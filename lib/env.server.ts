@@ -42,6 +42,17 @@ export const serverEnv = {
   get plaidCountryCodes() {
     return csv(process.env.PLAID_COUNTRY_CODES, "US");
   },
+  // Public base URL of the deployed app. Used to register the Plaid webhook on
+  // new link tokens (only when it is a real https origin — never localhost).
+  get appUrl() {
+    return process.env.NEXT_PUBLIC_APP_URL;
+  },
+  // Optional. When set, passed as the Plaid Link redirect_uri so OAuth banks can
+  // return to the app. Must exactly match a redirect URI registered in the Plaid
+  // dashboard. Leave unset for sandbox / non-OAuth institutions.
+  get plaidRedirectUri() {
+    return process.env.PLAID_REDIRECT_URI;
+  },
   get tokenEncKey() {
     return required("PLAID_TOKEN_ENC_KEY", process.env.PLAID_TOKEN_ENC_KEY);
   },

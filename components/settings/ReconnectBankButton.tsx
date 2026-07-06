@@ -3,12 +3,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePlaidLink } from "react-plaid-link";
+import { saveResume, clearResume } from "@/lib/plaid-resume";
 
 /**
  * Repairs a broken bank connection via Plaid Link update mode. Rendered only
  * for items that need attention, so the update-mode link token is fetched on
  * mount (mirrors ConnectBankButton). Link fixes the credentials in place;
  * /api/plaid/reconnect then clears our error state and resyncs.
+ *
+ * OAuth banks redirect the browser to the registered redirect_uri (the
+ * dashboard) mid-flow, unmounting this button. So on click we stash the
+ * reconnect context; ConnectBankButton on the dashboard reads it back and
+ * finalizes. Non-OAuth banks never redirect and finish inline via onSuccess.
  */
 export default function ReconnectBankButton({ itemId }: { itemId: string }) {
   const router = useRouter();
@@ -50,6 +56,7 @@ export default function ReconnectBankButton({ itemId }: { itemId: string }) {
         const json = await res.json().catch(() => ({}));
         throw new Error(json.error ?? "Failed to finish reconnection");
       }
+      clearResume();
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error");
@@ -63,10 +70,18 @@ export default function ReconnectBankButton({ itemId }: { itemId: string }) {
     onSuccess: () => onSuccess(),
   });
 
+  // Stash this item's context before opening, so an OAuth redirect can resume
+  // it on the dashboard. Set on click (not mount) so multiple broken-bank
+  // buttons don't overwrite each other — the clicked one wins.
+  const handleOpen = useCallback(() => {
+    if (linkToken) saveResume({ token: linkToken, mode: "reconnect", itemId });
+    open();
+  }, [linkToken, itemId, open]);
+
   return (
     <span className="inline-flex items-center gap-2">
       <button
-        onClick={() => open()}
+        onClick={handleOpen}
         disabled={!ready || !linkToken || busy}
         className="text-xs rounded border border-black/15 dark:border-white/25 px-2 py-1 disabled:opacity-50"
       >
