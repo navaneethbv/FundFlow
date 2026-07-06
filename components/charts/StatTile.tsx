@@ -25,12 +25,12 @@ export default function StatTile({
   const isGood = delta !== undefined && (delta >= 0) === upIsGood;
 
   return (
-    <section className="rounded-[26px] border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.08)] backdrop-blur-xl transition-transform duration-200 hover:-translate-y-0.5">
+    <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card transition-transform duration-200 hover:-translate-y-0.5">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--muted)]">{label}</h3>
+        <h3 className="eyebrow">{label}</h3>
         {trend && trend.length >= 2 && <Sparkline values={trend} />}
       </div>
-      <p className="mt-3 text-3xl font-black tracking-[-0.04em]" style={{ color: "var(--viz-ink)" }}>
+      <p className="display mt-3 text-3xl">
         {formatCurrency(value)}
       </p>
       {showDelta && (
