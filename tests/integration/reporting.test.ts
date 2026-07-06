@@ -25,6 +25,8 @@ vi.mock("nodemailer", () => {
 });
 
 suite("weekly financial reporting integration", () => {
+  if (!run) return;
+
   const admin = createClient(url!, secret!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });

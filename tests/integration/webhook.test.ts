@@ -25,6 +25,8 @@ vi.mock("@/lib/sync", async (importOriginal) => {
 });
 
 suite("plaid webhook integration", () => {
+  if (!run) return;
+
   const admin = createClient(url!, secret!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
