@@ -3,6 +3,7 @@ import PDFDocument from "pdfkit";
 import nodemailer from "nodemailer";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { formatCurrency, titleCase } from "./format";
+import { EXCLUDED_PFC } from "./dashboard";
 
 export interface WeeklyReportData {
   userId: string;
@@ -43,9 +44,12 @@ export async function getWeeklyReportData(
     { data: accounts },
     { data: txns },
   ] = await Promise.all([
+    // This runs with the service client (bypasses RLS), so it MUST scope by
+    // user_id explicitly or the report leaks other users' accounts.
     supabase
       .from("accounts")
-      .select("id, name, type, subtype, current_balance"),
+      .select("id, name, type, subtype, current_balance")
+      .eq("user_id", userId),
     supabase
       .from("transactions")
       .select("date, amount, merchant_name, name, pfc_primary, account_id")
@@ -72,9 +76,12 @@ export async function getWeeklyReportData(
 
     const isActiveWeek = t.date >= sevenDaysAgoStr && t.date <= todayStr;
     const isPrevWeek = t.date >= fourteenDaysAgoStr && t.date < sevenDaysAgoStr;
+    // Transfers and loan payments are cash movement, not spending; counting
+    // them would double-count credit-card purchases and their payment.
+    const isSpend = t.amount > 0 && !EXCLUDED_PFC.has(t.pfc_primary ?? "");
 
     if (acct.type === "credit") {
-      if (t.amount > 0) {
+      if (isSpend) {
         if (isActiveWeek) {
           totalSpend += t.amount;
           const cat = t.pfc_primary ?? "Uncategorized";
@@ -87,16 +94,19 @@ export async function getWeeklyReportData(
       }
     } else if (acct.type === "depository") {
       if (t.amount > 0) {
-        // Outflow
-        if (isActiveWeek) {
-          totalSpend += t.amount;
-          outflows += t.amount;
-          const cat = t.pfc_primary ?? "Uncategorized";
-          activeCategories[cat] = (activeCategories[cat] ?? 0) + t.amount;
-          const merch = t.merchant_name ?? t.name ?? "Unknown Merchant";
-          activeMerchants[merch] = (activeMerchants[merch] ?? 0) + t.amount;
-        } else if (isPrevWeek) {
-          prevTotalSpend += t.amount;
+        // Outflow. Cash flow counts every withdrawal (transfers included);
+        // spend/category/merchant totals count only real spending.
+        if (isActiveWeek) outflows += t.amount;
+        if (isSpend) {
+          if (isActiveWeek) {
+            totalSpend += t.amount;
+            const cat = t.pfc_primary ?? "Uncategorized";
+            activeCategories[cat] = (activeCategories[cat] ?? 0) + t.amount;
+            const merch = t.merchant_name ?? t.name ?? "Unknown Merchant";
+            activeMerchants[merch] = (activeMerchants[merch] ?? 0) + t.amount;
+          } else if (isPrevWeek) {
+            prevTotalSpend += t.amount;
+          }
         }
       } else if (t.amount < 0) {
         // Inflow
@@ -306,8 +316,15 @@ export async function sendWeeklyReportEmail(
       secure: port === 465,
       auth: { user, pass },
     });
+  } else if (process.env.NODE_ENV === "production") {
+    // Never fall back to Ethereal in production: it is a public test inbox,
+    // and this email carries the user's financial summary. Fail loudly; the
+    // cron route logs and skips this user.
+    throw new Error(
+      "SMTP is not configured (SMTP_HOST/SMTP_USER/SMTP_PASS); refusing to send report",
+    );
   } else {
-    // Fallback: provision a test Ethereal account
+    // Dev fallback: provision a test Ethereal account
     const testAccount = await nodemailer.createTestAccount();
     transporter = nodemailer.createTransport({
       host: "smtp.ethereal.email",

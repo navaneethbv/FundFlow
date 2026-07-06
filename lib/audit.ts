@@ -13,8 +13,10 @@ export type AuditAction =
   | "plaid_connect"
   | "plaid_token_exchange"
   | "plaid_disconnect"
+  | "plaid_reconnect"
   | "data_refresh"
   | "data_export"
+  | "data_import"
   | "account_delete";
 
 interface AuditParams {

@@ -1,8 +1,9 @@
 import "server-only";
 import type { AccountBase } from "plaid";
 import { createServiceClient } from "@/lib/supabase/service";
-import { encryptSecret, decryptSecret } from "@/lib/crypto";
+import { encryptSecret, decryptSecret, decryptSecretDetailed } from "@/lib/crypto";
 import type { PlaidItemRow } from "@/lib/types";
+import { logError } from "@/lib/log";
 
 const ITEM_COLUMNS =
   "id, user_id, plaid_item_id, institution_id, institution_name, access_token_ciphertext, access_token_iv, access_token_tag, sync_cursor, status, error_code";
@@ -46,6 +47,57 @@ export function decryptItemToken(item: PlaidItemRow): string {
     iv: item.access_token_iv,
     tag: item.access_token_tag,
   });
+}
+
+/**
+ * Decrypt the item's token and, if it was still encrypted with the previous
+ * key (PLAID_TOKEN_ENC_KEY_PREVIOUS during rotation), re-encrypt it with the
+ * current key in place. Called from the daily sync, so a rotation converges
+ * on its own within a day. The upgrade is best-effort: a failed write only
+ * means the fallback key is needed a little longer.
+ */
+export async function decryptItemTokenAndUpgrade(
+  item: PlaidItemRow,
+): Promise<string> {
+  const { plaintext, usedFallbackKey } = decryptSecretDetailed({
+    ciphertext: item.access_token_ciphertext,
+    iv: item.access_token_iv,
+    tag: item.access_token_tag,
+  });
+
+  if (usedFallbackKey) {
+    try {
+      const enc = encryptSecret(plaintext);
+      const supabase = createServiceClient();
+      const { error } = await supabase
+        .from("plaid_items")
+        .update({
+          access_token_ciphertext: enc.ciphertext,
+          access_token_iv: enc.iv,
+          access_token_tag: enc.tag,
+        })
+        .eq("id", item.id);
+      if (error) throw error;
+    } catch (error) {
+      logError("plaid-service.token-rotation", error);
+    }
+  }
+
+  return plaintext;
+}
+
+/** Look up an item by its Plaid-side item id (webhook payloads carry these). */
+export async function getItemByPlaidItemId(
+  plaidItemId: string,
+): Promise<PlaidItemRow | null> {
+  const supabase = createServiceClient();
+  const { data, error } = await supabase
+    .from("plaid_items")
+    .select(ITEM_COLUMNS)
+    .eq("plaid_item_id", plaidItemId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as PlaidItemRow) ?? null;
 }
 
 /** Load all active items for a user (scoped by user_id). */

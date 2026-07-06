@@ -3,7 +3,7 @@ import type { Transaction, RemovedTransaction, AccountBase } from "plaid";
 import { getPlaidClient } from "@/lib/plaid";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
-  decryptItemToken,
+  decryptItemTokenAndUpgrade,
   upsertAccounts,
   getAccountIdMap,
   updateItemCursor,
@@ -53,7 +53,7 @@ export async function syncItemTransactions(
   item: PlaidItemRow,
 ): Promise<SyncResult> {
   const plaid = getPlaidClient();
-  const accessToken = decryptItemToken(item);
+  const accessToken = await decryptItemTokenAndUpgrade(item);
 
   let cursor = item.sync_cursor ?? undefined;
   let hasMore = true;
@@ -120,20 +120,79 @@ export async function syncItemTransactions(
   return { added: added.length, modified: modified.length, removed: removed.length };
 }
 
+/** Pull the Plaid error code out of an Axios-shaped error, if there is one. */
+function plaidErrorCode(error: unknown): string | null {
+  const code = (error as { response?: { data?: { error_code?: unknown } } })
+    ?.response?.data?.error_code;
+  return typeof code === "string" ? code : null;
+}
+
+/**
+ * Best-effort run bookkeeping in sync_jobs (observability, must never break a
+ * sync). Returns the job row id, or null if recording failed.
+ */
+async function recordJobStart(
+  userId: string,
+  itemDbId: string,
+): Promise<string | null> {
+  try {
+    const supabase = createServiceClient();
+    const { data, error } = await supabase
+      .from("sync_jobs")
+      .insert({
+        user_id: userId,
+        plaid_item_id: itemDbId,
+        status: "running",
+        attempts: 1,
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+    return data.id as string;
+  } catch (error) {
+    logError("sync.job-record", error);
+    return null;
+  }
+}
+
+async function recordJobEnd(
+  jobId: string | null,
+  status: "done" | "failed",
+  lastError: string | null = null,
+): Promise<void> {
+  if (!jobId) return;
+  try {
+    const supabase = createServiceClient();
+    const { error } = await supabase
+      .from("sync_jobs")
+      .update({ status, last_error: lastError })
+      .eq("id", jobId);
+    if (error) throw error;
+  } catch (error) {
+    logError("sync.job-record", error);
+  }
+}
+
 /** Sync every active item for a user. Per-item failures are isolated. */
 export async function syncAllForUser(userId: string): Promise<SyncResult> {
   const items = await listActiveItems(userId);
   const total: SyncResult = { added: 0, modified: 0, removed: 0 };
 
   for (const item of items) {
+    const jobId = await recordJobStart(userId, item.id);
     try {
       const result = await syncItemTransactions(item);
       total.added += result.added;
       total.modified += result.modified;
       total.removed += result.removed;
+      await recordJobEnd(jobId, "done");
     } catch (error) {
       logError("sync.item", error);
-      await setItemStatus(item.id, "error", "sync_failed").catch(() => {});
+      // Keep the real Plaid code (e.g. ITEM_LOGIN_REQUIRED) so Settings can
+      // offer the right fix (reconnect) instead of a generic failure.
+      const code = plaidErrorCode(error) ?? "sync_failed";
+      await setItemStatus(item.id, "error", code).catch(() => {});
+      await recordJobEnd(jobId, "failed", code);
     }
   }
   return total;

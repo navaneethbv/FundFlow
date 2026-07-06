@@ -269,7 +269,10 @@ suite("API routes integration", () => {
         data: { link_token: "link-sandbox-12345" },
       });
 
-      const resp = await plaidLinkTokenPost();
+      const req = new NextRequest("http://localhost/api/plaid/link-token", {
+        method: "POST",
+      });
+      const resp = await plaidLinkTokenPost(req);
       expect(resp.status).toBe(200);
 
       const json = await resp.json();

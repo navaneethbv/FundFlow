@@ -2,11 +2,18 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import ReconnectBankButton from "@/components/settings/ReconnectBankButton";
 
 interface Item {
   id: string;
   institution_name: string | null;
   status: string;
+  error_code: string | null;
+}
+
+/** Broken now (status error) or breaking soon (consent expiring). */
+function needsReconnect(item: Item): boolean {
+  return item.status === "error" || item.error_code === "PENDING_EXPIRATION";
 }
 
 export default function BanksSection({ initialItems }: { initialItems: Item[] }) {
@@ -46,18 +53,24 @@ export default function BanksSection({ initialItems }: { initialItems: Item[] })
       ) : (
         <ul className="text-sm space-y-1">
           {items.map((i) => (
-            <li key={i.id} className="flex justify-between items-center">
+            <li key={i.id} className="flex justify-between items-center gap-2">
               <span>
                 {i.institution_name ?? "Bank"}
                 {i.status !== "active" ? ` (${i.status})` : ""}
+                {i.error_code === "PENDING_EXPIRATION" && (
+                  <span className="text-amber-600"> · consent expiring soon</span>
+                )}
               </span>
-              <button
-                onClick={() => disconnect(i.id)}
-                disabled={busyId === i.id}
-                className="text-red-600 underline text-xs disabled:opacity-50"
-              >
-                {busyId === i.id ? "Disconnecting…" : "Disconnect"}
-              </button>
+              <span className="inline-flex items-center gap-3">
+                {needsReconnect(i) && <ReconnectBankButton itemId={i.id} />}
+                <button
+                  onClick={() => disconnect(i.id)}
+                  disabled={busyId === i.id}
+                  className="text-red-600 underline text-xs disabled:opacity-50"
+                >
+                  {busyId === i.id ? "Disconnecting…" : "Disconnect"}
+                </button>
+              </span>
             </li>
           ))}
         </ul>

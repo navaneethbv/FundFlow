@@ -2,6 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { needsMfaStepUp } from "@/lib/mfa";
 import { logError } from "@/lib/log";
 
 const isProd = process.env.NODE_ENV === "production";
@@ -28,6 +29,18 @@ export async function requireUser(): Promise<AuthedContext | NextResponse> {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // Enforce MFA server-side: an MFA-enrolled user with a password-only (aal1)
+  // session must complete the TOTP challenge before any API grants access.
+  const { data: aal } =
+    await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (needsMfaStepUp(aal?.currentLevel, aal?.nextLevel)) {
+    return NextResponse.json(
+      { error: "MFA verification required" },
+      { status: 401 },
+    );
+  }
+
   return { user, supabase };
 }
 
