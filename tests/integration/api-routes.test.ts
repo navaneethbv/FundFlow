@@ -283,7 +283,73 @@ suite("API routes integration", () => {
         products: ["transactions"],
         country_codes: ["US"],
         language: "en",
+        transactions: {
+          days_requested: 730,
+        },
       });
+    });
+
+    it("returns link token in update mode for existing item", async () => {
+      activeUser = tempUserObj;
+      activeSupabaseClient = tempUserClient;
+
+      const enc = encryptSecret("reconnect-token");
+      const { data: item } = await admin.from("plaid_items").insert({
+        user_id: tempUserId,
+        plaid_item_id: `reconnect-item-${stamp}`,
+        access_token_ciphertext: enc.ciphertext,
+        access_token_iv: enc.iv,
+        access_token_tag: enc.tag,
+        status: "error",
+      }).select("id").single();
+
+      mockLinkTokenCreate.mockResolvedValue({
+        data: { link_token: "link-reconnect-12345" },
+      });
+
+      const req = new NextRequest("http://localhost/api/plaid/link-token", {
+        method: "POST",
+        body: JSON.stringify({ item_id: item!.id }),
+      });
+      const resp = await plaidLinkTokenPost(req);
+      expect(resp.status).toBe(200);
+
+      const json = await resp.json();
+      expect(json.link_token).toBe("link-reconnect-12345");
+      expect(mockLinkTokenCreate).toHaveBeenCalledWith({
+        user: { client_user_id: tempUserId },
+        client_name: "FundFlow",
+        country_codes: ["US"],
+        language: "en",
+        access_token: "reconnect-token",
+      });
+
+      await admin.from("plaid_items").delete().eq("id", item!.id);
+    });
+
+    it("returns 404 for update mode with non-existent item", async () => {
+      activeUser = tempUserObj;
+      activeSupabaseClient = tempUserClient;
+
+      const req = new NextRequest("http://localhost/api/plaid/link-token", {
+        method: "POST",
+        body: JSON.stringify({ item_id: "00000000-0000-0000-0000-000000000000" }),
+      });
+      const resp = await plaidLinkTokenPost(req);
+      expect(resp.status).toBe(404);
+    });
+
+    it("returns 500 when Plaid client linkTokenCreate throws", async () => {
+      activeUser = tempUserObj;
+      activeSupabaseClient = tempUserClient;
+
+      mockLinkTokenCreate.mockRejectedValue(new Error("Plaid API Error"));
+
+      const req = new NextRequest("http://localhost/api/plaid/link-token", {
+        method: "POST",
+      });
+      const resp = await plaidLinkTokenPost(req);
+      expect(resp.status).toBe(500);
     });
   });
 
@@ -303,6 +369,63 @@ suite("API routes integration", () => {
       expect(json.ok).toBe(true);
       expect(json.added).toBe(3);
       expect(json.recurring_streams).toBe(2);
+    });
+
+    it("handles auto-refresh correctly and rates limits subsequent auto requests", async () => {
+      activeUser = tempUserObj;
+      activeSupabaseClient = tempUserClient;
+
+      mockSyncAllForUser.mockResolvedValue({ added: 1, modified: 0, removed: 0 });
+
+      // First auto sync request (should run)
+      const req1 = new NextRequest("http://localhost/api/plaid/sync", {
+        method: "POST",
+        body: JSON.stringify({ source: "auto" }),
+      });
+      const resp1 = await plaidSyncPost(req1);
+      expect(resp1.status).toBe(200);
+      const json1 = await resp1.json();
+      expect(json1.ok).toBe(true);
+      expect(json1.skipped).toBeUndefined();
+
+      // Second auto sync request (should be skipped due to rate limit/window)
+      const req2 = new NextRequest("http://localhost/api/plaid/sync", {
+        method: "POST",
+        body: JSON.stringify({ source: "auto" }),
+      });
+      const resp2 = await plaidSyncPost(req2);
+      expect(resp2.status).toBe(200);
+      const json2 = await resp2.json();
+      expect(json2.ok).toBe(true);
+      expect(json2.skipped).toBe(true);
+    });
+
+    it("returns 429 when manual sync is rate limited", async () => {
+      activeUser = { ...tempUserObj, id: `rate-limit-user-${stamp}` };
+      activeSupabaseClient = tempUserClient;
+
+      mockSyncAllForUser.mockResolvedValue({ added: 0, modified: 0, removed: 0 });
+
+      // Make 7 requests to trigger the 6/min rate limit
+      for (let i = 0; i < 6; i++) {
+        const req = new NextRequest("http://localhost/api/plaid/sync", { method: "POST" });
+        await plaidSyncPost(req);
+      }
+
+      const reqLimit = new NextRequest("http://localhost/api/plaid/sync", { method: "POST" });
+      const respLimit = await plaidSyncPost(reqLimit);
+      expect(respLimit.status).toBe(429);
+    });
+
+    it("returns 500 when syncAllForUser throws an error", async () => {
+      activeUser = { ...tempUserObj, id: `sync-err-user-${stamp}` };
+      activeSupabaseClient = tempUserClient;
+
+      mockSyncAllForUser.mockRejectedValue(new Error("Sync Error"));
+
+      const req = new NextRequest("http://localhost/api/plaid/sync", { method: "POST" });
+      const resp = await plaidSyncPost(req);
+      expect(resp.status).toBe(500);
     });
   });
 

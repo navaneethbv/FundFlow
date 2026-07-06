@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import {
   storeItem,
   decryptItemToken,
+  decryptItemTokenAndUpgrade,
   listActiveItems,
   getItem,
   upsertAccounts,
@@ -168,5 +169,62 @@ suite("plaid-service DB integration", () => {
     expect(dbAccount!.name).toBe("Checking Account");
     expect(Number(dbAccount!.current_balance)).toBe(1500.5);
     expect(Number(dbAccount!.available_balance)).toBe(1450.0);
+  });
+
+  it("automatically rotates and re-encrypts tokens when decrypted using fallback key", async () => {
+    const crypto = await import("node:crypto");
+    const { encryptSecret, decryptSecretDetailed } = await import("@/lib/crypto");
+
+    const originalEncKey = process.env.PLAID_TOKEN_ENC_KEY;
+    const fallbackKey = crypto.randomBytes(32).toString("base64");
+
+    // 1. Temporarily swap the encryption key to generate fallback ciphertext
+    process.env.PLAID_TOKEN_ENC_KEY = fallbackKey;
+    const encPayload = encryptSecret("fallback-token-secret");
+
+    // 2. Set the fallback environment variables
+    process.env.PLAID_TOKEN_ENC_KEY = originalEncKey;
+    process.env.PLAID_TOKEN_ENC_KEY_PREVIOUS = fallbackKey;
+
+    // 3. Insert this fallback ciphertext into DB
+    const { data: item } = await admin
+      .from("plaid_items")
+      .insert({
+        user_id: userId,
+        plaid_item_id: `fallback-item-${stamp}`,
+        access_token_ciphertext: encPayload.ciphertext,
+        access_token_iv: encPayload.iv,
+        access_token_tag: encPayload.tag,
+        status: "active",
+      })
+      .select("id, access_token_ciphertext, access_token_iv, access_token_tag")
+      .single();
+
+    // 4. Decrypt the token, triggering database upgrade/rotation
+    const decrypted = await decryptItemTokenAndUpgrade(item as any);
+    expect(decrypted).toBe("fallback-token-secret");
+
+    // 5. Fetch from DB again to verify it has been updated with primary key encryption
+    const { data: updatedItem } = await admin
+      .from("plaid_items")
+      .select("access_token_ciphertext, access_token_iv, access_token_tag")
+      .eq("id", item!.id)
+      .single();
+
+    // It should differ from fallback ciphertext
+    expect(updatedItem!.access_token_ciphertext).not.toBe(item!.access_token_ciphertext);
+
+    // It should now decrypt successfully using only the primary key
+    delete process.env.PLAID_TOKEN_ENC_KEY_PREVIOUS;
+    const decryptedWithPrimary = decryptSecretDetailed({
+      ciphertext: updatedItem!.access_token_ciphertext,
+      iv: updatedItem!.access_token_iv,
+      tag: updatedItem!.access_token_tag,
+    });
+    expect(decryptedWithPrimary.plaintext).toBe("fallback-token-secret");
+    expect(decryptedWithPrimary.usedFallbackKey).toBe(false);
+
+    // Clean up
+    await admin.from("plaid_items").delete().eq("id", item!.id);
   });
 });
