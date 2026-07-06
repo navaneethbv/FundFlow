@@ -21,6 +21,18 @@ export default function MfaSection() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  async function finalizeMfaAction(action: "enroll" | "unenroll", factorId: string) {
+    const response = await fetch("/api/settings/mfa", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, factorId }),
+    });
+    if (!response.ok) {
+      const json = await response.json().catch(() => ({}));
+      throw new Error(json.error ?? "Failed to update MFA settings");
+    }
+  }
+
   const loadFactors = useCallback(async () => {
     const { data } = await supabase.auth.mfa.listFactors();
     setFactors((data?.totp ?? []) as Factor[]);
@@ -74,16 +86,7 @@ export default function MfaSection() {
       });
       if (verify.error) throw verify.error;
 
-      await supabase
-        .from("profiles")
-        .update({ mfa_enrolled: true })
-        .eq("id", (await supabase.auth.getUser()).data.user?.id ?? "");
-
-      await fetch("/api/settings/mfa", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "enroll", factorId: enrolling.factorId }),
-      }).catch(() => null);
+      await finalizeMfaAction("enroll", enrolling.factorId);
 
       setEnrolling(null);
       setCode("");
@@ -97,21 +100,14 @@ export default function MfaSection() {
 
   async function unenroll(factorId: string) {
     setError(null);
-    await supabase.auth.mfa.unenroll({ factorId });
-
-    await fetch("/api/settings/mfa", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "unenroll", factorId }),
-    }).catch(() => null);
-
-    await loadFactors();
-    const { data } = await supabase.auth.mfa.listFactors();
-    if ((data?.totp ?? []).length === 0) {
-      await supabase
-        .from("profiles")
-        .update({ mfa_enrolled: false })
-        .eq("id", (await supabase.auth.getUser()).data.user?.id ?? "");
+    setLoading(true);
+    try {
+      await finalizeMfaAction("unenroll", factorId);
+      await loadFactors();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove authenticator");
+    } finally {
+      setLoading(false);
     }
   }
 

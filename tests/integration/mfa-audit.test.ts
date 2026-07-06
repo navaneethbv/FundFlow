@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { POST as mfaAuditPost } from "@/app/api/settings/mfa/route";
@@ -38,6 +38,27 @@ suite("MFA auditing integration", () => {
   let tempUserClient: ReturnType<typeof createClient>;
   let tempUserObj: unknown;
 
+  function clientWithMfa({
+    factors,
+    unenroll = vi.fn().mockResolvedValue({ error: null }),
+  }: {
+    factors: Array<{ id: string; status: string; friendly_name?: string }>;
+    unenroll?: ReturnType<typeof vi.fn>;
+  }) {
+    return {
+      from: (table: string) => tempUserClient.from(table),
+      auth: {
+        mfa: {
+          listFactors: vi.fn().mockResolvedValue({
+            data: { totp: factors, phone: [] },
+            error: null,
+          }),
+          unenroll,
+        },
+      },
+    };
+  }
+
   beforeAll(async () => {
     // Create temporary user
     const { data, error } = await admin.auth.admin.createUser({
@@ -64,6 +85,16 @@ suite("MFA auditing integration", () => {
     }
   });
 
+  beforeEach(async () => {
+    activeUser = null;
+    activeSupabaseClient = null;
+    await admin.from("audit_logs").delete().eq("user_id", tempUserId);
+    await admin
+      .from("profiles")
+      .update({ mfa_enrolled: false })
+      .eq("id", tempUserId);
+  });
+
   it("returns 400 for invalid action or missing body", async () => {
     activeUser = tempUserObj;
     activeSupabaseClient = tempUserClient;
@@ -85,7 +116,9 @@ suite("MFA auditing integration", () => {
 
   it("records mfa_enroll action in audit_logs", async () => {
     activeUser = tempUserObj;
-    activeSupabaseClient = tempUserClient;
+    activeSupabaseClient = clientWithMfa({
+      factors: [{ id: `f-enr-${stamp}`, status: "verified" }],
+    });
 
     const req = new NextRequest("http://localhost/api/settings/mfa", {
       method: "POST",
@@ -106,9 +139,68 @@ suite("MFA auditing integration", () => {
     expect((logs![0].metadata as Record<string, unknown>).factorId).toBe(`f-enr-${stamp}`);
   });
 
+  it("rejects enroll finalization when the factor is not verified", async () => {
+    activeUser = tempUserObj;
+    activeSupabaseClient = clientWithMfa({
+      factors: [{ id: `f-unverified-${stamp}`, status: "unverified" }],
+    });
+
+    const req = new NextRequest("http://localhost/api/settings/mfa", {
+      method: "POST",
+      body: JSON.stringify({ action: "enroll", factorId: `f-unverified-${stamp}` }),
+    });
+    const resp = await mfaAuditPost(req);
+    expect(resp.status).toBe(400);
+
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("mfa_enrolled")
+      .eq("id", tempUserId)
+      .single();
+    expect(profile?.mfa_enrolled).toBe(false);
+
+    const { count } = await admin
+      .from("audit_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", tempUserId)
+      .eq("action", "mfa_enroll");
+    expect(count).toBe(0);
+  });
+
+  it("server-finalizes enroll by setting the profile flag and writing audit", async () => {
+    activeUser = tempUserObj;
+    activeSupabaseClient = clientWithMfa({
+      factors: [{ id: `f-verified-${stamp}`, status: "verified" }],
+    });
+
+    const req = new NextRequest("http://localhost/api/settings/mfa", {
+      method: "POST",
+      body: JSON.stringify({ action: "enroll", factorId: `f-verified-${stamp}` }),
+    });
+    const resp = await mfaAuditPost(req);
+    expect(resp.status).toBe(200);
+
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("mfa_enrolled")
+      .eq("id", tempUserId)
+      .single();
+    expect(profile?.mfa_enrolled).toBe(true);
+
+    const { data: logs } = await admin
+      .from("audit_logs")
+      .select("action, metadata")
+      .eq("user_id", tempUserId)
+      .eq("action", "mfa_enroll");
+    expect(logs).toHaveLength(1);
+    expect((logs![0].metadata as Record<string, unknown>).factorId).toBe(`f-verified-${stamp}`);
+  });
+
   it("records mfa_unenroll action in audit_logs", async () => {
     activeUser = tempUserObj;
-    activeSupabaseClient = tempUserClient;
+    activeSupabaseClient = clientWithMfa({
+      factors: [],
+    });
 
     const req = new NextRequest("http://localhost/api/settings/mfa", {
       method: "POST",
@@ -127,5 +219,34 @@ suite("MFA auditing integration", () => {
     expect(error).toBeNull();
     expect(logs).toHaveLength(1);
     expect((logs![0].metadata as Record<string, unknown>).factorId).toBe(`f-un-${stamp}`);
+  });
+
+  it("server-finalizes unenroll by removing the factor and clearing profile when none remain", async () => {
+    const unenroll = vi.fn().mockResolvedValue({ error: null });
+    activeUser = tempUserObj;
+    activeSupabaseClient = clientWithMfa({
+      factors: [],
+      unenroll,
+    });
+
+    await admin
+      .from("profiles")
+      .update({ mfa_enrolled: true })
+      .eq("id", tempUserId);
+
+    const req = new NextRequest("http://localhost/api/settings/mfa", {
+      method: "POST",
+      body: JSON.stringify({ action: "unenroll", factorId: `f-last-${stamp}` }),
+    });
+    const resp = await mfaAuditPost(req);
+    expect(resp.status).toBe(200);
+    expect(unenroll).toHaveBeenCalledWith({ factorId: `f-last-${stamp}` });
+
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("mfa_enrolled")
+      .eq("id", tempUserId)
+      .single();
+    expect(profile?.mfa_enrolled).toBe(false);
   });
 });
