@@ -131,9 +131,12 @@ supabase/migrations/                                schema + RLS + rate limiter
 proxy.ts                                            session refresh + CSP + route guard
 ```
 
-## Known notes / future todos
+## Known Notes / Future Todos
 
-- **`npm audit`** flags a moderate PostCSS advisory pinned transitively *inside Next.js itself*; it only affects untrusted CSS stringification (not our path). It resolves when Next bumps its internal PostCSS; we don't downgrade Next.
+- **`npm audit`** flags moderate PostCSS entries pinned transitively *inside Next.js itself*; the advisory affects untrusted CSS stringification (not our path). It resolves when Next bumps its internal PostCSS; we don't downgrade Next.
 - **Email the CSV report** on a schedule (e.g. Resend) — planned.
 - **Plaid webhooks** with signature verification for real-time sync — planned (currently on-demand + daily cron).
 - **Optional in-app AI insights** endpoint reusing the export data contract — planned.
+
+See [`docs/TODO.md`](docs/TODO.md) for the deferred feature list and
+[`docs/HANDOFF.md`](docs/HANDOFF.md) for the latest session handoff notes.
