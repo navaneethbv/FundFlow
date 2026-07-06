@@ -15,6 +15,7 @@ const eslintConfig = defineConfig([
     // Local/generated artifacts:
     "coverage/**",
     ".remember/**",
+    "img/**",
   ]),
 ]);
 

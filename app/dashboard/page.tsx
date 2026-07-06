@@ -5,8 +5,7 @@ import { formatCurrency, titleCase, formatMonth, formatMinutesAgo } from "@/lib/
 import ConnectBankButton from "@/components/ConnectBankButton";
 import RefreshButton from "@/components/RefreshButton";
 import AutoRefresh from "@/components/AutoRefresh";
-import LogoutButton from "@/components/LogoutButton";
-import ThemeToggle from "@/components/ThemeToggle";
+import AppShell from "@/components/shell/AppShell";
 import { detectCardDesign } from "@/lib/card-design";
 import TrendChart from "@/components/charts/TrendChart";
 import DonutChart from "@/components/charts/DonutChart";
@@ -191,44 +190,18 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     if (selectedMonth) parts.push(`month=${selectedMonth}`);
     return `/dashboard?${parts.join("&")}`;
   };
+  const shellActive =
+    activeTab === "breakdowns"
+      ? "cards"
+      : activeTab === "cashflow"
+      ? "cashflow"
+      : "overview";
 
   return (
-    <main className="mx-auto max-w-[1180px] space-y-8 px-4 py-5 sm:px-6 lg:py-8">
+    <AppShell active={shellActive} email={user?.email}>
       {/* Live updates: re-render every 2 min (no Plaid calls, shows what the
           webhook/cron wrote), plus one Plaid auto-pull per 30-min window. */}
       {hasBanks && <AutoRefresh />}
-
-      {/* Header section with mobile optimization */}
-      <header className="flex flex-col gap-4 rounded-[28px] border border-[var(--surface-border)] bg-[var(--surface)] px-5 py-4 shadow-[0_18px_60px_rgba(0,0,0,0.08)] backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-[var(--accent)]">
-            Personal cash control
-          </p>
-          <h1 className="text-3xl font-black tracking-[-0.04em] sm:text-4xl">
-            FundFlow
-          </h1>
-          <p className="mt-1 text-xs text-[var(--muted)] sm:hidden">{user?.email}</p>
-        </div>
-        <nav className="flex flex-col gap-3 text-sm font-semibold sm:items-end">
-          <span className="hidden text-xs font-medium text-[var(--muted)] sm:inline">{user?.email}</span>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/transactions"
-              className="rounded-full border border-transparent px-3 py-1.5 text-black/70 transition-colors hover:border-black/10 hover:bg-black/5 hover:text-black focus-visible:outline-2 dark:text-white/70 dark:hover:border-white/10 dark:hover:bg-white/[0.08] dark:hover:text-white"
-            >
-              Transactions
-            </Link>
-            <Link
-              href="/settings"
-              className="rounded-full border border-transparent px-3 py-1.5 text-black/70 transition-colors hover:border-black/10 hover:bg-black/5 hover:text-black focus-visible:outline-2 dark:text-white/70 dark:hover:border-white/10 dark:hover:bg-white/[0.08] dark:hover:text-white"
-            >
-              Settings
-            </Link>
-            <ThemeToggle />
-            <LogoutButton />
-          </div>
-        </nav>
-      </header>
 
       {(brokenBanks.length > 0 || isStale) && (
         <div className="rounded-[22px] border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm shadow-sm">
@@ -771,6 +744,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           )}
         </>
       )}
-    </main>
+    </AppShell>
   );
 }

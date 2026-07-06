@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import AutoRefresh from "@/components/AutoRefresh";
+import AppShell from "@/components/shell/AppShell";
 import { formatCurrency, titleCase, formatMonth } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -69,6 +70,9 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
     query.range(offset, offset + PAGE_SIZE - 1),
     supabase.from("accounts").select("id, name, mask").order("name"),
   ]);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const rows = txns ?? [];
   const total = count ?? rows.length;
@@ -86,20 +90,13 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
   };
 
   return (
-    <main className="max-w-4xl mx-auto p-4 sm:p-6 space-y-5">
+    <AppShell active="transactions" email={user?.email}>
+      <div className="mx-auto max-w-4xl space-y-5">
       {/* New transactions appear as the webhook/auto-pull writes them. */}
       <AutoRefresh />
 
-      <header className="flex items-center justify-between pb-3 border-b border-black/5 dark:border-white/5">
+      <header className="flex items-center justify-between border-b border-black/5 pb-3 dark:border-white/5">
         <h1 className="text-2xl font-bold tracking-tight">Transactions</h1>
-        <nav className="flex gap-4 text-sm font-medium">
-          <Link href="/dashboard" className="underline hover:opacity-80">
-            Dashboard
-          </Link>
-          <Link href="/settings" className="underline hover:opacity-80">
-            Settings
-          </Link>
-        </nav>
       </header>
 
       {/* One filter row above everything it scopes (plain GET form, no JS). */}
@@ -186,10 +183,10 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
                     )}
                   </td>
                   <td className="py-2 px-3 hidden sm:table-cell opacity-70">
-                    {titleCase(t.pfc_primary) || "—"}
+                    {titleCase(t.pfc_primary) || "-"}
                   </td>
                   <td className="py-2 px-3 hidden md:table-cell opacity-70">
-                    {accountName.get(t.account_id) ?? "—"}
+                    {accountName.get(t.account_id) ?? "-"}
                   </td>
                   <td
                     className="py-2 px-3 text-right font-semibold whitespace-nowrap"
@@ -226,6 +223,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
           )}
         </nav>
       )}
-    </main>
+      </div>
+    </AppShell>
   );
 }
