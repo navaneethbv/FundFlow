@@ -33,7 +33,8 @@ async function verifyPlaidWebhook(req: NextRequest, bodyText: string): Promise<b
 
     const publicKey = crypto.createPublicKey({
       format: "jwk",
-      key: response.data.key as unknown as crypto.JsonWebKey,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      key: response.data.key as any,
     });
 
     const signingInput = `${headerB64}.${payloadB64}`;
