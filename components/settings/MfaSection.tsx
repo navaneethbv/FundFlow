@@ -79,6 +79,12 @@ export default function MfaSection() {
         .update({ mfa_enrolled: true })
         .eq("id", (await supabase.auth.getUser()).data.user?.id ?? "");
 
+      await fetch("/api/settings/mfa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "enroll", factorId: enrolling.factorId }),
+      }).catch(() => null);
+
       setEnrolling(null);
       setCode("");
       await loadFactors();
@@ -92,6 +98,13 @@ export default function MfaSection() {
   async function unenroll(factorId: string) {
     setError(null);
     await supabase.auth.mfa.unenroll({ factorId });
+
+    await fetch("/api/settings/mfa", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "unenroll", factorId }),
+    }).catch(() => null);
+
     await loadFactors();
     const { data } = await supabase.auth.mfa.listFactors();
     if ((data?.totp ?? []).length === 0) {

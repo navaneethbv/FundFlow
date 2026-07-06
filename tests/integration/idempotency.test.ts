@@ -14,6 +14,8 @@ const run = Boolean(url && secret);
 const suite = run ? describe : describe.skip;
 
 suite("sync idempotency", () => {
+  if (!run) return;
+
   const admin = createClient(url!, secret!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
