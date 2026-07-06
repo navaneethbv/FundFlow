@@ -6,6 +6,7 @@ import ConnectBankButton from "@/components/ConnectBankButton";
 import RefreshButton from "@/components/RefreshButton";
 import AutoRefresh from "@/components/AutoRefresh";
 import LogoutButton from "@/components/LogoutButton";
+import ThemeToggle from "@/components/ThemeToggle";
 import { detectCardDesign } from "@/lib/card-design";
 import TrendChart from "@/components/charts/TrendChart";
 import DonutChart from "@/components/charts/DonutChart";
@@ -23,8 +24,8 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-black/10 dark:border-white/15 p-5 bg-white/40 dark:bg-black/20 backdrop-blur-sm shadow-sm transition-all duration-200">
-      <h2 className="text-xs font-semibold uppercase tracking-wider opacity-60 mb-4">
+    <section className="rounded-[26px] border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-[0_22px_70px_rgba(0,0,0,0.08)] backdrop-blur-xl transition-all duration-200 dark:shadow-[0_22px_80px_rgba(0,0,0,0.3)]">
+      <h2 className="mb-4 text-xs font-bold uppercase tracking-[0.18em] text-[var(--muted)]">
         {title}
       </h2>
       {children}
@@ -40,21 +41,21 @@ function BarList({
   max: number;
 }) {
   if (items.length === 0) {
-    return <p className="text-sm opacity-60 py-4">No data yet.</p>;
+    return <p className="py-4 text-sm text-[var(--muted)]">No data yet.</p>;
   }
   return (
     <ul className="space-y-3">
       {items.map((item) => (
         <li key={item.label} className="text-sm">
-          <div className="flex justify-between mb-1.5 font-medium">
+          <div className="mb-1.5 flex justify-between gap-4 font-medium">
             <span>{item.label}</span>
             <span className="tabular-nums font-semibold">{formatCurrency(item.amount)}</span>
           </div>
           {/* Ranking bars: one series → one hue (slot 1), 4px rounded data-end,
               square at the baseline. Never a darker-where-bigger ramp. */}
-          <div className="h-2.5 bg-black/[0.06] dark:bg-white/[0.08] overflow-hidden rounded-r-[4px]">
+          <div className="h-2.5 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
             <div
-              className="h-full rounded-r-[4px] transition-all duration-500 ease-out"
+              className="h-full rounded-full transition-all duration-500 ease-out"
               style={{
                 width: `${max > 0 ? (item.amount / max) * 100 : 0}%`,
                 background: "var(--viz-1)",
@@ -192,33 +193,45 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   };
 
   return (
-    <main className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
-      {/* Live updates: re-render every 2 min (no Plaid calls — shows what the
+    <main className="mx-auto max-w-[1180px] space-y-8 px-4 py-5 sm:px-6 lg:py-8">
+      {/* Live updates: re-render every 2 min (no Plaid calls, shows what the
           webhook/cron wrote), plus one Plaid auto-pull per 30-min window. */}
       {hasBanks && <AutoRefresh />}
 
       {/* Header section with mobile optimization */}
-      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-black/5 dark:border-white/5">
+      <header className="flex flex-col gap-4 rounded-[28px] border border-[var(--surface-border)] bg-[var(--surface)] px-5 py-4 shadow-[0_18px_60px_rgba(0,0,0,0.08)] backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">FundFlow</h1>
-          <p className="text-xs opacity-60 mt-0.5 sm:hidden">{user?.email}</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-[var(--accent)]">
+            Personal cash control
+          </p>
+          <h1 className="text-3xl font-black tracking-[-0.04em] sm:text-4xl">
+            FundFlow
+          </h1>
+          <p className="mt-1 text-xs text-[var(--muted)] sm:hidden">{user?.email}</p>
         </div>
-        <nav className="flex items-center justify-between sm:justify-end gap-5 text-sm font-medium">
-          <span className="opacity-60 hidden sm:inline text-xs">{user?.email}</span>
-          <div className="flex gap-4">
-            <Link href="/transactions" className="underline hover:opacity-80 transition-opacity">
+        <nav className="flex flex-col gap-3 text-sm font-semibold sm:items-end">
+          <span className="hidden text-xs font-medium text-[var(--muted)] sm:inline">{user?.email}</span>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/transactions"
+              className="rounded-full border border-transparent px-3 py-1.5 text-black/70 transition-colors hover:border-black/10 hover:bg-black/5 hover:text-black focus-visible:outline-2 dark:text-white/70 dark:hover:border-white/10 dark:hover:bg-white/[0.08] dark:hover:text-white"
+            >
               Transactions
             </Link>
-            <Link href="/settings" className="underline hover:opacity-80 transition-opacity">
+            <Link
+              href="/settings"
+              className="rounded-full border border-transparent px-3 py-1.5 text-black/70 transition-colors hover:border-black/10 hover:bg-black/5 hover:text-black focus-visible:outline-2 dark:text-white/70 dark:hover:border-white/10 dark:hover:bg-white/[0.08] dark:hover:text-white"
+            >
               Settings
             </Link>
+            <ThemeToggle />
             <LogoutButton />
           </div>
         </nav>
       </header>
 
       {(brokenBanks.length > 0 || isStale) && (
-        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+        <div className="rounded-[22px] border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm shadow-sm">
           {brokenBanks.length > 0 ? (
             <>
               <span className="font-medium">
@@ -227,14 +240,14 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                   .join(", ")}{" "}
                 lost its connection
               </span>{" "}
-              — data may be stale.{" "}
+              , data may be stale.{" "}
               <Link href="/settings" className="underline">
                 Reconnect in Settings
               </Link>
             </>
           ) : (
             <>
-              <span className="font-medium">Data may be stale</span> — no
+              <span className="font-medium">Data may be stale</span>, no
               successful sync in the last 48 hours. Try Refresh, and check your
               banks in{" "}
               <Link href="/settings" className="underline">
@@ -247,40 +260,45 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       )}
 
       {/* Action buttons bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-black/5 dark:bg-white/5 p-3 rounded-2xl">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <ConnectBankButton />
-          {hasBanks && <RefreshButton />}
-          {hasBanks && (
-            <span className="text-xs opacity-60" title="Newest successful sync; auto-updates every 30 min while open">
-              Updated {formatMinutesAgo(data.lastSyncAgoMinutes)}
-            </span>
-          )}
+      <section className="rounded-[30px] border border-[var(--surface-border)] bg-[var(--surface-strong)] p-4 shadow-[0_22px_70px_rgba(0,0,0,0.1)] backdrop-blur-xl">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            <ConnectBankButton />
+            {hasBanks && <RefreshButton />}
+            {hasBanks && (
+              <span
+                className="rounded-full border border-[var(--surface-border)] bg-black/[0.03] px-3 py-2 text-xs font-medium text-[var(--muted)] dark:bg-white/[0.05]"
+                title="Newest successful sync; auto-updates every 30 min while open"
+              >
+                Updated {formatMinutesAgo(data.lastSyncAgoMinutes)}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
+            {(items ?? []).map((i) => (
+              <span
+                key={i.id}
+                className={`inline-flex items-center rounded-full border px-3 py-1.5 ${
+                  i.status === "active"
+                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                    : "border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300"
+                }`}
+              >
+                {i.institution_name ?? "Bank"}
+                {i.status !== "active" ? ` (${i.status})` : ""}
+              </span>
+            ))}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
-          {(items ?? []).map((i) => (
-            <span
-              key={i.id}
-              className={`inline-block rounded-full border px-2.5 py-1 ${
-                i.status === "active"
-                  ? "border-green-500/20 bg-green-500/10 text-green-700 dark:text-green-400"
-                  : "border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-400"
-              }`}
-            >
-              {i.institution_name ?? "Bank"}
-              {i.status !== "active" ? ` (${i.status})` : ""}
-            </span>
-          ))}
-        </div>
-      </div>
+      </section>
 
       {!hasBanks ? (
-        <div className="text-center py-12 px-4 rounded-2xl border border-dashed border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5">
-          <svg className="w-12 h-12 mx-auto mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="rounded-[30px] border border-dashed border-[var(--surface-border)] bg-[var(--surface)] px-4 py-14 text-center shadow-[0_22px_70px_rgba(0,0,0,0.08)] backdrop-blur-xl">
+          <svg className="mx-auto mb-4 h-12 w-12 text-[var(--muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
           </svg>
-          <h3 className="font-semibold text-lg">No banks connected</h3>
-          <p className="opacity-60 text-sm max-w-sm mx-auto mt-1 mb-4">
+          <h3 className="text-2xl font-black tracking-[-0.03em]">No banks connected</h3>
+          <p className="mx-auto mb-5 mt-2 max-w-sm text-sm text-[var(--muted)]">
             Connect your bank accounts securely with Plaid to analyze your spending, subscriptions, and income streams.
           </p>
           <ConnectBankButton />
@@ -289,14 +307,14 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         <>
           {/* Card Deck Carousel with snap scrolling */}
           <div>
-            <div className="flex items-baseline justify-between mb-3">
-              <h2 className="text-sm font-semibold uppercase tracking-wider opacity-60">
+            <div className="mb-3 flex items-baseline justify-between">
+              <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-[var(--muted)]">
                 Your Cards & Accounts
               </h2>
               {selectedAccountId && (
                 <Link
                   href={`/dashboard?tab=${activeTab}${selectedMonth ? `&month=${selectedMonth}` : ""}`}
-                  className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                  className="text-xs font-bold text-[var(--accent)] hover:underline"
                 >
                   Clear Card Filter
                 </Link>
@@ -304,7 +322,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             </div>
 
             {/* Horizontal deck container */}
-            <div className="flex overflow-x-auto gap-4 pb-4 snap-x scrollbar-none touch-pan-x -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div className="-mx-4 flex touch-pan-x snap-x gap-4 overflow-x-auto px-4 pb-4 scrollbar-none sm:mx-0 sm:px-0">
               {data.accounts.map((a) => {
                 const design = detectCardDesign(a.name, a.official_name, a.type, a.subtype);
                 const isSelected = selectedAccountId === a.id;
@@ -318,24 +336,24 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                   <Link
                     href={cardLink}
                     key={a.id}
-                    className="flex-shrink-0 snap-start"
+                    className="flex-shrink-0 snap-start rounded-[24px] focus-visible:outline-2"
                   >
                     <div
-                      className={`relative w-[280px] sm:w-[300px] h-[170px] rounded-2xl p-5 bg-gradient-to-br ${
+                      className={`relative flex h-[178px] w-[292px] flex-col justify-between overflow-hidden rounded-[24px] bg-gradient-to-br p-5 sm:w-[320px] ${
                         design.bgGradient
-                      } ${design.textColor} flex flex-col justify-between shadow-md transition-all duration-200 cursor-pointer ${
+                      } ${design.textColor} shadow-[0_18px_50px_rgba(0,0,0,0.18)] transition-all duration-200 before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.25),transparent_14rem)] ${
                         isSelected
-                          ? `ring-4 ${design.borderColor} scale-[0.98]`
-                          : "hover:scale-[1.01] hover:shadow-lg border border-black/5 dark:border-white/5"
+                          ? `scale-[0.98] ring-4 ${design.borderColor}`
+                          : "border border-white/15 hover:-translate-y-1 hover:shadow-[0_24px_70px_rgba(0,0,0,0.24)]"
                       }`}
                     >
                       {/* Top row: Name & Logo */}
-                      <div className="flex items-start justify-between">
+                      <div className="relative z-10 flex items-start justify-between">
                         <div className="max-w-[70%]">
-                          <p className="text-[10px] uppercase opacity-70 tracking-widest leading-none font-bold">
+                          <p className="text-[10px] font-bold uppercase leading-none tracking-[0.22em] opacity-70">
                             {a.type === "credit" ? "Credit Card" : titleCase(a.subtype ?? a.type)}
                           </p>
-                          <p className="font-bold text-sm tracking-tight truncate mt-1">
+                          <p className="mt-1 truncate text-base font-black tracking-[-0.02em]">
                             {design.displayName}
                           </p>
                         </div>
@@ -345,25 +363,25 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                       </div>
 
                       {/* Middle row: Masked digits */}
-                      <div>
-                        <p className="font-mono text-base tracking-widest opacity-85 select-all">
+                      <div className="relative z-10">
+                        <p className="select-all font-mono text-lg tracking-[0.32em] opacity-85">
                           •••• •••• •••• {a.mask ?? "••••"}
                         </p>
                       </div>
 
                       {/* Bottom row: Balance & EXP / Info */}
-                      <div className="flex items-end justify-between">
+                      <div className="relative z-10 flex items-end justify-between">
                         <div>
-                          <p className="text-[9px] uppercase opacity-70 tracking-widest leading-none font-bold mb-0.5">
+                          <p className="mb-1 text-[9px] font-bold uppercase leading-none tracking-[0.22em] opacity-70">
                             Balance
                           </p>
-                          <p className="font-semibold text-lg tabular-nums leading-none tracking-tight">
+                          <p className="text-xl font-black leading-none tracking-[-0.03em]">
                             {formatCurrency(a.current_balance, a.iso_currency_code ?? "USD")}
                           </p>
                         </div>
                         {a.credit_limit ? (
                           <div className="text-right">
-                            <p className="text-[8px] uppercase opacity-70 tracking-widest leading-none font-bold mb-0.5">
+                            <p className="mb-1 text-[8px] font-bold uppercase leading-none tracking-[0.22em] opacity-70">
                               Limit
                             </p>
                             <p className="text-xs opacity-90 tabular-nums">
@@ -384,11 +402,11 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           </div>
 
           {/* Month selector Browser */}
-          <div className="space-y-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wider opacity-60">
+          <div className="space-y-3">
+            <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-[var(--muted)]">
               Browse Spending History
             </h2>
-            <div className="flex overflow-x-auto gap-2 pb-2 snap-x scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4 pb-2 scrollbar-none sm:mx-0 sm:px-0">
               {data.availableMonths.map((m) => {
                 const isActive = data.selectedMonth === m;
                 const monthLink = isActive
@@ -399,13 +417,13 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                   <Link
                     href={monthLink}
                     key={m}
-                    className="flex-shrink-0 snap-start"
+                    className="flex-shrink-0 snap-start rounded-full focus-visible:outline-2"
                   >
                     <span
-                      className={`inline-block px-4 py-2 text-xs font-semibold rounded-full border transition-all duration-150 cursor-pointer ${
+                      className={`inline-block rounded-full border px-4 py-2 text-xs font-bold transition-all duration-150 ${
                         isActive
-                          ? "bg-foreground text-background border-foreground font-bold shadow-sm"
-                          : "border-black/10 dark:border-white/15 bg-white/50 dark:bg-black/30 hover:border-black/30 dark:hover:border-white/30"
+                          ? "border-transparent bg-foreground text-background shadow-[0_10px_30px_rgba(0,0,0,0.16)]"
+                          : "border-[var(--surface-border)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--foreground)]"
                       }`}
                     >
                       {formatMonth(m)}
@@ -417,33 +435,33 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           </div>
 
           {/* Tab selectors */}
-          <div className="flex border-b border-black/10 dark:border-white/10 gap-1.5 scrollbar-none overflow-x-auto">
+          <div className="flex gap-2 overflow-x-auto rounded-full border border-[var(--surface-border)] bg-[var(--surface)] p-1.5 shadow-sm backdrop-blur-xl scrollbar-none">
             <Link
               href={getTabUrl("overview")}
-              className={`py-2.5 px-4 text-sm font-bold border-b-2 transition-all duration-150 ${
+              className={`rounded-full px-4 py-2.5 text-sm font-bold transition-all duration-150 focus-visible:outline-2 ${
                 activeTab === "overview"
-                  ? "border-foreground text-foreground"
-                  : "border-transparent text-black/50 dark:text-white/50 hover:text-foreground"
+                  ? "bg-foreground text-background shadow-sm"
+                  : "text-[var(--muted)] hover:bg-black/[0.04] hover:text-[var(--foreground)] dark:hover:bg-white/[0.06]"
               }`}
             >
               Overview
             </Link>
             <Link
               href={getTabUrl("breakdowns")}
-              className={`py-2.5 px-4 text-sm font-bold border-b-2 transition-all duration-150 ${
+              className={`rounded-full px-4 py-2.5 text-sm font-bold transition-all duration-150 focus-visible:outline-2 ${
                 activeTab === "breakdowns"
-                  ? "border-foreground text-foreground"
-                  : "border-transparent text-black/50 dark:text-white/50 hover:text-foreground"
+                  ? "bg-foreground text-background shadow-sm"
+                  : "text-[var(--muted)] hover:bg-black/[0.04] hover:text-[var(--foreground)] dark:hover:bg-white/[0.06]"
               }`}
             >
               Cards & Banks
             </Link>
             <Link
               href={getTabUrl("cashflow")}
-              className={`py-2.5 px-4 text-sm font-bold border-b-2 transition-all duration-150 ${
+              className={`rounded-full px-4 py-2.5 text-sm font-bold transition-all duration-150 focus-visible:outline-2 ${
                 activeTab === "cashflow"
-                  ? "border-foreground text-foreground"
-                  : "border-transparent text-black/50 dark:text-white/50 hover:text-foreground"
+                  ? "bg-foreground text-background shadow-sm"
+                  : "text-[var(--muted)] hover:bg-black/[0.04] hover:text-[var(--foreground)] dark:hover:bg-white/[0.06]"
               }`}
             >
               Cash Flow Insights
@@ -454,25 +472,25 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           {activeTab === "overview" && (
             <div className="space-y-6">
               {/* Pacing Widget (spent so far vs budget & vs last month pro-rated) */}
-              <section className="rounded-2xl border border-black/10 dark:border-white/15 p-5 bg-gradient-to-br from-black/[0.02] to-black/[0.05] dark:from-white/[0.02] dark:to-white/[0.05] shadow-inner space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <section className="space-y-5 rounded-[30px] border border-[var(--surface-border)] bg-[var(--surface-strong)] p-5 shadow-[0_22px_70px_rgba(0,0,0,0.1)] backdrop-blur-xl sm:p-6">
+                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
                   <div>
-                    <h3 className="text-sm font-semibold uppercase tracking-wider opacity-60">
+                    <h3 className="text-sm font-bold uppercase tracking-[0.18em] text-[var(--muted)]">
                       Spend Pacing & Budget
                     </h3>
-                    <p className="text-xs opacity-50 mt-0.5">
+                    <p className="mt-1 text-sm text-[var(--muted)]">
                       Priced and compared to this exact calendar day last month
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold tabular-nums">
+                    <p className="text-3xl font-black tracking-[-0.04em] sm:text-4xl">
                       {formatCurrency(data.currentMonthExpenses)}
                     </p>
-                    <p className="text-xs font-semibold opacity-70">
+                    <p className="text-xs font-bold text-[var(--muted)]">
                       {hasBudget ? (
                         <>of {formatCurrency(data.totalBudget)} monthly budget</>
                       ) : (
-                        <Link href="/settings" className="text-blue-600 dark:text-blue-400 underline">
+                        <Link href="/settings" className="text-[var(--accent)] underline">
                           Set budgets in settings
                         </Link>
                       )}
@@ -482,8 +500,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
                 {/* Progress bar vs total budget */}
                 {hasBudget && (
-                  <div className="space-y-1.5">
-                    <div className="h-3 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden relative">
+                  <div className="space-y-2">
+                    <div className="relative h-3 overflow-hidden rounded-full bg-black/[0.07] dark:bg-white/[0.08]">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ease-out ${
                           budgetAlert
@@ -507,7 +525,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                       >
                         {budgetProgress.toFixed(0)}% consumed
                       </span>
-                      <span className="opacity-60">
+                      <span className="text-[var(--muted)]">
                         {formatCurrency(Math.max(0, data.totalBudget - data.currentMonthExpenses))} remaining
                       </span>
                     </div>
@@ -515,10 +533,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                 )}
 
                 {/* Comparison Pacing indicator vs last month pro-rated */}
-                <div className="flex items-center gap-3 bg-white/40 dark:bg-black/20 p-3 rounded-xl text-sm border border-black/5 dark:border-white/5 backdrop-blur-sm">
+                <div className="flex items-center gap-3 rounded-[22px] border border-[var(--surface-border)] bg-black/[0.03] p-4 text-sm backdrop-blur-sm dark:bg-white/[0.05]">
                   {pacingDiff > 0 ? (
                     <>
-                      <div className="w-8 h-8 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center font-bold text-lg select-none">
+                      <div className="flex h-10 w-10 select-none items-center justify-center rounded-full bg-red-500/10 text-lg font-bold text-red-500">
                         ↑
                       </div>
                       <div>
@@ -530,7 +548,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                     </>
                   ) : pacingDiff < 0 ? (
                     <>
-                      <div className="w-8 h-8 rounded-full bg-green-500/10 text-green-500 flex items-center justify-center font-bold text-lg select-none">
+                      <div className="flex h-10 w-10 select-none items-center justify-center rounded-full bg-green-500/10 text-lg font-bold text-green-500">
                         ↓
                       </div>
                       <div>
@@ -542,7 +560,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                     </>
                   ) : (
                     <>
-                      <div className="w-8 h-8 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center font-bold text-lg select-none">
+                      <div className="flex h-10 w-10 select-none items-center justify-center rounded-full bg-blue-500/10 text-lg font-bold text-blue-500">
                         →
                       </div>
                       <div>
@@ -610,14 +628,17 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                 </Card>
                 <Card title="Recurring streams">
                   {data.subscriptions.length === 0 ? (
-                    <p className="text-sm opacity-60 py-4">No recurring streams detected.</p>
+                    <p className="py-4 text-sm text-[var(--muted)]">No recurring streams detected.</p>
                   ) : (
                     <ul className="space-y-3.5 text-sm font-medium">
                       {data.subscriptions.map((s, i) => (
-                        <li key={i} className="flex justify-between items-center py-0.5 border-b border-black/5 dark:border-white/5 last:border-0">
-                          <span>
+                        <li
+                          key={i}
+                          className="flex items-center justify-between gap-4 border-b border-[var(--surface-border)] py-1.5 last:border-0"
+                        >
+                          <span className="min-w-0">
                             {s.merchant}
-                            <span className="text-[10px] ml-1.5 uppercase opacity-55 font-bold tracking-wider px-1.5 py-0.5 bg-black/5 dark:bg-white/5 rounded">
+                            <span className="ml-2 rounded-full bg-black/[0.05] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)] dark:bg-white/[0.07]">
                               {s.frequency ?? "recurring"}
                             </span>
                           </span>
@@ -663,18 +684,18 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             <div className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Card title="Depository Inflows (Deposits)">
-                  <p className="text-2xl font-bold tabular-nums text-green-600 dark:text-green-400">
+                  <p className="text-3xl font-black tracking-[-0.04em] text-green-600 dark:text-green-400">
                     +{formatCurrency(data.cashFlow.deposits)}
                   </p>
                 </Card>
                 <Card title="Depository Outflows (Withdrawals)">
-                  <p className="text-2xl font-bold tabular-nums text-red-600 dark:text-red-400">
+                  <p className="text-3xl font-black tracking-[-0.04em] text-red-600 dark:text-red-400">
                     -{formatCurrency(data.cashFlow.withdrawals)}
                   </p>
                 </Card>
                 <Card title="Net Cash Flow">
                   <p
-                    className={`text-2xl font-bold tabular-nums ${
+                    className={`text-3xl font-black tracking-[-0.04em] ${
                       data.cashFlow.net >= 0
                         ? "text-green-600 dark:text-green-400"
                         : "text-red-600 dark:text-red-400"
@@ -698,11 +719,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
               {/* Cash Flow Insights Banner */}
               {data.cashFlow.net < 0 ? (
-                <div className="bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/20 rounded-2xl p-5 text-sm space-y-2">
-                  <h4 className="font-bold flex items-center gap-1.5">
-                    <span>⚠️</span> Negative Cash Flow Detected
+                <div className="space-y-2 rounded-[24px] border border-red-500/20 bg-red-500/10 p-5 text-sm text-red-700 shadow-sm dark:text-red-300">
+                  <h4 className="flex items-center gap-2 font-black">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-red-500/15">!</span>
+                    Negative Cash Flow Detected
                   </h4>
-                  <p className="opacity-90">
+                  <p className="text-red-900/75 dark:text-red-100/80">
                     Your depository withdrawals and transfers out exceeded your inflows by{" "}
                     <strong>{formatCurrency(Math.abs(data.cashFlow.net))}</strong> in{" "}
                     {formatMonth(data.selectedMonth)}. Consider adjusting category limits, scaling
@@ -710,11 +732,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                   </p>
                 </div>
               ) : (
-                <div className="bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20 rounded-2xl p-5 text-sm space-y-2">
-                  <h4 className="font-bold flex items-center gap-1.5">
-                    <span>✅</span> Positive Cash Flow Balanced
+                <div className="space-y-2 rounded-[24px] border border-green-500/20 bg-green-500/10 p-5 text-sm text-green-700 shadow-sm dark:text-green-300">
+                  <h4 className="flex items-center gap-2 font-black">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-green-500/15">+</span>
+                    Positive Cash Flow Balanced
                   </h4>
-                  <p className="opacity-90">
+                  <p className="text-green-900/75 dark:text-green-100/80">
                     Great work! You saved or retained{" "}
                     <strong>{formatCurrency(data.cashFlow.net)}</strong> in net depository cash
                     during {formatMonth(data.selectedMonth)}. Retaining positive cash flows helps build
@@ -725,15 +748,15 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
               {/* Depository Accounts list */}
               <Card title="Checking & Savings Accounts Summary">
-                <ul className="divide-y divide-black/10 dark:divide-white/10 text-sm font-medium">
+                <ul className="divide-y divide-[var(--surface-border)] text-sm font-medium">
                   {data.accounts
                     .filter((a) => a.type === "depository")
                     .map((a) => (
-                      <li key={a.id} className="flex justify-between py-3">
+                      <li key={a.id} className="flex justify-between gap-4 py-3">
                         <span>
                           {a.name ?? "Checking"}
                           {a.mask ? ` ••${a.mask}` : ""}
-                          <span className="text-xs ml-2 opacity-50 uppercase tracking-wide">
+                          <span className="ml-2 text-xs uppercase tracking-wide text-[var(--muted)]">
                             {titleCase(a.subtype ?? "")}
                           </span>
                         </span>

@@ -14,7 +14,10 @@ export default function LogoutButton() {
   }
 
   return (
-    <button onClick={signOut} className="text-sm underline opacity-80">
+    <button
+      onClick={signOut}
+      className="text-sm font-medium text-black/60 transition-colors hover:text-black focus-visible:outline-2 dark:text-white/60 dark:hover:text-white"
+    >
       Sign out
     </button>
   );

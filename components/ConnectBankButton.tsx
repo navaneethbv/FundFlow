@@ -112,7 +112,7 @@ export default function ConnectBankButton() {
       <button
         onClick={() => open()}
         disabled={!ready || !linkToken || busy}
-        className="rounded bg-foreground text-background px-4 py-2 font-medium disabled:opacity-50"
+        className="rounded-full bg-foreground text-background px-5 py-2.5 text-sm font-semibold shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-2 disabled:translate-y-0 disabled:opacity-45 disabled:shadow-none"
       >
         {busy ? "Connecting…" : "Connect a bank"}
       </button>
