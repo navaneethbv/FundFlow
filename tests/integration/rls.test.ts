@@ -15,6 +15,8 @@ const run = Boolean(url && publishable && secret);
 const suite = run ? describe : describe.skip;
 
 suite("RLS cross-user isolation", () => {
+  if (!run) return;
+
   const admin = createClient(url!, secret!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });

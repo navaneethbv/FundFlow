@@ -9,6 +9,7 @@ export type AuditAction =
   | "logout"
   | "signup"
   | "mfa_enroll"
+  | "mfa_unenroll"
   | "plaid_connect"
   | "plaid_token_exchange"
   | "plaid_disconnect"
