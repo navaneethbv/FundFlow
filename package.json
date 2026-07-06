@@ -16,7 +16,7 @@
     "@supabase/supabase-js": "^2.110.0",
     "next": "16.2.10",
     "plaid": "^43.0.0",
-    "react": "19.2.4",
+    "react": "19.2.7",
     "react-dom": "19.2.4",
     "react-plaid-link": "^4.1.1",
     "server-only": "^0.0.1"
