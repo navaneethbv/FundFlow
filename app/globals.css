@@ -3,17 +3,27 @@
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
 :root {
-  --background: #f4f7fb;
-  --foreground: #11161f;
+  --background: #f3f5f9;
+  --foreground: #0f1523;
   --surface: rgba(255, 255, 255, 0.72);
   --surface-strong: rgba(255, 255, 255, 0.9);
   --surface-border: rgba(17, 22, 31, 0.1);
-  --muted: #647084;
+  --panel: #ffffff;
+  --panel-2: #f7f9fc;
+  --panel-border: rgba(15, 23, 42, 0.08);
+  --panel-hover: rgba(15, 23, 42, 0.035);
+  --muted: #5c6778;
   --accent: #2563eb;
+  --accent-strong: #2563eb;
   --accent-2: #0ea5a5;
-  --accent-soft: rgba(37, 99, 235, 0.12);
+  --accent-soft: rgba(37, 99, 235, 0.1);
+  --accent-gradient: linear-gradient(135deg, #2563eb, #3b82f6);
   --success: #0f9f6e;
   --danger: #e05252;
+  --warning: #b45309;
+  --shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 28px rgba(15, 23, 42, 0.06);
+  --shadow-lift: 0 4px 10px rgba(15, 23, 42, 0.06), 0 18px 44px rgba(15, 23, 42, 0.12);
+  --shadow-glow: 0 4px 14px rgba(37, 99, 235, 0.32);
 
   /* Data-viz tokens (light). Categorical slots are assigned in fixed order;
      the set + surface passed scripts/validate_palette.js (dataviz skill):
@@ -37,17 +47,27 @@
 }
 
 :root[data-theme="light"] {
-  --background: #f4f7fb;
-  --foreground: #11161f;
+  --background: #f3f5f9;
+  --foreground: #0f1523;
   --surface: rgba(255, 255, 255, 0.72);
   --surface-strong: rgba(255, 255, 255, 0.9);
   --surface-border: rgba(17, 22, 31, 0.1);
-  --muted: #647084;
+  --panel: #ffffff;
+  --panel-2: #f7f9fc;
+  --panel-border: rgba(15, 23, 42, 0.08);
+  --panel-hover: rgba(15, 23, 42, 0.035);
+  --muted: #5c6778;
   --accent: #2563eb;
+  --accent-strong: #2563eb;
   --accent-2: #0ea5a5;
-  --accent-soft: rgba(37, 99, 235, 0.12);
+  --accent-soft: rgba(37, 99, 235, 0.1);
+  --accent-gradient: linear-gradient(135deg, #2563eb, #3b82f6);
   --success: #0f9f6e;
   --danger: #e05252;
+  --warning: #b45309;
+  --shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 28px rgba(15, 23, 42, 0.06);
+  --shadow-lift: 0 4px 10px rgba(15, 23, 42, 0.06), 0 18px 44px rgba(15, 23, 42, 0.12);
+  --shadow-glow: 0 4px 14px rgba(37, 99, 235, 0.32);
   --viz-1: #2a78d6;
   --viz-2: #1baf7a;
   --viz-3: #eda100;
@@ -68,22 +88,51 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-strong: var(--surface-strong);
+  --color-surface-border: var(--surface-border);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-panel-border: var(--panel-border);
+  --color-panel-hover: var(--panel-hover);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --radius-card: 1rem;
+  --radius-field: 0.625rem;
+  --shadow-card: var(--shadow-soft);
+  --shadow-float: var(--shadow-lift);
+  --shadow-pop: var(--shadow-glow);
 }
 
 :root[data-theme="dark"] {
-  --background: #05070b;
-  --foreground: #f3f7fb;
-  --surface: rgba(14, 18, 27, 0.78);
-  --surface-strong: rgba(20, 25, 36, 0.94);
-  --surface-border: rgba(226, 232, 240, 0.13);
-  --muted: #8c96a8;
-  --accent: #65a4ff;
+  --background: #0a0e15;
+  --foreground: #eef2f8;
+  --surface: rgba(16, 21, 31, 0.78);
+  --surface-strong: rgba(22, 28, 40, 0.94);
+  --surface-border: rgba(148, 163, 184, 0.14);
+  --panel: #10151f;
+  --panel-2: #161c28;
+  --panel-border: rgba(148, 163, 184, 0.14);
+  --panel-hover: rgba(148, 163, 184, 0.07);
+  --muted: #8b96aa;
+  --accent: #60a5fa;
+  --accent-strong: #3b82f6;
   --accent-2: #27d3c3;
-  --accent-soft: rgba(101, 164, 255, 0.16);
+  --accent-soft: rgba(96, 165, 250, 0.14);
+  --accent-gradient: linear-gradient(135deg, #2f6fed, #3b82f6);
   --success: #20d88c;
   --danger: #ff7373;
+  --warning: #fbbf24;
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.35);
+  --shadow-lift: 0 6px 14px rgba(0, 0, 0, 0.4), 0 20px 48px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 4px 16px rgba(59, 130, 246, 0.4);
   --viz-1: #3987e5;
   --viz-2: #199e70;
   --viz-3: #c98500;
@@ -103,17 +152,27 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --background: #05070b;
-    --foreground: #f3f7fb;
-    --surface: rgba(14, 18, 27, 0.78);
-    --surface-strong: rgba(20, 25, 36, 0.94);
-    --surface-border: rgba(226, 232, 240, 0.13);
-    --muted: #8c96a8;
-    --accent: #65a4ff;
+    --background: #0a0e15;
+    --foreground: #eef2f8;
+    --surface: rgba(16, 21, 31, 0.78);
+    --surface-strong: rgba(22, 28, 40, 0.94);
+    --surface-border: rgba(148, 163, 184, 0.14);
+    --panel: #10151f;
+    --panel-2: #161c28;
+    --panel-border: rgba(148, 163, 184, 0.14);
+    --panel-hover: rgba(148, 163, 184, 0.07);
+    --muted: #8b96aa;
+    --accent: #60a5fa;
+    --accent-strong: #3b82f6;
     --accent-2: #27d3c3;
-    --accent-soft: rgba(101, 164, 255, 0.16);
+    --accent-soft: rgba(96, 165, 250, 0.14);
+    --accent-gradient: linear-gradient(135deg, #2f6fed, #3b82f6);
     --success: #20d88c;
     --danger: #ff7373;
+    --warning: #fbbf24;
+    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.35);
+    --shadow-lift: 0 6px 14px rgba(0, 0, 0, 0.4), 0 20px 48px rgba(0, 0, 0, 0.5);
+    --shadow-glow: 0 4px 16px rgba(59, 130, 246, 0.4);
     --viz-1: #3987e5;
     --viz-2: #199e70;
     --viz-3: #c98500;
@@ -138,14 +197,33 @@ body {
   font-family: var(--font-geist-sans, Arial), Helvetica, sans-serif;
   min-height: 100vh;
   background-image:
-    radial-gradient(circle at 18% 0%, rgba(37, 99, 235, 0.14), transparent 26rem),
-    radial-gradient(circle at 84% 10%, rgba(14, 165, 165, 0.13), transparent 24rem),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 34rem);
+    radial-gradient(circle at 16% -4%, var(--accent-soft), transparent 30rem),
+    radial-gradient(circle at 88% 0%, rgba(14, 165, 165, 0.07), transparent 26rem);
+  background-attachment: fixed;
+}
+
+/* Type roles: quiet uppercase section labels and headline numerals. */
+.eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+
+.display {
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
 }
 
 button:not(:disabled),
 a[href],
-summary {
+summary,
+label[for],
+input[type="checkbox"]:not(:disabled),
+input[type="file"]:not(:disabled),
+input[type="range"]:not(:disabled) {
   cursor: pointer;
 }
 
@@ -173,4 +251,15 @@ a {
 
 .scrollbar-none::-webkit-scrollbar {
   display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

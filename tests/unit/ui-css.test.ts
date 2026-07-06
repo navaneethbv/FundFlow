@@ -11,6 +11,13 @@ describe("global interactive affordances", () => {
     expect(css).toContain("cursor: not-allowed");
   });
 
+  it("neutralizes animation for users preferring reduced motion", () => {
+    const css = readFileSync("app/globals.css", "utf8");
+
+    expect(css).toContain("prefers-reduced-motion: reduce");
+    expect(css).toContain("transition-duration: 0.01ms");
+  });
+
   it("supports persisted light and dark theme overrides", () => {
     const css = readFileSync("app/globals.css", "utf8");
     const layout = readFileSync("app/layout.tsx", "utf8");
