@@ -20,14 +20,14 @@
     "nodemailer": "^9.0.3",
     "pdfkit": "^0.19.1",
     "plaid": "^43.0.0",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
     "react-plaid-link": "^4.1.1",
     "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^26",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^4.1.9",
@@ -35,7 +35,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "tailwindcss": "^4",
-    "typescript": "^5",
+    "typescript": "^6",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^4.1.9"
   }
