@@ -41,6 +41,19 @@ export async function POST(request: NextRequest) {
       products: [],
     };
 
+    // Register the webhook for real-time updates, but only for a reachable
+    // https origin — a localhost dev URL is unreachable and Plaid rejects it.
+    const appUrl = serverEnv.appUrl;
+    if (appUrl && appUrl.startsWith("https://")) {
+      req.webhook = `${appUrl}/api/plaid/webhook`;
+    }
+    // OAuth banks (most large US institutions in production) need a registered
+    // redirect_uri. Included only when configured; sandbox / non-OAuth links
+    // work without it. Applies to both normal and update (reconnect) mode.
+    if (serverEnv.plaidRedirectUri) {
+      req.redirect_uri = serverEnv.plaidRedirectUri;
+    }
+
     if (itemId) {
       const item = await getItem(user.id, itemId);
       if (!item) {
