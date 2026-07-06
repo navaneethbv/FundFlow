@@ -9,6 +9,15 @@ const secret = process.env.SUPABASE_SECRET_KEY;
 const run = Boolean(url && secret);
 const suite = run ? describe : describe.skip;
 
+type ItemLifecycleWebhookPayload = {
+  webhook_type: "ITEM";
+  webhook_code: string;
+  item_id: string;
+  error?: {
+    error_code: string;
+  };
+};
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let syncTriggeredWith: any = null;
 
@@ -139,7 +148,7 @@ suite("plaid webhook integration", () => {
     ];
 
     for (const { code, expectedStatus, expectedError } of codes) {
-      const payload: any = {
+      const payload: ItemLifecycleWebhookPayload = {
         webhook_type: "ITEM",
         webhook_code: code,
         item_id: plaidItemId,

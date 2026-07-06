@@ -201,7 +201,7 @@ suite("plaid-service DB integration", () => {
       .single();
 
     // 4. Decrypt the token, triggering database upgrade/rotation
-    const decrypted = await decryptItemTokenAndUpgrade(item as any);
+    const decrypted = await decryptItemTokenAndUpgrade(item!);
     expect(decrypted).toBe("fallback-token-secret");
 
     // 5. Fetch from DB again to verify it has been updated with primary key encryption
