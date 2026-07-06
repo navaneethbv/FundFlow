@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Button from "@/components/ui/Button";
+import Input from "@/components/ui/Input";
+import Panel from "@/components/ui/Panel";
+import Select from "@/components/ui/Select";
 
 interface AccountOption {
   id: string;
@@ -61,9 +65,8 @@ export default function ImportSection({ accounts }: { accounts: AccountOption[] 
   }
 
   return (
-    <section className="rounded-lg border border-black/10 dark:border-white/15 p-4 space-y-3">
-      <h2 className="font-semibold">Import history (CSV)</h2>
-      <p className="text-sm opacity-80">
+    <Panel title="Import data" eyebrow="CSV backfill">
+      <p className="mb-4 text-sm text-muted">
         Backfill history older than Plaid provides (max 24 months) from a bank-statement
         CSV. Needs date, description, and amount (or debit/credit) columns. Rows that
         overlap the account&apos;s Plaid-synced history are skipped automatically, and
@@ -71,31 +74,28 @@ export default function ImportSection({ accounts }: { accounts: AccountOption[] 
       </p>
 
       {accounts.length === 0 ? (
-        <p className="text-sm opacity-60">Connect a bank first — imports attach to an account.</p>
+        <p className="text-sm text-muted">Connect a bank first. Imports attach to an account.</p>
       ) : (
         <form onSubmit={onSubmit} className="space-y-3 text-sm">
-          <input
-            type="file"
-            name="file"
-            accept=".csv,text/csv"
-            required
-            className="block w-full text-sm file:mr-3 file:rounded file:border file:border-black/15 dark:file:border-white/25 file:bg-transparent file:px-3 file:py-1.5 file:text-sm"
-          />
+          <label className="flex min-h-32 flex-col items-center justify-center rounded-card border border-dashed border-panel-border bg-panel-2 px-4 py-8 text-center text-sm text-muted">
+            <span className="font-semibold text-foreground">Drag and drop your CSV file here</span>
+            <span className="mt-1">or choose a file</span>
+            <Input type="file" name="file" accept=".csv,text/csv" required className="mt-4 max-w-xs" />
+          </label>
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2">
               Into account
-              <select
+              <Select
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value)}
-                className="rounded border border-black/15 dark:border-white/20 bg-transparent px-2 py-1.5"
               >
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name ?? "Account"}
-                    {a.mask ? ` ••${a.mask}` : ""}
+                    {a.mask ? ` **${a.mask}` : ""}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label className="flex items-center gap-2">
               <input
@@ -106,23 +106,22 @@ export default function ImportSection({ accounts }: { accounts: AccountOption[] 
               Positive amounts are deposits (most bank CSVs)
             </label>
           </div>
-          <button
+          <Button
             type="submit"
-            disabled={busy}
-            className="rounded border border-black/15 dark:border-white/25 px-3 py-1.5 disabled:opacity-50"
+            loading={busy}
           >
-            {busy ? "Importing…" : "Import CSV"}
-          </button>
+            {busy ? "Importing..." : "Import CSV"}
+          </Button>
         </form>
       )}
 
       {result && (
-        <div className="text-sm space-y-1 rounded-lg bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20 p-3">
+        <div className="mt-4 space-y-1 rounded-lg border border-green-500/20 bg-green-500/10 p-3 text-sm text-green-700 dark:text-green-400">
           <p className="font-medium">
             Imported {result.imported.toLocaleString()} transaction
             {result.imported === 1 ? "" : "s"}
             {result.skipped_overlap > 0 &&
-              ` · ${result.skipped_overlap} skipped (overlap with Plaid history)`}
+              ` - ${result.skipped_overlap} skipped (overlap with Plaid history)`}
           </p>
           {result.parse_errors.length > 0 && (
             <details>
@@ -140,6 +139,6 @@ export default function ImportSection({ accounts }: { accounts: AccountOption[] 
         </div>
       )}
       {error && <p className="text-sm text-red-600">{error}</p>}
-    </section>
+    </Panel>
   );
 }

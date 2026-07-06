@@ -36,21 +36,30 @@ export default async function SettingsPage() {
 
   return (
     <AppShell active="settings" email={user?.email}>
-      <div className="mx-auto max-w-2xl space-y-6">
+      <div className="space-y-6">
         <header>
-          <h1 className="text-2xl font-semibold">Settings</h1>
+          <p className="eyebrow">Control center</p>
+          <h1 className="display mt-2 text-3xl sm:text-4xl">Settings</h1>
         </header>
 
-        <MfaSection />
-        <BanksSection initialItems={items ?? []} />
-        <div id="budgets">
-          <BudgetsSection initialBudgets={budgets ?? []} />
+        <div className="grid gap-6 xl:grid-cols-3">
+          <BanksSection initialItems={items ?? []} />
+          <div id="budgets">
+            <BudgetsSection initialBudgets={budgets ?? []} />
+          </div>
+          <MfaSection />
         </div>
-        <ExportSection initialEnabled={profile?.ai_export_enabled ?? true} />
-        <ImportSection accounts={accounts ?? []} />
-        <div id="reports">
-          <ReportsSection initialEnabled={profile?.weekly_report_enabled ?? true} />
+
+        <div className="grid gap-6 xl:grid-cols-2">
+          <ImportSection accounts={accounts ?? []} />
+          <div className="space-y-6">
+            <ExportSection initialEnabled={profile?.ai_export_enabled ?? true} />
+            <div id="reports">
+              <ReportsSection initialEnabled={profile?.weekly_report_enabled ?? true} />
+            </div>
+          </div>
         </div>
+
         <DangerZone />
       </div>
     </AppShell>

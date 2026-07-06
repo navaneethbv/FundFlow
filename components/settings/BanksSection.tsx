@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import ReconnectBankButton from "@/components/settings/ReconnectBankButton";
+import Badge from "@/components/ui/Badge";
+import Button from "@/components/ui/Button";
+import Panel from "@/components/ui/Panel";
 
 interface Item {
   id: string;
@@ -46,36 +49,38 @@ export default function BanksSection({ initialItems }: { initialItems: Item[] })
   }
 
   return (
-    <section className="rounded-lg border border-black/10 dark:border-white/15 p-4 space-y-3">
-      <h2 className="font-semibold">Connected banks</h2>
+    <Panel title="Connected institutions" eyebrow="Banks">
       {items.length === 0 ? (
-        <p className="text-sm opacity-60">No banks connected.</p>
+        <p className="text-sm text-muted">No banks connected.</p>
       ) : (
-        <ul className="text-sm space-y-1">
+        <ul className="space-y-3 text-sm">
           {items.map((i) => (
-            <li key={i.id} className="flex justify-between items-center gap-2">
+            <li key={i.id} className="flex items-center justify-between gap-3 rounded-field border border-panel-border bg-panel-2 p-3">
               <span>
-                {i.institution_name ?? "Bank"}
-                {i.status !== "active" ? ` (${i.status})` : ""}
+                <span className="block font-semibold">{i.institution_name ?? "Bank"}</span>
                 {i.error_code === "PENDING_EXPIRATION" && (
-                  <span className="text-amber-600"> · consent expiring soon</span>
+                  <span className="text-xs text-warning">Consent expiring soon</span>
                 )}
               </span>
-              <span className="inline-flex items-center gap-3">
+              <span className="inline-flex items-center gap-2">
+                <Badge tone={i.status === "active" ? "success" : "danger"}>
+                  {i.status === "active" ? "Connected" : i.status}
+                </Badge>
                 {needsReconnect(i) && <ReconnectBankButton itemId={i.id} />}
-                <button
+                <Button
                   onClick={() => disconnect(i.id)}
                   disabled={busyId === i.id}
-                  className="text-red-600 underline text-xs disabled:opacity-50"
+                  variant="danger"
+                  size="sm"
                 >
-                  {busyId === i.id ? "Disconnecting…" : "Disconnect"}
-                </button>
+                  {busyId === i.id ? "Disconnecting..." : "Disconnect"}
+                </Button>
               </span>
             </li>
           ))}
         </ul>
       )}
       {error && <p className="text-sm text-red-600">{error}</p>}
-    </section>
+    </Panel>
   );
 }

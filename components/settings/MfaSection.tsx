@@ -2,6 +2,10 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import Badge from "@/components/ui/Badge";
+import Button from "@/components/ui/Button";
+import Input from "@/components/ui/Input";
+import Panel from "@/components/ui/Panel";
 
 interface Factor {
   id: string;
@@ -114,71 +118,71 @@ export default function MfaSection() {
   const active = factors.filter((f) => f.status === "verified");
 
   return (
-    <section className="rounded-lg border border-black/10 dark:border-white/15 p-4 space-y-3">
-      <h2 className="font-semibold">Two-factor authentication (TOTP)</h2>
+    <Panel title="Security" eyebrow="Multi-factor authentication">
 
       {active.length > 0 && (
-        <ul className="text-sm space-y-1">
+        <ul className="mb-4 space-y-2 text-sm">
           {active.map((f) => (
-            <li key={f.id} className="flex justify-between items-center">
-              <span>{f.friendly_name ?? "Authenticator"} · enabled</span>
-              <button
+            <li key={f.id} className="flex items-center justify-between gap-3 rounded-field bg-panel-2 p-3">
+              <span>{f.friendly_name ?? "Authenticator"}</span>
+              <Badge tone="success">Enabled</Badge>
+              <Button
                 onClick={() => unenroll(f.id)}
-                className="text-red-600 underline text-xs"
+                variant="ghost"
+                size="sm"
               >
                 Remove
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
       )}
 
       {!enrolling ? (
-        <button
+        <Button
           onClick={startEnroll}
-          disabled={loading}
-          className="rounded border border-black/15 dark:border-white/25 px-3 py-1.5 text-sm disabled:opacity-50"
+          loading={loading}
+          variant="secondary"
         >
           {active.length > 0 ? "Add another authenticator" : "Enable 2FA"}
-        </button>
+        </Button>
       ) : (
         <div className="space-y-3">
-          <p className="text-sm opacity-80">
+          <p className="text-sm text-muted">
             Scan this QR in your authenticator app, then enter the 6-digit code.
           </p>
           {/* qr_code is an inline SVG data URI */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={enrolling.qr} alt="TOTP QR code" className="w-40 h-40" />
-          <p className="text-xs opacity-60 break-all">
+          <p className="break-all text-xs text-muted">
             Secret: {enrolling.secret}
           </p>
           <div className="flex gap-2">
-            <input
+            <Input
               inputMode="numeric"
               maxLength={6}
               placeholder="123456"
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              className="rounded border border-black/15 dark:border-white/25 bg-transparent px-3 py-1.5 text-sm tracking-widest"
+              className="w-32 tracking-widest"
             />
-            <button
+            <Button
               onClick={verifyEnroll}
-              disabled={loading}
-              className="rounded bg-foreground text-background px-3 py-1.5 text-sm disabled:opacity-50"
+              loading={loading}
             >
               Verify
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => setEnrolling(null)}
-              className="text-sm underline opacity-70"
+              variant="ghost"
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
-    </section>
+    </Panel>
   );
 }
