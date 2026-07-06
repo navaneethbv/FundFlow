@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
@@ -18,16 +19,33 @@ export const metadata: Metadata = {
   description: "Secure personal finance insights powered by Plaid.",
 };
 
-export default function RootLayout({
+const themeScript = `
+(() => {
+  try {
+    const stored = localStorage.getItem("fundflow-theme");
+    const system = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    const theme = stored === "light" || stored === "dark" ? stored : system;
+    document.documentElement.dataset.theme = theme;
+  } catch {}
+})();
+`;
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
+      <head>
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className="min-h-full flex flex-col">
         {children}
         <Analytics />

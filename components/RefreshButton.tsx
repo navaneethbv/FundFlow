@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Button from "@/components/ui/Button";
 
 export default function RefreshButton() {
   const router = useRouter();
@@ -27,13 +28,13 @@ export default function RefreshButton() {
 
   return (
     <div className="inline-flex flex-col gap-1">
-      <button
+      <Button
         onClick={refresh}
-        disabled={busy}
-        className="rounded border border-black/15 dark:border-white/25 px-4 py-2 font-medium disabled:opacity-50"
+        loading={busy}
+        variant="secondary"
       >
-        {busy ? "Refreshing…" : "Refresh"}
-      </button>
+        {busy ? "Refreshing..." : "Refresh"}
+      </Button>
       {error && <span className="text-xs text-red-600">{error}</span>}
     </div>
   );

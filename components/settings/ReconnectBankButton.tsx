@@ -4,17 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePlaidLink } from "react-plaid-link";
 import { saveResume, clearResume } from "@/lib/plaid-resume";
+import Button from "@/components/ui/Button";
 
 /**
  * Repairs a broken bank connection via Plaid Link update mode. Rendered only
  * for items that need attention, so the update-mode link token is fetched on
- * mount (mirrors ConnectBankButton). Link fixes the credentials in place;
- * /api/plaid/reconnect then clears our error state and resyncs.
- *
- * OAuth banks redirect the browser to the registered redirect_uri (the
- * dashboard) mid-flow, unmounting this button. So on click we stash the
- * reconnect context; ConnectBankButton on the dashboard reads it back and
- * finalizes. Non-OAuth banks never redirect and finish inline via onSuccess.
+ * mount. Link fixes the credentials in place; /api/plaid/reconnect then clears
+ * our error state and resyncs.
  */
 export default function ReconnectBankButton({ itemId }: { itemId: string }) {
   const router = useRouter();
@@ -71,8 +67,8 @@ export default function ReconnectBankButton({ itemId }: { itemId: string }) {
   });
 
   // Stash this item's context before opening, so an OAuth redirect can resume
-  // it on the dashboard. Set on click (not mount) so multiple broken-bank
-  // buttons don't overwrite each other — the clicked one wins.
+  // it on the dashboard. Set on click so multiple broken-bank buttons do not
+  // overwrite each other.
   const handleOpen = useCallback(() => {
     if (linkToken) saveResume({ token: linkToken, mode: "reconnect", itemId });
     open();
@@ -80,13 +76,15 @@ export default function ReconnectBankButton({ itemId }: { itemId: string }) {
 
   return (
     <span className="inline-flex items-center gap-2">
-      <button
+      <Button
         onClick={handleOpen}
         disabled={!ready || !linkToken || busy}
-        className="text-xs rounded border border-black/15 dark:border-white/25 px-2 py-1 disabled:opacity-50"
+        loading={busy}
+        variant="secondary"
+        size="sm"
       >
-        {busy ? "Reconnecting…" : "Reconnect"}
-      </button>
+        {busy ? "Reconnecting..." : "Reconnect"}
+      </Button>
       {error && <span className="text-xs text-red-600">{error}</span>}
     </span>
   );

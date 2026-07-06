@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { buttonVariants } from "@/components/ui/Button";
 
 /**
  * "Continue with Google" via Supabase OAuth (PKCE). The redirect lands on
- * /auth/callback, which exchanges the code for a session — same path the
+ * /auth/callback, which exchanges the code for a session. It is the same path the
  * email-confirmation flow uses. Requires the Google provider to be enabled
  * in the Supabase dashboard (see README "Google sign-in").
  */
@@ -39,7 +40,7 @@ export default function GoogleSignInButton() {
         type="button"
         onClick={signInWithGoogle}
         disabled={loading}
-        className="w-full rounded border border-black/15 dark:border-white/25 py-2 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+        className={buttonVariants({ variant: "secondary", size: "lg" })}
       >
         <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
           <path
@@ -59,7 +60,7 @@ export default function GoogleSignInButton() {
             d="M12 4.77c1.76 0 3.35.61 4.6 1.8l3.44-3.44A11.97 11.97 0 0 0 12 0 12 12 0 0 0 1.27 6.62l4.01 3.09C6.22 6.88 8.87 4.77 12 4.77z"
           />
         </svg>
-        {loading ? "Redirecting…" : "Continue with Google"}
+        {loading ? "Redirecting..." : "Continue with Google"}
       </button>
       {error && <p className="text-sm text-red-600">{error}</p>}
     </div>

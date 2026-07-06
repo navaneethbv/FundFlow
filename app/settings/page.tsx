@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import AppShell from "@/components/shell/AppShell";
 import MfaSection from "@/components/settings/MfaSection";
 import ExportSection from "@/components/settings/ExportSection";
 import ReportsSection from "@/components/settings/ReportsSection";
@@ -35,21 +35,33 @@ export default async function SettingsPage() {
     ]);
 
   return (
-    <main className="max-w-2xl mx-auto p-6 space-y-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Settings</h1>
-        <Link href="/dashboard" className="underline text-sm">
-          Back to dashboard
-        </Link>
-      </header>
+    <AppShell active="settings" email={user?.email}>
+      <div className="space-y-6">
+        <header>
+          <p className="eyebrow">Control center</p>
+          <h1 className="display mt-2 text-3xl sm:text-4xl">Settings</h1>
+        </header>
 
-      <MfaSection />
-      <BanksSection initialItems={items ?? []} />
-      <BudgetsSection initialBudgets={budgets ?? []} />
-      <ExportSection initialEnabled={profile?.ai_export_enabled ?? true} />
-      <ImportSection accounts={accounts ?? []} />
-      <ReportsSection initialEnabled={profile?.weekly_report_enabled ?? true} />
-      <DangerZone />
-    </main>
+        <div className="grid gap-6 xl:grid-cols-3">
+          <BanksSection initialItems={items ?? []} />
+          <div id="budgets">
+            <BudgetsSection initialBudgets={budgets ?? []} />
+          </div>
+          <MfaSection />
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-2">
+          <ImportSection accounts={accounts ?? []} />
+          <div className="space-y-6">
+            <ExportSection initialEnabled={profile?.ai_export_enabled ?? true} />
+            <div id="reports">
+              <ReportsSection initialEnabled={profile?.weekly_report_enabled ?? true} />
+            </div>
+          </div>
+        </div>
+
+        <DangerZone />
+      </div>
+    </AppShell>
   );
 }

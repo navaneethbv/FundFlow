@@ -9,6 +9,7 @@ import {
   clearResume,
   type PlaidResume,
 } from "@/lib/plaid-resume";
+import Button from "@/components/ui/Button";
 
 export default function ConnectBankButton() {
   const router = useRouter();
@@ -109,13 +110,13 @@ export default function ConnectBankButton() {
 
   return (
     <div className="inline-flex flex-col gap-1">
-      <button
+      <Button
         onClick={() => open()}
         disabled={!ready || !linkToken || busy}
-        className="rounded bg-foreground text-background px-4 py-2 font-medium disabled:opacity-50"
+        loading={busy}
       >
-        {busy ? "Connecting…" : "Connect a bank"}
-      </button>
+        {busy ? "Connecting..." : "Connect a bank"}
+      </Button>
       {error && <span className="text-xs text-red-600">{error}</span>}
     </div>
   );

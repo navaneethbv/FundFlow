@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import Badge from "@/components/ui/Badge";
+import Button from "@/components/ui/Button";
+import Panel from "@/components/ui/Panel";
 
 /** Weekly email report opt-in/out (profiles.weekly_report_enabled, RLS-scoped). */
 export default function ReportsSection({
@@ -26,9 +29,8 @@ export default function ReportsSection({
   }
 
   return (
-    <section className="rounded-lg border border-black/10 dark:border-white/15 p-4 space-y-3">
-      <h2 className="font-semibold">Weekly email report</h2>
-      <p className="text-sm opacity-80">
+    <Panel title="Reports" eyebrow="Weekly email">
+      <p className="mb-4 text-sm text-muted">
         Every Sunday, get a PDF summary of your week: spend vs last week, top
         categories and merchants, cash flow, and balances.
       </p>
@@ -41,7 +43,11 @@ export default function ReportsSection({
           disabled={saving}
         />
         Email me the weekly report
+        <Badge tone={enabled ? "success" : "warning"}>{enabled ? "Enabled" : "Paused"}</Badge>
       </label>
-    </section>
+      <Button type="button" variant="ghost" size="sm" onClick={toggle} disabled={saving} className="mt-4">
+        {saving ? "Saving..." : enabled ? "Pause reports" : "Enable reports"}
+      </Button>
+    </Panel>
   );
 }

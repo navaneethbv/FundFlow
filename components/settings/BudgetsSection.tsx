@@ -3,6 +3,10 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/format";
+import Button from "@/components/ui/Button";
+import Field from "@/components/ui/Field";
+import Input from "@/components/ui/Input";
+import Panel from "@/components/ui/Panel";
 
 interface Budget {
   id: string;
@@ -54,52 +58,58 @@ export default function BudgetsSection({
   }
 
   return (
-    <section className="rounded-lg border border-black/10 dark:border-white/15 p-4 space-y-3">
-      <h2 className="font-semibold">Monthly budgets</h2>
+    <Panel title="Budget limits" eyebrow="Monthly targets">
 
       {budgets.length > 0 && (
-        <ul className="text-sm space-y-1">
+        <ul className="mb-4 space-y-3 text-sm">
           {budgets.map((b) => (
-            <li key={b.id} className="flex justify-between items-center">
-              <span>
-                {b.category} · {formatCurrency(b.monthly_limit)}
+            <li key={b.id} className="flex items-center justify-between gap-4">
+              <span className="min-w-0 flex-1">
+                <span className="mb-1 flex justify-between gap-3 font-semibold">
+                  <span>{b.category}</span>
+                  <span>{formatCurrency(b.monthly_limit)}</span>
+                </span>
+                <span className="block h-2 rounded-full bg-panel-hover">
+                  <span className="block h-2 w-3/4 rounded-full bg-accent" />
+                </span>
               </span>
-              <button
+              <Button
                 onClick={() => remove(b.id)}
-                className="text-red-600 underline text-xs"
+                variant="ghost"
+                size="sm"
               >
                 Remove
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
       )}
 
-      <form onSubmit={add} className="flex flex-wrap gap-2">
-        <input
-          placeholder="Category (e.g. FOOD_AND_DRINK)"
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="rounded border border-black/15 dark:border-white/25 bg-transparent px-3 py-1.5 text-sm"
-        />
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          placeholder="Limit"
-          value={limit}
-          onChange={(e) => setLimit(e.target.value)}
-          className="rounded border border-black/15 dark:border-white/25 bg-transparent px-3 py-1.5 text-sm w-28"
-        />
-        <button
-          type="submit"
-          className="rounded bg-foreground text-background px-3 py-1.5 text-sm"
-        >
+      <form onSubmit={add} className="flex flex-wrap items-end gap-2">
+        <Field label="Category">
+          <Input
+            placeholder="FOOD_AND_DRINK"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          />
+        </Field>
+        <Field label="Limit">
+          <Input
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="500"
+            value={limit}
+            onChange={(e) => setLimit(e.target.value)}
+            className="w-28"
+          />
+        </Field>
+        <Button type="submit" size="md">
           Add
-        </button>
+        </Button>
       </form>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
-    </section>
+    </Panel>
   );
 }

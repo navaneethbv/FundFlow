@@ -9,6 +9,15 @@ const secret = process.env.SUPABASE_SECRET_KEY;
 const run = Boolean(url && secret);
 const suite = run ? describe : describe.skip;
 
+type ItemLifecycleWebhookPayload = {
+  webhook_type: "ITEM";
+  webhook_code: string;
+  item_id: string;
+  error?: {
+    error_code: string;
+  };
+};
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let syncTriggeredWith: any = null;
 
@@ -115,5 +124,85 @@ suite("plaid webhook integration", () => {
     const resp = await plaidWebhookPost(req);
     expect(resp.status).toBe(200);
     expect(syncTriggeredWith).toBeNull();
+  });
+
+  it("returns 400 when item_id is missing in sync updates webhook", async () => {
+    const req = new NextRequest("http://localhost/api/plaid/webhook", {
+      method: "POST",
+      body: JSON.stringify({
+        webhook_type: "TRANSACTIONS",
+        webhook_code: "SYNC_UPDATES_AVAILABLE",
+      }),
+    });
+
+    const resp = await plaidWebhookPost(req);
+    expect(resp.status).toBe(400);
+  });
+
+  it("updates item status on ITEM lifecycle webhooks", async () => {
+    const codes = [
+      { code: "ERROR", expectedStatus: "error", expectedError: "ITEM_LOGIN_REQUIRED" },
+      { code: "PENDING_EXPIRATION", expectedStatus: "active", expectedError: "PENDING_EXPIRATION" },
+      { code: "LOGIN_REPAIRED", expectedStatus: "active", expectedError: null },
+      { code: "USER_PERMISSION_REVOKED", expectedStatus: "disconnected", expectedError: "USER_PERMISSION_REVOKED" },
+    ];
+
+    for (const { code, expectedStatus, expectedError } of codes) {
+      const payload: ItemLifecycleWebhookPayload = {
+        webhook_type: "ITEM",
+        webhook_code: code,
+        item_id: plaidItemId,
+      };
+      if (code === "ERROR") {
+        payload.error = { error_code: "ITEM_LOGIN_REQUIRED" };
+      }
+
+      const req = new NextRequest("http://localhost/api/plaid/webhook", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      const resp = await plaidWebhookPost(req);
+      expect(resp.status).toBe(200);
+
+      // Verify db updates
+      const { data: item } = await admin
+        .from("plaid_items")
+        .select("status, error_code")
+        .eq("id", itemDbId)
+        .single();
+      expect(item?.status).toBe(expectedStatus);
+      expect(item?.error_code).toBe(expectedError);
+    }
+  });
+
+  it("rejects webhook if signature verification fails in production environment", async () => {
+    const origNodeEnv = process.env.NODE_ENV;
+    const origPlaidEnv = process.env.PLAID_ENV;
+
+    try {
+      process.env.NODE_ENV = "production";
+      process.env.PLAID_ENV = "production";
+
+      // 1. Missing header
+      const req1 = new NextRequest("http://localhost/api/plaid/webhook", {
+        method: "POST",
+        body: JSON.stringify({ webhook_type: "ITEM" }),
+      });
+      const resp1 = await plaidWebhookPost(req1);
+      expect(resp1.status).toBe(401);
+
+      // 2. Malformed signature header (falls into catch block)
+      const req2 = new NextRequest("http://localhost/api/plaid/webhook", {
+        method: "POST",
+        headers: { "plaid-verification": "invalid-jwt-format" },
+        body: JSON.stringify({ webhook_type: "ITEM" }),
+      });
+      const resp2 = await plaidWebhookPost(req2);
+      expect(resp2.status).toBe(401);
+    } finally {
+      process.env.NODE_ENV = origNodeEnv;
+      process.env.PLAID_ENV = origPlaidEnv;
+    }
   });
 });

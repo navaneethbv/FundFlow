@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
+import Button from "@/components/ui/Button";
+import Field from "@/components/ui/Field";
+import Input from "@/components/ui/Input";
 
 export default function SignupForm() {
   const router = useRouter();
@@ -50,32 +53,29 @@ export default function SignupForm() {
   }
 
   return (
-    <div className="w-full max-w-sm space-y-6">
-      <h1 className="text-2xl font-semibold">Create your FundFlow account</h1>
+    <div className="space-y-6">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          type="email"
-          required
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded border border-black/15 dark:border-white/20 bg-transparent px-3 py-2"
-        />
-        <input
-          type="password"
-          required
-          placeholder="Password (min 10 characters)"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded border border-black/15 dark:border-white/20 bg-transparent px-3 py-2"
-        />
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded bg-foreground text-background py-2 font-medium disabled:opacity-50"
-        >
-          {loading ? "Creating…" : "Create account"}
-        </button>
+        <Field label="Email">
+          <Input
+            type="email"
+            required
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </Field>
+        <Field label="Password">
+          <Input
+            type="password"
+            required
+            placeholder="At least 10 characters"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </Field>
+        <Button type="submit" loading={loading} size="lg">
+          {loading ? "Creating..." : "Create account"}
+        </Button>
       </form>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -83,9 +83,9 @@ export default function SignupForm() {
 
       <GoogleSignInButton />
 
-      <p className="text-sm opacity-80">
+      <p className="text-sm text-muted">
         Already have an account?{" "}
-        <Link href="/login" className="underline">
+        <Link href="/login" className="font-semibold text-accent hover:underline">
           Sign in
         </Link>
       </p>

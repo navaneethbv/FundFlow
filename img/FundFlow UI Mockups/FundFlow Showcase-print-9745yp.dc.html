@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style data-omelette-print-defaults>
+@media print {
+  @page { margin: 0.5in; }
+  h1, h2, h3, h4, h5, h6 { break-after: avoid; }
+  figure, table, pre, blockquote, img, svg, tr, [class~="card" i] { break-inside: avoid; }
+  img, svg { max-width: 100%; }
+  p { orphans: 3; widows: 3; }
+}
+</style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #e7eaef; font-family: 'Instrument Sans', 'Helvetica Neue', sans-serif; }
+  * { box-sizing: border-box; }
+  a { color: #2f7df6; text-decoration: none; }
+  a:hover { color: #1d6ae8; }
+</style>
+</helmet>
+
+<div style="position: relative; width: 2400px; height: 1360px; background: radial-gradient(1200px 800px at 30% 20%, #f4f6f9 0%, #e7eaef 60%, #dde1e8 100%); overflow: hidden; font-family: 'Instrument Sans', sans-serif;">
+
+  <!-- ============ LIGHT OVERVIEW WINDOW (left, behind hero) ============ -->
+  <div data-screen-label="Overview (light)" style="position: absolute; left: 44px; top: 96px; width: 700px; height: 810px; background: #ffffff; border-radius: 16px; box-shadow: 0 30px 70px rgba(15,23,42,0.18), 0 4px 14px rgba(15,23,42,0.08); overflow: hidden; z-index: 2;">
+    <div style="display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #eef1f5;">
+      <span style="width: 10px; height: 10px; border-radius: 50%; background: #ff5f57;"></span>
+      <span style="width: 10px; height: 10px; border-radius: 50%; background: #febc2e;"></span>
+      <span style="width: 10px; height: 10px; border-radius: 50%; background: #28c840;"></span>
+    </div>
+    <div style="display: flex; height: 100%;">
+      <!-- sidebar -->
+      <div style="width: 150px; border-right: 1px solid #eef1f5; padding: 16px 10px; display: flex; flex-direction: column; gap: 2px;">
+        <div style="display: flex; align-items: center; gap: 7px; padding: 0 8px 14px 8px;">
+          <div style="width: 22px; height: 22px; border-radius: 6px; background: linear-gradient(135deg, #2f7df6, #2dd4bf); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 11px; font-style: italic;">F</div>
+          <span style="font-weight: 700; font-size: 14px; color: #0f172a;">FundFlow</span>
+        </div>
+        <div style="padding: 8px 10px; border-radius: 8px; background: #eaf2fe; color: #2f7df6; font-size: 11.5px; font-weight: 600;">Overview</div>
+        <div style="padding: 8px 10px; border-radius: 8px; color: #64748b; font-size: 11.5px;">Transactions</div>
+        <div style="padding: 8px 10px; border-radius: 8px; color: #64748b; font-size: 11.5px;">Cards &amp; Banks</div>
+        <div style="padding: 8px 10px; border-radius: 8px; color: #64748b; font-size: 11.5px;">Cash Flow Insights</div>
+        <div style="padding: 8px 10px; border-radius: 8px; color: #64748b; font-size: 11.5px;">Budgets</div>
+        <div style="padding: 8px 10px; border-radius: 8px; color: #64748b; font-size: 11.5px;">Goals</div>
+        <div style="padding: 8px 10px; border-radius: 8px; color: #64748b; font-size: 11.5px;">Reports</div>
+        <div style="padding: 8px 10px; border-radius: 8px; color: #64748b; font-size: 11.5px;">Settings</div>
+      </div>
+      <!-- main -->
+      <div style="flex: 1; padding: 18px 20px; overflow: hidden;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="font-size: 19px; font-weight: 700; color: #0f172a;">Overview</div>
+          <div style="display: flex; align-items: center; gap: 10px; font-size: 10.5px; color: #64748b;">
+            <span>demo@fundflow.app</span>
+            <span style="width: 26px; height: 14px; border-radius: 8px; background: #d7dde6; position: relative; display: inline-block;"><span style="position: absolute; left: 2px; top: 2px; width: 10px; height: 10px; border-radius: 50%; background: #fff;"></span></span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 5px; margin-top: 12px;">
+          <span style="padding: 4px 10px; border-radius: 20px; font-size: 10px; color: #64748b; background: #f2f5f9;">Jan</span>
+          <span style="padding: 4px 10px; border-radius: 20px; font-size: 10px; color: #64748b; background: #f2f5f9;">Feb</span>
+          <span style="padding: 4px 10px; border-radius: 20px; font-size: 10px; color: #64748b; background: #f2f5f9;">Mar</span>
+          <span style="padding: 4px 10px; border-radius: 20px; font-size: 10px; color: #64748b; background: #f2f5f9;">Apr</span>
+          <span style="padding: 4px 10px; border-radius: 20px; font-size: 10px; color: #64748b; background: #f2f5f9;">May</span>
+          <span style="padding: 4px 10px; border-radius: 20px; font-size: 10px; color: #fff; background: #2f7df6; font-weight: 600;">Jun</span>
+          <span style="padding: 4px 10px; border-radius: 20px; font-size: 10px; color: #64748b; background: #f2f5f9;">2025 ▾</span>
+        </div>
+        <!-- pacing + stats -->
+        <div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 12px; margin-top: 14px;">
+          <div style="border: 1px solid #eef1f5; border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(15,23,42,0.04);">
+            <div style="font-size: 10px; color: #64748b; font-weight: 600;">Spending Pacing</div>
+            <div style="font-size: 20px; font-weight: 700; color: #0f172a; margin-top: 3px;">$5,920.00</div>
+            <div style="font-size: 9.5px; color: #94a3b8;">of $8,400 budget</div>
+            <div style="height: 6px; border-radius: 4px; background: #eef1f5; margin-top: 8px; overflow: hidden;"><div style="width: 70%; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #34d399, #2dd4bf);"></div></div>
+            <div style="display: flex; justify-content: space-between; font-size: 9px; margin-top: 5px;"><span style="color: #059669; font-weight: 600;">7% below prior month</span><span style="color: #94a3b8;">70%</span></div>
+          </div>
+          <div style="border: 1px solid #eef1f5; border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(15,23,42,0.04);">
+            <div style="font-size: 10px; color: #64748b; font-weight: 600;">Income</div>
+            <div style="font-size: 17px; font-weight: 700; color: #0f172a; margin-top: 3px;">$8,450.00</div>
+            <div style="font-size: 9px; color: #059669; font-weight: 600; margin-top: 3px;">▲ 6.2% vs May</div>
+            <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top: 12px;">Net</div>
+            <div style="font-size: 15px; font-weight: 700; color: #0f172a;">$2,530.00</div>
+            <div style="font-size: 9px; color: #059669; font-weight: 600;">▲ 28.1% vs May</div>
+          </div>
+          <div style="border: 1px solid #eef1f5; border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(15,23,42,0.04);">
+            <div style="font-size: 10px; color: #64748b; font-weight: 600;">Expenses</div>
+            <div style="font-size: 17px; font-weight: 700; color: #0f172a; margin-top: 3px;">$5,920.00</div>
+            <div style="font-size: 9px; color: #059669; font-weight: 600; margin-top: 3px;">▼ 7% vs May</div>
+            <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top: 12px;">Savings Rate</div>
+            <div style="font-size: 15px; font-weight: 700; color: #0f172a;">22%</div>
+            <div style="font-size: 9px; color: #059669; font-weight: 600;">▲ 3pp vs May</div>
+          </div>
+        </div>
+        <!-- charts row -->
+        <div style="display: grid; grid-template-columns: 1.35fr 1fr; gap: 12px; margin-top: 12px;">
+          <div style="border: 1px solid #eef1f5; border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(15,23,42,0.04);">
+            <div style="display: flex; justify-content: space-between; align-items: baseline;">
+              <div>
+                <div style="font-size: 11px; font-weight: 700; color: #0f172a;">Spending vs Income</div>
+                <div style="font-size: 9px; color: #94a3b8;">Last 6 months</div>
+              </div>
+              <div style="display: flex; gap: 10px; font-size: 9px; color: #64748b;">
+                <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #2f7df6;"></span>Spending</span>
+                <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #34d399;"></span>Income</span>
+              </div>
+            </div>
+            <svg width="100%" height="118" viewBox="0 0 280 118" style="margin-top: 8px;">
+              <line x1="0" y1="20" x2="280" y2="20" stroke="#eef1f5" stroke-width="1"></line>
+              <line x1="0" y1="50" x2="280" y2="50" stroke="#eef1f5" stroke-width="1"></line>
+              <line x1="0" y1="80" x2="280" y2="80" stroke="#eef1f5" stroke-width="1"></line>
+              <line x1="0" y1="105" x2="280" y2="105" stroke="#eef1f5" stroke-width="1"></line>
+              <polyline points="10,60 62,52 114,58 166,44 218,38 270,30" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></polyline>
+              <polyline points="10,88 62,80 114,84 166,70 218,66 270,58" fill="none" stroke="#2f7df6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></polyline>
+              <circle cx="10" cy="60" r="3" fill="#34d399"></circle><circle cx="62" cy="52" r="3" fill="#34d399"></circle><circle cx="114" cy="58" r="3" fill="#34d399"></circle><circle cx="166" cy="44" r="3" fill="#34d399"></circle><circle cx="218" cy="38" r="3" fill="#34d399"></circle><circle cx="270" cy="30" r="3" fill="#34d399"></circle>
+              <circle cx="10" cy="88" r="3" fill="#2f7df6"></circle><circle cx="62" cy="80" r="3" fill="#2f7df6"></circle><circle cx="114" cy="84" r="3" fill="#2f7df6"></circle><circle cx="166" cy="70" r="3" fill="#2f7df6"></circle><circle cx="218" cy="66" r="3" fill="#2f7df6"></circle><circle cx="270" cy="58" r="3" fill="#2f7df6"></circle>
+            </svg>
+            <div style="display: flex; justify-content: space-between; font-size: 8.5px; color: #94a3b8; padding: 0 4px;">
+              <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span>
+            </div>
+          </div>
+          <div style="border: 1px solid #eef1f5; border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(15,23,42,0.04);">
+            <div style="font-size: 11px; font-weight: 700; color: #0f172a;">Spending by Category</div>
+            <div style="font-size: 9px; color: #94a3b8;">This month</div>
+            <div style="display: flex; align-items: center; gap: 12px; margin-top: 10px;">
+              <div style="width: 82px; height: 82px; border-radius: 50%; background: conic-gradient(#2f7df6 0 36%, #34d399 36% 51%, #f59e0b 51% 63%, #2dd4bf 63% 73%, #a78bfa 73% 82%, #f87171 82% 90%, #cbd5e1 90% 100%); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <div style="width: 50px; height: 50px; border-radius: 50%; background: #fff;"></div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 4px; font-size: 8.5px; color: #64748b; flex: 1;">
+                <div style="display: flex; justify-content: space-between;"><span style="display: flex; align-items: center; gap: 4px;"><span style="width: 6px; height: 6px; border-radius: 2px; background: #2f7df6;"></span>Housing</span><span style="font-weight: 600; color: #0f172a;">36%</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="display: flex; align-items: center; gap: 4px;"><span style="width: 6px; height: 6px; border-radius: 2px; background: #34d399;"></span>Groceries</span><span style="font-weight: 600; color: #0f172a;">15%</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="display: flex; align-items: center; gap: 4px;"><span style="width: 6px; height: 6px; border-radius: 2px; background: #f59e0b;"></span>Dining</span><span style="font-weight: 600; color: #0f172a;">12%</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="display: flex; align-items: center; gap: 4px;"><span style="width: 6px; height: 6px; border-radius: 2px; background: #2dd4bf;"></span>Travel</span><span style="font-weight: 600; color: #0f172a;">10%</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="display: flex; align-items: center; gap: 4px;"><span style="width: 6px; height: 6px; border-radius: 2px; background: #a78bfa;"></span>Shopping</span><span style="font-weight: 600; color: #0f172a;">9%</span></div>
+              </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 9px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #eef1f5;"><span style="color: #94a3b8;">Total</span><span style="font-weight: 700; color: #0f172a;">$5,920.00</span></div>
+          </div>
+        </div>
+        <!-- merchants + recurring -->
+        <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 12px; margin-top: 12px;">
+          <div style="border: 1px solid #eef1f5; border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(15,23,42,0.04);">
+            <div style="font-size: 11px; font-weight: 700; color: #0f172a;">Top Merchants</div>
+            <div style="font-size: 9px; color: #94a3b8; margin-bottom: 8px;">This month</div>
+            <div style="display: flex; flex-direction: column; gap: 7px; font-size: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;"><span style="display: flex; gap: 8px; color: #334155;"><span style="color: #94a3b8; width: 10px;">1</span>Trader Joe's</span><span style="font-weight: 600; color: #0f172a;">$412.34</span></div>
+              <div style="display: flex; justify-content: space-between; align-items: center;"><span style="display: flex; gap: 8px; color: #334155;"><span style="color: #94a3b8; width: 10px;">2</span>Amazon</span><span style="font-weight: 600; color: #0f172a;">$298.76</span></div>
+              <div style="display: flex; justify-content: space-between; align-items: center;"><span style="display: flex; gap: 8px; color: #334155;"><span style="color: #94a3b8; width: 10px;">3</span>Starbucks</span><span style="font-weight: 600; color: #0f172a;">$187.45</span></div>
+              <div style="display: flex; justify-content: space-between; align-items: center;"><span style="display: flex; gap: 8px; color: #334155;"><span style="color: #94a3b8; width: 10px;">4</span>Uber</span><span style="font-weight: 600; color: #0f172a;">$141.33</span></div>
+              <div style="display: flex; justify-content: space-between; align-items: center;"><span style="display: flex; gap: 8px; color: #334155;"><span style="color: #94a3b8; width: 10px;">5</span>Costco</span><span style="font-weight: 600; color: #0f172a;">$128.90</span></div>
+            </div>
+            <div style="font-size: 9.5px; color: #2f7df6; font-weight: 600; margin-top: 10px;">View all merchants →</div>
+          </div>
+          <div style="border: 1px solid #eef1f5; border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(15,23,42,0.04);">
+            <div style="font-size: 11px; font-weight: 700; color: #0f172a; margin-bottom: 10px;">Recurring Streams</div>
+            <div style="display: flex; flex-direction: column; gap: 7px; font-size: 9.5px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;"><span style="display: flex; align-items: center; gap: 7px;"><span style="width: 16px; height: 16px; border-radius: 5px; background: #0f172a; color: #fff; font-size: 8px; font-weight: 700; display: flex; align-items: center; justify-content: center;">R</span><span><span style="color: #0f172a; font-weight: 600;">Rent</span> <span style="color: #94a3b8;">· Chase Checking •••• 4821</span></span></span><span style="color: #64748b;">Monthly</span></div>
+              <div style="display: flex; justify-content: space-between; align-items: center;"><span style="display: flex; align-items: center; gap: 7px;"><span style="width: 16px; height: 16px; border-radius: 5px; background: #34d399; color: #fff; font-size: 8px; font-weight: 700; display: flex; align-items: center; justify-content: center;">S</span><span><span style="color: #0f172a; font-weight: 600;">Salary</span> <span style="color: #94a3b8;">· BofA Checking •••• 7712</span></span></span><span style="color: #64748b;">Monthly</span></div>
+              <div style="display: flex; justify-content: space-between; align-items: center;"><span style="display: flex; align-items: center; gap: 7px;"><span style="width: 16px; height: 16px; border-radius: 5px; background: #e50914; color: #fff; font-size: 8px; font-weight: 700; display: flex; align-items: center; justify-content: center;">N</span><span><span style="color: #0f172a; font-weight: 600;">Netflix</span> <span style="color: #94a3b8;">· Amex Gold •••• 1009</span></span></span><span style="color: #64748b;">Monthly</span></div>
+              <div style="display: flex; justify-content: space-between; align-items: center;"><span style="display: flex; align-items: center; gap: 7px;"><span style="width: 16px; height: 16px; border-radius: 5px; background: #2f7df6; color: #fff; font-size: 8px; font-weight: 700; display: flex; align-items: center; justify-content: center;">G</span><span><span style="color: #0f172a; font-weight: 600;">Gym Membership</span> <span style="color: #94a3b8;">· Capital One •••• 6154</span></span></span><span style="color: #64748b;">Monthly</span></div>
+              <div style="display: flex; justify-content: space-between; align-items: center;"><span style="display: flex; align-items: center; gap: 7px;"><span style="width: 16px; height: 16px; border-radius: 5px; background: #a78bfa; color: #fff; font-size: 8px; font-weight: 700; display: flex; align-items: center; justify-content: center;">I</span><span><span style="color: #0f172a; font-weight: 600;">Internet</span> <span style="color: #94a3b8;">· Chase Checking •••• 4821</span></span></span><span style="color: #64748b;">Monthly</span></div>
+            </div>
+            <div style="font-size: 9.5px; color: #2f7df6; font-weight: 600; margin-top: 10px;">View all recurring →</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DARK TRANSACTIONS WINDOW (right, behind hero) ============ -->
+  <div data-screen-label="Transactions (dark)" style="position: absolute; right: 40px; top: 110px; width: 660px; height: 590px; background: #0d1119; border-radius: 16px; box-shadow: 0 30px 70px rgba(15,23,42,0.28), 0 4px 14px rgba(15,23,42,0.12); overflow: hidden; z-index: 1; border: 1px solid rgba(255,255,255,0.06);">
+    <div style="display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+      <span style="width: 10px; height: 10px; border-radius: 50%; background: #ff5f57;"></span>
+      <span style="width: 10px; height: 10px; border-radius: 50%; background: #febc2e;"></span>
+      <span style="width: 10px; height: 10px; border-radius: 50%; background: #28c840;"></span>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 18px 0 18px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="width: 20px; height: 20px; border-radius: 6px; background: linear-gradient(135deg, #2f7df6, #2dd4bf); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 10px; font-style: italic;">F</div>
+        <span style="font-weight: 700; font-size: 13px; color: #f1f5f9;">FundFlow</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px; font-size: 9.5px; color: #94a3b8;">
+        <span>demo@fundflow.app</span><span>Transactions</span><span>Settings</span><span>Sign out</span>
+      </div>
+    </div>
+    <div style="padding: 12px 18px;">
+      <div style="font-size: 16px; font-weight: 700; color: #f1f5f9;">Transactions</div>
+      <div style="display: flex; gap: 8px; margin-top: 10px;">
+        <div style="flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 6px 10px; font-size: 10px; color: #64748b;">⌕&nbsp; Search transactions…</div>
+        <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 6px 10px; font-size: 10px; color: #cbd5e1;">Jun 2025 ▾</div>
+        <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 6px 10px; font-size: 10px; color: #cbd5e1;">All Accounts ▾</div>
+        <div style="background: #2f7df6; border-radius: 8px; padding: 6px 12px; font-size: 10px; color: #fff; font-weight: 600;">Filters</div>
+      </div>
+      <div style="display: grid; grid-template-columns: 1.3fr 1fr 1.5fr 0.8fr 0.6fr; gap: 8px; padding: 10px 10px 7px 10px; font-size: 9px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid rgba(255,255,255,0.07); margin-top: 8px;">
+        <span>Merchant</span><span>Category</span><span>Account</span><span style="text-align: right;">Amount</span><span style="text-align: right;">Date</span>
+      </div>
+      <div style="display: flex; flex-direction: column; font-size: 10px;">
+        <div style="display: grid; grid-template-columns: 1.3fr 1fr 1.5fr 0.8fr 0.6fr; gap: 8px; padding: 7.5px 10px; border-bottom: 1px solid rgba(255,255,255,0.045); align-items: center;"><span style="color: #e2e8f0; font-weight: 600;">Whole Foods</span><span style="color: #94a3b8;">Groceries</span><span style="color: #94a3b8;">Chase Checking · 4821</span><span style="text-align: right; color: #f87171; font-weight: 600;">-$86.14</span><span style="text-align: right; color: #64748b;">Jun 12</span></div>
+        <div style="display: grid; grid-template-columns: 1.3fr 1fr 1.5fr 0.8fr 0.6fr; gap: 8px; padding: 7.5px 10px; border-bottom: 1px solid rgba(255,255,255,0.045); align-items: center;"><span style="color: #e2e8f0; font-weight: 600;">Trader Joe's</span><span style="color: #94a3b8;">Groceries</span><span style="color: #94a3b8;">Chase Checking · 4821</span><span style="text-align: right; color: #f87171; font-weight: 600;">-$54.23</span><span style="text-align: right; color: #64748b;">Jun 11</span></div>
+        <div style="display: grid; grid-template-columns: 1.3fr 1fr 1.5fr 0.8fr 0.6fr; gap: 8px; padding: 7.5px 10px; border-bottom: 1px solid rgba(255,255,255,0.045); align-items: center;"><span style="color: #e2e8f0; font-weight: 600;">Starbucks</span><span style="color: #94a3b8;">Dining</span><span style="color: #94a3b8;">Chase Checking · 4821</span><span style="text-align: right; color: #f87171; font-weight: 600;">-$5.78</span><span style="text-align: right; color: #64748b;">Jun 11</span></div>
+        <div style="display: grid; grid-template-columns: 1.3fr 1fr 1.5fr 0.8fr 0.6fr; gap: 8px; padding: 7.5px 10px; border-bottom: 1px solid rgba(255,255,255,0.045); align-items: center;"><span style="color: #e2e8f0; font-weight: 600;">Uber</span><span style="color: #94a3b8;">Transport</span><span style="color: #94a3b8;">Capital One Card · 6154</span><span style="text-align: right; color: #f87171; font-weight: 600;">-$22.47</span><span style="text-align: right; color: #64748b;">Jun 14</span></div>
+        <div style="display: grid; grid-template-columns: 1.3fr 1fr 1.5fr 0.8fr 0.6fr; gap: 8px; padding: 7.5px 10px; border-bottom: 1px solid rgba(255,255,255,0.045); align-items: center;"><span style="color: #e2e8f0; font-weight: 600;">Amazon</span><span style="color: #94a3b8;">Shopping</span><span style="color: #94a3b8;">Amex Gold · 1009</span><span style="text-align: right; color: #f87171; font-weight: 600;">-$49.99</span><span style="text-align: right; color: #64748b;">Jun 13</span></div>
+        <div style="display: grid; grid-template-columns: 1.3fr 1fr 1.5fr 0.8fr 0.6fr; gap: 8px; padding: 7.5px 10px; border-bottom: 1px solid rgba(255,255,255,0.045); align-items: center;"><span style="color: #e2e8f0; font-weight: 600;">Netflix</span><span style="color: #94a3b8;">Subscription</span><span style="color: #94a3b8;">Amex Gold · 1009</span><span style="text-align: right; color: #f87171; font-weight: 600;">-$15.49</span><span style="text-align: right; color: #64748b;">Jun 09</span></div>
+        <div style="display: grid; grid-template-columns: 1.3fr 1fr 1.5fr 0.8fr 0.6fr; gap: 8px; padding: 7.5px 10px; border-bottom: 1px solid rgba(255,255,255,0.045); align-items: center;"><span style="color: #e2e8f0; font-weight: 600;">Payroll</span><span style="color: #94a3b8;">Income</span><span style="color: #94a3b8;">BofA Checking · 7712</span><span style="text-align: right; color: #34d399; font-weight: 600;">+$4,225.00</span><span style="text-align: right; color: #64748b;">Jun 01</span></div>
+        <div style="display: grid; grid-template-columns: 1.3fr 1fr 1.5fr 0.8fr 0.6fr; gap: 8px; padding: 7.5px 10px; border-bottom: 1px solid rgba(255,255,255,0.045); align-items: center;"><span style="color: #e2e8f0; font-weight: 600;">Gym Membership</span><span style="color: #94a3b8;">Health</span><span style="color: #94a3b8;">Capital One Card · 6154</span><span style="text-align: right; color: #f87171; font-weight: 600;">-$45.00</span><span style="text-align: right; color: #64748b;">Jun 08</span></div>
+        <div style="display: grid; grid-template-columns: 1.3fr 1fr 1.5fr 0.8fr 0.6fr; gap: 8px; padding: 7.5px 10px; border-bottom: 1px solid rgba(255,255,255,0.045); align-items: center;"><span style="color: #e2e8f0; font-weight: 600;">Internet</span><span style="color: #94a3b8;">Utilities</span><span style="color: #94a3b8;">Chase Checking · 4821</span><span style="text-align: right; color: #f87171; font-weight: 600;">-$69.99</span><span style="text-align: right; color: #64748b;">Jun 07</span></div>
+        <div style="display: grid; grid-template-columns: 1.3fr 1fr 1.5fr 0.8fr 0.6fr; gap: 8px; padding: 7.5px 10px; border-bottom: 1px solid rgba(255,255,255,0.045); align-items: center;"><span style="color: #e2e8f0; font-weight: 600;">Costco</span><span style="color: #94a3b8;">Shopping</span><span style="color: #94a3b8;">Chase Checking · 4821</span><span style="text-align: right; color: #f87171; font-weight: 600;">-$128.90</span><span style="text-align: right; color: #64748b;">Jun 06</span></div>
+        <div style="display: grid; grid-template-columns: 1.3fr 1fr 1.5fr 0.8fr 0.6fr; gap: 8px; padding: 7.5px 10px; border-bottom: 1px solid rgba(255,255,255,0.045); align-items: center;"><span style="color: #e2e8f0; font-weight: 600;">Electricity</span><span style="color: #94a3b8;">Utilities</span><span style="color: #94a3b8;">Chase Checking · 4821</span><span style="text-align: right; color: #f87171; font-weight: 600;">-$74.32</span><span style="text-align: right; color: #64748b;">Jun 05</span></div>
+        <div style="display: grid; grid-template-columns: 1.3fr 1fr 1.5fr 0.8fr 0.6fr; gap: 8px; padding: 7.5px 10px; align-items: center;"><span style="color: #e2e8f0; font-weight: 600;">Mobile Phone</span><span style="color: #94a3b8;">Utilities</span><span style="color: #94a3b8;">BofA Checking · 7712</span><span style="text-align: right; color: #f87171; font-weight: 600;">-$58.99</span><span style="text-align: right; color: #64748b;">Jun 04</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ HERO DARK DASHBOARD ============ -->
+  <div data-screen-label="Dashboard (dark hero)" style="position: absolute; left: 640px; top: 44px; width: 1130px; height: 1010px; background: #0b0f17; border-radius: 18px; box-shadow: 0 50px 110px rgba(10,15,30,0.45), 0 8px 24px rgba(10,15,30,0.25); overflow: hidden; z-index: 5; border: 1px solid rgba(255,255,255,0.07);">
+    <!-- header -->
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.02);">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #2f7df6, #2dd4bf); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 14px; font-style: italic; box-shadow: 0 4px 12px rgba(47,125,246,0.4);">F</div>
+        <span style="font-weight: 700; font-size: 17px; color: #f8fafc; letter-spacing: -0.01em;">FundFlow</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 18px; font-size: 12px; color: #94a3b8;">
+        <span>demo@fundflow.app</span>
+        <span style="display: flex; align-items: center; gap: 6px;">
+          <span style="color: #64748b;">☀</span>
+          <span style="width: 34px; height: 18px; border-radius: 10px; background: #2f7df6; position: relative; display: inline-block;"><span style="position: absolute; right: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff;"></span></span>
+        </span>
+        <span style="color: #e2e8f0; font-weight: 500;">Transactions</span>
+        <span style="color: #e2e8f0; font-weight: 500;">Settings</span>
+        <span>Sign out</span>
+      </div>
+    </div>
+    <div style="display: flex;">
+      <!-- sidebar -->
+      <div style="width: 190px; border-right: 1px solid rgba(255,255,255,0.06); padding: 16px 12px; display: flex; flex-direction: column; gap: 3px;">
+        <div style="display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-radius: 9px; background: rgba(47,125,246,0.16); color: #6ea8ff; font-size: 12.5px; font-weight: 600; border: 1px solid rgba(47,125,246,0.25);"><span style="font-size: 11px;">◫</span>Overview</div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-radius: 9px; color: #94a3b8; font-size: 12.5px;"><span style="font-size: 11px;">≡</span>Transactions</div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-radius: 9px; color: #94a3b8; font-size: 12.5px;"><span style="font-size: 11px;">▭</span>Cards &amp; Banks</div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-radius: 9px; color: #94a3b8; font-size: 12.5px;"><span style="font-size: 11px;">∿</span>Cash Flow Insights</div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-radius: 9px; color: #94a3b8; font-size: 12.5px;"><span style="font-size: 11px;">◔</span>Budgets</div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-radius: 9px; color: #94a3b8; font-size: 12.5px;"><span style="font-size: 11px;">◎</span>Goals</div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-radius: 9px; color: #94a3b8; font-size: 12.5px;"><span style="font-size: 11px;">▤</span>Reports</div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-radius: 9px; color: #94a3b8; font-size: 12.5px;"><span style="font-size: 11px;">⚙</span>Settings</div>
+      </div>
+      <!-- main -->
+      <div style="flex: 1; padding: 20px 24px; min-width: 0;">
+        <!-- action rail -->
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 7px; background: linear-gradient(135deg, #2f7df6, #2563eb); color: #fff; font-size: 12px; font-weight: 600; padding: 9px 16px; border-radius: 9px; box-shadow: 0 4px 14px rgba(47,125,246,0.35);">+ Connect a bank</div>
+          <div style="display: flex; align-items: center; gap: 7px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #e2e8f0; font-size: 12px; font-weight: 500; padding: 9px 14px; border-radius: 9px;">⟳ Refresh</div>
+          <span style="font-size: 11.5px; color: #94a3b8;">Updated: Jun 15, 2025 at 9:41 AM</span>
+          <div style="flex: 1;"></div>
+          <div style="display: flex; align-items: center; gap: 6px; background: rgba(47,125,246,0.12); border: 1px solid rgba(47,125,246,0.25); color: #6ea8ff; font-size: 11px; font-weight: 600; padding: 6px 12px; border-radius: 20px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #6ea8ff;"></span>5 Accounts connected</div>
+          <div style="display: flex; align-items: center; gap: 6px; background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.25); color: #34d399; font-size: 11px; font-weight: 600; padding: 6px 12px; border-radius: 20px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #34d399;"></span>All systems operational</div>
+        </div>
+        <!-- card carousel -->
+        <div style="display: flex; align-items: center; gap: 10px; margin-top: 18px;">
+          <div style="width: 26px; height: 26px; border-radius: 50%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0;">‹</div>
+          <div style="display: flex; gap: 12px; flex: 1; min-width: 0;">
+            <!-- Chase selected -->
+            <div style="flex: 1; background: linear-gradient(150deg, #12203a, #0e1a2f); border: 2px solid #2f7df6; border-radius: 14px; padding: 14px 16px; box-shadow: 0 0 0 4px rgba(47,125,246,0.12), 0 8px 24px rgba(0,0,0,0.35); position: relative;">
+              <div style="font-size: 11.5px; font-weight: 700; color: #f1f5f9;">Chase Checking</div>
+              <div style="font-size: 9.5px; color: #7d8ba3; margin-top: 2px;">Checking •••• 4821</div>
+              <div style="font-size: 18px; font-weight: 700; color: #fff; margin-top: 12px; letter-spacing: -0.01em;">$4,265.18</div>
+              <div style="font-size: 9px; color: #7d8ba3;">Available Balance</div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px;">
+                <span style="font-size: 10px; font-weight: 800; color: #fff; letter-spacing: 0.08em;">CHASE <span style="color: #2f7df6;">◉</span></span>
+              </div>
+            </div>
+            <!-- Amex gold -->
+            <div style="flex: 1; background: linear-gradient(150deg, #3b3320, #2a2416); border: 1px solid rgba(212,175,55,0.35); border-radius: 14px; padding: 14px 16px;">
+              <div style="font-size: 11.5px; font-weight: 700; color: #f5edd8;">Amex Gold</div>
+              <div style="font-size: 9.5px; color: #a89968; margin-top: 2px;">Credit Card •••• 1009</div>
+              <div style="font-size: 18px; font-weight: 700; color: #fff; margin-top: 12px;">$1,204.77</div>
+              <div style="font-size: 9px; color: #a89968;">Current Balance</div>
+              <div style="margin-top: 12px;"><span style="font-size: 7.5px; font-weight: 700; color: #1a1a1a; background: linear-gradient(135deg, #e8d48a, #c9a94e); padding: 3px 6px; border-radius: 3px; letter-spacing: 0.05em;">AMERICAN EXPRESS</span></div>
+            </div>
+            <!-- Wells Fargo -->
+            <div style="flex: 1; background: linear-gradient(150deg, #171d2b, #121724); border: 1px solid rgba(255,255,255,0.09); border-radius: 14px; padding: 14px 16px;">
+              <div style="font-size: 11.5px; font-weight: 700; color: #f1f5f9;">Wells Fargo Platinum</div>
+              <div style="font-size: 9.5px; color: #7d8ba3; margin-top: 2px;">Credit Card •••• 9283</div>
+              <div style="font-size: 18px; font-weight: 700; color: #fff; margin-top: 12px;">$2,842.13</div>
+              <div style="font-size: 9px; color: #7d8ba3;">Current Balance</div>
+              <div style="margin-top: 12px;"><span style="font-size: 12px; font-weight: 800; color: #fff; font-style: italic; letter-spacing: 0.02em;">VISA</span></div>
+            </div>
+            <!-- BofA -->
+            <div style="flex: 1; background: linear-gradient(150deg, #171d2b, #121724); border: 1px solid rgba(255,255,255,0.09); border-radius: 14px; padding: 14px 16px;">
+              <div style="font-size: 11.5px; font-weight: 700; color: #f1f5f9;">BofA Everyday</div>
+              <div style="font-size: 9.5px; color: #7d8ba3; margin-top: 2px;">Checking •••• 7712</div>
+              <div style="font-size: 18px; font-weight: 700; color: #fff; margin-top: 12px;">$12,840.32</div>
+              <div style="font-size: 9px; color: #7d8ba3;">Available Balance</div>
+              <div style="display: flex; gap: 2px; margin-top: 14px;"><span style="width: 14px; height: 9px; background: #e31837; border-radius: 1px;"></span><span style="width: 14px; height: 9px; background: #1a4a8f; border-radius: 1px;"></span></div>
+            </div>
+            <!-- Capital One -->
+            <div style="flex: 1; background: linear-gradient(150deg, #171d2b, #121724); border: 1px solid rgba(255,255,255,0.09); border-radius: 14px; padding: 14px 16px;">
+              <div style="font-size: 11.5px; font-weight: 700; color: #f1f5f9;">Capital One Checking</div>
+              <div style="font-size: 9.5px; color: #7d8ba3; margin-top: 2px;">Checking •••• 6154</div>
+              <div style="font-size: 18px; font-weight: 700; color: #fff; margin-top: 12px;">$3,210.45</div>
+              <div style="font-size: 9px; color: #7d8ba3;">Available Balance</div>
+              <div style="margin-top: 12px;"><span style="font-size: 10px; font-weight: 700; color: #fff; font-style: italic;">Capital<span style="color: #d22e1e;">One</span></span></div>
+            </div>
+          </div>
+          <div style="width: 26px; height: 26px; border-radius: 50%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0;">›</div>
+        </div>
+        <!-- month pills -->
+        <div style="display: flex; gap: 7px; margin-top: 18px;">
+          <span style="padding: 6px 15px; border-radius: 8px; font-size: 11px; color: #94a3b8; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);">Jan</span>
+          <span style="padding: 6px 15px; border-radius: 8px; font-size: 11px; color: #94a3b8; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);">Feb</span>
+          <span style="padding: 6px 15px; border-radius: 8px; font-size: 11px; color: #94a3b8; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);">Mar</span>
+          <span style="padding: 6px 15px; border-radius: 8px; font-size: 11px; color: #94a3b8; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);">Apr</span>
+          <span style="padding: 6px 15px; border-radius: 8px; font-size: 11px; color: #94a3b8; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);">May</span>
+          <span style="padding: 6px 15px; border-radius: 8px; font-size: 11px; color: #fff; background: #2f7df6; font-weight: 600; box-shadow: 0 2px 10px rgba(47,125,246,0.4);">Jun</span>
+          <span style="padding: 6px 15px; border-radius: 8px; font-size: 11px; color: #cbd5e1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);">2025 ▾</span>
+        </div>
+        <!-- tabs -->
+        <div style="display: flex; gap: 26px; margin-top: 20px; border-bottom: 1px solid rgba(255,255,255,0.07); font-size: 12.5px;">
+          <span style="padding-bottom: 10px; color: #f1f5f9; font-weight: 600; border-bottom: 2px solid #2f7df6;">Overview</span>
+          <span style="padding-bottom: 10px; color: #94a3b8;">Cards &amp; Banks</span>
+          <span style="padding-bottom: 10px; color: #94a3b8;">Cash Flow Insights</span>
+        </div>
+        <!-- stat tiles -->
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 18px;">
+          <div style="background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08); border-radius: 13px; padding: 14px 16px 10px 16px; backdrop-filter: blur(8px);">
+            <div style="font-size: 10.5px; color: #94a3b8; font-weight: 500;">Total Net Worth</div>
+            <div style="font-size: 21px; font-weight: 700; color: #fff; margin-top: 4px; letter-spacing: -0.01em;">$124,560.75</div>
+            <div style="font-size: 10px; color: #34d399; font-weight: 600; margin-top: 3px;">▲ 5.6% vs last month</div>
+            <svg width="100%" height="42" viewBox="0 0 200 42" preserveAspectRatio="none" style="margin-top: 6px; display: block;">
+              <defs><linearGradient id="ffg1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2f7df6" stop-opacity="0.45"></stop><stop offset="100%" stop-color="#2f7df6" stop-opacity="0"></stop></linearGradient></defs>
+              <path d="M0,34 L20,30 L40,32 L60,24 L80,27 L100,18 L120,22 L140,14 L160,17 L180,9 L200,12 L200,42 L0,42 Z" fill="url(#ffg1)"></path>
+              <path d="M0,34 L20,30 L40,32 L60,24 L80,27 L100,18 L120,22 L140,14 L160,17 L180,9 L200,12" fill="none" stroke="#4b93ff" stroke-width="2"></path>
+            </svg>
+          </div>
+          <div style="background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08); border-radius: 13px; padding: 14px 16px 10px 16px; backdrop-filter: blur(8px);">
+            <div style="font-size: 10.5px; color: #94a3b8; font-weight: 500;">Monthly Cash Flow</div>
+            <div style="font-size: 21px; font-weight: 700; color: #fff; margin-top: 4px;">$2,530.00</div>
+            <div style="font-size: 10px; color: #34d399; font-weight: 600; margin-top: 3px;">▲ 12.4% vs last month</div>
+            <div style="display: flex; align-items: flex-end; gap: 4px; height: 42px; margin-top: 6px;">
+              <span style="flex: 1; height: 40%; background: rgba(47,125,246,0.35); border-radius: 3px 3px 0 0;"></span>
+              <span style="flex: 1; height: 55%; background: rgba(47,125,246,0.45); border-radius: 3px 3px 0 0;"></span>
+              <span style="flex: 1; height: 35%; background: rgba(47,125,246,0.35); border-radius: 3px 3px 0 0;"></span>
+              <span style="flex: 1; height: 65%; background: rgba(47,125,246,0.55); border-radius: 3px 3px 0 0;"></span>
+              <span style="flex: 1; height: 50%; background: rgba(47,125,246,0.45); border-radius: 3px 3px 0 0;"></span>
+              <span style="flex: 1; height: 85%; background: #2f7df6; border-radius: 3px 3px 0 0;"></span>
+            </div>
+          </div>
+          <div style="background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08); border-radius: 13px; padding: 14px 16px 10px 16px; backdrop-filter: blur(8px);">
+            <div style="font-size: 10.5px; color: #94a3b8; font-weight: 500;">Monthly Spending</div>
+            <div style="font-size: 21px; font-weight: 700; color: #fff; margin-top: 4px;">$5,920.00</div>
+            <div style="font-size: 10px; color: #34d399; font-weight: 600; margin-top: 3px;">▼ 7% vs last month</div>
+            <svg width="100%" height="42" viewBox="0 0 200 42" preserveAspectRatio="none" style="margin-top: 6px; display: block;">
+              <defs><linearGradient id="ffg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f87171" stop-opacity="0.35"></stop><stop offset="100%" stop-color="#f87171" stop-opacity="0"></stop></linearGradient></defs>
+              <path d="M0,16 L20,22 L40,12 L60,26 L80,18 L100,30 L120,20 L140,28 L160,22 L180,32 L200,26 L200,42 L0,42 Z" fill="url(#ffg2)"></path>
+              <path d="M0,16 L20,22 L40,12 L60,26 L80,18 L100,30 L120,20 L140,28 L160,22 L180,32 L200,26" fill="none" stroke="#f87171" stroke-width="2"></path>
+            </svg>
+          </div>
+          <div style="background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08); border-radius: 13px; padding: 14px 16px 10px 16px; backdrop-filter: blur(8px); display: flex; justify-content: space-between;">
+            <div>
+              <div style="font-size: 10.5px; color: #94a3b8; font-weight: 500;">Savings Rate</div>
+              <div style="font-size: 21px; font-weight: 700; color: #fff; margin-top: 4px;">22%</div>
+              <div style="font-size: 10px; color: #34d399; font-weight: 600; margin-top: 3px;">▲ 3pp vs last month</div>
+            </div>
+            <div style="width: 58px; height: 58px; border-radius: 50%; background: conic-gradient(#2dd4bf 0 22%, rgba(255,255,255,0.08) 22% 100%); display: flex; align-items: center; justify-content: center; align-self: center;">
+              <div style="width: 42px; height: 42px; border-radius: 50%; background: #10151f;"></div>
+            </div>
+          </div>
+        </div>
+        <!-- bottom row -->
+        <div style="display: grid; grid-template-columns: 1fr 1.15fr; gap: 14px; margin-top: 14px;">
+          <div style="background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08); border-radius: 13px; padding: 16px 18px;">
+            <div style="font-size: 13px; font-weight: 700; color: #f1f5f9; margin-bottom: 12px;">Recent Activity</div>
+            <div style="display: flex; flex-direction: column; gap: 11px;">
+              <div style="display: flex; align-items: center; gap: 11px;">
+                <span style="width: 30px; height: 30px; border-radius: 9px; background: rgba(52,211,153,0.15); color: #34d399; display: flex; align-items: center; justify-content: center; font-size: 13px;">↓</span>
+                <span style="flex: 1;"><span style="display: block; font-size: 11.5px; font-weight: 600; color: #e2e8f0;">Payroll Deposit</span><span style="display: block; font-size: 9.5px; color: #7d8ba3;">BofA Checking •••• 7712</span></span>
+                <span style="text-align: right;"><span style="display: block; font-size: 11.5px; font-weight: 700; color: #34d399;">+$4,225.00</span><span style="display: block; font-size: 9px; color: #7d8ba3;">Jun 01</span></span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 11px;">
+                <span style="width: 30px; height: 30px; border-radius: 9px; background: rgba(52,211,153,0.12); color: #86efac; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">W</span>
+                <span style="flex: 1;"><span style="display: block; font-size: 11.5px; font-weight: 600; color: #e2e8f0;">Whole Foods</span><span style="display: block; font-size: 9.5px; color: #7d8ba3;">Chase Checking •••• 4821</span></span>
+                <span style="text-align: right;"><span style="display: block; font-size: 11.5px; font-weight: 700; color: #f1f5f9;">-$86.14</span><span style="display: block; font-size: 9px; color: #7d8ba3;">Jun 12</span></span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 11px;">
+                <span style="width: 30px; height: 30px; border-radius: 9px; background: rgba(229,9,20,0.18); color: #f87171; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">N</span>
+                <span style="flex: 1;"><span style="display: block; font-size: 11.5px; font-weight: 600; color: #e2e8f0;">Netflix</span><span style="display: block; font-size: 9.5px; color: #7d8ba3;">Amex Gold •••• 1009</span></span>
+                <span style="text-align: right;"><span style="display: block; font-size: 11.5px; font-weight: 700; color: #f1f5f9;">-$15.49</span><span style="display: block; font-size: 9px; color: #7d8ba3;">Jun 09</span></span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 11px;">
+                <span style="width: 30px; height: 30px; border-radius: 9px; background: rgba(47,125,246,0.15); color: #6ea8ff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">U</span>
+                <span style="flex: 1;"><span style="display: block; font-size: 11.5px; font-weight: 600; color: #e2e8f0;">Uber Trip</span><span style="display: block; font-size: 9.5px; color: #7d8ba3;">Capital One Card •••• 6154</span></span>
+                <span style="text-align: right;"><span style="display: block; font-size: 11.5px; font-weight: 700; color: #f1f5f9;">-$22.47</span><span style="display: block; font-size: 9px; color: #7d8ba3;">Jun 14</span></span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 11px;">
+                <span style="width: 30px; height: 30px; border-radius: 9px; background: rgba(167,139,250,0.15); color: #c4b5fd; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">A</span>
+                <span style="flex: 1;"><span style="display: block; font-size: 11.5px; font-weight: 600; color: #e2e8f0;">Amazon</span><span style="display: block; font-size: 9.5px; color: #7d8ba3;">Amex Gold •••• 1009</span></span>
+                <span style="text-align: right;"><span style="display: block; font-size: 11.5px; font-weight: 700; color: #f1f5f9;">-$49.99</span><span style="display: block; font-size: 9px; color: #7d8ba3;">Jun 13</span></span>
+              </div>
+            </div>
+            <div style="font-size: 11px; color: #6ea8ff; font-weight: 600; margin-top: 14px;">View all transactions →</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08); border-radius: 13px; padding: 16px 18px;">
+            <div style="font-size: 13px; font-weight: 700; color: #f1f5f9; margin-bottom: 12px;">Spending by Category</div>
+            <div style="display: flex; align-items: center; gap: 22px;">
+              <div style="width: 148px; height: 148px; border-radius: 50%; background: conic-gradient(#2f7df6 0 36%, #34d399 36% 51%, #f59e0b 51% 63%, #2dd4bf 63% 73%, #a78bfa 73% 82%, #f87171 82% 90%, #475569 90% 100%); display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 8px 30px rgba(0,0,0,0.4);">
+                <div style="width: 92px; height: 92px; border-radius: 50%; background: #10151f;"></div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 8px; flex: 1; font-size: 11px;">
+                <div style="display: flex; align-items: center; gap: 8px;"><span style="width: 8px; height: 8px; border-radius: 2.5px; background: #2f7df6;"></span><span style="color: #cbd5e1; flex: 1;">Housing</span><span style="color: #94a3b8;">36%</span><span style="color: #f1f5f9; font-weight: 600; width: 50px; text-align: right;">$2,131</span></div>
+                <div style="display: flex; align-items: center; gap: 8px;"><span style="width: 8px; height: 8px; border-radius: 2.5px; background: #34d399;"></span><span style="color: #cbd5e1; flex: 1;">Groceries</span><span style="color: #94a3b8;">15%</span><span style="color: #f1f5f9; font-weight: 600; width: 50px; text-align: right;">$888</span></div>
+                <div style="display: flex; align-items: center; gap: 8px;"><span style="width: 8px; height: 8px; border-radius: 2.5px; background: #f59e0b;"></span><span style="color: #cbd5e1; flex: 1;">Dining</span><span style="color: #94a3b8;">12%</span><span style="color: #f1f5f9; font-weight: 600; width: 50px; text-align: right;">$710</span></div>
+                <div style="display: flex; align-items: center; gap: 8px;"><span style="width: 8px; height: 8px; border-radius: 2.5px; background: #2dd4bf;"></span><span style="color: #cbd5e1; flex: 1;">Travel</span><span style="color: #94a3b8;">10%</span><span style="color: #f1f5f9; font-weight: 600; width: 50px; text-align: right;">$592</span></div>
+                <div style="display: flex; align-items: center; gap: 8px;"><span style="width: 8px; height: 8px; border-radius: 2.5px; background: #a78bfa;"></span><span style="color: #cbd5e1; flex: 1;">Shopping</span><span style="color: #94a3b8;">9%</span><span style="color: #f1f5f9; font-weight: 600; width: 50px; text-align: right;">$533</span></div>
+                <div style="display: flex; align-items: center; gap: 8px;"><span style="width: 8px; height: 8px; border-radius: 2.5px; background: #f87171;"></span><span style="color: #cbd5e1; flex: 1;">Utilities</span><span style="color: #94a3b8;">8%</span><span style="color: #f1f5f9; font-weight: 600; width: 50px; text-align: right;">$474</span></div>
+              </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.07);"><span style="color: #94a3b8;">Total</span><span style="font-weight: 700; color: #fff;">$5,920.00</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ LIGHT SETTINGS WINDOW (bottom right) ============ -->
+  <div data-screen-label="Settings (light)" style="position: absolute; right: 60px; bottom: 46px; width: 940px; height: 640px; background: #fbfcfe; border-radius: 16px; box-shadow: 0 40px 90px rgba(15,23,42,0.25), 0 6px 18px rgba(15,23,42,0.1); overflow: hidden; z-index: 6;">
+    <div style="display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #eef1f5; background: #fff;">
+      <span style="width: 10px; height: 10px; border-radius: 50%; background: #ff5f57;"></span>
+      <span style="width: 10px; height: 10px; border-radius: 50%; background: #febc2e;"></span>
+      <span style="width: 10px; height: 10px; border-radius: 50%; background: #28c840;"></span>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid #eef1f5; background: #fff;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="width: 22px; height: 22px; border-radius: 6px; background: linear-gradient(135deg, #2f7df6, #2dd4bf); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 11px; font-style: italic;">F</div>
+        <span style="font-weight: 700; font-size: 14px; color: #0f172a;">FundFlow</span>
+        <span style="font-size: 15px; font-weight: 700; color: #0f172a; margin-left: 12px;">Settings</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px; font-size: 10px; color: #64748b;">
+        <span>demo@fundflow.app</span><span>Transactions</span><span style="color: #0f172a; font-weight: 600;">Settings</span><span>Sign out</span>
+      </div>
+    </div>
+    <div style="display: grid; grid-template-columns: 1.15fr 1fr 0.95fr; gap: 14px; padding: 16px 20px;">
+      <!-- connected institutions -->
+      <div style="background: #fff; border: 1px solid #eef1f5; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(15,23,42,0.04);">
+        <div style="font-size: 12px; font-weight: 700; color: #0f172a; margin-bottom: 10px;">Connected Institutions</div>
+        <div style="display: flex; flex-direction: column; gap: 9px; font-size: 10px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="width: 22px; height: 22px; border-radius: 6px; background: #1a4a8f; color: #fff; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center;">C</span>
+            <span style="flex: 1;"><span style="display: block; font-weight: 600; color: #0f172a;">Chase</span><span style="display: block; color: #94a3b8; font-size: 8.5px;">Chase Checking •••• 4821</span></span>
+            <span style="font-size: 8px; font-weight: 700; color: #059669; background: #e6f7f0; padding: 3px 8px; border-radius: 12px;">Connected</span>
+            <span style="font-size: 9px; color: #2f7df6; font-weight: 600;">Reconnect</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="width: 22px; height: 22px; border-radius: 6px; background: #e31837; color: #fff; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center;">B</span>
+            <span style="flex: 1;"><span style="display: block; font-weight: 600; color: #0f172a;">Bank of America</span><span style="display: block; color: #94a3b8; font-size: 8.5px;">BofA Checking •••• 7712</span></span>
+            <span style="font-size: 8px; font-weight: 700; color: #059669; background: #e6f7f0; padding: 3px 8px; border-radius: 12px;">Connected</span>
+            <span style="font-size: 9px; color: #2f7df6; font-weight: 600;">Reconnect</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="width: 22px; height: 22px; border-radius: 6px; background: #006fcf; color: #fff; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center;">A</span>
+            <span style="flex: 1;"><span style="display: block; font-weight: 600; color: #0f172a;">American Express</span><span style="display: block; color: #94a3b8; font-size: 8.5px;">Amex Gold •••• 1009</span></span>
+            <span style="font-size: 8px; font-weight: 700; color: #059669; background: #e6f7f0; padding: 3px 8px; border-radius: 12px;">Connected</span>
+            <span style="font-size: 9px; color: #2f7df6; font-weight: 600;">Reconnect</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="width: 22px; height: 22px; border-radius: 6px; background: #013a6b; color: #fff; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center;">C</span>
+            <span style="flex: 1;"><span style="display: block; font-weight: 600; color: #0f172a;">Capital One</span><span style="display: block; color: #94a3b8; font-size: 8.5px;">Capital One Card •••• 6154</span></span>
+            <span style="font-size: 8px; font-weight: 700; color: #059669; background: #e6f7f0; padding: 3px 8px; border-radius: 12px;">Connected</span>
+            <span style="font-size: 9px; color: #2f7df6; font-weight: 600;">Reconnect</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="width: 22px; height: 22px; border-radius: 6px; background: #b31e30; color: #fff; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center;">W</span>
+            <span style="flex: 1;"><span style="display: block; font-weight: 600; color: #0f172a;">Wells Fargo</span><span style="display: block; color: #94a3b8; font-size: 8.5px;">Wells Fargo Platinum •••• 9283</span></span>
+            <span style="font-size: 8px; font-weight: 700; color: #dc2626; background: #fdeeee; padding: 3px 8px; border-radius: 12px;">Reauth needed</span>
+            <span style="font-size: 9px; color: #2f7df6; font-weight: 600;">Reconnect</span>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; margin-top: 12px; padding: 8px 10px; border: 1px dashed #cbd5e1; border-radius: 8px; font-size: 9.5px; color: #2f7df6; font-weight: 600; justify-content: center;">+ Connect a new institution <span style="color: #94a3b8; font-weight: 400;">via Plaid</span></div>
+      </div>
+      <!-- budget limits -->
+      <div style="background: #fff; border: 1px solid #eef1f5; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(15,23,42,0.04);">
+        <div style="font-size: 12px; font-weight: 700; color: #0f172a;">Budget Limits</div>
+        <div style="font-size: 8.5px; color: #94a3b8; margin-bottom: 12px;">Monthly budgets by category</div>
+        <div style="display: flex; flex-direction: column; gap: 12px; font-size: 9.5px;">
+          <div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;"><span style="color: #334155; font-weight: 600;">Groceries</span><span style="color: #94a3b8;">$888 / $1,000</span></div>
+            <div style="height: 5px; border-radius: 3px; background: #eef1f5; position: relative;"><div style="width: 89%; height: 100%; border-radius: 3px; background: #2f7df6;"></div><span style="position: absolute; left: 89%; top: -2.5px; width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 2.5px solid #2f7df6; transform: translateX(-50%); display: block; box-sizing: border-box;"></span></div>
+          </div>
+          <div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;"><span style="color: #334155; font-weight: 600;">Dining</span><span style="color: #94a3b8;">$710 / $800</span></div>
+            <div style="height: 5px; border-radius: 3px; background: #eef1f5; position: relative;"><div style="width: 89%; height: 100%; border-radius: 3px; background: #f59e0b;"></div><span style="position: absolute; left: 89%; top: -2.5px; width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 2.5px solid #f59e0b; transform: translateX(-50%); display: block; box-sizing: border-box;"></span></div>
+          </div>
+          <div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;"><span style="color: #334155; font-weight: 600;">Travel</span><span style="color: #94a3b8;">$592 / $900</span></div>
+            <div style="height: 5px; border-radius: 3px; background: #eef1f5; position: relative;"><div style="width: 66%; height: 100%; border-radius: 3px; background: #2dd4bf;"></div><span style="position: absolute; left: 66%; top: -2.5px; width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 2.5px solid #2dd4bf; transform: translateX(-50%); display: block; box-sizing: border-box;"></span></div>
+          </div>
+          <div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;"><span style="color: #334155; font-weight: 600;">Utilities</span><span style="color: #94a3b8;">$450 / $500</span></div>
+            <div style="height: 5px; border-radius: 3px; background: #eef1f5; position: relative;"><div style="width: 90%; height: 100%; border-radius: 3px; background: #a78bfa;"></div><span style="position: absolute; left: 90%; top: -2.5px; width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 2.5px solid #a78bfa; transform: translateX(-50%); display: block; box-sizing: border-box;"></span></div>
+          </div>
+          <div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;"><span style="color: #334155; font-weight: 600;">Shopping</span><span style="color: #94a3b8;">$533 / $600</span></div>
+            <div style="height: 5px; border-radius: 3px; background: #eef1f5; position: relative;"><div style="width: 89%; height: 100%; border-radius: 3px; background: #34d399;"></div><span style="position: absolute; left: 89%; top: -2.5px; width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 2.5px solid #34d399; transform: translateX(-50%); display: block; box-sizing: border-box;"></span></div>
+          </div>
+        </div>
+        <div style="font-size: 9.5px; color: #2f7df6; font-weight: 600; margin-top: 12px;">Edit budgets →</div>
+      </div>
+      <!-- security -->
+      <div style="background: #fff; border: 1px solid #eef1f5; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(15,23,42,0.04);">
+        <div style="font-size: 12px; font-weight: 700; color: #0f172a;">Security</div>
+        <div style="font-size: 8.5px; color: #94a3b8; margin-bottom: 12px;">Multi-factor authentication</div>
+        <div style="display: flex; flex-direction: column; gap: 11px; font-size: 9.5px;">
+          <div style="display: flex; align-items: flex-start; gap: 9px;">
+            <span style="width: 22px; height: 22px; border-radius: 6px; background: #f2f5f9; color: #64748b; font-size: 10px; display: flex; align-items: center; justify-content: center;">✉</span>
+            <span style="flex: 1;"><span style="display: block; font-weight: 600; color: #0f172a;">SMS</span><span style="display: block; color: #94a3b8; font-size: 8.5px;">Receive codes via text message</span></span>
+            <span style="width: 26px; height: 14px; border-radius: 8px; background: #d7dde6; position: relative; display: inline-block; flex-shrink: 0;"><span style="position: absolute; left: 2px; top: 2px; width: 10px; height: 10px; border-radius: 50%; background: #fff;"></span></span>
+          </div>
+          <div style="display: flex; align-items: flex-start; gap: 9px;">
+            <span style="width: 22px; height: 22px; border-radius: 6px; background: #eaf2fe; color: #2f7df6; font-size: 10px; display: flex; align-items: center; justify-content: center;">◈</span>
+            <span style="flex: 1;"><span style="display: block; font-weight: 600; color: #0f172a;">Authenticator App</span><span style="display: block; color: #94a3b8; font-size: 8.5px;">Use an authenticator app</span></span>
+            <span style="font-size: 8px; font-weight: 700; color: #059669; background: #e6f7f0; padding: 3px 8px; border-radius: 12px; flex-shrink: 0;">Enabled</span>
+          </div>
+          <div style="display: flex; align-items: flex-start; gap: 9px;">
+            <span style="width: 22px; height: 22px; border-radius: 6px; background: #f2f5f9; color: #64748b; font-size: 10px; display: flex; align-items: center; justify-content: center;">⚿</span>
+            <span style="flex: 1;"><span style="display: block; font-weight: 600; color: #0f172a;">Backup Codes</span><span style="display: block; color: #94a3b8; font-size: 8.5px;">Use backup codes to sign in</span></span>
+            <span style="color: #94a3b8; flex-shrink: 0;">›</span>
+          </div>
+        </div>
+        <div style="font-size: 9.5px; color: #2f7df6; font-weight: 600; margin-top: 12px; padding-top: 10px; border-top: 1px solid #eef1f5;">Change security settings →</div>
+      </div>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1.3fr; gap: 14px; padding: 0 20px;">
+      <!-- import -->
+      <div style="background: #fff; border: 1px solid #eef1f5; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(15,23,42,0.04);">
+        <div style="font-size: 12px; font-weight: 700; color: #0f172a;">Import Data</div>
+        <div style="font-size: 8.5px; color: #94a3b8;">Backfill your history with a CSV file</div>
+        <div style="margin-top: 10px; border: 1.5px dashed #cbd5e1; border-radius: 10px; padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 6px; background: #fafbfd;">
+          <span style="font-size: 10px; color: #64748b;">Drag and drop your CSV file here</span>
+          <span style="font-size: 8.5px; color: #94a3b8;">or</span>
+          <span style="font-size: 9.5px; font-weight: 600; color: #fff; background: #2f7df6; padding: 5px 14px; border-radius: 7px;">Choose file</span>
+        </div>
+        <div style="font-size: 9px; color: #2f7df6; font-weight: 600; margin-top: 10px;">Learn more about CSV import →</div>
+      </div>
+      <!-- export -->
+      <div style="background: #fff; border: 1px solid #eef1f5; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(15,23,42,0.04);">
+        <div style="font-size: 12px; font-weight: 700; color: #0f172a;">Export Data</div>
+        <div style="font-size: 8.5px; color: #94a3b8; margin-bottom: 10px;">Download your data or reports</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 9px;">
+          <div style="display: flex; align-items: center; gap: 9px; border: 1px solid #eef1f5; border-radius: 9px; padding: 10px 12px;">
+            <span style="width: 26px; height: 26px; border-radius: 7px; background: #eaf2fe; color: #2f7df6; font-size: 11px; display: flex; align-items: center; justify-content: center;">⇩</span>
+            <span><span style="display: block; font-size: 10px; font-weight: 700; color: #0f172a;">Export as CSV</span><span style="display: block; font-size: 8px; color: #94a3b8;">Download a CSV file</span></span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 9px; border: 1px solid #eef1f5; border-radius: 9px; padding: 10px 12px;">
+            <span style="width: 26px; height: 26px; border-radius: 7px; background: #e6f9f6; color: #0d9488; font-size: 11px; display: flex; align-items: center; justify-content: center;">{ }</span>
+            <span><span style="display: block; font-size: 10px; font-weight: 700; color: #0f172a;">Export as JSON</span><span style="display: block; font-size: 8px; color: #94a3b8;">Download a JSON file</span></span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 9px; border: 1px solid #eef1f5; border-radius: 9px; padding: 10px 12px;">
+            <span style="width: 26px; height: 26px; border-radius: 7px; background: #fdeeee; color: #dc2626; font-size: 11px; display: flex; align-items: center; justify-content: center;">▤</span>
+            <span><span style="display: block; font-size: 10px; font-weight: 700; color: #0f172a;">Export PDF Report</span><span style="display: block; font-size: 8px; color: #94a3b8;">Download a PDF report</span></span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 9px; border: 1px dashed #e2e8f0; border-radius: 9px; padding: 10px 12px;">
+            <span style="width: 26px; height: 26px; border-radius: 7px; background: #f2f5f9; color: #94a3b8; font-size: 11px; display: flex; align-items: center; justify-content: center;">⏱</span>
+            <span><span style="display: block; font-size: 10px; font-weight: 700; color: #64748b;">Scheduled exports</span><span style="display: block; font-size: 8px; color: #94a3b8;">Coming soon</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DARK LOGIN + MFA (bottom left) ============ -->
+  <div data-screen-label="Login &amp; MFA (dark)" style="position: absolute; left: 88px; bottom: 40px; width: 880px; height: 430px; display: flex; z-index: 4; border-radius: 16px; box-shadow: 0 40px 90px rgba(10,15,30,0.4), 0 6px 18px rgba(10,15,30,0.2); overflow: hidden; border: 1px solid rgba(255,255,255,0.07);">
+    <!-- sign in -->
+    <div style="flex: 1; background: #0d1119; padding: 34px 40px; display: flex; flex-direction: column;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg, #2f7df6, #2dd4bf); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 15px; font-style: italic; box-shadow: 0 4px 14px rgba(47,125,246,0.4);">F</div>
+        <span style="font-weight: 700; font-size: 19px; color: #f8fafc;">FundFlow</span>
+      </div>
+      <div style="font-size: 11.5px; color: #94a3b8; margin-top: 10px; line-height: 1.5;">Take control of your money.<br>Make confident financial decisions.</div>
+      <div style="display: flex; align-items: center; justify-content: center; gap: 8px; background: #fff; color: #1f2937; font-size: 12px; font-weight: 600; padding: 10px; border-radius: 9px; margin-top: 22px;">
+        <span style="width: 14px; height: 14px; border-radius: 50%; background: conic-gradient(#ea4335 0 25%, #4285f4 25% 50%, #34a853 50% 75%, #fbbc05 75% 100%); display: inline-block;"></span>
+        Continue with Google
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; margin: 16px 0 12px 0;">
+        <span style="flex: 1; height: 1px; background: rgba(255,255,255,0.09);"></span>
+        <span style="font-size: 9.5px; color: #64748b;">or</span>
+        <span style="flex: 1; height: 1px; background: rgba(255,255,255,0.09);"></span>
+      </div>
+      <div style="font-size: 10px; color: #94a3b8; font-weight: 600; margin-bottom: 5px;">Email</div>
+      <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 9px 12px; font-size: 11px; color: #64748b;">you@example.com</div>
+      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 12px; margin-bottom: 5px;">
+        <span style="font-size: 10px; color: #94a3b8; font-weight: 600;">Password</span>
+        <span style="font-size: 9px; color: #6ea8ff; font-weight: 600;">Forgot password?</span>
+      </div>
+      <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 9px 12px; font-size: 11px; color: #cbd5e1; letter-spacing: 0.2em;">••••••••••••</div>
+      <div style="background: linear-gradient(135deg, #2f7df6, #2563eb); color: #fff; font-size: 12px; font-weight: 600; padding: 10px; border-radius: 9px; text-align: center; margin-top: 16px; box-shadow: 0 4px 14px rgba(47,125,246,0.35);">Sign in</div>
+      <div style="font-size: 10px; color: #64748b; text-align: center; margin-top: 14px;">Don't have an account? <span style="color: #6ea8ff; font-weight: 600;">Sign up</span></div>
+    </div>
+    <!-- MFA -->
+    <div style="flex: 1; background: linear-gradient(160deg, #0f1524, #0b0f17); padding: 34px 40px; display: flex; flex-direction: column; align-items: center; border-left: 1px solid rgba(255,255,255,0.06);">
+      <div style="width: 66px; height: 66px; border-radius: 50%; background: radial-gradient(circle at 50% 40%, rgba(47,125,246,0.35), rgba(47,125,246,0.06)); border: 1px solid rgba(47,125,246,0.35); display: flex; align-items: center; justify-content: center; font-size: 26px; color: #6ea8ff; box-shadow: 0 0 40px rgba(47,125,246,0.25); margin-top: 4px;">🔒</div>
+      <div style="font-size: 16px; font-weight: 700; color: #f1f5f9; margin-top: 16px;">Two-Factor Authentication</div>
+      <div style="font-size: 10.5px; color: #94a3b8; margin-top: 5px; text-align: center;">Enter the 6-digit code from your authenticator app.</div>
+      <div style="display: flex; gap: 8px; margin-top: 20px;">
+        <span style="width: 38px; height: 44px; border-radius: 9px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700; color: #fff;">1</span>
+        <span style="width: 38px; height: 44px; border-radius: 9px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700; color: #fff;">2</span>
+        <span style="width: 38px; height: 44px; border-radius: 9px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700; color: #fff;">3</span>
+        <span style="width: 38px; height: 44px; border-radius: 9px; background: rgba(255,255,255,0.06); border: 1px solid #2f7df6; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700; color: #fff; box-shadow: 0 0 0 3px rgba(47,125,246,0.18);">4</span>
+        <span style="width: 38px; height: 44px; border-radius: 9px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700; color: #475569;"></span>
+        <span style="width: 38px; height: 44px; border-radius: 9px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700; color: #475569;"></span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 7px; margin-top: 16px; font-size: 10px; color: #94a3b8; align-self: flex-start; margin-left: 12px;">
+        <span style="width: 13px; height: 13px; border-radius: 4px; background: #2f7df6; color: #fff; font-size: 9px; display: flex; align-items: center; justify-content: center;">✓</span>
+        Trust this device for 30 days
+      </div>
+      <div style="background: linear-gradient(135deg, #2f7df6, #2563eb); color: #fff; font-size: 12px; font-weight: 600; padding: 10px; border-radius: 9px; text-align: center; margin-top: 14px; width: 100%; box-shadow: 0 4px 14px rgba(47,125,246,0.35);">Verify</div>
+      <div style="font-size: 10px; color: #6ea8ff; font-weight: 600; margin-top: 12px;">Use backup code</div>
+    </div>
+  </div>
+
+</div>
+
+</x-dc>
+<script>
+(async () => {
+  if (!document.title || !document.title.trim()) document.title = "FundFlow Showcase";
+  // Prepend so page-supplied @page / break rules (deck-stage's margin:0,
+  // author CSS) keep source-order precedence over the baseline.
+  const baseCss = document.createElement('style');
+  baseCss.textContent = "@media print {\n  figure, table { break-inside: avoid; }\n  *, *::before, *::after {\n    print-color-adjust: exact; -webkit-print-color-adjust: exact;\n    backdrop-filter: none !important; -webkit-backdrop-filter: none !important;\n    animation-delay: -99s !important; animation-duration: .001s !important;\n    animation-iteration-count: 1 !important; animation-fill-mode: both !important;\n    animation-play-state: running !important; transition-duration: 0s !important;\n  }\n}";
+  document.head.prepend(baseCss);
+  if (document.readyState === 'loading') {
+    await new Promise((r) => document.addEventListener('DOMContentLoaded', r, { once: true }));
+  }
+  let ds = document.querySelector('deck-stage');
+  // whenDefined never resolves when nothing registers the element, so only
+  // await it when a <deck-stage> tag exists (and race a timeout regardless).
+  if (ds && !customElements.get('deck-stage')) {
+    try {
+      await Promise.race([
+        customElements.whenDefined('deck-stage'),
+        new Promise((r) => setTimeout(r, 3000)),
+      ]);
+    } catch (e) {}
+    ds = document.querySelector('deck-stage');
+  }
+  // dc-runtime assigns window.DCLogic at init and mounts into #dc-root on
+  // DOMContentLoaded; settle on that subtree so React has rendered before
+  // print(). Non-DC pages fall through to weighing body.
+  const isDc = !ds && 'DCLogic' in window;
+  const settleRoot = ds || (isDc ? document.getElementById('dc-root') : null) || document.body;
+  if (settleRoot) {
+    // Weigh only content children — skip script/style/template so inline
+    // Babel/CSS doesn't register as stable "content" before the framework
+    // has mounted anything.
+    const MEDIA = 'img,svg,canvas,video,picture,iframe,embed,object';
+    const weigh = () => {
+      let text = 0, media = 0;
+      for (const c of settleRoot.children) {
+        const t = c.tagName;
+        if (t === 'SCRIPT' || t === 'STYLE' || t === 'TEMPLATE') continue;
+        text += (c.textContent || '').trim().length;
+        media += c.querySelectorAll(MEDIA).length + (c.matches(MEDIA) ? 1 : 0);
+      }
+      return text + media * 100;
+    };
+    // "Non-zero and stable" alone is not sufficient to mean rendered: generic
+    // body can carry a static shell while async main content is pending, and
+    // #dc-root can carry the root DC's static text while child refs are still
+    // .sc-placeholder boxes. Gate generic on readyState 'complete', and never
+    // accept stability while a dc-runtime placeholder is present.
+    const isGeneric = settleRoot === document.body;
+    const deadline = Date.now() + 15000;
+    let last = -1, stable = 0;
+    while (Date.now() < deadline) {
+      const n = weigh();
+      const ready =
+        (!isGeneric || document.readyState === 'complete') &&
+        !settleRoot.querySelector('.sc-placeholder');
+      if (n > 0 && n === last && ready) { if (++stable >= 2) break; } else { stable = 0; }
+      last = n;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+  // Project support.js may predate runtime default-seeding; push via bridge.
+  if (isDc && window.__dcSetProps && window.__dcRootName) {
+    try {
+      const dpEl = document.querySelector('script[data-dc-script]');
+      const meta = JSON.parse((dpEl && dpEl.getAttribute('data-props')) || '{}');
+      const bag = {};
+      for (const k in meta)
+        if (k[0] !== '$' && meta[k] && meta[k].default !== undefined)
+          bag[k] = meta[k].default;
+      if (Object.keys(bag).length) {
+        window.__dcSetProps(window.__dcRootName(), bag);
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    } catch (e) {}
+  }
+  // Reveal content gated on scroll or visibility before printing. Lazy <img>,
+  // IntersectionObserver fade-ins, and collapsed <details> don't render while
+  // off-screen, so a long page would print with them blank or closed. Open
+  // every <details>, force native-lazy images eager, and scroll the document
+  // through its full height to trip lazy-load + IO; then wait (bounded) for the
+  // newly-triggered images. Inert for deck-stage (slides aren't scroll-gated).
+  try {
+    for (const d of document.querySelectorAll('details')) d.open = true;
+    for (const img of document.querySelectorAll('img[loading="lazy"]'))
+      img.loading = 'eager';
+    const scroller = document.scrollingElement || document.documentElement;
+    const full = Math.max(scroller.scrollHeight, document.body.scrollHeight);
+    const step = window.innerHeight || 800;
+    for (let y = 0; y <= full; y += step) {
+      window.scrollTo(0, y);
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    window.scrollTo(0, 0);
+    await Promise.race([
+      Promise.all(
+        [...document.images].map((img) =>
+          img.complete
+            ? null
+            : new Promise((res) => {
+                img.addEventListener('load', res, { once: true });
+                img.addEventListener('error', res, { once: true });
+              })
+        )
+      ),
+      new Promise((r) => setTimeout(r, 4000)),
+    ]);
+  } catch (e) {}
+  try { await document.fonts.ready; } catch (e) {}
+  // Jump every animation to its end state so print() never captures a slide
+  // mid-entrance. Ordering matters: the 0s-transition style must be live
+  // BEFORE data-deck-active is set so attribute-keyed transitions don't
+  // start a (now-0s) run from the pre-active base.
+  const st = document.createElement('style');
+  st.textContent = '*,*::before,*::after{animation-delay:-99s !important;animation-duration:.001s !important;animation-iteration-count:1 !important;animation-fill-mode:both !important;animation-play-state:running !important;transition-duration:0s !important}';
+  document.head.appendChild(st);
+  for (const d of document.querySelectorAll('deck-stage')) {
+    for (const c of d.children) {
+      const t = c.tagName;
+      if (t === 'SCRIPT' || t === 'STYLE' || t === 'TEMPLATE') continue;
+      c.setAttribute('data-deck-active', '');
+    }
+  }
+  // Re-append deck-stage's @page last so no author @page can add a margin and
+  // spill each full-bleed slide onto two sheets. Backstop for old copies.
+  if (ds) {
+    let pg = document.getElementById('deck-stage-print-page');
+    if (!pg) {
+      pg = document.createElement('style');
+      pg.textContent = '@page{size:' + (+ds.getAttribute('width') || 1920) +
+        'px ' + (+ds.getAttribute('height') || 1080) + 'px;margin:0}';
+    }
+    document.body.appendChild(pg);
+  }
+  try {
+    const sweep = () => {
+      for (const a of document.getAnimations()) {
+        try { a.finish(); } catch (e) {
+          try { a.currentTime = (a.effect && a.effect.getComputedTiming().duration) || 0; a.pause(); } catch (e2) {}
+        }
+      }
+    };
+    sweep();
+    await new Promise((r) => requestAnimationFrame(r));
+    sweep();
+    await new Promise((r) => requestAnimationFrame(r));
+  } catch (e) {}
+  // Size the PDF page to the rendered design unless the file opted into
+  // standard paper via @page{size:letter|A4|…}. Decks own their own @page.
+  // Wrappers (body, …) lose padding+margin so the frame sits at (0,0); the
+  // frame itself loses only margin — its padding is INSIDE the measured
+  // rect and must stay, or content shifts and leaves a gap at bottom/right.
+  var __m = null;
+  try { __m = (() => {
+  var STAMP = true;
+  var docEl = document.documentElement;
+  var doc = { width: docEl.scrollWidth, height: docEl.scrollHeight };
+
+  var ds = document.querySelector('deck-stage');
+  if (ds) {
+    var dw = Number(ds.getAttribute('width')) || 1920;
+    var dh = Number(ds.getAttribute('height')) || 1080;
+    var n = typeof ds.length === 'number' ? ds.length : ds.children.length;
+    var idx = typeof ds.index === 'number' ? ds.index : 0;
+    var frames = [];
+    for (var i = 0; i < n; i++) frames.push({ left: 0, top: 0, width: dw, height: dh });
+    return { kind: 'deck', source: 'declared', doc: doc, frames: frames,
+      authored: frames.map(function(){return{width:true,height:true}}),
+      deck: { width: dw, height: dh, slideCount: n, index: idx },
+      signals: { paperPage: false, pxPage: false } };
+  }
+
+  // Declared kind: a doc-page tag names the kind outright, so no signal
+  // heuristics run (like the deck branch above, signals report false —
+  // they describe inferred classifications only). The tag alone is not
+  // trusted: the element must have upgraded (shadowRoot present), so a
+  // leftover tag whose script was deleted falls through to the heuristics
+  // that handle plain markup.
+  var stageSx = window.scrollX || 0, stageSy = window.scrollY || 0;
+  var dp = document.querySelector('doc-page');
+  if (dp && dp.shadowRoot) {
+    // Crop to the sheet, not the host — the desk around it is screen-only
+    // chrome that must not land in PNG exports.
+    var sheet = dp.shadowRoot.querySelector('.sheet');
+    var sr = (sheet || dp).getBoundingClientRect();
+    return { kind: 'paper-doc', source: 'declared', doc: doc,
+      frames: [{ left: sr.left + stageSx, top: sr.top + stageSy,
+        width: sr.width, height: sr.height }],
+      authored: [{ width: false, height: false }],
+      signals: { paperPage: false, pxPage: false } };
+  }
+  var paperPage = false, pxPage = false;
+  var eachRule = function (fn) {
+    for (var s = 0; s < document.styleSheets.length; s++) {
+      var rs; try { rs = document.styleSheets[s].cssRules; } catch (e) { continue; }
+      for (var r = 0; r < rs.length; r++) {
+        fn(rs[r]);
+        if (rs[r].cssRules) for (var n = 0; n < rs[r].cssRules.length; n++) fn(rs[r].cssRules[n]);
+      }
+    }
+  };
+  eachRule(function (r) {
+    if (r.type !== 6) return;
+    var m = /\bsize\s*:\s*([^;}]+)/i.exec(r.cssText || '');
+    if (!m) return;
+    if (/\b(letter|a[3-5]|legal|ledger)\b/i.test(m[1])) paperPage = true;
+    if (/\d+(?:\.\d+)?px\b/i.test(m[1])) pxPage = true;
+  });
+  var signals = { paperPage: paperPage, pxPage: pxPage };
+
+  var pxVal = function (v) {
+    var m = /^(\d+(?:\.\d+)?)px$/.exec(v || ''); return m ? +m[1] : 0;
+  };
+  var authoredPx = function (el, prop) {
+    if (pxVal(el.style[prop])) return true;
+    var attr = el.getAttribute(prop);
+    if (attr && /^\d+$/.test(attr)) return true;
+    var hit = false;
+    eachRule(function (r) {
+      if (hit || r.type !== 1 || !r.style) return;
+      try { if (el.matches(r.selectorText) && pxVal(r.style[prop])) hit = true; } catch (e) {}
+    });
+    return hit;
+  };
+
+  var el = document.body, rootPxW = false;
+  for (;;) {
+    var kids = [];
+    for (var c = 0; c < el.children.length; c++) {
+      var t = el.children[c].tagName;
+      if (t !== 'SCRIPT' && t !== 'STYLE' && t !== 'TEMPLATE') kids.push(el.children[c]);
+    }
+    if (kids.length !== 1 || !(kids[0] instanceof HTMLElement)) break;
+    if (STAMP) el.setAttribute('data-om-frame-wrap', '');
+    el = kids[0];
+    rootPxW = authoredPx(el, 'width');
+    if (rootPxW) break;
+  }
+  if (!rootPxW) rootPxW = authoredPx(el, 'width');
+
+  // @page{size:letter} alone is a flowing doc; with a px-width root it's a
+  // fixed sheet pretending to be paper — fall through and size to render.
+  if (paperPage && !rootPxW) {
+    return { kind: 'paper-doc', source: 'inferred', doc: doc, signals: signals,
+      frames: [{ left: 0, top: 0, width: doc.width, height: doc.height }],
+      authored: [{ width: false, height: false }] };
+  }
+
+  var sx = window.scrollX || 0, sy = window.scrollY || 0;
+  var rectOf = function (e) {
+    var r = e.getBoundingClientRect();
+    var oy; try { oy = getComputedStyle(e).overflowY; } catch (err) {}
+    var h = oy === 'visible' ? Math.max(r.height, e.scrollHeight || 0) : r.height;
+    return { left: r.left + sx, top: r.top + sy, width: r.width, height: h };
+  };
+
+  // Multi-frame: ≥2 visible non-fixed children, each with authored px width
+  // AND height, all within ±2px of each other. Off unless the page opts in
+  // via data-om-multi-frame on the stop element — guards against card grids
+  // and pricing tables that match the geometry but aren't separate canvases.
+  if (el.hasAttribute('data-om-multi-frame')) {
+    var cands = [];
+    for (var k = 0; k < el.children.length; k++) {
+      var ch = el.children[k];
+      var cs; try { cs = getComputedStyle(ch); } catch (e) { continue; }
+      if (cs.display === 'none' || cs.visibility === 'hidden' || cs.position === 'fixed') continue;
+      var rc = rectOf(ch);
+      if (rc.width < 2 || rc.height < 2) continue;
+      if (!authoredPx(ch, 'width') || !authoredPx(ch, 'height')) continue;
+      cands.push(rc);
+    }
+    if (cands.length >= 2) {
+      var w0 = cands[0].width, h0 = cands[0].height, ok = true;
+      for (var q = 1; q < cands.length; q++)
+        if (Math.abs(cands[q].width - w0) > 2 || Math.abs(cands[q].height - h0) > 2) ok = false;
+      if (ok) return { kind: 'multi-frame', source: 'inferred', doc: doc, signals: signals,
+        frames: cands, authored: cands.map(function(){return{width:true,height:true}}) };
+    }
+  }
+
+  if (STAMP) el.setAttribute('data-om-frame', '');
+  return { kind: 'single-canvas', source: 'inferred', doc: doc, signals: signals,
+    frames: [rectOf(el)],
+    authored: [{ width: rootPxW, height: authoredPx(el, 'height') }] };
+})(); } catch (e) {}
+  var frame = null;
+  if (__m && __m.kind === 'single-canvas') {
+    var f = __m.frames && __m.frames[0];
+    if (f && f.width >= 200 && f.height >= 200) {
+      frame = f;
+      var fst = document.createElement('style');
+      fst.textContent = '@media print{@page{size:' + Math.ceil(f.width) + 'px ' +
+        Math.ceil(f.height) + 'px;margin:0}' +
+        'html,body,[data-om-frame-wrap]{padding:0!important;margin:0!important;background:none!important}' +
+        '[data-om-frame]{margin:0!important}}';
+      document.body.appendChild(fst);
+    }
+  }
+  // Relax break-inside on oversized elements. An element taller than a
+  // printable page can't honor break-inside: avoid — browsers either overflow
+  // it or push it whole to the next page, leaving a blank gap, then break it
+  // anyway at an arbitrary point. After the final layout (content revealed,
+  // animations jumped), find elements taller than a page that still compute
+  // break-inside: avoid and reset them to auto, so the browser breaks them at
+  // their children's boundaries instead (children keep their own avoid). PAGE_PX
+  // is a conservative portrait estimate at 96 CSS px/in — Letter/A4 usable
+  // height minus our 0.5in margins — so only clearly-oversized elements are
+  // touched and under-page elements still stay whole. Skipped for decks (slides
+  // are sized to the page) and for fixed-size canvases (frame set, or an author
+  // px-based @page) — runs as before for flowing docs on letter/A4.
+  try {
+    if (!ds && !frame && !(__m && __m.signals && __m.signals.pxPage)) {
+      const PAGE_PX = 1024;
+      // Our print defaults add a real @page margin only when the source has
+      // no @page of its own; computed style can't tell us (it reports screen
+      // media), so read the injected rule directly.
+      const defaults = document.querySelector('style[data-omelette-print-defaults]');
+      const pageInset = /@page\s*\{[^}]*margin/.test(defaults ? defaults.textContent || '' : '');
+      const SEL = 'section,article,figure,table,pre,blockquote,[class~="card" i],[class~="page" i],[class~="sheet" i]';
+      for (const el of document.body.querySelectorAll(SEL)) {
+        if (el instanceof HTMLElement && el.offsetHeight > PAGE_PX) {
+          el.setAttribute('data-om-oversized', '');
+          // Fake-paged docs simulate sheets with over-tall break-after:page
+          // boxes; honoring the break spills half-blank pages and ends a
+          // colored box mid-sheet. Flow them, and (only when we own the page
+          // inset) drop the redundant padding/background via the rule below.
+          const cs = getComputedStyle(el);
+          if (cs.breakAfter === 'page' || cs.pageBreakAfter === 'always') {
+            el.setAttribute('data-om-fakepage', '');
+          }
+        }
+      }
+      const ost = document.createElement('style');
+      ost.textContent = '@media print{' +
+        '[data-om-oversized]{break-inside:auto !important;page-break-inside:auto !important}' +
+        '[data-om-fakepage]{break-after:auto !important;page-break-after:auto !important}' +
+        (pageInset ? '[data-om-fakepage]{padding:0 !important;background:none !important}' : '') +
+        '}';
+      document.head.appendChild(ost);
+    }
+  } catch (e) {}
+  // macOS Preview renders Skia-PDF Luminosity soft-masks as opaque grey boxes;
+  // swap the CSS that triggers them for Preview-safe forms.
+  try {
+    for (const el of document.body.querySelectorAll('*')) {
+      const cs = getComputedStyle(el);
+
+      if (cs.boxShadow !== 'none' && cs.filter === 'none') {
+        const outs = [], kept = [];
+        for (const s of cs.boxShadow.split(/,(?![^(]*[)])/)) {
+          const t = s.trim();
+          const m = t.match(/^(rgba?[(][^)]+[)]) (-?[0-9.]+px) (-?[0-9.]+px) ([0-9.]+px) -?[0-9.]+px$/);
+          if (m && parseFloat(m[4]) > 0) outs.push('drop-shadow(' + m[2] + ' ' + m[3] + ' ' + m[4] + ' ' + m[1] + ')');
+          else kept.push(t);
+        }
+        if (outs.length) {
+          el.style.setProperty('filter', outs.join(' '), 'important');
+          el.style.setProperty('box-shadow', kept.join(', ') || 'none', 'important');
+        }
+      }
+
+      const mask = cs.maskImage && cs.maskImage !== 'none' ? cs.maskImage : cs.webkitMaskImage;
+      if (mask && mask !== 'none' && cs.filter === 'none') el.style.setProperty('filter', 'opacity(1)', 'important');
+    }
+  } catch (e) {}
+  setTimeout(() => { try { window.print(); } catch (e) {} }, 200);
+})();
+</script>
+</body>
+</html>

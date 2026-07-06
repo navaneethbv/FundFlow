@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import Badge from "@/components/ui/Badge";
+import Button from "@/components/ui/Button";
+import ButtonLink from "@/components/ui/ButtonLink";
+import Panel from "@/components/ui/Panel";
 
 export default function ExportSection({
   initialEnabled,
@@ -24,21 +28,15 @@ export default function ExportSection({
     setSaving(false);
   }
 
-  const buttonClass = (gated: boolean) =>
-    `inline-block rounded border border-black/15 dark:border-white/25 px-3 py-1.5 text-sm ${
-      gated && !enabled ? "pointer-events-none opacity-40" : ""
-    }`;
-
   return (
-    <section className="rounded-lg border border-black/10 dark:border-white/15 p-4 space-y-3">
-      <h2 className="font-semibold">Export your data</h2>
-      <p className="text-sm opacity-80">
+    <Panel title="Export data" eyebrow="Downloads">
+      <p className="mb-4 text-sm text-muted">
         Download your transactions as CSV or JSON (merchant, amount, date,
-        category only — no account numbers or identifiers; feed them to any AI
+        category only - no account numbers or identifiers; feed them to any AI
         tool you choose), or grab this week&apos;s summary as a PDF.
       </p>
 
-      <label className="flex items-center gap-2 text-sm">
+      <label className="mb-4 flex items-center gap-2 text-sm">
         <input
           type="checkbox"
           checked={enabled}
@@ -46,21 +44,21 @@ export default function ExportSection({
           disabled={saving}
         />
         Allow exporting my transaction data
+        <Badge tone={enabled ? "success" : "warning"}>{enabled ? "Enabled" : "Paused"}</Badge>
       </label>
 
       <div className="flex flex-wrap gap-2">
-        <a href="/api/export/csv" className={buttonClass(true)}>
-          Download CSV
-        </a>
-        <a href="/api/export/json" className={buttonClass(true)}>
-          Download JSON
-        </a>
-        {/* The PDF is the same summary the weekly email carries — not gated by
-            the transaction-export toggle. */}
-        <a href="/api/export/report" className={buttonClass(false)}>
-          Weekly report (PDF)
-        </a>
+        <ButtonLink href="/api/export/csv" className={!enabled ? "pointer-events-none opacity-40" : ""}>
+          Export as CSV
+        </ButtonLink>
+        <ButtonLink href="/api/export/json" className={!enabled ? "pointer-events-none opacity-40" : ""}>
+          Export as JSON
+        </ButtonLink>
+        <ButtonLink href="/api/export/report">Export PDF report</ButtonLink>
       </div>
-    </section>
+      <Button type="button" variant="ghost" size="sm" onClick={toggle} disabled={saving} className="mt-4">
+        {saving ? "Saving..." : enabled ? "Pause exports" : "Enable exports"}
+      </Button>
+    </Panel>
   );
 }

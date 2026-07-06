@@ -2,9 +2,7 @@ import Sparkline from "@/components/charts/Sparkline";
 import { formatCurrency } from "@/lib/format";
 
 /**
- * Stat tile: label · value (proportional figures — never tabular-nums on a
- * large standalone number) · optional signed delta vs a named period (color =
- * direction × whether up is good) · optional sparkline.
+ * Stat tile: label, value, optional signed delta vs a named period, and optional sparkline.
  */
 export default function StatTile({
   label,
@@ -27,16 +25,16 @@ export default function StatTile({
   const isGood = delta !== undefined && (delta >= 0) === upIsGood;
 
   return (
-    <section className="rounded-2xl border border-black/10 dark:border-white/15 p-5 bg-white/40 dark:bg-black/20 backdrop-blur-sm shadow-sm">
+    <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card transition-transform duration-200 hover:-translate-y-0.5">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wider opacity-60">{label}</h3>
+        <h3 className="eyebrow">{label}</h3>
         {trend && trend.length >= 2 && <Sparkline values={trend} />}
       </div>
-      <p className="text-2xl font-semibold mt-1" style={{ color: "var(--viz-ink)" }}>
+      <p className="display mt-3 text-3xl">
         {formatCurrency(value)}
       </p>
       {showDelta && (
-        <p className="text-xs mt-1.5 font-medium" style={{ color: isGood ? "var(--viz-good)" : "var(--viz-bad)" }}>
+        <p className="mt-2 text-sm font-bold" style={{ color: isGood ? "var(--viz-good)" : "var(--viz-bad)" }}>
           {delta! >= 0 ? "▲" : "▼"} {formatCurrency(Math.abs(delta!))}{" "}
           <span style={{ color: "var(--viz-muted)" }}>vs {deltaVs}</span>
         </p>
