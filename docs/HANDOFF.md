@@ -1,6 +1,6 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-07-05. Read this first to resume.
+Last updated: 2026-07-06. Read this first to resume.
 
 ## Where we are
 
@@ -10,7 +10,7 @@ run**, which is blocked on adding Plaid Sandbox keys.
 
 **Status: green.**
 - `npm run build` ✓ · `npm run lint` ✓ · `npx tsc --noEmit` ✓
-- `npm test` ✓ **13/13** (unit + integration against the live FundFlow DB)
+- `npm test` ✓ **20 files / 99 tests** (unit + integration against the live FundFlow DB)
 - Supabase migrations **applied** to the FundFlow project (`zrxbmmtqqhlwtrinocww`)
 - RLS cross-user isolation and sync idempotency are **proven by integration tests**
 
@@ -59,7 +59,7 @@ run**, which is blocked on adding Plaid Sandbox keys.
 ## Where things live
 
 - Plan: `~/.claude/plans/build-a-secure-ai-powered-parsed-valiant.md`
-- Future features: `TODO.md` (card designs, mobile, per-card/per-bank spend,
+- Future features: `docs/TODO.md` (card designs, mobile, per-card/per-bank spend,
   checking cash-flow insights, monthly history, email report, webhooks, AI).
 - Full walkthrough + security checklist: `README.md`
 - Migrations: `supabase/migrations/0001_init.sql`, `0002_rate_limit.sql`
@@ -67,5 +67,5 @@ run**, which is blocked on adding Plaid Sandbox keys.
 ## Not yet done
 
 - Browser end-to-end run (needs Plaid keys — step above).
-- `git` is untouched (no commits made). Commit when ready.
-- Everything in `TODO.md` is deferred by design.
+- Cleanup work is on branch `cleanup/docs-and-issues`. Commit when ready.
+- Everything in `docs/TODO.md` is deferred by design.
