@@ -28,7 +28,17 @@ export async function GET(request: NextRequest) {
       .eq("status", "active");
     if (error) throw error;
 
-    const userIds = [...new Set((items ?? []).map((r) => r.user_id as string))];
+    const allUserIds = [...new Set((items ?? []).map((r) => r.user_id as string))];
+
+    // Respect the per-user opt-out (Settings → Weekly email report).
+    const { data: optedIn, error: prefError } = await service
+      .from("profiles")
+      .select("id")
+      .in("id", allUserIds)
+      .eq("weekly_report_enabled", true);
+    if (prefError) throw prefError;
+    const userIds = (optedIn ?? []).map((r) => r.id as string);
+
     const dateStr = new Date().toISOString().slice(0, 10);
 
     let sentCount = 0;

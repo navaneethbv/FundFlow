@@ -1,11 +1,17 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getDashboardData } from "@/lib/dashboard";
-import { formatCurrency, titleCase, formatMonth } from "@/lib/format";
+import { formatCurrency, titleCase, formatMonth, formatMinutesAgo } from "@/lib/format";
 import ConnectBankButton from "@/components/ConnectBankButton";
 import RefreshButton from "@/components/RefreshButton";
+import AutoRefresh from "@/components/AutoRefresh";
 import LogoutButton from "@/components/LogoutButton";
 import { detectCardDesign } from "@/lib/card-design";
+import TrendChart from "@/components/charts/TrendChart";
+import DonutChart from "@/components/charts/DonutChart";
+import DivergingColumns from "@/components/charts/DivergingColumns";
+import StatTile from "@/components/charts/StatTile";
+import { foldTail } from "@/lib/chart-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -44,10 +50,15 @@ function BarList({
             <span>{item.label}</span>
             <span className="tabular-nums font-semibold">{formatCurrency(item.amount)}</span>
           </div>
-          <div className="h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+          {/* Ranking bars: one series → one hue (slot 1), 4px rounded data-end,
+              square at the baseline. Never a darker-where-bigger ramp. */}
+          <div className="h-2.5 bg-black/[0.06] dark:bg-white/[0.08] overflow-hidden rounded-r-[4px]">
             <div
-              className="h-full bg-foreground rounded-full transition-all duration-500 ease-out"
-              style={{ width: `${max > 0 ? (item.amount / max) * 100 : 0}%` }}
+              className="h-full rounded-r-[4px] transition-all duration-500 ease-out"
+              style={{
+                width: `${max > 0 ? (item.amount / max) * 100 : 0}%`,
+                background: "var(--viz-1)",
+              }}
             />
           </div>
         </li>
@@ -128,11 +139,32 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       .order("created_at"),
   ]);
 
+  // Freshness: warn when a bank connection is broken, or when no sync has
+  // succeeded in 48h (covers silently failing crons; sync_jobs is written by
+  // every sync run). Staleness is computed in getDashboardData.
+  const brokenBanks = (items ?? []).filter((i) => i.status === "error");
+  const isStale = data.syncIsStale;
+
   const net = data.currentMonthIncome - data.currentMonthExpenses;
-  const maxCategory = Math.max(1, ...data.categoryBreakdown.map((c) => c.amount));
   const maxMerchant = Math.max(1, ...data.merchantBreakdown.map((m) => m.amount));
-  const maxMonth = Math.max(1, ...data.monthlySpending.map((m) => m.amount));
   const hasBanks = (items ?? []).length > 0;
+
+  // Series + deltas for the charts and stat tiles (6-month window, last =
+  // active month, index 4 = the month before).
+  const monthLabels = data.monthlySpending.map((m) => formatMonth(m.month));
+  const spendSeries = data.monthlySpending.map((m) => m.amount);
+  const incomeSeries = data.monthlyIncome.map((m) => m.amount);
+  const netSeries = spendSeries.map((s, i) => (incomeSeries[i] ?? 0) - s);
+  const prevMonthLabel = monthLabels[monthLabels.length - 2] ?? "last month";
+  const spendDelta = spendSeries[5]! - (spendSeries[4] ?? 0);
+  const incomeDelta = incomeSeries[5]! - (incomeSeries[4] ?? 0);
+  const netDelta = netSeries[5]! - (netSeries[4] ?? 0);
+
+  const donutItems = foldTail(
+    data.categoryBreakdown.map((c) => ({ label: titleCase(c.category), amount: c.amount })),
+    6,
+    (amount) => ({ label: "Other", amount }),
+  );
 
   // Budget calculations
   const hasBudget = data.totalBudget > 0;
@@ -161,6 +193,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   return (
     <main className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
+      {/* Live updates: re-render every 2 min (no Plaid calls — shows what the
+          webhook/cron wrote), plus one Plaid auto-pull per 30-min window. */}
+      {hasBanks && <AutoRefresh />}
+
       {/* Header section with mobile optimization */}
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-black/5 dark:border-white/5">
         <div>
@@ -170,6 +206,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         <nav className="flex items-center justify-between sm:justify-end gap-5 text-sm font-medium">
           <span className="opacity-60 hidden sm:inline text-xs">{user?.email}</span>
           <div className="flex gap-4">
+            <Link href="/transactions" className="underline hover:opacity-80 transition-opacity">
+              Transactions
+            </Link>
             <Link href="/settings" className="underline hover:opacity-80 transition-opacity">
               Settings
             </Link>
@@ -178,11 +217,45 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         </nav>
       </header>
 
+      {(brokenBanks.length > 0 || isStale) && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+          {brokenBanks.length > 0 ? (
+            <>
+              <span className="font-medium">
+                {brokenBanks
+                  .map((b) => b.institution_name ?? "A bank")
+                  .join(", ")}{" "}
+                lost its connection
+              </span>{" "}
+              — data may be stale.{" "}
+              <Link href="/settings" className="underline">
+                Reconnect in Settings
+              </Link>
+            </>
+          ) : (
+            <>
+              <span className="font-medium">Data may be stale</span> — no
+              successful sync in the last 48 hours. Try Refresh, and check your
+              banks in{" "}
+              <Link href="/settings" className="underline">
+                Settings
+              </Link>
+              .
+            </>
+          )}
+        </div>
+      )}
+
       {/* Action buttons bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-black/5 dark:bg-white/5 p-3 rounded-2xl">
         <div className="flex flex-wrap items-center gap-2.5">
           <ConnectBankButton />
           {hasBanks && <RefreshButton />}
+          {hasBanks && (
+            <span className="text-xs opacity-60" title="Newest successful sync; auto-updates every 30 min while open">
+              Updated {formatMinutesAgo(data.lastSyncAgoMinutes)}
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
           {(items ?? []).map((i) => (
@@ -481,48 +554,47 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                 </div>
               </section>
 
-              {/* Stats grid */}
+              {/* Stat tiles: value + delta vs last month + 6-month sparkline */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Card title={`${formatMonth(data.selectedMonth)} · Income`}>
-                  <p className="text-2xl font-bold tabular-nums text-green-600 dark:text-green-400">
-                    {formatCurrency(data.currentMonthIncome)}
-                  </p>
-                </Card>
-                <Card title={`${formatMonth(data.selectedMonth)} · Expenses`}>
-                  <p className="text-2xl font-bold tabular-nums text-red-600 dark:text-red-400">
-                    {formatCurrency(data.currentMonthExpenses)}
-                  </p>
-                </Card>
-                <Card title={`${formatMonth(data.selectedMonth)} · Net`}>
-                  <p
-                    className={`text-2xl font-bold tabular-nums ${
-                      net >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
-                    }`}
-                  >
-                    {formatCurrency(net)}
-                  </p>
-                </Card>
+                <StatTile
+                  label={`${formatMonth(data.selectedMonth)} · Income`}
+                  value={data.currentMonthIncome}
+                  delta={incomeDelta}
+                  deltaVs={prevMonthLabel}
+                  upIsGood
+                  trend={incomeSeries}
+                />
+                <StatTile
+                  label={`${formatMonth(data.selectedMonth)} · Expenses`}
+                  value={data.currentMonthExpenses}
+                  delta={spendDelta}
+                  deltaVs={prevMonthLabel}
+                  upIsGood={false}
+                  trend={spendSeries}
+                />
+                <StatTile
+                  label={`${formatMonth(data.selectedMonth)} · Net`}
+                  value={net}
+                  delta={netDelta}
+                  deltaVs={prevMonthLabel}
+                  upIsGood
+                  trend={netSeries}
+                />
               </div>
 
-              {/* Charts section layout polished */}
+              {/* Trend + category breakdown */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <Card title="Monthly spending trend">
-                  <BarList
-                    items={data.monthlySpending.map((m) => ({
-                      label: formatMonth(m.month),
-                      amount: m.amount,
-                    }))}
-                    max={maxMonth}
+                <Card title="Spending vs income · 6 months">
+                  <TrendChart
+                    labels={monthLabels}
+                    series={[
+                      { name: "Spending", slot: 6, values: spendSeries },
+                      { name: "Income", slot: 1, values: incomeSeries },
+                    ]}
                   />
                 </Card>
-                <Card title={`Category spending (${formatMonth(data.selectedMonth)})`}>
-                  <BarList
-                    items={data.categoryBreakdown.map((c) => ({
-                      label: titleCase(c.category),
-                      amount: c.amount,
-                    }))}
-                    max={maxCategory}
-                  />
+                <Card title={`Where it went (${formatMonth(data.selectedMonth)})`}>
+                  <DonutChart items={donutItems} centerLabel="total spend" />
                 </Card>
               </div>
 
@@ -613,6 +685,16 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                   </p>
                 </Card>
               </div>
+
+              <Card title="Checking cash flow · 6 months">
+                <DivergingColumns
+                  labels={data.monthlyCashFlow.map((m) => formatMonth(m.month))}
+                  up={data.monthlyCashFlow.map((m) => m.deposits)}
+                  down={data.monthlyCashFlow.map((m) => m.withdrawals)}
+                  upName="Deposits"
+                  downName="Withdrawals"
+                />
+              </Card>
 
               {/* Cash Flow Insights Banner */}
               {data.cashFlow.net < 0 ? (

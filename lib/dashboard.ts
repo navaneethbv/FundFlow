@@ -8,7 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * negative = money in (income). Transfers are excluded from spend/income totals.
  */
 
-const EXCLUDED_PFC = new Set([
+export const EXCLUDED_PFC = new Set([
   "TRANSFER_IN",
   "TRANSFER_OUT",
   "LOAN_PAYMENTS",
@@ -32,6 +32,8 @@ export interface DashboardData {
   accounts: AccountSummary[];
   creditAccounts: AccountSummary[];
   monthlySpending: { month: string; amount: number }[];
+  monthlyIncome: { month: string; amount: number }[];
+  monthlyCashFlow: { month: string; deposits: number; withdrawals: number }[];
   categoryBreakdown: { category: string; amount: number }[];
   merchantBreakdown: { merchant: string; amount: number }[];
   currentMonthExpenses: number;
@@ -45,6 +47,12 @@ export interface DashboardData {
   incomeStreams: { merchant: string; amount: number; frequency: string | null }[];
   availableMonths: string[];
   selectedMonth: string;
+  /** Completion time of the newest successful sync job, or null if none. */
+  lastSyncAt: string | null;
+  /** Whole minutes since lastSyncAt (null when never synced). */
+  lastSyncAgoMinutes: number | null;
+  /** True when banks are connected but no sync has succeeded in 48h. */
+  syncIsStale: boolean;
   totalBudget: number;
   lastMonthProratedSpent: number;
   spendPerCard: { name: string; amount: number }[];
@@ -65,6 +73,27 @@ function monthKey(dateStr: string): string {
   return dateStr.slice(0, 7); // YYYY-MM
 }
 
+/** "2026-07" + delta months, pure string math (no timezone surprises). */
+function addMonths(ym: string, delta: number): string {
+  const [y, m] = ym.split("-").map(Number);
+  const total = y! * 12 + (m! - 1) + delta;
+  const ny = Math.floor(total / 12);
+  const nm = (total % 12) + 1;
+  return `${ny}-${String(nm).padStart(2, "0")}`;
+}
+
+/** Newest → oldest month keys, capped so a decade of data stays bounded. */
+function enumerateMonths(newest: string, oldest: string, cap = 120): string[] {
+  const months: string[] = [];
+  let cursor = newest;
+  while (months.length < cap) {
+    months.push(cursor);
+    if (cursor <= oldest) break;
+    cursor = addMonths(cursor, -1);
+  }
+  return months;
+}
+
 function isSpending(t: TxnLite): boolean {
   return t.amount > 0 && !EXCLUDED_PFC.has(t.pfc_primary ?? "");
 }
@@ -77,6 +106,8 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+const STALE_AFTER_MS = 48 * 3600 * 1000;
+
 export async function getDashboardData(
   supabase: SupabaseClient,
   selectedAccountId?: string,
@@ -85,12 +116,17 @@ export async function getDashboardData(
   const now = new Date();
   const currentMonth = monthKey(now.toISOString().slice(0, 10));
 
+  // Stage 1: everything except transactions, plus one tiny oldest-date probe.
+  // Transactions are then fetched BOUNDED to the 6-month window the dashboard
+  // actually renders — with years of history (and a 2-minute auto re-render)
+  // an unbounded select-all grows without limit.
   const [
     { data: accounts },
-    { data: txns },
     { data: streams },
     { data: items },
     { data: budgets },
+    { data: lastSyncJob },
+    { data: oldestTxn },
   ] = await Promise.all([
     supabase
       .from("accounts")
@@ -98,9 +134,6 @@ export async function getDashboardData(
         "id, name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code, plaid_item_id",
       )
       .order("name"),
-    supabase
-      .from("transactions")
-      .select("date, amount, merchant_name, name, pfc_primary, account_id"),
     supabase
       .from("recurring_streams")
       .select("merchant_name, description, average_amount, frequency, category, stream_type, is_active, plaid_item_id")
@@ -111,43 +144,89 @@ export async function getDashboardData(
     supabase
       .from("budgets")
       .select("category, monthly_limit"),
+    supabase
+      .from("sync_jobs")
+      .select("updated_at")
+      .eq("status", "done")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("transactions")
+      .select("date")
+      .order("date", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   const allAccounts = (accounts ?? []) as AccountSummary[];
-  const allTxnsRaw = (txns ?? []) as TxnLite[];
+  const lastSyncAt = (lastSyncJob?.updated_at as string | undefined) ?? null;
   const allItems = (items ?? []) as Array<{ id: string; institution_name: string | null }>;
   const allBudgets = (budgets ?? []) as Array<{ category: string; monthly_limit: number }>;
+
+  // Month browser: a continuous range from the oldest transaction to today
+  // (empty months render as zeros — still browsable).
+  const oldestMonth = oldestTxn ? monthKey(oldestTxn.date as string) : currentMonth;
+  const availableMonths = enumerateMonths(currentMonth, oldestMonth);
+
+  // Determine active month
+  const activeMonth =
+    selectedMonth && availableMonths.includes(selectedMonth)
+      ? selectedMonth
+      : currentMonth;
+
+  // Stage 2: transactions for the rendered window only — the active month,
+  // the five months before it (charts), including the pro-rated comparison.
+  const windowStart = `${addMonths(activeMonth, -5)}-01`;
+  const windowEndExclusive = `${addMonths(activeMonth, 1)}-01`;
+  const { data: txns } = await supabase
+    .from("transactions")
+    .select("date, amount, merchant_name, name, pfc_primary, account_id")
+    .gte("date", windowStart)
+    .lt("date", windowEndExclusive);
+
+  const allTxnsRaw = (txns ?? []) as TxnLite[];
 
   // Filter transactions by selected account if specified
   const filteredTxns = selectedAccountId
     ? allTxnsRaw.filter((t) => t.account_id === selectedAccountId)
     : allTxnsRaw;
 
-  // Extract all available months from all transactions
-  const monthSet = new Set<string>();
-  monthSet.add(currentMonth);
-  for (const t of allTxnsRaw) {
-    monthSet.add(monthKey(t.date));
-  }
-  const availableMonths = [...monthSet].sort((a, b) => b.localeCompare(a));
+  // Per-month aggregates (spending, income, depository cash flow) for the
+  // 6-month window ending at activeMonth. One account-type lookup map keeps
+  // the cash-flow pass linear.
+  const accountTypeById = new Map<string, string | null>();
+  for (const a of allAccounts) accountTypeById.set(a.id, a.type);
 
-  // Determine active month
-  const activeMonth = selectedMonth && monthSet.has(selectedMonth)
-    ? selectedMonth
-    : currentMonth;
-
-  // Monthly spending (last 6 months relative to activeMonth)
   const monthMap = new Map<string, number>();
+  const incomeMap = new Map<string, number>();
   for (const t of filteredTxns) {
-    if (!isSpending(t)) continue;
     const key = monthKey(t.date);
-    monthMap.set(key, (monthMap.get(key) ?? 0) + t.amount);
+    if (isSpending(t)) {
+      monthMap.set(key, (monthMap.get(key) ?? 0) + t.amount);
+    } else if (isIncome(t)) {
+      incomeMap.set(key, (incomeMap.get(key) ?? 0) + Math.abs(t.amount));
+    }
   }
 
-  // Generate last 6 months relative to activeMonth to render in the spending chart
+  const depositsMap = new Map<string, number>();
+  const withdrawalsMap = new Map<string, number>();
+  for (const t of allTxnsRaw) {
+    if (accountTypeById.get(t.account_id) !== "depository") continue;
+    const key = monthKey(t.date);
+    if (t.amount < 0) {
+      depositsMap.set(key, (depositsMap.get(key) ?? 0) + Math.abs(t.amount));
+    } else {
+      withdrawalsMap.set(key, (withdrawalsMap.get(key) ?? 0) + t.amount);
+    }
+  }
+
+  // Generate last 6 months relative to activeMonth to render in the charts
   const activeYear = Number(activeMonth.split("-")[0]);
   const activeMonthIndex = Number(activeMonth.split("-")[1]) - 1;
   const monthlySpending: { month: string; amount: number }[] = [];
+  const monthlyIncome: { month: string; amount: number }[] = [];
+  const monthlyCashFlow: { month: string; deposits: number; withdrawals: number }[] = [];
 
   for (let i = 5; i >= 0; i--) {
     const d = new Date(activeYear, activeMonthIndex - i, 15);
@@ -155,6 +234,15 @@ export async function getDashboardData(
     monthlySpending.push({
       month: key,
       amount: round2(monthMap.get(key) ?? 0),
+    });
+    monthlyIncome.push({
+      month: key,
+      amount: round2(incomeMap.get(key) ?? 0),
+    });
+    monthlyCashFlow.push({
+      month: key,
+      deposits: round2(depositsMap.get(key) ?? 0),
+      withdrawals: round2(withdrawalsMap.get(key) ?? 0),
     });
   }
 
@@ -295,6 +383,8 @@ export async function getDashboardData(
     accounts: allAccounts,
     creditAccounts: allAccounts.filter((a) => a.type === "credit"),
     monthlySpending,
+    monthlyIncome,
+    monthlyCashFlow,
     categoryBreakdown,
     merchantBreakdown,
     currentMonthExpenses: round2(currentMonthExpenses),
@@ -303,6 +393,14 @@ export async function getDashboardData(
     incomeStreams,
     availableMonths,
     selectedMonth: activeMonth,
+    lastSyncAt,
+    lastSyncAgoMinutes: lastSyncAt
+      ? Math.max(0, Math.floor((Date.now() - new Date(lastSyncAt).getTime()) / 60000))
+      : null,
+    syncIsStale:
+      allItems.length > 0 &&
+      (!lastSyncAt ||
+        Date.now() - new Date(lastSyncAt).getTime() > STALE_AFTER_MS),
     totalBudget: round2(totalBudget),
     lastMonthProratedSpent: round2(lastMonthProratedSpent),
     spendPerCard,

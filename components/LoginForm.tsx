@@ -1,20 +1,49 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { needsMfaStepUp } from "@/lib/mfa";
+import GoogleSignInButton from "@/components/GoogleSignInButton";
+
+// Errors forwarded by /auth/callback (e.g. an expired email-confirmation link).
+const CALLBACK_ERRORS: Record<string, string> = {
+  confirmation_failed:
+    "That confirmation link is invalid or expired. Try signing in, or sign up again to get a new link.",
+  missing_code:
+    "The confirmation link was incomplete. Please use the link from your email.",
+};
 
 export default function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mfaRequired, setMfaRequired] = useState(false);
   const [code, setCode] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    CALLBACK_ERRORS[searchParams.get("error") ?? ""] ?? null,
+  );
   const [loading, setLoading] = useState(false);
+
+  // A user who abandoned the TOTP step (or was redirected here by the proxy
+  // with an aal1 session) should resume at the code prompt, not the password
+  // form. Same async-check-then-set pattern as MfaSection's factor load.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (active && data && needsMfaStepUp(data.currentLevel, data.nextLevel)) {
+        setMfaRequired(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [supabase]);
 
   async function completeIfMfaRequired(): Promise<boolean> {
     // Returns true if login is fully complete, false if a TOTP code is needed.
@@ -135,6 +164,8 @@ export default function LoginForm() {
       )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {!mfaRequired && <GoogleSignInButton />}
 
       <p className="text-sm opacity-80">
         No account?{" "}

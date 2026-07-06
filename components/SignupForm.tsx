@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import GoogleSignInButton from "@/components/GoogleSignInButton";
 
 export default function SignupForm() {
   const router = useRouter();
@@ -79,6 +80,8 @@ export default function SignupForm() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
       {message && <p className="text-sm text-green-600">{message}</p>}
+
+      <GoogleSignInButton />
 
       <p className="text-sm opacity-80">
         Already have an account?{" "}

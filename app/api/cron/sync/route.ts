@@ -43,6 +43,17 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Housekeeping (best-effort): drop sync_jobs history older than 30 days
+    // and rate-limit windows that closed more than a day ago.
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+    const oneDayAgo = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const [jobsPrune, countersPrune] = await Promise.all([
+      service.from("sync_jobs").delete().lt("created_at", thirtyDaysAgo),
+      service.from("rate_limit_counters").delete().lt("window_start", oneDayAgo),
+    ]);
+    if (jobsPrune.error) logError("cron.sync.prune.jobs", jobsPrune.error);
+    if (countersPrune.error) logError("cron.sync.prune.counters", countersPrune.error);
+
     return NextResponse.json({ ok: true, users: userIds.length, synced });
   } catch (error) {
     return errorResponse("cron.sync", error);

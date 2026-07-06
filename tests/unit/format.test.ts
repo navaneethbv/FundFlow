@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatCurrency, titleCase, formatMonth } from "@/lib/format";
+import { formatCurrency, titleCase, formatMonth, formatMinutesAgo } from "@/lib/format";
 
 describe("formatCurrency", () => {
   it("formats positive numbers as USD currency by default", () => {
@@ -65,5 +65,20 @@ describe("formatMonth", () => {
     expect(formatMonth("2026-06")).toBe("Jun 2026");
     expect(formatMonth("2020-01")).toBe("Jan 2020");
     expect(formatMonth("2025-12")).toBe("Dec 2025");
+  });
+});
+
+describe("formatMinutesAgo", () => {
+  it("covers the minute/hour/day ladder", () => {
+    expect(formatMinutesAgo(0)).toBe("just now");
+    expect(formatMinutesAgo(12)).toBe("12m ago");
+    expect(formatMinutesAgo(95)).toBe("1h ago");
+    expect(formatMinutesAgo(60 * 24 * 3 + 30)).toBe("3d ago");
+  });
+
+  it('returns "never" for null/undefined/negative', () => {
+    expect(formatMinutesAgo(null)).toBe("never");
+    expect(formatMinutesAgo(undefined)).toBe("never");
+    expect(formatMinutesAgo(-5)).toBe("never");
   });
 });

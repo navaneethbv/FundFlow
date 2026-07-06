@@ -3,6 +3,26 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Data-viz tokens (light). Categorical slots are assigned in fixed order;
+     the set + surface passed scripts/validate_palette.js (dataviz skill):
+     light worst adjacent CVD dE 24.2. Aqua/yellow sit under 3:1 on white, so
+     every chart using them ships visible value labels (relief rule). */
+  --viz-1: #2a78d6; /* blue */
+  --viz-2: #1baf7a; /* aqua */
+  --viz-3: #eda100; /* yellow */
+  --viz-4: #008300; /* green */
+  --viz-5: #4a3aa7; /* violet */
+  --viz-6: #e34948; /* red */
+  --viz-pos: #2a78d6; /* diverging pole: inflow */
+  --viz-neg: #e34948; /* diverging pole: outflow */
+  --viz-ink: #0b0b0b;
+  --viz-ink-2: #52514e;
+  --viz-muted: #898781;
+  --viz-grid: #e1e0d9;
+  --viz-axis: #c3c2b7;
+  --viz-good: #006300; /* delta "good direction" text */
+  --viz-bad: #d03b3b;
 }
 
 @theme inline {
@@ -16,11 +36,30 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+
+    /* Dark mode is selected, not flipped: same hues re-stepped for the dark
+       surface and validated against #0a0a0a (all >= 3:1; CVD floor band ->
+       gaps + direct labels are mandatory, which the components provide). */
+    --viz-1: #3987e5;
+    --viz-2: #199e70;
+    --viz-3: #c98500;
+    --viz-4: #008300;
+    --viz-5: #9085e9;
+    --viz-6: #e66767;
+    --viz-pos: #3987e5;
+    --viz-neg: #e66767;
+    --viz-ink: #ffffff;
+    --viz-ink-2: #c3c2b7;
+    --viz-muted: #898781;
+    --viz-grid: #2c2c2a;
+    --viz-axis: #383835;
+    --viz-good: #0ca30c;
+    --viz-bad: #e66767;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans, Arial), Helvetica, sans-serif;
 }

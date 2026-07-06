@@ -1,6 +1,11 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterEach } from "vitest";
 import { randomBytes } from "node:crypto";
-import { encryptSecret, decryptSecret, safeEqual } from "@/lib/crypto";
+import {
+  encryptSecret,
+  decryptSecret,
+  decryptSecretDetailed,
+  safeEqual,
+} from "@/lib/crypto";
 
 beforeAll(() => {
   // Ensure a valid 32-byte key exists even if .env.local didn't set one.
@@ -46,6 +51,40 @@ describe("token encryption (AES-256-GCM)", () => {
     process.env.PLAID_TOKEN_ENC_KEY = Buffer.from("too-short").toString("base64");
     expect(() => encryptSecret("x")).toThrow();
     process.env.PLAID_TOKEN_ENC_KEY = prev;
+  });
+});
+
+describe("key rotation (PLAID_TOKEN_ENC_KEY_PREVIOUS)", () => {
+  afterEach(() => {
+    delete process.env.PLAID_TOKEN_ENC_KEY_PREVIOUS;
+  });
+
+  it("decrypts old-key ciphertext via the fallback and flags it for re-encryption", () => {
+    const oldKey = process.env.PLAID_TOKEN_ENC_KEY!;
+    const enc = encryptSecret("rotate-me"); // encrypted with the old key
+
+    // Rotate: new primary, old key demoted to fallback.
+    process.env.PLAID_TOKEN_ENC_KEY = randomBytes(32).toString("base64");
+    process.env.PLAID_TOKEN_ENC_KEY_PREVIOUS = oldKey;
+
+    const result = decryptSecretDetailed(enc);
+    expect(result.plaintext).toBe("rotate-me");
+    expect(result.usedFallbackKey).toBe(true);
+
+    // New encryptions use the new key — no fallback needed.
+    const fresh = decryptSecretDetailed(encryptSecret("fresh"));
+    expect(fresh.usedFallbackKey).toBe(false);
+
+    process.env.PLAID_TOKEN_ENC_KEY = oldKey;
+  });
+
+  it("still fails when neither key matches", () => {
+    const enc = encryptSecret("unreachable");
+    const original = process.env.PLAID_TOKEN_ENC_KEY!;
+    process.env.PLAID_TOKEN_ENC_KEY = randomBytes(32).toString("base64");
+    process.env.PLAID_TOKEN_ENC_KEY_PREVIOUS = randomBytes(32).toString("base64");
+    expect(() => decryptSecret(enc)).toThrow();
+    process.env.PLAID_TOKEN_ENC_KEY = original;
   });
 });
 

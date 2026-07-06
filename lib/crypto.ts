@@ -12,6 +12,12 @@ import {
  *
  * The key comes from PLAID_TOKEN_ENC_KEY (32 raw bytes, base64-encoded). Read
  * lazily so this module stays importable in tests that set only this one var.
+ *
+ * Rotation: set PLAID_TOKEN_ENC_KEY to the new key and move the old one to
+ * PLAID_TOKEN_ENC_KEY_PREVIOUS. Encryption always uses the new key; decryption
+ * falls back to the previous key (GCM's auth tag makes a wrong-key attempt fail
+ * loudly, never silently). The daily sync re-encrypts any token it had to
+ * decrypt with the fallback, so PREVIOUS can be removed once syncs are clean.
  */
 
 const ALGORITHM = "aes-256-gcm";
@@ -24,18 +30,32 @@ export interface EncryptedPayload {
   tag: string; // base64 GCM auth tag
 }
 
+function decodeKey(name: string, encoded: string): Buffer {
+  const key = Buffer.from(encoded, "base64");
+  if (key.length !== KEY_BYTES) {
+    throw new Error(
+      `${name} must decode to ${KEY_BYTES} bytes (got ${key.length})`,
+    );
+  }
+  return key;
+}
+
 function getKey(): Buffer {
   const encoded = process.env.PLAID_TOKEN_ENC_KEY;
   if (!encoded) {
     throw new Error("Missing PLAID_TOKEN_ENC_KEY");
   }
-  const key = Buffer.from(encoded, "base64");
-  if (key.length !== KEY_BYTES) {
-    throw new Error(
-      `PLAID_TOKEN_ENC_KEY must decode to ${KEY_BYTES} bytes (got ${key.length})`,
-    );
+  return decodeKey("PLAID_TOKEN_ENC_KEY", encoded);
+}
+
+/** Current key first, then the rotation fallback if configured. */
+function getDecryptionKeys(): Buffer[] {
+  const keys = [getKey()];
+  const previous = process.env.PLAID_TOKEN_ENC_KEY_PREVIOUS;
+  if (previous) {
+    keys.push(decodeKey("PLAID_TOKEN_ENC_KEY_PREVIOUS", previous));
   }
-  return key;
+  return keys;
 }
 
 export function encryptSecret(plaintext: string): EncryptedPayload {
@@ -53,18 +73,40 @@ export function encryptSecret(plaintext: string): EncryptedPayload {
   };
 }
 
-export function decryptSecret(payload: EncryptedPayload): string {
+export interface DecryptedSecret {
+  plaintext: string;
+  /** True when the rotation fallback key was needed — re-encrypt this secret. */
+  usedFallbackKey: boolean;
+}
+
+/** Decrypt, reporting whether the previous (rotation) key had to be used. */
+export function decryptSecretDetailed(
+  payload: EncryptedPayload,
+): DecryptedSecret {
   const iv = Buffer.from(payload.iv, "base64");
   const tag = Buffer.from(payload.tag, "base64");
   const ciphertext = Buffer.from(payload.ciphertext, "base64");
 
-  const decipher = createDecipheriv(ALGORITHM, getKey(), iv);
-  decipher.setAuthTag(tag);
-  const plaintext = Buffer.concat([
-    decipher.update(ciphertext),
-    decipher.final(), // throws if the tag/ciphertext was tampered with
-  ]);
-  return plaintext.toString("utf8");
+  const keys = getDecryptionKeys();
+  let lastError: unknown;
+  for (let i = 0; i < keys.length; i++) {
+    try {
+      const decipher = createDecipheriv(ALGORITHM, keys[i]!, iv);
+      decipher.setAuthTag(tag);
+      const plaintext = Buffer.concat([
+        decipher.update(ciphertext),
+        decipher.final(), // throws if the key is wrong or data was tampered with
+      ]);
+      return { plaintext: plaintext.toString("utf8"), usedFallbackKey: i > 0 };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+export function decryptSecret(payload: EncryptedPayload): string {
+  return decryptSecretDetailed(payload).plaintext;
 }
 
 /** Constant-time string comparison for secrets (e.g. cron token). */
