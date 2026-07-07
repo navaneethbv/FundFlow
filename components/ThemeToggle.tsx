@@ -64,8 +64,8 @@ export default function ThemeToggle({
         <span className="relative h-4 w-8 rounded-full bg-black/10 dark:bg-white/15">
           <span
             className={cn(
-              "absolute top-0.5 h-3 w-3 rounded-full bg-accent-strong shadow-pop transition-transform duration-150",
-              theme === "dark" ? "translate-x-4" : "translate-x-0.5",
+              "absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-accent-strong shadow-pop transition-transform duration-150",
+              theme === "dark" ? "translate-x-4" : "translate-x-0",
             )}
           />
         </span>
@@ -83,8 +83,8 @@ export default function ThemeToggle({
     >
       <span className="relative h-4 w-8 rounded-full bg-black/10 dark:bg-white/15">
         <span
-          className={`absolute top-0.5 h-3 w-3 rounded-full bg-[var(--foreground)] transition-transform duration-150 ${
-            theme === "dark" ? "translate-x-4" : "translate-x-0.5"
+          className={`absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-[var(--foreground)] transition-transform duration-150 ${
+            theme === "dark" ? "translate-x-4" : "translate-x-0"
           }`}
         />
       </span>

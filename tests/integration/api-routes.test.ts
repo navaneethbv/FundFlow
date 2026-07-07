@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { encryptSecret } from "@/lib/crypto";
 
 // Mocking Route Handler dependencies
@@ -34,6 +34,61 @@ vi.mock("@/lib/plaid", () => ({
     accountsGet: mockAccountsGet,
   }),
 }));
+
+let mockDeleteUserError: Error | null = null;
+let mockSupabaseFromError: Error | null = null;
+vi.mock("@/lib/supabase/service", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/lib/supabase/service")>();
+  return {
+    ...original,
+    createServiceClient: () => {
+      const client = original.createServiceClient();
+      const originalDelete = client.auth.admin.deleteUser.bind(client.auth.admin);
+      client.auth.admin.deleteUser = async (id: string) => {
+        if (mockDeleteUserError) {
+          return { data: { user: null }, error: mockDeleteUserError };
+        }
+        return originalDelete(id);
+      };
+
+      const originalFrom = client.from.bind(client);
+      client.from = (table: string) => {
+        if (mockSupabaseFromError) {
+          const builder = {
+            select: () => builder,
+            eq: () => builder,
+            delete: () => builder,
+            single: () => builder,
+            maybeSingle: () => builder,
+            order: () => builder,
+            lt: () => Promise.resolve({ data: null, error: mockSupabaseFromError }),
+            then: (onfulfilled?: (value: unknown) => unknown) => {
+              const res = Promise.resolve({ data: null, error: mockSupabaseFromError });
+              return onfulfilled ? res.then(onfulfilled) : res;
+            },
+          };
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          return builder as any;
+        }
+        return originalFrom(table);
+      };
+
+      return client;
+    },
+  };
+});
+
+let mockExportRowsError: Error | null = null;
+vi.mock("@/lib/export", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/lib/export")>();
+  return {
+    ...original,
+    fetchPrivacySafeRows: async (supabase: SupabaseClient, userId: string) => {
+      if (mockExportRowsError) throw mockExportRowsError;
+      return original.fetchPrivacySafeRows(supabase, userId);
+    },
+  };
+});
 
 // Mock requireUser and requireAdmin
 let activeUser: unknown = null;
@@ -173,6 +228,46 @@ suite("API routes integration", () => {
       // Clean up item
       await admin.from("plaid_items").delete().eq("id", item!.id);
     });
+
+    it("proceeds successfully even if one user's sync throws an error", async () => {
+      mockSyncAllForUser.mockRejectedValue(new Error("Per-user sync failure"));
+
+      // Seed an active item
+      const enc = encryptSecret("dummy-cron-token-fail");
+      const { data: item } = await admin.from("plaid_items").insert({
+        user_id: tempUserId,
+        plaid_item_id: `cron-item-fail-${stamp}`,
+        access_token_ciphertext: enc.ciphertext,
+        access_token_iv: enc.iv,
+        access_token_tag: enc.tag,
+        status: "active",
+      }).select("id").single();
+
+      const req = new NextRequest("http://localhost/api/cron/sync", {
+        headers: { authorization: `Bearer ${process.env.CRON_SECRET}` },
+      });
+      const resp = await cronSyncGet(req);
+      expect(resp.status).toBe(200);
+
+      const json = await resp.json();
+      expect(json.ok).toBe(true);
+      expect(json.users).toBeGreaterThanOrEqual(1);
+      expect(json.synced).toBe(0); // sync failed for this user
+
+      await admin.from("plaid_items").delete().eq("id", item!.id);
+    });
+
+    it("returns 500 when Supabase query for active items fails", async () => {
+      mockSupabaseFromError = new Error("Database select failure");
+
+      const req = new NextRequest("http://localhost/api/cron/sync", {
+        headers: { authorization: `Bearer ${process.env.CRON_SECRET}` },
+      });
+      const resp = await cronSyncGet(req);
+      expect(resp.status).toBe(500);
+
+      mockSupabaseFromError = null; // reset
+    });
   });
 
   describe("/api/export/csv", () => {
@@ -257,6 +352,19 @@ suite("API routes integration", () => {
 
       // Clean up item & account (cascades transactions)
       await admin.from("plaid_items").delete().eq("id", item!.id);
+    });
+
+    it("returns 500 when fetchPrivacySafeRows throws an error", async () => {
+      activeUser = tempUserObj;
+      activeSupabaseClient = tempUserClient;
+
+      mockExportRowsError = new Error("Export failure");
+
+      const req = new NextRequest("http://localhost/api/export/csv");
+      const resp = await exportCsvGet(req);
+      expect(resp.status).toBe(500);
+
+      mockExportRowsError = null; // reset
     });
   });
 
@@ -491,6 +599,94 @@ suite("API routes integration", () => {
 
       expect(deletedItem).toBeNull();
     });
+
+    it("fails with 400 when body is not valid JSON", async () => {
+      activeUser = tempUserObj;
+      activeSupabaseClient = tempUserClient;
+
+      const req = new NextRequest("http://localhost/api/plaid/disconnect", {
+        method: "POST",
+        body: "invalid-json-content",
+      });
+      const resp = await plaidDisconnectPost(req);
+      expect(resp.status).toBe(400);
+      const json = await resp.json();
+      expect(json.error).toContain("Invalid JSON body");
+    });
+
+    it("disconnects the item successfully even if Plaid itemRemove fails", async () => {
+      activeUser = tempUserObj;
+      activeSupabaseClient = tempUserClient;
+
+      // Seed item
+      const enc = encryptSecret("dummy-disconnect-token-fail");
+      const { data: item } = await admin
+        .from("plaid_items")
+        .insert({
+          user_id: tempUserId,
+          plaid_item_id: `disc-item-fail-${stamp}`,
+          institution_name: "Mock Bank Fail",
+          access_token_ciphertext: enc.ciphertext,
+          access_token_iv: enc.iv,
+          access_token_tag: enc.tag,
+        })
+        .select("id")
+        .single();
+
+      // Mock itemRemove to fail
+      mockItemRemove.mockRejectedValue(new Error("Plaid itemRemove error"));
+
+      const req = new NextRequest("http://localhost/api/plaid/disconnect", {
+        method: "POST",
+        body: JSON.stringify({ item_id: item!.id }),
+      });
+      const resp = await plaidDisconnectPost(req);
+      expect(resp.status).toBe(200);
+
+      // Verify it was still deleted from DB
+      const { data: deletedItem } = await admin
+        .from("plaid_items")
+        .select("id")
+        .eq("id", item!.id)
+        .maybeSingle();
+
+      expect(deletedItem).toBeNull();
+    });
+
+    it("returns 500 when Supabase query for deleting item fails", async () => {
+      activeUser = tempUserObj;
+      activeSupabaseClient = tempUserClient;
+
+      // Seed item
+      const enc = encryptSecret("dummy-disconnect-token-dbfail");
+      const { data: item } = await admin
+        .from("plaid_items")
+        .insert({
+          user_id: tempUserId,
+          plaid_item_id: `disc-item-dbfail-${stamp}`,
+          institution_name: "Mock Bank DB Fail",
+          access_token_ciphertext: enc.ciphertext,
+          access_token_iv: enc.iv,
+          access_token_tag: enc.tag,
+        })
+        .select("id")
+        .single();
+
+      mockItemRemove.mockResolvedValue({ data: {} });
+      mockSupabaseFromError = new Error("DB delete error");
+
+      const req = new NextRequest("http://localhost/api/plaid/disconnect", {
+        method: "POST",
+        body: JSON.stringify({ item_id: item!.id }),
+      });
+      const resp = await plaidDisconnectPost(req);
+      expect(resp.status).toBe(500);
+
+      mockSupabaseFromError = null; // reset
+
+      // Cleanup
+      await admin.from("plaid_items").delete().eq("id", item!.id);
+    });
   });
 
   describe("/api/plaid/exchange", () => {
@@ -590,6 +786,60 @@ suite("API routes integration", () => {
       // Verify user deleted in Supabase auth
       const { data: userCheck } = await admin.auth.admin.getUserById(delUser.user!.id).catch(() => ({ data: { user: null } }));
       expect(userCheck.user).toBeNull();
+    });
+
+    it("deletes user account successfully even if plaid.itemRemove fails", async () => {
+      const { data: delUser } = await admin.auth.admin.createUser({
+        email: `api-del-fail-${stamp}@example.com`,
+        password: "Password123!",
+        email_confirm: true,
+      });
+
+      const delUserClient = createClient(url!, publishable!, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      await delUserClient.auth.signInWithPassword({
+        email: `api-del-fail-${stamp}@example.com`,
+        password: "Password123!",
+      });
+
+      const enc = encryptSecret("dummy-del-token");
+      await admin
+        .from("plaid_items")
+        .insert({
+          user_id: delUser.user!.id,
+          plaid_item_id: `del-item-fail-${stamp}`,
+          access_token_ciphertext: enc.ciphertext,
+          access_token_iv: enc.iv,
+          access_token_tag: enc.tag,
+        });
+
+      // Mock itemRemove to fail
+      mockItemRemove.mockRejectedValue(new Error("Plaid remove failed"));
+
+      activeUser = delUser.user!;
+      activeSupabaseClient = delUserClient;
+
+      const req = new NextRequest("http://localhost/api/account", { method: "DELETE" });
+      const resp = await accountDelete(req);
+      expect(resp.status).toBe(200);
+
+      // Verify user deleted in Supabase auth despite Plaid error
+      const { data: userCheck } = await admin.auth.admin.getUserById(delUser.user!.id).catch(() => ({ data: { user: null } }));
+      expect(userCheck.user).toBeNull();
+    });
+
+    it("returns 500 when Supabase deleteUser fails", async () => {
+      mockDeleteUserError = new Error("Supabase auth deletion error");
+
+      activeUser = tempUserObj;
+      activeSupabaseClient = tempUserClient;
+
+      const req = new NextRequest("http://localhost/api/account", { method: "DELETE" });
+      const resp = await accountDelete(req);
+      expect(resp.status).toBe(500);
+
+      mockDeleteUserError = null; // reset
     });
   });
 });

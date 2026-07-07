@@ -31,4 +31,12 @@ describe("global interactive affordances", () => {
     expect(toggle).toContain("fundflow-theme");
     expect(toggle).toContain("aria-label");
   });
+
+  it("anchors the theme toggle thumb inside the switch track", () => {
+    const toggle = readFileSync("components/ThemeToggle.tsx", "utf8");
+
+    expect(toggle).toContain("absolute left-0.5 top-0.5");
+    expect(toggle).toContain('theme === "dark" ? "translate-x-4" : "translate-x-0"');
+    expect(toggle).not.toContain("translate-x-0.5");
+  });
 });
