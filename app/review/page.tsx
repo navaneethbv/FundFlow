@@ -95,9 +95,9 @@ export default async function MonthlyReviewPage({ searchParams }: PageProps) {
         <Panel title="Goals review" eyebrow="Pace">
           <div className="space-y-3 text-sm">
             {goalsSummary.map((goal) => (
-              <div key={goal.id} className="flex justify-between gap-4 rounded-field bg-panel-2 p-3">
+              <div key={goal.goal.id} className="flex justify-between gap-4 rounded-field bg-panel-2 p-3">
                 <span>
-                  <span className="block font-semibold">{goal.name}</span>
+                  <span className="block font-semibold">{goal.goal.name}</span>
                   <span className="block text-xs text-muted">{goal.status}</span>
                 </span>
                 <span className="font-bold">{formatCurrency(goal.remainingAmount)} left</span>

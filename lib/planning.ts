@@ -415,7 +415,12 @@ export function buildImportReview(
   existingFingerprints: Set<string>,
 ) {
   const seen = new Set<string>();
-  const reviewRows = rows.map((row) => {
+  const reviewRows: Array<{
+    rowHash: string;
+    row: { date: string; amount: number; merchant: string; category: string | null };
+    flags: string[];
+    status: "pending" | "approved" | "rejected" | "committed";
+  }> = rows.map((row) => {
     const fingerprint = `${row.date}|${row.amount.toFixed(2)}|${row.merchant}`;
     const flags: string[] = [];
     if (existingFingerprints.has(fingerprint)) flags.push("possible-duplicate");
@@ -426,7 +431,7 @@ export function buildImportReview(
       rowHash: hash,
       row,
       flags,
-      status: "pending" as const,
+      status: "pending",
     };
   });
 
