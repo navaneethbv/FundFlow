@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { encryptSecret } from "@/lib/crypto";
 
 // Mocking Route Handler dependencies
@@ -35,8 +35,8 @@ vi.mock("@/lib/plaid", () => ({
   }),
 }));
 
-let mockDeleteUserError: any = null;
-let mockSupabaseFromError: any = null;
+let mockDeleteUserError: Error | null = null;
+let mockSupabaseFromError: Error | null = null;
 vi.mock("@/lib/supabase/service", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/supabase/service")>();
   return {
@@ -62,8 +62,12 @@ vi.mock("@/lib/supabase/service", async (importOriginal) => {
             maybeSingle: () => builder,
             order: () => builder,
             lt: () => Promise.resolve({ data: null, error: mockSupabaseFromError }),
-            then: (onfulfilled: any) => Promise.resolve({ data: null, error: mockSupabaseFromError }).then(onfulfilled),
+            then: (onfulfilled?: (value: unknown) => unknown) => {
+              const res = Promise.resolve({ data: null, error: mockSupabaseFromError });
+              return onfulfilled ? res.then(onfulfilled) : res;
+            },
           };
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           return builder as any;
         }
         return originalFrom(table);
@@ -74,12 +78,12 @@ vi.mock("@/lib/supabase/service", async (importOriginal) => {
   };
 });
 
-let mockExportRowsError: any = null;
+let mockExportRowsError: Error | null = null;
 vi.mock("@/lib/export", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/export")>();
   return {
     ...original,
-    fetchPrivacySafeRows: async (supabase: any, userId: string) => {
+    fetchPrivacySafeRows: async (supabase: SupabaseClient, userId: string) => {
       if (mockExportRowsError) throw mockExportRowsError;
       return original.fetchPrivacySafeRows(supabase, userId);
     },
