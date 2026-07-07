@@ -46,7 +46,7 @@ describe("UI overhaul primitives and shell", () => {
 
     expect(goalsPage).toContain('export const dynamic = "force-dynamic"');
     expect(goalsPage).toContain("AppShell");
-    expect(goalsPage).toContain("Goals are coming soon");
+    expect(goalsPage).toContain("GoalsManager");
   });
 
   it("uses the shared app shell on protected product pages", () => {
