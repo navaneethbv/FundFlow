@@ -30,7 +30,6 @@ export default function OverviewTab({
   const cashFlowSeries = spendSeries.map((spend, index) => (incomeSeries[index] ?? 0) - spend);
   const prevMonth = monthLabels[monthLabels.length - 2] ?? "last month";
   const currentNet = data.currentMonthIncome - data.currentMonthExpenses;
-  const currentSavings = data.currentMonthIncome - data.currentMonthExpenses;
   const previousSavings =
     (incomeSeries[incomeSeries.length - 2] ?? 0) - (spendSeries[spendSeries.length - 2] ?? 0);
   const maxMerchant = Math.max(1, ...data.merchantBreakdown.map((m) => m.amount));
@@ -43,9 +42,9 @@ export default function OverviewTab({
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="Total Net Worth" value={netWorth} delta={currentSavings - previousSavings} deltaVs={prevMonth} trend={cashFlowSeries} />
+        <StatTile label="Total Net Worth" value={netWorth} delta={currentNet - previousSavings} deltaVs={prevMonth} chart={<AreaSparkline values={cashFlowSeries} />} />
         <StatTile label="Monthly Cash Flow" value={currentNet} delta={currentNet - previousSavings} deltaVs={prevMonth} trend={cashFlowSeries} />
-        <StatTile label="Monthly Spending" value={data.currentMonthExpenses} delta={spendSeries[5]! - (spendSeries[4] ?? 0)} deltaVs={prevMonth} upIsGood={false} trend={spendSeries} />
+        <StatTile label="Monthly Spending" value={data.currentMonthExpenses} delta={spendSeries[5]! - (spendSeries[4] ?? 0)} deltaVs={prevMonth} upIsGood={false} chart={<MiniBars values={spendSeries} />} />
         <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -94,11 +93,6 @@ export default function OverviewTab({
             {data.subscriptions.length === 0 && <p className="py-4 text-sm text-muted">No recurring streams yet.</p>}
           </div>
         </Panel>
-      </div>
-
-      <div className="hidden">
-        <AreaSparkline values={cashFlowSeries} />
-        <MiniBars values={incomeSeries} />
       </div>
     </div>
   );
