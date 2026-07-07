@@ -11,6 +11,7 @@ import CashflowTab from "@/components/dashboard/CashflowTab";
 import FreshnessBanner from "@/components/dashboard/FreshnessBanner";
 import MonthChips from "@/components/dashboard/MonthChips";
 import OverviewTab from "@/components/dashboard/OverviewTab";
+import ButtonLink from "@/components/ui/ButtonLink";
 import { computeNetWorth, computeSavingsRate } from "@/components/dashboard/metrics";
 import { type RecentTransaction } from "@/components/dashboard/RecentActivity";
 import { getDashboardData } from "@/lib/dashboard";
@@ -113,11 +114,16 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     <AppShell active={shellActive} email={user?.email}>
       {hasBanks && <AutoRefresh />}
 
-      <div className="flex flex-col gap-2">
-        <p className="eyebrow">Overview</p>
-        <h1 className="display text-3xl sm:text-4xl">
-          {formatMonth(data.selectedMonth)} money map
-        </h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="eyebrow">Overview</p>
+          <h1 className="display text-3xl sm:text-4xl">
+            {formatMonth(data.selectedMonth)} money map
+          </h1>
+        </div>
+        <ButtonLink href={`/review?month=${data.selectedMonth}`}>
+          Monthly review
+        </ButtonLink>
       </div>
 
       <FreshnessBanner brokenBanks={brokenBanks} isStale={data.syncIsStale} />
