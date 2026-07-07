@@ -89,4 +89,99 @@ suite("RLS cross-user isolation", () => {
     });
     expect(error).not.toBeNull(); // RLS check violation
   });
+
+  it("user A can do full CRUD on their own goals", async () => {
+    const clientA = await signIn(userA.email, userA.password);
+
+    // Create a goal
+    const { data: goal, error: insertError } = await clientA
+      .from("goals")
+      .insert({
+        user_id: idA,
+        name: "Savings Target A",
+        target_amount: 5000,
+        saved_amount: 1000,
+      })
+      .select("id, name, target_amount, saved_amount")
+      .single();
+
+    expect(insertError).toBeNull();
+    expect(goal).toBeTruthy();
+    expect(goal!.name).toBe("Savings Target A");
+
+    // Read the goal
+    const { data: readGoals, error: readError } = await clientA
+      .from("goals")
+      .select("id")
+      .eq("id", goal!.id);
+
+    expect(readError).toBeNull();
+    expect(readGoals).toHaveLength(1);
+
+    // Update the goal
+    const { error: updateError } = await clientA
+      .from("goals")
+      .update({ saved_amount: 2000 })
+      .eq("id", goal!.id);
+
+    expect(updateError).toBeNull();
+
+    // Delete the goal
+    const { error: deleteError } = await clientA
+      .from("goals")
+      .delete()
+      .eq("id", goal!.id);
+
+    expect(deleteError).toBeNull();
+  });
+
+  it("user B cannot read, update, or delete user A's goals", async () => {
+    // Seed goal for user A
+    const { data: goal } = await admin
+      .from("goals")
+      .insert({
+        user_id: idA,
+        name: "Secret Goal A",
+        target_amount: 10000,
+        saved_amount: 500,
+      })
+      .select("id")
+      .single();
+
+    expect(goal).toBeTruthy();
+
+    // User B tries to read
+    const { data: readGoals } = await clientB
+      .from("goals")
+      .select("id")
+      .eq("id", goal!.id);
+    expect(readGoals ?? []).toHaveLength(0);
+
+    // User B tries to update
+    const { error: updateError } = await clientB
+      .from("goals")
+      .update({ saved_amount: 9999 })
+      .eq("id", goal!.id);
+    // Since RLS policies apply using policy filters (using user_id = auth.uid()),
+    // updating another user's goal will either return no rows updated or throw an error.
+    // In Supabase, update without RLS write access returns success but updates 0 rows,
+    // let's verify if user B can actually mutate it.
+    
+    // User B tries to delete
+    const { error: deleteError } = await clientB
+      .from("goals")
+      .delete()
+      .eq("id", goal!.id);
+
+    // Verify the goal is still intact with its original saved_amount
+    const { data: checkGoal } = await admin
+      .from("goals")
+      .select("saved_amount")
+      .eq("id", goal!.id)
+      .single();
+    expect(checkGoal!.saved_amount).toBe(500);
+
+    // Clean up
+    await admin.from("goals").delete().eq("id", goal!.id);
+  });
 });
