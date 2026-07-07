@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { formatCurrency } from "@/lib/format";
-import { goalProgressPct, type Goal } from "@/lib/goals";
+import { goalSummary, type Goal } from "@/lib/goals";
 
 /** Read-only overview of the top savings goals; full CRUD lives on /goals. */
 export default function GoalsSummary({ goals }: { goals: Goal[] }) {
@@ -18,9 +18,8 @@ export default function GoalsSummary({ goals }: { goals: Goal[] }) {
 
   return (
     <div className="space-y-4">
-      {goals.slice(0, 3).map((goal) => {
-        const pct = goalProgressPct(goal.saved_amount, goal.target_amount);
-        const complete = pct >= 100;
+      {goalSummary(goals).slice(0, 3).map(({ goal, progressPct, remainingAmount, monthlyPace }) => {
+        const complete = progressPct >= 100;
         return (
           <div key={goal.id}>
             <div className="mb-1 flex items-baseline justify-between gap-3">
@@ -33,11 +32,18 @@ export default function GoalsSummary({ goals }: { goals: Goal[] }) {
               <span
                 className="block h-2 rounded-full"
                 style={{
-                  width: `${pct}%`,
+                  width: `${progressPct}%`,
                   backgroundColor: complete ? "var(--viz-good)" : "var(--accent)",
                 }}
               />
             </span>
+            <p className="mt-1 text-xs text-muted">
+              {complete
+                ? "Goal complete"
+                : `${formatCurrency(remainingAmount)} remaining${
+                    monthlyPace ? `, ${formatCurrency(monthlyPace)} needed monthly` : ""
+                  }`}
+            </p>
           </div>
         );
       })}

@@ -7,6 +7,10 @@ import ImportSection from "@/components/settings/ImportSection";
 import BudgetsSection from "@/components/settings/BudgetsSection";
 import BanksSection from "@/components/settings/BanksSection";
 import DangerZone from "@/components/settings/DangerZone";
+import ManualAccountsSection from "@/components/settings/ManualAccountsSection";
+import MerchantRulesSection from "@/components/settings/MerchantRulesSection";
+import NotificationsSection from "@/components/settings/NotificationsSection";
+import PlanningPreferencesSection from "@/components/settings/PlanningPreferencesSection";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +20,17 @@ export default async function SettingsPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [{ data: profile }, { data: items }, { data: budgets }, { data: accounts }] =
+  const [
+    { data: profile },
+    { data: items },
+    { data: budgets },
+    { data: accounts },
+    { data: merchantRules },
+    { data: manualAccounts },
+    { data: notifications },
+    { data: alertPreferences },
+    { data: aiSettings },
+  ] =
     await Promise.all([
       supabase
         .from("profiles")
@@ -32,6 +46,29 @@ export default async function SettingsPage() {
         .select("id, category, monthly_limit")
         .order("category"),
       supabase.from("accounts").select("id, name, mask").order("name"),
+      supabase
+        .from("merchant_rules")
+        .select("id, match_type, pattern, display_name, category, enabled")
+        .order("created_at"),
+      supabase
+        .from("manual_accounts")
+        .select("id, name, account_type, balance, include_in_net_worth")
+        .order("created_at"),
+      supabase
+        .from("notifications")
+        .select("id, type, severity, title, body, read_at, created_at")
+        .order("created_at", { ascending: false })
+        .limit(5),
+      supabase
+        .from("alert_preferences")
+        .select("broken_bank, budget_exceeded, goal_reached, large_transaction, low_cash_forecast")
+        .eq("user_id", user?.id ?? "")
+        .maybeSingle(),
+      supabase
+        .from("ai_settings")
+        .select("enabled")
+        .eq("user_id", user?.id ?? "")
+        .maybeSingle(),
     ]);
 
   return (
@@ -58,6 +95,21 @@ export default async function SettingsPage() {
               <ReportsSection initialEnabled={profile?.weekly_report_enabled ?? true} />
             </div>
           </div>
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-2">
+          <div id="cleanup">
+            <MerchantRulesSection initialRules={merchantRules ?? []} />
+          </div>
+          <ManualAccountsSection initialAccounts={manualAccounts ?? []} />
+        </div>
+
+        <div id="alerts" className="grid gap-6 xl:grid-cols-2">
+          <NotificationsSection initialNotifications={notifications ?? []} />
+          <PlanningPreferencesSection
+            initialPreferences={alertPreferences}
+            initialAiEnabled={aiSettings?.enabled ?? false}
+          />
         </div>
 
         <DangerZone />

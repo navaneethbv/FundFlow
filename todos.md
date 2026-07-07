@@ -14,6 +14,22 @@ FundFlow is strongest as a private personal finance cockpit:
 - Make recurring bills, goals, budgets, and cash flow visible at a glance.
 - Keep the app simple enough for 1-2 real users to trust every day.
 
+## Current PR Status
+
+- Goals production pass: implemented.
+- Roadmap schema and RLS foundation: implemented in `20260707012910_roadmap_features.sql`.
+- Budget envelopes, cash-flow forecast, recurring calendar, merchant cleanup,
+  spending anomalies, net-worth snapshot, notifications, alert preferences,
+  AI opt-in payload safety, import review modeling, and household role helpers:
+  implemented as deterministic app foundations.
+- Dashboard planning insights, Settings controls, Monthly Review, and Admin
+  Observability: implemented.
+- Plaid Sandbox browser E2E and mobile screenshot QA: documented in
+  `docs/QA.md`; execution still requires live Plaid Sandbox credentials and
+  captured browser evidence.
+- Supabase advisors and migration application: blocked locally until the
+  project is linked or a local Supabase database is running.
+
 ## P0: Finish And Stabilize Current Work
 
 ### 1. Goals Production Pass
