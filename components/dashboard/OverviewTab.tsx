@@ -10,6 +10,7 @@ import TrendChart from "@/components/charts/TrendChart";
 import Panel from "@/components/ui/Panel";
 import BarList from "@/components/dashboard/BarList";
 import GoalsSummary from "@/components/dashboard/GoalsSummary";
+import PlanningInsights from "@/components/dashboard/PlanningInsights";
 import RecentActivity, { type RecentTransaction } from "@/components/dashboard/RecentActivity";
 import type { Goal } from "@/lib/goals";
 
@@ -95,6 +96,8 @@ export default function OverviewTab({
           </div>
         </Panel>
       </div>
+
+      <PlanningInsights data={data} />
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Panel title="Recent activity" className="xl:col-span-1">

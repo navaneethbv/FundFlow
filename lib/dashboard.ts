@@ -1,4 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  buildBudgetEnvelopes,
+  computeNetWorthSnapshot,
+  detectSpendingAnomalies,
+  forecastCashFlow,
+  groupRecurringByWeek,
+  type BudgetEnvelope,
+  type CashFlowForecast,
+  type SpendingAnomaly,
+} from "@/lib/planning";
 
 /**
  * Aggregations for the dashboard. Runs with the caller's user-scoped Supabase
@@ -58,6 +68,11 @@ export interface DashboardData {
   spendPerCard: { name: string; amount: number }[];
   spendPerBank: { name: string; amount: number }[];
   cashFlow: { deposits: number; withdrawals: number; net: number };
+  budgetEnvelopes: BudgetEnvelope[];
+  cashFlowForecast: CashFlowForecast;
+  recurringWeeks: ReturnType<typeof groupRecurringByWeek>;
+  spendingAnomalies: SpendingAnomaly[];
+  netWorthSnapshot: { assets: number; liabilities: number; netWorth: number };
 }
 
 interface TxnLite {
@@ -107,6 +122,20 @@ function round2(n: number): number {
 }
 
 const STALE_AFTER_MS = 48 * 3600 * 1000;
+
+function normalizeFrequency(frequency: string | null): "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly" {
+  const value = (frequency ?? "").toLowerCase();
+  if (value.includes("week") && value.includes("bi")) return "biweekly";
+  if (value.includes("week")) return "weekly";
+  if (value.includes("quarter")) return "quarterly";
+  if (value.includes("year")) return "yearly";
+  return "monthly";
+}
+
+function monthDate(month: string, day: number): string {
+  const daysInMonth = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
+  return `${month}-${String(Math.min(day, daysInMonth)).padStart(2, "0")}`;
+}
 
 export async function getDashboardData(
   supabase: SupabaseClient,
@@ -249,10 +278,15 @@ export async function getDashboardData(
   // Active-month breakdowns and income/expense totals
   const categoryMap = new Map<string, number>();
   const merchantMap = new Map<string, number>();
+  const categoryHistoryMap = new Map<string, number>();
   let currentMonthExpenses = 0;
   let currentMonthIncome = 0;
 
   for (const t of filteredTxns) {
+    if (isSpending(t)) {
+      const historyKey = `${monthKey(t.date)}|${t.pfc_primary ?? "UNCATEGORIZED"}`;
+      categoryHistoryMap.set(historyKey, (categoryHistoryMap.get(historyKey) ?? 0) + t.amount);
+    }
     if (monthKey(t.date) !== activeMonth) continue;
     if (isSpending(t)) {
       currentMonthExpenses += t.amount;
@@ -379,6 +413,92 @@ export async function getDashboardData(
     }))
     .sort((a, b) => b.amount - a.amount);
 
+  const activeDay =
+    isCurrentMonth ? today.getDate() : new Date(activeYear, activeMonthIndex + 1, 0).getDate();
+  const activeDaysInMonth = new Date(activeYear, activeMonthIndex + 1, 0).getDate();
+  const budgetEnvelopes = buildBudgetEnvelopes({
+    budgets: allBudgets.map((budget) => ({
+      category: budget.category,
+      monthlyLimit: Number(budget.monthly_limit),
+    })),
+    currentSpend: categoryBreakdown.map((row) => ({
+      category: row.category,
+      amount: row.amount,
+    })),
+    previousSpend: [...categoryHistoryMap.entries()]
+      .map(([key, amount]) => {
+        const [month, category] = key.split("|");
+        return { month: month!, category: category!, amount: round2(amount) };
+      })
+      .filter((row) => row.month !== activeMonth),
+    dayOfMonth: activeDay,
+    daysInMonth: activeDaysInMonth,
+  });
+
+  const recurringItems = [
+    ...subscriptions.map((stream) => ({
+      name: stream.merchant,
+      amount: stream.amount,
+      frequency: normalizeFrequency(stream.frequency),
+      itemType: "expense" as const,
+      nextDate: monthDate(activeMonth, 15),
+      category: stream.category,
+    })),
+    ...incomeStreams.map((stream) => ({
+      name: stream.merchant,
+      amount: stream.amount,
+      frequency: normalizeFrequency(stream.frequency),
+      itemType: "income" as const,
+      nextDate: monthDate(activeMonth, 15),
+    })),
+  ];
+  const cashBalance = allAccounts
+    .filter((account) => account.type === "depository")
+    .reduce((sum, account) => sum + Number(account.current_balance ?? 0), 0);
+  const cashFlowForecast = forecastCashFlow({
+    startingBalance: cashBalance,
+    asOf: monthDate(activeMonth, Math.min(activeDay, 28)),
+    horizonDays: 30,
+    items: recurringItems,
+    lowBalanceThreshold: 500,
+  });
+  const recurringWeeks = groupRecurringByWeek(recurringItems, monthDate(activeMonth, 1), 31);
+  const priorCategoryAverages = [...categoryHistoryMap.entries()]
+    .map(([key, amount]) => {
+      const [month, category] = key.split("|");
+      return { month: month!, category: category!, amount };
+    })
+    .filter((row) => row.month !== activeMonth)
+    .reduce((map, row) => {
+      const values = map.get(row.category) ?? [];
+      values.push(row.amount);
+      map.set(row.category, values);
+      return map;
+    }, new Map<string, number[]>());
+  const spendingAnomalies = detectSpendingAnomalies({
+    currentTransactions: filteredTxns
+      .filter((t) => monthKey(t.date) === activeMonth && isSpending(t))
+      .map((t) => ({
+        id: `${t.date}-${t.account_id}-${t.name ?? t.merchant_name ?? "txn"}-${t.amount}`,
+        date: t.date,
+        merchant: t.merchant_name ?? t.name ?? "Unknown",
+        category: t.pfc_primary ?? "UNCATEGORIZED",
+        amount: t.amount,
+      })),
+    priorCategoryAverages: [...priorCategoryAverages.entries()].map(([category, values]) => ({
+      category,
+      amount: round2(values.reduce((sum, value) => sum + value, 0) / values.length),
+    })),
+    largeTransactionThreshold: 500,
+  });
+  const netWorthSnapshot = computeNetWorthSnapshot(
+    allAccounts.map((account) => ({
+      name: account.name ?? "Account",
+      type: account.type,
+      balance: account.current_balance,
+    })),
+  );
+
   return {
     accounts: allAccounts,
     creditAccounts: allAccounts.filter((a) => a.type === "credit"),
@@ -406,5 +526,10 @@ export async function getDashboardData(
     spendPerCard,
     spendPerBank,
     cashFlow,
+    budgetEnvelopes,
+    cashFlowForecast,
+    recurringWeeks,
+    spendingAnomalies,
+    netWorthSnapshot,
   };
 }
