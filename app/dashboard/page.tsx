@@ -14,6 +14,7 @@ import OverviewTab from "@/components/dashboard/OverviewTab";
 import { computeNetWorth, computeSavingsRate } from "@/components/dashboard/metrics";
 import { type RecentTransaction } from "@/components/dashboard/RecentActivity";
 import { getDashboardData } from "@/lib/dashboard";
+import { getGoals } from "@/lib/goals";
 import { formatMonth } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
@@ -82,12 +83,13 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [data, { data: items }] = await Promise.all([
+  const [data, { data: items }, goals] = await Promise.all([
     getDashboardData(supabase, selectedAccountId, selectedMonth),
     supabase
       .from("plaid_items")
       .select("id, institution_name, status")
       .order("created_at"),
+    getGoals(supabase),
   ]);
 
   const plaidItems = (items ?? []) as PlaidItem[];
@@ -161,6 +163,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
               savingsRate={savingsRate}
               recentTransactions={recentTransactions}
               accountNames={accountNames}
+              goals={goals}
             />
           )}
           {activeTab === "breakdowns" && <BreakdownsTab data={data} />}

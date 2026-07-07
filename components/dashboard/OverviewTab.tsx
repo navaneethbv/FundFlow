@@ -9,7 +9,9 @@ import StatTile from "@/components/charts/StatTile";
 import TrendChart from "@/components/charts/TrendChart";
 import Panel from "@/components/ui/Panel";
 import BarList from "@/components/dashboard/BarList";
+import GoalsSummary from "@/components/dashboard/GoalsSummary";
 import RecentActivity, { type RecentTransaction } from "@/components/dashboard/RecentActivity";
+import type { Goal } from "@/lib/goals";
 
 export default function OverviewTab({
   data,
@@ -17,12 +19,14 @@ export default function OverviewTab({
   savingsRate,
   recentTransactions,
   accountNames,
+  goals,
 }: {
   data: DashboardData;
   netWorth: number;
   savingsRate: number;
   recentTransactions: RecentTransaction[];
   accountNames: Map<string, string>;
+  goals: Goal[];
 }) {
   const monthLabels = data.monthlySpending.map((m) => formatMonth(m.month));
   const spendSeries = data.monthlySpending.map((m) => m.amount);
@@ -72,14 +76,11 @@ export default function OverviewTab({
         </Panel>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-3">
-        <Panel title="Recent activity" className="xl:col-span-1">
-          <RecentActivity transactions={recentTransactions} accountNames={accountNames} />
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <Panel title="Savings goals" eyebrow="Progress" action={<span className="text-xs font-bold text-muted">Savings rate {savingsRate}%</span>}>
+          <GoalsSummary goals={goals} />
         </Panel>
-        <Panel title="Top merchants" className="xl:col-span-1">
-          <BarList items={data.merchantBreakdown.map((m) => ({ label: m.merchant, amount: m.amount }))} max={maxMerchant} />
-        </Panel>
-        <Panel title="Recurring streams" className="xl:col-span-1">
+        <Panel title="Recurring streams" eyebrow="Subscriptions and income">
           <div className="space-y-3">
             {data.subscriptions.slice(0, 5).map((stream) => (
               <div key={`${stream.merchant}-${stream.amount}`} className="flex items-center justify-between gap-4 rounded-field p-2 hover:bg-panel-hover">
@@ -92,6 +93,15 @@ export default function OverviewTab({
             ))}
             {data.subscriptions.length === 0 && <p className="py-4 text-sm text-muted">No recurring streams yet.</p>}
           </div>
+        </Panel>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Panel title="Recent activity" className="xl:col-span-1">
+          <RecentActivity transactions={recentTransactions} accountNames={accountNames} />
+        </Panel>
+        <Panel title="Top merchants" className="xl:col-span-1">
+          <BarList items={data.merchantBreakdown.map((m) => ({ label: m.merchant, amount: m.amount }))} max={maxMerchant} />
         </Panel>
       </div>
     </div>
