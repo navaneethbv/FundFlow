@@ -1,8 +1,11 @@
+import type { ReactNode } from "react";
 import Sparkline from "@/components/charts/Sparkline";
 import { formatCurrency } from "@/lib/format";
 
 /**
- * Stat tile: label, value, optional signed delta vs a named period, and optional sparkline.
+ * Stat tile: label, value, optional signed delta vs a named period, and a
+ * decorative mini chart. Pass `chart` for a bespoke visual (area glow, mini
+ * bars, ...); otherwise `trend` renders the default sparkline.
  */
 export default function StatTile({
   label,
@@ -11,6 +14,7 @@ export default function StatTile({
   deltaVs,
   upIsGood = true,
   trend,
+  chart,
 }: {
   label: string;
   value: number;
@@ -20,6 +24,8 @@ export default function StatTile({
   deltaVs?: string;
   upIsGood?: boolean;
   trend?: number[];
+  /** Decorative mini chart; overrides the default sparkline when provided. */
+  chart?: ReactNode;
 }) {
   const showDelta = delta !== undefined && deltaVs;
   const isGood = delta !== undefined && (delta >= 0) === upIsGood;
@@ -28,7 +34,7 @@ export default function StatTile({
     <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card transition-transform duration-200 hover:-translate-y-0.5">
       <div className="flex items-start justify-between gap-2">
         <h3 className="eyebrow">{label}</h3>
-        {trend && trend.length >= 2 && <Sparkline values={trend} />}
+        {chart ?? (trend && trend.length >= 2 && <Sparkline values={trend} />)}
       </div>
       <p className="display mt-3 text-3xl">
         {formatCurrency(value)}
