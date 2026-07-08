@@ -205,7 +205,6 @@ export async function getDashboardData(
   const lastSyncAt = (lastSyncJob?.updated_at as string | undefined) ?? null;
   const allItems = (items ?? []) as Array<{ id: string; institution_name: string | null }>;
   const allBudgets = (budgets ?? []) as Array<{ category: string; monthly_limit: number }>;
-  const allRules = (merchantRules ?? []) as any[];
   const allSnapshots = (snapshots ?? []) as Array<{ snapshot_month: string; assets: number; liabilities: number }>;
 
   // Month browser: a continuous range from the oldest transaction to today

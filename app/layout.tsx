@@ -30,6 +30,16 @@ const themeScript = `
 })();
 `;
 
+const serviceWorkerScript = `
+(() => {
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    });
+  }
+})();
+`;
+
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -45,6 +55,7 @@ export default async function RootLayout({
     >
       <head>
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: serviceWorkerScript }} />
       </head>
       <body className="min-h-full flex flex-col">
         {children}

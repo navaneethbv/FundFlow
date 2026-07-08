@@ -9,7 +9,15 @@ const mockFrom = vi.fn();
 const mockInsert = vi.fn();
 const mockUpsert = vi.fn();
 
-const mockQueryChain: any = {
+const mockQueryChain: {
+  select: typeof mockSelect;
+  insert: typeof mockInsert;
+  upsert: typeof mockUpsert;
+  eq: typeof mockEq;
+  gte: typeof mockGte;
+  single: typeof mockSingle;
+  then?: (onfulfilled: (value: { data: unknown[]; error: null }) => unknown) => Promise<unknown>;
+} = {
   select: mockSelect,
   insert: mockInsert,
   upsert: mockUpsert,
@@ -60,7 +68,8 @@ describe("notifications manager", () => {
     mockSingle.mockResolvedValue({ data: null, error: null }); // Default no preferences row
     
     // Support promise-like behavior on the query chain by default
-    mockQueryChain.then = (onfulfilled: any) => Promise.resolve({ data: [], error: null }).then(onfulfilled);
+    mockQueryChain.then = (onfulfilled: (value: { data: unknown[]; error: null }) => unknown) =>
+      Promise.resolve({ data: [], error: null }).then(onfulfilled);
   });
 
   it("respects alert opt-out preference and returns null", async () => {

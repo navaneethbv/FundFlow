@@ -50,9 +50,9 @@ export async function GET(request: NextRequest) {
         const pdfBuffer = await generateWeeklyReportPdf(reportData);
         await sendWeeklyReportEmail(reportData.userEmail, pdfBuffer, dateStr);
         sentCount += 1;
-      } catch (err: any) {
+      } catch (err) {
         logError("cron.weekly-report.user", err);
-        if (err.message?.includes("SMTP is not configured")) {
+        if (err instanceof Error && err.message.includes("SMTP is not configured")) {
           await service.from("notifications").insert({
             user_id: userId,
             type: "broken_bank",

@@ -34,13 +34,17 @@ Done and verified:
   - Merchant Rules Applied: Display-time rule matching applied to transactions for both dashboard and ledger.
   - Net Worth Snapshots: Monthly assets/liabilities snapshot upserted on daily sync cron, and historical net worth line chart rendered on dashboard.
   - Email Alert Sender: Daily digest email alerts sent via SMTP, gracefully warning/skipping when SMTP is not configured.
+- Milestone 2: Roadmap completion pass:
+  - Transaction Quality: Added annotation, split, refund-link, and review-decision schema, plus split-safe spend aggregation, refund matching, and decision filtering helpers.
+  - Import Review Queue: Added preview and commit API routes using existing CSV parsing, duplicate flags, and deterministic `import-<hash>` ids.
+  - Planning Depth: Added recurring status matching, unusual amount prompts, debt payoff planning, and sinking fund suggestions.
+  - Security And Account: Added active session records, MFA backup-code schema, user audit log, full takeout export route, and settings panels for sessions, passkeys, audit, and household mode.
+  - Infra And Efficiency: Added isolated dashboard cache helper, installable manifest, and offline read-only service worker shell.
+  - Optional AI And Household: Added deterministic privacy-safe insight generation route and household creation panel.
 
 Schema-only or helper-only, finished by the P0/P1 items below:
 
-- AI opt-in exists but no insight generation.
-- `buildImportReview()` has no UI or commit flow.
-- Recurring items are hardcoded `status: "expected"`.
-- Household mode is one helper plus migration bits.
+- Real Plaid Sandbox browser evidence still requires live credentials and screenshots from `docs/QA.md`.
 
 ## P0: Close The Loop On PR #23
 
@@ -124,6 +128,10 @@ Tests:
 Documented in `docs/QA.md`; still requires execution with live Sandbox
 credentials and captured evidence. This gates real-bank production use.
 
+Status: manual execution remains required. The codebase now has route and UI
+coverage for the roadmap completion pass, plus the existing QA runbook for
+credentialed browser evidence.
+
 Implementation notes:
 
 - Run the full happy path from `docs/QA.md` (signup through account delete).
@@ -149,6 +157,8 @@ Tests:
 - Query stays scoped to the signed-in user.
 - Empty query returns the normal month view.
 
+Status: implemented on `/transactions` with server-side scoped search.
+
 ### 7. Notes, Tags, And Splits
 
 Make the ledger feel human instead of raw bank text.
@@ -167,6 +177,9 @@ Tests:
 - Split totals validated server-side or by check constraint.
 - Aggregation counts split categories once (no double counting).
 
+Status: implemented with `transaction_annotations`, `transaction_splits`,
+deferred split-total validation, and split-safe aggregation helpers.
+
 ### 8. Refund Matching And Duplicate Merge
 
 Implementation notes:
@@ -181,6 +194,9 @@ Tests:
 
 - Netting excludes linked refunds from spend totals.
 - Dismissals persist across syncs.
+
+Status: implemented with `linked_refunds`,
+`transaction_review_decisions`, refund-pair detection, and decision filtering.
 
 ### 9. Import Review Queue UI
 
@@ -198,6 +214,8 @@ Tests:
 - Parser handles common bank CSV formats.
 - Re-import remains idempotent.
 - Rejected rows are never written.
+
+Status: implemented with `/api/import/preview` and `/api/import/commit`.
 
 ## P1: Planning Depth
 
@@ -217,6 +235,9 @@ Tests:
 - Rollover math across month boundaries.
 - History display matches computed values.
 
+Status: history values are surfaced through planning helpers and dashboard
+planning panels.
+
 ### 11. Recurring Statuses And Links
 
 Every recurring item is currently `status: "expected"`.
@@ -233,6 +254,8 @@ Tests:
 - Status transitions for paid, late, unusual amount.
 - Price-increase detection threshold.
 
+Status: implemented in `buildRecurringStatuses()`.
+
 ### 12. Forecast Upgrades
 
 Implementation notes:
@@ -245,6 +268,9 @@ Tests:
 
 - Forecast math for weekly, biweekly, monthly, and irregular income.
 - Edge cases for missing balance or missing recurring data.
+
+Status: implemented through the existing forecast helper and low-cash alert
+producer, with manual recurring schema available.
 
 ### 13. Debt Payoff Planner
 
@@ -259,6 +285,8 @@ Tests:
 - Ordering and payoff math for both strategies.
 - Handles zero-interest and missing-APR accounts.
 
+Status: implemented in `planDebtPayoff()`.
+
 ### 14. Sinking Funds
 
 Implementation notes:
@@ -271,6 +299,8 @@ Tests:
 
 - Suggestion never exceeds surplus.
 - No suggestion when surplus is negative.
+
+Status: implemented in `suggestSinkingFunds()`.
 
 ## P2: Security And Account
 
@@ -288,6 +318,9 @@ Tests:
 - AAL step-up still enforced for passkey sessions.
 - Backup code is single-use.
 
+Status: passkey support is surfaced in Settings, MFA step-up enforcement stays
+server-side, and backup-code persistence is available through schema.
+
 ### 16. Active Session Management
 
 Implementation notes:
@@ -299,6 +332,8 @@ Tests:
 
 - Revoked session can no longer call APIs.
 
+Status: implemented with `user_session_records`, settings UI, and revoke API.
+
 ### 17. User-Facing Audit Log Viewer
 
 Implementation notes:
@@ -309,6 +344,8 @@ Implementation notes:
 Tests:
 
 - User A cannot read user B's events.
+
+Status: implemented with an owner-scoped audit API and Settings viewer.
 
 ### 18. Full Data Takeout And Verified Deletion
 
@@ -324,6 +361,9 @@ Tests:
 
 - Takeout contains no Plaid access tokens or secrets.
 - Deletion removes all user rows and Plaid items.
+
+Status: full takeout route implemented with secret redaction; deletion already
+removes Plaid items before cascading user-owned rows.
 
 ## P2: Infra And Efficiency
 
@@ -344,6 +384,8 @@ Tests:
 - Cache key isolation between users.
 - Invalidation on sync completion.
 
+Status: implemented with an isolated per-user dashboard cache helper.
+
 ### 20. Browser Smoke Test Suite
 
 Implementation notes:
@@ -353,6 +395,9 @@ Implementation notes:
 - Runs in CI without Plaid; keep full Plaid link testing as the documented
   manual flow in `docs/QA.md`.
 
+Status: route/UI source coverage now checks the smoke surfaces without Plaid;
+full Plaid browser testing remains the manual `docs/QA.md` flow.
+
 ### 21. PWA
 
 Implementation notes:
@@ -360,6 +405,9 @@ Implementation notes:
 - Installable manifest and icons.
 - Offline read-only shell for the last-rendered dashboard.
 - No offline writes; keep the trust boundary server-side.
+
+Status: implemented with `app/manifest.ts` and a GET-only offline service
+worker shell.
 
 ## P3: Optional AI And Household
 
@@ -380,6 +428,9 @@ Tests:
 - Payload never contains keys outside the safe set.
 - Disabled setting returns null payload.
 
+Status: implemented with deterministic privacy-safe insight summaries and
+`/api/ai/insights`.
+
 ### 23. Shared Household Mode
 
 Implementation notes:
@@ -389,6 +440,9 @@ Implementation notes:
 - Keep personal auth and audit logs separate.
 - Major RLS change: design and test policies before implementation; never use
   user-editable metadata for authorization.
+
+Status: household schema, role helper, RLS policies, and a Settings creation
+panel are implemented.
 
 ## Technical Debt And Hardening
 

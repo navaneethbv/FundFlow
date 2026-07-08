@@ -61,9 +61,9 @@ export async function GET(request: NextRequest) {
               await sendDailyDigestEmail(email, todayNotifications, dateStr);
             }
           }
-        } catch (digestErr: any) {
+        } catch (digestErr) {
           logError("cron.sync.digest", digestErr);
-          if (digestErr.message?.includes("SMTP is not configured")) {
+          if (digestErr instanceof Error && digestErr.message.includes("SMTP is not configured")) {
             await service.from("notifications").insert({
               user_id: userId,
               type: "broken_bank",
