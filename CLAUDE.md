@@ -174,9 +174,3 @@ client components.
   (`POST as plaidWebhookPost`) rather than spinning up a server.
 - `docs/HANDOFF.md` is the session-resume note; `docs/TODO.md` is the deferred
   feature list. Update both when finishing significant work.
-
-## Local-change workflow (this repo, current phase)
-
-Do **not** commit or push. Every added/updated file must also be copied into
-`New-Changes/` (mirroring the repo path), and `New-Changes/README.md` must
-describe each change; deletions/moves are documented there too.
