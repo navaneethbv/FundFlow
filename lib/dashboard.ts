@@ -147,9 +147,20 @@ export async function getDashboardData(
   supabase: SupabaseClient,
   selectedAccountId?: string,
   selectedMonth?: string,
+  userId?: string,
 ): Promise<DashboardData> {
   const now = new Date();
   const currentMonth = monthKey(now.toISOString().slice(0, 10));
+
+  // Explicit user scoping. With the user-scoped client this is redundant (RLS
+  // already limits rows), but this function is also called under the service
+  // client from the notification cron, where RLS is bypassed — there `userId`
+  // MUST be passed so every query filters to that user. Every table read below
+  // has a `user_id` column.
+  const scopeUser = <T>(builder: T): T =>
+    userId
+      ? (builder as T & { eq(column: string, value: string): T }).eq("user_id", userId)
+      : builder;
 
   // Stage 1: everything except transactions, plus one tiny oldest-date probe.
   // Transactions are then fetched BOUNDED to the 6-month window the dashboard
@@ -165,43 +176,49 @@ export async function getDashboardData(
     { data: merchantRules },
     { data: snapshots },
   ] = await Promise.all([
-    supabase
-      .from("accounts")
-      .select(
-        "id, name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code, plaid_item_id",
-      )
-      .order("name"),
-    supabase
-      .from("recurring_streams")
-      .select("merchant_name, description, average_amount, frequency, category, stream_type, is_active, plaid_item_id")
-      .eq("is_active", true),
-    supabase
-      .from("plaid_items")
-      .select("id, institution_name"),
-    supabase
-      .from("budgets")
-      .select("category, monthly_limit"),
-    supabase
-      .from("sync_jobs")
-      .select("updated_at")
-      .eq("status", "done")
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from("transactions")
-      .select("date")
-      .order("date", { ascending: true })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from("merchant_rules")
-      .select("match_type, pattern, display_name, category, enabled")
-      .order("created_at"),
-    supabase
-      .from("net_worth_snapshots")
-      .select("snapshot_month, assets, liabilities")
-      .order("snapshot_month", { ascending: true }),
+    scopeUser(
+      supabase
+        .from("accounts")
+        .select(
+          "id, name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code, plaid_item_id",
+        )
+        .order("name"),
+    ),
+    scopeUser(
+      supabase
+        .from("recurring_streams")
+        .select("merchant_name, description, average_amount, frequency, category, stream_type, is_active, plaid_item_id")
+        .eq("is_active", true),
+    ),
+    scopeUser(supabase.from("plaid_items").select("id, institution_name")),
+    scopeUser(supabase.from("budgets").select("category, monthly_limit")),
+    scopeUser(
+      supabase
+        .from("sync_jobs")
+        .select("updated_at")
+        .eq("status", "done")
+        .order("updated_at", { ascending: false })
+        .limit(1),
+    ).maybeSingle(),
+    scopeUser(
+      supabase
+        .from("transactions")
+        .select("date")
+        .order("date", { ascending: true })
+        .limit(1),
+    ).maybeSingle(),
+    scopeUser(
+      supabase
+        .from("merchant_rules")
+        .select("match_type, pattern, display_name, category, enabled")
+        .order("created_at"),
+    ),
+    scopeUser(
+      supabase
+        .from("net_worth_snapshots")
+        .select("snapshot_month, assets, liabilities")
+        .order("snapshot_month", { ascending: true }),
+    ),
   ]);
 
   const allAccounts = (accounts ?? []) as AccountSummary[];
@@ -225,11 +242,13 @@ export async function getDashboardData(
   // the five months before it (charts), including the pro-rated comparison.
   const windowStart = `${addMonths(activeMonth, -5)}-01`;
   const windowEndExclusive = `${addMonths(activeMonth, 1)}-01`;
-  const { data: txns } = await supabase
-    .from("transactions")
-    .select("id, date, amount, merchant_name, name, pfc_primary, account_id")
-    .gte("date", windowStart)
-    .lt("date", windowEndExclusive);
+  const { data: txns } = await scopeUser(
+    supabase
+      .from("transactions")
+      .select("id, date, amount, merchant_name, name, pfc_primary, account_id")
+      .gte("date", windowStart)
+      .lt("date", windowEndExclusive),
+  );
 
   const allTxnsRawUncleaned = (txns ?? []) as TxnLite[];
 
@@ -352,10 +371,12 @@ export async function getDashboardData(
   // (valid) splits, so this is a no-op until a user adds splits.
   const activeSpendIds = activeMonthSpend.map((t) => t.id);
   const { data: splitRows } = activeSpendIds.length
-    ? await supabase
-        .from("transaction_splits")
-        .select("transaction_id, category, amount")
-        .in("transaction_id", activeSpendIds)
+    ? await scopeUser(
+        supabase
+          .from("transaction_splits")
+          .select("transaction_id, category, amount")
+          .in("transaction_id", activeSpendIds),
+      )
     : { data: [] as Array<{ transaction_id: string; category: string; amount: number }> };
   const splits = (splitRows ?? []).map((s) => ({
     transactionId: s.transaction_id as string,

@@ -94,8 +94,10 @@ export async function processNotificationsForUser(userId: string) {
   const supabase = createServiceClient();
   const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
 
-  // 1. Run dashboard aggregation & planning forecast
-  const dashboardData = await getDashboardData(supabase, undefined, currentMonth);
+  // 1. Run dashboard aggregation & planning forecast. This uses the service
+  // client (RLS bypassed), so userId MUST be passed to scope every query to
+  // this user — otherwise the aggregation would span all users' data.
+  const dashboardData = await getDashboardData(supabase, undefined, currentMonth, userId);
 
   // 2. Check low cash forecast
   if (dashboardData.cashFlowForecast?.lowBalanceRisk) {

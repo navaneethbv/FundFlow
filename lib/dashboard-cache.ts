@@ -55,7 +55,7 @@ export async function getCachedDashboardData(
   const scope = `${selectedAccountId ?? "all"}:${selectedMonth ?? "default"}`;
   const cached = await dashboardCache.get(userId, scope);
   if (cached) return cached;
-  const data = await getDashboardData(supabase, selectedAccountId, selectedMonth);
+  const data = await getDashboardData(supabase, selectedAccountId, selectedMonth, userId);
   await dashboardCache.set(userId, scope, data);
   return data;
 }
