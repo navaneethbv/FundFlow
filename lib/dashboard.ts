@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  applyMerchantRules,
   buildBudgetEnvelopes,
   computeNetWorthSnapshot,
   detectSpendingAnomalies,
@@ -9,6 +10,8 @@ import {
   type CashFlowForecast,
   type SpendingAnomaly,
 } from "@/lib/planning";
+import { buildRecurringStatuses } from "@/lib/planning-depth";
+import { aggregateSpendWithSplits } from "@/lib/transaction-quality";
 
 /**
  * Aggregations for the dashboard. Runs with the caller's user-scoped Supabase
@@ -73,9 +76,12 @@ export interface DashboardData {
   recurringWeeks: ReturnType<typeof groupRecurringByWeek>;
   spendingAnomalies: SpendingAnomaly[];
   netWorthSnapshot: { assets: number; liabilities: number; netWorth: number };
+  netWorthHistory: { month: string; assets: number; liabilities: number; netWorth: number }[];
+  recurringStatuses: ReturnType<typeof buildRecurringStatuses>;
 }
 
 interface TxnLite {
+  id: string;
   date: string;
   amount: number;
   merchant_name: string | null;
@@ -141,9 +147,20 @@ export async function getDashboardData(
   supabase: SupabaseClient,
   selectedAccountId?: string,
   selectedMonth?: string,
+  userId?: string,
 ): Promise<DashboardData> {
   const now = new Date();
   const currentMonth = monthKey(now.toISOString().slice(0, 10));
+
+  // Explicit user scoping. With the user-scoped client this is redundant (RLS
+  // already limits rows), but this function is also called under the service
+  // client from the notification cron, where RLS is bypassed — there `userId`
+  // MUST be passed so every query filters to that user. Every table read below
+  // has a `user_id` column.
+  const scopeUser = <T>(builder: T): T =>
+    userId
+      ? (builder as T & { eq(column: string, value: string): T }).eq("user_id", userId)
+      : builder;
 
   // Stage 1: everything except transactions, plus one tiny oldest-date probe.
   // Transactions are then fetched BOUNDED to the 6-month window the dashboard
@@ -156,42 +173,59 @@ export async function getDashboardData(
     { data: budgets },
     { data: lastSyncJob },
     { data: oldestTxn },
+    { data: merchantRules },
+    { data: snapshots },
   ] = await Promise.all([
-    supabase
-      .from("accounts")
-      .select(
-        "id, name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code, plaid_item_id",
-      )
-      .order("name"),
-    supabase
-      .from("recurring_streams")
-      .select("merchant_name, description, average_amount, frequency, category, stream_type, is_active, plaid_item_id")
-      .eq("is_active", true),
-    supabase
-      .from("plaid_items")
-      .select("id, institution_name"),
-    supabase
-      .from("budgets")
-      .select("category, monthly_limit"),
-    supabase
-      .from("sync_jobs")
-      .select("updated_at")
-      .eq("status", "done")
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from("transactions")
-      .select("date")
-      .order("date", { ascending: true })
-      .limit(1)
-      .maybeSingle(),
+    scopeUser(
+      supabase
+        .from("accounts")
+        .select(
+          "id, name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code, plaid_item_id",
+        )
+        .order("name"),
+    ),
+    scopeUser(
+      supabase
+        .from("recurring_streams")
+        .select("merchant_name, description, average_amount, frequency, category, stream_type, is_active, plaid_item_id")
+        .eq("is_active", true),
+    ),
+    scopeUser(supabase.from("plaid_items").select("id, institution_name")),
+    scopeUser(supabase.from("budgets").select("category, monthly_limit")),
+    scopeUser(
+      supabase
+        .from("sync_jobs")
+        .select("updated_at")
+        .eq("status", "done")
+        .order("updated_at", { ascending: false })
+        .limit(1),
+    ).maybeSingle(),
+    scopeUser(
+      supabase
+        .from("transactions")
+        .select("date")
+        .order("date", { ascending: true })
+        .limit(1),
+    ).maybeSingle(),
+    scopeUser(
+      supabase
+        .from("merchant_rules")
+        .select("match_type, pattern, display_name, category, enabled")
+        .order("created_at"),
+    ),
+    scopeUser(
+      supabase
+        .from("net_worth_snapshots")
+        .select("snapshot_month, assets, liabilities")
+        .order("snapshot_month", { ascending: true }),
+    ),
   ]);
 
   const allAccounts = (accounts ?? []) as AccountSummary[];
   const lastSyncAt = (lastSyncJob?.updated_at as string | undefined) ?? null;
   const allItems = (items ?? []) as Array<{ id: string; institution_name: string | null }>;
   const allBudgets = (budgets ?? []) as Array<{ category: string; monthly_limit: number }>;
+  const allSnapshots = (snapshots ?? []) as Array<{ snapshot_month: string; assets: number; liabilities: number }>;
 
   // Month browser: a continuous range from the oldest transaction to today
   // (empty months render as zeros — still browsable).
@@ -208,13 +242,46 @@ export async function getDashboardData(
   // the five months before it (charts), including the pro-rated comparison.
   const windowStart = `${addMonths(activeMonth, -5)}-01`;
   const windowEndExclusive = `${addMonths(activeMonth, 1)}-01`;
-  const { data: txns } = await supabase
-    .from("transactions")
-    .select("date, amount, merchant_name, name, pfc_primary, account_id")
-    .gte("date", windowStart)
-    .lt("date", windowEndExclusive);
+  const { data: txns } = await scopeUser(
+    supabase
+      .from("transactions")
+      .select("id, date, amount, merchant_name, name, pfc_primary, account_id")
+      .gte("date", windowStart)
+      .lt("date", windowEndExclusive),
+  );
 
-  const allTxnsRaw = (txns ?? []) as TxnLite[];
+  const allTxnsRawUncleaned = (txns ?? []) as TxnLite[];
+
+  const accountNamesById = new Map<string, string>();
+  for (const a of allAccounts) {
+    accountNamesById.set(a.id, a.name || "");
+  }
+
+  const cleanupTxns = allTxnsRawUncleaned.map((t) => ({
+    id: t.id,
+    merchant: t.merchant_name ?? t.name ?? "",
+    category: t.pfc_primary,
+    accountName: accountNamesById.get(t.account_id) || "",
+  }));
+
+  const rulesList = (merchantRules ?? []).map((r) => ({
+    matchType: r.match_type as "merchant" | "keyword" | "account",
+    pattern: r.pattern,
+    displayName: r.display_name,
+    category: r.category,
+    enabled: r.enabled,
+  }));
+
+  const appliedTxns = applyMerchantRules(cleanupTxns, rulesList);
+
+  const allTxnsRaw = allTxnsRawUncleaned.map((t, index) => {
+    const clean = appliedTxns[index]!;
+    return {
+      ...t,
+      merchant_name: clean.merchant,
+      pfc_primary: clean.category,
+    };
+  });
 
   // Filter transactions by selected account if specified
   const filteredTxns = selectedAccountId
@@ -276,11 +343,11 @@ export async function getDashboardData(
   }
 
   // Active-month breakdowns and income/expense totals
-  const categoryMap = new Map<string, number>();
   const merchantMap = new Map<string, number>();
   const categoryHistoryMap = new Map<string, number>();
   let currentMonthExpenses = 0;
   let currentMonthIncome = 0;
+  const activeMonthSpend: TxnLite[] = [];
 
   for (const t of filteredTxns) {
     if (isSpending(t)) {
@@ -290,8 +357,7 @@ export async function getDashboardData(
     if (monthKey(t.date) !== activeMonth) continue;
     if (isSpending(t)) {
       currentMonthExpenses += t.amount;
-      const cat = t.pfc_primary ?? "UNCATEGORIZED";
-      categoryMap.set(cat, (categoryMap.get(cat) ?? 0) + t.amount);
+      activeMonthSpend.push(t);
       const merch = t.merchant_name ?? t.name ?? "Unknown";
       merchantMap.set(merch, (merchantMap.get(merch) ?? 0) + t.amount);
     } else if (isIncome(t)) {
@@ -299,9 +365,28 @@ export async function getDashboardData(
     }
   }
 
-  const categoryBreakdown = [...categoryMap.entries()]
-    .map(([category, amount]) => ({ category, amount: round2(amount) }))
-    .sort((a, b) => b.amount - a.amount);
+  // Split-aware category totals: when a transaction has splits that sum to its
+  // amount, its spend is distributed across the split categories instead of its
+  // single Plaid category. Whole-transaction category is used when there are no
+  // (valid) splits, so this is a no-op until a user adds splits.
+  const activeSpendIds = activeMonthSpend.map((t) => t.id);
+  const { data: splitRows } = activeSpendIds.length
+    ? await scopeUser(
+        supabase
+          .from("transaction_splits")
+          .select("transaction_id, category, amount")
+          .in("transaction_id", activeSpendIds),
+      )
+    : { data: [] as Array<{ transaction_id: string; category: string; amount: number }> };
+  const splits = (splitRows ?? []).map((s) => ({
+    transactionId: s.transaction_id as string,
+    category: s.category as string,
+    amount: Number(s.amount),
+  }));
+  const categoryBreakdown = aggregateSpendWithSplits(
+    activeMonthSpend.map((t) => ({ id: t.id, amount: t.amount, category: t.pfc_primary })),
+    splits,
+  );
 
   const merchantBreakdown = [...merchantMap.entries()]
     .map(([merchant, amount]) => ({ merchant, amount: round2(amount) }))
@@ -463,6 +548,39 @@ export async function getDashboardData(
     lowBalanceThreshold: 500,
   });
   const recurringWeeks = groupRecurringByWeek(recurringItems, monthDate(activeMonth, 1), 31);
+
+  // Recurring stream statuses: match each stream to a real transaction so the
+  // dashboard can show paid / unusual amount / late instead of a flat
+  // "expected". Plaid's stream table has no next-date column, so the expected
+  // date is anchored to the stream's latest matching transaction when one
+  // exists (otherwise the mid-month placeholder drives expected/late).
+  const recurringTxns = filteredTxns.map((t) => ({
+    id: t.id,
+    date: t.date,
+    merchant: t.merchant_name ?? t.name ?? "",
+    amount: t.amount,
+  }));
+  const latestMatchDate = (name: string): string | null => {
+    const target = name.trim().toLowerCase();
+    let best: string | null = null;
+    for (const txn of recurringTxns) {
+      if (txn.merchant.trim().toLowerCase() !== target) continue;
+      if (!best || txn.date > best) best = txn.date;
+    }
+    return best;
+  };
+  const recurringStatuses = buildRecurringStatuses({
+    asOf: monthDate(activeMonth, Math.min(activeDay, 28)),
+    unusualAmountPct: 0.2,
+    items: recurringItems.map((item, index) => ({
+      id: `${index}`,
+      name: item.name,
+      amount: item.amount,
+      itemType: item.itemType,
+      nextDate: latestMatchDate(item.name) ?? item.nextDate,
+    })),
+    transactions: recurringTxns,
+  });
   const priorCategoryAverages = [...categoryHistoryMap.entries()]
     .map(([key, amount]) => {
       const [month, category] = key.split("|");
@@ -499,6 +617,17 @@ export async function getDashboardData(
     })),
   );
 
+  const netWorthHistory = allSnapshots.map((s) => {
+    const assets = Number(s.assets ?? 0);
+    const liabilities = Number(s.liabilities ?? 0);
+    return {
+      month: s.snapshot_month.slice(0, 7), // YYYY-MM
+      assets,
+      liabilities,
+      netWorth: round2(assets - liabilities),
+    };
+  });
+
   return {
     accounts: allAccounts,
     creditAccounts: allAccounts.filter((a) => a.type === "credit"),
@@ -531,5 +660,7 @@ export async function getDashboardData(
     recurringWeeks,
     spendingAnomalies,
     netWorthSnapshot,
+    netWorthHistory,
+    recurringStatuses,
   };
 }

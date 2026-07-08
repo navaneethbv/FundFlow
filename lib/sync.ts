@@ -12,6 +12,9 @@ import {
 } from "@/lib/plaid-service";
 import type { PlaidItemRow } from "@/lib/types";
 import { logError } from "@/lib/log";
+import { createNotification } from "@/lib/notifications";
+import { invalidateDashboardCache } from "@/lib/dashboard-cache";
+import { formatCurrency } from "@/lib/format";
 
 export interface SyncResult {
   added: number;
@@ -99,6 +102,22 @@ export async function syncItemTransactions(
       .from("transactions")
       .upsert(upsertRows, { onConflict: "plaid_transaction_id" });
     if (error) throw error;
+
+    // Check for large transactions (threshold 500)
+    const largeThreshold = 500;
+    for (const row of upsertRows) {
+      if (row.amount >= largeThreshold) {
+        await createNotification(
+          item.user_id,
+          "large_transaction",
+          {
+            title: `Large transaction: ${row.merchant_name || row.name || "Unknown"}`,
+            body: `A transaction of ${formatCurrency(row.amount)} was recorded at ${row.merchant_name || row.name || "Unknown"} on ${row.date}.`,
+          },
+          row.plaid_transaction_id,
+        ).catch((err) => logError("sync.large_txn_notification", err));
+      }
+    }
   }
 
   if (removed.length > 0) {
@@ -193,7 +212,21 @@ export async function syncAllForUser(userId: string): Promise<SyncResult> {
       const code = plaidErrorCode(error) ?? "sync_failed";
       await setItemStatus(item.id, "error", code).catch(() => {});
       await recordJobEnd(jobId, "failed", code);
+
+      // Emit broken bank/sync failure notification
+      await createNotification(
+        userId,
+        "broken_bank",
+        {
+          title: `Bank connection issue: ${item.institution_name || "Bank"}`,
+          body: `The connection to ${item.institution_name || "your bank"} needs to be updated (error: ${code}).`,
+        },
+        item.id,
+      ).catch((err) => logError("sync.broken_bank_notification", err));
     }
   }
+  // Fresh transactions/balances just landed — drop this user's cached dashboard
+  // so the next render recomputes instead of serving pre-sync numbers.
+  invalidateDashboardCache(userId);
   return total;
 }

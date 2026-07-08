@@ -1,5 +1,6 @@
 import "server-only";
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { needsMfaStepUp } from "@/lib/mfa";
@@ -10,6 +11,29 @@ const isProd = process.env.NODE_ENV === "production";
 export interface AuthedContext {
   user: User;
   supabase: SupabaseClient;
+}
+
+/**
+ * The Supabase session id (the JWT `session_id` claim) for the current request,
+ * or null if it can't be read. The payload is decoded without verification —
+ * `getUser()` already validated the session against the auth server — and the
+ * decode is format-agnostic (base64url JSON regardless of signing algorithm).
+ * Used to key the device/session list and to enforce session revocation.
+ */
+export async function currentSessionId(
+  supabase: SupabaseClient,
+): Promise<string | null> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const payload = session?.access_token?.split(".")[1];
+  if (!payload) return null;
+  try {
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    return typeof claims.session_id === "string" ? claims.session_id : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -39,6 +63,40 @@ export async function requireUser(): Promise<AuthedContext | NextResponse> {
       { error: "MFA verification required" },
       { status: 401 },
     );
+  }
+
+  // Record this session for the device list and enforce user-initiated
+  // revocation: once a session record is revoked, every subsequent API call
+  // from it returns 401. The recording is best-effort — a transient failure
+  // here must fall open, not lock the user out of the whole app.
+  try {
+    const sessionId = await currentSessionId(supabase);
+    if (sessionId) {
+      let userAgent: string | null = null;
+      try {
+        userAgent = (await headers()).get("user-agent");
+      } catch {
+        // headers() is unavailable outside a request scope (e.g. unit tests).
+      }
+      const { data: record } = await supabase
+        .from("user_session_records")
+        .upsert(
+          {
+            user_id: user.id,
+            session_id: sessionId,
+            user_agent: userAgent,
+            last_seen_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,session_id" },
+        )
+        .select("revoked_at")
+        .maybeSingle();
+      if (record?.revoked_at) {
+        return NextResponse.json({ error: "Session revoked" }, { status: 401 });
+      }
+    }
+  } catch (error) {
+    logError("session.record", error);
   }
 
   return { user, supabase };
