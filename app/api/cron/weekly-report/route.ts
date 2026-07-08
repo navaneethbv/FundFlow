@@ -50,8 +50,17 @@ export async function GET(request: NextRequest) {
         const pdfBuffer = await generateWeeklyReportPdf(reportData);
         await sendWeeklyReportEmail(reportData.userEmail, pdfBuffer, dateStr);
         sentCount += 1;
-      } catch (err) {
+      } catch (err: any) {
         logError("cron.weekly-report.user", err);
+        if (err.message?.includes("SMTP is not configured")) {
+          await service.from("notifications").insert({
+            user_id: userId,
+            type: "broken_bank",
+            severity: "danger",
+            title: "Weekly report skipped",
+            body: "We could not send your weekly report because SMTP is not configured in production settings.",
+          });
+        }
       }
     }
 

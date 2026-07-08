@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  applyMerchantRules,
   buildBudgetEnvelopes,
   computeNetWorthSnapshot,
   detectSpendingAnomalies,
@@ -73,9 +74,11 @@ export interface DashboardData {
   recurringWeeks: ReturnType<typeof groupRecurringByWeek>;
   spendingAnomalies: SpendingAnomaly[];
   netWorthSnapshot: { assets: number; liabilities: number; netWorth: number };
+  netWorthHistory: { month: string; assets: number; liabilities: number; netWorth: number }[];
 }
 
 interface TxnLite {
+  id: string;
   date: string;
   amount: number;
   merchant_name: string | null;
@@ -156,6 +159,8 @@ export async function getDashboardData(
     { data: budgets },
     { data: lastSyncJob },
     { data: oldestTxn },
+    { data: merchantRules },
+    { data: snapshots },
   ] = await Promise.all([
     supabase
       .from("accounts")
@@ -186,12 +191,22 @@ export async function getDashboardData(
       .order("date", { ascending: true })
       .limit(1)
       .maybeSingle(),
+    supabase
+      .from("merchant_rules")
+      .select("match_type, pattern, display_name, category, enabled")
+      .order("created_at"),
+    supabase
+      .from("net_worth_snapshots")
+      .select("snapshot_month, assets, liabilities")
+      .order("snapshot_month", { ascending: true }),
   ]);
 
   const allAccounts = (accounts ?? []) as AccountSummary[];
   const lastSyncAt = (lastSyncJob?.updated_at as string | undefined) ?? null;
   const allItems = (items ?? []) as Array<{ id: string; institution_name: string | null }>;
   const allBudgets = (budgets ?? []) as Array<{ category: string; monthly_limit: number }>;
+  const allRules = (merchantRules ?? []) as any[];
+  const allSnapshots = (snapshots ?? []) as Array<{ snapshot_month: string; assets: number; liabilities: number }>;
 
   // Month browser: a continuous range from the oldest transaction to today
   // (empty months render as zeros — still browsable).
@@ -210,11 +225,42 @@ export async function getDashboardData(
   const windowEndExclusive = `${addMonths(activeMonth, 1)}-01`;
   const { data: txns } = await supabase
     .from("transactions")
-    .select("date, amount, merchant_name, name, pfc_primary, account_id")
+    .select("id, date, amount, merchant_name, name, pfc_primary, account_id")
     .gte("date", windowStart)
     .lt("date", windowEndExclusive);
 
-  const allTxnsRaw = (txns ?? []) as TxnLite[];
+  const allTxnsRawUncleaned = (txns ?? []) as TxnLite[];
+
+  const accountNamesById = new Map<string, string>();
+  for (const a of allAccounts) {
+    accountNamesById.set(a.id, a.name || "");
+  }
+
+  const cleanupTxns = allTxnsRawUncleaned.map((t) => ({
+    id: t.id,
+    merchant: t.merchant_name ?? t.name ?? "",
+    category: t.pfc_primary,
+    accountName: accountNamesById.get(t.account_id) || "",
+  }));
+
+  const rulesList = (merchantRules ?? []).map((r) => ({
+    matchType: r.match_type as "merchant" | "keyword" | "account",
+    pattern: r.pattern,
+    displayName: r.display_name,
+    category: r.category,
+    enabled: r.enabled,
+  }));
+
+  const appliedTxns = applyMerchantRules(cleanupTxns, rulesList);
+
+  const allTxnsRaw = allTxnsRawUncleaned.map((t, index) => {
+    const clean = appliedTxns[index]!;
+    return {
+      ...t,
+      merchant_name: clean.merchant,
+      pfc_primary: clean.category,
+    };
+  });
 
   // Filter transactions by selected account if specified
   const filteredTxns = selectedAccountId
@@ -499,6 +545,17 @@ export async function getDashboardData(
     })),
   );
 
+  const netWorthHistory = allSnapshots.map((s) => {
+    const assets = Number(s.assets ?? 0);
+    const liabilities = Number(s.liabilities ?? 0);
+    return {
+      month: s.snapshot_month.slice(0, 7), // YYYY-MM
+      assets,
+      liabilities,
+      netWorth: round2(assets - liabilities),
+    };
+  });
+
   return {
     accounts: allAccounts,
     creditAccounts: allAccounts.filter((a) => a.type === "credit"),
@@ -531,5 +588,6 @@ export async function getDashboardData(
     recurringWeeks,
     spendingAnomalies,
     netWorthSnapshot,
+    netWorthHistory,
   };
 }

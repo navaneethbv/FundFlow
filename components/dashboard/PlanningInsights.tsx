@@ -2,6 +2,7 @@ import type { DashboardData } from "@/lib/dashboard";
 import { formatCurrency, titleCase } from "@/lib/format";
 import Badge from "@/components/ui/Badge";
 import Panel from "@/components/ui/Panel";
+import TrendChart from "@/components/charts/TrendChart";
 
 function statusTone(status: string): "success" | "warning" | "danger" {
   if (status === "over") return "danger";
@@ -44,7 +45,6 @@ export default function PlanningInsights({ data }: { data: DashboardData }) {
           )}
         </div>
       </Panel>
-
       <Panel
         title="Cash forecast"
         eyebrow="Next 30 days"
@@ -99,21 +99,38 @@ export default function PlanningInsights({ data }: { data: DashboardData }) {
         </div>
       </Panel>
 
-      <Panel title="Net worth snapshot" eyebrow="Assets and liabilities">
-        <dl className="space-y-3 text-sm">
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted">Assets</dt>
-            <dd className="font-bold">{formatCurrency(data.netWorthSnapshot.assets)}</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted">Liabilities</dt>
-            <dd className="font-bold">{formatCurrency(data.netWorthSnapshot.liabilities)}</dd>
-          </div>
-          <div className="flex justify-between gap-4 border-t border-panel-border pt-3">
-            <dt className="font-semibold">Net worth</dt>
-            <dd className="display text-xl">{formatCurrency(data.netWorthSnapshot.netWorth)}</dd>
-          </div>
-        </dl>
+      <Panel title="Net worth snapshot" eyebrow="Assets and liabilities" className="xl:col-span-2">
+        <div className="grid gap-6 md:grid-cols-2">
+          <dl className="space-y-3 text-sm">
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted">Assets</dt>
+              <dd className="font-bold">{formatCurrency(data.netWorthSnapshot.assets)}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted">Liabilities</dt>
+              <dd className="font-bold">{formatCurrency(data.netWorthSnapshot.liabilities)}</dd>
+            </div>
+            <div className="flex justify-between gap-4 border-t border-panel-border pt-3">
+              <dt className="font-semibold">Net worth</dt>
+              <dd className="display text-xl">{formatCurrency(data.netWorthSnapshot.netWorth)}</dd>
+            </div>
+          </dl>
+          {data.netWorthHistory && data.netWorthHistory.length > 0 && (
+            <div className="border-t border-panel-border pt-4 md:border-t-0 md:border-l md:pt-0 md:pl-6">
+              <h4 className="text-xs font-semibold text-muted mb-2 uppercase tracking-wider">Trend</h4>
+              <TrendChart
+                labels={data.netWorthHistory.map((h) => h.month)}
+                series={[
+                  {
+                    name: "Net Worth",
+                    slot: 2,
+                    values: data.netWorthHistory.map((h) => h.netWorth),
+                  },
+                ]}
+              />
+            </div>
+          )}
+        </div>
       </Panel>
     </div>
   );

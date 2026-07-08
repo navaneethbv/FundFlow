@@ -10,6 +10,7 @@ import Panel from "@/components/ui/Panel";
 import Select from "@/components/ui/Select";
 import { Search } from "@/components/ui/icons";
 import { formatCurrency, titleCase, formatMonth } from "@/lib/format";
+import { applyMerchantRules } from "@/lib/planning";
 
 export const dynamic = "force-dynamic";
 
@@ -73,20 +74,48 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
   }
 
   const offset = (page - 1) * PAGE_SIZE;
-  const [{ data: txns, count }, { data: accounts }] = await Promise.all([
+  const [{ data: txns, count }, { data: accounts }, { data: merchantRules }] = await Promise.all([
     query.range(offset, offset + PAGE_SIZE - 1),
     supabase.from("accounts").select("id, name, mask").order("name"),
+    supabase.from("merchant_rules").select("match_type, pattern, display_name, category, enabled").order("created_at"),
   ]);
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const rows = txns ?? [];
-  const total = count ?? rows.length;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const accountName = new Map(
     (accounts ?? []).map((a) => [a.id as string, `${a.name ?? "Account"}${a.mask ? ` ••${a.mask}` : ""}`]),
   );
+
+  const rawRows = txns ?? [];
+  const total = count ?? rawRows.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const cleanupTxns = rawRows.map((r) => ({
+    id: r.id,
+    merchant: r.merchant_name ?? r.name ?? "",
+    category: r.pfc_primary,
+    accountName: accountName.get(r.account_id) || "",
+  }));
+
+  const rulesList = (merchantRules ?? []).map((r) => ({
+    matchType: r.match_type as "merchant" | "keyword" | "account",
+    pattern: r.pattern,
+    displayName: r.display_name,
+    category: r.category,
+    enabled: r.enabled,
+  }));
+
+  const appliedTxns = applyMerchantRules(cleanupTxns, rulesList);
+
+  const rows = rawRows.map((r, index) => {
+    const clean = appliedTxns[index]!;
+    return {
+      ...r,
+      merchant_name: clean.merchant,
+      pfc_primary: clean.category,
+    };
+  });
 
   const pageLink = (p: number) => {
     const parts = [`page=${p}`];

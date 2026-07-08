@@ -369,3 +369,77 @@ export async function sendWeeklyReportEmail(
 
   return info;
 }
+
+export async function sendDailyDigestEmail(
+  toEmail: string,
+  notifications: Array<{ type: string; title: string; body: string }>,
+  dateStr: string,
+) {
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT ?? "587");
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  const from = process.env.SMTP_FROM ?? "FundFlow <onboarding@resend.dev>";
+
+  let transporter;
+
+  if (host && user && pass) {
+    transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: { user, pass },
+    });
+  } else if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "SMTP is not configured (SMTP_HOST/SMTP_USER/SMTP_PASS); refusing to send daily digest",
+    );
+  } else {
+    // Dev fallback: provision a test Ethereal account
+    const testAccount = await nodemailer.createTestAccount();
+    transporter = nodemailer.createTransport({
+      host: "smtp.ethereal.email",
+      port: 587,
+      secure: false,
+      auth: {
+        user: testAccount.user,
+        pass: testAccount.pass,
+      },
+    });
+  }
+
+  const alertsHtml = notifications.map((n) => `
+    <div style="margin-bottom: 15px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 6px; background-color: #f8fafc">
+      <strong style="color: #0f172a; font-size: 14px;">[${titleCase(n.type.replace(/_/g, " "))}] ${n.title}</strong>
+      <p style="color: #475569; margin: 4px 0 0 0; font-size: 13px;">${n.body}</p>
+    </div>
+  `).join("");
+
+  const info = await transporter.sendMail({
+    from,
+    to: toEmail,
+    subject: `FundFlow Daily Alert Digest · ${dateStr}`,
+    text: `You have ${notifications.length} alerts today. Check the FundFlow dashboard.`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 580px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px">
+        <h2 style="color: #0f172a; margin-top: 0">Daily Alert Digest</h2>
+        <p style="color: #334155; line-height: 1.5">
+          Here is a digest of the financial alerts generated for your account today:
+        </p>
+        <div style="margin: 20px 0">
+          ${alertsHtml}
+        </div>
+        <p style="color: #64748b; font-size: 12px; border-top: 1px solid #e2e8f0; padding-top: 15px">
+          This is an automated private digest of your financial activity. View full details in the dashboard.
+        </p>
+      </div>
+    `,
+  });
+
+  if (!host) {
+    const previewUrl = nodemailer.getTestMessageUrl(info);
+    console.log(`[nodemailer] Test daily digest email sent! Preview URL: ${previewUrl}`);
+  }
+
+  return info;
+}
