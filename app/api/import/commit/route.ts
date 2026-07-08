@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       .from("import_review_rows")
       .select("id, date, description, amount, status")
       .eq("batch_id", batchId)
-      .eq("status", "approved");
+      .eq("status", "pending");
     if (approvedIds) query = query.in("id", approvedIds);
     const { data: rows, error: rowError } = await query;
     if (rowError) throw rowError;

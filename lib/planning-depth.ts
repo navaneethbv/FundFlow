@@ -113,6 +113,61 @@ export function planDebtPayoff(
   };
 }
 
+export interface PlanningDepthAccount {
+  name: string | null;
+  type: string | null;
+  balance: number | null;
+  apr?: number | null;
+  minimumPayment?: number | null;
+}
+
+const LIABILITY_TYPES = new Set(["credit", "loan", "liability", "debt"]);
+
+/**
+ * Assembles the dashboard's planning-depth view from data the app already has:
+ * an avalanche debt-payoff plan funded by the month's cash surplus, and
+ * deterministic sinking-fund suggestions for active goals. Returns null plans
+ * when the inputs don't support a meaningful suggestion (no liabilities, no
+ * surplus) so the UI can show an honest empty state instead of fabricated math.
+ */
+export function buildPlanningDepthView(input: {
+  accounts: PlanningDepthAccount[];
+  monthlyIncome: number;
+  monthlySpend: number;
+  goals: {
+    id: string;
+    name: string;
+    targetAmount: number;
+    currentAmount: number;
+    monthsRemaining: number;
+  }[];
+}) {
+  const surplus = round2(input.monthlyIncome - input.monthlySpend);
+
+  const debts: DebtAccount[] = input.accounts
+    .filter((account) => LIABILITY_TYPES.has(account.type ?? ""))
+    .map((account, index) => ({
+      id: `${index}`,
+      name: account.name ?? "Debt",
+      balance: Math.abs(account.balance ?? 0),
+      apr: account.apr ?? null,
+      minimumPayment: account.minimumPayment ?? null,
+    }))
+    .filter((debt) => debt.balance > 0);
+
+  const debtPayoff =
+    debts.length > 0 && surplus > 0 ? planDebtPayoff(debts, surplus, "avalanche") : null;
+
+  const sinkingFunds = suggestSinkingFunds({
+    monthlyIncome: input.monthlyIncome,
+    monthlySpend: input.monthlySpend,
+    existingGoalPace: 0,
+    goals: input.goals,
+  });
+
+  return { surplus, debtPayoff, sinkingFunds };
+}
+
 export function suggestSinkingFunds(input: {
   monthlyIncome: number;
   monthlySpend: number;

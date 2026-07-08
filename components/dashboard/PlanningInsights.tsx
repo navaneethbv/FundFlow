@@ -10,12 +10,20 @@ function statusTone(status: string): "success" | "warning" | "danger" {
   return "success";
 }
 
+function recurringTone(status: string): "success" | "warning" | "danger" | "accent" {
+  if (status === "paid") return "success";
+  if (status === "unusual_amount") return "warning";
+  if (status === "late") return "danger";
+  return "accent";
+}
+
 export default function PlanningInsights({ data }: { data: DashboardData }) {
   const topBudgets = data.budgetEnvelopes.slice(0, 4);
   const anomalies = data.spendingAnomalies.slice(0, 3);
   const recurringItems = data.recurringWeeks.flatMap((week) =>
     week.items.slice(0, 3).map((item) => ({ ...item, weekStart: week.weekStart })),
   );
+  const recurringStatuses = data.recurringStatuses.slice(0, 6);
 
   return (
     <div className="grid gap-6 xl:grid-cols-3">
@@ -95,6 +103,23 @@ export default function PlanningInsights({ data }: { data: DashboardData }) {
           ))}
           {recurringItems.length === 0 && (
             <p className="py-4 text-sm text-muted">No recurring items found yet.</p>
+          )}
+        </div>
+      </Panel>
+
+      <Panel title="Recurring status" eyebrow="Paid vs expected">
+        <div className="space-y-2 text-sm">
+          {recurringStatuses.map((item) => (
+            <div key={item.name} className="rounded-field bg-panel-2 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-semibold">{item.name}</span>
+                <Badge tone={recurringTone(item.status)}>{item.status.replace("_", " ")}</Badge>
+              </div>
+              {item.reviewPrompt && <p className="mt-2 text-xs text-muted">{item.reviewPrompt}</p>}
+            </div>
+          ))}
+          {recurringStatuses.length === 0 && (
+            <p className="py-4 text-sm text-muted">No recurring streams to track yet.</p>
           )}
         </div>
       </Panel>

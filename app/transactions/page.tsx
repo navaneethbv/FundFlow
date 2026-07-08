@@ -9,6 +9,7 @@ import Input from "@/components/ui/Input";
 import Panel from "@/components/ui/Panel";
 import Select from "@/components/ui/Select";
 import { Search } from "@/components/ui/icons";
+import RefundReview from "@/components/transactions/RefundReview";
 import { formatCurrency, titleCase, formatMonth } from "@/lib/format";
 import { applyMerchantRules } from "@/lib/planning";
 
@@ -134,6 +135,8 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
           <p className="eyebrow">Ledger</p>
           <h1 className="display mt-2 text-3xl sm:text-4xl">Transactions</h1>
         </header>
+
+        <RefundReview />
 
         <Panel>
           <form method="get" action="/transactions" className="flex flex-wrap items-center gap-2 text-sm">

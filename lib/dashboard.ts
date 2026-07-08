@@ -10,6 +10,8 @@ import {
   type CashFlowForecast,
   type SpendingAnomaly,
 } from "@/lib/planning";
+import { buildRecurringStatuses } from "@/lib/planning-depth";
+import { aggregateSpendWithSplits } from "@/lib/transaction-quality";
 
 /**
  * Aggregations for the dashboard. Runs with the caller's user-scoped Supabase
@@ -75,6 +77,7 @@ export interface DashboardData {
   spendingAnomalies: SpendingAnomaly[];
   netWorthSnapshot: { assets: number; liabilities: number; netWorth: number };
   netWorthHistory: { month: string; assets: number; liabilities: number; netWorth: number }[];
+  recurringStatuses: ReturnType<typeof buildRecurringStatuses>;
 }
 
 interface TxnLite {
@@ -321,11 +324,11 @@ export async function getDashboardData(
   }
 
   // Active-month breakdowns and income/expense totals
-  const categoryMap = new Map<string, number>();
   const merchantMap = new Map<string, number>();
   const categoryHistoryMap = new Map<string, number>();
   let currentMonthExpenses = 0;
   let currentMonthIncome = 0;
+  const activeMonthSpend: TxnLite[] = [];
 
   for (const t of filteredTxns) {
     if (isSpending(t)) {
@@ -335,8 +338,7 @@ export async function getDashboardData(
     if (monthKey(t.date) !== activeMonth) continue;
     if (isSpending(t)) {
       currentMonthExpenses += t.amount;
-      const cat = t.pfc_primary ?? "UNCATEGORIZED";
-      categoryMap.set(cat, (categoryMap.get(cat) ?? 0) + t.amount);
+      activeMonthSpend.push(t);
       const merch = t.merchant_name ?? t.name ?? "Unknown";
       merchantMap.set(merch, (merchantMap.get(merch) ?? 0) + t.amount);
     } else if (isIncome(t)) {
@@ -344,9 +346,26 @@ export async function getDashboardData(
     }
   }
 
-  const categoryBreakdown = [...categoryMap.entries()]
-    .map(([category, amount]) => ({ category, amount: round2(amount) }))
-    .sort((a, b) => b.amount - a.amount);
+  // Split-aware category totals: when a transaction has splits that sum to its
+  // amount, its spend is distributed across the split categories instead of its
+  // single Plaid category. Whole-transaction category is used when there are no
+  // (valid) splits, so this is a no-op until a user adds splits.
+  const activeSpendIds = activeMonthSpend.map((t) => t.id);
+  const { data: splitRows } = activeSpendIds.length
+    ? await supabase
+        .from("transaction_splits")
+        .select("transaction_id, category, amount")
+        .in("transaction_id", activeSpendIds)
+    : { data: [] as Array<{ transaction_id: string; category: string; amount: number }> };
+  const splits = (splitRows ?? []).map((s) => ({
+    transactionId: s.transaction_id as string,
+    category: s.category as string,
+    amount: Number(s.amount),
+  }));
+  const categoryBreakdown = aggregateSpendWithSplits(
+    activeMonthSpend.map((t) => ({ id: t.id, amount: t.amount, category: t.pfc_primary })),
+    splits,
+  );
 
   const merchantBreakdown = [...merchantMap.entries()]
     .map(([merchant, amount]) => ({ merchant, amount: round2(amount) }))
@@ -508,6 +527,39 @@ export async function getDashboardData(
     lowBalanceThreshold: 500,
   });
   const recurringWeeks = groupRecurringByWeek(recurringItems, monthDate(activeMonth, 1), 31);
+
+  // Recurring stream statuses: match each stream to a real transaction so the
+  // dashboard can show paid / unusual amount / late instead of a flat
+  // "expected". Plaid's stream table has no next-date column, so the expected
+  // date is anchored to the stream's latest matching transaction when one
+  // exists (otherwise the mid-month placeholder drives expected/late).
+  const recurringTxns = filteredTxns.map((t) => ({
+    id: t.id,
+    date: t.date,
+    merchant: t.merchant_name ?? t.name ?? "",
+    amount: t.amount,
+  }));
+  const latestMatchDate = (name: string): string | null => {
+    const target = name.trim().toLowerCase();
+    let best: string | null = null;
+    for (const txn of recurringTxns) {
+      if (txn.merchant.trim().toLowerCase() !== target) continue;
+      if (!best || txn.date > best) best = txn.date;
+    }
+    return best;
+  };
+  const recurringStatuses = buildRecurringStatuses({
+    asOf: monthDate(activeMonth, Math.min(activeDay, 28)),
+    unusualAmountPct: 0.2,
+    items: recurringItems.map((item, index) => ({
+      id: `${index}`,
+      name: item.name,
+      amount: item.amount,
+      itemType: item.itemType,
+      nextDate: latestMatchDate(item.name) ?? item.nextDate,
+    })),
+    transactions: recurringTxns,
+  });
   const priorCategoryAverages = [...categoryHistoryMap.entries()]
     .map(([key, amount]) => {
       const [month, category] = key.split("|");
@@ -588,5 +640,6 @@ export async function getDashboardData(
     spendingAnomalies,
     netWorthSnapshot,
     netWorthHistory,
+    recurringStatuses,
   };
 }

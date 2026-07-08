@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { buildSessionList } from "@/lib/security-account";
-import { badRequest, errorResponse, requireUser } from "@/lib/http";
+import { badRequest, currentSessionId, errorResponse, requireUser } from "@/lib/http";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export async function GET() {
@@ -9,19 +9,22 @@ export async function GET() {
   const { supabase } = auth;
 
   try {
-    const { data, error } = await supabase
-      .from("user_session_records")
-      .select("id, session_id, user_agent, revoked_at, last_seen_at")
-      .is("revoked_at", null)
-      .order("last_seen_at", { ascending: false })
-      .limit(20);
+    const [{ data, error }, activeSessionId] = await Promise.all([
+      supabase
+        .from("user_session_records")
+        .select("id, session_id, user_agent, revoked_at, last_seen_at")
+        .is("revoked_at", null)
+        .order("last_seen_at", { ascending: false })
+        .limit(20),
+      currentSessionId(supabase),
+    ]);
     if (error) throw error;
 
     return NextResponse.json({
       sessions: buildSessionList(
         (data ?? []).map((row) => ({
           id: row.id as string,
-          current: false,
+          current: (row.session_id as string) === activeSessionId,
           userAgent: row.user_agent as string | null,
           lastSeenAt: row.last_seen_at as string,
         })),

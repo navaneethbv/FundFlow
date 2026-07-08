@@ -177,8 +177,11 @@ Tests:
 - Split totals validated server-side or by check constraint.
 - Aggregation counts split categories once (no double counting).
 
-Status: implemented with `transaction_annotations`, `transaction_splits`,
-deferred split-total validation, and split-safe aggregation helpers.
+Status: partial. Schema (`transaction_annotations`, `transaction_splits`) with
+a deferred split-total constraint trigger is in place, and the dashboard
+category breakdown now uses split-safe aggregation when splits exist
+(`aggregateSpendWithSplits` wired into `getDashboardData`). Still missing: a UI
+to add notes/tags/splits (splits can only be created directly today).
 
 ### 8. Refund Matching And Duplicate Merge
 
@@ -195,8 +198,11 @@ Tests:
 - Netting excludes linked refunds from spend totals.
 - Dismissals persist across syncs.
 
-Status: implemented with `linked_refunds`,
-`transaction_review_decisions`, refund-pair detection, and decision filtering.
+Status: mostly done. Refund pairs are detected and surfaced on `/transactions`
+(`RefundReview` + `/api/transactions/refunds`); linking persists to
+`linked_refunds` and dismissals to `transaction_review_decisions`, so a re-sync
+never resurfaces a dismissed pair. Remaining: linked refunds are stored but not
+yet netted out of dashboard spend totals.
 
 ### 9. Import Review Queue UI
 
@@ -215,7 +221,11 @@ Tests:
 - Re-import remains idempotent.
 - Rejected rows are never written.
 
-Status: implemented with `/api/import/preview` and `/api/import/commit`.
+Status: implemented. `ImportReviewSection` drives the preview → select →
+commit flow through `/api/import/preview` and `/api/import/commit`; possible and
+file duplicates are flagged and unchecked by default, and only the selected
+rows are committed via the deterministic `import-<hash>` path. Column remapping
+is not yet offered (auto-detection only).
 
 ## P1: Planning Depth
 
@@ -254,7 +264,10 @@ Tests:
 - Status transitions for paid, late, unusual amount.
 - Price-increase detection threshold.
 
-Status: implemented in `buildRecurringStatuses()`.
+Status: implemented. `buildRecurringStatuses()` is wired into `getDashboardData`
+(anchored to each stream's latest matching transaction, since Plaid streams
+carry no next-date column) and rendered as paid / expected / late / unusual
+badges with price-change review prompts in the dashboard planning panels.
 
 ### 12. Forecast Upgrades
 
@@ -285,7 +298,10 @@ Tests:
 - Ordering and payoff math for both strategies.
 - Handles zero-interest and missing-APR accounts.
 
-Status: implemented in `planDebtPayoff()`.
+Status: implemented. `planDebtPayoff()` is surfaced via the dashboard `Debt
+payoff` panel (`buildPlanningDepthView` → `PlanningDepth`), showing avalanche
+order for liability accounts funded by the month's cash surplus, with explicit
+assumptions (unknown APRs treated as 0%).
 
 ### 14. Sinking Funds
 
@@ -300,7 +316,9 @@ Tests:
 - Suggestion never exceeds surplus.
 - No suggestion when surplus is negative.
 
-Status: implemented in `suggestSinkingFunds()`.
+Status: implemented. `suggestSinkingFunds()` is surfaced via the dashboard
+`Sinking funds` panel (`PlanningDepth`), suggesting per-goal monthly
+contributions capped at the month's surplus for the user to confirm manually.
 
 ## P2: Security And Account
 
@@ -332,7 +350,11 @@ Tests:
 
 - Revoked session can no longer call APIs.
 
-Status: implemented with `user_session_records`, settings UI, and revoke API.
+Status: implemented and functional. `requireUser()` now records the current
+session (from the JWT `session_id` claim) into `user_session_records` on every
+API call and 401s any session whose record has been revoked, so revoking in
+Settings actually blocks further API access. The current session is marked and
+cannot be self-revoked.
 
 ### 17. User-Facing Audit Log Viewer
 
@@ -384,7 +406,10 @@ Tests:
 - Cache key isolation between users.
 - Invalidation on sync completion.
 
-Status: implemented with an isolated per-user dashboard cache helper.
+Status: implemented. The dashboard render path uses `getCachedDashboardData`
+(process-local, keyed by user id + account + month, short TTL), and
+`syncAllForUser` invalidates a user's cache on sync completion. Only ever
+populated with the user-scoped RLS-bound client, so no cross-user bleed.
 
 ### 20. Browser Smoke Test Suite
 
@@ -428,8 +453,9 @@ Tests:
 - Payload never contains keys outside the safe set.
 - Disabled setting returns null payload.
 
-Status: implemented with deterministic privacy-safe insight summaries and
-`/api/ai/insights`.
+Status: implemented. `AiInsightsSection` in Settings calls `/api/ai/insights`
+to generate and display deterministic privacy-safe summaries (only the
+`SAFE_AI_KEYS` export fields leave the server), gated behind the AI toggle.
 
 ### 23. Shared Household Mode
 

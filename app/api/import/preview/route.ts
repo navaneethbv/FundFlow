@@ -43,22 +43,37 @@ export async function POST(request: NextRequest) {
     if (batchError) throw batchError;
 
     const batchId = batch.id as string;
-    const { error: rowsError } = await service.from("import_review_rows").insert(
-      review.rows.map((row) => ({
-        user_id: user.id,
-        batch_id: batchId,
-        row_hash: row.rowHash,
-        date: row.row.date,
-        description: row.row.merchant,
-        amount: row.row.amount,
-        status: row.flags.includes("file-duplicate") ? "rejected" : "pending",
-      })),
-    );
+    // Flagged rows (file or possible duplicates) default to "rejected" so the
+    // safe default only imports clean rows; the user can still opt them back in.
+    const { data: insertedRows, error: rowsError } = await service
+      .from("import_review_rows")
+      .insert(
+        review.rows.map((row) => ({
+          user_id: user.id,
+          batch_id: batchId,
+          row_hash: row.rowHash,
+          date: row.row.date,
+          description: row.row.merchant,
+          amount: row.row.amount,
+          status: row.flags.length > 0 ? "rejected" : "pending",
+        })),
+      )
+      .select("id, date, description, amount, status");
     if (rowsError) throw rowsError;
+
+    // PostgREST returns inserted rows in input order, so flags align by index.
+    const rowsOut = (insertedRows ?? []).map((row, index) => ({
+      id: row.id as string,
+      date: row.date as string,
+      description: row.description as string,
+      amount: Number(row.amount),
+      status: row.status as string,
+      flags: review.rows[index]?.flags ?? [],
+    }));
 
     return NextResponse.json({
       batch_id: batchId,
-      rows: review.rows,
+      rows: rowsOut,
       parse_errors: errors.slice(0, 20),
     });
   } catch (error) {

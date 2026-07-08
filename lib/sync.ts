@@ -13,6 +13,7 @@ import {
 import type { PlaidItemRow } from "@/lib/types";
 import { logError } from "@/lib/log";
 import { createNotification } from "@/lib/notifications";
+import { invalidateDashboardCache } from "@/lib/dashboard-cache";
 import { formatCurrency } from "@/lib/format";
 
 export interface SyncResult {
@@ -224,5 +225,8 @@ export async function syncAllForUser(userId: string): Promise<SyncResult> {
       ).catch((err) => logError("sync.broken_bank_notification", err));
     }
   }
+  // Fresh transactions/balances just landed — drop this user's cached dashboard
+  // so the next render recomputes instead of serving pre-sync numbers.
+  invalidateDashboardCache(userId);
   return total;
 }

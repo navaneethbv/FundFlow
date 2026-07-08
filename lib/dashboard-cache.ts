@@ -1,3 +1,6 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { getDashboardData, type DashboardData } from "@/lib/dashboard";
+
 interface CacheRecord<T> {
   value: T;
   expiresAt: number;
@@ -32,4 +35,32 @@ export function createDashboardCache<T>(ttlMs: number) {
       }
     },
   };
+}
+
+// Process-local dashboard cache. Keyed strictly by user id + render scope, so a
+// warm serverless instance skips recomputing the full aggregation on the
+// 2-minute AutoRefresh re-render. The TTL is short because budgets and goals are
+// written straight from the browser (no server route to invalidate on); sync
+// completion invalidates explicitly. Only ever populated with a user-scoped
+// (RLS-bound) client, so one user's cache can never be served to another.
+const DASHBOARD_TTL_MS = 45_000;
+const dashboardCache = createDashboardCache<DashboardData>(DASHBOARD_TTL_MS);
+
+export async function getCachedDashboardData(
+  supabase: SupabaseClient,
+  userId: string,
+  selectedAccountId?: string,
+  selectedMonth?: string,
+): Promise<DashboardData> {
+  const scope = `${selectedAccountId ?? "all"}:${selectedMonth ?? "default"}`;
+  const cached = await dashboardCache.get(userId, scope);
+  if (cached) return cached;
+  const data = await getDashboardData(supabase, selectedAccountId, selectedMonth);
+  await dashboardCache.set(userId, scope, data);
+  return data;
+}
+
+/** Drop every cached scope for a user after their data changes (sync completion). */
+export function invalidateDashboardCache(userId: string): void {
+  dashboardCache.invalidateUser(userId);
 }

@@ -15,6 +15,7 @@ import ButtonLink from "@/components/ui/ButtonLink";
 import { computeNetWorth, computeSavingsRate } from "@/components/dashboard/metrics";
 import { type RecentTransaction } from "@/components/dashboard/RecentActivity";
 import { getDashboardData } from "@/lib/dashboard";
+import { getCachedDashboardData } from "@/lib/dashboard-cache";
 import { getGoals } from "@/lib/goals";
 import { formatMonth } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -85,7 +86,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   } = await supabase.auth.getUser();
 
   const [data, { data: items }, goals] = await Promise.all([
-    getDashboardData(supabase, selectedAccountId, selectedMonth),
+    user
+      ? getCachedDashboardData(supabase, user.id, selectedAccountId, selectedMonth)
+      : getDashboardData(supabase, selectedAccountId, selectedMonth),
     supabase
       .from("plaid_items")
       .select("id, institution_name, status")

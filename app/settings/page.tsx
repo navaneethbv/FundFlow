@@ -4,6 +4,8 @@ import MfaSection from "@/components/settings/MfaSection";
 import ExportSection from "@/components/settings/ExportSection";
 import ReportsSection from "@/components/settings/ReportsSection";
 import ImportSection from "@/components/settings/ImportSection";
+import ImportReviewSection from "@/components/settings/ImportReviewSection";
+import AiInsightsSection from "@/components/settings/AiInsightsSection";
 import BudgetsSection from "@/components/settings/BudgetsSection";
 import BanksSection from "@/components/settings/BanksSection";
 import DangerZone from "@/components/settings/DangerZone";
@@ -16,6 +18,7 @@ import SessionsSection from "@/components/settings/SessionsSection";
 import PasskeysSection from "@/components/settings/PasskeysSection";
 import HouseholdSection from "@/components/settings/HouseholdSection";
 import { buildAuditLogPage, buildSessionList } from "@/lib/security-account";
+import { currentSessionId } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +27,7 @@ export default async function SettingsPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const activeSessionId = await currentSessionId(supabase);
 
   const [
     { data: profile },
@@ -85,7 +89,7 @@ export default async function SettingsPage() {
         .limit(5),
       supabase
         .from("user_session_records")
-        .select("id, user_agent, last_seen_at")
+        .select("id, session_id, user_agent, last_seen_at")
         .is("revoked_at", null)
         .order("last_seen_at", { ascending: false })
         .limit(5),
@@ -107,7 +111,7 @@ export default async function SettingsPage() {
   const sessions = buildSessionList(
     (sessionRows ?? []).map((row) => ({
       id: row.id as string,
-      current: false,
+      current: (row.session_id as string) === activeSessionId,
       userAgent: row.user_agent as string | null,
       lastSeenAt: row.last_seen_at as string,
     })),
@@ -137,6 +141,11 @@ export default async function SettingsPage() {
               <ReportsSection initialEnabled={profile?.weekly_report_enabled ?? true} />
             </div>
           </div>
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-2">
+          <ImportReviewSection accounts={accounts ?? []} />
+          <AiInsightsSection enabled={aiSettings?.enabled ?? false} />
         </div>
 
         <div className="grid gap-6 xl:grid-cols-2">
