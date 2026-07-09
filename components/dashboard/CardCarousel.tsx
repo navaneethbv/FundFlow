@@ -57,13 +57,13 @@ export default function CardCarousel({
             >
               <article
                 className={cn(
-                  "relative flex h-[170px] w-[292px] flex-col justify-between overflow-hidden rounded-card border p-5 text-white shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-float",
-                  account.type === "credit" ? "bg-slate-900" : "bg-[#0b1b33]",
-                  selected ? "border-accent ring-2 ring-accent/45" : "border-white/10",
+                  "relative flex h-[170px] w-[292px] flex-col justify-between overflow-hidden rounded-card border bg-gradient-to-br p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-float",
+                  design.bgGradient,
                   design.textColor,
+                  selected ? "border-accent ring-2 ring-accent/45" : design.borderColor,
                 )}
               >
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(96,165,250,0.34),transparent_12rem)]" />
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(255,255,255,0.18),transparent_12rem)]" />
                 <div className="relative flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <p className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-70">
