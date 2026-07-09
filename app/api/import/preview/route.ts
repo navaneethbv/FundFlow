@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { buildImportReview } from "@/lib/planning";
-import { parseImportCsv } from "@/lib/import";
+import { getCsvColumns, normalizeColumnMap, parseImportCsv, type ColumnMap } from "@/lib/import";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -18,8 +18,35 @@ export async function POST(request: NextRequest) {
     if (!(file instanceof File)) return badRequest("file is required");
 
     const text = await file.text();
-    const { rows, errors } = parseImportCsv(text, { positiveIsIncome });
-    if (rows.length === 0) return badRequest(errors[0] ?? "No importable rows found");
+
+    // An explicit column map (from the manual-mapping UI) overrides detection.
+    const columnMapRaw = form.get("column_map");
+    let columns: ColumnMap | undefined;
+    if (typeof columnMapRaw === "string" && columnMapRaw.length > 0) {
+      const header = getCsvColumns(text);
+      const parsed = header ? normalizeColumnMap(JSON.parse(columnMapRaw), header.headers.length) : null;
+      if (!parsed) return badRequest("Invalid column mapping. Map at least a date, description, and amount (or debit/credit).");
+      columns = parsed;
+    }
+
+    const { rows, errors } = parseImportCsv(text, { positiveIsIncome, columns });
+    if (rows.length === 0) {
+      // With no explicit map, auto-detection couldn't produce rows — hand the
+      // headers back so the UI can offer manual column mapping instead of a
+      // dead-end error.
+      if (!columns) {
+        const header = getCsvColumns(text);
+        if (header && header.headers.length > 0) {
+          return NextResponse.json({
+            needs_mapping: true,
+            headers: header.headers,
+            sample: header.sample,
+            parse_errors: errors.slice(0, 20),
+          });
+        }
+      }
+      return badRequest(errors[0] ?? "No importable rows found");
+    }
 
     const { data: existing } = await supabase
       .from("transactions")

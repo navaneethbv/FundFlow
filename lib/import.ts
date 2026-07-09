@@ -119,6 +119,38 @@ export function detectColumns(headerRow: string[]): ColumnMap | null {
   };
 }
 
+/**
+ * Header row plus a few sample rows, for the manual column-mapping UI when
+ * auto-detection can't decide. Null when the file has no rows at all.
+ */
+export function getCsvColumns(text: string): { headers: string[]; sample: string[][] } | null {
+  const table = parseCsv(text);
+  if (table.length === 0) return null;
+  return { headers: table[0]!, sample: table.slice(1, 4) };
+}
+
+/**
+ * Validate a user-supplied column map against a header of `width` columns:
+ * date and description are required and in range, and at least one of amount or
+ * debit/credit is mapped. Returns a normalized map, or null when invalid.
+ */
+export function normalizeColumnMap(input: unknown, width: number): ColumnMap | null {
+  if (!input || typeof input !== "object") return null;
+  const raw = input as Record<string, unknown>;
+  const idx = (value: unknown): number | null => {
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value >= width) return null;
+    return value;
+  };
+  const date = idx(raw.date);
+  const description = idx(raw.description);
+  if (date === null || description === null) return null;
+  const amount = idx(raw.amount);
+  const debit = idx(raw.debit);
+  const credit = idx(raw.credit);
+  if (amount === null && debit === null && credit === null) return null;
+  return { date, description, amount, debit, credit, category: idx(raw.category) };
+}
+
 /** "2026-07-05", "07/05/2026", "7/5/26" → YYYY-MM-DD; null when unparseable. */
 export function normalizeDate(raw: string): string | null {
   const s = raw.trim();
@@ -164,13 +196,14 @@ export function parseAmount(raw: string): number | null {
  */
 export function parseImportCsv(
   text: string,
-  options: { positiveIsIncome: boolean },
+  options: { positiveIsIncome: boolean; columns?: ColumnMap },
 ): ImportParseResult {
   const table = parseCsv(text);
   if (table.length < 2) {
     return { rows: [], errors: ["File has no data rows."] };
   }
-  const columns = detectColumns(table[0]!);
+  // An explicit map (from the manual column-mapping UI) overrides detection.
+  const columns = options.columns ?? detectColumns(table[0]!);
   if (!columns) {
     return {
       rows: [],

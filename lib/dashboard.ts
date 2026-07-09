@@ -175,6 +175,7 @@ export async function getDashboardData(
     { data: oldestTxn },
     { data: merchantRules },
     { data: snapshots },
+    { data: linkedRefunds },
   ] = await Promise.all([
     scopeUser(
       supabase
@@ -218,6 +219,11 @@ export async function getDashboardData(
         .from("net_worth_snapshots")
         .select("snapshot_month, assets, liabilities")
         .order("snapshot_month", { ascending: true }),
+    ),
+    scopeUser(
+      supabase
+        .from("linked_refunds")
+        .select("charge_transaction_id, refund_transaction_id"),
     ),
   ]);
 
@@ -288,6 +294,22 @@ export async function getDashboardData(
     ? allTxnsRaw.filter((t) => t.account_id === selectedAccountId)
     : allTxnsRaw;
 
+  // Linked refund pairs net out of spend/income aggregation: a fully-refunded
+  // purchase is neither spend nor income, so both the charge and its refund are
+  // dropped from spend/income/category/merchant/card/bank totals. Cash-flow
+  // (literal depository money movement) and the ledger list still show them.
+  const linkedRefundIds = new Set<string>();
+  for (const row of (linkedRefunds ?? []) as Array<{
+    charge_transaction_id: string;
+    refund_transaction_id: string;
+  }>) {
+    linkedRefundIds.add(row.charge_transaction_id);
+    linkedRefundIds.add(row.refund_transaction_id);
+  }
+  const spendTxns = linkedRefundIds.size
+    ? filteredTxns.filter((t) => !linkedRefundIds.has(t.id))
+    : filteredTxns;
+
   // Per-month aggregates (spending, income, depository cash flow) for the
   // 6-month window ending at activeMonth. One account-type lookup map keeps
   // the cash-flow pass linear.
@@ -296,7 +318,7 @@ export async function getDashboardData(
 
   const monthMap = new Map<string, number>();
   const incomeMap = new Map<string, number>();
-  for (const t of filteredTxns) {
+  for (const t of spendTxns) {
     const key = monthKey(t.date);
     if (isSpending(t)) {
       monthMap.set(key, (monthMap.get(key) ?? 0) + t.amount);
@@ -349,7 +371,7 @@ export async function getDashboardData(
   let currentMonthIncome = 0;
   const activeMonthSpend: TxnLite[] = [];
 
-  for (const t of filteredTxns) {
+  for (const t of spendTxns) {
     if (isSpending(t)) {
       const historyKey = `${monthKey(t.date)}|${t.pfc_primary ?? "UNCATEGORIZED"}`;
       categoryHistoryMap.set(historyKey, (categoryHistoryMap.get(historyKey) ?? 0) + t.amount);
@@ -405,7 +427,7 @@ export async function getDashboardData(
   const lastMonthKey = monthKey(lastMonthDate.toISOString().slice(0, 10));
 
   let lastMonthProratedSpent = 0;
-  for (const t of filteredTxns) {
+  for (const t of spendTxns) {
     if (monthKey(t.date) !== lastMonthKey) continue;
     const tDay = Number(t.date.split("-")[2]);
     if (tDay <= targetDay && isSpending(t)) {
@@ -415,7 +437,7 @@ export async function getDashboardData(
 
   // 3. Spend Per Card calculation for the active month
   const cardSpendMap = new Map<string, number>();
-  for (const t of filteredTxns) {
+  for (const t of spendTxns) {
     if (monthKey(t.date) !== activeMonth || !isSpending(t)) continue;
     cardSpendMap.set(t.account_id, (cardSpendMap.get(t.account_id) ?? 0) + t.amount);
   }
@@ -429,7 +451,7 @@ export async function getDashboardData(
 
   // 4. Spend Per Bank calculation for the active month
   const bankSpendMap = new Map<string, number>();
-  for (const t of filteredTxns) {
+  for (const t of spendTxns) {
     if (monthKey(t.date) !== activeMonth || !isSpending(t)) continue;
     const acct = allAccounts.find((a) => a.id === t.account_id);
     const bankName = acct
