@@ -78,13 +78,21 @@ export function goalSummary(goals: Goal[], today = new Date()): GoalSummaryItem[
     });
 }
 
-/** Owner-scoped goals for the signed-in user (RLS-bound), oldest first. */
+/**
+ * Owner-scoped goals, oldest first. Page/route callers pass the RLS-bound
+ * client and omit `userId` (RLS scopes the rows). Service-client callers
+ * (RLS bypassed) MUST pass `userId` so the query is scoped explicitly —
+ * otherwise it returns every user's goals.
+ */
 export async function getGoals(
   supabase: Awaited<ReturnType<typeof createClient>>,
+  userId?: string,
 ): Promise<Goal[]> {
-  const { data } = await supabase
+  let query = supabase
     .from("goals")
     .select("id, name, target_amount, saved_amount, target_date")
     .order("created_at");
+  if (userId) query = query.eq("user_id", userId);
+  const { data } = await query;
   return (data ?? []) as Goal[];
 }

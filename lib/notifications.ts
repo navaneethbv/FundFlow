@@ -129,8 +129,9 @@ export async function processNotificationsForUser(userId: string) {
     }
   }
 
-  // 4. Check goals reached
-  const goals = await getGoals(supabase);
+  // 4. Check goals reached. Service client (RLS bypassed) — pass userId so
+  // goals are scoped to this user, otherwise every user's goals leak in.
+  const goals = await getGoals(supabase, userId);
   for (const goal of goals) {
     if (goal.saved_amount >= goal.target_amount) {
       await createNotification(
