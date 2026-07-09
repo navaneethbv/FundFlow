@@ -21,8 +21,11 @@ Done and verified:
 
 - Goals production pass: edit support, optimistic rollback, empty/loading/
   success/completion states, dashboard pace insights, RLS integration tests.
-- Roadmap schema and RLS foundation: `20260707012910_roadmap_features.sql`
-  applied to the live Supabase project.
+- Roadmap schema and RLS foundation: `20260707012910_roadmap_features.sql` and
+  `20260708040000_roadmap_completion.sql` applied to the live Supabase project
+  (the completion migration was applied 2026-07-08 after its tables were found
+  missing in production — the refund Link button 500'd because
+  `transaction_review_decisions`/`linked_refunds` did not exist).
 - Read-side planning foundations in `lib/planning.ts`: envelope pacing,
   30-day cash forecast, recurring week grouping, anomaly detection, net worth
   compute, AI payload filter, import review builder.
