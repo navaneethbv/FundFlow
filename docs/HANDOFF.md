@@ -25,7 +25,12 @@ integration test) · `npm run test:unit` ✓ **196 tests**.
 - **CSV column remap:** import preview offers manual column mapping when
   auto-detection fails (`normalizeColumnMap`/`getCsvColumns`, `parseImportCsv`
   `columns` override).
-- **No new migration** — all three used tables already applied.
+- **Migration:** `20260708040000_roadmap_completion.sql` (transaction_annotations,
+  transaction_splits, linked_refunds, transaction_review_decisions,
+  user_session_records, mfa_backup_codes) was **NOT** applied to the live project
+  until **2026-07-08** — it was applied via the dashboard SQL editor after the
+  refund Link button 500'd in production (the tables didn't exist). Verified all
+  six tables now return 200. If you spin up a fresh project, apply it.
 - **Deferred (not a merge blocker):** session revocation is API-only — revoke
   sets `revoked_at` but does not `auth.admin.signOut` or gate page renders in
   `proxy.ts`; and a full multi-breakpoint mobile visual QA still needs the
