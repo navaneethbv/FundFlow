@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   parseCsv,
   detectColumns,
+  normalizeColumnMap,
+  getCsvColumns,
   normalizeDate,
   parseAmount,
   parseImportCsv,
@@ -46,6 +48,61 @@ describe("detectColumns", () => {
   it("returns null when essentials are missing", () => {
     expect(detectColumns(["Foo", "Bar"])).toBeNull();
     expect(detectColumns(["Date", "Description"])).toBeNull(); // no amount
+  });
+});
+
+describe("normalizeColumnMap", () => {
+  it("accepts an explicit map with required fields in range", () => {
+    expect(normalizeColumnMap({ date: 0, description: 1, amount: 2 }, 3)).toEqual({
+      date: 0,
+      description: 1,
+      amount: 2,
+      debit: null,
+      credit: null,
+      category: null,
+    });
+  });
+
+  it("accepts a debit/credit map with a category", () => {
+    expect(normalizeColumnMap({ date: 1, description: 0, debit: 2, credit: 3, category: 4 }, 5)).toEqual({
+      date: 1,
+      description: 0,
+      amount: null,
+      debit: 2,
+      credit: 3,
+      category: 4,
+    });
+  });
+
+  it("rejects out-of-range, missing, or amount-less maps", () => {
+    expect(normalizeColumnMap({ date: 0, description: 1 }, 3)).toBeNull(); // no amount/debit/credit
+    expect(normalizeColumnMap({ date: 5, description: 1, amount: 2 }, 3)).toBeNull(); // out of range
+    expect(normalizeColumnMap({ description: 1, amount: 2 }, 3)).toBeNull(); // no date
+    expect(normalizeColumnMap(null, 3)).toBeNull();
+  });
+});
+
+describe("getCsvColumns", () => {
+  it("returns headers and up to three sample rows", () => {
+    const result = getCsvColumns("A,B,C\n1,2,3\n4,5,6\n7,8,9\n10,11,12");
+    expect(result?.headers).toEqual(["A", "B", "C"]);
+    expect(result?.sample).toHaveLength(3);
+    expect(result?.sample[0]).toEqual(["1", "2", "3"]);
+  });
+});
+
+describe("parseImportCsv with an explicit column map", () => {
+  it("uses the provided map instead of auto-detection", () => {
+    // Header names are unrecognizable, so detection would fail; the map rescues it.
+    const csv = "col0,col1,col2\n2026-07-05,Coffee Shop,4.50\n2026-07-06,Paycheck,-1000";
+    const result = parseImportCsv(csv, {
+      positiveIsIncome: false,
+      columns: { date: 0, description: 1, amount: 2, debit: null, credit: null, category: null },
+    });
+    expect(result.rows).toEqual([
+      { date: "2026-07-05", amount: 4.5, merchant: "Coffee Shop", category: null },
+      { date: "2026-07-06", amount: -1000, merchant: "Paycheck", category: null },
+    ]);
   });
 });
 

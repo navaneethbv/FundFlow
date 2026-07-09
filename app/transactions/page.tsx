@@ -10,6 +10,7 @@ import Panel from "@/components/ui/Panel";
 import Select from "@/components/ui/Select";
 import { Search } from "@/components/ui/icons";
 import RefundReview from "@/components/transactions/RefundReview";
+import TransactionEditor from "@/components/transactions/TransactionEditor";
 import { formatCurrency, titleCase, formatMonth } from "@/lib/format";
 import { applyMerchantRules } from "@/lib/planning";
 
@@ -92,6 +93,27 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
   const total = count ?? rawRows.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  // User annotations (note/tags) and category splits for the visible rows. RLS
+  // scopes both to the signed-in user.
+  const txnIds = rawRows.map((r) => r.id as string);
+  const [{ data: annotations }, { data: splits }] = txnIds.length
+    ? await Promise.all([
+        supabase.from("transaction_annotations").select("transaction_id, note, tags").in("transaction_id", txnIds),
+        supabase.from("transaction_splits").select("transaction_id, category, amount").in("transaction_id", txnIds),
+      ])
+    : [{ data: [] as { transaction_id: string; note: string | null; tags: string[] }[] }, { data: [] as { transaction_id: string; category: string; amount: number }[] }];
+
+  const annById = new Map<string, { note: string | null; tags: string[] }>();
+  for (const a of annotations ?? []) {
+    annById.set(a.transaction_id as string, { note: a.note as string | null, tags: (a.tags as string[]) ?? [] });
+  }
+  const splitsById = new Map<string, { category: string; amount: number }[]>();
+  for (const s of splits ?? []) {
+    const list = splitsById.get(s.transaction_id as string) ?? [];
+    list.push({ category: s.category as string, amount: Number(s.amount) });
+    splitsById.set(s.transaction_id as string, list);
+  }
+
   const cleanupTxns = rawRows.map((r) => ({
     id: r.id,
     merchant: r.merchant_name ?? r.name ?? "",
@@ -117,6 +139,15 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
       pfc_primary: clean.category,
     };
   });
+
+  // Category suggestions for the split editor: categories seen on this page
+  // plus any already used in splits.
+  const categoryOptions = [
+    ...new Set([
+      ...rows.map((r) => r.pfc_primary).filter((c): c is string => Boolean(c)),
+      ...[...splitsById.values()].flat().map((s) => s.category),
+    ]),
+  ].sort();
 
   const pageLink = (p: number) => {
     const parts = [`page=${p}`];
@@ -191,38 +222,68 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
                     <th className="hidden px-4 py-3 font-semibold sm:table-cell">Category</th>
                     <th className="hidden px-4 py-3 font-semibold md:table-cell">Account</th>
                     <th className="px-4 py-3 text-right font-semibold">Amount</th>
+                    <th className="px-4 py-3 text-right font-semibold">
+                      <span className="sr-only">Notes and splits</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="tabular-nums">
-                  {rows.map((t) => (
+                  {rows.map((t) => {
+                    const ann = annById.get(t.id as string);
+                    const txnSplits = splitsById.get(t.id as string) ?? [];
+                    return (
                     <tr
                       key={t.id}
                       className="border-b border-panel-border last:border-0 hover:bg-panel-hover"
                     >
-                      <td className="whitespace-nowrap px-4 py-3 text-muted">{t.date}</td>
-                      <td className="px-4 py-3">
+                      <td className="whitespace-nowrap px-4 py-3 align-top text-muted">{t.date}</td>
+                      <td className="px-4 py-3 align-top">
                         <span className="font-medium">{t.merchant_name ?? t.name ?? "Unknown"}</span>
                         {t.pending && (
                           <Badge tone="warning" className="ml-2">
                             pending
                           </Badge>
                         )}
+                        {(ann?.note || (ann?.tags?.length ?? 0) > 0 || txnSplits.length > 0) && (
+                          <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                            {txnSplits.length > 0 && <Badge tone="accent">split ×{txnSplits.length}</Badge>}
+                            {ann?.tags?.map((tag) => (
+                              <Badge key={tag}>{tag}</Badge>
+                            ))}
+                            {ann?.note && <span className="text-xs text-muted">{ann.note}</span>}
+                          </span>
+                        )}
                       </td>
-                      <td className="hidden px-4 py-3 text-muted sm:table-cell">
+                      <td className="hidden px-4 py-3 align-top text-muted sm:table-cell">
                         {titleCase(t.pfc_primary) || "-"}
                       </td>
-                      <td className="hidden px-4 py-3 text-muted md:table-cell">
+                      <td className="hidden px-4 py-3 align-top text-muted md:table-cell">
                         {accountName.get(t.account_id) ?? "-"}
                       </td>
                       <td
-                        className="whitespace-nowrap px-4 py-3 text-right font-semibold"
+                        className="whitespace-nowrap px-4 py-3 text-right align-top font-semibold"
                         style={t.amount < 0 ? { color: "var(--success)" } : { color: "var(--danger)" }}
                       >
                         {t.amount < 0 ? "+" : "-"}
                         {formatCurrency(Math.abs(t.amount), t.iso_currency_code ?? "USD")}
                       </td>
+                      <td className="px-2 py-3 text-right align-top">
+                        <TransactionEditor
+                          transaction={{
+                            id: t.id as string,
+                            merchant: (t.merchant_name ?? t.name ?? "Unknown") as string,
+                            amount: t.amount as number,
+                            currency: (t.iso_currency_code ?? "USD") as string,
+                          }}
+                          note={ann?.note ?? null}
+                          tags={ann?.tags ?? []}
+                          splits={txnSplits}
+                          categories={categoryOptions}
+                        />
+                      </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

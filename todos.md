@@ -177,11 +177,13 @@ Tests:
 - Split totals validated server-side or by check constraint.
 - Aggregation counts split categories once (no double counting).
 
-Status: partial. Schema (`transaction_annotations`, `transaction_splits`) with
-a deferred split-total constraint trigger is in place, and the dashboard
-category breakdown now uses split-safe aggregation when splits exist
-(`aggregateSpendWithSplits` wired into `getDashboardData`). Still missing: a UI
-to add notes/tags/splits (splits can only be created directly today).
+Status: done. Schema (`transaction_annotations`, `transaction_splits`) with a
+deferred split-total constraint trigger is in place; the dashboard category
+breakdown uses split-safe aggregation (`aggregateSpendWithSplits` in
+`getDashboardData`); and the `/transactions` ledger now has a per-row editor
+(`TransactionEditor` → `/api/transactions/annotate`) to add a note, tags, and
+category splits. Splits are validated client-side and by the DB trigger to sum
+to the transaction amount; notes/tags/splits show inline on each row.
 
 ### 8. Refund Matching And Duplicate Merge
 
@@ -198,11 +200,13 @@ Tests:
 - Netting excludes linked refunds from spend totals.
 - Dismissals persist across syncs.
 
-Status: mostly done. Refund pairs are detected and surfaced on `/transactions`
+Status: done. Refund pairs are detected and surfaced on `/transactions`
 (`RefundReview` + `/api/transactions/refunds`); linking persists to
 `linked_refunds` and dismissals to `transaction_review_decisions`, so a re-sync
-never resurfaces a dismissed pair. Remaining: linked refunds are stored but not
-yet netted out of dashboard spend totals.
+never resurfaces a dismissed pair. Linked pairs now net out of dashboard
+spend/income aggregation (`getDashboardData` drops both the charge and refund
+from spend, category, merchant, card, and bank totals); literal depository
+cash-flow and the ledger list still show them.
 
 ### 9. Import Review Queue UI
 
@@ -221,11 +225,13 @@ Tests:
 - Re-import remains idempotent.
 - Rejected rows are never written.
 
-Status: implemented. `ImportReviewSection` drives the preview → select →
-commit flow through `/api/import/preview` and `/api/import/commit`; possible and
-file duplicates are flagged and unchecked by default, and only the selected
-rows are committed via the deterministic `import-<hash>` path. Column remapping
-is not yet offered (auto-detection only).
+Status: done. `ImportReviewSection` drives the preview → select → commit flow
+through `/api/import/preview` and `/api/import/commit`; possible and file
+duplicates are flagged and unchecked by default, and only the selected rows are
+committed via the deterministic `import-<hash>` path. When auto-detection can't
+resolve columns, the preview returns the header + sample rows and the UI offers
+a manual column-mapping step (`normalizeColumnMap` validates the map, and
+`parseImportCsv` accepts an explicit `columns` override).
 
 ## P1: Planning Depth
 

@@ -1,6 +1,35 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-07-06. Read this first to resume.
+Last updated: 2026-07-08. Read this first to resume.
+
+## Latest session (2026-07-08, branch `feat/todos-roadmap`)
+
+Security review of the branch + three roadmap partials finished. All code-level
+gates green: `npm run build` ✓ · `npm run lint` ✓ (2 pre-existing warnings in an
+integration test) · `npm run test:unit` ✓ **196 tests**.
+
+- **Security fix (HIGH):** `getGoals` was called with the RLS-bypassing service
+  client in the notification cron with no `user_id` filter — a cross-user leak
+  of goal names/amounts into other users' notifications/digest emails. Now takes
+  `userId` and scopes the query (`lib/goals.ts`, `lib/notifications.ts`);
+  regression test added.
+- **Security fix (MEDIUM):** the offline service worker cached authenticated
+  page HTML into Cache Storage (persisted across logout on shared devices).
+  `public/sw.js` now serves navigations network-only and caches only static
+  assets.
+- **Refund netting:** linked refund pairs net out of dashboard spend/income
+  aggregation (`getDashboardData` reads `linked_refunds`); cash-flow + ledger
+  still show them.
+- **Splits/notes UI:** per-row ledger editor (`TransactionEditor` →
+  `/api/transactions/annotate`) for note, tags, and category splits.
+- **CSV column remap:** import preview offers manual column mapping when
+  auto-detection fails (`normalizeColumnMap`/`getCsvColumns`, `parseImportCsv`
+  `columns` override).
+- **No new migration** — all three used tables already applied.
+- **Deferred (not a merge blocker):** session revocation is API-only — revoke
+  sets `revoked_at` but does not `auth.admin.signOut` or gate page renders in
+  `proxy.ts`; and a full multi-breakpoint mobile visual QA still needs the
+  running app (the shell/pages are already Tailwind-responsive).
 
 ## Where we are
 
