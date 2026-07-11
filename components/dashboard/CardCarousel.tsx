@@ -49,7 +49,7 @@ export default function CardCarousel({
       <div className="-mx-4 flex touch-pan-x snap-x gap-4 overflow-x-auto px-4 pb-2 scrollbar-none sm:mx-0 sm:px-0">
         {accounts.map((account) => {
           const design = detectCardDesign(account.name, account.official_name, account.type, account.subtype);
-          const image = detectCardImage(account.name, account.official_name);
+          const image = detectCardImage(account.name, account.official_name, account.mask);
           const selected = selectedAccountId === account.id;
           return (
             <Link
