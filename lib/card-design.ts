@@ -23,7 +23,11 @@ export function detectCardDesign(
     network = "visa";
   } else if (normName.includes("mastercard") || normName.includes("mc")) {
     network = "mastercard";
-  } else if (normName.includes("amex") || normName.includes("american express")) {
+  } else if (
+    normName.includes("amex") ||
+    normName.includes("american express") ||
+    normName.includes("blue cash")
+  ) {
     network = "amex";
   } else if (normName.includes("apple")) {
     network = "apple";
