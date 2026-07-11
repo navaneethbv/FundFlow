@@ -216,3 +216,55 @@ export function buildCategoryDrilldown(input: {
 
   return { kind: "category", category, sub, total, momDelta, subcategories, merchants, trend, transactions };
 }
+
+export interface MerchantDrilldownData {
+  kind: "merchant";
+  merchant: string;
+  /** Whole-window (6-month) stats. */
+  total: number;
+  count: number;
+  average: number;
+  dominantCategory: string | null;
+  trend: { month: string; amount: number }[];
+  transactions: DrillTxn[];
+}
+
+export type DrilldownData = CategoryDrilldownData | MerchantDrilldownData;
+
+export function buildMerchantDrilldown(input: {
+  txns: DrillTxn[];
+  merchant: string;
+  months: string[];
+}): MerchantDrilldownData {
+  const { txns, merchant, months } = input;
+  const target = merchant.trim().toLowerCase();
+  const matches = txns.filter((t) => t.merchant.trim().toLowerCase() === target);
+
+  const trendMap = new Map<string, number>();
+  const categoryMap = new Map<string, number>();
+  let total = 0;
+  for (const t of matches) {
+    total += t.amount;
+    const month = t.date.slice(0, 7);
+    trendMap.set(month, (trendMap.get(month) ?? 0) + t.amount);
+    const cat = t.category ?? "UNCATEGORIZED";
+    categoryMap.set(cat, (categoryMap.get(cat) ?? 0) + t.amount);
+  }
+
+  const dominantCategory =
+    [...categoryMap.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
+  return {
+    kind: "merchant",
+    merchant,
+    total: round2(total),
+    count: matches.length,
+    average: matches.length ? round2(total / matches.length) : 0,
+    dominantCategory,
+    trend: months.map((month) => ({ month, amount: round2(trendMap.get(month) ?? 0) })),
+    transactions: matches
+      .slice()
+      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.id.localeCompare(b.id)))
+      .slice(0, TXN_CAP),
+  };
+}

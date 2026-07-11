@@ -6,8 +6,10 @@ import {
   MANUAL_SPLIT_KEY,
   OTHER_CATEGORY_KEY,
   buildCategoryDrilldown,
+  buildMerchantDrilldown,
   type DrillTxn,
 } from "@/lib/drilldown";
+
 
 describe("dashboardUrl", () => {
   it("builds /dashboard with only the params provided, in stable order", () => {
@@ -249,3 +251,43 @@ describe("buildCategoryDrilldown", () => {
     expect(result.transactions[0]!.date >= result.transactions[1]!.date).toBe(true);
   });
 });
+
+describe("buildMerchantDrilldown", () => {
+  const txns: DrillTxn[] = [
+    txn({ id: "a", date: "2026-07-01", amount: 15.49, merchant: "Netflix", category: "ENTERTAINMENT", subcategory: null }),
+    txn({ id: "b", date: "2026-06-01", amount: 15.49, merchant: "netflix ", category: "ENTERTAINMENT", subcategory: null }),
+    txn({ id: "c", date: "2026-05-01", amount: 12.99, merchant: "Netflix", category: "GENERAL_SERVICES", subcategory: null }),
+    txn({ id: "d", date: "2026-07-02", amount: 80, merchant: "Safeway" }),
+  ];
+
+  it("matches case-insensitively and computes window stats", () => {
+    const result = buildMerchantDrilldown({ txns, merchant: "Netflix", months: WINDOW });
+    expect(result.kind).toBe("merchant");
+    expect(result.count).toBe(3);
+    expect(result.total).toBe(43.97);
+    expect(result.average).toBe(14.66);
+    expect(result.dominantCategory).toBe("ENTERTAINMENT");
+    expect(result.transactions.map((t) => t.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("builds the per-month trend", () => {
+    const result = buildMerchantDrilldown({ txns, merchant: "Netflix", months: WINDOW });
+    expect(result.trend).toEqual([
+      { month: "2026-02", amount: 0 },
+      { month: "2026-03", amount: 0 },
+      { month: "2026-04", amount: 0 },
+      { month: "2026-05", amount: 12.99 },
+      { month: "2026-06", amount: 15.49 },
+      { month: "2026-07", amount: 15.49 },
+    ]);
+  });
+
+  it("returns zeroed stats for a merchant with no matches", () => {
+    const result = buildMerchantDrilldown({ txns, merchant: "Nobody", months: WINDOW });
+    expect(result.count).toBe(0);
+    expect(result.total).toBe(0);
+    expect(result.average).toBe(0);
+    expect(result.dominantCategory).toBeNull();
+  });
+});
+
