@@ -13,5 +13,9 @@ export default function CardNetworkLogo({ network }: { network: string }) {
   if (network === "amex") {
     return <span className="rounded border border-current/50 px-1 py-0.5 text-[9px] font-black">AMEX</span>;
   }
-  return <span className="text-xs font-black uppercase tracking-wider opacity-75">Card</span>;
+  if (network === "discover") {
+    return <span className="text-sm font-black tracking-tight">Discover</span>;
+  }
+  // Default any unidentified network to VISA (these accounts are all Visa).
+  return <span className="text-lg font-black italic tracking-wider">VISA</span>;
 }
