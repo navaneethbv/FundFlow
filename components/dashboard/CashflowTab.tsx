@@ -3,7 +3,7 @@ import { formatCurrency, formatMonth, titleCase } from "@/lib/format";
 import DivergingColumns from "@/components/charts/DivergingColumns";
 import Panel from "@/components/ui/Panel";
 
-export default function CashflowTab({ data }: { data: DashboardData }) {
+export default function CashflowTab({ data, linkParams }: { data: DashboardData; linkParams?: any }) {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-3">

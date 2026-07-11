@@ -20,7 +20,7 @@ export default function Panel({
   className,
   children,
   ...props
-}: React.HTMLAttributes<HTMLElement> & {
+}: Omit<React.HTMLAttributes<HTMLElement>, "title"> & {
   eyebrow?: string;
   title?: React.ReactNode;
   action?: React.ReactNode;

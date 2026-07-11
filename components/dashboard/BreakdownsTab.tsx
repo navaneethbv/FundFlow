@@ -3,7 +3,7 @@ import { formatCurrency } from "@/lib/format";
 import BarList from "@/components/dashboard/BarList";
 import Panel from "@/components/ui/Panel";
 
-export default function BreakdownsTab({ data }: { data: DashboardData }) {
+export default function BreakdownsTab({ data, linkParams }: { data: DashboardData; linkParams?: any }) {
   const maxCard = Math.max(1, ...data.spendPerCard.map((i) => i.amount));
   const maxBank = Math.max(1, ...data.spendPerBank.map((i) => i.amount));
 

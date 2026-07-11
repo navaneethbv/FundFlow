@@ -7,11 +7,13 @@ export default function MonthChips({
   selectedMonth,
   selectedAccountId,
   activeTab,
+  extraParams,
 }: {
   months: string[];
   selectedMonth: string;
   selectedAccountId?: string;
   activeTab: string;
+  extraParams?: Record<string, string | undefined>;
 }) {
   return (
     <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-none sm:mx-0 sm:px-0">
@@ -19,6 +21,9 @@ export default function MonthChips({
         const params = new URLSearchParams({ tab: activeTab });
         if (month !== selectedMonth) params.set("month", month);
         if (selectedAccountId) params.set("accountId", selectedAccountId);
+        for (const [key, value] of Object.entries(extraParams ?? {})) {
+          if (value) params.set(key, value);
+        }
         const active = month === selectedMonth;
         return (
           <Link

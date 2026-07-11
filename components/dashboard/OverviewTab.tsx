@@ -1,6 +1,10 @@
+import Link from "next/link";
 import type { DashboardData } from "@/lib/dashboard";
 import { foldTail } from "@/lib/chart-utils";
 import { formatCurrency, formatMonth, titleCase } from "@/lib/format";
+import { dashboardUrl, OTHER_CATEGORY_KEY } from "@/lib/drilldown";
+import CategoryDrilldownPanel, { type DrillLinkParams } from "@/components/dashboard/CategoryDrilldownPanel";
+import MerchantDrilldownPanel from "@/components/dashboard/MerchantDrilldownPanel";
 import AreaSparkline from "@/components/charts/AreaSparkline";
 import DonutChart from "@/components/charts/DonutChart";
 import MiniBars from "@/components/charts/MiniBars";
@@ -22,6 +26,8 @@ export default function OverviewTab({
   recentTransactions,
   accountNames,
   goals,
+  linkParams,
+  drillQuery,
 }: {
   data: DashboardData;
   netWorth: number;
@@ -29,6 +35,8 @@ export default function OverviewTab({
   recentTransactions: RecentTransaction[];
   accountNames: Map<string, string>;
   goals: Goal[];
+  linkParams: DrillLinkParams;
+  drillQuery: { category?: string; sub?: string; merchant?: string };
 }) {
   const monthLabels = data.monthlySpending.map((m) => formatMonth(m.month));
   const spendSeries = data.monthlySpending.map((m) => m.amount);
@@ -40,10 +48,20 @@ export default function OverviewTab({
     (incomeSeries[incomeSeries.length - 2] ?? 0) - (spendSeries[spendSeries.length - 2] ?? 0);
   const maxMerchant = Math.max(1, ...data.merchantBreakdown.map((m) => m.amount));
   const donutItems = foldTail(
-    data.categoryBreakdown.map((c) => ({ label: titleCase(c.category), amount: c.amount })),
+    data.categoryBreakdown.map((c) => ({
+      label: titleCase(c.category),
+      amount: c.amount,
+      href: dashboardUrl({ ...linkParams, category: c.category }),
+    })),
     6,
-    (amount) => ({ label: "Other", amount }),
+    (amount) => ({
+      label: "Other",
+      amount,
+      href: dashboardUrl({ ...linkParams, category: OTHER_CATEGORY_KEY }),
+    }),
   );
+  const showAllCategories = drillQuery.category === OTHER_CATEGORY_KEY;
+  const maxCategory = Math.max(1, ...data.categoryBreakdown.map((c) => c.amount));
 
   return (
     <div className="space-y-6">
@@ -67,15 +85,47 @@ export default function OverviewTab({
         <Panel title="Spending vs income" eyebrow="Last 6 months">
           <TrendChart
             labels={monthLabels}
+            links={data.monthlySpending.map((m) =>
+              dashboardUrl({ ...linkParams, ...drillQuery, month: m.month }),
+            )}
             series={[
               { name: "Spending", slot: 1, values: spendSeries },
               { name: "Income", slot: 2, values: incomeSeries },
             ]}
           />
         </Panel>
-        <Panel title="Spending by category" eyebrow="This month" action={<span className="text-xs font-bold text-muted">Total {formatCurrency(data.currentMonthExpenses)}</span>}>
-          <DonutChart items={donutItems} centerLabel="spent" />
-        </Panel>
+        {data.drilldown?.kind === "category" ? (
+          <CategoryDrilldownPanel drill={data.drilldown} linkParams={linkParams} month={data.selectedMonth} />
+        ) : data.drilldown?.kind === "merchant" ? (
+          <MerchantDrilldownPanel drill={data.drilldown} linkParams={linkParams} month={data.selectedMonth} />
+        ) : showAllCategories ? (
+          <Panel
+            title="All categories"
+            eyebrow="This month"
+            action={
+              <Link href={dashboardUrl(linkParams)} className="text-xs font-semibold text-accent hover:underline">
+                Back to top 6
+              </Link>
+            }
+          >
+            <BarList
+              items={data.categoryBreakdown.map((c) => ({
+                label: titleCase(c.category),
+                amount: c.amount,
+                href: dashboardUrl({ ...linkParams, category: c.category }),
+              }))}
+              max={maxCategory}
+            />
+          </Panel>
+        ) : (
+          <Panel
+            title="Spending by category"
+            eyebrow="This month"
+            action={<span className="text-xs font-bold text-muted">Total {formatCurrency(data.currentMonthExpenses)}</span>}
+          >
+            <DonutChart items={donutItems} centerLabel="spent" />
+          </Panel>
+        )}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
@@ -85,13 +135,17 @@ export default function OverviewTab({
         <Panel title="Recurring streams" eyebrow="Subscriptions and income">
           <div className="space-y-3">
             {data.subscriptions.slice(0, 5).map((stream) => (
-              <div key={`${stream.merchant}-${stream.amount}`} className="flex items-center justify-between gap-4 rounded-field p-2 hover:bg-panel-hover">
+              <Link
+                key={`${stream.merchant}-${stream.amount}`}
+                href={dashboardUrl({ ...linkParams, merchant: stream.merchant })}
+                className="flex items-center justify-between gap-4 rounded-field p-2 hover:bg-panel-hover"
+              >
                 <span>
                   <span className="block text-sm font-semibold">{stream.merchant}</span>
                   <span className="block text-xs text-muted">{stream.frequency ?? "Recurring"}</span>
                 </span>
                 <span className="tabular-nums text-sm font-bold">{formatCurrency(stream.amount)}</span>
-              </div>
+              </Link>
             ))}
             {data.subscriptions.length === 0 && <p className="py-4 text-sm text-muted">No recurring streams yet.</p>}
           </div>
@@ -107,7 +161,14 @@ export default function OverviewTab({
           <RecentActivity transactions={recentTransactions} accountNames={accountNames} />
         </Panel>
         <Panel title="Top merchants" className="xl:col-span-1">
-          <BarList items={data.merchantBreakdown.map((m) => ({ label: m.merchant, amount: m.amount }))} max={maxMerchant} />
+          <BarList
+            items={data.merchantBreakdown.map((m) => ({
+              label: m.merchant,
+              amount: m.amount,
+              href: dashboardUrl({ ...linkParams, merchant: m.merchant }),
+            }))}
+            max={maxMerchant}
+          />
         </Panel>
       </div>
     </div>
