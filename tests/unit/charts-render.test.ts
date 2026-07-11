@@ -126,3 +126,65 @@ describe("Sparkline and StatTile", () => {
     expect(html).toContain("var(--viz-bad)"); // spending up = bad direction
   });
 });
+
+import BarList from "@/components/dashboard/BarList";
+
+describe("chart link affordances", () => {
+  it("DonutChart wraps slices and legend rows in links when href is set", () => {
+    const html = renderToStaticMarkup(
+      createElement(DonutChart, {
+        items: [
+          { label: "Food And Drink", amount: 420, href: "/dashboard?category=FOOD_AND_DRINK" },
+          { label: "Travel", amount: 260 },
+        ],
+        centerLabel: "spent",
+      }),
+    );
+    expect(html).toContain('href="/dashboard?category=FOOD_AND_DRINK"');
+    // Unlinked items render no anchor for themselves: exactly 2 anchors
+    // (slice + legend) for the one linked item.
+    expect(html.match(/<a /g)?.length).toBe(2);
+  });
+
+  it("TrendChart makes month hit-targets links", () => {
+    const html = renderToStaticMarkup(
+      createElement(TrendChart, {
+        labels,
+        links: labels.map((_, i) => `/dashboard?month=2026-0${i + 1}`),
+        series: [{ name: "Spending", slot: 1, values: spend }],
+      }),
+    );
+    expect(html).toContain('href="/dashboard?month=2026-01"');
+    expect(html).toContain('href="/dashboard?month=2026-06"');
+  });
+
+  it("DivergingColumns makes month hit-targets links", () => {
+    const html = renderToStaticMarkup(
+      createElement(DivergingColumns, {
+        labels,
+        up: income,
+        down: spend,
+        upName: "Deposits",
+        downName: "Withdrawals",
+        links: labels.map((_, i) => `/dashboard?tab=cashflow&month=2026-0${i + 1}`),
+      }),
+    );
+    expect(html).toContain('href="/dashboard?tab=cashflow&amp;month=2026-03"');
+  });
+});
+
+describe("BarList links", () => {
+  it("renders items as links when href is set", () => {
+    const html = renderToStaticMarkup(
+      createElement(BarList, {
+        items: [
+          { label: "Netflix", amount: 15.49, href: "/dashboard?merchant=Netflix" },
+          { label: "Safeway", amount: 210 },
+        ],
+        max: 210,
+      }),
+    );
+    expect(html).toContain('href="/dashboard?merchant=Netflix"');
+    expect(html.match(/<a /g)?.length).toBe(1);
+  });
+});

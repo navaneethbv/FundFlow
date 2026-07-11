@@ -1,10 +1,11 @@
+import Link from "next/link";
 import { formatCurrency } from "@/lib/format";
 
 export default function BarList({
   items,
   max,
 }: {
-  items: { label: string; amount: number }[];
+  items: { label: string; amount: number; href?: string }[];
   max: number;
 }) {
   if (items.length === 0) {
@@ -13,20 +14,36 @@ export default function BarList({
 
   return (
     <ul className="space-y-3">
-      {items.map((item) => (
-        <li key={item.label} className="text-sm">
-          <div className="mb-1.5 flex justify-between gap-4 font-medium">
-            <span>{item.label}</span>
-            <span className="tabular-nums font-semibold">{formatCurrency(item.amount)}</span>
-          </div>
-          <div className="h-2.5 overflow-hidden rounded-full bg-panel-hover">
-            <div
-              className="h-full rounded-full bg-accent transition-all duration-500 ease-out"
-              style={{ width: `${max > 0 ? (item.amount / max) * 100 : 0}%` }}
-            />
-          </div>
-        </li>
-      ))}
+      {items.map((item) => {
+        const body = (
+          <>
+            <div className="mb-1.5 flex justify-between gap-4 font-medium">
+              <span>{item.label}</span>
+              <span className="tabular-nums font-semibold">{formatCurrency(item.amount)}</span>
+            </div>
+            <div className="h-2.5 overflow-hidden rounded-full bg-panel-hover">
+              <div
+                className="h-full rounded-full bg-accent transition-all duration-500 ease-out"
+                style={{ width: `${max > 0 ? (item.amount / max) * 100 : 0}%` }}
+              />
+            </div>
+          </>
+        );
+        return (
+          <li key={item.label} className="text-sm">
+            {item.href ? (
+              <Link
+                href={item.href}
+                className="block rounded-field p-1.5 -m-1.5 hover:bg-panel-hover focus-visible:outline-2"
+              >
+                {body}
+              </Link>
+            ) : (
+              body
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }

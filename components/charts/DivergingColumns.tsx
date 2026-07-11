@@ -12,6 +12,7 @@ export default function DivergingColumns({
   down,
   upName,
   downName,
+  links,
   valueFormatter = compactCurrency,
 }: {
   labels: string[];
@@ -19,6 +20,7 @@ export default function DivergingColumns({
   down: number[];
   upName: string;
   downName: string;
+  links?: (string | undefined)[];
   valueFormatter?: (v: number) => string;
 }) {
   const W = 560;
@@ -95,11 +97,21 @@ export default function DivergingColumns({
             <text x={xMid(i)} y={H - 8} textAnchor="middle" fontSize={10} fill="var(--viz-muted)">
               {l}
             </text>
-            <rect x={PAD.left + band * i} y={PAD.top} width={band} height={plotH} fill="transparent">
-              <title>
-                {`${l} · ${upName}: ${valueFormatter(up[i] ?? 0)} · ${downName}: ${valueFormatter(down[i] ?? 0)} · Net: ${valueFormatter((up[i] ?? 0) - (down[i] ?? 0))}`}
-              </title>
-            </rect>
+            {links?.[i] ? (
+              <a href={links[i]} aria-label={`View ${l}`}>
+                <rect x={PAD.left + band * i} y={PAD.top} width={band} height={plotH} fill="transparent">
+                  <title>
+                    {`${l} · ${upName}: ${valueFormatter(up[i] ?? 0)} · ${downName}: ${valueFormatter(down[i] ?? 0)} · Net: ${valueFormatter((up[i] ?? 0) - (down[i] ?? 0))}`}
+                  </title>
+                </rect>
+              </a>
+            ) : (
+              <rect x={PAD.left + band * i} y={PAD.top} width={band} height={plotH} fill="transparent">
+                <title>
+                  {`${l} · ${upName}: ${valueFormatter(up[i] ?? 0)} · ${downName}: ${valueFormatter(down[i] ?? 0)} · Net: ${valueFormatter((up[i] ?? 0) - (down[i] ?? 0))}`}
+                </title>
+              </rect>
+            )}
           </g>
         ))}
       </svg>
@@ -132,3 +144,4 @@ export default function DivergingColumns({
     </div>
   );
 }
+
