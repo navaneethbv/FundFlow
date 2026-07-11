@@ -37,4 +37,40 @@ describe("getCachedDashboardData", () => {
     expect(mockGetDashboardData).toHaveBeenCalledTimes(2);
     expect(second).not.toBe(first);
   });
+
+  it("caches different drill scopes separately", async () => {
+    const base = await getCachedDashboardData(supabase, "drill-user", undefined, "2026-07");
+    const drilled = await getCachedDashboardData(supabase, "drill-user", undefined, "2026-07", {
+      drill: { category: "FOOD_AND_DRINK" },
+    });
+    const drilledAgain = await getCachedDashboardData(supabase, "drill-user", undefined, "2026-07", {
+      drill: { category: "FOOD_AND_DRINK" },
+    });
+    expect(mockGetDashboardData).toHaveBeenCalledTimes(2);
+    expect(drilled).not.toBe(base);
+    expect(drilledAgain).toBe(drilled);
+  });
+
+  it("caches item-filtered scopes separately", async () => {
+    await getCachedDashboardData(supabase, "item-user", undefined, "2026-07");
+    await getCachedDashboardData(supabase, "item-user", undefined, "2026-07", { itemId: "item-1" });
+    expect(mockGetDashboardData).toHaveBeenCalledTimes(2);
+  });
+});
+
+import { dashboardScopeKey } from "@/lib/dashboard-cache";
+
+describe("dashboardScopeKey", () => {
+  it("encodes every drill dimension", () => {
+    expect(dashboardScopeKey(undefined, undefined)).toBe("all:default:all:-:-:-");
+    expect(
+      dashboardScopeKey("acct-1", "2026-07", {
+        itemId: "item-1",
+        drill: { category: "FOOD_AND_DRINK", sub: "FOOD_AND_DRINK_COFFEE" },
+      }),
+    ).toBe("acct-1:2026-07:item-1:FOOD_AND_DRINK:FOOD_AND_DRINK_COFFEE:-");
+    expect(dashboardScopeKey(undefined, "2026-07", { drill: { merchant: "Netflix" } })).toBe(
+      "all:2026-07:all:-:-:Netflix",
+    );
+  });
 });
