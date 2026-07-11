@@ -80,13 +80,15 @@ export default function CardCarousel({
                 ) : (
                   <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(255,255,255,0.18),transparent_12rem)]" />
                 )}
-                <div className="relative flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-70">
-                      {account.type === "credit" ? "Credit Card" : titleCase(account.subtype ?? account.type)}
-                    </p>
-                    <h3 className="mt-1 truncate text-base font-black">{design.displayName}</h3>
-                  </div>
+                <div className={cn("relative flex items-start gap-4", image ? "justify-end" : "justify-between")}>
+                  {!image && (
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-70">
+                        {account.type === "credit" ? "Credit Card" : titleCase(account.subtype ?? account.type)}
+                      </p>
+                      <h3 className="mt-1 truncate text-base font-black">{design.displayName}</h3>
+                    </div>
+                  )}
                   <CardNetworkLogo network={design.network} />
                 </div>
                 <div className="relative">
