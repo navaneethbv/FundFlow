@@ -95,7 +95,15 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
       `merchant_name.ilike.%${q}%,name.ilike.%${q}%,pfc_primary.ilike.%${catQ}%,pfc_detailed.ilike.%${catQ}%`,
     );
   }
-  if (category) query = query.eq("pfc_primary", category);
+  if (category) {
+    // Uncategorized rows store NULL, not the literal "UNCATEGORIZED" the
+    // dashboard drill uses as a sentinel — match both so the drill's ledger
+    // link isn't empty.
+    query =
+      category === "UNCATEGORIZED"
+        ? query.or("pfc_primary.is.null,pfc_primary.eq.UNCATEGORIZED")
+        : query.eq("pfc_primary", category);
+  }
   if (sub) query = query.eq("pfc_detailed", sub);
   if (merchant) {
     query = query.or(`merchant_name.ilike.${merchant},name.ilike.${merchant}`);

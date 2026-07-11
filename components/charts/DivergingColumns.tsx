@@ -98,7 +98,11 @@ export default function DivergingColumns({
               {l}
             </text>
             {links?.[i] ? (
-              <a href={links[i]} aria-label={`View ${l}`}>
+              <a
+                href={links[i]}
+                aria-label={`View ${l}, ${upName} ${valueFormatter(up[i] ?? 0)}, ${downName} ${valueFormatter(down[i] ?? 0)}`}
+                className="focus-visible:outline-2"
+              >
                 <rect x={PAD.left + band * i} y={PAD.top} width={band} height={plotH} fill="transparent">
                   <title>
                     {`${l} · ${upName}: ${valueFormatter(up[i] ?? 0)} · ${downName}: ${valueFormatter(down[i] ?? 0)} · Net: ${valueFormatter((up[i] ?? 0) - (down[i] ?? 0))}`}

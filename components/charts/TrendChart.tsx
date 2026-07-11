@@ -170,7 +170,14 @@ export default function TrendChart({
           );
           const href = links?.[i];
           return href ? (
-            <a key={l} href={href} aria-label={`View ${l}`}>
+            <a
+              key={l}
+              href={href}
+              aria-label={`View ${l}${series
+                .map((s) => `, ${s.name} ${valueFormatter(s.values[i] ?? 0)}`)
+                .join("")}`}
+              className="focus-visible:outline-2"
+            >
               {hit}
             </a>
           ) : (
