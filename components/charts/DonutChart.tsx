@@ -1,8 +1,11 @@
+import Link from "next/link";
 import { donutSegments, compactCurrency } from "@/lib/chart-utils";
 
 export interface DonutItem {
   label: string;
   amount: number;
+  /** When set, the slice and its legend row become links. */
+  href?: string;
 }
 
 /**
@@ -40,15 +43,29 @@ export default function DonutChart({
         role="img"
         aria-label={`${centerLabel} breakdown`}
       >
-        {segments.map((s) => (
-          <path key={s.item.label} d={s.path} fill={`var(--viz-${slotOf(s.item)})`}>
-            <title>
-              {`${s.item.label}: ${valueFormatter(s.item.amount)} (${Math.round(
-                (s.item.amount / total) * 100,
-              )}%)`}
-            </title>
-          </path>
-        ))}
+        {segments.map((s) => {
+          const slice = (
+            <path key={s.item.label} d={s.path} fill={`var(--viz-${slotOf(s.item)})`}>
+              <title>
+                {`${s.item.label}: ${valueFormatter(s.item.amount)} (${Math.round(
+                  (s.item.amount / total) * 100,
+                )}%)`}
+              </title>
+            </path>
+          );
+          return s.item.href ? (
+            <a
+              key={s.item.label}
+              href={s.item.href}
+              aria-label={`${s.item.label}: ${valueFormatter(s.item.amount)}`}
+              className="focus-visible:outline-2"
+            >
+              {slice}
+            </a>
+          ) : (
+            slice
+          );
+        })}
         <text
           x={C}
           y={C - 4}
@@ -65,26 +82,42 @@ export default function DonutChart({
       </svg>
 
       <ul className="w-full space-y-1.5 text-sm">
-        {items.map((item, i) => (
-          <li key={item.label} className="flex items-center gap-2">
-            <span
-              className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
-              style={{ background: `var(--viz-${i + 1})` }}
-            />
-            <span className="truncate" style={{ color: "var(--viz-ink-2)" }}>
-              {item.label}
-            </span>
-            <span
-              className="ml-auto tabular-nums font-medium"
-              style={{ color: "var(--viz-ink)" }}
-            >
-              {valueFormatter(item.amount)}
-            </span>
-            <span className="w-10 text-right tabular-nums text-xs" style={{ color: "var(--viz-muted)" }}>
-              {total > 0 ? `${Math.round((item.amount / total) * 100)}%` : ""}
-            </span>
-          </li>
-        ))}
+        {items.map((item, i) => {
+          const row = (
+            <>
+              <span
+                className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
+                style={{ background: `var(--viz-${i + 1})` }}
+              />
+              <span className="truncate" style={{ color: "var(--viz-ink-2)" }}>
+                {item.label}
+              </span>
+              <span
+                className="ml-auto tabular-nums font-medium"
+                style={{ color: "var(--viz-ink)" }}
+              >
+                {valueFormatter(item.amount)}
+              </span>
+              <span className="w-10 text-right tabular-nums text-xs" style={{ color: "var(--viz-muted)" }}>
+                {total > 0 ? `${Math.round((item.amount / total) * 100)}%` : ""}
+              </span>
+            </>
+          );
+          return (
+            <li key={item.label}>
+              {item.href ? (
+                <Link
+                  href={item.href}
+                  className="flex items-center gap-2 rounded-field p-1 -m-1 hover:bg-panel-hover focus-visible:outline-2"
+                >
+                  {row}
+                </Link>
+              ) : (
+                <span className="flex items-center gap-2 p-1 -m-1">{row}</span>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

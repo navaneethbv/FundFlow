@@ -27,6 +27,10 @@ interface PageProps {
     accountId?: string;
     month?: string;
     tab?: string;
+    itemId?: string;
+    category?: string;
+    sub?: string;
+    merchant?: string;
   }>;
 }
 
@@ -36,10 +40,11 @@ type PlaidItem = {
   status: string | null;
 };
 
-function tabUrl(tab: string, selectedAccountId?: string, selectedMonth?: string) {
+function tabUrl(tab: string, selectedAccountId?: string, selectedMonth?: string, itemId?: string) {
   const params = new URLSearchParams({ tab });
   if (selectedAccountId) params.set("accountId", selectedAccountId);
   if (selectedMonth) params.set("month", selectedMonth);
+  if (itemId) params.set("itemId", itemId);
   return `/dashboard?${params.toString()}`;
 }
 
@@ -85,10 +90,16 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const selectedItemId = params.itemId;
+  const drillOptions = {
+    itemId: selectedItemId,
+    drill: { category: params.category, sub: params.sub, merchant: params.merchant },
+  };
+
   const [data, { data: items }, goals] = await Promise.all([
     user
-      ? getCachedDashboardData(supabase, user.id, selectedAccountId, selectedMonth)
-      : getDashboardData(supabase, selectedAccountId, selectedMonth),
+      ? getCachedDashboardData(supabase, user.id, selectedAccountId, selectedMonth, drillOptions)
+      : getDashboardData(supabase, selectedAccountId, selectedMonth, undefined, drillOptions),
     supabase
       .from("plaid_items")
       .select("id, institution_name, status")
@@ -151,18 +162,20 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             selectedAccountId={selectedAccountId}
             selectedMonth={selectedMonth}
             activeTab={activeTab}
+            extraParams={{ itemId: selectedItemId, category: params.category, sub: params.sub, merchant: params.merchant }}
           />
           <MonthChips
             months={data.availableMonths}
             selectedMonth={data.selectedMonth}
             selectedAccountId={selectedAccountId}
             activeTab={activeTab}
+            extraParams={{ itemId: selectedItemId, category: params.category, sub: params.sub, merchant: params.merchant }}
           />
           <Tabs
             items={[
-              { label: "Overview", href: tabUrl("overview", selectedAccountId, selectedMonth), active: activeTab === "overview" },
-              { label: "Cards & Banks", href: tabUrl("breakdowns", selectedAccountId, selectedMonth), active: activeTab === "breakdowns" },
-              { label: "Cash Flow Insights", href: tabUrl("cashflow", selectedAccountId, selectedMonth), active: activeTab === "cashflow" },
+              { label: "Overview", href: tabUrl("overview", selectedAccountId, selectedMonth, selectedItemId), active: activeTab === "overview" },
+              { label: "Cards & Banks", href: tabUrl("breakdowns", selectedAccountId, selectedMonth, selectedItemId), active: activeTab === "breakdowns" },
+              { label: "Cash Flow Insights", href: tabUrl("cashflow", selectedAccountId, selectedMonth, selectedItemId), active: activeTab === "cashflow" },
             ]}
           />
           {activeTab === "overview" && (
@@ -173,10 +186,41 @@ export default async function DashboardPage({ searchParams }: PageProps) {
               recentTransactions={recentTransactions}
               accountNames={accountNames}
               goals={goals}
+              linkParams={{
+                tab: activeTab,
+                month: selectedMonth,
+                accountId: selectedAccountId,
+                itemId: selectedItemId,
+              }}
+              drillQuery={{
+                category: params.category,
+                sub: params.sub,
+                merchant: params.merchant,
+              }}
             />
           )}
-          {activeTab === "breakdowns" && <BreakdownsTab data={data} />}
-          {activeTab === "cashflow" && <CashflowTab data={data} />}
+          {activeTab === "breakdowns" && (
+            <BreakdownsTab
+              data={data}
+              linkParams={{
+                tab: activeTab,
+                month: selectedMonth,
+                accountId: selectedAccountId,
+                itemId: selectedItemId,
+              }}
+            />
+          )}
+          {activeTab === "cashflow" && (
+            <CashflowTab
+              data={data}
+              linkParams={{
+                tab: activeTab,
+                month: selectedMonth,
+                accountId: selectedAccountId,
+                itemId: selectedItemId,
+              }}
+            />
+          )}
         </>
       )}
     </AppShell>

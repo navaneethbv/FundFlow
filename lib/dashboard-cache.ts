@@ -46,16 +46,34 @@ export function createDashboardCache<T>(ttlMs: number) {
 const DASHBOARD_TTL_MS = 45_000;
 const dashboardCache = createDashboardCache<DashboardData>(DASHBOARD_TTL_MS);
 
+import type { DashboardOptions } from "@/lib/dashboard";
+
+export function dashboardScopeKey(
+  selectedAccountId?: string,
+  selectedMonth?: string,
+  options?: DashboardOptions,
+): string {
+  return [
+    selectedAccountId ?? "all",
+    selectedMonth ?? "default",
+    options?.itemId ?? "all",
+    options?.drill?.category ?? "-",
+    options?.drill?.sub ?? "-",
+    options?.drill?.merchant ?? "-",
+  ].join(":");
+}
+
 export async function getCachedDashboardData(
   supabase: SupabaseClient,
   userId: string,
   selectedAccountId?: string,
   selectedMonth?: string,
+  options?: DashboardOptions,
 ): Promise<DashboardData> {
-  const scope = `${selectedAccountId ?? "all"}:${selectedMonth ?? "default"}`;
+  const scope = dashboardScopeKey(selectedAccountId, selectedMonth, options);
   const cached = await dashboardCache.get(userId, scope);
   if (cached) return cached;
-  const data = await getDashboardData(supabase, selectedAccountId, selectedMonth, userId);
+  const data = await getDashboardData(supabase, selectedAccountId, selectedMonth, userId, options);
   await dashboardCache.set(userId, scope, data);
   return data;
 }

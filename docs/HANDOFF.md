@@ -2,11 +2,20 @@
 
 Last updated: 2026-07-08. Read this first to resume.
 
-## Latest session (2026-07-08, branch `feat/todos-roadmap`)
+## Latest session (2026-07-11, branch `feat/todos-roadmap`)
+
+Three-level dashboard drill-down and advanced ledger filters completed. All code-level gates green: `npm run build` ✓ · `npm run lint` ✓ (2 pre-existing warnings in an integration test) · `npm run test:unit` ✓ **231 tests**.
+
+- **Three-level drilldown:** dashboard `OverviewTab` category donut slices, merchant lists, and subscriptions link dynamically to in-place subcategory donut, top merchants, and 6-month trends, using search parameters (`/dashboard?category=X&sub=Y`).
+- **Interactive charts:** donut slices link to category drills, trend charts preserve drill filters when pivoting months, and diverging columns link back to dashboard views.
+- **Advanced ledger filters:** `/transactions` page supports exact parameters (`category`, `sub`, `merchant`, `flow`, `accountType`) with dynamic badge chips for easy removal.
+- **Data layer support:** added `buildCategoryDrilldown` and `buildMerchantDrilldown` helpers to fetch and aggregate history cleanly with zero new data, zero Plaid calls, and zero schema migrations.
+- **Verification:** 35 new unit tests added covering the drilldown calculations, panel rendering, and parameter wiring.
+
+## Previous session (2026-07-08)
 
 Security review of the branch + three roadmap partials finished. All code-level
-gates green: `npm run build` ✓ · `npm run lint` ✓ (2 pre-existing warnings in an
-integration test) · `npm run test:unit` ✓ **196 tests**.
+gates green: `npm run build` ✓ · `npm run lint` ✓ · `npm run test:unit` ✓.
 
 - **Security fix (HIGH):** `getGoals` was called with the RLS-bypassing service
   client in the notification cron with no `user_id` filter — a cross-user leak

@@ -13,6 +13,7 @@ import RefundReview from "@/components/transactions/RefundReview";
 import TransactionEditor from "@/components/transactions/TransactionEditor";
 import { formatCurrency, titleCase, formatMonth } from "@/lib/format";
 import { applyMerchantRules } from "@/lib/planning";
+import { filterRowsWithRules, hasRemapRules } from "@/lib/ledger-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,11 @@ interface PageProps {
     accountId?: string;
     q?: string;
     page?: string;
+    category?: string;
+    sub?: string;
+    merchant?: string;
+    flow?: string;
+    accountType?: string;
   }>;
 }
 
@@ -48,14 +54,49 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
   const q = sanitizeSearch(params.q ?? "");
   const page = Math.max(1, Number(params.page) || 1);
 
+  const CATEGORY_RE = /^[A-Z][A-Z0-9_]*$/;
+  const category = CATEGORY_RE.test(params.category ?? "") ? params.category! : "";
+  const sub = CATEGORY_RE.test(params.sub ?? "") ? params.sub! : "";
+  const merchant = sanitizeSearch(params.merchant ?? "");
+  const flow = params.flow === "in" || params.flow === "out" ? params.flow : "";
+  const accountType =
+    params.accountType === "depository" || params.accountType === "credit"
+      ? params.accountType
+      : "";
+
   const supabase = await createClient();
+
+  // Fetch accounts and rules first to allow type-based filtration.
+  const [{ data: accounts }, { data: merchantRules }] = await Promise.all([
+    supabase.from("accounts").select("id, name, mask, type").order("name"),
+    supabase.from("merchant_rules").select("match_type, pattern, display_name, category, enabled").order("created_at"),
+  ]);
+
+  const rulesList = (merchantRules ?? []).map((r) => ({
+    matchType: r.match_type as "merchant" | "keyword" | "account",
+    pattern: r.pattern,
+    displayName: r.display_name,
+    category: r.category,
+    enabled: r.enabled,
+  }));
+
+  // Account name without the mask, for rule matching — mirrors the dashboard so
+  // the ledger's rules-applied filter agrees with the drill it came from.
+  const accountNamesById = new Map(
+    (accounts ?? []).map((a) => [a.id as string, (a.name ?? "") as string]),
+  );
+
+  // Merchant rules recategorize/rename rows in-app, so a `category`/`merchant`
+  // filter can't be expressed in SQL once such rules exist. In that case fetch
+  // the rule-independent scope and filter on the rules-applied values instead.
+  const ruleAwareFilter = Boolean(category || merchant) && hasRemapRules(rulesList);
 
   // RLS scopes both queries to the signed-in user.
   let query = supabase
     .from("transactions")
     .select(
       "id, date, amount, iso_currency_code, merchant_name, name, pfc_primary, pending, account_id",
-      { count: "exact" },
+      ruleAwareFilter ? {} : { count: "exact" },
     )
     .order("date", { ascending: false })
     .order("id", { ascending: true });
@@ -74,13 +115,39 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
       `merchant_name.ilike.%${q}%,name.ilike.%${q}%,pfc_primary.ilike.%${catQ}%,pfc_detailed.ilike.%${catQ}%`,
     );
   }
+  if (sub) query = query.eq("pfc_detailed", sub);
+  if (flow === "in") query = query.lt("amount", 0);
+  if (flow === "out") query = query.gt("amount", 0);
+  if (accountType) {
+    const typedIds = (accounts ?? [])
+      .filter((a) => a.type === accountType)
+      .map((a) => a.id as string);
+    query = query.in("account_id", typedIds.length ? typedIds : ["-"]);
+  }
+  // category/merchant go through SQL only on the fast path; the rule-aware path
+  // filters them in-app below (over the rules-applied values).
+  if (!ruleAwareFilter) {
+    if (category) {
+      // Uncategorized rows store NULL, not the literal "UNCATEGORIZED" the
+      // dashboard drill uses as a sentinel — match both so the drill's ledger
+      // link isn't empty.
+      query =
+        category === "UNCATEGORIZED"
+          ? query.or("pfc_primary.is.null,pfc_primary.eq.UNCATEGORIZED")
+          : query.eq("pfc_primary", category);
+    }
+    if (merchant) {
+      query = query.or(`merchant_name.ilike.${merchant},name.ilike.${merchant}`);
+    }
+  }
 
   const offset = (page - 1) * PAGE_SIZE;
-  const [{ data: txns, count }, { data: accounts }, { data: merchantRules }] = await Promise.all([
-    query.range(offset, offset + PAGE_SIZE - 1),
-    supabase.from("accounts").select("id, name, mask").order("name"),
-    supabase.from("merchant_rules").select("match_type, pattern, display_name, category, enabled").order("created_at"),
-  ]);
+  // Drills always carry a month, so the rule-aware fetch stays small; the cap
+  // only bounds the rare unfiltered-by-month manual URL.
+  const RULE_AWARE_FETCH_CAP = 4000;
+  const pageResult = ruleAwareFilter
+    ? await query.limit(RULE_AWARE_FETCH_CAP)
+    : await query.range(offset, offset + PAGE_SIZE - 1);
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -89,8 +156,14 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
     (accounts ?? []).map((a) => [a.id as string, `${a.name ?? "Account"}${a.mask ? ` ••${a.mask}` : ""}`]),
   );
 
-  const rawRows = txns ?? [];
-  const total = count ?? rawRows.length;
+  const fetchedRows = pageResult.data ?? [];
+  let rawRows = fetchedRows;
+  let total = pageResult.count ?? fetchedRows.length;
+  if (ruleAwareFilter) {
+    const filtered = filterRowsWithRules(fetchedRows, rulesList, accountNamesById, { category, merchant });
+    total = filtered.length;
+    rawRows = filtered.slice(offset, offset + PAGE_SIZE);
+  }
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // User annotations (note/tags) and category splits for the visible rows. RLS
@@ -118,15 +191,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
     id: r.id,
     merchant: r.merchant_name ?? r.name ?? "",
     category: r.pfc_primary,
-    accountName: accountName.get(r.account_id) || "",
-  }));
-
-  const rulesList = (merchantRules ?? []).map((r) => ({
-    matchType: r.match_type as "merchant" | "keyword" | "account",
-    pattern: r.pattern,
-    displayName: r.display_name,
-    category: r.category,
-    enabled: r.enabled,
+    accountName: accountNamesById.get(r.account_id) || "",
   }));
 
   const appliedTxns = applyMerchantRules(cleanupTxns, rulesList);
@@ -154,6 +219,11 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
     if (month) parts.push(`month=${month}`);
     if (accountId) parts.push(`accountId=${accountId}`);
     if (params.q) parts.push(`q=${encodeURIComponent(params.q)}`);
+    if (category) parts.push(`category=${category}`);
+    if (sub) parts.push(`sub=${sub}`);
+    if (merchant) parts.push(`merchant=${encodeURIComponent(merchant)}`);
+    if (flow) parts.push(`flow=${flow}`);
+    if (accountType) parts.push(`accountType=${accountType}`);
     return `/transactions?${parts.join("&")}`;
   };
 
@@ -192,13 +262,44 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
               ))}
             </Select>
             <Button type="submit">Filters</Button>
-            {(month || accountId || params.q) && (
+            {(month || accountId || params.q || category || sub || merchant || flow || accountType) && (
               <ButtonLink href="/transactions" variant="ghost">
                 Clear
               </ButtonLink>
             )}
           </form>
         </Panel>
+
+        {(category || sub || merchant || flow || accountType) && (
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            {(
+              [
+                ["category", category ? titleCase(category) : ""],
+                ["sub", sub ? titleCase(sub) : ""],
+                ["merchant", merchant],
+                ["flow", flow === "in" ? "Money in" : flow === "out" ? "Money out" : ""],
+                ["accountType", accountType ? titleCase(accountType) : ""],
+              ] as const
+            )
+              .filter(([, label]) => label)
+              .map(([key, label]) => {
+                const remaining = new URLSearchParams();
+                if (month) remaining.set("month", month);
+                if (accountId) remaining.set("accountId", accountId);
+                if (params.q) remaining.set("q", params.q);
+                if (category && key !== "category") remaining.set("category", category);
+                if (sub && key !== "sub" && key !== "category") remaining.set("sub", sub);
+                if (merchant && key !== "merchant") remaining.set("merchant", merchant);
+                if (flow && key !== "flow") remaining.set("flow", flow);
+                if (accountType && key !== "accountType") remaining.set("accountType", accountType);
+                return (
+                  <ButtonLink key={key} href={`/transactions?${remaining.toString()}`} variant="ghost">
+                    {label} ×
+                  </ButtonLink>
+                );
+              })}
+          </div>
+        )}
 
         <p className="text-xs text-muted">
           {total.toLocaleString()} transaction{total === 1 ? "" : "s"}

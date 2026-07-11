@@ -56,6 +56,12 @@ and Settings read `profiles.weekly_report_enabled`.
 - ~~**Checking-account cash-flow insights**~~ Done — Cash Flow tab with a
   6-month diverging deposits/withdrawals chart.
 
+## Added 2026-07-11 (drill-down & ledger filters)
+
+- **Category & Merchant drilldown:** Interactive SVG category donut and merchant lists drill down in-place into subcategories, top merchants, and 6-month trends.
+- **Interactive month/column links:** Charts preserve drill down states when pivoting months.
+- **Exact ledger filters:** Ledger page supports filtering by `category`, `sub`, `merchant`, `flow`, and `accountType` with tag badges to clear filters.
+
 ## Added 2026-07-05 (charts / ledger / exports session)
 
 - Server-rendered SVG chart kit (`components/charts/`): trend lines, category

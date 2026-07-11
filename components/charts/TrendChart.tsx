@@ -16,10 +16,12 @@ export interface TrendSeries {
 export default function TrendChart({
   series,
   labels,
+  links,
   valueFormatter = compactCurrency,
 }: {
   series: TrendSeries[];
   labels: string[];
+  links?: (string | undefined)[];
   valueFormatter?: (v: number) => string;
 }) {
   const W = 560;
@@ -152,20 +154,36 @@ export default function TrendChart({
         })}
 
         {/* Generous invisible hit targets carrying native tooltips. */}
-        {labels.map((l, i) => (
-          <rect
-            key={l}
-            x={x(i) - plotW / labels.length / 2}
-            y={PAD.top}
-            width={plotW / labels.length}
-            height={plotH}
-            fill="transparent"
-          >
-            <title>
-              {`${l}${series.map((s) => ` · ${s.name}: ${valueFormatter(s.values[i] ?? 0)}`).join("")}`}
-            </title>
-          </rect>
-        ))}
+        {labels.map((l, i) => {
+          const hit = (
+            <rect
+              x={x(i) - plotW / labels.length / 2}
+              y={PAD.top}
+              width={plotW / labels.length}
+              height={plotH}
+              fill="transparent"
+            >
+              <title>
+                {`${l}${series.map((s) => ` · ${s.name}: ${valueFormatter(s.values[i] ?? 0)}`).join("")}`}
+              </title>
+            </rect>
+          );
+          const href = links?.[i];
+          return href ? (
+            <a
+              key={l}
+              href={href}
+              aria-label={`View ${l}${series
+                .map((s) => `, ${s.name} ${valueFormatter(s.values[i] ?? 0)}`)
+                .join("")}`}
+              className="focus-visible:outline-2"
+            >
+              {hit}
+            </a>
+          ) : (
+            <g key={l}>{hit}</g>
+          );
+        })}
       </svg>
 
       <details className="mt-1">

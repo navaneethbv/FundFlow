@@ -12,6 +12,16 @@ import {
 } from "@/lib/planning";
 import { buildRecurringStatuses } from "@/lib/planning-depth";
 import { aggregateSpendWithSplits } from "@/lib/transaction-quality";
+import {
+  buildCategoryDrilldown,
+  buildMerchantDrilldown,
+  normalizeDrillParams,
+  OTHER_CATEGORY_KEY,
+  type DrilldownData,
+  type DrillParams,
+  type DrillTxn,
+} from "@/lib/drilldown";
+
 
 /**
  * Aggregations for the dashboard. Runs with the caller's user-scoped Supabase
@@ -68,8 +78,8 @@ export interface DashboardData {
   syncIsStale: boolean;
   totalBudget: number;
   lastMonthProratedSpent: number;
-  spendPerCard: { name: string; amount: number }[];
-  spendPerBank: { name: string; amount: number }[];
+  spendPerCard: { name: string; amount: number; accountId: string }[];
+  spendPerBank: { name: string; amount: number; itemId: string | null }[];
   cashFlow: { deposits: number; withdrawals: number; net: number };
   budgetEnvelopes: BudgetEnvelope[];
   cashFlowForecast: CashFlowForecast;
@@ -78,6 +88,13 @@ export interface DashboardData {
   netWorthSnapshot: { assets: number; liabilities: number; netWorth: number };
   netWorthHistory: { month: string; assets: number; liabilities: number; netWorth: number }[];
   recurringStatuses: ReturnType<typeof buildRecurringStatuses>;
+  drilldown?: DrilldownData;
+  /**
+   * Lower-cased merchant names present in the 6-month window's spend. A merchant
+   * drill only resolves for these, so the UI can avoid rendering a dead link
+   * (e.g. a recurring stream whose name matches no transaction).
+   */
+  drillableMerchants: string[];
 }
 
 interface TxnLite {
@@ -87,6 +104,7 @@ interface TxnLite {
   merchant_name: string | null;
   name: string | null;
   pfc_primary: string | null;
+  pfc_detailed: string | null;
   account_id: string;
 }
 
@@ -143,11 +161,17 @@ function monthDate(month: string, day: number): string {
   return `${month}-${String(Math.min(day, daysInMonth)).padStart(2, "0")}`;
 }
 
+export interface DashboardOptions {
+  itemId?: string;
+  drill?: DrillParams;
+}
+
 export async function getDashboardData(
   supabase: SupabaseClient,
   selectedAccountId?: string,
   selectedMonth?: string,
   userId?: string,
+  options?: DashboardOptions,
 ): Promise<DashboardData> {
   const now = new Date();
   const currentMonth = monthKey(now.toISOString().slice(0, 10));
@@ -251,7 +275,7 @@ export async function getDashboardData(
   const { data: txns } = await scopeUser(
     supabase
       .from("transactions")
-      .select("id, date, amount, merchant_name, name, pfc_primary, account_id")
+      .select("id, date, amount, merchant_name, name, pfc_primary, pfc_detailed, account_id")
       .gte("date", windowStart)
       .lt("date", windowEndExclusive),
   );
@@ -289,10 +313,19 @@ export async function getDashboardData(
     };
   });
 
-  // Filter transactions by selected account if specified
-  const filteredTxns = selectedAccountId
-    ? allTxnsRaw.filter((t) => t.account_id === selectedAccountId)
-    : allTxnsRaw;
+  // Filter transactions by selected account and/or bank (plaid item)
+  const itemAccountIds = options?.itemId
+    ? new Set(
+        allAccounts
+          .filter((a) => a.plaid_item_id === options.itemId)
+          .map((a) => a.id),
+      )
+    : null;
+  const filteredTxns = allTxnsRaw.filter(
+    (t) =>
+      (!selectedAccountId || t.account_id === selectedAccountId) &&
+      (!itemAccountIds || itemAccountIds.has(t.account_id)),
+  );
 
   // Linked refund pairs net out of spend/income aggregation: a fully-refunded
   // purchase is neither spend nor income, so both the charge and its refund are
@@ -410,6 +443,62 @@ export async function getDashboardData(
     splits,
   );
 
+  // Window spend transactions (rules-applied) shared by the drill aggregation
+  // and the drillable-merchant set below.
+  const windowSpendTxns: DrillTxn[] = spendTxns.filter(isSpending).map((t) => ({
+    id: t.id,
+    date: t.date,
+    amount: t.amount,
+    merchant: t.merchant_name ?? t.name ?? "Unknown",
+    category: t.pfc_primary,
+    subcategory: t.pfc_detailed,
+  }));
+  const windowSpendMerchants = new Set<string>();
+  for (const t of windowSpendTxns) {
+    windowSpendMerchants.add(t.merchant.trim().toLowerCase());
+  }
+
+  // Drill-down: pure aggregation over the same window txns the donut uses.
+  // Params are validated against values present in the data - unknown values
+  // simply render the un-drilled dashboard.
+  let drilldown: DrilldownData | undefined;
+  if (options?.drill && (options.drill.category || options.drill.merchant)) {
+    const knownCategories = new Set<string>();
+    const knownSubcategories = new Set<string>();
+    for (const t of windowSpendTxns) {
+      knownCategories.add(t.category ?? "UNCATEGORIZED");
+      knownSubcategories.add(t.subcategory ?? "UNCATEGORIZED");
+    }
+    const knownMerchants = windowSpendMerchants;
+    for (const s of splits) knownCategories.add(s.category);
+    const drill = normalizeDrillParams(options.drill, {
+      categories: knownCategories,
+      subcategories: knownSubcategories,
+      merchants: knownMerchants,
+    });
+    const windowMonths = monthlySpending.map((m) => m.month);
+    if (drill.category && drill.category !== OTHER_CATEGORY_KEY) {
+      drilldown = buildCategoryDrilldown({
+        txns: windowSpendTxns,
+        splits: splits.map((s) => ({
+          transactionId: s.transactionId,
+          category: s.category,
+          amount: s.amount,
+        })),
+        category: drill.category,
+        sub: drill.sub ?? null,
+        months: windowMonths,
+        activeMonth,
+      });
+    } else if (drill.merchant) {
+      drilldown = buildMerchantDrilldown({
+        txns: windowSpendTxns,
+        merchant: drill.merchant,
+        months: windowMonths,
+      });
+    }
+  }
+
   const merchantBreakdown = [...merchantMap.entries()]
     .map(([merchant, amount]) => ({ merchant, amount: round2(amount) }))
     .sort((a, b) => b.amount - a.amount)
@@ -435,7 +524,6 @@ export async function getDashboardData(
     }
   }
 
-  // 3. Spend Per Card calculation for the active month
   const cardSpendMap = new Map<string, number>();
   for (const t of spendTxns) {
     if (monthKey(t.date) !== activeMonth || !isSpending(t)) continue;
@@ -445,7 +533,7 @@ export async function getDashboardData(
     .map(([acctId, amount]) => {
       const acct = allAccounts.find((a) => a.id === acctId);
       const displayName = acct ? `${acct.name ?? "Account"}${acct.mask ? ` ••${acct.mask}` : ""}` : "Unknown Account";
-      return { name: displayName, amount: round2(amount) };
+      return { name: displayName, amount: round2(amount), accountId: acctId };
     })
     .sort((a, b) => b.amount - a.amount);
 
@@ -454,13 +542,17 @@ export async function getDashboardData(
   for (const t of spendTxns) {
     if (monthKey(t.date) !== activeMonth || !isSpending(t)) continue;
     const acct = allAccounts.find((a) => a.id === t.account_id);
-    const bankName = acct
-      ? (allItems.find((i) => i.id === acct.plaid_item_id)?.institution_name ?? "Other Bank")
-      : "Unknown Bank";
-    bankSpendMap.set(bankName, (bankSpendMap.get(bankName) ?? 0) + t.amount);
+    const bankItemId = acct?.plaid_item_id ?? null;
+    bankSpendMap.set(bankItemId ?? "", (bankSpendMap.get(bankItemId ?? "") ?? 0) + t.amount);
   }
   const spendPerBank = [...bankSpendMap.entries()]
-    .map(([name, amount]) => ({ name, amount: round2(amount) }))
+    .map(([itemKey, amount]) => ({
+      name: itemKey
+        ? (allItems.find((i) => i.id === itemKey)?.institution_name ?? "Other Bank")
+        : "Unknown Bank",
+      amount: round2(amount),
+      itemId: itemKey || null,
+    }))
     .sort((a, b) => b.amount - a.amount);
 
   // 5. Checking account cash flow aggregates for the active month
@@ -684,5 +776,7 @@ export async function getDashboardData(
     netWorthSnapshot,
     netWorthHistory,
     recurringStatuses,
+    drilldown,
+    drillableMerchants: [...windowSpendMerchants],
   };
 }
