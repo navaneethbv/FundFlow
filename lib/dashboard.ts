@@ -89,6 +89,12 @@ export interface DashboardData {
   netWorthHistory: { month: string; assets: number; liabilities: number; netWorth: number }[];
   recurringStatuses: ReturnType<typeof buildRecurringStatuses>;
   drilldown?: DrilldownData;
+  /**
+   * Lower-cased merchant names present in the 6-month window's spend. A merchant
+   * drill only resolves for these, so the UI can avoid rendering a dead link
+   * (e.g. a recurring stream whose name matches no transaction).
+   */
+  drillableMerchants: string[];
 }
 
 interface TxnLite {
@@ -437,27 +443,33 @@ export async function getDashboardData(
     splits,
   );
 
+  // Window spend transactions (rules-applied) shared by the drill aggregation
+  // and the drillable-merchant set below.
+  const windowSpendTxns: DrillTxn[] = spendTxns.filter(isSpending).map((t) => ({
+    id: t.id,
+    date: t.date,
+    amount: t.amount,
+    merchant: t.merchant_name ?? t.name ?? "Unknown",
+    category: t.pfc_primary,
+    subcategory: t.pfc_detailed,
+  }));
+  const windowSpendMerchants = new Set<string>();
+  for (const t of windowSpendTxns) {
+    windowSpendMerchants.add(t.merchant.trim().toLowerCase());
+  }
+
   // Drill-down: pure aggregation over the same window txns the donut uses.
   // Params are validated against values present in the data - unknown values
   // simply render the un-drilled dashboard.
   let drilldown: DrilldownData | undefined;
   if (options?.drill && (options.drill.category || options.drill.merchant)) {
-    const windowSpendTxns: DrillTxn[] = spendTxns.filter(isSpending).map((t) => ({
-      id: t.id,
-      date: t.date,
-      amount: t.amount,
-      merchant: t.merchant_name ?? t.name ?? "Unknown",
-      category: t.pfc_primary,
-      subcategory: t.pfc_detailed,
-    }));
     const knownCategories = new Set<string>();
     const knownSubcategories = new Set<string>();
-    const knownMerchants = new Set<string>();
     for (const t of windowSpendTxns) {
       knownCategories.add(t.category ?? "UNCATEGORIZED");
       knownSubcategories.add(t.subcategory ?? "UNCATEGORIZED");
-      knownMerchants.add(t.merchant.trim().toLowerCase());
     }
+    const knownMerchants = windowSpendMerchants;
     for (const s of splits) knownCategories.add(s.category);
     const drill = normalizeDrillParams(options.drill, {
       categories: knownCategories,
@@ -765,5 +777,6 @@ export async function getDashboardData(
     netWorthHistory,
     recurringStatuses,
     drilldown,
+    drillableMerchants: [...windowSpendMerchants],
   };
 }

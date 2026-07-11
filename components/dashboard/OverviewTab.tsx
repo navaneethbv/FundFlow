@@ -62,6 +62,7 @@ export default function OverviewTab({
   );
   const showAllCategories = drillQuery.category === OTHER_CATEGORY_KEY;
   const maxCategory = Math.max(1, ...data.categoryBreakdown.map((c) => c.amount));
+  const drillableMerchants = new Set(data.drillableMerchants);
 
   return (
     <div className="space-y-6">
@@ -134,19 +135,37 @@ export default function OverviewTab({
         </Panel>
         <Panel title="Recurring streams" eyebrow="Subscriptions and income">
           <div className="space-y-3">
-            {data.subscriptions.slice(0, 5).map((stream) => (
-              <Link
-                key={`${stream.merchant}-${stream.amount}`}
-                href={dashboardUrl({ ...linkParams, merchant: stream.merchant })}
-                className="flex items-center justify-between gap-4 rounded-field p-2 hover:bg-panel-hover"
-              >
-                <span>
-                  <span className="block text-sm font-semibold">{stream.merchant}</span>
-                  <span className="block text-xs text-muted">{stream.frequency ?? "Recurring"}</span>
-                </span>
-                <span className="tabular-nums text-sm font-bold">{formatCurrency(stream.amount)}</span>
-              </Link>
-            ))}
+            {data.subscriptions.slice(0, 5).map((stream) => {
+              // Only link streams whose merchant actually appears in the
+              // window's spend — otherwise the drill can't resolve and the
+              // click is a dead no-op.
+              const drillable = drillableMerchants.has(stream.merchant.trim().toLowerCase());
+              const inner = (
+                <>
+                  <span>
+                    <span className="block text-sm font-semibold">{stream.merchant}</span>
+                    <span className="block text-xs text-muted">{stream.frequency ?? "Recurring"}</span>
+                  </span>
+                  <span className="tabular-nums text-sm font-bold">{formatCurrency(stream.amount)}</span>
+                </>
+              );
+              return drillable ? (
+                <Link
+                  key={`${stream.merchant}-${stream.amount}`}
+                  href={dashboardUrl({ ...linkParams, merchant: stream.merchant })}
+                  className="flex items-center justify-between gap-4 rounded-field p-2 hover:bg-panel-hover focus-visible:outline-2"
+                >
+                  {inner}
+                </Link>
+              ) : (
+                <div
+                  key={`${stream.merchant}-${stream.amount}`}
+                  className="flex items-center justify-between gap-4 rounded-field p-2"
+                >
+                  {inner}
+                </div>
+              );
+            })}
             {data.subscriptions.length === 0 && <p className="py-4 text-sm text-muted">No recurring streams yet.</p>}
           </div>
         </Panel>

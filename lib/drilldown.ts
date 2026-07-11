@@ -54,11 +54,15 @@ export function normalizeDrillParams(
   if (raw.category === OTHER_CATEGORY_KEY) return { category: OTHER_CATEGORY_KEY };
   if (raw.category && (known.categories.has(raw.category) || raw.category === UNCATEGORIZED_KEY)) {
     const out: DrillParams = { category: raw.category };
+    // A sub must belong to the drilled category. The sentinels apply to any
+    // category; a real pfc_detailed must exist in the data AND be prefixed by
+    // its primary (Plaid's taxonomy invariant, same one subcategoryLabel uses)
+    // so a sub from a different category can't be pinned onto this one.
     if (
       raw.sub &&
-      (known.subcategories.has(raw.sub) ||
-        raw.sub === MANUAL_SPLIT_KEY ||
-        raw.sub === UNCATEGORIZED_KEY)
+      (raw.sub === MANUAL_SPLIT_KEY ||
+        raw.sub === UNCATEGORIZED_KEY ||
+        (known.subcategories.has(raw.sub) && raw.sub.startsWith(`${raw.category}_`)))
     ) {
       out.sub = raw.sub;
     }

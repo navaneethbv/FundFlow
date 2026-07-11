@@ -13,6 +13,7 @@ import RefundReview from "@/components/transactions/RefundReview";
 import TransactionEditor from "@/components/transactions/TransactionEditor";
 import { formatCurrency, titleCase, formatMonth } from "@/lib/format";
 import { applyMerchantRules } from "@/lib/planning";
+import { filterRowsWithRules, hasRemapRules } from "@/lib/ledger-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -71,12 +72,31 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
     supabase.from("merchant_rules").select("match_type, pattern, display_name, category, enabled").order("created_at"),
   ]);
 
+  const rulesList = (merchantRules ?? []).map((r) => ({
+    matchType: r.match_type as "merchant" | "keyword" | "account",
+    pattern: r.pattern,
+    displayName: r.display_name,
+    category: r.category,
+    enabled: r.enabled,
+  }));
+
+  // Account name without the mask, for rule matching — mirrors the dashboard so
+  // the ledger's rules-applied filter agrees with the drill it came from.
+  const accountNamesById = new Map(
+    (accounts ?? []).map((a) => [a.id as string, (a.name ?? "") as string]),
+  );
+
+  // Merchant rules recategorize/rename rows in-app, so a `category`/`merchant`
+  // filter can't be expressed in SQL once such rules exist. In that case fetch
+  // the rule-independent scope and filter on the rules-applied values instead.
+  const ruleAwareFilter = Boolean(category || merchant) && hasRemapRules(rulesList);
+
   // RLS scopes both queries to the signed-in user.
   let query = supabase
     .from("transactions")
     .select(
       "id, date, amount, iso_currency_code, merchant_name, name, pfc_primary, pending, account_id",
-      { count: "exact" },
+      ruleAwareFilter ? {} : { count: "exact" },
     )
     .order("date", { ascending: false })
     .order("id", { ascending: true });
@@ -95,19 +115,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
       `merchant_name.ilike.%${q}%,name.ilike.%${q}%,pfc_primary.ilike.%${catQ}%,pfc_detailed.ilike.%${catQ}%`,
     );
   }
-  if (category) {
-    // Uncategorized rows store NULL, not the literal "UNCATEGORIZED" the
-    // dashboard drill uses as a sentinel — match both so the drill's ledger
-    // link isn't empty.
-    query =
-      category === "UNCATEGORIZED"
-        ? query.or("pfc_primary.is.null,pfc_primary.eq.UNCATEGORIZED")
-        : query.eq("pfc_primary", category);
-  }
   if (sub) query = query.eq("pfc_detailed", sub);
-  if (merchant) {
-    query = query.or(`merchant_name.ilike.${merchant},name.ilike.${merchant}`);
-  }
   if (flow === "in") query = query.lt("amount", 0);
   if (flow === "out") query = query.gt("amount", 0);
   if (accountType) {
@@ -116,9 +124,30 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
       .map((a) => a.id as string);
     query = query.in("account_id", typedIds.length ? typedIds : ["-"]);
   }
+  // category/merchant go through SQL only on the fast path; the rule-aware path
+  // filters them in-app below (over the rules-applied values).
+  if (!ruleAwareFilter) {
+    if (category) {
+      // Uncategorized rows store NULL, not the literal "UNCATEGORIZED" the
+      // dashboard drill uses as a sentinel — match both so the drill's ledger
+      // link isn't empty.
+      query =
+        category === "UNCATEGORIZED"
+          ? query.or("pfc_primary.is.null,pfc_primary.eq.UNCATEGORIZED")
+          : query.eq("pfc_primary", category);
+    }
+    if (merchant) {
+      query = query.or(`merchant_name.ilike.${merchant},name.ilike.${merchant}`);
+    }
+  }
 
   const offset = (page - 1) * PAGE_SIZE;
-  const { data: txns, count } = await query.range(offset, offset + PAGE_SIZE - 1);
+  // Drills always carry a month, so the rule-aware fetch stays small; the cap
+  // only bounds the rare unfiltered-by-month manual URL.
+  const RULE_AWARE_FETCH_CAP = 4000;
+  const pageResult = ruleAwareFilter
+    ? await query.limit(RULE_AWARE_FETCH_CAP)
+    : await query.range(offset, offset + PAGE_SIZE - 1);
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -127,8 +156,14 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
     (accounts ?? []).map((a) => [a.id as string, `${a.name ?? "Account"}${a.mask ? ` ••${a.mask}` : ""}`]),
   );
 
-  const rawRows = txns ?? [];
-  const total = count ?? rawRows.length;
+  const fetchedRows = pageResult.data ?? [];
+  let rawRows = fetchedRows;
+  let total = pageResult.count ?? fetchedRows.length;
+  if (ruleAwareFilter) {
+    const filtered = filterRowsWithRules(fetchedRows, rulesList, accountNamesById, { category, merchant });
+    total = filtered.length;
+    rawRows = filtered.slice(offset, offset + PAGE_SIZE);
+  }
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // User annotations (note/tags) and category splits for the visible rows. RLS
@@ -156,15 +191,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
     id: r.id,
     merchant: r.merchant_name ?? r.name ?? "",
     category: r.pfc_primary,
-    accountName: accountName.get(r.account_id) || "",
-  }));
-
-  const rulesList = (merchantRules ?? []).map((r) => ({
-    matchType: r.match_type as "merchant" | "keyword" | "account",
-    pattern: r.pattern,
-    displayName: r.display_name,
-    category: r.category,
-    enabled: r.enabled,
+    accountName: accountNamesById.get(r.account_id) || "",
   }));
 
   const appliedTxns = applyMerchantRules(cleanupTxns, rulesList);

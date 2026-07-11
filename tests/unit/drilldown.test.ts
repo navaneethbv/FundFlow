@@ -66,6 +66,15 @@ describe("normalizeDrillParams", () => {
     ).toEqual({ category: "FOOD_AND_DRINK", sub: MANUAL_SPLIT_KEY });
   });
 
+  it("drops a known sub that belongs to a different category (keeps the category)", () => {
+    expect(
+      normalizeDrillParams(
+        { category: "RENT_AND_UTILITIES", sub: "FOOD_AND_DRINK_COFFEE" },
+        known,
+      ),
+    ).toEqual({ category: "RENT_AND_UTILITIES" });
+  });
+
   it("rejects an unknown category entirely (sub dropped too)", () => {
     expect(normalizeDrillParams({ category: "EVIL", sub: "X" }, known)).toEqual({});
   });
