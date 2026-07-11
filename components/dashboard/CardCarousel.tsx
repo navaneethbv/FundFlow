@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { AccountSummary } from "@/lib/dashboard";
 import { detectCardDesign } from "@/lib/card-design";
+import { detectCardImage } from "@/lib/card-image";
 import { formatCurrency, titleCase } from "@/lib/format";
 import CardNetworkLogo from "@/components/dashboard/CardNetworkLogo";
 import { cn } from "@/lib/cn";
@@ -48,6 +49,7 @@ export default function CardCarousel({
       <div className="-mx-4 flex touch-pan-x snap-x gap-4 overflow-x-auto px-4 pb-2 scrollbar-none sm:mx-0 sm:px-0">
         {accounts.map((account) => {
           const design = detectCardDesign(account.name, account.official_name, account.type, account.subtype);
+          const image = detectCardImage(account.name, account.official_name);
           const selected = selectedAccountId === account.id;
           return (
             <Link
@@ -59,11 +61,25 @@ export default function CardCarousel({
                 className={cn(
                   "relative flex h-[170px] w-[292px] flex-col justify-between overflow-hidden rounded-card border bg-gradient-to-br p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-float",
                   design.bgGradient,
-                  design.textColor,
-                  selected ? "border-accent ring-2 ring-accent/45" : design.borderColor,
+                  image ? "text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.55)]" : design.textColor,
+                  selected ? "border-accent ring-2 ring-accent/45" : image ? "border-white/10" : design.borderColor,
                 )}
               >
-                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(255,255,255,0.18),transparent_12rem)]" />
+                {image ? (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={image}
+                      alt=""
+                      aria-hidden
+                      draggable={false}
+                      className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+                    />
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-black/45" />
+                  </>
+                ) : (
+                  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(255,255,255,0.18),transparent_12rem)]" />
+                )}
                 <div className="relative flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <p className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-70">
