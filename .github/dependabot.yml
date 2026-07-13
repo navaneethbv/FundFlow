@@ -5,6 +5,25 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    ignore:
+      # TypeScript 7 is the native (Go) port. Its root export exposes only
+      # { version, versionMajorMinor }; the compiler API moved to the
+      # explicitly-unstable "typescript/unstable/*" subpaths. Nothing in our
+      # toolchain can consume that yet: typescript-eslint 8.63.0 peers on
+      # ">=4.8.4 <6.1.0" and crashes on ts.Extension being undefined, and
+      # next build fails to detect TypeScript at all. Drop this ignore once
+      # typescript-eslint and Next.js ship TS 7 support.
+      - dependency-name: "typescript"
+        versions: ["7.x"]
+      # ESLint 10 removed the deprecated context.getFilename(). eslint-plugin-react
+      # 7.37.5 (its latest) still calls it in lib/util/version.js and peers on
+      # eslint "<=^9.7", so `npm run lint` dies with "Error while loading rule
+      # 'react/display-name': contextOrFilename.getFilename is not a function".
+      # The plugin is vendored by eslint-config-next 16.2.10, whose own
+      # eslint ">=9.0.0" peer range is too loose to catch this. Drop this ignore
+      # once eslint-plugin-react ships ESLint 10 support.
+      - dependency-name: "eslint"
+        versions: ["10.x"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
