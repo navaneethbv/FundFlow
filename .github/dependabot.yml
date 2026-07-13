@@ -5,6 +5,16 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    ignore:
+      # TypeScript 7 is the native (Go) port. Its root export exposes only
+      # { version, versionMajorMinor }; the compiler API moved to the
+      # explicitly-unstable "typescript/unstable/*" subpaths. Nothing in our
+      # toolchain can consume that yet: typescript-eslint 8.63.0 peers on
+      # ">=4.8.4 <6.1.0" and crashes on ts.Extension being undefined, and
+      # next build fails to detect TypeScript at all. Drop this ignore once
+      # typescript-eslint and Next.js ship TS 7 support.
+      - dependency-name: "typescript"
+        versions: ["7.x"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
