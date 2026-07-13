@@ -1,34 +1,49 @@
+import Link from "next/link";
 import type { DashboardData } from "@/lib/dashboard";
+import { dashboardUrl } from "@/lib/drilldown";
 import { formatCurrency, formatMonth, titleCase } from "@/lib/format";
 import DivergingColumns from "@/components/charts/DivergingColumns";
 import TrendChart from "@/components/charts/TrendChart";
 import BarList from "@/components/dashboard/BarList";
 import CardCarousel from "@/components/dashboard/CardCarousel";
+import type { DrillLinkParams } from "@/components/dashboard/CategoryDrilldownPanel";
 import Panel from "@/components/ui/Panel";
 
 function MetricPanel({
   title,
   value,
   tone,
+  href,
 }: {
   title: string;
   value: number;
   tone?: "success" | "danger";
+  href?: string;
 }) {
+  const valueNode = (
+    <p
+      className={
+        tone === "success"
+          ? "metric-value text-2xl text-success"
+          : tone === "danger"
+            ? "metric-value text-2xl text-danger"
+            : "metric-value text-2xl"
+      }
+    >
+      {value > 0 && title === "Net cash flow" ? "+" : ""}
+      {formatCurrency(value)}
+    </p>
+  );
+
   return (
     <Panel title={title}>
-      <p
-        className={
-          tone === "success"
-            ? "metric-value text-2xl text-success"
-            : tone === "danger"
-              ? "metric-value text-2xl text-danger"
-              : "metric-value text-2xl"
-        }
-      >
-        {value > 0 && title === "Net cash flow" ? "+" : ""}
-        {formatCurrency(value)}
-      </p>
+      {href ? (
+        <Link href={href} className="block rounded-field hover:bg-panel-hover">
+          {valueNode}
+        </Link>
+      ) : (
+        valueNode
+      )}
     </Panel>
   );
 }
@@ -37,18 +52,26 @@ export default function WealthView({
   data,
   selectedAccountId,
   selectedMonth,
+  linkParams,
+  extraParams,
 }: {
   data: DashboardData;
   selectedAccountId?: string;
   selectedMonth?: string;
+  linkParams: DrillLinkParams;
+  extraParams?: Record<string, string | undefined>;
 }) {
   const cardItems = data.spendPerCard.map((item) => ({
     label: item.name,
     amount: item.amount,
+    href: dashboardUrl({ ...linkParams, accountId: item.accountId }),
   }));
   const bankItems = data.spendPerBank.map((item) => ({
     label: item.name,
     amount: item.amount,
+    href: item.itemId
+      ? dashboardUrl({ ...linkParams, itemId: item.itemId })
+      : undefined,
   }));
   const maxCard = Math.max(1, ...cardItems.map((item) => item.amount));
   const maxBank = Math.max(1, ...bankItems.map((item) => item.amount));
@@ -114,6 +137,7 @@ export default function WealthView({
         selectedAccountId={selectedAccountId}
         selectedMonth={selectedMonth}
         activeView="wealth"
+        extraParams={extraParams}
       />
 
       {(cardItems.length > 0 || bankItems.length > 0) && (
@@ -136,11 +160,13 @@ export default function WealthView({
           title="Deposits"
           value={data.cashFlow.deposits}
           tone="success"
+          href={`/transactions?month=${data.selectedMonth}&flow=in&accountType=depository`}
         />
         <MetricPanel
           title="Withdrawals"
           value={data.cashFlow.withdrawals}
           tone="danger"
+          href={`/transactions?month=${data.selectedMonth}&flow=out&accountType=depository`}
         />
         <MetricPanel
           title="Net cash flow"
@@ -152,6 +178,9 @@ export default function WealthView({
       <Panel title="Cash flow history" eyebrow="Six-month movement">
         <DivergingColumns
           labels={data.monthlyCashFlow.map((month) => formatMonth(month.month))}
+          links={data.monthlyCashFlow.map((month) =>
+            dashboardUrl({ ...linkParams, month: month.month })
+          )}
           up={data.monthlyCashFlow.map((month) => month.deposits)}
           down={data.monthlyCashFlow.map((month) => month.withdrawals)}
           upName="Deposits"

@@ -30,7 +30,7 @@ describe("goals feature", () => {
   });
 
   it("surfaces goals on the dashboard overview", () => {
-    expect(readFileSync("components/dashboard/OverviewTab.tsx", "utf8")).toContain("GoalsSummary");
+    expect(readFileSync("components/dashboard/PlanView.tsx", "utf8")).toContain("GoalsSummary");
   });
 
   it("supports editing goals with rollback-aware actions", () => {

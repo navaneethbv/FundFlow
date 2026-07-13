@@ -9,6 +9,7 @@ export type PriorityInput = {
   isStale: boolean;
   lastSyncAgoMinutes: number | null;
   lowBalanceRisk: boolean;
+  budgetCount: number;
   budgetRiskCount: number;
   anomalyCount: number;
 };
@@ -24,6 +25,7 @@ export function buildPrioritySignals({
   isStale,
   lastSyncAgoMinutes,
   lowBalanceRisk,
+  budgetCount,
   budgetRiskCount,
   anomalyCount,
 }: PriorityInput): PrioritySignal[] {
@@ -44,7 +46,13 @@ export function buildPrioritySignals({
     lowBalanceRisk
       ? { label: "Low balance risk ahead", tone: "danger" }
       : { label: "Cash outlook stable", tone: "neutral" },
-    budgetRiskCount > 0
+    budgetCount === 0
+      ? {
+          label: "Budgets not set",
+          tone: "neutral",
+          href: "/settings#budgets",
+        }
+      : budgetRiskCount > 0
       ? {
           label: `${budgetRiskCount} budget${budgetRiskCount === 1 ? "" : "s"} need attention`,
           tone: "warning",
@@ -76,7 +84,7 @@ export default function PriorityRail(props: PriorityInput) {
       aria-label="Financial status"
       className="overflow-hidden rounded-card border border-panel-border bg-panel"
     >
-      <div className="flex divide-x divide-panel-border overflow-x-auto scrollbar-none">
+      <div className="grid grid-cols-1 gap-px bg-panel-border sm:grid-cols-2 xl:grid-cols-5">
         {signals.map((signal) => {
           const content = (
             <>
@@ -84,7 +92,7 @@ export default function PriorityRail(props: PriorityInput) {
                 aria-hidden
                 className={cn("h-2 w-2 shrink-0 rounded-full", toneClasses[signal.tone])}
               />
-              <span className="whitespace-nowrap">{signal.label}</span>
+              <span>{signal.label}</span>
             </>
           );
 
@@ -92,14 +100,14 @@ export default function PriorityRail(props: PriorityInput) {
             <Link
               key={signal.label}
               href={signal.href}
-              className="flex min-h-11 flex-1 items-center gap-2 px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-panel-hover focus-visible:outline-2"
+              className="flex min-h-11 items-center gap-2 bg-panel px-3 py-2 text-xs font-semibold leading-4 text-foreground transition-colors hover:bg-panel-hover focus-visible:outline-2"
             >
               {content}
             </Link>
           ) : (
             <div
               key={signal.label}
-              className="flex min-h-11 flex-1 items-center gap-2 px-3 py-2 text-xs font-medium text-muted"
+              className="flex min-h-11 items-center gap-2 bg-panel px-3 py-2 text-xs font-medium leading-4 text-muted"
             >
               {content}
             </div>

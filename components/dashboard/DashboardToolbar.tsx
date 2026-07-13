@@ -11,6 +11,17 @@ import {
   type DashboardView,
 } from "@/components/dashboard/dashboard-view";
 
+function withExtraParams(
+  href: string,
+  extraParams?: Record<string, string | undefined>,
+) {
+  const params = new URLSearchParams(href.split("?")[1]);
+  for (const [key, value] of Object.entries(extraParams ?? {})) {
+    if (value) params.set(key, value);
+  }
+  return `/dashboard?${params.toString()}`;
+}
+
 export default function DashboardToolbar({
   accounts,
   months,
@@ -20,6 +31,7 @@ export default function DashboardToolbar({
   hasBanks,
   itemCount,
   lastSyncAgoMinutes,
+  extraParams,
 }: {
   accounts: AccountSummary[];
   months: string[];
@@ -29,6 +41,7 @@ export default function DashboardToolbar({
   hasBanks: boolean;
   itemCount: number;
   lastSyncAgoMinutes: number | null;
+  extraParams?: Record<string, string | undefined>;
 }) {
   return (
     <section className="space-y-3 rounded-card border border-panel-border bg-panel p-3 sm:p-4">
@@ -57,7 +70,10 @@ export default function DashboardToolbar({
             className="flex max-w-full gap-1.5 overflow-x-auto scrollbar-none"
           >
             <Link
-              href={dashboardHref({ view: activeView, month: selectedMonth })}
+              href={withExtraParams(
+                dashboardHref({ view: activeView, month: selectedMonth }),
+                extraParams,
+              )}
               aria-current={selectedAccountId ? undefined : "page"}
               className={cn(
                 "shrink-0 rounded-field border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2",
@@ -73,11 +89,14 @@ export default function DashboardToolbar({
               return (
                 <Link
                   key={account.id}
-                  href={dashboardHref({
-                    view: activeView,
-                    accountId: active ? undefined : account.id,
-                    month: selectedMonth,
-                  })}
+                  href={withExtraParams(
+                    dashboardHref({
+                      view: activeView,
+                      accountId: active ? undefined : account.id,
+                      month: selectedMonth,
+                    }),
+                    extraParams,
+                  )}
                   aria-current={active ? "page" : undefined}
                   className={cn(
                     "shrink-0 rounded-field border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2",
@@ -100,6 +119,7 @@ export default function DashboardToolbar({
         selectedMonth={selectedMonth}
         selectedAccountId={selectedAccountId}
         activeView={activeView}
+        extraParams={extraParams}
       />
     </section>
   );

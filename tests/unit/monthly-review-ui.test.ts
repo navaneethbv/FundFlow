@@ -7,10 +7,12 @@ describe("monthly review UI", () => {
 
     const review = readFileSync("app/review/page.tsx", "utf8");
     const dashboard = readFileSync("app/dashboard/page.tsx", "utf8");
+    const toolbar = readFileSync("components/dashboard/DashboardToolbar.tsx", "utf8");
 
     expect(review).toContain("Monthly Review");
     expect(review).toContain("getDashboardData");
     expect(review).toContain("getGoals");
-    expect(dashboard).toContain("/review?");
+    expect(dashboard).toContain("DashboardToolbar");
+    expect(toolbar).toContain("/review?");
   });
 });

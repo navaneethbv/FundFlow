@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { DashboardData } from "@/lib/dashboard";
 import { foldTail } from "@/lib/chart-utils";
+import { dashboardUrl, OTHER_CATEGORY_KEY } from "@/lib/drilldown";
 import { formatCurrency, formatMonth, titleCase } from "@/lib/format";
 import AreaSparkline from "@/components/charts/AreaSparkline";
 import DonutChart from "@/components/charts/DonutChart";
@@ -9,6 +10,10 @@ import RadialGauge from "@/components/charts/RadialGauge";
 import StatTile from "@/components/charts/StatTile";
 import TrendChart from "@/components/charts/TrendChart";
 import BarList from "@/components/dashboard/BarList";
+import CategoryDrilldownPanel, {
+  type DrillLinkParams,
+} from "@/components/dashboard/CategoryDrilldownPanel";
+import MerchantDrilldownPanel from "@/components/dashboard/MerchantDrilldownPanel";
 import RecentActivity, {
   type RecentTransaction,
 } from "@/components/dashboard/RecentActivity";
@@ -79,12 +84,16 @@ export default function MonitorView({
   savingsRate,
   recentTransactions,
   accountNames,
+  linkParams,
+  drillQuery,
 }: {
   data: DashboardData;
   netWorth: number;
   savingsRate: number;
   recentTransactions: RecentTransaction[];
   accountNames: Map<string, string>;
+  linkParams: DrillLinkParams;
+  drillQuery: { category?: string; sub?: string; merchant?: string };
 }) {
   const monthLabels = data.monthlySpending.map((month) => formatMonth(month.month));
   const spendSeries = data.monthlySpending.map((month) => month.amount);
@@ -101,15 +110,27 @@ export default function MonitorView({
   const merchantItems = data.merchantBreakdown.map((item) => ({
     label: item.merchant,
     amount: item.amount,
+    href: dashboardUrl({ ...linkParams, merchant: item.merchant }),
   }));
   const donutItems = foldTail(
     data.categoryBreakdown.map((category) => ({
       label: titleCase(category.category),
       amount: category.amount,
+      href: dashboardUrl({ ...linkParams, category: category.category }),
     })),
     6,
-    (amount) => ({ label: "Other", amount }),
+    (amount) => ({
+      label: "Other",
+      amount,
+      href: dashboardUrl({ ...linkParams, category: OTHER_CATEGORY_KEY }),
+    }),
   );
+  const showAllCategories = drillQuery.category === OTHER_CATEGORY_KEY;
+  const maxCategory = Math.max(
+    1,
+    ...data.categoryBreakdown.map((category) => category.amount),
+  );
+  const drillableMerchants = new Set(data.drillableMerchants);
   const attentionItems = getAttentionItems(data);
 
   return (
@@ -157,6 +178,9 @@ export default function MonitorView({
         >
           <TrendChart
             labels={monthLabels}
+            links={data.monthlySpending.map((month) =>
+              dashboardUrl({ ...linkParams, ...drillQuery, month: month.month }),
+            )}
             series={[
               { name: "Spending", slot: 6, values: spendSeries },
               { name: "Income", slot: 1, values: incomeSeries },
@@ -218,32 +242,96 @@ export default function MonitorView({
 
       {(donutItems.length > 0 || data.subscriptions.length > 0) && (
         <div className="grid gap-5 xl:grid-cols-12">
-          {donutItems.length > 0 && (
+          {data.drilldown?.kind === "category" ? (
+            <div className="xl:col-span-7">
+              <CategoryDrilldownPanel
+                drill={data.drilldown}
+                linkParams={linkParams}
+                month={data.selectedMonth}
+              />
+            </div>
+          ) : data.drilldown?.kind === "merchant" ? (
+            <div className="xl:col-span-7">
+              <MerchantDrilldownPanel
+                drill={data.drilldown}
+                linkParams={linkParams}
+                month={data.selectedMonth}
+              />
+            </div>
+          ) : showAllCategories ? (
+            <Panel
+              title="All categories"
+              className="xl:col-span-7"
+              action={
+                <Link
+                  href={dashboardUrl(linkParams)}
+                  className="text-xs font-semibold text-accent hover:underline"
+                >
+                  Back to top 6
+                </Link>
+              }
+            >
+              <BarList
+                items={data.categoryBreakdown.map((category) => ({
+                  label: titleCase(category.category),
+                  amount: category.amount,
+                  href: dashboardUrl({
+                    ...linkParams,
+                    category: category.category,
+                  }),
+                }))}
+                max={maxCategory}
+              />
+            </Panel>
+          ) : donutItems.length > 0 ? (
             <Panel title="Spending by category" className="xl:col-span-7">
               <DonutChart items={donutItems} centerLabel="spent" />
             </Panel>
-          )}
+          ) : null}
           {data.subscriptions.length > 0 && (
             <Panel title="Recurring streams" className="xl:col-span-5">
               <div className="divide-y divide-panel-border">
-                {data.subscriptions.slice(0, 6).map((stream) => (
-                  <div
-                    key={`${stream.merchant}-${stream.amount}`}
-                    className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold">
-                        {stream.merchant}
+                {data.subscriptions.slice(0, 6).map((stream) => {
+                  const body = (
+                    <>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold">
+                          {stream.merchant}
+                        </span>
+                        <span className="block text-xs text-muted">
+                          {stream.frequency ?? "Recurring"}
+                        </span>
                       </span>
-                      <span className="block text-xs text-muted">
-                        {stream.frequency ?? "Recurring"}
+                      <span className="metric-value text-sm">
+                        {formatCurrency(stream.amount)}
                       </span>
-                    </span>
-                    <span className="metric-value text-sm">
-                      {formatCurrency(stream.amount)}
-                    </span>
-                  </div>
-                ))}
+                    </>
+                  );
+                  const className =
+                    "flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0";
+
+                  return drillableMerchants.has(
+                    stream.merchant.trim().toLowerCase(),
+                  ) ? (
+                    <Link
+                      key={`${stream.merchant}-${stream.amount}`}
+                      href={dashboardUrl({
+                        ...linkParams,
+                        merchant: stream.merchant,
+                      })}
+                      className={`${className} rounded-field hover:bg-panel-hover focus-visible:outline-2`}
+                    >
+                      {body}
+                    </Link>
+                  ) : (
+                    <div
+                      key={`${stream.merchant}-${stream.amount}`}
+                      className={className}
+                    >
+                      {body}
+                    </div>
+                  );
+                })}
               </div>
             </Panel>
           )}

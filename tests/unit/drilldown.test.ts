@@ -17,6 +17,9 @@ describe("dashboardUrl", () => {
     expect(dashboardUrl({ tab: "overview", month: "2026-07" })).toBe(
       "/dashboard?tab=overview&month=2026-07",
     );
+    expect(dashboardUrl({ view: "monitor", month: "2026-07" })).toBe(
+      "/dashboard?view=monitor&month=2026-07",
+    );
     expect(
       dashboardUrl({
         tab: "overview",
@@ -299,4 +302,3 @@ describe("buildMerchantDrilldown", () => {
     expect(result.dominantCategory).toBeNull();
   });
 });
-
