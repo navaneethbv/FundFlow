@@ -35,7 +35,7 @@ describe("weekly report periods", () => {
     });
   });
 
-  it("is due only during Monday's target local hour", () => {
+  it("is due from Monday's target local hour onward", () => {
     expect(
       isWeeklyReportDue(
         new Date("2026-07-13T15:30:00Z"),
@@ -48,6 +48,40 @@ describe("weekly report periods", () => {
         "America/Los_Angeles",
       ),
     ).toBe(false);
+  });
+
+  it("stays due later in the week so a missed hour catches up", () => {
+    // Tue/Thu/Sun after the target hour: a skipped or failed Monday run must
+    // still deliver, and every one of these resolves to the same period.
+    for (const reference of [
+      "2026-07-14T18:00:00Z",
+      "2026-07-16T09:00:00Z",
+      "2026-07-19T23:00:00Z",
+    ]) {
+      expect(
+        isWeeklyReportDue(new Date(reference), "America/Los_Angeles"),
+      ).toBe(true);
+      expect(
+        getWeeklyReportPeriod(new Date(reference), "America/Los_Angeles").start,
+      ).toBe("2026-07-06");
+    }
+  });
+
+  it("is not due once the period rolls over to the next week", () => {
+    // Monday 00:30 local: the period has already advanced, but the new week's
+    // report is not owed until the target hour.
+    expect(
+      isWeeklyReportDue(
+        new Date("2026-07-20T07:30:00Z"),
+        "America/Los_Angeles",
+      ),
+    ).toBe(false);
+    expect(
+      getWeeklyReportPeriod(
+        new Date("2026-07-20T07:30:00Z"),
+        "America/Los_Angeles",
+      ).start,
+    ).toBe("2026-07-13");
   });
 
   it("handles daylight-saving boundaries without shifting report dates", () => {
