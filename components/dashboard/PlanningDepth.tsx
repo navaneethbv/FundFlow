@@ -34,10 +34,12 @@ export default function PlanningDepth({ data, goals }: { data: DashboardData; go
   });
   const goalName = new Map(goals.map((goal) => [goal.id, goal.name]));
 
+  if (!view.debtPayoff && view.sinkingFunds.length === 0) return null;
+
   return (
-    <div className="grid gap-6 xl:grid-cols-2">
-      <Panel title="Debt payoff" eyebrow="Avalanche order">
-        {view.debtPayoff ? (
+    <div className="grid gap-5 xl:grid-cols-2">
+      {view.debtPayoff && (
+        <Panel title="Debt payoff" eyebrow="Avalanche order">
           <div className="space-y-3 text-sm">
             {view.debtPayoff.order.map((debt, index) => (
               <div
@@ -56,17 +58,11 @@ export default function PlanningDepth({ data, goals }: { data: DashboardData; go
               Highest-APR debt is paid first; unknown APRs are treated as 0%.
             </p>
           </div>
-        ) : (
-          <p className="py-4 text-sm text-muted">
-            {view.surplus <= 0
-              ? "No monthly surplus to model a payoff plan this month."
-              : "No credit or loan balances to pay down."}
-          </p>
-        )}
-      </Panel>
+        </Panel>
+      )}
 
-      <Panel title="Sinking funds" eyebrow="Suggested contributions">
-        {view.sinkingFunds.length > 0 ? (
+      {view.sinkingFunds.length > 0 && (
+        <Panel title="Sinking funds" eyebrow="Suggested contributions">
           <div className="space-y-3 text-sm">
             {view.sinkingFunds.map((suggestion) => (
               <div
@@ -83,12 +79,8 @@ export default function PlanningDepth({ data, goals }: { data: DashboardData; go
               From {formatCurrency(view.surplus)} monthly surplus. Confirm contributions manually.
             </p>
           </div>
-        ) : (
-          <p className="py-4 text-sm text-muted">
-            No monthly surplus to suggest goal funding right now.
-          </p>
-        )}
-      </Panel>
+        </Panel>
+      )}
     </div>
   );
 }

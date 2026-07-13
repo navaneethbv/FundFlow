@@ -5,6 +5,7 @@ import {
   resolveDashboardView,
 } from "@/components/dashboard/dashboard-view";
 import { buildPrioritySignals } from "@/components/dashboard/PriorityRail";
+import { getPlanSetupItems } from "@/components/dashboard/PlanView";
 
 describe("dashboard command center", () => {
   it("defaults to Monitor and maps legacy analysis tabs to Wealth", () => {
@@ -95,5 +96,50 @@ describe("dashboard command center", () => {
     expect(source).toContain("Nothing needs attention right now.");
     expect(source).not.toContain("PlanningDepth");
     expect(source).not.toContain("CardCarousel");
+  });
+
+  it("groups missing planning data into one setup list", () => {
+    const items = getPlanSetupItems(
+      {
+        budgetEnvelopes: [],
+        recurringWeeks: [],
+        recurringStatuses: [],
+      },
+      [],
+    );
+
+    expect(items).toEqual([
+      { label: "Create a monthly budget", href: "/settings#budgets" },
+      { label: "Add a savings goal", href: "/goals" },
+      { label: "Refresh recurring transactions", href: "/settings" },
+    ]);
+  });
+
+  it("does not render empty planning-depth panels", () => {
+    const source = readFileSync(
+      "components/dashboard/PlanningDepth.tsx",
+      "utf8",
+    );
+
+    expect(source).toContain(
+      "if (!view.debtPayoff && view.sinkingFunds.length === 0) return null;",
+    );
+    expect(source).toContain("{view.debtPayoff && (");
+    expect(source).toContain("{view.sinkingFunds.length > 0 && (");
+  });
+
+  it("keeps account and balance-sheet content in Wealth", () => {
+    expect(existsSync("components/dashboard/WealthView.tsx")).toBe(true);
+    const wealth = readFileSync("components/dashboard/WealthView.tsx", "utf8");
+    const cards = readFileSync("components/dashboard/CardCarousel.tsx", "utf8");
+
+    expect(wealth.indexOf("Net worth")).toBeLessThan(
+      wealth.indexOf("Spend by card"),
+    );
+    expect(wealth).toContain("Balance sheet");
+    expect(wealth).toContain("Cash flow history");
+    expect(wealth).toContain("CardCarousel");
+    expect(cards).toContain("activeView");
+    expect(cards).toContain("dashboardHref");
   });
 });

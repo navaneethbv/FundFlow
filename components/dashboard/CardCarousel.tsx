@@ -3,57 +3,78 @@ import type { AccountSummary } from "@/lib/dashboard";
 import { detectCardDesign } from "@/lib/card-design";
 import { detectCardImage } from "@/lib/card-image";
 import { formatCurrency, titleCase } from "@/lib/format";
+import CardNetworkLogo from "@/components/dashboard/CardNetworkLogo";
+import {
+  dashboardHref,
+  resolveDashboardView,
+  type DashboardView,
+} from "@/components/dashboard/dashboard-view";
 import { cn } from "@/lib/cn";
 
-function cardUrl({
-  accountId,
-  selectedAccountId,
-  activeTab,
-  selectedMonth,
-  extraParams,
-}: {
-  accountId: string;
-  selectedAccountId?: string;
-  activeTab: string;
-  selectedMonth?: string;
-  extraParams?: Record<string, string | undefined>;
-}) {
-  const params = new URLSearchParams({ tab: activeTab });
-  if (selectedAccountId !== accountId) params.set("accountId", accountId);
-  if (selectedMonth) params.set("month", selectedMonth);
+function withExtraParams(
+  href: string,
+  extraParams?: Record<string, string | undefined>,
+) {
+  const params = new URLSearchParams(href.split("?")[1]);
   for (const [key, value] of Object.entries(extraParams ?? {})) {
     if (value) params.set(key, value);
   }
   return `/dashboard?${params.toString()}`;
 }
 
+function cardUrl({
+  accountId,
+  selectedAccountId,
+  activeView,
+  selectedMonth,
+  extraParams,
+}: {
+  accountId: string;
+  selectedAccountId?: string;
+  activeView: DashboardView;
+  selectedMonth?: string;
+  extraParams?: Record<string, string | undefined>;
+}) {
+  return withExtraParams(
+    dashboardHref({
+      view: activeView,
+      accountId: selectedAccountId === accountId ? undefined : accountId,
+      month: selectedMonth,
+    }),
+    extraParams,
+  );
+}
+
 export default function CardCarousel({
   accounts,
   selectedAccountId,
   selectedMonth,
+  activeView,
   activeTab,
   extraParams,
 }: {
   accounts: AccountSummary[];
   selectedAccountId?: string;
   selectedMonth?: string;
-  activeTab: string;
+  activeView?: DashboardView;
+  activeTab?: string;
   extraParams?: Record<string, string | undefined>;
 }) {
   if (accounts.length === 0) return null;
-
-  const clearParams = new URLSearchParams({ tab: activeTab });
-  if (selectedMonth) clearParams.set("month", selectedMonth);
-  for (const [key, value] of Object.entries(extraParams ?? {})) {
-    if (value) clearParams.set(key, value);
-  }
+  const view = activeView ?? resolveDashboardView({ tab: activeTab });
 
   return (
     <section className="space-y-3">
       <div className="flex items-baseline justify-between">
         <h2 className="eyebrow">Cards & Accounts</h2>
         {selectedAccountId && (
-          <Link href={`/dashboard?${clearParams.toString()}`} className="text-xs font-semibold text-accent hover:underline">
+          <Link
+            href={withExtraParams(
+              dashboardHref({ view, month: selectedMonth }),
+              extraParams,
+            )}
+            className="text-xs font-semibold text-accent hover:underline"
+          >
             Clear filter
           </Link>
         )}
@@ -65,7 +86,13 @@ export default function CardCarousel({
           const selected = selectedAccountId === account.id;
           return (
             <Link
-              href={cardUrl({ accountId: account.id, selectedAccountId, activeTab, selectedMonth, extraParams })}
+              href={cardUrl({
+                accountId: account.id,
+                selectedAccountId,
+                activeView: view,
+                selectedMonth,
+                extraParams,
+              })}
               key={account.id}
               className="shrink-0 snap-start rounded-card focus-visible:outline-2"
             >
@@ -92,14 +119,17 @@ export default function CardCarousel({
                 ) : (
                   <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(255,255,255,0.18),transparent_12rem)]" />
                 )}
-                {!image && (
-                  <div className="relative min-w-0">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-70">
-                      {account.type === "credit" ? "Credit Card" : titleCase(account.subtype ?? account.type)}
-                    </p>
-                    <h3 className="mt-1 truncate text-base font-black">{design.displayName}</h3>
-                  </div>
-                )}
+                <div className={cn("relative flex items-start gap-4", image ? "justify-end" : "justify-between")}>
+                  {!image && (
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-70">
+                        {account.type === "credit" ? "Credit Card" : titleCase(account.subtype ?? account.type)}
+                      </p>
+                      <h3 className="mt-1 truncate text-base font-black">{design.displayName}</h3>
+                    </div>
+                  )}
+                  <CardNetworkLogo network={design.network} />
+                </div>
                 <div className="relative">
                   <p className="text-xs font-semibold opacity-75">
                     {account.type === "credit" ? "Current Balance" : "Available Balance"}
