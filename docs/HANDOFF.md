@@ -1,8 +1,28 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-07-12. Read this first to resume.
+Last updated: 2026-07-13. Read this first to resume.
 
-## Latest session (2026-07-12, branch `feat/weekly-insights-notifications`)
+## Latest session (2026-07-13, branch `navaneethbv-patch-1`)
+
+Fixed the weekly report scheduler, which had failed every run since it was
+configured. Two independent causes:
+
+- `FUNDFLOW_APP_URL` pointed at a URL Vercel redirects (an `http://` origin or
+  a Deployment-Protection-gated alias), so curl got a 3xx `Redirecting...` body
+  and never reached the app. The secret now holds the canonical production
+  domain `https://fund-flow-swart.vercel.app`; a `workflow_dispatch` run
+  returns 200. **If the production alias ever changes, update this secret.**
+- `isWeeklyReportDue` matched a single local hour (Monday 08:00), and GitHub
+  Actions cron is best-effort — it delayed and dropped hours, including that
+  one, so the 2026-07-06..07-12 report was never owed to anyone. The check is
+  now "Monday 08:00 local onward, all week", so a skipped or failed run catches
+  up on any later run. `claimWeeklyDelivery` dedupes on `period_start`, so a
+  delivered week is claimed and never re-sent.
+
+Not yet deployed: the widened window ships this week's missed report on the
+first hourly run after it reaches production.
+
+## Previous session (2026-07-12, branch `feat/weekly-insights-notifications`)
 
 Implemented timezone-aware weekly spending insights and a first-class notification center. Reports cover the previous Monday through Sunday and include categorized spending, prior-week comparison, top merchants, budget pace, depository cash flow, and bank and credit card spend. The HTML email and attached PDF exclude balances, masks, account numbers, and transaction detail.
 

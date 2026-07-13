@@ -81,11 +81,18 @@ export function getWeeklyReportPeriod(
   };
 }
 
+// The period rolls over at local Monday 00:00 and then stays put for seven
+// days, so a report stays owed for the rest of the week. Staying due past the
+// target hour is what lets a skipped scheduler run (GitHub Actions cron is
+// best-effort and does drop hours) or a failed send catch up on a later run;
+// `claimWeeklyDelivery` dedupes on period_start, so a delivered week is
+// claimed, not re-sent.
 export function isWeeklyReportDue(
   reference: Date,
   timezone: string,
   targetHour = 8,
 ): boolean {
   const local = localDateTime(reference, timezone);
-  return local.weekday === "Mon" && local.hour === targetHour;
+  if (local.weekday !== "Mon") return true;
+  return local.hour >= targetHour;
 }
