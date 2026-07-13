@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { createClient } from "@supabase/supabase-js";
-import { getWeeklyReportData, generateWeeklyReportPdf } from "@/lib/reporting";
+import {
+  getWeeklyReportData as getLegacyWeeklyReportData,
+  generateWeeklyReportPdf,
+} from "@/lib/reporting";
+import { getWeeklyReportData } from "@/lib/weekly-report-data";
 import { GET as weeklyReportGet } from "@/app/api/cron/weekly-report/route";
 import { NextRequest } from "next/server";
 import { serverEnv } from "@/lib/env.server";
@@ -11,6 +15,13 @@ const publishable = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 const secret = process.env.SUPABASE_SECRET_KEY;
 const run = Boolean(url && publishable && secret);
 const suite = run ? describe : describe.skip;
+
+const period = {
+  start: "2026-07-06",
+  end: "2026-07-12",
+  previousStart: "2026-06-29",
+  previousEnd: "2026-07-05",
+};
 
 vi.mock("nodemailer", () => {
   return {
@@ -52,6 +63,7 @@ suite("weekly financial reporting integration", () => {
       userId,
       plaidItemId: `item-rep-${stamp}`,
       accessToken: "mock-token",
+      institutionName: "Test Bank",
     });
 
     // 3. Create checking and credit accounts
@@ -84,16 +96,9 @@ suite("weekly financial reporting integration", () => {
     creditId = accountsData.find((a) => a.type === "credit")!.id;
 
     // 4. Seed transactions
-    const now = new Date();
-    const activeTxn1Date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 2)
-      .toISOString()
-      .slice(0, 10);
-    const activeTxn2Date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 3)
-      .toISOString()
-      .slice(0, 10);
-    const prevTxnDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 10)
-      .toISOString()
-      .slice(0, 10);
+    const activeTxn1Date = "2026-07-10";
+    const activeTxn2Date = "2026-07-09";
+    const prevTxnDate = "2026-07-02";
 
     const { error: txnsError } = await admin.from("transactions").insert([
       {
@@ -143,25 +148,33 @@ suite("weekly financial reporting integration", () => {
   });
 
   it("calculates weekly report data correctly", async () => {
-    const report = await getWeeklyReportData(admin, userId);
+    const report = await getWeeklyReportData(admin, userId, period);
     expect(report).not.toBeNull();
     if (!report) return;
 
     expect(report.totalSpend).toBe(80.0); // 50 (checking) + 30 (credit)
-    expect(report.prevTotalSpend).toBe(40.0); // 40 (prev week checking)
+    expect(report.previousTotalSpend).toBe(40.0); // 40 (prev week checking)
     expect(report.cashFlow.inflows).toBe(200.0); // Direct deposit
     expect(report.cashFlow.outflows).toBe(50.0); // Whole foods
     expect(report.cashFlow.net).toBe(150.0);
 
-    expect(report.categories).toContainEqual({ category: "FOOD_AND_DRINK", amount: 50.0 });
-    expect(report.categories).toContainEqual({ category: "TRAVEL", amount: 30.0 });
-
-    expect(report.accounts).toHaveLength(1);
-    expect(report.accounts[0].balance).toBe(1000.0);
+    expect(report.categories).toContainEqual({
+      category: "FOOD_AND_DRINK",
+      amount: 50.0,
+      share: 0.625,
+    });
+    expect(report.categories).toContainEqual({
+      category: "TRAVEL",
+      amount: 30.0,
+      share: 0.375,
+    });
+    expect(report.banks).toEqual([{ name: "Test Bank", amount: 80 }]);
+    expect(report.cards).toEqual([{ name: "Visa", amount: 30 }]);
+    expect(report).not.toHaveProperty("accounts");
   });
 
   it("generates a PDF report buffer", async () => {
-    const report = await getWeeklyReportData(admin, userId);
+    const report = await getLegacyWeeklyReportData(admin, userId);
     expect(report).not.toBeNull();
     if (!report) return;
 
