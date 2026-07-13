@@ -1,10 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { createClient } from "@supabase/supabase-js";
-import {
-  getWeeklyReportData as getLegacyWeeklyReportData,
-  generateWeeklyReportPdf,
-} from "@/lib/reporting";
 import { getWeeklyReportData } from "@/lib/weekly-report-data";
+import { generateWeeklyReportPdf } from "@/lib/report-pdf";
 import { GET as weeklyReportGet } from "@/app/api/cron/weekly-report/route";
 import { NextRequest } from "next/server";
 import { serverEnv } from "@/lib/env.server";
@@ -174,7 +171,7 @@ suite("weekly financial reporting integration", () => {
   });
 
   it("generates a PDF report buffer", async () => {
-    const report = await getLegacyWeeklyReportData(admin, userId);
+    const report = await getWeeklyReportData(admin, userId, period);
     expect(report).not.toBeNull();
     if (!report) return;
 
