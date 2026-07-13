@@ -2,7 +2,6 @@ import Link from "next/link";
 import type { ComponentType } from "react";
 import { cn } from "@/lib/cn";
 import {
-  CreditCard,
   FileText,
   LayoutDashboard,
   LineChart,
@@ -14,11 +13,10 @@ import {
 } from "@/components/ui/icons";
 
 export type AppShellActive =
-  | "overview"
+  | "monitor"
+  | "plan"
+  | "wealth"
   | "transactions"
-  | "cards"
-  | "cashflow"
-  | "budgets"
   | "goals"
   | "reports"
   | "notifications"
@@ -31,12 +29,14 @@ type NavItem = {
   icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
 };
 
-const navItems: NavItem[] = [
-  { label: "Overview", href: "/dashboard", key: "overview", icon: LayoutDashboard },
+const primaryItems: NavItem[] = [
+  { label: "Monitor", href: "/dashboard?view=monitor", key: "monitor", icon: LayoutDashboard },
+  { label: "Plan", href: "/dashboard?view=plan", key: "plan", icon: PiggyBank },
+  { label: "Wealth", href: "/dashboard?view=wealth", key: "wealth", icon: LineChart },
   { label: "Transactions", href: "/transactions", key: "transactions", icon: Wallet },
-  { label: "Cards & Banks", href: "/dashboard?tab=breakdowns", key: "cards", icon: CreditCard },
-  { label: "Cash Flow Insights", href: "/dashboard?tab=cashflow", key: "cashflow", icon: LineChart },
-  { label: "Budgets", href: "/settings#budgets", key: "budgets", icon: PiggyBank },
+];
+
+const manageItems: NavItem[] = [
   { label: "Goals", href: "/goals", key: "goals", icon: Target },
   { label: "Reports", href: "/settings#reports", key: "reports", icon: FileText },
   { label: "Notifications", href: "/notifications", key: "notifications", icon: Mail },
@@ -74,11 +74,19 @@ function NavLink({
 }
 
 export default function AppSidebar({ active }: { active: AppShellActive }) {
+  const mobileItems = [...primaryItems, ...manageItems];
+
   return (
     <>
-      <aside className="sticky top-[73px] hidden h-[calc(100vh-73px)] w-64 shrink-0 border-r border-panel-border bg-background/80 px-4 py-5 backdrop-blur lg:block">
+      <aside className="sticky top-16 hidden h-[calc(100vh-64px)] w-60 shrink-0 border-r border-panel-border bg-panel px-4 py-5 lg:block">
         <nav aria-label="Primary" className="space-y-1">
-          {navItems.map((item) => (
+          {primaryItems.map((item) => (
+            <NavLink key={item.key} item={item} active={active} />
+          ))}
+          <p className="px-3 pb-1 pt-6 text-[0.65rem] font-bold uppercase tracking-[0.16em] text-muted">
+            Manage
+          </p>
+          {manageItems.map((item) => (
             <NavLink key={item.key} item={item} active={active} />
           ))}
         </nav>
@@ -87,7 +95,7 @@ export default function AppSidebar({ active }: { active: AppShellActive }) {
         aria-label="Primary"
         className="lg:hidden -mx-4 flex gap-2 overflow-x-auto border-b border-panel-border px-4 py-3 scrollbar-none sm:-mx-6 sm:px-6"
       >
-        {navItems.map((item) => (
+        {mobileItems.map((item) => (
           <NavLink key={item.key} item={item} active={active} compact />
         ))}
       </nav>

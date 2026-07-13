@@ -77,6 +77,7 @@ export function normalizeDrillParams(
 
 /** Canonical /dashboard URL builder; skips empty params, stable key order. */
 export function dashboardUrl(params: {
+  view?: string;
   tab?: string;
   month?: string;
   accountId?: string;
@@ -86,7 +87,7 @@ export function dashboardUrl(params: {
   merchant?: string;
 }): string {
   const search = new URLSearchParams();
-  for (const key of ["tab", "month", "accountId", "itemId", "category", "sub", "merchant"] as const) {
+  for (const key of ["view", "tab", "month", "accountId", "itemId", "category", "sub", "merchant"] as const) {
     const value = params[key];
     if (value) search.set(key, value);
   }

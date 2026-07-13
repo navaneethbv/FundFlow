@@ -43,7 +43,7 @@ export default function Panel({
           <div>
             {eyebrow && <p className="eyebrow">{eyebrow}</p>}
             {title && (
-              <h2 className="text-sm font-bold tracking-tight">{title}</h2>
+              <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
             )}
           </div>
           {action}

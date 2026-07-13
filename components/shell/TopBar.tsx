@@ -6,7 +6,7 @@ import LogoutButton from "@/components/LogoutButton";
 export default function TopBar({ email }: { email?: string | null }) {
   return (
     <header className="sticky top-0 z-30 border-b border-panel-border bg-background/88 backdrop-blur">
-      <div className="flex h-[73px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+      <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-6 lg:px-7">
         <Link href="/dashboard" className="rounded-field focus-visible:outline-2">
           <Logo />
         </Link>
@@ -17,18 +17,6 @@ export default function TopBar({ email }: { email?: string | null }) {
             </span>
           )}
           <ThemeToggle variant="switch" />
-          <Link
-            href="/transactions"
-            className="hidden rounded-field px-2.5 py-1.5 text-sm font-semibold text-muted transition-colors hover:bg-panel-hover hover:text-foreground focus-visible:outline-2 sm:inline-flex"
-          >
-            Transactions
-          </Link>
-          <Link
-            href="/settings"
-            className="hidden rounded-field px-2.5 py-1.5 text-sm font-semibold text-muted transition-colors hover:bg-panel-hover hover:text-foreground focus-visible:outline-2 sm:inline-flex"
-          >
-            Settings
-          </Link>
           <LogoutButton />
         </div>
       </div>

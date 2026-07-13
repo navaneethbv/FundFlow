@@ -4,18 +4,18 @@ import EmptyState from "@/components/ui/EmptyState";
 import Tabs from "@/components/ui/Tabs";
 import { Landmark } from "@/components/ui/icons";
 import ConnectBankButton from "@/components/ConnectBankButton";
-import ActionBar from "@/components/dashboard/ActionBar";
-import BreakdownsTab from "@/components/dashboard/BreakdownsTab";
-import CardCarousel from "@/components/dashboard/CardCarousel";
-import CashflowTab from "@/components/dashboard/CashflowTab";
+import DashboardToolbar from "@/components/dashboard/DashboardToolbar";
 import FreshnessBanner from "@/components/dashboard/FreshnessBanner";
-import MonthChips from "@/components/dashboard/MonthChips";
-import OverviewTab from "@/components/dashboard/OverviewTab";
-import ButtonLink from "@/components/ui/ButtonLink";
+import MonitorView from "@/components/dashboard/MonitorView";
+import PlanView from "@/components/dashboard/PlanView";
+import PriorityRail from "@/components/dashboard/PriorityRail";
+import WealthView from "@/components/dashboard/WealthView";
+import { resolveDashboardView } from "@/components/dashboard/dashboard-view";
 import { computeNetWorth, computeSavingsRate } from "@/components/dashboard/metrics";
 import { type RecentTransaction } from "@/components/dashboard/RecentActivity";
 import { getDashboardData } from "@/lib/dashboard";
 import { getCachedDashboardData } from "@/lib/dashboard-cache";
+import { dashboardUrl } from "@/lib/drilldown";
 import { getGoals } from "@/lib/goals";
 import { formatMonth } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -27,6 +27,7 @@ interface PageProps {
     accountId?: string;
     month?: string;
     tab?: string;
+    view?: string;
     itemId?: string;
     category?: string;
     sub?: string;
@@ -39,14 +40,6 @@ type PlaidItem = {
   institution_name: string | null;
   status: string | null;
 };
-
-function tabUrl(tab: string, selectedAccountId?: string, selectedMonth?: string, itemId?: string) {
-  const params = new URLSearchParams({ tab });
-  if (selectedAccountId) params.set("accountId", selectedAccountId);
-  if (selectedMonth) params.set("month", selectedMonth);
-  if (itemId) params.set("itemId", itemId);
-  return `/dashboard?${params.toString()}`;
-}
 
 async function getRecentTransactions({
   supabase,
@@ -82,24 +75,36 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const selectedAccountId = params.accountId;
   const selectedMonth = params.month;
-  const activeTab = params.tab === "breakdowns" || params.tab === "cashflow" ? params.tab : "overview";
-  const shellActive = activeTab === "breakdowns" ? "cards" : activeTab === "cashflow" ? "cashflow" : "overview";
+  const selectedItemId = params.itemId;
+  const activeView = resolveDashboardView(params);
+  const drillQuery = {
+    category: params.category,
+    sub: params.sub,
+    merchant: params.merchant,
+  };
+  const drillOptions = { itemId: selectedItemId, drill: drillQuery };
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const selectedItemId = params.itemId;
-  const drillOptions = {
-    itemId: selectedItemId,
-    drill: { category: params.category, sub: params.sub, merchant: params.merchant },
-  };
-
   const [data, { data: items }, goals] = await Promise.all([
     user
-      ? getCachedDashboardData(supabase, user.id, selectedAccountId, selectedMonth, drillOptions)
-      : getDashboardData(supabase, selectedAccountId, selectedMonth, undefined, drillOptions),
+      ? getCachedDashboardData(
+          supabase,
+          user.id,
+          selectedAccountId,
+          selectedMonth,
+          drillOptions,
+        )
+      : getDashboardData(
+          supabase,
+          selectedAccountId,
+          selectedMonth,
+          undefined,
+          drillOptions,
+        ),
     supabase
       .from("plaid_items")
       .select("id, institution_name, status")
@@ -112,6 +117,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const brokenBanks = plaidItems.filter((item) => item.status === "error");
   const netWorth = computeNetWorth(data.accounts);
   const savingsRate = computeSavingsRate(data.currentMonthIncome, data.currentMonthExpenses);
+  const budgetRiskCount = data.budgetEnvelopes.filter(
+    (budget) => budget.status === "over" || budget.status === "at-risk",
+  ).length;
   const recentTransactions = await getRecentTransactions({
     supabase,
     month: data.selectedMonth,
@@ -123,30 +131,29 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       `${account.name ?? "Account"}${account.mask ? ` **${account.mask}` : ""}`,
     ]),
   );
+  const linkParams = {
+    view: activeView,
+    month: selectedMonth,
+    accountId: selectedAccountId,
+    itemId: selectedItemId,
+  };
+  const extraParams = { itemId: selectedItemId, ...drillQuery };
 
   return (
-    <AppShell active={shellActive} email={user?.email}>
+    <AppShell active={activeView} email={user?.email}>
       {hasBanks && <AutoRefresh />}
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="eyebrow">Overview</p>
-          <h1 className="display text-3xl sm:text-4xl">
-            {formatMonth(data.selectedMonth)} money map
-          </h1>
-        </div>
-        <ButtonLink href={`/review?month=${data.selectedMonth}`}>
-          Monthly review
-        </ButtonLink>
-      </div>
+      <header>
+        <p className="eyebrow">{formatMonth(data.selectedMonth)}</p>
+        <h1 className="display mt-2 text-3xl sm:text-4xl">
+          Financial command center
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
+          Monitor today, plan what comes next, and track your balance sheet.
+        </p>
+      </header>
 
       <FreshnessBanner brokenBanks={brokenBanks} isStale={data.syncIsStale} />
-      <ActionBar
-        hasBanks={hasBanks}
-        itemCount={plaidItems.length}
-        hasBrokenBanks={brokenBanks.length > 0}
-        lastSyncAgoMinutes={data.lastSyncAgoMinutes}
-      />
 
       {!hasBanks ? (
         <EmptyState
@@ -157,68 +164,59 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         />
       ) : (
         <>
-          <CardCarousel
+          <DashboardToolbar
             accounts={data.accounts}
-            selectedAccountId={selectedAccountId}
-            selectedMonth={selectedMonth}
-            activeTab={activeTab}
-            extraParams={{ itemId: selectedItemId, category: params.category, sub: params.sub, merchant: params.merchant }}
-          />
-          <MonthChips
             months={data.availableMonths}
             selectedMonth={data.selectedMonth}
             selectedAccountId={selectedAccountId}
-            activeTab={activeTab}
-            extraParams={{ itemId: selectedItemId, category: params.category, sub: params.sub, merchant: params.merchant }}
+            activeView={activeView}
+            hasBanks={hasBanks}
+            itemCount={plaidItems.length}
+            lastSyncAgoMinutes={data.lastSyncAgoMinutes}
+            extraParams={extraParams}
           />
           <Tabs
-            items={[
-              { label: "Overview", href: tabUrl("overview", selectedAccountId, selectedMonth, selectedItemId), active: activeTab === "overview" },
-              { label: "Cards & Banks", href: tabUrl("breakdowns", selectedAccountId, selectedMonth, selectedItemId), active: activeTab === "breakdowns" },
-              { label: "Cash Flow Insights", href: tabUrl("cashflow", selectedAccountId, selectedMonth, selectedItemId), active: activeTab === "cashflow" },
-            ]}
+            items={(["monitor", "plan", "wealth"] as const).map((view) => ({
+              label: view[0]!.toUpperCase() + view.slice(1),
+              href: dashboardUrl({
+                view,
+                accountId: selectedAccountId,
+                month: selectedMonth,
+                ...extraParams,
+              }),
+              active: activeView === view,
+            }))}
           />
-          {activeTab === "overview" && (
-            <OverviewTab
+
+          <PriorityRail
+            brokenBankCount={brokenBanks.length}
+            isStale={data.syncIsStale}
+            lastSyncAgoMinutes={data.lastSyncAgoMinutes}
+            lowBalanceRisk={data.cashFlowForecast.lowBalanceRisk}
+            budgetCount={data.budgetEnvelopes.length}
+            budgetRiskCount={budgetRiskCount}
+            anomalyCount={data.spendingAnomalies.length}
+          />
+
+          {activeView === "monitor" && (
+            <MonitorView
               data={data}
               netWorth={netWorth}
               savingsRate={savingsRate}
               recentTransactions={recentTransactions}
               accountNames={accountNames}
-              goals={goals}
-              linkParams={{
-                tab: activeTab,
-                month: selectedMonth,
-                accountId: selectedAccountId,
-                itemId: selectedItemId,
-              }}
-              drillQuery={{
-                category: params.category,
-                sub: params.sub,
-                merchant: params.merchant,
-              }}
+              linkParams={linkParams}
+              drillQuery={drillQuery}
             />
           )}
-          {activeTab === "breakdowns" && (
-            <BreakdownsTab
+          {activeView === "plan" && <PlanView data={data} goals={goals} />}
+          {activeView === "wealth" && (
+            <WealthView
               data={data}
-              linkParams={{
-                tab: activeTab,
-                month: selectedMonth,
-                accountId: selectedAccountId,
-                itemId: selectedItemId,
-              }}
-            />
-          )}
-          {activeTab === "cashflow" && (
-            <CashflowTab
-              data={data}
-              linkParams={{
-                tab: activeTab,
-                month: selectedMonth,
-                accountId: selectedAccountId,
-                itemId: selectedItemId,
-              }}
+              selectedAccountId={selectedAccountId}
+              selectedMonth={selectedMonth}
+              linkParams={linkParams}
+              extraParams={extraParams}
             />
           )}
         </>

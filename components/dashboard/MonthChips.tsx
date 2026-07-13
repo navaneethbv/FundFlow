@@ -1,36 +1,52 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { formatMonth } from "@/lib/format";
+import {
+  dashboardHref,
+  resolveDashboardView,
+  type DashboardView,
+} from "@/components/dashboard/dashboard-view";
 
 export default function MonthChips({
   months,
   selectedMonth,
   selectedAccountId,
+  activeView,
   activeTab,
   extraParams,
 }: {
   months: string[];
   selectedMonth: string;
   selectedAccountId?: string;
-  activeTab: string;
+  activeView?: DashboardView;
+  activeTab?: string;
   extraParams?: Record<string, string | undefined>;
 }) {
+  const view = activeView ?? resolveDashboardView({ tab: activeTab });
+
   return (
-    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-none sm:mx-0 sm:px-0">
+    <nav
+      aria-label="Month filter"
+      className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none"
+    >
       {months.map((month) => {
-        const params = new URLSearchParams({ tab: activeTab });
-        if (month !== selectedMonth) params.set("month", month);
-        if (selectedAccountId) params.set("accountId", selectedAccountId);
+        const active = month === selectedMonth;
+        const href = dashboardHref({
+          view,
+          accountId: selectedAccountId,
+          month: active ? undefined : month,
+        });
+        const params = new URLSearchParams(href.split("?")[1]);
         for (const [key, value] of Object.entries(extraParams ?? {})) {
           if (value) params.set(key, value);
         }
-        const active = month === selectedMonth;
+
         return (
           <Link
             key={month}
             href={`/dashboard?${params.toString()}`}
             className={cn(
-              "shrink-0 rounded-field border px-3 py-2 text-xs font-bold transition-colors focus-visible:outline-2",
+              "shrink-0 rounded-field border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2",
               active
                 ? "border-accent bg-accent text-white"
                 : "border-panel-border bg-panel text-muted hover:text-foreground",
@@ -40,6 +56,6 @@ export default function MonthChips({
           </Link>
         );
       })}
-    </div>
+    </nav>
   );
 }

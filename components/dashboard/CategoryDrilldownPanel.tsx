@@ -12,7 +12,8 @@ import BarList from "@/components/dashboard/BarList";
 import Panel from "@/components/ui/Panel";
 
 export interface DrillLinkParams {
-  tab: string;
+  view?: string;
+  tab?: string;
   month?: string;
   accountId?: string;
   itemId?: string;

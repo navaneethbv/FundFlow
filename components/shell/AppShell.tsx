@@ -16,8 +16,8 @@ export default function AppShell({
       <TopBar email={email} />
       <div className="lg:flex">
         <AppSidebar active={active} />
-        <main className="w-full min-w-0 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
-          <div className="mx-auto max-w-[1180px] space-y-6">{children}</div>
+        <main className="w-full min-w-0 px-4 py-5 sm:px-6 lg:px-7 lg:py-7">
+          <div className="mx-auto max-w-[1320px] space-y-5">{children}</div>
         </main>
       </div>
     </div>

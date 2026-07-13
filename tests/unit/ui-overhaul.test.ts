@@ -25,11 +25,10 @@ describe("UI overhaul primitives and shell", () => {
     const sidebar = readFileSync("components/shell/AppSidebar.tsx", "utf8");
 
     for (const href of [
-      "/dashboard",
+      "/dashboard?view=monitor",
+      "/dashboard?view=plan",
+      "/dashboard?view=wealth",
       "/transactions",
-      "/dashboard?tab=breakdowns",
-      "/dashboard?tab=cashflow",
-      "/settings#budgets",
       "/goals",
       "/settings#reports",
       "/settings",
@@ -38,7 +37,17 @@ describe("UI overhaul primitives and shell", () => {
     }
 
     expect(sidebar).toContain("active");
+    expect(sidebar).toContain("Manage");
     expect(sidebar).toContain("lg:hidden");
+  });
+
+  it("keeps primary navigation out of the utility top bar", () => {
+    const topBar = readFileSync("components/shell/TopBar.tsx", "utf8");
+
+    expect(topBar).not.toContain('href="/transactions"');
+    expect(topBar).not.toContain('href="/settings"');
+    expect(topBar).toContain("ThemeToggle");
+    expect(topBar).toContain("LogoutButton");
   });
 
   it("keeps goals protected and dynamic", () => {
@@ -51,7 +60,7 @@ describe("UI overhaul primitives and shell", () => {
 
   it("uses the shared app shell on protected product pages", () => {
     const pages = [
-      ["app/dashboard/page.tsx", 'active={shellActive}'],
+      ["app/dashboard/page.tsx", 'active={activeView}'],
       ["app/transactions/page.tsx", 'active="transactions"'],
       ["app/settings/page.tsx", 'active="settings"'],
       ["app/goals/page.tsx", 'active="goals"'],

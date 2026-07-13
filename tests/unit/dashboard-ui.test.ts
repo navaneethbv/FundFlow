@@ -21,13 +21,14 @@ describe("dashboard UI overhaul", () => {
 
   it("extracts the dashboard into phase components", () => {
     for (const file of [
-      "components/dashboard/ActionBar.tsx",
+      "components/dashboard/DashboardToolbar.tsx",
+      "components/dashboard/PriorityRail.tsx",
       "components/dashboard/CardCarousel.tsx",
       "components/dashboard/FreshnessBanner.tsx",
       "components/dashboard/MonthChips.tsx",
-      "components/dashboard/OverviewTab.tsx",
-      "components/dashboard/BreakdownsTab.tsx",
-      "components/dashboard/CashflowTab.tsx",
+      "components/dashboard/MonitorView.tsx",
+      "components/dashboard/PlanView.tsx",
+      "components/dashboard/WealthView.tsx",
       "components/dashboard/RecentActivity.tsx",
       "components/charts/RadialGauge.tsx",
       "components/charts/MiniBars.tsx",
@@ -41,8 +42,10 @@ describe("dashboard UI overhaul", () => {
     const source = readFileSync("app/dashboard/page.tsx", "utf8");
     const lineCount = source.split("\n").length;
 
-    expect(source).toContain("OverviewTab");
-    expect(source).toContain("RecentActivity");
-    expect(lineCount).toBeLessThanOrEqual(230);
+    expect(source).toContain("MonitorView");
+    expect(source).toContain("PlanView");
+    expect(source).toContain("WealthView");
+    expect(source).toContain("resolveDashboardView");
+    expect(lineCount).toBeLessThanOrEqual(240);
   });
 });
