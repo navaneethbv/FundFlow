@@ -14,13 +14,15 @@ CSV or JSON** (merchant, amount, date, category only) that you can feed to any
 AI tool you choose — plus an on-demand **PDF summary report**, all from
 Settings.
 
+FundFlow can also deliver a visual weekly report for the previous Monday through Sunday to the user's signup email. The Monday report includes categorized spending, week-over-week change, top merchants, budget pace, cash flow, and bank and credit card breakdowns, with an expanded PDF attached. It excludes balances, account numbers or masks, and transaction-level detail.
+
 ## Stack
 
 - **Frontend + backend:** Next.js 16 (App Router, TypeScript) — one deployable on Vercel.
 - **Auth:** Supabase Auth (email + password or **Google sign-in**, optional **TOTP MFA**), cookie sessions via `@supabase/ssr`.
 - **Database:** Supabase Postgres with **Row Level Security** on every table.
 - **Bank data:** Plaid (`/link/token/create`, `/item/public_token/exchange`, `/transactions/sync`, `/transactions/recurring/get`).
-- **Scheduling:** Vercel Cron (daily sync).
+- **Scheduling:** Vercel Cron (daily sync and hourly timezone-aware weekly report check).
 
 ## Architecture
 
@@ -56,7 +58,7 @@ Supabase Auth   Supabase Postgres    Plaid API (server-only)
 - **Plaid-frugal by design** — sync is cursor-based (each pull fetches only the delta since the stored cursor; history renders from Postgres with zero Plaid calls), auto-pulls skip the slow-moving recurring-streams call (manual Refresh + daily cron cover it), and webhook verification keys are cached by `kid`.
 - **History** — new links request Plaid's maximum **730 days** of transactions (`days_requested`); institutions may provide less. From connection onward, FundFlow retains everything in your own database indefinitely, so history only grows.
 - **CSV import for pre-Plaid history** (Settings → Import) — backfill older years from bank-statement CSVs. Auto-detects date/description/amount (or debit/credit) columns, normalizes to the Plaid sign convention, skips rows overlapping the account's Plaid-synced range, and uses deterministic ids so re-importing never duplicates.
-- **Report opt-out** — the weekly email respects a per-user toggle in Settings (`weekly_report_enabled`).
+- **Notification control** — `/notifications` controls optional weekly reports, daily digests, planning alerts, and delivery timezone. Bank or sync failures and Auth security messages remain enabled.
 - **Least privilege** — the browser uses the publishable key (RLS-bound); the secret key is used only in trusted server routes.
 - **Dependency scanning** — Dependabot + `npm audit` in CI.
 
@@ -84,10 +86,9 @@ Get your Supabase URL + **publishable** and **secret** keys from
 Project Settings → API Keys. Get Plaid `client_id`/`secret` from the Plaid dashboard.
 
 ### 3. Database
-Apply the migrations in `supabase/migrations/` to your project. Either:
+Apply every migration in `supabase/migrations/` to your project, including the weekly insights preferences and delivery table. Either:
 - **Supabase CLI:** `supabase link --project-ref <ref>` then `supabase db push`, or
-- **Dashboard:** paste `0001_init.sql`, `0002_rate_limit.sql`, then
-  `0003_hardening.sql` into the SQL editor, in order.
+- **Dashboard:** run the migration files in filename order through the SQL editor.
 
 ### 4. Supabase Auth settings
 - For quick local testing, disable "Confirm email" (Auth → Providers → Email), or use the emailed confirmation link (handled by `/auth/callback`).
@@ -134,11 +135,13 @@ migrations. They verify **cross-user RLS isolation** and **sync idempotency**
 
 1. Import the repo in Vercel.
 2. Add all `.env.local` vars as Project Environment Variables (Production).
-3. `vercel.json` registers a daily cron at 07:00 UTC hitting `/api/cron/sync`.
-   Vercel automatically sends `Authorization: Bearer $CRON_SECRET`, which the
-   route verifies. Make sure `CRON_SECRET` is set in Vercel.
-4. Switch `PLAID_ENV` to `production` (and use production Plaid keys) when ready
+3. Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, and `SMTP_FROM`. Financial emails never fall back to a public test inbox in production.
+4. `vercel.json` keeps the daily sync and checks `/api/cron/weekly-report` hourly so each opted-in user can receive Monday delivery around 8:00 AM in their selected timezone. Hourly cron requires Vercel Pro or another trusted hourly scheduler. Vercel Hobby only supports daily cron invocations.
+5. Vercel sends `Authorization: Bearer $CRON_SECRET`, which each cron route verifies. Make sure `CRON_SECRET` is set.
+6. Switch `PLAID_ENV` to `production` (and use production Plaid keys) when ready
    to connect real banks.
+
+The report delivery row is claimed before rendering and has a unique user and period key, so duplicate cron calls do not send the same completed report twice. To roll back email delivery, disable the hourly scheduler first, then deploy the prior app version. Keep the migration in place so delivery history remains readable.
 
 ## Project structure
 
@@ -167,7 +170,7 @@ proxy.ts                                            session refresh + CSP + rout
 ## Known Notes / Future Todos
 
 - **`npm audit`** flags moderate PostCSS entries pinned transitively *inside Next.js itself*; the advisory affects untrusted CSS stringification (not our path). It resolves when Next bumps its internal PostCSS; we don't downgrade Next.
-- **Weekly PDF email report** is implemented (`/api/cron/weekly-report`, Sundays 07:00 UTC). It needs the `SMTP_*` vars set in production; without them the report is skipped (never sent through a test inbox).
+- **Weekly PDF email report** is implemented at `/api/cron/weekly-report`. It needs the `SMTP_*` vars set in production; without them the delivery is recorded as failed and never sent through a test inbox.
 - **Plaid webhooks** are implemented (`/api/plaid/webhook`) with ES256 signature verification in non-sandbox environments (key fetched via `/webhook_verification_key/get`, body-hash + freshness checks). Set the webhook URL in the Plaid dashboard to enable real-time sync alongside the daily cron.
 - **Optional in-app AI insights** endpoint reusing the export data contract — planned.
 

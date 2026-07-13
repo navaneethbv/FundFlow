@@ -17,6 +17,18 @@ FundFlow is strongest as a private personal finance cockpit:
 
 ## Status After PR #23
 
+### Weekly insights and notification center (2026-07-12)
+
+Implemented on `feat/weekly-insights-notifications`:
+
+- Previous Monday-to-Sunday report model with cleanup rules, category splits, refund and duplicate reconciliation.
+- Responsive HTML email plus a visual PDF attachment with category, merchant, budget, cash-flow, bank, and credit card breakdowns.
+- User timezone delivery around Monday 8:00 AM, unique delivery claims, retry state, and per-user failure isolation.
+- `/notifications` for weekly and daily email opt-ins, in-app alert controls, recent alerts, and delivery history.
+- Mandatory broken-bank and sync alerts remain enabled.
+
+Remaining rollout work is operational: apply the migration, configure SMTP, provide an hourly trusted scheduler, and complete the live email/browser QA in `docs/QA.md`.
+
 Done and verified:
 
 - Goals production pass: edit support, optimistic rollback, empty/loading/

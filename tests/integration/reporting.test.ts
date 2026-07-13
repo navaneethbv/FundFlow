@@ -216,8 +216,9 @@ suite("weekly financial reporting integration", () => {
 
   it("sends once per period, respects opt-out, and isolates send failures", async () => {
     const reference = new Date("2026-07-13T15:15:00.000Z");
-    const first = await runWeeklyReports(reference);
-    const second = await runWeeklyReports(reference);
+    const testUserIds = [userId, optedOutUserId, failingUserId];
+    const first = await runWeeklyReports(reference, testUserIds);
+    const second = await runWeeklyReports(reference, testUserIds);
 
     expect(first.reports_sent).toBeGreaterThanOrEqual(1);
     expect(first.reports_failed).toBeGreaterThanOrEqual(1);

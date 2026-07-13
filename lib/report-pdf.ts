@@ -71,11 +71,17 @@ export function generateWeeklyReportPdf(data: WeeklyReportData): Promise<Buffer>
 
     const sectionTitle = (title: string, subtitle?: string) => {
       ensureSpace(subtitle ? 42 : 28);
-      doc.fillColor(COLORS.ink).font("Helvetica-Bold").fontSize(13).text(title);
+      const y = doc.y;
+      doc.fillColor(COLORS.ink).font("Helvetica-Bold").fontSize(13).text(title, PAGE.margin, y, {
+        width: CONTENT_WIDTH,
+        lineBreak: false,
+      });
       if (subtitle) {
-        doc.moveDown(0.2).fillColor(COLORS.muted).font("Helvetica").fontSize(8.5).text(subtitle);
+        doc.fillColor(COLORS.muted).font("Helvetica").fontSize(8.5).text(subtitle, PAGE.margin, y + 20, {
+          width: CONTENT_WIDTH,
+        });
       }
-      doc.moveDown(0.55);
+      doc.y = y + (subtitle ? 46 : 29);
     };
 
     const emptyState = (message: string) => {
@@ -257,14 +263,14 @@ export function generateWeeklyReportPdf(data: WeeklyReportData): Promise<Buffer>
     const range = doc.bufferedPageRange();
     for (let index = 0; index < range.count; index += 1) {
       doc.switchToPage(range.start + index);
-      doc.strokeColor(COLORS.line).lineWidth(0.7).moveTo(PAGE.margin, 746).lineTo(PAGE.width - PAGE.margin, 746).stroke();
+      doc.strokeColor(COLORS.line).lineWidth(0.7).moveTo(PAGE.margin, 720).lineTo(PAGE.width - PAGE.margin, 720).stroke();
       doc.fillColor("#94A3B8").font("Helvetica").fontSize(7.5).text(
         "FundFlow weekly insights. Aggregated for your personal use.",
         PAGE.margin,
-        756,
+        727,
         { width: CONTENT_WIDTH - 80, lineBreak: false },
       );
-      doc.text(`${index + 1} / ${range.count}`, PAGE.width - PAGE.margin - 70, 756, {
+      doc.text(`${index + 1} / ${range.count}`, PAGE.width - PAGE.margin - 70, 727, {
         width: 70,
         align: "right",
         lineBreak: false,

@@ -60,7 +60,7 @@ function accountLabel(value: string): string {
 function sectionHeading(title: string, eyebrow: string): string {
   return `
     <tr>
-      <td style="padding:28px 32px 10px;border-left:3px solid ${COLORS.accent};">
+      <td class="mobile-gutter" style="padding:28px 32px 10px;border-left:3px solid ${COLORS.accent};">
         <div style="font-size:11px;line-height:16px;letter-spacing:1.2px;text-transform:uppercase;color:${COLORS.accent};font-weight:700;">${escapeEmailHtml(eyebrow)}</div>
         <div style="font-size:20px;line-height:28px;color:${COLORS.ink};font-weight:700;">${escapeEmailHtml(title)}</div>
       </td>
@@ -68,7 +68,7 @@ function sectionHeading(title: string, eyebrow: string): string {
 }
 
 function emptyRow(message: string): string {
-  return `<tr><td style="padding:10px 32px 4px;color:${COLORS.muted};font-size:14px;line-height:21px;">${escapeEmailHtml(message)}</td></tr>`;
+  return `<tr><td class="mobile-gutter" style="padding:10px 32px 4px;color:${COLORS.muted};font-size:14px;line-height:21px;">${escapeEmailHtml(message)}</td></tr>`;
 }
 
 function barRows(
@@ -80,7 +80,7 @@ function barRows(
     .map(
       (row) => `
       <tr>
-        <td style="padding:8px 32px;">
+        <td class="mobile-gutter" style="padding:8px 32px;">
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
             <tr>
               <td style="color:${COLORS.ink};font-size:14px;line-height:20px;font-weight:600;">${escapeEmailHtml(row.label)}</td>
@@ -101,7 +101,7 @@ function barRows(
 }
 
 function metricCell(label: string, value: string, color = COLORS.ink): string {
-  return `<td width="33.33%" valign="top" style="padding:18px 14px;background:${COLORS.panel};border:1px solid ${COLORS.line};">
+  return `<td class="metric-cell" width="33.33%" valign="top" style="padding:18px 14px;background:${COLORS.panel};border:1px solid ${COLORS.line};">
     <div style="font-size:11px;line-height:16px;text-transform:uppercase;letter-spacing:.8px;color:${COLORS.muted};font-weight:700;">${escapeEmailHtml(label)}</div>
     <div style="padding-top:4px;font-size:22px;line-height:28px;color:${color};font-weight:700;">${escapeEmailHtml(value)}</div>
   </td>`;
@@ -157,7 +157,7 @@ export function renderWeeklyReportEmail(
                 : COLORS.success;
           return `
           <tr>
-            <td style="padding:9px 32px;">
+            <td class="mobile-gutter" style="padding:9px 32px;">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                 <tr>
                   <td style="font-size:14px;line-height:20px;color:${COLORS.ink};font-weight:600;">${escapeEmailHtml(titleCase(budget.category))}</td>
@@ -176,24 +176,37 @@ export function renderWeeklyReportEmail(
   const merchantHtml = data.merchants.length
     ? data.merchants
         .map(
-          (merchant) => `<tr><td style="padding:7px 32px;color:${COLORS.ink};font-size:14px;line-height:20px;">${escapeEmailHtml(merchant.merchant)}</td><td align="right" style="padding:7px 32px 7px 12px;color:${COLORS.ink};font-size:14px;line-height:20px;font-weight:700;">${formatCurrency(merchant.amount)}</td></tr>`,
+          (merchant) => `<tr><td class="merchant-label" width="70%" style="padding:7px 12px 7px 32px;color:${COLORS.ink};font-size:14px;line-height:20px;overflow-wrap:anywhere;">${escapeEmailHtml(merchant.merchant)}</td><td class="merchant-amount" width="30%" align="right" style="padding:7px 32px 7px 12px;color:${COLORS.ink};font-size:14px;line-height:20px;font-weight:700;white-space:nowrap;">${formatCurrency(merchant.amount)}</td></tr>`,
         )
         .join("")
     : emptyRow("No merchants recorded this week.");
 
   const html = `<!doctype html>
-<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><title>FundFlow weekly insights</title></head>
+<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><title>FundFlow weekly insights</title>
+<style>
+@media only screen and (max-width:600px) {
+  .email-shell { width:100% !important; max-width:100% !important; table-layout:fixed !important; border-radius:10px !important; }
+  .email-header { padding:26px 20px 22px !important; }
+  .email-header-title { font-size:25px !important; line-height:31px !important; }
+  .metric-wrap { padding-left:12px !important; padding-right:12px !important; }
+  .metric-row, .metric-cell { display:block !important; width:auto !important; }
+  .metric-cell { margin-bottom:8px !important; }
+  .mobile-gutter { padding-left:20px !important; padding-right:20px !important; }
+  .merchant-label { padding-left:20px !important; }
+  .merchant-amount { padding-right:20px !important; }
+}
+</style></head>
 <body style="margin:0;padding:0;background:${COLORS.canvas};font-family:Arial,Helvetica,sans-serif;color:${COLORS.ink};">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:${COLORS.canvas};">
     <tr><td align="center" style="padding:24px 12px;">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background:${COLORS.panel};border:1px solid ${COLORS.line};border-radius:16px;overflow:hidden;">
-        <tr><td style="padding:34px 32px 28px;background:${COLORS.ink};">
+      <table class="email-shell" role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background:${COLORS.panel};border:1px solid ${COLORS.line};border-radius:16px;overflow:hidden;">
+        <tr><td class="email-header" style="padding:34px 32px 28px;background:${COLORS.ink};">
           <div style="font-size:12px;line-height:18px;letter-spacing:1.5px;text-transform:uppercase;color:#93c5fd;font-weight:700;">FundFlow weekly flow</div>
-          <div style="padding-top:8px;font-size:30px;line-height:36px;color:#ffffff;font-weight:700;">Your money, in motion.</div>
+          <div class="email-header-title" style="padding-top:8px;font-size:30px;line-height:36px;color:#ffffff;font-weight:700;">Your money, in motion.</div>
           <div style="padding-top:8px;font-size:14px;line-height:21px;color:#cbd5e1;">Previous Monday through Sunday | ${escapeEmailHtml(range)}</div>
         </td></tr>
-        <tr><td style="padding:20px 24px 6px;">
-          <table role="presentation" width="100%" cellspacing="8" cellpadding="0" border="0"><tr>
+        <tr><td class="metric-wrap" style="padding:20px 24px 6px;">
+          <table role="presentation" width="100%" cellspacing="8" cellpadding="0" border="0"><tr class="metric-row">
             ${metricCell("Spent", formatCurrency(data.totalSpend))}
             ${metricCell("Prior week", formatCurrency(data.previousTotalSpend))}
             ${metricCell("Change", change, changeColor)}
@@ -202,22 +215,22 @@ export function renderWeeklyReportEmail(
         ${sectionHeading("Category breakdown", "Where it went")}
         ${categoryHtml}
         ${sectionHeading("Banks and credit cards", "How it moved")}
-        <tr><td style="padding:6px 32px 0;color:${COLORS.muted};font-size:12px;line-height:18px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;">By bank</td></tr>
+        <tr><td class="mobile-gutter" style="padding:6px 32px 0;color:${COLORS.muted};font-size:12px;line-height:18px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;">By bank</td></tr>
         ${bankHtml}
-        <tr><td style="padding:18px 32px 0;color:${COLORS.muted};font-size:12px;line-height:18px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;">By credit card</td></tr>
+        <tr><td class="mobile-gutter" style="padding:18px 32px 0;color:${COLORS.muted};font-size:12px;line-height:18px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;">By credit card</td></tr>
         ${cardHtml}
         ${sectionHeading("Budget pacing", "Weekly allowance")}
         ${budgetHtml}
         ${sectionHeading("Top merchants", "Largest stops")}
         ${merchantHtml}
         ${sectionHeading("Cash flow", "Checking and savings")}
-        <tr><td style="padding:8px 24px 12px;"><table role="presentation" width="100%" cellspacing="8" cellpadding="0" border="0"><tr>
+        <tr><td class="metric-wrap" style="padding:8px 24px 12px;"><table role="presentation" width="100%" cellspacing="8" cellpadding="0" border="0"><tr class="metric-row">
           ${metricCell("Deposits", `+${formatCurrency(data.cashFlow.inflows)}`, COLORS.success)}
           ${metricCell("Withdrawals", `-${formatCurrency(data.cashFlow.outflows)}`, COLORS.danger)}
           ${metricCell("Net flow", `${data.cashFlow.net >= 0 ? "+" : ""}${formatCurrency(data.cashFlow.net)}`, data.cashFlow.net >= 0 ? COLORS.success : COLORS.danger)}
         </tr></table></td></tr>
-        <tr><td align="center" style="padding:22px 32px 14px;"><a href="${safeDashboardUrl}" style="display:inline-block;padding:12px 20px;border-radius:8px;background:${COLORS.accent};color:#ffffff;text-decoration:none;font-size:14px;line-height:20px;font-weight:700;">Open FundFlow</a></td></tr>
-        <tr><td align="center" style="padding:0 32px 30px;color:${COLORS.muted};font-size:12px;line-height:18px;">Your expanded PDF report is attached. No account balances or transaction details are included.</td></tr>
+        <tr><td class="mobile-gutter" align="center" style="padding:22px 32px 14px;"><a href="${safeDashboardUrl}" style="display:inline-block;padding:12px 20px;border-radius:8px;background:${COLORS.accent};color:#ffffff;text-decoration:none;font-size:14px;line-height:20px;font-weight:700;">Open FundFlow</a></td></tr>
+        <tr><td class="mobile-gutter" align="center" style="padding:0 32px 30px;color:${COLORS.muted};font-size:12px;line-height:18px;">Your expanded PDF report is attached. No account balances or transaction details are included.</td></tr>
       </table>
     </td></tr>
   </table>

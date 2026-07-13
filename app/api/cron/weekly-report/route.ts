@@ -41,14 +41,17 @@ function safeDeliveryError(error: unknown): string {
 
 export async function runWeeklyReports(
   reference = new Date(),
+  onlyUserIds?: string[],
 ): Promise<WeeklyRunResult> {
   const service = createServiceClient();
   // This is the trusted scheduler's only all-user query. Every report data,
   // delivery, and auth lookup after it is explicitly scoped to the profile id.
-  const { data: profiles, error } = await service
+  let profileQuery = service
     .from("profiles")
     .select("id, timezone")
     .eq("weekly_report_enabled", true);
+  if (onlyUserIds) profileQuery = profileQuery.in("id", onlyUserIds);
+  const { data: profiles, error } = await profileQuery;
   if (error) throw error;
 
   const result: WeeklyRunResult = {
