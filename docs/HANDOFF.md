@@ -12,7 +12,7 @@ Deployment requirements:
 
 - `20260713051741_weekly_insights_notifications.sql` was applied to the live FundFlow project on 2026-07-12 through the Supabase migration API.
 - Configure production `SMTP_*` values.
-- Use Vercel Pro or another trusted hourly scheduler for the requested per-user Monday 8:00 AM delivery behavior.
+- GitHub Actions provides the hourly trigger because the linked Vercel project is on Hobby. Repository secrets `FUNDFLOW_APP_URL` and `CRON_SECRET` were configured on 2026-07-12.
 - Run the weekly email visual QA section in `docs/QA.md` with a signed-in browser and real email client before production rollout.
 
 ## Latest session (2026-07-08, branch `feat/todos-roadmap`)

@@ -126,4 +126,4 @@ Release gate:
 - `npm run build`
 - `git diff --check`
 - Confirm migrations are applied before browser-testing roadmap tables.
-- Confirm the hourly weekly scheduler is provided by Vercel Pro or another trusted scheduler.
+- Confirm `weekly-report.yml` has access to the `FUNDFLOW_APP_URL` and `CRON_SECRET` repository secrets.

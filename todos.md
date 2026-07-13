@@ -27,7 +27,7 @@ Implemented on `feat/weekly-insights-notifications`:
 - `/notifications` for weekly and daily email opt-ins, in-app alert controls, recent alerts, and delivery history.
 - Mandatory broken-bank and sync alerts remain enabled.
 
-Remaining rollout work is operational: apply the migration, configure SMTP, provide an hourly trusted scheduler, and complete the live email/browser QA in `docs/QA.md`.
+Remaining rollout work is operational: configure SMTP and complete the live email/browser QA in `docs/QA.md`. The migration is applied and GitHub Actions provides the hourly scheduler without requiring Vercel Pro.
 
 Done and verified:
 

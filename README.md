@@ -22,7 +22,7 @@ FundFlow can also deliver a visual weekly report for the previous Monday through
 - **Auth:** Supabase Auth (email + password or **Google sign-in**, optional **TOTP MFA**), cookie sessions via `@supabase/ssr`.
 - **Database:** Supabase Postgres with **Row Level Security** on every table.
 - **Bank data:** Plaid (`/link/token/create`, `/item/public_token/exchange`, `/transactions/sync`, `/transactions/recurring/get`).
-- **Scheduling:** Vercel Cron (daily sync and hourly timezone-aware weekly report check).
+- **Scheduling:** Vercel Cron for daily sync and GitHub Actions for the hourly timezone-aware weekly report check.
 
 ## Architecture
 
@@ -136,12 +136,13 @@ migrations. They verify **cross-user RLS isolation** and **sync idempotency**
 1. Import the repo in Vercel.
 2. Add all `.env.local` vars as Project Environment Variables (Production).
 3. Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, and `SMTP_FROM`. Financial emails never fall back to a public test inbox in production.
-4. `vercel.json` keeps the daily sync and checks `/api/cron/weekly-report` hourly so each opted-in user can receive Monday delivery around 8:00 AM in their selected timezone. Hourly cron requires Vercel Pro or another trusted hourly scheduler. Vercel Hobby only supports daily cron invocations.
-5. Vercel sends `Authorization: Bearer $CRON_SECRET`, which each cron route verifies. Make sure `CRON_SECRET` is set.
-6. Switch `PLAID_ENV` to `production` (and use production Plaid keys) when ready
+4. `vercel.json` keeps the daily sync on Vercel Hobby. The `weekly-report.yml` GitHub Actions workflow checks `/api/cron/weekly-report` hourly so each opted-in user can receive Monday delivery around 8:00 AM in their selected timezone. Add repository secrets `FUNDFLOW_APP_URL` and `CRON_SECRET` before merging.
+5. Both schedulers send `Authorization: Bearer $CRON_SECRET`, which each cron route verifies.
+6. Vercel Pro can host the hourly trigger instead if you prefer to consolidate schedulers, but Hobby rejects cron expressions that run more than once per day.
+7. Switch `PLAID_ENV` to `production` (and use production Plaid keys) when ready
    to connect real banks.
 
-The report delivery row is claimed before rendering and has a unique user and period key, so duplicate cron calls do not send the same completed report twice. To roll back email delivery, disable the hourly scheduler first, then deploy the prior app version. Keep the migration in place so delivery history remains readable.
+The report delivery row is claimed before rendering and has a unique user and period key, so duplicate cron calls do not send the same completed report twice. To roll back email delivery, disable the GitHub Actions workflow first, then deploy the prior app version. Keep the migration in place so delivery history remains readable.
 
 ## Project structure
 
