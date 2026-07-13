@@ -18,5 +18,10 @@ export default defineConfig({
     // Integration tests hit a shared Supabase project (and its Auth rate limits),
     // so run test files sequentially to avoid cross-file interference.
     fileParallelism: false,
+    coverage: {
+      provider: "v8",
+      reporter: ["text-summary", "lcov"],
+      include: ["app/**", "components/**", "lib/**", "scripts/**"],
+    },
   },
 });
