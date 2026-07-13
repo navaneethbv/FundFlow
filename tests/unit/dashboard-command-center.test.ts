@@ -81,4 +81,19 @@ describe("dashboard command center", () => {
     expect(months).toContain("activeView");
     expect(months).toContain("dashboardHref");
   });
+
+  it("keeps daily monitoring content ahead of secondary detail", () => {
+    expect(existsSync("components/dashboard/MonitorView.tsx")).toBe(true);
+    const source = readFileSync("components/dashboard/MonitorView.tsx", "utf8");
+
+    expect(source.indexOf("Recent activity")).toBeLessThan(
+      source.indexOf("Spending by category"),
+    );
+    expect(source.indexOf("Top merchants")).toBeLessThan(
+      source.indexOf("Recurring streams"),
+    );
+    expect(source).toContain("Nothing needs attention right now.");
+    expect(source).not.toContain("PlanningDepth");
+    expect(source).not.toContain("CardCarousel");
+  });
 });
