@@ -1,6 +1,19 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-07-08. Read this first to resume.
+Last updated: 2026-07-12. Read this first to resume.
+
+## Latest session (2026-07-12, branch `feat/weekly-insights-notifications`)
+
+Implemented timezone-aware weekly spending insights and a first-class notification center. Reports cover the previous Monday through Sunday and include categorized spending, prior-week comparison, top merchants, budget pace, depository cash flow, and bank and credit card spend. The HTML email and attached PDF exclude balances, masks, account numbers, and transaction detail.
+
+Delivery is idempotent through `weekly_report_deliveries`, retries failed or stale work, isolates per-user failures, and sends to the Supabase Auth signup email. `/notifications` controls optional weekly and daily email plus optional planning alerts. Broken-bank, sync, Auth, and security messages remain mandatory.
+
+Deployment requirements:
+
+- `20260713051741_weekly_insights_notifications.sql` was applied to the live FundFlow project on 2026-07-12 through the Supabase migration API.
+- Configure production `SMTP_*` values.
+- GitHub Actions provides the hourly trigger because the linked Vercel project is on Hobby. Repository secrets `FUNDFLOW_APP_URL` and `CRON_SECRET` were configured on 2026-07-12.
+- Run the weekly email visual QA section in `docs/QA.md` with a signed-in browser and real email client before production rollout.
 
 ## Latest session (2026-07-11, branch `feat/todos-roadmap`)
 

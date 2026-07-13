@@ -14,7 +14,7 @@ export default defineConfig({
   test: {
     environment: "node",
     setupFiles: ["./tests/setup.ts"],
-    include: ["tests/**/*.test.ts"],
+    include: ["tests/**/*.test.ts", "scripts/**/*.test.ts"],
     // Integration tests hit a shared Supabase project (and its Auth rate limits),
     // so run test files sequentially to avoid cross-file interference.
     fileParallelism: false,

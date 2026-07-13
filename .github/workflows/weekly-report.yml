@@ -1,0 +1,36 @@
+name: Weekly report scheduler
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: weekly-report-scheduler
+  cancel-in-progress: false
+
+jobs:
+  invoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Invoke timezone-aware weekly reports
+        env:
+          APP_URL: ${{ secrets.FUNDFLOW_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        shell: bash
+        run: |
+          response_file="$(mktemp)"
+          status="$(curl --silent --show-error \
+            --retry 3 \
+            --retry-all-errors \
+            --max-time 120 \
+            --output "$response_file" \
+            --write-out "%{http_code}" \
+            --header "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/cron/weekly-report")"
+          cat "$response_file"
+          test "$status" = "200"

@@ -195,4 +195,41 @@ suite("roadmap feature RLS", () => {
     expect(ownMemberships ?? []).toHaveLength(1);
     expect(otherMemberships ?? []).toHaveLength(0);
   });
+
+  it("lets owners read weekly delivery status without allowing client writes", async () => {
+    const { error: insertError } = await admin
+      .from("weekly_report_deliveries")
+      .insert({
+        user_id: idA,
+        period_start: "2026-07-06",
+        period_end: "2026-07-12",
+        status: "sent",
+        sent_at: "2026-07-13T15:00:00Z",
+      });
+    expect(insertError).toBeNull();
+
+    const { data: ownRows, error: ownError } = await clientA
+      .from("weekly_report_deliveries")
+      .select("period_start, status");
+    expect(ownError).toBeNull();
+    expect(ownRows).toEqual([
+      { period_start: "2026-07-06", status: "sent" },
+    ]);
+
+    const { data: otherRows, error: otherError } = await clientB
+      .from("weekly_report_deliveries")
+      .select("period_start, status");
+    expect(otherError).toBeNull();
+    expect(otherRows ?? []).toHaveLength(0);
+
+    const { error: clientWriteError } = await clientA
+      .from("weekly_report_deliveries")
+      .insert({
+        user_id: idA,
+        period_start: "2026-07-13",
+        period_end: "2026-07-19",
+        status: "processing",
+      });
+    expect(clientWriteError).not.toBeNull();
+  });
 });

@@ -11,14 +11,14 @@ import BanksSection from "@/components/settings/BanksSection";
 import DangerZone from "@/components/settings/DangerZone";
 import ManualAccountsSection from "@/components/settings/ManualAccountsSection";
 import MerchantRulesSection from "@/components/settings/MerchantRulesSection";
-import NotificationsSection from "@/components/settings/NotificationsSection";
-import PlanningPreferencesSection from "@/components/settings/PlanningPreferencesSection";
 import AuditLogSection from "@/components/settings/AuditLogSection";
 import SessionsSection from "@/components/settings/SessionsSection";
 import PasskeysSection from "@/components/settings/PasskeysSection";
 import HouseholdSection from "@/components/settings/HouseholdSection";
 import { buildAuditLogPage, buildSessionList } from "@/lib/security-account";
 import { currentSessionId } from "@/lib/http";
+import ButtonLink from "@/components/ui/ButtonLink";
+import Panel from "@/components/ui/Panel";
 
 export const dynamic = "force-dynamic";
 
@@ -36,8 +36,6 @@ export default async function SettingsPage() {
     { data: accounts },
     { data: merchantRules },
     { data: manualAccounts },
-    { data: notifications },
-    { data: alertPreferences },
     { data: aiSettings },
     { data: auditLogs },
     { data: sessionRows },
@@ -46,7 +44,7 @@ export default async function SettingsPage() {
     await Promise.all([
       supabase
         .from("profiles")
-        .select("ai_export_enabled, weekly_report_enabled")
+        .select("ai_export_enabled")
         .eq("id", user?.id ?? "")
         .single(),
       supabase
@@ -66,16 +64,6 @@ export default async function SettingsPage() {
         .from("manual_accounts")
         .select("id, name, account_type, balance, include_in_net_worth")
         .order("created_at"),
-      supabase
-        .from("notifications")
-        .select("id, type, severity, title, body, read_at, created_at")
-        .order("created_at", { ascending: false })
-        .limit(5),
-      supabase
-        .from("alert_preferences")
-        .select("broken_bank, budget_exceeded, goal_reached, large_transaction, low_cash_forecast")
-        .eq("user_id", user?.id ?? "")
-        .maybeSingle(),
       supabase
         .from("ai_settings")
         .select("enabled")
@@ -138,7 +126,7 @@ export default async function SettingsPage() {
           <div className="space-y-6">
             <ExportSection initialEnabled={profile?.ai_export_enabled ?? true} />
             <div id="reports">
-              <ReportsSection initialEnabled={profile?.weekly_report_enabled ?? true} />
+              <ReportsSection />
             </div>
           </div>
         </div>
@@ -155,12 +143,11 @@ export default async function SettingsPage() {
           <ManualAccountsSection initialAccounts={manualAccounts ?? []} />
         </div>
 
-        <div id="alerts" className="grid gap-6 xl:grid-cols-2">
-          <NotificationsSection initialNotifications={notifications ?? []} />
-          <PlanningPreferencesSection
-            initialPreferences={alertPreferences}
-            initialAiEnabled={aiSettings?.enabled ?? false}
-          />
+        <div id="alerts">
+          <Panel title="Notifications" eyebrow="Alerts and delivery">
+            <p className="mb-4 text-sm text-muted">Review your feed and manage optional in-app alerts from the notification center.</p>
+            <ButtonLink href="/notifications">Open notifications</ButtonLink>
+          </Panel>
         </div>
 
         <div id="security" className="grid gap-6 xl:grid-cols-2">

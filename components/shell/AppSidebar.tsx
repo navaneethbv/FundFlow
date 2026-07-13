@@ -6,6 +6,7 @@ import {
   FileText,
   LayoutDashboard,
   LineChart,
+  Mail,
   PiggyBank,
   Settings,
   Target,
@@ -20,6 +21,7 @@ export type AppShellActive =
   | "budgets"
   | "goals"
   | "reports"
+  | "notifications"
   | "settings";
 
 type NavItem = {
@@ -37,6 +39,7 @@ const navItems: NavItem[] = [
   { label: "Budgets", href: "/settings#budgets", key: "budgets", icon: PiggyBank },
   { label: "Goals", href: "/goals", key: "goals", icon: Target },
   { label: "Reports", href: "/settings#reports", key: "reports", icon: FileText },
+  { label: "Notifications", href: "/notifications", key: "notifications", icon: Mail },
   { label: "Settings", href: "/settings", key: "settings", icon: Settings },
 ];
 
