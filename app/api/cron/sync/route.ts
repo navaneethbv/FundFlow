@@ -47,18 +47,36 @@ export async function GET(request: NextRequest) {
         try {
           const todayStart = new Date();
           todayStart.setUTCHours(0, 0, 0, 0);
-          const { data: todayNotifications } = await service
+          const [{ data: profile, error: profileError }, { data: todayNotifications, error: notificationError }] = await Promise.all([
+            service
+              .from("profiles")
+              .select("daily_digest_email_enabled")
+              .eq("id", userId)
+              .maybeSingle(),
+            service
             .from("notifications")
             .select("type, title, body")
             .eq("user_id", userId)
-            .gte("created_at", todayStart.toISOString());
+            .gte("created_at", todayStart.toISOString()),
+          ]);
+          if (profileError) throw profileError;
+          if (notificationError) throw notificationError;
 
-          if (todayNotifications && todayNotifications.length > 0) {
+          const digestNotifications = profile?.daily_digest_email_enabled === false
+            ? (todayNotifications ?? []).filter((notification) => notification.type === "broken_bank")
+            : (todayNotifications ?? []);
+
+          if (digestNotifications.length > 0) {
             const { data: userData } = await service.auth.admin.getUserById(userId);
             const email = userData?.user?.email;
             if (email) {
               const dateStr = new Date().toISOString().slice(0, 10);
-              await sendDailyDigestEmail(email, todayNotifications, dateStr);
+              await sendDailyDigestEmail(
+                email,
+                digestNotifications,
+                dateStr,
+                `${serverEnv.appUrl ?? "http://localhost:3000"}/notifications`,
+              );
             }
           }
         } catch (digestErr) {

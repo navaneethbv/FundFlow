@@ -31,7 +31,7 @@ export async function createNotification(
     low_cash_forecast: true,
   };
 
-  if (!shouldSendAlert(type, preferences)) {
+  if (type !== "broken_bank" && !shouldSendAlert(type, preferences)) {
     return null;
   }
 

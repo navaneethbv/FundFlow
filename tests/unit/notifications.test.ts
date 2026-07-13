@@ -89,6 +89,25 @@ describe("notifications manager", () => {
     expect(result).toBeNull();
   });
 
+  it("keeps broken bank alerts enabled despite a legacy opt-out", async () => {
+    mockSingle.mockResolvedValueOnce({
+      data: { broken_bank: false },
+      error: null,
+    });
+    mockSingle.mockResolvedValueOnce({
+      data: { id: "critical-alert" },
+      error: null,
+    });
+
+    const result = await createNotification("user-1", "broken_bank", {
+      title: "Reconnect your bank",
+      body: "A connection needs attention.",
+    });
+
+    expect(result).toEqual({ id: "critical-alert" });
+    expect(mockInsert).toHaveBeenCalled();
+  });
+
   it("inserts notification when preference is enabled", async () => {
     const mockCreatedNotification = {
       id: "notif-123",
