@@ -46,7 +46,7 @@ export default function DashboardToolbar({
   return (
     <section className="space-y-3 rounded-card border border-panel-border bg-panel p-3 sm:p-4">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 xl:shrink-0">
           <ConnectBankButton />
           {hasBanks && <RefreshButton />}
           <ButtonLink
@@ -67,7 +67,7 @@ export default function DashboardToolbar({
         {accounts.length > 0 && (
           <nav
             aria-label="Account filter"
-            className="flex max-w-full gap-1.5 overflow-x-auto scrollbar-none"
+            className="flex min-w-0 max-w-full gap-1.5 overflow-x-auto scrollbar-none"
           >
             <Link
               href={withExtraParams(
