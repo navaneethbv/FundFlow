@@ -6,8 +6,8 @@ describe("settings roadmap workflows", () => {
     for (const file of [
       "components/settings/MerchantRulesSection.tsx",
       "components/settings/ManualAccountsSection.tsx",
-      "components/settings/NotificationsSection.tsx",
-      "components/settings/PlanningPreferencesSection.tsx",
+      "components/notifications/NotificationFeed.tsx",
+      "components/notifications/InAppPreferences.tsx",
     ]) {
       expect(existsSync(file), `${file} should exist`).toBe(true);
     }
@@ -18,8 +18,9 @@ describe("settings roadmap workflows", () => {
 
     expect(page).toContain("MerchantRulesSection");
     expect(page).toContain("ManualAccountsSection");
-    expect(page).toContain("NotificationsSection");
-    expect(page).toContain("PlanningPreferencesSection");
+    expect(page).not.toContain("NotificationsSection");
+    expect(page).not.toContain("PlanningPreferencesSection");
+    expect(page).toContain('href="/notifications"');
     expect(page).toContain('id="cleanup"');
     expect(page).toContain('id="alerts"');
   });
