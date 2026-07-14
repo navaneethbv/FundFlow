@@ -7,8 +7,8 @@ problems. This spec covers the fixes. No schema change, no new query.
 
 `buildWeeklyReport` labels cards with the raw Plaid `account.name`
 (`lib/weekly-report.ts`). Plaid returns `"CREDIT CARD"` for one of the Chase
-cards, so the report printed a row literally titled `CREDIT CARD` for $1,041.34,
-the largest card line on the page.
+cards, so the report printed a row literally titled `CREDIT CARD`, which
+happened to be the largest card line on the page and named nothing at all.
 
 **Rejected: reuse `detectCardDesign` from `lib/card-design.ts`.** It does not
 solve this (`"CREDIT CARD"` falls through every branch to `name || "Credit
@@ -29,16 +29,17 @@ The report already builds `institutionById` for the bank breakdown, so the
 institution is in hand. Labels are produced in the data layer, so this fixes the
 **email and the PDF at once**.
 
-Verified against real data: the three Chase cards sum to the Chase bank total
-($1,324.17) and the two Amex cards to the Amex total ($31.52), so the prefixes
-are correct.
+Verified against real data: each institution's cards sum exactly to that
+institution's bank total, so the prefixes attribute cards to the right issuer.
 
 ## 2. The two breakdowns look additive but are not
 
-Banks sum to the full week's spend ($1,485.69). Cards sum to $1,355.69, a
-*subset* of the same money, because each card rolls up into its bank. Nothing on
-the page says so. Add a line to the "Bank and card breakdown" subtitle stating
-that card totals are already counted in their bank's total.
+Banks sum to the full week's spend. Cards sum to a *subset* of that same money,
+because each card rolls up into its bank, and any depository spend appears only
+under its bank. Nothing on the page says so, and the two columns sit side by
+side inviting the reader to add them. Add a line to the "Bank and card
+breakdown" subtitle stating that card totals are already counted in their bank's
+total.
 
 ## 3. Page balance
 
@@ -50,8 +51,8 @@ Budget pace stays even when empty; it reads as a nudge to configure budgets.
 
 ## 4. Invisible bars
 
-A 1% category (Personal Care, $16.55) renders as a dot. Give bars a floor width
-so small slices stay legible.
+A 1% category renders as a dot, which reads as a rendering artifact rather than
+a value. Raise the bar floor (6pt to 16pt) so small slices stay legible.
 
 ## Out of scope
 
