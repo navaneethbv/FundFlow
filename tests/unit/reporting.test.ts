@@ -26,6 +26,7 @@ vi.mock("nodemailer", () => {
 });
 
 import { sendWeeklyReportEmail, sendDailyDigestEmail } from "@/lib/reporting";
+import type { WeeklyReportData } from "@/lib/weekly-report";
 
 describe("lib/reporting", () => {
   const originalEnv = { ...process.env };
@@ -64,7 +65,7 @@ describe("lib/reporting", () => {
       previousTotalSpend: 100,
       cashFlow: { inflows: 200, outflows: 150, net: 50 },
       merchants: [],
-    } as any;
+    } as unknown as WeeklyReportData;
 
     const res = await sendWeeklyReportEmail(
       data,
@@ -100,7 +101,7 @@ describe("lib/reporting", () => {
       previousTotalSpend: 100,
       cashFlow: { inflows: 200, outflows: 150, net: 50 },
       merchants: [],
-    } as any;
+    } as unknown as WeeklyReportData;
 
     await expect(
       sendWeeklyReportEmail(data, Buffer.from("pdf"), "http://localhost"),

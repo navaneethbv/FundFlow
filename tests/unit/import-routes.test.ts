@@ -49,7 +49,7 @@ vi.mock("@/lib/supabase/service", () => ({
 import { POST as previewPost } from "@/app/api/import/preview/route";
 import { POST as commitPost } from "@/app/api/import/commit/route";
 import { POST as csvPost } from "@/app/api/import/csv/route";
-import { NextResponse, NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 
 describe("Import API Routes", () => {
   beforeEach(() => {

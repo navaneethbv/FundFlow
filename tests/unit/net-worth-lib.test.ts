@@ -85,7 +85,7 @@ describe("writeNetWorthSnapshot", () => {
   });
 
   it("handles null return values from supabase calls safely", async () => {
-    mockSupabase.from.mockImplementation((table: string) => {
+    mockSupabase.from.mockImplementation(() => {
       const chain = {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockResolvedValue({ data: null }),

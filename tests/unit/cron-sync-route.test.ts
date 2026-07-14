@@ -59,7 +59,7 @@ const mockErrorResponse = vi.fn((context, err) => {
   return new Response("error", { status: 500 });
 });
 vi.mock("@/lib/http", () => ({
-  errorResponse: (context: string, err: any) => mockErrorResponse(context, err),
+  errorResponse: (context: string, err: unknown) => mockErrorResponse(context, err),
 }));
 
 import { GET } from "@/app/api/cron/sync/route";
@@ -113,8 +113,9 @@ describe("GET /api/cron/sync", () => {
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown[]; error: unknown }) => unknown) => unknown,
       };
-      (query as any).then = (onfulfilled: any) =>
+      query.then = (onfulfilled) =>
         Promise.resolve({ data, error: null }).then(onfulfilled);
       return query;
     });

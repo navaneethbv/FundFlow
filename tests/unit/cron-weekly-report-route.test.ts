@@ -15,7 +15,7 @@ vi.mock("@/lib/report-delivery", () => ({
   claimWeeklyDelivery: vi.fn(),
   markWeeklyDeliveryFailed: vi.fn(),
   markWeeklyDeliverySent: vi.fn(),
-  safeDeliveryError: (e: any) => e.message,
+  safeDeliveryError: (e: { message: string }) => e.message,
 }));
 
 const mockGetWeeklyReportData = vi.fn();
@@ -63,7 +63,7 @@ const mockErrorResponse = vi.fn((context, err) => {
   return new Response("error", { status: 500 });
 });
 vi.mock("@/lib/http", () => ({
-  errorResponse: (context: string, err: any) => mockErrorResponse(context, err),
+  errorResponse: (context: string, err: unknown) => mockErrorResponse(context, err),
 }));
 
 import { GET } from "@/app/api/cron/weekly-report/route";
@@ -98,8 +98,9 @@ describe("GET /api/cron/weekly-report", () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         in: vi.fn().mockReturnThis(),
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown[]; error: unknown }) => unknown) => unknown,
       };
-      (query as any).then = (onfulfilled: any) =>
+      query.then = (onfulfilled) =>
         Promise.resolve({ data, error: null }).then(onfulfilled);
       return query;
     });
@@ -144,8 +145,9 @@ describe("GET /api/cron/weekly-report", () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         in: vi.fn().mockReturnThis(),
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown[]; error: unknown }) => unknown) => unknown,
       };
-      (query as any).then = (onfulfilled: any) =>
+      query.then = (onfulfilled) =>
         Promise.resolve({ data, error: null }).then(onfulfilled);
       return query;
     });

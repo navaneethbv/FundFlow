@@ -30,7 +30,7 @@ import {
   GET as sessionsGet,
   DELETE as sessionsDelete,
 } from "@/app/api/settings/sessions/route";
-import { NextResponse, NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 
 describe("Settings API Routes", () => {
   beforeEach(() => {
@@ -62,7 +62,9 @@ describe("Settings API Routes", () => {
       const request = new Request(
         "http://localhost/api/settings/audit",
       ) as NextRequest;
-      (request as any).nextUrl = { searchParams: new URLSearchParams() };
+      Object.defineProperty(request, "nextUrl", {
+        value: { searchParams: new URLSearchParams() },
+      });
 
       const res = await auditGet(request);
       expect(res.status).toBe(200);
@@ -93,7 +95,9 @@ describe("Settings API Routes", () => {
       const request = new Request(
         "http://localhost/api/settings/audit",
       ) as NextRequest;
-      (request as any).nextUrl = { searchParams: new URLSearchParams() };
+      Object.defineProperty(request, "nextUrl", {
+        value: { searchParams: new URLSearchParams() },
+      });
       mockErrorResponse.mockReturnValue(new Response("error", { status: 500 }));
 
       const res = await auditGet(request);

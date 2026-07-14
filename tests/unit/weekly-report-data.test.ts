@@ -67,12 +67,13 @@ describe("getWeeklyReportData", () => {
           lte: vi.fn().mockReturnThis(),
           order: vi.fn().mockReturnThis(),
           limit: vi.fn().mockResolvedValue({ data, error: null }),
+          then: undefined as unknown as (onfulfilled: (value: { data: unknown[]; error: unknown }) => unknown) => unknown,
         };
-        (query as any).then = (onfulfilled: any) =>
+        query.then = (onfulfilled) =>
           Promise.resolve({ data, error: null }).then(onfulfilled);
         return query;
       }),
-    } as any;
+    } as never;
 
     const period = {
       start: "2026-07-06",

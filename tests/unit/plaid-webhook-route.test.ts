@@ -20,7 +20,7 @@ const mockErrorResponse = vi.fn((context, err) => {
 });
 const mockBadRequest = vi.fn((msg) => new Response(msg, { status: 400 }));
 vi.mock("@/lib/http", () => ({
-  errorResponse: (context: string, err: any) => mockErrorResponse(context, err),
+  errorResponse: (context: string, err: unknown) => mockErrorResponse(context, err),
   badRequest: (msg: string) => mockBadRequest(msg),
 }));
 

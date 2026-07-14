@@ -158,7 +158,7 @@ suite("RLS cross-user isolation", () => {
     expect(readGoals ?? []).toHaveLength(0);
 
     // User B tries to update
-    const { error: updateError } = await clientB
+    await clientB
       .from("goals")
       .update({ saved_amount: 9999 })
       .eq("id", goal!.id);
@@ -168,7 +168,7 @@ suite("RLS cross-user isolation", () => {
     // let's verify if user B can actually mutate it.
     
     // User B tries to delete
-    const { error: deleteError } = await clientB
+    await clientB
       .from("goals")
       .delete()
       .eq("id", goal!.id);

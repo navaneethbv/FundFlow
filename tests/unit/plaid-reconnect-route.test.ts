@@ -35,7 +35,7 @@ vi.mock("@/lib/log", () => ({
 }));
 
 import { POST } from "@/app/api/plaid/reconnect/route";
-import { NextResponse, NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 
 describe("POST /api/plaid/reconnect", () => {
   beforeEach(() => {

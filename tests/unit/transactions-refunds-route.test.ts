@@ -18,7 +18,7 @@ vi.mock("@/lib/transaction-quality", () => ({
 }));
 
 import { GET, POST } from "@/app/api/transactions/refunds/route";
-import { NextResponse, NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 
 describe("Transactions Refunds API Route", () => {
   beforeEach(() => {
