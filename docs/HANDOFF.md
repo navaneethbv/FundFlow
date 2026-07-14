@@ -2,25 +2,43 @@
 
 Last updated: 2026-07-13. Read this first to resume.
 
-## Latest session (2026-07-13, branch `navaneethbv-patch-1`)
+## Latest session (2026-07-13, weekly report scheduler repair)
 
-Fixed the weekly report scheduler, which had failed every run since it was
-configured. Two independent causes:
+The weekly report had never once delivered. Four independent faults were
+stacked on top of each other; each one only became visible after the one in
+front of it was cleared. End state: a `workflow_dispatch` run returned
+`{"ok":true,"users":1,"due":1,"reports_sent":1,"reports_failed":0}`, the
+2026-07-06..07-12 report landed, and an immediate re-run returned
+`reports_skipped:1`, confirming the delivery claim prevents duplicates.
 
-- `FUNDFLOW_APP_URL` pointed at a URL Vercel redirects (an `http://` origin or
-  a Deployment-Protection-gated alias), so curl got a 3xx `Redirecting...` body
-  and never reached the app. The secret now holds the canonical production
-  domain `https://fund-flow-swart.vercel.app`; a `workflow_dispatch` run
-  returns 200. **If the production alias ever changes, update this secret.**
-- `isWeeklyReportDue` matched a single local hour (Monday 08:00), and GitHub
-  Actions cron is best-effort — it delayed and dropped hours, including that
-  one, so the 2026-07-06..07-12 report was never owed to anyone. The check is
-  now "Monday 08:00 local onward, all week", so a skipped or failed run catches
-  up on any later run. `claimWeeklyDelivery` dedupes on `period_start`, so a
-  delivered week is claimed and never re-sent.
-
-Not yet deployed: the widened window ships this week's missed report on the
-first hourly run after it reaches production.
+1. **Wrong scheduler URL.** `FUNDFLOW_APP_URL` held a URL that Vercel
+   redirects (an `http://` origin or a Deployment-Protection-gated alias), so
+   curl got a 3xx `Redirecting...` body and never reached the app. The secret
+   now holds the canonical production domain `https://fund-flow-swart.vercel.app`.
+   **If that alias ever changes, update the secret.** Note curl cannot simply
+   follow the redirect: it strips `Authorization` across hosts.
+2. **One-hour due window.** `isWeeklyReportDue` matched a single local hour
+   (Monday 08:00), and GitHub Actions cron is best-effort: it delayed and
+   dropped hours, including that one, so the report was never owed to anyone.
+   It is now "Monday 08:00 local onward, all week", so a skipped or failed run
+   catches up later. Safe because the period is constant for the seven days
+   after it rolls over, and `claimWeeklyDelivery` dedupes on `period_start`.
+   Consequence: a `failed` delivery now retries hourly for the rest of the
+   week rather than being abandoned.
+3. **pdfkit fonts missing from the bundle.** pdfkit reads its standard-font
+   metrics off disk at render time. It is not auto-externalized, so Turbopack
+   bundled it and rewrote the read to `/ROOT/node_modules/pdfkit/js/data/
+   Helvetica.afm`, which does not exist in the deployed function. Every send
+   died with ENOENT before an email was attempted, and `/api/export/report`
+   was broken the same way. Fixed in `next.config.ts` with
+   `serverExternalPackages: ["pdfkit"]` plus `outputFileTracingIncludes` for
+   both PDF routes. **Any new route that renders a PDF must be added there.**
+4. **No SMTP.** Production had no `SMTP_*` vars at all, so `lib/reporting.ts`
+   refused to send (by design). Now configured against Resend. Resend's shared
+   `onboarding@resend.dev` sender only delivers to the Resend account's own
+   address; sending to any other recipient returns `550`. If the recipient
+   address ever changes, either verify a domain and set `SMTP_FROM`, or move
+   to an SMTP provider without that restriction.
 
 ## Previous session (2026-07-12, branch `feat/weekly-insights-notifications`)
 
