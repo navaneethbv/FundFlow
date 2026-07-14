@@ -59,6 +59,28 @@ export interface WeeklyReportData {
   cashFlow: { inflows: number; outflows: number; net: number };
 }
 
+// Plaid hands back whatever the bank calls the account, which for one Chase card
+// is the literal string "CREDIT CARD". Alone that names nothing, so always carry
+// the institution. Only rewrite the casing of a name that is entirely uppercase:
+// "Platinum Card®" and "Blue Cash Preferred®" are already how the issuer writes
+// them, and a blind title-case would mangle them.
+export function formatCardLabel(
+  accountName: string | null | undefined,
+  institutionName: string | null | undefined,
+): string {
+  const name = accountName?.trim();
+  const institution = institutionName?.trim();
+  const shouting = !!name && !/[a-z]/.test(name) && /[A-Z]/.test(name);
+  const label = name
+    ? shouting
+      ? name
+          .toLowerCase()
+          .replace(/\b[a-z]/g, (letter) => letter.toUpperCase())
+      : name
+    : "Credit card";
+  return institution ? `${institution} · ${label}` : label;
+}
+
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -177,7 +199,13 @@ export function buildWeeklyReportModel(
     currentSpend.filter(
       (transaction) => accountById.get(transaction.accountId)?.type === "credit",
     ),
-    (transaction) => accountById.get(transaction.accountId)?.name ?? "Credit card",
+    (transaction) => {
+      const account = accountById.get(transaction.accountId);
+      return formatCardLabel(
+        account?.name,
+        account ? institutionById.get(account.plaidItemId) : null,
+      );
+    },
   );
 
   const categoryAmount = new Map(

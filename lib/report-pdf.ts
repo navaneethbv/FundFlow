@@ -123,7 +123,9 @@ export function generateWeeklyReportPdf(data: WeeklyReportData): Promise<Buffer>
           });
         }
         doc.roundedRect(PAGE.margin, y + 17, CONTENT_WIDTH, 6, 3).fill(COLORS.line);
-        doc.roundedRect(PAGE.margin, y + 17, Math.max(6, CONTENT_WIDTH * (row.amount / max)), 6, 3).fill(color);
+        // Floor the fill well above the 6pt corner radius: at 6pt a 1% slice
+        // renders as a dot that reads as a rendering artifact, not a value.
+        doc.roundedRect(PAGE.margin, y + 17, Math.max(16, CONTENT_WIDTH * (row.amount / max)), 6, 3).fill(color);
         doc.y = y + 34;
       }
       doc.moveDown(0.25);
@@ -171,7 +173,7 @@ export function generateWeeklyReportPdf(data: WeeklyReportData): Promise<Buffer>
       "No eligible spending was recorded for this week.",
     );
 
-    sectionTitle("Bank and card breakdown", "Aggregated spend only. Balances, account numbers, and transaction details are excluded.");
+    sectionTitle("Bank and card breakdown", "Aggregated spend only; balances, account numbers, and transaction details are excluded. Each card's spend is already counted in its bank's total, so the two columns do not add up.");
     const bankY = doc.y;
     const columnWidth = (CONTENT_WIDTH - 18) / 2;
     const compactList = (
@@ -207,6 +209,16 @@ export function generateWeeklyReportPdf(data: WeeklyReportData): Promise<Buffer>
     const cardsEnd = compactList(PAGE.margin + columnWidth + 18, "CREDIT CARDS", data.cards, true);
     doc.y = Math.max(banksEnd, cardsEnd) + 12;
 
+    // Merchants lead the back half: they finish the "where did it go" story that
+    // categories and accounts start, so they belong with them rather than stranded
+    // behind the budget block.
+    sectionTitle("Top merchants");
+    barRows(
+      data.merchants.slice(0, 5).map((merchant) => ({ label: merchant.merchant, amount: merchant.amount })),
+      "No merchant spending was recorded.",
+      COLORS.amber,
+    );
+
     sectionTitle("Budget pace");
     if (data.budgets.length === 0) {
       emptyState("No category budgets are configured.");
@@ -234,13 +246,6 @@ export function generateWeeklyReportPdf(data: WeeklyReportData): Promise<Buffer>
       }
       doc.moveDown(0.4);
     }
-
-    sectionTitle("Top merchants");
-    barRows(
-      data.merchants.slice(0, 5).map((merchant) => ({ label: merchant.merchant, amount: merchant.amount })),
-      "No merchant spending was recorded.",
-      COLORS.amber,
-    );
 
     sectionTitle("Checking and savings cash flow");
     ensureSpace(62);

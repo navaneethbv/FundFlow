@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWeeklyReportModel } from "@/lib/weekly-report";
+import { buildWeeklyReportModel, formatCardLabel } from "@/lib/weekly-report";
 
 const period = {
   start: "2026-07-06",
@@ -166,8 +166,8 @@ describe("weekly report model", () => {
       { name: "American Express", amount: 30 },
     ]);
     expect(report.cards).toEqual([
-      { name: "Sapphire Reserve", amount: 120 },
-      { name: "Gold Card", amount: 30 },
+      { name: "Chase · Sapphire Reserve", amount: 120 },
+      { name: "American Express · Gold Card", amount: 30 },
     ]);
     expect(report.cards.map((card) => card.name).join(" ")).not.toMatch(
       /\d{4}/,
@@ -203,5 +203,30 @@ describe("weekly report model", () => {
     expect(report.previousTotalSpend).toBe(0);
     expect(report.changePercent).toBeNull();
     expect(report.categories).toEqual([]);
+  });
+});
+
+describe("formatCardLabel", () => {
+  it("title-cases a name Plaid returns in all caps", () => {
+    // The real failure: Chase reports this account as "CREDIT CARD", which read
+    // as a shouted, bank-less row for the largest card total on the page.
+    expect(formatCardLabel("CREDIT CARD", "Chase")).toBe("Chase · Credit Card");
+  });
+
+  it("leaves a name that already has its own casing alone", () => {
+    expect(formatCardLabel("Platinum Card®", "American Express")).toBe(
+      "American Express · Platinum Card®",
+    );
+    expect(formatCardLabel("Blue Cash Preferred®", "American Express")).toBe(
+      "American Express · Blue Cash Preferred®",
+    );
+    expect(formatCardLabel("Amazon", "Chase")).toBe("Chase · Amazon");
+  });
+
+  it("falls back when the institution or the name is missing", () => {
+    expect(formatCardLabel("Freedom", null)).toBe("Freedom");
+    expect(formatCardLabel(null, "Chase")).toBe("Chase · Credit card");
+    expect(formatCardLabel(null, null)).toBe("Credit card");
+    expect(formatCardLabel("   ", "Chase")).toBe("Chase · Credit card");
   });
 });
