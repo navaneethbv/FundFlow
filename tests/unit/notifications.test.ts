@@ -224,4 +224,76 @@ describe("notifications manager", () => {
     expect(processedNotifications).toContain("budget_exceeded");
     expect(processedNotifications).toContain("goal_reached");
   });
+
+  it("handles duplication checking with subjectKey", async () => {
+    // Enable low cash forecast alerts
+    mockSingle.mockResolvedValueOnce({
+      data: { low_cash_forecast: true },
+      error: null,
+    });
+
+    // Mock existing notifications in window containing a subjectKey match
+    mockGte.mockResolvedValueOnce({
+      data: [
+        { title: "Target alert Chase credit", body: "Something happened" }
+      ],
+      error: null,
+    });
+
+    const result = await createNotification(
+      "user-1",
+      "low_cash_forecast",
+      { title: "New alert", body: "chase credit balance low" },
+      "Chase credit" // subjectKey
+    );
+
+    // Should be detected as a duplicate (case-insensitive substring match of "Chase credit" in title/body)
+    expect(result).toBeNull();
+    expect(mockInsert).not.toHaveBeenCalled();
+  });
+
+  it("triggers broken bank notification during processing when item status is error", async () => {
+    // Mock Dashboard and Goals data
+    mockGetDashboardData.mockResolvedValue({
+      cashFlowForecast: { lowBalanceRisk: false },
+      budgetEnvelopes: [],
+      netWorthSnapshot: { assets: 100, liabilities: 0, netWorth: 100 },
+    });
+    mockGetGoals.mockResolvedValue([]);
+
+    // Mock preferences
+    mockSingle.mockResolvedValue({
+      data: { broken_bank: true },
+      error: null,
+    });
+
+    // Mock broken bank item
+    mockFrom.mockImplementation((table) => {
+      if (table === "plaid_items") {
+        return {
+          select: () => ({
+            eq: () => Promise.resolve({
+              data: [{ id: "item-123", institution_name: "Chase", status: "error", error_code: "ITEM_LOGIN_REQUIRED" }],
+              error: null,
+            }),
+          }),
+        };
+      }
+      return mockQueryChain;
+    });
+
+    const processedNotifications: string[] = [];
+    mockInsert.mockImplementation((val) => {
+      processedNotifications.push(val.type);
+      return {
+        select: vi.fn().mockReturnValue({
+          single: () => Promise.resolve({ data: val, error: null }),
+        }),
+      };
+    });
+
+    await processNotificationsForUser("user-1");
+
+    expect(processedNotifications).toContain("broken_bank");
+  });
 });

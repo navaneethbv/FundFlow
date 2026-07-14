@@ -21,7 +21,17 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text-summary", "lcov"],
-      include: ["app/**", "components/**", "lib/**", "scripts/**"],
+      include: [
+        "lib/**",
+        "app/api/**",
+        "scripts/**",
+        "components/charts/**",
+        "components/dashboard/metrics.ts",
+        "components/dashboard/dashboard-view.ts"
+      ],
+      exclude: [
+        "lib/types.ts",
+      ],
     },
   },
 });

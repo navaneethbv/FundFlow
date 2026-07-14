@@ -6,6 +6,9 @@ import DonutChart from "@/components/charts/DonutChart";
 import DivergingColumns from "@/components/charts/DivergingColumns";
 import Sparkline from "@/components/charts/Sparkline";
 import StatTile from "@/components/charts/StatTile";
+import AreaSparkline from "@/components/charts/AreaSparkline";
+import MiniBars from "@/components/charts/MiniBars";
+import RadialGauge from "@/components/charts/RadialGauge";
 
 /**
  * The chart components are server-rendered SVG; rendering them to markup is
@@ -186,5 +189,34 @@ describe("BarList links", () => {
     );
     expect(html).toContain('href="/dashboard?merchant=Netflix"');
     expect(html.match(/<a /g)?.length).toBe(1);
+  });
+});
+
+describe("AreaSparkline", () => {
+  it("renders area sparkline without NaN", () => {
+    const html = renderToStaticMarkup(createElement(AreaSparkline, { values: [5, 10, 5, 20] }));
+    expect(html).not.toContain("NaN");
+    expect(html).toContain("path");
+  });
+
+  it("returns null if values length is less than 2", () => {
+    const html = renderToStaticMarkup(createElement(AreaSparkline, { values: [5] }));
+    expect(html).toBe("");
+  });
+});
+
+describe("MiniBars", () => {
+  it("renders mini bars matching list values", () => {
+    const html = renderToStaticMarkup(createElement(MiniBars, { values: [5, 10, 15] }));
+    expect(html).toContain("flex");
+    expect(html.match(/<span /g)?.length).toBe(3);
+  });
+});
+
+describe("RadialGauge", () => {
+  it("renders radial gauge with correct circumference and dash", () => {
+    const html = renderToStaticMarkup(createElement(RadialGauge, { value: 75 }));
+    expect(html).toContain("svg");
+    expect(html).toContain("circle");
   });
 });

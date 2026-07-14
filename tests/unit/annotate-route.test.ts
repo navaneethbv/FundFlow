@@ -87,4 +87,43 @@ describe("POST /api/transactions/annotate", () => {
     const res = await post({ transaction_id: "not-mine", note: "x" });
     expect(res.status).toBe(400);
   });
+
+  it("returns 400 when transaction_id is missing", async () => {
+    const { client } = makeClient({ id: "t1", amount: 60 });
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: client });
+    const res = await post({ note: "x" });
+    expect(res.status).toBe(400);
+  });
+
+  it("deletes annotations when note and tags are empty", async () => {
+    const { client } = makeClient({ id: "t1", amount: 60 });
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: client });
+    const res = await post({ transaction_id: "t1", note: "", tags: [] });
+    expect(res.status).toBe(200);
+  });
+
+  it("upserts annotations when note is provided", async () => {
+    const { client } = makeClient({ id: "t1", amount: 60 });
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: client });
+    const res = await post({ transaction_id: "t1", note: "some note", tags: ["tag1"] });
+    expect(res.status).toBe(200);
+  });
+
+  it("deletes splits when splits is an empty array", async () => {
+    const { client } = makeClient({ id: "t1", amount: 60 });
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: client });
+    const res = await post({ transaction_id: "t1", splits: [] });
+    expect(res.status).toBe(200);
+  });
+
+  it("returns 500 when database call throws an error", async () => {
+    const client = {
+      from: () => {
+        throw new Error("DB Error");
+      },
+    };
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: client });
+    const res = await post({ transaction_id: "t1", note: "x" });
+    expect(res.status).toBe(500);
+  });
 });
