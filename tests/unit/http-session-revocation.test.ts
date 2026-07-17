@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Build a JWT-shaped access token carrying a session_id claim (payload only —
+// Build a JWT-shaped access token carrying a session_id claim (payload only;
 // requireUser decodes without verifying, since getUser already validated it).
 function tokenWithSession(sessionId: string): string {
   const payload = Buffer.from(JSON.stringify({ session_id: sessionId })).toString("base64url");
