@@ -42,7 +42,7 @@ polish pass. All gates green: `npm run build` PASS, `npm run lint` PASS,
   `-mx-4`/`-mx-6` bleed pattern had no matching parent padding to cancel
   against, causing horizontal scroll on every signed-in page at phone
   widths. Files: `components/transactions/MobileLedgerList.tsx`,
-  `app/transactions/page.tsx`, `components/shell/MonthChips.tsx`,
+  `app/transactions/page.tsx`, `components/dashboard/MonthChips.tsx`,
   `components/shell/AppSidebar.tsx`. QA: screenshot-verified with Playwright
   at 375px and 414px across all nine signed-in routes plus `/login`, before
   and after the overflow fix; a programmatic scan confirmed no control
