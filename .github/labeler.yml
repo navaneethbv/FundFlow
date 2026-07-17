@@ -1,0 +1,27 @@
+# Path-based PR labels for actions/labeler@v4 (see .github/workflows/label.yml).
+# v4 syntax: label -> list of minimatch globs; any match applies the label.
+
+api:
+  - app/api/**
+
+ui:
+  - components/**
+  - app/**/*.tsx
+  - app/globals.css
+
+lib:
+  - lib/**
+
+tests:
+  - tests/**
+
+database:
+  - supabase/**
+
+docs:
+  - docs/**
+  - "*.md"
+
+ci:
+  - .github/**
+  - vercel.json
