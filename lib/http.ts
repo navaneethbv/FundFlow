@@ -17,7 +17,7 @@ export interface AuthedContext {
 /**
  * The Supabase session id (the JWT `session_id` claim) for the current request,
  * or null if it can't be read. Uses decodeSessionId to extract the claim
- * without verification — `getUser()` already validated the session against the auth server.
+ * without verification; `getUser()` already validated the session against the auth server.
  * Used to key the device/session list and to enforce session revocation.
  */
 export async function currentSessionId(
