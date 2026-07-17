@@ -90,3 +90,35 @@ export async function sendDailyDigestEmail(
   if (!hostConfigured) logDevelopmentPreview(info);
   return info;
 }
+
+export interface CronAlertSummary {
+  failed: number;
+  total: number;
+  /**
+   * First error message of the run. Error messages only (the same strings
+   * logError already emits); never payloads, balances, or PII.
+   */
+  firstError?: string;
+}
+
+export async function sendCronAlertEmail(
+  toEmail: string,
+  cronName: string,
+  summary: CronAlertSummary,
+) {
+  const { hostConfigured, transporter } = await createMailTransport();
+  const lines = [
+    `The ${cronName} cron run at ${new Date().toISOString()} reported failures.`,
+    `Failed: ${summary.failed} of ${summary.total}.`,
+    summary.firstError ? `First error: ${summary.firstError.slice(0, 200)}` : null,
+    "Check the Vercel logs and the dashboard sync status for detail.",
+  ].filter((line): line is string => Boolean(line));
+  const info = await transporter.sendMail({
+    from: process.env.SMTP_FROM ?? "FundFlow <onboarding@resend.dev>",
+    to: toEmail,
+    subject: `FundFlow cron failure: ${cronName}`,
+    text: lines.join("\n"),
+  });
+  if (!hostConfigured) logDevelopmentPreview(info);
+  return info;
+}
