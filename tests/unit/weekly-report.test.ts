@@ -225,8 +225,114 @@ describe("formatCardLabel", () => {
 
   it("falls back when the institution or the name is missing", () => {
     expect(formatCardLabel("Freedom", null)).toBe("Freedom");
+    expect(formatCardLabel("   ", "Chase")).toBe("Chase · Credit card");
     expect(formatCardLabel(null, "Chase")).toBe("Chase · Credit card");
     expect(formatCardLabel(null, null)).toBe("Credit card");
-    expect(formatCardLabel("   ", "Chase")).toBe("Chase · Credit card");
+  });
+});
+
+describe("weekly report model budget sorting", () => {
+  it("sorts budgets by percentage descending, and then by category alphabetically when percentages are equal", () => {
+    const report = buildWeeklyReportModel({
+      userId: "user-1",
+      userEmail: "person@example.com",
+      period: {
+        start: "2026-07-06",
+        end: "2026-07-12",
+        previousStart: "2026-06-29",
+        previousEnd: "2026-07-05",
+      },
+      transactions: [],
+      accounts: [],
+      institutions: [],
+      budgets: [
+        { category: "TRAVEL", monthlyLimit: 520 },
+        { category: "DINING", monthlyLimit: 520 },
+        { category: "AUTO", monthlyLimit: 520 },
+      ],
+      merchantRules: [],
+      splits: [],
+      linkedRefundTransactionIds: new Set(),
+      duplicateTransactionIds: new Set(),
+    });
+
+    expect(report.budgets.map((b) => b.category)).toEqual(["AUTO", "DINING", "TRAVEL"]);
+  });
+});
+
+describe("weekly report model edge cases and branch coverage", () => {
+  it("covers missing accounts, missing institutions, merchant tie-breakers, and budget statuses", () => {
+    const report = buildWeeklyReportModel({
+      userId: "user-1",
+      userEmail: "person@example.com",
+      period: {
+        start: "2026-07-06",
+        end: "2026-07-12",
+        previousStart: "2026-06-29",
+        previousEnd: "2026-07-05",
+      },
+      transactions: [
+        {
+          id: "t1",
+          date: "2026-07-08",
+          amount: 100,
+          merchantName: "Merchant B",
+          name: "Merchant B",
+          category: "FOOD",
+          accountId: "missing-account", // account is missing in accounts list
+        },
+        {
+          id: "t2",
+          date: "2026-07-08",
+          amount: 100,
+          merchantName: "Merchant A", // same amount as Merchant B to trigger tie-breaker
+          name: "Merchant A",
+          category: "TRAVEL",
+          accountId: "no-inst-account", // account exists, but institution name is missing
+        },
+        {
+          id: "t3",
+          date: "2026-07-08",
+          amount: 100,
+          merchantName: "Merchant C",
+          name: "Merchant C",
+          category: "CREDIT_SPEND",
+          accountId: "missing-credit-account", // credit spending with missing account
+        },
+      ],
+      accounts: [
+        {
+          id: "no-inst-account",
+          name: "Anonymous checking",
+          type: "depository",
+          plaidItemId: "unknown-item",
+        },
+        {
+          id: "missing-credit-account",
+          name: "Anonymous credit",
+          type: "credit",
+          plaidItemId: "unknown-item",
+        },
+      ],
+      institutions: [], // no institutions mocked
+      budgets: [
+        { category: "FOOD", monthlyLimit: 0 }, // allowance: 0, spent: 100 -> percentage: 1 (spent > 0), status: "at-risk" (percentage >= 0.85)
+        { category: "TRAVEL", monthlyLimit: 520 }, // allowance: 120, spent: 100 -> percentage: 0.83, status: "on-track"
+        { category: "AUTO", monthlyLimit: 0 }, // allowance: 0, spent: 0 -> percentage: 0, status: "on-track"
+        { category: "OVER_BUDGET", monthlyLimit: 520 }, // allowance: 120, spent: 150 -> percentage: 1.25, status: "over"
+        { category: "AT_RISK_BUDGET", monthlyLimit: 520 }, // allowance: 120, spent: 108 -> percentage: 0.9, status: "at-risk"
+      ],
+      merchantRules: [],
+      splits: [],
+      linkedRefundTransactionIds: new Set(),
+      duplicateTransactionIds: new Set(),
+    });
+
+    expect(report.banks).toEqual([{ name: "Other bank", amount: 300 }]);
+    expect(report.merchants).toEqual([
+      { merchant: "Merchant A", amount: 100 },
+      { merchant: "Merchant B", amount: 100 },
+      { merchant: "Merchant C", amount: 100 },
+    ]);
   });
 });

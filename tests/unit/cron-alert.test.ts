@@ -68,6 +68,16 @@ describe("alertCronFailure", () => {
     expect(mockLogError).toHaveBeenCalledWith("cron-alert.no-admin", expect.any(Error));
   });
 
+  it("logs and skips when database query for admin profile fails", async () => {
+    profilesChain.limit.mockResolvedValue({
+      data: null,
+      error: new Error("Supabase query error"),
+    });
+    await alertCronFailure("daily-sync", { failed: 1, total: 1 });
+    expect(mockSendCronAlertEmail).not.toHaveBeenCalled();
+    expect(mockLogError).toHaveBeenCalledWith("cron-alert.send", expect.any(Error));
+  });
+
   it("logs and skips when the admin has no email", async () => {
     mockGetUserById.mockResolvedValue({ data: { user: { email: null } } });
     await alertCronFailure("daily-sync", { failed: 1, total: 1 });

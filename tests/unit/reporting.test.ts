@@ -189,4 +189,23 @@ describe("lib/reporting", () => {
     expect(text).not.toContain("First error:");
     expect(mocks.mockGetTestMessageUrl).toHaveBeenCalled();
   });
+
+  it("sends daily digest using ethereal in development when SMTP is not configured", async () => {
+    delete process.env.SMTP_HOST;
+    delete process.env.SMTP_USER;
+    delete process.env.SMTP_PASS;
+    process.env.NODE_ENV = "development";
+
+    mocks.mockGetTestMessageUrl.mockReturnValueOnce(null); // to cover previewUrl is null branch
+
+    const res = await sendDailyDigestEmail(
+      "user@example.com",
+      [],
+      "2026-07-13",
+      "http://localhost",
+    );
+
+    expect(mocks.mockCreateTestAccount).toHaveBeenCalled();
+    expect(res).toEqual({ messageId: "mock-message-id" });
+  });
 });

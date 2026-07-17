@@ -66,4 +66,11 @@ describe("requireUser session revocation", () => {
     const result = await requireUser();
     expect(result).not.toBeInstanceOf(Response);
   });
+
+  it("passes and does not record session if no session token is available", async () => {
+    mockGetSession.mockResolvedValue({ data: { session: null } });
+    const result = await requireUser();
+    expect(result).not.toBeInstanceOf(Response);
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
 });

@@ -73,10 +73,12 @@ vi.mock("@/lib/http", () => ({
 
 import { GET } from "@/app/api/cron/weekly-report/route";
 import { NextRequest } from "next/server";
+import { markWeeklyDeliveryFailed } from "@/lib/report-delivery";
 
 describe("GET /api/cron/weekly-report", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(markWeeklyDeliveryFailed).mockResolvedValue(undefined as any);
   });
 
   it("returns 401 if secret does not match", async () => {
@@ -226,5 +228,267 @@ describe("GET /api/cron/weekly-report", () => {
       total: 1,
       firstError: "pdf_render_failed",
     });
+  });
+
+  it("handles email delivery failure by marking delivery as failed", async () => {
+    mockSafeEqual.mockReturnValue(true);
+    const request = new NextRequest("http://localhost/api/cron/weekly-report", {
+      headers: { authorization: "Bearer test-secret" },
+    });
+
+    mockServiceClient.from.mockImplementation((table) => {
+      let data: unknown[] = [];
+      if (table === "profiles") {
+        data = [{ id: "u1", timezone: "America/New_York" }];
+      }
+      const query = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
+        then: undefined as any,
+      };
+      query.then = (onfulfilled) =>
+        Promise.resolve({ data, error: null }).then(onfulfilled);
+      return query;
+    });
+
+    mockGetWeeklyReportPeriod.mockReturnValue({ start: "2026-07-06" });
+    mockGetEligibleWeeklyReportUsers.mockResolvedValue(["u1"]);
+    const { claimWeeklyDelivery, markWeeklyDeliveryFailed } = await import("@/lib/report-delivery");
+    vi.mocked(claimWeeklyDelivery).mockResolvedValue({
+      claimed: true,
+      deliveryId: "d1",
+    });
+    vi.mocked(markWeeklyDeliveryFailed).mockResolvedValue(undefined);
+
+    mockGetWeeklyReportData.mockResolvedValue({ id: "r1" });
+    mockRenderWeeklyReportPdf.mockResolvedValue(Buffer.from("pdf"));
+    mockSendWeeklyReportEmail.mockRejectedValue(new Error("SMTP offline"));
+
+    const res = await GET(request);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.reports_failed).toBe(1);
+    expect(body.first_error).toBe("email_send_failed");
+    expect(markWeeklyDeliveryFailed).toHaveBeenCalledWith(expect.any(Object), "u1", "d1", "email_send_failed");
+  });
+
+  it("logs error if marking delivery failed throws an error", async () => {
+    mockSafeEqual.mockReturnValue(true);
+    const request = new NextRequest("http://localhost/api/cron/weekly-report", {
+      headers: { authorization: "Bearer test-secret" },
+    });
+
+    mockServiceClient.from.mockImplementation((table) => {
+      let data: unknown[] = [];
+      if (table === "profiles") {
+        data = [{ id: "u1", timezone: "America/New_York" }];
+      }
+      const query = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
+        then: undefined as any,
+      };
+      query.then = (onfulfilled) =>
+        Promise.resolve({ data, error: null }).then(onfulfilled);
+      return query;
+    });
+
+    mockGetWeeklyReportPeriod.mockReturnValue({ start: "2026-07-06" });
+    mockGetEligibleWeeklyReportUsers.mockResolvedValue(["u1"]);
+    const { claimWeeklyDelivery, markWeeklyDeliveryFailed } = await import("@/lib/report-delivery");
+    vi.mocked(claimWeeklyDelivery).mockResolvedValue({
+      claimed: true,
+      deliveryId: "d1",
+    });
+
+    mockGetWeeklyReportData.mockResolvedValue({ id: "r1" });
+    mockRenderWeeklyReportPdf.mockResolvedValue(Buffer.from("pdf"));
+    mockSendWeeklyReportEmail.mockRejectedValue(new Error("SMTP offline"));
+    vi.mocked(markWeeklyDeliveryFailed).mockRejectedValue(new Error("Failed to mark status"));
+
+    const res = await GET(request);
+    expect(res.status).toBe(200);
+    expect(mockLogError).toHaveBeenCalledWith("cron.weekly-report.delivery", expect.any(Error));
+  });
+
+  it("alerts the admin and returns 500 when runWeeklyReports throws an error", async () => {
+    mockSafeEqual.mockReturnValue(true);
+    const request = new NextRequest("http://localhost/api/cron/weekly-report", {
+      headers: { authorization: "Bearer test-secret" },
+    });
+
+    mockServiceClient.from.mockImplementation(() => {
+      throw new Error("DB Error");
+    });
+
+    const res = await GET(request);
+    expect(res.status).toBe(500);
+    expect(mockAlertCronFailure).toHaveBeenCalledWith("weekly-report", {
+      failed: 1,
+      total: 1,
+      firstError: "DB Error",
+    });
+    expect(mockErrorResponse).toHaveBeenCalledWith("cron.weekly-report", expect.any(Error));
+  });
+
+  it("skips user report when delivery claim is not claimed", async () => {
+    mockSafeEqual.mockReturnValue(true);
+    const request = new NextRequest("http://localhost/api/cron/weekly-report", {
+      headers: { authorization: "Bearer test-secret" },
+    });
+
+    mockServiceClient.from.mockImplementation((table) => {
+      let data: unknown[] = [];
+      if (table === "profiles") {
+        data = [{ id: "u1", timezone: "America/New_York" }];
+      }
+      const query = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
+        then: undefined as any,
+      };
+      query.then = (onfulfilled) =>
+        Promise.resolve({ data, error: null }).then(onfulfilled);
+      return query;
+    });
+
+    mockGetWeeklyReportPeriod.mockReturnValue({ start: "2026-07-06" });
+    mockGetEligibleWeeklyReportUsers.mockResolvedValue(["u1"]);
+    const { claimWeeklyDelivery } = await import("@/lib/report-delivery");
+    vi.mocked(claimWeeklyDelivery).mockResolvedValue({
+      claimed: false,
+    });
+
+    const res = await GET(request);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.reports_skipped).toBe(1);
+    expect(body.reports_sent).toBe(0);
+  });
+
+  it("marks delivery failed when report data is missing", async () => {
+    mockSafeEqual.mockReturnValue(true);
+    const request = new NextRequest("http://localhost/api/cron/weekly-report", {
+      headers: { authorization: "Bearer test-secret" },
+    });
+
+    mockServiceClient.from.mockImplementation((table) => {
+      let data: unknown[] = [];
+      if (table === "profiles") {
+        data = [{ id: "u1", timezone: "America/New_York" }];
+      }
+      const query = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
+        then: undefined as any,
+      };
+      query.then = (onfulfilled) =>
+        Promise.resolve({ data, error: null }).then(onfulfilled);
+      return query;
+    });
+
+    mockGetWeeklyReportPeriod.mockReturnValue({ start: "2026-07-06" });
+    mockGetEligibleWeeklyReportUsers.mockResolvedValue(["u1"]);
+    const { claimWeeklyDelivery, markWeeklyDeliveryFailed } = await import("@/lib/report-delivery");
+    vi.mocked(claimWeeklyDelivery).mockResolvedValue({
+      claimed: true,
+      deliveryId: "d1",
+    });
+    vi.mocked(markWeeklyDeliveryFailed).mockResolvedValue(undefined);
+
+    mockGetWeeklyReportData.mockResolvedValue(null);
+
+    const res = await GET(request);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.reports_failed).toBe(1);
+    expect(body.first_error).toBe("missing_account_email");
+    expect(markWeeklyDeliveryFailed).toHaveBeenCalledWith(expect.any(Object), "u1", "d1", "missing_account_email");
+  });
+
+  it("handles SMTP not configured error during email delivery", async () => {
+    mockSafeEqual.mockReturnValue(true);
+    const request = new NextRequest("http://localhost/api/cron/weekly-report", {
+      headers: { authorization: "Bearer test-secret" },
+    });
+
+    mockServiceClient.from.mockImplementation((table) => {
+      let data: unknown[] = [];
+      if (table === "profiles") {
+        data = [{ id: "u1", timezone: "America/New_York" }];
+      }
+      const query = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
+        then: undefined as any,
+      };
+      query.then = (onfulfilled) =>
+        Promise.resolve({ data, error: null }).then(onfulfilled);
+      return query;
+    });
+
+    mockGetWeeklyReportPeriod.mockReturnValue({ start: "2026-07-06" });
+    mockGetEligibleWeeklyReportUsers.mockResolvedValue(["u1"]);
+    const { claimWeeklyDelivery } = await import("@/lib/report-delivery");
+    vi.mocked(claimWeeklyDelivery).mockResolvedValue({
+      claimed: true,
+      deliveryId: "d1",
+    });
+
+    mockGetWeeklyReportData.mockResolvedValue({ id: "r1" });
+    mockRenderWeeklyReportPdf.mockResolvedValue(Buffer.from("pdf"));
+    mockSendWeeklyReportEmail.mockRejectedValue(new Error("SMTP is not configured"));
+
+    const res = await GET(request);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.reports_failed).toBe(1);
+    expect(body.first_error).toBe("smtp_not_configured");
+  });
+
+  it("handles PDF/font errors during email delivery", async () => {
+    mockSafeEqual.mockReturnValue(true);
+    const request = new NextRequest("http://localhost/api/cron/weekly-report", {
+      headers: { authorization: "Bearer test-secret" },
+    });
+
+    mockServiceClient.from.mockImplementation((table) => {
+      let data: unknown[] = [];
+      if (table === "profiles") {
+        data = [{ id: "u1", timezone: "America/New_York" }];
+      }
+      const query = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
+        then: undefined as any,
+      };
+      query.then = (onfulfilled) =>
+        Promise.resolve({ data, error: null }).then(onfulfilled);
+      return query;
+    });
+
+    mockGetWeeklyReportPeriod.mockReturnValue({ start: "2026-07-06" });
+    mockGetEligibleWeeklyReportUsers.mockResolvedValue(["u1"]);
+    const { claimWeeklyDelivery } = await import("@/lib/report-delivery");
+    vi.mocked(claimWeeklyDelivery).mockResolvedValue({
+      claimed: true,
+      deliveryId: "d1",
+    });
+
+    mockGetWeeklyReportData.mockResolvedValue({ id: "r1" });
+    mockRenderWeeklyReportPdf.mockResolvedValue(Buffer.from("pdf"));
+    mockSendWeeklyReportEmail.mockRejectedValue(new Error("font rendering failed"));
+
+    const res = await GET(request);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.reports_failed).toBe(1);
+    expect(body.first_error).toBe("pdf_render_failed");
   });
 });
