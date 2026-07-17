@@ -5,6 +5,7 @@ import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { needsMfaStepUp } from "@/lib/mfa";
 import { logError } from "@/lib/log";
+import { decodeSessionId } from "@/lib/session-token";
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -15,9 +16,8 @@ export interface AuthedContext {
 
 /**
  * The Supabase session id (the JWT `session_id` claim) for the current request,
- * or null if it can't be read. The payload is decoded without verification —
- * `getUser()` already validated the session against the auth server — and the
- * decode is format-agnostic (base64url JSON regardless of signing algorithm).
+ * or null if it can't be read. Uses decodeSessionId to extract the claim
+ * without verification — `getUser()` already validated the session against the auth server.
  * Used to key the device/session list and to enforce session revocation.
  */
 export async function currentSessionId(
@@ -26,14 +26,7 @@ export async function currentSessionId(
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  const payload = session?.access_token?.split(".")[1];
-  if (!payload) return null;
-  try {
-    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-    return typeof claims.session_id === "string" ? claims.session_id : null;
-  } catch {
-    return null;
-  }
+  return decodeSessionId(session?.access_token);
 }
 
 /**
