@@ -194,6 +194,61 @@ describe("GET /api/cron/sync", () => {
     });
   });
 
+  it("reduces a non-code exception message to the error's class name", async () => {
+    mockSafeEqual.mockReturnValue(true);
+    const request = new NextRequest("http://localhost/api/cron/sync", {
+      headers: { authorization: "Bearer test-secret" },
+    });
+
+    mockServiceClient.from.mockImplementation((table) => {
+      let data: unknown[] = [];
+      if (table === "plaid_items") {
+        data = [{ user_id: "u1" }, { user_id: "u2" }];
+      } else if (table === "profiles") {
+        const q = {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn(),
+        };
+        q.maybeSingle.mockResolvedValue({
+          data: { daily_digest_email_enabled: true },
+          error: null,
+        });
+        return q;
+      }
+
+      const query = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
+        lt: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockResolvedValue({ error: null }),
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown[]; error: unknown }) => unknown) => unknown,
+      };
+      query.then = (onfulfilled) =>
+        Promise.resolve({ data, error: null }).then(onfulfilled);
+      return query;
+    });
+
+    mockSyncAllForUser.mockImplementation((userId: string) => {
+      if (userId === "u1") {
+        return Promise.reject(
+          new Error("db error: Key (plaid_transaction_id)=(abc) already exists"),
+        );
+      }
+      return Promise.resolve();
+    });
+
+    const res = await GET(request);
+    expect(res.status).toBe(200);
+    expect(mockAlertCronFailure).toHaveBeenCalledWith("daily-sync", {
+      failed: 1,
+      total: 2,
+      firstError: "Error",
+    });
+  });
+
   it("does not alert when every user syncs cleanly", async () => {
     mockSafeEqual.mockReturnValue(true);
     const request = new NextRequest("http://localhost/api/cron/sync", {

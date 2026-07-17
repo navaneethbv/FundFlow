@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { decodeSessionId } from "@/lib/session-token";
+import { logError } from "@/lib/log";
 
 /**
  * True when the current request's session has been revoked from the Settings
@@ -24,7 +25,8 @@ export async function isSessionRevoked(
       .eq("session_id", sessionId)
       .maybeSingle();
     return Boolean(record?.revoked_at);
-  } catch {
+  } catch (error) {
+    logError("session-revocation.lookup", error);
     return false;
   }
 }

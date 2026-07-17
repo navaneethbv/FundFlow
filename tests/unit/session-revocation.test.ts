@@ -2,6 +2,11 @@ import { describe, it, expect, vi } from "vitest";
 import { isSessionRevoked } from "@/lib/session-revocation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+const mockLogError = vi.fn();
+vi.mock("@/lib/log", () => ({
+  logError: (...args: unknown[]) => mockLogError(...args),
+}));
+
 function makeToken(sessionId: string): string {
   const payload = Buffer.from(
     JSON.stringify({ session_id: sessionId }),
@@ -67,5 +72,9 @@ describe("isSessionRevoked", () => {
       lookupError: true,
     });
     expect(await isSessionRevoked(client, "u1")).toBe(false);
+    expect(mockLogError).toHaveBeenCalledWith(
+      "session-revocation.lookup",
+      expect.any(Error),
+    );
   });
 });

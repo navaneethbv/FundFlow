@@ -14,6 +14,14 @@ import { alertCronFailure } from "@/lib/cron-alert";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+/** Reduce an exception to a safe token for the alert email: a Plaid-style
+ *  UPPER_SNAKE code if the message is one, otherwise the error's class name. */
+function safeSyncError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/^[A-Z0-9_]{3,60}$/.test(message)) return message;
+  return err instanceof Error ? err.name : "unknown_error";
+}
+
 /**
  * Scheduled daily sync for every user with active bank connections.
  * Protected by CRON_SECRET: Vercel Cron sends "Authorization: Bearer <secret>"
@@ -97,7 +105,7 @@ export async function GET(request: NextRequest) {
         synced += 1;
       } catch (err) {
         logError("cron.sync.user", err);
-        failures.push(err instanceof Error ? err.message : String(err));
+        failures.push(safeSyncError(err));
       }
     }
 
@@ -125,7 +133,7 @@ export async function GET(request: NextRequest) {
     await alertCronFailure("daily-sync", {
       failed: 1,
       total: 1,
-      firstError: error instanceof Error ? error.message : String(error),
+      firstError: safeSyncError(error),
     });
     return errorResponse("cron.sync", error);
   }
