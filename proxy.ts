@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { publicEnv } from "@/lib/env";
 import { needsMfaStepUp } from "@/lib/mfa";
 import { isCrossOrigin } from "@/lib/origin";
+import { isSessionRevoked } from "@/lib/session-revocation";
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
@@ -125,13 +126,29 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isApi = pathname.startsWith("/api");
 
+  // Session revocation: a device revoked in Settings must lose page access on
+  // its next navigation, not only API access (requireUser already gates
+  // those). One indexed RLS-scoped lookup per protected page render; the
+  // helper fails open. signOut(local) invalidates this session's refresh
+  // token and queues its cookie clears on `response` via the setAll plumbing.
+  let sessionRevoked = false;
+  if (user && !mfaPending && !isApi && !isPublicPage(pathname)) {
+    sessionRevoked = await isSessionRevoked(supabase, user.id);
+    if (sessionRevoked) {
+      await supabase.auth.signOut({ scope: "local" });
+    }
+  }
+
   // Redirect unauthenticated (or MFA-pending) users away from protected pages.
   // API routes enforce their own auth (returning JSON 401), so we don't
   // redirect those.
-  if ((!user || mfaPending) && !isApi && !isPublicPage(pathname)) {
+  if ((!user || mfaPending || sessionRevoked) && !isApi && !isPublicPage(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     const redirect = NextResponse.redirect(url);
+    // signOut() queued its cookie clears on `response`; carry every pending
+    // cookie onto the redirect or the revoked session keeps its auth cookies.
+    response.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie));
     applySecurityHeaders(redirect, csp);
     return redirect;
   }

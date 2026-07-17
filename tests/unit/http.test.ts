@@ -59,6 +59,25 @@ describe("errorResponse", () => {
     expect(json.error).toBe("DB Connection failed");
     expect(logErrorSpy).toHaveBeenCalledWith("test.db", err);
   });
+
+  it("returns 500 response for non-Error object string", async () => {
+    const resp = errorResponse("test.db", "Database crashed");
+    expect(resp.status).toBe(500);
+    const json = await resp.json();
+    expect(json.error).toBe("Database crashed");
+    expect(logErrorSpy).toHaveBeenCalledWith("test.db", "Database crashed");
+  });
+
+  it("returns generic error message in production mode", async () => {
+    vi.resetModules();
+    vi.stubEnv("NODE_ENV", "production");
+    const { errorResponse: prodErrorResponse } = await import("@/lib/http");
+    const resp = prodErrorResponse("test.prod", new Error("secret details"));
+    expect(resp.status).toBe(500);
+    const json = await resp.json();
+    expect(json.error).toBe("Something went wrong. Please try again.");
+    vi.unstubAllEnvs();
+  });
 });
 
 describe("requireUser", () => {

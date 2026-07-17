@@ -11,6 +11,7 @@ import Select from "@/components/ui/Select";
 import { Search } from "@/components/ui/icons";
 import RefundReview from "@/components/transactions/RefundReview";
 import TransactionEditor from "@/components/transactions/TransactionEditor";
+import MobileLedgerList, { type LedgerCardRow } from "@/components/transactions/MobileLedgerList";
 import { formatCurrency, titleCase, formatMonth } from "@/lib/format";
 import { applyMerchantRules } from "@/lib/planning";
 import { filterRowsWithRules, hasRemapRules } from "@/lib/ledger-filter";
@@ -214,6 +215,24 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
     ]),
   ].sort();
 
+  const cardRows: LedgerCardRow[] = rows.map((t) => {
+    const ann = annById.get(t.id as string);
+    return {
+      id: t.id as string,
+      date: t.date as string,
+      merchant: (t.merchant_name ?? t.name ?? "Unknown") as string,
+      category: t.pfc_primary as string | null,
+      accountLabel: accountName.get(t.account_id) ?? "-",
+      amount: t.amount as number,
+      currency: (t.iso_currency_code ?? "USD") as string,
+      pending: Boolean(t.pending),
+      note: ann?.note ?? null,
+      tags: ann?.tags ?? [],
+      splits: splitsById.get(t.id as string) ?? [],
+      categoryOptions,
+    };
+  });
+
   const pageLink = (p: number) => {
     const parts = [`page=${p}`];
     if (month) parts.push(`month=${month}`);
@@ -314,7 +333,10 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
           />
         ) : (
           <Panel padding="none" className="overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="sm:hidden">
+              <MobileLedgerList rows={cardRows} />
+            </div>
+            <div className="hidden overflow-x-auto sm:block">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 z-10 bg-panel-2">
                   <tr className="border-b border-panel-border text-left text-xs uppercase tracking-wider text-muted">

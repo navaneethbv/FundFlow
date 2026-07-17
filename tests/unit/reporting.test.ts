@@ -25,7 +25,11 @@ vi.mock("nodemailer", () => {
   };
 });
 
-import { sendWeeklyReportEmail, sendDailyDigestEmail } from "@/lib/reporting";
+import {
+  sendWeeklyReportEmail,
+  sendDailyDigestEmail,
+  sendCronAlertEmail,
+} from "@/lib/reporting";
 import type { WeeklyReportData } from "@/lib/weekly-report";
 
 describe("lib/reporting", () => {
@@ -142,6 +146,66 @@ describe("lib/reporting", () => {
         to: "user@example.com",
       }),
     );
+    expect(res).toEqual({ messageId: "mock-message-id" });
+  });
+
+  it("sends a cron alert with the failure summary and truncated first error", async () => {
+    process.env.SMTP_HOST = "smtp.custom.com";
+    process.env.SMTP_PORT = "587";
+    process.env.SMTP_USER = "user";
+    process.env.SMTP_PASS = "pass";
+
+    const res = await sendCronAlertEmail("admin@example.com", "daily-sync", {
+      failed: 2,
+      total: 5,
+      firstError: "X".repeat(300),
+    });
+
+    expect(mocks.mockSendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "admin@example.com",
+        subject: "FundFlow cron failure: daily-sync",
+      }),
+    );
+    const text = mocks.mockSendMail.mock.calls[0][0].text as string;
+    expect(text).toContain("Failed: 2 of 5.");
+    expect(text).toContain("First error: " + "X".repeat(200));
+    expect(text).not.toContain("X".repeat(201));
+    expect(res).toEqual({ messageId: "mock-message-id" });
+  });
+
+  it("omits the first-error line when none is given and previews via ethereal in dev", async () => {
+    delete process.env.SMTP_HOST;
+    delete process.env.SMTP_USER;
+    delete process.env.SMTP_PASS;
+    process.env.NODE_ENV = "development";
+
+    await sendCronAlertEmail("admin@example.com", "weekly-report", {
+      failed: 1,
+      total: 1,
+    });
+
+    const text = mocks.mockSendMail.mock.calls[0][0].text as string;
+    expect(text).not.toContain("First error:");
+    expect(mocks.mockGetTestMessageUrl).toHaveBeenCalled();
+  });
+
+  it("sends daily digest using ethereal in development when SMTP is not configured", async () => {
+    delete process.env.SMTP_HOST;
+    delete process.env.SMTP_USER;
+    delete process.env.SMTP_PASS;
+    process.env.NODE_ENV = "development";
+
+    mocks.mockGetTestMessageUrl.mockReturnValueOnce(null); // to cover previewUrl is null branch
+
+    const res = await sendDailyDigestEmail(
+      "user@example.com",
+      [],
+      "2026-07-13",
+      "http://localhost",
+    );
+
+    expect(mocks.mockCreateTestAccount).toHaveBeenCalled();
     expect(res).toEqual({ messageId: "mock-message-id" });
   });
 });

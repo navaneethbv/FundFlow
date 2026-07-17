@@ -38,4 +38,33 @@ describe("weekly report PDF", () => {
     expect(zero.subarray(0, 4).toString()).toBe("%PDF");
     expect(dense.length).toBeGreaterThan(5_000);
   });
+
+  it("renders positive trend and negative cash flow", async () => {
+    const buffer = await generateWeeklyReportPdf(
+      weeklyReportFixture({
+        totalSpend: 150,
+        previousTotalSpend: 100,
+        changeAmount: 50,
+        changePercent: 50,
+        cashFlow: { inflows: 50, outflows: 200, net: -150 },
+      }),
+    );
+    expect(buffer.subarray(0, 4).toString()).toBe("%PDF");
+  });
+
+  it("renders cross-month period, custom card numbers, and zero spend trend", async () => {
+    const buffer = await generateWeeklyReportPdf(
+      weeklyReportFixture({
+        period: {
+          start: "2026-06-29",
+          end: "2026-07-05",
+          previousStart: "2026-06-22",
+          previousEnd: "2026-06-28",
+        },
+        changePercent: 0,
+        cards: [{ name: "Chase Checking *1234", amount: 100 }],
+      }),
+    );
+    expect(buffer.subarray(0, 4).toString()).toBe("%PDF");
+  });
 });

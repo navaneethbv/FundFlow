@@ -61,7 +61,7 @@ function NavLink({
       aria-current={isActive ? "page" : undefined}
       className={cn(
         "inline-flex items-center gap-3 rounded-field text-sm font-semibold transition-colors duration-150 focus-visible:outline-2",
-        compact ? "shrink-0 px-3 py-2" : "w-full px-3 py-2.5",
+        compact ? "min-h-11 shrink-0 px-3 py-2" : "w-full px-3 py-2.5",
         isActive
           ? "bg-accent-soft text-accent"
           : "text-muted hover:bg-panel-hover hover:text-foreground",
@@ -93,7 +93,7 @@ export default function AppSidebar({ active }: { active: AppShellActive }) {
       </aside>
       <nav
         aria-label="Primary"
-        className="lg:hidden -mx-4 flex gap-2 overflow-x-auto border-b border-panel-border px-4 py-3 scrollbar-none sm:-mx-6 sm:px-6"
+        className="lg:hidden flex gap-2 overflow-x-auto border-b border-panel-border px-4 py-3 scrollbar-none sm:px-6 [mask-image:linear-gradient(to_right,black_calc(100%_-_2rem),transparent)]"
       >
         {mobileItems.map((item) => (
           <NavLink key={item.key} item={item} active={active} compact />

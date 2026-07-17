@@ -9,9 +9,18 @@ import { logError } from "@/lib/log";
 import { writeNetWorthSnapshot } from "@/lib/net-worth";
 import { processNotificationsForUser } from "@/lib/notifications";
 import { sendDailyDigestEmail } from "@/lib/reporting";
+import { alertCronFailure } from "@/lib/cron-alert";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+/** Reduce an exception to a safe token for the alert email: a Plaid-style
+ *  UPPER_SNAKE code if the message is one, otherwise the error's class name. */
+function safeSyncError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/^[A-Z0-9_]{3,60}$/.test(message)) return message;
+  return err instanceof Error ? err.name : "unknown_error";
+}
 
 /**
  * Scheduled daily sync for every user with active bank connections.
@@ -36,6 +45,7 @@ export async function GET(request: NextRequest) {
     const userIds = [...new Set((data ?? []).map((r) => r.user_id as string))];
 
     let synced = 0;
+    const failures: string[] = [];
     for (const userId of userIds) {
       try {
         await syncAllForUser(userId);
@@ -95,6 +105,7 @@ export async function GET(request: NextRequest) {
         synced += 1;
       } catch (err) {
         logError("cron.sync.user", err);
+        failures.push(safeSyncError(err));
       }
     }
 
@@ -109,8 +120,21 @@ export async function GET(request: NextRequest) {
     if (jobsPrune.error) logError("cron.sync.prune.jobs", jobsPrune.error);
     if (countersPrune.error) logError("cron.sync.prune.counters", countersPrune.error);
 
+    if (failures.length > 0) {
+      await alertCronFailure("daily-sync", {
+        failed: failures.length,
+        total: userIds.length,
+        firstError: failures[0],
+      });
+    }
+
     return NextResponse.json({ ok: true, users: userIds.length, synced });
   } catch (error) {
+    await alertCronFailure("daily-sync", {
+      failed: 1,
+      total: 1,
+      firstError: safeSyncError(error),
+    });
     return errorResponse("cron.sync", error);
   }
 }
