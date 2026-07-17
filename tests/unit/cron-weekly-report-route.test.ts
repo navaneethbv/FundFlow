@@ -78,7 +78,7 @@ import { markWeeklyDeliveryFailed } from "@/lib/report-delivery";
 describe("GET /api/cron/weekly-report", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(markWeeklyDeliveryFailed).mockResolvedValue(undefined as any);
+    vi.mocked(markWeeklyDeliveryFailed).mockResolvedValue(undefined);
   });
 
   it("returns 401 if secret does not match", async () => {
@@ -245,7 +245,7 @@ describe("GET /api/cron/weekly-report", () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         in: vi.fn().mockReturnThis(),
-        then: undefined as any,
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
       query.then = (onfulfilled) =>
         Promise.resolve({ data, error: null }).then(onfulfilled);
@@ -288,7 +288,7 @@ describe("GET /api/cron/weekly-report", () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         in: vi.fn().mockReturnThis(),
-        then: undefined as any,
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
       query.then = (onfulfilled) =>
         Promise.resolve({ data, error: null }).then(onfulfilled);
@@ -348,7 +348,7 @@ describe("GET /api/cron/weekly-report", () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         in: vi.fn().mockReturnThis(),
-        then: undefined as any,
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
       query.then = (onfulfilled) =>
         Promise.resolve({ data, error: null }).then(onfulfilled);
@@ -384,7 +384,7 @@ describe("GET /api/cron/weekly-report", () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         in: vi.fn().mockReturnThis(),
-        then: undefined as any,
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
       query.then = (onfulfilled) =>
         Promise.resolve({ data, error: null }).then(onfulfilled);
@@ -425,7 +425,7 @@ describe("GET /api/cron/weekly-report", () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         in: vi.fn().mockReturnThis(),
-        then: undefined as any,
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
       query.then = (onfulfilled) =>
         Promise.resolve({ data, error: null }).then(onfulfilled);
@@ -466,7 +466,7 @@ describe("GET /api/cron/weekly-report", () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         in: vi.fn().mockReturnThis(),
-        then: undefined as any,
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
       query.then = (onfulfilled) =>
         Promise.resolve({ data, error: null }).then(onfulfilled);

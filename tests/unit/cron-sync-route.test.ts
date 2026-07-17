@@ -328,7 +328,7 @@ describe("GET /api/cron/sync", () => {
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
-        then: undefined as any,
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
       query.then = (onfulfilled) =>
         Promise.resolve({ data, error: null }).then(onfulfilled);
@@ -386,7 +386,7 @@ describe("GET /api/cron/sync", () => {
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
         insert: mockInsert,
-        then: undefined as any,
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
       query.then = (onfulfilled) =>
         Promise.resolve({ data, error: null }).then(onfulfilled);
@@ -422,7 +422,7 @@ describe("GET /api/cron/sync", () => {
       const query = {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        then: undefined as any,
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
       query.then = (onfulfilled) =>
         Promise.resolve({ data: null, error: new Error("DB Query failed") }).then(onfulfilled);
@@ -446,7 +446,7 @@ describe("GET /api/cron/sync", () => {
     });
 
     mockServiceClient.from.mockImplementation((table) => {
-      let data: any[] = [];
+      let data: unknown[] = [];
       if (table === "plaid_items") {
         data = [{ user_id: "u1" }];
       } else if (table === "profiles") {
@@ -465,7 +465,7 @@ describe("GET /api/cron/sync", () => {
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
-        then: undefined as any,
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
       query.then = (onfulfilled) =>
         Promise.resolve({ data, error: null }).then(onfulfilled);
@@ -484,7 +484,7 @@ describe("GET /api/cron/sync", () => {
     });
 
     mockServiceClient.from.mockImplementation((table) => {
-      let data: any[] = [];
+      let data: unknown[] = [];
       if (table === "plaid_items") {
         data = [{ user_id: "u1" }];
       } else if (table === "profiles") {
@@ -499,7 +499,7 @@ describe("GET /api/cron/sync", () => {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
           gte: vi.fn().mockReturnThis(),
-          then: undefined as any,
+          then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
         };
         query.then = (onfulfilled) =>
           Promise.resolve({ data: null, error: new Error("Notification DB Error") }).then(onfulfilled);
@@ -513,7 +513,7 @@ describe("GET /api/cron/sync", () => {
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
-        then: undefined as any,
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
       query.then = (onfulfilled) =>
         Promise.resolve({ data, error: null }).then(onfulfilled);
@@ -532,7 +532,7 @@ describe("GET /api/cron/sync", () => {
     });
 
     mockServiceClient.from.mockImplementation((table) => {
-      let data: any[] = [];
+      let data: unknown[] = [];
       if (table === "plaid_items") {
         data = [{ user_id: "u1" }];
       }
@@ -544,7 +544,7 @@ describe("GET /api/cron/sync", () => {
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
-        then: undefined as any,
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
       query.then = (onfulfilled) => {
         if (table === "sync_jobs") {
@@ -571,7 +571,7 @@ describe("GET /api/cron/sync", () => {
     });
 
     mockServiceClient.from.mockImplementation((table) => {
-      let data: any[] = [];
+      let data: unknown[] = [];
       if (table === "plaid_items") {
         data = [{ user_id: "u1" }];
       }
@@ -582,7 +582,7 @@ describe("GET /api/cron/sync", () => {
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
-        then: undefined as any,
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
       query.then = (onfulfilled) =>
         Promise.resolve({ data, error: null }).then(onfulfilled);
@@ -621,7 +621,7 @@ describe("GET /api/cron/sync", () => {
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
-        then: undefined as any,
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
       query.then = (onfulfilled) =>
         Promise.resolve({ data: null, error: null }).then(onfulfilled);
@@ -641,7 +641,7 @@ describe("GET /api/cron/sync", () => {
     });
 
     mockServiceClient.from.mockImplementation((table) => {
-      let data: any[] = [];
+      let data: unknown[] = [];
       if (table === "plaid_items") {
         data = [{ user_id: "u1" }];
       } else if (table === "profiles") {
@@ -662,7 +662,7 @@ describe("GET /api/cron/sync", () => {
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
-        then: undefined as any,
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
       query.then = (onfulfilled) =>
         Promise.resolve({ data, error: null }).then(onfulfilled);
