@@ -1,8 +1,57 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-07-13. Read this first to resume.
+Last updated: 2026-07-16. Read this first to resume.
 
-## Latest session (2026-07-13, branch `navaneethbv-patch-1`)
+## Latest session (2026-07-16, branch `feat/remaining-must-haves`)
+
+Delivered the three remaining must-have items from `docs/TODO.md`: session
+revocation enforced on page renders, cron-failure alert emails, and a mobile
+polish pass. All gates green: `npm run build` PASS, `npm run lint` PASS,
+`npm run test:unit` PASS (374 tests). See
+`.superpowers/sdd/task-9-report.md` for the full session record.
+
+- **Session revocation on page renders.** `proxy.ts` now calls
+  `isSessionRevoked` (from `lib/session-revocation.ts`) for every logged-in,
+  non-MFA-pending, non-API page request; a revoked session triggers
+  `supabase.auth.signOut({ scope: "local" })` and a redirect to `/login` with
+  the queued cookie clears copied onto the redirect response. API calls were
+  already 401'd on a revoked session via `requireUser()` in `lib/http.ts`.
+  Files: `proxy.ts`, `lib/session-revocation.ts`. QA: end-to-end browser
+  verification with Playwright (see `.superpowers/sdd/revocation-e2e-report.md`)
+  confirmed a revoked session redirects `/dashboard` to `/login`, clears
+  `sb-*` cookies, and 401s a follow-up authenticated API call.
+- **Cron-failure alert emails.** `lib/cron-alert.ts` (`alertCronFailure`)
+  emails the admin profile (`profiles.role = 'admin'`) when a cron run has
+  failures, deduped to one alert per cron name per 24h via the existing
+  Postgres rate limiter; the email body includes the cron name, failure
+  count, and a truncated first error. Wired into `/api/cron/sync` (per-user
+  sync failures plus the whole-run catch) and `/api/cron/weekly-report`
+  (report failures plus the whole-run catch). Never throws: a failing alert
+  send cannot break the cron's own response. Files: `lib/reporting.ts`
+  (`sendCronAlertEmail`), `lib/cron-alert.ts`,
+  `app/api/cron/sync/route.ts`, `app/api/cron/weekly-report/route.ts`. QA:
+  unit tests cover the success, rate-limit-dedupe, no-admin-profile,
+  no-admin-email, and send-failure paths (`tests/unit/cron-alert.test.ts`,
+  `tests/unit/cron-sync-route.test.ts`,
+  `tests/unit/cron-weekly-report-route.test.ts`).
+- **Mobile polish.** A stacked card ledger below the `sm` breakpoint
+  (`components/transactions/MobileLedgerList.tsx`, wired into
+  `app/transactions/page.tsx`), 44px minimum touch targets on nav links and
+  month chips, and a scroll-strip edge-fade affordance on the mobile nav.
+  Also fixed a site-wide mobile overflow bug: the mobile nav strip's
+  `-mx-4`/`-mx-6` bleed pattern had no matching parent padding to cancel
+  against, causing horizontal scroll on every signed-in page at phone
+  widths. Files: `components/transactions/MobileLedgerList.tsx`,
+  `app/transactions/page.tsx`, `components/shell/MonthChips.tsx`,
+  `components/shell/AppSidebar.tsx`. QA: screenshot-verified with Playwright
+  at 375px and 414px across all nine signed-in routes plus `/login`, before
+  and after the overflow fix; a programmatic scan confirmed no control
+  overlaps or sub-24px tap targets.
+- **Deployment consideration:** cron alert emails require an admin profile
+  (`profiles.role = 'admin'`) and production `SMTP_*` env; if either is
+  missing, `alertCronFailure` logs and skips the send rather than throwing.
+
+## Previous session (2026-07-13, branch `navaneethbv-patch-1`)
 
 Fixed the weekly report scheduler, which had failed every run since it was
 configured. Two independent causes:

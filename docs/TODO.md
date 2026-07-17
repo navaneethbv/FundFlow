@@ -23,7 +23,11 @@ is a hole a real deployment would fall into.
    sync writes a `sync_jobs` row (running → done/failed with the Plaid error
    code); the dashboard shows a stale-data banner when a bank is broken or no
    sync succeeded in 48h; the daily cron prunes jobs older than 30 days.
-   *Still optional:* an alert email when a whole cron run fails.
+   ~~*Still optional:* an alert email when a whole cron run fails.~~ **Done
+   (2026-07-16):** `lib/cron-alert.ts` (`alertCronFailure`) emails the admin
+   profile on cron failure, deduped to one alert per cron name per 24h via
+   the rate limiter; wired into `/api/cron/sync` and
+   `/api/cron/weekly-report`.
 5. ~~**Origin check on mutating API routes.**~~ **Done (2026-07-05):**
    `lib/origin.ts` + `proxy.ts` reject cross-origin mutating `/api` requests
    (403); requests without an Origin header (webhooks, cron, curl) pass.
@@ -46,8 +50,12 @@ and Settings read `profiles.weekly_report_enabled`.
 
 - ~~**Card designs by network/product**~~ Done — card-deck carousel
   (`lib/card-design.ts`), card selection filters the dashboard.
-- **Mobile support** — polish responsive layouts for phones (the UI is Tailwind
-  responsive today; needs dedicated mobile passes and touch-friendly controls).
+- ~~**Mobile support**~~ **Done (2026-07-16):** stacked card ledger below the
+  `sm` breakpoint (`components/transactions/MobileLedgerList.tsx`), 44px
+  minimum touch targets on nav links and month chips, a scroll-strip edge-fade
+  affordance, and a site-wide mobile overflow fix (removed a negative-margin
+  bleed on the mobile nav strip that broke every signed-in page at phone
+  widths); screenshot-verified at 375px and 414px.
 - ~~**Monthly history views**~~ Done — month browser on the dashboard plus the
   `/transactions` ledger with month/account/search filters.
 - ~~**Current spend indicator**~~ Done — pacing widget (vs budget and vs
