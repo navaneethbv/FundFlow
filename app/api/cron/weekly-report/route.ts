@@ -17,6 +17,7 @@ import {
 } from "@/lib/report-period";
 import { errorResponse } from "@/lib/http";
 import { logError } from "@/lib/log";
+import { alertCronFailure } from "@/lib/cron-alert";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -27,6 +28,7 @@ type WeeklyRunResult = {
   reports_sent: number;
   reports_skipped: number;
   reports_failed: number;
+  first_error?: string;
 };
 
 function safeDeliveryError(error: unknown): string {
@@ -87,6 +89,7 @@ export async function runWeeklyReports(
           "missing_account_email",
         );
         result.reports_failed += 1;
+        result.first_error ??= "missing_account_email";
         continue;
       }
 
@@ -101,6 +104,7 @@ export async function runWeeklyReports(
           "pdf_render_failed",
         );
         result.reports_failed += 1;
+        result.first_error ??= "pdf_render_failed";
         logError("cron.weekly-report.pdf", pdfError);
         continue;
       }
@@ -120,6 +124,7 @@ export async function runWeeklyReports(
       result.reports_sent += 1;
     } catch (userError) {
       result.reports_failed += 1;
+      result.first_error ??= safeDeliveryError(userError);
       logError("cron.weekly-report.user", userError);
       if (deliveryId) {
         try {
@@ -147,8 +152,21 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    return NextResponse.json({ ok: true, ...(await runWeeklyReports()) });
+    const result = await runWeeklyReports();
+    if (result.reports_failed > 0) {
+      await alertCronFailure("weekly-report", {
+        failed: result.reports_failed,
+        total: result.due,
+        firstError: result.first_error,
+      });
+    }
+    return NextResponse.json({ ok: true, ...result });
   } catch (error) {
+    await alertCronFailure("weekly-report", {
+      failed: 1,
+      total: 1,
+      firstError: error instanceof Error ? error.message : String(error),
+    });
     return errorResponse("cron.weekly-report", error);
   }
 }

@@ -9,6 +9,7 @@ import { logError } from "@/lib/log";
 import { writeNetWorthSnapshot } from "@/lib/net-worth";
 import { processNotificationsForUser } from "@/lib/notifications";
 import { sendDailyDigestEmail } from "@/lib/reporting";
+import { alertCronFailure } from "@/lib/cron-alert";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -36,6 +37,7 @@ export async function GET(request: NextRequest) {
     const userIds = [...new Set((data ?? []).map((r) => r.user_id as string))];
 
     let synced = 0;
+    const failures: string[] = [];
     for (const userId of userIds) {
       try {
         await syncAllForUser(userId);
@@ -95,6 +97,7 @@ export async function GET(request: NextRequest) {
         synced += 1;
       } catch (err) {
         logError("cron.sync.user", err);
+        failures.push(err instanceof Error ? err.message : String(err));
       }
     }
 
@@ -109,8 +112,21 @@ export async function GET(request: NextRequest) {
     if (jobsPrune.error) logError("cron.sync.prune.jobs", jobsPrune.error);
     if (countersPrune.error) logError("cron.sync.prune.counters", countersPrune.error);
 
+    if (failures.length > 0) {
+      await alertCronFailure("daily-sync", {
+        failed: failures.length,
+        total: userIds.length,
+        firstError: failures[0],
+      });
+    }
+
     return NextResponse.json({ ok: true, users: userIds.length, synced });
   } catch (error) {
+    await alertCronFailure("daily-sync", {
+      failed: 1,
+      total: 1,
+      firstError: error instanceof Error ? error.message : String(error),
+    });
     return errorResponse("cron.sync", error);
   }
 }
