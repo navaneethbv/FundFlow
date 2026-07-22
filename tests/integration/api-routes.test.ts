@@ -46,7 +46,8 @@ vi.mock("@/lib/supabase/service", async (importOriginal) => {
       const originalDelete = client.auth.admin.deleteUser.bind(client.auth.admin);
       client.auth.admin.deleteUser = async (id: string) => {
         if (mockDeleteUserError) {
-          return { data: { user: null }, error: mockDeleteUserError };
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          return { data: { user: null }, error: mockDeleteUserError } as any;
         }
         return originalDelete(id);
       };
@@ -91,10 +92,12 @@ vi.mock("@/lib/export", async (importOriginal) => {
 });
 
 // Mock requireUser and requireAdmin
-let activeUser: unknown = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let activeUser: any = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let activeSupabaseClient: any = null;
-let activeAdminUser: unknown = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let activeAdminUser: any = null;
 
 vi.mock("@/lib/http", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/http")>();
@@ -143,7 +146,8 @@ suite("API routes integration", () => {
   const stamp = Date.now();
   let tempUserId = "";
   let tempUserClient: ReturnType<typeof createClient>;
-  let tempUserObj: unknown;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let tempUserObj: any;
 
   beforeAll(async () => {
     // Create temporary user
@@ -200,34 +204,38 @@ suite("API routes integration", () => {
       expect(resp.status).toBe(401);
     });
 
-    it("runs successfully and returns synced user count with correct secret", async () => {
-      mockSyncAllForUser.mockResolvedValue({ added: 1, modified: 0, removed: 0 });
-      mockRefreshRecurringForUser.mockResolvedValue(0);
+    it(
+      "runs successfully and returns synced user count with correct secret",
+      async () => {
+        mockSyncAllForUser.mockResolvedValue({ added: 1, modified: 0, removed: 0 });
+        mockRefreshRecurringForUser.mockResolvedValue(0);
 
-      // Seed an active item so the cron has a user to sync
-      const enc = encryptSecret("dummy-cron-token");
-      const { data: item } = await admin.from("plaid_items").insert({
-        user_id: tempUserId,
-        plaid_item_id: `cron-item-${stamp}`,
-        access_token_ciphertext: enc.ciphertext,
-        access_token_iv: enc.iv,
-        access_token_tag: enc.tag,
-        status: "active",
-      }).select("id").single();
+        // Seed an active item so the cron has a user to sync
+        const enc = encryptSecret("dummy-cron-token");
+        const { data: item } = await admin.from("plaid_items").insert({
+          user_id: tempUserId,
+          plaid_item_id: `cron-item-${stamp}`,
+          access_token_ciphertext: enc.ciphertext,
+          access_token_iv: enc.iv,
+          access_token_tag: enc.tag,
+          status: "active",
+        }).select("id").single();
 
-      const req = new NextRequest("http://localhost/api/cron/sync", {
-        headers: { authorization: `Bearer ${process.env.CRON_SECRET}` },
-      });
-      const resp = await cronSyncGet(req);
-      expect(resp.status).toBe(200);
+        const req = new NextRequest("http://localhost/api/cron/sync", {
+          headers: { authorization: `Bearer ${process.env.CRON_SECRET}` },
+        });
+        const resp = await cronSyncGet(req);
+        expect(resp.status).toBe(200);
 
-      const json = await resp.json();
-      expect(json.ok).toBe(true);
-      expect(json.users).toBeGreaterThanOrEqual(1);
+        const json = await resp.json();
+        expect(json.ok).toBe(true);
+        expect(json.users).toBeGreaterThanOrEqual(1);
 
-      // Clean up item
-      await admin.from("plaid_items").delete().eq("id", item!.id);
-    });
+        // Clean up item
+        await admin.from("plaid_items").delete().eq("id", item!.id);
+      },
+      15000,
+    );
 
     it("proceeds successfully even if one user's sync throws an error", async () => {
       mockSyncAllForUser.mockRejectedValue(new Error("Per-user sync failure"));

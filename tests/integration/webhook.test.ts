@@ -177,12 +177,9 @@ suite("plaid webhook integration", () => {
   });
 
   it("rejects webhook if signature verification fails in production environment", async () => {
-    const origNodeEnv = process.env.NODE_ENV;
-    const origPlaidEnv = process.env.PLAID_ENV;
-
     try {
-      process.env.NODE_ENV = "production";
-      process.env.PLAID_ENV = "production";
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("PLAID_ENV", "production");
 
       // 1. Missing header
       const req1 = new NextRequest("http://localhost/api/plaid/webhook", {
@@ -201,8 +198,7 @@ suite("plaid webhook integration", () => {
       const resp2 = await plaidWebhookPost(req2);
       expect(resp2.status).toBe(401);
     } finally {
-      process.env.NODE_ENV = origNodeEnv;
-      process.env.PLAID_ENV = origPlaidEnv;
+      vi.unstubAllEnvs();
     }
   });
 });

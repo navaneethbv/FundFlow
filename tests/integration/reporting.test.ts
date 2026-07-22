@@ -200,7 +200,7 @@ suite("weekly financial reporting integration", () => {
       share: 0.375,
     });
     expect(report.banks).toEqual([{ name: "Test Bank", amount: 80 }]);
-    expect(report.cards).toEqual([{ name: "Visa", amount: 30 }]);
+    expect(report.cards).toEqual([{ name: "Test Bank · Visa", amount: 30 }]);
     expect(report).not.toHaveProperty("accounts");
   });
 

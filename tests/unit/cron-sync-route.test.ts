@@ -548,10 +548,10 @@ describe("GET /api/cron/sync", () => {
       };
       query.then = (onfulfilled) => {
         if (table === "sync_jobs") {
-          return Promise.resolve({ error: new Error("Pruning jobs failed") }).then(onfulfilled);
+          return Promise.resolve({ data: null, error: new Error("Pruning jobs failed") }).then(onfulfilled);
         }
         if (table === "rate_limit_counters") {
-          return Promise.resolve({ error: new Error("Pruning counters failed") }).then(onfulfilled);
+          return Promise.resolve({ data: null, error: new Error("Pruning counters failed") }).then(onfulfilled);
         }
         return Promise.resolve({ data, error: null }).then(onfulfilled);
       };
