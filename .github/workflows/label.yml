@@ -17,9 +17,10 @@ jobs:
       pull-requests: write
 
     steps:
-    # Pinned to the major version whose config syntax .github/labeler.yml
-    # actually uses. This previously read @v4 while upstream had retagged it
-    # to v6 code, so a config that had not changed started failing.
+    # Keep this major version in step with the syntax .github/labeler.yml
+    # uses. The v6 bump landed on its own and left the config in the v4 form,
+    # which fails the action outright ("unexpected type for label"); the
+    # config is now v5+ to match.
     - uses: actions/labeler@v6
       with:
         repo-token: "${{ secrets.GITHUB_TOKEN }}"
