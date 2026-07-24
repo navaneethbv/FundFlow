@@ -32,9 +32,13 @@ export async function fetchPrivacySafeRows(
     return { allowed: false };
   }
 
+  // Explicit user scoping: redundant under the RLS-bound client, but this
+  // function is also called with the service client for API-token requests,
+  // where this filter is the only thing standing between users.
   const { data: txns, error } = await supabase
     .from("transactions")
     .select("date, merchant_name, name, amount, pfc_primary, pfc_detailed")
+    .eq("user_id", userId)
     .order("date", { ascending: false });
   if (error) throw error;
 

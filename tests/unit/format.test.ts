@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatCurrency, titleCase, formatMonth, formatMinutesAgo } from "@/lib/format";
+import { formatCurrency, titleCase, formatDay, formatMonth, formatMinutesAgo } from "@/lib/format";
 
 describe("formatCurrency", () => {
   it("formats positive numbers as USD currency by default", () => {
@@ -65,6 +65,13 @@ describe("formatMonth", () => {
     expect(formatMonth("2026-06")).toBe("Jun 2026");
     expect(formatMonth("2020-01")).toBe("Jan 2020");
     expect(formatMonth("2025-12")).toBe("Dec 2025");
+  });
+});
+
+describe("formatDay", () => {
+  it("formats YYYY-MM-DD dates to a short month + day", () => {
+    expect(formatDay("2026-07-24")).toBe("Jul 24");
+    expect(formatDay("2025-12-01")).toBe("Dec 1");
   });
 });
 

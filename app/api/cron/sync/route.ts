@@ -7,6 +7,8 @@ import { refreshRecurringForUser } from "@/lib/recurring";
 import { errorResponse } from "@/lib/http";
 import { logError } from "@/lib/log";
 import { writeNetWorthSnapshot } from "@/lib/net-worth";
+import { syncCardAprsForUser } from "@/lib/liabilities";
+import { runIntegrityChecks } from "@/lib/integrity";
 import { processNotificationsForUser } from "@/lib/notifications";
 import { sendDailyDigestEmail } from "@/lib/reporting";
 import { alertCronFailure } from "@/lib/cron-alert";
@@ -51,6 +53,11 @@ export async function GET(request: NextRequest) {
         await syncAllForUser(userId);
         await refreshRecurringForUser(userId);
         await writeNetWorthSnapshot(userId);
+        try {
+          await syncCardAprsForUser(userId); // no-op unless PLAID_LIABILITIES_ENABLED=1
+        } catch (aprError) {
+          logError("cron.sync.aprs", aprError);
+        }
         await processNotificationsForUser(userId);
 
         // Daily Digest Email Trigger
@@ -107,6 +114,52 @@ export async function GET(request: NextRequest) {
         logError("cron.sync.user", err);
         failures.push(safeSyncError(err));
       }
+    }
+
+    // Data-integrity pass (2.3, best-effort): stuck jobs, orphaned
+    // transactions, duplicate Plaid ids. Bounded queries per user; findings
+    // go to the admin through the same deduped alert rail as cron failures.
+    try {
+      const integrityFindings: string[] = [];
+      for (const userId of userIds) {
+        const [{ data: jobs }, { data: txns }, { data: accts }] = await Promise.all([
+          service
+            .from("sync_jobs")
+            .select("status, updated_at")
+            .eq("user_id", userId)
+            .eq("status", "running"),
+          service
+            .from("transactions")
+            .select("id, account_id, plaid_transaction_id, pending, date")
+            .eq("user_id", userId),
+          service.from("accounts").select("id").eq("user_id", userId),
+        ]);
+        const findings = runIntegrityChecks({
+          nowMs: Date.now(),
+          syncJobs: (jobs ?? []).map((j) => ({
+            status: j.status as string,
+            updatedAt: j.updated_at as string,
+          })),
+          transactions: (txns ?? []).map((t) => ({
+            id: t.id as string,
+            accountId: t.account_id as string,
+            plaidTransactionId: t.plaid_transaction_id as string | null,
+            pending: Boolean(t.pending),
+            date: t.date as string,
+          })),
+          accountIds: (accts ?? []).map((a) => a.id as string),
+        });
+        for (const finding of findings) integrityFindings.push(finding.detail);
+      }
+      if (integrityFindings.length > 0) {
+        await alertCronFailure("integrity", {
+          failed: integrityFindings.length,
+          total: userIds.length,
+          firstError: integrityFindings[0],
+        });
+      }
+    } catch (integrityErr) {
+      logError("cron.sync.integrity", integrityErr);
     }
 
     // Housekeeping (best-effort): drop sync_jobs history older than 30 days

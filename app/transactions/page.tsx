@@ -12,6 +12,8 @@ import { Search } from "@/components/ui/icons";
 import RefundReview from "@/components/transactions/RefundReview";
 import TransactionEditor from "@/components/transactions/TransactionEditor";
 import MobileLedgerList, { type LedgerCardRow } from "@/components/transactions/MobileLedgerList";
+import SavedViewsBar from "@/components/transactions/SavedViewsBar";
+import BulkTagBar from "@/components/transactions/BulkTagBar";
 import { formatCurrency, titleCase, formatMonth } from "@/lib/format";
 import { applyMerchantRules } from "@/lib/planning";
 import { filterRowsWithRules, hasRemapRules } from "@/lib/ledger-filter";
@@ -66,6 +68,15 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
       : "";
 
   const supabase = await createClient();
+  const { data: savedViewRows } = await supabase
+    .from("saved_views")
+    .select("id, name, params")
+    .order("created_at");
+  const savedViews = ((savedViewRows ?? []) as Array<{
+    id: string;
+    name: string;
+    params: Record<string, string>;
+  }>);
 
   // Fetch accounts and rules first to allow type-based filtration.
   const [{ data: accounts }, { data: merchantRules }] = await Promise.all([
@@ -258,6 +269,22 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
 
         <RefundReview />
 
+        <SavedViewsBar
+          initialViews={savedViews}
+          currentParams={Object.fromEntries(
+            Object.entries({
+              month: params.month,
+              accountId: params.accountId,
+              q: params.q,
+              category: params.category,
+              sub: params.sub,
+              merchant: params.merchant,
+              flow: params.flow,
+              accountType: params.accountType,
+            }).filter(([, value]) => typeof value === "string" && value.length > 0),
+          ) as Record<string, string>}
+        />
+
         <Panel>
           <form method="get" action="/transactions" className="flex flex-wrap items-center gap-2 text-sm">
             <div className="relative min-w-52 flex-1">
@@ -335,6 +362,9 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
           <Panel padding="none" className="overflow-hidden">
             <div className="sm:hidden">
               <MobileLedgerList rows={cardRows} />
+            </div>
+            <div className="border-b border-panel-border px-4 py-2 sm:px-5">
+              <BulkTagBar transactionIds={rows.map((t) => t.id)} />
             </div>
             <div className="hidden overflow-x-auto sm:block">
               <table className="w-full text-sm">

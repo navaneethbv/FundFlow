@@ -1,0 +1,37 @@
+name: Monthly encrypted backup
+
+on:
+  schedule:
+    # 1st of each month, 09:00 UTC
+    - cron: "0 9 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: monthly-backup
+  cancel-in-progress: false
+
+jobs:
+  invoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Invoke encrypted backup cron
+        env:
+          APP_URL: ${{ secrets.FUNDFLOW_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        shell: bash
+        run: |
+          response_file="$(mktemp)"
+          status="$(curl --silent --show-error \
+            --retry 3 \
+            --retry-all-errors \
+            --max-time 120 \
+            --output "$response_file" \
+            --write-out "%{http_code}" \
+            --header "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/cron/backup")"
+          cat "$response_file"
+          test "$status" = "200"

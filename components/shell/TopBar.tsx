@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Logo from "@/components/ui/Logo";
+import PrivacyToggle from "@/components/PrivacyToggle";
 import ThemeToggle from "@/components/ThemeToggle";
 import LogoutButton from "@/components/LogoutButton";
 
@@ -16,6 +17,7 @@ export default function TopBar({ email }: { email?: string | null }) {
               {email}
             </span>
           )}
+          <PrivacyToggle />
           <ThemeToggle variant="switch" />
           <LogoutButton />
         </div>

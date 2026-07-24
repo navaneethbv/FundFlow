@@ -1,8 +1,9 @@
 import Link from "next/link";
 import type { DashboardData } from "@/lib/dashboard";
 import { foldTail } from "@/lib/chart-utils";
+import { medianOf } from "@/lib/insights";
 import { dashboardUrl, OTHER_CATEGORY_KEY } from "@/lib/drilldown";
-import { formatCurrency, formatMonth, titleCase } from "@/lib/format";
+import { formatCurrency, formatDay, formatMonth, titleCase } from "@/lib/format";
 import AreaSparkline from "@/components/charts/AreaSparkline";
 import DonutChart from "@/components/charts/DonutChart";
 import MiniBars from "@/components/charts/MiniBars";
@@ -86,6 +87,7 @@ export default function MonitorView({
   accountNames,
   linkParams,
   drillQuery,
+  prefs,
 }: {
   data: DashboardData;
   netWorth: number;
@@ -94,6 +96,7 @@ export default function MonitorView({
   accountNames: Map<string, string>;
   linkParams: DrillLinkParams;
   drillQuery: { category?: string; sub?: string; merchant?: string };
+  prefs?: { hideRecent?: boolean; hideBreakdowns?: boolean };
 }) {
   const monthLabels = data.monthlySpending.map((month) => formatMonth(month.month));
   const spendSeries = data.monthlySpending.map((month) => month.amount);
@@ -132,6 +135,16 @@ export default function MonitorView({
   );
   const drillableMerchants = new Set(data.drillableMerchants);
   const attentionItems = getAttentionItems(data);
+  const insights = data.insights;
+  const safeToSpend = insights.safeToSpend;
+  const paycheck = insights.paycheck;
+  const completedEssentials = insights.essentialsSplit
+    .slice(0, -1)
+    .map((row) => row.essentials)
+    .filter((amount) => amount > 0);
+  const typicalEssentials = completedEssentials.length
+    ? medianOf(completedEssentials)
+    : null;
 
   return (
     <div className="space-y-5">
@@ -167,6 +180,44 @@ export default function MonitorView({
             </div>
             <RadialGauge value={savingsRate} />
           </div>
+        </section>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
+          <h3 className="eyebrow">Safe to spend</h3>
+          <p className="metric-value mt-3 text-3xl">
+            {safeToSpend ? formatCurrency(safeToSpend.amount) : "—"}
+          </p>
+          <p className="mt-2 text-xs font-medium text-muted">
+            {safeToSpend
+              ? safeToSpend.anchor === "paycheck"
+                ? `After ${formatCurrency(safeToSpend.upcomingBillsTotal)} in bills before your ${formatDay(safeToSpend.horizonEnd)} paycheck`
+                : `After ${formatCurrency(safeToSpend.upcomingBillsTotal)} in bills over the next two weeks`
+              : "Connect a checking account to see what's spendable."}
+          </p>
+        </section>
+        <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
+          <h3 className="eyebrow">Emergency runway</h3>
+          <p className="metric-value mt-3 text-3xl">
+            {insights.runwayMonths !== null ? `${insights.runwayMonths} mo` : "—"}
+          </p>
+          <p className="mt-2 text-xs font-medium text-muted">
+            {insights.runwayMonths !== null && typicalEssentials !== null
+              ? `Cash on hand vs ~${formatCurrency(typicalEssentials)}/mo in essentials`
+              : "Needs a full month of essential spending history."}
+          </p>
+        </section>
+        <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
+          <h3 className="eyebrow">Next paycheck</h3>
+          <p className="metric-value mt-3 text-3xl">
+            {paycheck?.nextPayDate ? formatDay(paycheck.nextPayDate) : "—"}
+          </p>
+          <p className="mt-2 text-xs font-medium text-muted">
+            {paycheck?.nextPayDate
+              ? `${formatCurrency(paycheck.amount)} expected from ${paycheck.name}`
+              : "No recurring income detected yet."}
+          </p>
         </section>
       </div>
 
@@ -222,7 +273,7 @@ export default function MonitorView({
         </Panel>
       </div>
 
-      {(recentTransactions.length > 0 || merchantItems.length > 0) && (
+      {!prefs?.hideRecent && (recentTransactions.length > 0 || merchantItems.length > 0) && (
         <div className="grid gap-5 xl:grid-cols-12">
           {recentTransactions.length > 0 && (
             <Panel title="Recent activity" className="xl:col-span-8">
@@ -240,7 +291,7 @@ export default function MonitorView({
         </div>
       )}
 
-      {(donutItems.length > 0 || data.subscriptions.length > 0) && (
+      {!prefs?.hideBreakdowns && (donutItems.length > 0 || data.subscriptions.length > 0) && (
         <div className="grid gap-5 xl:grid-cols-12">
           {data.drilldown?.kind === "category" ? (
             <div className="xl:col-span-7">

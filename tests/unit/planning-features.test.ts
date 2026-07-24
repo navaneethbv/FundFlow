@@ -6,6 +6,7 @@ import {
   applyMerchantRules,
   previewMerchantRules,
   detectSpendingAnomalies,
+  groupRecurringByPeriod,
   computeNetWorthSnapshot,
   buildNotification,
   shouldSendAlert,
@@ -124,6 +125,126 @@ describe("planning roadmap features", () => {
     expect(anomalies.map((a) => a.kind)).toEqual(
       expect.arrayContaining(["duplicate-charge", "large-transaction", "category-spike"]),
     );
+  });
+
+  it("flags a merchant charge at least double its trailing median", () => {
+    const anomalies = detectSpendingAnomalies({
+      currentTransactions: [
+        { id: "x", date: "2026-07-05", merchant: "Power Co", category: "RENT_AND_UTILITIES", amount: 210 },
+      ],
+      priorCategoryAverages: [],
+      priorMerchantMedians: [{ merchant: "Power Co", amount: 90 }],
+      largeTransactionThreshold: 500,
+    });
+    expect(anomalies).toEqual([
+      expect.objectContaining({
+        kind: "merchant-spike",
+        transactionId: "x",
+        severity: "warning",
+      }),
+    ]);
+  });
+
+  it("does not flag merchant charges below double the median or with tiny dollar jumps", () => {
+    const anomalies = detectSpendingAnomalies({
+      currentTransactions: [
+        { id: "y", date: "2026-07-05", merchant: "Power Co", category: "RENT_AND_UTILITIES", amount: 170 },
+        { id: "z", date: "2026-07-06", merchant: "Coffee Cart", category: "FOOD_AND_DRINK", amount: 12 },
+      ],
+      priorCategoryAverages: [],
+      priorMerchantMedians: [
+        { merchant: "Power Co", amount: 90 },
+        { merchant: "Coffee Cart", amount: 5 },
+      ],
+      largeTransactionThreshold: 500,
+    });
+    expect(anomalies).toEqual([]);
+  });
+
+  it("groups upcoming bills by month with occurrence expansion and totals", () => {
+    const groups = groupRecurringByPeriod(
+      [
+        { name: "Netflix", amount: 17.99, itemType: "expense", frequency: "monthly", nextDate: "2026-08-05" },
+        { name: "Gym", amount: 25, itemType: "expense", frequency: "weekly", nextDate: "2026-08-03" },
+        { name: "Payroll", amount: 2400, itemType: "income", frequency: "biweekly", nextDate: "2026-08-07" },
+      ],
+      "2026-08-01",
+      40,
+      "monthly",
+    );
+    expect(groups).toHaveLength(2);
+    expect(groups[0]!.periodStart).toBe("2026-08-01");
+    expect(groups[1]!.periodStart).toBe("2026-09-01");
+    // weekly gym occurs 4x in August (3, 10, 17, 24, 31 → 5x)
+    const august = groups[0]!;
+    expect(august.items.filter((i) => i.name === "Gym")).toHaveLength(5);
+    expect(august.expenseTotal).toBe(17.99 + 25 * 5);
+    expect(august.incomeTotal).toBe(4800);
+  });
+
+  it("groups weekly with Monday period starts and expands within the horizon", () => {
+    const groups = groupRecurringByPeriod(
+      [{ name: "Gym", amount: 25, itemType: "expense", frequency: "weekly", nextDate: "2026-08-05" }],
+      "2026-08-03",
+      14,
+      "weekly",
+    );
+    // 2026-08-05 is a Wednesday; Monday of that week is 08-03. Horizon ends
+    // 08-17, so occurrences land 08-05 and 08-12 → two Monday-keyed groups.
+    expect(groups.map((g) => g.periodStart)).toEqual(["2026-08-03", "2026-08-10"]);
+  });
+
+  it("applies budget rollover carry when enabled", () => {
+    const envelopes = buildBudgetEnvelopes({
+      budgets: [
+        { category: "FOOD_AND_DRINK", monthlyLimit: 500, rolloverEnabled: true },
+        { category: "TRANSPORTATION", monthlyLimit: 200 },
+      ],
+      currentSpend: [
+        { category: "FOOD_AND_DRINK", amount: 300 },
+        { category: "TRANSPORTATION", amount: 60 },
+      ],
+      previousSpend: [
+        { month: "2026-05", category: "FOOD_AND_DRINK", amount: 420 },
+        { month: "2026-06", category: "FOOD_AND_DRINK", amount: 550 },
+      ],
+      windowMonths: ["2026-05", "2026-06"],
+      dayOfMonth: 15,
+      daysInMonth: 30,
+    });
+
+    // carry = (500-420) + (500-550) = 30
+    expect(envelopes[0]).toMatchObject({
+      carry: 30,
+      effectiveLimit: 530,
+      remaining: 230,
+    });
+    // rollover disabled → no carry, remaining unchanged from limit math
+    expect(envelopes[1]).toMatchObject({ carry: 0, effectiveLimit: 200, remaining: 140 });
+  });
+
+  it("counts zero-spend window months as full carry and floors effective limit at zero", () => {
+    const envelopes = buildBudgetEnvelopes({
+      budgets: [{ category: "FUN", monthlyLimit: 100, rolloverEnabled: true }],
+      currentSpend: [{ category: "FUN", amount: 20 }],
+      previousSpend: [{ month: "2026-06", category: "FUN", amount: 450 }],
+      windowMonths: ["2026-05", "2026-06"],
+      dayOfMonth: 10,
+      daysInMonth: 31,
+    });
+    // carry = (100-0) + (100-450) = -250 → effectiveLimit floored at 0
+    expect(envelopes[0]!.carry).toBe(-250);
+    expect(envelopes[0]!.effectiveLimit).toBe(0);
+    expect(envelopes[0]!.status).toBe("over");
+  });
+
+  it("assigns severities to the subscription alert types", () => {
+    expect(
+      buildNotification("price_hike", { title: "t", body: "b" }).severity,
+    ).toBe("warning");
+    expect(
+      buildNotification("new_subscription", { title: "t", body: "b" }).severity,
+    ).toBe("info");
   });
 
   it("computes net worth from linked and manual accounts", () => {

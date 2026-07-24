@@ -59,4 +59,15 @@ export const serverEnv = {
   get cronSecret() {
     return required("CRON_SECRET", process.env.CRON_SECRET);
   },
+  // Optional: 32-byte base64 key for encrypted takeout backups (2.1).
+  // Deliberately distinct from PLAID_TOKEN_ENC_KEY — a leaked backup key
+  // must not unlock bank tokens. The backup cron fails closed without it.
+  get backupEncKey() {
+    return process.env.BACKUP_ENC_KEY;
+  },
+  // Optional: enables the in-app AI insights provider (Phase 3). Without
+  // it, insight generation returns a clear "not configured" state.
+  get anthropicApiKey() {
+    return process.env.ANTHROPIC_API_KEY;
+  },
 };

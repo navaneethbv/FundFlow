@@ -103,8 +103,15 @@ export async function syncItemTransactions(
       .upsert(upsertRows, { onConflict: "plaid_transaction_id" });
     if (error) throw error;
 
-    // Check for large transactions (threshold 500)
-    const largeThreshold = 500;
+    // Instant large-transaction alerts (7.3): user-configurable threshold,
+    // defaulting to $500 when unset. Service-client read — user_id filter
+    // is load-bearing.
+    const { data: alertPref } = await supabase
+      .from("alert_preferences")
+      .select("large_transaction_threshold")
+      .eq("user_id", item.user_id)
+      .maybeSingle();
+    const largeThreshold = Number(alertPref?.large_transaction_threshold ?? 500);
     for (const row of upsertRows) {
       if (row.amount >= largeThreshold) {
         await createNotification(
@@ -117,6 +124,36 @@ export async function syncItemTransactions(
           row.plaid_transaction_id,
         ).catch((err) => logError("sync.large_txn_notification", err));
       }
+    }
+
+    // Cancellation watch (Bucket 2): if a merchant the user marked as
+    // cancelled charges again, raise a danger alert. Best-effort.
+    try {
+      const { data: cancelledRows } = await supabase
+        .from("cancelled_subscriptions")
+        .select("merchant")
+        .eq("user_id", item.user_id);
+      if (cancelledRows && cancelledRows.length > 0) {
+        const cancelled = new Set(
+          cancelledRows.map((row) => (row.merchant as string).trim().toLowerCase()),
+        );
+        for (const row of upsertRows) {
+          const merchant = (row.merchant_name || row.name || "").trim();
+          if (!merchant || row.amount <= 0) continue;
+          if (!cancelled.has(merchant.toLowerCase())) continue;
+          await createNotification(
+            item.user_id,
+            "cancellation_watch",
+            {
+              title: `Charged after cancellation: ${merchant}`,
+              body: `${merchant} charged ${formatCurrency(row.amount)} on ${row.date} after you marked it cancelled. Dispute or re-cancel.`,
+            },
+            merchant,
+          ).catch((err) => logError("sync.cancellation_watch", err));
+        }
+      }
+    } catch (watchError) {
+      logError("sync.cancellation_watch", watchError);
     }
   }
 

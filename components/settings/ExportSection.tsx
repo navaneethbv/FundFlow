@@ -55,6 +55,12 @@ export default function ExportSection({
           Export as JSON
         </ButtonLink>
         <ButtonLink href="/api/export/report">Export PDF report</ButtonLink>
+        <ButtonLink
+          href="/api/export/csv?scope=tax"
+          className={!enabled ? "pointer-events-none opacity-40" : ""}
+        >
+          Tax-tagged CSV
+        </ButtonLink>
       </div>
       <Button type="button" variant="ghost" size="sm" onClick={toggle} disabled={saving} className="mt-4">
         {saving ? "Saving..." : enabled ? "Pause exports" : "Enable exports"}

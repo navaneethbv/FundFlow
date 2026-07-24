@@ -1,0 +1,45 @@
+# Self-hosting starting point (roadmap Phase 5). Runs the FundFlow app
+# against a Supabase project you host elsewhere (managed Supabase or the
+# official `supabase start` local stack — replicating the full Supabase
+# platform in this file is deliberately out of scope).
+#
+#   docker compose -f docker-compose.selfhost.yml up --build
+#
+# Required env: everything in .env.example (Supabase URL + keys, Plaid
+# keys, PLAID_TOKEN_ENC_KEY, CRON_SECRET, SMTP_*, BACKUP_ENC_KEY).
+# Schedulers: run the GitHub Actions workflows, or add host cron entries
+# calling /api/cron/sync daily and /api/cron/backup monthly with
+# "Authorization: Bearer $CRON_SECRET".
+services:
+  fundflow:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM node:20-alpine AS build
+        WORKDIR /app
+        COPY package*.json ./
+        RUN npm ci
+        COPY . .
+        ARG NEXT_PUBLIC_SUPABASE_URL
+        ARG NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+        ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL \
+            NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+        RUN npm run build
+        FROM node:20-alpine
+        WORKDIR /app
+        ENV NODE_ENV=production
+        COPY --from=build /app ./
+        EXPOSE 3000
+        CMD ["npm", "start"]
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}
+    env_file: .env.local
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 60s
+      timeout: 5s
+      retries: 3

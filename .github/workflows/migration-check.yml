@@ -1,0 +1,49 @@
+name: Migration smoke-check
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/**"
+      - "scripts/check-rls.sql"
+
+permissions:
+  contents: read
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: supabase/postgres:15.8.1.085
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare auth schema stubs
+        # Migrations reference auth.users / auth.uid(); the supabase image
+        # ships the auth schema, but ensure uid() exists for plain runs.
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
+            create schema if not exists auth;
+            create table if not exists auth.users (id uuid primary key, email text);
+            create or replace function auth.uid() returns uuid
+              language sql stable as 'select null::uuid';
+          "
+      - name: Apply every migration in filename order
+        run: |
+          for f in supabase/migrations/*.sql; do
+            echo "== applying $f"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
+          done
+      - name: Assert RLS on every public table
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-rls.sql

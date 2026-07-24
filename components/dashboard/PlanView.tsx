@@ -1,11 +1,16 @@
 import Link from "next/link";
 import type { DashboardData } from "@/lib/dashboard";
+import type { BillGrouping } from "@/lib/planning";
 import type { Goal } from "@/lib/goals";
+import { dashboardUrl } from "@/lib/drilldown";
 import { formatCurrency, titleCase } from "@/lib/format";
 import Badge from "@/components/ui/Badge";
 import Panel from "@/components/ui/Panel";
+import BillCalendar from "@/components/dashboard/BillCalendar";
 import GoalsSummary from "@/components/dashboard/GoalsSummary";
 import PlanningDepth from "@/components/dashboard/PlanningDepth";
+import WhatIfPanel from "@/components/dashboard/WhatIfPanel";
+import { medianOf, projectNetWorth } from "@/lib/insights";
 
 type PlanData = Pick<
   DashboardData,
@@ -61,17 +66,49 @@ function recurringTone(
 export default function PlanView({
   data,
   goals,
+  billsGrouping = "weekly",
+  billsLinkParams = {},
+  prefs,
 }: {
   data: DashboardData;
   goals: Goal[];
+  billsGrouping?: BillGrouping;
+  billsLinkParams?: { month?: string; accountId?: string; itemId?: string };
+  prefs?: { hideBillCalendar?: boolean; hideWhatIf?: boolean; hideDebt?: boolean };
 }) {
   const setupItems = getPlanSetupItems(data, goals);
-  const recurringItems = data.recurringWeeks.flatMap((week) =>
-    week.items.slice(0, 3).map((item) => ({
-      ...item,
-      weekStart: week.weekStart,
-    })),
+  const billPeriods = data.billPeriods[billsGrouping];
+  const priceDrift = data.insights.priceDrift;
+  const debt = data.insights.debt;
+  const sinking = data.insights.sinkingFunds;
+
+  // Net-worth trajectory: median completed-month net (income − spend), 0%
+  // growth assumption stated in the panel.
+  const netSeries = data.monthlySpending.map(
+    (month, index) => (data.monthlyIncome[index]?.amount ?? 0) - month.amount,
   );
+  const completedNet = netSeries.slice(0, -1);
+  const monthlySavings = completedNet.length > 0 ? medianOf(completedNet) : 0;
+  const projectedYear1 =
+    projectNetWorth({
+      currentNetWorth: data.netWorthSnapshot.netWorth,
+      monthlySavings,
+      months: 12,
+    }).at(-1)?.netWorth ?? data.netWorthSnapshot.netWorth;
+  const projectedYear5 =
+    projectNetWorth({
+      currentNetWorth: data.netWorthSnapshot.netWorth,
+      monthlySavings,
+      months: 60,
+    }).at(-1)?.netWorth ?? data.netWorthSnapshot.netWorth;
+
+  const whatIfDebts = data.accounts
+    .filter((account) => account.type === "credit" && Number(account.current_balance ?? 0) > 0)
+    .map((account) => ({
+      name: account.name ?? "Card",
+      balance: Number(account.current_balance),
+      apr: account.apr === null || account.apr === undefined ? 22 : Number(account.apr),
+    }));
 
   return (
     <div className="space-y-5">
@@ -172,39 +209,175 @@ export default function PlanView({
           </ul>
         </Panel>
 
-        {recurringItems.length > 0 && (
+        {!prefs?.hideBillCalendar && (
+          <div className="xl:col-span-7">
+            <BillCalendar
+              periods={billPeriods}
+              grouping={billsGrouping}
+              weeklyHref={dashboardUrl({ view: "plan", ...billsLinkParams, bills: "weekly" })}
+              monthlyHref={dashboardUrl({ view: "plan", ...billsLinkParams, bills: "monthly" })}
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-12">
+        {!prefs?.hideDebt && debt && (debt.plan || debt.planWithExtra) && (
           <Panel
-            title="Recurring calendar"
-            eyebrow="Upcoming"
+            title="Debt payoff"
+            eyebrow="Avalanche strategy"
             className="xl:col-span-7"
           >
-            <div className="grid gap-x-5 sm:grid-cols-2">
-              {recurringItems.slice(0, 6).map((item) => (
-                <div
-                  key={`${item.weekStart}-${item.name}`}
-                  className="flex justify-between gap-4 border-b border-panel-border py-3 first:pt-0"
-                >
-                  <span>
-                    <span className="block text-sm font-semibold">{item.name}</span>
-                    <span className="block text-xs text-muted">
-                      Week of {item.weekStart}
+            {debt.plan ? (
+              <>
+                <p className="text-sm">
+                  At minimum payments you are debt-free in{" "}
+                  <span className="font-bold">{debt.plan.months} months</span>{" "}
+                  paying{" "}
+                  <span className="metric-value">{formatCurrency(debt.plan.totalInterest)}</span>{" "}
+                  in interest.
+                </p>
+                {debt.planWithExtra && (
+                  <p className="mt-2 text-sm">
+                    Adding {formatCurrency(debt.extraMonthly)}/mo:{" "}
+                    <span className="font-bold">{debt.planWithExtra.months} months</span>{" "}
+                    and{" "}
+                    <span className="metric-value">
+                      {formatCurrency(debt.planWithExtra.totalInterest)}
+                    </span>{" "}
+                    in interest — saving{" "}
+                    <span className="font-bold text-success">
+                      {formatCurrency(
+                        Math.max(0, debt.plan.totalInterest - debt.planWithExtra.totalInterest),
+                      )}
                     </span>
-                  </span>
-                  <span
-                    className={
-                      item.itemType === "income"
-                        ? "metric-value text-sm text-success"
-                        : "metric-value text-sm"
-                    }
-                  >
-                    {item.itemType === "income" ? "+" : ""}
-                    {formatCurrency(item.amount)}
-                  </span>
-                </div>
-              ))}
-            </div>
+                    .
+                  </p>
+                )}
+                <ul className="mt-3 space-y-1 text-xs text-muted">
+                  {debt.plan.debts.map((d) => (
+                    <li key={d.name}>
+                      {d.name}: cleared month {d.payoffMonth} ·{" "}
+                      {formatCurrency(d.interestPaid)} interest
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="text-sm text-warning">
+                Minimum payments don&apos;t cover the interest on these balances —
+                the plan never converges. Increase payments to see a payoff date.
+              </p>
+            )}
+            {debt.usesAssumedApr && (
+              <p className="mt-3 text-xs text-muted">
+                Assumes {`22%`} APR on cards without a rate — set real APRs in
+                Settings for accuracy.
+              </p>
+            )}
           </Panel>
         )}
+
+        {priceDrift.items.length > 0 && (
+          <Panel
+            title="Price drift"
+            eyebrow="Your personal inflation"
+            className={debt && (debt.plan || debt.planWithExtra) ? "xl:col-span-5" : "xl:col-span-7"}
+          >
+            {priceDrift.overallDriftPct !== null && (
+              <p className="mb-3 text-sm">
+                Repeat merchants cost{" "}
+                <span
+                  className="font-bold"
+                  style={{
+                    color:
+                      priceDrift.overallDriftPct > 0 ? "var(--viz-bad)" : "var(--viz-good)",
+                  }}
+                >
+                  {priceDrift.overallDriftPct > 0 ? "+" : ""}
+                  {priceDrift.overallDriftPct}%
+                </span>{" "}
+                vs three months ago.
+              </p>
+            )}
+            <ul className="space-y-2 text-sm">
+              {priceDrift.items.slice(0, 5).map((item) => (
+                <li key={item.merchant} className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 truncate font-semibold">{item.merchant}</span>
+                  <span className="shrink-0 text-xs text-muted">
+                    {formatCurrency(item.earlierAvg)} → {formatCurrency(item.recentAvg)}{" "}
+                    <span
+                      className="font-bold"
+                      style={{ color: item.driftPct > 0 ? "var(--viz-bad)" : "var(--viz-good)" }}
+                    >
+                      ({item.driftPct > 0 ? "+" : ""}
+                      {item.driftPct}%)
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        )}
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-12">
+        {!prefs?.hideWhatIf && (
+        <div className="xl:col-span-7">
+          <WhatIfPanel
+            cashBalance={data.insights.safeToSpend?.cashBalance ?? null}
+            monthlyIncome={data.currentMonthIncome}
+            monthlySpend={data.currentMonthExpenses}
+            monthlyEssentials={data.insights.essentialsSplit
+              .slice(0, -1)
+              .map((row) => row.essentials)}
+            debts={whatIfDebts}
+          />
+        </div>
+        )}
+        <div className="space-y-5 xl:col-span-5">
+          {sinking.items.length > 0 && (
+            <Panel title="Sinking funds" eyebrow="Planned irregulars">
+              <p className="mb-3 text-sm">
+                Reserve{" "}
+                <span className="metric-value">
+                  {formatCurrency(sinking.totalMonthlySetAside)}
+                </span>
+                /mo for what&apos;s coming.
+              </p>
+              <ul className="space-y-1.5 text-sm">
+                {sinking.items.slice(0, 5).map((fund) => (
+                  <li key={fund.name} className="flex justify-between gap-3">
+                    <span className="min-w-0 truncate">
+                      {fund.name}
+                      {fund.dueSoon && (
+                        <span className="ml-1.5 text-xs font-bold text-warning">due soon</span>
+                      )}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted">
+                      {formatCurrency(fund.monthlySetAside)}/mo → {fund.dueDate}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
+          <Panel title="Trajectory" eyebrow="At your current pace">
+            <p className="text-sm">
+              Saving about{" "}
+              <span className="metric-value">{formatCurrency(monthlySavings)}</span>
+              /mo, you&apos;re on track for{" "}
+              <span className="metric-value">{formatCurrency(projectedYear1)}</span>{" "}
+              in a year and{" "}
+              <span className="metric-value">{formatCurrency(projectedYear5)}</span>{" "}
+              in five.
+            </p>
+            <p className="mt-2 text-xs text-muted">
+              Median of your completed months; assumes 0% investment growth.
+              The full balance sheet lives on the Wealth view.
+            </p>
+          </Panel>
+        </div>
       </div>
 
       {data.recurringStatuses.length > 0 && (
