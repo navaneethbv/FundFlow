@@ -41,19 +41,23 @@ export async function GET(request: NextRequest) {
     }
 
     // Tax season preset (6.4): only transactions the user tagged "tax" in
-    // the ledger editor. Same privacy contract, RLS-scoped queries.
+    // the ledger editor. Same privacy contract. Both queries filter user_id
+    // explicitly — on the API-token path `supabase` is the service client,
+    // which bypasses RLS, so leaning on RLS here would leak across users.
     const scope = request.nextUrl.searchParams.get("scope");
     let exportRows = result.rows;
     if (scope === "tax") {
       const { data: tagged } = await supabase
         .from("transaction_annotations")
         .select("transaction_id")
+        .eq("user_id", user.id)
         .contains("tags", ["tax"]);
       const ids = (tagged ?? []).map((r) => r.transaction_id as string);
       const { data: taxTxns } = ids.length
         ? await supabase
             .from("transactions")
             .select("date, amount, merchant_name, name, pfc_primary")
+            .eq("user_id", user.id)
             .in("id", ids)
             .order("date")
         : { data: [] as never[] };

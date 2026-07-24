@@ -89,16 +89,22 @@ export default function CommandPalette() {
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-[15vh]"
-      onClick={close}
-    >
+    <div className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[15vh]">
+      {/* Click-outside-to-close as a real button, so it is not a bare click
+          handler on a non-interactive element. Kept out of the tab order:
+          Escape (wired globally above) is the keyboard affordance. */}
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label="Close command palette"
+        className="absolute inset-0 h-full w-full cursor-default bg-black/40"
+        onClick={close}
+      />
       <div
         role="dialog"
         aria-label="Command palette"
         aria-modal="true"
-        className="w-full max-w-lg rounded-card border border-panel-border bg-panel shadow-card"
-        onClick={(event) => event.stopPropagation()}
+        className="relative w-full max-w-lg rounded-card border border-panel-border bg-panel shadow-card"
       >
         <div className="flex items-center gap-2 border-b border-panel-border px-4 py-3">
           <Search aria-hidden className="h-4 w-4 text-muted" />

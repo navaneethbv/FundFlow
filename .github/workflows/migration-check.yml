@@ -30,14 +30,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Prepare auth schema stubs
-        # Migrations reference auth.users / auth.uid(); the supabase image
-        # ships the auth schema, but ensure uid() exists for plain runs.
+        # Migrations reference auth.users, auth.uid() and the `authenticated`
+        # role. The supabase image ships all three, and its auth schema is
+        # owned by another role — so create each only when it is genuinely
+        # missing. An unconditional "create if not exists" is denied on that
+        # image, since permissions are checked before existence.
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
-            create schema if not exists auth;
-            create table if not exists auth.users (id uuid primary key, email text);
-            create or replace function auth.uid() returns uuid
-              language sql stable as 'select null::uuid';
+            do \$\$
+            begin
+              if to_regclass('auth.users') is null then
+                create schema if not exists auth;
+                create table auth.users (id uuid primary key, email text);
+              end if;
+              if to_regproc('auth.uid') is null then
+                create function auth.uid() returns uuid
+                  language sql stable as 'select null::uuid';
+              end if;
+              if not exists (select 1 from pg_roles where rolname = 'authenticated') then
+                create role authenticated;
+              end if;
+            end
+            \$\$;
           "
       - name: Apply every migration in filename order
         run: |

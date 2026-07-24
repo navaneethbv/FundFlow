@@ -13,6 +13,15 @@ import { createServiceClient } from "@/lib/supabase/service";
 
 export const API_TOKEN_PREFIX = "fft_";
 
+/**
+ * SHA-256, deliberately — not bcrypt/argon2. These tokens are 256 bits of
+ * `randomBytes` (see the mint route), not user-chosen passwords: there is no
+ * guessable keyspace for a slow KDF to protect, and this runs on every
+ * token-authenticated request, where a deliberately slow hash would only be a
+ * self-inflicted DoS. Same reasoning as the calendar tokens and household
+ * invites. Static analysis reads "token → sha256" as password hashing and
+ * flags it; that heuristic does not apply here.
+ */
 export function hashApiToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }

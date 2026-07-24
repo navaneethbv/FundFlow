@@ -54,7 +54,11 @@ export function buildInsightPayload(rows: AggregateRow[]) {
     }
   }
 
-  const keepMonths = new Set([...months].sort().slice(-MAX_MONTHS));
+  // Month keys are YYYY-MM, so an explicit lexicographic compare is also
+  // chronological.
+  const keepMonths = new Set(
+    [...months].sort((a, b) => a.localeCompare(b)).slice(-MAX_MONTHS),
+  );
   return {
     monthly_category_spend: [...byMonthCategory.entries()]
       .map(([key, amount]) => {
@@ -109,7 +113,7 @@ export async function generateInsightsWithProvider(input: {
   const latestMonth =
     payload.monthly_category_spend
       .map((row) => row.month!)
-      .sort()
+      .sort((a, b) => a.localeCompare(b))
       .at(-1) ?? null;
 
   const client = new Anthropic({ apiKey: serverEnv.anthropicApiKey });
