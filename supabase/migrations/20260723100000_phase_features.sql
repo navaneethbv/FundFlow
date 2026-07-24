@@ -57,37 +57,40 @@ create policy "calendar_tokens_update_own" on public.calendar_tokens
 create policy "calendar_tokens_delete_own" on public.calendar_tokens
   for delete using (user_id = (select auth.uid()));
 
--- 4.1 Household membership + invites. Members can read membership of their
--- own households; only the household owner mutates. Invite acceptance runs
--- through a server route (service client) because the invitee has no row
--- visibility until the membership exists.
-create table public.household_members (
-  id            uuid primary key default gen_random_uuid(),
-  household_id  uuid not null references public.households (id) on delete cascade,
-  user_id       uuid not null references auth.users (id) on delete cascade,
-  role          text not null default 'member' check (role in ('owner', 'member')),
-  created_at    timestamptz not null default now(),
-  unique (household_id, user_id)
-);
-create index household_members_user_id_idx on public.household_members (user_id);
-alter table public.household_members enable row level security;
-create policy "household_members_select_own" on public.household_members
-  for select using (
-    user_id = (select auth.uid())
-    or household_id in (
-      select id from public.households where owner_user_id = (select auth.uid())
-    )
-  );
+-- 4.1 Household membership + invites.
+--
+-- public.household_members already exists from 20260707012910 with a superset
+-- of the columns used here (it adds status/updated_at), RLS enabled, indexes,
+-- and owner-or-self select/delete policies that match what this migration
+-- wants. So the table is NOT recreated here.
+--
+-- Its write policies do have to change. They were written when membership
+-- granted nothing, so they allow "user_id = auth.uid()" — any authenticated
+-- user could insert themselves into an arbitrary household, or move their own
+-- row to one. From 20260723150000 onward membership is a data-access grant
+-- (is_household_member gates goals, budgets, shared expenses, and a shared
+-- connection's accounts/transactions/streams), which turns that into a
+-- privilege-escalation path. Membership is now owner-granted only.
+--
+-- Invite acceptance is unaffected: it runs through a server route on the
+-- service client, because the invitee has no row visibility until the
+-- membership exists.
+drop policy if exists "household_members_insert_visible" on public.household_members;
 create policy "household_members_insert_owner" on public.household_members
-  for insert with check (
+  for insert to authenticated with check (
     household_id in (
       select id from public.households where owner_user_id = (select auth.uid())
     )
   );
-create policy "household_members_delete_owner" on public.household_members
-  for delete using (
-    user_id = (select auth.uid())
-    or household_id in (
+
+drop policy if exists "household_members_update_visible" on public.household_members;
+create policy "household_members_update_owner" on public.household_members
+  for update to authenticated using (
+    household_id in (
+      select id from public.households where owner_user_id = (select auth.uid())
+    )
+  ) with check (
+    household_id in (
       select id from public.households where owner_user_id = (select auth.uid())
     )
   );

@@ -36,6 +36,12 @@ the real ones.
    `calendar_tokens`, `household_members/invites`, `milestones`,
    `saved_views`, `alert_preferences.large_transaction_threshold`, pg_trgm
    indexes) and fail until it runs.
+   Note this migration also **replaces the `household_members` insert/update
+   policies** with owner-only versions.
+   The originals (from `20260707012910`) allowed `user_id = auth.uid()`, which
+   was harmless when membership granted nothing, but becomes a
+   privilege-escalation path once `is_household_member()` starts gating shared
+   financial data.
 2. **Set `BACKUP_ENC_KEY`** (32 bytes base64:
    `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`)
    in Vercel env — the backup cron fails closed (and alerts the admin)
