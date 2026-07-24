@@ -4,9 +4,15 @@ import { formatCurrency } from "@/lib/format";
 export type EnvelopeStatus = "over" | "at-risk" | "on-track";
 
 export interface BudgetEnvelopeInput {
-  budgets: { category: string; monthlyLimit: number }[];
+  budgets: { category: string; monthlyLimit: number; rolloverEnabled?: boolean }[];
   currentSpend: { category: string; amount: number }[];
   previousSpend: { month: string; category: string; amount: number }[];
+  /**
+   * Prior months the rollover carry should span. Months absent from
+   * previousSpend count as zero spend (full carry). Without this, rollover
+   * budgets carry nothing.
+   */
+  windowMonths?: string[];
   dayOfMonth: number;
   daysInMonth: number;
 }
@@ -20,6 +26,10 @@ export interface BudgetEnvelope {
   status: EnvelopeStatus;
   lastMonthSpend: number;
   threeMonthAverage: number;
+  /** Unused budget carried in from prior window months (rollover only). */
+  carry: number;
+  /** monthlyLimit + carry, floored at 0 — what remaining/status compare to. */
+  effectiveLimit: number;
 }
 
 export type RecurringFrequency = "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
@@ -80,11 +90,13 @@ export interface SpendingAnomalyInput {
     amount: number;
   }[];
   priorCategoryAverages: { category: string; amount: number }[];
+  /** Trailing median charge per merchant (prior months, spend only). */
+  priorMerchantMedians?: { merchant: string; amount: number }[];
   largeTransactionThreshold: number;
 }
 
 export interface SpendingAnomaly {
-  kind: "large-transaction" | "category-spike" | "duplicate-charge";
+  kind: "large-transaction" | "category-spike" | "duplicate-charge" | "merchant-spike";
   transactionId?: string;
   category?: string;
   severity: "info" | "warning";
@@ -103,7 +115,11 @@ export type AlertType =
   | "budget_exceeded"
   | "goal_reached"
   | "large_transaction"
-  | "low_cash_forecast";
+  | "low_cash_forecast"
+  | "price_hike"
+  | "new_subscription"
+  | "milestone"
+  | "cancellation_watch";
 
 export interface AlertPreferences {
   broken_bank?: boolean;
@@ -111,6 +127,10 @@ export interface AlertPreferences {
   goal_reached?: boolean;
   large_transaction?: boolean;
   low_cash_forecast?: boolean;
+  price_hike?: boolean;
+  new_subscription?: boolean;
+  milestone?: boolean;
+  cancellation_watch?: boolean;
 }
 
 const ALERT_SEVERITY: Record<AlertType, "info" | "success" | "warning" | "danger"> = {
@@ -119,6 +139,10 @@ const ALERT_SEVERITY: Record<AlertType, "info" | "success" | "warning" | "danger
   goal_reached: "success",
   large_transaction: "warning",
   low_cash_forecast: "warning",
+  price_hike: "warning",
+  new_subscription: "info",
+  milestone: "success",
+  cancellation_watch: "danger",
 };
 
 const SAFE_AI_KEYS = new Set([
@@ -196,9 +220,20 @@ export function buildBudgetEnvelopes(input: BudgetEnvelopeInput): BudgetEnvelope
         ? 0
         : lastThree.reduce((sum, row) => sum + row.amount, 0) / lastThree.length,
     );
-    const remaining = round2(budget.monthlyLimit - spent);
+
+    let carry = 0;
+    if (budget.rolloverEnabled && (input.windowMonths?.length ?? 0) > 0) {
+      const spendByMonth = new Map(history.map((row) => [row.month, row.amount]));
+      for (const month of input.windowMonths!) {
+        carry += budget.monthlyLimit - (spendByMonth.get(month) ?? 0);
+      }
+      carry = round2(carry);
+    }
+    const effectiveLimit = Math.max(0, round2(budget.monthlyLimit + carry));
+
+    const remaining = round2(effectiveLimit - spent);
     const status: EnvelopeStatus =
-      spent > budget.monthlyLimit ? "over" : projectedSpend > budget.monthlyLimit ? "at-risk" : "on-track";
+      spent > effectiveLimit ? "over" : projectedSpend > effectiveLimit ? "at-risk" : "on-track";
 
     return {
       category: budget.category,
@@ -209,6 +244,8 @@ export function buildBudgetEnvelopes(input: BudgetEnvelopeInput): BudgetEnvelope
       status,
       lastMonthSpend,
       threeMonthAverage,
+      carry,
+      effectiveLimit,
     };
   });
 }
@@ -278,6 +315,74 @@ export function groupRecurringByWeek(items: RecurringItem[], asOf: string, horiz
     }));
 }
 
+export type BillGrouping = "weekly" | "monthly";
+
+export interface BillPeriod {
+  periodStart: string;
+  items: Array<RecurringItem & { status: "expected" }>;
+  expenseTotal: number;
+  incomeTotal: number;
+}
+
+/**
+ * Groups upcoming recurring bills/paychecks into weekly (Monday-keyed) or
+ * monthly buckets, expanding each item's occurrences across the horizon —
+ * a weekly gym charge appears once per week, not once total. Each expanded
+ * item's nextDate is the occurrence date.
+ */
+export function groupRecurringByPeriod(
+  items: RecurringItem[],
+  asOf: string,
+  horizonDays: number,
+  grouping: BillGrouping,
+): BillPeriod[] {
+  const endDate = addDays(asOf, horizonDays);
+  const groups = new Map<string, Array<RecurringItem & { status: "expected" }>>();
+
+  for (const item of items) {
+    let cursor = item.nextDate;
+    // Advance stale anchors forward without emitting past occurrences.
+    for (let i = 0; i < 500 && cursor < asOf; i++) {
+      cursor = nextOccurrence(cursor, item.frequency);
+    }
+    while (cursor >= asOf && cursor <= endDate) {
+      let key: string;
+      if (grouping === "monthly") {
+        key = `${cursor.slice(0, 7)}-01`;
+      } else {
+        const due = parseDate(cursor);
+        const weekStart = new Date(due);
+        weekStart.setUTCDate(due.getUTCDate() - ((due.getUTCDay() + 6) % 7));
+        key = isoDate(weekStart);
+      }
+      const rows = groups.get(key) ?? [];
+      rows.push({ ...item, nextDate: cursor, status: "expected" });
+      groups.set(key, rows);
+      cursor = nextOccurrence(cursor, item.frequency);
+    }
+  }
+
+  return [...groups.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([periodStart, rows]) => {
+      const sorted = rows.sort(
+        (a, b) => a.nextDate.localeCompare(b.nextDate) || a.name.localeCompare(b.name),
+      );
+      let expenseTotal = 0;
+      let incomeTotal = 0;
+      for (const row of sorted) {
+        if (row.itemType === "income") incomeTotal += Math.abs(row.amount);
+        else expenseTotal += Math.abs(row.amount);
+      }
+      return {
+        periodStart,
+        items: sorted,
+        expenseTotal: round2(expenseTotal),
+        incomeTotal: round2(incomeTotal),
+      };
+    });
+}
+
 function matchesRule(transaction: CleanupTransaction, rule: MerchantRule): boolean {
   if (!rule.enabled) return false;
   const pattern = normalize(rule.pattern);
@@ -314,10 +419,18 @@ export function previewMerchantRules(transactions: CleanupTransaction[], rules: 
     }));
 }
 
+/** A merchant spike needs 2× the median AND a $25 jump — small-dollar
+ * merchants (coffee, parking) double all the time without meaning anything. */
+const MERCHANT_SPIKE_FACTOR = 2;
+const MERCHANT_SPIKE_MIN_INCREASE = 25;
+
 export function detectSpendingAnomalies(input: SpendingAnomalyInput): SpendingAnomaly[] {
   const anomalies: SpendingAnomaly[] = [];
   const categoryTotals = new Map<string, number>();
   const priorAverages = new Map(input.priorCategoryAverages.map((row) => [row.category, row.amount]));
+  const merchantMedians = new Map(
+    (input.priorMerchantMedians ?? []).map((row) => [normalize(row.merchant), row.amount]),
+  );
   const seen = new Set<string>();
   const duplicateKeys = new Set<string>();
 
@@ -328,6 +441,20 @@ export function detectSpendingAnomalies(input: SpendingAnomalyInput): SpendingAn
         transactionId: transaction.id,
         severity: "warning",
         message: `${transaction.merchant} is larger than usual review threshold.`,
+      });
+    }
+
+    const merchantMedian = merchantMedians.get(normalize(transaction.merchant)) ?? 0;
+    if (
+      merchantMedian > 0 &&
+      transaction.amount >= merchantMedian * MERCHANT_SPIKE_FACTOR &&
+      transaction.amount - merchantMedian >= MERCHANT_SPIKE_MIN_INCREASE
+    ) {
+      anomalies.push({
+        kind: "merchant-spike",
+        transactionId: transaction.id,
+        severity: "warning",
+        message: `${transaction.merchant} charged ${formatCurrency(transaction.amount)}, well above its usual ${formatCurrency(merchantMedian)}.`,
       });
     }
 

@@ -10,7 +10,9 @@ describe("planning feature UI", () => {
 
     expect(plan).toContain("Budget pace");
     expect(plan).toContain("Cash forecast");
-    expect(plan).toContain("Recurring calendar");
+    // The 2026-07-23 session replaced the flat "Recurring calendar" list
+    // with the grouped BillCalendar (weekly/monthly toggle).
+    expect(plan).toContain("BillCalendar");
     expect(plan).toContain("PlanningDepth");
     expect(wealth).toContain("Net worth");
     expect(plan).not.toContain("Net worth");

@@ -17,7 +17,20 @@ export type AuditAction =
   | "data_refresh"
   | "data_export"
   | "data_import"
-  | "account_delete";
+  | "account_delete"
+  | "calendar_token_created"
+  | "calendar_token_revoked"
+  | "data_backup"
+  | "household_invite_sent"
+  | "household_invite_accepted"
+  | "apr_updated"
+  | "api_token_created"
+  | "api_token_revoked"
+  | "receipt_scanned"
+  | "ai_question"
+  | "household_share_changed"
+  | "demo_data_loaded"
+  | "demo_data_cleared";
 
 interface AuditParams {
   userId: string | null;

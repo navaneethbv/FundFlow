@@ -22,8 +22,11 @@ const OPTIONS: Array<{ key: AlertKey; title: string; description: string }> = [
 
 export default function InAppPreferences({
   initialPreferences,
+  initialThreshold = null,
 }: {
   initialPreferences: Partial<Preferences> | null;
+  /** large_transaction alert threshold in dollars; null = default ($500). */
+  initialThreshold?: number | null;
 }) {
   const supabase = createClient();
   const [preferences, setPreferences] = useState<Preferences>({
@@ -32,6 +35,9 @@ export default function InAppPreferences({
     large_transaction: initialPreferences?.large_transaction ?? false,
     low_cash_forecast: initialPreferences?.low_cash_forecast ?? true,
   });
+  const [threshold, setThreshold] = useState(
+    initialThreshold !== null ? String(initialThreshold) : "",
+  );
   const [status, setStatus] = useState<string | null>(null);
 
   async function save() {
@@ -41,8 +47,21 @@ export default function InAppPreferences({
       setStatus("Sign in again to save alert preferences.");
       return;
     }
+    const parsedThreshold = threshold.trim() === "" ? null : Number(threshold);
+    if (
+      parsedThreshold !== null &&
+      (!Number.isFinite(parsedThreshold) || parsedThreshold <= 0)
+    ) {
+      setStatus("The large-transaction threshold must be a positive amount.");
+      return;
+    }
     const { error } = await supabase.from("alert_preferences").upsert(
-      { user_id: data.user.id, broken_bank: true, ...preferences },
+      {
+        user_id: data.user.id,
+        broken_bank: true,
+        large_transaction_threshold: parsedThreshold,
+        ...preferences,
+      },
       { onConflict: "user_id" },
     );
     setStatus(error?.message ?? "In-app preferences saved.");
@@ -67,6 +86,23 @@ export default function InAppPreferences({
           </label>
         ))}
       </div>
+      <label className="mt-4 flex items-center justify-between gap-4 rounded-field bg-panel-2 p-4">
+        <span>
+          <span className="block text-sm font-semibold">Large-transaction threshold</span>
+          <span className="mt-1 block text-xs leading-5 text-muted">
+            Alert instantly on charges above this amount (blank = $500 default).
+          </span>
+        </span>
+        <input
+          type="number"
+          min="1"
+          step="1"
+          placeholder="500"
+          value={threshold}
+          onChange={(event) => setThreshold(event.target.value)}
+          className="w-24 rounded-field border border-panel-border bg-panel px-2 py-1 text-sm"
+        />
+      </label>
       <Button className="mt-5" type="button" onClick={save}>Save alert preferences</Button>
       {status && <p className="mt-3 text-sm text-muted" role="status">{status}</p>}
     </Panel>

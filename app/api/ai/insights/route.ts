@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { generateAiInsightSummaries } from "@/lib/ai-insights";
+import {
+  generateInsightsWithProvider,
+  isAiProviderConfigured,
+} from "@/lib/ai-provider";
 import { fetchPrivacySafeRows } from "@/lib/export";
 import { errorResponse, requireUser } from "@/lib/http";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { logError } from "@/lib/log";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export async function POST() {
@@ -18,15 +24,33 @@ export async function POST() {
       return NextResponse.json({ insights: [] });
     }
 
-    const insights = generateAiInsightSummaries({
-      enabled: true,
-      rows: exportResult.rows.map((row) => ({
-        month: row.date.slice(0, 7),
-        merchant: row.merchant,
-        category: row.category,
-        amount: row.amount,
-      })),
-    });
+    const rows = exportResult.rows.map((row) => ({
+      month: row.date.slice(0, 7),
+      merchant: row.merchant,
+      category: row.category,
+      amount: row.amount,
+    }));
+
+    // Provider path (Phase 3): real model-generated insights over the same
+    // privacy-safe aggregates, hard-capped to 4 generations/day per user so
+    // a stuck retry loop can never run up a bill. Any provider failure
+    // falls back to the built-in rule-based summaries — never a 500.
+    let insights: Array<{
+      insightType: string;
+      sourceMonth: string | null;
+      summary: string;
+    }> | null = null;
+    if (isAiProviderConfigured()) {
+      const allowed = await checkRateLimit(`ai-insights:${user.id}`, 4, 24 * 3600);
+      if (allowed) {
+        try {
+          insights = await generateInsightsWithProvider({ rows });
+        } catch (providerError) {
+          logError("ai.insights.provider", providerError);
+        }
+      }
+    }
+    insights ??= generateAiInsightSummaries({ enabled: true, rows });
 
     const service = createServiceClient();
     const { error } = await service.from("ai_insights").insert(

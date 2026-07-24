@@ -1,6 +1,7 @@
 import AppShell from "@/components/shell/AppShell";
 import EmailPreferences from "@/components/notifications/EmailPreferences";
 import InAppPreferences from "@/components/notifications/InAppPreferences";
+import PushSection from "@/components/notifications/PushSection";
 import NotificationFeed, { type NotificationRow } from "@/components/notifications/NotificationFeed";
 import Badge from "@/components/ui/Badge";
 import Panel from "@/components/ui/Panel";
@@ -27,7 +28,7 @@ export default async function NotificationsPage() {
       .maybeSingle(),
     supabase
       .from("alert_preferences")
-      .select("budget_exceeded, goal_reached, large_transaction, low_cash_forecast")
+      .select("budget_exceeded, goal_reached, large_transaction, low_cash_forecast, large_transaction_threshold")
       .eq("user_id", userId)
       .maybeSingle(),
     supabase
@@ -65,7 +66,14 @@ export default async function NotificationsPage() {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
         <NotificationFeed initialNotifications={(notifications ?? []) as NotificationRow[]} />
         <div className="space-y-6">
-          <InAppPreferences initialPreferences={alertPreferences} />
+          <InAppPreferences
+            initialPreferences={alertPreferences}
+            initialThreshold={
+              (alertPreferences as { large_transaction_threshold?: number | null } | null)
+                ?.large_transaction_threshold ?? null
+            }
+          />
+          <PushSection />
           <Panel title="Weekly delivery history" eyebrow="Last 6 reports">
             <div className="space-y-3 text-sm">
               {(deliveries ?? []).map((delivery) => (

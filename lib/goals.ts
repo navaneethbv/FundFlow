@@ -6,6 +6,8 @@ export interface Goal {
   target_amount: number;
   saved_amount: number;
   target_date: string | null;
+  /** Household the goal is shared with (4.2-lite); null = private. */
+  household_id?: string | null;
 }
 
 export type GoalStatus = "completed" | "overdue" | "on-track" | "no-date";
@@ -90,7 +92,7 @@ export async function getGoals(
 ): Promise<Goal[]> {
   let query = supabase
     .from("goals")
-    .select("id, name, target_amount, saved_amount, target_date")
+    .select("id, name, target_amount, saved_amount, target_date, household_id")
     .order("created_at");
   if (userId) query = query.eq("user_id", userId);
   const { data } = await query;

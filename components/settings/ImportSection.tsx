@@ -80,7 +80,7 @@ export default function ImportSection({ accounts }: { accounts: AccountOption[] 
           <label className="flex min-h-32 flex-col items-center justify-center rounded-card border border-dashed border-panel-border bg-panel-2 px-4 py-8 text-center text-sm text-muted">
             <span className="font-semibold text-foreground">Drag and drop your CSV file here</span>
             <span className="mt-1">or choose a file</span>
-            <Input type="file" name="file" accept=".csv,text/csv" required className="mt-4 max-w-xs" />
+            <Input type="file" name="file" accept=".csv,.ofx,.qfx,text/csv" required className="mt-4 max-w-xs" />
           </label>
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2">

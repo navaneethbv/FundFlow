@@ -5,12 +5,33 @@ import {
   computeNetWorthSnapshot,
   detectSpendingAnomalies,
   forecastCashFlow,
+  groupRecurringByPeriod,
   groupRecurringByWeek,
+  type BillPeriod,
   type BudgetEnvelope,
   type CashFlowForecast,
   type SpendingAnomaly,
 } from "@/lib/planning";
+import { buildPayoffPlan, type PayoffPlan } from "@/lib/debt";
 import { buildRecurringStatuses } from "@/lib/planning-depth";
+import {
+  buildCategoryOverrideMap,
+  computeMerchantPriceDrift,
+  computeRunwayMonths,
+  computeSafeToSpend,
+  computeSavingsRateSeries,
+  computeSinkingFunds,
+  type SinkingFundPlan,
+  detectPaychecks,
+  medianOf,
+  overrideCategory,
+  splitEssentialsByMonth,
+  type EssentialsSplit,
+  type MerchantPriceDrift,
+  type Paycheck,
+  type SafeToSpend,
+  type SavingsRatePoint,
+} from "@/lib/insights";
 import { aggregateSpendWithSplits } from "@/lib/transaction-quality";
 import {
   buildCategoryDrilldown,
@@ -49,6 +70,8 @@ export interface AccountSummary {
   credit_limit: number | null;
   iso_currency_code: string | null;
   plaid_item_id: string;
+  /** User-entered APR for the debt planner (Plaid doesn't provide it). */
+  apr: number | null;
 }
 
 export interface DashboardData {
@@ -88,6 +111,30 @@ export interface DashboardData {
   netWorthSnapshot: { assets: number; liabilities: number; netWorth: number };
   netWorthHistory: { month: string; assets: number; liabilities: number; netWorth: number }[];
   recurringStatuses: ReturnType<typeof buildRecurringStatuses>;
+  /**
+   * Active-month spend split by person (household scope only, 4.3):
+   * `mine` is the requesting user's spend, `household` is everyone else's
+   * shared spend. Null outside household scope or with no partner data.
+   */
+  spendPerPerson: { mine: number; household: number } | null;
+  /** Upcoming bills grouped both ways; the Plan view toggles between them. */
+  billPeriods: { weekly: BillPeriod[]; monthly: BillPeriod[] };
+  /** Pure financial-intelligence derivations (lib/insights.ts). */
+  insights: {
+    savingsRateSeries: SavingsRatePoint[];
+    essentialsSplit: EssentialsSplit[];
+    runwayMonths: number | null;
+    paycheck: Paycheck | null;
+    safeToSpend: SafeToSpend | null;
+    priceDrift: MerchantPriceDrift;
+    sinkingFunds: { items: SinkingFundPlan[]; totalMonthlySetAside: number };
+    debt: {
+      plan: PayoffPlan | null;
+      planWithExtra: PayoffPlan | null;
+      extraMonthly: number;
+      usesAssumedApr: boolean;
+    } | null;
+  };
   drilldown?: DrilldownData;
   /**
    * Lower-cased merchant names present in the 6-month window's spend. A merchant
@@ -106,6 +153,7 @@ interface TxnLite {
   pfc_primary: string | null;
   pfc_detailed: string | null;
   account_id: string;
+  user_id: string;
 }
 
 function monthKey(dateStr: string): string {
@@ -164,6 +212,13 @@ function monthDate(month: string, day: number): string {
 export interface DashboardOptions {
   itemId?: string;
   drill?: DrillParams;
+  /**
+   * "mine" (default) scopes every query to the caller's own rows.
+   * "household" skips the explicit user filter so RLS-visible shared rows
+   * (per-connection household sharing, 4.2) blend in. ONLY meaningful with
+   * the RLS-bound user client — service-client callers must never pass it.
+   */
+  scope?: "mine" | "household";
 }
 
 export async function getDashboardData(
@@ -181,8 +236,9 @@ export async function getDashboardData(
   // client from the notification cron, where RLS is bypassed — there `userId`
   // MUST be passed so every query filters to that user. Every table read below
   // has a `user_id` column.
+  const applyUserScope = options?.scope !== "household";
   const scopeUser = <T>(builder: T): T =>
-    userId
+    userId && applyUserScope
       ? (builder as T & { eq(column: string, value: string): T }).eq("user_id", userId)
       : builder;
 
@@ -200,12 +256,14 @@ export async function getDashboardData(
     { data: merchantRules },
     { data: snapshots },
     { data: linkedRefunds },
+    { data: categoryOverrideRows },
+    { data: sinkingFundRows },
   ] = await Promise.all([
     scopeUser(
       supabase
         .from("accounts")
         .select(
-          "id, name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code, plaid_item_id",
+          "id, name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code, plaid_item_id, apr",
         )
         .order("name"),
     ),
@@ -216,7 +274,7 @@ export async function getDashboardData(
         .eq("is_active", true),
     ),
     scopeUser(supabase.from("plaid_items").select("id, institution_name")),
-    scopeUser(supabase.from("budgets").select("category, monthly_limit")),
+    scopeUser(supabase.from("budgets").select("category, monthly_limit, rollover_enabled")),
     scopeUser(
       supabase
         .from("sync_jobs")
@@ -249,12 +307,27 @@ export async function getDashboardData(
         .from("linked_refunds")
         .select("charge_transaction_id, refund_transaction_id"),
     ),
+    scopeUser(
+      supabase
+        .from("category_overrides")
+        .select("source_category, display_category"),
+    ),
+    scopeUser(
+      supabase
+        .from("sinking_funds")
+        .select("name, target_amount, due_date")
+        .order("due_date"),
+    ),
   ]);
 
   const allAccounts = (accounts ?? []) as AccountSummary[];
   const lastSyncAt = (lastSyncJob?.updated_at as string | undefined) ?? null;
   const allItems = (items ?? []) as Array<{ id: string; institution_name: string | null }>;
-  const allBudgets = (budgets ?? []) as Array<{ category: string; monthly_limit: number }>;
+  const allBudgets = (budgets ?? []) as Array<{
+    category: string;
+    monthly_limit: number;
+    rollover_enabled?: boolean | null;
+  }>;
   const allSnapshots = (snapshots ?? []) as Array<{ snapshot_month: string; assets: number; liabilities: number }>;
 
   // Month browser: a continuous range from the oldest transaction to today
@@ -275,7 +348,7 @@ export async function getDashboardData(
   const { data: txns } = await scopeUser(
     supabase
       .from("transactions")
-      .select("id, date, amount, merchant_name, name, pfc_primary, pfc_detailed, account_id")
+      .select("id, date, amount, merchant_name, name, pfc_primary, pfc_detailed, account_id, user_id")
       .gte("date", windowStart)
       .lt("date", windowEndExclusive),
   );
@@ -304,12 +377,31 @@ export async function getDashboardData(
 
   const appliedTxns = applyMerchantRules(cleanupTxns, rulesList);
 
+  // Custom category renames/merges (1.13), applied after merchant rules.
+  // Overrides touching EXCLUDED_PFC in either direction are dropped so users
+  // can't accidentally hide transfers from (or leak them into) spend totals.
+  const overrideMap = buildCategoryOverrideMap(
+    ((categoryOverrideRows ?? []) as Array<{
+      source_category: string;
+      display_category: string;
+    }>)
+      .filter(
+        (row) =>
+          !EXCLUDED_PFC.has(row.source_category.trim().toUpperCase()) &&
+          !EXCLUDED_PFC.has(row.display_category.trim().toUpperCase()),
+      )
+      .map((row) => ({
+        sourceCategory: row.source_category,
+        displayCategory: row.display_category,
+      })),
+  );
+
   const allTxnsRaw = allTxnsRawUncleaned.map((t, index) => {
     const clean = appliedTxns[index]!;
     return {
       ...t,
       merchant_name: clean.merchant,
-      pfc_primary: clean.category,
+      pfc_primary: overrideCategory(overrideMap, clean.category),
     };
   });
 
@@ -619,7 +711,11 @@ export async function getDashboardData(
     budgets: allBudgets.map((budget) => ({
       category: budget.category,
       monthlyLimit: Number(budget.monthly_limit),
+      rolloverEnabled: Boolean(budget.rollover_enabled),
     })),
+    windowMonths: monthlySpending
+      .map((m) => m.month)
+      .filter((m) => m !== activeMonth),
     currentSpend: categoryBreakdown.map((row) => ({
       category: row.category,
       amount: row.amount,
@@ -662,6 +758,78 @@ export async function getDashboardData(
     lowBalanceThreshold: 500,
   });
   const recurringWeeks = groupRecurringByWeek(recurringItems, monthDate(activeMonth, 1), 31);
+
+  // Financial-intelligence derivations — pure math over data already in
+  // memory; no extra queries, no Plaid calls (the auto re-render multiplies
+  // whatever this costs, so it must stay free).
+  const insightsAsOf = monthDate(activeMonth, Math.min(activeDay, 28));
+  const essentialsSplit = splitEssentialsByMonth(
+    spendTxns.filter(isSpending).map((t) => ({
+      month: monthKey(t.date),
+      pfcPrimary: t.pfc_primary,
+      pfcDetailed: t.pfc_detailed,
+      amount: t.amount,
+    })),
+    monthlySpending.map((m) => m.month),
+  );
+  const savingsRateSeries = computeSavingsRateSeries(monthlyIncome, monthlySpending);
+  const runwayMonths = computeRunwayMonths({
+    liquidBalance: cashBalance,
+    // The current calendar month is partial and would drag the median down.
+    monthlyEssentials: essentialsSplit
+      .filter((row) => row.month !== currentMonth)
+      .map((row) => row.essentials),
+  });
+  const paychecks = detectPaychecks({
+    incomeStreams: incomeStreams.map((stream) => ({
+      name: stream.merchant,
+      amount: stream.amount,
+      frequency: normalizeFrequency(stream.frequency),
+    })),
+    incomeTransactions: filteredTxns.filter(isIncome).map((t) => ({
+      date: t.date,
+      merchant: t.merchant_name ?? t.name ?? "",
+      amount: t.amount,
+    })),
+    asOf: insightsAsOf,
+  });
+  // Sinking funds: planned irregular expenses spread into a monthly
+  // set-aside; funds due soon count as upcoming bills in Safe-to-Spend
+  // (past-due dates clamp to today so they aren't silently dropped).
+  const sinkingFunds = computeSinkingFunds({
+    funds: ((sinkingFundRows ?? []) as Array<{
+      name: string;
+      target_amount: number;
+      due_date: string;
+    }>).map((row) => ({
+      name: row.name,
+      targetAmount: Number(row.target_amount),
+      dueDate: row.due_date,
+    })),
+    asOf: insightsAsOf,
+  });
+
+  const safeToSpend = computeSafeToSpend({
+    cashBalance,
+    asOf: insightsAsOf,
+    nextPayDate: paychecks.primary?.nextPayDate ?? null,
+    upcomingExpenses: [
+      ...cashFlowForecast.events
+        .filter((event) => event.itemType === "expense")
+        .map((event) => ({
+          date: event.date,
+          name: event.name,
+          amount: Math.abs(event.amount),
+        })),
+      ...sinkingFunds.items
+        .filter((fund) => fund.dueSoon)
+        .map((fund) => ({
+          date: fund.dueDate < insightsAsOf ? insightsAsOf : fund.dueDate,
+          name: fund.name,
+          amount: fund.targetAmount,
+        })),
+    ],
+  });
 
   // Recurring stream statuses: match each stream to a real transaction so the
   // dashboard can show paid / unusual amount / late instead of a flat
@@ -707,6 +875,89 @@ export async function getDashboardData(
       map.set(row.category, values);
       return map;
     }, new Map<string, number[]>());
+  // Per-person attribution (4.3): only meaningful in household scope, where
+  // the window can contain a partner's shared rows.
+  let spendPerPerson: { mine: number; household: number } | null = null;
+  if (options?.scope === "household" && userId) {
+    let mine = 0;
+    let household = 0;
+    for (const t of spendTxns) {
+      if (monthKey(t.date) !== activeMonth || !isSpending(t)) continue;
+      if (t.user_id === userId) mine += t.amount;
+      else household += t.amount;
+    }
+    if (household > 0) {
+      spendPerPerson = { mine: round2(mine), household: round2(household) };
+    }
+  }
+
+  // Bill calendar (1.8): expand recurring occurrences over the horizon,
+  // anchored to each stream's latest real transaction when one exists so
+  // dates aren't the mid-month placeholder. Both groupings are cheap pure
+  // math; the Plan view toggles between them.
+  const anchoredRecurringItems = recurringItems.map((item) => {
+    const lastPaid = latestMatchDate(item.name);
+    return lastPaid ? { ...item, nextDate: lastPaid } : item;
+  });
+  const billPeriods = {
+    weekly: groupRecurringByPeriod(anchoredRecurringItems, insightsAsOf, 35, "weekly"),
+    monthly: groupRecurringByPeriod(anchoredRecurringItems, insightsAsOf, 62, "monthly"),
+  };
+
+  // Personal price drift (1.9): recent 3-month vs prior 3-month average
+  // charge per repeat merchant.
+  const priceDrift = computeMerchantPriceDrift({
+    txns: spendTxns.filter(isSpending).map((t) => ({
+      date: t.date,
+      merchant: t.merchant_name ?? t.name ?? "Unknown",
+      amount: t.amount,
+    })),
+    asOfMonth: activeMonth,
+  });
+
+  // Debt payoff planner (1.10) over carried credit-card balances. Cards
+  // without a user-entered APR assume a typical rate and say so in the UI.
+  const ASSUMED_APR = 22;
+  const debtAccounts = allAccounts.filter(
+    (a) => a.type === "credit" && Number(a.current_balance ?? 0) > 0,
+  );
+  const debtInputs = debtAccounts.map((a) => ({
+    name: `${a.name ?? "Card"}${a.mask ? ` ••${a.mask}` : ""}`,
+    balance: Number(a.current_balance),
+    apr: a.apr === null || a.apr === undefined ? ASSUMED_APR : Number(a.apr),
+  }));
+  const DEBT_EXTRA_MONTHLY = 200;
+  const debt =
+    debtInputs.length > 0
+      ? {
+          plan: buildPayoffPlan({ debts: debtInputs, extraMonthly: 0, strategy: "avalanche" }),
+          planWithExtra: buildPayoffPlan({
+            debts: debtInputs,
+            extraMonthly: DEBT_EXTRA_MONTHLY,
+            strategy: "avalanche",
+          }),
+          extraMonthly: DEBT_EXTRA_MONTHLY,
+          usesAssumedApr: debtAccounts.some((a) => a.apr === null || a.apr === undefined),
+        }
+      : null;
+
+  // Per-merchant trailing medians from the prior window months. Two charges
+  // minimum: one prior charge doesn't establish what "usual" looks like.
+  const priorMerchantAmounts = new Map<string, { name: string; amounts: number[] }>();
+  for (const t of spendTxns) {
+    if (monthKey(t.date) === activeMonth || !isSpending(t)) continue;
+    const name = t.merchant_name ?? t.name ?? "Unknown";
+    const key = name.trim().toLowerCase();
+    const entry = priorMerchantAmounts.get(key) ?? { name, amounts: [] };
+    entry.amounts.push(t.amount);
+    priorMerchantAmounts.set(key, entry);
+  }
+  const priorMerchantMedians = [...priorMerchantAmounts.values()]
+    .filter((entry) => entry.amounts.length >= 2)
+    .map((entry) => ({
+      merchant: entry.name,
+      amount: round2(medianOf(entry.amounts)),
+    }));
   const spendingAnomalies = detectSpendingAnomalies({
     currentTransactions: filteredTxns
       .filter((t) => monthKey(t.date) === activeMonth && isSpending(t))
@@ -721,6 +972,7 @@ export async function getDashboardData(
       category,
       amount: round2(values.reduce((sum, value) => sum + value, 0) / values.length),
     })),
+    priorMerchantMedians,
     largeTransactionThreshold: 500,
   });
   const netWorthSnapshot = computeNetWorthSnapshot(
@@ -776,6 +1028,18 @@ export async function getDashboardData(
     netWorthSnapshot,
     netWorthHistory,
     recurringStatuses,
+    spendPerPerson,
+    billPeriods,
+    insights: {
+      savingsRateSeries,
+      essentialsSplit,
+      runwayMonths,
+      paycheck: paychecks.primary,
+      safeToSpend,
+      priceDrift,
+      sinkingFunds,
+      debt,
+    },
     drilldown,
     drillableMerchants: [...windowSpendMerchants],
   };

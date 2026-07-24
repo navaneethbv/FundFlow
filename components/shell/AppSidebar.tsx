@@ -8,6 +8,7 @@ import {
   Mail,
   PiggyBank,
   Settings,
+  Sparkles,
   Target,
   Wallet,
 } from "@/components/ui/icons";
@@ -18,6 +19,7 @@ export type AppShellActive =
   | "wealth"
   | "transactions"
   | "goals"
+  | "wrapped"
   | "reports"
   | "notifications"
   | "settings";
@@ -38,6 +40,7 @@ const primaryItems: NavItem[] = [
 
 const manageItems: NavItem[] = [
   { label: "Goals", href: "/goals", key: "goals", icon: Target },
+  { label: "Year in Money", href: "/wrapped", key: "wrapped", icon: Sparkles },
   { label: "Reports", href: "/settings#reports", key: "reports", icon: FileText },
   { label: "Notifications", href: "/notifications", key: "notifications", icon: Mail },
   { label: "Settings", href: "/settings", key: "settings", icon: Settings },

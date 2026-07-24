@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import AppSidebar, { type AppShellActive } from "@/components/shell/AppSidebar";
+import CommandPalette from "@/components/CommandPalette";
 import TopBar from "@/components/shell/TopBar";
 
 export default function AppShell({
@@ -13,6 +14,7 @@ export default function AppShell({
 }) {
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <CommandPalette />
       <TopBar email={email} />
       <div className="lg:flex">
         <AppSidebar active={active} />

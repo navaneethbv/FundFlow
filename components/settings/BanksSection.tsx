@@ -12,6 +12,7 @@ interface Item {
   institution_name: string | null;
   status: string;
   error_code: string | null;
+  shared_household_id?: string | null;
 }
 
 /** Broken now (status error) or breaking soon (consent expiring). */
@@ -19,11 +20,41 @@ function needsReconnect(item: Item): boolean {
   return item.status === "error" || item.error_code === "PENDING_EXPIRATION";
 }
 
-export default function BanksSection({ initialItems }: { initialItems: Item[] }) {
+export default function BanksSection({
+  initialItems,
+  hasHousehold = false,
+}: {
+  initialItems: Item[];
+  hasHousehold?: boolean;
+}) {
   const router = useRouter();
   const [items, setItems] = useState<Item[]>(initialItems);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  async function toggleShare(id: string, share: boolean) {
+    setError(null);
+    const res = await fetch("/api/plaid/share", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itemId: id, share }),
+    });
+    const json = (await res.json().catch(() => null)) as {
+      householdId?: string | null;
+      error?: string;
+    } | null;
+    if (!res.ok) {
+      setError(json?.error ?? "Could not update sharing.");
+      return;
+    }
+    setItems((list) =>
+      list.map((item) =>
+        item.id === id
+          ? { ...item, shared_household_id: share ? (json?.householdId ?? "shared") : null }
+          : item,
+      ),
+    );
+  }
 
   async function disconnect(id: string) {
     if (!confirm("Disconnect this bank and delete its data?")) return;
@@ -60,6 +91,16 @@ export default function BanksSection({ initialItems }: { initialItems: Item[] })
                 <span className="block font-semibold">{i.institution_name ?? "Bank"}</span>
                 {i.error_code === "PENDING_EXPIRATION" && (
                   <span className="text-xs text-warning">Consent expiring soon</span>
+                )}
+                {hasHousehold && (
+                  <label className="mt-1 flex items-center gap-1.5 text-xs text-muted">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(i.shared_household_id)}
+                      onChange={(e) => toggleShare(i.id, e.target.checked)}
+                    />
+                    Share with household
+                  </label>
                 )}
               </span>
               <span className="inline-flex items-center gap-2">

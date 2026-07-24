@@ -12,12 +12,14 @@ import PriorityRail from "@/components/dashboard/PriorityRail";
 import WealthView from "@/components/dashboard/WealthView";
 import { resolveDashboardView } from "@/components/dashboard/dashboard-view";
 import { computeNetWorth, computeSavingsRate } from "@/components/dashboard/metrics";
-import { type RecentTransaction } from "@/components/dashboard/RecentActivity";
+import { getRecentTransactions } from "@/lib/recent-transactions";
 import { getDashboardData } from "@/lib/dashboard";
 import { getCachedDashboardData } from "@/lib/dashboard-cache";
 import { dashboardUrl } from "@/lib/drilldown";
 import { getGoals } from "@/lib/goals";
 import { formatMonth } from "@/lib/format";
+import ScopeChips from "@/components/dashboard/ScopeChips";
+import type { DashboardPrefs } from "@/components/settings/DashboardPrefsSection";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +34,8 @@ interface PageProps {
     category?: string;
     sub?: string;
     merchant?: string;
+    bills?: string;
+    scope?: string;
   }>;
 }
 
@@ -40,36 +44,6 @@ type PlaidItem = {
   institution_name: string | null;
   status: string | null;
 };
-
-async function getRecentTransactions({
-  supabase,
-  month,
-  accountId,
-}: {
-  supabase: Awaited<ReturnType<typeof createClient>>;
-  month: string;
-  accountId?: string;
-}): Promise<RecentTransaction[]> {
-  const start = `${month}-01`;
-  const [year, monthNumber] = month.split("-").map(Number);
-  const end = `${year}-${String((monthNumber ?? 1) + 1).padStart(2, "0")}-01`;
-  const endDate =
-    monthNumber === 12 ? `${(year ?? 0) + 1}-01-01` : end;
-
-  let query = supabase
-    .from("transactions")
-    .select("id, date, amount, iso_currency_code, merchant_name, name, pfc_primary, account_id")
-    .gte("date", start)
-    .lt("date", endDate)
-    .order("date", { ascending: false })
-    .order("id", { ascending: true })
-    .limit(5);
-
-  if (accountId) query = query.eq("account_id", accountId);
-
-  const { data } = await query;
-  return (data ?? []) as RecentTransaction[];
-}
 
 export default async function DashboardPage({ searchParams }: PageProps) {
   const params = await searchParams;
@@ -82,14 +56,20 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     sub: params.sub,
     merchant: params.merchant,
   };
-  const drillOptions = { itemId: selectedItemId, drill: drillQuery };
+  const dashboardScope: "mine" | "household" =
+    params.scope === "household" ? "household" : "mine";
+  const drillOptions = {
+    itemId: selectedItemId,
+    drill: drillQuery,
+    scope: dashboardScope,
+  };
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [data, { data: items }, goals] = await Promise.all([
+  const [data, { data: items }, goals, { data: householdRows }] = await Promise.all([
     user
       ? getCachedDashboardData(
           supabase,
@@ -110,7 +90,15 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       .select("id, institution_name, status")
       .order("created_at"),
     getGoals(supabase),
+    supabase.from("households").select("id").limit(1),
   ]);
+  const hasHousehold = (householdRows ?? []).length > 0;
+  const { data: profileRow } = await supabase
+    .from("profiles")
+    .select("dashboard_prefs")
+    .eq("id", user?.id ?? "")
+    .maybeSingle();
+  const dashboardPrefs = (profileRow?.dashboard_prefs ?? {}) as DashboardPrefs;
 
   const plaidItems = (items ?? []) as PlaidItem[];
   const hasBanks = plaidItems.length > 0;
@@ -188,6 +176,17 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             }))}
           />
 
+          {hasHousehold && (
+            <ScopeChips
+              activeView={activeView}
+              selectedMonth={selectedMonth}
+              selectedAccountId={selectedAccountId}
+              selectedItemId={selectedItemId}
+              dashboardScope={dashboardScope}
+              spendPerPerson={data.spendPerPerson}
+            />
+          )}
+
           <PriorityRail
             brokenBankCount={brokenBanks.length}
             isStale={data.syncIsStale}
@@ -207,9 +206,22 @@ export default async function DashboardPage({ searchParams }: PageProps) {
               accountNames={accountNames}
               linkParams={linkParams}
               drillQuery={drillQuery}
+              prefs={dashboardPrefs}
             />
           )}
-          {activeView === "plan" && <PlanView data={data} goals={goals} />}
+          {activeView === "plan" && (
+            <PlanView
+              data={data}
+              goals={goals}
+              billsGrouping={params.bills === "monthly" ? "monthly" : "weekly"}
+              billsLinkParams={{
+                month: selectedMonth,
+                accountId: selectedAccountId,
+                itemId: selectedItemId,
+              }}
+              prefs={dashboardPrefs}
+            />
+          )}
           {activeView === "wealth" && (
             <WealthView
               data={data}
