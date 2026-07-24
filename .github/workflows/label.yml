@@ -17,6 +17,9 @@ jobs:
       pull-requests: write
 
     steps:
-    - uses: actions/labeler@v4
+    # Pinned to the major version whose config syntax .github/labeler.yml
+    # actually uses. This previously read @v4 while upstream had retagged it
+    # to v6 code, so a config that had not changed started failing.
+    - uses: actions/labeler@v6
       with:
         repo-token: "${{ secrets.GITHUB_TOKEN }}"
