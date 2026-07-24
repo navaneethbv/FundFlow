@@ -20,7 +20,7 @@
     "@vercel/analytics": "^2.0.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.24.0",
-    "next": "16.2.10",
+    "next": "16.2.11",
     "nodemailer": "^9.0.3",
     "pdfkit": "^0.19.1",
     "plaid": "^43.0.0",
