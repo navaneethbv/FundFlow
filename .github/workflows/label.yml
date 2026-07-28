@@ -21,6 +21,6 @@ jobs:
     # uses. The v6 bump landed on its own and left the config in the v4 form,
     # which fails the action outright ("unexpected type for label"); the
     # config is now v5+ to match.
-    - uses: actions/labeler@v6
+    - uses: actions/labeler@v7
       with:
         repo-token: "${{ secrets.GITHUB_TOKEN }}"
