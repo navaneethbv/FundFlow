@@ -46,6 +46,35 @@ from `docs/HANDOFF.md` (still pending Plaid Sandbox keys). **Remember to apply
 `0003_hardening.sql` to the live Supabase project** — the weekly-report cron
 and Settings read `profiles.weekly_report_enabled`.
 
+## Added 2026-07-23 (four-session roadmap drop)
+
+Shipped in one merge; the per-feature record is
+`docs/CHANGES-roadmap-2026-07-23.md`.
+This closed out most of the list below, plus phases 2-8 of the roadmap.
+
+- ~~**Optional in-app AI insights**~~ Done: `lib/ai-provider.ts` (official
+  `@anthropic-ai/sdk`) behind the existing double consent, capped at 4
+  generations/user/day, falling back to the rule-based summaries whenever the
+  key is absent or the provider errors.
+- ~~**Self-hosted docker-compose**~~ Done: `docker-compose.selfhost.yml`, with
+  the new `/api/health` endpoint wired into the container healthcheck.
+- ~~**Browser E2E run**~~ Scaffolded: `playwright.config.ts`,
+  `tests/e2e/smoke.spec.ts` (6 no-auth specs) and
+  `tests/e2e/golden-path.spec.ts` (7 authenticated specs), plus
+  `.github/workflows/e2e.yml`. The golden path skips cleanly without
+  `E2E_EMAIL`/`E2E_PASSWORD`.
+
+Still open, all needing credentials or an owner decision rather than code:
+
+- Add `E2E_EMAIL` / `E2E_PASSWORD` repo secrets so the authenticated golden
+  path actually runs in CI (and `E2E_PLAID=1` for the sandbox connect step).
+- Enable the Plaid Liabilities product and set `PLAID_LIABILITIES_ENABLED=1`
+  to get real card APRs instead of the 22% assumption.
+- Generate VAPID keys to activate web push (it is a silent no-op without
+  them).
+- By design, not a gap: household-shared rows are read-only for members
+  everywhere. No member ever writes to a partner's data.
+
 ## Requested enhancements
 
 - ~~**Card designs by network/product**~~ Done — card-deck carousel
@@ -85,12 +114,14 @@ and Settings read `profiles.weekly_report_enabled`.
   weekly PDF report cron (`/api/cron/weekly-report` + `lib/reporting.ts`).
 - ~~**Plaid webhooks** with signature verification for real-time sync.~~ Done:
   `/api/plaid/webhook` verifies ES256 signatures outside sandbox.
-- **Optional in-app AI insights** endpoint (provider-agnostic) reusing the export
-  data contract, gated by the per-user AI setting.
+- ~~**Optional in-app AI insights** endpoint (provider-agnostic) reusing the
+  export data contract, gated by the per-user AI setting.~~ Done (2026-07-23):
+  `lib/ai-provider.ts`.
 - ~~**CSV import for pre-Plaid history**~~ Done (2026-07-05):
   `lib/import.ts` + `/api/import/csv` + Settings Import section. Dedupe: rows
   on/after the account's earliest Plaid-synced date are skipped; deterministic
   `import-<hash>` ids make re-imports idempotent.
-- **Self-hosted docker-compose** if moving off managed Supabase.
+- ~~**Self-hosted docker-compose** if moving off managed Supabase.~~ Done
+  (2026-07-23): `docker-compose.selfhost.yml`.
 - **Audit MFA enrollment** server-side — promoted to the must-have list above
   (item 7).

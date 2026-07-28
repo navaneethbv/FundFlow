@@ -31,6 +31,25 @@ export function formatMinutesAgo(minutes: number | null | undefined): string {
   return `${Math.floor(minutes / (24 * 60))}d ago`;
 }
 
+/** Whole hours elapsed since an ISO timestamp (null passes through). */
+export function hoursSince(iso: string | null): number | null {
+  if (!iso) return null;
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 3600000);
+}
+
+/** Whole days elapsed since an ISO timestamp (null passes through). */
+export function daysSince(iso: string | null): number | null {
+  if (!iso) return null;
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+}
+
+/** "2026-07-24" → "Jul 24". */
+export function formatDay(date: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  const parsed = new Date(year!, (month ?? 1) - 1, day ?? 1);
+  return parsed.toLocaleString("en-US", { month: "short", day: "numeric" });
+}
+
 export function formatMonth(monthKey: string): string {
   const [year, month] = monthKey.split("-").map(Number);
   const date = new Date(year!, (month ?? 1) - 1, 1);

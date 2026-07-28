@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireUser, errorResponse } from "@/lib/http";
+import { verifyApiToken } from "@/lib/api-tokens";
 import { fetchPrivacySafeRows } from "@/lib/export";
 import { createServiceClient } from "@/lib/supabase/service";
 import { writeAudit, getClientIp } from "@/lib/audit";
@@ -11,8 +12,20 @@ import { writeAudit, getClientIp } from "@/lib/audit";
  */
 export async function GET(request: NextRequest) {
   const auth = await requireUser();
-  if (auth instanceof NextResponse) return auth;
-  const { user, supabase } = auth;
+  let userId: string;
+  let supabase;
+  if (auth instanceof NextResponse) {
+    // API-token path (6.1) — service client + explicit scoping inside
+    // fetchPrivacySafeRows.
+    const tokenUserId = await verifyApiToken(request.headers.get("authorization"));
+    if (!tokenUserId) return auth;
+    userId = tokenUserId;
+    supabase = createServiceClient();
+  } else {
+    userId = auth.user.id;
+    supabase = auth.supabase;
+  }
+  const user = { id: userId };
 
   try {
     const result = await fetchPrivacySafeRows(supabase, user.id);

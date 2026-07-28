@@ -62,15 +62,19 @@ import { dashboardScopeKey } from "@/lib/dashboard-cache";
 
 describe("dashboardScopeKey", () => {
   it("encodes every drill dimension", () => {
-    expect(dashboardScopeKey(undefined, undefined)).toBe("all:default:all:-:-:-");
+    // The trailing dimension is the household scope (4.2) — "mine" default.
+    expect(dashboardScopeKey(undefined, undefined)).toBe("all:default:all:-:-:-:mine");
     expect(
       dashboardScopeKey("acct-1", "2026-07", {
         itemId: "item-1",
         drill: { category: "FOOD_AND_DRINK", sub: "FOOD_AND_DRINK_COFFEE" },
       }),
-    ).toBe("acct-1:2026-07:item-1:FOOD_AND_DRINK:FOOD_AND_DRINK_COFFEE:-");
+    ).toBe("acct-1:2026-07:item-1:FOOD_AND_DRINK:FOOD_AND_DRINK_COFFEE:-:mine");
     expect(dashboardScopeKey(undefined, "2026-07", { drill: { merchant: "Netflix" } })).toBe(
-      "all:2026-07:all:-:-:Netflix",
+      "all:2026-07:all:-:-:Netflix:mine",
     );
+    expect(
+      dashboardScopeKey(undefined, undefined, { scope: "household" }),
+    ).toBe("all:default:all:-:-:-:household");
   });
 });

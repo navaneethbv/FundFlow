@@ -1,18 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const mockRequireUser = vi.fn();
-const mockErrorResponse = vi.fn();
-const mockBadRequest = vi.fn((msg) => new Response(msg, { status: 400 }));
-const mockCurrentSessionId = vi.fn(() => "session-active");
+const mockRequireUser = vi.fn<(...args: unknown[]) => unknown>();
+const mockErrorResponse = vi.fn<(...args: unknown[]) => unknown>();
+const mockBadRequest = vi.fn<(...args: unknown[]) => unknown>((msg: unknown) => new Response(String(msg), { status: 400 }));
+const mockCurrentSessionId = vi.fn<(...args: unknown[]) => unknown>(() => "session-active");
 vi.mock("@/lib/http", () => ({
   requireUser: () => mockRequireUser(),
   errorResponse: (...args: unknown[]) => mockErrorResponse(...args),
-  badRequest: (msg: string) => mockBadRequest(msg),
+  badRequest: (...args: unknown[]) => mockBadRequest(...args),
   currentSessionId: (...args: unknown[]) => mockCurrentSessionId(...args),
 }));
 
-const mockBuildAuditLogPage = vi.fn((logs) => ({ logs }));
-const mockBuildSessionList = vi.fn((sessions) => ({ sessions }));
+const mockBuildAuditLogPage = vi.fn<(...args: unknown[]) => unknown>((logs) => ({ logs }));
+const mockBuildSessionList = vi.fn<(...args: unknown[]) => unknown>((sessions) => ({ sessions }));
 vi.mock("@/lib/security-account", () => ({
   buildAuditLogPage: (logs: unknown) => mockBuildAuditLogPage(logs),
   buildSessionList: (sessions: unknown) => mockBuildSessionList(sessions),

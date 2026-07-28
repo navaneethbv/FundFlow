@@ -51,8 +51,45 @@ export default function HouseholdSection({ initialHouseholds }: { initialHouseho
           <p className="text-muted">Create a household when you are ready to share budgets, goals, and reports.</p>
         ) : (
           households.map((household) => (
-            <div key={household.id} className="rounded-field bg-panel-2 p-3 font-semibold">
-              {household.name}
+            <div key={household.id} className="rounded-field bg-panel-2 p-3">
+              <span className="font-semibold">{household.name}</span>
+              <form
+                className="mt-2 flex flex-wrap items-center gap-2"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setStatus(null);
+                  const form = e.currentTarget;
+                  const input = form.elements.namedItem("email") as HTMLInputElement;
+                  const response = await fetch("/api/household/invite", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      householdId: household.id,
+                      email: input.value,
+                    }),
+                  });
+                  if (response.ok) {
+                    setStatus(`Invite sent to ${input.value}.`);
+                    input.value = "";
+                  } else {
+                    const data = (await response.json().catch(() => null)) as {
+                      error?: string;
+                    } | null;
+                    setStatus(data?.error ?? "Could not send the invite.");
+                  }
+                }}
+              >
+                <Input
+                  name="email"
+                  type="email"
+                  required
+                  placeholder="partner@example.com"
+                  className="w-56"
+                />
+                <Button type="submit" size="sm" variant="ghost">
+                  Invite
+                </Button>
+              </form>
             </div>
           ))
         )}

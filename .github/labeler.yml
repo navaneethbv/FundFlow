@@ -1,27 +1,40 @@
-# Path-based PR labels for actions/labeler@v4 (see .github/workflows/label.yml).
-# v4 syntax: label -> list of minimatch globs; any match applies the label.
+# Path-based PR labels for actions/labeler (see .github/workflows/label.yml).
+#
+# v5+ syntax: label -> list of config options, each naming a match rule.
+# The older v4 form (label -> bare list of globs) is no longer accepted and
+# fails the action outright with "found unexpected type for label".
 
 api:
-  - app/api/**
+  - changed-files:
+      - any-glob-to-any-file: "app/api/**"
 
 ui:
-  - components/**
-  - app/**/*.tsx
-  - app/globals.css
+  - changed-files:
+      - any-glob-to-any-file:
+          - "components/**"
+          - "app/**/*.tsx"
+          - "app/globals.css"
 
 lib:
-  - lib/**
+  - changed-files:
+      - any-glob-to-any-file: "lib/**"
 
 tests:
-  - tests/**
+  - changed-files:
+      - any-glob-to-any-file: "tests/**"
 
 database:
-  - supabase/**
+  - changed-files:
+      - any-glob-to-any-file: "supabase/**"
 
 docs:
-  - docs/**
-  - "*.md"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "*.md"
 
 ci:
-  - .github/**
-  - vercel.json
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+          - "vercel.json"

@@ -42,13 +42,14 @@ describe("lib/reporting", () => {
 
   afterEach(() => {
     process.env = originalEnv;
+    vi.unstubAllEnvs();
   });
 
   it("sends weekly report using ethereal test account in development", async () => {
     delete process.env.SMTP_HOST;
     delete process.env.SMTP_USER;
     delete process.env.SMTP_PASS;
-    process.env.NODE_ENV = "development";
+    vi.stubEnv("NODE_ENV", "development");
 
     const data = {
       userEmail: "test@example.com",
@@ -90,7 +91,7 @@ describe("lib/reporting", () => {
     delete process.env.SMTP_HOST;
     delete process.env.SMTP_USER;
     delete process.env.SMTP_PASS;
-    process.env.NODE_ENV = "production";
+    vi.stubEnv("NODE_ENV", "production");
 
     const data = {
       userEmail: "test@example.com",
@@ -123,11 +124,9 @@ describe("lib/reporting", () => {
       "user@example.com",
       [
         {
-          id: "1",
           type: "low_cash_forecast",
           title: "Low Cash",
           body: "Check balance",
-          created_at: "2026",
         },
       ],
       "2026-07-13",
@@ -178,7 +177,7 @@ describe("lib/reporting", () => {
     delete process.env.SMTP_HOST;
     delete process.env.SMTP_USER;
     delete process.env.SMTP_PASS;
-    process.env.NODE_ENV = "development";
+    vi.stubEnv("NODE_ENV", "development");
 
     await sendCronAlertEmail("admin@example.com", "weekly-report", {
       failed: 1,
@@ -194,7 +193,7 @@ describe("lib/reporting", () => {
     delete process.env.SMTP_HOST;
     delete process.env.SMTP_USER;
     delete process.env.SMTP_PASS;
-    process.env.NODE_ENV = "development";
+    vi.stubEnv("NODE_ENV", "development");
 
     mocks.mockGetTestMessageUrl.mockReturnValueOnce(null); // to cover previewUrl is null branch
 

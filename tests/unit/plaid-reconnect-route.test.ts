@@ -1,35 +1,34 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const mockRequireUser = vi.fn();
-const mockErrorResponse = vi.fn();
-const mockBadRequest = vi.fn((msg) => new Response(msg, { status: 400 }));
+const mockRequireUser = vi.fn<(...args: unknown[]) => unknown>();
+const mockErrorResponse = vi.fn<(...args: unknown[]) => unknown>();
+const mockBadRequest = vi.fn<(...args: unknown[]) => unknown>((msg: unknown) => new Response(String(msg), { status: 400 }));
 vi.mock("@/lib/http", () => ({
   requireUser: () => mockRequireUser(),
   errorResponse: (...args: unknown[]) => mockErrorResponse(...args),
-  badRequest: (msg: string) => mockBadRequest(msg),
+  badRequest: (...args: unknown[]) => mockBadRequest(...args),
 }));
 
-const mockGetItem = vi.fn();
-const mockSetItemStatus = vi.fn();
+const mockGetItem = vi.fn<(...args: unknown[]) => unknown>();
+const mockSetItemStatus = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/plaid-service", () => ({
   getItem: (...args: unknown[]) => mockGetItem(...args),
   setItemStatus: (...args: unknown[]) => mockSetItemStatus(...args),
 }));
 
-const mockSyncItemTransactions = vi.fn();
+const mockSyncItemTransactions = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/sync", () => ({
-  syncItemTransactions: (...args: unknown[]) =>
-    mockSyncItemTransactions(...args),
+  syncItemTransactions: (...args: unknown[]) => mockSyncItemTransactions(...args),
 }));
 
-const mockWriteAudit = vi.fn();
-const mockGetClientIp = vi.fn(() => "127.0.0.1");
+const mockWriteAudit = vi.fn<(...args: unknown[]) => unknown>();
+const mockGetClientIp = vi.fn<(...args: unknown[]) => unknown>(() => "127.0.0.1");
 vi.mock("@/lib/audit", () => ({
   writeAudit: (...args: unknown[]) => mockWriteAudit(...args),
   getClientIp: (...args: unknown[]) => mockGetClientIp(...args),
 }));
 
-const mockLogError = vi.fn();
+const mockLogError = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/log", () => ({
   logError: (...args: unknown[]) => mockLogError(...args),
 }));

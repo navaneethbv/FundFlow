@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { needsMfaStepUp } from "@/lib/mfa";
+import { notifyNewDeviceLogin } from "@/lib/login-alert";
 import { logError } from "@/lib/log";
 import { decodeSessionId } from "@/lib/session-token";
 
@@ -82,10 +83,18 @@ export async function requireUser(): Promise<AuthedContext | NextResponse> {
           },
           { onConflict: "user_id,session_id" },
         )
-        .select("revoked_at")
+        .select("revoked_at, created_at")
         .maybeSingle();
       if (record?.revoked_at) {
         return NextResponse.json({ error: "Session revoked" }, { status: 401 });
+      }
+      // New-device login alert (7.1): only when this upsert CREATED the
+      // record (created_at is fresh). Fire-and-forget; never blocks.
+      if (
+        record?.created_at &&
+        Date.now() - new Date(record.created_at as string).getTime() < 15_000
+      ) {
+        void notifyNewDeviceLogin(user.id, user.email, userAgent);
       }
     }
   } catch (error) {

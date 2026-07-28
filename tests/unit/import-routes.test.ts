@@ -1,25 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const mockRequireUser = vi.fn();
-const mockErrorResponse = vi.fn();
-const mockBadRequest = vi.fn((msg) => new Response(msg, { status: 400 }));
+const mockRequireUser = vi.fn<(...args: unknown[]) => unknown>();
+const mockErrorResponse = vi.fn<(...args: unknown[]) => unknown>();
+const mockBadRequest = vi.fn<(...args: unknown[]) => unknown>((msg: unknown) => new Response(String(msg), { status: 400 }));
 vi.mock("@/lib/http", () => ({
   requireUser: () => mockRequireUser(),
   errorResponse: (...args: unknown[]) => mockErrorResponse(...args),
-  badRequest: (msg: string) => mockBadRequest(msg),
+  badRequest: (...args: unknown[]) => mockBadRequest(...args),
 }));
 
-const mockBuildImportReview = vi.fn();
+const mockBuildImportReview = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/planning", () => ({
   buildImportReview: (...args: unknown[]) => mockBuildImportReview(...args),
 }));
 
-const mockParseImportCsv = vi.fn();
-const mockMakeImportId = vi.fn(
-  (accId, row, n) => `import-id-${accId}-${row.date}-${n}`,
+const mockParseImportCsv = vi.fn<(...args: unknown[]) => unknown>();
+const mockMakeImportId = vi.fn<(...args: unknown[]) => unknown>(
+  (accId: unknown, row: unknown, n: unknown) => `import-id-${String(accId)}-${(row as { date: string }).date}-${String(n)}`,
 );
-const mockGetCsvColumns = vi.fn();
-const mockNormalizeColumnMap = vi.fn();
+const mockGetCsvColumns = vi.fn<(...args: unknown[]) => unknown>();
+const mockNormalizeColumnMap = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/import", () => ({
   parseImportCsv: (...args: unknown[]) => mockParseImportCsv(...args),
   makeImportId: (...args: unknown[]) => mockMakeImportId(...args),
@@ -27,13 +27,13 @@ vi.mock("@/lib/import", () => ({
   normalizeColumnMap: (...args: unknown[]) => mockNormalizeColumnMap(...args),
 }));
 
-const mockCheckRateLimit = vi.fn(() => Promise.resolve(true));
+const mockCheckRateLimit = vi.fn<(...args: unknown[]) => unknown>(() => Promise.resolve(true));
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
 }));
 
-const mockWriteAudit = vi.fn();
-const mockGetClientIp = vi.fn(() => "127.0.0.1");
+const mockWriteAudit = vi.fn<(...args: unknown[]) => unknown>();
+const mockGetClientIp = vi.fn<(...args: unknown[]) => unknown>(() => "127.0.0.1");
 vi.mock("@/lib/audit", () => ({
   writeAudit: (...args: unknown[]) => mockWriteAudit(...args),
   getClientIp: (...args: unknown[]) => mockGetClientIp(...args),

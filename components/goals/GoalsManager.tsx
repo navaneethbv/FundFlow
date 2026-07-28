@@ -37,12 +37,14 @@ function GoalRow({
   onContribute,
   onUpdate,
   onRemove,
+  footer = null,
 }: {
   goal: Goal;
   monthlyNet: number;
   onContribute: (id: string, amount: number) => Promise<void>;
   onUpdate: (id: string, draft: GoalDraft) => Promise<boolean>;
   onRemove: (id: string) => Promise<void>;
+  footer?: React.ReactNode;
 }) {
   const [amount, setAmount] = useState("");
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
@@ -199,6 +201,7 @@ function GoalRow({
         </Button>
       </form>
       {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+      {footer}
     </li>
   );
 }
@@ -206,12 +209,27 @@ function GoalRow({
 export default function GoalsManager({
   initialGoals,
   monthlyNet,
+  householdId = null,
 }: {
   initialGoals: Goal[];
   monthlyNet: number;
+  /** When set, goals can be shared with this household (4.2-lite). */
+  householdId?: string | null;
 }) {
   const supabase = createClient();
   const [goals, setGoals] = useState<Goal[]>(initialGoals);
+
+  async function toggleShare(id: string, share: boolean) {
+    const nextValue = share ? householdId : null;
+    const { error: shareError } = await supabase
+      .from("goals")
+      .update({ household_id: nextValue })
+      .eq("id", id);
+    if (shareError) return;
+    setGoals((rows) =>
+      rows.map((row) => (row.id === id ? { ...row, household_id: nextValue } : row)),
+    );
+  }
   const [name, setName] = useState("");
   const [target, setTarget] = useState("");
   const [targetDate, setTargetDate] = useState("");
@@ -317,6 +335,18 @@ export default function GoalsManager({
               onContribute={contribute}
               onUpdate={updateGoal}
               onRemove={remove}
+              footer={
+                householdId ? (
+                  <label className="mt-2 flex items-center gap-1.5 text-xs text-muted">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(goal.household_id)}
+                      onChange={(e) => toggleShare(goal.id, e.target.checked)}
+                    />
+                    Visible to my household
+                  </label>
+                ) : null
+              }
             />
           ))}
         </ul>

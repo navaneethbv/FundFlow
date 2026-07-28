@@ -12,11 +12,13 @@ export default async function GoalsPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [goals, data] = await Promise.all([
+  const [goals, data, { data: householdRows }] = await Promise.all([
     getGoals(supabase),
     getDashboardData(supabase),
+    supabase.from("households").select("id").limit(1),
   ]);
   const monthlyNet = data.currentMonthIncome - data.currentMonthExpenses;
+  const householdId = (householdRows?.[0]?.id as string | undefined) ?? null;
 
   return (
     <AppShell active="goals" email={user?.email}>
@@ -27,7 +29,11 @@ export default async function GoalsPage() {
           Set savings targets and record contributions as you go.
         </p>
       </div>
-      <GoalsManager initialGoals={goals} monthlyNet={monthlyNet} />
+      <GoalsManager
+        initialGoals={goals}
+        monthlyNet={monthlyNet}
+        householdId={householdId}
+      />
     </AppShell>
   );
 }

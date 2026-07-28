@@ -1,8 +1,47 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-07-16. Read this first to resume.
+Last updated: 2026-07-23. Read this first to resume.
 
-## Latest session (2026-07-16, branch `feat/remaining-must-haves`)
+## Latest session (2026-07-23, branch `feat/remaining-must-haves`)
+
+Merged the four-session roadmap drop (previously staged in a `new_changes/`
+folder) into the repo at its real paths.
+The full per-feature record lives in `docs/CHANGES-roadmap-2026-07-23.md` —
+read that for what shipped; this note only covers what a resuming session
+needs to act on.
+
+Headline additions: financial-intelligence tiles (Safe to Spend, next
+paycheck, emergency runway), encrypted monthly backups, integrity checks and
+a `/api/health` endpoint, real Anthropic-backed AI insights with rule-based
+fallback, full per-connection household sharing behind an explicit scope chip,
+iCal feed, OFX/QFX import, personal API tokens, web push, demo mode, command
+palette, saved ledger views, bulk tagging, and a `/wrapped` year-in-review
+page.
+
+Gates run after the merge, all green: `npm run lint` PASS, `npm run typecheck`
+PASS, `npm run test:unit` PASS (87 files / 517 tests), `npm run build` PASS.
+
+**Before deploying, work the checklist at the top of
+`docs/CHANGES-roadmap-2026-07-23.md`.** The short version:
+
+1. Apply all three new migrations in filename order —
+   `20260723100000_phase_features.sql`,
+   `20260723150000_bucket_features.sql`,
+   `20260723200000_full_sharing_push_prefs.sql`.
+   Pages read columns these create and fail until they run.
+2. Set `BACKUP_ENC_KEY` (32 bytes base64) in Vercel env; the backup cron fails
+   closed without it. It is deliberately a different key from
+   `PLAID_TOKEN_ENC_KEY`.
+3. Optional: `ANTHROPIC_API_KEY` (real AI insights; rule-based summaries keep
+   working without it), `PLAID_LIABILITIES_ENABLED=1` (paid Plaid product, auto
+   card APRs), and VAPID keys for web push (`VAPID_PUBLIC_KEY`,
+   `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`).
+
+New deps: `@anthropic-ai/sdk`, `web-push`, `@playwright/test`,
+`@types/web-push`. New script: `npm run test:e2e` (Playwright; needs
+`npx playwright install chromium` and a running app).
+
+## Previous session (2026-07-16, branch `feat/remaining-must-haves`)
 
 Delivered the three remaining must-have items from `docs/TODO.md`: session
 revocation enforced on page renders, cron-failure alert emails, and a mobile

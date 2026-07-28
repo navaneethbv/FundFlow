@@ -64,7 +64,7 @@ export default function CardCarousel({
   const view = activeView ?? resolveDashboardView({ tab: activeTab });
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-3" aria-label="Cards and accounts selection">
       <div className="flex items-baseline justify-between">
         <h2 className="eyebrow">Cards & Accounts</h2>
         {selectedAccountId && (
@@ -74,6 +74,7 @@ export default function CardCarousel({
               extraParams,
             )}
             className="text-xs font-semibold text-accent hover:underline"
+            aria-label="Clear active account filter"
           >
             Clear filter
           </Link>
@@ -95,6 +96,7 @@ export default function CardCarousel({
               })}
               key={account.id}
               className="shrink-0 snap-start rounded-card focus-visible:outline-2"
+              aria-label={`${selected ? "Deselect" : "Filter by"} ${account.name}`}
             >
               <article
                 className={cn(

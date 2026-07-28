@@ -46,3 +46,34 @@ self.addEventListener("fetch", (event) => {
       .catch(() => caches.match(event.request)),
   );
 });
+
+// Web push: payloads carry title/body only (no PII, no amounts unless the
+// notification itself includes them). Tapping opens the notification feed.
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+  let payload = { title: "FundFlow", body: "" };
+  try {
+    payload = event.data.json();
+  } catch {
+    payload.body = event.data.text();
+  }
+  event.waitUntil(
+    self.registration.showNotification(payload.title || "FundFlow", {
+      body: payload.body || "",
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if (client.url.includes("/notifications") && "focus" in client) return client.focus();
+      }
+      return self.clients.openWindow("/notifications");
+    }),
+  );
+});

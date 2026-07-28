@@ -60,6 +60,7 @@ export function dashboardScopeKey(
     options?.drill?.category ?? "-",
     options?.drill?.sub ?? "-",
     options?.drill?.merchant ?? "-",
+    options?.scope ?? "mine",
   ].join(":");
 }
 

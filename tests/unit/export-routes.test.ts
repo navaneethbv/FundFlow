@@ -1,46 +1,44 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const mockRequireUser = vi.fn();
-const mockErrorResponse = vi.fn(() => new Response("error", { status: 500 }));
+const mockRequireUser = vi.fn<(...args: unknown[]) => unknown>();
+const mockErrorResponse = vi.fn<(...args: unknown[]) => unknown>(() => new Response("error", { status: 500 }));
 vi.mock("@/lib/http", () => ({
   requireUser: () => mockRequireUser(),
   errorResponse: (...args: unknown[]) => mockErrorResponse(...args),
 }));
 
-const mockFetchPrivacySafeRows = vi.fn();
+const mockFetchPrivacySafeRows = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/export", () => ({
-  fetchPrivacySafeRows: (...args: unknown[]) =>
-    mockFetchPrivacySafeRows(...args),
+  fetchPrivacySafeRows: (...args: unknown[]) => mockFetchPrivacySafeRows(...args),
 }));
 
-const mockWriteAudit = vi.fn();
-const mockGetClientIp = vi.fn(() => "127.0.0.1");
+const mockWriteAudit = vi.fn<(...args: unknown[]) => unknown>();
+const mockGetClientIp = vi.fn<(...args: unknown[]) => unknown>(() => "127.0.0.1");
 vi.mock("@/lib/audit", () => ({
   writeAudit: (...args: unknown[]) => mockWriteAudit(...args),
   getClientIp: (...args: unknown[]) => mockGetClientIp(...args),
 }));
 
 const mockServiceClient = {
-  from: vi.fn(),
+  from: vi.fn<(...args: unknown[]) => unknown>(),
 };
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => mockServiceClient,
 }));
 
-const mockBuildDataTakeout = vi.fn((data) => ({ takeout: data }));
+const mockBuildDataTakeout = vi.fn<(...args: unknown[]) => unknown>((data) => ({ takeout: data }));
 vi.mock("@/lib/security-account", () => ({
   buildDataTakeout: (data: unknown) => mockBuildDataTakeout(data),
 }));
 
-const mockGetWeeklyReportData = vi.fn();
+const mockGetWeeklyReportData = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/weekly-report-data", () => ({
   getWeeklyReportData: (...args: unknown[]) => mockGetWeeklyReportData(...args),
 }));
 
-const mockGenerateWeeklyReportPdf = vi.fn(() => Buffer.from("pdf-data"));
+const mockGenerateWeeklyReportPdf = vi.fn<(...args: unknown[]) => unknown>(() => Buffer.from("pdf-data"));
 vi.mock("@/lib/report-pdf", () => ({
-  generateWeeklyReportPdf: (...args: unknown[]) =>
-    mockGenerateWeeklyReportPdf(...args),
+  generateWeeklyReportPdf: (...args: unknown[]) => mockGenerateWeeklyReportPdf(...args),
 }));
 
 import { GET as jsonGet } from "@/app/api/export/json/route";

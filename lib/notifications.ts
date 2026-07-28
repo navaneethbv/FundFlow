@@ -2,7 +2,10 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { buildNotification, shouldSendAlert, type AlertType } from "@/lib/planning";
 import { getDashboardData } from "@/lib/dashboard";
 import { getGoals } from "@/lib/goals";
+import { detectNetWorthMilestones } from "@/lib/insights";
+import { sendPushToUser } from "@/lib/push";
 import { formatCurrency } from "@/lib/format";
+import { logError } from "@/lib/log";
 
 /**
  * Creates and inserts a notification into the database if the user has opted in
@@ -83,6 +86,10 @@ export async function createNotification(
     .single();
 
   if (insertError) throw insertError;
+
+  // Mirror to web push (fire-and-forget; no-op without VAPID keys).
+  void sendPushToUser(userId, { title: shape.title, body: shape.body });
+
   return inserted;
 }
 
@@ -144,6 +151,39 @@ export async function processNotificationsForUser(userId: string) {
         goal.id,
       );
     }
+  }
+
+  // 4b. Net-worth milestones (8.2). The unique (user_id, key) constraint is
+  // the dedupe: the insert claims the milestone, and only a successful
+  // claim notifies — so each key fires exactly once, ever. Best-effort.
+  try {
+    const { data: achievedRows } = await supabase
+      .from("milestones")
+      .select("key")
+      .eq("user_id", userId);
+    const milestones = detectNetWorthMilestones({
+      history: dashboardData.netWorthHistory.map((row) => ({
+        month: row.month,
+        netWorth: row.netWorth,
+      })),
+      achieved: (achievedRows ?? []).map((row) => row.key as string),
+    });
+    for (const milestone of milestones) {
+      const { error: claimError } = await supabase.from("milestones").insert({
+        user_id: userId,
+        key: milestone.key,
+        title: milestone.title,
+      });
+      if (claimError) continue; // already claimed (or table missing) — stay silent
+      await createNotification(
+        userId,
+        "milestone",
+        { title: milestone.title, body: milestone.body },
+        milestone.key,
+      );
+    }
+  } catch (milestoneError) {
+    logError("notifications.milestones", milestoneError);
   }
 
   // 5. Check broken bank connections

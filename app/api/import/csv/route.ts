@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
 import { parseImportCsv, makeImportId, type ImportedRow } from "@/lib/import";
+import { looksLikeOfx, parseOfx } from "@/lib/import-ofx";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { createServiceClient } from "@/lib/supabase/service";
 import { writeAudit, getClientIp } from "@/lib/audit";
@@ -60,7 +61,19 @@ export async function POST(request: NextRequest) {
     }
 
     const text = await file.text();
-    const { rows, errors } = parseImportCsv(text, { positiveIsIncome });
+    // OFX/QFX statements (6.3) feed the same normalized pipeline as CSV —
+    // same sign convention, same deterministic ids, same overlap guard.
+    const { rows, errors } = looksLikeOfx(text)
+      ? {
+          rows: parseOfx(text).map((t) => ({
+            date: t.date,
+            amount: t.amount,
+            merchant: t.description || "Imported",
+            category: null,
+          })),
+          errors: [] as string[],
+        }
+      : parseImportCsv(text, { positiveIsIncome });
     if (rows.length === 0) {
       return badRequest(errors[0] ?? "No importable rows found");
     }

@@ -3,6 +3,7 @@ import Badge from "@/components/ui/Badge";
 import Panel from "@/components/ui/Panel";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { daysSince, hoursSince } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,8 @@ export default async function AdminObservabilityPage() {
     recentSyncJobs,
     recentAuditLogs,
     bankHealth,
+    lastBackup,
+    lastDoneSync,
   ] = await Promise.all([
     service.from("profiles").select("id", { count: "exact", head: true }),
     service.from("plaid_items").select("id", { count: "exact", head: true }),
@@ -65,7 +68,26 @@ export default async function AdminObservabilityPage() {
       .select("id, institution_name, status, error_code, updated_at")
       .order("updated_at", { ascending: false })
       .limit(6),
+    service
+      .from("audit_logs")
+      .select("created_at")
+      .eq("action", "data_backup")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    service
+      .from("sync_jobs")
+      .select("updated_at")
+      .eq("status", "done")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
+
+  const lastBackupAt = (lastBackup.data?.created_at as string | undefined) ?? null;
+  const lastSyncAt = (lastDoneSync.data?.updated_at as string | undefined) ?? null;
+  const backupAgeDays = daysSince(lastBackupAt);
+  const syncAgeHours = hoursSince(lastSyncAt);
 
   const stats = [
     { label: "Users", value: countValue(profiles) },
@@ -92,6 +114,29 @@ export default async function AdminObservabilityPage() {
           </Panel>
         ))}
       </div>
+
+      <Panel title="Operations" eyebrow="Backups and freshness">
+        <div className="grid gap-3 text-sm sm:grid-cols-2">
+          <div className="rounded-field bg-panel-2 p-3">
+            <span className="block text-xs text-muted">Last encrypted backup</span>
+            <span className="mt-1 flex items-center gap-2 font-semibold">
+              {lastBackupAt ? `${backupAgeDays}d ago` : "never"}
+              <Badge tone={backupAgeDays !== null && backupAgeDays <= 35 ? "success" : "danger"}>
+                {backupAgeDays !== null && backupAgeDays <= 35 ? "current" : "overdue"}
+              </Badge>
+            </span>
+          </div>
+          <div className="rounded-field bg-panel-2 p-3">
+            <span className="block text-xs text-muted">Last successful sync</span>
+            <span className="mt-1 flex items-center gap-2 font-semibold">
+              {lastSyncAt ? `${syncAgeHours}h ago` : "never"}
+              <Badge tone={syncAgeHours !== null && syncAgeHours <= 48 ? "success" : "danger"}>
+                {syncAgeHours !== null && syncAgeHours <= 48 ? "fresh" : "stale"}
+              </Badge>
+            </span>
+          </div>
+        </div>
+      </Panel>
 
       <div className="grid gap-6 xl:grid-cols-3">
         <Panel title="Recent sync jobs" eyebrow="Status">

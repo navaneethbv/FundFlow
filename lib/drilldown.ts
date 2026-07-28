@@ -85,9 +85,11 @@ export function dashboardUrl(params: {
   category?: string;
   sub?: string;
   merchant?: string;
+  bills?: string;
+  scope?: string;
 }): string {
   const search = new URLSearchParams();
-  for (const key of ["view", "tab", "month", "accountId", "itemId", "category", "sub", "merchant"] as const) {
+  for (const key of ["view", "tab", "month", "accountId", "itemId", "category", "sub", "merchant", "bills", "scope"] as const) {
     const value = params[key];
     if (value) search.set(key, value);
   }

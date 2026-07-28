@@ -197,7 +197,7 @@ suite("plaid-service DB integration", () => {
         access_token_tag: encPayload.tag,
         status: "active",
       })
-      .select("id, access_token_ciphertext, access_token_iv, access_token_tag")
+      .select("*")
       .single();
 
     // 4. Decrypt the token, triggering database upgrade/rotation

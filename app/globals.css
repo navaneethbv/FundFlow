@@ -220,6 +220,13 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Privacy blur (PrivacyToggle): hide amounts from shoulder surfers and
+   screen shares. Cosmetic only — the values are still in the DOM. */
+[data-privacy="blur"] .metric-value {
+  filter: blur(9px);
+  user-select: none;
+}
+
 button:not(:disabled),
 a[href],
 summary,

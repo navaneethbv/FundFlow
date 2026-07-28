@@ -24,7 +24,9 @@ export default defineConfig({
       include: [
         "lib/**",
         "app/api/**",
-        "scripts/**",
+        // Source only: scripts/ also holds .sql (check-rls.sql), which the
+        // coverage remapper tries to parse as JS and errors on.
+        "scripts/**/*.{ts,mjs,js}",
         "components/charts/**",
         "components/dashboard/metrics.ts",
         "components/dashboard/dashboard-view.ts"
