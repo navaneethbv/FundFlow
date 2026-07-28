@@ -17,12 +17,12 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.114.0",
     "@supabase/ssr": "^0.12.3",
-    "@supabase/supabase-js": "^2.110.8",
+    "@supabase/supabase-js": "^2.110.9",
     "@types/nodemailer": "^8.0.1",
     "@types/pdfkit": "^0.17.6",
     "@vercel/analytics": "^2.0.1",
     "clsx": "^2.1.1",
-    "lucide-react": "^1.25.0",
+    "lucide-react": "^1.27.0",
     "next": "16.2.11",
     "nodemailer": "^9.0.3",
     "pdfkit": "^0.19.1",
@@ -50,6 +50,7 @@
     "vitest": "^4.1.10"
   },
   "overrides": {
-    "postcss": "^8.5.10"
+    "postcss": "^8.5.10",
+    "sharp": "^0.35.3"
   }
 }
