@@ -2,7 +2,32 @@
 
 Last updated: 2026-07-29. Read this first to resume.
 
-## Latest session (2026-07-29, branch `feat/finance-domain-foundation`)
+## START HERE — next session (as of 2026-07-29)
+
+Phase 0 is **merged to main** (PR #69). Main is green: 801 unit tests, 114 files.
+
+**Do Phase 2 (Accounts) next. Skip Phase 1 for now.**
+Phase 1 is navigation, and its own plan says nav entries stay hidden until a page is production-ready, so on its own it would ship almost nothing visible; one of its steps (move "Year in Money" under Reports) also needs a Reports page that does not exist yet.
+Do Phase 1 later as a small cleanup once two or three real pages exist.
+Phase 2 is the right next move because its daily `account_balance_snapshots` table is what Phase 8 (dashboard widgets) and Phase 10 (forecasting) both read, and history only accumulates once the table is live: every day you wait is a day of missing chart data.
+
+Sequence for the next session:
+
+1. Read Phase 2 in `docs/superpowers/plans/2026-07-29-monarch-parity.md`, plus the "Phase 0 implementation notes" in the same file (four interface decisions that differ from the plan's original sketch).
+2. Expand Phase 2 into its own dated plan file with `superpowers:writing-plans`, breaking each checkbox into red-green-refactor-commit steps.
+3. Branch `feat/accounts-page`, then build it test-first.
+
+**The one step only a human can do:** this repo has no migration runner, so `supabase/migrations/<ts>_account_snapshots.sql` must be applied to the live Supabase project (CLI or dashboard SQL editor) *before* any code reading those columns is merged. Plan the PR so the migration lands and is applied first, then the reading code.
+
+Carry these forward into every later phase — they are already true on main:
+
+- Consume `projectFinanceTransactions` from `lib/finance-domain.ts`. Never re-apply merchant rules, category overrides, refund netting, or `EXCLUDED_PFC` in a page; that is exactly the drift Phase 0 exists to prevent.
+- New pages pass **real splits** to the projection. Only `lib/dashboard.ts` passes `splits: []`, because it distributes splits downstream over active-month spend and would otherwise apply them twice.
+- Read transactions through `fetchFinanceTransactions` in `lib/finance-query.ts` (column-explicit, paginated, upper-bounded). No `select("*")`, no unbounded reads.
+- Take scope from `parseFinancialScope`; pass `scopeQueryUserId(scope)` to service-client queries so `user_id` is always explicit.
+- Gate any unreleased page behind `lib/feature-flags.ts`. Flags control reachability only, never auth or RLS.
+
+## Session of 2026-07-29 (branch `feat/finance-domain-foundation`, merged as PR #69)
 
 Started the financial-planner parity program.
 The reviewed master plan is `docs/superpowers/plans/2026-07-29-monarch-parity.md`: 14 phases, each its own branch and PR, each expanded into TDD steps before implementation.
