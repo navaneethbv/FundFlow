@@ -30,6 +30,7 @@ export async function GET() {
       { data: goals },
       { data: rules },
       { data: manualAccounts },
+      { data: accountBalanceSnapshots },
       { data: alertPreferences },
       { data: aiSettings },
     ] = await Promise.all([
@@ -39,6 +40,7 @@ export async function GET() {
       supabase.from("goals").select("name, target_amount, current_amount, target_date, status"),
       supabase.from("merchant_rules").select("match_type, pattern, display_name, category, enabled"),
       supabase.from("manual_accounts").select("name, account_type, balance, include_in_net_worth"),
+      supabase.from("account_balance_snapshots").select("account_id, manual_account_id, snapshot_date, current_balance, available_balance, iso_currency_code"),
       supabase.from("alert_preferences").select("broken_bank, budget_exceeded, goal_reached, large_transaction, low_cash_forecast"),
       supabase.from("ai_settings").select("enabled"),
     ]);
@@ -51,6 +53,7 @@ export async function GET() {
         goals: goals ?? [],
         merchant_rules: rules ?? [],
         manual_accounts: manualAccounts ?? [],
+        account_balance_snapshots: accountBalanceSnapshots ?? [],
         alert_preferences: alertPreferences ?? [],
         ai_settings: aiSettings ?? [],
       }),

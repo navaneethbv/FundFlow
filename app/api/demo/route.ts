@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireUser, errorResponse } from "@/lib/http";
-import { buildDemoDataset } from "@/lib/demo-data";
+import {
+  buildDemoAccountSnapshots,
+  buildDemoDataset,
+} from "@/lib/demo-data";
 import { createServiceClient } from "@/lib/supabase/service";
 import { writeAudit } from "@/lib/audit";
 import { invalidateDashboardCache } from "@/lib/dashboard-cache";
@@ -70,6 +73,19 @@ export async function POST() {
       .select("id");
     if (accountError) throw accountError;
     const accountIds = (accountRows ?? []).map((row) => row.id as string);
+
+    const snapshots = buildDemoAccountSnapshots({
+      userId: user.id,
+      today: new Date().toISOString().slice(0, 10),
+      accounts: dataset.accounts,
+      accountIds,
+    });
+    const { error: snapshotError } = await service
+      .from("account_balance_snapshots")
+      .upsert(snapshots, {
+        onConflict: "account_id,manual_account_id,snapshot_date",
+      });
+    if (snapshotError) throw snapshotError;
 
     const txnRows = dataset.transactions.map((txn) => ({
       user_id: user.id,

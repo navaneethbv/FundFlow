@@ -15,7 +15,8 @@ import { logError } from "@/lib/log";
  * `user_id uuid not null references auth.users (id) on delete cascade`.
  * A table that references profiles, or omits the cascade, silently survives
  * account deletion. Sibling checklists: app/api/export/takeout/route.ts and
- * app/api/cron/backup/route.ts.
+ * app/api/cron/backup/route.ts. Account balance snapshots cascade through
+ * user_id and through both account_id and manual_account_id source records.
  */
 export async function DELETE(request: NextRequest) {
   const auth = await requireUser();

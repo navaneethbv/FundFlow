@@ -123,7 +123,14 @@ describe("Export API Routes", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body).toHaveProperty("takeout");
-      expect(mockBuildDataTakeout).toHaveBeenCalled();
+      expect(mockSupabase.from).toHaveBeenCalledWith(
+        "account_balance_snapshots",
+      );
+      expect(mockBuildDataTakeout).toHaveBeenCalledWith(
+        expect.objectContaining({
+          account_balance_snapshots: [],
+        }),
+      );
     });
 
     it("returns 500 when database call throws an error", async () => {

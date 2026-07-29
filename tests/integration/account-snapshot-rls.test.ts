@@ -189,4 +189,72 @@ suite("account balance snapshot RLS", () => {
 
     expect(error).not.toBeNull();
   });
+
+  it("deletes snapshots when their auth user is deleted", async () => {
+    const cascadeUserId = await createUser(
+      `snapshot-cascade-${stamp}@example.com`,
+      "Password123!",
+    );
+
+    try {
+      const item = await insertOne("plaid_items", {
+        user_id: cascadeUserId,
+        plaid_item_id: `snapshot-cascade-item-${stamp}`,
+        institution_name: "Cascade Bank",
+        access_token_ciphertext: "ciphertext",
+        access_token_iv: "iv",
+        access_token_tag: "tag",
+      });
+      const account = await insertOne("accounts", {
+        user_id: cascadeUserId,
+        plaid_item_id: item.id,
+        plaid_account_id: `snapshot-cascade-account-${stamp}`,
+        name: "Cascade checking",
+        type: "depository",
+        current_balance: 50,
+        iso_currency_code: "USD",
+      });
+      const manualAccount = await insertOne("manual_accounts", {
+        user_id: cascadeUserId,
+        name: "Cascade cash",
+        account_type: "cash",
+        balance: 25,
+        include_in_net_worth: true,
+      });
+      const { data: snapshots, error: snapshotError } = await admin
+        .from("account_balance_snapshots")
+        .insert([
+          {
+            user_id: cascadeUserId,
+            account_id: account.id,
+            snapshot_date: "2026-07-29",
+            current_balance: 50,
+            iso_currency_code: "USD",
+          },
+          {
+            user_id: cascadeUserId,
+            manual_account_id: manualAccount.id,
+            snapshot_date: "2026-07-29",
+            current_balance: 25,
+            iso_currency_code: "USD",
+          },
+        ])
+        .select("id");
+      if (snapshotError) throw snapshotError;
+      const snapshotIds = (snapshots ?? []).map((snapshot) => snapshot.id);
+
+      const { error: deleteError } =
+        await admin.auth.admin.deleteUser(cascadeUserId);
+      expect(deleteError).toBeNull();
+
+      const { data, error } = await admin
+        .from("account_balance_snapshots")
+        .select("id")
+        .in("id", snapshotIds);
+      expect(error).toBeNull();
+      expect(data).toEqual([]);
+    } finally {
+      await admin.auth.admin.deleteUser(cascadeUserId);
+    }
+  });
 });
