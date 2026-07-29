@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { loadEnvConfig } from "@next/env";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import path from "node:path";
 
 loadEnvConfig(process.cwd());
@@ -21,13 +21,15 @@ const memberEmail = `accounts-e2e-member-${stamp}@example.com`;
 test.describe.serial("accounts page", () => {
   test.skip(!RUN, "Supabase browser and service credentials are required");
 
-  const admin = createClient(SUPABASE_URL!, SUPABASE_SECRET_KEY!, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  let admin: SupabaseClient;
   let ownerId = "";
   let memberId = "";
 
   test.beforeAll(async () => {
+    admin = createClient(SUPABASE_URL!, SUPABASE_SECRET_KEY!, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
     const { data: owner, error: ownerError } =
       await admin.auth.admin.createUser({
         email: ownerEmail,
