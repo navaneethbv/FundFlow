@@ -455,6 +455,6 @@ describe("POST /api/transactions/annotate-batch", () => {
     const upserts = serviceClient.writtenTo("transaction_annotations") as Array<
       Record<string, unknown>
     >;
-    expect((upserts[0].tags as string[]).length).toBe(12);
+    expect(upserts[0].tags as string[]).toHaveLength(12);
   });
 });

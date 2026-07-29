@@ -20,7 +20,7 @@ interface PageProps {
  * Year in Money (8.1): an annual recap over the user's own ledger.
  * RLS-scoped reads, one bounded query, pure aggregation in lib/annual.ts.
  */
-export default async function WrappedPage({ searchParams }: PageProps) {
+export default async function WrappedPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
   const currentYear = new Date().getFullYear();
   const year =

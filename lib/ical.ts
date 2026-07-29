@@ -51,9 +51,9 @@ function advance(date: string, frequency: CalendarBill["frequency"]): string {
 /** RFC 5545 TEXT escaping — backslash first, then structural characters. */
 function escapeText(value: string): string {
   return value
-    .replace(/\\/g, "\\\\")
-    .replace(/;/g, "\\;")
-    .replace(/,/g, "\\,");
+    .replaceAll("\\", String.raw`\\`)
+    .replaceAll(";", String.raw`\;`)
+    .replaceAll(",", String.raw`\,`);
 }
 
 function slug(value: string): string {
@@ -61,12 +61,13 @@ function slug(value: string): string {
     value
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "") || "bill"
+      .replace(/^-+/, "")
+      .replace(/-+$/, "") || "bill"
   );
 }
 
 function compactDate(date: string): string {
-  return date.replace(/-/g, "");
+  return date.replaceAll("-", "");
 }
 
 export function buildBillsCalendar(input: {

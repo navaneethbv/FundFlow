@@ -3,7 +3,7 @@ import { formatCurrency } from "@/lib/format";
 import { goalSummary, type Goal } from "@/lib/goals";
 
 /** Read-only overview of the top savings goals; full CRUD lives on /goals. */
-export default function GoalsSummary({ goals }: { goals: Goal[] }) {
+export default function GoalsSummary({ goals }: Readonly<{ goals: Goal[] }>) {
   if (goals.length === 0) {
     return (
       <p className="py-4 text-sm text-muted">
@@ -20,6 +20,9 @@ export default function GoalsSummary({ goals }: { goals: Goal[] }) {
     <div className="space-y-4">
       {goalSummary(goals).slice(0, 3).map(({ goal, progressPct, remainingAmount, monthlyPace }) => {
         const complete = progressPct >= 100;
+        const paceSuffix = monthlyPace
+          ? `, ${formatCurrency(monthlyPace)} needed monthly`
+          : "";
         return (
           <div key={goal.id}>
             <div className="mb-1 flex items-baseline justify-between gap-3">
@@ -40,9 +43,7 @@ export default function GoalsSummary({ goals }: { goals: Goal[] }) {
             <p className="mt-1 text-xs text-muted">
               {complete
                 ? "Goal complete"
-                : `${formatCurrency(remainingAmount)} remaining${
-                    monthlyPace ? `, ${formatCurrency(monthlyPace)} needed monthly` : ""
-                  }`}
+                : `${formatCurrency(remainingAmount)} remaining${paceSuffix}`}
             </p>
           </div>
         );

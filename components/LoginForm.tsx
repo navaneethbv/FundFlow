@@ -62,7 +62,7 @@ export default function LoginForm() {
     return true;
   }
 
-  async function handlePasswordSubmit(e: React.FormEvent) {
+  async function handlePasswordSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
@@ -85,7 +85,7 @@ export default function LoginForm() {
     }
   }
 
-  async function handleMfaSubmit(e: React.FormEvent) {
+  async function handleMfaSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);

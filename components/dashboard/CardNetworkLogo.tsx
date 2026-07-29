@@ -1,4 +1,4 @@
-export default function CardNetworkLogo({ network }: { network: string }) {
+export default function CardNetworkLogo({ network }: Readonly<{ network: string }>) {
   if (network === "visa") {
     return <span className="text-lg font-black italic tracking-wider">VISA</span>;
   }

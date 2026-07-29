@@ -1,4 +1,4 @@
-export default function MiniBars({ values }: { values: number[] }) {
+export default function MiniBars({ values }: Readonly<{ values: number[] }>) {
   const max = Math.max(1, ...values);
 
   return (

@@ -18,9 +18,9 @@ interface TokenRow {
  */
 export default function CalendarFeedSection({
   initialTokens,
-}: {
+}: Readonly<{
   initialTokens: TokenRow[];
-}) {
+}>) {
   const [tokens, setTokens] = useState<TokenRow[]>(initialTokens);
   const [includeAmounts, setIncludeAmounts] = useState(false);
   const [mintedUrl, setMintedUrl] = useState<string | null>(null);
@@ -87,7 +87,7 @@ export default function CalendarFeedSection({
           checked={includeAmounts}
           onChange={(e) => setIncludeAmounts(e.target.checked)}
         />
-        Include amounts in event titles
+        <span>Include amounts in event titles</span>
       </label>
       <Button onClick={mint} size="md">
         Create feed URL

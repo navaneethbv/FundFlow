@@ -22,13 +22,13 @@ export default function WhatIfPanel({
   monthlySpend,
   monthlyEssentials,
   debts,
-}: {
+}: Readonly<{
   cashBalance: number | null;
   monthlyIncome: number;
   monthlySpend: number;
   monthlyEssentials: number[];
   debts: WhatIfDebt[];
-}) {
+}>) {
   const [incomeDelta, setIncomeDelta] = useState(0);
   const [spendDelta, setSpendDelta] = useState(0);
   const [extraDebt, setExtraDebt] = useState(0);
@@ -67,12 +67,13 @@ export default function WhatIfPanel({
       </p>
 
       <div className="mt-4 space-y-4">
-        <label className="block text-sm">
+        <label className="block text-sm" htmlFor="whatif-income">
           <span className="flex justify-between font-semibold">
             <span>Income change</span>
             <span className="metric-value text-xs">{signed(incomeDelta)}</span>
           </span>
           <input
+            id="whatif-income"
             type="range"
             min={-1000}
             max={2000}
@@ -83,12 +84,13 @@ export default function WhatIfPanel({
           />
         </label>
 
-        <label className="block text-sm">
+        <label className="block text-sm" htmlFor="whatif-spend">
           <span className="flex justify-between font-semibold">
             <span>Spending change</span>
             <span className="metric-value text-xs">{signed(spendDelta)}</span>
           </span>
           <input
+            id="whatif-spend"
             type="range"
             min={-2000}
             max={1000}
@@ -100,7 +102,7 @@ export default function WhatIfPanel({
         </label>
 
         {debts.length > 0 && (
-          <label className="block text-sm">
+          <label className="block text-sm" htmlFor="whatif-debt">
             <span className="flex justify-between font-semibold">
               <span>Extra toward debt</span>
               <span className="metric-value text-xs">
@@ -108,6 +110,7 @@ export default function WhatIfPanel({
               </span>
             </span>
             <input
+              id="whatif-debt"
               type="range"
               min={0}
               max={1000}
@@ -145,9 +148,10 @@ export default function WhatIfPanel({
         <div className="rounded-field border border-panel-border bg-panel-2 p-3">
           <dt className="text-xs text-muted">Debt-free</dt>
           <dd className="mt-1 text-sm">
-            {debts.length === 0 ? (
+            {debts.length === 0 && (
               <span className="metric-value text-lg font-bold">—</span>
-            ) : projection.plan ? (
+            )}
+            {debts.length > 0 && projection.plan && (
               <>
                 <span className="metric-value text-lg font-bold">
                   {projection.plan.months} mo
@@ -156,7 +160,8 @@ export default function WhatIfPanel({
                   {formatCurrency(projection.plan.totalInterest)} interest
                 </span>
               </>
-            ) : (
+            )}
+            {debts.length > 0 && !projection.plan && (
               <span className="text-xs text-warning">
                 Payments don&apos;t cover the interest — add more.
               </span>

@@ -21,16 +21,16 @@ interface OverrideRow {
  */
 export default function CategoryOverridesSection({
   initialOverrides,
-}: {
+}: Readonly<{
   initialOverrides: OverrideRow[];
-}) {
+}>) {
   const supabase = createClient();
   const [overrides, setOverrides] = useState<OverrideRow[]>(initialOverrides);
   const [source, setSource] = useState("");
   const [display, setDisplay] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  async function add(e: React.FormEvent) {
+  async function add(e: React.SyntheticEvent) {
     e.preventDefault();
     setError(null);
     const sourceValue = source.trim().toUpperCase();

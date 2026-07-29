@@ -1,7 +1,7 @@
 import { cn } from "@/lib/cn";
 
 /** Brand mark: blue rounded square with a white cash-flow wave. */
-export function LogoMark({ className }: { className?: string }) {
+export function LogoMark({ className }: Readonly<{ className?: string }>) {
   return (
     <span
       aria-hidden
@@ -27,10 +27,10 @@ export function LogoMark({ className }: { className?: string }) {
 export default function Logo({
   className,
   markClassName,
-}: {
+}: Readonly<{
   className?: string;
   markClassName?: string;
-}) {
+}>) {
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
       <LogoMark className={markClassName} />

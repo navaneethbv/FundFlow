@@ -3,7 +3,13 @@ import type { DashboardData } from "@/lib/dashboard";
 import { foldTail } from "@/lib/chart-utils";
 import { medianOf } from "@/lib/insights";
 import { dashboardUrl, OTHER_CATEGORY_KEY } from "@/lib/drilldown";
-import { formatCurrency, formatDay, formatMonth, titleCase } from "@/lib/format";
+import {
+  formatCurrency,
+  formatDay,
+  formatFrequency,
+  formatMonth,
+  titleCase,
+} from "@/lib/format";
 import AreaSparkline from "@/components/charts/AreaSparkline";
 import DonutChart from "@/components/charts/DonutChart";
 import MiniBars from "@/components/charts/MiniBars";
@@ -88,7 +94,7 @@ export default function MonitorView({
   linkParams,
   drillQuery,
   prefs,
-}: {
+}: Readonly<{
   data: DashboardData;
   netWorth: number;
   savingsRate: number;
@@ -97,18 +103,16 @@ export default function MonitorView({
   linkParams: DrillLinkParams;
   drillQuery: { category?: string; sub?: string; merchant?: string };
   prefs?: { hideRecent?: boolean; hideBreakdowns?: boolean };
-}) {
+}>) {
   const monthLabels = data.monthlySpending.map((month) => formatMonth(month.month));
   const spendSeries = data.monthlySpending.map((month) => month.amount);
   const incomeSeries = data.monthlyIncome.map((month) => month.amount);
   const cashFlowSeries = spendSeries.map(
     (spend, index) => (incomeSeries[index] ?? 0) - spend,
   );
-  const previousMonth = monthLabels[monthLabels.length - 2] ?? "last month";
+  const previousMonth = monthLabels.at(-2) ?? "last month";
   const currentNet = data.currentMonthIncome - data.currentMonthExpenses;
-  const previousNet =
-    (incomeSeries[incomeSeries.length - 2] ?? 0) -
-    (spendSeries[spendSeries.length - 2] ?? 0);
+  const previousNet = (incomeSeries.at(-2) ?? 0) - (spendSeries.at(-2) ?? 0);
   const maxMerchant = Math.max(1, ...data.merchantBreakdown.map((item) => item.amount));
   const merchantItems = data.merchantBreakdown.map((item) => ({
     label: item.merchant,
@@ -190,11 +194,14 @@ export default function MonitorView({
             {safeToSpend ? formatCurrency(safeToSpend.amount) : "—"}
           </p>
           <p className="mt-2 text-xs font-medium text-muted">
-            {safeToSpend
-              ? safeToSpend.anchor === "paycheck"
-                ? `After ${formatCurrency(safeToSpend.upcomingBillsTotal)} in bills before your ${formatDay(safeToSpend.horizonEnd)} paycheck`
-                : `After ${formatCurrency(safeToSpend.upcomingBillsTotal)} in bills over the next two weeks`
-              : "Connect a checking account to see what's spendable."}
+            {!safeToSpend &&
+              "Connect a checking account to see what's spendable."}
+            {safeToSpend &&
+              safeToSpend.anchor === "paycheck" &&
+              `After ${formatCurrency(safeToSpend.upcomingBillsTotal)} in bills before your ${formatDay(safeToSpend.horizonEnd)} paycheck`}
+            {safeToSpend &&
+              safeToSpend.anchor !== "paycheck" &&
+              `After ${formatCurrency(safeToSpend.upcomingBillsTotal)} in bills over the next two weeks`}
           </p>
         </section>
         <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
@@ -346,11 +353,11 @@ export default function MonitorView({
                   const body = (
                     <>
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-semibold">
+                        <span className="block truncate text-sm font-semibold leading-tight">
                           {stream.merchant}
                         </span>
-                        <span className="block text-xs text-muted">
-                          {stream.frequency ?? "Recurring"}
+                        <span className="mt-0.5 block text-xs text-muted">
+                          {formatFrequency(stream.frequency)}
                         </span>
                       </span>
                       <span className="metric-value text-sm">

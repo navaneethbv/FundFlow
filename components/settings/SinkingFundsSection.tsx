@@ -22,9 +22,9 @@ interface FundRow {
  */
 export default function SinkingFundsSection({
   initialFunds,
-}: {
+}: Readonly<{
   initialFunds: FundRow[];
-}) {
+}>) {
   const supabase = createClient();
   const [funds, setFunds] = useState(initialFunds);
   const [name, setName] = useState("");
@@ -32,7 +32,7 @@ export default function SinkingFundsSection({
   const [dueDate, setDueDate] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  async function add(e: React.FormEvent) {
+  async function add(e: React.SyntheticEvent) {
     e.preventDefault();
     setError(null);
     const parsed = Number(amount);

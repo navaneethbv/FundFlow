@@ -27,9 +27,9 @@ const OPTIONS: Array<{ key: keyof DashboardPrefs; label: string; view: string }>
  */
 export default function DashboardPrefsSection({
   initialPrefs,
-}: {
+}: Readonly<{
   initialPrefs: DashboardPrefs;
-}) {
+}>) {
   const supabase = createClient();
   const [prefs, setPrefs] = useState<DashboardPrefs>(initialPrefs);
   const [status, setStatus] = useState<string | null>(null);
@@ -54,6 +54,7 @@ export default function DashboardPrefsSection({
         {OPTIONS.map((option) => (
           <label
             key={option.key}
+            htmlFor={`dashpref-${option.key}`}
             className="flex items-center justify-between gap-4 rounded-field bg-panel-2 p-3 text-sm"
           >
             <span>
@@ -61,6 +62,7 @@ export default function DashboardPrefsSection({
               <span className="ml-2 text-xs text-muted">{option.view}</span>
             </span>
             <input
+              id={`dashpref-${option.key}`}
               type="checkbox"
               className="h-4 w-4 accent-accent"
               checked={!prefs[option.key]}

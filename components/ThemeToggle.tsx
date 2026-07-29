@@ -26,9 +26,9 @@ function applyTheme(theme: Theme) {
 
 export default function ThemeToggle({
   variant = "default",
-}: {
+}: Readonly<{
   variant?: ThemeToggleVariant;
-}) {
+}>) {
   const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {

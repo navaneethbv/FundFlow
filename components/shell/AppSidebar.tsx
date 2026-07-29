@@ -50,11 +50,11 @@ function NavLink({
   item,
   active,
   compact = false,
-}: {
+}: Readonly<{
   item: NavItem;
   active: AppShellActive;
   compact?: boolean;
-}) {
+}>) {
   const Icon = item.icon;
   const isActive = item.key === active;
 
@@ -76,7 +76,7 @@ function NavLink({
   );
 }
 
-export default function AppSidebar({ active }: { active: AppShellActive }) {
+export default function AppSidebar({ active }: Readonly<{ active: AppShellActive }>) {
   const mobileItems = [...primaryItems, ...manageItems];
 
   return (

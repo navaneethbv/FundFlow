@@ -69,13 +69,13 @@ export default function PlanView({
   billsGrouping = "weekly",
   billsLinkParams = {},
   prefs,
-}: {
+}: Readonly<{
   data: DashboardData;
   goals: Goal[];
   billsGrouping?: BillGrouping;
   billsLinkParams?: { month?: string; accountId?: string; itemId?: string };
   prefs?: { hideBillCalendar?: boolean; hideWhatIf?: boolean; hideDebt?: boolean };
-}) {
+}>) {
   const setupItems = getPlanSetupItems(data, goals);
   const billPeriods = data.billPeriods[billsGrouping];
   const priceDrift = data.insights.priceDrift;

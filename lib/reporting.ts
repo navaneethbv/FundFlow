@@ -35,8 +35,8 @@ async function createMailTransport() {
     hostConfigured: false,
     transporter: nodemailer.createTransport({
       host: "smtp.ethereal.email",
-      port: 587,
-      secure: false,
+      port: 465,
+      secure: true,
       auth: { user: testAccount.user, pass: testAccount.pass },
     }),
   };

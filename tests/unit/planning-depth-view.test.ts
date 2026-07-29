@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildPlanningDepthView } from "@/lib/planning-depth";
+import { buildPayoffPlan } from "@/lib/debt";
 
 const goals = [
   { id: "g1", name: "Emergency", targetAmount: 6000, currentAmount: 1000, monthsRemaining: 10 },
@@ -68,4 +69,19 @@ describe("buildPlanningDepthView", () => {
     });
     expect(view.sinkingFunds).toEqual([]);
   });
+
+  it("supports snowball strategy ordering lowest balance first", () => {
+    const plan = buildPayoffPlan({
+      debts: [
+        { name: "Big Loan", balance: 10000, apr: 18, minPayment: 200 },
+        { name: "Small Card", balance: 500, apr: 12, minPayment: 25 },
+      ],
+      extraMonthly: 100,
+      strategy: "snowball",
+    });
+    expect(plan).not.toBeNull();
+    expect(plan!.order[0]).toBe("Small Card");
+  });
 });
+
+

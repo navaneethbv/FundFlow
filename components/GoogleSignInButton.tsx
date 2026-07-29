@@ -33,7 +33,7 @@ export default function GoogleSignInButton() {
     <div className="space-y-2">
       <div className="flex items-center gap-3 text-xs uppercase tracking-wider opacity-50">
         <span className="h-px flex-1 bg-current" />
-        or
+        <span>or</span>
         <span className="h-px flex-1 bg-current" />
       </div>
       <button

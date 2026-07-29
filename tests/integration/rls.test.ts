@@ -73,7 +73,7 @@ suite("RLS cross-user isolation", () => {
   it("user A can read their own plaid_items", async () => {
     const clientA = await signIn(userA.email, userA.password);
     const { data } = await clientA.from("plaid_items").select("id");
-    expect((data ?? []).length).toBe(1);
+    expect(data ?? []).toHaveLength(1);
   });
 
   it("user B cannot read user A's plaid_items", async () => {

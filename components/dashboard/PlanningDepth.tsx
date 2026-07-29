@@ -15,7 +15,7 @@ function monthsUntil(date: string | null): number {
   return Math.max(1, months);
 }
 
-export default function PlanningDepth({ data, goals }: { data: DashboardData; goals: Goal[] }) {
+export default function PlanningDepth({ data, goals }: Readonly<{ data: DashboardData; goals: Goal[] }>) {
   const view = buildPlanningDepthView({
     accounts: data.accounts.map((account) => ({
       name: account.name,

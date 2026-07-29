@@ -27,12 +27,12 @@ export default function BudgetsSection({
   initialBudgets,
   suggestions = [],
   householdId = null,
-}: {
+}: Readonly<{
   initialBudgets: Budget[];
   suggestions?: BudgetSuggestionItem[];
   /** When set, budgets can be shared with this household (4.2-lite). */
   householdId?: string | null;
-}) {
+}>) {
   const supabase = createClient();
   const [budgets, setBudgets] = useState<Budget[]>(initialBudgets);
   const [category, setCategory] = useState("");
@@ -59,7 +59,7 @@ export default function BudgetsSection({
     return true;
   }
 
-  async function add(e: React.FormEvent) {
+  async function add(e: React.SyntheticEvent) {
     e.preventDefault();
     setError(null);
     const parsed = Number(limit);
@@ -100,6 +100,21 @@ export default function BudgetsSection({
     );
   }
 
+  async function toggleBudgetShare(id: string, checked: boolean) {
+    const nextValue = checked ? householdId : null;
+    const { error: shareError } = await supabase
+      .from("budgets")
+      .update({ household_id: nextValue })
+      .eq("id", id);
+    if (shareError) {
+      setError(shareError.message);
+      return;
+    }
+    setBudgets((rows) =>
+      rows.map((row) => (row.id === id ? { ...row, household_id: nextValue } : row)),
+    );
+  }
+
   return (
     <Panel title="Budget limits" eyebrow="Monthly targets">
 
@@ -121,31 +136,16 @@ export default function BudgetsSection({
                     checked={Boolean(b.rollover_enabled)}
                     onChange={(e) => toggleRollover(b.id, e.target.checked)}
                   />
-                  Roll unused budget into next month
+                  <span>Roll unused budget into next month</span>
                 </label>
                 {householdId && (
                   <label className="mt-1 flex items-center gap-1.5 text-xs text-muted">
                     <input
                       type="checkbox"
                       checked={Boolean(b.household_id)}
-                      onChange={async (e) => {
-                        const nextValue = e.target.checked ? householdId : null;
-                        const { error: shareError } = await supabase
-                          .from("budgets")
-                          .update({ household_id: nextValue })
-                          .eq("id", b.id);
-                        if (shareError) {
-                          setError(shareError.message);
-                          return;
-                        }
-                        setBudgets((rows) =>
-                          rows.map((row) =>
-                            row.id === b.id ? { ...row, household_id: nextValue } : row,
-                          ),
-                        );
-                      }}
+                      onChange={(e) => toggleBudgetShare(b.id, e.target.checked)}
                     />
-                    Visible to my household
+                    <span>Visible to my household</span>
                   </label>
                 )}
               </span>

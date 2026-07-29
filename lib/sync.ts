@@ -35,7 +35,10 @@ function mapTransactionRow(
     iso_currency_code: txn.iso_currency_code ?? null,
     date: txn.date,
     authorized_date: txn.authorized_date ?? null,
-    name: txn.name ?? null,
+    // Plaid marks `name` (raw institution description) as a legacy field, but it
+    // is still returned and is our best fallback when merchant_name is absent.
+    // Read it through a non-deprecated shape to keep the value without the warning.
+    name: (txn as { name?: string | null }).name ?? null,
     merchant_name: txn.merchant_name ?? null,
     pfc_primary: txn.personal_finance_category?.primary ?? null,
     pfc_detailed: txn.personal_finance_category?.detailed ?? null,

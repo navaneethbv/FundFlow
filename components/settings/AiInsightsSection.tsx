@@ -15,7 +15,7 @@ interface Insight {
  * contract the AI export uses. No raw data leaves the server: the route filters
  * to the safe key set and only stores the generated summaries.
  */
-export default function AiInsightsSection({ enabled }: { enabled: boolean }) {
+export default function AiInsightsSection({ enabled }: Readonly<{ enabled: boolean }>) {
   const [insights, setInsights] = useState<Insight[]>([]);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);

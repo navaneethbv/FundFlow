@@ -60,7 +60,7 @@ export function buildDemoDataset(input: {
   const months = input.months ?? 6;
   // Seed from the user id so re-loading produces the same dataset.
   let seed = 0;
-  for (const char of input.userId) seed = (seed * 31 + char.charCodeAt(0)) >>> 0;
+  for (const char of input.userId) seed = (seed * 31 + char.codePointAt(0)!) >>> 0;
   const random = mulberry32(seed || 42);
 
   const transactions: DemoDataset["transactions"] = [];

@@ -16,7 +16,7 @@ export interface NotificationRow {
   created_at: string;
 }
 
-export default function NotificationFeed({ initialNotifications }: { initialNotifications: NotificationRow[] }) {
+export default function NotificationFeed({ initialNotifications }: Readonly<{ initialNotifications: NotificationRow[] }>) {
   const supabase = createClient();
   const [notifications, setNotifications] = useState(initialNotifications);
   const [error, setError] = useState<string | null>(null);

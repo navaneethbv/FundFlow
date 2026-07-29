@@ -88,7 +88,7 @@ const CATEGORY_HEADERS = ["category", "type"];
 
 function findHeader(headers: string[], candidates: string[]): number | null {
   for (const candidate of candidates) {
-    const idx = headers.findIndex((h) => h === candidate);
+    const idx = headers.indexOf(candidate);
     if (idx !== -1) return idx;
   }
   // Fall back to prefix matches ("transaction date & time").
@@ -183,7 +183,7 @@ export function parseAmount(raw: string): number | null {
     negative = true;
     s = s.slice(1, -1);
   }
-  if (!/^[+-]?\d*\.?\d+$/.test(s)) return null;
+  if (!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(s)) return null;
   const value = Number(s);
   if (!Number.isFinite(value)) return null;
   return negative ? -value : value;

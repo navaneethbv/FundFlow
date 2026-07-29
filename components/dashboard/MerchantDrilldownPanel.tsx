@@ -9,11 +9,11 @@ export default function MerchantDrilldownPanel({
   drill,
   linkParams,
   month,
-}: {
+}: Readonly<{
   drill: MerchantDrilldownData;
   linkParams: DrillLinkParams;
   month: string;
-}) {
+}>) {
   const ledger = new URLSearchParams();
   ledger.set("month", month);
   if (linkParams.accountId) ledger.set("accountId", linkParams.accountId);

@@ -2,10 +2,9 @@ import AppShell from "@/components/shell/AppShell";
 import BarList from "@/components/dashboard/BarList";
 import ButtonLink from "@/components/ui/ButtonLink";
 import Panel from "@/components/ui/Panel";
-import { goalSummary } from "@/lib/goals";
+import { goalSummary, getGoals } from "@/lib/goals";
 import { getDashboardData } from "@/lib/dashboard";
 import { formatCurrency, formatMonth, titleCase } from "@/lib/format";
-import { getGoals } from "@/lib/goals";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +13,7 @@ interface PageProps {
   searchParams: Promise<{ month?: string }>;
 }
 
-export default async function MonthlyReviewPage({ searchParams }: PageProps) {
+export default async function MonthlyReviewPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
   const supabase = await createClient();
   const {

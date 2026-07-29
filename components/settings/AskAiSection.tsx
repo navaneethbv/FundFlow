@@ -10,13 +10,13 @@ import Panel from "@/components/ui/Panel";
  * over the same privacy-safe aggregates the AI insights use. No chat, no
  * history, 10 questions/day.
  */
-export default function AskAiSection({ enabled }: { enabled: boolean }) {
+export default function AskAiSection({ enabled }: Readonly<{ enabled: boolean }>) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function ask(e: React.FormEvent) {
+  async function ask(e: React.SyntheticEvent) {
     e.preventDefault();
     setError(null);
     setAnswer(null);

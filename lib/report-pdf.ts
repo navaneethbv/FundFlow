@@ -31,7 +31,7 @@ function periodLabel(data: WeeklyReportData): string {
 }
 
 function safeAccountLabel(value: string): string {
-  return value.replace(/(?:\s|[-*xX])*(?:\d[\s-]*){4}\s*$/, "").trim() || "Credit card";
+  return value.replace(/[\s*x•-]*\d{4}\s*$/i, "").trim() || "Credit card";
 }
 
 function trendLabel(data: WeeklyReportData): string {

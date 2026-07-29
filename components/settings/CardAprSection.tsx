@@ -18,9 +18,9 @@ interface CreditAccount {
  */
 export default function CardAprSection({
   initialAccounts,
-}: {
+}: Readonly<{
   initialAccounts: CreditAccount[];
-}) {
+}>) {
   const [accounts, setAccounts] = useState(initialAccounts);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<string | null>(null);

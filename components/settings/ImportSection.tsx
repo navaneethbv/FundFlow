@@ -20,7 +20,7 @@ interface ImportResult {
 }
 
 /** Upload a bank-statement CSV to backfill pre-Plaid history into an account. */
-export default function ImportSection({ accounts }: { accounts: AccountOption[] }) {
+export default function ImportSection({ accounts }: Readonly<{ accounts: AccountOption[] }>) {
   const router = useRouter();
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const [positiveIsIncome, setPositiveIsIncome] = useState(true);
@@ -28,7 +28,7 @@ export default function ImportSection({ accounts }: { accounts: AccountOption[] 
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setResult(null);
@@ -103,7 +103,7 @@ export default function ImportSection({ accounts }: { accounts: AccountOption[] 
                 checked={positiveIsIncome}
                 onChange={(e) => setPositiveIsIncome(e.target.checked)}
               />
-              Positive amounts are deposits (most bank CSVs)
+              <span>Positive amounts are deposits (most bank CSVs)</span>
             </label>
           </div>
           <Button

@@ -6,11 +6,11 @@ export default function AuthShell({
   title,
   subtitle,
   children,
-}: {
+}: Readonly<{
   title: string;
   subtitle?: string;
   children: ReactNode;
-}) {
+}>) {
   return (
     <main className="relative flex min-h-screen items-center justify-center px-4 py-10 text-foreground">
       <div className="absolute right-4 top-4 sm:right-6 sm:top-6">

@@ -12,7 +12,7 @@ import Button from "@/components/ui/Button";
  * mount. Link fixes the credentials in place; /api/plaid/reconnect then clears
  * our error state and resyncs.
  */
-export default function ReconnectBankButton({ itemId }: { itemId: string }) {
+export default function ReconnectBankButton({ itemId }: Readonly<{ itemId: string }>) {
   const router = useRouter();
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

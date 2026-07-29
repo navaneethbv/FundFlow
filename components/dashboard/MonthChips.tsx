@@ -14,14 +14,14 @@ export default function MonthChips({
   activeView,
   activeTab,
   extraParams,
-}: {
+}: Readonly<{
   months: string[];
   selectedMonth: string;
   selectedAccountId?: string;
   activeView?: DashboardView;
   activeTab?: string;
   extraParams?: Record<string, string | undefined>;
-}) {
+}>) {
   const view = activeView ?? resolveDashboardView({ tab: activeTab });
 
   return (

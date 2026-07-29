@@ -37,7 +37,7 @@ function decodeEntities(value: string): string {
  * terminated) and XML (closing-tag terminated) variants.
  */
 function field(block: string, tag: string): string | null {
-  const match = block.match(new RegExp(`<${tag}>([^<\\r\\n]*)`, "i"));
+  const match = new RegExp(String.raw`<${tag}>([^<\r\n]*)`, "i").exec(block);
   const value = match?.[1]?.trim();
   return value ? decodeEntities(value) : null;
 }
@@ -68,12 +68,12 @@ export function parseOfx(content: string): OfxTransaction[] {
 
     const name = field(block, "NAME");
     const memo = field(block, "MEMO");
-    const description =
-      name && memo
-        ? name === memo
-          ? name
-          : `${name} — ${memo}`
-        : (name ?? memo ?? "");
+    let description: string;
+    if (name && memo) {
+      description = name === memo ? name : `${name} — ${memo}`;
+    } else {
+      description = name ?? memo ?? "";
+    }
 
     rows.push({
       date,

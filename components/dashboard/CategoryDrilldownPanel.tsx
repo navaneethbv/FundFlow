@@ -31,12 +31,12 @@ export default function CategoryDrilldownPanel({
   drill,
   linkParams,
   month,
-}: {
+}: Readonly<{
   drill: CategoryDrilldownData;
   linkParams: DrillLinkParams;
   /** The resolved active month (data.selectedMonth), for ledger links. */
   month: string;
-}) {
+}>) {
   const categoryLabel = titleCase(drill.category);
   const atSubLevel = drill.sub !== null;
   const donutItems = foldTail(

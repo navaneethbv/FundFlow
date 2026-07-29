@@ -17,12 +17,12 @@ export default function BillCalendar({
   grouping,
   weeklyHref,
   monthlyHref,
-}: {
+}: Readonly<{
   periods: BillPeriod[];
   grouping: BillGrouping;
   weeklyHref: string;
   monthlyHref: string;
-}) {
+}>) {
   const toggle = (
     <div className="flex gap-1 text-xs font-semibold">
       {(

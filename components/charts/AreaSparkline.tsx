@@ -1,6 +1,6 @@
 import { areaPath, linePath } from "@/lib/chart-utils";
 
-export default function AreaSparkline({ values }: { values: number[] }) {
+export default function AreaSparkline({ values }: Readonly<{ values: number[] }>) {
   const W = 120;
   const H = 42;
   const PAD = 4;

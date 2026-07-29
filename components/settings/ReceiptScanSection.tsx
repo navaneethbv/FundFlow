@@ -20,12 +20,12 @@ interface ScanResult {
  * match is found — you choose whether to attach the line items as a note
  * via the existing annotate endpoint. The image itself is never stored.
  */
-export default function ReceiptScanSection({ enabled }: { enabled: boolean }) {
+export default function ReceiptScanSection({ enabled }: Readonly<{ enabled: boolean }>) {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
-  async function scan(e: React.FormEvent<HTMLFormElement>) {
+  async function scan(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     setStatus(null);
     setResult(null);

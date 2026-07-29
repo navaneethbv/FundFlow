@@ -38,14 +38,14 @@ function GoalRow({
   onUpdate,
   onRemove,
   footer = null,
-}: {
+}: Readonly<{
   goal: Goal;
   monthlyNet: number;
   onContribute: (id: string, amount: number) => Promise<void>;
   onUpdate: (id: string, draft: GoalDraft) => Promise<boolean>;
   onRemove: (id: string) => Promise<void>;
   footer?: React.ReactNode;
-}) {
+}>) {
   const [amount, setAmount] = useState("");
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
   const [draft, setDraft] = useState<GoalDraft>({
@@ -63,7 +63,7 @@ function GoalRow({
   const monthlyPace = goalMonthlyPace(goal);
   const isEditing = editingGoalId === goal.id;
 
-  async function contribute(e: React.FormEvent) {
+  async function contribute(e: React.SyntheticEvent) {
     e.preventDefault();
     setError(null);
     const parsed = Number(amount);
@@ -77,7 +77,7 @@ function GoalRow({
     setAmount("");
   }
 
-  async function saveEdit(e: React.FormEvent) {
+  async function saveEdit(e: React.SyntheticEvent) {
     e.preventDefault();
     setError(null);
     setBusy(true);
@@ -89,6 +89,10 @@ function GoalRow({
       setError("Could not save changes. Your previous goal values were restored.");
     }
   }
+
+  const paceSuffix = monthlyPace
+    ? `, ${formatCurrency(monthlyPace)} needed monthly`
+    : "";
 
   return (
     <li className="rounded-card border border-panel-border bg-panel p-4">
@@ -125,9 +129,7 @@ function GoalRow({
         This month: {monthlyNet >= 0 ? "+" : "-"}
         {formatCurrency(Math.abs(monthlyNet))} saved.{" "}
         {remainingAmount > 0
-          ? `${formatCurrency(remainingAmount)} remaining${
-              monthlyPace ? `, ${formatCurrency(monthlyPace)} needed monthly` : ""
-            }.`
+          ? `${formatCurrency(remainingAmount)} remaining${paceSuffix}.`
           : "This goal is fully funded."}
       </p>
 
@@ -210,12 +212,12 @@ export default function GoalsManager({
   initialGoals,
   monthlyNet,
   householdId = null,
-}: {
+}: Readonly<{
   initialGoals: Goal[];
   monthlyNet: number;
   /** When set, goals can be shared with this household (4.2-lite). */
   householdId?: string | null;
-}) {
+}>) {
   const supabase = createClient();
   const [goals, setGoals] = useState<Goal[]>(initialGoals);
 
@@ -240,7 +242,7 @@ export default function GoalsManager({
     setError(message);
   }
 
-  async function add(e: React.FormEvent) {
+  async function add(e: React.SyntheticEvent) {
     e.preventDefault();
     setError(null);
     const parsedTarget = Number(target);
@@ -281,7 +283,6 @@ export default function GoalsManager({
       .eq("id", id);
     if (updateError) {
       restoreGoals(snapshot, updateError.message);
-      return;
     }
   }
 
@@ -343,7 +344,7 @@ export default function GoalsManager({
                       checked={Boolean(goal.household_id)}
                       onChange={(e) => toggleShare(goal.id, e.target.checked)}
                     />
-                    Visible to my household
+                    <span>Visible to my household</span>
                   </label>
                 ) : null
               }

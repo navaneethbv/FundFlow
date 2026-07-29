@@ -9,7 +9,7 @@ import Button from "@/components/ui/Button";
  * visible on the page — filter first, then tag the result set. "tax" and
  * "receipt" get one-click chips since they drive other features.
  */
-export default function BulkTagBar({ transactionIds }: { transactionIds: string[] }) {
+export default function BulkTagBar({ transactionIds }: Readonly<{ transactionIds: string[] }>) {
   const router = useRouter();
   const [tag, setTag] = useState("");
   const [busy, setBusy] = useState(false);

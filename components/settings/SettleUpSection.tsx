@@ -34,12 +34,12 @@ export default function SettleUpSection({
   currentUserId,
   members,
   initialExpenses,
-}: {
+}: Readonly<{
   householdId: string;
   currentUserId: string;
   members: HouseholdMemberInfo[];
   initialExpenses: ExpenseRow[];
-}) {
+}>) {
   const supabase = createClient();
   const [expenses, setExpenses] = useState(initialExpenses);
   const [description, setDescription] = useState("");
@@ -60,7 +60,7 @@ export default function SettleUpSection({
     })),
   );
 
-  async function add(e: React.FormEvent) {
+  async function add(e: React.SyntheticEvent) {
     e.preventDefault();
     setError(null);
     const parsed = Number(amount);

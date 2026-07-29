@@ -4,9 +4,9 @@ import { cn } from "@/lib/cn";
 /** Link-based underline tabs; server-safe, active state passed by the page. */
 export default function Tabs({
   items,
-}: {
+}: Readonly<{
   items: { label: string; href: string; active: boolean }[];
-}) {
+}>) {
   return (
     <nav className="flex gap-1 overflow-x-auto border-b border-panel-border scrollbar-none">
       {items.map((item) => (

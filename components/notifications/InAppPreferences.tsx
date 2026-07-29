@@ -23,11 +23,11 @@ const OPTIONS: Array<{ key: AlertKey; title: string; description: string }> = [
 export default function InAppPreferences({
   initialPreferences,
   initialThreshold = null,
-}: {
+}: Readonly<{
   initialPreferences: Partial<Preferences> | null;
   /** large_transaction alert threshold in dollars; null = default ($500). */
   initialThreshold?: number | null;
-}) {
+}>) {
   const supabase = createClient();
   const [preferences, setPreferences] = useState<Preferences>({
     budget_exceeded: initialPreferences?.budget_exceeded ?? true,
@@ -72,12 +72,17 @@ export default function InAppPreferences({
       <p className="mb-5 text-sm text-muted">Choose which planning signals appear in your notification feed. Critical bank alerts always appear.</p>
       <div className="space-y-3">
         {OPTIONS.map((option) => (
-          <label key={option.key} className="flex items-start justify-between gap-4 rounded-field bg-panel-2 p-4">
+          <label
+            key={option.key}
+            htmlFor={`inapp-${option.key}`}
+            className="flex items-start justify-between gap-4 rounded-field bg-panel-2 p-4"
+          >
             <span>
               <span className="block text-sm font-semibold">{option.title}</span>
               <span className="mt-1 block text-xs leading-5 text-muted">{option.description}</span>
             </span>
             <input
+              id={`inapp-${option.key}`}
               type="checkbox"
               className="mt-1 h-4 w-4 accent-accent"
               checked={preferences[option.key]}
@@ -86,7 +91,10 @@ export default function InAppPreferences({
           </label>
         ))}
       </div>
-      <label className="mt-4 flex items-center justify-between gap-4 rounded-field bg-panel-2 p-4">
+      <label
+        htmlFor="inapp-threshold"
+        className="mt-4 flex items-center justify-between gap-4 rounded-field bg-panel-2 p-4"
+      >
         <span>
           <span className="block text-sm font-semibold">Large-transaction threshold</span>
           <span className="mt-1 block text-xs leading-5 text-muted">
@@ -94,6 +102,7 @@ export default function InAppPreferences({
           </span>
         </span>
         <input
+          id="inapp-threshold"
           type="number"
           min="1"
           step="1"
@@ -104,7 +113,7 @@ export default function InAppPreferences({
         />
       </label>
       <Button className="mt-5" type="button" onClick={save}>Save alert preferences</Button>
-      {status && <p className="mt-3 text-sm text-muted" role="status">{status}</p>}
+      {status && <output className="mt-3 block text-sm text-muted">{status}</output>}
     </Panel>
   );
 }

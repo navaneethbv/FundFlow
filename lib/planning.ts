@@ -232,8 +232,9 @@ export function buildBudgetEnvelopes(input: BudgetEnvelopeInput): BudgetEnvelope
     const effectiveLimit = Math.max(0, round2(budget.monthlyLimit + carry));
 
     const remaining = round2(effectiveLimit - spent);
-    const status: EnvelopeStatus =
-      spent > effectiveLimit ? "over" : projectedSpend > effectiveLimit ? "at-risk" : "on-track";
+    let status: EnvelopeStatus = "on-track";
+    if (spent > effectiveLimit) status = "over";
+    else if (projectedSpend > effectiveLimit) status = "at-risk";
 
     return {
       category: budget.category,
@@ -311,7 +312,7 @@ export function groupRecurringByWeek(items: RecurringItem[], asOf: string, horiz
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([weekStart, rows]) => ({
       weekStart,
-      items: rows.sort((a, b) => a.nextDate.localeCompare(b.nextDate) || a.name.localeCompare(b.name)),
+      items: rows.toSorted((a, b) => a.nextDate.localeCompare(b.nextDate) || a.name.localeCompare(b.name)),
     }));
 }
 
@@ -365,7 +366,7 @@ export function groupRecurringByPeriod(
   return [...groups.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([periodStart, rows]) => {
-      const sorted = rows.sort(
+      const sorted = rows.toSorted(
         (a, b) => a.nextDate.localeCompare(b.nextDate) || a.name.localeCompare(b.name),
       );
       let expenseTotal = 0;
@@ -553,7 +554,7 @@ export function buildImportReview(
     if (existingFingerprints.has(fingerprint)) flags.push("possible-duplicate");
     if (seen.has(fingerprint)) flags.push("file-duplicate");
     seen.add(fingerprint);
-    const hash = createHash("sha1").update(fingerprint).digest("hex");
+    const hash = createHash("sha256").update(fingerprint).digest("hex");
     return {
       rowHash: hash,
       row,

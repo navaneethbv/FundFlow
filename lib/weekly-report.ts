@@ -71,13 +71,12 @@ export function formatCardLabel(
   const name = accountName?.trim();
   const institution = institutionName?.trim();
   const shouting = !!name && !/[a-z]/.test(name) && /[A-Z]/.test(name);
-  const label = name
-    ? shouting
-      ? name
-          .toLowerCase()
-          .replace(/\b[a-z]/g, (letter) => letter.toUpperCase())
-      : name
-    : "Credit card";
+  let label = "Credit card";
+  if (name) {
+    label = shouting
+      ? name.toLowerCase().replace(/\b[a-z]/g, (letter) => letter.toUpperCase())
+      : name;
+  }
   return institution ? `${institution} · ${label}` : label;
 }
 
@@ -215,18 +214,18 @@ export function buildWeeklyReportModel(
     .map((budget) => {
       const spent = round2(categoryAmount.get(budget.category) ?? 0);
       const weeklyAllowance = round2((budget.monthlyLimit * 12) / 52);
-      const percentage =
-        weeklyAllowance > 0 ? round2(spent / weeklyAllowance) : spent > 0 ? 1 : 0;
+      let percentage = 0;
+      if (weeklyAllowance > 0) percentage = round2(spent / weeklyAllowance);
+      else if (spent > 0) percentage = 1;
+      let status: "on-track" | "at-risk" | "over" = "on-track";
+      if (percentage > 1) status = "over";
+      else if (percentage >= 0.85) status = "at-risk";
       return {
         category: budget.category,
         spent,
         weeklyAllowance,
         percentage,
-        status: (percentage > 1
-          ? "over"
-          : percentage >= 0.85
-            ? "at-risk"
-            : "on-track") as "on-track" | "at-risk" | "over",
+        status,
       };
     })
     .sort((a, b) => b.percentage - a.percentage || a.category.localeCompare(b.category));

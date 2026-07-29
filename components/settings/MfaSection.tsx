@@ -13,6 +13,18 @@ interface Factor {
   status: string;
 }
 
+async function finalizeMfaAction(action: "enroll" | "unenroll", factorId: string) {
+  const response = await fetch("/api/settings/mfa", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, factorId }),
+  });
+  if (!response.ok) {
+    const json = await response.json().catch(() => ({}));
+    throw new Error(json.error ?? "Failed to update MFA settings");
+  }
+}
+
 export default function MfaSection() {
   const supabase = createClient();
   const [factors, setFactors] = useState<Factor[]>([]);
@@ -24,18 +36,6 @@ export default function MfaSection() {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  async function finalizeMfaAction(action: "enroll" | "unenroll", factorId: string) {
-    const response = await fetch("/api/settings/mfa", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, factorId }),
-    });
-    if (!response.ok) {
-      const json = await response.json().catch(() => ({}));
-      throw new Error(json.error ?? "Failed to update MFA settings");
-    }
-  }
 
   const loadFactors = useCallback(async () => {
     const { data } = await supabase.auth.mfa.listFactors();

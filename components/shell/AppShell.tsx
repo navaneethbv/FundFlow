@@ -7,11 +7,11 @@ export default function AppShell({
   active,
   email,
   children,
-}: {
+}: Readonly<{
   active: AppShellActive;
   email?: string | null;
   children: ReactNode;
-}) {
+}>) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <CommandPalette />

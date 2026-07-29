@@ -13,14 +13,14 @@ export default function ScopeChips({
   selectedItemId,
   dashboardScope,
   spendPerPerson,
-}: {
+}: Readonly<{
   activeView: string;
   selectedMonth?: string;
   selectedAccountId?: string;
   selectedItemId?: string;
   dashboardScope: "mine" | "household";
   spendPerPerson: { mine: number; household: number } | null;
-}) {
+}>) {
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
       {(

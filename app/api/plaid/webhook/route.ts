@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
+import crypto from "node:crypto";
 import { safeEqual } from "@/lib/crypto";
 import { getPlaidClient } from "@/lib/plaid";
 import { syncItemTransactions } from "@/lib/sync";
