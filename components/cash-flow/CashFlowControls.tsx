@@ -46,7 +46,7 @@ function ControlLink({
   return (
     <Link
       href={href}
-      aria-current={active ? "true" : undefined}
+      aria-current={active ? "page" : undefined}
       className={cn(
         "inline-flex min-h-11 items-center rounded-field px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-2",
         active

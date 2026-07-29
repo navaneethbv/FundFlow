@@ -15,14 +15,17 @@ function isoDaysAgo(days: number): string {
 export async function GET() {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
-  const { supabase } = auth;
+  const { supabase, user } = auth;
 
   try {
     const since = isoDaysAgo(LOOKBACK_DAYS);
     const [{ data: txns }, { data: decisions }] = await Promise.all([
+      // Own ledger only: pairing a charge against a household member's shared
+      // refund would link two people's rows into one review decision.
       supabase
         .from("transactions")
         .select("id, date, merchant_name, name, amount")
+        .eq("user_id", user.id)
         .gte("date", since)
         .limit(5000),
       supabase

@@ -64,9 +64,34 @@ describe("Cash Flow charts", () => {
 
     expect(html).toContain("Income");
     expect(html).toContain("Expenses");
-    expect(html).toContain("Cumulative savings");
+    expect(html).toContain("Net savings");
     expect(html).toContain('href="/cash-flow?selected=2026-07"');
     expect(html).not.toContain("NaN");
+  });
+
+  it("plots per-period savings, so the shared axis stays sized to the bars", () => {
+    // A running total outgrows the per-period bars it shares an axis with:
+    // DivergingColumns sizes both arms to the largest magnitude, so a
+    // cumulative line would flatten every column.
+    const growing: PeriodCashFlow[] = Array.from({ length: 12 }, (_, index) => ({
+      key: `2026-${String(index + 1).padStart(2, "0")}`,
+      label: `M${index + 1}`,
+      income: 1000,
+      expenses: 400,
+      savings: 600,
+      savingsRate: 60,
+    }));
+
+    const html = renderToStaticMarkup(
+      createElement(PeriodBars, { periods: growing, currency: "USD" }),
+    );
+
+    // Twelve periods at 600 saved would cumulate to 7,200; the line must stay
+    // at the per-period value instead.
+    const table = html.slice(html.indexOf("<table"));
+    expect(table).toContain("$600");
+    expect(table).not.toContain("7,200");
+    expect(table).not.toContain("7.2K");
   });
 });
 

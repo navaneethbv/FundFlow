@@ -86,7 +86,9 @@ describe("computePeriodCashFlow", () => {
         income: 0,
         expenses: 50,
         savings: -50,
-        savingsRate: 0,
+        // No income means no denominator. Reporting 0% here would read as
+        // "broke even" when the month actually spent with nothing coming in.
+        savingsRate: null,
       },
     ]);
   });
@@ -263,6 +265,42 @@ describe("cash flow selection and currencies", () => {
     expect(groups.get("USD")?.map((row) => row.id)).toEqual(["usd"]);
     expect(groups.get("Unknown currency")?.map((row) => row.id)).toEqual([
       "unknown",
+    ]);
+  });
+
+  it("treats a blank currency code as USD, matching the Accounts page", () => {
+    // /accounts defaults a null iso_currency_code to USD. Bucketing the same
+    // account separately here would raise a "multiple currencies" warning and
+    // split totals that the Accounts page never shows.
+    const rows = [
+      transaction({
+        id: "explicit",
+        date: "2026-07-01",
+        signedAmount: 10,
+        flow: "expense",
+        accountId: "account-usd",
+      }),
+      transaction({
+        id: "blank",
+        date: "2026-07-01",
+        signedAmount: 20,
+        flow: "expense",
+        accountId: "account-blank",
+      }),
+    ];
+
+    const groups = partitionCashFlowByCurrency(
+      rows,
+      new Map([
+        ["account-usd", "USD"],
+        ["account-blank", ""],
+      ]),
+    );
+
+    expect([...groups.keys()]).toEqual(["USD"]);
+    expect(groups.get("USD")?.map((row) => row.id)).toEqual([
+      "explicit",
+      "blank",
     ]);
   });
 });

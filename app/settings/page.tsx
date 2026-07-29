@@ -121,9 +121,11 @@ export default async function SettingsPage() {
         .from("households")
         .select("id, name")
         .order("created_at", { ascending: false }),
+      // Own spend history only: this drives the caller's budget suggestions.
       supabase
         .from("transactions")
         .select("date, amount, pfc_primary")
+        .eq("user_id", user?.id ?? "")
         .gte("date", monthStart(-4))
         .lt("date", monthStart(0)),
       supabase

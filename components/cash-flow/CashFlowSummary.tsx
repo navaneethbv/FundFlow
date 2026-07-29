@@ -2,10 +2,17 @@ import Panel from "@/components/ui/Panel";
 import type { PeriodCashFlow } from "@/lib/cash-flow";
 import { formatCurrency } from "@/lib/format";
 
-function formatPercent(value: number): string {
+function formatPercent(value: number | null): string {
+  // No income means there is no denominator, not a 0% rate.
+  if (value === null) return "No income";
   return `${new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 2,
   }).format(value)}%`;
+}
+
+function savingsRateTone(value: number | null): string {
+  if (value === null) return "var(--viz-ink)";
+  return value >= 0 ? "var(--viz-good)" : "var(--viz-bad)";
 }
 
 export default function CashFlowSummary({
@@ -45,8 +52,7 @@ export default function CashFlowSummary({
     {
       label: "Savings rate",
       value: formatPercent(period.savingsRate),
-      tone:
-        period.savingsRate >= 0 ? "var(--viz-good)" : "var(--viz-bad)",
+      tone: savingsRateTone(period.savingsRate),
     },
   ];
 

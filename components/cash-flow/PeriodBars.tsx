@@ -23,12 +23,17 @@ function compactCurrency(value: number, currency: string): string {
   }
 }
 
-function cumulativeSavings(periods: PeriodCashFlow[]): number[] {
-  let total = 0;
-  return periods.map((period) => {
-    total += period.savings;
-    return Math.round(total * 100) / 100;
-  });
+/**
+ * Per-period savings, NOT a running total.
+ *
+ * A cumulative line belongs to a different scale than the per-period bars it
+ * would sit on: over 12-24 periods the running total dwarfs any single
+ * period's income, and because the shared axis is sized to the largest arm,
+ * every bar collapses to a few unreadable pixels. Net savings per period is
+ * the same unit and magnitude as the bars, so one axis is honest.
+ */
+function periodSavings(periods: PeriodCashFlow[]): number[] {
+  return periods.map((period) => period.savings);
 }
 
 export default function PeriodBars({
@@ -48,8 +53,8 @@ export default function PeriodBars({
       upName="Income"
       downName="Expenses"
       line={{
-        name: "Cumulative savings",
-        values: cumulativeSavings(periods),
+        name: "Net savings",
+        values: periodSavings(periods),
       }}
       links={links}
       valueFormatter={(value) => compactCurrency(value, currency)}

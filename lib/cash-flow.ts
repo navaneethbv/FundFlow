@@ -1,4 +1,5 @@
 import type { CanonicalFinanceTransaction } from "@/lib/finance-domain";
+import { UNKNOWN_CURRENCY } from "@/lib/format";
 
 export type CashFlowPeriod = "monthly" | "quarterly" | "yearly";
 export type BreakdownDimension = "category" | "group" | "merchant";
@@ -10,7 +11,12 @@ export interface PeriodCashFlow {
   income: number;
   expenses: number;
   savings: number;
-  savingsRate: number;
+  /**
+   * Percent of income kept, or null when there was no income to divide by.
+   * Reporting 0% for a period with expenses and no income would read as
+   * "broke even" when the truth is "spent with nothing coming in".
+   */
+  savingsRate: number | null;
 }
 
 export interface BreakdownRow {
@@ -88,22 +94,25 @@ export function computePeriodCashFlow(
         expenses,
         savings,
         savingsRate:
-          income === 0 ? 0 : round2((savings / income) * 100),
+          income === 0 ? null : round2((savings / income) * 100),
       };
     });
 }
+
+const BREAKDOWN_FIELD: Record<
+  BreakdownDimension,
+  (row: CanonicalFinanceTransaction) => string
+> = {
+  category: (row) => row.categoryKey,
+  group: (row) => row.groupKey,
+  merchant: (row) => row.merchant,
+};
 
 function breakdownLabel(
   row: CanonicalFinanceTransaction,
   dimension: BreakdownDimension,
 ): string {
-  const value =
-    dimension === "category"
-      ? row.categoryKey
-      : dimension === "group"
-        ? row.groupKey
-        : row.merchant;
-  return value.trim() || "Unknown";
+  return BREAKDOWN_FIELD[dimension](row).trim() || "Unknown";
 }
 
 export function breakdownBy(
@@ -154,10 +163,14 @@ function currencyFor(
   row: CanonicalFinanceTransaction,
   currencyByAccountId: ReadonlyMap<string, string>,
 ): string {
-  const value = row.accountId
-    ? currencyByAccountId.get(row.accountId)?.trim().toUpperCase()
-    : undefined;
-  return value && /^[A-Z]{3}$/.test(value) ? value : "Unknown currency";
+  if (!row.accountId || !currencyByAccountId.has(row.accountId)) {
+    return UNKNOWN_CURRENCY;
+  }
+  const value = currencyByAccountId.get(row.accountId)?.trim().toUpperCase();
+  // An account with a blank or malformed code is treated as USD, matching
+  // `app/accounts/page.tsx`. Splitting it into its own bucket here would raise
+  // a "multiple currencies" warning that the Accounts page never shows.
+  return value && /^[A-Z]{3}$/.test(value) ? value : "USD";
 }
 
 export function partitionCashFlowByCurrency(

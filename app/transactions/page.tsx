@@ -70,6 +70,14 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
       : "";
 
   const supabase = await createClient();
+  // The ledger has no household scope selector, so every query below is the
+  // caller's own. RLS alone no longer expresses that: `accounts`,
+  // `transactions`, and `transaction_splits` are also readable for a household
+  // member's opted-in Plaid connections.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const ownerId = user?.id ?? "";
   const { data: savedViewRows } = await supabase
     .from("saved_views")
     .select("id, name, params")
@@ -82,7 +90,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
 
   // Fetch accounts and rules first to allow type-based filtration.
   const [{ data: accounts }, { data: merchantRules }] = await Promise.all([
-    supabase.from("accounts").select("id, name, mask, type").order("name"),
+    supabase.from("accounts").select("id, name, mask, type").eq("user_id", ownerId).order("name"),
     supabase.from("merchant_rules").select("match_type, pattern, display_name, category, enabled").order("created_at"),
   ]);
 
@@ -105,13 +113,13 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   // the rule-independent scope and filter on the rules-applied values instead.
   const ruleAwareFilter = Boolean(category || merchant) && hasRemapRules(rulesList);
 
-  // RLS scopes both queries to the signed-in user.
   let query = supabase
     .from("transactions")
     .select(
       "id, date, amount, iso_currency_code, merchant_name, name, pfc_primary, pending, account_id",
       ruleAwareFilter ? {} : { count: "exact" },
     )
+    .eq("user_id", ownerId)
     .order("date", { ascending: false })
     .order("id", { ascending: true });
 
@@ -162,9 +170,6 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   const pageResult = ruleAwareFilter
     ? await query.limit(RULE_AWARE_FETCH_CAP)
     : await query.range(offset, offset + PAGE_SIZE - 1);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const accountName = new Map(
     (accounts ?? []).map((a) => {
@@ -183,13 +188,15 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   }
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  // User annotations (note/tags) and category splits for the visible rows. RLS
-  // scopes both to the signed-in user.
+  // User annotations (note/tags) and category splits for the visible rows.
+  // `transaction_splits` is readable for any transaction the caller can see,
+  // which now includes a household member's shared rows — filter to the
+  // caller's own so their categories are never rewritten by someone else's.
   const txnIds = rawRows.map((r) => r.id as string);
   const [{ data: annotations }, { data: splits }] = txnIds.length
     ? await Promise.all([
-        supabase.from("transaction_annotations").select("transaction_id, note, tags").in("transaction_id", txnIds),
-        supabase.from("transaction_splits").select("transaction_id, category, amount").in("transaction_id", txnIds),
+        supabase.from("transaction_annotations").select("transaction_id, note, tags").eq("user_id", ownerId).in("transaction_id", txnIds),
+        supabase.from("transaction_splits").select("transaction_id, category, amount").eq("user_id", ownerId).in("transaction_id", txnIds),
       ])
     : [{ data: [] as { transaction_id: string; note: string | null; tags: string[] }[] }, { data: [] as { transaction_id: string; category: string; amount: number }[] }];
 

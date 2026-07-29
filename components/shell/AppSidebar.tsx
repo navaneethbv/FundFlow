@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ComponentType } from "react";
 import { cn } from "@/lib/cn";
 import {
+  ArrowLeftRight,
   FileText,
   Landmark,
   LayoutDashboard,
@@ -39,6 +40,7 @@ const primaryItems: NavItem[] = [
   { label: "Plan", href: "/dashboard?view=plan", key: "plan", icon: PiggyBank },
   { label: "Wealth", href: "/dashboard?view=wealth", key: "wealth", icon: LineChart },
   { label: "Accounts", href: "/accounts", key: "accounts", icon: Landmark },
+  { label: "Cash Flow", href: "/cash-flow", key: "cashFlow", icon: ArrowLeftRight },
   { label: "Transactions", href: "/transactions", key: "transactions", icon: Wallet },
 ];
 

@@ -26,13 +26,16 @@ export async function POST(request: NextRequest) {
       return badRequest("transaction_id is required");
     }
 
-    // The split/annotation RLS only checks user_id = auth.uid(), not that the
-    // referenced transaction is the caller's. Verify ownership via the
-    // RLS-scoped client (returns null for another user's transaction).
+    // Ownership, not visibility. RLS now also exposes a household member's
+    // shared transactions, so `user_id` must be explicit here — mirroring
+    // annotate-batch. Without it a member could attach splits to the owner's
+    // transaction, and validate_transaction_split_total() sums splits across
+    // users, which would permanently block the owner from splitting it.
     const { data: txn } = await supabase
       .from("transactions")
       .select("id, amount")
       .eq("id", transactionId)
+      .eq("user_id", user.id)
       .maybeSingle();
     if (!txn) return badRequest("Transaction not found");
     const absAmount = Math.abs(Number(txn.amount));

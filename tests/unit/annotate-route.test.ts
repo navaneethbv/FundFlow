@@ -8,11 +8,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
  */
 function makeClient(txn: { id: string; amount: number } | null) {
   const inserts: unknown[] = [];
-  const from = () => {
+  const eqCalls: Array<{ table: string; column: string; value: unknown }> = [];
+  const from = (table: string) => {
     const chain: Record<string, unknown> = {};
     Object.assign(chain, {
       select: () => chain,
-      eq: () => chain,
+      eq: (column: string, value: unknown) => {
+        eqCalls.push({ table, column, value });
+        return chain;
+      },
       delete: () => chain,
       maybeSingle: () => Promise.resolve({ data: txn }),
       upsert: () => Promise.resolve({ error: null }),
@@ -24,7 +28,7 @@ function makeClient(txn: { id: string; amount: number } | null) {
     });
     return chain;
   };
-  return { client: { from } as never, inserts };
+  return { client: { from } as never, inserts, eqCalls };
 }
 
 const { mockRequireUser } = vi.hoisted(() => ({ mockRequireUser: vi.fn() }));
@@ -48,6 +52,23 @@ function post(body: unknown) {
 
 describe("POST /api/transactions/annotate", () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it("looks the transaction up by owner, not by RLS visibility", async () => {
+    // RLS also exposes a household member's shared transactions. Without an
+    // explicit user_id a member could attach splits to the owner's row, and
+    // validate_transaction_split_total() sums splits across users — which
+    // would permanently block the owner from splitting that transaction.
+    const { client, eqCalls } = makeClient({ id: "t1", amount: 60 });
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: client });
+
+    await post({ transaction_id: "t1", note: "hello" });
+
+    expect(eqCalls).toContainEqual({
+      table: "transactions",
+      column: "user_id",
+      value: "u1",
+    });
+  });
 
   it("rejects splits that do not sum to the transaction amount", async () => {
     const { client, inserts } = makeClient({ id: "t1", amount: 60 });

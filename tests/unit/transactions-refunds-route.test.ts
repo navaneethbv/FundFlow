@@ -32,6 +32,9 @@ describe("Transactions Refunds API Route", () => {
           if (table === "transactions") {
             return {
               select: vi.fn().mockReturnThis(),
+              // Own ledger only: a household member's shared refunds must not
+              // be paired against this caller's charges.
+              eq: vi.fn().mockReturnThis(),
               gte: vi.fn().mockReturnThis(),
               limit: vi.fn().mockResolvedValue({
                 data: [

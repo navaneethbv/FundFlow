@@ -24,7 +24,7 @@ import {
   serializeFinancialScope,
 } from "@/lib/financial-scope";
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import { formatMonth } from "@/lib/format";
+import { formatMonth, UNKNOWN_CURRENCY } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -157,16 +157,6 @@ export default async function CashFlowPage({
     "expense",
   );
 
-  if (process.env.NODE_ENV !== "test") {
-    console.info("cash_flow_loaded", {
-      rowCount: loaded.transactions.length,
-      truncated: loaded.truncated,
-      period,
-      rangeMonths,
-      scope: scope.kind,
-    });
-  }
-
   return (
     <AppShell active="cashFlow" email={user.email}>
       <header>
@@ -238,16 +228,16 @@ export default async function CashFlowPage({
 
           <CashFlowSummary
             period={selectedPeriod}
-            currency={selectedCurrency ?? "Unknown currency"}
+            currency={selectedCurrency ?? UNKNOWN_CURRENCY}
           />
 
           <Panel
             eyebrow="Trend"
-            title="Income, expenses, and cumulative savings"
+            title="Income, expenses, and net savings"
           >
             <PeriodBars
               periods={periods}
-              currency={selectedCurrency ?? "Unknown currency"}
+              currency={selectedCurrency ?? UNKNOWN_CURRENCY}
               links={periods.map((row) => periodLink(row.key, current))}
             />
           </Panel>
@@ -260,7 +250,7 @@ export default async function CashFlowPage({
               <BreakdownBars
                 title="Income"
                 rows={incomeBreakdown}
-                currency={selectedCurrency ?? "Unknown currency"}
+                currency={selectedCurrency ?? UNKNOWN_CURRENCY}
                 dimension={dimension}
               />
             </Panel>
@@ -271,7 +261,7 @@ export default async function CashFlowPage({
               <BreakdownBars
                 title="Expenses"
                 rows={expenseBreakdown}
-                currency={selectedCurrency ?? "Unknown currency"}
+                currency={selectedCurrency ?? UNKNOWN_CURRENCY}
                 dimension={dimension}
               />
             </Panel>

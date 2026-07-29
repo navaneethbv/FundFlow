@@ -212,18 +212,14 @@ export async function loadCashFlowData(
   const accountNames = new Map(
     accounts.map((row) => [row.id, row.name ?? ""]),
   );
+  // Every account is present, including ones with a null currency code —
+  // `currencyFor` maps a blank code to USD exactly like the Accounts page.
+  // Dropping them here would instead bucket their rows as "Unknown currency".
   const currencyByAccountId = new Map(
-    accounts
-      .filter(
-        (
-          row,
-        ): row is AccountRow & { iso_currency_code: string } =>
-          typeof row.iso_currency_code === "string",
-      )
-      .map((row) => [
-        row.id,
-        row.iso_currency_code.trim().toUpperCase(),
-      ]),
+    accounts.map((row) => [
+      row.id,
+      (row.iso_currency_code ?? "").trim().toUpperCase(),
+    ]),
   );
   const lastSuccessfulSyncAt =
     ((syncResult.data as SyncRow | null)?.updated_at as string | undefined) ??

@@ -13,7 +13,7 @@ The released `/cash-flow` server page now provides:
 - URL-driven range, selected-period, category, group, merchant, Mine, Household, and currency controls.
 - A bounded 24-month and 25,000-row transaction read through `fetchFinanceTransactions`.
 - Real split forwarding to `projectFinanceTransactions`, plus merchant rules, category overrides, linked-refund netting, account names, and transfer exclusion.
-- Currency-separated summaries, period bars, cumulative savings, complete breakdown tables, and an honest unknown-currency state.
+- Currency-separated summaries, period bars, per-period net savings, complete breakdown tables, and an honest unknown-currency state.
 - Loading, empty, partial-data, stale-data, permission-safe, and error states.
 - Accessible chart table twins, 44px controls, and responsive light and dark layouts.
 
