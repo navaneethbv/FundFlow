@@ -15,11 +15,13 @@ import ButtonLink from "@/components/ui/ButtonLink";
 import EmptyState from "@/components/ui/EmptyState";
 import { Landmark } from "@/components/ui/icons";
 import {
+  accountsViewIsFiltered,
   applyAccountsPageView,
   buildAccountsPageData,
   compareTextAscending,
   type AccountBalanceSnapshot,
   type AccountGroupKey,
+  type AccountsPageViewOptions,
   type UnifiedAccountSummary,
 } from "@/lib/accounts-page";
 import {
@@ -87,8 +89,13 @@ function numeric(value: number | string | null): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/**
+ * The snapshot read is deliberately bounded. Snapshots accrue one row per
+ * account per day forever, so the longest option is a stated 12 months rather
+ * than an unbounded "all" — see the frugality invariants in CLAUDE.md.
+ */
 function historyStart(range: string | undefined): string {
-  const days = range === "90" ? 90 : range === "all" ? 366 : 30;
+  const days = range === "90" ? 90 : range === "365" ? 365 : 30;
   const start = new Date();
   start.setUTCDate(start.getUTCDate() - days);
   return start.toISOString().slice(0, 10);
@@ -265,14 +272,15 @@ export default async function AccountsPage({
       : {};
   const prefs = accountPreferences(dashboardPrefs.accountsPage);
   const built = buildAccountsPageData(accounts, snapshots, new Date());
-  const view = applyAccountsPageView(built, {
+  const viewOptions: AccountsPageViewOptions = {
     hiddenIds: prefs.hiddenIds,
     order: prefs.order,
     visibility: validVisibility(params.visibility),
     institution: params.institution || undefined,
     groupKey: validGroup(params.type),
     ownerUserId: params.owner || undefined,
-  });
+  };
+  const view = applyAccountsPageView(built, viewOptions);
   const institutions = [
     ...new Set(
       accounts
@@ -293,7 +301,7 @@ export default async function AccountsPage({
     visibility: validVisibility(params.visibility),
     owner: params.owner,
     range:
-      params.range === "90" || params.range === "all" ? params.range : "30",
+      params.range === "90" || params.range === "365" ? params.range : "30",
     summary: params.summary === "percent" ? "percent" : "totals",
   };
   const allRows = Object.values(built.groups).flatMap((group) => group.rows);
@@ -367,6 +375,7 @@ export default async function AccountsPage({
             historyStartsOn={built.historyStartsOn}
             mode={filterValues.summary ?? "totals"}
             query={filterValues}
+            filtered={accountsViewIsFiltered(viewOptions)}
           />
           <div className="space-y-4">
             {(Object.keys(view.groups) as AccountGroupKey[]).map((key) => (

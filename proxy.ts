@@ -175,6 +175,10 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     // Run on everything except Next internals and static asset files.
+    // `sw.js` is excluded so the service worker is served straight from
+    // `public/` — routing it through the proxy in dev broke registration. It
+    // is a public static file with no user data, so it needs no session
+    // refresh; it does mean the SW response carries no CSP of its own.
     "/((?!_next/static|_next/image|favicon.ico|sw\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

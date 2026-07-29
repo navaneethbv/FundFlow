@@ -1,5 +1,6 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/service";
+import { logError } from "@/lib/log";
 
 export interface SnapshotPlaidAccount {
   id: string;
@@ -131,4 +132,24 @@ export async function writeDailyAccountSnapshots(
   if (error) throw error;
 
   return { written: rows.length, snapshotDate };
+}
+
+/**
+ * Snapshot capture for request paths whose primary work has already committed
+ * (a manual-account write, a completed Plaid sync). Losing one day of history
+ * must never turn a succeeded operation into a 500 the user reads as failure —
+ * the daily cron re-captures the same current-state row anyway.
+ *
+ * The cron itself calls `writeDailyAccountSnapshots` directly, because there a
+ * failure should be recorded rather than swallowed.
+ */
+export async function tryWriteDailyAccountSnapshots(
+  userId: string,
+  context: string,
+): Promise<void> {
+  try {
+    await writeDailyAccountSnapshots(userId);
+  } catch (error) {
+    logError(context, error);
+  }
 }

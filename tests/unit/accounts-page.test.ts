@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  accountsViewIsFiltered,
   applyAccountsPageView,
   buildAccountsPageData,
   compareTextAscending,
@@ -418,5 +419,92 @@ describe("buildAccountsPageData", () => {
     expect(visible.groups.cash.rows.map((row) => row.id)).toEqual(["cash-2"]);
     expect(hidden.groups.cash.rows.map((row) => row.id)).toEqual(["cash-1"]);
     expect(visible.summary).toEqual(built.summary);
+  });
+
+  it("recomputes group totals from the rows that survive filtering", () => {
+    const built = buildAccountsPageData(
+      [
+        account({
+          id: "cash-1",
+          name: "Checking",
+          type: "depository",
+          currentBalance: 100,
+          institution: "Bank A",
+        }),
+        account({
+          id: "cash-2",
+          name: "Savings",
+          type: "depository",
+          currentBalance: 250,
+          institution: "Bank B",
+        }),
+      ],
+      [],
+      NOW,
+    );
+    expect(built.groups.cash.totals).toEqual([
+      { currency: "USD", amount: 350 },
+    ]);
+
+    // A header total that still counts the filtered-out account reads as a bug.
+    const filtered = applyAccountsPageView(built, { institution: "Bank B" });
+    expect(filtered.groups.cash.rows.map((row) => row.id)).toEqual(["cash-2"]);
+    expect(filtered.groups.cash.totals).toEqual([
+      { currency: "USD", amount: 250 },
+    ]);
+
+    const withHidden = applyAccountsPageView(built, { hiddenIds: ["cash-2"] });
+    expect(withHidden.groups.cash.totals).toEqual([
+      { currency: "USD", amount: 100 },
+    ]);
+  });
+
+  it("keys the net-worth series off the account currency, not the snapshot's", () => {
+    const built = buildAccountsPageData(
+      [
+        account({
+          id: "cash-1",
+          name: "Checking",
+          type: "depository",
+          currentBalance: 100,
+          currency: "EUR",
+        }),
+      ],
+      [
+        // A stale row written before the account's currency code was corrected.
+        snapshot("cash-1", "2026-07-28", 90, { currency: "USD" }),
+        snapshot("cash-1", "2026-07-29", 100, { currency: "EUR" }),
+      ],
+      NOW,
+    );
+
+    expect(Object.keys(built.summary.netWorthSeries)).toEqual(["EUR"]);
+    expect(built.summary.netWorthSeries.EUR).toEqual([
+      { date: "2026-07-28", value: 90 },
+      { date: "2026-07-29", value: 100 },
+    ]);
+  });
+});
+
+describe("accountsViewIsFiltered", () => {
+  it("is false only when every account is on screen", () => {
+    expect(accountsViewIsFiltered({ visibility: "all" })).toBe(false);
+    expect(accountsViewIsFiltered({ visibility: "all", hiddenIds: [] })).toBe(
+      false,
+    );
+    // The default "visible" mode hides whatever the user marked hidden.
+    expect(accountsViewIsFiltered({})).toBe(true);
+    expect(accountsViewIsFiltered({ visibility: "all", institution: "A" })).toBe(
+      true,
+    );
+    expect(accountsViewIsFiltered({ visibility: "all", groupKey: "cash" })).toBe(
+      true,
+    );
+    expect(
+      accountsViewIsFiltered({ visibility: "all", ownerUserId: "user-2" }),
+    ).toBe(true);
+    expect(
+      accountsViewIsFiltered({ visibility: "all", hiddenIds: ["cash-1"] }),
+    ).toBe(true);
   });
 });

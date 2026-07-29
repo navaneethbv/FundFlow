@@ -21,6 +21,8 @@ const mockWriteDailyAccountSnapshots = vi.fn();
 vi.mock("@/lib/account-history", () => ({
   writeDailyAccountSnapshots: (...args: unknown[]) =>
     mockWriteDailyAccountSnapshots(...args),
+  tryWriteDailyAccountSnapshots: (...args: unknown[]) =>
+    mockWriteDailyAccountSnapshots(...args),
 }));
 
 const mockWriteAudit = vi.fn();
@@ -127,7 +129,10 @@ describe("POST /api/manual-accounts", () => {
       balance: 1000,
       include_in_net_worth: true,
     });
-    expect(mockWriteDailyAccountSnapshots).toHaveBeenCalledWith(USER_ID);
+    expect(mockWriteDailyAccountSnapshots).toHaveBeenCalledWith(
+      USER_ID,
+      "manual-accounts.create.snapshot",
+    );
     expect(mockWriteAudit).toHaveBeenCalledWith({
       userId: USER_ID,
       action: "manual_account_created",
@@ -193,7 +198,10 @@ describe("PATCH /api/manual-accounts", () => {
       include_in_net_worth: true,
     });
     expect(serviceClient.scopedToUser("manual_accounts", USER_ID)).toBe(true);
-    expect(mockWriteDailyAccountSnapshots).toHaveBeenCalledWith(USER_ID);
+    expect(mockWriteDailyAccountSnapshots).toHaveBeenCalledWith(
+      USER_ID,
+      "manual-accounts.update.snapshot",
+    );
     expect(mockWriteAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "manual_account_updated",

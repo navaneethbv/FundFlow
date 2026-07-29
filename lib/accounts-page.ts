@@ -87,6 +87,23 @@ export interface AccountsPageViewOptions {
   ownerUserId?: string;
 }
 
+/**
+ * True when the view options actually remove rows the unfiltered page shows.
+ * The page uses this to disclose that the balance-sheet summary still covers
+ * every account, since that summary is deliberately portfolio-wide.
+ */
+export function accountsViewIsFiltered(
+  options: AccountsPageViewOptions,
+): boolean {
+  return Boolean(
+    options.institution ||
+      options.groupKey ||
+      options.ownerUserId ||
+      (options.visibility ?? "visible") !== "all" ||
+      (options.hiddenIds?.length ?? 0) > 0,
+  );
+}
+
 const GROUP_LABELS: Record<AccountGroupKey, string> = {
   credit: "Credit cards",
   cash: "Cash",
@@ -310,7 +327,10 @@ export function buildAccountsPageData(
       group === "credit" || group === "loan"
         ? -Math.abs(snapshot.currentBalance)
         : snapshot.currentBalance;
-    const currency = snapshot.currency;
+    // Key the series off the account's current currency, not the snapshot's.
+    // A code that changed mid-history would otherwise split one account across
+    // two series while assets/liabilities above stay under a single currency.
+    const currency = account.currency;
     const byDate = seriesMaps.get(currency) ?? new Map<string, number>();
     addAmount(byDate, snapshot.snapshotDate, signed);
     seriesMaps.set(currency, byDate);
@@ -400,7 +420,13 @@ export function applyAccountsPageView(
                 const bOrder = order.get(b.id) ?? Number.MAX_SAFE_INTEGER;
                 return aOrder - bOrder || a.name.localeCompare(b.name);
               });
-      return [key, { ...group, rows }];
+      // Totals must be recomputed from the rows that survive filtering — a
+      // group header that sums accounts the user cannot see reads as a bug.
+      const totals = new Map<string, number>();
+      for (const row of rows) {
+        if (row.balance !== null) addAmount(totals, row.currency, row.balance);
+      }
+      return [key, { ...group, rows, totals: totalsFromMap(totals) }];
     }),
   ) as AccountsPageData["groups"];
 

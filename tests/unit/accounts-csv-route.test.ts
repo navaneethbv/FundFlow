@@ -143,4 +143,73 @@ describe("GET /api/export/accounts-csv", () => {
       "cash,Unavailable,checking,,USD,2026-07-29",
     );
   });
+
+  it("omits accounts the user hid on the Accounts page", async () => {
+    const userClient = clientStub({
+      households: { data: [] },
+      profiles: {
+        data: {
+          dashboard_prefs: {
+            accountsPage: { hiddenIds: ["account-hidden", "manual-hidden"] },
+          },
+        },
+      },
+      accounts: {
+        data: [
+          {
+            id: "account-hidden",
+            user_id: USER_ID,
+            name: "Hidden Checking",
+            mask: null,
+            type: "depository",
+            subtype: "checking",
+            current_balance: 10,
+            iso_currency_code: "USD",
+            updated_at: "2026-07-29T09:00:00.000Z",
+          },
+          {
+            id: "account-shown",
+            user_id: USER_ID,
+            name: "Shown Checking",
+            mask: null,
+            type: "depository",
+            subtype: "checking",
+            current_balance: 20,
+            iso_currency_code: "USD",
+            updated_at: "2026-07-29T09:00:00.000Z",
+          },
+        ],
+      },
+      manual_accounts: {
+        data: [
+          {
+            id: "manual-hidden",
+            user_id: USER_ID,
+            name: "Hidden Cash",
+            account_type: "cash",
+            balance: 30,
+            updated_at: "2026-07-29T09:00:00.000Z",
+          },
+        ],
+      },
+    });
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: userClient,
+    });
+
+    const response = await GET(
+      new NextRequest("http://localhost/api/export/accounts-csv"),
+    );
+    const csv = await response.text();
+
+    expect(csv).toContain("Shown Checking");
+    expect(csv).not.toContain("Hidden Checking");
+    expect(csv).not.toContain("Hidden Cash");
+    expect(mockWriteAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: { kind: "accounts_csv", rows: 1 },
+      }),
+    );
+  });
 });
