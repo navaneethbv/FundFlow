@@ -72,7 +72,7 @@ export default function AppSidebar({ active }: Readonly<{ active: AppShellActive
         aria-label="Primary"
         className="lg:hidden flex gap-2 overflow-x-auto border-b border-panel-border px-4 py-3 scrollbar-none sm:px-6 [mask-image:linear-gradient(to_right,black_calc(100%_-_2rem),transparent)]"
       >
-        {NAV_ITEMS.map((item) => (
+        {enabledItems.map((item) => (
           <NavLink key={item.key} item={item} active={active} compact />
         ))}
       </nav>

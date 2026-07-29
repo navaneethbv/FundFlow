@@ -44,16 +44,7 @@ function monthStart(offset: number): string {
   return `${year}-${String(month).padStart(2, "0")}-01`;
 }
 
-import SettingsLayout from "@/components/settings/SettingsLayout";
-import ProfileSection from "@/components/settings/ProfileSection";
-import TagsSection from "@/components/settings/TagsSection";
-import type { SettingsSectionKey } from "@/components/settings/settings-nav";
-
-export default async function SettingsPage(
-  props: Readonly<{ searchParams: Promise<{ section?: string }> }>,
-) {
-  const searchParams = await props.searchParams;
-  const activeSection: SettingsSectionKey = (searchParams.section as SettingsSectionKey) || "profile";
+export default async function SettingsPage() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -83,7 +74,7 @@ export default async function SettingsPage(
     await Promise.all([
       supabase
         .from("profiles")
-        .select("ai_export_enabled, dashboard_prefs, full_name, display_name")
+        .select("ai_export_enabled, dashboard_prefs")
         .eq("id", user?.id ?? "")
         .single(),
       supabase
@@ -234,16 +225,6 @@ export default async function SettingsPage(
           <h1 className="display mt-2 text-3xl sm:text-4xl">Settings</h1>
         </header>
 
-        <SettingsLayout activeSection={activeSection}>
-          <div className="space-y-6">
-            {activeSection === "profile" && (
-              <ProfileSection
-                initialFullName={profile?.full_name ?? ""}
-                initialDisplayName={profile?.display_name ?? ""}
-              />
-            )}
-            {activeSection === "tags" && <TagsSection />}
-
         <div className="grid gap-6 xl:grid-cols-3">
           <BanksSection
             initialItems={items ?? []}
@@ -384,8 +365,6 @@ export default async function SettingsPage(
         </div>
 
         <DangerZone />
-          </div>
-        </SettingsLayout>
       </div>
     </AppShell>
   );

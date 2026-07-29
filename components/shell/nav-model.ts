@@ -1,19 +1,14 @@
 import type { ComponentType } from "react";
 import {
   ArrowLeftRight,
-  BarChart3,
-  Calendar,
-  Compass,
   Landmark,
   LayoutDashboard,
-  LineChart,
   Mail,
   PiggyBank,
   Search,
   Settings,
   Sparkles,
   Target,
-  TrendingUp,
   Wallet,
 } from "@/components/ui/icons";
 
@@ -51,13 +46,8 @@ export const NAV_ITEMS: NavItemDefinition[] = [
   { key: "accounts", label: "Accounts", href: "/accounts", icon: Landmark, category: "primary", featureFlag: "accountsPage" },
   { key: "transactions", label: "Transactions", href: "/transactions", icon: Wallet, category: "primary" },
   { key: "cashflow", label: "Cash Flow", href: "/cash-flow", icon: ArrowLeftRight, category: "primary", featureFlag: "cashFlowPage" },
-  { key: "reports", label: "Reports", href: "/reports", icon: BarChart3, category: "primary", featureFlag: "reportsPage" },
   { key: "budget", label: "Budget", href: "/budget", icon: PiggyBank, category: "planning", featureFlag: "budgetPage" },
-  { key: "recurring", label: "Recurring", href: "/recurring", icon: Calendar, category: "planning", featureFlag: "recurringPage" },
   { key: "goals", label: "Goals", href: "/goals", icon: Target, category: "planning" },
-  { key: "investments", label: "Investments", href: "/investments", icon: LineChart, category: "planning", featureFlag: "investmentsPage" },
-  { key: "forecasting", label: "Forecasting", href: "/forecasting", icon: TrendingUp, category: "planning", featureFlag: "forecastingPage" },
-  { key: "advice", label: "Advice", href: "/advice", icon: Compass, category: "planning", featureFlag: "advicePage" },
   { key: "notifications", label: "Notifications", href: "/notifications", icon: Mail, category: "manage" },
   { key: "settings", label: "Settings", href: "/settings", icon: Settings, category: "manage" },
   { key: "wrapped", label: "Year in Money", href: "/wrapped", icon: Sparkles, category: "manage" },

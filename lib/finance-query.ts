@@ -94,7 +94,17 @@ export async function fetchFinanceTransactions(
 
 export interface CanonicalProjectionResult {
   transactions: import("@/lib/finance-domain").CanonicalFinanceTransaction[];
+  currencyByAccountId: Map<string, string>;
   truncated: boolean;
+}
+
+function assertProjectionQuery(
+  table: string,
+  result: { error: { code?: string } | null },
+): void {
+  if (!result.error) return;
+  const suffix = result.error.code ? `:${result.error.code}` : "";
+  throw new Error(`finance_projection_query_failed:${table}${suffix}`);
 }
 
 export async function loadCanonicalProjection(
@@ -103,7 +113,12 @@ export async function loadCanonicalProjection(
 ): Promise<CanonicalProjectionResult> {
   const userId = scopeQueryUserId(options.scope);
   const fetchResult = await fetchFinanceTransactions(supabase, options);
+  const txnIds = fetchResult.rows.map((r) => r.id);
 
+  let accountsQuery = supabase
+    .from("accounts")
+    .select("id,name,iso_currency_code")
+    .limit(5000);
   let rulesQuery = supabase
     .from("merchant_rules")
     .select("match_type,pattern,display_name,category,enabled")
@@ -121,16 +136,58 @@ export async function loadCanonicalProjection(
     .limit(FINANCE_MAX_ROWS);
 
   if (userId) {
+    accountsQuery = accountsQuery.eq("user_id", userId);
     rulesQuery = rulesQuery.eq("user_id", userId);
     overridesQuery = overridesQuery.eq("user_id", userId);
     refundsQuery = refundsQuery.eq("user_id", userId);
   }
 
-  const [rulesRes, overridesRes, refundsRes] = await Promise.all([
-    rulesQuery,
-    overridesQuery,
-    refundsQuery,
-  ]);
+  interface SplitRow {
+    id: string;
+    source_transaction_id: string;
+    amount: number;
+    category: string | null;
+    merchant_name: string | null;
+  }
+
+  // Chunk transaction_splits by 500 transaction IDs
+  const splitChunksPromises: Array<PromiseLike<{ data: SplitRow[] | null; error: { code?: string } | null }>> = [];
+  if (txnIds.length > 0) {
+    for (let i = 0; i < txnIds.length; i += 500) {
+      const chunk = txnIds.slice(i, i + 500);
+      let splitsQuery = supabase
+        .from("transaction_splits")
+        .select("id,source_transaction_id,amount,category,merchant_name")
+        .in("source_transaction_id", chunk);
+      if (userId) splitsQuery = splitsQuery.eq("user_id", userId);
+      splitChunksPromises.push(splitsQuery);
+    }
+  }
+
+  const [accountsRes, rulesRes, overridesRes, refundsRes, ...splitResChunks] =
+    await Promise.all([
+      accountsQuery,
+      rulesQuery,
+      overridesQuery,
+      refundsQuery,
+      ...splitChunksPromises,
+    ]);
+
+  assertProjectionQuery("accounts", accountsRes);
+  assertProjectionQuery("merchant_rules", rulesRes);
+  assertProjectionQuery("category_overrides", overridesRes);
+  assertProjectionQuery("linked_refunds", refundsRes);
+  for (const sRes of splitResChunks) {
+    assertProjectionQuery("transaction_splits", sRes);
+  }
+
+  const currencyByAccountId = new Map<string, string>();
+  const accountNames = new Map<string, string>();
+
+  for (const acc of accountsRes.data || []) {
+    currencyByAccountId.set(acc.id, acc.iso_currency_code || "USD");
+    if (acc.name) accountNames.set(acc.id, acc.name);
+  }
 
   const merchantRules = ((rulesRes.data || []) as Array<{
     match_type: "merchant" | "keyword" | "account";
@@ -162,16 +219,34 @@ export async function loadCanonicalProjection(
     refundTransactionId: rf.refund_transaction_id,
   }));
 
+  const splits: Array<{
+    transactionId: string;
+    category: string;
+    amount: number;
+  }> = [];
+
+  for (const sRes of splitResChunks) {
+    for (const s of sRes.data || []) {
+      splits.push({
+        transactionId: s.source_transaction_id,
+        category: s.category || "UNCATEGORIZED",
+        amount: Number(s.amount),
+      });
+    }
+  }
+
   const { projectFinanceTransactions } = await import("@/lib/finance-domain");
 
   return {
     transactions: projectFinanceTransactions({
       rows: fetchResult.rows,
+      accountNames,
       merchantRules,
       categoryOverrides,
-      splits: [],
+      splits,
       linkedRefunds,
     }),
+    currencyByAccountId,
     truncated: fetchResult.truncated,
   };
 }

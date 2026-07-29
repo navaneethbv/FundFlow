@@ -11,16 +11,7 @@
 export const FEATURE_FLAG_DEFAULTS = {
   accountsPage: true,
   cashFlowPage: true,
-  budgetPage: true,
-  recurringPage: true,
-  reportsPage: true,
-  goalsV2: true,
-  dashboardWidgets: true,
-  investmentsPage: true,
-  forecastingPage: true,
-  advicePage: true,
-  transactionsParity: true,
-  settingsIa: true,
+  budgetPage: false,
 } as const;
 
 export type FeatureFlag = keyof typeof FEATURE_FLAG_DEFAULTS;

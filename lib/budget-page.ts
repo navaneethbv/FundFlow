@@ -1,5 +1,6 @@
 import { CanonicalFinanceTransaction } from "./finance-domain";
 import { titleCase } from "./format";
+import type { FinanceWindow } from "./finance-query";
 
 export interface BudgetLine {
   budgetId: string | null;
@@ -42,6 +43,48 @@ export interface BudgetSeedProposal {
   reason: string;
 }
 
+export function parseBudgetHorizon(value: unknown): BudgetHorizon {
+  if (value === "yearly" || value === "decade") return value;
+  return "monthly";
+}
+
+/** "2026-07" + delta months, pure string math. */
+function addMonths(ym: string, delta: number): string {
+  const [y, m] = ym.split("-").map(Number);
+  const total = (y || 2026) * 12 + ((m || 1) - 1) + delta;
+  const ny = Math.floor(total / 12);
+  const nm = (total % 12) + 1;
+  return `${ny}-${String(nm).padStart(2, "0")}`;
+}
+
+export function budgetWindow(
+  anchorMonth: string,
+  horizon: BudgetHorizon,
+): FinanceWindow {
+  const [y] = anchorMonth.split("-").map(Number);
+  const year = y || 2026;
+
+  if (horizon === "yearly") {
+    return {
+      start: `${year}-01-01`,
+      endExclusive: `${year + 1}-01-01`,
+    };
+  }
+
+  if (horizon === "decade") {
+    const decadeStart = Math.floor(year / 10) * 10;
+    return {
+      start: `${decadeStart}-01-01`,
+      endExclusive: `${decadeStart + 10}-01-01`,
+    };
+  }
+
+  return {
+    start: `${anchorMonth}-01`,
+    endExclusive: `${addMonths(anchorMonth, 1)}-01`,
+  };
+}
+
 export function getMonthEndDate(monthStr: string): string {
   const [y, m] = monthStr.split("-").map(Number);
   const isLeap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -65,7 +108,7 @@ export function buildBudgetPage(input: {
   goalContributions?: { name: string; planned: number; actual: number }[];
 }): BudgetPageData {
   const { month, horizon = "monthly", budgets, periods = [], txns, goalContributions = [] } = input;
-  const multiplier = horizon === "yearly" ? 12 : horizon === "decade" ? 120 : 1;
+  const window = budgetWindow(month, horizon);
 
   const budgetMap = new Map<
     string,
@@ -85,10 +128,18 @@ export function buildBudgetPage(input: {
     });
   }
 
+  // Build month-specific period limits
   const periodPlannedMap = new Map<string, number>();
   for (const p of periods) {
-    if (p.month.slice(0, 7) === month) {
-      periodPlannedMap.set(p.budget_id, Number(p.planned));
+    if (horizon === "monthly") {
+      if (p.month.slice(0, 7) === month) {
+        periodPlannedMap.set(p.budget_id, Number(p.planned));
+      }
+    } else {
+      if (p.month >= window.start && p.month < window.endExclusive) {
+        const key = `${p.budget_id}|${p.month.slice(0, 7)}`;
+        periodPlannedMap.set(key, Number(p.planned));
+      }
     }
   }
 
@@ -96,7 +147,7 @@ export function buildBudgetPage(input: {
   const actualIncomeMap = new Map<string, number>();
 
   for (const t of txns) {
-    if (t.date.slice(0, 7) !== month) continue;
+    if (t.date < window.start || t.date >= window.endExclusive) continue;
     const catKey = (t.categoryKey || "Uncategorized").toLowerCase();
     if (t.flow === "income") {
       actualIncomeMap.set(catKey, (actualIncomeMap.get(catKey) || 0) + Math.abs(t.signedAmount));
@@ -114,23 +165,38 @@ export function buildBudgetPage(input: {
 
   const processedCats = new Set<string>();
 
+  // Determine months in window for planned aggregation
+  let monthCount = 1;
+  if (horizon === "yearly") monthCount = 12;
+  if (horizon === "decade") monthCount = 120;
+
   for (const b of budgets) {
     const catLower = b.category.toLowerCase();
     processedCats.add(catLower);
 
     const grp = (b.group_name as "income" | "fixed" | "flexible" | "non_monthly") || "flexible";
-    const periodPlanned = periodPlannedMap.get(b.id);
-    const monthlyLimit = periodPlanned !== undefined ? periodPlanned : Number(b.monthly_limit);
-    const planned = monthlyLimit * multiplier;
+
+    let plannedSum = 0;
+    if (horizon === "monthly") {
+      const pVal = periodPlannedMap.get(b.id);
+      plannedSum = pVal !== undefined ? pVal : Number(b.monthly_limit);
+    } else {
+      const startYM = window.start.slice(0, 7);
+      for (let m = 0; m < monthCount; m++) {
+        const ym = addMonths(startYM, m);
+        const pVal = periodPlannedMap.get(`${b.id}|${ym}`);
+        plannedSum += pVal !== undefined ? pVal : Number(b.monthly_limit);
+      }
+    }
 
     const actual = grp === "income" ? actualIncomeMap.get(catLower) || 0 : actualSpendMap.get(catLower) || 0;
-    const remaining = grp === "income" ? actual - planned : planned - actual;
+    const remaining = grp === "income" ? actual - plannedSum : plannedSum - actual;
 
     sectionLines[grp]?.push({
       budgetId: b.id,
       category: b.category,
       label: titleCase(b.category),
-      planned: Math.round(planned * 100) / 100,
+      planned: Math.round(plannedSum * 100) / 100,
       actual: Math.round(actual * 100) / 100,
       remaining: Math.round(remaining * 100) / 100,
       budgeted: true,

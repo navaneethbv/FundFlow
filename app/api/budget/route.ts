@@ -1,58 +1,89 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { writeAudit } from "@/lib/audit";
 
-export async function PUT(request: Request) {
-  try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const YYYY_MM_REGEX = /^\d{4}-(?:0[1-9]|1[0-2])$/;
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function PUT(request: Request) {
+  const auth = await requireUser();
+  if (auth instanceof NextResponse) return auth;
+  const { supabase, user } = auth;
+
+  try {
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return badRequest("Invalid JSON payload");
     }
 
-    const body = await request.json();
     const { budget_id, month, planned, group_name, rollover_enabled } = body;
 
-    if (!budget_id || !month || planned === undefined || planned < 0) {
-      return NextResponse.json({ error: "Invalid budget payload" }, { status: 400 });
+    if (!budget_id || typeof budget_id !== "string" || !UUID_REGEX.test(budget_id)) {
+      return badRequest("Invalid budget_id");
+    }
+
+    if (!month || typeof month !== "string" || !YYYY_MM_REGEX.test(month.slice(0, 7))) {
+      return badRequest("Invalid month");
+    }
+
+    const parsedPlanned = Number(planned);
+    if (!Number.isFinite(parsedPlanned) || parsedPlanned < 0) {
+      return badRequest("Invalid planned amount");
     }
 
     const firstOfMonth = `${month.slice(0, 7)}-01`;
 
-    await supabase
+    const { error: periodError } = await supabase
       .from("budget_periods")
       .upsert(
         {
           user_id: user.id,
           budget_id,
           month: firstOfMonth,
-          planned: Number(planned),
+          planned: Math.round(parsedPlanned * 100) / 100,
         },
         { onConflict: "budget_id,month" },
       );
 
-    if (group_name || rollover_enabled !== undefined) {
-      const updateData: Record<string, unknown> = {};
-      if (group_name) updateData.group_name = group_name;
-      if (rollover_enabled !== undefined) updateData.rollover_enabled = Boolean(rollover_enabled);
+    if (periodError) {
+      return errorResponse("budget.update_period", periodError);
+    }
 
-      await supabase
+    const changedFields: string[] = ["planned"];
+
+    if (group_name !== undefined || rollover_enabled !== undefined) {
+      const updateData: Record<string, unknown> = {};
+      if (group_name) {
+        if (!["income", "fixed", "flexible", "non_monthly"].includes(group_name)) {
+          return badRequest("Invalid group_name");
+        }
+        updateData.group_name = group_name;
+        changedFields.push("group_name");
+      }
+      if (rollover_enabled !== undefined) {
+        updateData.rollover_enabled = Boolean(rollover_enabled);
+        changedFields.push("rollover_enabled");
+      }
+
+      const { error: budgetError } = await supabase
         .from("budgets")
         .update(updateData)
         .eq("id", budget_id)
         .eq("user_id", user.id);
+
+      if (budgetError) {
+        return errorResponse("budget.update_envelope", budgetError);
+      }
     }
 
     await writeAudit({
       userId: user.id,
-      action: "apr_updated",
-      metadata: { budget_id, month: firstOfMonth },
+      action: "budget_updated",
+      metadata: { budget_id, month: firstOfMonth, changed_fields: changedFields },
     });
 
     return NextResponse.json({ success: true });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to update budget";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch (error) {
+    return errorResponse("budget.update", error);
   }
 }

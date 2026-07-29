@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
           { data: rules },
           { data: manualAccounts },
           { data: accountBalanceSnapshots },
+          { data: budgetPeriods },
         // ADDING A USER-OWNED TABLE? Add it here too if losing it would cost
         // the user data they cannot re-sync from Plaid (their own budgets,
         // goals, rules, manual records, annotations). Derived or re-syncable
@@ -84,6 +85,10 @@ export async function GET(request: NextRequest) {
             .from("account_balance_snapshots")
             .select("account_id, manual_account_id, snapshot_date, current_balance, available_balance, iso_currency_code")
             .eq("user_id", userId),
+          service
+            .from("budget_periods")
+            .select("budget_id, month, planned")
+            .eq("user_id", userId),
         ]);
 
         const protectedSections = [
@@ -94,6 +99,7 @@ export async function GET(request: NextRequest) {
           rules,
           manualAccounts,
           accountBalanceSnapshots,
+          budgetPeriods,
         ];
         if (!protectedSections.some((rows) => (rows ?? []).length > 0)) {
           continue;
@@ -110,6 +116,7 @@ export async function GET(request: NextRequest) {
             merchant_rules: rules ?? [],
             manual_accounts: manualAccounts ?? [],
             account_balance_snapshots: accountBalanceSnapshots ?? [],
+            budget_periods: budgetPeriods ?? [],
           },
           backupKey,
         );
