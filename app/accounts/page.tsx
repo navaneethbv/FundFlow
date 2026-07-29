@@ -17,6 +17,7 @@ import { Landmark } from "@/components/ui/icons";
 import {
   applyAccountsPageView,
   buildAccountsPageData,
+  compareTextAscending,
   type AccountBalanceSnapshot,
   type AccountGroupKey,
   type UnifiedAccountSummary,
@@ -273,8 +274,12 @@ export default async function AccountsPage({
     ownerUserId: params.owner || undefined,
   });
   const institutions = [
-    ...new Set(accounts.map((account) => account.institution).filter(Boolean)),
-  ].sort() as string[];
+    ...new Set(
+      accounts
+        .map((account) => account.institution)
+        .filter((institution): institution is string => institution !== null),
+    ),
+  ].sort(compareTextAscending);
   const ownerOptions = [
     ...new Set(accounts.map((account) => account.ownerUserId)),
   ].map((ownerId) => ({

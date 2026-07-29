@@ -95,6 +95,10 @@ const GROUP_LABELS: Record<AccountGroupKey, string> = {
   other: "Other",
 };
 
+export function compareTextAscending(a: string, b: string): number {
+  return a.localeCompare(b);
+}
+
 export function groupKeyFor(
   type: string | null,
   subtype: string | null,
@@ -334,11 +338,11 @@ export function buildAccountsPageData(
         )
         .map((account) => account.currency),
     ),
-  ].sort();
+  ].sort(compareTextAscending);
   const historyStartsOn =
     snapshots
       .map((snapshot) => snapshot.snapshotDate)
-      .sort()
+      .sort(compareTextAscending)
       .at(0) ?? null;
 
   return {

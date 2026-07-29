@@ -2,12 +2,24 @@ import { describe, expect, it } from "vitest";
 import {
   applyAccountsPageView,
   buildAccountsPageData,
+  compareTextAscending,
   groupKeyFor,
   type AccountBalanceSnapshot,
   type UnifiedAccountSummary,
 } from "@/lib/accounts-page";
 
 const NOW = new Date("2026-07-29T12:00:00.000Z");
+
+describe("compareTextAscending", () => {
+  it("provides an explicit locale-aware comparator for account filters and history", () => {
+    expect(compareTextAscending).toBeTypeOf("function");
+    expect(["Zulu", "Alpha", "Bravo"].sort(compareTextAscending)).toEqual([
+      "Alpha",
+      "Bravo",
+      "Zulu",
+    ]);
+  });
+});
 
 function account(
   input: Partial<UnifiedAccountSummary> &
