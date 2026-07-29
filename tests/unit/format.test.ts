@@ -6,6 +6,8 @@ import {
   formatDay,
   formatMonth,
   formatMinutesAgo,
+  hoursSince,
+  daysSince,
 } from "@/lib/format";
 
 describe("formatCurrency", () => {
@@ -109,5 +111,18 @@ describe("formatMinutesAgo", () => {
     expect(formatMinutesAgo(null)).toBe("never");
     expect(formatMinutesAgo(undefined)).toBe("never");
     expect(formatMinutesAgo(-5)).toBe("never");
+  });
+});
+
+describe("hoursSince and daysSince", () => {
+  it("calculates hoursSince and daysSince correctly", () => {
+    const twoHoursAgo = new Date(Date.now() - 2 * 3600000).toISOString();
+    const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString();
+
+    expect(hoursSince(twoHoursAgo)).toBe(2);
+    expect(hoursSince(null)).toBeNull();
+
+    expect(daysSince(threeDaysAgo)).toBe(3);
+    expect(daysSince(null)).toBeNull();
   });
 });
