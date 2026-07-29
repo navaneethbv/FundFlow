@@ -25,6 +25,8 @@ suite("account balance snapshot RLS", () => {
 
   let ownerId = "";
   let memberId = "";
+  let privateAccountId = "";
+  let sharedAccountId = "";
   let privateSnapshotId = "";
   let sharedSnapshotId = "";
   let ownerClient: SupabaseClient;
@@ -116,17 +118,19 @@ suite("account balance snapshot RLS", () => {
       current_balance: 200,
       iso_currency_code: "USD",
     });
+    privateAccountId = privateAccount.id as string;
+    sharedAccountId = sharedAccount.id as string;
 
     const privateSnapshot = await insertOne("account_balance_snapshots", {
       user_id: ownerId,
-      account_id: privateAccount.id,
+      account_id: privateAccountId,
       snapshot_date: "2026-07-28",
       current_balance: 100,
       iso_currency_code: "USD",
     });
     const sharedSnapshot = await insertOne("account_balance_snapshots", {
       user_id: ownerId,
-      account_id: sharedAccount.id,
+      account_id: sharedAccountId,
       snapshot_date: "2026-07-28",
       current_balance: 200,
       iso_currency_code: "USD",
@@ -153,11 +157,22 @@ suite("account balance snapshot RLS", () => {
   });
 
   it("lets a household member read only the shared account snapshot", async () => {
+    const { data: accounts, error: accountsError } = await memberClient
+      .from("accounts")
+      .select("id")
+      .in("id", [privateAccountId, sharedAccountId]);
+    const { data: items, error: itemsError } = await memberClient
+      .from("plaid_items")
+      .select("id");
     const { data, error } = await memberClient
       .from("account_balance_snapshots")
       .select("id")
       .in("id", [privateSnapshotId, sharedSnapshotId]);
 
+    expect(accountsError).toBeNull();
+    expect(accounts).toEqual([{ id: sharedAccountId }]);
+    expect(itemsError).toBeNull();
+    expect(items).toEqual([]);
     expect(error).toBeNull();
     expect(data).toEqual([{ id: sharedSnapshotId }]);
   });
