@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/format";
 import Button from "@/components/ui/Button";
 import Field from "@/components/ui/Field";
@@ -22,8 +21,16 @@ export default function ManualAccountsSection({
 }: Readonly<{
   initialAccounts: ManualAccount[];
 }>) {
-  const supabase = createClient();
   const [accounts, setAccounts] = useState(initialAccounts);
+  const [balanceDrafts, setBalanceDrafts] = useState<Record<string, string>>(
+    () =>
+      Object.fromEntries(
+        initialAccounts.map((account) => [
+          account.id,
+          String(Number(account.balance)),
+        ]),
+      ),
+  );
   const [name, setName] = useState("");
   const [accountType, setAccountType] = useState<ManualAccount["account_type"]>("asset");
   const [balance, setBalance] = useState("");
@@ -42,37 +49,87 @@ export default function ManualAccountsSection({
       return;
     }
 
-    const { data: userData } = await supabase.auth.getUser();
-    const { data, error: insertError } = await supabase
-      .from("manual_accounts")
-      .insert({
-        user_id: userData.user?.id,
+    const response = await fetch("/api/manual-accounts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
         name: name.trim(),
-        account_type: accountType,
+        accountType,
         balance: parsedBalance,
-        include_in_net_worth: true,
-      })
-      .select("id, name, account_type, balance, include_in_net_worth")
-      .single();
-
-    if (insertError) {
-      setError(insertError.message);
+      }),
+    });
+    const payload = (await response.json().catch(() => ({}))) as {
+      account?: ManualAccount;
+      error?: string;
+    };
+    if (!response.ok || !payload.account) {
+      setError(payload.error ?? "Could not add the account.");
       return;
     }
 
-    setAccounts((current) => [...current, data as ManualAccount]);
+    const account = payload.account;
+    setAccounts((current) => [...current, account]);
+    setBalanceDrafts((current) => ({
+      ...current,
+      [account.id]: String(Number(account.balance)),
+    }));
     setName("");
     setBalance("");
+  }
+
+  async function saveAccount(account: ManualAccount) {
+    setError(null);
+    const parsedBalance = Number(balanceDrafts[account.id]);
+    if (!Number.isFinite(parsedBalance)) {
+      setError(`Enter a numeric balance for ${account.name}.`);
+      return;
+    }
+
+    const response = await fetch("/api/manual-accounts", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        id: account.id,
+        balance: parsedBalance,
+        includeInNetWorth: account.include_in_net_worth,
+      }),
+    });
+    const payload = (await response.json().catch(() => ({}))) as {
+      account?: ManualAccount;
+      error?: string;
+    };
+    if (!response.ok || !payload.account) {
+      setError(payload.error ?? "Could not update the account.");
+      return;
+    }
+    setAccounts((current) =>
+      current.map((item) =>
+        item.id === account.id ? payload.account! : item,
+      ),
+    );
   }
 
   async function removeAccount(id: string) {
     const previous = accounts;
     setAccounts((current) => current.filter((account) => account.id !== id));
-    const { error: deleteError } = await supabase.from("manual_accounts").delete().eq("id", id);
-    if (deleteError) {
+    const response = await fetch("/api/manual-accounts", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
       setAccounts(previous);
-      setError(deleteError.message);
+      setError(payload.error ?? "Could not remove the account.");
+      return;
     }
+    setBalanceDrafts((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
   }
 
   return (
@@ -83,13 +140,55 @@ export default function ManualAccountsSection({
 
       <div className="mb-4 space-y-2 text-sm">
         {accounts.map((account) => (
-          <div key={account.id} className="flex items-center justify-between gap-3 rounded-field bg-panel-2 p-3">
-            <span>
+          <div
+            key={account.id}
+            className="grid gap-3 rounded-field bg-panel-2 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(9rem,12rem)_auto]"
+          >
+            <span className="self-center">
               <span className="block font-semibold">{account.name}</span>
               <span className="block text-xs text-muted">{account.account_type}</span>
             </span>
-            <span className="flex items-center gap-3">
-              <span className="font-bold">{formatCurrency(Number(account.balance))}</span>
+            <span className="space-y-2">
+              <Input
+                type="number"
+                step="0.01"
+                aria-label={`Balance for ${account.name}`}
+                value={balanceDrafts[account.id] ?? ""}
+                onChange={(event) =>
+                  setBalanceDrafts((current) => ({
+                    ...current,
+                    [account.id]: event.target.value,
+                  }))
+                }
+              />
+              <label className="flex min-h-11 items-center gap-2 text-xs text-muted">
+                <input
+                  type="checkbox"
+                  checked={account.include_in_net_worth}
+                  onChange={(event) =>
+                    setAccounts((current) =>
+                      current.map((item) =>
+                        item.id === account.id
+                          ? {
+                              ...item,
+                              include_in_net_worth: event.target.checked,
+                            }
+                          : item,
+                      ),
+                    )
+                  }
+                />
+                Include in net worth
+              </label>
+            </span>
+            <span className="flex flex-wrap items-center gap-2 sm:justify-end">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => saveAccount(account)}
+              >
+                Save balance
+              </Button>
               <Button variant="ghost" size="sm" onClick={() => removeAccount(account.id)}>
                 Remove
               </Button>
