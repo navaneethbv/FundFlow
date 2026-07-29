@@ -9,6 +9,13 @@ import { logError } from "@/lib/log";
 /**
  * User-controlled account deletion. Removes all Plaid items at Plaid, then
  * deletes the auth user, which cascades to profiles and every user-owned table.
+ *
+ * ADDING A USER-OWNED TABLE? This route needs no edit, but the new table only
+ * gets erased if its owner column is declared
+ * `user_id uuid not null references auth.users (id) on delete cascade`.
+ * A table that references profiles, or omits the cascade, silently survives
+ * account deletion. Sibling checklists: app/api/export/takeout/route.ts and
+ * app/api/cron/backup/route.ts.
  */
 export async function DELETE(request: NextRequest) {
   const auth = await requireUser();
