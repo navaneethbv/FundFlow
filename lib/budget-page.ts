@@ -21,13 +21,17 @@ export interface BudgetSection {
   unbudgetedCount: number;
 }
 
+export type BudgetHorizon = "monthly" | "yearly" | "decade";
+
 export interface BudgetPageData {
   month: string;
+  horizon: BudgetHorizon;
   sections: BudgetSection[];
   totalIncome: { planned: number; actual: number };
   totalExpenses: { planned: number; actual: number; remaining: number };
   contributions: { goals: { name: string; planned: number; actual: number }[] };
   leftToBudget: number;
+  sinkingFundsTotal: number;
 }
 
 export interface BudgetSeedProposal {
@@ -38,8 +42,17 @@ export interface BudgetSeedProposal {
   reason: string;
 }
 
+export function getMonthEndDate(monthStr: string): string {
+  const [y, m] = monthStr.split("-").map(Number);
+  const isLeap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  const daysInMonth = [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const lastDay = daysInMonth[(m || 1) - 1] || 31;
+  return `${monthStr}-${String(lastDay).padStart(2, "0")}`;
+}
+
 export function buildBudgetPage(input: {
   month: string;
+  horizon?: BudgetHorizon;
   budgets: {
     id: string;
     category: string;
@@ -51,7 +64,8 @@ export function buildBudgetPage(input: {
   txns: CanonicalFinanceTransaction[];
   goalContributions?: { name: string; planned: number; actual: number }[];
 }): BudgetPageData {
-  const { month, budgets, periods = [], txns, goalContributions = [] } = input;
+  const { month, horizon = "monthly", budgets, periods = [], txns, goalContributions = [] } = input;
+  const multiplier = horizon === "yearly" ? 12 : horizon === "decade" ? 120 : 1;
 
   const budgetMap = new Map<
     string,
@@ -106,7 +120,8 @@ export function buildBudgetPage(input: {
 
     const grp = (b.group_name as "income" | "fixed" | "flexible" | "non_monthly") || "flexible";
     const periodPlanned = periodPlannedMap.get(b.id);
-    const planned = periodPlanned !== undefined ? periodPlanned : Number(b.monthly_limit);
+    const monthlyLimit = periodPlanned !== undefined ? periodPlanned : Number(b.monthly_limit);
+    const planned = monthlyLimit * multiplier;
 
     const actual = grp === "income" ? actualIncomeMap.get(catLower) || 0 : actualSpendMap.get(catLower) || 0;
     const remaining = grp === "income" ? actual - planned : planned - actual;
@@ -182,13 +197,20 @@ export function buildBudgetPage(input: {
   const contributionsPlanned = goalContributions.reduce((acc, g) => acc + g.planned, 0);
   const leftToBudget = Math.round((totalIncome.planned - totalExpenses.planned - contributionsPlanned) * 100) / 100;
 
+  const sinkingFundsTotal = sectionLines.non_monthly.reduce(
+    (acc, line) => acc + Math.max(0, line.remaining),
+    0,
+  );
+
   return {
     month,
+    horizon,
     sections,
     totalIncome,
     totalExpenses,
     contributions: { goals: goalContributions },
     leftToBudget,
+    sinkingFundsTotal: Math.round(sinkingFundsTotal * 100) / 100,
   };
 }
 

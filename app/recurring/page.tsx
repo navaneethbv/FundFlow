@@ -5,9 +5,15 @@ import ReviewBanner from "@/components/recurring/ReviewBanner";
 import MonthSummary from "@/components/recurring/MonthSummary";
 import RecurringList from "@/components/recurring/RecurringList";
 
+import { notFound } from "next/navigation";
+import { isFeatureEnabled } from "@/lib/feature-flags";
+
 export default async function RecurringPage(
   props: Readonly<{ searchParams: Promise<{ month?: string; scope?: string }> }>,
 ) {
+  if (!isFeatureEnabled("recurringPage")) {
+    notFound();
+  }
   const searchParams = await props.searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

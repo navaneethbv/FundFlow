@@ -14,31 +14,55 @@ export default function BudgetTable({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>("");
   const [loading, setLoading] = useState(false);
+  const [linesState, setLinesState] = useState<BudgetLine[]>(section.lines);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleEditClick = (line: BudgetLine) => {
     if (!line.budgetId) return;
     setEditingId(line.budgetId);
     setEditValue(line.planned.toString());
+    setErrorMessage(null);
   };
 
-  const handleSave = async (budgetId: string) => {
+  const handleSave = async (line: BudgetLine) => {
+    if (!line.budgetId) return;
     const val = parseFloat(editValue);
     if (isNaN(val) || val < 0) return;
 
+    const previousLines = [...linesState];
+
+    // Optimistic Update
+    setLinesState((prev) =>
+      prev.map((l) => {
+        if (l.budgetId === line.budgetId) {
+          const newRemaining = section.key === "income" ? l.actual - val : val - l.actual;
+          return { ...l, planned: val, remaining: newRemaining };
+        }
+        return l;
+      }),
+    );
+
     setLoading(true);
+    setErrorMessage(null);
+
     try {
-      await fetch("/api/budget", {
+      const res = await fetch("/api/budget", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          budget_id: budgetId,
+          budget_id: line.budgetId,
           month,
           planned: val,
         }),
       });
-      window.location.reload();
+
+      if (!res.ok) {
+        throw new Error("Failed to save budget update");
+      }
     } catch {
-      // ignore error for now
+      // Instant Rollback on Error
+      setLinesState(previousLines);
+      setErrorMessage("Save failed — rolled back changes.");
     } finally {
       setLoading(false);
       setEditingId(null);
@@ -54,17 +78,22 @@ export default function BudgetTable({
             Planned: {formatCurrency(section.planned)} · Actual: {formatCurrency(section.actual)}
           </p>
         </div>
-        <span
-          className={`text-sm font-bold ${
-            section.remaining < 0 ? "text-danger" : "text-foreground"
-          }`}
-        >
-          {formatCurrency(section.remaining)} remaining
-        </span>
+        <div className="text-right">
+          <span
+            className={`text-sm font-bold ${
+              section.remaining < 0 ? "text-danger" : "text-foreground"
+            }`}
+          >
+            {formatCurrency(section.remaining)} remaining
+          </span>
+          {errorMessage && (
+            <p className="text-xs text-danger mt-1">{errorMessage}</p>
+          )}
+        </div>
       </div>
 
       <div className="divide-y divide-panel-border overflow-x-auto">
-        {section.lines.map((line) => (
+        {linesState.map((line) => (
           <div
             key={line.category}
             className="flex items-center justify-between px-5 py-3 text-sm hover:bg-panel-hover"
@@ -90,9 +119,9 @@ export default function BudgetTable({
                       autoFocus
                     />
                     <button
-                      onClick={() => line.budgetId && handleSave(line.budgetId)}
+                      onClick={() => handleSave(line)}
                       disabled={loading}
-                      className="rounded bg-accent px-2 py-1 text-xs text-white"
+                      className="rounded bg-accent px-2 py-1 text-xs text-white hover:bg-accent/90"
                     >
                       Save
                     </button>

@@ -1,16 +1,24 @@
 import { createClient } from "@/lib/supabase/server";
 import AppShell from "@/components/shell/AppShell";
-import { buildBudgetPage } from "@/lib/budget-page";
-import { fetchFinanceTransactions } from "@/lib/finance-query";
-import { projectFinanceTransactions } from "@/lib/finance-domain";
+import { buildBudgetPage, getMonthEndDate, type BudgetHorizon } from "@/lib/budget-page";
+import { loadCanonicalProjection } from "@/lib/finance-query";
 import { parseFinancialScope } from "@/lib/financial-scope";
 import BudgetSummary from "@/components/budget/BudgetSummary";
 import BudgetTable from "@/components/budget/BudgetTable";
 import SeedBudgetButton from "@/components/budget/SeedBudgetButton";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 
 export default async function BudgetPage(
-  props: Readonly<{ searchParams: Promise<{ month?: string; scope?: string }> }>,
+  props: Readonly<{
+    searchParams: Promise<{ month?: string; scope?: string; horizon?: string }>;
+  }>,
 ) {
+  if (!isFeatureEnabled("budgetPage")) {
+    notFound();
+  }
+
   const searchParams = await props.searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -20,6 +28,7 @@ export default async function BudgetPage(
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const selectedMonth = searchParams.month || currentMonth;
+  const horizon: BudgetHorizon = (searchParams.horizon as BudgetHorizon) || "monthly";
 
   const scope = parseFinancialScope({
     raw: searchParams.scope,
@@ -51,25 +60,18 @@ export default async function BudgetPage(
     planned: Number(p.planned),
   }));
 
-  // Fetch transactions for the active month
+  // Robust month-end date calculation for queries
   const startDate = `${selectedMonth}-01`;
-  const endDate = `${selectedMonth}-31`;
+  const endDate = getMonthEndDate(selectedMonth);
 
-  const { rows } = await fetchFinanceTransactions(supabase, {
+  const { transactions: canonicalTxns } = await loadCanonicalProjection(supabase, {
     scope,
     window: { start: startDate, endExclusive: endDate },
   });
 
-  const canonicalTxns = projectFinanceTransactions({
-    rows,
-    merchantRules: [],
-    categoryOverrides: [],
-    splits: [],
-    linkedRefunds: [],
-  });
-
   const budgetData = buildBudgetPage({
     month: selectedMonth,
+    horizon,
     budgets,
     periods,
     txns: canonicalTxns,
@@ -82,10 +84,37 @@ export default async function BudgetPage(
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Budget</h1>
             <p className="text-sm text-muted">
-              Plan and track your spending envelopes for {selectedMonth}
+              Plan and track your spending envelopes for {selectedMonth} ({horizon} view)
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <div className="flex items-center rounded-field border border-panel-border bg-panel p-1 text-xs">
+              <Link
+                href={`/budget?month=${selectedMonth}&horizon=monthly`}
+                className={`rounded px-2.5 py-1 font-semibold ${
+                  horizon === "monthly" ? "bg-accent text-white" : "text-muted hover:text-foreground"
+                }`}
+              >
+                Month
+              </Link>
+              <Link
+                href={`/budget?month=${selectedMonth}&horizon=yearly`}
+                className={`rounded px-2.5 py-1 font-semibold ${
+                  horizon === "yearly" ? "bg-accent text-white" : "text-muted hover:text-foreground"
+                }`}
+              >
+                Year
+              </Link>
+              <Link
+                href={`/budget?month=${selectedMonth}&horizon=decade`}
+                className={`rounded px-2.5 py-1 font-semibold ${
+                  horizon === "decade" ? "bg-accent text-white" : "text-muted hover:text-foreground"
+                }`}
+              >
+                Decade
+              </Link>
+            </div>
+
             <SeedBudgetButton />
           </div>
         </div>

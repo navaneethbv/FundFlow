@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { fetchFinanceTransactions } from "@/lib/finance-query";
-import { projectFinanceTransactions } from "@/lib/finance-domain";
+import { loadCanonicalProjection } from "@/lib/finance-query";
 import { parseFinancialScope } from "@/lib/financial-scope";
 import { toCsv } from "@/lib/csv";
 import { writeAudit } from "@/lib/audit";
@@ -25,17 +24,9 @@ export async function GET(request: Request) {
       visibleHouseholdIds: [],
     });
 
-    const { rows } = await fetchFinanceTransactions(supabase, {
+    const { transactions: canonicalTxns } = await loadCanonicalProjection(supabase, {
       scope,
       window: { start: startDate, endExclusive: endDate },
-    });
-
-    const canonicalTxns = projectFinanceTransactions({
-      rows,
-      merchantRules: [],
-      categoryOverrides: [],
-      splits: [],
-      linkedRefunds: [],
     });
 
     const headers = ["date", "merchant", "category", "flow", "amount", "source"];

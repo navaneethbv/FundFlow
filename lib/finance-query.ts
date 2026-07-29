@@ -91,3 +91,87 @@ export async function fetchFinanceTransactions(
     offset += pageSize;
   }
 }
+
+export interface CanonicalProjectionResult {
+  transactions: import("@/lib/finance-domain").CanonicalFinanceTransaction[];
+  truncated: boolean;
+}
+
+export async function loadCanonicalProjection(
+  supabase: SupabaseClient,
+  options: FetchFinanceOptions,
+): Promise<CanonicalProjectionResult> {
+  const userId = scopeQueryUserId(options.scope);
+  const fetchResult = await fetchFinanceTransactions(supabase, options);
+
+  let rulesQuery = supabase
+    .from("merchant_rules")
+    .select("match_type,pattern,display_name,category,enabled")
+    .order("created_at")
+    .limit(5000);
+  let overridesQuery = supabase
+    .from("category_overrides")
+    .select("source_category,display_category")
+    .order("source_category")
+    .limit(5000);
+  let refundsQuery = supabase
+    .from("linked_refunds")
+    .select("charge_transaction_id,refund_transaction_id")
+    .order("charge_transaction_id")
+    .limit(FINANCE_MAX_ROWS);
+
+  if (userId) {
+    rulesQuery = rulesQuery.eq("user_id", userId);
+    overridesQuery = overridesQuery.eq("user_id", userId);
+    refundsQuery = refundsQuery.eq("user_id", userId);
+  }
+
+  const [rulesRes, overridesRes, refundsRes] = await Promise.all([
+    rulesQuery,
+    overridesQuery,
+    refundsQuery,
+  ]);
+
+  const merchantRules = ((rulesRes.data || []) as Array<{
+    match_type: "merchant" | "keyword" | "account";
+    pattern: string;
+    display_name: string | null;
+    category: string | null;
+    enabled: boolean;
+  }>).map((r) => ({
+    matchType: r.match_type,
+    pattern: r.pattern,
+    displayName: r.display_name,
+    category: r.category,
+    enabled: r.enabled,
+  }));
+
+  const categoryOverrides = ((overridesRes.data || []) as Array<{
+    source_category: string;
+    display_category: string;
+  }>).map((c) => ({
+    sourceCategory: c.source_category,
+    displayCategory: c.display_category,
+  }));
+
+  const linkedRefunds = ((refundsRes.data || []) as Array<{
+    charge_transaction_id: string;
+    refund_transaction_id: string;
+  }>).map((rf) => ({
+    chargeTransactionId: rf.charge_transaction_id,
+    refundTransactionId: rf.refund_transaction_id,
+  }));
+
+  const { projectFinanceTransactions } = await import("@/lib/finance-domain");
+
+  return {
+    transactions: projectFinanceTransactions({
+      rows: fetchResult.rows,
+      merchantRules,
+      categoryOverrides,
+      splits: [],
+      linkedRefunds,
+    }),
+    truncated: fetchResult.truncated,
+  };
+}

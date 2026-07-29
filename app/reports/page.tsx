@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import AppShell from "@/components/shell/AppShell";
-import { fetchFinanceTransactions } from "@/lib/finance-query";
-import { projectFinanceTransactions } from "@/lib/finance-domain";
+import { loadCanonicalProjection } from "@/lib/finance-query";
 import { parseFinancialScope } from "@/lib/financial-scope";
 import { summarizeTransactions, buildCashFlowSankeyData } from "@/lib/reports";
 import SankeyChart from "@/components/charts/SankeyChart";
@@ -9,9 +8,15 @@ import { formatCurrency } from "@/lib/format";
 import Link from "next/link";
 import { Download, FileText } from "@/components/ui/icons";
 
+import { notFound } from "next/navigation";
+import { isFeatureEnabled } from "@/lib/feature-flags";
+
 export default async function ReportsPage(
   props: Readonly<{ searchParams: Promise<{ start?: string; end?: string; scope?: string }> }>,
 ) {
+  if (!isFeatureEnabled("reportsPage")) {
+    notFound();
+  }
   const searchParams = await props.searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -29,17 +34,9 @@ export default async function ReportsPage(
     visibleHouseholdIds: [],
   });
 
-  const { rows } = await fetchFinanceTransactions(supabase, {
+  const { transactions: canonicalTxns } = await loadCanonicalProjection(supabase, {
     scope,
     window: { start: startDate, endExclusive: endDate },
-  });
-
-  const canonicalTxns = projectFinanceTransactions({
-    rows,
-    merchantRules: [],
-    categoryOverrides: [],
-    splits: [],
-    linkedRefunds: [],
   });
 
   const summary = summarizeTransactions(canonicalTxns);

@@ -36,10 +36,16 @@ function NavLink({
   );
 }
 
+import { isFeatureEnabled } from "@/lib/feature-flags";
+
 export default function AppSidebar({ active }: Readonly<{ active: AppShellActive }>) {
-  const primaryItems = NAV_ITEMS.filter((i) => i.category === "primary");
-  const planningItems = NAV_ITEMS.filter((i) => i.category === "planning");
-  const manageItems = NAV_ITEMS.filter((i) => i.category === "manage");
+  const enabledItems = NAV_ITEMS.filter(
+    (item) => !item.featureFlag || isFeatureEnabled(item.featureFlag),
+  );
+
+  const primaryItems = enabledItems.filter((i) => i.category === "primary");
+  const planningItems = enabledItems.filter((i) => i.category === "planning");
+  const manageItems = enabledItems.filter((i) => i.category === "manage");
 
   return (
     <>
