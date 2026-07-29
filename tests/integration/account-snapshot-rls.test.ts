@@ -29,6 +29,8 @@ suite("account balance snapshot RLS", () => {
   let sharedAccountId = "";
   let privateSnapshotId = "";
   let sharedSnapshotId = "";
+  let privateTransactionId = "";
+  let sharedTransactionId = "";
   let ownerClient: SupabaseClient;
   let memberClient: SupabaseClient;
 
@@ -137,6 +139,33 @@ suite("account balance snapshot RLS", () => {
     });
     privateSnapshotId = privateSnapshot.id as string;
     sharedSnapshotId = sharedSnapshot.id as string;
+
+    const privateTransaction = await insertOne("transactions", {
+      user_id: ownerId,
+      account_id: privateAccountId,
+      plaid_transaction_id: `snapshot-private-transaction-${stamp}`,
+      date: "2026-07-28",
+      amount: 10,
+      name: "PRIVATE TRANSACTION",
+      merchant_name: "Private transaction",
+      pfc_primary: "GENERAL_MERCHANDISE",
+      pfc_detailed: "GENERAL_MERCHANDISE_OTHER",
+      pending: false,
+    });
+    const sharedTransaction = await insertOne("transactions", {
+      user_id: ownerId,
+      account_id: sharedAccountId,
+      plaid_transaction_id: `snapshot-shared-transaction-${stamp}`,
+      date: "2026-07-28",
+      amount: 20,
+      name: "SHARED TRANSACTION",
+      merchant_name: "Shared transaction",
+      pfc_primary: "GENERAL_MERCHANDISE",
+      pfc_detailed: "GENERAL_MERCHANDISE_OTHER",
+      pending: false,
+    });
+    privateTransactionId = privateTransaction.id as string;
+    sharedTransactionId = sharedTransaction.id as string;
   });
 
   afterAll(async () => {
@@ -175,6 +204,16 @@ suite("account balance snapshot RLS", () => {
     expect(items).toEqual([]);
     expect(error).toBeNull();
     expect(data).toEqual([{ id: sharedSnapshotId }]);
+  });
+
+  it("lets a household member read only the shared account transaction", async () => {
+    const { data, error } = await memberClient
+      .from("transactions")
+      .select("id")
+      .in("id", [privateTransactionId, sharedTransactionId]);
+
+    expect(error).toBeNull();
+    expect(data).toEqual([{ id: sharedTransactionId }]);
   });
 
   it("denies authenticated snapshot writes", async () => {
