@@ -3,6 +3,12 @@ export function formatCurrency(
   currency = "USD",
 ): string {
   const value = amount ?? 0;
+  if (currency === "Unknown currency") {
+    return new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  }
   try {
     return new Intl.NumberFormat("en-US", {
       style: "currency",

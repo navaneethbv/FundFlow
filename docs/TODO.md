@@ -9,7 +9,12 @@ Fourteen phases bringing FundFlow to parity with the reference planner screensho
 
 - **Phase 0 — canonical finance semantics.** Done (2026-07-29), branch `feat/finance-domain-foundation`.
   `lib/finance-domain.ts`, `lib/financial-scope.ts`, `lib/finance-query.ts`, `lib/feature-flags.ts`; dashboard refactored onto the projection with a parity test.
-- Phases 1-13 are pending; each gets its own branch, PR, and TDD expansion before implementation.
+- **Phase 2: Accounts.** Done (2026-07-29), branch `feat/accounts-page`, PR #70.
+  Live daily account snapshots, currency-safe summaries, history, preferences, manual accounts, export, and owner and household RLS are complete.
+- **Phase 3: Cash Flow.** Done (2026-07-29), branch `feat/cash-flow-page`.
+  Canonical Income, Expenses, Savings, period trends, complete breakdowns, Mine and Household scope, and currency separation are complete.
+- Phase 1 and Phases 4-13 are pending.
+  Each gets its own branch, pull request, and TDD expansion before implementation.
 
 Excluded from the program by decision, revisit only if asked: credit score (no consented bureau integration), billing/free-trial/referrals (not a commercial product), Retail Sync (no authorized data source), and investment benchmark overlays (needs a licensed market-data feed, deferred inside Phase 9B).
 

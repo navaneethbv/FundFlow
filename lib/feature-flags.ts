@@ -10,7 +10,7 @@
 /** Every known flag and its shipped default. */
 export const FEATURE_FLAG_DEFAULTS = {
   accountsPage: true,
-  cashFlowPage: false,
+  cashFlowPage: true,
   budgetPage: false,
   recurringPage: false,
   reportsPage: false,

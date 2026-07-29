@@ -19,6 +19,7 @@ export default function LogoutButton() {
       onClick={signOut}
       variant="ghost"
       size="sm"
+      className="whitespace-nowrap"
     >
       Sign out
     </Button>

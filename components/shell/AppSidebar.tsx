@@ -18,6 +18,7 @@ export type AppShellActive =
   | "plan"
   | "wealth"
   | "accounts"
+  | "cashFlow"
   | "transactions"
   | "goals"
   | "wrapped"

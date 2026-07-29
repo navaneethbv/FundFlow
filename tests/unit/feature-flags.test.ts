@@ -7,11 +7,15 @@ import {
 } from "@/lib/feature-flags";
 
 describe("feature flags", () => {
-  it("ships Accounts while keeping every later page off by default", () => {
+  it("ships Accounts and Cash Flow while keeping later pages off by default", () => {
     expect(isFeatureEnabled("accountsPage", {})).toBe(true);
+    expect(isFeatureEnabled("cashFlowPage", {})).toBe(true);
     expect(
       Object.entries(FEATURE_FLAG_DEFAULTS)
-        .filter(([flag]) => flag !== "accountsPage")
+        .filter(
+          ([flag]) =>
+            flag !== "accountsPage" && flag !== "cashFlowPage",
+        )
         .every(([, value]) => value === false),
     ).toBe(true);
   });

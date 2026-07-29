@@ -2,7 +2,61 @@
 
 Last updated: 2026-07-29. Read this first to resume.
 
-## START HERE: Phase 2 Accounts is implemented
+## START HERE: Phase 3 Cash Flow is implemented
+
+Phase 3 is implemented on `feat/cash-flow-page`, stacked on `feat/accounts-page` until PR #70 merges.
+Retarget the Cash Flow pull request to `main` after PR #70 merges.
+
+The released `/cash-flow` server page now provides:
+
+- Monthly, quarterly, and yearly Income, Expenses, Savings, and Savings Rate using the canonical Phase 0 projection.
+- URL-driven range, selected-period, category, group, merchant, Mine, Household, and currency controls.
+- A bounded 24-month and 25,000-row transaction read through `fetchFinanceTransactions`.
+- Real split forwarding to `projectFinanceTransactions`, plus merchant rules, category overrides, linked-refund netting, account names, and transfer exclusion.
+- Currency-separated summaries, period bars, cumulative savings, complete breakdown tables, and an honest unknown-currency state.
+- Loading, empty, partial-data, stale-data, permission-safe, and error states.
+- Accessible chart table twins, 44px controls, and responsive light and dark layouts.
+
+Analytical Cash Flow uses canonical `flow` values so Income and Expenses reconcile with Budget and Reports.
+The existing dashboard cash-movement chart remains a literal depository deposit and withdrawal view and was not changed.
+The page makes no Plaid calls.
+Its sidebar entry remains deferred with Phase 1.
+
+Browser testing and the final code review exposed two existing household projection RLS defects.
+Household members could read a shared account, but the transaction policy directly joined token-protected `plaid_items` rows that members intentionally cannot select.
+The migration `20260729203107_shared_transaction_authorization.sql` replaces the two permissive transaction read policies with one authenticated policy that uses `private.can_read_shared_account(account_id)`.
+It was committed before reader code and applied to live Supabase project `zrxbmmtqqhlwtrinocww` as migration version `20260729203351`.
+Live policy inspection shows one `transactions_select_visible` policy for `authenticated`.
+Transaction splits and linked refund pairs were also owner-only even when their source transactions were shared.
+The migration `20260729204345_shared_projection_metadata_authorization.sql` makes read visibility follow the source transactions, preserves owner-only writes, and adds transaction-key indexes.
+It was also committed before reader code and applied live as migration version `20260729204429`.
+The live RLS regression suite passes at 6 tests, and the credentialed Cash Flow browser journey now includes a partner-owned split transaction and refund pair.
+
+Supabase Advisors show no new transaction-policy finding after the migration.
+They still report older project-wide security and performance findings that predate Phase 3 and were not expanded into this vertical slice.
+Local `supabase db lint --local` remains unavailable because local Postgres is not running.
+
+Visual acceptance is green at 1440 by 900, 768 by 1024, and 390 by 844 in light and dark themes.
+The checks cover canonical totals, owner and partner splits, owner and partner refund netting, merchant renames, category overrides, Mine and Household scope, USD and CAD separation, URL state, touch targets, horizontal overflow, same-origin failures, server errors, browser exceptions, and console errors.
+The visual pass also found and fixed the preexisting mobile header defect where `Sign out` wrapped to two lines.
+
+The current full code gate is:
+
+- `npm run lint`: pass with zero warnings.
+- `npm run typecheck`: pass.
+- `npm test`: pass at 141 files and 978 tests.
+- `npm run build`: pass with `/cash-flow` in the production route manifest.
+- Credentialed `npm run test:e2e -- tests/e2e/cash-flow.spec.ts`: pass.
+- The same Playwright file with `SUPABASE_SECRET_KEY` absent: clean skip.
+- `git diff --check`: pass.
+- `npm audit --audit-level=high`: reports the existing `brace-expansion` advisory through the dev-only ESLint chain.
+  Do not use the suggested forced ESLint 10 major upgrade as an incidental Phase 3 change.
+
+Phase 1 remains deferred until more production pages exist.
+Next, expand and build Phase 4 (Budget) test-first from `docs/superpowers/plans/2026-07-29-monarch-parity.md`.
+Continue carrying the Phase 0 canonical projection, real splits, bounded query, parsed scope, and feature-flag invariants into that page.
+
+## Phase 2 Accounts is implemented
 
 Phase 2 is implemented on `feat/accounts-page`.
 The migration-first ordering constraint was honored before reader code was made eligible to merge.
