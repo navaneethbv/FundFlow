@@ -4,6 +4,7 @@ import { loadCanonicalProjection } from "@/lib/finance-query";
 import { parseFinancialScope } from "@/lib/financial-scope";
 import { summarizeTransactions, buildCashFlowSankeyData } from "@/lib/reports";
 import SankeyChart from "@/components/charts/SankeyChart";
+import ReportsBreakdown from "@/components/reports/ReportsBreakdown";
 import { formatCurrency } from "@/lib/format";
 import Link from "next/link";
 import { Download, FileText } from "@/components/ui/icons";
@@ -12,11 +13,14 @@ import { notFound } from "next/navigation";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 
 export default async function ReportsPage(
-  props: Readonly<{ searchParams: Promise<{ start?: string; end?: string; scope?: string }> }>,
+  props: Readonly<{
+    searchParams: Promise<{ start?: string; end?: string; scope?: string; tab?: string }>;
+  }>,
 ) {
   if (!isFeatureEnabled("reportsPage")) {
     notFound();
   }
+
   const searchParams = await props.searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -27,6 +31,7 @@ export default async function ReportsPage(
   const currentYear = now.getFullYear();
   const startDate = searchParams.start || `${currentYear}-01-01`;
   const endDate = searchParams.end || `${currentYear}-12-31`;
+  const activeTab = searchParams.tab || "cashflow";
 
   const scope = parseFinancialScope({
     raw: searchParams.scope,
@@ -49,10 +54,37 @@ export default async function ReportsPage(
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Reports</h1>
             <p className="text-sm text-muted">
-              Interactive financial flow breakdown and saved definitions ({startDate} to {endDate})
+              Interactive financial flow breakdown ({startDate} to {endDate})
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <div className="flex items-center rounded-field border border-panel-border bg-panel p-1 text-xs">
+              <Link
+                href={`/reports?start=${startDate}&end=${endDate}&tab=cashflow`}
+                className={`rounded px-2.5 py-1 font-semibold ${
+                  activeTab === "cashflow" ? "bg-accent text-white" : "text-muted hover:text-foreground"
+                }`}
+              >
+                Cash Flow
+              </Link>
+              <Link
+                href={`/reports?start=${startDate}&end=${endDate}&tab=spending`}
+                className={`rounded px-2.5 py-1 font-semibold ${
+                  activeTab === "spending" ? "bg-accent text-white" : "text-muted hover:text-foreground"
+                }`}
+              >
+                Spending
+              </Link>
+              <Link
+                href={`/reports?start=${startDate}&end=${endDate}&tab=income`}
+                className={`rounded px-2.5 py-1 font-semibold ${
+                  activeTab === "income" ? "bg-accent text-white" : "text-muted hover:text-foreground"
+                }`}
+              >
+                Income
+              </Link>
+            </div>
+
             <a
               href={`/api/export/report-csv?start=${startDate}&end=${endDate}`}
               className="inline-flex items-center gap-2 rounded-field border border-panel-border bg-panel px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-panel-hover"
@@ -60,13 +92,13 @@ export default async function ReportsPage(
               <Download className="h-3.5 w-3.5" />
               <span>Export CSV</span>
             </a>
-            <Link
-              href="/wrapped"
+            <a
+              href={`/api/reports/pdf?start=${startDate}&end=${endDate}`}
               className="inline-flex items-center gap-2 rounded-field bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent/90"
             >
               <FileText className="h-3.5 w-3.5" />
-              <span>Year in Money</span>
-            </Link>
+              <span>PDF Report</span>
+            </a>
           </div>
         </div>
 
@@ -96,11 +128,14 @@ export default async function ReportsPage(
           </div>
         </div>
 
-        {/* Sankey Flow Diagram */}
-        <div className="rounded-panel border border-panel-border bg-panel p-6">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Cash Flow Diagram</h2>
-          <SankeyChart nodes={sankeyData.nodes} links={sankeyData.links} />
-        </div>
+        {activeTab === "cashflow" ? (
+          <div className="rounded-panel border border-panel-border bg-panel p-6">
+            <h2 className="text-lg font-semibold text-foreground mb-4">Cash Flow Diagram</h2>
+            <SankeyChart nodes={sankeyData.nodes} links={sankeyData.links} />
+          </div>
+        ) : (
+          <ReportsBreakdown transactions={canonicalTxns} type={activeTab as "spending" | "income"} />
+        )}
       </div>
     </AppShell>
   );

@@ -4,16 +4,20 @@ import { expandStreamsForMonth } from "@/lib/recurring-page";
 import ReviewBanner from "@/components/recurring/ReviewBanner";
 import MonthSummary from "@/components/recurring/MonthSummary";
 import RecurringList from "@/components/recurring/RecurringList";
-
+import RecurringCalendar from "@/components/recurring/RecurringCalendar";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 
 export default async function RecurringPage(
-  props: Readonly<{ searchParams: Promise<{ month?: string; scope?: string }> }>,
+  props: Readonly<{
+    searchParams: Promise<{ month?: string; scope?: string; view?: string }>;
+  }>,
 ) {
   if (!isFeatureEnabled("recurringPage")) {
     notFound();
   }
+
   const searchParams = await props.searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -24,6 +28,7 @@ export default async function RecurringPage(
   const today = now.toISOString().slice(0, 10);
   const currentMonth = today.slice(0, 7);
   const selectedMonth = searchParams.month || currentMonth;
+  const activeView = searchParams.view || "list";
 
   // Fetch recurring streams
   const { data: streamsRows } = await supabase
@@ -71,18 +76,44 @@ export default async function RecurringPage(
   return (
     <AppShell active="recurring" email={user.email}>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Recurring</h1>
-          <p className="text-sm text-muted">
-            Track subscriptions, recurring bills, and expected streams for {selectedMonth}
-          </p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Recurring</h1>
+            <p className="text-sm text-muted">
+              Track subscriptions, recurring bills, and expected streams for {selectedMonth}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center rounded-field border border-panel-border bg-panel p-1 text-xs">
+              <Link
+                href={`/recurring?month=${selectedMonth}&view=list`}
+                className={`rounded px-2.5 py-1 font-semibold ${
+                  activeView === "list" ? "bg-accent text-white" : "text-muted hover:text-foreground"
+                }`}
+              >
+                List
+              </Link>
+              <Link
+                href={`/recurring?month=${selectedMonth}&view=calendar`}
+                className={`rounded px-2.5 py-1 font-semibold ${
+                  activeView === "calendar" ? "bg-accent text-white" : "text-muted hover:text-foreground"
+                }`}
+              >
+                Calendar
+              </Link>
+            </div>
+          </div>
         </div>
 
         <ReviewBanner count={monthData.reviewCount} />
 
         <MonthSummary data={monthData} />
 
-        <RecurringList occurrences={monthData.occurrences} />
+        {activeView === "calendar" ? (
+          <RecurringCalendar month={selectedMonth} occurrences={monthData.occurrences} />
+        ) : (
+          <RecurringList occurrences={monthData.occurrences} />
+        )}
       </div>
     </AppShell>
   );

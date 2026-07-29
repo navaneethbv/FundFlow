@@ -25,6 +25,9 @@ export async function PATCH(request: Request) {
       updates.dismissed_at = null;
     } else if (action === "dismiss") {
       updates.dismissed_at = new Date().toISOString();
+    } else if (action === "restore") {
+      updates.dismissed_at = null;
+      updates.reviewed_at = new Date().toISOString();
     } else if (action === "amount" && user_amount !== undefined) {
       updates.user_amount = Number(user_amount);
     } else {
