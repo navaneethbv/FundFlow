@@ -19,6 +19,12 @@ function totalFor(totals: CurrencyTotal[], currency: string): number {
   return totals.find((entry) => entry.currency === currency)?.amount ?? 0;
 }
 
+function formatSignedPercent(pct: number | null): string {
+  if (pct === null) return "Not enough history";
+  const sign = pct >= 0 ? "+" : "";
+  return `${sign}${pct}%`;
+}
+
 function HistoryChart({ summary }: Readonly<{ summary: Summary }>) {
   const W = 720;
   const H = 220;
@@ -86,11 +92,14 @@ export default function SummaryPanel({
   historyStartsOn,
   mode,
   query = {},
+  filtered = false,
 }: Readonly<{
   summary: Summary;
   historyStartsOn: string | null;
   mode: "totals" | "percent";
   query?: SummaryQuery;
+  /** A filter is hiding rows below, but this balance sheet stays portfolio-wide. */
+  filtered?: boolean;
 }>) {
   function summaryHref(nextMode: "totals" | "percent"): string {
     const params = new URLSearchParams();
@@ -131,10 +140,18 @@ export default function SummaryPanel({
         </p>
       )}
 
+      {filtered && (
+        <p className="mb-4 text-sm text-muted">
+          This balance sheet covers every account, including any hidden or
+          filtered out of the list below.
+        </p>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {summary.currencies.map((currency) => {
           const monthChange = summary.netWorthMonthChange[currency];
           const netWorth = totalFor(summary.netWorth, currency);
+          const percentLabel = formatSignedPercent(monthChange?.pct ?? null);
           return (
             <div
               key={currency}
@@ -143,9 +160,7 @@ export default function SummaryPanel({
               <p className="text-xs font-semibold text-muted">{currency}</p>
               <p className="mt-2 font-mono text-2xl font-bold tabular-nums">
                 {mode === "percent"
-                  ? !monthChange || monthChange.pct === null
-                    ? "Not enough history"
-                    : `${monthChange.pct >= 0 ? "+" : ""}${monthChange.pct}%`
+                  ? percentLabel
                   : formatCurrency(netWorth, currency)}
               </p>
               <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">

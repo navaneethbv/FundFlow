@@ -85,7 +85,13 @@ export default async function SettingsPage() {
         .from("budgets")
         .select("id, category, monthly_limit, rollover_enabled, household_id")
         .order("category"),
-      supabase.from("accounts").select("id, name, mask, type, apr").order("name"),
+      // Own accounts only: Settings edits APR, and a household member's shared
+      // accounts are read-only to this user.
+      supabase
+        .from("accounts")
+        .select("id, name, mask, type, apr")
+        .eq("user_id", user?.id ?? "")
+        .order("name"),
       supabase
         .from("merchant_rules")
         .select("id, match_type, pattern, display_name, category, enabled")

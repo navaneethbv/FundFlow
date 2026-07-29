@@ -29,8 +29,10 @@ describe("global interactive affordances", () => {
     expect(layout).toContain("x-nonce");
     expect(layout).toContain("fundflow-theme");
     expect(layout).toContain("suppressHydrationWarning");
-    expect(layout).toContain("link-initialize.js");
-    expect(layout).toContain("defer");
+    // Plaid Link must stay out of the root layout: react-plaid-link injects it
+    // on demand under strict-dynamic, so loading it here would contact
+    // cdn.plaid.com on every page view, signed out included.
+    expect(layout).not.toContain("link-initialize.js");
     expect(toggle).toContain("fundflow-theme");
     expect(toggle).toContain("aria-label");
   });

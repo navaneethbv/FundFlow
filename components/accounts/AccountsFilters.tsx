@@ -7,7 +7,7 @@ export interface AccountsFilterValues {
   type?: AccountGroupKey;
   visibility?: "visible" | "hidden" | "all";
   owner?: string;
-  range?: "30" | "90" | "all";
+  range?: "30" | "90" | "365";
   summary?: "totals" | "percent";
 }
 
@@ -68,7 +68,7 @@ export default function AccountsFilters({
         <Select name="range" defaultValue={current.range ?? "30"}>
           <option value="30">30 days</option>
           <option value="90">90 days</option>
-          <option value="all">All available</option>
+          <option value="365">12 months</option>
         </Select>
       </label>
       {householdScope && (

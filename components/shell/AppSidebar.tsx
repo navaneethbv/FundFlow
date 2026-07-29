@@ -3,6 +3,7 @@ import type { ComponentType } from "react";
 import { cn } from "@/lib/cn";
 import {
   FileText,
+  Landmark,
   LayoutDashboard,
   LineChart,
   Mail,
@@ -37,6 +38,7 @@ const primaryItems: NavItem[] = [
   { label: "Monitor", href: "/dashboard?view=monitor", key: "monitor", icon: LayoutDashboard },
   { label: "Plan", href: "/dashboard?view=plan", key: "plan", icon: PiggyBank },
   { label: "Wealth", href: "/dashboard?view=wealth", key: "wealth", icon: LineChart },
+  { label: "Accounts", href: "/accounts", key: "accounts", icon: Landmark },
   { label: "Transactions", href: "/transactions", key: "transactions", icon: Wallet },
 ];
 

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { createServiceClient } from "@/lib/supabase/service";
-import { writeDailyAccountSnapshots } from "@/lib/account-history";
+import { tryWriteDailyAccountSnapshots } from "@/lib/account-history";
 import { getClientIp, writeAudit } from "@/lib/audit";
 
 const ACCOUNT_TYPES = new Set([
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     if (error) throw error;
     if (!account) throw new Error("Manual account create returned no row");
 
-    await writeDailyAccountSnapshots(user.id);
+    await tryWriteDailyAccountSnapshots(user.id, "manual-accounts.create.snapshot");
     await writeAudit({
       userId: user.id,
       action: "manual_account_created",
@@ -133,7 +133,7 @@ export async function PATCH(request: NextRequest) {
     if (error) throw error;
     if (!account) throw new Error("Manual account update returned no row");
 
-    await writeDailyAccountSnapshots(user.id);
+    await tryWriteDailyAccountSnapshots(user.id, "manual-accounts.update.snapshot");
     await writeAudit({
       userId: user.id,
       action: "manual_account_updated",

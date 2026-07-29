@@ -45,6 +45,16 @@ function displayBalance(
   return group === "credit" || group === "loan" ? Math.abs(value) : value;
 }
 
+/** The `/accounts` hidden-account preference, defensively parsed. */
+function hiddenAccountIds(dashboardPrefs: unknown): Set<string> {
+  if (!dashboardPrefs || typeof dashboardPrefs !== "object") return new Set();
+  const page = (dashboardPrefs as { accountsPage?: unknown }).accountsPage;
+  if (!page || typeof page !== "object") return new Set();
+  const ids = (page as { hiddenIds?: unknown }).hiddenIds;
+  if (!Array.isArray(ids)) return new Set();
+  return new Set(ids.filter((id): id is string => typeof id === "string"));
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -80,15 +90,27 @@ export async function GET(request: NextRequest) {
       manualQuery = manualQuery.eq("user_id", queryUserId);
     }
 
-    const [plaidResult, manualResult] = await Promise.all([
+    const [plaidResult, manualResult, profileResult] = await Promise.all([
       plaidQuery,
       manualQuery,
+      supabase
+        .from("profiles")
+        .select("dashboard_prefs")
+        .eq("id", user.id)
+        .maybeSingle(),
     ]);
     if (plaidResult.error) throw plaidResult.error;
     if (manualResult.error) throw manualResult.error;
+    if (profileResult.error) throw profileResult.error;
+
+    // An account the user hid on /accounts stays out of the export too —
+    // finding it in the CSV would contradict the visibility they chose.
+    const hiddenIds = hiddenAccountIds(profileResult.data?.dashboard_prefs);
 
     const rows = [
-      ...((plaidResult.data ?? []) as PlaidCsvRow[]).map((account) => {
+      ...((plaidResult.data ?? []) as PlaidCsvRow[])
+        .filter((account) => !hiddenIds.has(account.id))
+        .map((account) => {
         const name = `${account.name?.trim() || "Account"}${
           account.mask ? ` (...${account.mask})` : ""
         }`;
@@ -105,18 +127,20 @@ export async function GET(request: NextRequest) {
           asOf: account.updated_at.slice(0, 10),
         };
       }),
-      ...((manualResult.data ?? []) as ManualCsvRow[]).map((account) => ({
-        group: groupKeyFor(account.account_type, null),
-        name: account.name,
-        subtype: account.account_type,
-        balance: displayBalance(
-          account.account_type,
-          null,
-          numeric(account.balance),
-        ),
-        currency: "USD",
-        asOf: account.updated_at.slice(0, 10),
-      })),
+      ...((manualResult.data ?? []) as ManualCsvRow[])
+        .filter((account) => !hiddenIds.has(account.id))
+        .map((account) => ({
+          group: groupKeyFor(account.account_type, null),
+          name: account.name,
+          subtype: account.account_type,
+          balance: displayBalance(
+            account.account_type,
+            null,
+            numeric(account.balance),
+          ),
+          currency: "USD",
+          asOf: account.updated_at.slice(0, 10),
+        })),
     ].sort(
       (a, b) =>
         a.group.localeCompare(b.group) || a.name.localeCompare(b.name),

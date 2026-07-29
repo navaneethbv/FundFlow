@@ -3,8 +3,12 @@ import { buildDataTakeout } from "@/lib/security-account";
 import { errorResponse, requireUser } from "@/lib/http";
 
 /**
- * Full data takeout. Reads run on the cookie-bound client, so RLS scopes every
- * table to the caller.
+ * Full data takeout. Reads run on the cookie-bound client, but RLS alone is no
+ * longer a sufficient scope: `accounts`, `transactions`, and
+ * `account_balance_snapshots` are additionally readable for a household
+ * member's opted-in Plaid connections. Takeout means "the caller's own data",
+ * so every query below filters `user_id` explicitly — do not drop those
+ * filters back to bare RLS.
  *
  * ADDING A USER-OWNED TABLE? It belongs in this list unless it is derived data
  * the user cannot meaningfully re-read (sync bookkeeping, rate-limit windows)
@@ -20,7 +24,7 @@ import { errorResponse, requireUser } from "@/lib/http";
 export async function GET() {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
-  const { supabase } = auth;
+  const { supabase, user } = auth;
 
   try {
     const [
@@ -34,13 +38,13 @@ export async function GET() {
       { data: alertPreferences },
       { data: aiSettings },
     ] = await Promise.all([
-      supabase.from("accounts").select("name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code"),
-      supabase.from("transactions").select("date, amount, iso_currency_code, name, merchant_name, pfc_primary, pfc_detailed, pending"),
+      supabase.from("accounts").select("name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code").eq("user_id", user.id),
+      supabase.from("transactions").select("date, amount, iso_currency_code, name, merchant_name, pfc_primary, pfc_detailed, pending").eq("user_id", user.id),
       supabase.from("budgets").select("category, monthly_limit"),
       supabase.from("goals").select("name, target_amount, current_amount, target_date, status"),
       supabase.from("merchant_rules").select("match_type, pattern, display_name, category, enabled"),
       supabase.from("manual_accounts").select("name, account_type, balance, include_in_net_worth"),
-      supabase.from("account_balance_snapshots").select("account_id, manual_account_id, snapshot_date, current_balance, available_balance, iso_currency_code"),
+      supabase.from("account_balance_snapshots").select("account_id, manual_account_id, snapshot_date, current_balance, available_balance, iso_currency_code").eq("user_id", user.id),
       supabase.from("alert_preferences").select("broken_bank, budget_exceeded, goal_reached, large_transaction, low_cash_forecast"),
       supabase.from("ai_settings").select("enabled"),
     ]);

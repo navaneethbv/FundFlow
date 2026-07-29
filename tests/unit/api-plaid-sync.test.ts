@@ -21,6 +21,8 @@ const mockWriteDailyAccountSnapshots = vi.fn();
 vi.mock("@/lib/account-history", () => ({
   writeDailyAccountSnapshots: (...args: unknown[]) =>
     mockWriteDailyAccountSnapshots(...args),
+  tryWriteDailyAccountSnapshots: (...args: unknown[]) =>
+    mockWriteDailyAccountSnapshots(...args),
 }));
 
 const mockCheckRateLimit = vi.fn();
@@ -95,7 +97,10 @@ describe("POST /api/plaid/sync", () => {
       removed: 0,
       recurring_streams: 3,
     });
-    expect(mockWriteDailyAccountSnapshots).toHaveBeenCalledWith("user-1");
+    expect(mockWriteDailyAccountSnapshots).toHaveBeenCalledWith(
+      "user-1",
+      "plaid.sync.snapshot",
+    );
     expect(mockWriteAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "user-1",

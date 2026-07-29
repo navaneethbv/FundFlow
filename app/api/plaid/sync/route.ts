@@ -4,7 +4,7 @@ import { syncAllForUser } from "@/lib/sync";
 import { refreshRecurringForUser } from "@/lib/recurring";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { writeAudit, getClientIp } from "@/lib/audit";
-import { writeDailyAccountSnapshots } from "@/lib/account-history";
+import { tryWriteDailyAccountSnapshots } from "@/lib/account-history";
 
 /** Auto-pulls (AutoRefresh component) may hit Plaid at most once per window. */
 const AUTO_SYNC_WINDOW_SECONDS = 30 * 60;
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await syncAllForUser(user.id);
-    await writeDailyAccountSnapshots(user.id);
+    await tryWriteDailyAccountSnapshots(user.id, "plaid.sync.snapshot");
 
     // Recurring streams change slowly (weekly at best) but cost one Plaid
     // call per item. Auto-pulls skip them — the manual Refresh and the daily
