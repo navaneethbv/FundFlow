@@ -19,15 +19,15 @@ interface TokenRow {
  */
 export default function ApiTokensSection({
   initialTokens,
-}: {
+}: Readonly<{
   initialTokens: TokenRow[];
-}) {
+}>) {
   const [tokens, setTokens] = useState(initialTokens);
   const [name, setName] = useState("");
   const [minted, setMinted] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function mint(e: React.FormEvent) {
+  async function mint(e: React.SyntheticEvent) {
     e.preventDefault();
     setError(null);
     setMinted(null);

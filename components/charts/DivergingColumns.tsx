@@ -14,7 +14,7 @@ export default function DivergingColumns({
   downName,
   links,
   valueFormatter = compactCurrency,
-}: {
+}: Readonly<{
   labels: string[];
   up: number[];
   down: number[];
@@ -22,7 +22,7 @@ export default function DivergingColumns({
   downName: string;
   links?: (string | undefined)[];
   valueFormatter?: (v: number) => string;
-}) {
+}>) {
   const W = 560;
   const H = 260;
   const PAD = { top: 16, right: 16, bottom: 26, left: 46 };
@@ -35,7 +35,7 @@ export default function DivergingColumns({
   }
 
   const ticks = niceTicks(maxArm, 2);
-  const armMax = ticks[ticks.length - 1]!;
+  const armMax = ticks.at(-1)!;
   const zeroY = PAD.top + plotH / 2;
   const yUp = (v: number) => zeroY - (v / armMax) * (plotH / 2);
   const yDown = (v: number) => zeroY + (v / armMax) * (plotH / 2);

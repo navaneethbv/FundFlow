@@ -9,7 +9,7 @@ interface AuditRow {
   metadata: Record<string, unknown>;
 }
 
-export default function AuditLogSection({ initialRows }: { initialRows: AuditRow[] }) {
+export default function AuditLogSection({ initialRows }: Readonly<{ initialRows: AuditRow[] }>) {
   const [rows, setRows] = useState(initialRows);
   const [status, setStatus] = useState<string | null>(null);
 

@@ -19,10 +19,10 @@ interface SavedView {
 export default function SavedViewsBar({
   initialViews,
   currentParams,
-}: {
+}: Readonly<{
   initialViews: SavedView[];
   currentParams: Record<string, string>;
-}) {
+}>) {
   const supabase = createClient();
   const [views, setViews] = useState(initialViews);
   const [saving, setSaving] = useState(false);
@@ -36,7 +36,7 @@ export default function SavedViewsBar({
     return search ? `/transactions?${search}` : "/transactions";
   }
 
-  async function save(e: React.FormEvent) {
+  async function save(e: React.SyntheticEvent) {
     e.preventDefault();
     setError(null);
     if (!name.trim()) return;

@@ -9,9 +9,9 @@ import Panel from "@/components/ui/Panel";
 
 export default function ExportSection({
   initialEnabled,
-}: {
+}: Readonly<{
   initialEnabled: boolean;
-}) {
+}>) {
   const supabase = createClient();
   const [enabled, setEnabled] = useState(initialEnabled);
   const [saving, setSaving] = useState(false);
@@ -27,6 +27,10 @@ export default function ExportSection({
     setEnabled(next);
     setSaving(false);
   }
+
+  let toggleLabel = "Enable exports";
+  if (saving) toggleLabel = "Saving...";
+  else if (enabled) toggleLabel = "Pause exports";
 
   return (
     <Panel title="Export data" eyebrow="Downloads">
@@ -63,7 +67,7 @@ export default function ExportSection({
         </ButtonLink>
       </div>
       <Button type="button" variant="ghost" size="sm" onClick={toggle} disabled={saving} className="mt-4">
-        {saving ? "Saving..." : enabled ? "Pause exports" : "Enable exports"}
+        {toggleLabel}
       </Button>
     </Panel>
   );

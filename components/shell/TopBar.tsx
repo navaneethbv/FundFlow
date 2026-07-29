@@ -4,7 +4,7 @@ import PrivacyToggle from "@/components/PrivacyToggle";
 import ThemeToggle from "@/components/ThemeToggle";
 import LogoutButton from "@/components/LogoutButton";
 
-export default function TopBar({ email }: { email?: string | null }) {
+export default function TopBar({ email }: Readonly<{ email?: string | null }>) {
   return (
     <header className="sticky top-0 z-30 border-b border-panel-border bg-background/88 backdrop-blur">
       <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-6 lg:px-7">

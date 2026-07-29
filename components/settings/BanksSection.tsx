@@ -23,10 +23,10 @@ function needsReconnect(item: Item): boolean {
 export default function BanksSection({
   initialItems,
   hasHousehold = false,
-}: {
+}: Readonly<{
   initialItems: Item[];
   hasHousehold?: boolean;
-}) {
+}>) {
   const router = useRouter();
   const [items, setItems] = useState<Item[]>(initialItems);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -99,7 +99,7 @@ export default function BanksSection({
                       checked={Boolean(i.shared_household_id)}
                       onChange={(e) => toggleShare(i.id, e.target.checked)}
                     />
-                    Share with household
+                    <span>Share with household</span>
                   </label>
                 )}
               </span>

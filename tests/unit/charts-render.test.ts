@@ -68,7 +68,7 @@ describe("DonutChart", () => {
   it("renders one gapped segment per item without NaN", () => {
     expect(html).not.toContain("NaN");
     const paths = html.match(/<path /g) ?? [];
-    expect(paths.length).toBe(items.length);
+    expect(paths).toHaveLength(items.length);
   });
 
   it("legend lists every label AND value (the relief rule for light slots)", () => {

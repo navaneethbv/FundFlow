@@ -18,12 +18,12 @@ export default function TrendChart({
   labels,
   links,
   valueFormatter = compactCurrency,
-}: {
+}: Readonly<{
   series: TrendSeries[];
   labels: string[];
   links?: (string | undefined)[];
   valueFormatter?: (v: number) => string;
-}) {
+}>) {
   const W = 560;
   const H = 240;
   const PAD = { top: 14, right: 58, bottom: 26, left: 46 };
@@ -37,7 +37,7 @@ export default function TrendChart({
   }
 
   const ticks = niceTicks(maxValue);
-  const yMax = ticks[ticks.length - 1]!;
+  const yMax = ticks.at(-1)!;
   const x = (i: number) =>
     PAD.left + (labels.length === 1 ? plotW / 2 : (i / (labels.length - 1)) * plotW);
   const y = (v: number) => PAD.top + plotH - (v / yMax) * plotH;
@@ -45,7 +45,7 @@ export default function TrendChart({
   const pointsFor = (s: TrendSeries) => s.values.map((v, i) => ({ x: x(i), y: y(v) }));
 
   // Endpoint labels: nudge apart if two series converge at the right edge.
-  const endLabelY = series.map((s) => y(s.values[s.values.length - 1] ?? 0));
+  const endLabelY = series.map((s) => y(s.values.at(-1) ?? 0));
   if (endLabelY.length === 2 && Math.abs(endLabelY[0]! - endLabelY[1]!) < 14) {
     const [a, b] = endLabelY[0]! <= endLabelY[1]! ? [0, 1] : [1, 0];
     const mid = (endLabelY[0]! + endLabelY[1]!) / 2;
@@ -155,6 +155,9 @@ export default function TrendChart({
 
         {/* Generous invisible hit targets carrying native tooltips. */}
         {labels.map((l, i) => {
+          const seriesText = series
+            .map((s) => ` · ${s.name}: ${valueFormatter(s.values[i] ?? 0)}`)
+            .join("");
           const hit = (
             <rect
               x={x(i) - plotW / labels.length / 2}
@@ -163,9 +166,7 @@ export default function TrendChart({
               height={plotH}
               fill="transparent"
             >
-              <title>
-                {`${l}${series.map((s) => ` · ${s.name}: ${valueFormatter(s.values[i] ?? 0)}`).join("")}`}
-              </title>
+              <title>{`${l}${seriesText}`}</title>
             </rect>
           );
           const href = links?.[i];

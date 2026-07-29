@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { formatCurrency, titleCase, formatDay, formatMonth, formatMinutesAgo } from "@/lib/format";
+import {
+  formatCurrency,
+  titleCase,
+  formatFrequency,
+  formatDay,
+  formatMonth,
+  formatMinutesAgo,
+} from "@/lib/format";
 
 describe("formatCurrency", () => {
   it("formats positive numbers as USD currency by default", () => {
@@ -57,6 +64,21 @@ describe("titleCase", () => {
 
   it("handles a mix of spaces and underscores", () => {
     expect(titleCase("some_random  name")).toBe("Some Random Name");
+  });
+});
+
+describe("formatFrequency", () => {
+  it("humanizes known Plaid frequencies", () => {
+    expect(formatFrequency("MONTHLY")).toBe("Monthly");
+    expect(formatFrequency("ANNUALLY")).toBe("Annually");
+    expect(formatFrequency("SEMI_MONTHLY")).toBe("Semi Monthly");
+  });
+
+  it("collapses UNKNOWN, null, undefined, and blanks to \"Recurring\"", () => {
+    expect(formatFrequency("UNKNOWN")).toBe("Recurring");
+    expect(formatFrequency(null)).toBe("Recurring");
+    expect(formatFrequency(undefined)).toBe("Recurring");
+    expect(formatFrequency("   ")).toBe("Recurring");
   });
 });
 

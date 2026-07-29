@@ -12,14 +12,14 @@ import Panel from "@/components/ui/Panel";
  */
 export default function CancelledSubscriptionsSection({
   initialMerchants,
-}: {
+}: Readonly<{
   initialMerchants: string[];
-}) {
+}>) {
   const [merchants, setMerchants] = useState(initialMerchants);
   const [merchant, setMerchant] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  async function add(e: React.FormEvent) {
+  async function add(e: React.SyntheticEvent) {
     e.preventDefault();
     setError(null);
     const name = merchant.trim();

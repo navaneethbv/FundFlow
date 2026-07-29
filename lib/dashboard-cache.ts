@@ -1,30 +1,34 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getDashboardData, type DashboardData } from "@/lib/dashboard";
+import {
+  getDashboardData,
+  type DashboardData,
+  type DashboardOptions,
+} from "@/lib/dashboard";
 
 interface CacheRecord<T> {
   value: T;
   expiresAt: number;
 }
 
+function cacheKeyFor(userId: string, scope: string) {
+  return `${userId}:${scope}`;
+}
+
 export function createDashboardCache<T>(ttlMs: number) {
   const records = new Map<string, CacheRecord<T>>();
 
-  function key(userId: string, scope: string) {
-    return `${userId}:${scope}`;
-  }
-
   return {
     async get(userId: string, scope: string): Promise<T | null> {
-      const record = records.get(key(userId, scope));
+      const record = records.get(cacheKeyFor(userId, scope));
       if (!record) return null;
       if (record.expiresAt <= Date.now()) {
-        records.delete(key(userId, scope));
+        records.delete(cacheKeyFor(userId, scope));
         return null;
       }
       return record.value;
     },
     async set(userId: string, scope: string, value: T): Promise<void> {
-      records.set(key(userId, scope), {
+      records.set(cacheKeyFor(userId, scope), {
         value,
         expiresAt: Date.now() + ttlMs,
       });
@@ -45,8 +49,6 @@ export function createDashboardCache<T>(ttlMs: number) {
 // (RLS-bound) client, so one user's cache can never be served to another.
 const DASHBOARD_TTL_MS = 45_000;
 const dashboardCache = createDashboardCache<DashboardData>(DASHBOARD_TTL_MS);
-
-import type { DashboardOptions } from "@/lib/dashboard";
 
 export function dashboardScopeKey(
   selectedAccountId?: string,

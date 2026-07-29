@@ -19,11 +19,11 @@ export default function DonutChart({
   items,
   centerLabel,
   valueFormatter = compactCurrency,
-}: {
+}: Readonly<{
   items: DonutItem[];
   centerLabel: string;
   valueFormatter?: (v: number) => string;
-}) {
+}>) {
   const SIZE = 184;
   const C = SIZE / 2;
   const total = items.reduce((a, b) => a + Math.max(0, b.amount), 0);

@@ -19,9 +19,9 @@ interface ManualAccount {
 
 export default function ManualAccountsSection({
   initialAccounts,
-}: {
+}: Readonly<{
   initialAccounts: ManualAccount[];
-}) {
+}>) {
   const supabase = createClient();
   const [accounts, setAccounts] = useState(initialAccounts);
   const [name, setName] = useState("");
@@ -33,7 +33,7 @@ export default function ManualAccountsSection({
     .filter((account) => account.include_in_net_worth)
     .reduce((sum, account) => sum + Number(account.balance), 0);
 
-  async function addAccount(event: React.FormEvent) {
+  async function addAccount(event: React.SyntheticEvent) {
     event.preventDefault();
     setError(null);
     const parsedBalance = Number(balance);

@@ -32,7 +32,7 @@ export default function DashboardToolbar({
   itemCount,
   lastSyncAgoMinutes,
   extraParams,
-}: {
+}: Readonly<{
   accounts: AccountSummary[];
   months: string[];
   selectedMonth: string;
@@ -42,7 +42,7 @@ export default function DashboardToolbar({
   itemCount: number;
   lastSyncAgoMinutes: number | null;
   extraParams?: Record<string, string | undefined>;
-}) {
+}>) {
   return (
     <section className="space-y-3 rounded-card border border-panel-border bg-panel p-3 sm:p-4">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">

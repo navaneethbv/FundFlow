@@ -4,10 +4,10 @@ import Panel from "@/components/ui/Panel";
 export default function FreshnessBanner({
   brokenBanks,
   isStale,
-}: {
+}: Readonly<{
   brokenBanks: { institution_name: string | null }[];
   isStale: boolean;
-}) {
+}>) {
   if (brokenBanks.length === 0 && !isStale) return null;
 
   return (

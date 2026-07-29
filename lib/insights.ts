@@ -395,7 +395,9 @@ export function computeMerchantPriceDrift(input: {
   for (const txn of input.txns) {
     if (txn.amount <= 0) continue;
     const month = txn.date.slice(0, 7);
-    const bucket = recentMonths.has(month) ? "recent" : earlierMonths.has(month) ? "earlier" : null;
+    let bucket: "recent" | "earlier" | null = null;
+    if (recentMonths.has(month)) bucket = "recent";
+    else if (earlierMonths.has(month)) bucket = "earlier";
     if (!bucket) continue;
     const key = normalizeName(txn.merchant);
     const entry = byMerchant.get(key) ?? { name: txn.merchant, recent: [], earlier: [] };

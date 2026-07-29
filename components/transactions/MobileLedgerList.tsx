@@ -21,7 +21,7 @@ export interface LedgerCardRow {
  * Phone-width twin of the ledger table: one stacked card per transaction.
  * Rendered below the `sm` breakpoint; the table remains the sm+ rendering.
  */
-export default function MobileLedgerList({ rows }: { rows: LedgerCardRow[] }) {
+export default function MobileLedgerList({ rows }: Readonly<{ rows: LedgerCardRow[] }>) {
   return (
     <ul className="divide-y divide-panel-border">
       {rows.map((row) => (

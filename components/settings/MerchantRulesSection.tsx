@@ -20,9 +20,9 @@ interface MerchantRule {
 
 export default function MerchantRulesSection({
   initialRules,
-}: {
+}: Readonly<{
   initialRules: MerchantRule[];
-}) {
+}>) {
   const supabase = createClient();
   const [rules, setRules] = useState(initialRules);
   const [matchType, setMatchType] = useState<MerchantRule["match_type"]>("keyword");
@@ -31,7 +31,7 @@ export default function MerchantRulesSection({
   const [category, setCategory] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  async function addRule(event: React.FormEvent) {
+  async function addRule(event: React.SyntheticEvent) {
     event.preventDefault();
     setError(null);
     if (!pattern.trim()) {

@@ -9,7 +9,7 @@ import Panel from "@/components/ui/Panel";
  * Demo mode (7.4): load a deterministic sample dataset (blocked while a
  * real bank is connected), or clear it again. For screenshots and demos.
  */
-export default function DemoDataSection({ hasBanks }: { hasBanks: boolean }) {
+export default function DemoDataSection({ hasBanks }: Readonly<{ hasBanks: boolean }>) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);

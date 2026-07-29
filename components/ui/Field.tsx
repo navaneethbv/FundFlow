@@ -7,13 +7,13 @@ export default function Field({
   hint,
   error,
   children,
-}: {
+}: Readonly<{
   label: React.ReactNode;
   htmlFor?: string;
   hint?: React.ReactNode;
   error?: React.ReactNode;
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <div className="space-y-1.5">
       <Label htmlFor={htmlFor}>{label}</Label>

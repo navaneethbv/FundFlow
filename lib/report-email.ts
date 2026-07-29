@@ -42,7 +42,8 @@ function periodLabel(data: WeeklyReportData): string {
   const startMonth = start.split(" ")[0];
   const endMonth = end.split(" ")[0];
   if (startMonth === endMonth) {
-    return `${start}-${end.replace(`${endMonth} `, "")}`;
+    const endWithoutMonth = end.replace(`${endMonth} `, "");
+    return `${start}-${endWithoutMonth}`;
   }
   return `${start}-${end}`;
 }
@@ -53,7 +54,7 @@ function clampPercent(value: number): number {
 
 function accountLabel(value: string): string {
   return value
-    .replace(/\s+(?:(?:•{2}|\*{2,}|x{2,})\s*)?\d{4}\b/gi, "")
+    .replace(/\s+(?:[•*x]{2,}\s*)?\d{4}\b/gi, "")
     .trim();
 }
 
@@ -112,10 +113,13 @@ export function renderWeeklyReportEmail(
   dashboardUrl: string,
 ): { subject: string; html: string; text: string } {
   const range = periodLabel(data);
-  const change =
-    data.changePercent === null
-      ? "No prior data"
-      : `${data.changePercent > 0 ? "+" : ""}${Math.round(data.changePercent * 100)}%`;
+  let change: string;
+  if (data.changePercent === null) {
+    change = "No prior data";
+  } else {
+    const sign = data.changePercent > 0 ? "+" : "";
+    change = `${sign}${Math.round(data.changePercent * 100)}%`;
+  }
   const changeColor =
     data.changeAmount <= 0 ? COLORS.success : COLORS.danger;
   const maxBank = Math.max(1, ...data.banks.map((row) => row.amount));
@@ -149,12 +153,9 @@ export function renderWeeklyReportEmail(
   const budgetHtml = data.budgets.length
     ? data.budgets
         .map((budget) => {
-          const tone =
-            budget.status === "over"
-              ? COLORS.danger
-              : budget.status === "at-risk"
-                ? COLORS.warning
-                : COLORS.success;
+          let tone = COLORS.success;
+          if (budget.status === "over") tone = COLORS.danger;
+          else if (budget.status === "at-risk") tone = COLORS.warning;
           return `
           <tr>
             <td class="mobile-gutter" style="padding:9px 32px;">
@@ -282,7 +283,7 @@ export function renderDailyDigestEmail(
 ): { subject: string; html: string; text: string } {
   const rows = notifications
     .map(
-      (notification) => `<tr><td style="padding:12px 16px;border:1px solid ${COLORS.line};background:#f7f9fc;"><div style="color:${COLORS.ink};font-size:14px;line-height:20px;font-weight:700;">${escapeEmailHtml(titleCase(notification.type.replace(/_/g, " ")))} | ${escapeEmailHtml(notification.title)}</div><div style="padding-top:4px;color:${COLORS.muted};font-size:13px;line-height:19px;">${escapeEmailHtml(notification.body)}</div></td></tr><tr><td height="8"></td></tr>`,
+      (notification) => `<tr><td style="padding:12px 16px;border:1px solid ${COLORS.line};background:#f7f9fc;"><div style="color:${COLORS.ink};font-size:14px;line-height:20px;font-weight:700;">${escapeEmailHtml(titleCase(notification.type.replaceAll("_", " ")))} | ${escapeEmailHtml(notification.title)}</div><div style="padding-top:4px;color:${COLORS.muted};font-size:13px;line-height:19px;">${escapeEmailHtml(notification.body)}</div></td></tr><tr><td height="8"></td></tr>`,
     )
     .join("");
   const html = `<html><body style="margin:0;background:${COLORS.canvas};font-family:Arial,Helvetica,sans-serif;"><table role="presentation" width="100%"><tr><td align="center" style="padding:24px 12px;"><table role="presentation" width="100%" style="max-width:600px;background:${COLORS.panel};border:1px solid ${COLORS.line};"><tr><td style="padding:28px 24px;"><h1 style="margin:0;color:${COLORS.ink};font-size:24px;line-height:31px;">Daily financial alerts</h1><p style="color:${COLORS.muted};font-size:14px;line-height:21px;">${escapeEmailHtml(date)} | ${notifications.length} alert${notifications.length === 1 ? "" : "s"}</p><table role="presentation" width="100%" cellspacing="0" cellpadding="0">${rows}</table><p><a href="${escapeEmailHtml(notificationsUrl)}" style="color:${COLORS.accent};font-weight:700;">Review notifications</a></p></td></tr></table></td></tr></table></body></html>`;
@@ -290,7 +291,7 @@ export function renderDailyDigestEmail(
     `FundFlow daily alerts | ${date}`,
     ...notifications.flatMap((notification) => [
       "",
-      `${titleCase(notification.type.replace(/_/g, " "))}: ${notification.title}`,
+      `${titleCase(notification.type.replaceAll("_", " "))}: ${notification.title}`,
       notification.body,
     ]),
     "",

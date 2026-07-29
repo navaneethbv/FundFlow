@@ -20,6 +20,20 @@ export type PrioritySignal = {
   href?: string;
 };
 
+function buildBudgetSignal(budgetCount: number, budgetRiskCount: number): PrioritySignal {
+  if (budgetCount === 0) {
+    return { label: "Budgets not set", tone: "neutral", href: "/settings#budgets" };
+  }
+  if (budgetRiskCount > 0) {
+    return {
+      label: `${budgetRiskCount} budget${budgetRiskCount === 1 ? "" : "s"} need attention`,
+      tone: "warning",
+      href: "/settings#budgets",
+    };
+  }
+  return { label: "Budgets on track", tone: "neutral" };
+}
+
 export function buildPrioritySignals({
   brokenBankCount,
   isStale,
@@ -29,6 +43,7 @@ export function buildPrioritySignals({
   budgetRiskCount,
   anomalyCount,
 }: PriorityInput): PrioritySignal[] {
+  const budgetSignal = buildBudgetSignal(budgetCount, budgetRiskCount);
   return [
     brokenBankCount > 0
       ? {
@@ -46,19 +61,7 @@ export function buildPrioritySignals({
     lowBalanceRisk
       ? { label: "Low balance risk ahead", tone: "danger" }
       : { label: "Cash outlook stable", tone: "neutral" },
-    budgetCount === 0
-      ? {
-          label: "Budgets not set",
-          tone: "neutral",
-          href: "/settings#budgets",
-        }
-      : budgetRiskCount > 0
-      ? {
-          label: `${budgetRiskCount} budget${budgetRiskCount === 1 ? "" : "s"} need attention`,
-          tone: "warning",
-          href: "/settings#budgets",
-        }
-      : { label: "Budgets on track", tone: "neutral" },
+    budgetSignal,
     anomalyCount > 0
       ? {
           label: `${anomalyCount} unusual activit${anomalyCount === 1 ? "y" : "ies"}`,
@@ -76,7 +79,7 @@ const toneClasses: Record<PriorityTone, string> = {
   danger: "bg-danger",
 };
 
-export default function PriorityRail(props: PriorityInput) {
+export default function PriorityRail(props: Readonly<PriorityInput>) {
   const signals = buildPrioritySignals(props);
 
   return (

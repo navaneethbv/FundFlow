@@ -4,10 +4,10 @@ import { formatCurrency } from "@/lib/format";
 export default function BarList({
   items,
   max,
-}: {
+}: Readonly<{
   items: { label: string; amount: number; href?: string }[];
   max: number;
-}) {
+}>) {
   if (items.length === 0) {
     return <p className="py-4 text-sm text-muted">No data yet.</p>;
   }

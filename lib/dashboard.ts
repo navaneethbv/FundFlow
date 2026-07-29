@@ -624,7 +624,11 @@ export async function getDashboardData(
   const spendPerCard = [...cardSpendMap.entries()]
     .map(([acctId, amount]) => {
       const acct = allAccounts.find((a) => a.id === acctId);
-      const displayName = acct ? `${acct.name ?? "Account"}${acct.mask ? ` ••${acct.mask}` : ""}` : "Unknown Account";
+      let displayName = "Unknown Account";
+      if (acct) {
+        const mask = acct.mask ? ` ••${acct.mask}` : "";
+        displayName = `${acct.name ?? "Account"}${mask}`;
+      }
       return { name: displayName, amount: round2(amount), accountId: acctId };
     })
     .sort((a, b) => b.amount - a.amount);
@@ -688,7 +692,7 @@ export async function getDashboardData(
   const subscriptions = filteredStreams
     .filter((s) => s.stream_type === "outflow")
     .map((s) => ({
-      merchant: s.merchant_name ?? s.description ?? "Unknown",
+      merchant: s.merchant_name?.trim() || s.description?.trim() || "Unknown",
       amount: round2(Math.abs(s.average_amount ?? 0)),
       frequency: s.frequency,
       category: s.category,
@@ -698,7 +702,7 @@ export async function getDashboardData(
   const incomeStreams = filteredStreams
     .filter((s) => s.stream_type === "inflow")
     .map((s) => ({
-      merchant: s.merchant_name ?? s.description ?? "Unknown",
+      merchant: s.merchant_name?.trim() || s.description?.trim() || "Unknown",
       amount: round2(Math.abs(s.average_amount ?? 0)),
       frequency: s.frequency,
     }))
@@ -921,11 +925,14 @@ export async function getDashboardData(
   const debtAccounts = allAccounts.filter(
     (a) => a.type === "credit" && Number(a.current_balance ?? 0) > 0,
   );
-  const debtInputs = debtAccounts.map((a) => ({
-    name: `${a.name ?? "Card"}${a.mask ? ` ••${a.mask}` : ""}`,
-    balance: Number(a.current_balance),
-    apr: a.apr === null || a.apr === undefined ? ASSUMED_APR : Number(a.apr),
-  }));
+  const debtInputs = debtAccounts.map((a) => {
+    const mask = a.mask ? ` ••${a.mask}` : "";
+    return {
+      name: `${a.name ?? "Card"}${mask}`,
+      balance: Number(a.current_balance),
+      apr: a.apr === null || a.apr === undefined ? ASSUMED_APR : Number(a.apr),
+    };
+  });
   const DEBT_EXTRA_MONTHLY = 200;
   const debt =
     debtInputs.length > 0

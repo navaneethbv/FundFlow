@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       .select("id, name, owner_user_id")
       .eq("id", body.householdId)
       .maybeSingle();
-    if (!household || household.owner_user_id !== user.id) {
+    if (household?.owner_user_id !== user.id) {
       return NextResponse.json({ error: "Household not found" }, { status: 404 });
     }
 

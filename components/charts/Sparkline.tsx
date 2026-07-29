@@ -5,7 +5,7 @@ import { linePath } from "@/lib/chart-utils";
  * as an accent end-dot with a 2px surface ring. Decorative trend context —
  * the tile's value + delta carry the numbers, so no axes or labels here.
  */
-export default function Sparkline({ values }: { values: number[] }) {
+export default function Sparkline({ values }: Readonly<{ values: number[] }>) {
   const W = 96;
   const H = 30;
   const PAD = 4;
@@ -18,7 +18,7 @@ export default function Sparkline({ values }: { values: number[] }) {
     x: PAD + (i / (values.length - 1)) * (W - PAD * 2),
     y: PAD + (1 - (v - min) / range) * (H - PAD * 2),
   }));
-  const last = pts[pts.length - 1]!;
+  const last = pts.at(-1)!;
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-24 h-[30px]" aria-hidden="true">

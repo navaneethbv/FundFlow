@@ -22,12 +22,12 @@ export default function EmailPreferences({
   initialWeeklyEnabled,
   initialDailyEnabled,
   initialTimezone,
-}: {
+}: Readonly<{
   email: string;
   initialWeeklyEnabled: boolean;
   initialDailyEnabled: boolean;
   initialTimezone: string;
-}) {
+}>) {
   const supabase = createClient();
   const [weeklyEnabled, setWeeklyEnabled] = useState(initialWeeklyEnabled);
   const [dailyEnabled, setDailyEnabled] = useState(initialDailyEnabled);
@@ -83,12 +83,17 @@ export default function EmailPreferences({
       </p>
       <div className="space-y-3">
         {rows.map((row) => (
-          <label key={row.title} className="flex items-start justify-between gap-4 rounded-field border border-panel-border bg-panel-2 p-4">
+          <label
+            key={row.title}
+            htmlFor={`email-${row.title.replaceAll(" ", "-")}`}
+            className="flex items-start justify-between gap-4 rounded-field border border-panel-border bg-panel-2 p-4"
+          >
             <span>
               <span className="block text-sm font-semibold">{row.title}</span>
               <span className="mt-1 block max-w-xl text-xs leading-5 text-muted">{row.description}</span>
             </span>
             <input
+              id={`email-${row.title.replaceAll(" ", "-")}`}
               type="checkbox"
               className="mt-1 h-4 w-4 accent-accent"
               checked={row.checked}
@@ -131,7 +136,7 @@ export default function EmailPreferences({
         <Button type="button" onClick={save} disabled={saving}>
           {saving ? "Saving..." : "Save email preferences"}
         </Button>
-        {status && <p className="text-sm text-muted" role="status">{status}</p>}
+        {status && <output className="text-sm text-muted">{status}</output>}
       </div>
     </Panel>
   );

@@ -22,6 +22,18 @@ export function titleCase(value: string | null | undefined): string {
     .join(" ");
 }
 
+/**
+ * Humanizes a Plaid recurring-stream frequency ("MONTHLY" → "Monthly").
+ * UNKNOWN or blank collapses to "Recurring" rather than a bare "Unknown".
+ */
+export function formatFrequency(frequency: string | null | undefined): string {
+  const value = frequency?.trim();
+  if (!value || value.toUpperCase() === "UNKNOWN") {
+    return "Recurring";
+  }
+  return titleCase(value);
+}
+
 /** "just now" / "12m ago" / "3h ago" / "2d ago" from a minute count. */
 export function formatMinutesAgo(minutes: number | null | undefined): string {
   if (minutes === null || minutes === undefined || minutes < 0) return "never";

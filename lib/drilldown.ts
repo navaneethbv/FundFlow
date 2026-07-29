@@ -218,7 +218,11 @@ export function buildCategoryDrilldown(input: {
     );
   }
   const transactions = [...byId.values()]
-    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.id.localeCompare(b.id)))
+    .sort((a, b) => {
+      if (a.date < b.date) return 1;
+      if (a.date > b.date) return -1;
+      return a.id.localeCompare(b.id);
+    })
     .slice(0, TXN_CAP);
 
   return { kind: "category", category, sub, total, momDelta, subcategories, merchants, trend, transactions };
@@ -271,7 +275,11 @@ export function buildMerchantDrilldown(input: {
     trend: months.map((month) => ({ month, amount: round2(trendMap.get(month) ?? 0) })),
     transactions: matches
       .slice()
-      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.id.localeCompare(b.id)))
+      .sort((a, b) => {
+      if (a.date < b.date) return 1;
+      if (a.date > b.date) return -1;
+      return a.id.localeCompare(b.id);
+    })
       .slice(0, TXN_CAP),
   };
 }

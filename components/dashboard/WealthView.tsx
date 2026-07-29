@@ -14,22 +14,17 @@ function MetricPanel({
   value,
   tone,
   href,
-}: {
+}: Readonly<{
   title: string;
   value: number;
   tone?: "success" | "danger";
   href?: string;
-}) {
+}>) {
+  let valueClass = "metric-value text-2xl";
+  if (tone === "success") valueClass += " text-success";
+  else if (tone === "danger") valueClass += " text-danger";
   const valueNode = (
-    <p
-      className={
-        tone === "success"
-          ? "metric-value text-2xl text-success"
-          : tone === "danger"
-            ? "metric-value text-2xl text-danger"
-            : "metric-value text-2xl"
-      }
-    >
+    <p className={valueClass}>
       {value > 0 && title === "Net cash flow" ? "+" : ""}
       {formatCurrency(value)}
     </p>
@@ -54,13 +49,13 @@ export default function WealthView({
   selectedMonth,
   linkParams,
   extraParams,
-}: {
+}: Readonly<{
   data: DashboardData;
   selectedAccountId?: string;
   selectedMonth?: string;
   linkParams: DrillLinkParams;
   extraParams?: Record<string, string | undefined>;
-}) {
+}>) {
   const cardItems = data.spendPerCard.map((item) => ({
     label: item.name,
     amount: item.amount,

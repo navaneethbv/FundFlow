@@ -28,7 +28,7 @@ export async function fetchPrivacySafeRows(
     .select("ai_export_enabled")
     .eq("id", userId)
     .single();
-  if (profile && profile.ai_export_enabled === false) {
+  if (profile?.ai_export_enabled === false) {
     return { allowed: false };
   }
 

@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     // Register the webhook for real-time updates, but only for a reachable
     // https origin — a localhost dev URL is unreachable and Plaid rejects it.
     const appUrl = serverEnv.appUrl;
-    if (appUrl && appUrl.startsWith("https://")) {
+    if (appUrl?.startsWith("https://")) {
       req.webhook = `${appUrl}/api/plaid/webhook`;
     }
     // OAuth banks (most large US institutions in production) need a registered

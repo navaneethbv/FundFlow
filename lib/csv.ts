@@ -14,7 +14,7 @@ function escapeField(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return "";
   const str = typeof value === "string" ? neutralizeFormula(value) : String(value);
   if (/[",\n\r]/.test(str)) {
-    return `"${str.replace(/"/g, '""')}"`;
+    return `"${str.replaceAll('"', '""')}"`;
   }
   return str;
 }

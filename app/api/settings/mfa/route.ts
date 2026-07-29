@@ -63,8 +63,8 @@ export async function POST(req: NextRequest) {
 
     if (mfaAction === "enroll") {
       const verifiedFactors = await listVerifiedFactors(supabase);
-      const verifiedFactor = verifiedFactors.find((factor) => factor.id === factorId);
-      if (!verifiedFactor) {
+      const isVerified = verifiedFactors.some((factor) => factor.id === factorId);
+      if (!isVerified) {
         return badRequest("MFA factor must be verified before finalizing enrollment");
       }
       await setProfileMfaFlag(supabase, user.id, true);

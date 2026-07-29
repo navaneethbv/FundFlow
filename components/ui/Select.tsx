@@ -5,7 +5,7 @@ export default function Select({
   className,
   children,
   ...props
-}: React.SelectHTMLAttributes<HTMLSelectElement>) {
+}: Readonly<React.SelectHTMLAttributes<HTMLSelectElement>>) {
   return (
     <select className={cn(fieldClasses, "appearance-none pr-8", className)} {...props}>
       {children}

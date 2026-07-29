@@ -14,10 +14,10 @@ export type RecentTransaction = {
 export default function RecentActivity({
   transactions,
   accountNames,
-}: {
+}: Readonly<{
   transactions: RecentTransaction[];
   accountNames: Map<string, string>;
-}) {
+}>) {
   if (transactions.length === 0) {
     return <p className="py-4 text-sm text-muted">No recent activity yet.</p>;
   }

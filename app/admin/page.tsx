@@ -13,6 +13,12 @@ function countValue(result: CountResult): number {
   return result.count ?? 0;
 }
 
+function jobStatusTone(status: string): "success" | "danger" | "warning" {
+  if (status === "done") return "success";
+  if (status === "error") return "danger";
+  return "warning";
+}
+
 export default async function AdminObservabilityPage() {
   const supabase = await createClient();
   const {
@@ -147,7 +153,7 @@ export default async function AdminObservabilityPage() {
                   <span className="block font-semibold">{job.source ?? "manual"}</span>
                   <span className="block text-xs text-muted">{job.updated_at}</span>
                 </span>
-                <Badge tone={job.status === "done" ? "success" : job.status === "error" ? "danger" : "warning"}>
+                <Badge tone={jobStatusTone(job.status)}>
                   {job.status}
                 </Badge>
               </div>

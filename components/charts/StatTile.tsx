@@ -15,7 +15,7 @@ export default function StatTile({
   upIsGood = true,
   trend,
   chart,
-}: {
+}: Readonly<{
   label: string;
   value: number;
   /** Absolute change vs the comparison period (same unit as value). */
@@ -26,7 +26,7 @@ export default function StatTile({
   trend?: number[];
   /** Decorative mini chart; overrides the default sparkline when provided. */
   chart?: ReactNode;
-}) {
+}>) {
   const showDelta = delta !== undefined && deltaVs;
   const isGood = delta !== undefined && (delta >= 0) === upIsGood;
 

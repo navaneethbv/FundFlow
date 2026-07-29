@@ -50,7 +50,9 @@ function sanitizeSearch(q: string): string {
   return q.replace(/[%_,()."\\]/g, " ").replace(/\s+/g, " ").trim();
 }
 
-export default async function TransactionsPage({ searchParams }: PageProps) {
+const FLOW_LABELS: Record<string, string> = { in: "Money in", out: "Money out" };
+
+export default async function TransactionsPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
   const month = params.month ?? "";
   const accountId = params.accountId ?? "";
@@ -165,7 +167,10 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
   } = await supabase.auth.getUser();
 
   const accountName = new Map(
-    (accounts ?? []).map((a) => [a.id as string, `${a.name ?? "Account"}${a.mask ? ` ••${a.mask}` : ""}`]),
+    (accounts ?? []).map((a) => {
+      const mask = a.mask ? ` ••${a.mask}` : "";
+      return [a.id as string, `${a.name ?? "Account"}${mask}`];
+    }),
   );
 
   const fetchedRows = pageResult.data ?? [];
@@ -224,7 +229,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
       ...rows.map((r) => r.pfc_primary).filter((c): c is string => Boolean(c)),
       ...[...splitsById.values()].flat().map((s) => s.category),
     ]),
-  ].sort();
+  ].sort((a, b) => a.localeCompare(b));
 
   const cardRows: LedgerCardRow[] = rows.map((t) => {
     const ann = annById.get(t.id as string);
@@ -323,7 +328,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
                 ["category", category ? titleCase(category) : ""],
                 ["sub", sub ? titleCase(sub) : ""],
                 ["merchant", merchant],
-                ["flow", flow === "in" ? "Money in" : flow === "out" ? "Money out" : ""],
+                ["flow", FLOW_LABELS[flow ?? ""] ?? ""],
                 ["accountType", accountType ? titleCase(accountType) : ""],
               ] as const
             )

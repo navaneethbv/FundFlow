@@ -10,6 +10,12 @@ import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
+function deliveryStatusTone(status: string): "success" | "danger" | "neutral" {
+  if (status === "sent") return "success";
+  if (status === "failed") return "danger";
+  return "neutral";
+}
+
 export default async function NotificationsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -82,7 +88,7 @@ export default async function NotificationsPage() {
                     <span className="block font-semibold">{delivery.period_start} to {delivery.period_end}</span>
                     <span className="block text-xs text-muted">{delivery.sent_at ? `Sent ${new Date(delivery.sent_at).toLocaleDateString()}` : "Delivery attempted"}</span>
                   </span>
-                  <Badge tone={delivery.status === "sent" ? "success" : delivery.status === "failed" ? "danger" : "neutral"}>{delivery.status}</Badge>
+                  <Badge tone={deliveryStatusTone(delivery.status)}>{delivery.status}</Badge>
                 </div>
               ))}
               {(deliveries ?? []).length === 0 && <p className="py-4 text-sm text-muted">Your first weekly delivery will appear here after it is prepared.</p>}

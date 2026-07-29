@@ -33,7 +33,7 @@ interface MappingState {
  * unchecked by default so the safe path never re-imports duplicates. When
  * columns can't be auto-detected, a manual column-mapping step is offered.
  */
-export default function ImportReviewSection({ accounts }: { accounts: AccountOption[] }) {
+export default function ImportReviewSection({ accounts }: Readonly<{ accounts: AccountOption[] }>) {
   const router = useRouter();
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const [positiveIsIncome, setPositiveIsIncome] = useState(true);
@@ -85,7 +85,7 @@ export default function ImportReviewSection({ accounts }: { accounts: AccountOpt
     }
   }
 
-  async function onPreview(event: React.FormEvent<HTMLFormElement>) {
+  async function onPreview(event: React.SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     setCommitted(null);
     setMapping(null);
@@ -99,7 +99,7 @@ export default function ImportReviewSection({ accounts }: { accounts: AccountOpt
     await runPreview(file);
   }
 
-  function onApplyMapping(event: React.FormEvent<HTMLFormElement>) {
+  function onApplyMapping(event: React.SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!pendingFile) return;
     if (mapDate === "" || mapDescription === "") {

@@ -39,27 +39,29 @@ export async function notifyNewDeviceLogin(
   }
 }
 
+// Order matters: Edge UAs also contain "Chrome", and iPadOS reports "Macintosh",
+// so the more specific pattern must come first. First match wins.
+const OS_PATTERNS: [RegExp, string][] = [
+  [/Windows/i, "Windows"],
+  [/Macintosh|Mac OS/i, "macOS"],
+  [/iPhone|iPad/i, "iOS"],
+  [/Android/i, "Android"],
+  [/Linux/i, "Linux"],
+];
+const BROWSER_PATTERNS: [RegExp, string][] = [
+  [/Edg\//i, "Edge"],
+  [/Chrome\//i, "Chrome"],
+  [/Firefox\//i, "Firefox"],
+  [/Safari\//i, "Safari"],
+];
+
+function matchLabel(userAgent: string, patterns: [RegExp, string][], fallback: string): string {
+  return patterns.find(([re]) => re.test(userAgent))?.[1] ?? fallback;
+}
+
 /** "Mozilla/5.0 (Macintosh; ...) ... Safari/605.1" → coarse device label. */
 export function summarizeUserAgent(userAgent: string): string {
-  const os = /Windows/i.test(userAgent)
-    ? "Windows"
-    : /Macintosh|Mac OS/i.test(userAgent)
-      ? "macOS"
-      : /iPhone|iPad/i.test(userAgent)
-        ? "iOS"
-        : /Android/i.test(userAgent)
-          ? "Android"
-          : /Linux/i.test(userAgent)
-            ? "Linux"
-            : "Unknown OS";
-  const browser = /Edg\//i.test(userAgent)
-    ? "Edge"
-    : /Chrome\//i.test(userAgent)
-      ? "Chrome"
-      : /Firefox\//i.test(userAgent)
-        ? "Firefox"
-        : /Safari\//i.test(userAgent)
-          ? "Safari"
-          : "Unknown browser";
+  const os = matchLabel(userAgent, OS_PATTERNS, "Unknown OS");
+  const browser = matchLabel(userAgent, BROWSER_PATTERNS, "Unknown browser");
   return `${browser} on ${os}`;
 }

@@ -9,9 +9,14 @@ export function niceTicks(maxValue: number, tickCount = 4): number[] {
   const rough = maxValue / tickCount;
   const magnitude = Math.pow(10, Math.floor(Math.log10(rough)));
   const residual = rough / magnitude;
-  const niceStep =
-    (residual <= 1 ? 1 : residual <= 2 ? 2 : residual <= 2.5 ? 2.5 : residual <= 5 ? 5 : 10) *
-    magnitude;
+  const stepThresholds: [number, number][] = [
+    [1, 1],
+    [2, 2],
+    [2.5, 2.5],
+    [5, 5],
+  ];
+  const stepMultiplier = stepThresholds.find(([limit]) => residual <= limit)?.[1] ?? 10;
+  const niceStep = stepMultiplier * magnitude;
   const ticks: number[] = [];
   for (let v = 0; v <= maxValue + niceStep * 0.999; v += niceStep) {
     ticks.push(Math.round(v * 100) / 100);
@@ -45,7 +50,7 @@ export function linePath(points: Point[]): string {
 export function areaPath(points: Point[], baselineY: number): string {
   if (points.length === 0) return "";
   const first = points[0]!;
-  const last = points[points.length - 1]!;
+  const last = points.at(-1)!;
   return `${linePath(points)} L${round2(last.x)} ${round2(baselineY)} L${round2(first.x)} ${round2(baselineY)} Z`;
 }
 

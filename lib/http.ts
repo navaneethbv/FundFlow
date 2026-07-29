@@ -111,11 +111,10 @@ export function errorResponse(
   status = 500,
 ): NextResponse {
   logError(context, error);
-  const message = isProd
-    ? "Something went wrong. Please try again."
-    : error instanceof Error
-      ? error.message
-      : String(error);
+  let message: string;
+  if (isProd) message = "Something went wrong. Please try again.";
+  else if (error instanceof Error) message = error.message;
+  else message = String(error);
   return NextResponse.json({ error: message }, { status });
 }
 
@@ -137,7 +136,7 @@ export async function requireAdmin(): Promise<AuthedContext | NextResponse> {
     .eq("id", auth.user.id)
     .single();
 
-  if (!profile || profile.role !== "admin") {
+  if (profile?.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   return auth;

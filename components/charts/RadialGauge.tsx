@@ -1,4 +1,4 @@
-export default function RadialGauge({ value }: { value: number }) {
+export default function RadialGauge({ value }: Readonly<{ value: number }>) {
   const clamped = Math.max(0, Math.min(100, value));
   const radius = 22;
   const circumference = 2 * Math.PI * radius;

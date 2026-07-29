@@ -45,7 +45,7 @@ type PlaidItem = {
   status: string | null;
 };
 
-export default async function DashboardPage({ searchParams }: PageProps) {
+export default async function DashboardPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
   const selectedAccountId = params.accountId;
   const selectedMonth = params.month;
@@ -114,10 +114,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     accountId: selectedAccountId,
   });
   const accountNames = new Map(
-    data.accounts.map((account) => [
-      account.id,
-      `${account.name ?? "Account"}${account.mask ? ` **${account.mask}` : ""}`,
-    ]),
+    data.accounts.map((account) => {
+      const mask = account.mask ? ` **${account.mask}` : "";
+      return [account.id, `${account.name ?? "Account"}${mask}`];
+    }),
   );
   const linkParams = {
     view: activeView,

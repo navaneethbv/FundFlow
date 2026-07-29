@@ -4,12 +4,12 @@ export default function EmptyState({
   title,
   description,
   action,
-}: {
+}: Readonly<{
   icon?: React.ReactNode;
   title: string;
   description?: string;
   action?: React.ReactNode;
-}) {
+}>) {
   return (
     <div className="rounded-card border border-dashed border-panel-border bg-panel px-4 py-14 text-center shadow-card">
       {icon && (

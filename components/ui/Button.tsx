@@ -58,6 +58,7 @@ export default function Button({
 }) {
   return (
     <button
+      type="button"
       className={buttonVariants({ variant, size, className })}
       disabled={disabled || loading}
       aria-busy={loading || undefined}

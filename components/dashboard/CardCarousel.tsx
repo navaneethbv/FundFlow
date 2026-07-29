@@ -52,14 +52,14 @@ export default function CardCarousel({
   activeView,
   activeTab,
   extraParams,
-}: {
+}: Readonly<{
   accounts: AccountSummary[];
   selectedAccountId?: string;
   selectedMonth?: string;
   activeView?: DashboardView;
   activeTab?: string;
   extraParams?: Record<string, string | undefined>;
-}) {
+}>) {
   if (accounts.length === 0) return null;
   const view = activeView ?? resolveDashboardView({ tab: activeTab });
 
@@ -85,6 +85,9 @@ export default function CardCarousel({
           const design = detectCardDesign(account.name, account.official_name, account.type, account.subtype);
           const image = detectCardImage(account.name, account.official_name, account.mask);
           const selected = selectedAccountId === account.id;
+          let borderClass = design.borderColor;
+          if (selected) borderClass = "border-accent ring-2 ring-accent/45";
+          else if (image) borderClass = "border-white/10";
           return (
             <Link
               href={cardUrl({
@@ -103,7 +106,7 @@ export default function CardCarousel({
                   "relative flex h-[170px] w-[292px] flex-col justify-between overflow-hidden rounded-card border bg-gradient-to-br p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-float",
                   design.bgGradient,
                   image ? "text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.55)]" : design.textColor,
-                  selected ? "border-accent ring-2 ring-accent/45" : image ? "border-white/10" : design.borderColor,
+                  borderClass,
                 )}
               >
                 {image ? (

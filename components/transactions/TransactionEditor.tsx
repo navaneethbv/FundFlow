@@ -21,8 +21,13 @@ interface TransactionEditorProps {
 }
 
 interface SplitRow {
+  id: string;
   category: string;
   amount: string;
+}
+
+function toSplitRow(split: { category: string; amount: number }): SplitRow {
+  return { id: crypto.randomUUID(), category: split.category, amount: String(split.amount) };
 }
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
@@ -40,7 +45,7 @@ export default function TransactionEditor({
   tags: initialTags,
   splits: initialSplits,
   categories,
-}: TransactionEditorProps) {
+}: Readonly<TransactionEditorProps>) {
   const target = round2(Math.abs(transaction.amount));
 
   const [saved, setSaved] = useState({
@@ -51,9 +56,7 @@ export default function TransactionEditor({
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState(saved.note);
   const [tagText, setTagText] = useState(saved.tags.join(", "));
-  const [rows, setRows] = useState<SplitRow[]>(
-    saved.splits.map((s) => ({ category: s.category, amount: String(s.amount) })),
-  );
+  const [rows, setRows] = useState<SplitRow[]>(() => saved.splits.map(toSplitRow));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,9 +70,17 @@ export default function TransactionEditor({
   function openEditor() {
     setNote(saved.note);
     setTagText(saved.tags.join(", "));
-    setRows(saved.splits.map((s) => ({ category: s.category, amount: String(s.amount) })));
+    setRows(saved.splits.map(toSplitRow));
     setError(null);
     setOpen(true);
+  }
+
+  function updateRow(id: string, patch: Partial<Omit<SplitRow, "id">>) {
+    setRows((cur) => cur.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  }
+
+  function removeRow(id: string) {
+    setRows((cur) => cur.filter((r) => r.id !== id));
   }
 
   const parsedTags = tagText
@@ -134,13 +145,18 @@ export default function TransactionEditor({
       </button>
 
       {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
-          role="dialog"
-          aria-modal="true"
-          onClick={(e) => e.target === e.currentTarget && setOpen(false)}
-        >
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-panel-border bg-panel p-5 shadow-pop sm:rounded-2xl">
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+          <button
+            type="button"
+            aria-label="Close editor"
+            className="absolute inset-0 h-full w-full cursor-default bg-black/50"
+            onClick={() => setOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-panel-border bg-panel p-5 shadow-pop sm:rounded-2xl"
+          >
             <div className="mb-4">
               <p className="text-xs uppercase tracking-wider text-muted">
                 {transaction.amount < 0 ? "Money in" : "Money out"} ·{" "}
@@ -201,14 +217,12 @@ export default function TransactionEditor({
               ))}
             </datalist>
             <div className="space-y-2">
-              {rows.map((row, i) => (
-                <div key={i} className="flex gap-2">
+              {rows.map((row) => (
+                <div key={row.id} className="flex gap-2">
                   <input
                     list={`cats-${transaction.id}`}
                     value={row.category}
-                    onChange={(e) =>
-                      setRows((cur) => cur.map((r, j) => (j === i ? { ...r, category: e.target.value } : r)))
-                    }
+                    onChange={(e) => updateRow(row.id, { category: e.target.value })}
                     placeholder="Category"
                     className={cn(fieldClasses, "flex-1")}
                   />
@@ -218,15 +232,13 @@ export default function TransactionEditor({
                     step="0.01"
                     min="0"
                     value={row.amount}
-                    onChange={(e) =>
-                      setRows((cur) => cur.map((r, j) => (j === i ? { ...r, amount: e.target.value } : r)))
-                    }
+                    onChange={(e) => updateRow(row.id, { amount: e.target.value })}
                     placeholder="0.00"
                     className={cn(fieldClasses, "w-24 tabular-nums")}
                   />
                   <button
                     type="button"
-                    onClick={() => setRows((cur) => cur.filter((_, j) => j !== i))}
+                    onClick={() => removeRow(row.id)}
                     className="rounded-field px-2 text-muted hover:bg-panel-hover hover:text-danger"
                     aria-label="Remove split"
                   >
@@ -240,7 +252,9 @@ export default function TransactionEditor({
                 type="button"
                 size="sm"
                 variant="secondary"
-                onClick={() => setRows((cur) => [...cur, { category: "", amount: "" }])}
+                onClick={() =>
+                  setRows((cur) => [...cur, { id: crypto.randomUUID(), category: "", amount: "" }])
+                }
               >
                 Add split
               </Button>

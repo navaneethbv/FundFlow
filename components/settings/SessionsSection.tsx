@@ -10,7 +10,7 @@ interface SessionRow {
   current: boolean;
 }
 
-export default function SessionsSection({ initialSessions }: { initialSessions: SessionRow[] }) {
+export default function SessionsSection({ initialSessions }: Readonly<{ initialSessions: SessionRow[] }>) {
   const [sessions, setSessions] = useState(initialSessions);
   const [status, setStatus] = useState<string | null>(null);
 

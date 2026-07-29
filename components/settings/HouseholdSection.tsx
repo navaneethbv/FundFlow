@@ -11,7 +11,7 @@ interface HouseholdRow {
   name: string;
 }
 
-export default function HouseholdSection({ initialHouseholds }: { initialHouseholds: HouseholdRow[] }) {
+export default function HouseholdSection({ initialHouseholds }: Readonly<{ initialHouseholds: HouseholdRow[] }>) {
   const supabase = createClient();
   const [households, setHouseholds] = useState(initialHouseholds);
   const [name, setName] = useState("");
