@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  applyMerchantRules,
   buildBudgetEnvelopes,
   computeNetWorthSnapshot,
   detectSpendingAnomalies,
@@ -15,7 +14,6 @@ import {
 import { buildPayoffPlan, type PayoffPlan } from "@/lib/debt";
 import { buildRecurringStatuses } from "@/lib/planning-depth";
 import {
-  buildCategoryOverrideMap,
   computeMerchantPriceDrift,
   computeRunwayMonths,
   computeSafeToSpend,
@@ -24,7 +22,6 @@ import {
   type SinkingFundPlan,
   detectPaychecks,
   medianOf,
-  overrideCategory,
   splitEssentialsByMonth,
   type EssentialsSplit,
   type MerchantPriceDrift,
@@ -33,6 +30,14 @@ import {
   type SavingsRatePoint,
 } from "@/lib/insights";
 import { aggregateSpendWithSplits } from "@/lib/transaction-quality";
+import {
+  fromTransactionRow,
+  projectFinanceTransactions,
+  TRANSFER_GROUPS,
+  UNCATEGORIZED,
+  type FinanceFlow,
+  type TransactionRow,
+} from "@/lib/finance-domain";
 import {
   buildCategoryDrilldown,
   buildMerchantDrilldown,
@@ -52,11 +57,12 @@ import {
  * negative = money in (income). Transfers are excluded from spend/income totals.
  */
 
-export const EXCLUDED_PFC = new Set([
-  "TRANSFER_IN",
-  "TRANSFER_OUT",
-  "LOAN_PAYMENTS",
-]);
+/**
+ * Categories that are cash movement rather than spending. Aliases the canonical
+ * `TRANSFER_GROUPS` so the app has exactly one definition; prefer importing it
+ * from `lib/finance-domain` in new code.
+ */
+export const EXCLUDED_PFC = TRANSFER_GROUPS;
 
 export interface AccountSummary {
   id: string;
@@ -154,6 +160,8 @@ interface TxnLite {
   pfc_detailed: string | null;
   account_id: string;
   user_id: string;
+  /** Spend/income classification decided once by the canonical projection. */
+  flow: FinanceFlow;
 }
 
 function monthKey(dateStr: string): string {
@@ -182,11 +190,11 @@ function enumerateMonths(newest: string, oldest: string, cap = 120): string[] {
 }
 
 function isSpending(t: TxnLite): boolean {
-  return t.amount > 0 && !EXCLUDED_PFC.has(t.pfc_primary ?? "");
+  return t.flow === "expense";
 }
 
 function isIncome(t: TxnLite): boolean {
-  return t.amount < 0 && !EXCLUDED_PFC.has(t.pfc_primary ?? "");
+  return t.flow === "income";
 }
 
 function round2(n: number): number {
@@ -348,24 +356,17 @@ export async function getDashboardData(
   const { data: txns } = await scopeUser(
     supabase
       .from("transactions")
-      .select("id, date, amount, merchant_name, name, pfc_primary, pfc_detailed, account_id, user_id")
+      .select(
+        "id, date, amount, merchant_name, name, pfc_primary, pfc_detailed, account_id, user_id, plaid_transaction_id",
+      )
       .gte("date", windowStart)
       .lt("date", windowEndExclusive),
   );
-
-  const allTxnsRawUncleaned = (txns ?? []) as TxnLite[];
 
   const accountNamesById = new Map<string, string>();
   for (const a of allAccounts) {
     accountNamesById.set(a.id, a.name || "");
   }
-
-  const cleanupTxns = allTxnsRawUncleaned.map((t) => ({
-    id: t.id,
-    merchant: t.merchant_name ?? t.name ?? "",
-    category: t.pfc_primary,
-    accountName: accountNamesById.get(t.account_id) || "",
-  }));
 
   const rulesList = (merchantRules ?? []).map((r) => ({
     matchType: r.match_type as "merchant" | "keyword" | "account",
@@ -375,33 +376,50 @@ export async function getDashboardData(
     enabled: r.enabled,
   }));
 
-  const appliedTxns = applyMerchantRules(cleanupTxns, rulesList);
+  // Transaction meaning — merchant rules, category renames, refund netting and
+  // spend/income/transfer classification — is decided once by the canonical
+  // projection so every page agrees with this one.
+  //
+  // Splits are deliberately NOT passed here: the dashboard distributes them
+  // downstream over active-month spend only (see categoryBreakdown), and
+  // handing them to the projection as well would apply them twice.
+  const rawRows = ((txns ?? []) as unknown as TransactionRow[]).map(fromTransactionRow);
+  const rawById = new Map(rawRows.map((row) => [row.id, row]));
 
-  // Custom category renames/merges (1.13), applied after merchant rules.
-  // Overrides touching EXCLUDED_PFC in either direction are dropped so users
-  // can't accidentally hide transfers from (or leak them into) spend totals.
-  const overrideMap = buildCategoryOverrideMap(
-    ((categoryOverrideRows ?? []) as Array<{
+  const canonicalTxns = projectFinanceTransactions({
+    rows: rawRows,
+    merchantRules: rulesList,
+    categoryOverrides: ((categoryOverrideRows ?? []) as Array<{
       source_category: string;
       display_category: string;
-    }>)
-      .filter(
-        (row) =>
-          !EXCLUDED_PFC.has(row.source_category.trim().toUpperCase()) &&
-          !EXCLUDED_PFC.has(row.display_category.trim().toUpperCase()),
-      )
-      .map((row) => ({
-        sourceCategory: row.source_category,
-        displayCategory: row.display_category,
-      })),
-  );
+    }>).map((row) => ({
+      sourceCategory: row.source_category,
+      displayCategory: row.display_category,
+    })),
+    splits: [],
+    linkedRefunds: ((linkedRefunds ?? []) as Array<{
+      charge_transaction_id: string;
+      refund_transaction_id: string;
+    }>).map((row) => ({
+      chargeTransactionId: row.charge_transaction_id,
+      refundTransactionId: row.refund_transaction_id,
+    })),
+    accountNames: accountNamesById,
+  });
 
-  const allTxnsRaw = allTxnsRawUncleaned.map((t, index) => {
-    const clean = appliedTxns[index]!;
+  const allTxnsRaw: TxnLite[] = canonicalTxns.map((row) => {
+    const source = rawById.get(row.sourceTransactionId)!;
     return {
-      ...t,
-      merchant_name: clean.merchant,
-      pfc_primary: overrideCategory(overrideMap, clean.category),
+      id: row.id,
+      date: row.date,
+      amount: row.signedAmount,
+      merchant_name: row.merchant,
+      name: source.name,
+      pfc_primary: row.groupKey === UNCATEGORIZED ? null : row.groupKey,
+      pfc_detailed: source.pfcDetailed,
+      account_id: row.accountId ?? "",
+      user_id: source.userId,
+      flow: row.flow,
     };
   });
 
@@ -419,21 +437,11 @@ export async function getDashboardData(
       (!itemAccountIds || itemAccountIds.has(t.account_id)),
   );
 
-  // Linked refund pairs net out of spend/income aggregation: a fully-refunded
-  // purchase is neither spend nor income, so both the charge and its refund are
-  // dropped from spend/income/category/merchant/card/bank totals. Cash-flow
-  // (literal depository money movement) and the ledger list still show them.
-  const linkedRefundIds = new Set<string>();
-  for (const row of (linkedRefunds ?? []) as Array<{
-    charge_transaction_id: string;
-    refund_transaction_id: string;
-  }>) {
-    linkedRefundIds.add(row.charge_transaction_id);
-    linkedRefundIds.add(row.refund_transaction_id);
-  }
-  const spendTxns = linkedRefundIds.size
-    ? filteredTxns.filter((t) => !linkedRefundIds.has(t.id))
-    : filteredTxns;
+  // Linked refund pairs already carry flow "transfer" from the projection: a
+  // fully-refunded purchase is neither spend nor income, so both halves fall
+  // out of spend/income/category/merchant/card/bank totals. Cash-flow (literal
+  // depository money movement) and the ledger list still show them.
+  const spendTxns = filteredTxns;
 
   // Per-month aggregates (spending, income, depository cash flow) for the
   // 6-month window ending at activeMonth. One account-type lookup map keeps

@@ -214,7 +214,9 @@ export interface TransactionRow {
   id: string;
   user_id: string;
   account_id: string;
-  plaid_transaction_id: string;
+  /** Absent when a caller selects a narrower column set; provenance then
+   *  falls back to "plaid" rather than throwing. */
+  plaid_transaction_id?: string | null;
   date: string;
   amount: number;
   merchant_name: string | null;
@@ -224,18 +226,20 @@ export interface TransactionRow {
   pending?: boolean | null;
 }
 
+function sourceFromProviderId(providerId: string): FinanceSource {
+  if (providerId.startsWith("import-")) return "import";
+  if (providerId.startsWith("manual-")) return "manual";
+  return "plaid";
+}
+
 /**
  * Adapts today's schema to the canonical input. Provenance comes from the
  * `plaid_transaction_id` prefix convention (`import-`, `manual-`); Phase 12
  * replaces this with the explicit `source` and `manual_account_id` columns.
  */
 export function fromTransactionRow(row: TransactionRow): RawFinanceTransaction {
-  const providerId = row.plaid_transaction_id;
-  const source: FinanceSource = providerId.startsWith("import-")
-    ? "import"
-    : providerId.startsWith("manual-")
-      ? "manual"
-      : "plaid";
+  const providerId = row.plaid_transaction_id ?? "";
+  const source = sourceFromProviderId(providerId);
 
   return {
     id: row.id,
