@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { getDashboardData } from "@/lib/dashboard";
+import { breakdownBy, computePeriodCashFlow } from "@/lib/cash-flow";
 import {
   financeTotals,
   fromTransactionRow,
   projectFinanceTransactions,
   type TransactionRow,
 } from "@/lib/finance-domain";
+import type { TransactionSplit } from "@/lib/transaction-quality";
 
 type Row = Record<string, unknown>;
 
@@ -209,7 +211,7 @@ function supabase() {
 }
 
 /** The same ledger, projected directly — the reference the dashboard must match. */
-function reference() {
+function reference(splits: TransactionSplit[] = []) {
   return projectFinanceTransactions({
     rows: (TRANSACTIONS as unknown as TransactionRow[]).map(fromTransactionRow),
     merchantRules: MERCHANT_RULES.map((r) => ({
@@ -223,7 +225,7 @@ function reference() {
       sourceCategory: r.source_category as string,
       displayCategory: r.display_category as string,
     })),
-    splits: [],
+    splits,
     linkedRefunds: LINKED_REFUNDS.map((r) => ({
       chargeTransactionId: r.charge_transaction_id as string,
       refundTransactionId: r.refund_transaction_id as string,
@@ -274,5 +276,39 @@ describe("dashboard / canonical projection parity", () => {
     expect(data.merchantBreakdown.some((m) => m.merchant === "Returned Store")).toBe(false);
     // Deposits include the $200 refund and the $3,500 paycheck.
     expect(data.cashFlow.deposits).toBe(3700);
+  });
+
+  it("reconciles the selected Cash Flow period with canonical totals while passing real splits", () => {
+    const projected = reference([
+      {
+        transactionId: "groceries",
+        category: "Groceries",
+        amount: 70.5,
+      },
+      {
+        transactionId: "groceries",
+        category: "Household supplies",
+        amount: 50,
+      },
+    ]);
+    const totals = financeTotals(projected);
+    const july = computePeriodCashFlow(projected, "monthly")[0];
+
+    expect(july).toMatchObject({
+      key: "2026-07",
+      income: totals.income,
+      expenses: totals.expenses,
+      savings: totals.net,
+    });
+    expect(july?.savingsRate).toBe(94.13);
+    expect(breakdownBy(projected, "category", "expense")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "Groceries", amount: 70.5 }),
+        expect.objectContaining({
+          label: "Household supplies",
+          amount: 50,
+        }),
+      ]),
+    );
   });
 });

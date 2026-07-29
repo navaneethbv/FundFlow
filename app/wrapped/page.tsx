@@ -31,9 +31,12 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
     data: { user },
   } = await supabase.auth.getUser();
 
+  // "The user's own ledger" is now an explicit filter: RLS also exposes a
+  // household member's shared transactions, and this recap is personal.
   const { data: rows } = await supabase
     .from("transactions")
     .select("date, amount, merchant_name, name, pfc_primary")
+    .eq("user_id", user?.id ?? "")
     .gte("date", `${year}-01-01`)
     .lt("date", `${Number(year) + 1}-01-01`);
 

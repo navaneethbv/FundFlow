@@ -1,8 +1,21 @@
+/**
+ * Bucket label for rows whose currency cannot be resolved at all. Callers pass
+ * it where an ISO code goes, and it renders as a bare number rather than
+ * guessing a symbol. A merely malformed code still falls back to `$` below.
+ */
+export const UNKNOWN_CURRENCY = "Unknown currency";
+
 export function formatCurrency(
   amount: number | null | undefined,
   currency = "USD",
 ): string {
   const value = amount ?? 0;
+  if (currency === UNKNOWN_CURRENCY) {
+    return new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  }
   try {
     return new Intl.NumberFormat("en-US", {
       style: "currency",

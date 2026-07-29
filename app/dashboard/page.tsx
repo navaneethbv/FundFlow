@@ -112,6 +112,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
     supabase,
     month: data.selectedMonth,
     accountId: selectedAccountId,
+    userId: dashboardScope === "household" ? undefined : user?.id,
   });
   const accountNames = new Map(
     data.accounts.map((account) => {

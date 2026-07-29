@@ -1,4 +1,8 @@
-import { niceTicks, compactCurrency } from "@/lib/chart-utils";
+import {
+  compactCurrency,
+  linePath,
+  niceTicks,
+} from "@/lib/chart-utils";
 
 /**
  * Diverging columns around a zero baseline — polarity data (money in vs money
@@ -13,6 +17,7 @@ export default function DivergingColumns({
   upName,
   downName,
   links,
+  line,
   valueFormatter = compactCurrency,
 }: Readonly<{
   labels: string[];
@@ -21,6 +26,10 @@ export default function DivergingColumns({
   upName: string;
   downName: string;
   links?: (string | undefined)[];
+  line?: {
+    name: string;
+    values: number[];
+  };
   valueFormatter?: (v: number) => string;
 }>) {
   const W = 560;
@@ -29,7 +38,8 @@ export default function DivergingColumns({
   const plotW = W - PAD.left - PAD.right;
   const plotH = H - PAD.top - PAD.bottom;
 
-  const maxArm = Math.max(0, ...up, ...down);
+  const lineMagnitude = (line?.values ?? []).map((value) => Math.abs(value));
+  const maxArm = Math.max(0, ...up, ...down, ...lineMagnitude);
   if (maxArm <= 0 || labels.length === 0) {
     return <p className="text-sm opacity-60 py-4">No data yet.</p>;
   }
@@ -39,6 +49,8 @@ export default function DivergingColumns({
   const zeroY = PAD.top + plotH / 2;
   const yUp = (v: number) => zeroY - (v / armMax) * (plotH / 2);
   const yDown = (v: number) => zeroY + (v / armMax) * (plotH / 2);
+  const yLine = (v: number) =>
+    zeroY - (v / armMax) * (plotH / 2);
 
   const band = plotW / labels.length;
   const colW = Math.min(24, band * 0.5);
@@ -72,9 +84,24 @@ export default function DivergingColumns({
           <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: "var(--viz-neg)" }} />
           {downName}
         </span>
+        {line && (
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              aria-hidden
+              className="inline-block h-0.5 w-3"
+              style={{ background: "var(--viz-ink)" }}
+            />
+            {line.name}
+          </span>
+        )}
       </div>
 
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label={`${upName} vs ${downName}`}>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full h-auto"
+        role="img"
+        aria-label={`${upName} vs ${downName}${line ? ` with ${line.name}` : ""}`}
+      >
         {gridLevels.map((t) => (
           <g key={t}>
             <line x1={PAD.left} x2={W - PAD.right} y1={yUp(t)} y2={yUp(t)} stroke="var(--viz-grid)" strokeWidth={1} />
@@ -90,6 +117,23 @@ export default function DivergingColumns({
 
         <line x1={PAD.left} x2={W - PAD.right} y1={zeroY} y2={zeroY} stroke="var(--viz-axis)" strokeWidth={1} />
 
+        {line && (
+          <path
+            data-series={line.name}
+            d={linePath(
+              labels.map((_, index) => ({
+                x: xMid(index),
+                y: yLine(line.values[index] ?? 0),
+              })),
+            )}
+            fill="none"
+            stroke="var(--viz-ink)"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        )}
+
         {labels.map((l, i) => (
           <g key={l}>
             <path d={column(i, up[i] ?? 0, "up")} fill="var(--viz-pos)" />
@@ -100,19 +144,19 @@ export default function DivergingColumns({
             {links?.[i] ? (
               <a
                 href={links[i]}
-                aria-label={`View ${l}, ${upName} ${valueFormatter(up[i] ?? 0)}, ${downName} ${valueFormatter(down[i] ?? 0)}`}
+                aria-label={`View ${l}, ${upName} ${valueFormatter(up[i] ?? 0)}, ${downName} ${valueFormatter(down[i] ?? 0)}${line ? `, ${line.name} ${valueFormatter(line.values[i] ?? 0)}` : ""}`}
                 className="focus-visible:outline-2"
               >
                 <rect x={PAD.left + band * i} y={PAD.top} width={band} height={plotH} fill="transparent">
                   <title>
-                    {`${l} · ${upName}: ${valueFormatter(up[i] ?? 0)} · ${downName}: ${valueFormatter(down[i] ?? 0)} · Net: ${valueFormatter((up[i] ?? 0) - (down[i] ?? 0))}`}
+                    {`${l} · ${upName}: ${valueFormatter(up[i] ?? 0)} · ${downName}: ${valueFormatter(down[i] ?? 0)} · Net: ${valueFormatter((up[i] ?? 0) - (down[i] ?? 0))}${line ? ` · ${line.name}: ${valueFormatter(line.values[i] ?? 0)}` : ""}`}
                   </title>
                 </rect>
               </a>
             ) : (
               <rect x={PAD.left + band * i} y={PAD.top} width={band} height={plotH} fill="transparent">
                 <title>
-                  {`${l} · ${upName}: ${valueFormatter(up[i] ?? 0)} · ${downName}: ${valueFormatter(down[i] ?? 0)} · Net: ${valueFormatter((up[i] ?? 0) - (down[i] ?? 0))}`}
+                  {`${l} · ${upName}: ${valueFormatter(up[i] ?? 0)} · ${downName}: ${valueFormatter(down[i] ?? 0)} · Net: ${valueFormatter((up[i] ?? 0) - (down[i] ?? 0))}${line ? ` · ${line.name}: ${valueFormatter(line.values[i] ?? 0)}` : ""}`}
                 </title>
               </rect>
             )}
@@ -131,6 +175,9 @@ export default function DivergingColumns({
               <th className="py-1 pr-2 font-medium">{upName}</th>
               <th className="py-1 pr-2 font-medium">{downName}</th>
               <th className="py-1 pr-2 font-medium">Net</th>
+              {line && (
+                <th className="py-1 pr-2 font-medium">{line.name}</th>
+              )}
             </tr>
           </thead>
           <tbody className="tabular-nums">
@@ -140,6 +187,11 @@ export default function DivergingColumns({
                 <td className="py-1 pr-2">{valueFormatter(up[i] ?? 0)}</td>
                 <td className="py-1 pr-2">{valueFormatter(down[i] ?? 0)}</td>
                 <td className="py-1 pr-2">{valueFormatter((up[i] ?? 0) - (down[i] ?? 0))}</td>
+                {line && (
+                  <td className="py-1 pr-2">
+                    {valueFormatter(line.values[i] ?? 0)}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -148,4 +200,3 @@ export default function DivergingColumns({
     </div>
   );
 }
-
