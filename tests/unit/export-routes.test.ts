@@ -108,11 +108,30 @@ describe("Export API Routes", () => {
   });
 
   describe("GET /api/export/takeout", () => {
-    it("returns data takeout payload", async () => {
+    it("returns data takeout payload scoped to the caller", async () => {
+      // Tables with a household-shared read policy must be filtered by
+      // user_id, or takeout hands the caller a household member's records.
+      const scopedTables = new Set([
+        "accounts",
+        "transactions",
+        "account_balance_snapshots",
+      ]);
+      const eqCalls: Array<[string, string, string]> = [];
       const mockSupabase = {
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockResolvedValue({ data: [] }),
-        }),
+        from: vi.fn((table: string) => ({
+          select: vi.fn(() => {
+            const result = { data: [] };
+            const chain = {
+              eq: vi.fn((column: string, value: string) => {
+                eqCalls.push([table, column, value]);
+                return Promise.resolve(result);
+              }),
+              then: (resolve: (value: { data: never[] }) => unknown) =>
+                Promise.resolve(result).then(resolve),
+            };
+            return chain;
+          }),
+        })),
       };
       mockRequireUser.mockResolvedValue({
         user: { id: "u1" },
@@ -121,9 +140,19 @@ describe("Export API Routes", () => {
 
       const res = await takeoutGet();
       expect(res.status).toBe(200);
+      for (const table of scopedTables) {
+        expect(eqCalls).toContainEqual([table, "user_id", "u1"]);
+      }
       const body = await res.json();
       expect(body).toHaveProperty("takeout");
-      expect(mockBuildDataTakeout).toHaveBeenCalled();
+      expect(mockSupabase.from).toHaveBeenCalledWith(
+        "account_balance_snapshots",
+      );
+      expect(mockBuildDataTakeout).toHaveBeenCalledWith(
+        expect.objectContaining({
+          account_balance_snapshots: [],
+        }),
+      );
     });
 
     it("returns 500 when database call throws an error", async () => {

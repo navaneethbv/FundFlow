@@ -39,6 +39,7 @@ export interface DemoDataset {
     subtype: string;
     mask: string;
     current_balance: number;
+    iso_currency_code: string;
   }>;
   transactions: Array<{
     plaid_transaction_id: string;
@@ -130,6 +131,7 @@ export function buildDemoDataset(input: {
         subtype: "checking",
         mask: "0001",
         current_balance: 4820.55,
+        iso_currency_code: "USD",
       },
       {
         plaid_account_id: `demo-card-${input.userId}`,
@@ -138,8 +140,30 @@ export function buildDemoDataset(input: {
         subtype: "credit card",
         mask: "0002",
         current_balance: 1240.3,
+        iso_currency_code: "USD",
       },
     ],
     transactions,
   };
+}
+
+export function buildDemoAccountSnapshots(input: {
+  userId: string;
+  today: string;
+  accounts: DemoDataset["accounts"];
+  accountIds: string[];
+}) {
+  if (input.accounts.length !== input.accountIds.length) {
+    throw new Error("Demo account ids did not match the inserted accounts.");
+  }
+
+  return input.accounts.map((account, index) => ({
+    user_id: input.userId,
+    account_id: input.accountIds[index]!,
+    manual_account_id: null,
+    snapshot_date: input.today,
+    current_balance: account.current_balance,
+    available_balance: null,
+    iso_currency_code: account.iso_currency_code,
+  }));
 }

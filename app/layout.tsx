@@ -54,8 +54,22 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
-        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: serviceWorkerScript }} />
+        <script
+          nonce={nonce}
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: themeScript }}
+        />
+        {/*
+          Plaid Link is NOT loaded here. `react-plaid-link` injects it on demand
+          from the two components that need it, which `strict-dynamic` already
+          permits. Loading it globally would hand cdn.plaid.com a request on
+          every page view, including signed-out ones.
+        */}
+        <script
+          nonce={nonce}
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: serviceWorkerScript }}
+        />
       </head>
       <body className="min-h-full flex flex-col">
         {children}

@@ -57,6 +57,7 @@ export async function GET(request: NextRequest) {
           { data: goals },
           { data: rules },
           { data: manualAccounts },
+          { data: accountBalanceSnapshots },
         // ADDING A USER-OWNED TABLE? Add it here too if losing it would cost
         // the user data they cannot re-sync from Plaid (their own budgets,
         // goals, rules, manual records, annotations). Derived or re-syncable
@@ -79,9 +80,24 @@ export async function GET(request: NextRequest) {
           service.from("goals").select("name, target_amount, saved_amount, target_date").eq("user_id", userId),
           service.from("merchant_rules").select("match_type, pattern, display_name, category, enabled").eq("user_id", userId),
           service.from("manual_accounts").select("name, account_type, balance, include_in_net_worth").eq("user_id", userId),
+          service
+            .from("account_balance_snapshots")
+            .select("account_id, manual_account_id, snapshot_date, current_balance, available_balance, iso_currency_code")
+            .eq("user_id", userId),
         ]);
 
-        if ((transactions ?? []).length === 0) continue; // nothing to protect yet
+        const protectedSections = [
+          accounts,
+          transactions,
+          budgets,
+          goals,
+          rules,
+          manualAccounts,
+          accountBalanceSnapshots,
+        ];
+        if (!protectedSections.some((rows) => (rows ?? []).length > 0)) {
+          continue;
+        }
 
         const archive = buildBackupArchive(
           {
@@ -93,6 +109,7 @@ export async function GET(request: NextRequest) {
             goals: goals ?? [],
             merchant_rules: rules ?? [],
             manual_accounts: manualAccounts ?? [],
+            account_balance_snapshots: accountBalanceSnapshots ?? [],
           },
           backupKey,
         );
@@ -110,7 +127,13 @@ export async function GET(request: NextRequest) {
         await writeAudit({
           userId,
           action: "data_backup",
-          metadata: { rows: (transactions ?? []).length, date: today },
+          metadata: {
+            rows: protectedSections.reduce(
+              (total, rows) => total + (rows ?? []).length,
+              0,
+            ),
+            date: today,
+          },
         });
         sent += 1;
       } catch (err) {

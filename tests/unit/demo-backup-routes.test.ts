@@ -116,7 +116,8 @@ describe("POST /api/demo", () => {
     });
     serviceClient = buildServiceClient({
       plaid_items: { data: { id: "item-1" }, error: null },
-      accounts: { data: [{ id: "acc-1" }, { id: "acc-2" }, { id: "acc-3" }], error: null },
+      accounts: { data: [{ id: "acc-1" }, { id: "acc-2" }], error: null },
+      account_balance_snapshots: { error: null },
       transactions: { error: null },
     });
 
@@ -126,6 +127,24 @@ describe("POST /api/demo", () => {
     expect(res.status).toBe(200);
     expect(payload.ok).toBe(true);
     expect(payload.transactions).toBeGreaterThan(0);
+    expect(serviceClient.writtenTo("account_balance_snapshots")).toEqual([
+      expect.objectContaining({
+        user_id: USER,
+        account_id: "acc-1",
+        manual_account_id: null,
+        snapshot_date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        current_balance: 4820.55,
+        iso_currency_code: "USD",
+      }),
+      expect.objectContaining({
+        user_id: USER,
+        account_id: "acc-2",
+        manual_account_id: null,
+        snapshot_date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        current_balance: 1240.3,
+        iso_currency_code: "USD",
+      }),
+    ]);
     expect(mockInvalidate).toHaveBeenCalledWith(USER);
     expect(mockWriteAudit).toHaveBeenCalledWith(
       expect.objectContaining({ action: "demo_data_loaded" }),
@@ -139,7 +158,7 @@ describe("POST /api/demo", () => {
     });
     serviceClient = buildServiceClient({
       plaid_items: { data: { id: "item-1" }, error: null },
-      accounts: { data: [{ id: "a" }, { id: "b" }, { id: "c" }], error: null },
+      accounts: { data: [{ id: "a" }, { id: "b" }], error: null },
       transactions: { error: null },
     });
 
@@ -207,6 +226,16 @@ describe("GET /api/cron/backup", () => {
       goals: { data: [] },
       merchant_rules: { data: [] },
       manual_accounts: { data: [] },
+      account_balance_snapshots: {
+        data: [
+          {
+            snapshot_date: "2026-07-29",
+            current_balance: 100,
+            available_balance: 80,
+            iso_currency_code: "USD",
+          },
+        ],
+      },
     });
 
     const res = await backupGet(cronRequest());
@@ -214,7 +243,15 @@ describe("GET /api/cron/backup", () => {
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toMatchObject({ ok: true, users: 1, sent: 1 });
     expect(mockBuildBackupArchive).toHaveBeenCalledWith(
-      expect.objectContaining({ backup_version: 1 }),
+      expect.objectContaining({
+        backup_version: 1,
+        account_balance_snapshots: [
+          expect.objectContaining({
+            snapshot_date: "2026-07-29",
+            current_balance: 100,
+          }),
+        ],
+      }),
       "backup-key",
     );
     expect(mockSendBackupEmail).toHaveBeenCalledWith(
@@ -224,6 +261,9 @@ describe("GET /api/cron/backup", () => {
       expect.any(String),
     );
     expect(serviceClient.scopedToUser("transactions", USER)).toBe(true);
+    expect(
+      serviceClient.scopedToUser("account_balance_snapshots", USER),
+    ).toBe(true);
   });
 
   it("skips a user with no transactions instead of mailing an empty archive", async () => {
@@ -241,6 +281,35 @@ describe("GET /api/cron/backup", () => {
 
     await expect(res.json()).resolves.toMatchObject({ sent: 0 });
     expect(mockSendBackupEmail).not.toHaveBeenCalled();
+  });
+
+  it("backs up balance history even when the user has no transactions", async () => {
+    serviceClient = buildServiceClient({
+      profiles: { data: [{ id: USER }], error: null },
+      transactions: { data: [] },
+      accounts: { data: [] },
+      budgets: { data: [] },
+      goals: { data: [] },
+      merchant_rules: { data: [] },
+      manual_accounts: { data: [] },
+      account_balance_snapshots: {
+        data: [
+          {
+            account_id: "account-1",
+            manual_account_id: null,
+            snapshot_date: "2026-07-29",
+            current_balance: 100,
+            available_balance: null,
+            iso_currency_code: "USD",
+          },
+        ],
+      },
+    });
+
+    const res = await backupGet(cronRequest());
+
+    await expect(res.json()).resolves.toMatchObject({ sent: 1 });
+    expect(mockSendBackupEmail).toHaveBeenCalledOnce();
   });
 
   it("skips a user whose email cannot be resolved", async () => {

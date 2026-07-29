@@ -29,6 +29,9 @@ export type AuditAction =
   | "receipt_scanned"
   | "ai_question"
   | "household_share_changed"
+  | "manual_account_created"
+  | "manual_account_updated"
+  | "manual_account_deleted"
   | "demo_data_loaded"
   | "demo_data_cleared";
 

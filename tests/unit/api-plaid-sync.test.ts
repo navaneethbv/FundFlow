@@ -17,6 +17,14 @@ vi.mock("@/lib/recurring", () => ({
   refreshRecurringForUser: (...args: unknown[]) => mockRefreshRecurringForUser(...args),
 }));
 
+const mockWriteDailyAccountSnapshots = vi.fn();
+vi.mock("@/lib/account-history", () => ({
+  writeDailyAccountSnapshots: (...args: unknown[]) =>
+    mockWriteDailyAccountSnapshots(...args),
+  tryWriteDailyAccountSnapshots: (...args: unknown[]) =>
+    mockWriteDailyAccountSnapshots(...args),
+}));
+
 const mockCheckRateLimit = vi.fn();
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
@@ -89,6 +97,10 @@ describe("POST /api/plaid/sync", () => {
       removed: 0,
       recurring_streams: 3,
     });
+    expect(mockWriteDailyAccountSnapshots).toHaveBeenCalledWith(
+      "user-1",
+      "plaid.sync.snapshot",
+    );
     expect(mockWriteAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "user-1",
@@ -106,6 +118,7 @@ describe("POST /api/plaid/sync", () => {
     const req = new NextRequest("http://localhost/api/plaid/sync", { method: "POST" });
     const res = await POST(req);
     expect(res.status).toBe(500);
+    expect(mockWriteDailyAccountSnapshots).not.toHaveBeenCalled();
     expect(mockErrorResponse).toHaveBeenCalledWith("plaid.sync", expect.any(Error));
   });
 });

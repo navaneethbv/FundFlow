@@ -17,6 +17,12 @@ vi.mock("@/lib/net-worth", () => ({
     mockWriteNetWorthSnapshot(...args),
 }));
 
+const mockWriteDailyAccountSnapshots = vi.fn();
+vi.mock("@/lib/account-history", () => ({
+  writeDailyAccountSnapshots: (...args: unknown[]) =>
+    mockWriteDailyAccountSnapshots(...args),
+}));
+
 const mockProcessNotificationsForUser = vi.fn();
 vi.mock("@/lib/notifications", () => ({
   processNotificationsForUser: (...args: unknown[]) =>
@@ -133,6 +139,7 @@ describe("GET /api/cron/sync", () => {
     const res = await GET(request);
     expect(res.status).toBe(200);
     expect(mockSyncAllForUser).toHaveBeenCalledWith("u1");
+    expect(mockWriteDailyAccountSnapshots).toHaveBeenCalledWith("u1");
     expect(mockSendDailyDigestEmail).toHaveBeenCalledWith(
       "u1@test.com",
       [{ type: "low_cash_forecast", title: "Low Cash", body: "Warning" }],

@@ -21,12 +21,17 @@ function supabaseHost(): string {
   return new URL(publicEnv.supabaseUrl).host;
 }
 
-function buildCsp(nonce: string): string {
+export function buildCsp(
+  nonce: string,
+  isDev = process.env.NODE_ENV === "development",
+): string {
   const host = supabaseHost();
   return [
     `default-src 'self'`,
     // Nonce + strict-dynamic lets Next's scripts run and load Plaid Link.
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://cdn.plaid.com`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${
+      isDev ? " 'unsafe-eval'" : ""
+    } https://cdn.plaid.com`,
     // Tailwind/Next inject inline styles; nonce-ing styles is impractical.
     `style-src 'self' 'unsafe-inline'`,
     `img-src 'self' data: https:`,
@@ -170,6 +175,10 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     // Run on everything except Next internals and static asset files.
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    // `sw.js` is excluded so the service worker is served straight from
+    // `public/` — routing it through the proxy in dev broke registration. It
+    // is a public static file with no user data, so it needs no session
+    // refresh; it does mean the SW response carries no CSP of its own.
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

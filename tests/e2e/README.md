@@ -47,6 +47,24 @@ changed Link, not that the app broke.
 The account must exist already and must **not** have TOTP enrolled (the
 sign-in spec stops at the password step). Never point it at real data.
 
+## Accounts page: `accounts.spec.ts`
+
+This suite provisions two throwaway Supabase Auth users and deletes them after the run.
+It creates one shared household account, then uses the demo and manual-account APIs to build the owner view.
+It verifies grouping, net worth, daily-history disclosure, filters, household ownership, saved visibility, and the exact accounts CSV header.
+It checks 1440 by 900, 768 by 1024, and 390 by 844 in light and dark themes.
+It also enforces 44 px touch targets, no horizontal overflow, and a clean application error surface.
+
+Set `ACCOUNTS_E2E_SCREENSHOT_DIR` to retain all six full-page visual captures:
+
+```bash
+ACCOUNTS_E2E_SCREENSHOT_DIR=/tmp/fundflow-accounts-e2e npm run test:e2e -- tests/e2e/accounts.spec.ts
+```
+
+The suite requires `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `SUPABASE_SECRET_KEY`.
+It skips cleanly when those credentials are absent.
+Never point the suite at a project where temporary Auth users are not acceptable.
+
 ## TODO — destructive/lifecycle specs (need a throwaway user)
 
 Still worth adding, but they mutate or destroy state, so they need the
