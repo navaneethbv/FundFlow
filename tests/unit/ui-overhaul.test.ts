@@ -22,23 +22,22 @@ describe("UI overhaul primitives and shell", () => {
   });
 
   it("lists every planned sidebar destination with an active state", () => {
-    const sidebar = readFileSync("components/shell/AppSidebar.tsx", "utf8");
+    const navSource =
+      readFileSync("components/shell/AppSidebar.tsx", "utf8") +
+      readFileSync("components/shell/nav-model.ts", "utf8");
 
     for (const href of [
-      "/dashboard?view=monitor",
-      "/dashboard?view=plan",
-      "/dashboard?view=wealth",
+      "/dashboard",
       "/transactions",
       "/goals",
-      "/settings#reports",
       "/settings",
     ]) {
-      expect(sidebar).toContain(`href: "${href}"`);
+      expect(navSource).toContain(`href: "${href}"`);
     }
 
-    expect(sidebar).toContain("active");
-    expect(sidebar).toContain("Manage");
-    expect(sidebar).toContain("lg:hidden");
+    expect(navSource).toContain("active");
+    expect(navSource).toContain("Manage");
+    expect(navSource).toContain("lg:hidden");
   });
 
   it("keeps primary navigation out of the utility top bar", () => {

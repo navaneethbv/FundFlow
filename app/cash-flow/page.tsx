@@ -158,7 +158,7 @@ export default async function CashFlowPage({
   );
 
   return (
-    <AppShell active="cashFlow" email={user.email}>
+    <AppShell active="cashflow" email={user.email}>
       <header>
         <p className="eyebrow">
           {rangeMonths} months ending {formatMonth(anchorMonth)}

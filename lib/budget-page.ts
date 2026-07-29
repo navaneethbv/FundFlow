@@ -1,0 +1,242 @@
+import { CanonicalFinanceTransaction } from "./finance-domain";
+import { titleCase } from "./format";
+
+export interface BudgetLine {
+  budgetId: string | null;
+  category: string;
+  label: string;
+  planned: number;
+  actual: number;
+  remaining: number;
+  budgeted: boolean;
+}
+
+export interface BudgetSection {
+  key: "income" | "fixed" | "flexible" | "non_monthly";
+  label: string;
+  planned: number;
+  actual: number;
+  remaining: number;
+  lines: BudgetLine[];
+  unbudgetedCount: number;
+}
+
+export interface BudgetPageData {
+  month: string;
+  sections: BudgetSection[];
+  totalIncome: { planned: number; actual: number };
+  totalExpenses: { planned: number; actual: number; remaining: number };
+  contributions: { goals: { name: string; planned: number; actual: number }[] };
+  leftToBudget: number;
+}
+
+export interface BudgetSeedProposal {
+  category: string;
+  group_name: "income" | "fixed" | "flexible" | "non_monthly";
+  suggested_amount: number;
+  confidence: "high" | "medium" | "low";
+  reason: string;
+}
+
+export function buildBudgetPage(input: {
+  month: string;
+  budgets: {
+    id: string;
+    category: string;
+    monthly_limit: number;
+    group_name?: string;
+    rollover_enabled?: boolean;
+  }[];
+  periods?: { budget_id: string; month: string; planned: number }[];
+  txns: CanonicalFinanceTransaction[];
+  goalContributions?: { name: string; planned: number; actual: number }[];
+}): BudgetPageData {
+  const { month, budgets, periods = [], txns, goalContributions = [] } = input;
+
+  const budgetMap = new Map<
+    string,
+    {
+      id: string;
+      monthly_limit: number;
+      group_name: "income" | "fixed" | "flexible" | "non_monthly";
+    }
+  >();
+
+  for (const b of budgets) {
+    const grp = (b.group_name as "income" | "fixed" | "flexible" | "non_monthly") || "flexible";
+    budgetMap.set(b.category.toLowerCase(), {
+      id: b.id,
+      monthly_limit: Number(b.monthly_limit),
+      group_name: grp,
+    });
+  }
+
+  const periodPlannedMap = new Map<string, number>();
+  for (const p of periods) {
+    if (p.month.slice(0, 7) === month) {
+      periodPlannedMap.set(p.budget_id, Number(p.planned));
+    }
+  }
+
+  const actualSpendMap = new Map<string, number>();
+  const actualIncomeMap = new Map<string, number>();
+
+  for (const t of txns) {
+    if (t.date.slice(0, 7) !== month) continue;
+    const catKey = (t.categoryKey || "Uncategorized").toLowerCase();
+    if (t.flow === "income") {
+      actualIncomeMap.set(catKey, (actualIncomeMap.get(catKey) || 0) + Math.abs(t.signedAmount));
+    } else if (t.flow === "expense") {
+      actualSpendMap.set(catKey, (actualSpendMap.get(catKey) || 0) + Math.abs(t.signedAmount));
+    }
+  }
+
+  const sectionLines: Record<string, BudgetLine[]> = {
+    income: [],
+    fixed: [],
+    flexible: [],
+    non_monthly: [],
+  };
+
+  const processedCats = new Set<string>();
+
+  for (const b of budgets) {
+    const catLower = b.category.toLowerCase();
+    processedCats.add(catLower);
+
+    const grp = (b.group_name as "income" | "fixed" | "flexible" | "non_monthly") || "flexible";
+    const periodPlanned = periodPlannedMap.get(b.id);
+    const planned = periodPlanned !== undefined ? periodPlanned : Number(b.monthly_limit);
+
+    const actual = grp === "income" ? actualIncomeMap.get(catLower) || 0 : actualSpendMap.get(catLower) || 0;
+    const remaining = grp === "income" ? actual - planned : planned - actual;
+
+    sectionLines[grp]?.push({
+      budgetId: b.id,
+      category: b.category,
+      label: titleCase(b.category),
+      planned: Math.round(planned * 100) / 100,
+      actual: Math.round(actual * 100) / 100,
+      remaining: Math.round(remaining * 100) / 100,
+      budgeted: true,
+    });
+  }
+
+  // Handle unbudgeted spending categories
+  for (const [catLower, actual] of actualSpendMap.entries()) {
+    if (processedCats.has(catLower)) continue;
+
+    sectionLines.flexible.push({
+      budgetId: null,
+      category: catLower,
+      label: titleCase(catLower),
+      planned: 0,
+      actual: Math.round(actual * 100) / 100,
+      remaining: -Math.round(actual * 100) / 100,
+      budgeted: false,
+    });
+  }
+
+  const sectionLabels: Record<string, string> = {
+    income: "Income",
+    fixed: "Fixed Expenses",
+    flexible: "Flexible Expenses",
+    non_monthly: "Non-Monthly Expenses",
+  };
+
+  const sections: BudgetSection[] = (["income", "fixed", "flexible", "non_monthly"] as const).map(
+    (key) => {
+      const lines = sectionLines[key] || [];
+      const plannedSum = lines.reduce((acc, l) => acc + l.planned, 0);
+      const actualSum = lines.reduce((acc, l) => acc + l.actual, 0);
+      const remainingSum = key === "income" ? actualSum - plannedSum : plannedSum - actualSum;
+      const unbudgetedCount = lines.filter((l) => !l.budgeted).length;
+
+      return {
+        key,
+        label: sectionLabels[key],
+        planned: Math.round(plannedSum * 100) / 100,
+        actual: Math.round(actualSum * 100) / 100,
+        remaining: Math.round(remainingSum * 100) / 100,
+        lines,
+        unbudgetedCount,
+      };
+    },
+  );
+
+  const incomeSec = sections.find((s) => s.key === "income")!;
+  const fixedSec = sections.find((s) => s.key === "fixed")!;
+  const flexSec = sections.find((s) => s.key === "flexible")!;
+  const nonMonthlySec = sections.find((s) => s.key === "non_monthly")!;
+
+  const totalIncome = { planned: incomeSec.planned, actual: incomeSec.actual };
+  const totalExpensesPlanned = fixedSec.planned + flexSec.planned + nonMonthlySec.planned;
+  const totalExpensesActual = fixedSec.actual + flexSec.actual + nonMonthlySec.actual;
+
+  const totalExpenses = {
+    planned: Math.round(totalExpensesPlanned * 100) / 100,
+    actual: Math.round(totalExpensesActual * 100) / 100,
+    remaining: Math.round((totalExpensesPlanned - totalExpensesActual) * 100) / 100,
+  };
+
+  const contributionsPlanned = goalContributions.reduce((acc, g) => acc + g.planned, 0);
+  const leftToBudget = Math.round((totalIncome.planned - totalExpenses.planned - contributionsPlanned) * 100) / 100;
+
+  return {
+    month,
+    sections,
+    totalIncome,
+    totalExpenses,
+    contributions: { goals: goalContributions },
+    leftToBudget,
+  };
+}
+
+export function proposeBudgetFromHistory(input: {
+  txnsLast3Months: CanonicalFinanceTransaction[];
+  recurringTransactionIds?: Set<string>;
+}): BudgetSeedProposal[] {
+  const { txnsLast3Months, recurringTransactionIds = new Set() } = input;
+
+  const catTotals = new Map<string, { income: number; expense: number; count: number; recurringCount: number }>();
+
+  for (const t of txnsLast3Months) {
+    const cat = (t.categoryKey || "Uncategorized").toLowerCase();
+    const entry = catTotals.get(cat) || { income: 0, expense: 0, count: 0, recurringCount: 0 };
+
+    if (t.flow === "income") entry.income += Math.abs(t.signedAmount);
+    if (t.flow === "expense") entry.expense += Math.abs(t.signedAmount);
+    entry.count += 1;
+
+    if (recurringTransactionIds.has(t.id)) entry.recurringCount += 1;
+    catTotals.set(cat, entry);
+  }
+
+  const proposals: BudgetSeedProposal[] = [];
+
+  for (const [cat, data] of catTotals.entries()) {
+    if (data.income > data.expense) {
+      const avg = Math.round((data.income / 3) * 100) / 100;
+      proposals.push({
+        category: cat,
+        group_name: "income",
+        suggested_amount: avg,
+        confidence: data.count >= 3 ? "high" : "medium",
+        reason: "Based on 3-month average income",
+      });
+    } else {
+      const avg = Math.round((data.expense / 3) * 100) / 100;
+      const isFixed = data.recurringCount > 0 && data.recurringCount / data.count >= 0.5;
+
+      proposals.push({
+        category: cat,
+        group_name: isFixed ? "fixed" : "flexible",
+        suggested_amount: avg,
+        confidence: data.count >= 3 ? "high" : "medium",
+        reason: isFixed ? "Identified as recurring fixed expense" : "Based on 3-month average spending",
+      });
+    }
+  }
+
+  return proposals;
+}

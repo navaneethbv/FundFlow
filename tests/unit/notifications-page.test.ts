@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest";
 
 describe("notifications center", () => {
   it("is a primary authenticated destination", () => {
-    const sidebar = readFileSync("components/shell/AppSidebar.tsx", "utf8");
+    const navSource =
+      readFileSync("components/shell/AppSidebar.tsx", "utf8") +
+      readFileSync("components/shell/nav-model.ts", "utf8");
 
-    expect(sidebar).toContain('href: "/notifications"');
-    expect(sidebar).toContain('key: "notifications"');
+    expect(navSource).toContain('href: "/notifications"');
+    expect(navSource).toContain('key: "notifications"');
     expect(existsSync("app/notifications/page.tsx")).toBe(true);
     expect(readFileSync("app/notifications/page.tsx", "utf8")).toContain(
       'active="notifications"',
