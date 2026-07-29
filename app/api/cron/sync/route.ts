@@ -12,6 +12,7 @@ import { runIntegrityChecks } from "@/lib/integrity";
 import { processNotificationsForUser } from "@/lib/notifications";
 import { sendDailyDigestEmail } from "@/lib/reporting";
 import { alertCronFailure } from "@/lib/cron-alert";
+import { writeDailyAccountSnapshots } from "@/lib/account-history";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -51,6 +52,7 @@ export async function GET(request: NextRequest) {
     for (const userId of userIds) {
       try {
         await syncAllForUser(userId);
+        await writeDailyAccountSnapshots(userId);
         await refreshRecurringForUser(userId);
         await writeNetWorthSnapshot(userId);
         try {
