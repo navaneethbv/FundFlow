@@ -17,6 +17,7 @@ export type AppShellActive =
   | "monitor"
   | "plan"
   | "wealth"
+  | "accounts"
   | "transactions"
   | "goals"
   | "wrapped"

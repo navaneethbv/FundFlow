@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyAccountsPageView,
   buildAccountsPageData,
   groupKeyFor,
   type AccountBalanceSnapshot,
@@ -364,5 +365,46 @@ describe("buildAccountsPageData", () => {
       updatedAgo: "2 days ago",
       stale: true,
     });
+  });
+
+  it("filters and orders list rows without changing summary net worth", () => {
+    const built = buildAccountsPageData(
+      [
+        account({
+          id: "cash-1",
+          name: "Checking",
+          type: "depository",
+          currentBalance: 100,
+          institution: "Bank A",
+        }),
+        account({
+          id: "cash-2",
+          ownerUserId: "member-2",
+          name: "Savings",
+          type: "depository",
+          currentBalance: 200,
+          institution: "Bank B",
+        }),
+      ],
+      [],
+      NOW,
+    );
+
+    const visible = applyAccountsPageView(built, {
+      hiddenIds: ["cash-1"],
+      order: ["cash-2", "cash-1"],
+      visibility: "visible",
+      institution: "Bank B",
+      ownerUserId: "member-2",
+    });
+    const hidden = applyAccountsPageView(built, {
+      hiddenIds: ["cash-1"],
+      order: ["cash-2", "cash-1"],
+      visibility: "hidden",
+    });
+
+    expect(visible.groups.cash.rows.map((row) => row.id)).toEqual(["cash-2"]);
+    expect(hidden.groups.cash.rows.map((row) => row.id)).toEqual(["cash-1"]);
+    expect(visible.summary).toEqual(built.summary);
   });
 });

@@ -78,6 +78,15 @@ export interface AccountsPageData {
   historyStartsOn: string | null;
 }
 
+export interface AccountsPageViewOptions {
+  hiddenIds?: string[];
+  order?: string[];
+  visibility?: "visible" | "hidden" | "all";
+  institution?: string;
+  groupKey?: AccountGroupKey;
+  ownerUserId?: string;
+}
+
 const GROUP_LABELS: Record<AccountGroupKey, string> = {
   credit: "Credit cards",
   cash: "Cash",
@@ -345,4 +354,51 @@ export function buildAccountsPageData(
     },
     historyStartsOn,
   };
+}
+
+export function applyAccountsPageView(
+  data: AccountsPageData,
+  options: AccountsPageViewOptions,
+): AccountsPageData {
+  const hidden = new Set(options.hiddenIds ?? []);
+  const order = new Map(
+    (options.order ?? []).map((accountId, index) => [accountId, index]),
+  );
+  const visibility = options.visibility ?? "visible";
+  const groups = Object.fromEntries(
+    (Object.entries(data.groups) as Array<
+      [AccountGroupKey, AccountsPageData["groups"][AccountGroupKey]]
+    >).map(([key, group]) => {
+      const rows =
+        options.groupKey && options.groupKey !== key
+          ? []
+          : group.rows
+              .filter((row) => {
+                const isHidden = hidden.has(row.id);
+                if (visibility === "visible" && isHidden) return false;
+                if (visibility === "hidden" && !isHidden) return false;
+                if (
+                  options.institution &&
+                  row.institution !== options.institution
+                ) {
+                  return false;
+                }
+                if (
+                  options.ownerUserId &&
+                  row.ownerUserId !== options.ownerUserId
+                ) {
+                  return false;
+                }
+                return true;
+              })
+              .sort((a, b) => {
+                const aOrder = order.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+                const bOrder = order.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+                return aOrder - bOrder || a.name.localeCompare(b.name);
+              });
+      return [key, { ...group, rows }];
+    }),
+  ) as AccountsPageData["groups"];
+
+  return { ...data, groups };
 }
