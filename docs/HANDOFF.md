@@ -1,6 +1,33 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-07-23. Read this first to resume.
+Last updated: 2026-07-29. Read this first to resume.
+
+## Latest session (2026-07-29, branch `feat/finance-domain-foundation`)
+
+Started the financial-planner parity program.
+The reviewed master plan is `docs/superpowers/plans/2026-07-29-monarch-parity.md`: 14 phases, each its own branch and PR, each expanded into TDD steps before implementation.
+
+**Phase 0 (canonical finance semantics) is complete and committed.**
+It exists because the draft plan had four separate phases re-deriving transaction meaning, which would have produced pages that disagree about the same month's totals.
+
+Four new modules, all pure and unit-tested:
+
+- `lib/finance-domain.ts` — `projectFinanceTransactions` decides transaction meaning once: merchant rules, then category overrides, then split expansion, then refund netting, then transfer classification, then a stable `(date, id)` sort.
+  `financeTotals` is the only place income/expense/net are summed.
+- `lib/financial-scope.ts` — `mine` vs `household` scope; a household id is honored only when it appears in the RLS-visible list, so a guessed id degrades to personal scope instead of erroring.
+- `lib/finance-query.ts` — column-explicit, paginated, upper-bounded reads.
+  Reports truncation rather than silently dropping rows.
+- `lib/feature-flags.ts` — server-side flags for unreleased pages; they gate reachability only, never auth or RLS.
+
+`lib/dashboard.ts` now consumes the projection instead of re-deriving semantics inline, and `EXCLUDED_PFC` is an alias of `TRANSFER_GROUPS` so there is one definition.
+`tests/unit/dashboard-finance-parity.test.ts` pins dashboard totals to `financeTotals` over the same ledger — if they ever drift, that test fails.
+
+Read "Phase 0 implementation notes" in the plan before starting any later phase: it records four interface decisions that differ from the plan's original sketch, most importantly that the dashboard deliberately passes `splits: []` (it applies splits downstream) while new pages should pass real splits.
+
+Gates at completion, all green: `npm run lint`, `npm run typecheck`, `npm run test:unit` (114 files / 801 tests), `npm run build`.
+No migrations in this phase, so nothing to apply to the live project.
+
+Next: Phase 1 (navigation and information architecture), which adds nav entries only as each vertical slice becomes usable — no authenticated "Coming soon" pages.
 
 ## Latest session (2026-07-23, branch `feat/remaining-must-haves`)
 
@@ -191,6 +218,7 @@ verified at the code/DB level**. The only thing left is a **browser end-to-end
 run**, which is blocked on adding Plaid Sandbox keys.
 
 **Status: green.**
+
 - `npm run build` ✓ · `npm run lint` ✓ · `npx tsc --noEmit` ✓
 - `npm test` ✓ **20 files / 99 tests** (unit + integration against the live FundFlow DB)
 - Supabase migrations **applied** to the FundFlow project (`zrxbmmtqqhlwtrinocww`)
@@ -204,8 +232,8 @@ run**, which is blocked on adding Plaid Sandbox keys.
   `.env.local` (gitignored). A separate old project (`ofyyjzjjmopwvfqlhnyc`,
   paper-trading) exists — do NOT touch it.
 - **MCP gotcha:** the Supabase MCP connector in the last session pointed at the
-  OLD project. `.mcp.json` now points at FundFlow but needs a Claude Code restart
-  + `/mcp` OAuth to use. We bypassed it by applying migrations via the SQL editor
+  OLD project. `.mcp.json` now points at FundFlow but needs a Claude Code
+  restart and `/mcp` OAuth to use. We bypassed it by applying migrations via the SQL editor
   and verifying with the integration tests (which hit FundFlow directly).
 - **Personal app, 1-2 users.** AI is NOT integrated by design — instead a CSV
   export the user feeds to an external AI.
@@ -216,11 +244,11 @@ run**, which is blocked on adding Plaid Sandbox keys.
 
 1. **Add Plaid Sandbox keys** to `.env.local`:
    - `PLAID_CLIENT_ID` and `PLAID_SECRET` from
-     https://dashboard.plaid.com/developers/keys (keep `PLAID_ENV=sandbox`).
+     <https://dashboard.plaid.com/developers/keys> (keep `PLAID_ENV=sandbox`).
 2. **Supabase Auth setting:** in the FundFlow dashboard, Auth → Providers → Email,
    either disable "Confirm email" for easy local testing, or use the emailed link
    (handled by `/auth/callback`).
-3. `npm run dev`, open http://localhost:3000:
+3. `npm run dev`, open <http://localhost:3000>:
    - Sign up, (optionally enroll TOTP in Settings), log in.
    - Click **Connect a bank** → Plaid Sandbox → `user_good` / `pass_good`.
    - Confirm the dashboard fills in (balances, categories, merchants, recurring).

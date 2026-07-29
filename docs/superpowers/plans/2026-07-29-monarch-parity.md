@@ -206,22 +206,41 @@ Consumers that offer a pending toggle (the Reports saved-filter in Phase 6, the 
 
 **Steps:**
 
-- [ ] Write a fixture with a paycheck, ordinary expense, credit-card payment, refund pair, split transaction, imported transaction, manual transaction, merchant rename, category override, pending row, and household-shared row.
-- [ ] Write failing parity tests asserting the same income, expense, savings, merchant, group, and category totals for dashboard, budget, cash flow, reports, and exports.
-- [ ] Implement `projectFinanceTransactions` in the existing application order: source normalization, merchant rules, category override, split expansion, refund netting, transfer exclusion, and stable sorting.
-- [ ] Add an adapter for the current schema that derives `source` from the existing `plaid_transaction_id` prefixes and sets `manualAccountId` to null.
+- [x] Write a fixture with a paycheck, ordinary expense, credit-card payment, refund pair, split transaction, imported transaction, manual transaction, merchant rename, category override, pending row, and household-shared row.
+- [x] Write failing parity tests asserting the same income, expense, savings, merchant, group, and category totals for dashboard, budget, cash flow, reports, and exports.
+- [x] Implement `projectFinanceTransactions` in the existing application order: source normalization, merchant rules, category override, split expansion, refund netting, transfer exclusion, and stable sorting.
+- [x] Add an adapter for the current schema that derives `source` from the existing `plaid_transaction_id` prefixes and sets `manualAccountId` to null.
   Phase 12 replaces that adapter field with the explicit source and manual-account columns after its migration lands.
-- [ ] Export the shared row types instead of creating private `TxnLite` variants in later phases.
-- [ ] Implement `FinancialScope` parsing and URL serialization.
+- [x] Export the shared row types instead of creating private `TxnLite` variants in later phases.
+- [x] Implement `FinancialScope` parsing and URL serialization.
   Reject household ids that are not visible through the existing RLS-bound household query.
-- [ ] Add `finance-query.ts` helpers that select only required columns, paginate all-time reads in stable `(date,id)` order, and enforce an explicit upper bound per request.
-- [ ] Replace dashboard-local aggregation with the projection and prove its existing unit fixtures render unchanged.
-- [ ] Add a typed feature-flag registry for unreleased pages.
+- [x] Add `finance-query.ts` helpers that select only required columns, paginate all-time reads in stable `(date,id)` order, and enforce an explicit upper bound per request.
+- [x] Replace dashboard-local aggregation with the projection and prove its existing unit fixtures render unchanged.
+- [x] Add a typed feature-flag registry for unreleased pages.
   Flags are evaluated on the server and never weaken auth or RLS.
-- [ ] Update takeout, encrypted backup, delete-account coverage, and `scripts/check-rls.sql` templates so every later phase has a checklist slot.
-- [ ] Run the full gate and commit `refactor(finance): establish canonical transaction semantics`.
+- [x] Update takeout, encrypted backup, delete-account coverage, and `scripts/check-rls.sql` templates so every later phase has a checklist slot.
+- [x] Run the full gate and commit `refactor(finance): establish canonical transaction semantics`.
 
 **E2E check:** With the same seeded dataset, dashboard totals and the privacy-safe CSV totals remain unchanged before and after the refactor, and Mine versus Household scope never exposes an unshared connection.
+
+### Phase 0 implementation notes (shipped 2026-07-29, branch `feat/finance-domain-foundation`)
+
+Four decisions differ from the interfaces sketched above; later phases should code against these.
+
+- `CanonicalFinanceTransaction` gained `sourceTransactionId`.
+  Split expansion has to yield unique `id`s, so `id` is unique per projected row (`<txnId>::<n>` for split parts) and `sourceTransactionId` is the `transactions.id` to link back to.
+- `ProjectFinanceInput` gained an optional `accountNames` map.
+  Merchant rules support `matchType: "account"`, which cannot be evaluated without account names.
+- The dashboard passes `splits: []` on purpose.
+  It distributes splits downstream over active-month spend only (`aggregateSpendWithSplits` plus the drilldown), so handing them to the projection as well would apply them twice.
+  New pages have no legacy split path and should pass real splits.
+- `flow: "transfer"` carries both meanings of "moved but not spend or income": a `TRANSFER_GROUPS` category, and either half of a linked refund pair.
+  Cash-flow views ignore `flow` and read `signedAmount` with the account type.
+
+`EXCLUDED_PFC` in `lib/dashboard.ts` is now an alias of `TRANSFER_GROUPS`, so the four existing consumers keep working against one definition.
+`fromTransactionRow` tolerates a missing `plaid_transaction_id` (falls back to `source: "plaid"`) so a narrower column selection cannot crash a page.
+
+Gate at completion: eslint clean, `tsc --noEmit` clean, 801 unit tests passing across 114 files, `npm run build` compiled successfully.
 
 ---
 
