@@ -57,6 +57,15 @@ export async function GET(request: NextRequest) {
           { data: goals },
           { data: rules },
           { data: manualAccounts },
+        // ADDING A USER-OWNED TABLE? Add it here too if losing it would cost
+        // the user data they cannot re-sync from Plaid (their own budgets,
+        // goals, rules, manual records, annotations). Derived or re-syncable
+        // data stays out to keep archives small. Every query below MUST keep
+        // its explicit .eq("user_id", userId): this runs under the service
+        // client, so RLS is not a backstop and a missing filter cross-feeds
+        // one user's data into another's backup.
+        // Sibling checklists: app/api/export/takeout/route.ts (takeout),
+        // the on-delete-cascade FK (deletion), scripts/check-rls.sql (RLS).
         ] = await Promise.all([
           service
             .from("accounts")

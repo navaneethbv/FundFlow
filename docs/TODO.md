@@ -2,6 +2,17 @@
 
 Nice-to-have features and enhancements, deferred out of the initial build.
 
+## Active program: financial-planner parity (started 2026-07-29)
+
+Plan: `docs/superpowers/plans/2026-07-29-monarch-parity.md`.
+Fourteen phases bringing FundFlow to parity with the reference planner screenshots: Accounts, Cash Flow, Budget, Recurring, Reports, Goals, Investments, Forecasting, Advice, Settings IA, and a customizable dashboard.
+
+- **Phase 0 — canonical finance semantics.** Done (2026-07-29), branch `feat/finance-domain-foundation`.
+  `lib/finance-domain.ts`, `lib/financial-scope.ts`, `lib/finance-query.ts`, `lib/feature-flags.ts`; dashboard refactored onto the projection with a parity test.
+- Phases 1-13 are pending; each gets its own branch, PR, and TDD expansion before implementation.
+
+Excluded from the program by decision, revisit only if asked: credit score (no consented bureau integration), billing/free-trial/referrals (not a commercial product), Retail Sync (no authorized data source), and investment benchmark overlays (needs a licensed market-data feed, deferred inside Phase 9B).
+
 ## Must-have before real-bank production use
 
 Gaps found in the 2026-07-05 review, ranked. These are not polish — each one

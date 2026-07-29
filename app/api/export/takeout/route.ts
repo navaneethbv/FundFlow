@@ -2,6 +2,21 @@ import { NextResponse } from "next/server";
 import { buildDataTakeout } from "@/lib/security-account";
 import { errorResponse, requireUser } from "@/lib/http";
 
+/**
+ * Full data takeout. Reads run on the cookie-bound client, so RLS scopes every
+ * table to the caller.
+ *
+ * ADDING A USER-OWNED TABLE? It belongs in this list unless it is derived data
+ * the user cannot meaningfully re-read (sync bookkeeping, rate-limit windows)
+ * or a secret they must never receive back (Plaid tokens, MFA backup codes).
+ * The matching checklist lives in three other places:
+ *   - encrypted backup:   app/api/cron/backup/route.ts
+ *   - account deletion:   the table's `user_id` FK must be
+ *                         `references auth.users (id) on delete cascade`,
+ *                         which is what app/api/account/route.ts relies on
+ *   - RLS proof:          scripts/check-rls.sql needs no edit; it fails for any
+ *                         public table lacking RLS or lacking a policy
+ */
 export async function GET() {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;

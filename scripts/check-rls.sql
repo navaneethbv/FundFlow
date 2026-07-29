@@ -2,6 +2,13 @@
 -- lacks row level security. Run in CI against an ephemeral database with
 -- all migrations applied:
 --   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-rls.sql
+--
+-- ADDING A USER-OWNED TABLE? This script needs no edit — it discovers every
+-- public table automatically and fails when one has no RLS or no policy. The
+-- three checklists that DO need attention live in the app:
+--   app/api/export/takeout/route.ts   (does the user get this data back?)
+--   app/api/cron/backup/route.ts      (is it worth protecting from loss?)
+--   app/api/account/route.ts          (does deletion actually cascade to it?)
 DO $$
 DECLARE
   missing text;
