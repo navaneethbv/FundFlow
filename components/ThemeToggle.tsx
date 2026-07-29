@@ -58,7 +58,7 @@ export default function ThemeToggle({
         type="button"
         onClick={toggleTheme}
         aria-label={`Switch to ${nextTheme} mode`}
-        className="group inline-flex items-center gap-2 rounded-full border border-panel-border bg-panel-2 px-2 py-1 text-muted shadow-sm transition-colors duration-150 hover:border-accent/50 hover:text-foreground focus-visible:outline-2"
+        className="group inline-flex min-h-11 min-w-11 items-center gap-2 rounded-full border border-panel-border bg-panel-2 px-2 py-1 text-muted shadow-sm transition-colors duration-150 hover:border-accent/50 hover:text-foreground focus-visible:outline-2"
       >
         <Sun aria-hidden className="h-3.5 w-3.5" />
         <span className="relative h-4 w-8 rounded-full bg-black/10 dark:bg-white/15">

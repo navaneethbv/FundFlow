@@ -3,6 +3,65 @@
 This runbook covers roadmap items that require live credentials, browser state,
 or screenshots. Keep it current when flows change.
 
+## Accounts Phase 2 Release Evidence
+
+Live migrations:
+
+- Apply `20260729182910_account_snapshots.sql`.
+- Apply `20260729183248_shared_account_rls.sql`.
+- Apply `20260729193500_private_shared_account_authorization.sql`.
+- Confirm all three are recorded on FundFlow project `zrxbmmtqqhlwtrinocww`.
+- Never apply them to the inactive project `ofyyjzjjmopwvfqlhnyc`.
+
+Live database checks:
+
+1. Confirm RLS is enabled on `account_balance_snapshots`.
+2. Confirm `authenticated` has `SELECT` and lacks `INSERT`, `UPDATE`, and `DELETE`.
+3. Confirm `service_role` has `SELECT`, `INSERT`, `UPDATE`, and `DELETE`.
+4. Confirm duplicate source-day rows and invalid source rows are both zero.
+5. Confirm the current-day snapshot count matches every eligible Plaid and included manual account with a non-null balance.
+6. Run `npx vitest run tests/integration/account-snapshot-rls.test.ts`.
+7. Run Supabase security and performance advisors.
+8. Confirm neither advisor reports `account_balance_snapshots` or `can_read_shared_account`.
+
+History semantics:
+
+- History starts on `2026-07-29`.
+- Earlier history is unavailable.
+- Never fabricate or interpolate earlier balances.
+- The current-state backfill is one day only.
+- Ongoing daily history requires the application cron and refresh writers to be deployed.
+
+Automated browser acceptance:
+
+```bash
+ACCOUNTS_E2E_SCREENSHOT_DIR=/tmp/fundflow-accounts-e2e npm run test:e2e -- tests/e2e/accounts.spec.ts
+```
+
+The suite provisions and deletes throwaway users through the Supabase admin client.
+It uses demo and manual accounts, plus one explicitly shared household account.
+It checks the page at 1440 by 900, 768 by 1024, and 390 by 844 in light and dark themes.
+It covers mine and household scope, institution, type, visibility, owner, and range filters.
+It covers totals and Percent modes, account preferences, the exact CSV header, 44 px touch targets, and horizontal overflow.
+It fails on browser exceptions, same-origin request failures other than navigation aborts, same-origin 5xx responses, and unexpected application console warnings or errors.
+Headless Chromium GPU diagnostics and unreachable third-party DNS noise are excluded, while application-level Plaid loader errors remain failures.
+
+Manual visual evidence:
+
+- Inspect all six screenshots for spacing, hierarchy, contrast, clipping, focus, wrapping, and overflow.
+- Verify empty one-day sparkline slots do not leave blank rows on phones.
+- Verify account amounts remain readable in both themes.
+- Verify the honest earlier-history disclosure appears.
+- Use an interactive browser to switch Totals to Percent and confirm the URL and visible state update.
+- Confirm the browser warning and error console is empty.
+
+Production follow-up after merge:
+
+1. Deploy the application code.
+2. Run one explicit Plaid refresh and confirm a same-day upsert rather than a duplicate.
+3. After the next scheduled sync day, confirm a new date exists for eligible accounts.
+4. Confirm the first chart appears only after at least two real daily points exist.
+
 ## Plaid Sandbox Browser E2E
 
 Prerequisites:

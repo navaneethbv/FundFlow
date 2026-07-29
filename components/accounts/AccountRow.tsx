@@ -48,7 +48,12 @@ export default function AccountRow({
             : formatCurrency(row.balance, row.currency)}
         </p>
       </div>
-      <div className="min-h-11" aria-label={`${row.name} balance trend`}>
+      <div
+        className={
+          row.spark.length < 2 ? "hidden min-h-11 sm:block" : "min-h-11"
+        }
+        aria-label={`${row.name} balance trend`}
+      >
         <AreaSparkline values={row.spark} />
       </div>
       <div>

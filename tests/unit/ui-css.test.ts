@@ -28,6 +28,9 @@ describe("global interactive affordances", () => {
     expect(layout).toContain("headers");
     expect(layout).toContain("x-nonce");
     expect(layout).toContain("fundflow-theme");
+    expect(layout).toContain("suppressHydrationWarning");
+    expect(layout).toContain("link-initialize.js");
+    expect(layout).toContain("defer");
     expect(toggle).toContain("fundflow-theme");
     expect(toggle).toContain("aria-label");
   });

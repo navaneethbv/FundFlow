@@ -54,8 +54,22 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
-        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: serviceWorkerScript }} />
+        <script
+          nonce={nonce}
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: themeScript }}
+        />
+        <script
+          nonce={nonce}
+          suppressHydrationWarning
+          defer
+          src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"
+        />
+        <script
+          nonce={nonce}
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: serviceWorkerScript }}
+        />
       </head>
       <body className="min-h-full flex flex-col">
         {children}

@@ -2,6 +2,64 @@
 
 Last updated: 2026-07-29. Read this first to resume.
 
+## START HERE: Phase 2 Accounts is implemented
+
+Phase 2 is implemented on `feat/accounts-page`.
+The migration-first ordering constraint was honored before reader code was made eligible to merge.
+
+The live FundFlow project `zrxbmmtqqhlwtrinocww` now has these Phase 2 migrations:
+
+- `20260729182910_account_snapshots.sql`, recorded live as version `20260729183147`.
+- `20260729183248_shared_account_rls.sql`, recorded live as version `20260729183347`.
+- `20260729193500_private_shared_account_authorization.sql`, recorded live as version `20260729193421`.
+
+Daily balance history starts on `2026-07-29`.
+Earlier history is unavailable and must not be inferred or backfilled.
+The one-time current-state backfill created 16 snapshots for 16 eligible source accounts.
+There are zero missing current-day sources, duplicate source-day rows, or invalid source rows.
+Ongoing daily capture begins when this branch is merged and deployed because the cron and refresh writers live in the application code.
+
+The Accounts experience now includes:
+
+- A released `/accounts` server page with mine and household scope, institution, account-type, visibility, owner, and history-range filters.
+- Currency-safe asset, liability, and net-worth summaries that never combine currencies without exchange rates.
+- Honest one-day and insufficient-history states, per-account freshness, 30-day change, sparklines, and a data-table twin.
+- Grouped Plaid and manual accounts, account ordering and visibility preferences, and an exact privacy-safe CSV export.
+- Authenticated manual-account create, balance-update, and delete routes with audit records and immediate snapshots.
+- Daily snapshot capture after explicit Plaid refreshes, successful scheduled syncs, manual-account mutations, and demo-data creation.
+- Snapshot retention in encrypted backups and user takeout exports, plus cascade-deletion coverage.
+
+Live access verification is green.
+Authenticated clients have `SELECT` only, service clients have full CRUD, owner and household-member reads pass, cross-user reads stay isolated, and cookie-client writes are denied.
+The shared-account authorization helper now lives in the non-exposed `private` schema.
+Supabase Advisors report no Phase 2 findings after the final hardening migration.
+
+Browser acceptance is green at 1440 by 900, 768 by 1024, and 390 by 844 in light and dark themes.
+The checks cover filters, scope, preferences, CSV export, touch targets, horizontal overflow, same-origin request failures, server errors, browser exceptions, and application console errors.
+The manual in-app browser pass also verified the Percent interaction and an empty warning/error console.
+
+The current full code gate is:
+
+- `npm run lint`: pass with zero warnings.
+- `npm run typecheck`: pass.
+- `npm test`: pass at 137 files and 946 tests.
+- `npm run build`: pass with `/accounts` and `/api/export/accounts-csv` in the production route manifest.
+- `git diff --check`: pass.
+- `npm audit --audit-level=high`: reports the current `brace-expansion` advisory through the dev-only ESLint chain.
+  `npm audit fix` updated the lockfile to patched `brace-expansion` versions `1.1.17` and `5.0.8`.
+  Do not use the suggested forced ESLint 10 major upgrade as an incidental Phase 2 change.
+
+Phase 1 remains deferred until more production pages exist.
+After this branch is delivered, expand and build Phase 3 (Cash Flow) test-first.
+Continue carrying the five Phase 0 finance-domain invariants from the parity plan into every transaction-derived page.
+
+The protected-main anomaly is explained.
+Repository ruleset `Protect main` lists user `8563761` as an `always` bypass actor, and GitHub reports that the current user can always bypass it.
+That is why direct commit `8d2dcea` landed even though the push also printed `Cannot update this protected ref`.
+Change that actor to pull-request-only bypass, or remove it after confirming another recovery path.
+No repository rule was mutated during this phase.
+
+<!-- Previous kickoff retained for historical context.
 ## START HERE — next session (as of 2026-07-29)
 
 Phase 0 is **merged to main** (PR #69). Main is green: 801 unit tests, 114 files.
@@ -27,6 +85,7 @@ Carry these forward into every later phase — they are already true on main:
 - Take scope from `parseFinancialScope`; pass `scopeQueryUserId(scope)` to service-client queries so `user_id` is always explicit.
 - Gate any unreleased page behind `lib/feature-flags.ts`. Flags control reachability only, never auth or RLS.
 
+-->
 ## Session of 2026-07-29 (branch `feat/finance-domain-foundation`, merged as PR #69)
 
 Started the financial-planner parity program.

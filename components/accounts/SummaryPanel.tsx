@@ -110,14 +110,14 @@ export default function SummaryPanel({
           <Link
             href={summaryHref("totals")}
             aria-current={mode === "totals" ? "page" : undefined}
-            className="rounded px-2 py-1 focus-visible:outline-2"
+            className="inline-flex min-h-11 items-center rounded px-2 py-1 focus-visible:outline-2"
           >
             Totals
           </Link>
           <Link
             href={summaryHref("percent")}
             aria-current={mode === "percent" ? "page" : undefined}
-            className="rounded px-2 py-1 focus-visible:outline-2"
+            className="inline-flex min-h-11 items-center rounded px-2 py-1 focus-visible:outline-2"
           >
             Percent
           </Link>

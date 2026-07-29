@@ -7,9 +7,13 @@ import {
 } from "@/lib/feature-flags";
 
 describe("feature flags", () => {
-  it("keeps every unreleased page off by default", () => {
-    expect(Object.values(FEATURE_FLAG_DEFAULTS).every((value) => value === false)).toBe(true);
-    expect(isFeatureEnabled("accountsPage", {})).toBe(false);
+  it("ships Accounts while keeping every later page off by default", () => {
+    expect(isFeatureEnabled("accountsPage", {})).toBe(true);
+    expect(
+      Object.entries(FEATURE_FLAG_DEFAULTS)
+        .filter(([flag]) => flag !== "accountsPage")
+        .every(([, value]) => value === false),
+    ).toBe(true);
   });
 
   it("enables the flags named in the environment", () => {

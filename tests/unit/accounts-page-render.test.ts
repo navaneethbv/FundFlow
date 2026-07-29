@@ -83,6 +83,20 @@ describe("Accounts page components", () => {
     expect(html).toContain("11.11%");
   });
 
+  it("removes an empty sparkline slot from the phone layout", () => {
+    const html = renderToStaticMarkup(
+      createElement(AccountGroup, {
+        groupKey: "cash",
+        group: {
+          ...data.groups.cash,
+          rows: [{ ...row, spark: [] }],
+        },
+      }),
+    );
+
+    expect(html).toContain('class="hidden min-h-11 sm:block"');
+  });
+
   it("renders honest currency and history disclosures with a table twin", () => {
     const html = renderToStaticMarkup(
       createElement(SummaryPanel, {
