@@ -31,6 +31,10 @@ suite("account balance snapshot RLS", () => {
   let sharedSnapshotId = "";
   let privateTransactionId = "";
   let sharedTransactionId = "";
+  let privateSplitIds: string[] = [];
+  let sharedSplitIds: string[] = [];
+  let privateLinkedRefundId = "";
+  let sharedLinkedRefundId = "";
   let ownerClient: SupabaseClient;
   let memberClient: SupabaseClient;
 
@@ -166,6 +170,119 @@ suite("account balance snapshot RLS", () => {
     });
     privateTransactionId = privateTransaction.id as string;
     sharedTransactionId = sharedTransaction.id as string;
+
+    const refundTransactions = await Promise.all([
+      insertOne("transactions", {
+        user_id: ownerId,
+        account_id: privateAccountId,
+        plaid_transaction_id: `snapshot-private-refund-charge-${stamp}`,
+        date: "2026-07-27",
+        amount: 15,
+        name: "PRIVATE REFUND CHARGE",
+        merchant_name: "Private refund",
+        pfc_primary: "GENERAL_MERCHANDISE",
+        pfc_detailed: "GENERAL_MERCHANDISE_OTHER",
+        pending: false,
+      }),
+      insertOne("transactions", {
+        user_id: ownerId,
+        account_id: privateAccountId,
+        plaid_transaction_id: `snapshot-private-refund-credit-${stamp}`,
+        date: "2026-07-28",
+        amount: -15,
+        name: "PRIVATE REFUND CREDIT",
+        merchant_name: "Private refund",
+        pfc_primary: "GENERAL_MERCHANDISE",
+        pfc_detailed: "GENERAL_MERCHANDISE_OTHER",
+        pending: false,
+      }),
+      insertOne("transactions", {
+        user_id: ownerId,
+        account_id: sharedAccountId,
+        plaid_transaction_id: `snapshot-shared-refund-charge-${stamp}`,
+        date: "2026-07-27",
+        amount: 30,
+        name: "SHARED REFUND CHARGE",
+        merchant_name: "Shared refund",
+        pfc_primary: "GENERAL_MERCHANDISE",
+        pfc_detailed: "GENERAL_MERCHANDISE_OTHER",
+        pending: false,
+      }),
+      insertOne("transactions", {
+        user_id: ownerId,
+        account_id: sharedAccountId,
+        plaid_transaction_id: `snapshot-shared-refund-credit-${stamp}`,
+        date: "2026-07-28",
+        amount: -30,
+        name: "SHARED REFUND CREDIT",
+        merchant_name: "Shared refund",
+        pfc_primary: "GENERAL_MERCHANDISE",
+        pfc_detailed: "GENERAL_MERCHANDISE_OTHER",
+        pending: false,
+      }),
+    ]);
+
+    const { data: splitRows, error: splitError } = await admin
+      .from("transaction_splits")
+      .insert([
+        {
+          user_id: ownerId,
+          transaction_id: privateTransactionId,
+          category: "Private A",
+          amount: 4,
+        },
+        {
+          user_id: ownerId,
+          transaction_id: privateTransactionId,
+          category: "Private B",
+          amount: 6,
+        },
+        {
+          user_id: ownerId,
+          transaction_id: sharedTransactionId,
+          category: "Shared A",
+          amount: 8,
+        },
+        {
+          user_id: ownerId,
+          transaction_id: sharedTransactionId,
+          category: "Shared B",
+          amount: 12,
+        },
+      ])
+      .select("id,transaction_id");
+    if (splitError) throw splitError;
+    privateSplitIds = splitRows
+      .filter((row) => row.transaction_id === privateTransactionId)
+      .map((row) => row.id as string);
+    sharedSplitIds = splitRows
+      .filter((row) => row.transaction_id === sharedTransactionId)
+      .map((row) => row.id as string);
+
+    const { data: refundRows, error: refundError } = await admin
+      .from("linked_refunds")
+      .insert([
+        {
+          user_id: ownerId,
+          charge_transaction_id: refundTransactions[0].id,
+          refund_transaction_id: refundTransactions[1].id,
+          amount: 15,
+        },
+        {
+          user_id: ownerId,
+          charge_transaction_id: refundTransactions[2].id,
+          refund_transaction_id: refundTransactions[3].id,
+          amount: 30,
+        },
+      ])
+      .select("id,charge_transaction_id");
+    if (refundError) throw refundError;
+    privateLinkedRefundId = refundRows.find(
+      (row) => row.charge_transaction_id === refundTransactions[0].id,
+    )!.id as string;
+    sharedLinkedRefundId = refundRows.find(
+      (row) => row.charge_transaction_id === refundTransactions[2].id,
+    )!.id as string;
   });
 
   afterAll(async () => {
@@ -214,6 +331,24 @@ suite("account balance snapshot RLS", () => {
 
     expect(error).toBeNull();
     expect(data).toEqual([{ id: sharedTransactionId }]);
+  });
+
+  it("lets a household member read only projection metadata for shared transactions", async () => {
+    const { data: splits, error: splitsError } = await memberClient
+      .from("transaction_splits")
+      .select("id")
+      .in("id", [...privateSplitIds, ...sharedSplitIds]);
+    const { data: refunds, error: refundsError } = await memberClient
+      .from("linked_refunds")
+      .select("id")
+      .in("id", [privateLinkedRefundId, sharedLinkedRefundId]);
+
+    expect(splitsError).toBeNull();
+    expect(splits?.map((row) => row.id).sort()).toEqual(
+      [...sharedSplitIds].sort(),
+    );
+    expect(refundsError).toBeNull();
+    expect(refunds).toEqual([{ id: sharedLinkedRefundId }]);
   });
 
   it("denies authenticated snapshot writes", async () => {
