@@ -18,11 +18,18 @@ describe("Sidebar Navigation Contract", () => {
 
   it("does not include unreleased future-phase routes in NAV_ITEMS", () => {
     const keys = NAV_ITEMS.map((item) => item.key);
-    expect(keys).not.toContain("recurring");
     expect(keys).not.toContain("reports");
     expect(keys).not.toContain("investments");
     expect(keys).not.toContain("forecasting");
     expect(keys).not.toContain("advice");
+  });
+
+  it("includes a recurring entry gated by recurringPage in the planning category", () => {
+    const recurring = NAV_ITEMS.find((item) => item.key === "recurring");
+    expect(recurring).toBeDefined();
+    expect(recurring!.category).toBe("planning");
+    expect(recurring!.featureFlag).toBe("recurringPage");
+    expect(recurring!.href).toBe("/recurring");
   });
 
   it("does not ship future-phase API or settings modules", () => {

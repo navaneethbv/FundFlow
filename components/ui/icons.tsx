@@ -24,6 +24,7 @@ export {
   PiggyBank,
   Plus,
   RefreshCw,
+  Repeat,
   Search,
   Settings,
   ShieldCheck,
