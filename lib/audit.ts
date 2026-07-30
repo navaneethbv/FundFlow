@@ -35,7 +35,11 @@ export type AuditAction =
   | "budget_updated"
   | "budget_proposals_created"
   | "demo_data_loaded"
-  | "demo_data_cleared";
+  | "demo_data_cleared"
+  | "recurring_stream_reviewed"
+  | "recurring_stream_dismissed"
+  | "recurring_stream_restored"
+  | "recurring_stream_amount_corrected";
 
 interface AuditParams {
   userId: string | null;

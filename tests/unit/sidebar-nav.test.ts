@@ -33,7 +33,7 @@ describe("Sidebar Navigation Contract", () => {
   });
 
   it("does not ship future-phase API or settings modules", () => {
-    expect(existsSync("app/api/recurring/route.ts")).toBe(false);
+    expect(existsSync("app/api/recurring/route.ts")).toBe(true);
     expect(existsSync("app/api/reports/saved/route.ts")).toBe(false);
     expect(existsSync("components/charts/CumulativeCompareChart.tsx")).toBe(
       false,
