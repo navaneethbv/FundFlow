@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { writeAudit, type AuditAction } from "@/lib/audit";
+import { createServiceClient } from "@/lib/supabase/service";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ACTIONS = ["review", "dismiss", "restore", "correct_amount"] as const;
@@ -65,14 +66,24 @@ function patchFor(action: RecurringAction, amount: number | undefined): Record<s
 export async function PATCH(request: Request) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
-  const { supabase, user } = auth;
+  const { user } = auth;
 
   try {
     const parsed = parseBody(await request.json().catch(() => null));
     if (!parsed.ok) return badRequest(parsed.message);
     const { stream_id: streamId, action, amount } = parsed.value;
 
-    const { data, error } = await supabase
+    // recurring_streams is a Plaid-synced table and is intentionally not
+    // client-writable (RLS has a SELECT-only policy — see CLAUDE.md's "client
+    // writes allowed only on budgets and the profiles preference columns"
+    // invariant). requireUser() only establishes identity here; the actual
+    // write goes through the service client, same as every other
+    // Plaid-synced-table write in this app (plaid-service.ts, sync.ts,
+    // app/api/plaid/disconnect/route.ts). The explicit .eq("user_id", ...)
+    // scope below is what enforces ownership, since the service client
+    // bypasses RLS entirely.
+    const service = createServiceClient();
+    const { data, error } = await service
       .from("recurring_streams")
       .update(patchFor(action, amount))
       .eq("id", streamId)

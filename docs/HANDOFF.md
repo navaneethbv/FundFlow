@@ -31,10 +31,18 @@ The review workflow's `PATCH /api/recurring` route (Confirm, Dismiss, Restore, c
 The route's `.select("id").maybeSingle()` then sees `data: null` and returns 404 "Recurring stream not found" for every legitimate request.
 This silently broke the entire review workflow — every Confirm, Dismiss, Restore, and amount correction — for every user, not a test-authoring artifact.
 Reproduced directly against the live project before any fix: an authenticated owner's own-row update returned `{ data: null, error: null }`, and a service-client re-read confirmed the row was unchanged.
-Fixed with a new migration, `supabase/migrations/20260730170000_recurring_streams_owner_write.sql`, adding one owner-scoped `UPDATE` policy in the same shape as every other owner-write table in this schema.
-Re-running the same repro after the fix returned `{ data: { id: ... }, error: null }` and the target row's `reviewed_at` was set.
-This migration was applied directly to the live project via `supabase db query --linked -f <file>` (the Supabase MCP tools require an interactive auth flow unavailable in this session, and `supabase db push` refused over a pre-existing local/remote migration-history mismatch that predates this phase).
-Its DDL is live and verified working; it is committed to the repo as a normal migration file, but unlike the two migrations above it is not registered in `supabase_migrations.schema_migrations` (`supabase migration repair` was blocked by this session's permission classifier) — a bookkeeping gap for a human to reconcile with `supabase migration repair --status applied 20260730170000`, not a functional one.
+
+The first attempt at a fix (an owner-scoped `UPDATE` RLS policy) was itself a security regression, caught by review: it made `recurring_streams` — a Plaid-synced table — directly writable from the browser across every column (`average_amount`, `frequency`, `status`, `is_active`, `merchant_name`, `predicted_next_date`, `stream_id`, `account_id`, ...), not just the three the route intends to expose, entirely bypassing `requireUser()`, rate limiting, and `writeAudit()`.
+That violated CLAUDE.md's explicit "do not regress" invariant that client writes are allowed only on `budgets` and the `profiles` preference columns.
+That policy was dropped again by `supabase/migrations/20260730180000_recurring_streams_revert_client_write.sql`.
+
+The correct fix follows the pattern already used everywhere else in this app for Plaid-synced-table writes (`plaid-service.ts`, `sync.ts`, and explicitly `app/api/plaid/disconnect/route.ts`): `requireUser()` still establishes identity, but `app/api/recurring/route.ts`'s `PATCH` handler now performs the actual write through `createServiceClient()`, keeping the existing `.eq("id", streamId).eq("user_id", user.id)` scope as the sole ownership check, since the service client bypasses RLS entirely.
+`recurring_streams` is back to exactly one live policy, `recurring_streams_select_visible` (`SELECT` only) — verified directly against the live project after applying the revert migration.
+Repro after this corrected fix: a cookie-client update again returns `{ data: null, error: null }` and leaves the row unchanged (RLS correctly blocks it, as it always should for this table), while a service-client update (the shape the route now uses) returns `{ data: { id: ... }, error: null }` with `reviewed_at` set.
+`tests/unit/recurring-route.test.ts` was updated to mock `createServiceClient` instead of asserting against the `requireUser()`-provided cookie client, and gained a regression test that fails loudly (via a cookie-client stub that throws on any query) if the route ever again relies on a cookie-client write succeeding.
+
+Both migrations were applied directly to the live project via `supabase db query --linked -f <file>` (the Supabase MCP tools require an interactive auth flow unavailable in this session, and `supabase db push` refused over a pre-existing local/remote migration-history mismatch that predates this phase).
+Their DDL is live and verified; neither is registered in `supabase_migrations.schema_migrations` (`supabase migration repair` was blocked by this session's permission classifier) — a bookkeeping gap for a human to reconcile with `supabase migration repair --status applied 20260730170000` and `... 20260730180000`, not a functional one.
 
 Task 15 also fixed two smaller, pre-existing defects noticed while running the full gate, per this repo's fix-it-when-you-see-it standard:
 
@@ -52,7 +60,7 @@ The final local gate, all real command output, all green:
 
 - `npm run lint`: pass, zero warnings (after removing the two unused `NextResponse` imports above).
 - `npx tsc --noEmit`: pass.
-- `npm test`: pass, 158 files / 1116 tests (includes `tests/integration/*` against the live Supabase project; `npm run test:unit` alone is 142 files / 1025 tests).
+- `npm test`: pass, 158 files / 1117 tests (includes `tests/integration/*` against the live Supabase project; `npm run test:unit` alone is 142 files / 1026 tests).
 - `npm run build`: pass, production route manifest includes `/recurring`, `/api/recurring`, and `/api/recurring/manual`.
 - `npm run test:e2e -- tests/e2e/recurring.spec.ts`: pass, 1/1, credentialed against the live FundFlow Supabase project, stable across three consecutive runs.
 - `git diff --check`: pass.

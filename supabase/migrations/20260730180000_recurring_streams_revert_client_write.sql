@@ -1,0 +1,22 @@
+-- Revert the previous migration's fix. Task 15 review (independently
+-- verified by the coordinator) correctly flagged that
+-- 20260730170000_recurring_streams_owner_write.sql's owner-scoped UPDATE
+-- policy made recurring_streams directly client-writable across ALL
+-- columns (average_amount, frequency, status, is_active, merchant_name,
+-- predicted_next_date, stream_id, account_id, ...), not just the three the
+-- PATCH route intends to expose (reviewed_at/dismissed_at/user_amount).
+-- That violates CLAUDE.md's explicit invariant: client writes are allowed
+-- only on `budgets` and the `profiles` preference columns.
+-- recurring_streams is a Plaid-synced table and was never meant to join
+-- that list (Task 10's own brief drew this exact contrast against
+-- manual_recurring_items).
+--
+-- The real fix for the underlying 404 bug (PATCH /api/recurring updating
+-- zero rows) is in application code, not RLS: the route now writes through
+-- the service client (createServiceClient()), the same pattern every other
+-- Plaid-synced-table write in this app already uses (plaid-service.ts,
+-- sync.ts, app/api/plaid/disconnect/route.ts), with the explicit
+-- `.eq("user_id", user.id)` scope enforcing ownership in code instead of
+-- RLS. That makes this table's client-write RLS policy both unnecessary
+-- and actively dangerous, so it is dropped here.
+drop policy if exists "recurring_streams_update_own" on public.recurring_streams;
