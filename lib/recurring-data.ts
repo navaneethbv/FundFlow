@@ -6,6 +6,7 @@ import {
   type FinancialScope,
 } from "@/lib/financial-scope";
 import {
+  countUnreviewedStreams,
   expandStreamsForMonth,
   type ManualRecurringFrequency,
   type ManualRecurringItemInput,
@@ -18,6 +19,7 @@ const DEPENDENCY_LIMIT = 5_000;
 
 interface RecurringStreamRawRow {
   id: string;
+  user_id: string;
   merchant_name: string | null;
   description: string | null;
   stream_type: "inflow" | "outflow";
@@ -47,6 +49,14 @@ export interface RecurringStreamRow {
   userAmount: number | null;
   averageAmount: number | null;
   accountName: string | null;
+  /**
+   * Whether this stream belongs to the actual authenticated caller (not just
+   * whichever `user_id` scope's queries used). In household scope, RLS
+   * surfaces every household member's streams, but only the owner's own rows
+   * are actionable through `PATCH /api/recurring` (that route always scopes
+   * to the real caller). Non-owned rows must render read-only in the UI.
+   */
+  isOwn: boolean;
 }
 
 export interface ManualRecurringItemRow {
@@ -172,7 +182,7 @@ export async function loadRecurringData(
   let streamsQuery = supabase
     .from("recurring_streams")
     .select(
-      "id,merchant_name,description,stream_type,status,is_active,reviewed_at,dismissed_at,user_amount,average_amount,last_amount,frequency,first_date,last_date,predicted_next_date,account_id",
+      "id,user_id,merchant_name,description,stream_type,status,is_active,reviewed_at,dismissed_at,user_amount,average_amount,last_amount,frequency,first_date,last_date,predicted_next_date,account_id",
     )
     .limit(DEPENDENCY_LIMIT);
   let manualQuery = supabase
@@ -298,13 +308,29 @@ export async function loadRecurringData(
   const lastSuccessfulSyncAt =
     ((syncResult.data as SyncRow | null)?.updated_at as string | undefined) ?? null;
 
+  // Household scope's queries above are unscoped by design (RLS does the
+  // filtering so household members can see each other's shared streams), so
+  // `streamInputs`/`streamRows` can include other members' rows. The review
+  // banner must only ever count the actual caller's own unreviewable
+  // streams — the same rows the sidebar badge counts — otherwise the banner
+  // and badge disagree, and confirming a co-owner's stream from the All tab
+  // would 404 against `PATCH /api/recurring`, which is always scoped to the
+  // real caller.
+  const ownerStreamIds = new Set(
+    streamRows.filter((row) => row.user_id === input.userId).map((row) => row.id),
+  );
+  const ownerScopedInputs = streamInputs.filter((streamInput) => ownerStreamIds.has(streamInput.id));
+
   return {
-    view: expandStreamsForMonth(
-      streamInputs,
-      manualInputs,
-      input.anchorMonth,
-      (input.now ?? new Date()).toISOString().slice(0, 10),
-    ),
+    view: {
+      ...expandStreamsForMonth(
+        streamInputs,
+        manualInputs,
+        input.anchorMonth,
+        (input.now ?? new Date()).toISOString().slice(0, 10),
+      ),
+      reviewCount: countUnreviewedStreams(ownerScopedInputs),
+    },
     scope,
     visibleHouseholdIds,
     allStreams: streamRows.map((row) => ({
@@ -319,6 +345,7 @@ export async function loadRecurringData(
       userAmount: row.user_amount === null ? null : Number(row.user_amount),
       averageAmount: row.average_amount === null ? null : Number(row.average_amount),
       accountName: row.account_id ? accountById.get(row.account_id)?.name ?? null : null,
+      isOwn: row.user_id === input.userId,
     })),
     manualItems: manualInputs,
     stale: isStale(lastSuccessfulSyncAt, input.now ?? new Date()),

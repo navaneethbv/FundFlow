@@ -18,6 +18,17 @@ const STATUS_TONE: Record<RecurringOccurrence["status"], string> = {
   complete: "text-success",
 };
 
+/**
+ * Whether a blurred amount field should trigger the `correct_amount` PATCH.
+ * `initial` is the value the field was seeded with (the stream's existing
+ * `userAmount`, or "" when there is none) — an untouched field, or one
+ * cleared back to empty, must never write a permanent override for a value
+ * the user never actually typed.
+ */
+export function shouldSubmitAmountCorrection(amount: string, initial: string): boolean {
+  return amount.trim() !== "" && amount !== initial;
+}
+
 function OccurrenceRow({ occurrence, currency }: Readonly<{ occurrence: RecurringOccurrence; currency: string }>) {
   return (
     <li className="flex items-center justify-between gap-4 border-t border-panel-border py-3 first:border-t-0">
@@ -56,7 +67,8 @@ function ManageRow({
   onCorrectAmount: (id: string, amount: number) => void;
   pending: boolean;
 }>) {
-  const [amount, setAmount] = useState(String(stream.userAmount ?? stream.averageAmount ?? 0));
+  const initialAmount = stream.userAmount != null ? String(stream.userAmount) : "";
+  const [amount, setAmount] = useState(initialAmount);
   const needsReview = stream.status === "MATURE" && !stream.dismissedAt && !stream.reviewedAt;
 
   return (
@@ -68,52 +80,58 @@ function ManageRow({
           {stream.dismissedAt ? " · Not recurring" : ""}
         </span>
       </span>
-      <span className="flex items-center gap-2">
-        <input
-          aria-label={`Expected amount for ${stream.merchantName ?? "this stream"}`}
-          type="number"
-          min="0"
-          step="0.01"
-          value={amount}
-          onChange={(event) => setAmount(event.target.value)}
-          onBlur={() => {
-            const value = Number(amount);
-            if (Number.isFinite(value) && value >= 0) onCorrectAmount(stream.id, value);
-          }}
-          disabled={pending}
-          className="min-h-11 w-24 rounded-field border border-panel-border bg-background px-3 text-right"
-        />
-        {needsReview && (
-          <>
+      {stream.isOwn ? (
+        <span className="flex items-center gap-2">
+          <input
+            aria-label={`Expected amount for ${stream.merchantName ?? "this stream"}`}
+            type="number"
+            min="0"
+            step="0.01"
+            value={amount}
+            placeholder={stream.averageAmount != null ? String(stream.averageAmount) : undefined}
+            onChange={(event) => setAmount(event.target.value)}
+            onBlur={() => {
+              if (!shouldSubmitAmountCorrection(amount, initialAmount)) return;
+              const value = Number(amount);
+              if (Number.isFinite(value) && value >= 0) onCorrectAmount(stream.id, value);
+            }}
+            disabled={pending}
+            className="min-h-11 w-24 rounded-field border border-panel-border bg-background px-3 text-right"
+          />
+          {needsReview && (
+            <>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => onReview(stream.id)}
+                className="min-h-11 rounded-field bg-accent px-3 text-sm font-semibold text-accent-foreground"
+              >
+                Confirm
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => onDismiss(stream.id)}
+                className="min-h-11 rounded-field border border-panel-border px-3 text-sm font-semibold"
+              >
+                Not recurring
+              </button>
+            </>
+          )}
+          {stream.dismissedAt && (
             <button
               type="button"
               disabled={pending}
-              onClick={() => onReview(stream.id)}
-              className="min-h-11 rounded-field bg-accent px-3 text-sm font-semibold text-accent-foreground"
-            >
-              Confirm
-            </button>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => onDismiss(stream.id)}
+              onClick={() => onRestore(stream.id)}
               className="min-h-11 rounded-field border border-panel-border px-3 text-sm font-semibold"
             >
-              Not recurring
+              Restore
             </button>
-          </>
-        )}
-        {stream.dismissedAt && (
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => onRestore(stream.id)}
-            className="min-h-11 rounded-field border border-panel-border px-3 text-sm font-semibold"
-          >
-            Restore
-          </button>
-        )}
-      </span>
+          )}
+        </span>
+      ) : (
+        <span className="text-xs text-muted">Shared · view only</span>
+      )}
     </li>
   );
 }

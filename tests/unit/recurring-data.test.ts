@@ -9,6 +9,7 @@ function makeClient(overrides: Record<string, { data?: unknown; error?: unknown 
       data: [
         {
           id: "stream-1",
+          user_id: "user-1",
           merchant_name: "Netflix",
           description: null,
           stream_type: "outflow",
@@ -100,5 +101,85 @@ describe("loadRecurringData", () => {
       anchorMonth: "2026-07",
     });
     expect(result.view.totals.creditCards.remaining).toBeGreaterThan(0);
+  });
+
+  describe("household scope ownership (Fix 1)", () => {
+    function makeHouseholdClient() {
+      return clientStub({
+        households: { data: [{ id: "household-1" }] },
+        recurring_streams: {
+          data: [
+            {
+              id: "stream-own",
+              user_id: "user-1",
+              merchant_name: "Netflix",
+              description: null,
+              stream_type: "outflow",
+              status: "MATURE",
+              is_active: true,
+              reviewed_at: null,
+              dismissed_at: null,
+              user_amount: null,
+              average_amount: 15.49,
+              last_amount: 15.49,
+              frequency: "MONTHLY",
+              first_date: "2026-01-15",
+              last_date: "2026-06-15",
+              predicted_next_date: "2026-07-15",
+              account_id: "account-1",
+            },
+            {
+              id: "stream-partner",
+              user_id: "user-2",
+              merchant_name: "Spotify",
+              description: null,
+              stream_type: "outflow",
+              status: "MATURE",
+              is_active: true,
+              reviewed_at: null,
+              dismissed_at: null,
+              user_amount: null,
+              average_amount: 9.99,
+              last_amount: 9.99,
+              frequency: "MONTHLY",
+              first_date: "2026-01-20",
+              last_date: "2026-06-20",
+              predicted_next_date: "2026-07-20",
+              account_id: null,
+            },
+          ],
+        },
+        recurring_stream_transactions: { data: [] },
+        manual_recurring_items: { data: [] },
+        accounts: {
+          data: [{ id: "account-1", name: "Checking", type: "depository", subtype: null, iso_currency_code: "USD" }],
+        },
+        sync_jobs: { data: null },
+      });
+    }
+
+    it("flags each stream's isOwn against the real authenticated caller, not the scope's query filter", async () => {
+      const client = makeHouseholdClient();
+      const result = await loadRecurringData(client as never, {
+        userId: "user-1",
+        anchorMonth: "2026-07",
+        rawScope: "household-1",
+      });
+      expect(result.allStreams.find((s) => s.id === "stream-own")?.isOwn).toBe(true);
+      expect(result.allStreams.find((s) => s.id === "stream-partner")?.isOwn).toBe(false);
+    });
+
+    it("counts reviewCount against only the caller's own unreviewed streams, matching countUnreviewedStreams alone", async () => {
+      const client = makeHouseholdClient();
+      const result = await loadRecurringData(client as never, {
+        userId: "user-1",
+        anchorMonth: "2026-07",
+        rawScope: "household-1",
+      });
+      // Both streams are unreviewed MATURE/active, but only "stream-own"
+      // belongs to user-1 — the banner must not count "stream-partner" even
+      // though it's visible in the household-scoped allStreams/occurrences.
+      expect(result.view.reviewCount).toBe(1);
+    });
   });
 });
