@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { NextResponse } from "next/server";
 import { PATCH } from "@/app/api/recurring/route";
 import { writeAudit } from "@/lib/audit";
 import { requireUser } from "@/lib/http";
