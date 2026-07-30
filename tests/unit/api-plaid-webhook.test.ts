@@ -191,7 +191,9 @@ describe("POST /api/plaid/webhook", () => {
       webhookVerificationKeyGet: vi.fn().mockResolvedValue({ data: { key: { ...jwk, expired_at: null } } }),
     };
     const plaidModule = await import("@/lib/plaid");
-    vi.spyOn(plaidModule, "getPlaidClient").mockReturnValue(mockPlaid as any);
+    vi.spyOn(plaidModule, "getPlaidClient").mockReturnValue(
+      mockPlaid as unknown as ReturnType<typeof plaidModule.getPlaidClient>
+    );
 
     const bodyText = JSON.stringify({
       webhook_type: "ITEM",
@@ -237,7 +239,9 @@ describe("POST /api/plaid/webhook", () => {
       webhookVerificationKeyGet: vi.fn().mockResolvedValue({ data: { key: { ...jwk, expired_at: "2026-01-01" } } }),
     };
     const plaidModule = await import("@/lib/plaid");
-    vi.spyOn(plaidModule, "getPlaidClient").mockReturnValue(mockPlaid as any);
+    vi.spyOn(plaidModule, "getPlaidClient").mockReturnValue(
+      mockPlaid as unknown as ReturnType<typeof plaidModule.getPlaidClient>
+    );
 
     const bodyText = JSON.stringify({ webhook_type: "ITEM" });
     const bodyHash = crypto.createHash("sha256").update(bodyText).digest("hex");
