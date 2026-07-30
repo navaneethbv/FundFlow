@@ -84,4 +84,9 @@ describe("manual recurring items route", () => {
     const response = await PATCH(req("PATCH", { id: ITEM_ID, amount: 90 }));
     expect(response.status).toBe(404);
   });
+
+  it("rejects a PATCH name over 140 characters", async () => {
+    const response = await PATCH(req("PATCH", { id: ITEM_ID, name: "a".repeat(141) }));
+    expect(response.status).toBe(400);
+  });
 });

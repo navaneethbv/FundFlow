@@ -91,7 +91,13 @@ export async function PATCH(request: Request) {
     }
     const patch: Record<string, unknown> = {};
     if (body.name !== undefined) {
-      if (typeof body.name !== "string" || body.name.trim().length < 1) return badRequest("Invalid name");
+      if (
+        typeof body.name !== "string" ||
+        body.name.trim().length < 1 ||
+        body.name.trim().length > 140
+      ) {
+        return badRequest("Invalid name");
+      }
       patch.name = body.name.trim();
     }
     if (body.amount !== undefined) {
