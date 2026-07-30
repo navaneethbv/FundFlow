@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { shouldSubmitAmountCorrection } from "@/components/recurring/RecurringList";
+import { manualItemCreatePayload, shouldSubmitAmountCorrection } from "@/components/recurring/RecurringList";
 
 /**
  * `RecurringList` is a "use client" component and this repo has no
@@ -53,5 +53,61 @@ describe("RecurringList amount field seeding (Fix 2)", () => {
 
   it("guards onBlur with shouldSubmitAmountCorrection instead of firing unconditionally", () => {
     expect(source).toContain("shouldSubmitAmountCorrection(amount, initialAmount)");
+  });
+});
+
+describe("manualItemCreatePayload (Fix 5)", () => {
+  it("translates the add-form's fields into the exact POST /api/recurring/manual body shape", () => {
+    expect(
+      manualItemCreatePayload({
+        name: "Piano lessons",
+        amount: 80,
+        frequency: "monthly",
+        nextDate: "2026-08-05",
+        itemType: "expense",
+      }),
+    ).toEqual({
+      name: "Piano lessons",
+      amount: 80,
+      frequency: "monthly",
+      next_date: "2026-08-05",
+      item_type: "expense",
+      category: null,
+    });
+  });
+});
+
+describe("RecurringList manual item management UI (Fix 5)", () => {
+  it("accepts a manualItems prop and renders a list with an empty state", () => {
+    expect(source).toContain("manualItems: ManualRecurringItemRow[]");
+    expect(source).toContain("No manual items yet.");
+    expect(source).toContain("manualItems.map((item)");
+  });
+
+  it("toggling enabled PATCHes { id, enabled } to /api/recurring/manual", () => {
+    expect(source).toContain('fetch("/api/recurring/manual"');
+    expect(source).toMatch(/method:\s*"PATCH"/);
+    expect(source).toContain("JSON.stringify({ id, enabled })");
+  });
+
+  it("deleting DELETEs { id } to /api/recurring/manual", () => {
+    expect(source).toMatch(/method:\s*"DELETE"/);
+    expect(source).toContain("JSON.stringify({ id })");
+  });
+
+  it("adding POSTs via manualItemCreatePayload and refreshes the router on success", () => {
+    expect(source).toMatch(/method:\s*"POST"/);
+    expect(source).toContain("JSON.stringify(manualItemCreatePayload(input))");
+    // mutateManualItem is the single success/failure path shared by
+    // toggle/delete/add, and it calls router.refresh() only when the
+    // response is ok.
+    expect(source).toContain("router.refresh()");
+  });
+
+  it("renders name, frequency, amount, and next due date for each manual item", () => {
+    expect(source).toContain("item.name");
+    expect(source).toContain("formatDay(item.nextDate)");
+    expect(source).toContain("manualFrequencyLabel(item.frequency)");
+    expect(source).toContain("formatCurrency(item.amount, currency)");
   });
 });

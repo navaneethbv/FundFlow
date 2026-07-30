@@ -12,7 +12,7 @@ The released `/recurring` server page now provides:
 - A month-scoped occurrence list built from Plaid's `predicted_next_date` anchor and `transaction_ids` (never a merchant-name heuristic for Plaid-sourced completion; heuristic matching is reserved for manual items only).
 - Upcoming, Complete, and All tabs; the All tab is the single place to Confirm, dismiss ("Not recurring"), restore, and correct the expected amount of a stream.
 - A review banner and a sidebar nav badge, both counting `MATURE`, active, undismissed, unreviewed streams, and both clearing together once every stream is reviewed.
-- Manual recurring items (income and expense) with their own CRUD route, folded into the same monthly occurrence expansion as Plaid streams.
+- Manual recurring items (income and expense): a "Manual items" section in the All tab (add/enable-toggle/delete, backed by `/api/recurring/manual`'s CRUD route), folded into the same monthly occurrence expansion as Plaid streams.
 - A "This month" progress panel (income, expenses, and — only when nonzero — credit cards), and Mine/Household scope via the shared `parseFinancialScope`.
 - A stale-data banner driven by the newest successful `sync_jobs` row, matching the existing dashboard convention.
 

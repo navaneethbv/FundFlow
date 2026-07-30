@@ -119,6 +119,7 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
             <RecurringList
               occurrences={loaded.view.occurrences}
               streams={loaded.allStreams}
+              manualItems={loaded.manualItems}
               currency={loaded.currency}
             />
           </Panel>
