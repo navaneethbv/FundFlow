@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { occurrenceDatesInWindow } from "@/lib/recurring-page";
+import {
+  countUnreviewedStreams,
+  expandStreamsForMonth,
+  occurrenceDatesInWindow,
+  type RecurringStreamInput,
+} from "@/lib/recurring-page";
 
 describe("occurrenceDatesInWindow", () => {
   it("returns every weekly occurrence anchored ahead of the window", () => {
@@ -59,5 +64,150 @@ describe("occurrenceDatesInWindow", () => {
     // rolls into the following month (2028 is a leap year: Jan 29 + 1 month
     // lands on Feb 29, which does exist). This is a real date, not a bug.
     expect(dates).toEqual(["2028-02-29"]);
+  });
+});
+
+describe("countUnreviewedStreams", () => {
+  it("counts only active, MATURE, non-dismissed, unreviewed streams", () => {
+    const count = countUnreviewedStreams([
+      { isActive: true, status: "MATURE", dismissedAt: null, reviewedAt: null },
+      { isActive: true, status: "MATURE", dismissedAt: null, reviewedAt: "2026-07-01T00:00:00Z" },
+      { isActive: true, status: "MATURE", dismissedAt: "2026-07-01T00:00:00Z", reviewedAt: null },
+      { isActive: true, status: "EARLY_DETECTION", dismissedAt: null, reviewedAt: null },
+      { isActive: false, status: "MATURE", dismissedAt: null, reviewedAt: null },
+    ]);
+    expect(count).toBe(1);
+  });
+});
+
+function stream(overrides: Partial<RecurringStreamInput> = {}): RecurringStreamInput {
+  return {
+    id: "stream-1",
+    streamType: "outflow",
+    merchantName: "Netflix",
+    description: null,
+    averageAmount: 15.49,
+    lastAmount: 15.49,
+    userAmount: null,
+    frequency: "MONTHLY",
+    status: "MATURE",
+    isActive: true,
+    accountName: "Checking",
+    isCreditAccount: false,
+    firstDate: "2026-01-15",
+    lastDate: "2026-06-15",
+    predictedNextDate: "2026-07-15",
+    reviewedAt: "2026-01-16T00:00:00Z",
+    dismissedAt: null,
+    matchedTransactions: [],
+    ...overrides,
+  };
+}
+
+describe("expandStreamsForMonth", () => {
+  it("marks an occurrence complete when a matched transaction lands near the due date", () => {
+    const month = expandStreamsForMonth(
+      [stream({ matchedTransactions: [{ id: "txn-1", date: "2026-07-16" }] })],
+      [],
+      "2026-07",
+      "2026-07-20",
+    );
+    expect(month.occurrences).toHaveLength(1);
+    expect(month.occurrences[0]).toMatchObject({
+      status: "complete",
+      matchedTransactionId: "txn-1",
+      dueDate: "2026-07-15",
+      amount: 15.49,
+      isIncome: false,
+    });
+  });
+
+  it("marks an unmatched past-due occurrence overdue and a future one upcoming", () => {
+    const overdue = expandStreamsForMonth([stream()], [], "2026-07", "2026-07-20");
+    expect(overdue.occurrences[0]!.status).toBe("overdue");
+
+    const upcoming = expandStreamsForMonth([stream()], [], "2026-07", "2026-07-10");
+    expect(upcoming.occurrences[0]!.status).toBe("upcoming");
+  });
+
+  it("excludes dismissed and tombstoned streams", () => {
+    const month = expandStreamsForMonth(
+      [
+        stream({ id: "a", dismissedAt: "2026-07-01T00:00:00Z" }),
+        stream({ id: "b", status: "TOMBSTONED" }),
+      ],
+      [],
+      "2026-07",
+      "2026-07-20",
+    );
+    expect(month.occurrences).toHaveLength(0);
+  });
+
+  it("skips streams with no usable anchor date", () => {
+    const month = expandStreamsForMonth(
+      [stream({ predictedNextDate: null, lastDate: null, firstDate: null })],
+      [],
+      "2026-07",
+      "2026-07-20",
+    );
+    expect(month.occurrences).toHaveLength(0);
+  });
+
+  it("buckets income, expenses, and credit-card occurrences separately", () => {
+    const month = expandStreamsForMonth(
+      [
+        stream({ id: "paycheck", streamType: "inflow", averageAmount: 3000 }),
+        stream({ id: "card-bill", isCreditAccount: true, averageAmount: 200 }),
+        stream({ id: "rent", averageAmount: 1500, matchedTransactions: [{ id: "t", date: "2026-07-15" }] }),
+      ],
+      [],
+      "2026-07",
+      "2026-07-20",
+    );
+    expect(month.totals.income.remaining).toBe(3000);
+    expect(month.totals.creditCards.remaining).toBe(200);
+    expect(month.totals.expenses.paid).toBe(1500);
+  });
+
+  it("expands enabled manual items and skips disabled ones", () => {
+    const month = expandStreamsForMonth(
+      [],
+      [
+        {
+          id: "manual-1",
+          name: "Piano lessons",
+          amount: 80,
+          frequency: "monthly",
+          nextDate: "2026-07-05",
+          itemType: "expense",
+          category: "Education",
+          enabled: true,
+        },
+        {
+          id: "manual-2",
+          name: "Old gym",
+          amount: 40,
+          frequency: "monthly",
+          nextDate: "2026-07-01",
+          itemType: "expense",
+          category: null,
+          enabled: false,
+        },
+      ],
+      "2026-07",
+      "2026-07-01",
+    );
+    expect(month.occurrences).toHaveLength(1);
+    expect(month.occurrences[0]).toMatchObject({ source: "manual", sourceId: "manual-1", category: "Education" });
+  });
+
+  it("computes reviewCount independently of the viewed month's occurrences", () => {
+    const month = expandStreamsForMonth(
+      [stream({ reviewedAt: null }), stream({ id: "b", predictedNextDate: "2099-01-01", reviewedAt: null })],
+      [],
+      "2026-07",
+      "2026-07-20",
+    );
+    expect(month.reviewCount).toBe(2);
   });
 });
