@@ -115,6 +115,7 @@ describe("Export API Routes", () => {
         "accounts",
         "transactions",
         "account_balance_snapshots",
+        "budget_periods",
       ]);
       const eqCalls: Array<[string, string, string]> = [];
       const mockSupabase = {
@@ -151,8 +152,32 @@ describe("Export API Routes", () => {
       expect(mockBuildDataTakeout).toHaveBeenCalledWith(
         expect.objectContaining({
           account_balance_snapshots: [],
+          budget_periods: [],
         }),
       );
+    });
+
+    it("fails the takeout when budget history cannot be read", async () => {
+      const mockSupabase = {
+        from: vi.fn((table: string) => ({
+          select: vi.fn(() => ({
+            eq: vi.fn().mockResolvedValue(
+              table === "budget_periods"
+                ? { data: null, error: { code: "42501" } }
+                : { data: [], error: null },
+            ),
+          })),
+        })),
+      };
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: mockSupabase,
+      });
+
+      const res = await takeoutGet();
+
+      expect(res.status).toBe(500);
+      expect(mockBuildDataTakeout).not.toHaveBeenCalled();
     });
 
     it("returns 500 when database call throws an error", async () => {

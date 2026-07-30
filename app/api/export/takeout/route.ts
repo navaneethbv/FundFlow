@@ -7,7 +7,7 @@ import { errorResponse, requireUser } from "@/lib/http";
  * longer a sufficient scope: `accounts`, `transactions`, and
  * `account_balance_snapshots` are additionally readable for a household
  * member's opted-in Plaid connections. Takeout means "the caller's own data",
- * so every query below filters `user_id` explicitly — do not drop those
+ * so every query below filters `user_id` explicitly. Do not drop those
  * filters back to bare RLS.
  */
 export async function GET() {
@@ -16,18 +16,7 @@ export async function GET() {
   const { supabase, user } = auth;
 
   try {
-    const [
-      { data: accounts },
-      { data: transactions },
-      { data: budgets },
-      { data: goals },
-      { data: rules },
-      { data: manualAccounts },
-      { data: accountBalanceSnapshots },
-      { data: alertPreferences },
-      { data: aiSettings },
-      { data: budgetPeriods },
-    ] = await Promise.all([
+    const results = await Promise.all([
       supabase.from("accounts").select("name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code").eq("user_id", user.id),
       supabase.from("transactions").select("date, amount, iso_currency_code, name, merchant_name, pfc_primary, pfc_detailed, pending").eq("user_id", user.id),
       supabase.from("budgets").select("category, monthly_limit").eq("user_id", user.id),
@@ -39,6 +28,20 @@ export async function GET() {
       supabase.from("ai_settings").select("enabled").eq("user_id", user.id),
       supabase.from("budget_periods").select("budget_id, month, planned").eq("user_id", user.id),
     ]);
+    const failed = results.find((result) => result.error);
+    if (failed?.error) throw failed.error;
+    const [
+      accounts,
+      transactions,
+      budgets,
+      goals,
+      rules,
+      manualAccounts,
+      accountBalanceSnapshots,
+      alertPreferences,
+      aiSettings,
+      budgetPeriods,
+    ] = results.map((result) => result.data);
 
     return NextResponse.json(
       buildDataTakeout({
