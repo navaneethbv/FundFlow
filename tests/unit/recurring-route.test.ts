@@ -76,8 +76,24 @@ describe("PATCH /api/recurring", () => {
   });
 
   it("sets user_amount on correct_amount", async () => {
-    await PATCH(request({ stream_id: STREAM_ID, action: "correct_amount", amount: 19.98 }));
+    await PATCH(request({ stream_id: STREAM_ID, action: "correct_amount", amount: 19.99 }));
     const written = client.writtenTo("recurring_streams") as Record<string, unknown>;
-    expect(written.user_amount).toBe(19.98);
+    expect(written.user_amount).toBe(19.99);
+  });
+
+  it("accepts common subscription prices like 19.99 (regression test)", async () => {
+    const response = await PATCH(
+      request({ stream_id: STREAM_ID, action: "correct_amount", amount: 19.99 }),
+    );
+    expect(response.status).toBe(200);
+    const written = client.writtenTo("recurring_streams") as Record<string, unknown>;
+    expect(written.user_amount).toBe(19.99);
+  });
+
+  it("rejects genuine 3-decimal amounts like 19.999", async () => {
+    const response = await PATCH(
+      request({ stream_id: STREAM_ID, action: "correct_amount", amount: 19.999 }),
+    );
+    expect(response.status).toBe(400);
   });
 });

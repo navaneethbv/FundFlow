@@ -20,7 +20,7 @@ interface PatchBody {
 }
 
 function hasAtMostTwoDecimals(value: number): boolean {
-  return Math.abs(value * 100 - Math.round(value * 100)) < Number.EPSILON * 100;
+  return Math.abs(Math.round(value * 100) - value * 100) < 1e-6;
 }
 
 function parseBody(value: unknown): { ok: true; value: PatchBody } | { ok: false; message: string } {
