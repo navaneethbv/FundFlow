@@ -215,10 +215,16 @@ test.describe.serial("Phase 5: recurring page", () => {
     await expect(manageRow.getByRole("button", { name: "Confirm" })).toHaveCount(0);
 
     // Editing the expected amount in "All" changes the Upcoming tab's total.
+    // The field is untouched (no prior user_amount override), so it starts
+    // empty and shows Plaid's tracked average only as a placeholder hint --
+    // see Fix 2 of the whole-branch review: seeding the value itself from
+    // averageAmount let tabbing past an untouched field silently convert it
+    // into a permanent override.
     const amountInput = page.getByRole("spinbutton", {
       name: "Expected amount for Test Streaming Co",
     });
-    await expect(amountInput).toHaveValue("42");
+    await expect(amountInput).toHaveValue("");
+    await expect(amountInput).toHaveAttribute("placeholder", "42");
     const amountPatch = page.waitForResponse(
       (response) =>
         response.request().method() === "PATCH" &&
