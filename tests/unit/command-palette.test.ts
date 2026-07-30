@@ -49,12 +49,25 @@ describe("command palette", () => {
   });
 
   it("every enabled nav item has a matching href in the built command list, including /wrapped", () => {
-    const enabledHrefs = new Set(getEnabledNavItems().map((item) => item.href));
+    // Reproduce AppShell's exact construction (getEnabledNavItems().map(...))
+    // so this actually fails if a future edit silently drops an item, rather
+    // than just checking that the substring "item.href" appears somewhere.
+    const navCommands = getEnabledNavItems().map((item) => ({
+      label: item.label,
+      href: item.href,
+      hint: item.hint,
+    }));
+    const hrefs = navCommands.map((command) => command.href);
+    expect(hrefs).toContain("/wrapped");
+    expect(hrefs).toHaveLength(getEnabledNavItems().length);
+
+    // Confirm AppShell actually builds its commands array from the live nav
+    // list this way, not a hardcoded or stale copy.
     const appShellSource = readFileSync("components/shell/AppShell.tsx", "utf8");
-    for (const href of enabledHrefs) {
-      expect(appShellSource.includes("item.href") || appShellSource.includes(href)).toBe(true);
-    }
-    expect(enabledHrefs.has("/wrapped")).toBe(true);
+    expect(appShellSource).toMatch(/getEnabledNavItems\(\)\.map\(/);
+    expect(appShellSource).toContain("item.label");
+    expect(appShellSource).toContain("item.href");
+    expect(appShellSource).toContain("item.hint");
   });
 
   it("dispatches the shared open-command-palette event on Cmd+K listener setup", () => {

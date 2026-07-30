@@ -8,7 +8,7 @@ import { OPEN_COMMAND_PALETTE_EVENT } from "@/components/shell/command-palette-e
 /**
  * Command palette (8.3): Cmd+K / Ctrl+K jump-to-anywhere. The command list is
  * passed in as a prop (built by AppShell from the enabled nav items) so it
- * stays in sync with the sidebar automatically — filtering and keyboard
+ * stays in sync with the sidebar automatically: filtering and keyboard
  * navigation are plain React state, no dependency. Mounted once in AppShell
  * so it works on every signed-in page.
  */
