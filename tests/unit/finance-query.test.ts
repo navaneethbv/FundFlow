@@ -2,9 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   FINANCE_TRANSACTION_COLUMNS,
   fetchFinanceTransactions,
+  loadCanonicalProjection,
   monthWindow,
 } from "@/lib/finance-query";
 import type { FinancialScope } from "@/lib/financial-scope";
+import { clientStub } from "../fixtures/supabase-query";
 
 const MINE: FinancialScope = { kind: "mine", ownerUserId: "user-1" };
 const HOUSEHOLD: FinancialScope = { kind: "household", householdId: "hh-1" };
@@ -162,5 +164,173 @@ describe("fetchFinanceTransactions", () => {
     const second = makeSupabase(1, 1000);
     await fetchFinanceTransactions(second.supabase, { scope: MINE });
     expect(second.recorded.eq.some(([column]) => column === "pending")).toBe(false);
+  });
+});
+
+describe("loadCanonicalProjection", () => {
+  const transactionRows = [
+    {
+      id: "expense-1",
+      user_id: "user-1",
+      account_id: "account-1",
+      plaid_transaction_id: "plaid-expense-1",
+      date: "2026-07-10",
+      amount: 100,
+      merchant_name: "Original Market",
+      name: "ORIGINAL MARKET",
+      pfc_primary: "FOOD_AND_DRINK",
+      pfc_detailed: "FOOD_AND_DRINK_GROCERIES",
+      pending: false,
+    },
+  ];
+
+  function projectionClient(overrides: Record<string, { data?: unknown; error?: unknown }> = {}) {
+    return clientStub({
+      transactions: { data: transactionRows },
+      accounts: {
+        data: [
+          {
+            id: "account-1",
+            name: "Daily Checking",
+            iso_currency_code: "usd",
+          },
+        ],
+      },
+      merchant_rules: {
+        data: [
+          {
+            match_type: "account",
+            pattern: "daily checking",
+            display_name: "Account Rule",
+            category: "FOOD_AND_DRINK",
+            enabled: true,
+          },
+        ],
+      },
+      category_overrides: {
+        data: [
+          {
+            source_category: "FOOD_AND_DRINK",
+            display_category: "EVERYDAY",
+          },
+        ],
+      },
+      transaction_splits: {
+        data: [
+          {
+            transaction_id: "expense-1",
+            category: "Groceries",
+            amount: 40,
+          },
+          {
+            transaction_id: "expense-1",
+            category: "Dining",
+            amount: 60,
+          },
+        ],
+      },
+      linked_refunds: { data: [] },
+      ...overrides,
+    });
+  }
+
+  it("loads the real split schema and passes every dependency to the projection", async () => {
+    const supabase = projectionClient();
+
+    const result = await loadCanonicalProjection(supabase as never, {
+      scope: MINE,
+      window: { start: "2026-07-01", endExclusive: "2026-08-01" },
+    });
+
+    expect(supabase.callsOn("transaction_splits")).toEqual(
+      expect.arrayContaining([
+        {
+          method: "select",
+          args: ["transaction_id,category,amount"],
+        },
+        {
+          method: "in",
+          args: ["transaction_id", ["expense-1"]],
+        },
+      ]),
+    );
+    expect(result.transactions).toEqual([
+      expect.objectContaining({
+        id: "expense-1::0",
+        merchant: "Account Rule",
+        groupKey: "EVERYDAY",
+        categoryKey: "Groceries",
+        signedAmount: 40,
+      }),
+      expect.objectContaining({
+        id: "expense-1::1",
+        categoryKey: "Dining",
+        signedAmount: 60,
+      }),
+    ]);
+    expect(result.currencyByAccountId).toEqual(
+      new Map([["account-1", "USD"]]),
+    );
+  });
+
+  it("filters every Mine dependency by owner and leaves Household visibility to RLS", async () => {
+    const mineClient = projectionClient();
+    await loadCanonicalProjection(mineClient as never, { scope: MINE });
+
+    for (const table of [
+      "accounts",
+      "merchant_rules",
+      "category_overrides",
+      "transaction_splits",
+      "linked_refunds",
+    ]) {
+      expect(mineClient.scopedToUser(table, "user-1")).toBe(true);
+    }
+
+    const householdClient = projectionClient();
+    await loadCanonicalProjection(householdClient as never, {
+      scope: HOUSEHOLD,
+    });
+
+    for (const table of [
+      "accounts",
+      "merchant_rules",
+      "category_overrides",
+      "transaction_splits",
+      "linked_refunds",
+    ]) {
+      expect(householdClient.scopedToUser(table, "user-1")).toBe(false);
+    }
+  });
+
+  it("chunks split dependency reads at 500 source transaction ids", async () => {
+    const rows = Array.from({ length: 501 }, (_, index) => ({
+      ...transactionRows[0],
+      id: `expense-${index}`,
+      plaid_transaction_id: `plaid-expense-${index}`,
+    }));
+    const supabase = projectionClient({ transactions: { data: rows } });
+
+    await loadCanonicalProjection(supabase as never, { scope: MINE });
+
+    const splitChunks = supabase
+      .callsOn("transaction_splits")
+      .filter(({ method }) => method === "in");
+    expect(splitChunks).toHaveLength(2);
+    expect(splitChunks[0]?.args[1]).toHaveLength(500);
+    expect(splitChunks[1]?.args[1]).toHaveLength(1);
+  });
+
+  it("reports dependency failures without exposing database messages", async () => {
+    const supabase = projectionClient({
+      category_overrides: {
+        data: null,
+        error: { code: "42501", message: "sensitive database detail" },
+      },
+    });
+
+    await expect(
+      loadCanonicalProjection(supabase as never, { scope: MINE }),
+    ).rejects.toThrow("finance_projection_query_failed:category_overrides:42501");
   });
 });

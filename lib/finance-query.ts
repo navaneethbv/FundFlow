@@ -112,7 +112,19 @@ export async function loadCanonicalProjection(
   options: FetchFinanceOptions,
 ): Promise<CanonicalProjectionResult> {
   const userId = scopeQueryUserId(options.scope);
-  const fetchResult = await fetchFinanceTransactions(supabase, options);
+  let fetchResult: FinanceFetchResult;
+  try {
+    fetchResult = await fetchFinanceTransactions(supabase, options);
+  } catch (error) {
+    const code =
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof error.code === "string"
+        ? `:${error.code}`
+        : "";
+    throw new Error(`finance_projection_query_failed:transactions${code}`);
+  }
   const txnIds = fetchResult.rows.map((r) => r.id);
 
   let accountsQuery = supabase
@@ -143,11 +155,9 @@ export async function loadCanonicalProjection(
   }
 
   interface SplitRow {
-    id: string;
-    source_transaction_id: string;
-    amount: number;
-    category: string | null;
-    merchant_name: string | null;
+    transaction_id: string;
+    category: string;
+    amount: number | string;
   }
 
   // Chunk transaction_splits by 500 transaction IDs
@@ -157,8 +167,9 @@ export async function loadCanonicalProjection(
       const chunk = txnIds.slice(i, i + 500);
       let splitsQuery = supabase
         .from("transaction_splits")
-        .select("id,source_transaction_id,amount,category,merchant_name")
-        .in("source_transaction_id", chunk);
+        .select("transaction_id,category,amount")
+        .in("transaction_id", chunk)
+        .limit(2000);
       if (userId) splitsQuery = splitsQuery.eq("user_id", userId);
       splitChunksPromises.push(splitsQuery);
     }
@@ -185,7 +196,10 @@ export async function loadCanonicalProjection(
   const accountNames = new Map<string, string>();
 
   for (const acc of accountsRes.data || []) {
-    currencyByAccountId.set(acc.id, acc.iso_currency_code || "USD");
+    currencyByAccountId.set(
+      acc.id,
+      String(acc.iso_currency_code ?? "").trim().toUpperCase(),
+    );
     if (acc.name) accountNames.set(acc.id, acc.name);
   }
 
@@ -228,8 +242,8 @@ export async function loadCanonicalProjection(
   for (const sRes of splitResChunks) {
     for (const s of sRes.data || []) {
       splits.push({
-        transactionId: s.source_transaction_id,
-        category: s.category || "UNCATEGORIZED",
+        transactionId: s.transaction_id,
+        category: s.category,
         amount: Number(s.amount),
       });
     }
