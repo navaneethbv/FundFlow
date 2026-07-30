@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
-import { NAV_ITEMS, type AppShellActive, type NavItemDefinition } from "@/components/shell/nav-model";
+import { getEnabledNavItems, type AppShellActive, type NavItemDefinition } from "@/components/shell/nav-model";
 
 export type { AppShellActive };
 
@@ -36,12 +36,8 @@ function NavLink({
   );
 }
 
-import { isFeatureEnabled } from "@/lib/feature-flags";
-
 export default function AppSidebar({ active }: Readonly<{ active: AppShellActive }>) {
-  const enabledItems = NAV_ITEMS.filter(
-    (item) => !item.featureFlag || isFeatureEnabled(item.featureFlag),
-  );
+  const enabledItems = getEnabledNavItems();
 
   const primaryItems = enabledItems.filter((i) => i.category === "primary");
   const planningItems = enabledItems.filter((i) => i.category === "planning");
