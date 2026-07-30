@@ -500,15 +500,20 @@ describe("occurrenceDatesInWindow", () => {
     expect(dates).toEqual([]);
   });
 
-  it("returns two semi-monthly occurrences within a 31-day month", () => {
+  it("steps a semi-monthly cadence every 15 days across a 31-day month", () => {
     const dates = occurrenceDatesInWindow(
       "2026-07-01",
       { unit: "days", amount: 15 },
       "2026-07-01",
       "2026-08-01",
     );
-    expect(dates.length).toBe(2);
-    expect(dates[0]).toBe("2026-07-01");
+    // A fixed 15-day step from day 1 lands on 1, 16, 31 within a 31-day
+    // month -- three occurrences, not the "twice a month" a real
+    // day-of-month-anchored semi-monthly schedule would give. This is the
+    // documented approximation (see FREQUENCY_LABELS below): Plaid doesn't
+    // give us a day-of-month anchor beyond first_date/last_date, so this
+    // step size is an approximation, not an exact twice-monthly match.
+    expect(dates).toEqual(["2026-07-01", "2026-07-16", "2026-07-31"]);
   });
 
   it("carries a leap-day monthly anchor across February without throwing", () => {
