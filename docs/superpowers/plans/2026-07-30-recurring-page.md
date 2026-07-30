@@ -820,6 +820,28 @@ describe("expandStreamsForMonth", () => {
     );
     expect(month.reviewCount).toBe(2);
   });
+
+  it("never lets one transaction complete two occurrences of a weekly stream", () => {
+    // WEEKLY cadence is 7 days but tolerance is 5, so adjacent due dates'
+    // [-5, +5] windows overlap by 3 days. A single transaction landing in
+    // that overlap must complete only the nearer occurrence.
+    const month = expandStreamsForMonth(
+      [
+        stream({
+          frequency: "WEEKLY",
+          predictedNextDate: "2026-07-08",
+          averageAmount: 20,
+          matchedTransactions: [{ id: "txn-1", date: "2026-07-04" }],
+        }),
+      ],
+      [],
+      "2026-07",
+      "2026-07-20",
+    );
+    const completed = month.occurrences.filter((occurrence) => occurrence.status === "complete");
+    expect(completed).toHaveLength(1);
+    expect(month.totals.expenses.paid).toBe(20);
+  });
 });
 ```
 
@@ -908,10 +930,20 @@ export function expandStreamsForMonth(
     const dueDates = occurrenceDatesInWindow(anchor, cadence, windowStart, windowEndExclusive);
     const amount = Math.abs(stream.userAmount ?? stream.averageAmount ?? stream.lastAmount ?? 0);
     const isIncome = stream.streamType === "inflow";
+    // WEEKLY (cadence 7, tolerance 5) and SEMI_MONTHLY (cadence 15,
+    // tolerance 10) have overlapping tolerance windows between adjacent due
+    // dates. A working pool that a match is removed from once used prevents
+    // one real transaction from completing two occurrences and double
+    // counting toward `paid`.
+    const availableMatches = [...stream.matchedTransactions];
 
     for (const dueDate of dueDates) {
-      const match = nearestMatch(dueDate, stream.matchedTransactions, tolerance);
+      const match = nearestMatch(dueDate, availableMatches, tolerance);
       const complete = match !== null;
+      if (match) {
+        const consumedIndex = availableMatches.findIndex((candidate) => candidate.id === match.id);
+        if (consumedIndex !== -1) availableMatches.splice(consumedIndex, 1);
+      }
       occurrences.push({
         source: "plaid",
         sourceId: stream.id,
