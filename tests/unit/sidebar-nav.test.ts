@@ -80,4 +80,18 @@ describe("Sidebar Navigation Contract", () => {
     expect(source).toContain("isAskAiAvailable");
     expect(source).toContain('href="/settings#ask-ai"');
   });
+
+  it("AppSidebar wraps its desktop nav in SidebarShell instead of rendering <aside> directly", () => {
+    const source = readFileSync("components/shell/AppSidebar.tsx", "utf8");
+    expect(source).toContain("SidebarShell");
+    expect(source).not.toContain("<aside");
+  });
+
+  it("SidebarShell persists collapse state through profiles.dashboard_prefs", () => {
+    const source = readFileSync("components/shell/SidebarShell.tsx", "utf8");
+    expect(source).toContain('"use client"');
+    expect(source).toContain("dashboard_prefs");
+    expect(source).toContain("sidebarCollapsed");
+    expect(source).toContain("aria-pressed");
+  });
 });

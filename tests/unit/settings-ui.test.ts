@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import type { DashboardPrefs } from "@/components/settings/DashboardPrefsSection";
 
 describe("settings UI restyle", () => {
   it("uses shared panels and keeps sidebar anchors", () => {
@@ -21,5 +22,10 @@ describe("settings UI restyle", () => {
     }
     expect(sections.join("\n")).toContain("Badge");
     expect(sections.join("\n")).toContain("Button");
+  });
+
+  it("DashboardPrefs includes an optional sidebarCollapsed flag", () => {
+    const prefs: DashboardPrefs = { sidebarCollapsed: true };
+    expect(prefs.sidebarCollapsed).toBe(true);
   });
 });

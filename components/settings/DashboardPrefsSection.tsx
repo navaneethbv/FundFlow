@@ -11,6 +11,7 @@ export interface DashboardPrefs {
   hideBillCalendar?: boolean;
   hideWhatIf?: boolean;
   hideDebt?: boolean;
+  sidebarCollapsed?: boolean;
 }
 
 const OPTIONS: Array<{ key: keyof DashboardPrefs; label: string; view: string }> = [
