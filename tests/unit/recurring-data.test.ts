@@ -220,4 +220,16 @@ describe("loadRecurringData", () => {
       expect(result.view.reviewCount).toBe(1);
     });
   });
+
+  it("throws recurring_query_failed error when query returns an error", async () => {
+    const client = makeClient({
+      recurring_streams: { error: { code: "PGRST116" } },
+    });
+    await expect(
+      loadRecurringData(client as never, {
+        userId: "user-1",
+        anchorMonth: "2026-07",
+      }),
+    ).rejects.toThrow("recurring_query_failed:recurring_streams:PGRST116");
+  });
 });

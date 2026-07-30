@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NextResponse } from "next/server";
 import { DELETE, PATCH, POST } from "@/app/api/recurring/manual/route";
 import { writeAudit } from "@/lib/audit";
 import { requireUser } from "@/lib/http";
@@ -87,5 +88,49 @@ describe("manual recurring items route", () => {
   it("rejects a PATCH name over 140 characters", async () => {
     const response = await PATCH(req("PATCH", { id: ITEM_ID, name: "a".repeat(141) }));
     expect(response.status).toBe(400);
+  });
+
+  it("rejects POST with invalid name, next_date, item_type, or category", async () => {
+    expect((await POST(req("POST", { ...validCreate, name: "" }))).status).toBe(400);
+    expect((await POST(req("POST", { ...validCreate, next_date: "08-05-2026" }))).status).toBe(400);
+    expect((await POST(req("POST", { ...validCreate, item_type: "other" }))).status).toBe(400);
+    expect((await POST(req("POST", { ...validCreate, category: 123 }))).status).toBe(400);
+    expect((await POST(req("POST", "invalid json"))).status).toBe(400);
+  });
+
+  it("rejects PATCH with invalid id, amount, frequency, next_date, item_type, category, or enabled", async () => {
+    expect((await PATCH(req("PATCH", { id: "invalid-uuid" }))).status).toBe(400);
+    expect((await PATCH(req("PATCH", { id: ITEM_ID, name: "" }))).status).toBe(400);
+    expect((await PATCH(req("PATCH", { id: ITEM_ID, amount: -50 }))).status).toBe(400);
+    expect((await PATCH(req("PATCH", { id: ITEM_ID, frequency: "yearly-plus" }))).status).toBe(400);
+    expect((await PATCH(req("PATCH", { id: ITEM_ID, next_date: "invalid" }))).status).toBe(400);
+    expect((await PATCH(req("PATCH", { id: ITEM_ID, item_type: "invalid" }))).status).toBe(400);
+    expect((await PATCH(req("PATCH", { id: ITEM_ID, category: 123 }))).status).toBe(400);
+    expect((await PATCH(req("PATCH", { id: ITEM_ID, enabled: "yes" }))).status).toBe(400);
+  });
+
+  it("rejects DELETE with invalid id", async () => {
+    expect((await DELETE(req("DELETE", { id: "invalid-uuid" }))).status).toBe(400);
+  });
+
+  it("handles DB errors on POST, PATCH, DELETE", async () => {
+    client = clientStub({ manual_recurring_items: { error: new Error("DB Error") } });
+    vi.mocked(requireUser).mockResolvedValue({
+      user: { id: "user-1" },
+      supabase: client as never,
+    } as never);
+
+    expect((await POST(req("POST", validCreate))).status).toBe(500);
+    expect((await PATCH(req("PATCH", { id: ITEM_ID, amount: 100 }))).status).toBe(500);
+    expect((await DELETE(req("DELETE", { id: ITEM_ID }))).status).toBe(500);
+  });
+
+  it("returns auth response when unauthenticated", async () => {
+    const authErr = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    vi.mocked(requireUser).mockResolvedValue(authErr as never);
+
+    expect((await POST(req("POST", validCreate))).status).toBe(401);
+    expect((await PATCH(req("PATCH", { id: ITEM_ID, amount: 100 }))).status).toBe(401);
+    expect((await DELETE(req("DELETE", { id: ITEM_ID }))).status).toBe(401);
   });
 });

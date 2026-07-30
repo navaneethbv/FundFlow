@@ -185,6 +185,7 @@ describe("notifications manager", () => {
         },
       ],
       netWorthSnapshot: { assets: 1000, liabilities: 0, netWorth: 1000 },
+      netWorthHistory: [],
     });
 
     // 2. Mock Goals
@@ -258,6 +259,7 @@ describe("notifications manager", () => {
       cashFlowForecast: { lowBalanceRisk: false },
       budgetEnvelopes: [],
       netWorthSnapshot: { assets: 100, liabilities: 0, netWorth: 100 },
+      netWorthHistory: [],
     });
     mockGetGoals.mockResolvedValue([]);
 
@@ -295,5 +297,33 @@ describe("notifications manager", () => {
     await processNotificationsForUser("user-1");
 
     expect(processedNotifications).toContain("broken_bank");
+  });
+
+  it("getUnreadNotificationCount returns unread count or 0 on error", async () => {
+    const { getUnreadNotificationCount } = await import("@/lib/notifications");
+
+    const mockSupabaseSuccess = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            is: vi.fn().mockResolvedValue({ count: 5, error: null }),
+          }),
+        }),
+      }),
+    };
+    const count = await getUnreadNotificationCount(mockSupabaseSuccess as never, "user-1");
+    expect(count).toBe(5);
+
+    const mockSupabaseError = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            is: vi.fn().mockResolvedValue({ count: null, error: new Error("DB Error") }),
+          }),
+        }),
+      }),
+    };
+    const countErr = await getUnreadNotificationCount(mockSupabaseError as never, "user-1");
+    expect(countErr).toBe(0);
   });
 });

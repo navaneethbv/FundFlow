@@ -20,7 +20,7 @@ export default defineConfig({
     fileParallelism: false,
     coverage: {
       provider: "v8",
-      reporter: ["text-summary", "lcov"],
+      reporter: ["text", "text-summary", "lcov"],
       include: [
         "lib/**",
         "app/api/**",

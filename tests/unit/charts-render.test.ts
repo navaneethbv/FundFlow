@@ -52,6 +52,28 @@ describe("TrendChart", () => {
     );
     expect(empty).toContain("No data yet");
   });
+
+  it("renders single series with area wash and handles single label and converging end labels", () => {
+    const htmlSingle = renderToStaticMarkup(
+      createElement(TrendChart, {
+        labels: ["Jan"],
+        series: [{ name: "Spending", slot: 1, values: [500] }],
+      }),
+    );
+    expect(htmlSingle).toContain("<path");
+    expect(htmlSingle).not.toContain("NaN");
+
+    const htmlConverge = renderToStaticMarkup(
+      createElement(TrendChart, {
+        labels: ["Jan", "Feb"],
+        series: [
+          { name: "S1", slot: 1, values: [100, 500] },
+          { name: "S2", slot: 2, values: [100, 505] },
+        ],
+      }),
+    );
+    expect(htmlConverge).not.toContain("NaN");
+  });
 });
 
 describe("DonutChart", () => {
