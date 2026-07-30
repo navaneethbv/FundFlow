@@ -13,8 +13,13 @@ Fourteen phases bringing FundFlow to parity with the reference planner screensho
   Live daily account snapshots, currency-safe summaries, history, preferences, manual accounts, export, and owner and household RLS are complete.
 - **Phase 3: Cash Flow.** Done (2026-07-29), branch `feat/cash-flow-page`.
   Canonical Income, Expenses, Savings, period trends, complete breakdowns, Mine and Household scope, and currency separation are complete.
-- Phase 1 and Phases 4-13 are pending.
+- **Phase 4: Budget.** Done (2026-07-30), branch `feat/monarch-parity-all-phases`, PR #72.
+  Period budgets, Month/Year/Decade views, rollover, sinking funds, and a reviewed budget-seeding proposal are complete.
+- **Phase 1: Navigation and IA.** Done (2026-07-30), branch `feat/planner-ia`, PR #74.
+  Centralized `NAV_ITEMS`, top-bar search/notifications/settings, persisted sidebar collapse, gated Ask-AI link, and feature-flag-gated nav entries are complete.
+- Phases 5-13 are pending.
   Each gets its own branch, pull request, and TDD expansion before implementation.
+  PR #73 attempted Phases 5-13 as one placeholder drop and was closed/reverted without rewriting shared history; do not resume from that branch.
 
 Excluded from the program by decision, revisit only if asked: credit score (no consented bureau integration), billing/free-trial/referrals (not a commercial product), Retail Sync (no authorized data source), and investment benchmark overlays (needs a licensed market-data feed, deferred inside Phase 9B).
 
