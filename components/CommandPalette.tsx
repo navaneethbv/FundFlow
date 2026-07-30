@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "@/components/ui/icons";
+import { OPEN_COMMAND_PALETTE_EVENT } from "@/components/shell/command-palette-events";
 
 /**
- * Command palette (8.3): Cmd+K / Ctrl+K jump-to-anywhere. A static command
- * list keeps it CSP-safe and dependency-free — filtering and keyboard
- * navigation are plain React state. Mounted once in AppShell so it works on
- * every signed-in page.
+ * Command palette (8.3): Cmd+K / Ctrl+K jump-to-anywhere. The command list is
+ * passed in as a prop (built by AppShell from the enabled nav items) so it
+ * stays in sync with the sidebar automatically — filtering and keyboard
+ * navigation are plain React state, no dependency. Mounted once in AppShell
+ * so it works on every signed-in page.
  */
 interface Command {
   label: string;
@@ -16,21 +18,7 @@ interface Command {
   hint: string;
 }
 
-const COMMANDS: Command[] = [
-  { label: "Dashboard", href: "/dashboard", hint: "Monitor view" },
-  { label: "Plan view", href: "/dashboard?view=plan", hint: "Budgets, bills, debt" },
-  { label: "Wealth view", href: "/dashboard?view=wealth", hint: "Net worth & breakdowns" },
-  { label: "Transactions", href: "/transactions", hint: "Ledger" },
-  { label: "Goals", href: "/goals", hint: "Savings goals" },
-  { label: "Notifications", href: "/notifications", hint: "Alerts & digests" },
-  { label: "Settings", href: "/settings", hint: "Control center" },
-  { label: "Budgets", href: "/settings#budgets", hint: "Monthly limits" },
-  { label: "Review", href: "/review", hint: "Monthly review" },
-  { label: "Export CSV", href: "/api/export/csv", hint: "Privacy-safe download" },
-  { label: "Tax CSV", href: "/api/export/csv?scope=tax", hint: "Tax-tagged download" },
-];
-
-export default function CommandPalette() {
+export default function CommandPalette({ items }: Readonly<{ items: Command[] }>) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -39,13 +27,13 @@ export default function CommandPalette() {
 
   const matches = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return COMMANDS;
-    return COMMANDS.filter(
+    if (!needle) return items;
+    return items.filter(
       (command) =>
         command.label.toLowerCase().includes(needle) ||
         command.hint.toLowerCase().includes(needle),
     );
-  }, [query]);
+  }, [items, query]);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -78,8 +66,17 @@ export default function CommandPalette() {
         setOpen(false);
       }
     }
+    function onOpenRequest() {
+      setOpen(true);
+      setQuery("");
+      setSelected(0);
+    }
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener(OPEN_COMMAND_PALETTE_EVENT, onOpenRequest);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener(OPEN_COMMAND_PALETTE_EVENT, onOpenRequest);
+    };
   }, []);
 
   useEffect(() => {
