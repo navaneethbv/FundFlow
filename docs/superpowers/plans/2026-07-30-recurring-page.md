@@ -146,6 +146,21 @@ git commit -m "feat(recurring): add occurrence tracking migration"
 
 ---
 
+## Task 1b (inserted mid-plan, discovered during Task 2): fix household RLS defect on recurring streams
+
+**Not in the original plan** — discovered while implementing Task 2. Task 1's new `rst_select_shared_stream` policy, and the pre-existing `recurring_streams_select_household` policy (added 2026-07-23, unrelated to this phase), both join `public.plaid_items` directly inside their own RLS `USING` clause. Household members have no SELECT policy on `plaid_items` (it holds encrypted Plaid access tokens), so RLS on that nested join always evaluates to zero rows for a household member — shared recurring streams were invisible to household members in production since the July 23 migration, and Task 1's new policy repeated the identical mistake.
+
+This is the exact bug class already fixed twice in this codebase, for accounts (`20260729193500_private_shared_account_authorization.sql`) and transactions (`20260729203107_shared_transaction_authorization.sql`): a `private`-schema `SECURITY DEFINER` helper function performs the `plaid_items` join under elevated privilege and returns only a boolean, and the two separate permissive policies (always-own + household) are replaced with one consolidated policy per table.
+
+**Files:**
+- Create: `supabase/migrations/20260730020500_recurring_shared_authorization.sql`
+
+This migration creates `private.can_read_shared_stream(target_stream_id uuid)` (SECURITY DEFINER, `search_path = ''`), drops the old `recurring_streams_select_own`/`recurring_streams_select_household` and `rst_select_own`/`rst_select_shared_stream` policies, and creates consolidated `recurring_streams_select_visible`/`rst_select_visible` policies using the new helper. Applied live via Supabase MCP after review, same as Task 1's migration.
+
+Commits: `01240de..797ff19`. Review: clean.
+
+---
+
 ## Task 2: Integration RLS test for the new table
 
 **Files:**
