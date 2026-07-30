@@ -11,7 +11,7 @@
 export const FEATURE_FLAG_DEFAULTS = {
   accountsPage: true,
   cashFlowPage: true,
-  budgetPage: false,
+  budgetPage: true,
 } as const;
 
 export type FeatureFlag = keyof typeof FEATURE_FLAG_DEFAULTS;

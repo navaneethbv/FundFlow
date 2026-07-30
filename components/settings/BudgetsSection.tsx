@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/format";
@@ -116,7 +117,18 @@ export default function BudgetsSection({
   }
 
   return (
-    <Panel title="Budget limits" eyebrow="Monthly targets">
+    <Panel
+      title="Budget limits"
+      eyebrow="Monthly targets"
+      action={
+        <Link
+          href="/budget"
+          className="inline-flex min-h-11 items-center rounded-field px-3 text-sm font-semibold text-accent"
+        >
+          Open planner
+        </Link>
+      }
+    >
 
       {budgets.length > 0 && (
         <ul className="mb-4 space-y-3 text-sm">

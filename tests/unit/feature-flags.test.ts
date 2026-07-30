@@ -7,10 +7,10 @@ import {
 } from "@/lib/feature-flags";
 
 describe("feature flags", () => {
-  it("ships Accounts and Cash Flow while keeping budget off by default", () => {
+  it("ships Accounts, Cash Flow, and Budget by default", () => {
     expect(isFeatureEnabled("accountsPage", {})).toBe(true);
     expect(isFeatureEnabled("cashFlowPage", {})).toBe(true);
-    expect(isFeatureEnabled("budgetPage", {})).toBe(false);
+    expect(isFeatureEnabled("budgetPage", {})).toBe(true);
   });
 
   it("resolves feature flags from environment", () => {

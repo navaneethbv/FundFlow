@@ -10,9 +10,9 @@ describe("Sidebar Navigation Contract", () => {
     expect(isFeatureEnabled(budgetItem!.featureFlag!, { FUNDFLOW_FEATURE_FLAGS: "budgetPage" })).toBe(true);
   });
 
-  it("excludes /budget link when budgetPage flag is disabled", () => {
+  it("ships /budget after its production migration", () => {
     const budgetItem = NAV_ITEMS.find((item) => item.key === "budget");
-    expect(isFeatureEnabled(budgetItem!.featureFlag!, { FUNDFLOW_FEATURE_FLAGS: "" })).toBe(false);
+    expect(isFeatureEnabled(budgetItem!.featureFlag!, { FUNDFLOW_FEATURE_FLAGS: "" })).toBe(true);
   });
 
   it("does not include unreleased future-phase routes in NAV_ITEMS", () => {
