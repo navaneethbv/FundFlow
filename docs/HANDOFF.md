@@ -2,6 +2,31 @@
 
 Last updated: 2026-07-30. Read this first to resume.
 
+## START HERE: Phase 1 Navigation and Information Architecture is implemented
+
+Phase 1 is implemented on `feat/planner-ia`. The pull request follows Tasks 1-6 of the Monarch Parity test-first plan and delivers a nav-model-driven architecture for the app shell, gating future pages as they ship.
+
+The navigation system now provides:
+
+- A centralized `NAV_ITEMS` definition that drives the sidebar, command palette, and app shell active-view tracking.
+- Responsive top-bar utility actions: search, notifications, and settings (visible and interactive below the `sm` breakpoint at 640px per Tailwind).
+- Sidebar collapse state persisted through `profiles.dashboard_prefs` with a toggle button and aria-pressed state.
+- Gated Ask-AI lower-rail link that only renders when `isAskAiAvailable` returns true.
+- Feature-flag-driven navigation entries so unreleased pages remain hidden from both sidebar and command palette.
+- Dashboard subviews (monitor, plan, wealth) remain internal to the `/dashboard` route and are not exposed as top-level nav entries.
+
+The implementation honors the existing `TRANSFER_GROUPS` exclusion set and the five Phase 0 finance-domain invariants carried forward from prior work.
+
+The "move Year in Money under Reports" step from the master plan is intentionally deferred to Phase 6 because the Reports page does not yet exist. Phase 6's implementation plan must explicitly include a link-and-remove step to move `wrapped` from the `manage` category into the `reports` category once that page ships.
+
+The sm-breakpoint utility icon scope decision (Task 4) was validated with mobile testing at 375px and 414px across all signed-in routes and login.
+
+Current gates, all green: `npm run lint` PASS, `npm run typecheck` PASS, `npm test` PASS, `npm run build` PASS.
+
+Credentialed browser acceptance is green for sidebar collapse, command palette, top-bar responsive layout, gated Ask-AI link, and desktop/tablet/mobile/light/dark theme combinations.
+
+Next, Phase 2 (Accounts) through Phase 4 (Budget) have already shipped on `main` (merged in PR #72). Phase 5 onwards remains future work.
+
 ## START HERE: Phase 4 Budget is implemented
 
 Phase 4 is implemented on `feat/monarch-parity-all-phases` in PR #72.

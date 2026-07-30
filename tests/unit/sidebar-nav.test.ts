@@ -107,4 +107,17 @@ describe("Sidebar Navigation Contract", () => {
     expect(shellSource).toContain("data-collapsed");
     expect(sidebarSource).toContain("group-data-[collapsed=true]/sidebar");
   });
+
+  it("never adds monitor, plan, or wealth as top-level nav keys", () => {
+    const keys = NAV_ITEMS.map((item) => item.key);
+    expect(keys).not.toContain("monitor");
+    expect(keys).not.toContain("plan");
+    expect(keys).not.toContain("wealth");
+  });
+
+  it("keeps Year in Money as a top-level nav entry until Reports (Phase 6) exists", () => {
+    const wrapped = NAV_ITEMS.find((item) => item.key === "wrapped");
+    expect(wrapped?.href).toBe("/wrapped");
+    expect(wrapped?.category).toBe("manage");
+  });
 });
