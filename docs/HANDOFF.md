@@ -9,7 +9,7 @@ Phase 1 is implemented on `feat/planner-ia`. The pull request follows Tasks 1-6 
 The navigation system now provides:
 
 - A centralized `NAV_ITEMS` definition that drives the sidebar, command palette, and app shell active-view tracking.
-- Responsive top-bar utility actions: search, notifications, and settings (hidden below the `sm` breakpoint at 640px per Tailwind, visible at `sm` and above; reachable on mobile via the existing pill nav).
+- Responsive top-bar utility actions: search, notifications, and settings (hidden below the `sm` breakpoint at 640px per Tailwind, visible at `sm` and above; notifications and settings remain reachable via the mobile pill nav, search is keyboard-only via Cmd+K/Ctrl+K on mobile, known gap not addressed in this phase).
 - Sidebar collapse state persisted through `profiles.dashboard_prefs` with a toggle button and aria-pressed state.
 - Gated Ask-AI lower-rail link that only renders when `isAskAiAvailable` returns true.
 - Feature-flag-driven navigation entries so unreleased pages remain hidden from both sidebar and command palette.
