@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { formatCurrency, formatDay } from "@/lib/format";
 import type { RecurringOccurrence } from "@/lib/recurring-page";
 import type { RecurringStreamRow } from "@/lib/recurring-data";
@@ -129,15 +130,28 @@ export default function RecurringList({
   const [tab, setTab] = useState<"upcoming" | "complete" | "manage">("upcoming");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   async function patchStream(streamId: string, action: string, amount?: number) {
     setError(null);
-    const response = await fetch("/api/recurring", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ stream_id: streamId, action, amount }),
-    });
-    if (!response.ok) setError("That update didn't save. Try again.");
+    try {
+      const response = await fetch("/api/recurring", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stream_id: streamId, action, amount }),
+      });
+      if (!response.ok) {
+        setError("That update didn't save. Try again.");
+        return;
+      }
+      // Server props (needsReview/dismissedAt/amount) only change on the
+      // next render from the server, so a successful mutation needs an
+      // explicit refresh or the Confirm/Dismiss/Restore buttons and the
+      // corrected amount appear unchanged until a manual reload.
+      router.refresh();
+    } catch {
+      setError("That update didn't save. Try again.");
+    }
   }
 
   function handle(streamId: string, action: string, amount?: number) {
