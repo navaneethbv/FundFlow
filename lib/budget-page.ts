@@ -1,19 +1,46 @@
-import { CanonicalFinanceTransaction } from "./finance-domain";
+import type { CanonicalFinanceTransaction } from "./finance-domain";
 import { titleCase } from "./format";
 import type { FinanceWindow } from "./finance-query";
+import type { SinkingFundPlan } from "./insights";
+
+export type BudgetGroup =
+  | "income"
+  | "fixed"
+  | "flexible"
+  | "non_monthly";
+
+export interface BudgetRecord {
+  id: string;
+  category: string;
+  monthly_limit: number;
+  group_name?: string;
+  rollover_enabled?: boolean;
+  sort_order?: number;
+}
+
+export interface BudgetPeriodRecord {
+  budget_id: string;
+  month: string;
+  planned: number;
+}
 
 export interface BudgetLine {
   budgetId: string | null;
   category: string;
   label: string;
+  basePlanned: number;
   planned: number;
   actual: number;
   remaining: number;
   budgeted: boolean;
+  group: BudgetGroup;
+  rolloverEnabled: boolean;
+  rolloverCarry: number;
+  sortOrder: number;
 }
 
 export interface BudgetSection {
-  key: "income" | "fixed" | "flexible" | "non_monthly";
+  key: BudgetGroup;
   label: string;
   planned: number;
   actual: number;
@@ -26,21 +53,66 @@ export type BudgetHorizon = "monthly" | "yearly" | "decade";
 
 export interface BudgetPageData {
   month: string;
-  horizon: BudgetHorizon;
+  horizon: "monthly";
   sections: BudgetSection[];
   totalIncome: { planned: number; actual: number };
   totalExpenses: { planned: number; actual: number; remaining: number };
-  contributions: { goals: { name: string; planned: number; actual: number }[] };
+  contributions: {
+    goals: { name: string; planned: number; actual: number }[];
+  };
   leftToBudget: number;
   sinkingFundsTotal: number;
 }
 
+export interface BudgetYearData {
+  year: number;
+  planned: number;
+  actual: number;
+  remaining: number;
+  incomePlanned: number;
+  incomeActual: number;
+  months: BudgetPageData[];
+}
+
+export type BudgetViewData =
+  | { horizon: "monthly"; month: BudgetPageData }
+  | { horizon: "yearly"; year: number; months: BudgetPageData[] }
+  | { horizon: "decade"; startYear: number; years: BudgetYearData[] };
+
+export interface BudgetViewInput {
+  month: string;
+  horizon: BudgetHorizon;
+  budgets: BudgetRecord[];
+  periods?: BudgetPeriodRecord[];
+  txns: CanonicalFinanceTransaction[];
+  sinkingFunds?: SinkingFundPlan[];
+  goalContributions?: {
+    name: string;
+    planned: number;
+    actual: number;
+  }[];
+}
+
 export interface BudgetSeedProposal {
   category: string;
-  group_name: "income" | "fixed" | "flexible" | "non_monthly";
+  group_name: BudgetGroup;
   suggested_amount: number;
+  rollover_enabled: boolean;
+  sort_order: number;
   confidence: "high" | "medium" | "low";
   reason: string;
+}
+
+const MONTH_REGEX = /^(\d{4})-(0[1-9]|1[0-2])$/;
+const GROUPS: BudgetGroup[] = [
+  "income",
+  "fixed",
+  "flexible",
+  "non_monthly",
+];
+
+function round2(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
 export function parseBudgetHorizon(value: unknown): BudgetHorizon {
@@ -48,283 +120,452 @@ export function parseBudgetHorizon(value: unknown): BudgetHorizon {
   return "monthly";
 }
 
-/** "2026-07" + delta months, pure string math. */
-function addMonths(ym: string, delta: number): string {
-  const [y, m] = ym.split("-").map(Number);
-  const total = (y || 2026) * 12 + ((m || 1) - 1) + delta;
-  const ny = Math.floor(total / 12);
-  const nm = (total % 12) + 1;
-  return `${ny}-${String(nm).padStart(2, "0")}`;
+export function parseBudgetMonth(
+  value: unknown,
+  fallback: string,
+): string {
+  return typeof value === "string" && MONTH_REGEX.test(value)
+    ? value
+    : fallback;
+}
+
+function requireBudgetMonth(value: string): [number, number] {
+  const match = MONTH_REGEX.exec(value);
+  if (!match) throw new Error("invalid_budget_month");
+  return [Number(match[1]), Number(match[2])];
+}
+
+function addMonths(month: string, delta: number): string {
+  const [year, oneBasedMonth] = requireBudgetMonth(month);
+  const total = year * 12 + oneBasedMonth - 1 + delta;
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
 }
 
 export function budgetWindow(
   anchorMonth: string,
   horizon: BudgetHorizon,
 ): FinanceWindow {
-  const [y] = anchorMonth.split("-").map(Number);
-  const year = y || 2026;
-
+  const [year] = requireBudgetMonth(anchorMonth);
   if (horizon === "yearly") {
     return {
       start: `${year}-01-01`,
       endExclusive: `${year + 1}-01-01`,
     };
   }
-
   if (horizon === "decade") {
-    const decadeStart = Math.floor(year / 10) * 10;
+    const startYear = Math.floor(year / 10) * 10;
     return {
-      start: `${decadeStart}-01-01`,
-      endExclusive: `${decadeStart + 10}-01-01`,
+      start: `${startYear}-01-01`,
+      endExclusive: `${startYear + 10}-01-01`,
     };
   }
-
   return {
     start: `${anchorMonth}-01`,
     endExclusive: `${addMonths(anchorMonth, 1)}-01`,
   };
 }
 
-export function getMonthEndDate(monthStr: string): string {
-  const [y, m] = monthStr.split("-").map(Number);
-  const isLeap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
-  const daysInMonth = [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  const lastDay = daysInMonth[(m || 1) - 1] || 31;
-  return `${monthStr}-${String(lastDay).padStart(2, "0")}`;
+export function getMonthEndDate(month: string): string {
+  const [year, oneBasedMonth] = requireBudgetMonth(month);
+  const lastDay = new Date(Date.UTC(year, oneBasedMonth, 0))
+    .getUTCDate();
+  return `${month}-${String(lastDay).padStart(2, "0")}`;
+}
+
+function budgetGroup(value: string | undefined): BudgetGroup {
+  return GROUPS.includes(value as BudgetGroup)
+    ? (value as BudgetGroup)
+    : "flexible";
+}
+
+function periodAmount(
+  periods: BudgetPeriodRecord[],
+  budgetId: string,
+  month: string,
+): number | undefined {
+  const period = periods.find(
+    (row) =>
+      row.budget_id === budgetId && row.month.slice(0, 7) === month,
+  );
+  return period ? Number(period.planned) : undefined;
+}
+
+function actualsForMonth(
+  txns: CanonicalFinanceTransaction[],
+  month: string,
+): {
+  income: Map<string, number>;
+  expenses: Map<string, number>;
+} {
+  const income = new Map<string, number>();
+  const expenses = new Map<string, number>();
+  for (const transaction of txns) {
+    if (transaction.date.slice(0, 7) !== month) continue;
+    const key = (transaction.categoryKey || "Uncategorized").toLowerCase();
+    if (transaction.flow === "income") {
+      income.set(
+        key,
+        round2((income.get(key) ?? 0) + Math.abs(transaction.signedAmount)),
+      );
+    }
+    if (transaction.flow === "expense") {
+      expenses.set(
+        key,
+        round2(
+          (expenses.get(key) ?? 0) + Math.abs(transaction.signedAmount),
+        ),
+      );
+    }
+  }
+  return { income, expenses };
 }
 
 export function buildBudgetPage(input: {
   month: string;
   horizon?: BudgetHorizon;
-  budgets: {
-    id: string;
-    category: string;
-    monthly_limit: number;
-    group_name?: string;
-    rollover_enabled?: boolean;
-  }[];
-  periods?: { budget_id: string; month: string; planned: number }[];
+  budgets: BudgetRecord[];
+  periods?: BudgetPeriodRecord[];
   txns: CanonicalFinanceTransaction[];
-  goalContributions?: { name: string; planned: number; actual: number }[];
+  sinkingFunds?: SinkingFundPlan[];
+  goalContributions?: {
+    name: string;
+    planned: number;
+    actual: number;
+  }[];
 }): BudgetPageData {
-  const { month, horizon = "monthly", budgets, periods = [], txns, goalContributions = [] } = input;
-  const window = budgetWindow(month, horizon);
-
-  const budgetMap = new Map<
-    string,
-    {
-      id: string;
-      monthly_limit: number;
-      group_name: "income" | "fixed" | "flexible" | "non_monthly";
-    }
-  >();
-
-  for (const b of budgets) {
-    const grp = (b.group_name as "income" | "fixed" | "flexible" | "non_monthly") || "flexible";
-    budgetMap.set(b.category.toLowerCase(), {
-      id: b.id,
-      monthly_limit: Number(b.monthly_limit),
-      group_name: grp,
-    });
-  }
-
-  // Build month-specific period limits
-  const periodPlannedMap = new Map<string, number>();
-  for (const p of periods) {
-    if (horizon === "monthly") {
-      if (p.month.slice(0, 7) === month) {
-        periodPlannedMap.set(p.budget_id, Number(p.planned));
-      }
-    } else {
-      if (p.month >= window.start && p.month < window.endExclusive) {
-        const key = `${p.budget_id}|${p.month.slice(0, 7)}`;
-        periodPlannedMap.set(key, Number(p.planned));
-      }
-    }
-  }
-
-  const actualSpendMap = new Map<string, number>();
-  const actualIncomeMap = new Map<string, number>();
-
-  for (const t of txns) {
-    if (t.date < window.start || t.date >= window.endExclusive) continue;
-    const catKey = (t.categoryKey || "Uncategorized").toLowerCase();
-    if (t.flow === "income") {
-      actualIncomeMap.set(catKey, (actualIncomeMap.get(catKey) || 0) + Math.abs(t.signedAmount));
-    } else if (t.flow === "expense") {
-      actualSpendMap.set(catKey, (actualSpendMap.get(catKey) || 0) + Math.abs(t.signedAmount));
-    }
-  }
-
-  const sectionLines: Record<string, BudgetLine[]> = {
+  requireBudgetMonth(input.month);
+  const periods = input.periods ?? [];
+  const sinkingFunds = input.sinkingFunds ?? [];
+  const goalContributions = input.goalContributions ?? [];
+  const current = actualsForMonth(input.txns, input.month);
+  const previousMonth = addMonths(input.month, -1);
+  const previous = actualsForMonth(input.txns, previousMonth);
+  const processed = new Set<string>();
+  const linesByGroup: Record<BudgetGroup, BudgetLine[]> = {
     income: [],
     fixed: [],
     flexible: [],
     non_monthly: [],
   };
 
-  const processedCats = new Set<string>();
-
-  // Determine months in window for planned aggregation
-  let monthCount = 1;
-  if (horizon === "yearly") monthCount = 12;
-  if (horizon === "decade") monthCount = 120;
-
-  for (const b of budgets) {
-    const catLower = b.category.toLowerCase();
-    processedCats.add(catLower);
-
-    const grp = (b.group_name as "income" | "fixed" | "flexible" | "non_monthly") || "flexible";
-
-    let plannedSum = 0;
-    if (horizon === "monthly") {
-      const pVal = periodPlannedMap.get(b.id);
-      plannedSum = pVal !== undefined ? pVal : Number(b.monthly_limit);
-    } else {
-      const startYM = window.start.slice(0, 7);
-      for (let m = 0; m < monthCount; m++) {
-        const ym = addMonths(startYM, m);
-        const pVal = periodPlannedMap.get(`${b.id}|${ym}`);
-        plannedSum += pVal !== undefined ? pVal : Number(b.monthly_limit);
-      }
-    }
-
-    const actual = grp === "income" ? actualIncomeMap.get(catLower) || 0 : actualSpendMap.get(catLower) || 0;
-    const remaining = grp === "income" ? actual - plannedSum : plannedSum - actual;
-
-    sectionLines[grp]?.push({
-      budgetId: b.id,
-      category: b.category,
-      label: titleCase(b.category),
-      planned: Math.round(plannedSum * 100) / 100,
-      actual: Math.round(actual * 100) / 100,
-      remaining: Math.round(remaining * 100) / 100,
+  for (const budget of input.budgets) {
+    const category = budget.category.toLowerCase();
+    const group = budgetGroup(budget.group_name);
+    const basePlanned =
+      periodAmount(periods, budget.id, input.month) ??
+      Number(budget.monthly_limit);
+    const previousPlanned =
+      periodAmount(periods, budget.id, previousMonth) ??
+      Number(budget.monthly_limit);
+    const rolloverCarry =
+      budget.rollover_enabled && group !== "income"
+        ? round2(previousPlanned - (previous.expenses.get(category) ?? 0))
+        : 0;
+    const planned =
+      group === "income"
+        ? round2(basePlanned)
+        : Math.max(0, round2(basePlanned + rolloverCarry));
+    const actual =
+      group === "income"
+        ? current.income.get(category) ?? 0
+        : current.expenses.get(category) ?? 0;
+    processed.add(category);
+    linesByGroup[group].push({
+      budgetId: budget.id,
+      category: budget.category,
+      label: titleCase(budget.category),
+      basePlanned: round2(basePlanned),
+      planned,
+      actual: round2(actual),
+      remaining: round2(
+        group === "income" ? actual - planned : planned - actual,
+      ),
       budgeted: true,
+      group,
+      rolloverEnabled: Boolean(budget.rollover_enabled),
+      rolloverCarry,
+      sortOrder: Number(budget.sort_order ?? 0),
     });
   }
 
-  // Handle unbudgeted spending categories
-  for (const [catLower, actual] of actualSpendMap.entries()) {
-    if (processedCats.has(catLower)) continue;
-
-    sectionLines.flexible.push({
+  for (const [category, actual] of current.expenses) {
+    if (processed.has(category)) continue;
+    linesByGroup.flexible.push({
       budgetId: null,
-      category: catLower,
-      label: titleCase(catLower),
+      category,
+      label: titleCase(category),
+      basePlanned: 0,
       planned: 0,
-      actual: Math.round(actual * 100) / 100,
-      remaining: -Math.round(actual * 100) / 100,
+      actual,
+      remaining: round2(-actual),
       budgeted: false,
+      group: "flexible",
+      rolloverEnabled: false,
+      rolloverCarry: 0,
+      sortOrder: Number.MAX_SAFE_INTEGER,
+    });
+  }
+  for (const [category, actual] of current.income) {
+    if (processed.has(category)) continue;
+    linesByGroup.income.push({
+      budgetId: null,
+      category,
+      label: titleCase(category),
+      basePlanned: 0,
+      planned: 0,
+      actual,
+      remaining: actual,
+      budgeted: false,
+      group: "income",
+      rolloverEnabled: false,
+      rolloverCarry: 0,
+      sortOrder: Number.MAX_SAFE_INTEGER,
     });
   }
 
-  const sectionLabels: Record<string, string> = {
+  const labels: Record<BudgetGroup, string> = {
     income: "Income",
     fixed: "Fixed Expenses",
     flexible: "Flexible Expenses",
     non_monthly: "Non-Monthly Expenses",
   };
+  const sections = GROUPS.map((key): BudgetSection => {
+    const lines = linesByGroup[key].toSorted(
+      (left, right) =>
+        left.sortOrder - right.sortOrder ||
+        left.label.localeCompare(right.label),
+    );
+    const planned = round2(
+      lines.reduce((total, line) => total + line.planned, 0),
+    );
+    const actual = round2(
+      lines.reduce((total, line) => total + line.actual, 0),
+    );
+    return {
+      key,
+      label: labels[key],
+      planned,
+      actual,
+      remaining: round2(
+        key === "income" ? actual - planned : planned - actual,
+      ),
+      lines,
+      unbudgetedCount: lines.filter((line) => !line.budgeted).length,
+    };
+  });
 
-  const sections: BudgetSection[] = (["income", "fixed", "flexible", "non_monthly"] as const).map(
-    (key) => {
-      const lines = sectionLines[key] || [];
-      const plannedSum = lines.reduce((acc, l) => acc + l.planned, 0);
-      const actualSum = lines.reduce((acc, l) => acc + l.actual, 0);
-      const remainingSum = key === "income" ? actualSum - plannedSum : plannedSum - actualSum;
-      const unbudgetedCount = lines.filter((l) => !l.budgeted).length;
-
-      return {
-        key,
-        label: sectionLabels[key],
-        planned: Math.round(plannedSum * 100) / 100,
-        actual: Math.round(actualSum * 100) / 100,
-        remaining: Math.round(remainingSum * 100) / 100,
-        lines,
-        unbudgetedCount,
-      };
-    },
+  const income = sections[0];
+  const expenses = sections.slice(1);
+  const expensePlanned = round2(
+    expenses.reduce((total, section) => total + section.planned, 0),
   );
-
-  const incomeSec = sections.find((s) => s.key === "income")!;
-  const fixedSec = sections.find((s) => s.key === "fixed")!;
-  const flexSec = sections.find((s) => s.key === "flexible")!;
-  const nonMonthlySec = sections.find((s) => s.key === "non_monthly")!;
-
-  const totalIncome = { planned: incomeSec.planned, actual: incomeSec.actual };
-  const totalExpensesPlanned = fixedSec.planned + flexSec.planned + nonMonthlySec.planned;
-  const totalExpensesActual = fixedSec.actual + flexSec.actual + nonMonthlySec.actual;
-
-  const totalExpenses = {
-    planned: Math.round(totalExpensesPlanned * 100) / 100,
-    actual: Math.round(totalExpensesActual * 100) / 100,
-    remaining: Math.round((totalExpensesPlanned - totalExpensesActual) * 100) / 100,
-  };
-
-  const contributionsPlanned = goalContributions.reduce((acc, g) => acc + g.planned, 0);
-  const leftToBudget = Math.round((totalIncome.planned - totalExpenses.planned - contributionsPlanned) * 100) / 100;
-
-  const sinkingFundsTotal = sectionLines.non_monthly.reduce(
-    (acc, line) => acc + Math.max(0, line.remaining),
-    0,
+  const expenseActual = round2(
+    expenses.reduce((total, section) => total + section.actual, 0),
+  );
+  const contributionsPlanned = round2(
+    goalContributions.reduce((total, goal) => total + goal.planned, 0),
   );
 
   return {
-    month,
-    horizon,
+    month: input.month,
+    horizon: "monthly",
     sections,
-    totalIncome,
-    totalExpenses,
+    totalIncome: {
+      planned: income.planned,
+      actual: income.actual,
+    },
+    totalExpenses: {
+      planned: expensePlanned,
+      actual: expenseActual,
+      remaining: round2(expensePlanned - expenseActual),
+    },
     contributions: { goals: goalContributions },
-    leftToBudget,
-    sinkingFundsTotal: Math.round(sinkingFundsTotal * 100) / 100,
+    leftToBudget: round2(
+      income.planned - expensePlanned - contributionsPlanned,
+    ),
+    sinkingFundsTotal: round2(
+      sinkingFunds.reduce(
+        (total, fund) => total + fund.monthlySetAside,
+        0,
+      ),
+    ),
+  };
+}
+
+function yearData(input: BudgetViewInput, year: number): BudgetYearData {
+  const months = Array.from({ length: 12 }, (_, index) =>
+    buildBudgetPage({
+      ...input,
+      month: `${year}-${String(index + 1).padStart(2, "0")}`,
+    }),
+  );
+  return {
+    year,
+    planned: round2(
+      months.reduce(
+        (total, month) => total + month.totalExpenses.planned,
+        0,
+      ),
+    ),
+    actual: round2(
+      months.reduce(
+        (total, month) => total + month.totalExpenses.actual,
+        0,
+      ),
+    ),
+    remaining: round2(
+      months.reduce(
+        (total, month) => total + month.totalExpenses.remaining,
+        0,
+      ),
+    ),
+    incomePlanned: round2(
+      months.reduce(
+        (total, month) => total + month.totalIncome.planned,
+        0,
+      ),
+    ),
+    incomeActual: round2(
+      months.reduce(
+        (total, month) => total + month.totalIncome.actual,
+        0,
+      ),
+    ),
+    months,
+  };
+}
+
+export function buildBudgetView(input: BudgetViewInput): BudgetViewData {
+  const [year] = requireBudgetMonth(input.month);
+  if (input.horizon === "monthly") {
+    return {
+      horizon: "monthly",
+      month: buildBudgetPage(input),
+    };
+  }
+  if (input.horizon === "yearly") {
+    return {
+      horizon: "yearly",
+      year,
+      months: yearData(input, year).months,
+    };
+  }
+
+  const startYear = Math.floor(year / 10) * 10;
+  const endYear = startYear + 10;
+  const yearsWithData = new Set<number>();
+  for (const transaction of input.txns) {
+    const transactionYear = Number(transaction.date.slice(0, 4));
+    if (transactionYear >= startYear && transactionYear < endYear) {
+      yearsWithData.add(transactionYear);
+    }
+  }
+  for (const period of input.periods ?? []) {
+    const periodYear = Number(period.month.slice(0, 4));
+    if (periodYear >= startYear && periodYear < endYear) {
+      yearsWithData.add(periodYear);
+    }
+  }
+  return {
+    horizon: "decade",
+    startYear,
+    years: [...yearsWithData]
+      .sort((left, right) => left - right)
+      .map((dataYear) => yearData(input, dataYear)),
   };
 }
 
 export function proposeBudgetFromHistory(input: {
   txnsLast3Months: CanonicalFinanceTransaction[];
   recurringTransactionIds?: Set<string>;
+  sinkingFunds?: SinkingFundPlan[];
+  existingCategories?: Set<string>;
 }): BudgetSeedProposal[] {
-  const { txnsLast3Months, recurringTransactionIds = new Set() } = input;
+  const recurringIds = input.recurringTransactionIds ?? new Set<string>();
+  const existing = new Set(
+    [...(input.existingCategories ?? new Set<string>())].map((category) =>
+      category.toLowerCase(),
+    ),
+  );
+  const totals = new Map<
+    string,
+    {
+      income: number;
+      expense: number;
+      recurringExpense: number;
+      sourceIds: Set<string>;
+    }
+  >();
 
-  const catTotals = new Map<string, { income: number; expense: number; count: number; recurringCount: number }>();
-
-  for (const t of txnsLast3Months) {
-    const cat = (t.categoryKey || "Uncategorized").toLowerCase();
-    const entry = catTotals.get(cat) || { income: 0, expense: 0, count: 0, recurringCount: 0 };
-
-    if (t.flow === "income") entry.income += Math.abs(t.signedAmount);
-    if (t.flow === "expense") entry.expense += Math.abs(t.signedAmount);
-    entry.count += 1;
-
-    if (recurringTransactionIds.has(t.id)) entry.recurringCount += 1;
-    catTotals.set(cat, entry);
+  for (const transaction of input.txnsLast3Months) {
+    if (transaction.flow === "transfer") continue;
+    const category = (
+      transaction.categoryKey || "Uncategorized"
+    ).toLowerCase();
+    if (existing.has(category)) continue;
+    const current = totals.get(category) ?? {
+      income: 0,
+      expense: 0,
+      recurringExpense: 0,
+      sourceIds: new Set<string>(),
+    };
+    const amount = Math.abs(transaction.signedAmount);
+    current.sourceIds.add(transaction.sourceTransactionId);
+    if (transaction.flow === "income") current.income += amount;
+    if (transaction.flow === "expense") {
+      current.expense += amount;
+      if (recurringIds.has(transaction.sourceTransactionId)) {
+        current.recurringExpense += amount;
+      }
+    }
+    totals.set(category, current);
   }
 
   const proposals: BudgetSeedProposal[] = [];
-
-  for (const [cat, data] of catTotals.entries()) {
-    if (data.income > data.expense) {
-      const avg = Math.round((data.income / 3) * 100) / 100;
-      proposals.push({
-        category: cat,
-        group_name: "income",
-        suggested_amount: avg,
-        confidence: data.count >= 3 ? "high" : "medium",
-        reason: "Based on 3-month average income",
-      });
-    } else {
-      const avg = Math.round((data.expense / 3) * 100) / 100;
-      const isFixed = data.recurringCount > 0 && data.recurringCount / data.count >= 0.5;
-
-      proposals.push({
-        category: cat,
-        group_name: isFixed ? "fixed" : "flexible",
-        suggested_amount: avg,
-        confidence: data.count >= 3 ? "high" : "medium",
-        reason: isFixed ? "Identified as recurring fixed expense" : "Based on 3-month average spending",
-      });
-    }
+  for (const [category, total] of totals) {
+    const isIncome = total.income > total.expense;
+    const fixedShare =
+      total.expense > 0 ? total.recurringExpense / total.expense : 0;
+    const group: BudgetGroup = isIncome
+      ? "income"
+      : fixedShare >= 0.5
+        ? "fixed"
+        : "flexible";
+    const amount = isIncome ? total.income : total.expense;
+    const occurrences = total.sourceIds.size;
+    proposals.push({
+      category,
+      group_name: group,
+      suggested_amount: round2(amount / 3),
+      rollover_enabled: false,
+      sort_order: proposals.length,
+      confidence:
+        occurrences >= 3 ? "high" : occurrences >= 2 ? "medium" : "low",
+      reason:
+        group === "fixed"
+          ? "Recurring charges make up most trailing spending"
+          : isIncome
+            ? "Based on three complete months of income"
+            : "Based on three complete months of spending",
+    });
   }
 
-  return proposals;
+  for (const fund of input.sinkingFunds ?? []) {
+    const category = fund.name.trim().toLowerCase();
+    if (!category || existing.has(category)) continue;
+    if (proposals.some((proposal) => proposal.category === category)) continue;
+    proposals.push({
+      category,
+      group_name: "non_monthly",
+      suggested_amount: round2(fund.monthlySetAside),
+      rollover_enabled: true,
+      sort_order: proposals.length,
+      confidence: "high",
+      reason: `Set aside monthly for ${fund.dueDate}`,
+    });
+  }
+
+  return proposals
+    .filter((proposal) => proposal.suggested_amount > 0)
+    .map((proposal, index) => ({ ...proposal, sort_order: index }));
 }

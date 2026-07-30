@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildBudgetPage, getMonthEndDate } from "@/lib/budget-page";
-import type { CanonicalFinanceTransaction } from "@/lib/finance-domain";
+import { budgetWindow, getMonthEndDate } from "@/lib/budget-page";
 
 describe("Phase 4 Budget Full Parity", () => {
   it("computes correct month end dates for standard months and leap years", () => {
@@ -9,18 +8,14 @@ describe("Phase 4 Budget Full Parity", () => {
     expect(getMonthEndDate("2028-02")).toBe("2028-02-29");
   });
 
-  it("multiplies planned budget envelope limits by horizon multiplier", () => {
-    const budgets = [
-      { id: "b1", category: "GROCERIES", monthly_limit: 500, group_name: "flexible" },
-    ];
-    const txns: CanonicalFinanceTransaction[] = [];
-
-    const monthlyData = buildBudgetPage({ month: "2026-07", horizon: "monthly", budgets, txns });
-    const yearlyData = buildBudgetPage({ month: "2026-07", horizon: "yearly", budgets, txns });
-    const decadeData = buildBudgetPage({ month: "2026-07", horizon: "decade", budgets, txns });
-
-    expect(monthlyData.sections[2].lines[0].planned).toBe(500);
-    expect(yearlyData.sections[2].lines[0].planned).toBe(6000);
-    expect(decadeData.sections[2].lines[0].planned).toBe(60000);
+  it("uses calendar windows for every horizon", () => {
+    expect(budgetWindow("2026-07", "yearly")).toEqual({
+      start: "2026-01-01",
+      endExclusive: "2027-01-01",
+    });
+    expect(budgetWindow("2026-07", "decade")).toEqual({
+      start: "2020-01-01",
+      endExclusive: "2030-01-01",
+    });
   });
 });
