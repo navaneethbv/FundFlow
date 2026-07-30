@@ -30,10 +30,10 @@ describe("Sidebar Navigation Contract", () => {
     expect(recurring!.category).toBe("planning");
     expect(recurring!.featureFlag).toBe("recurringPage");
     expect(recurring!.href).toBe("/recurring");
+    expect(existsSync("app/api/recurring/route.ts")).toBe(true);
   });
 
   it("does not ship future-phase API or settings modules", () => {
-    expect(existsSync("app/api/recurring/route.ts")).toBe(true);
     expect(existsSync("app/api/reports/saved/route.ts")).toBe(false);
     expect(existsSync("components/charts/CumulativeCompareChart.tsx")).toBe(
       false,
@@ -113,6 +113,11 @@ describe("Sidebar Navigation Contract", () => {
     expect(shellSource).toContain("group/sidebar");
     expect(shellSource).toContain("data-collapsed");
     expect(sidebarSource).toContain("group-data-[collapsed=true]/sidebar");
+  });
+
+  it("gives the nav badge an accessible label instead of leaving the count aria-hidden with no compensating text (Fix 7)", () => {
+    const source = readFileSync("components/shell/AppSidebar.tsx", "utf8");
+    expect(source).toContain("aria-label={badge && badge > 0");
   });
 
   it("never adds monitor, plan, or wealth as top-level nav keys", () => {

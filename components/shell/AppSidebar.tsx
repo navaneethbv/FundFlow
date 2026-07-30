@@ -29,6 +29,7 @@ function NavLink({
     <Link
       href={item.href}
       title={item.label}
+      aria-label={badge && badge > 0 ? `${item.label}, ${badge} to review` : undefined}
       aria-current={isActive ? "page" : undefined}
       className={cn(
         "inline-flex items-center gap-3 rounded-field text-sm font-semibold transition-colors duration-150 focus-visible:outline-2",
