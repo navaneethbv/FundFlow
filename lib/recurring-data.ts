@@ -76,6 +76,7 @@ interface AccountRow {
   name: string | null;
   type: string | null;
   subtype: string | null;
+  iso_currency_code: string | null;
 }
 
 interface JoinRow {
@@ -99,6 +100,39 @@ export interface RecurringLoadResult {
   allStreams: RecurringStreamRow[];
   manualItems: ManualRecurringItemRow[];
   stale: boolean;
+  /**
+   * A single dominant currency for the scoped accounts, used to label
+   * amounts throughout the Recurring page. This is a deliberate
+   * simplification, not full multi-currency partitioning like Cash
+   * Flow/Budget: Recurring streams are shown as one combined list rather
+   * than split per currency, so we pick the most common ISO currency code
+   * among the user's accounts (ties broken by first-seen order) and label
+   * everything with it. Falls back to "USD" when no account resolves a
+   * currency code.
+   */
+  currency: string;
+}
+
+function dominantCurrency(accounts: AccountRow[]): string {
+  const counts = new Map<string, number>();
+  const order: string[] = [];
+  for (const account of accounts) {
+    const code = (account.iso_currency_code ?? "").trim().toUpperCase();
+    if (!code) continue;
+    if (!counts.has(code)) order.push(code);
+    counts.set(code, (counts.get(code) ?? 0) + 1);
+  }
+  if (order.length === 0) return "USD";
+  let best = order[0]!;
+  let bestCount = counts.get(best) ?? 0;
+  for (const code of order) {
+    const count = counts.get(code) ?? 0;
+    if (count > bestCount) {
+      best = code;
+      bestCount = count;
+    }
+  }
+  return best;
 }
 
 function assertRecurringQuery(table: string, result: { error: { code?: string } | null }): void {
@@ -145,7 +179,10 @@ export async function loadRecurringData(
     .from("manual_recurring_items")
     .select("id,name,amount,frequency,next_date,item_type,category,enabled")
     .limit(DEPENDENCY_LIMIT);
-  let accountsQuery = supabase.from("accounts").select("id,name,type,subtype").limit(DEPENDENCY_LIMIT);
+  let accountsQuery = supabase
+    .from("accounts")
+    .select("id,name,type,subtype,iso_currency_code")
+    .limit(DEPENDENCY_LIMIT);
   let syncQuery = supabase
     .from("sync_jobs")
     .select("updated_at")
@@ -285,5 +322,6 @@ export async function loadRecurringData(
     })),
     manualItems: manualInputs,
     stale: isStale(lastSuccessfulSyncAt, input.now ?? new Date()),
+    currency: dominantCurrency((accountsResult.data ?? []) as AccountRow[]),
   };
 }

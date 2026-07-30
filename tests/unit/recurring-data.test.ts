@@ -29,7 +29,9 @@ function makeClient(overrides: Record<string, { data?: unknown; error?: unknown 
     },
     recurring_stream_transactions: { data: [] },
     manual_recurring_items: { data: [] },
-    accounts: { data: [{ id: "account-1", name: "Checking", type: "depository", subtype: null }] },
+    accounts: {
+      data: [{ id: "account-1", name: "Checking", type: "depository", subtype: null, iso_currency_code: "USD" }],
+    },
     sync_jobs: { data: null },
     ...overrides,
   });
@@ -46,6 +48,35 @@ describe("loadRecurringData", () => {
     expect(client.scopedToUser("manual_recurring_items", "user-1")).toBe(true);
     expect(result.view.occurrences).toHaveLength(1);
     expect(result.view.occurrences[0]!.merchant).toBe("Netflix");
+    expect(result.currency).toBe("USD");
+  });
+
+  it("falls back to USD when no account resolves a currency code", async () => {
+    const client = makeClient({
+      accounts: { data: [{ id: "account-1", name: "Checking", type: "depository", subtype: null, iso_currency_code: null }] },
+    });
+    const result = await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-07",
+    });
+    expect(result.currency).toBe("USD");
+  });
+
+  it("picks the most common currency among scoped accounts", async () => {
+    const client = makeClient({
+      accounts: {
+        data: [
+          { id: "account-1", name: "Checking", type: "depository", subtype: null, iso_currency_code: "usd" },
+          { id: "account-2", name: "Savings", type: "depository", subtype: null, iso_currency_code: "EUR" },
+          { id: "account-3", name: "Other savings", type: "depository", subtype: null, iso_currency_code: "EUR" },
+        ],
+      },
+    });
+    const result = await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-07",
+    });
+    expect(result.currency).toBe("EUR");
   });
 
   it("reports stale when the newest done sync job is more than 48h old", async () => {
