@@ -167,10 +167,11 @@ export async function refreshRecurringForItem(item: PlaidItemRow): Promise<numbe
 
   const supabase = createServiceClient();
 
-  const { data: accountRows } = await supabase
+  const { data: accountRows, error: accountsError } = await supabase
     .from("accounts")
     .select("id, plaid_account_id")
     .eq("user_id", item.user_id);
+  if (accountsError) throw accountsError;
   const accountIdByPlaidId = new Map(
     (accountRows ?? []).map((row) => [row.plaid_account_id as string, row.id as string]),
   );

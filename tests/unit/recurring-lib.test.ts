@@ -348,6 +348,36 @@ describe("lib/recurring", () => {
     expect(mock.updateIn).toHaveBeenCalledWith("stream_id", ["gone-stream"]);
   });
 
+  it("throws and never upserts when the accounts read fails, instead of silently unlinking every stream", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce({
+      data: {
+        inflow_streams: [],
+        outflow_streams: [
+          {
+            stream_id: "stream-1",
+            merchant_name: "Netflix",
+            description: "Netflix Subscription",
+            last_amount: { amount: 15.99 },
+            is_active: true,
+            transaction_ids: [],
+          },
+        ],
+      },
+    });
+
+    const mock = createRecurringSupabaseMock({
+      accounts: { data: null, error: new Error("accounts read failed") },
+    });
+    mockServiceClient.from.mockImplementation(mock.from);
+
+    await expect(refreshRecurringForItem(dummyItem)).rejects.toThrow("accounts read failed");
+
+    // A thrown accounts read must abort before the upsert -- otherwise every
+    // stream in this sync would be persisted with account_id: null,
+    // silently unlinking it from whatever account it was really tied to.
+    expect(mock.upsert).not.toHaveBeenCalled();
+  });
+
   it("never calls the deactivation update when the Plaid call throws", async () => {
     mockTransactionsRecurringGet.mockRejectedValueOnce(new Error("Plaid down"));
 
