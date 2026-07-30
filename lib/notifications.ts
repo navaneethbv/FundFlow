@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/service";
 import { buildNotification, shouldSendAlert, type AlertType } from "@/lib/planning";
 import { getDashboardData } from "@/lib/dashboard";
@@ -205,4 +206,23 @@ export async function processNotificationsForUser(userId: string) {
       );
     }
   }
+}
+
+/**
+ * Unread count for the top-bar bell (Phase 1). Takes the caller's own
+ * RLS-bound client (not the service client) since this always runs for the
+ * signed-in user reading their own notifications. Fails open to 0 so a
+ * transient query error never breaks the shell chrome.
+ */
+export async function getUnreadNotificationCount(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .is("read_at", null);
+  if (error) return 0;
+  return count ?? 0;
 }
