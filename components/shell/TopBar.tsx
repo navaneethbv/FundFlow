@@ -3,6 +3,9 @@ import Logo from "@/components/ui/Logo";
 import PrivacyToggle from "@/components/PrivacyToggle";
 import ThemeToggle from "@/components/ThemeToggle";
 import LogoutButton from "@/components/LogoutButton";
+import SearchButton from "@/components/shell/SearchButton";
+import NotificationsBell from "@/components/shell/NotificationsBell";
+import { Settings } from "@/components/ui/icons";
 
 export default function TopBar({ email }: Readonly<{ email?: string | null }>) {
   return (
@@ -17,6 +20,18 @@ export default function TopBar({ email }: Readonly<{ email?: string | null }>) {
               {email}
             </span>
           )}
+          <div className="hidden items-center gap-2 sm:flex">
+            <SearchButton />
+            <NotificationsBell />
+            <Link
+              href="/settings"
+              aria-label="Settings"
+              title="Settings"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-panel-border bg-panel-2 text-muted shadow-sm transition-colors duration-150 hover:border-accent/50 hover:text-foreground focus-visible:outline-2"
+            >
+              <Settings aria-hidden className="h-3.5 w-3.5" />
+            </Link>
+          </div>
           <PrivacyToggle />
           <ThemeToggle variant="switch" />
           <LogoutButton />

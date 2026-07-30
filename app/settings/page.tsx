@@ -256,7 +256,9 @@ export default async function SettingsPage() {
         </div>
 
         <div className="grid gap-6 xl:grid-cols-2">
-          <AskAiSection enabled={aiSettings?.enabled ?? false} />
+          <div id="ask-ai">
+            <AskAiSection enabled={aiSettings?.enabled ?? false} />
+          </div>
           <ReceiptScanSection enabled={aiSettings?.enabled ?? false} />
         </div>
 

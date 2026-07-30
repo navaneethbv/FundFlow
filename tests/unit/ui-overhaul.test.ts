@@ -43,8 +43,11 @@ describe("UI overhaul primitives and shell", () => {
   it("keeps primary navigation out of the utility top bar", () => {
     const topBar = readFileSync("components/shell/TopBar.tsx", "utf8");
 
+    // Primary destinations (transactions, goals, dashboard, ...) live only in
+    // the sidebar/mobile pill nav. Settings is a utility action (alongside
+    // search and notifications), not a primary destination, so it's expected
+    // here (Phase 1 IA, Task 4).
     expect(topBar).not.toContain('href="/transactions"');
-    expect(topBar).not.toContain('href="/settings"');
     expect(topBar).toContain("ThemeToggle");
     expect(topBar).toContain("LogoutButton");
   });

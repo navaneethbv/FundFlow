@@ -2,6 +2,38 @@
 
 Last updated: 2026-07-30. Read this first to resume.
 
+## START HERE: Phase 1 Navigation and Information Architecture is implemented
+
+Phase 1 is implemented on `feat/planner-ia` (Tasks 1-8 of its test-first plan) and delivers a nav-model-driven architecture for the app shell, gating future pages as they ship.
+
+The navigation system now provides:
+
+- A centralized `NAV_ITEMS` definition that drives the sidebar, command palette, and app shell active-view tracking.
+- Responsive top-bar utility actions: search, notifications, and settings (hidden below the `sm` breakpoint at 640px per Tailwind, visible at `sm` and above; notifications and settings remain reachable via the mobile pill nav, search is keyboard-only via Cmd+K/Ctrl+K on mobile, known gap not addressed in this phase).
+- Sidebar collapse state persisted through `profiles.dashboard_prefs` with a toggle button and aria-pressed state.
+- Gated Ask-AI lower-rail link that only renders when `isAskAiAvailable` returns true.
+- Feature-flag-driven navigation entries so unreleased pages remain hidden from both sidebar and command palette.
+- Dashboard subviews (monitor, plan, wealth) remain internal to the `/dashboard` route and are not exposed as top-level nav entries.
+
+The implementation honors the existing `TRANSFER_GROUPS` exclusion set and the five Phase 0 finance-domain invariants carried forward from prior work.
+
+The "move Year in Money under Reports" step from the master plan is intentionally deferred to Phase 6 because the Reports page does not yet exist. Phase 6's implementation plan must explicitly include a link-and-remove step to move `wrapped` from the `manage` category into the `reports` category once that page ships.
+
+The sm-breakpoint utility icon scope decision (Task 4) is defined in the responsive Tailwind classes and covered by source-level unit tests.
+
+Task 8 added `tests/e2e/planner-ia.spec.ts`, a credentialed live-Supabase Playwright suite (throwaway user created via the admin client, same pattern as `accounts.spec.ts`/`cash-flow.spec.ts`). It actually ran against a real Chromium browser and the local dev server, not just against source: `npm run test:e2e -- tests/e2e/planner-ia.spec.ts` passed 6/6 on two consecutive runs. Coverage: only-implemented-destinations-in-sidebar (no Reports/Recurring links), command palette open via top-bar button and Cmd+K plus Escape-to-close, notifications/settings top-bar links navigate, sidebar collapse persists across reload (writes to `profiles.dashboard_prefs.sidebarCollapsed` and re-seeds server-side), mobile pill nav at 390px with no horizontal overflow in both light and dark themes, and a signed-out request to a private path (`/budget`) redirecting to `/login`.
+
+The final local gate, all real command output, all green:
+
+- `npm run lint`: pass, zero warnings.
+- `npx tsc --noEmit`: pass.
+- `npm test`: pass, 152 files / 1070 tests (includes `tests/integration/*` against the live Supabase project; `npm run test:unit` alone is 137 files / 983 tests, unchanged from Task 7 since Task 8 added only an E2E spec).
+- `npm run build`: pass, production route manifest includes all Phase 1 destinations.
+- `npm run test:e2e -- tests/e2e/planner-ia.spec.ts`: pass, 6/6, credentialed against the live FundFlow Supabase project.
+- `git diff --check`: pass.
+
+Next: Phase 5, 6, or 9A (independent of each other) per the master plan's dependency graph (`docs/superpowers/plans/2026-07-29-monarch-parity.md`): all three depend only on Phase 1, which is now done, and Phase 6's other prerequisite (Phase 3, Cash Flow) already shipped on `main`.
+
 ## START HERE: Phase 4 Budget is implemented
 
 Phase 4 is implemented on `feat/monarch-parity-all-phases` in PR #72.
