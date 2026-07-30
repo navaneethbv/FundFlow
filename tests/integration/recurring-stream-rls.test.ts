@@ -183,12 +183,29 @@ suite("recurring stream transactions RLS", () => {
   });
 
   it("denies the cookie client any write", async () => {
-    // No UPDATE policy exists on this table, so RLS filters the row out of
-    // the update's implicit USING clause: Postgres/PostgREST report this as
-    // zero rows affected, not an error (the same behavior already relied on
-    // by tests/integration/budget-period-rls.test.ts's household-write-denial
-    // case). Verify the write had no effect via the service client instead of
-    // asserting on `error`.
+    // No UPDATE policy exists on this table, so its implicit USING clause
+    // (the one Postgres checks to find rows eligible for UPDATE) matches
+    // zero rows for the owner's own row too -- the update silently affects
+    // nothing and PostgREST reports no error. Verified empirically against
+    // this exact table: an UPDATE here returns { error: null, status: 200 },
+    // while an INSERT on the same table (no INSERT policy either) returns
+    // { error: { code: "42501", message: "new row violates row-level
+    // security policy..." }, status: 403 }. That is the real mechanism --
+    // UPDATE's USING clause silently filters, INSERT's WITH CHECK clause
+    // hard-fails -- not a difference in table-level GRANTs between this
+    // table and its siblings. (An earlier version of this comment blamed a
+    // missing INSERT/UPDATE/DELETE grant for the silent no-op; that GRANT
+    // theory doesn't hold here either -- the UPDATE reaches RLS at all,
+    // meaning the role already has UPDATE privilege on this table, most
+    // likely via Supabase's default per-schema grants to `authenticated`
+    // rather than this migration's explicit `grant select`.) This is why
+    // tests/integration/account-snapshot-rls.test.ts's "denies authenticated
+    // snapshot writes" test (an INSERT) can assert directly on `error`, while
+    // an UPDATE-based test here cannot -- it's the command type, not the
+    // table, that decides. tests/integration/budget-period-rls.test.ts's
+    // household-write-denial case hits the same UPDATE-silently-filters path
+    // and is the correct precedent for verifying via the admin client that
+    // the row is unchanged instead of asserting on `error`.
     const before = await admin
       .from("recurring_stream_transactions")
       .select("created_at")
