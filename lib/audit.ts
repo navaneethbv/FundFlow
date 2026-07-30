@@ -39,7 +39,10 @@ export type AuditAction =
   | "recurring_stream_reviewed"
   | "recurring_stream_dismissed"
   | "recurring_stream_restored"
-  | "recurring_stream_amount_corrected";
+  | "recurring_stream_amount_corrected"
+  | "manual_recurring_item_created"
+  | "manual_recurring_item_updated"
+  | "manual_recurring_item_deleted";
 
 interface AuditParams {
   userId: string | null;
