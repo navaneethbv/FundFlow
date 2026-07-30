@@ -35,6 +35,7 @@ interface RecurringStreamRawRow {
   last_date: string | null;
   predicted_next_date: string | null;
   account_id: string | null;
+  category: string | null;
 }
 
 export interface RecurringStreamRow {
@@ -182,7 +183,7 @@ export async function loadRecurringData(
   let streamsQuery = supabase
     .from("recurring_streams")
     .select(
-      "id,user_id,merchant_name,description,stream_type,status,is_active,reviewed_at,dismissed_at,user_amount,average_amount,last_amount,frequency,first_date,last_date,predicted_next_date,account_id",
+      "id,user_id,merchant_name,description,stream_type,status,is_active,reviewed_at,dismissed_at,user_amount,average_amount,last_amount,frequency,first_date,last_date,predicted_next_date,account_id,category",
     )
     .limit(DEPENDENCY_LIMIT);
   let manualQuery = supabase
@@ -290,6 +291,7 @@ export async function loadRecurringData(
       reviewedAt: row.reviewed_at,
       dismissedAt: row.dismissed_at,
       matchedTransactions: matchedByStreamId.get(row.id) ?? [],
+      category: row.category,
     };
   });
 

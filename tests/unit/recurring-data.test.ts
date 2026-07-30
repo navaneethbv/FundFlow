@@ -25,6 +25,7 @@ function makeClient(overrides: Record<string, { data?: unknown; error?: unknown 
           last_date: "2026-06-15",
           predicted_next_date: "2026-07-15",
           account_id: "account-1",
+          category: null,
         },
       ],
     },
@@ -101,6 +102,43 @@ describe("loadRecurringData", () => {
       anchorMonth: "2026-07",
     });
     expect(result.view.totals.creditCards.remaining).toBeGreaterThan(0);
+  });
+
+  it("passes category through to the stream input, excluding EXCLUDED_PFC streams from totals (Fix 4)", async () => {
+    const client = makeClient({
+      recurring_streams: {
+        data: [
+          {
+            id: "stream-1",
+            user_id: "user-1",
+            merchant_name: "Card autopay",
+            description: null,
+            stream_type: "outflow",
+            status: "MATURE",
+            is_active: true,
+            reviewed_at: "2026-01-01T00:00:00Z",
+            dismissed_at: null,
+            user_amount: null,
+            average_amount: 400,
+            last_amount: 400,
+            frequency: "MONTHLY",
+            first_date: "2026-01-15",
+            last_date: "2026-06-15",
+            predicted_next_date: "2026-07-15",
+            account_id: "account-1",
+            category: "LOAN_PAYMENTS",
+          },
+        ],
+      },
+    });
+    const result = await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-07",
+    });
+    expect(result.view.occurrences).toHaveLength(1);
+    expect(result.view.occurrences[0]!.category).toBe("LOAN_PAYMENTS");
+    expect(result.view.totals.expenses.remaining).toBe(0);
+    expect(result.view.totals.creditCards.remaining).toBe(0);
   });
 
   describe("household scope ownership (Fix 1)", () => {

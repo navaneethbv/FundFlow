@@ -100,6 +100,7 @@ function stream(overrides: Partial<RecurringStreamInput> = {}): RecurringStreamI
     reviewedAt: "2026-01-16T00:00:00Z",
     dismissedAt: null,
     matchedTransactions: [],
+    category: null,
     ...overrides,
   };
 }
@@ -209,6 +210,30 @@ describe("expandStreamsForMonth", () => {
       "2026-07-20",
     );
     expect(month.reviewCount).toBe(2);
+  });
+
+  it("excludes transfers/loan payments (EXCLUDED_PFC) from totals but still lists the occurrence (Fix 4)", () => {
+    const month = expandStreamsForMonth(
+      [
+        stream({
+          id: "card-autopay",
+          category: "LOAN_PAYMENTS",
+          isCreditAccount: false,
+          averageAmount: 400,
+        }),
+      ],
+      [],
+      "2026-07",
+      "2026-07-01",
+    );
+    expect(month.occurrences).toHaveLength(1);
+    expect(month.occurrences[0]).toMatchObject({ sourceId: "card-autopay", category: "LOAN_PAYMENTS" });
+    expect(month.totals.income.paid).toBe(0);
+    expect(month.totals.income.remaining).toBe(0);
+    expect(month.totals.expenses.paid).toBe(0);
+    expect(month.totals.expenses.remaining).toBe(0);
+    expect(month.totals.creditCards.paid).toBe(0);
+    expect(month.totals.creditCards.remaining).toBe(0);
   });
 
   it("never lets one transaction complete two occurrences of a weekly stream", () => {

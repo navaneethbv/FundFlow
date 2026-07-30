@@ -1,3 +1,5 @@
+import { EXCLUDED_PFC } from "@/lib/dashboard";
+
 export type RecurringFrequency =
   | "WEEKLY"
   | "BIWEEKLY"
@@ -27,6 +29,8 @@ export interface RecurringStreamInput {
   reviewedAt: string | null;
   dismissedAt: string | null;
   matchedTransactions: { id: string; date: string }[];
+  /** Plaid's `personal_finance_category.primary`. See EXCLUDED_PFC below. */
+  category: string | null;
 }
 
 interface Cadence {
@@ -252,18 +256,28 @@ export function expandStreamsForMonth(
         frequency: FREQUENCY_LABELS[stream.frequency],
         dueDate,
         account: stream.accountName,
-        category: null,
+        category: stream.category,
         amount,
         status: complete ? "complete" : dueDate < today ? "overdue" : "upcoming",
         matchedTransactionId: match?.id ?? null,
         isIncome,
       });
-      // isIncome is checked first intentionally: a credit-card refund/payment
-      // modeled as an inflow should count as income, not reduce the
-      // credit-card bucket, even when isCreditAccount is also true.
-      if (isIncome) addToBucket(totals.income, amount, complete);
-      else if (stream.isCreditAccount) addToBucket(totals.creditCards, amount, complete);
-      else addToBucket(totals.expenses, amount, complete);
+      // Transfers and loan payments (EXCLUDED_PFC) still show as an
+      // occurrence line item -- users should still see their scheduled
+      // savings transfer or checking->card autopay -- but must not add to
+      // any totals bucket, matching this codebase's dashboard-wide rule
+      // that every spend total apply EXCLUDED_PFC or credit-card payments
+      // get double-counted (once as the card's own bill, once again as the
+      // transfer that pays it).
+      if (!EXCLUDED_PFC.has(stream.category ?? "")) {
+        // isIncome is checked first intentionally: a credit-card
+        // refund/payment modeled as an inflow should count as income, not
+        // reduce the credit-card bucket, even when isCreditAccount is also
+        // true.
+        if (isIncome) addToBucket(totals.income, amount, complete);
+        else if (stream.isCreditAccount) addToBucket(totals.creditCards, amount, complete);
+        else addToBucket(totals.expenses, amount, complete);
+      }
     }
   }
 
