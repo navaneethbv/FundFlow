@@ -60,6 +60,55 @@ async function resolveLocalTransactionIds(
 }
 
 /**
+ * Mark-and-sweep: deactivates streams that existed for this item but are
+ * absent from a successful, full Plaid response. A no-op when nothing is
+ * stale. Callers must only invoke this after a successful fetch/upsert — a
+ * thrown error upstream must skip this entirely, so a failed or partial
+ * refresh changes nothing.
+ */
+async function deactivateStaleStreams(
+  supabase: ReturnType<typeof createServiceClient>,
+  userId: string,
+  staleStreamIds: string[],
+): Promise<void> {
+  if (staleStreamIds.length === 0) return;
+  const { error } = await supabase
+    .from("recurring_streams")
+    .update({ is_active: false })
+    .eq("user_id", userId)
+    .in("stream_id", staleStreamIds);
+  if (error) throw error;
+}
+
+/**
+ * Replaces the recurring_stream_transactions join rows for one stream with
+ * its currently-resolved local transaction ids (delete-then-insert).
+ */
+async function replaceStreamTransactionJoins(
+  supabase: ReturnType<typeof createServiceClient>,
+  userId: string,
+  recurringStreamId: string,
+  localTransactionIds: string[],
+): Promise<void> {
+  const { error: deleteError } = await supabase
+    .from("recurring_stream_transactions")
+    .delete()
+    .eq("recurring_stream_id", recurringStreamId)
+    .eq("user_id", userId);
+  if (deleteError) throw deleteError;
+
+  if (localTransactionIds.length === 0) return;
+  const { error: insertError } = await supabase.from("recurring_stream_transactions").insert(
+    localTransactionIds.map((transactionId) => ({
+      user_id: userId,
+      recurring_stream_id: recurringStreamId,
+      transaction_id: transactionId,
+    })),
+  );
+  if (insertError) throw insertError;
+}
+
+/**
  * Notifies about subscription price hikes and new subscriptions found by
  * diffing a refresh against the stored streams. Best-effort by design: a
  * failed notification must never break the sync that discovered it.
@@ -152,13 +201,7 @@ export async function refreshRecurringForItem(item: PlaidItemRow): Promise<numbe
   const staleStreamIds = (existing ?? [])
     .map((row) => row.stream_id as string)
     .filter((streamId) => !currentStreamIds.has(streamId));
-  if (staleStreamIds.length > 0) {
-    await supabase
-      .from("recurring_streams")
-      .update({ is_active: false })
-      .eq("user_id", item.user_id)
-      .in("stream_id", staleStreamIds);
-  }
+  await deactivateStaleStreams(supabase, item.user_id, staleStreamIds);
 
   // Resolve each stream's Plaid transaction ids to local rows and replace
   // the join table's rows for that stream. Ids that don't resolve (older,
@@ -182,19 +225,7 @@ export async function refreshRecurringForItem(item: PlaidItemRow): Promise<numbe
       .map((plaidId) => localTransactionIdByPlaidId.get(plaidId))
       .filter((id): id is string => Boolean(id));
 
-    await supabase
-      .from("recurring_stream_transactions")
-      .delete()
-      .eq("recurring_stream_id", recurringStreamId);
-    if (localTransactionIds.length > 0) {
-      await supabase.from("recurring_stream_transactions").insert(
-        localTransactionIds.map((transactionId) => ({
-          user_id: item.user_id,
-          recurring_stream_id: recurringStreamId,
-          transaction_id: transactionId,
-        })),
-      );
-    }
+    await replaceStreamTransactionJoins(supabase, item.user_id, recurringStreamId, localTransactionIds);
   }
 
   // Diff only when history exists — the first refresh seeds silently

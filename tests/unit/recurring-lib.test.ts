@@ -70,7 +70,10 @@ function createRecurringSupabaseMock(
   const txEq = vi.fn().mockReturnValue({ in: txIn });
   const txSelect = vi.fn().mockReturnValue({ eq: txEq });
 
-  const rstDeleteEq = vi.fn().mockResolvedValue({ error: null });
+  // .delete().eq("recurring_stream_id", id).eq("user_id", userId) — two
+  // chained .eq() calls, both load-bearing filters.
+  const rstDeleteEqUser = vi.fn().mockResolvedValue({ error: null });
+  const rstDeleteEq = vi.fn().mockReturnValue({ eq: rstDeleteEqUser });
   const rstDelete = vi.fn().mockReturnValue({ eq: rstDeleteEq });
   const rstInsert = vi.fn().mockResolvedValue({ error: null });
 
@@ -102,6 +105,7 @@ function createRecurringSupabaseMock(
     txIn,
     rstDelete,
     rstDeleteEq,
+    rstDeleteEqUser,
     rstInsert,
   };
 }
@@ -250,6 +254,59 @@ describe("lib/recurring", () => {
       ],
       { onConflict: "stream_id" },
     );
+  });
+
+  it("resolves a stream's Plaid transaction ids to local rows, replaces the join table, and omits unresolvable ids", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce({
+      data: {
+        inflow_streams: [],
+        outflow_streams: [
+          {
+            stream_id: "stream-1",
+            merchant_name: "Netflix",
+            description: "Netflix Subscription",
+            last_amount: { amount: 15.99 },
+            is_active: true,
+            // "plaid-txn-resolvable" is present in the mocked transactions
+            // table below; "plaid-txn-missing" is not (e.g. an older,
+            // pruned transaction) and must be silently omitted.
+            transaction_ids: ["plaid-txn-resolvable", "plaid-txn-missing"],
+          },
+        ],
+      },
+    });
+
+    const mock = createRecurringSupabaseMock({
+      existingStreams: { data: [], error: null },
+      upserted: {
+        data: [{ id: "recurring-row-1", stream_id: "stream-1" }],
+        error: null,
+      },
+      transactions: {
+        data: [{ id: "local-txn-1", plaid_transaction_id: "plaid-txn-resolvable" }],
+        error: null,
+      },
+    });
+    mockServiceClient.from.mockImplementation(mock.from);
+
+    await refreshRecurringForItem(dummyItem);
+
+    // (c) delete happens before insert for that stream's recurring_stream_id.
+    expect(mock.rstDeleteEq).toHaveBeenCalledWith("recurring_stream_id", "recurring-row-1");
+    expect(mock.rstDeleteEqUser).toHaveBeenCalledWith("user_id", "user-1");
+    const deleteOrder = mock.rstDelete.mock.invocationCallOrder[0];
+    const insertOrder = mock.rstInsert.mock.invocationCallOrder[0];
+    expect(deleteOrder).toBeLessThan(insertOrder);
+
+    // (a) the resolvable id's LOCAL id ends up in the insert payload, and
+    // (b) the unresolvable one is silently omitted, with nothing thrown.
+    expect(mock.rstInsert).toHaveBeenCalledWith([
+      {
+        user_id: "user-1",
+        recurring_stream_id: "recurring-row-1",
+        transaction_id: "local-txn-1",
+      },
+    ]);
   });
 
   it("deactivates a stream missing from a full successful response without touching a failed refresh", async () => {

@@ -52,7 +52,7 @@ vi.mock("@/lib/supabase/service", () => ({
           };
         case "recurring_stream_transactions":
           return {
-            delete: () => ({ eq: () => Promise.resolve({ error: null }) }),
+            delete: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }) }) }),
             insert: () => Promise.resolve({ error: null }),
           };
         default:
