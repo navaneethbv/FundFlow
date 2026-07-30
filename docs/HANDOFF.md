@@ -9,7 +9,7 @@ Phase 1 is implemented on `feat/planner-ia`. The pull request follows Tasks 1-6 
 The navigation system now provides:
 
 - A centralized `NAV_ITEMS` definition that drives the sidebar, command palette, and app shell active-view tracking.
-- Responsive top-bar utility actions: search, notifications, and settings (visible and interactive below the `sm` breakpoint at 640px per Tailwind).
+- Responsive top-bar utility actions: search, notifications, and settings (hidden below the `sm` breakpoint at 640px per Tailwind, visible at `sm` and above; reachable on mobile via the existing pill nav).
 - Sidebar collapse state persisted through `profiles.dashboard_prefs` with a toggle button and aria-pressed state.
 - Gated Ask-AI lower-rail link that only renders when `isAskAiAvailable` returns true.
 - Feature-flag-driven navigation entries so unreleased pages remain hidden from both sidebar and command palette.
@@ -19,13 +19,13 @@ The implementation honors the existing `TRANSFER_GROUPS` exclusion set and the f
 
 The "move Year in Money under Reports" step from the master plan is intentionally deferred to Phase 6 because the Reports page does not yet exist. Phase 6's implementation plan must explicitly include a link-and-remove step to move `wrapped` from the `manage` category into the `reports` category once that page ships.
 
-The sm-breakpoint utility icon scope decision (Task 4) was validated with mobile testing at 375px and 414px across all signed-in routes and login.
+The sm-breakpoint utility icon scope decision (Task 4) is defined in the responsive Tailwind classes and covered by source-level unit tests.
 
-Current gates, all green: `npm run lint` PASS, `npm run typecheck` PASS, `npm test` PASS, `npm run build` PASS.
+Current gates, all green: `npm run lint` PASS, `npm run typecheck` PASS, `npm run test:unit` PASS (137 files, 983 tests including the two new regression tests), `npm run build` PASS.
 
-Credentialed browser acceptance is green for sidebar collapse, command palette, top-bar responsive layout, gated Ask-AI link, and desktop/tablet/mobile/light/dark theme combinations.
+Unit-level coverage only so far (readFileSync/mock-based source tests per this codebase's convention). Credentialed browser and E2E acceptance across viewports and themes is Task 8's job, not yet run.
 
-Next, Phase 2 (Accounts) through Phase 4 (Budget) have already shipped on `main` (merged in PR #72). Phase 5 onwards remains future work.
+Next, Phase 2 (Accounts, PR #70), Phase 3 (Cash Flow, PR #71), and Phase 4 (Budget, PR #72) have already shipped on `main`. Phase 5 onwards remains future work.
 
 ## START HERE: Phase 4 Budget is implemented
 
