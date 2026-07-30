@@ -2,6 +2,66 @@
 
 Last updated: 2026-07-30. Read this first to resume.
 
+## START HERE: Phase 5 Recurring is implemented
+
+Phase 5 is implemented on `feat/recurring-page` (Tasks 1-15 of its test-first plan).
+It delivers the Recurring page: the occurrence review workflow, manual recurring items, a sidebar unreviewed-stream badge, and Mine/Household scope.
+
+The released `/recurring` server page now provides:
+
+- A month-scoped occurrence list built from Plaid's `predicted_next_date` anchor and `transaction_ids` (never a merchant-name heuristic for Plaid-sourced completion; heuristic matching is reserved for manual items only).
+- Upcoming, Complete, and All tabs; the All tab is the single place to Confirm, dismiss ("Not recurring"), restore, and correct the expected amount of a stream.
+- A review banner and a sidebar nav badge, both counting `MATURE`, active, undismissed, unreviewed streams, and both clearing together once every stream is reviewed.
+- Manual recurring items (income and expense) with their own CRUD route, folded into the same monthly occurrence expansion as Plaid streams.
+- A "This month" progress panel (income, expenses, and — only when nonzero — credit cards), and Mine/Household scope via the shared `parseFinancialScope`.
+- A stale-data banner driven by the newest successful `sync_jobs` row, matching the existing dashboard convention.
+
+The live Supabase project `zrxbmmtqqhlwtrinocww` contains these Phase 5 migrations:
+
+- `20260730020000_recurring_review.sql`, recorded live as version `20260730160407`.
+  Adds `reviewed_at`, `dismissed_at`, `account_id`, `first_date`, `last_date`, `predicted_next_date`, and `user_amount` to `recurring_streams`, and creates the `recurring_stream_transactions` join table (RLS: owner-select and shared-stream-select policies, no client insert/update/delete — only the service client's sync writes it).
+- `20260730020500_recurring_shared_authorization.sql`, recorded live as version `20260730161711`.
+  Task 1b found and fixed a pre-existing household-visibility defect: `recurring_streams_select_household` and `rst_select_shared_stream` both joined `plaid_items` directly inside their own `USING` clause, and household members have no `SELECT` policy on `plaid_items` (it holds encrypted access tokens).
+  That silently hid every shared recurring stream from every household member since the July 23 sharing migration, independent of this phase.
+  Fixed the same way Phase 2/3 fixed the identical class of bug for accounts and transactions: a `private`-schema `SECURITY DEFINER` helper (`can_read_shared_stream`) plus one consolidated `SELECT` policy per table.
+
+Task 15's E2E acceptance run found and fixed a second, distinct RLS defect, this one in `recurring_streams` itself rather than its sharing policy.
+`recurring_streams` has had RLS enabled since `0001_init.sql`, but no migration ever added an `UPDATE` policy — the only policy on the table was the `SELECT` one.
+The review workflow's `PATCH /api/recurring` route (Confirm, Dismiss, Restore, correct amount) runs through the RLS-bound cookie client, not the service client; with no `UPDATE` policy, Postgres's implicit `USING` clause for a command with zero defined policies matches no rows, not even the row's true owner, and PostgREST reports no error.
+The route's `.select("id").maybeSingle()` then sees `data: null` and returns 404 "Recurring stream not found" for every legitimate request.
+This silently broke the entire review workflow — every Confirm, Dismiss, Restore, and amount correction — for every user, not a test-authoring artifact.
+Reproduced directly against the live project before any fix: an authenticated owner's own-row update returned `{ data: null, error: null }`, and a service-client re-read confirmed the row was unchanged.
+Fixed with a new migration, `supabase/migrations/20260730170000_recurring_streams_owner_write.sql`, adding one owner-scoped `UPDATE` policy in the same shape as every other owner-write table in this schema.
+Re-running the same repro after the fix returned `{ data: { id: ... }, error: null }` and the target row's `reviewed_at` was set.
+This migration was applied directly to the live project via `supabase db query --linked -f <file>` (the Supabase MCP tools require an interactive auth flow unavailable in this session, and `supabase db push` refused over a pre-existing local/remote migration-history mismatch that predates this phase).
+Its DDL is live and verified working; it is committed to the repo as a normal migration file, but unlike the two migrations above it is not registered in `supabase_migrations.schema_migrations` (`supabase migration repair` was blocked by this session's permission classifier) — a bookkeeping gap for a human to reconcile with `supabase migration repair --status applied 20260730170000`, not a functional one.
+
+Task 15 also fixed two smaller, pre-existing defects noticed while running the full gate, per this repo's fix-it-when-you-see-it standard:
+
+- `tests/integration/recurring.test.ts`'s mock `transactionsRecurringGet` response was missing `transaction_ids` on both mock streams, a field Task 5's occurrence-persistence code (`lib/recurring.ts`) reads unconditionally and the real Plaid SDK types mark as required (non-optional).
+  The test crashed with `Cannot read properties of undefined (reading 'map')`; fixed by adding `transaction_ids: []` to both fixtures.
+- `tests/unit/recurring-route.test.ts` and `tests/unit/recurring-manual-route.test.ts` each had an unused `NextResponse` import left over from earlier tasks, flagged by `npm run lint`; both removed.
+
+Live verification after the fixes:
+
+- The live repro script's before/after update results are recorded above.
+- `npm run test:e2e -- tests/e2e/recurring.spec.ts` passed 1/1 (a single comprehensive journey, matching `budget.spec.ts`'s shape) on three consecutive runs against the live FundFlow Supabase project: sidebar reachability and badge count, review banner visible for the seeded `MATURE`/`reviewed_at: null` stream, Confirm in the All tab clearing both the banner and the badge (proving the RLS fix works end-to-end, not just in isolation), editing the expected amount in All changing the Upcoming tab's displayed total, month navigation preserving a `scope=<householdId>` query parameter, and no horizontal overflow at 390x844.
+- Zero unexpected console errors/warnings, zero page errors, zero failed same-origin requests during that run.
+
+The final local gate, all real command output, all green:
+
+- `npm run lint`: pass, zero warnings (after removing the two unused `NextResponse` imports above).
+- `npx tsc --noEmit`: pass.
+- `npm test`: pass, 158 files / 1116 tests (includes `tests/integration/*` against the live Supabase project; `npm run test:unit` alone is 142 files / 1025 tests).
+- `npm run build`: pass, production route manifest includes `/recurring`, `/api/recurring`, and `/api/recurring/manual`.
+- `npm run test:e2e -- tests/e2e/recurring.spec.ts`: pass, 1/1, credentialed against the live FundFlow Supabase project, stable across three consecutive runs.
+- `git diff --check`: pass.
+
+Next: Phase 6, 9A, or 11 (independent of each other) per the master plan's dependency graph (`docs/superpowers/plans/2026-07-29-monarch-parity.md`'s Part 1).
+Phase 6 (Reports/Sankey) depends on Phase 3 (Cash Flow), already done.
+Phase 9A (Investment holdings/allocation) and Phase 11 (Advice) depend only on Phase 1, also done.
+All three are unblocked; none has a dependency on Phase 5.
+
 ## START HERE: Phase 1 Navigation and Information Architecture is implemented
 
 Phase 1 is implemented on `feat/planner-ia` (Tasks 1-8 of its test-first plan) and delivers a nav-model-driven architecture for the app shell, gating future pages as they ship.
