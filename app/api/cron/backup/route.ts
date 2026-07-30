@@ -16,7 +16,7 @@ export const maxDuration = 60;
  * Monthly encrypted backup (2.1): per user, serialize the full takeout
  * payload, gzip + AES-256-GCM encrypt with BACKUP_ENC_KEY, and email it to
  * the user's signup address. Fails closed without the key. Service client
- * throughout (cron context) — every query scopes user_id explicitly.
+ * throughout (cron context), and every query scopes user_id explicitly.
  */
 export async function GET(request: NextRequest) {
   const header = request.headers.get("authorization") ?? "";
@@ -50,14 +50,7 @@ export async function GET(request: NextRequest) {
     for (const profile of profiles ?? []) {
       const userId = profile.id as string;
       try {
-        const [
-          { data: accounts },
-          { data: transactions },
-          { data: budgets },
-          { data: goals },
-          { data: rules },
-          { data: manualAccounts },
-          { data: accountBalanceSnapshots },
+        const results = await Promise.all([
         // ADDING A USER-OWNED TABLE? Add it here too if losing it would cost
         // the user data they cannot re-sync from Plaid (their own budgets,
         // goals, rules, manual records, annotations). Derived or re-syncable
@@ -67,7 +60,6 @@ export async function GET(request: NextRequest) {
         // one user's data into another's backup.
         // Sibling checklists: app/api/export/takeout/route.ts (takeout),
         // the on-delete-cascade FK (deletion), scripts/check-rls.sql (RLS).
-        ] = await Promise.all([
           service
             .from("accounts")
             .select("name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code")
@@ -84,7 +76,23 @@ export async function GET(request: NextRequest) {
             .from("account_balance_snapshots")
             .select("account_id, manual_account_id, snapshot_date, current_balance, available_balance, iso_currency_code")
             .eq("user_id", userId),
+          service
+            .from("budget_periods")
+            .select("budget_id, month, planned")
+            .eq("user_id", userId),
         ]);
+        const failed = results.find((result) => result.error);
+        if (failed?.error) throw failed.error;
+        const [
+          accounts,
+          transactions,
+          budgets,
+          goals,
+          rules,
+          manualAccounts,
+          accountBalanceSnapshots,
+          budgetPeriods,
+        ] = results.map((result) => result.data);
 
         const protectedSections = [
           accounts,
@@ -94,6 +102,7 @@ export async function GET(request: NextRequest) {
           rules,
           manualAccounts,
           accountBalanceSnapshots,
+          budgetPeriods,
         ];
         if (!protectedSections.some((rows) => (rows ?? []).length > 0)) {
           continue;
@@ -110,6 +119,7 @@ export async function GET(request: NextRequest) {
             merchant_rules: rules ?? [],
             manual_accounts: manualAccounts ?? [],
             account_balance_snapshots: accountBalanceSnapshots ?? [],
+            budget_periods: budgetPeriods ?? [],
           },
           backupKey,
         );

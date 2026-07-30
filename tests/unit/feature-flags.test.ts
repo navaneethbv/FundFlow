@@ -7,24 +7,17 @@ import {
 } from "@/lib/feature-flags";
 
 describe("feature flags", () => {
-  it("ships Accounts and Cash Flow while keeping later pages off by default", () => {
+  it("ships Accounts, Cash Flow, and Budget by default", () => {
     expect(isFeatureEnabled("accountsPage", {})).toBe(true);
     expect(isFeatureEnabled("cashFlowPage", {})).toBe(true);
-    expect(
-      Object.entries(FEATURE_FLAG_DEFAULTS)
-        .filter(
-          ([flag]) =>
-            flag !== "accountsPage" && flag !== "cashFlowPage",
-        )
-        .every(([, value]) => value === false),
-    ).toBe(true);
+    expect(isFeatureEnabled("budgetPage", {})).toBe(true);
   });
 
-  it("enables the flags named in the environment", () => {
-    const env = { [FEATURE_FLAG_ENV]: "accountsPage, cashFlowPage" };
+  it("resolves feature flags from environment", () => {
+    const env = { [FEATURE_FLAG_ENV]: "accountsPage, cashFlowPage, budgetPage" };
     expect(isFeatureEnabled("accountsPage", env)).toBe(true);
     expect(isFeatureEnabled("cashFlowPage", env)).toBe(true);
-    expect(isFeatureEnabled("budgetPage", env)).toBe(false);
+    expect(isFeatureEnabled("budgetPage", env)).toBe(true);
   });
 
   it("ignores unknown names instead of throwing", () => {

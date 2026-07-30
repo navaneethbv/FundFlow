@@ -7,19 +7,8 @@ import { errorResponse, requireUser } from "@/lib/http";
  * longer a sufficient scope: `accounts`, `transactions`, and
  * `account_balance_snapshots` are additionally readable for a household
  * member's opted-in Plaid connections. Takeout means "the caller's own data",
- * so every query below filters `user_id` explicitly — do not drop those
+ * so every query below filters `user_id` explicitly. Do not drop those
  * filters back to bare RLS.
- *
- * ADDING A USER-OWNED TABLE? It belongs in this list unless it is derived data
- * the user cannot meaningfully re-read (sync bookkeeping, rate-limit windows)
- * or a secret they must never receive back (Plaid tokens, MFA backup codes).
- * The matching checklist lives in three other places:
- *   - encrypted backup:   app/api/cron/backup/route.ts
- *   - account deletion:   the table's `user_id` FK must be
- *                         `references auth.users (id) on delete cascade`,
- *                         which is what app/api/account/route.ts relies on
- *   - RLS proof:          scripts/check-rls.sql needs no edit; it fails for any
- *                         public table lacking RLS or lacking a policy
  */
 export async function GET() {
   const auth = await requireUser();
@@ -27,27 +16,32 @@ export async function GET() {
   const { supabase, user } = auth;
 
   try {
-    const [
-      { data: accounts },
-      { data: transactions },
-      { data: budgets },
-      { data: goals },
-      { data: rules },
-      { data: manualAccounts },
-      { data: accountBalanceSnapshots },
-      { data: alertPreferences },
-      { data: aiSettings },
-    ] = await Promise.all([
+    const results = await Promise.all([
       supabase.from("accounts").select("name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code").eq("user_id", user.id),
       supabase.from("transactions").select("date, amount, iso_currency_code, name, merchant_name, pfc_primary, pfc_detailed, pending").eq("user_id", user.id),
-      supabase.from("budgets").select("category, monthly_limit"),
-      supabase.from("goals").select("name, target_amount, current_amount, target_date, status"),
-      supabase.from("merchant_rules").select("match_type, pattern, display_name, category, enabled"),
-      supabase.from("manual_accounts").select("name, account_type, balance, include_in_net_worth"),
+      supabase.from("budgets").select("category, monthly_limit").eq("user_id", user.id),
+      supabase.from("goals").select("name, target_amount, current_amount, target_date, status").eq("user_id", user.id),
+      supabase.from("merchant_rules").select("match_type, pattern, display_name, category, enabled").eq("user_id", user.id),
+      supabase.from("manual_accounts").select("name, account_type, balance, include_in_net_worth").eq("user_id", user.id),
       supabase.from("account_balance_snapshots").select("account_id, manual_account_id, snapshot_date, current_balance, available_balance, iso_currency_code").eq("user_id", user.id),
-      supabase.from("alert_preferences").select("broken_bank, budget_exceeded, goal_reached, large_transaction, low_cash_forecast"),
-      supabase.from("ai_settings").select("enabled"),
+      supabase.from("alert_preferences").select("broken_bank, budget_exceeded, goal_reached, large_transaction, low_cash_forecast").eq("user_id", user.id),
+      supabase.from("ai_settings").select("enabled").eq("user_id", user.id),
+      supabase.from("budget_periods").select("budget_id, month, planned").eq("user_id", user.id),
     ]);
+    const failed = results.find((result) => result.error);
+    if (failed?.error) throw failed.error;
+    const [
+      accounts,
+      transactions,
+      budgets,
+      goals,
+      rules,
+      manualAccounts,
+      accountBalanceSnapshots,
+      alertPreferences,
+      aiSettings,
+      budgetPeriods,
+    ] = results.map((result) => result.data);
 
     return NextResponse.json(
       buildDataTakeout({
@@ -60,6 +54,7 @@ export async function GET() {
         account_balance_snapshots: accountBalanceSnapshots ?? [],
         alert_preferences: alertPreferences ?? [],
         ai_settings: aiSettings ?? [],
+        budget_periods: budgetPeriods ?? [],
       }),
     );
   } catch (error) {

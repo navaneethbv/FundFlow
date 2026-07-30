@@ -1,6 +1,84 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-07-29. Read this first to resume.
+Last updated: 2026-07-30. Read this first to resume.
+
+## START HERE: Phase 4 Budget is implemented
+
+Phase 4 is implemented on `feat/monarch-parity-all-phases` in PR #72.
+The pull request is intentionally limited to the Phase 4 Budget vertical slice.
+The Phase 5 through Phase 13 placeholder implementation was reverted without rewriting shared history.
+Start Phase 5 only after PR #72 merges, from a fresh branch based on `main`.
+
+The released `/budget` server page now provides:
+
+- Month, Year, and Decade views built from canonical transaction actuals and real period calculations.
+- Income, Fixed, Flexible, Non-Monthly, and honest empty Contributions sections.
+- Planned, actual, remaining, Left to Budget, rollover carry, and computed sinking-fund totals.
+- Inline planned amount, group, rollover, and sort-order edits with complete optimistic rollback.
+- A reviewed proposal dialog based on three complete months of canonical history, recurring sources, and existing sinking funds.
+- Mine and Household scope through `parseFinancialScope`.
+- Currency-separated totals that never invent exchange rates.
+- Bounded canonical reads through `loadCanonicalProjection` and `fetchFinanceTransactions`.
+- Loading, empty-section, stale-data, bounded-data, and route-level error states.
+- A simple Settings link to the full planner rather than a duplicate planning surface.
+
+Budget and Cash Flow reconcile for the same month, scope, and currency.
+The Budget loader consumes real transaction splits, merchant rules, category overrides, linked refunds, transfer classification, account names, and stable canonical sorting.
+The canonical split adapter now reads the real `transaction_splits` schema and hydrates all projection dependencies with bounded reads.
+
+The live Supabase project `zrxbmmtqqhlwtrinocww` contains these Phase 4 migrations:
+
+- `20260730013820` named `budget_groups`.
+- `20260730013939` named `budget_household_index`.
+- `20260730014055` named `budget_mutation_conflict_fix`.
+- `20260730015035` named `budget_select_policy`.
+
+The first migration creates `budget_periods`, its indexes, four owner-safe and household-readable RLS policies, and the authenticated `SECURITY INVOKER` atomic mutation function.
+The roll-forward migrations add the household foreign-key index, correct the named conflict target in the applied function, and combine Budget owner and household reads into one authenticated policy.
+Reader code and the `budgetPage` feature flag were released only after all four migrations were live.
+
+Live verification reports:
+
+- Zero `budget_periods` rows linked across owners.
+- RLS enabled on `budget_periods`.
+- Four intended `budget_periods` policies.
+- One authenticated `budgets_select_visible` policy.
+- Anonymous callers cannot execute `update_budget_period`.
+- Authenticated callers can execute `update_budget_period`.
+- The live owner, household-member, outsider, atomic-mutation, and cascade suite passes at 6 tests.
+
+Supabase Advisors report no new Phase 4 security finding.
+The Budget missing-index and duplicate-policy performance findings were corrected.
+The new `budgets_household_id_idx` is reported as unused because it has not accumulated production query usage yet.
+Older project-wide advisor findings remain outside this vertical slice.
+
+Credentialed browser acceptance is green for:
+
+- Proposal preview, editing, exclusion, confirmation, and persistence.
+- Planned amount edits, group moves, rollover changes, successful saves, and forced 500 rollback.
+- Month, Year, and Decade navigation.
+- Budget and Cash Flow actual-expense reconciliation.
+- Mine and Household isolation.
+- USD and CAD separation.
+- Desktop 1440 by 900, tablet 768 by 1024, and mobile 390 by 844.
+- Light and dark themes at every viewport.
+- Horizontal overflow containment, 44px controls, browser exceptions, console errors, request failures, and server failures.
+
+The final local gate is:
+
+- `npm run lint`: pass with zero warnings.
+- `npm run typecheck`: pass.
+- `npm test`: pass at 149 files and 1,043 tests.
+- `npm run test:coverage`: pass with 91.52 percent statements, 79.19 percent branches, 93.17 percent functions, and 94.66 percent lines.
+- `npm run build`: pass with `/budget` and `/api/budget` in the production route manifest.
+- Credentialed `npm run test:e2e -- tests/e2e/budget.spec.ts`: pass.
+- `git diff --check`: pass.
+- `npm audit --audit-level=high`: still reports the existing `brace-expansion` advisory through the dev-only ESLint chain.
+  The installed patched backports are `brace-expansion` 1.1.17 and 5.0.8.
+  Do not force an incidental ESLint 10 major upgrade inside Phase 4.
+
+Next, expand only Phase 5 from `docs/superpowers/plans/2026-07-29-monarch-parity.md` into its own test-first plan.
+Phase 5 is the Recurring page and its reviewed occurrence ledger.
 
 ## START HERE: Phase 3 Cash Flow is implemented
 

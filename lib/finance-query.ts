@@ -91,3 +91,176 @@ export async function fetchFinanceTransactions(
     offset += pageSize;
   }
 }
+
+export interface CanonicalProjectionResult {
+  transactions: import("@/lib/finance-domain").CanonicalFinanceTransaction[];
+  currencyByAccountId: Map<string, string>;
+  truncated: boolean;
+}
+
+function assertProjectionQuery(
+  table: string,
+  result: { error: { code?: string } | null },
+): void {
+  if (!result.error) return;
+  const suffix = result.error.code ? `:${result.error.code}` : "";
+  throw new Error(`finance_projection_query_failed:${table}${suffix}`);
+}
+
+export async function loadCanonicalProjection(
+  supabase: SupabaseClient,
+  options: FetchFinanceOptions,
+): Promise<CanonicalProjectionResult> {
+  const userId = scopeQueryUserId(options.scope);
+  let fetchResult: FinanceFetchResult;
+  try {
+    fetchResult = await fetchFinanceTransactions(supabase, options);
+  } catch (error) {
+    const code =
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof error.code === "string"
+        ? `:${error.code}`
+        : "";
+    throw new Error(`finance_projection_query_failed:transactions${code}`);
+  }
+  const txnIds = fetchResult.rows.map((r) => r.id);
+
+  let accountsQuery = supabase
+    .from("accounts")
+    .select("id,name,iso_currency_code")
+    .limit(5000);
+  let rulesQuery = supabase
+    .from("merchant_rules")
+    .select("match_type,pattern,display_name,category,enabled")
+    .order("created_at")
+    .limit(5000);
+  let overridesQuery = supabase
+    .from("category_overrides")
+    .select("source_category,display_category")
+    .order("source_category")
+    .limit(5000);
+  let refundsQuery = supabase
+    .from("linked_refunds")
+    .select("charge_transaction_id,refund_transaction_id")
+    .order("charge_transaction_id")
+    .limit(FINANCE_MAX_ROWS);
+
+  if (userId) {
+    accountsQuery = accountsQuery.eq("user_id", userId);
+    rulesQuery = rulesQuery.eq("user_id", userId);
+    overridesQuery = overridesQuery.eq("user_id", userId);
+    refundsQuery = refundsQuery.eq("user_id", userId);
+  }
+
+  interface SplitRow {
+    transaction_id: string;
+    category: string;
+    amount: number | string;
+  }
+
+  // Chunk transaction_splits by 500 transaction IDs
+  const splitChunksPromises: Array<PromiseLike<{ data: SplitRow[] | null; error: { code?: string } | null }>> = [];
+  if (txnIds.length > 0) {
+    for (let i = 0; i < txnIds.length; i += 500) {
+      const chunk = txnIds.slice(i, i + 500);
+      let splitsQuery = supabase
+        .from("transaction_splits")
+        .select("transaction_id,category,amount")
+        .in("transaction_id", chunk)
+        .limit(2000);
+      if (userId) splitsQuery = splitsQuery.eq("user_id", userId);
+      splitChunksPromises.push(splitsQuery);
+    }
+  }
+
+  const [accountsRes, rulesRes, overridesRes, refundsRes, ...splitResChunks] =
+    await Promise.all([
+      accountsQuery,
+      rulesQuery,
+      overridesQuery,
+      refundsQuery,
+      ...splitChunksPromises,
+    ]);
+
+  assertProjectionQuery("accounts", accountsRes);
+  assertProjectionQuery("merchant_rules", rulesRes);
+  assertProjectionQuery("category_overrides", overridesRes);
+  assertProjectionQuery("linked_refunds", refundsRes);
+  for (const sRes of splitResChunks) {
+    assertProjectionQuery("transaction_splits", sRes);
+  }
+
+  const currencyByAccountId = new Map<string, string>();
+  const accountNames = new Map<string, string>();
+
+  for (const acc of accountsRes.data || []) {
+    currencyByAccountId.set(
+      acc.id,
+      String(acc.iso_currency_code ?? "").trim().toUpperCase(),
+    );
+    if (acc.name) accountNames.set(acc.id, acc.name);
+  }
+
+  const merchantRules = ((rulesRes.data || []) as Array<{
+    match_type: "merchant" | "keyword" | "account";
+    pattern: string;
+    display_name: string | null;
+    category: string | null;
+    enabled: boolean;
+  }>).map((r) => ({
+    matchType: r.match_type,
+    pattern: r.pattern,
+    displayName: r.display_name,
+    category: r.category,
+    enabled: r.enabled,
+  }));
+
+  const categoryOverrides = ((overridesRes.data || []) as Array<{
+    source_category: string;
+    display_category: string;
+  }>).map((c) => ({
+    sourceCategory: c.source_category,
+    displayCategory: c.display_category,
+  }));
+
+  const linkedRefunds = ((refundsRes.data || []) as Array<{
+    charge_transaction_id: string;
+    refund_transaction_id: string;
+  }>).map((rf) => ({
+    chargeTransactionId: rf.charge_transaction_id,
+    refundTransactionId: rf.refund_transaction_id,
+  }));
+
+  const splits: Array<{
+    transactionId: string;
+    category: string;
+    amount: number;
+  }> = [];
+
+  for (const sRes of splitResChunks) {
+    for (const s of sRes.data || []) {
+      splits.push({
+        transactionId: s.transaction_id,
+        category: s.category,
+        amount: Number(s.amount),
+      });
+    }
+  }
+
+  const { projectFinanceTransactions } = await import("@/lib/finance-domain");
+
+  return {
+    transactions: projectFinanceTransactions({
+      rows: fetchResult.rows,
+      accountNames,
+      merchantRules,
+      categoryOverrides,
+      splits,
+      linkedRefunds,
+    }),
+    currencyByAccountId,
+    truncated: fetchResult.truncated,
+  };
+}

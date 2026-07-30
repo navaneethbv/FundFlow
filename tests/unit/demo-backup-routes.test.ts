@@ -312,6 +312,34 @@ describe("GET /api/cron/backup", () => {
     expect(mockSendBackupEmail).toHaveBeenCalledOnce();
   });
 
+  it("does not email a partial archive when budget history fails", async () => {
+    serviceClient = buildServiceClient({
+      profiles: { data: [{ id: USER }], error: null },
+      transactions: { data: [{ date: "2026-07-01", amount: 10 }] },
+      accounts: { data: [] },
+      budgets: { data: [] },
+      goals: { data: [] },
+      merchant_rules: { data: [] },
+      manual_accounts: { data: [] },
+      account_balance_snapshots: { data: [] },
+      budget_periods: {
+        data: null,
+        error: { code: "42501", message: "permission denied" },
+      },
+    });
+
+    const res = await backupGet(cronRequest());
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ sent: 0 });
+    expect(mockBuildBackupArchive).not.toHaveBeenCalled();
+    expect(mockSendBackupEmail).not.toHaveBeenCalled();
+    expect(mockAlertCronFailure).toHaveBeenCalledWith(
+      "backup",
+      expect.objectContaining({ failed: 1, total: 1 }),
+    );
+  });
+
   it("skips a user whose email cannot be resolved", async () => {
     serviceClient = buildServiceClient(
       {

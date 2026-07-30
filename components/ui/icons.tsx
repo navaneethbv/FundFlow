@@ -5,8 +5,11 @@
 export {
   AlertTriangle,
   ArrowLeftRight,
+  BarChart3,
+  Calendar,
   ChevronLeft,
   ChevronRight,
+  Compass,
   CreditCard,
   Download,
   Eye,
@@ -28,6 +31,7 @@ export {
   Sun,
   Target,
   Trash2,
+  TrendingUp,
   Upload,
   Wallet,
 } from "lucide-react";
