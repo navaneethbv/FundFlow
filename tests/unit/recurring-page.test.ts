@@ -210,4 +210,27 @@ describe("expandStreamsForMonth", () => {
     );
     expect(month.reviewCount).toBe(2);
   });
+
+  it("never lets one transaction complete two occurrences of a weekly stream", () => {
+    // WEEKLY cadence is 7 days but its tolerance window is +/-5 days, so
+    // adjacent due dates' windows overlap (2 * 5 > 7). A single matched
+    // transaction landing in that overlap must complete only the nearer
+    // occurrence, not both.
+    const month = expandStreamsForMonth(
+      [
+        stream({
+          frequency: "WEEKLY",
+          predictedNextDate: "2026-07-08",
+          averageAmount: 20,
+          matchedTransactions: [{ id: "txn-1", date: "2026-07-04" }],
+        }),
+      ],
+      [],
+      "2026-07",
+      "2026-07-20",
+    );
+    const completed = month.occurrences.filter((occurrence) => occurrence.status === "complete");
+    expect(completed).toHaveLength(1);
+    expect(month.totals.expenses.paid).toBe(20);
+  });
 });

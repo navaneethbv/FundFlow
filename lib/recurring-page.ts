@@ -232,9 +232,18 @@ export function expandStreamsForMonth(
     const dueDates = occurrenceDatesInWindow(anchor, cadence, windowStart, windowEndExclusive);
     const amount = Math.abs(stream.userAmount ?? stream.averageAmount ?? stream.lastAmount ?? 0);
     const isIncome = stream.streamType === "inflow";
+    // A working pool consumed as due dates match, so one transaction can
+    // complete at most one occurrence per stream. Without this, adjacent due
+    // dates whose tolerance windows overlap (WEEKLY: 2*5 > 7; SEMI_MONTHLY:
+    // 2*10 > 15) would double-count the same transaction.
+    const availableMatches = [...stream.matchedTransactions];
 
     for (const dueDate of dueDates) {
-      const match = nearestMatch(dueDate, stream.matchedTransactions, tolerance);
+      const match = nearestMatch(dueDate, availableMatches, tolerance);
+      if (match) {
+        const consumedIndex = availableMatches.findIndex((candidate) => candidate.id === match.id);
+        if (consumedIndex !== -1) availableMatches.splice(consumedIndex, 1);
+      }
       const complete = match !== null;
       occurrences.push({
         source: "plaid",
@@ -249,6 +258,9 @@ export function expandStreamsForMonth(
         matchedTransactionId: match?.id ?? null,
         isIncome,
       });
+      // isIncome is checked first intentionally: a credit-card refund/payment
+      // modeled as an inflow should count as income, not reduce the
+      // credit-card bucket, even when isCreditAccount is also true.
       if (isIncome) addToBucket(totals.income, amount, complete);
       else if (stream.isCreditAccount) addToBucket(totals.creditCards, amount, complete);
       else addToBucket(totals.expenses, amount, complete);
