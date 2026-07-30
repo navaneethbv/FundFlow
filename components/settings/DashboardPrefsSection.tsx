@@ -42,9 +42,34 @@ export default function DashboardPrefsSection({
       setStatus("Sign in again to save preferences.");
       return;
     }
+    // Read the current dashboard_prefs immediately before writing and merge
+    // in only the hide* flags this component owns, rather than overwriting
+    // the whole column with a stale render-time snapshot (that would
+    // silently discard sidebarCollapsed and any other sibling preference
+    // changed elsewhere, e.g. the sidebar collapse toggle, between this
+    // page load and clicking Save).
+    const { data: profile, error: readError } = await supabase
+      .from("profiles")
+      .select("dashboard_prefs")
+      .eq("id", data.user.id)
+      .maybeSingle();
+    if (readError) {
+      setStatus(readError.message);
+      return;
+    }
+    const dashboardPrefs =
+      profile?.dashboard_prefs &&
+      typeof profile.dashboard_prefs === "object" &&
+      !Array.isArray(profile.dashboard_prefs)
+        ? (profile.dashboard_prefs as DashboardPrefs)
+        : {};
+    const ownedUpdates: DashboardPrefs = {};
+    for (const option of OPTIONS) {
+      ownedUpdates[option.key] = prefs[option.key];
+    }
     const { error } = await supabase
       .from("profiles")
-      .update({ dashboard_prefs: prefs })
+      .update({ dashboard_prefs: { ...dashboardPrefs, ...ownedUpdates } })
       .eq("id", data.user.id);
     setStatus(error?.message ?? "Dashboard preferences saved.");
   }

@@ -13,10 +13,11 @@ export default async function AskAiLowerRailLink() {
   return (
     <Link
       href="/settings#ask-ai"
-      className="mt-4 inline-flex w-full items-center gap-3 rounded-field px-3 py-2.5 text-sm font-semibold text-muted transition-colors duration-150 hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"
+      title="Ask your money"
+      className="mt-4 inline-flex w-full items-center gap-3 rounded-field px-3 py-2.5 text-sm font-semibold text-muted transition-colors duration-150 hover:bg-panel-hover hover:text-foreground focus-visible:outline-2 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0"
     >
       <Sparkles aria-hidden className="h-4 w-4 shrink-0" />
-      <span>Ask your money</span>
+      <span className="group-data-[collapsed=true]/sidebar:sr-only">Ask your money</span>
     </Link>
   );
 }

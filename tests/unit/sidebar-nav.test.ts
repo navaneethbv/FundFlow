@@ -94,4 +94,17 @@ describe("Sidebar Navigation Contract", () => {
     expect(source).toContain("sidebarCollapsed");
     expect(source).toContain("aria-pressed");
   });
+
+  it("AppSidebar has no use client directive, so the env-var feature-flag override keeps working", () => {
+    const source = readFileSync("components/shell/AppSidebar.tsx", "utf8");
+    expect(source).not.toContain('"use client"');
+  });
+
+  it("SidebarShell's data-collapsed attribute matches the Tailwind selector AppSidebar uses", () => {
+    const shellSource = readFileSync("components/shell/SidebarShell.tsx", "utf8");
+    const sidebarSource = readFileSync("components/shell/AppSidebar.tsx", "utf8");
+    expect(shellSource).toContain("group/sidebar");
+    expect(shellSource).toContain("data-collapsed");
+    expect(sidebarSource).toContain("group-data-[collapsed=true]/sidebar");
+  });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/cn";
 import { ChevronLeft, ChevronRight } from "@/components/ui/icons";
@@ -12,33 +12,19 @@ import { ChevronLeft, ChevronRight } from "@/components/ui/icons";
  * Persists to profiles.dashboard_prefs.sidebarCollapsed, the same
  * client-writable column DashboardPrefsSection already uses, so the choice
  * follows the user across devices.
+ *
+ * The initial collapse state is resolved server-side by AppSidebar and
+ * passed in as `initialCollapsed`, rather than fetched here on mount: a
+ * client-side fetch-then-setState would flash the sidebar expanded before
+ * collapsing on every page load for users who collapsed it.
  */
 export default function SidebarShell({
   children,
   mobileNav,
-}: Readonly<{ children: ReactNode; mobileNav: ReactNode }>) {
-  const [collapsed, setCollapsed] = useState(false);
+  initialCollapsed = false,
+}: Readonly<{ children: ReactNode; mobileNav: ReactNode; initialCollapsed?: boolean }>) {
+  const [collapsed, setCollapsed] = useState(initialCollapsed);
   const supabase = createClient();
-
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!data.user) return;
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("dashboard_prefs")
-        .eq("id", data.user.id)
-        .maybeSingle();
-      if (active && profile?.dashboard_prefs?.sidebarCollapsed === true) {
-        setCollapsed(true);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   async function toggle() {
     const next = !collapsed;
@@ -50,10 +36,19 @@ export default function SidebarShell({
       .select("dashboard_prefs")
       .eq("id", data.user.id)
       .maybeSingle();
-    await supabase
+    const dashboardPrefs =
+      profile?.dashboard_prefs &&
+      typeof profile.dashboard_prefs === "object" &&
+      !Array.isArray(profile.dashboard_prefs)
+        ? profile.dashboard_prefs
+        : {};
+    const { error } = await supabase
       .from("profiles")
-      .update({ dashboard_prefs: { ...(profile?.dashboard_prefs ?? {}), sidebarCollapsed: next } })
+      .update({ dashboard_prefs: { ...dashboardPrefs, sidebarCollapsed: next } })
       .eq("id", data.user.id);
+    // Revert the optimistic toggle if the write failed, so the UI never
+    // claims a collapse state that wasn't actually persisted.
+    if (error) setCollapsed(!next);
   }
 
   return (
