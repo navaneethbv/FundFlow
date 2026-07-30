@@ -1,86 +1,241 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Sparkles } from "@/components/ui/icons";
 import { formatCurrency, titleCase } from "@/lib/format";
+import type {
+  BudgetGroup,
+  BudgetSeedProposal,
+} from "@/lib/budget-page";
 
-export default function SeedBudgetButton() {
+interface EditableProposal extends BudgetSeedProposal {
+  included: boolean;
+}
+
+export default function SeedBudgetButton({
+  proposals,
+  month,
+  currency,
+}: Readonly<{
+  proposals: BudgetSeedProposal[];
+  month: string;
+  currency: string;
+}>) {
+  const router = useRouter();
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState<EditableProposal[]>([]);
   const [loading, setLoading] = useState(false);
-  const [proposals, setProposals] = useState<
-    Array<{ category: string; suggested_amount: number; group_name: string }>
-  >([]);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleOpenPreview = () => {
-    // Generate static preview proposals
-    setProposals([
-      { category: "groceries", suggested_amount: 450, group_name: "flexible" },
-      { category: "dining_out", suggested_amount: 200, group_name: "flexible" },
-      { category: "rent", suggested_amount: 1500, group_name: "fixed" },
-    ]);
+  useEffect(() => {
+    if (!open) return;
+    const dialog = dialogRef.current;
+    const firstControl = dialog?.querySelector<HTMLElement>(
+      "button, input, select",
+    );
+    firstControl?.focus();
+  }, [open]);
+
+  function openPreview() {
+    setRows(proposals.map((proposal) => ({ ...proposal, included: true })));
+    setError(null);
     setOpen(true);
-  };
+  }
 
-  const handleConfirm = async () => {
+  function update(index: number, patch: Partial<EditableProposal>) {
+    setRows((current) =>
+      current.map((row, rowIndex) =>
+        rowIndex === index ? { ...row, ...patch } : row,
+      ),
+    );
+  }
+
+  function handleDialogKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setOpen(false);
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const controls = dialogRef.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled])',
+    );
+    if (!controls || controls.length === 0) return;
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  async function confirm() {
+    const selected = rows.filter((row) => row.included);
+    if (selected.length === 0) {
+      setError("Select at least one proposal.");
+      return;
+    }
     setLoading(true);
+    setError(null);
     try {
-      // Apply confirmed proposals
-      window.location.reload();
+      const response = await fetch("/api/budget", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          month,
+          items: selected.map((row) => ({
+            category: row.category,
+            monthly_limit: row.suggested_amount,
+            group_name: row.group_name,
+            rollover_enabled: row.rollover_enabled,
+            sort_order: row.sort_order,
+          })),
+        }),
+      });
+      if (!response.ok) throw new Error("proposal_save_failed");
+      setOpen(false);
+      router.refresh();
     } catch {
-      // ignore
+      setError("The proposals could not be saved. Review them and try again.");
     } finally {
       setLoading(false);
-      setOpen(false);
     }
-  };
+  }
 
   if (!open) {
     return (
       <button
-        onClick={handleOpenPreview}
-        className="inline-flex items-center gap-2 rounded-field bg-accent-soft px-3 py-1.5 text-xs font-semibold text-accent hover:bg-accent/20"
+        type="button"
+        onClick={openPreview}
+        disabled={proposals.length === 0}
+        className="inline-flex min-h-11 items-center gap-2 rounded-field bg-accent-soft px-4 text-sm font-semibold text-accent disabled:cursor-not-allowed disabled:opacity-50"
       >
-        <Sparkles className="h-3.5 w-3.5" />
-        <span>Auto-budget from history</span>
+        <Sparkles aria-hidden className="h-4 w-4" />
+        Create from history
       </button>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-panel border border-panel-border bg-panel p-6 space-y-4">
-        <div className="flex items-center gap-2 text-foreground">
-          <Sparkles className="h-5 w-5 text-accent" />
-          <h3 className="text-lg font-bold">Auto-Budget Proposals (Preview)</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="budget-proposal-title"
+        onKeyDown={handleDialogKeyDown}
+        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-card border border-panel-border bg-panel p-5 shadow-xl sm:p-6"
+      >
+        <div className="flex items-start gap-3">
+          <Sparkles aria-hidden className="mt-1 h-5 w-5 text-accent" />
+          <div>
+            <h2 id="budget-proposal-title" className="text-xl font-bold">
+              Review Budget proposals
+            </h2>
+            <p className="mt-1 text-sm text-muted">
+              Nothing is saved until you confirm the selected rows.
+            </p>
+          </div>
         </div>
-        <p className="text-xs text-muted">
-          Review the calculated proposals below. No changes are saved to your budget until you confirm.
-        </p>
 
-        <div className="space-y-2 border-y border-panel-border py-3">
-          {proposals.map((p) => (
-            <div key={p.category} className="flex items-center justify-between text-xs">
-              <span className="font-medium text-foreground">{titleCase(p.category)}</span>
-              <span className="font-bold text-accent">{formatCurrency(p.suggested_amount)}/mo</span>
-            </div>
+        <div className="mt-5 space-y-3">
+          {rows.map((row, index) => (
+            <fieldset
+              key={row.category}
+              className="rounded-field border border-panel-border p-4"
+            >
+              <legend className="px-1 font-semibold">
+                {titleCase(row.category)}
+              </legend>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <label className="flex min-h-11 items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={row.included}
+                    onChange={(event) =>
+                      update(index, { included: event.target.checked })
+                    }
+                  />
+                  Include
+                </label>
+                <label className="text-xs text-muted">
+                  Monthly amount
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={row.suggested_amount}
+                    onChange={(event) =>
+                      update(index, {
+                        suggested_amount: Number(event.target.value),
+                      })
+                    }
+                    className="mt-1 min-h-11 w-full rounded-field border border-panel-border bg-background px-3 text-foreground"
+                  />
+                </label>
+                <label className="text-xs text-muted">
+                  Group
+                  <select
+                    value={row.group_name}
+                    onChange={(event) =>
+                      update(index, {
+                        group_name: event.target.value as BudgetGroup,
+                      })
+                    }
+                    className="mt-1 min-h-11 w-full rounded-field border border-panel-border bg-background px-3 text-foreground"
+                  >
+                    <option value="income">Income</option>
+                    <option value="fixed">Fixed</option>
+                    <option value="flexible">Flexible</option>
+                    <option value="non_monthly">Non-Monthly</option>
+                  </select>
+                </label>
+                <label className="flex min-h-11 items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={row.rollover_enabled}
+                    onChange={(event) =>
+                      update(index, {
+                        rollover_enabled: event.target.checked,
+                      })
+                    }
+                  />
+                  Rollover
+                </label>
+              </div>
+              <p className="mt-2 text-xs text-muted">
+                {formatCurrency(row.suggested_amount, currency)} per month.{" "}
+                {row.reason}
+              </p>
+            </fieldset>
           ))}
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-2">
+        {error && (
+          <p role="alert" className="mt-4 text-sm font-semibold text-danger">
+            {error}
+          </p>
+        )}
+        <div className="mt-5 flex justify-end gap-3">
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="rounded px-3 py-1.5 text-xs font-semibold text-muted hover:bg-panel-hover"
+            className="min-h-11 rounded-field px-4 text-sm font-semibold text-muted hover:bg-panel-hover"
           >
             Cancel
           </button>
           <button
             type="button"
-            onClick={handleConfirm}
+            onClick={confirm}
             disabled={loading}
-            className="rounded bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent/90"
+            className="min-h-11 rounded-field bg-accent px-4 text-sm font-bold text-accent-foreground disabled:opacity-50"
           >
-            Confirm & Apply
+            {loading ? "Saving..." : "Confirm proposals"}
           </button>
         </div>
       </div>

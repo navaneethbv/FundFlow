@@ -33,6 +33,7 @@ export type AuditAction =
   | "manual_account_updated"
   | "manual_account_deleted"
   | "budget_updated"
+  | "budget_proposals_created"
   | "demo_data_loaded"
   | "demo_data_cleared";
 
