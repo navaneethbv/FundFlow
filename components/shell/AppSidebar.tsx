@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { getEnabledNavItems, type AppShellActive, type NavItemDefinition } from "@/components/shell/nav-model";
+import AskAiLowerRailLink from "@/components/shell/AskAiLowerRailLink";
 
 export type { AppShellActive };
 
@@ -62,6 +63,7 @@ export default function AppSidebar({ active }: Readonly<{ active: AppShellActive
           {manageItems.map((item) => (
             <NavLink key={item.key} item={item} active={active} />
           ))}
+          <AskAiLowerRailLink />
         </nav>
       </aside>
       <nav

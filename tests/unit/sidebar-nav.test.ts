@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest";
 import { NAV_ITEMS, UTILITY_ITEMS, getEnabledNavItems } from "@/components/shell/nav-model";
 import { isFeatureEnabled } from "@/lib/feature-flags";
@@ -68,5 +68,16 @@ describe("Sidebar Navigation Contract", () => {
     for (const item of UTILITY_ITEMS) {
       expect(item.label.length).toBeGreaterThan(0);
     }
+  });
+
+  it("AppSidebar renders the gated Ask-AI lower-rail link", () => {
+    const source = readFileSync("components/shell/AppSidebar.tsx", "utf8");
+    expect(source).toContain("AskAiLowerRailLink");
+  });
+
+  it("AskAiLowerRailLink checks isAskAiAvailable before rendering a link", () => {
+    const source = readFileSync("components/shell/AskAiLowerRailLink.tsx", "utf8");
+    expect(source).toContain("isAskAiAvailable");
+    expect(source).toContain('href="/settings#ask-ai"');
   });
 });
