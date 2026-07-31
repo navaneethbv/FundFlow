@@ -170,5 +170,18 @@ describe("weekly report delivery claims", () => {
         }),
       );
     });
+
+    it("throws errors when DB update operations fail", async () => {
+      const mockSupabaseError = {
+        from: vi.fn().mockReturnValue({
+          update: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: new Error("DB Error") }) }) }),
+          insert: () => ({ select: () => ({ single: () => Promise.resolve({ data: null, error: { code: "50000", message: "Fatal" } }) }) }),
+        }),
+      } as unknown as SupabaseClient;
+
+      await expect(markWeeklyDeliverySent(mockSupabaseError, "user-1", "del-1", null, now)).rejects.toThrow("DB Error");
+      await expect(markWeeklyDeliveryFailed(mockSupabaseError, "user-1", "del-1", "err")).rejects.toThrow("DB Error");
+      await expect(claimWeeklyDelivery(mockSupabaseError, "user-1", period, now)).rejects.toThrow("Fatal");
+    });
   });
 });

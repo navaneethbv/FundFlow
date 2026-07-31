@@ -152,4 +152,25 @@ describe("parseOfx (malformed input)", () => {
   it("returns an empty list for junk input", () => {
     expect(parseOfx("complete nonsense")).toEqual([]);
   });
+
+  it("skips blocks with invalid month/day numbers and handles memo-only or blank descriptions", () => {
+    const invalidDate = `<OFX><STMTTRN>
+<DTPOSTED>20241332
+<TRNAMT>-10.00
+<NAME>Invalid Date
+</STMTTRN>
+<STMTTRN>
+<DTPOSTED>20240115
+<TRNAMT>-15.00
+<MEMO>Memo Only
+</STMTTRN>
+<STMTTRN>
+<DTPOSTED>20240116
+<TRNAMT>-20.00
+</STMTTRN></OFX>`;
+    const rows = parseOfx(invalidDate);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.description).toBe("Memo Only");
+    expect(rows[1]!.description).toBe("");
+  });
 });

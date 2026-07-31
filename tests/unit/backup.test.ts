@@ -35,4 +35,12 @@ describe("backup archive", () => {
     const tampered = Buffer.from(JSON.stringify(envelope), "utf8");
     expect(() => readBackupArchive(tampered, KEY)).toThrow();
   });
+
+  it("throws for invalid key length or unsupported envelope shape", () => {
+    const invalidKey = Buffer.from("short-key").toString("base64");
+    expect(() => buildBackupArchive(payload, invalidKey)).toThrow("BACKUP_ENC_KEY must be 32 bytes base64");
+
+    const badEnvelope = Buffer.from(JSON.stringify({ v: 2, alg: "aes-256-gcm" }), "utf8");
+    expect(() => readBackupArchive(badEnvelope, KEY)).toThrow("Unsupported backup envelope");
+  });
 });

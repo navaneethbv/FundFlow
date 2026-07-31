@@ -466,3 +466,35 @@ describe("getRecentTransactions", () => {
     ).toBe(true);
   });
 });
+
+import { POST as insightsPost } from "@/app/api/ai/insights/route";
+
+describe("POST /api/ai/insights", () => {
+  it("generates and stores AI insights using configured provider", async () => {
+    consentingUser();
+    mockIsConfigured.mockReturnValue(true);
+
+    serviceClient = clientStub({
+      ai_insights: { data: [] },
+    });
+
+    const res = await insightsPost();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.insights).toBeDefined();
+  });
+
+  it("handles provider failure gracefully and falls back", async () => {
+    consentingUser();
+    mockIsConfigured.mockReturnValue(true);
+    const { generateInsightsWithProvider } = await import("@/lib/ai-provider");
+    vi.spyOn({ generateInsightsWithProvider }, "generateInsightsWithProvider").mockRejectedValue(new Error("Provider error"));
+
+    serviceClient = clientStub({
+      ai_insights: { data: [] },
+    });
+
+    const res = await insightsPost();
+    expect(res.status).toBe(200);
+  });
+});

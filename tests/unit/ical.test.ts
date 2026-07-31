@@ -156,4 +156,20 @@ describe("buildBillsCalendar", () => {
     expect(ics).toContain("END:VCALENDAR");
     expect(ics).not.toContain("BEGIN:VEVENT");
   });
+
+  it("expands biweekly, quarterly, and yearly frequencies correctly", () => {
+    const ics = buildBillsCalendar({
+      bills: [
+        { name: "Biweekly Pay", amount: 1000, itemType: "income", frequency: "biweekly", nextDate: "2026-07-01" },
+        { name: "Quarterly Tax", amount: 500, itemType: "expense", frequency: "quarterly", nextDate: "2026-07-01" },
+        { name: "Yearly Sub", amount: 100, itemType: "expense", frequency: "yearly", nextDate: "2026-07-01" },
+      ],
+      asOf: "2026-07-01",
+      horizonDays: 400,
+      includeAmounts: false,
+    });
+    expect(ics).toContain("DTSTART;VALUE=DATE:20260715");
+    expect(ics).toContain("DTSTART;VALUE=DATE:20261001");
+    expect(ics).toContain("DTSTART;VALUE=DATE:20270701");
+  });
 });
