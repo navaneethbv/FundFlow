@@ -56,8 +56,8 @@ export default function SidebarShell({
       <aside
         data-collapsed={collapsed}
         className={cn(
-          "group/sidebar sticky top-16 hidden h-[calc(100vh-64px)] shrink-0 border-r border-panel-border bg-panel px-4 py-5 lg:block overflow-y-auto transition-[width] duration-150",
-          collapsed ? "w-16" : "w-60",
+          "group/sidebar sticky top-16 hidden h-[calc(100vh-64px)] w-16 shrink-0 overflow-y-auto border-r border-panel-border bg-panel px-3 py-5 transition-[width] duration-150 md:block lg:px-4",
+          collapsed ? "lg:w-16" : "lg:w-60",
         )}
       >
         <button
@@ -66,7 +66,7 @@ export default function SidebarShell({
           aria-pressed={collapsed}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="mb-3 inline-flex h-8 w-8 items-center justify-center rounded-field text-muted hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"
+          className="mb-3 hidden h-8 w-8 items-center justify-center rounded-field text-muted hover:bg-panel-hover hover:text-foreground focus-visible:outline-2 lg:inline-flex"
         >
           {collapsed ? (
             <ChevronRight aria-hidden className="h-4 w-4" />

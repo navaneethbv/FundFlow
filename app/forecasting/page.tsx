@@ -47,7 +47,7 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
 
         <Panel padding="lg">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Starting point</h2>
-          <dl className="grid grid-cols-3 gap-4 text-sm">
+          <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-3">
             <div>
               <dt className="text-xs text-muted">Cash</dt>
               <dd className="metric-value text-lg font-bold">{formatCurrency(startingState.cash)}</dd>

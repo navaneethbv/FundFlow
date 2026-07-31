@@ -30,7 +30,7 @@ export default function Panel({
   return (
     <section
       className={cn(
-        "rounded-card border shadow-card",
+        "min-w-0 rounded-card border shadow-card",
         tones[tone],
         padding === "md" && "p-5",
         padding === "lg" && "p-5 sm:p-6",

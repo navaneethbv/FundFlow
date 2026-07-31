@@ -281,7 +281,7 @@ export default function MonitorView({
       </div>
 
       {!prefs?.hideRecent && (recentTransactions.length > 0 || merchantItems.length > 0) && (
-        <div className="grid gap-5 xl:grid-cols-12">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-12">
           {recentTransactions.length > 0 && (
             <Panel title="Recent activity" className="xl:col-span-8">
               <RecentActivity
@@ -299,7 +299,7 @@ export default function MonitorView({
       )}
 
       {!prefs?.hideBreakdowns && (donutItems.length > 0 || data.subscriptions.length > 0) && (
-        <div className="grid gap-5 xl:grid-cols-12">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-12">
           {data.drilldown?.kind === "category" ? (
             <div className="xl:col-span-7">
               <CategoryDrilldownPanel
@@ -352,7 +352,7 @@ export default function MonitorView({
                 {data.subscriptions.slice(0, 6).map((stream) => {
                   const body = (
                     <>
-                      <span className="min-w-0">
+                      <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold leading-tight">
                           {stream.merchant}
                         </span>
@@ -360,7 +360,7 @@ export default function MonitorView({
                           {formatFrequency(stream.frequency)}
                         </span>
                       </span>
-                      <span className="metric-value text-sm">
+                      <span className="metric-value shrink-0 whitespace-nowrap text-sm">
                         {formatCurrency(stream.amount)}
                       </span>
                     </>

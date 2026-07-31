@@ -76,7 +76,7 @@ export default function DashboardToolbar({
               )}
               aria-current={selectedAccountId ? undefined : "page"}
               className={cn(
-                "shrink-0 rounded-field border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2",
+                "flex min-h-11 shrink-0 items-center rounded-field border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2 sm:min-h-0",
                 selectedAccountId
                   ? "border-panel-border text-muted hover:text-foreground"
                   : "border-accent bg-accent-soft text-accent",
@@ -99,7 +99,7 @@ export default function DashboardToolbar({
                   )}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "shrink-0 rounded-field border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2",
+                    "flex min-h-11 shrink-0 items-center rounded-field border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2 sm:min-h-0",
                     active
                       ? "border-accent bg-accent-soft text-accent"
                       : "border-panel-border text-muted hover:text-foreground",

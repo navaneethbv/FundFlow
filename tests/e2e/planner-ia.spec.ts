@@ -72,7 +72,7 @@ test.describe.serial("Phase 1: navigation and information architecture", () => {
     );
     await expect(
       sidebar.getByRole("link", { name: "Recurring" }),
-    ).toHaveCount(0);
+    ).toBeVisible();
     await expect(
       sidebar.getByRole("link", { name: "Dashboard" }),
     ).toBeVisible();
@@ -154,25 +154,58 @@ test.describe.serial("Phase 1: navigation and information architecture", () => {
     ).toBeVisible();
   });
 
-  test("mobile nav at 390px shows compact pills and no horizontal overflow", async ({
+  test("tablet uses the compact sidebar instead of a clipped navigation strip", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 900, height: 1000 });
+    await page.goto("/dashboard");
+
+    await expect(page.getByRole("complementary")).toBeVisible();
+    const sidebar = page
+      .getByRole("navigation", { name: "Primary" })
+      .first();
+    await expect(sidebar).toBeVisible();
+    await expect(
+      sidebar.getByRole("link", { name: "Settings" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Collapse sidebar" }),
+    ).toBeHidden();
+  });
+
+  test("mobile navigation exposes primary destinations and a complete menu", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/dashboard");
-    // The lg:block desktop sidebar is hidden below the lg breakpoint; the
-    // mobile pill nav (also aria-label="Primary") is the reachable one.
+
     const mobileNav = page.getByRole("navigation", { name: "Primary" }).last();
     await expect(
       mobileNav.getByRole("link", { name: "Dashboard" }),
     ).toBeVisible();
-    // Search/command-palette has no touch affordance below sm by design
-    // (documented gap) -- notifications/settings stay reachable via the
-    // pill nav's own Notifications/Settings destinations instead.
+    await expect(
+      mobileNav.getByRole("link", { name: "Accounts" }),
+    ).toBeVisible();
+    await expect(
+      mobileNav.getByRole("link", { name: "Transactions" }),
+    ).toBeVisible();
+
+    const moreButton = mobileNav.getByRole("button", { name: "More" });
+    await expect(moreButton).toBeVisible();
+    await moreButton.click();
+    const allDestinations = page.getByRole("dialog", {
+      name: "All navigation",
+    });
+    await expect(allDestinations).toBeVisible();
+    await expect(
+      allDestinations.getByRole("link", { name: "Settings" }),
+    ).toBeVisible();
+    await allDestinations.getByRole("link", { name: "Settings" }).click();
+    await expect(page).toHaveURL(/\/settings$/);
+
+    await page.goto("/dashboard");
     await expect(page.getByRole("button", { name: /Search/ })).toBeHidden();
 
-    // Layout/overflow is theme-agnostic in principle, but check both themes
-    // explicitly (as accounts.spec.ts does) since the mobile pill nav's
-    // fade-mask gradient and borders are theme-token driven.
     for (const theme of ["light", "dark"] as const) {
       await page.evaluate((nextTheme) => {
         localStorage.setItem("fundflow-theme", nextTheme);
@@ -182,13 +215,23 @@ test.describe.serial("Phase 1: navigation and information architecture", () => {
         "data-theme",
         theme,
       );
-      const scrollWidth = await page.evaluate(
-        () => document.documentElement.scrollWidth,
+      const geometry = await page.evaluate(() => ({
+        contentWidth: Math.max(
+          document.documentElement.scrollWidth,
+          document.body.scrollWidth,
+        ),
+        viewportWidth: document.documentElement.clientWidth,
+      }));
+      expect(geometry.contentWidth).toBeLessThanOrEqual(
+        geometry.viewportWidth + 1,
       );
-      const clientWidth = await page.evaluate(
-        () => document.documentElement.clientWidth,
-      );
-      expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+
+      const targets = mobileNav.locator("a, button");
+      for (let index = 0; index < (await targets.count()); index += 1) {
+        const box = await targets.nth(index).boundingBox();
+        expect(box, "mobile navigation target must render").not.toBeNull();
+        expect(box!.height).toBeGreaterThanOrEqual(44);
+      }
     }
   });
 

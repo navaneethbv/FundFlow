@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { getEnabledNavItems, type AppShellActive, type NavItemDefinition } from "@/components/shell/nav-model";
 import AskAiLowerRailLink from "@/components/shell/AskAiLowerRailLink";
+import MobileNavigation from "@/components/shell/MobileNavigation";
 import SidebarShell from "@/components/shell/SidebarShell";
 import { createClient } from "@/lib/supabase/server";
 import { countUnreviewedStreams } from "@/lib/recurring-page";
@@ -36,18 +37,26 @@ function NavLink({
         "inline-flex items-center gap-3 rounded-field text-sm font-semibold transition-colors duration-150 focus-visible:outline-2",
         compact
           ? "min-h-11 shrink-0 px-3 py-2"
-          : "w-full px-3 py-2.5 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0",
+          : "w-full px-3 py-2.5 md:justify-center md:px-0 lg:justify-start lg:px-3 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0",
         isActive
           ? "bg-accent-soft text-accent"
           : "text-muted hover:bg-panel-hover hover:text-foreground",
       )}
     >
       <Icon aria-hidden className="h-4 w-4 shrink-0" />
-      <span className={compact ? "" : "group-data-[collapsed=true]/sidebar:sr-only"}>{item.label}</span>
+      <span
+        className={
+          compact
+            ? ""
+            : "md:sr-only lg:not-sr-only group-data-[collapsed=true]/sidebar:sr-only"
+        }
+      >
+        {item.label}
+      </span>
       {!!badge && badge > 0 && (
         <span
           aria-hidden
-          className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[0.6rem] font-bold text-white group-data-[collapsed=true]/sidebar:hidden"
+          className="ml-auto hidden h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[0.6rem] font-bold text-white lg:flex group-data-[collapsed=true]/sidebar:hidden"
         >
           {badge > 9 ? "9+" : badge}
         </span>
@@ -108,27 +117,29 @@ export default async function AppSidebar({ active }: Readonly<{ active: AppShell
     <SidebarShell
       initialCollapsed={initialCollapsed}
       mobileNav={
-        <nav
-          aria-label="Primary"
-          className="lg:hidden flex gap-2 overflow-x-auto border-b border-panel-border px-4 py-3 scrollbar-none sm:px-6 [mask-image:linear-gradient(to_right,black_calc(100%_-_2rem),transparent)]"
-        >
-          {enabledItems.map((item) => (
-            <NavLink key={item.key} item={item} active={active} compact badge={badgeFor(item)} />
-          ))}
-        </nav>
+        <MobileNavigation
+          active={active}
+          items={enabledItems.map((item) => ({
+            key: item.key,
+            label: item.label,
+            href: item.href,
+            category: item.category,
+            badge: badgeFor(item),
+          }))}
+        />
       }
     >
       <nav aria-label="Primary" className="space-y-1">
         {primaryItems.map((item) => (
           <NavLink key={item.key} item={item} active={active} />
         ))}
-        <p className="px-3 pb-1 pt-4 text-[0.65rem] font-bold uppercase tracking-[0.16em] text-muted group-data-[collapsed=true]/sidebar:hidden">
+        <p className="hidden px-3 pb-1 pt-4 text-[0.65rem] font-bold uppercase tracking-[0.16em] text-muted lg:block group-data-[collapsed=true]/sidebar:hidden">
           Planning
         </p>
         {planningItems.map((item) => (
           <NavLink key={item.key} item={item} active={active} badge={badgeFor(item)} />
         ))}
-        <p className="px-3 pb-1 pt-4 text-[0.65rem] font-bold uppercase tracking-[0.16em] text-muted group-data-[collapsed=true]/sidebar:hidden">
+        <p className="hidden px-3 pb-1 pt-4 text-[0.65rem] font-bold uppercase tracking-[0.16em] text-muted lg:block group-data-[collapsed=true]/sidebar:hidden">
           Manage
         </p>
         {manageItems.map((item) => (

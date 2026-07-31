@@ -86,9 +86,14 @@ export default function BanksSection({
       ) : (
         <ul className="space-y-3 text-sm">
           {items.map((i) => (
-            <li key={i.id} className="flex items-center justify-between gap-3 rounded-field border border-panel-border bg-panel-2 p-3">
-              <span>
-                <span className="block font-semibold">{i.institution_name ?? "Bank"}</span>
+            <li
+              key={i.id}
+              className="flex min-w-0 flex-col items-stretch gap-3 rounded-field border border-panel-border bg-panel-2 p-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <span className="min-w-0">
+                <span className="block break-words font-semibold">
+                  {i.institution_name ?? "Bank"}
+                </span>
                 {i.error_code === "PENDING_EXPIRATION" && (
                   <span className="text-xs text-warning">Consent expiring soon</span>
                 )}
@@ -103,7 +108,7 @@ export default function BanksSection({
                   </label>
                 )}
               </span>
-              <span className="inline-flex items-center gap-2">
+              <span className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
                 <Badge tone={i.status === "active" ? "success" : "danger"}>
                   {i.status === "active" ? "Connected" : i.status}
                 </Badge>
