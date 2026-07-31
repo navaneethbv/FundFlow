@@ -58,11 +58,16 @@ jobs:
         # only id/name/owner/created_at/updated_at - `public` is added by the
         # real storage-api service's migrations, which this smoke-check never
         # runs. Add only the column our migrations reference, same rationale
-        # as the auth stub above.
+        # as the auth stub above. storage.buckets is owned by
+        # supabase_storage_admin, not postgres (the image demotes postgres
+        # from superuser during its own bootstrap), so altering it needs
+        # SET ROLE - postgres is already granted membership by that bootstrap.
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
+            set role supabase_storage_admin;
             alter table storage.buckets
               add column if not exists public boolean not null default false;
+            reset role;
           "
       - name: Apply every migration in filename order
         run: |
