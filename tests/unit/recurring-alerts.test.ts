@@ -19,19 +19,46 @@ vi.mock("@/lib/notifications", () => ({
 vi.mock("@/lib/log", () => ({ logError: vi.fn() }));
 
 // from("recurring_streams").select(...).eq(...).eq(...) resolves the existing
-// rows; .upsert(...) resolves the write. Both hang off the same from() mock.
+// rows; .upsert(...).select(...) resolves the write and its id/stream_id
+// echo. Account resolution and the transaction-join table are exercised
+// elsewhere (tests/unit/recurring-lib.test.ts) — this file only cares about
+// the price-hike/new-subscription notification diff, so those tables just
+// resolve to harmless empty results.
 let existingRows: Array<{ stream_id: string; last_amount: number | null }>;
 const mockUpsert = vi.fn();
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => ({
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          eq: () => Promise.resolve({ data: existingRows, error: null }),
-        }),
-      }),
-      upsert: mockUpsert,
-    }),
+    from: (table: string) => {
+      switch (table) {
+        case "recurring_streams":
+          return {
+            select: () => ({
+              eq: () => ({
+                eq: () => Promise.resolve({ data: existingRows, error: null }),
+              }),
+            }),
+            upsert: mockUpsert,
+            update: () => ({
+              eq: () => ({ in: () => Promise.resolve({ error: null }) }),
+            }),
+          };
+        case "accounts":
+          return { select: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) };
+        case "transactions":
+          return {
+            select: () => ({
+              eq: () => ({ in: () => Promise.resolve({ data: [], error: null }) }),
+            }),
+          };
+        case "recurring_stream_transactions":
+          return {
+            delete: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }) }) }),
+            insert: () => Promise.resolve({ error: null }),
+          };
+        default:
+          throw new Error(`Unexpected table ${table}`);
+      }
+    },
   }),
 }));
 
@@ -53,13 +80,16 @@ function outflow(streamId: string, merchant: string, lastAmount: number) {
     status: "MATURE",
     personal_finance_category: { primary: "ENTERTAINMENT" },
     is_active: true,
+    transaction_ids: [],
   };
 }
 
 describe("recurring stream alerts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUpsert.mockResolvedValue({ error: null });
+    mockUpsert.mockReturnValue({
+      select: () => Promise.resolve({ data: [], error: null }),
+    });
     existingRows = [
       { stream_id: "s1", last_amount: 15.49 },
       { stream_id: "s2", last_amount: 9.99 },

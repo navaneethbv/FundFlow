@@ -76,6 +76,10 @@ suite("recurring streams DB integration & mock Plaid", () => {
             status: "active",
             personal_finance_category: { primary: "INCOME" },
             is_active: true,
+            // Real Plaid responses always include this (TransactionStream.
+            // transaction_ids is non-optional in the SDK types); empty here
+            // since no local transactions exist for this stream in the test.
+            transaction_ids: [],
           },
         ],
         outflow_streams: [
@@ -89,6 +93,7 @@ suite("recurring streams DB integration & mock Plaid", () => {
             status: "active",
             personal_finance_category: { primary: "ENTERTAINMENT" },
             is_active: true,
+            transaction_ids: [],
           },
         ],
       },

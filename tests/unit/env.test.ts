@@ -1,4 +1,4 @@
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, vi } from "vitest";
 import { publicEnv } from "@/lib/env";
 import { serverEnv } from "@/lib/env.server";
 
@@ -11,6 +11,14 @@ describe("publicEnv", () => {
     expect(publicEnv.appUrl).toBe(
       process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
     );
+  });
+
+  it("throws when a required public env variable is missing", async () => {
+    const originalUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    vi.resetModules();
+    await expect(import("@/lib/env")).rejects.toThrow("NEXT_PUBLIC_SUPABASE_URL");
+    process.env.NEXT_PUBLIC_SUPABASE_URL = originalUrl;
   });
 });
 

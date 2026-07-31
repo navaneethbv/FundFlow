@@ -224,3 +224,13 @@ describe("writeDailyAccountSnapshots", () => {
     ).rejects.toThrow("write unavailable");
   });
 });
+
+describe("tryWriteDailyAccountSnapshots", () => {
+  it("swallows errors and logs context without throwing", async () => {
+    const { tryWriteDailyAccountSnapshots } = await import("@/lib/account-history");
+    serviceClient = clientStub({
+      accounts: { error: new Error("DB offline") },
+    });
+    await expect(tryWriteDailyAccountSnapshots("user-1", "test.context")).resolves.toBeUndefined();
+  });
+});

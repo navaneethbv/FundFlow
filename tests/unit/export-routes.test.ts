@@ -42,6 +42,8 @@ vi.mock("@/lib/report-pdf", () => ({
 }));
 
 import { GET as jsonGet } from "@/app/api/export/json/route";
+import { GET as csvGet } from "@/app/api/export/csv/route";
+import { GET as accountsCsvGet } from "@/app/api/export/accounts-csv/route";
 import { GET as takeoutGet } from "@/app/api/export/takeout/route";
 import { GET as reportGet } from "@/app/api/export/report/route";
 import { NextResponse, NextRequest } from "next/server";
@@ -238,6 +240,71 @@ describe("Export API Routes", () => {
         metadata: { format: "pdf_report" },
         ip: "127.0.0.1",
       });
+    });
+
+    it("returns early if unauthenticated or error thrown", async () => {
+      mockRequireUser.mockResolvedValueOnce(new NextResponse("unauthorized", { status: 401 }));
+      expect((await reportGet(request)).status).toBe(401);
+
+      mockRequireUser.mockResolvedValueOnce({ user: { id: "u1" } });
+      const selectMock = vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { timezone: "America/New_York" },
+          }),
+        }),
+      });
+      mockServiceClient.from.mockReturnValue({ select: selectMock });
+      mockGetWeeklyReportData.mockRejectedValueOnce(new Error("Report Error"));
+      const res = await reportGet(request);
+      expect(res.status).toBe(500);
+    });
+  });
+
+  describe("GET /api/export/csv", () => {
+    const request = new NextRequest("http://localhost/api/export/csv");
+
+    it("returns early if not authenticated", async () => {
+      mockRequireUser.mockResolvedValue(new NextResponse("unauthorized", { status: 401 }));
+      const res = await csvGet(request);
+      expect(res.status).toBe(401);
+    });
+
+    it("returns 403 if export is disabled", async () => {
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: {} });
+      mockFetchPrivacySafeRows.mockResolvedValue({ allowed: false });
+
+      const res = await csvGet(request);
+      expect(res.status).toBe(403);
+    });
+
+    it("returns csv export, inserts export record, and logs audit on success", async () => {
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: {} });
+      mockFetchPrivacySafeRows.mockResolvedValue({
+        allowed: true,
+        rows: [
+          { date: "2026-07-01", amount: 50, merchant: "Coffee", category: "Food" },
+        ],
+      });
+
+      const insertMock = vi.fn().mockResolvedValue({ error: null });
+      mockServiceClient.from.mockReturnValue({ insert: insertMock });
+
+      const res = await csvGet(request);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Content-Type")).toContain("text/csv");
+      const text = await res.text();
+      expect(text).toContain("Coffee");
+    });
+  });
+
+  describe("GET /api/export/accounts-csv", () => {
+    const request = new Request("http://localhost/api/export/accounts-csv") as NextRequest;
+
+    it("returns early if not authenticated", async () => {
+      mockRequireUser.mockResolvedValue(new NextResponse("unauthorized", { status: 401 }));
+      const res = await accountsCsvGet(request);
+      expect(res.status).toBe(401);
     });
   });
 });

@@ -18,15 +18,22 @@ describe("Sidebar Navigation Contract", () => {
 
   it("does not include unreleased future-phase routes in NAV_ITEMS", () => {
     const keys = NAV_ITEMS.map((item) => item.key);
-    expect(keys).not.toContain("recurring");
     expect(keys).not.toContain("reports");
     expect(keys).not.toContain("investments");
     expect(keys).not.toContain("forecasting");
     expect(keys).not.toContain("advice");
   });
 
+  it("includes a recurring entry gated by recurringPage in the planning category", () => {
+    const recurring = NAV_ITEMS.find((item) => item.key === "recurring");
+    expect(recurring).toBeDefined();
+    expect(recurring!.category).toBe("planning");
+    expect(recurring!.featureFlag).toBe("recurringPage");
+    expect(recurring!.href).toBe("/recurring");
+    expect(existsSync("app/api/recurring/route.ts")).toBe(true);
+  });
+
   it("does not ship future-phase API or settings modules", () => {
-    expect(existsSync("app/api/recurring/route.ts")).toBe(false);
     expect(existsSync("app/api/reports/saved/route.ts")).toBe(false);
     expect(existsSync("components/charts/CumulativeCompareChart.tsx")).toBe(
       false,
@@ -106,6 +113,11 @@ describe("Sidebar Navigation Contract", () => {
     expect(shellSource).toContain("group/sidebar");
     expect(shellSource).toContain("data-collapsed");
     expect(sidebarSource).toContain("group-data-[collapsed=true]/sidebar");
+  });
+
+  it("gives the nav badge an accessible label instead of leaving the count aria-hidden with no compensating text (Fix 7)", () => {
+    const source = readFileSync("components/shell/AppSidebar.tsx", "utf8");
+    expect(source).toContain("aria-label={badge && badge > 0");
   });
 
   it("never adds monitor, plan, or wealth as top-level nav keys", () => {

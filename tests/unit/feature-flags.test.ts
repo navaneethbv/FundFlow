@@ -30,4 +30,9 @@ describe("feature flags", () => {
     const resolved = resolveFeatureFlags({});
     expect(Object.keys(resolved).sort()).toEqual(Object.keys(FEATURE_FLAG_DEFAULTS).sort());
   });
+
+  it("includes recurringPage in the default flag set, enabled", () => {
+    expect(FEATURE_FLAG_DEFAULTS.recurringPage).toBe(true);
+    expect(isFeatureEnabled("recurringPage")).toBe(true);
+  });
 });

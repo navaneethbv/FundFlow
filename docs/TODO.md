@@ -17,7 +17,9 @@ Fourteen phases bringing FundFlow to parity with the reference planner screensho
   Period budgets, Month/Year/Decade views, rollover, sinking funds, and a reviewed budget-seeding proposal are complete.
 - **Phase 1: Navigation and IA.** Done (2026-07-30), branch `feat/planner-ia`, PR #74.
   Centralized `NAV_ITEMS`, top-bar search/notifications/settings, persisted sidebar collapse, gated Ask-AI link, and feature-flag-gated nav entries are complete.
-- Phases 5-13 are pending.
+- **Phase 5: Recurring.** Done (2026-07-30), branch `feat/recurring-page`.
+  Occurrence review workflow anchored on Plaid's predicted_next_date/transaction_ids, manual recurring items, sidebar badge, Mine and Household scope are complete.
+- Phases 6-13 are pending.
   Each gets its own branch, pull request, and TDD expansion before implementation.
   PR #73 attempted Phases 5-13 as one placeholder drop and was closed/reverted without rewriting shared history; do not resume from that branch.
 

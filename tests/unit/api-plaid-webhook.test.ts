@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import crypto from "node:crypto";
 
 const mockGetItemByPlaidItemId = vi.fn();
 const mockSetItemStatus = vi.fn();
@@ -142,16 +143,131 @@ describe("POST /api/plaid/webhook", () => {
     vi.stubEnv("NODE_ENV", "production");
     process.env.PLAID_ENV = "production";
 
+    // 1. Missing header
+    let req = new NextRequest("http://localhost/api/plaid/webhook", {
+      method: "POST",
+      body: JSON.stringify({ webhook_type: "TRANSACTIONS" }),
+    });
+    let res = await POST(req);
+    expect(res.status).toBe(401);
+
+    // 2. Malformed header (not 3 parts)
+    req = new NextRequest("http://localhost/api/plaid/webhook", {
+      method: "POST",
+      headers: { "plaid-verification": "invalid.header" },
+      body: JSON.stringify({ webhook_type: "TRANSACTIONS" }),
+    });
+    res = await POST(req);
+    expect(res.status).toBe(401);
+
+    // 3. Header missing kid
+    const invalidHeaderB64 = Buffer.from(JSON.stringify({ alg: "ES256" })).toString("base64url");
+    req = new NextRequest("http://localhost/api/plaid/webhook", {
+      method: "POST",
+      headers: { "plaid-verification": `${invalidHeaderB64}.payload.sig` },
+      body: JSON.stringify({ webhook_type: "TRANSACTIONS" }),
+    });
+    res = await POST(req);
+    expect(res.status).toBe(401);
+
+    // 4. Header with invalid alg
+    const invalidAlgB64 = Buffer.from(JSON.stringify({ kid: "key-1", alg: "RS256" })).toString("base64url");
+    req = new NextRequest("http://localhost/api/plaid/webhook", {
+      method: "POST",
+      headers: { "plaid-verification": `${invalidAlgB64}.payload.sig` },
+      body: JSON.stringify({ webhook_type: "TRANSACTIONS" }),
+    });
+    res = await POST(req);
+    expect(res.status).toBe(401);
+  });
+
+  it("verifies genuine Plaid signature in production mode", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    process.env.PLAID_ENV = "production";
+
+    const { privateKey, publicKey } = crypto.generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    const jwk = publicKey.export({ format: "jwk" });
+    const mockPlaid = {
+      webhookVerificationKeyGet: vi.fn().mockResolvedValue({ data: { key: { ...jwk, expired_at: null } } }),
+    };
+    const plaidModule = await import("@/lib/plaid");
+    vi.spyOn(plaidModule, "getPlaidClient").mockReturnValue(
+      mockPlaid as unknown as ReturnType<typeof plaidModule.getPlaidClient>
+    );
+
+    const bodyText = JSON.stringify({
+      webhook_type: "ITEM",
+      webhook_code: "LOGIN_REPAIRED",
+      item_id: "plaid-item-1",
+    });
+    mockGetItemByPlaidItemId.mockResolvedValue(sampleItem);
+
+    const bodyHash = crypto.createHash("sha256").update(bodyText).digest("hex");
+    const headerObj = { kid: "key-ec-1", alg: "ES256" };
+    const payloadObj = { iat: Math.floor(Date.now() / 1000), request_body_sha256: bodyHash };
+
+    const headerB64 = Buffer.from(JSON.stringify(headerObj)).toString("base64url");
+    const payloadB64 = Buffer.from(JSON.stringify(payloadObj)).toString("base64url");
+    const signingInput = `${headerB64}.${payloadB64}`;
+
+    const signature = crypto.sign(
+      "sha256",
+      Buffer.from(signingInput),
+      { key: privateKey, dsaEncoding: "ieee-p1363" }
+    );
+    const signatureB64 = signature.toString("base64url");
+    const token = `${headerB64}.${payloadB64}.${signatureB64}`;
+
     const req = new NextRequest("http://localhost/api/plaid/webhook", {
       method: "POST",
-      headers: { "plaid-verification": "invalid-header" },
-      body: JSON.stringify({ webhook_type: "TRANSACTIONS" }),
+      headers: { "plaid-verification": token },
+      body: bodyText,
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(mockSetItemStatus).toHaveBeenCalledWith("item-db-1", "active", null);
+  });
+
+  it("rejects replayed webhooks with old timestamp", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    process.env.PLAID_ENV = "production";
+
+    const { privateKey, publicKey } = crypto.generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    const jwk = publicKey.export({ format: "jwk" });
+    const mockPlaid = {
+      webhookVerificationKeyGet: vi.fn().mockResolvedValue({ data: { key: { ...jwk, expired_at: "2026-01-01" } } }),
+    };
+    const plaidModule = await import("@/lib/plaid");
+    vi.spyOn(plaidModule, "getPlaidClient").mockReturnValue(
+      mockPlaid as unknown as ReturnType<typeof plaidModule.getPlaidClient>
+    );
+
+    const bodyText = JSON.stringify({ webhook_type: "ITEM" });
+    const bodyHash = crypto.createHash("sha256").update(bodyText).digest("hex");
+    const headerObj = { kid: "key-ec-2", alg: "ES256" };
+    // Timestamp 10 minutes ago
+    const payloadObj = { iat: Math.floor(Date.now() / 1000) - 600, request_body_sha256: bodyHash };
+
+    const headerB64 = Buffer.from(JSON.stringify(headerObj)).toString("base64url");
+    const payloadB64 = Buffer.from(JSON.stringify(payloadObj)).toString("base64url");
+    const signingInput = `${headerB64}.${payloadB64}`;
+
+    const signature = crypto.sign(
+      "sha256",
+      Buffer.from(signingInput),
+      { key: privateKey, dsaEncoding: "ieee-p1363" }
+    );
+    const token = `${headerB64}.${payloadB64}.${signature.toString("base64url")}`;
+
+    const req = new NextRequest("http://localhost/api/plaid/webhook", {
+      method: "POST",
+      headers: { "plaid-verification": token },
+      body: bodyText,
     });
 
     const res = await POST(req);
     expect(res.status).toBe(401);
-    const body = await res.json();
-    expect(body).toEqual({ error: "Invalid signature" });
   });
 
   it("calls errorResponse when processing throws error", async () => {
