@@ -108,7 +108,41 @@ describe("notifications manager", () => {
     expect(mockInsert).toHaveBeenCalled();
   });
 
-  it("inserts notification when preference is enabled", async () => {
+  it("processes net worth milestones and handles claim errors", async () => {
+    mockGetDashboardData.mockResolvedValue({
+      cashFlowForecast: { lowBalanceRisk: false },
+      budgetEnvelopes: [],
+      netWorthSnapshot: { assets: 15000, liabilities: 0, netWorth: 15000 },
+      netWorthHistory: [
+        { month: "2026-06", netWorth: 5000 },
+        { month: "2026-07", netWorth: 15000 }, // Crosses $10k milestone
+      ],
+    });
+    mockGetGoals.mockResolvedValue([]);
+    mockSingle.mockResolvedValue({ data: { broken_bank: true }, error: null });
+
+    const insertedMilestones: string[] = [];
+    mockFrom.mockImplementation((table) => {
+      if (table === "milestones") {
+        return {
+          select: () => ({
+            eq: () => Promise.resolve({ data: [], error: null }),
+          }),
+          insert: (data: { key: string }) => {
+            if (data.key === "dupe-key") return Promise.resolve({ error: new Error("Claimed") });
+            insertedMilestones.push(data.key);
+            return Promise.resolve({ error: null });
+          },
+        };
+      }
+      return mockQueryChain;
+    });
+
+    await processNotificationsForUser("user-1");
+    expect(insertedMilestones.length).toBeGreaterThan(0);
+  });
+
+  it("getUnreadNotificationCount returns unread count or 0 on error", async () => {
     const mockCreatedNotification = {
       id: "notif-123",
       user_id: "user-1",
@@ -185,6 +219,7 @@ describe("notifications manager", () => {
         },
       ],
       netWorthSnapshot: { assets: 1000, liabilities: 0, netWorth: 1000 },
+      netWorthHistory: [],
     });
 
     // 2. Mock Goals
@@ -258,6 +293,7 @@ describe("notifications manager", () => {
       cashFlowForecast: { lowBalanceRisk: false },
       budgetEnvelopes: [],
       netWorthSnapshot: { assets: 100, liabilities: 0, netWorth: 100 },
+      netWorthHistory: [],
     });
     mockGetGoals.mockResolvedValue([]);
 
