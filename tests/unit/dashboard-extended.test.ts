@@ -222,6 +222,17 @@ describe("lib/dashboard extended features", () => {
             { id: "g-1", name: "Emergency Fund", target_amount: 10000, current_amount: 4000, target_date: "2026-12-31" },
           ]);
         }
+        if (table === "account_snapshots") {
+          return createChainableMock([
+            { snapshot_month: "2026-06-01", assets: 10000, liabilities: 2000 },
+            { snapshot_month: "2026-07-01", assets: 12000, liabilities: 1500 },
+          ]);
+        }
+        if (table === "budget_targets" || table === "budget_envelopes") {
+          return createChainableMock([
+            { category: "FOOD_AND_DRINK", amount: 500 },
+          ]);
+        }
         return createChainableMock([]);
       }),
     } as unknown as SupabaseClient;

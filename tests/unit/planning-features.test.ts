@@ -299,4 +299,35 @@ describe("planning roadmap features", () => {
     expect(canManageHousehold({ userId: "u1", householdOwnerId: "u1", role: "owner" })).toBe(true);
     expect(canManageHousehold({ userId: "u2", householdOwnerId: "u1", role: "read_only" })).toBe(false);
   });
+
+  it("builds planning depth view and supports snowball strategy for debt payoff", async () => {
+    const { buildPlanningDepthView, planDebtPayoff } = await import("@/lib/planning-depth");
+
+    const planSnowball = planDebtPayoff(
+      [
+        { id: "d1", name: "Card 1", balance: 1000, apr: 18, minimumPayment: 30 },
+        { id: "d2", name: "Card 2", balance: 500, apr: 22, minimumPayment: 20 },
+      ],
+      100,
+      "snowball",
+    );
+    expect(planSnowball.strategy).toBe("snowball");
+    expect(planSnowball.order[0]!.name).toBe("Card 2");
+
+    const depthView = buildPlanningDepthView({
+      accounts: [
+        { name: "Checking", type: "depository", balance: 5000 },
+        { name: "Credit Card", type: "credit", balance: 1200, apr: 20 },
+      ],
+      monthlyIncome: 4000,
+      monthlySpend: 2500,
+      goals: [
+        { id: "g1", name: "Vacation", targetAmount: 1200, currentAmount: 600, monthsRemaining: 6 },
+      ],
+    });
+
+    expect(depthView.debtPayoff).not.toBeNull();
+    expect(depthView.sinkingFunds).toHaveLength(1);
+    expect(depthView.sinkingFunds[0]!.monthlyContribution).toBe(100);
+  });
 });
