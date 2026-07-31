@@ -318,7 +318,10 @@ export default async function AccountsPage({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <ConnectBankButton />
+          {/* The empty state below owns the connect CTA when there is nothing
+              to show. Rendering both mounts two Plaid Link instances on one
+              page, which Plaid explicitly calls unsupported. */}
+          {accounts.length > 0 && <ConnectBankButton />}
           {plaidAccounts.length > 0 && <RefreshButton />}
           <ButtonLink
             href={`/api/export/accounts-csv${

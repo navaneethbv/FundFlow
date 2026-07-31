@@ -142,7 +142,7 @@ describe("notifications manager", () => {
     expect(insertedMilestones.length).toBeGreaterThan(0);
   });
 
-  it("getUnreadNotificationCount returns unread count or 0 on error", async () => {
+  it("inserts notification when preference is enabled", async () => {
     const mockCreatedNotification = {
       id: "notif-123",
       user_id: "user-1",

@@ -81,6 +81,7 @@ export default function ReportTransactions({
               </td>
               <td className="py-2 pr-3">{flowLabel(row)}</td>
               <td
+                data-money
                 className="py-2 pr-3 text-right"
                 style={{
                   color:

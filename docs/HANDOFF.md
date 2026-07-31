@@ -1,8 +1,46 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-07-30. Read this first to resume.
+Last updated: 2026-07-31. Read this first to resume.
 
-## START HERE: Phases 9A–13 are implemented — the fourteen-phase program is complete
+## START HERE: every phase flag is now ON by default (2026-07-31)
+
+All eight gating migrations were verified applied to the live project
+(tables and the columns — `sync_jobs.job_type`, `transactions.manual_account_id`
+/`source`, the new `profiles` columns — were each queried directly), so every
+flag in `FEATURE_FLAG_DEFAULTS` now defaults to `true`. Before this,
+`/reports`, `/investments`, `/advice`, and `/forecasting` returned 404 and the
+Settings Profile/Display/Tags sections were dark, which is why the app felt
+half-built. All ten newly-reachable surfaces were loaded and confirmed to
+render a real `<h1>` with no error boundary.
+
+Turning `dashboardWidgets` on made the widget grid the default landing view and
+immediately exposed a real bug: `DashboardWidgetGrid`'s items had no `min-w-0`,
+so a wide widget stretched its grid track and took the whole dashboard into
+horizontal overflow on a phone (457px content in a 390px viewport). Fixed.
+
+Other fixes in the same pass, all verified in a browser rather than by reading
+code:
+
+- **Privacy blur covered ~21% of amounts.** `[data-privacy="blur"]` keyed on
+  `.metric-value` alone (44 usages against 207 currency renders), so
+  `/transactions` blurred **nothing** — 132 legible amounts with the toggle
+  reporting them hidden. Now three hooks (`.metric-value`, `.money`,
+  `[data-money]`) plus a `<Money>` component; 533 money nodes across 17 routes
+  verified covered, and `tests/unit/privacy-blur.test.ts` pins the selector.
+- **Plaid Link booted on every page view.** `ConnectBankButton` minted a link
+  token on mount, so a plain `/dashboard` load spent a Plaid API call plus
+  `link/workflow/start` and `link/heartbeat` against `production.plaid.com`
+  for users who never clicked Connect. Both it and `ReconnectBankButton` (one
+  per broken bank) now mint on click. Page views make zero Plaid calls.
+- **`/accounts` mounted two `ConnectBankButton`s** in its empty state (header +
+  empty-state action), producing two Plaid Link iframes on one page — the
+  configuration Plaid warns is unsupported.
+- **Three of five `PriorityRail` chips were inert**, and the dead ones were the
+  urgent ones (low balance, stale data). Every signal now carries an `href`.
+- Notifications used a `Mail` envelope icon in a component named
+  `NotificationsBell`; there was no `Bell` in the icon registry.
+
+## Phases 9A–13 are implemented — the fourteen-phase program is complete
 
 All six remaining phases (9A Investments, 9B Investment performance, 10
 Forecasting, 11 Advice, 12 Transactions parity, 13 Settings IA) were
@@ -17,9 +55,11 @@ every checkbox ticked and an implementation-notes subsection per phase.
 Gates on the full stack: `npm run build` PASS, `npm run lint` PASS,
 `npx tsc --noEmit` PASS, `npm run test:unit` PASS (**175 files / 1669 tests**).
 
-**The six flags — all default OFF, all independent, flip in any order**
+**The six flags — all default ON as of 2026-07-31, all independent.** The
+table records which migration each one needed; every one is applied. Re-gate by
+changing the default in `lib/feature-flags.ts`, never by editing the page.
 
-| Flag | Migration | Why it's off |
+| Flag | Migration | What it gated |
 | --- | --- | --- |
 | `investmentsPage` | `20260730210000_investments.sql` + `20260730220000_investment_transactions.sql` | New page + cron read/write new tables (9A and 9B share one flag — one feature surface, two migrations) |
 | `forecastingPage` | none | Review gate only |
@@ -27,12 +67,11 @@ Gates on the full stack: `npm run build` PASS, `npm run lint` PASS,
 | `transactionsParity` | `20260730240000_manual_transactions_receipts.sql` | Gates an **already-live** page — with it off, `/transactions` runs the exact pre-Phase-12 query |
 | `settingsIa` | `20260730250000_profile_and_tags.sql` | Also an already-live page — only Profile/Display/Tags (the sections reading new schema) redirect to Institutions when off |
 
-**To release everything:** apply the five migrations above in that order to
-the live Supabase project, then set as many flags as reviewed via
-`FUNDFLOW_FEATURE_FLAGS=investmentsPage,forecastingPage,advicePage,transactionsParity,settingsIa`
-(or flip individual defaults in `lib/feature-flags.ts`). They don't depend on
-each other's flags — `transactionsParity` and `settingsIa` are unrelated
-schema surfaces despite shipping in the same session.
+**Already released** (2026-07-31): the migrations are applied and the defaults
+are flipped. `FUNDFLOW_FEATURE_FLAGS` still works as a per-deployment additive
+override, but nothing needs it now. The flags don't depend on each other —
+`transactionsParity` and `settingsIa` are unrelated schema surfaces despite
+shipping in the same session.
 
 **One deliberate scope cut:** Phase 12's migration includes a `receipts`
 table and the app's first Supabase Storage bucket (schema and RLS only,

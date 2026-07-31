@@ -40,6 +40,7 @@ export default function BudgetSummary({
         >
           <p className="text-xs font-medium text-muted">{label}</p>
           <p
+            data-money
             className={`mt-1 text-2xl font-bold ${
               label === "Left to Budget" && Number(value) < 0
                 ? "text-danger"

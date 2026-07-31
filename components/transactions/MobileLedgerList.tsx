@@ -49,6 +49,7 @@ export default function MobileLedgerList({ rows }: Readonly<{ rows: LedgerCardRo
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1">
             <span
+              data-money
               className="whitespace-nowrap font-semibold tabular-nums"
               style={
                 row.amount < 0

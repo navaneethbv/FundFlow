@@ -83,6 +83,51 @@ describe("dashboard command center", () => {
     });
   });
 
+  it("gives every priority signal a destination, in both healthy and urgent states", () => {
+    // The rail renders five visually identical chips. When only some carry an
+    // href the rest look clickable and do nothing — and the worst version of
+    // that bug is the urgent ones (low balance, stale data) being the dead
+    // ones, which is exactly what a user reaches for first.
+    for (const input of [
+      {
+        brokenBankCount: 0,
+        isStale: false,
+        lastSyncAgoMinutes: 8,
+        lowBalanceRisk: false,
+        budgetCount: 1,
+        budgetRiskCount: 0,
+        anomalyCount: 0,
+      },
+      {
+        brokenBankCount: 1,
+        isStale: true,
+        lastSyncAgoMinutes: 3010,
+        lowBalanceRisk: true,
+        budgetCount: 2,
+        budgetRiskCount: 2,
+        anomalyCount: 3,
+      },
+    ]) {
+      for (const signal of buildPrioritySignals(input)) {
+        expect(signal.href, `"${signal.label}" needs a destination`).toBeTruthy();
+      }
+    }
+  });
+
+  it("points the stale-data and low-balance signals at surfaces that explain them", () => {
+    const urgent = buildPrioritySignals({
+      brokenBankCount: 0,
+      isStale: true,
+      lastSyncAgoMinutes: 3010,
+      lowBalanceRisk: true,
+      budgetCount: 1,
+      budgetRiskCount: 0,
+      anomalyCount: 0,
+    });
+    expect(urgent[1]?.href).toBe("/settings?section=institutions");
+    expect(urgent[2]?.href).toBe("/cash-flow");
+  });
+
   it("keeps dashboard controls in one filter-preserving toolbar", () => {
     expect(existsSync("components/dashboard/DashboardToolbar.tsx")).toBe(true);
     const toolbar = readFileSync(

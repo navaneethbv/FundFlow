@@ -135,7 +135,7 @@ export default function ManualAccountsSection({
   return (
     <Panel title="Manual accounts" eyebrow="Net worth">
       <p className="mb-4 text-sm text-muted">
-        Included manual balance: <span className="font-bold text-foreground">{formatCurrency(includedTotal)}</span>
+        Included manual balance: <span className="money font-bold text-foreground">{formatCurrency(includedTotal)}</span>
       </p>
 
       <div className="mb-4 space-y-2 text-sm">

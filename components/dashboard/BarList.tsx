@@ -19,7 +19,9 @@ export default function BarList({
           <>
             <div className="mb-1.5 flex justify-between gap-4 font-medium">
               <span>{item.label}</span>
-              <span className="tabular-nums font-semibold">{formatCurrency(item.amount)}</span>
+              <span data-money className="tabular-nums font-semibold">
+                {formatCurrency(item.amount)}
+              </span>
             </div>
             <div className="h-2.5 overflow-hidden rounded-full bg-panel-hover">
               <div

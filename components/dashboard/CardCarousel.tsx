@@ -139,7 +139,7 @@ export default function CardCarousel({
                   <p className="text-xs font-semibold opacity-75">
                     {account.type === "credit" ? "Current Balance" : "Available Balance"}
                   </p>
-                  <p className="display mt-1 text-2xl">
+                  <p data-money className="display mt-1 text-2xl">
                     {formatCurrency(account.current_balance, account.iso_currency_code ?? "USD")}
                   </p>
                   <p className="mt-2 font-mono text-xs tracking-[0.28em] opacity-75">

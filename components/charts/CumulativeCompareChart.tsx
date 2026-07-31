@@ -97,6 +97,7 @@ export default function CumulativeCompareChart({
               textAnchor="end"
               fontSize={9}
               fill="var(--viz-muted)"
+              className="money"
             >
               {valueFormatter(tick)}
             </text>
@@ -143,6 +144,7 @@ export default function CumulativeCompareChart({
               fontSize={10}
               fontWeight={600}
               fill="var(--viz-ink)"
+              className="money"
             >
               {valueFormatter(endpointValue.thisMonth)}
             </text>
@@ -210,10 +212,10 @@ export default function CumulativeCompareChart({
                 className="border-t border-black/5 dark:border-white/10"
               >
                 <td className="py-1 pr-2">{row.day}</td>
-                <td className="py-1 pr-2">
+                <td data-money className="py-1 pr-2">
                   {row.thisMonth === null ? "—" : valueFormatter(row.thisMonth)}
                 </td>
-                <td className="py-1 pr-2">
+                <td data-money className="py-1 pr-2">
                   {/* Forward-filled: the previous month ended, so its total did
                       not change. Plotting it would imply a day that existed. */}
                   {row.lastMonth === null

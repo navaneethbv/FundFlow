@@ -30,6 +30,7 @@ export default function AccountGroup({
           {group.totals.map((total) => (
             <span
               key={`${groupKey}-${total.currency}`}
+              data-money
               className="rounded-full bg-panel-2 px-2.5 py-1 font-mono text-xs font-bold tabular-nums"
             >
               {formatCurrency(total.amount, total.currency)}

@@ -86,6 +86,7 @@ export default function TrendChart({
               textAnchor="end"
               fontSize={10}
               fill="var(--viz-muted)"
+              className="money"
               style={{ fontVariantNumeric: "tabular-nums" }}
             >
               {valueFormatter(t)}
@@ -146,6 +147,7 @@ export default function TrendChart({
                 fontSize={11}
                 fontWeight={600}
                 fill="var(--viz-ink)"
+                className="money"
               >
                 {valueFormatter(s.values[last] ?? 0)}
               </text>
@@ -207,7 +209,7 @@ export default function TrendChart({
               <tr key={l} className="border-t border-black/5 dark:border-white/10">
                 <td className="py-1 pr-2">{l}</td>
                 {series.map((s) => (
-                  <td key={s.name} className="py-1 pr-2">
+                  <td key={s.name} data-money className="py-1 pr-2">
                     {valueFormatter(s.values[i] ?? 0)}
                   </td>
                 ))}

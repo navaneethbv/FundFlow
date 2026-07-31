@@ -148,7 +148,7 @@ export default function SankeyChart({
                     paintOrder="stroke"
                   >
                     {truncate(node.label)}
-                    <tspan fill="var(--viz-muted)" dx={5} fontSize={10}>
+                    <tspan className="money" fill="var(--viz-muted)" dx={5} fontSize={10}>
                       {valueFormatter(node.value)}
                     </tspan>
                   </text>
@@ -233,7 +233,7 @@ function FlowTable({
           >
             <td className="py-1 pr-2">{labelById.get(link.source) ?? link.source}</td>
             <td className="py-1 pr-2">{labelById.get(link.target) ?? link.target}</td>
-            <td className="py-1 pr-2 text-right">{valueFormatter(link.value)}</td>
+            <td data-money className="py-1 pr-2 text-right">{valueFormatter(link.value)}</td>
           </tr>
         ))}
       </tbody>

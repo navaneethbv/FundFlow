@@ -15,7 +15,9 @@ function ProgressRow({
       <div className="flex items-baseline justify-between text-sm">
         <span className="font-semibold">{label}</span>
         <span className="text-muted">
-          {formatCurrency(paid, currency)} of {formatCurrency(total, currency)}
+          <span data-money>
+            {formatCurrency(paid, currency)} of {formatCurrency(total, currency)}
+          </span>
         </span>
       </div>
       <div

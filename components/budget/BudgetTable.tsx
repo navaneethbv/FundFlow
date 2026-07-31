@@ -182,12 +182,13 @@ export default function BudgetTable({
       <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
         <div>
           <h2 className="font-semibold">{section.label}</h2>
-          <p className="mt-1 text-xs text-muted">
+          <p data-money className="mt-1 text-xs text-muted">
             {formatCurrency(section.planned, currency)} planned,{" "}
             {formatCurrency(section.actual, currency)} actual
           </p>
         </div>
         <p
+          data-money
           className={`text-sm font-bold ${
             section.remaining < 0 ? "text-danger" : "text-foreground"
           }`}

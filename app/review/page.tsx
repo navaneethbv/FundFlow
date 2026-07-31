@@ -53,13 +53,13 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
 
       <div className="grid gap-4 md:grid-cols-3">
         <Panel title="Income">
-          <p className="display text-3xl text-success">{formatCurrency(data.currentMonthIncome)}</p>
+          <p className="money display text-3xl text-success">{formatCurrency(data.currentMonthIncome)}</p>
         </Panel>
         <Panel title="Spending">
-          <p className="display text-3xl">{formatCurrency(data.currentMonthExpenses)}</p>
+          <p className="money display text-3xl">{formatCurrency(data.currentMonthExpenses)}</p>
         </Panel>
         <Panel title="Net">
-          <p className={net >= 0 ? "display text-3xl text-success" : "display text-3xl text-danger"}>
+          <p data-money className={net >= 0 ? "display text-3xl text-success" : "display text-3xl text-danger"}>
             {net >= 0 ? "+" : ""}
             {formatCurrency(net)}
           </p>

@@ -39,7 +39,10 @@ export default function RecentActivity({
               </span>
             </span>
             <span className="text-right">
-              <span className={income ? "block text-sm font-bold text-success" : "block text-sm font-bold text-danger"}>
+              <span
+                data-money
+                className={income ? "block text-sm font-bold text-success" : "block text-sm font-bold text-danger"}
+              >
                 {income ? "+" : "-"}
                 {formatCurrency(Math.abs(transaction.amount), transaction.iso_currency_code ?? "USD")}
               </span>

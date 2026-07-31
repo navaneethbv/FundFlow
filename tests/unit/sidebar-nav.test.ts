@@ -25,8 +25,8 @@ describe("Sidebar Navigation Contract", () => {
     expect(existsSync("app/advice/page.tsx")).toBe(true);
   });
 
-  it("keeps /advice gated until its advice_progress migration is applied", () => {
-    expect(isFeatureEnabled("advicePage", { FUNDFLOW_FEATURE_FLAGS: "" })).toBe(false);
+  it("ships /advice after its advice_progress migration", () => {
+    expect(isFeatureEnabled("advicePage", { FUNDFLOW_FEATURE_FLAGS: "" })).toBe(true);
     expect(isFeatureEnabled("advicePage", { FUNDFLOW_FEATURE_FLAGS: "advicePage" })).toBe(true);
   });
 
@@ -48,11 +48,11 @@ describe("Sidebar Navigation Contract", () => {
     expect(existsSync("app/investments/page.tsx")).toBe(true);
   });
 
-  it("keeps /investments gated until its investments migration is applied", () => {
+  it("ships /investments after its investments migration", () => {
     // The page and the daily cron both read/write securities, holdings, and
-    // holding_snapshots; a default-on flag would 500 every deployment that
-    // has not run 20260730210000_investments.sql yet.
-    expect(isFeatureEnabled("investmentsPage", { FUNDFLOW_FEATURE_FLAGS: "" })).toBe(false);
+    // holding_snapshots, and the stale-data banners read sync_jobs.job_type —
+    // all landed by 20260730210000_investments.sql.
+    expect(isFeatureEnabled("investmentsPage", { FUNDFLOW_FEATURE_FLAGS: "" })).toBe(true);
     expect(
       isFeatureEnabled("investmentsPage", { FUNDFLOW_FEATURE_FLAGS: "investmentsPage" }),
     ).toBe(true);
@@ -67,11 +67,11 @@ describe("Sidebar Navigation Contract", () => {
     expect(existsSync("app/reports/page.tsx")).toBe(true);
   });
 
-  it("keeps /reports gated until its saved_reports migration is applied", () => {
-    // The page reads `saved_reports`; a default-on flag would 500 every
-    // deployment that has not run 20260730190000_saved_reports.sql yet.
+  it("ships /reports after its saved_reports migration", () => {
+    // The page reads `saved_reports`, landed by
+    // 20260730190000_saved_reports.sql.
     expect(isFeatureEnabled("reportsPage", { FUNDFLOW_FEATURE_FLAGS: "" })).toBe(
-      false,
+      true,
     );
     expect(
       isFeatureEnabled("reportsPage", { FUNDFLOW_FEATURE_FLAGS: "reportsPage" }),
@@ -173,16 +173,12 @@ describe("Sidebar Navigation Contract", () => {
     expect(keys).not.toContain("wealth");
   });
 
-  it("keeps Year in Money in the nav while Reports is still flag-gated", () => {
-    // Phase 6 surfaces /wrapped from the Reports page, but Reports is off by
-    // default pending its migration. Retiring the nav entry now would strand
-    // /wrapped behind the command palette on every deployment that has not
-    // enabled reportsPage. Drop this entry in the change that flips the flag.
+  it("keeps Year in Money as its own nav entry now that Reports has shipped", () => {
+    // Phase 6 also surfaces /wrapped from the Reports page. Reports is on by
+    // default now, but /wrapped keeps its own nav entry rather than becoming
+    // reachable only by first visiting Reports.
     const wrapped = NAV_ITEMS.find((item) => item.key === "wrapped");
     expect(wrapped?.href).toBe("/wrapped");
     expect(wrapped?.category).toBe("manage");
-    expect(isFeatureEnabled("reportsPage", { FUNDFLOW_FEATURE_FLAGS: "" })).toBe(
-      false,
-    );
   });
 });
