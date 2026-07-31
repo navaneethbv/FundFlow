@@ -119,6 +119,26 @@ independently, in any order, after review.
 
 Excluded from the program by decision, revisit only if asked: credit score (no consented bureau integration), billing/free-trial/referrals (not a commercial product), Retail Sync (no authorized data source), and investment benchmark overlays (needs a licensed market-data feed, deferred inside Phase 9B).
 
+## Added 2026-07-31 (UI review) — three pre-existing E2E failures
+
+Found while verifying the UI-fix pass. Each reproduces on `main` **without**
+that pass's changes (confirmed by stashing), so they predate it and are not
+regressions. All three block a spec that otherwise passes.
+
+1. **`POST /api/demo` returns 500** in `accounts.spec.ts`'s setup
+   (`tests/e2e/accounts.spec.ts:164`), so the whole accounts spec never gets to
+   its assertions. The route works for a plain user — the spec's fixture is a
+   household **owner** who can already see a *member's* `shared_household_id`
+   Plaid item, which is the case the route's `hasRealBank` check and its
+   service-client inserts were not written for. Start there.
+2. **`cash-flow.spec.ts` trips the Plaid "link-initialize.js embedded more than
+   once" warning.** The `/accounts` empty-state double-mount that caused the
+   same warning is fixed, and client-side navigation was verified to keep
+   exactly one script tag and one instance — so a *second* source remains and
+   was not reproducible locally. `ReconnectBankButton` renders once per broken
+   item, which is the most likely remaining multi-instance surface.
+3. **`budget.spec.ts` fails** at `tests/e2e/budget.spec.ts:467`; not diagnosed.
+
 ## Must-have before real-bank production use
 
 Gaps found in the 2026-07-05 review, ranked. These are not polish — each one

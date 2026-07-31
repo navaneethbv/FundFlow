@@ -60,16 +60,27 @@ test.describe.serial("Phase 1: navigation and information architecture", () => {
     await signIn(page);
   });
 
-  test("only implemented destinations appear in the sidebar", async ({
+  test("every sidebar destination is reachable, not a 404", async ({
     page,
   }) => {
     await page.goto("/dashboard");
     const sidebar = page
       .getByRole("navigation", { name: "Primary" })
       .first();
-    await expect(sidebar.getByRole("link", { name: "Reports" })).toHaveCount(
-      0,
+
+    // The sidebar hides flag-gated pages, so anything it does show has to
+    // actually resolve. Reports used to be asserted absent; it ships now, and
+    // the useful invariant is that no visible entry leads nowhere.
+    const hrefs = await sidebar.getByRole("link").evaluateAll((links) =>
+      links.map((link) => link.getAttribute("href")!).filter(Boolean),
     );
+    expect(hrefs.length).toBeGreaterThan(0);
+    for (const href of hrefs) {
+      const res = await page.request.get(href);
+      expect(res.status(), `${href} should not 404`).toBeLessThan(400);
+    }
+
+    await expect(sidebar.getByRole("link", { name: "Reports" })).toBeVisible();
     await expect(
       sidebar.getByRole("link", { name: "Recurring" }),
     ).toBeVisible();

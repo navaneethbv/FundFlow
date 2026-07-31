@@ -36,15 +36,15 @@ describe("feature flags", () => {
     expect(isFeatureEnabled("recurringPage")).toBe(true);
   });
 
-  it("keeps transactionsParity off by default since it gates an already-live page's schema", () => {
-    expect(isFeatureEnabled("transactionsParity", { FUNDFLOW_FEATURE_FLAGS: "" })).toBe(false);
+  it("ships transactionsParity now that its migration is applied", () => {
+    expect(isFeatureEnabled("transactionsParity", { FUNDFLOW_FEATURE_FLAGS: "" })).toBe(true);
     expect(
       isFeatureEnabled("transactionsParity", { FUNDFLOW_FEATURE_FLAGS: "transactionsParity" }),
     ).toBe(true);
   });
 
-  it("keeps settingsIa off by default since it gates an already-live page's schema", () => {
-    expect(isFeatureEnabled("settingsIa", { FUNDFLOW_FEATURE_FLAGS: "" })).toBe(false);
+  it("ships settingsIa now that its migration is applied", () => {
+    expect(isFeatureEnabled("settingsIa", { FUNDFLOW_FEATURE_FLAGS: "" })).toBe(true);
     expect(isFeatureEnabled("settingsIa", { FUNDFLOW_FEATURE_FLAGS: "settingsIa" })).toBe(true);
   });
 });

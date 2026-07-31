@@ -44,7 +44,7 @@ export default function BreakdownBars({
             <li key={row.label} data-breakdown-bar={label}>
               <div className="mb-1.5 flex justify-between gap-4 text-sm">
                 <span className="font-medium">{label}</span>
-                <span className="tabular-nums font-semibold">
+                <span data-money className="tabular-nums font-semibold">
                   {formatCurrency(row.amount, currency)} ({row.pct}%)
                 </span>
               </div>
@@ -86,7 +86,7 @@ export default function BreakdownBars({
               {rows.map((row) => (
                 <tr key={row.label} className="border-b border-panel-border/60">
                   <td>{displayLabel(row.label)}</td>
-                  <td className="py-2 pr-3">
+                  <td data-money className="py-2 pr-3">
                     {formatCurrency(row.amount, currency)}
                   </td>
                   <td className="py-2">{row.pct}%</td>

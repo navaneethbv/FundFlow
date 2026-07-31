@@ -24,6 +24,7 @@ import MerchantDrilldownPanel from "@/components/dashboard/MerchantDrilldownPane
 import RecentActivity, {
   type RecentTransaction,
 } from "@/components/dashboard/RecentActivity";
+import Money from "@/components/ui/Money";
 import Panel from "@/components/ui/Panel";
 
 type AttentionItem = {
@@ -31,6 +32,12 @@ type AttentionItem = {
   detail: string;
   href: string;
   tone: "warning" | "danger";
+  /**
+   * True when `detail` quotes an amount. The detail is a prebuilt sentence, so
+   * the privacy blur has to cover the whole line rather than just the figure —
+   * the label still identifies the item while amounts are hidden.
+   */
+  hasAmount?: boolean;
 };
 
 function getAttentionItems(data: DashboardData): AttentionItem[] {
@@ -42,6 +49,7 @@ function getAttentionItems(data: DashboardData): AttentionItem[] {
       detail: `Balance may fall to ${formatCurrency(data.cashFlowForecast.lowestBalance)} in the next 30 days.`,
       href: "/dashboard?view=plan",
       tone: "danger",
+      hasAmount: true,
     });
   }
 
@@ -79,6 +87,8 @@ function getAttentionItems(data: DashboardData): AttentionItem[] {
         `${recurringIssues[0]!.name} needs review.`,
       href: "/dashboard?view=plan",
       tone: recurringIssues[0]!.status === "late" ? "danger" : "warning",
+      // An unusual-amount prompt quotes the charge that tripped it.
+      hasAmount: recurringIssues[0]!.status === "unusual_amount",
     });
   }
 
@@ -175,15 +185,17 @@ export default function MonitorView({
           upIsGood={false}
           chart={<MiniBars values={spendSeries} />}
         />
+        {/* Hand-rolled rather than a StatTile because the value is a percent,
+            not currency — but it mirrors StatTile's structure exactly (eyebrow
+            h3, h-11 header row, same spacing) so it sits in the row instead of
+            beside it. */}
         <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold text-muted">Savings rate</h2>
-              <p className="metric-value mt-3 text-3xl">{savingsRate}%</p>
-              <p className="mt-2 text-xs font-medium text-muted">Based on this month</p>
-            </div>
+          <div className="flex h-11 items-start justify-between gap-2">
+            <h3 className="eyebrow">Savings rate</h3>
             <RadialGauge value={savingsRate} />
           </div>
+          <p className="metric-value mt-3 text-3xl">{savingsRate}%</p>
+          <p className="mt-2 text-xs font-medium text-muted">Based on this month</p>
         </section>
       </div>
 
@@ -196,12 +208,14 @@ export default function MonitorView({
           <p className="mt-2 text-xs font-medium text-muted">
             {!safeToSpend &&
               "Connect a checking account to see what's spendable."}
-            {safeToSpend &&
-              safeToSpend.anchor === "paycheck" &&
-              `After ${formatCurrency(safeToSpend.upcomingBillsTotal)} in bills before your ${formatDay(safeToSpend.horizonEnd)} paycheck`}
-            {safeToSpend &&
-              safeToSpend.anchor !== "paycheck" &&
-              `After ${formatCurrency(safeToSpend.upcomingBillsTotal)} in bills over the next two weeks`}
+            {safeToSpend && (
+              <>
+                After <Money amount={safeToSpend.upcomingBillsTotal} /> in bills{" "}
+                {safeToSpend.anchor === "paycheck"
+                  ? `before your ${formatDay(safeToSpend.horizonEnd)} paycheck`
+                  : "over the next two weeks"}
+              </>
+            )}
           </p>
         </section>
         <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
@@ -210,9 +224,14 @@ export default function MonitorView({
             {insights.runwayMonths !== null ? `${insights.runwayMonths} mo` : "—"}
           </p>
           <p className="mt-2 text-xs font-medium text-muted">
-            {insights.runwayMonths !== null && typicalEssentials !== null
-              ? `Cash on hand vs ~${formatCurrency(typicalEssentials)}/mo in essentials`
-              : "Needs a full month of essential spending history."}
+            {insights.runwayMonths !== null && typicalEssentials !== null ? (
+              <>
+                Cash on hand vs ~<Money amount={typicalEssentials} />
+                /mo in essentials
+              </>
+            ) : (
+              "Needs a full month of essential spending history."
+            )}
           </p>
         </section>
         <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
@@ -221,9 +240,13 @@ export default function MonitorView({
             {paycheck?.nextPayDate ? formatDay(paycheck.nextPayDate) : "—"}
           </p>
           <p className="mt-2 text-xs font-medium text-muted">
-            {paycheck?.nextPayDate
-              ? `${formatCurrency(paycheck.amount)} expected from ${paycheck.name}`
-              : "No recurring income detected yet."}
+            {paycheck?.nextPayDate ? (
+              <>
+                <Money amount={paycheck.amount} /> expected from {paycheck.name}
+              </>
+            ) : (
+              "No recurring income detected yet."
+            )}
           </p>
         </section>
       </div>
@@ -272,7 +295,12 @@ export default function MonitorView({
                   >
                     {item.label}
                   </span>
-                  <span className="mt-1 block text-sm text-muted">{item.detail}</span>
+                  <span
+                    data-money={item.hasAmount || undefined}
+                    className="mt-1 block text-sm text-muted"
+                  >
+                    {item.detail}
+                  </span>
                 </Link>
               ))}
             </div>

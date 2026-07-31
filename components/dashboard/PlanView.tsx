@@ -200,11 +200,16 @@ export default function PlanView({
             {formatCurrency(data.cashFlowForecast.projectedBalance)}
           </p>
           <p className="mt-2 text-sm text-muted">
-            Lowest projected balance: {formatCurrency(data.cashFlowForecast.lowestBalance)}
+            Lowest projected balance:{" "}
+            <span className="money">
+              {formatCurrency(data.cashFlowForecast.lowestBalance)}
+            </span>
           </p>
           <ul className="mt-4 space-y-2 text-xs text-muted">
             {data.cashFlowForecast.assumptions.map((assumption) => (
-              <li key={assumption}>{assumption}</li>
+              <li key={assumption} data-money>
+                {assumption}
+              </li>
             ))}
           </ul>
         </Panel>
@@ -239,14 +244,14 @@ export default function PlanView({
                 </p>
                 {debt.planWithExtra && (
                   <p className="mt-2 text-sm">
-                    Adding {formatCurrency(debt.extraMonthly)}/mo:{" "}
+                    Adding <span className="money">{formatCurrency(debt.extraMonthly)}</span>/mo:{" "}
                     <span className="font-bold">{debt.planWithExtra.months} months</span>{" "}
                     and{" "}
                     <span className="metric-value">
                       {formatCurrency(debt.planWithExtra.totalInterest)}
                     </span>{" "}
                     in interest — saving{" "}
-                    <span className="font-bold text-success">
+                    <span className="money font-bold text-success">
                       {formatCurrency(
                         Math.max(0, debt.plan.totalInterest - debt.planWithExtra.totalInterest),
                       )}
@@ -258,7 +263,7 @@ export default function PlanView({
                   {debt.plan.debts.map((d) => (
                     <li key={d.name}>
                       {d.name}: cleared month {d.payoffMonth} ·{" "}
-                      {formatCurrency(d.interestPaid)} interest
+                      <span className="money">{formatCurrency(d.interestPaid)}</span> interest
                     </li>
                   ))}
                 </ul>

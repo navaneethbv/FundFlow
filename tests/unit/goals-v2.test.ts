@@ -725,19 +725,19 @@ describe("goalContributionsForMonth", () => {
 });
 
 describe("goalsV2 rollout flag", () => {
-  it("stays off until the goals_v2 migration is applied", () => {
-    // /goals and /budget are already-released pages that start reading
-    // goal_accounts and goal_progress_events once this is on. Defaulting it to
-    // true would 500 both on any deployment that has not run the migration.
-    expect(isFeatureEnabled("goalsV2", { FUNDFLOW_FEATURE_FLAGS: "" })).toBe(false);
+  it("ships now that the goals_v2 migration is applied", () => {
+    // /goals and /budget are already-released pages that read goal_accounts
+    // and goal_progress_events with this on, so the migration has to land
+    // before the default does — it has.
+    expect(isFeatureEnabled("goalsV2", { FUNDFLOW_FEATURE_FLAGS: "" })).toBe(true);
     expect(
       isFeatureEnabled("goalsV2", { FUNDFLOW_FEATURE_FLAGS: "goalsV2" }),
     ).toBe(true);
   });
 
-  it("is independent of the Phase 6 reports flag", () => {
+  it("does not depend on the Phase 6 reports flag being named", () => {
     expect(
       isFeatureEnabled("goalsV2", { FUNDFLOW_FEATURE_FLAGS: "reportsPage" }),
-    ).toBe(false);
+    ).toBe(true);
   });
 });

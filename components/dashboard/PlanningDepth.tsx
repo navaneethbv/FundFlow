@@ -49,10 +49,10 @@ export default function PlanningDepth({ data, goals }: Readonly<{ data: Dashboar
                 <span className="font-semibold">
                   {index + 1}. {debt.name}
                 </span>
-                <span className="tabular-nums font-bold">{formatCurrency(debt.balance)}</span>
+                <span data-money className="tabular-nums font-bold">{formatCurrency(debt.balance)}</span>
               </div>
             ))}
-            <p className="mt-2 text-xs text-muted">
+            <p data-money className="mt-2 text-xs text-muted">
               At {formatCurrency(view.surplus)}/mo surplus, {view.debtPayoff.order[0]?.name} clears in
               about {view.debtPayoff.steps[0]?.payoffMonth} months, then the surplus rolls to the next.
               Highest-APR debt is paid first; unknown APRs are treated as 0%.

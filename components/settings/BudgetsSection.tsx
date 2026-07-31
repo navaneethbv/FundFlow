@@ -213,7 +213,7 @@ export default function BudgetsSection({
                   <span className="block truncate font-semibold">
                     {suggestion.category}
                   </span>
-                  <span className="block text-xs text-muted">
+                  <span data-money className="block text-xs text-muted">
                     median {formatCurrency(suggestion.median)} over{" "}
                     {suggestion.months} months
                   </span>

@@ -14,7 +14,7 @@ import {
   Landmark,
   LayoutDashboard,
   LineChart,
-  Mail,
+  Bell,
   Menu,
   PiggyBank,
   Repeat,
@@ -46,7 +46,7 @@ const ICONS = {
   investments: LineChart,
   forecasting: TrendingUp,
   advice: Compass,
-  notifications: Mail,
+  notifications: Bell,
   settings: Settings,
   wrapped: Sparkles,
 } satisfies Record<NavItemKey, typeof LayoutDashboard>;

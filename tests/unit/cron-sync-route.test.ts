@@ -10,6 +10,13 @@ vi.mock("@/lib/investment-sync", () => ({
   syncInvestmentsForUser: (...args: unknown[]) => mockSyncInvestmentsForUser(...args),
 }));
 
+// The route reads investmentsPage only. Driving it here rather than through the
+// shipped default keeps both directions covered whichever way the default sits.
+let investmentsFlag = true;
+vi.mock("@/lib/feature-flags", () => ({
+  isFeatureEnabled: () => investmentsFlag,
+}));
+
 const mockRefreshRecurringForUser = vi.fn();
 vi.mock("@/lib/recurring", () => ({
   refreshRecurringForUser: (...args: unknown[]) =>
@@ -84,6 +91,7 @@ import { NextRequest } from "next/server";
 describe("GET /api/cron/sync", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    investmentsFlag = true;
   });
 
   it("returns 401 if secret does not match", async () => {
@@ -155,8 +163,6 @@ describe("GET /api/cron/sync", () => {
 
   it("isolates an investment sync failure from the rest of the daily run", async () => {
     mockSafeEqual.mockReturnValue(true);
-    // investmentsPage defaults off; opt in for this test only.
-    process.env.FUNDFLOW_FEATURE_FLAGS = "investmentsPage";
     const request = new NextRequest("http://localhost/api/cron/sync", {
       headers: { authorization: "Bearer test-secret" },
     });
@@ -178,20 +184,17 @@ describe("GET /api/cron/sync", () => {
     });
     mockSyncInvestmentsForUser.mockRejectedValue(new Error("PRODUCT_NOT_READY"));
 
-    try {
-      const res = await GET(request);
-      expect(res.status).toBe(200);
-      // Transaction sync, snapshots, and the digest pipeline all still ran.
-      expect(mockSyncAllForUser).toHaveBeenCalledWith("u1");
-      expect(mockWriteDailyAccountSnapshots).toHaveBeenCalledWith("u1");
-      expect(mockAlertCronFailure).not.toHaveBeenCalled();
-      expect(mockLogError).toHaveBeenCalledWith("cron.sync.investments", expect.any(Error));
-    } finally {
-      delete process.env.FUNDFLOW_FEATURE_FLAGS;
-    }
+    const res = await GET(request);
+    expect(res.status).toBe(200);
+    // Transaction sync, snapshots, and the digest pipeline all still ran.
+    expect(mockSyncAllForUser).toHaveBeenCalledWith("u1");
+    expect(mockWriteDailyAccountSnapshots).toHaveBeenCalledWith("u1");
+    expect(mockAlertCronFailure).not.toHaveBeenCalled();
+    expect(mockLogError).toHaveBeenCalledWith("cron.sync.investments", expect.any(Error));
   });
 
   it("does not run investment sync at all while investmentsPage is off", async () => {
+    investmentsFlag = false;
     mockSafeEqual.mockReturnValue(true);
     const request = new NextRequest("http://localhost/api/cron/sync", {
       headers: { authorization: "Bearer test-secret" },

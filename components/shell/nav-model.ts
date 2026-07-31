@@ -2,12 +2,12 @@ import type { ComponentType } from "react";
 import {
   ArrowLeftRight,
   BarChart3,
+  Bell,
   Compass,
   Landmark,
   LayoutDashboard,
   LineChart,
   TrendingUp,
-  Mail,
   PiggyBank,
   Repeat,
   Search,
@@ -65,7 +65,7 @@ export const NAV_ITEMS: NavItemDefinition[] = [
   { key: "investments", label: "Investments", href: "/investments", icon: LineChart, category: "planning", featureFlag: "investmentsPage", hint: "Holdings and allocation" },
   { key: "forecasting", label: "Forecasting", href: "/forecasting", icon: TrendingUp, category: "planning", featureFlag: "forecastingPage", hint: "Net worth projections" },
   { key: "advice", label: "Advice", href: "/advice", icon: Compass, category: "planning", featureFlag: "advicePage", hint: "Sourced education checklists" },
-  { key: "notifications", label: "Notifications", href: "/notifications", icon: Mail, category: "manage", hint: "Alerts and digests" },
+  { key: "notifications", label: "Notifications", href: "/notifications", icon: Bell, category: "manage", hint: "Alerts and digests" },
   { key: "settings", label: "Settings", href: "/settings", icon: Settings, category: "manage", hint: "Control center" },
   { key: "wrapped", label: "Year in Money", href: "/wrapped", icon: Sparkles, category: "manage", hint: "Annual recap" },
 ];
@@ -83,6 +83,6 @@ export interface UtilityItemDefinition {
 
 export const UTILITY_ITEMS: UtilityItemDefinition[] = [
   { key: "search", label: "Search (⌘K)", icon: Search, action: "search" },
-  { key: "notifications", label: "Notifications", icon: Mail, action: "notifications" },
+  { key: "notifications", label: "Notifications", icon: Bell, action: "notifications" },
   { key: "settings", label: "Settings", icon: Settings, action: "settings" },
 ];

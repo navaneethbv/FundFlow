@@ -28,11 +28,21 @@ export default function StatTile({
   chart?: ReactNode;
 }>) {
   const showDelta = delta !== undefined && deltaVs;
-  const isGood = delta !== undefined && (delta >= 0) === upIsGood;
+  // An unchanged figure is neither good nor bad. Reading `delta >= 0` as "up"
+  // paints a flat $0.00 green on one tile and red on the next, which is the
+  // one thing a delta must never do: imply a movement that did not happen.
+  const isFlat = delta === 0;
+  const isGood = delta !== undefined && (delta > 0) === upIsGood;
+  let deltaColor = "var(--viz-muted)";
+  if (!isFlat) deltaColor = isGood ? "var(--viz-good)" : "var(--viz-bad)";
 
   return (
     <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
-      <div className="flex items-start justify-between gap-2">
+      {/* Fixed height, not min-height: the mini charts differ in height
+          (area 44px, sparkline 30px) and a two-line label is taller than a
+          one-line one, so anything elastic here lands the values in a row at
+          different baselines. */}
+      <div className="flex h-11 items-start justify-between gap-2">
         <h3 className="eyebrow">{label}</h3>
         {chart ?? (trend && trend.length >= 2 && <Sparkline values={trend} />)}
       </div>
@@ -40,8 +50,15 @@ export default function StatTile({
         {formatCurrency(value)}
       </p>
       {showDelta && (
-        <p className="mt-2 text-sm font-bold" style={{ color: isGood ? "var(--viz-good)" : "var(--viz-bad)" }}>
-          {delta! >= 0 ? "▲" : "▼"} {formatCurrency(Math.abs(delta!))}{" "}
+        <p className="mt-2 text-sm font-bold" style={{ color: deltaColor }}>
+          {isFlat ? (
+            "No change"
+          ) : (
+            <>
+              {delta! > 0 ? "▲" : "▼"}{" "}
+              <span className="money">{formatCurrency(Math.abs(delta!))}</span>
+            </>
+          )}{" "}
           <span style={{ color: "var(--viz-muted)" }}>vs {deltaVs}</span>
         </p>
       )}

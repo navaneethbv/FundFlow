@@ -158,7 +158,7 @@ export default function SummaryPanel({
               className="rounded-field border border-panel-border bg-panel-2 p-4"
             >
               <p className="text-xs font-semibold text-muted">{currency}</p>
-              <p className="mt-2 font-mono text-2xl font-bold tabular-nums">
+              <p data-money className="mt-2 font-mono text-2xl font-bold tabular-nums">
                 {mode === "percent"
                   ? percentLabel
                   : formatCurrency(netWorth, currency)}
@@ -166,13 +166,13 @@ export default function SummaryPanel({
               <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
                 <div>
                   <dt className="text-muted">Assets</dt>
-                  <dd className="mt-1 font-semibold">
+                  <dd data-money className="mt-1 font-semibold">
                     {formatCurrency(totalFor(summary.assets, currency), currency)}
                   </dd>
                 </div>
                 <div>
                   <dt className="text-muted">Liabilities</dt>
-                  <dd className="mt-1 font-semibold">
+                  <dd data-money className="mt-1 font-semibold">
                     {formatCurrency(
                       totalFor(summary.liabilities, currency),
                       currency,
@@ -213,7 +213,7 @@ export default function SummaryPanel({
                     >
                       <td className="px-2 py-2">{point.date}</td>
                       <td className="px-2 py-2">{currency}</td>
-                      <td className="px-2 py-2 text-right font-mono tabular-nums">
+                      <td data-money className="px-2 py-2 text-right font-mono tabular-nums">
                         {formatCurrency(point.value, currency)}
                       </td>
                     </tr>

@@ -14,75 +14,63 @@ export const FEATURE_FLAG_DEFAULTS = {
   budgetPage: true,
   recurringPage: true,
   /**
-   * Phase 6. Off by default until `20260730190000_saved_reports.sql` is applied
-   * to the live project: the page reads `saved_reports`, and reading a table
-   * that does not exist yet is a 500, not a graceful degrade. Flip this to
-   * `true` in the same change that confirms the migration landed — or set
-   * `FUNDFLOW_FEATURE_FLAGS=reportsPage` to release it per-deployment first.
+   * Phase 6. Released: `20260730190000_saved_reports.sql` is applied, so the
+   * page's `saved_reports` reads resolve. A deployment that somehow lags the
+   * migration would 500 on /reports rather than degrade — re-gate by removing
+   * the default here, not by editing the page.
    */
-  reportsPage: false,
+  reportsPage: true,
   /**
-   * Phase 7. Off by default until `20260730200000_goals_v2.sql` is applied.
-   * Unlike `reportsPage` this does not gate a *new* page: `/goals` and
-   * `/budget` are already released, and both would start reading
-   * `goal_accounts` / `goal_progress_events` the moment this is on. With it
-   * off they behave exactly as they did before Phase 7, so a deployment that
-   * has not run the migration keeps working instead of 500ing two live pages.
+   * Phase 7. Released: `20260730200000_goals_v2.sql` is applied. This one does
+   * not gate a *new* page — `/goals` and `/budget` were already live and both
+   * now read `goal_accounts` / `goal_progress_events`, so a deployment missing
+   * the migration would break two live pages, not one new one.
    */
-  goalsV2: false,
+  goalsV2: true,
   /**
-   * Phase 8. Off by default. No migration is involved — widget layout lives in
-   * the existing `profiles.dashboard_prefs` JSON — so this can be flipped as
-   * soon as the grid has been reviewed. It gates a behaviour change rather
-   * than a schema one: turning it on makes the widget grid the dashboard's
+   * Phase 8. Released. No migration is involved — widget layout lives in the
+   * existing `profiles.dashboard_prefs` JSON. This gates a behaviour change
+   * rather than a schema one: with it on, the widget grid is the dashboard's
    * landing view. Monitor, Plan, and Wealth stay reachable from the same
    * toolbar either way.
    */
-  dashboardWidgets: false,
+  dashboardWidgets: true,
   /**
-   * Phase 9A. Off by default until `20260730210000_investments.sql` is
-   * applied: the page and the daily cron's investment sync both read/write
-   * `securities`, `holdings`, and `holding_snapshots`, and the cron write
-   * would fail on every run without the migration. `sync_jobs.job_type`
-   * (same migration) is also required — the stale-data banners on Dashboard,
-   * Budget, Cash Flow, and Recurring would otherwise read a fresh
-   * investments-only sync as "the bank sync is up to date" once this is on.
+   * Phase 9A. Released: `20260730210000_investments.sql` is applied, covering
+   * `securities`, `holdings`, `holding_snapshots`, and the `sync_jobs.job_type`
+   * column. `job_type` is the load-bearing one — without it the stale-data
+   * banners on Dashboard, Budget, Cash Flow, and Recurring would read a fresh
+   * investments-only sync as "the bank sync is up to date".
    */
-  investmentsPage: false,
+  investmentsPage: true,
   /**
-   * Phase 10. Off by default. No migration is involved — the page reads only
+   * Phase 10. Released. No migration is involved — the page reads only
    * existing accounts/manual_accounts/transactions through the canonical
-   * projection — so this is purely a review gate, the same shape as
+   * projection — so this was purely a review gate, the same shape as
    * `dashboardWidgets`.
    */
-  forecastingPage: false,
+  forecastingPage: true,
   /**
-   * Phase 11. Off by default until `20260730230000_advice.sql` is applied:
-   * the page reads/writes `advice_progress` and the new `profiles`
-   * preference columns, and the route would 500 on every request without it.
+   * Phase 11. Released: `20260730230000_advice.sql` is applied, so the page's
+   * `advice_progress` and `profiles.advice_profile` reads/writes resolve.
    */
-  advicePage: false,
+  advicePage: true,
   /**
-   * Phase 12. Off by default until `20260730240000_manual_transactions_receipts.sql`
-   * is applied: unlike the other Phase-9-through-11 flags, this one gates an
-   * ALREADY-RELEASED page. /transactions is always reachable, and this flag
-   * only decides whether its query selects the new `manual_account_id`/
-   * `source` columns and whether the Add Transaction / Columns controls
-   * render — with it off the ledger behaves exactly as it did before Phase 12
-   * instead of 500ing on every visit to a live page.
+   * Phase 12. Released: `20260730240000_manual_transactions_receipts.sql` is
+   * applied. Unlike the Phase-9-through-11 flags this gates an ALREADY-LIVE
+   * page — /transactions is always reachable, and this flag only decides
+   * whether its query selects `manual_account_id`/`source` and whether the
+   * Add Transaction / Columns controls render.
    */
-  transactionsParity: false,
+  transactionsParity: true,
   /**
-   * Phase 13. Off by default until `20260730250000_profile_and_tags.sql` is
-   * applied. Like `transactionsParity`, this gates an ALREADY-LIVE page:
-   * /settings is always reachable, and the new Profile/Display/Tags sections
-   * are the only ones that read the new profile columns or `user_tags` — the
-   * rest (Security, Institutions, Categories, Merchants, Rules, Household,
-   * Integrations, Data) use tables that already existed and work with this
-   * off. With it off those three sections redirect to Institutions instead
-   * of querying columns that don't exist yet.
+   * Phase 13. Released: `20260730250000_profile_and_tags.sql` is applied. Like
+   * `transactionsParity` this gates an ALREADY-LIVE page: /settings is always
+   * reachable, and the Profile/Display/Tags sections are the only ones reading
+   * the new profile columns or `user_tags`. The rest (Security, Institutions,
+   * Categories, Merchants, Rules, Household, Integrations, Data) predate it.
    */
-  settingsIa: false,
+  settingsIa: true,
 } as const;
 
 export type FeatureFlag = keyof typeof FEATURE_FLAG_DEFAULTS;

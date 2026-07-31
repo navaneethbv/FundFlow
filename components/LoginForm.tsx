@@ -139,19 +139,23 @@ export default function LoginForm() {
     <div className="space-y-6">
       {!mfaRequired ? (
         <form onSubmit={handlePasswordSubmit} className="space-y-4">
-          <Field label="Email">
+          <Field label="Email" htmlFor="login-email">
             <Input
+              id="login-email"
               type="email"
               required
+              autoComplete="email"
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
           </Field>
-          <Field label="Password">
+          <Field label="Password" htmlFor="login-password">
             <Input
+              id="login-password"
               type="password"
               required
+              autoComplete="current-password"
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}

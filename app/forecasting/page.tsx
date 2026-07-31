@@ -62,7 +62,7 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
             </div>
           </dl>
           <p className="mt-3 text-sm text-muted">
-            Net worth today: <span className="font-semibold text-foreground">{formatCurrency(currentNetWorth)}</span>
+            Net worth today: <span className="money font-semibold text-foreground">{formatCurrency(currentNetWorth)}</span>
           </p>
         </Panel>
 
@@ -76,8 +76,9 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
           </h2>
           <p className="mb-4 text-sm text-muted">
             In {assumptions.horizonMonths} months, base case:{" "}
-            <span className="font-semibold text-foreground">{formatCurrency(ending.base)}</span> (
-            {formatCurrency(ending.conservative)} to {formatCurrency(ending.optimistic)})
+            <span className="money font-semibold text-foreground">{formatCurrency(ending.base)}</span> (
+            <span className="money">{formatCurrency(ending.conservative)}</span> to{" "}
+            <span className="money">{formatCurrency(ending.optimistic)}</span>)
           </p>
           <ForecastChart points={points} currentNetWorth={currentNetWorth} />
         </Panel>

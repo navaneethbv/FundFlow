@@ -55,7 +55,7 @@ export default function ForecastChart({
           return (
             <g key={t}>
               <line x1={PAD_LEFT} x2={WIDTH - PAD_RIGHT} y1={y} y2={y} stroke="var(--panel-border)" strokeWidth={1} />
-              <text x={4} y={y + 4} fontSize={10} fill="var(--muted)">
+              <text x={4} y={y + 4} fontSize={10} fill="var(--muted)" className="money">
                 {compactCurrency(t + minValue)}
               </text>
             </g>
@@ -92,9 +92,9 @@ export default function ForecastChart({
           {points.map((p) => (
             <tr key={p.month}>
               <td>{p.month}</td>
-              <td>{formatCurrency(p.conservative)}</td>
-              <td>{formatCurrency(p.base)}</td>
-              <td>{formatCurrency(p.optimistic)}</td>
+              <td data-money>{formatCurrency(p.conservative)}</td>
+              <td data-money>{formatCurrency(p.base)}</td>
+              <td data-money>{formatCurrency(p.optimistic)}</td>
             </tr>
           ))}
         </tbody>

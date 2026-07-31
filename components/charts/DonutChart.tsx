@@ -73,6 +73,7 @@ export default function DonutChart({
           fontSize={20}
           fontWeight={600}
           fill="var(--viz-ink)"
+          className="money"
         >
           {valueFormatter(total)}
         </text>
@@ -93,6 +94,7 @@ export default function DonutChart({
                 {item.label}
               </span>
               <span
+                data-money
                 className="ml-auto tabular-nums font-medium"
                 style={{ color: "var(--viz-ink)" }}
               >

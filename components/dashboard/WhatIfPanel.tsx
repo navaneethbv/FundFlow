@@ -147,7 +147,7 @@ export default function WhatIfPanel({
                 <span className="metric-value text-lg font-bold">
                   {projection.plan.months} mo
                 </span>
-                <span className="block text-xs text-muted">
+                <span data-money className="block text-xs text-muted">
                   {formatCurrency(projection.plan.totalInterest)} interest
                 </span>
               </>

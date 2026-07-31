@@ -51,7 +51,7 @@ export default async function InvestmentsPage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Investments</h1>
             <p className="text-sm text-muted">
-              {formatCurrency(page.total, currency)} total
+              <span className="money">{formatCurrency(page.total, currency)}</span> total
               {page.dayChange && (
                 <span
                   className="ml-2"

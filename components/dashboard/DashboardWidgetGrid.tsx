@@ -1,4 +1,5 @@
 import type { ComponentProps } from "react";
+import { cn } from "@/lib/cn";
 import BudgetWidget from "@/components/dashboard/widgets/BudgetWidget";
 import GoalsWidget from "@/components/dashboard/widgets/GoalsWidget";
 import InvestmentsWidget from "@/components/dashboard/widgets/InvestmentsWidget";
@@ -110,9 +111,16 @@ export default function DashboardWidgetGrid({
   return (
     <div className="grid gap-5 xl:grid-cols-2">
       {keys.map((key) => (
+        // min-w-0: a grid item defaults to min-width:auto, so a widget with a
+        // wide child (table, chart, long merchant name) stretches its track
+        // instead of scrolling inside itself, and takes the whole page into
+        // horizontal overflow on a phone.
         <div
           key={key}
-          className={WIDGET_DEFINITIONS[key].wide ? "xl:col-span-2" : undefined}
+          className={cn(
+            "min-w-0",
+            WIDGET_DEFINITIONS[key].wide && "xl:col-span-2",
+          )}
         >
           {render(key)}
         </div>

@@ -386,13 +386,28 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
               <Input
                 type="search"
                 name="q"
+                aria-label="Search transactions"
                 defaultValue={params.q ?? ""}
                 placeholder="Search transactions"
                 className="pl-9"
               />
             </div>
-            <Input type="month" name="month" defaultValue={month} className="w-auto" />
-            <Select name="accountId" defaultValue={accountId} className="max-w-52">
+            {/* An empty month input paints as "--------- ----" with no visible
+                clue what it filters, so it carries its own name. */}
+            <Input
+              type="month"
+              name="month"
+              aria-label="Filter by month"
+              title="Filter by month"
+              defaultValue={month}
+              className="w-auto"
+            />
+            <Select
+              name="accountId"
+              aria-label="Filter by account"
+              defaultValue={accountId}
+              className="max-w-52"
+            >
               <option value="">All accounts</option>
               {(accounts ?? []).map((a) => (
                 <option key={a.id} value={a.id}>
@@ -496,7 +511,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                         <tr className="border-b border-panel-border bg-panel/60">
                           <td colSpan={rowColumnCount} className="px-4 py-1.5 text-xs font-semibold text-muted">
                             {t.date}
-                            <span className="ml-2 font-normal">
+                            <span data-money className="ml-2 font-normal">
                               {dayTotal < 0 ? "+" : "-"}
                               {formatCurrency(Math.abs(dayTotal))} net
                             </span>
@@ -540,6 +555,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                         </td>
                       )}
                       <td
+                        data-money
                         className="whitespace-nowrap px-4 py-3 text-right align-top font-semibold"
                         style={t.amount < 0 ? { color: "var(--success)" } : { color: "var(--danger)" }}
                       >

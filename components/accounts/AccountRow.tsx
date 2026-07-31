@@ -42,7 +42,7 @@ export default function AccountRow({
       </div>
       <div>
         <p className="text-xs text-muted">Balance</p>
-        <p className="mt-1 font-mono text-sm font-bold tabular-nums">
+        <p data-money className="mt-1 font-mono text-sm font-bold tabular-nums">
           {row.balance === null
             ? "Unavailable"
             : formatCurrency(row.balance, row.currency)}

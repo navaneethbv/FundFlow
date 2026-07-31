@@ -324,7 +324,9 @@ test.describe.serial("Phase 5: recurring page", () => {
       expect(box!.height).toBeGreaterThanOrEqual(44);
     }
 
-    await page.goto("/settings");
+    // Institutions explicitly: /settings lands on Profile, so the bare path
+    // would not contain the institution row this asserts on.
+    await page.goto("/settings?section=institutions");
     await expect(
       page.getByRole("heading", { name: "Settings" }),
     ).toBeVisible();

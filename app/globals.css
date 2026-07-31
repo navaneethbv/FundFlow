@@ -226,9 +226,19 @@ body {
 }
 
 /* Privacy blur (PrivacyToggle): hide amounts from shoulder surfers and
-   screen shares. Cosmetic only — the values are still in the DOM. */
-[data-privacy="blur"] .metric-value {
+   screen shares. Cosmetic only — the values are still in the DOM.
+
+   Three hooks, because money reaches the screen three ways:
+   - `.metric-value` — the big tabular figures (also a type style).
+   - `.money` — what <Money> emits; the default for a one-off amount.
+   - `[data-money]` — a container opt-in, so a table column or list row marks
+     itself once instead of every call site remembering. Amounts vastly
+     outnumber the places that render them, and a privacy control that covers
+     only some of them is worse than none: it tells the user they are hidden
+     while the ledger is still legible over their shoulder. */
+[data-privacy="blur"] :is(.metric-value, .money, [data-money]) {
   filter: blur(9px);
+  -webkit-user-select: none;
   user-select: none;
 }
 

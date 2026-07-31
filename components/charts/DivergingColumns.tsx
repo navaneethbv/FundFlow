@@ -106,10 +106,10 @@ export default function DivergingColumns({
           <g key={t}>
             <line x1={PAD.left} x2={W - PAD.right} y1={yUp(t)} y2={yUp(t)} stroke="var(--viz-grid)" strokeWidth={1} />
             <line x1={PAD.left} x2={W - PAD.right} y1={yDown(t)} y2={yDown(t)} stroke="var(--viz-grid)" strokeWidth={1} />
-            <text x={PAD.left - 6} y={yUp(t) + 3} textAnchor="end" fontSize={10} fill="var(--viz-muted)" style={{ fontVariantNumeric: "tabular-nums" }}>
+            <text x={PAD.left - 6} y={yUp(t) + 3} textAnchor="end" fontSize={10} fill="var(--viz-muted)" className="money" style={{ fontVariantNumeric: "tabular-nums" }}>
               {valueFormatter(t)}
             </text>
-            <text x={PAD.left - 6} y={yDown(t) + 3} textAnchor="end" fontSize={10} fill="var(--viz-muted)" style={{ fontVariantNumeric: "tabular-nums" }}>
+            <text x={PAD.left - 6} y={yDown(t) + 3} textAnchor="end" fontSize={10} fill="var(--viz-muted)" className="money" style={{ fontVariantNumeric: "tabular-nums" }}>
               {valueFormatter(-t)}
             </text>
           </g>
@@ -184,11 +184,11 @@ export default function DivergingColumns({
             {labels.map((l, i) => (
               <tr key={l} className="border-t border-black/5 dark:border-white/10">
                 <td className="py-1 pr-2">{l}</td>
-                <td className="py-1 pr-2">{valueFormatter(up[i] ?? 0)}</td>
-                <td className="py-1 pr-2">{valueFormatter(down[i] ?? 0)}</td>
-                <td className="py-1 pr-2">{valueFormatter((up[i] ?? 0) - (down[i] ?? 0))}</td>
+                <td data-money className="py-1 pr-2">{valueFormatter(up[i] ?? 0)}</td>
+                <td data-money className="py-1 pr-2">{valueFormatter(down[i] ?? 0)}</td>
+                <td data-money className="py-1 pr-2">{valueFormatter((up[i] ?? 0) - (down[i] ?? 0))}</td>
                 {line && (
-                  <td className="py-1 pr-2">
+                  <td data-money className="py-1 pr-2">
                     {valueFormatter(line.values[i] ?? 0)}
                   </td>
                 )}
