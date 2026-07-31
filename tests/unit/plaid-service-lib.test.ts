@@ -271,4 +271,17 @@ describe("lib/plaid-service", () => {
     expect(map.get("plaid-acc-1")).toBe("db-acc-1");
     expect(map.get("plaid-acc-2")).toBe("db-acc-2");
   });
+
+  it("throws errors when DB operations fail", async () => {
+    mockServiceClient.from.mockReturnValue({
+      select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: new Error("DB Error") }) }) }),
+      upsert: () => Promise.resolve({ error: new Error("Upsert Error") }),
+      update: () => ({ eq: () => Promise.resolve({ error: new Error("Update Error") }) }),
+    });
+
+    await expect(getItemByPlaidItemId("p1")).rejects.toThrow("DB Error");
+    await expect(upsertAccounts("u1", "i1", [{ account_id: "a1", balances: {} }] as any)).rejects.toThrow("Upsert Error");
+    await expect(updateItemCursor("i1", "c1")).rejects.toThrow("Update Error");
+    await expect(setItemStatus("i1", "error")).rejects.toThrow("Update Error");
+  });
 });
