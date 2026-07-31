@@ -37,7 +37,7 @@ describe("UI overhaul primitives and shell", () => {
 
     expect(navSource).toContain("active");
     expect(navSource).toContain("Manage");
-    expect(navSource).toContain("lg:hidden");
+    expect(navSource).toContain("MobileNavigation");
   });
 
   it("keeps primary navigation out of the utility top bar", () => {

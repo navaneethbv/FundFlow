@@ -20,6 +20,7 @@ export {
   LineChart,
   LogOut,
   Mail,
+  Menu,
   Moon,
   PiggyBank,
   Plus,
@@ -35,4 +36,5 @@ export {
   TrendingUp,
   Upload,
   Wallet,
+  X,
 } from "lucide-react";

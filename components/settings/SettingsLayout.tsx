@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { SETTINGS_SECTIONS, type SettingsSection } from "@/components/settings/settings-nav";
+import SettingsSectionPicker from "@/components/settings/SettingsSectionPicker";
 
 /**
  * Task-based side navigation. Each link is a plain `<Link>` to
@@ -19,8 +20,9 @@ export default function SettingsLayout({
 }>) {
   const visibleSections = SETTINGS_SECTIONS.filter((s) => !hiddenSections.includes(s.key));
   return (
-    <div className="grid gap-6 lg:grid-cols-[14rem_1fr]">
-      <nav aria-label="Settings sections" className="space-y-1">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[14rem_minmax(0,1fr)]">
+      <SettingsSectionPicker active={active} sections={visibleSections} />
+      <nav aria-label="Settings sections" className="hidden min-w-0 space-y-1 lg:block">
         {visibleSections.map((section) => (
           <Link
             key={section.key}
@@ -38,7 +40,7 @@ export default function SettingsLayout({
           </Link>
         ))}
       </nav>
-      <div className="space-y-6">{children}</div>
+      <div className="min-w-0 space-y-6">{children}</div>
     </div>
   );
 }

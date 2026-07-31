@@ -134,7 +134,7 @@ export default function TransactionEditor({
         type="button"
         onClick={openEditor}
         className={cn(
-          "rounded-field px-2 py-1 text-xs font-medium transition-colors",
+          "inline-flex min-h-11 min-w-11 items-center justify-center rounded-field px-2 py-1 text-xs font-medium transition-colors sm:min-h-0 sm:min-w-0",
           hasAnnotations
             ? "text-accent hover:bg-panel-hover"
             : "text-muted hover:bg-panel-hover hover:text-foreground",

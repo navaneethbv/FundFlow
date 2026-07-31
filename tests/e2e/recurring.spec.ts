@@ -11,9 +11,17 @@ const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
 const RUN = Boolean(
   SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY && SUPABASE_SECRET_KEY,
 );
+const FORECASTING_ON = (process.env.FUNDFLOW_FEATURE_FLAGS ?? "")
+  .split(",")
+  .map((name) => name.trim())
+  .includes("forecastingPage");
 const stamp = Date.now();
 const password = "RecurringE2E-Password-123!";
 const email = `recurring-e2e-${stamp}@example.com`;
+const merchantName =
+  "PAYPAL 401(K) SAVINGS PLAN AUTOMATIC CONTRIBUTION 7538";
+const institutionName =
+  "American Express Retirement and Investment Services";
 // Anchoring the demo stream on today's date (rather than a fixed day-of-month
 // like the 15th) keeps the fixture correct regardless of which day the suite
 // actually runs on: a dueDate equal to "today" always resolves to the
@@ -74,7 +82,7 @@ test.describe.serial("Phase 5: recurring page", () => {
       .insert({
         user_id: userId,
         plaid_item_id: `recurring-e2e-item-${stamp}`,
-        institution_name: "Recurring Test Bank",
+        institution_name: institutionName,
         status: "disconnected",
         access_token_ciphertext: "e2e",
         access_token_iv: "e2e",
@@ -108,8 +116,8 @@ test.describe.serial("Phase 5: recurring page", () => {
         account_id: account.id,
         stream_id: `recurring-e2e-stream-${stamp}`,
         stream_type: "outflow",
-        description: "Test Streaming Co",
-        merchant_name: "Test Streaming Co",
+        description: merchantName,
+        merchant_name: merchantName,
         average_amount: 42,
         last_amount: 42,
         frequency: "MONTHLY",
@@ -129,6 +137,20 @@ test.describe.serial("Phase 5: recurring page", () => {
       attempts: 1,
     });
     if (syncError) throw syncError;
+
+    const { error: transactionError } = await admin.from("transactions").insert({
+      user_id: userId,
+      account_id: account.id,
+      plaid_transaction_id: `responsive-e2e-transaction-${stamp}`,
+      date: today,
+      amount: 42,
+      name: merchantName,
+      merchant_name: merchantName,
+      pfc_primary: "GENERAL_MERCHANDISE",
+      pfc_detailed: "GENERAL_MERCHANDISE_OTHER",
+      pending: false,
+    });
+    if (transactionError) throw transactionError;
   });
 
   test.afterAll(async () => {
@@ -189,7 +211,7 @@ test.describe.serial("Phase 5: recurring page", () => {
     // clear (router.refresh() re-renders the server-rendered page, which
     // includes AppSidebar).
     await page.getByRole("tab", { name: /^All/ }).click();
-    const manageRow = page.locator("li").filter({ hasText: "Test Streaming Co" });
+    const manageRow = page.locator("li").filter({ hasText: merchantName });
     await expect(manageRow.getByRole("button", { name: "Confirm" })).toBeVisible();
     const confirmPatch = page.waitForResponse(
       (response) =>
@@ -221,7 +243,7 @@ test.describe.serial("Phase 5: recurring page", () => {
     // averageAmount let tabbing past an untouched field silently convert it
     // into a permanent override.
     const amountInput = page.getByRole("spinbutton", {
-      name: "Expected amount for Test Streaming Co",
+      name: `Expected amount for ${merchantName}`,
     });
     await expect(amountInput).toHaveValue("");
     await expect(amountInput).toHaveAttribute("placeholder", "42");
@@ -235,7 +257,7 @@ test.describe.serial("Phase 5: recurring page", () => {
     await amountInput.blur();
     await amountPatch;
     await page.getByRole("tab", { name: /^Upcoming/ }).click();
-    const upcomingRow = page.locator("li").filter({ hasText: "Test Streaming Co" });
+    const upcomingRow = page.locator("li").filter({ hasText: merchantName });
     await expect(upcomingRow.getByText("$55.00", { exact: true })).toBeVisible();
 
     // Month navigation preserves scope in the URL.
@@ -269,5 +291,101 @@ test.describe.serial("Phase 5: recurring page", () => {
     expect(pageErrors).toEqual([]);
     expect(failedAppRequests).toEqual([]);
     expect(unexpectedConsoleIssues).toEqual([]);
+  });
+
+  test("responsive signed-in surfaces contain long labels and preserve mobile interactions", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    await page.goto("/dashboard");
+    await expect(
+      page.getByRole("heading", { name: "Financial command center" }),
+    ).toBeVisible();
+
+    const geometry = await page.evaluate(() => ({
+      contentWidth: Math.max(
+        document.documentElement.scrollWidth,
+        document.body.scrollWidth,
+      ),
+      viewportWidth: document.documentElement.clientWidth,
+    }));
+    expect(geometry.contentWidth).toBeLessThanOrEqual(
+      geometry.viewportWidth + 1,
+    );
+
+    const accountFilters = page
+      .getByRole("navigation", { name: "Account filter" })
+      .getByRole("link");
+    for (let index = 0; index < (await accountFilters.count()); index += 1) {
+      const box = await accountFilters.nth(index).boundingBox();
+      expect(box, "account filter must render").not.toBeNull();
+      expect(box!.height).toBeGreaterThanOrEqual(44);
+    }
+
+    await page.goto("/settings");
+    await expect(
+      page.getByRole("heading", { name: "Settings" }),
+    ).toBeVisible();
+    const settingsGeometry = await page.evaluate(() => ({
+      contentWidth: Math.max(
+        document.documentElement.scrollWidth,
+        document.body.scrollWidth,
+      ),
+      viewportWidth: document.documentElement.clientWidth,
+    }));
+    expect(settingsGeometry.contentWidth).toBeLessThanOrEqual(
+      settingsGeometry.viewportWidth + 1,
+    );
+
+    const institutionRow = page.locator("li").filter({
+      hasText: institutionName,
+    });
+    const institutionNameBox = await institutionRow
+      .locator(":scope > span")
+      .first()
+      .boundingBox();
+    const institutionActionsBox = await institutionRow
+      .locator(":scope > span")
+      .last()
+      .boundingBox();
+    expect(institutionNameBox).not.toBeNull();
+    expect(institutionActionsBox).not.toBeNull();
+    expect(institutionActionsBox!.y).toBeGreaterThanOrEqual(
+      institutionNameBox!.y + institutionNameBox!.height,
+    );
+
+    const sectionPicker = page.getByRole("combobox", {
+      name: "Settings section",
+    });
+    await expect(sectionPicker).toBeVisible();
+    await expect(sectionPicker).toHaveValue("institutions");
+    await sectionPicker.selectOption("security");
+    await expect(page).toHaveURL(/section=security/);
+
+    await page.goto("/transactions");
+    const editor = page.getByRole("button", {
+      name: "Add notes or splits",
+    });
+    await expect(editor).toBeVisible();
+    const editorBox = await editor.boundingBox();
+    expect(editorBox, "transaction editor must render").not.toBeNull();
+    expect(editorBox!.width).toBeGreaterThanOrEqual(44);
+    expect(editorBox!.height).toBeGreaterThanOrEqual(44);
+
+    if (FORECASTING_ON) {
+      await page.goto("/forecasting");
+      await expect(
+        page.getByRole("heading", { name: "Forecasting" }),
+      ).toBeVisible();
+      const startingValues = page.locator("dl > div");
+      await expect(startingValues).toHaveCount(3);
+      for (let index = 0; index < 3; index += 1) {
+        const box = await startingValues.nth(index).boundingBox();
+        expect(box, "forecast value must render").not.toBeNull();
+        expect(box!.width).toBeGreaterThanOrEqual(250);
+      }
+    }
   });
 });
