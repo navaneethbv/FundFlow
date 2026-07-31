@@ -29,26 +29,6 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
-      - name: Wait for storage schema bootstrap
-        # pg_isready only proves Postgres accepts connections; the supabase
-        # image keeps running its own chain of docker-entrypoint-initdb.d
-        # storage/auth migrations after that. `storage.buckets` exists
-        # immediately but its `public` column is added by a later migration
-        # in that chain - no PR touched storage.buckets before this one, so
-        # the race was previously dormant. Poll for the column instead of
-        # assuming pg_isready means "fully migrated."
-        run: |
-          for i in $(seq 1 60); do
-            if psql "$DATABASE_URL" -tAc "
-              select 1 from information_schema.columns
-               where table_schema = 'storage' and table_name = 'buckets' and column_name = 'public'
-            " 2>/dev/null | grep -q 1; then
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "storage.buckets.public never appeared within 60s" >&2
-          exit 1
       - name: Prepare auth schema stubs
         # Migrations reference auth.users, auth.uid() and the `authenticated`
         # role. The supabase image ships all three, and its auth schema is
@@ -72,6 +52,17 @@ jobs:
               end if;
             end
             \$\$;
+          "
+      - name: Prepare storage schema stubs
+        # The bare postgres image's own bootstrap creates storage.buckets with
+        # only id/name/owner/created_at/updated_at - `public` is added by the
+        # real storage-api service's migrations, which this smoke-check never
+        # runs. Add only the column our migrations reference, same rationale
+        # as the auth stub above.
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
+            alter table storage.buckets
+              add column if not exists public boolean not null default false;
           "
       - name: Apply every migration in filename order
         run: |
