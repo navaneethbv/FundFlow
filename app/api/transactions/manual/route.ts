@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     if (error) throw error;
 
     if (input.goalId || input.notes) {
-      const linkRequest = new NextRequest("http://internal/api/transactions/annotate", {
+      const linkRequest = new NextRequest("https://internal/api/transactions/annotate", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

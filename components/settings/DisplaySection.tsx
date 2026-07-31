@@ -22,8 +22,11 @@ export default function DisplaySection({ initialPrefs }: Readonly<{ initialPrefs
   async function update(patch: Partial<DisplayPrefs>) {
     setBusy(true);
     setStatus(null);
-    const next = { ...prefs, ...patch };
-    setPrefs(next);
+    let previous: DisplayPrefs = prefs;
+    setPrefs((current) => {
+      previous = current;
+      return { ...current, ...patch };
+    });
     try {
       const response = await fetch("/api/settings/profile", {
         method: "PATCH",
@@ -34,7 +37,7 @@ export default function DisplaySection({ initialPrefs }: Readonly<{ initialPrefs
         setStatus("Saved.");
         router.refresh();
       } else {
-        setPrefs(prefs); // roll back
+        setPrefs(previous); // roll back to the state just before this patch
       }
     } finally {
       setBusy(false);
