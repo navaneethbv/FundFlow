@@ -3,6 +3,7 @@ name: Migration smoke-check
 on:
   pull_request:
     paths:
+      - ".github/workflows/migration-check.yml"
       - "supabase/migrations/**"
       - "scripts/check-rls.sql"
 
@@ -12,68 +13,26 @@ permissions:
 jobs:
   apply-and-verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    services:
-      postgres:
-        image: supabase/postgres:15.8.1.085
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
+    timeout-minutes: 20
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      SUPABASE_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
-      - name: Prepare auth schema stubs
-        # Migrations reference auth.users, auth.uid() and the `authenticated`
-        # role. The supabase image ships all three, and its auth schema is
-        # owned by another role — so create each only when it is genuinely
-        # missing. An unconditional "create if not exists" is denied on that
-        # image, since permissions are checked before existence.
-        run: |
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
-            do \$\$
-            begin
-              if to_regclass('auth.users') is null then
-                create schema if not exists auth;
-                create table auth.users (id uuid primary key, email text);
-              end if;
-              if to_regproc('auth.uid') is null then
-                create function auth.uid() returns uuid
-                  language sql stable as 'select null::uuid';
-              end if;
-              if not exists (select 1 from pg_roles where rolname = 'authenticated') then
-                create role authenticated;
-              end if;
-            end
-            \$\$;
-          "
-      - name: Prepare storage schema stubs
-        # The bare postgres image's own bootstrap creates storage.buckets with
-        # only id/name/owner/created_at/updated_at - `public` is added by the
-        # real storage-api service's migrations, which this smoke-check never
-        # runs. Add only the column our migrations reference, same rationale
-        # as the auth stub above. storage.buckets is owned by
-        # supabase_storage_admin, not postgres (the image demotes postgres
-        # from superuser during its own bootstrap), so altering it needs
-        # SET ROLE - postgres is already granted membership by that bootstrap.
-        run: |
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
-            set role supabase_storage_admin;
-            alter table storage.buckets
-              add column if not exists public boolean not null default false;
-            reset role;
-          "
-      - name: Apply every migration in filename order
-        run: |
-          for f in supabase/migrations/*.sql; do
-            echo "== applying $f"
-            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
-          done
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.109.0
+
+      - name: Start Supabase local stack
+        run: supabase start
+
+      - name: Apply every migration from a clean database
+        run: supabase db reset --local --no-seed
+
       - name: Assert RLS on every public table
-        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-rls.sql
+        run: supabase db query --local --file scripts/check-rls.sql
+
+      - name: Stop Supabase local stack
+        if: always()
+        run: supabase stop --no-backup || true

@@ -397,6 +397,7 @@ suite("API routes integration", () => {
         user: { client_user_id: tempUserId },
         client_name: "FundFlow",
         products: ["transactions"],
+        optional_products: ["investments"],
         country_codes: ["US"],
         language: "en",
         transactions: {
