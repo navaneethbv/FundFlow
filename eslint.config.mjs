@@ -16,6 +16,7 @@ const eslintConfig = defineConfig([
     "coverage/**",
     ".remember/**",
     "img/**",
+    ".agents/**",
   ]),
 ]);
 
