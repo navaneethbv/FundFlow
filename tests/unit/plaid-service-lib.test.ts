@@ -280,7 +280,7 @@ describe("lib/plaid-service", () => {
     });
 
     await expect(getItemByPlaidItemId("p1")).rejects.toThrow("DB Error");
-    await expect(upsertAccounts("u1", "i1", [{ account_id: "a1", balances: {} }] as any)).rejects.toThrow("Upsert Error");
+    await expect(upsertAccounts("u1", "i1", [{ account_id: "a1", balances: {} }] as never)).rejects.toThrow("Upsert Error");
     await expect(updateItemCursor("i1", "c1")).rejects.toThrow("Update Error");
     await expect(setItemStatus("i1", "error")).rejects.toThrow("Update Error");
   });

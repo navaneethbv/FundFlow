@@ -25,7 +25,6 @@ vi.mock("@/lib/http", () => ({
 
 import { POST } from "@/app/api/plaid/webhook/route";
 import { NextRequest } from "next/server";
-import type { PlaidApi } from "plaid";
 
 describe("POST /api/plaid/webhook", () => {
   const originalEnv = { ...process.env };
