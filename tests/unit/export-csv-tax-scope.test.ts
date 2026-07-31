@@ -99,4 +99,26 @@ describe("GET /api/export/csv?scope=tax — API-token path", () => {
     await csvGet(request);
     expect(scopedToUser("transactions", TOKEN_USER)).toBe(true);
   });
+
+  it("handles null merchant/category fallbacks in tax scope and generates CSV", async () => {
+    seeds.transaction_annotations = [{ transaction_id: "t1" }];
+    seeds.transactions = [
+      { date: "2026-07-01", amount: 99.99, merchant_name: null, name: null, pfc_primary: null },
+    ];
+    const res = await csvGet(request);
+    expect(res.status).toBe(200);
+    const csvText = await res.text();
+    expect(csvText).toContain("Unknown");
+    expect(csvText).toContain("UNCATEGORIZED");
+  });
+
+  it("handles empty tagged transaction annotations and invalid API token", async () => {
+    seeds.transaction_annotations = [];
+    const res = await csvGet(request);
+    expect(res.status).toBe(200);
+
+    mockVerifyApiToken.mockResolvedValueOnce(null);
+    const unauthRes = await csvGet(request);
+    expect(unauthRes.status).toBe(401);
+  });
 });

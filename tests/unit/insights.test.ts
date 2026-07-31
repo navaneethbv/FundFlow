@@ -539,4 +539,23 @@ describe("detectNetWorthMilestones", () => {
       }),
     ).toEqual([]);
   });
+
+  it("handles weekly, quarterly, and yearly cadence in detectPaychecks", () => {
+    const res = detectPaychecks({
+      incomeStreams: [
+        { name: "Weekly Job", amount: 500, frequency: "weekly" },
+        { name: "Quarterly Div", amount: 1200, frequency: "quarterly" },
+        { name: "Yearly Bonus", amount: 5000, frequency: "yearly" },
+      ],
+      incomeTransactions: [
+        { date: "2026-07-01", merchant: "Weekly Job", amount: -500 },
+        { date: "2026-07-01", merchant: "Quarterly Div", amount: -1200 },
+        { date: "2026-07-01", merchant: "Yearly Bonus", amount: -5000 },
+      ],
+      asOf: "2026-07-10",
+    });
+    expect(res.paychecks[0]!.nextPayDate).toBe("2026-07-15");
+    expect(res.paychecks[1]!.nextPayDate).toBe("2026-10-01");
+    expect(res.paychecks[2]!.nextPayDate).toBe("2027-07-01");
+  });
 });

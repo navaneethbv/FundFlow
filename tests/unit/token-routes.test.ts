@@ -216,6 +216,20 @@ describe("/api/calendar/token", () => {
       revoked_at: expect.any(String),
     });
   });
+
+  it("returns 401 when unauthenticated or handles DB error in calendar token route", async () => {
+    mockRequireUser.mockResolvedValue(new NextResponse("unauthorized", { status: 401 }));
+    const postRes = await calTokenPost(body("http://localhost/api/calendar/token", "POST", {}));
+    expect(postRes.status).toBe(401);
+
+    const delRes = await calTokenDelete(body("http://localhost/api/calendar/token", "DELETE", { id: "c1" }));
+    expect(delRes.status).toBe(401);
+
+    const errorClient = clientStub({ calendar_tokens: { error: { code: "50000" } } });
+    mockRequireUser.mockResolvedValue({ user: { id: USER }, supabase: errorClient });
+    await expect(calTokenPost(body("http://localhost/api/calendar/token", "POST", {}))).rejects.toThrow();
+    await expect(calTokenDelete(body("http://localhost/api/calendar/token", "DELETE", { id: "c1" }))).rejects.toThrow();
+  });
 });
 
 describe("GET /api/calendar/[token]", () => {
@@ -312,5 +326,45 @@ describe("GET /api/calendar/[token]", () => {
 
     expect(text).toContain("Gym");
     expect(text).not.toContain("42");
+  });
+
+  it("handles description fallback, inflow stream_type, and various frequencies", async () => {
+    serviceClient = clientStub({
+      calendar_tokens: { data: { user_id: USER, include_amounts: true } },
+      recurring_streams: {
+        data: [
+          {
+            merchant_name: null,
+            description: "Paycheck Deposit",
+            average_amount: 2500,
+            last_amount: null,
+            frequency: "biweekly",
+            stream_type: "inflow",
+            is_active: true,
+          },
+          {
+            merchant_name: "Insurance",
+            average_amount: 300,
+            last_amount: 300,
+            frequency: "quarterly",
+            stream_type: "outflow",
+            is_active: true,
+          },
+          {
+            merchant_name: "Domain",
+            average_amount: 15,
+            last_amount: 15,
+            frequency: "yearly",
+            stream_type: "outflow",
+            is_active: true,
+          },
+        ],
+      },
+    });
+
+    const res = await calFeedGet(new Request("http://localhost"), params("k".repeat(40)));
+    const text = await res.text();
+    expect(res.status).toBe(200);
+    expect(text).toContain("Paycheck Deposit");
   });
 });

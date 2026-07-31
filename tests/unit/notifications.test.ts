@@ -360,4 +360,32 @@ describe("notifications manager", () => {
     const countErr = await getUnreadNotificationCount(mockSupabaseError as never, "user-1");
     expect(countErr).toBe(0);
   });
+
+  it("handles non-matching subjectKey and DB errors in createNotification", async () => {
+    mockSingle.mockResolvedValueOnce({
+      data: { low_cash_forecast: true },
+      error: null,
+    });
+    mockGte.mockResolvedValueOnce({
+      data: [{ title: "Wells Fargo alert", body: "Balance low" }],
+      error: null,
+    });
+    mockSingle.mockResolvedValueOnce({
+      data: { id: "notif-new" },
+      error: null,
+    });
+
+    const res = await createNotification(
+      "user-1",
+      "low_cash_forecast",
+      { title: "Chase alert", body: "Low cash" },
+      "Chase"
+    );
+    expect(res).toEqual({ id: "notif-new" });
+
+    // DB query error handling
+    mockSingle.mockResolvedValueOnce({ data: { low_cash_forecast: true }, error: null });
+    mockGte.mockResolvedValueOnce({ data: null, error: new Error("Dedupe Error") });
+    await expect(createNotification("user-1", "low_cash_forecast", { title: "t", body: "b" })).rejects.toThrow("Dedupe Error");
+  });
 });

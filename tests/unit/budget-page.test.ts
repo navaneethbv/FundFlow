@@ -274,4 +274,24 @@ describe("proposeBudgetFromHistory", () => {
       }),
     ]);
   });
+
+  it("proposes income and flexible expense groups from history and skips existing budgets", () => {
+    const proposals = proposeBudgetFromHistory({
+      txnsLast3Months: [
+        transaction("pay-1", "2026-05-01", -3000, "PAYCHECK", "income"),
+        transaction("pay-2", "2026-06-01", -3000, "PAYCHECK", "income"),
+        transaction("coffee-1", "2026-05-10", 15, "COFFEE"),
+        transaction("coffee-2", "2026-06-10", 20, "COFFEE"),
+      ],
+      existingCategories: new Set(["paycheck"]),
+    });
+
+    expect(proposals).toContainEqual(
+      expect.objectContaining({
+        category: "coffee",
+        group_name: "flexible",
+      }),
+    );
+    expect(proposals.some((p) => p.category === "paycheck")).toBe(false);
+  });
 });

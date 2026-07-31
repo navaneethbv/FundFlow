@@ -110,6 +110,12 @@ describe("Export API Routes", () => {
   });
 
   describe("GET /api/export/takeout", () => {
+    it("returns early if not authenticated", async () => {
+      mockRequireUser.mockResolvedValue(new NextResponse("unauthorized", { status: 401 }));
+      const res = await takeoutGet();
+      expect(res.status).toBe(401);
+    });
+
     it("returns data takeout payload scoped to the caller", async () => {
       // Tables with a household-shared read policy must be filtered by
       // user_id, or takeout hands the caller a household member's records.

@@ -231,6 +231,16 @@ describe("loadRecurringData", () => {
         anchorMonth: "2026-07",
       }),
     ).rejects.toThrow("recurring_query_failed:recurring_streams:PGRST116");
+
+    const clientNoCode = makeClient({
+      recurring_streams: { error: {} },
+    });
+    await expect(
+      loadRecurringData(clientNoCode as never, {
+        userId: "user-1",
+        anchorMonth: "2026-07",
+      }),
+    ).rejects.toThrow("recurring_query_failed:recurring_streams");
   });
 
   it("maps transaction dates from stream transaction joins", async () => {

@@ -330,4 +330,30 @@ describe("planning roadmap features", () => {
     expect(depthView.sinkingFunds).toHaveLength(1);
     expect(depthView.sinkingFunds[0]!.monthlyContribution).toBe(100);
   });
+
+  it("builds recurring statuses with late, expected, paid, and unusual amount reviews", async () => {
+    const { buildRecurringStatuses } = await import("@/lib/planning-depth");
+
+    const statuses = buildRecurringStatuses({
+      asOf: "2026-07-20",
+      unusualAmountPct: 0.1,
+      items: [
+        { id: "i1", name: "Gym", amount: 50, itemType: "expense", nextDate: "2026-07-10" },
+        { id: "i2", name: "Water", amount: 30, itemType: "expense", nextDate: "2026-07-19" },
+        { id: "i3", name: "Electric", amount: 100, itemType: "expense", nextDate: "2026-07-15" },
+        { id: "i4", name: "Bonus", amount: 500, itemType: "income", nextDate: "2026-07-15" },
+      ],
+      transactions: [
+        { id: "t1", date: "2026-07-15", merchant: "Electric", amount: 150 },
+        { id: "t2", date: "2026-07-15", merchant: "Bonus", amount: 700 },
+      ],
+    });
+
+    expect(statuses[0]!.status).toBe("late");
+    expect(statuses[1]!.status).toBe("expected");
+    expect(statuses[2]!.status).toBe("unusual_amount");
+    expect(statuses[2]!.reviewPrompt).toContain("Review Electric");
+    expect(statuses[3]!.status).toBe("unusual_amount");
+    expect(statuses[3]!.reviewPrompt).toBeNull();
+  });
 });
