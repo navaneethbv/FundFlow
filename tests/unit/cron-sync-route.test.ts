@@ -5,6 +5,11 @@ vi.mock("@/lib/sync", () => ({
   syncAllForUser: (...args: unknown[]) => mockSyncAllForUser(...args),
 }));
 
+const mockSyncInvestmentsForUser = vi.fn().mockResolvedValue(0);
+vi.mock("@/lib/investment-sync", () => ({
+  syncInvestmentsForUser: (...args: unknown[]) => mockSyncInvestmentsForUser(...args),
+}));
+
 const mockRefreshRecurringForUser = vi.fn();
 vi.mock("@/lib/recurring", () => ({
   refreshRecurringForUser: (...args: unknown[]) =>
@@ -146,6 +151,70 @@ describe("GET /api/cron/sync", () => {
       expect.any(String),
       expect.any(String),
     );
+  });
+
+  it("isolates an investment sync failure from the rest of the daily run", async () => {
+    mockSafeEqual.mockReturnValue(true);
+    // investmentsPage defaults off; opt in for this test only.
+    process.env.FUNDFLOW_FEATURE_FLAGS = "investmentsPage";
+    const request = new NextRequest("http://localhost/api/cron/sync", {
+      headers: { authorization: "Bearer test-secret" },
+    });
+
+    mockServiceClient.from.mockImplementation((table) => {
+      const data: unknown[] = table === "plaid_items" ? [{ user_id: "u1" }] : [];
+      const query = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
+        lt: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockResolvedValue({ error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown[]; error: unknown }) => unknown) => unknown,
+      };
+      query.then = (onfulfilled) => Promise.resolve({ data, error: null }).then(onfulfilled);
+      return query;
+    });
+    mockSyncInvestmentsForUser.mockRejectedValue(new Error("PRODUCT_NOT_READY"));
+
+    try {
+      const res = await GET(request);
+      expect(res.status).toBe(200);
+      // Transaction sync, snapshots, and the digest pipeline all still ran.
+      expect(mockSyncAllForUser).toHaveBeenCalledWith("u1");
+      expect(mockWriteDailyAccountSnapshots).toHaveBeenCalledWith("u1");
+      expect(mockAlertCronFailure).not.toHaveBeenCalled();
+      expect(mockLogError).toHaveBeenCalledWith("cron.sync.investments", expect.any(Error));
+    } finally {
+      delete process.env.FUNDFLOW_FEATURE_FLAGS;
+    }
+  });
+
+  it("does not run investment sync at all while investmentsPage is off", async () => {
+    mockSafeEqual.mockReturnValue(true);
+    const request = new NextRequest("http://localhost/api/cron/sync", {
+      headers: { authorization: "Bearer test-secret" },
+    });
+    mockServiceClient.from.mockImplementation((table) => {
+      const data: unknown[] = table === "plaid_items" ? [{ user_id: "u1" }] : [];
+      const query = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
+        lt: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockResolvedValue({ error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown[]; error: unknown }) => unknown) => unknown,
+      };
+      query.then = (onfulfilled) => Promise.resolve({ data, error: null }).then(onfulfilled);
+      return query;
+    });
+
+    const res = await GET(request);
+    expect(res.status).toBe(200);
+    expect(mockSyncInvestmentsForUser).not.toHaveBeenCalled();
   });
 
   it("alerts the admin when a user's sync fails", async () => {

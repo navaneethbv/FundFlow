@@ -257,6 +257,12 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
 
       expect(res.status).toBe(200);
       expect(json).toEqual({ link_token: "link-sandbox-123" });
+      // Investments is optional, not required: existing Transactions-only
+      // links keep working, and an institution without Investments support
+      // still shows up in Link instead of being filtered out.
+      expect(mockLinkTokenCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ optional_products: ["investments"] }),
+      );
     });
 
     it("creates a link token in update mode for existing item", async () => {
@@ -272,6 +278,14 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
 
       expect(res.status).toBe(200);
       expect(json).toEqual({ link_token: "link-update-123" });
+      // Update mode reconnects an existing Item; adding a new product is a
+      // separate, deliberate action, not a side effect of reconnecting.
+      const updateModeCall = mockLinkTokenCreate.mock.calls.at(-1)![0] as {
+        optional_products?: unknown;
+        products?: unknown;
+      };
+      expect(updateModeCall.optional_products).toBeUndefined();
+      expect(updateModeCall.products).toBeUndefined();
     });
 
     it("returns 404 in update mode if item not found", async () => {

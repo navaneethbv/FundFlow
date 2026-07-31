@@ -16,12 +16,66 @@ describe("Sidebar Navigation Contract", () => {
     expect(isFeatureEnabled(budgetItem!.featureFlag!, { FUNDFLOW_FEATURE_FLAGS: "" })).toBe(true);
   });
 
-  it("does not include unreleased future-phase routes in NAV_ITEMS", () => {
-    const keys = NAV_ITEMS.map((item) => item.key);
-    expect(keys).not.toContain("reports");
-    expect(keys).not.toContain("investments");
-    expect(keys).not.toContain("forecasting");
-    expect(keys).not.toContain("advice");
+  it("includes an advice entry gated by advicePage in the planning category", () => {
+    const advice = NAV_ITEMS.find((item) => item.key === "advice");
+    expect(advice).toBeDefined();
+    expect(advice!.category).toBe("planning");
+    expect(advice!.featureFlag).toBe("advicePage");
+    expect(advice!.href).toBe("/advice");
+    expect(existsSync("app/advice/page.tsx")).toBe(true);
+  });
+
+  it("keeps /advice gated until its advice_progress migration is applied", () => {
+    expect(isFeatureEnabled("advicePage", { FUNDFLOW_FEATURE_FLAGS: "" })).toBe(false);
+    expect(isFeatureEnabled("advicePage", { FUNDFLOW_FEATURE_FLAGS: "advicePage" })).toBe(true);
+  });
+
+  it("includes a forecasting entry gated by forecastingPage in the planning category", () => {
+    const forecasting = NAV_ITEMS.find((item) => item.key === "forecasting");
+    expect(forecasting).toBeDefined();
+    expect(forecasting!.category).toBe("planning");
+    expect(forecasting!.featureFlag).toBe("forecastingPage");
+    expect(forecasting!.href).toBe("/forecasting");
+    expect(existsSync("app/forecasting/page.tsx")).toBe(true);
+  });
+
+  it("includes an investments entry gated by investmentsPage in the planning category", () => {
+    const investments = NAV_ITEMS.find((item) => item.key === "investments");
+    expect(investments).toBeDefined();
+    expect(investments!.category).toBe("planning");
+    expect(investments!.featureFlag).toBe("investmentsPage");
+    expect(investments!.href).toBe("/investments");
+    expect(existsSync("app/investments/page.tsx")).toBe(true);
+  });
+
+  it("keeps /investments gated until its investments migration is applied", () => {
+    // The page and the daily cron both read/write securities, holdings, and
+    // holding_snapshots; a default-on flag would 500 every deployment that
+    // has not run 20260730210000_investments.sql yet.
+    expect(isFeatureEnabled("investmentsPage", { FUNDFLOW_FEATURE_FLAGS: "" })).toBe(false);
+    expect(
+      isFeatureEnabled("investmentsPage", { FUNDFLOW_FEATURE_FLAGS: "investmentsPage" }),
+    ).toBe(true);
+  });
+
+  it("includes a reports entry gated by reportsPage in the primary category", () => {
+    const reports = NAV_ITEMS.find((item) => item.key === "reports");
+    expect(reports).toBeDefined();
+    expect(reports!.category).toBe("primary");
+    expect(reports!.featureFlag).toBe("reportsPage");
+    expect(reports!.href).toBe("/reports");
+    expect(existsSync("app/reports/page.tsx")).toBe(true);
+  });
+
+  it("keeps /reports gated until its saved_reports migration is applied", () => {
+    // The page reads `saved_reports`; a default-on flag would 500 every
+    // deployment that has not run 20260730190000_saved_reports.sql yet.
+    expect(isFeatureEnabled("reportsPage", { FUNDFLOW_FEATURE_FLAGS: "" })).toBe(
+      false,
+    );
+    expect(
+      isFeatureEnabled("reportsPage", { FUNDFLOW_FEATURE_FLAGS: "reportsPage" }),
+    ).toBe(true);
   });
 
   it("includes a recurring entry gated by recurringPage in the planning category", () => {
@@ -31,14 +85,6 @@ describe("Sidebar Navigation Contract", () => {
     expect(recurring!.featureFlag).toBe("recurringPage");
     expect(recurring!.href).toBe("/recurring");
     expect(existsSync("app/api/recurring/route.ts")).toBe(true);
-  });
-
-  it("does not ship future-phase API or settings modules", () => {
-    expect(existsSync("app/api/reports/saved/route.ts")).toBe(false);
-    expect(existsSync("components/charts/CumulativeCompareChart.tsx")).toBe(
-      false,
-    );
-    expect(existsSync("components/settings/settings-nav.ts")).toBe(false);
   });
 
   it("has unique keys and non-empty labels, hrefs, and hints for every item", () => {
@@ -85,7 +131,7 @@ describe("Sidebar Navigation Contract", () => {
   it("AskAiLowerRailLink checks isAskAiAvailable before rendering a link", () => {
     const source = readFileSync("components/shell/AskAiLowerRailLink.tsx", "utf8");
     expect(source).toContain("isAskAiAvailable");
-    expect(source).toContain('href="/settings#ask-ai"');
+    expect(source).toContain('href="/settings?section=integrations"');
   });
 
   it("AppSidebar wraps its desktop nav in SidebarShell instead of rendering <aside> directly", () => {
@@ -127,9 +173,16 @@ describe("Sidebar Navigation Contract", () => {
     expect(keys).not.toContain("wealth");
   });
 
-  it("keeps Year in Money as a top-level nav entry until Reports (Phase 6) exists", () => {
+  it("keeps Year in Money in the nav while Reports is still flag-gated", () => {
+    // Phase 6 surfaces /wrapped from the Reports page, but Reports is off by
+    // default pending its migration. Retiring the nav entry now would strand
+    // /wrapped behind the command palette on every deployment that has not
+    // enabled reportsPage. Drop this entry in the change that flips the flag.
     const wrapped = NAV_ITEMS.find((item) => item.key === "wrapped");
     expect(wrapped?.href).toBe("/wrapped");
     expect(wrapped?.category).toBe("manage");
+    expect(isFeatureEnabled("reportsPage", { FUNDFLOW_FEATURE_FLAGS: "" })).toBe(
+      false,
+    );
   });
 });

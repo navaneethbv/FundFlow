@@ -3,9 +3,11 @@ import crypto from "node:crypto";
 import { safeEqual } from "@/lib/crypto";
 import { getPlaidClient } from "@/lib/plaid";
 import { syncItemTransactions } from "@/lib/sync";
+import { syncInvestmentsForItem } from "@/lib/investment-sync";
 import { getItemByPlaidItemId, setItemStatus } from "@/lib/plaid-service";
 import { errorResponse, badRequest } from "@/lib/http";
 import { logError } from "@/lib/log";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 
 export const dynamic = "force-dynamic";
 
@@ -109,6 +111,21 @@ export async function POST(req: NextRequest) {
         // Incremental sync, awaited so failures surface in the response code
         // (Plaid retries non-2xx deliveries).
         await syncItemTransactions(item);
+      }
+    }
+
+    // Holdings changed (or the initial historical pull finished): a bounded,
+    // item-scoped refresh. Gated on investmentsPage — before its migration is
+    // applied, `holdings` doesn't exist to write to.
+    if (
+      webhook_type === "HOLDINGS" &&
+      (webhook_code === "DEFAULT_UPDATE" || webhook_code === "HISTORICAL_UPDATE") &&
+      item_id &&
+      isFeatureEnabled("investmentsPage")
+    ) {
+      const item = await getItemByPlaidItemId(item_id);
+      if (item) {
+        await syncInvestmentsForItem(item).catch((err) => logError("webhook.holdings", err));
       }
     }
 

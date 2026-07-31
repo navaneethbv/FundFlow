@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { validateSplits } from "@/lib/transaction-quality";
+import { writeAudit, getClientIp } from "@/lib/audit";
 
 interface SplitInput {
   category: string;
@@ -33,12 +34,33 @@ export async function POST(request: NextRequest) {
     // users, which would permanently block the owner from splitting it.
     const { data: txn } = await supabase
       .from("transactions")
-      .select("id, amount")
+      .select("id, amount, date")
       .eq("id", transactionId)
       .eq("user_id", user.id)
       .maybeSingle();
     if (!txn) return badRequest("Transaction not found");
     const absAmount = Math.abs(Number(txn.amount));
+
+    // --- Goal link (Phase 7) ---
+    // Absent key means "leave the link alone"; an explicit null clears it.
+    const goalProvided = body?.goal_id !== undefined;
+    const goalId =
+      typeof body?.goal_id === "string" && body.goal_id.trim()
+        ? body.goal_id.trim()
+        : null;
+    let linkedGoal: { id: string; spending_reduces: boolean } | null = null;
+    if (goalProvided && goalId) {
+      const { data: goal } = await supabase
+        .from("goals")
+        .select("id, spending_reduces")
+        .eq("id", goalId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      // Ownership again, not visibility: a household member can see a shared
+      // goal but must not be able to attach the owner's transaction to it.
+      if (!goal) return badRequest("Goal not found");
+      linkedGoal = goal as { id: string; spending_reduces: boolean };
+    }
 
     // --- Note + tags ---
     const rawNote = typeof body?.note === "string" ? body.note.trim() : "";
@@ -54,7 +76,11 @@ export async function POST(request: NextRequest) {
         ].slice(0, 20)
       : [];
 
-    if (!note && tags.length === 0) {
+    // The annotation row now carries three things, so it is only redundant once
+    // all three are empty — deleting it while a goal link is set would silently
+    // drop the link.
+    const keepsGoalLink = goalProvided ? goalId !== null : false;
+    if (!note && tags.length === 0 && !keepsGoalLink) {
       const { error } = await supabase
         .from("transaction_annotations")
         .delete()
@@ -65,7 +91,15 @@ export async function POST(request: NextRequest) {
       const { error } = await supabase
         .from("transaction_annotations")
         .upsert(
-          { user_id: user.id, transaction_id: transactionId, note, tags },
+          {
+            user_id: user.id,
+            transaction_id: transactionId,
+            note,
+            tags,
+            // Omitted when the caller did not mention it, so an unrelated note
+            // edit cannot clear an existing link.
+            ...(goalProvided ? { goal_id: goalId } : {}),
+          },
           { onConflict: "user_id,transaction_id" },
         );
       if (error) throw error;
@@ -121,6 +155,59 @@ export async function POST(request: NextRequest) {
         );
         if (insError) throw insError;
       }
+    }
+
+    // --- Goal progress event (Phase 7) ---
+    // Only a `spending_reduces` goal turns a transaction into progress, and it
+    // does so negatively: money spent against a save-up goal sets it back.
+    if (goalProvided) {
+      // Clear any event from a previous link first, so re-pointing a
+      // transaction at another goal cannot leave progress behind on the old one.
+      let stale = supabase
+        .from("goal_progress_events")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("transaction_id", transactionId);
+      if (goalId) stale = stale.neq("goal_id", goalId);
+      const { error: staleError } = await stale;
+      if (staleError) throw staleError;
+
+      const isExpense = Number(txn.amount) > 0;
+      if (linkedGoal?.spending_reduces && isExpense) {
+        // Idempotent: unique (goal_id, transaction_id) means linking the same
+        // transaction twice updates the one event rather than adding a second.
+        const { error: eventError } = await supabase
+          .from("goal_progress_events")
+          .upsert(
+            {
+              user_id: user.id,
+              goal_id: linkedGoal.id,
+              transaction_id: transactionId,
+              event_date: txn.date as string,
+              amount: -absAmount,
+              event_type: "transaction",
+            },
+            { onConflict: "goal_id,transaction_id" },
+          );
+        if (eventError) throw eventError;
+      } else if (goalId) {
+        // Linked to a goal that does not reduce on spend (or an inflow): the
+        // link is informational, so no event may exist for it.
+        const { error: removeError } = await supabase
+          .from("goal_progress_events")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("transaction_id", transactionId)
+          .eq("goal_id", goalId);
+        if (removeError) throw removeError;
+      }
+
+      await writeAudit({
+        userId: user.id,
+        action: "goal_transaction_linked",
+        metadata: { transaction_id: transactionId, goal_id: goalId },
+        ip: getClientIp(request),
+      });
     }
 
     return NextResponse.json({ ok: true });

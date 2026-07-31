@@ -305,6 +305,32 @@ describe("projectFinanceTransactions", () => {
     expect(rows[0]!.groupKey).toBe("UNCATEGORIZED");
     expect(rows[0]!.categoryKey).toBe("UNCATEGORIZED");
   });
+
+  it("projects a manual transaction (Phase 12) with no accountId alongside Plaid rows", () => {
+    const manual = raw({
+      id: "t-manual",
+      accountId: null,
+      manualAccountId: "man-1",
+      source: "manual",
+      amount: 45,
+      merchant: "Cash tip",
+      pfcPrimary: "FOOD_AND_DRINK",
+      pfcDetailed: "FOOD_AND_DRINK_OTHER",
+    });
+    const rows = projectFinanceTransactions({
+      rows: [GROCERIES, manual],
+      merchantRules: [],
+      categoryOverrides: [],
+      splits: [],
+      linkedRefunds: [],
+    });
+    const manualRow = byId(rows, "t-manual")!;
+    expect(manualRow.accountId).toBeNull();
+    expect(manualRow.manualAccountId).toBe("man-1");
+    expect(manualRow.flow).toBe("expense");
+    // It counts toward the shared total exactly like a Plaid row would.
+    expect(financeTotals(rows).expenses).toBe(GROCERIES.amount + manual.amount);
+  });
 });
 
 describe("financeTotals", () => {
@@ -346,7 +372,7 @@ describe("fromTransactionRow", () => {
     expect(fromTransactionRow({ ...base, plaid_transaction_id: "manual-abc" }).source).toBe("manual");
   });
 
-  it("defaults pending to false and manual account to null before Phase 12", () => {
+  it("defaults pending to false and manual account to null when the row omits both", () => {
     const row = fromTransactionRow({
       id: "row-2",
       user_id: "user-1",
@@ -361,5 +387,24 @@ describe("fromTransactionRow", () => {
     });
     expect(row.pending).toBe(false);
     expect(row.manualAccountId).toBeNull();
+  });
+
+  it("passes through a manual transaction's null account_id and set manual_account_id (Phase 12)", () => {
+    const row = fromTransactionRow({
+      id: "row-3",
+      user_id: "user-1",
+      account_id: null,
+      manual_account_id: "man-1",
+      plaid_transaction_id: "manual-abc",
+      date: "2026-07-01",
+      amount: 12,
+      merchant_name: "Cash purchase",
+      name: null,
+      pfc_primary: null,
+      pfc_detailed: null,
+    });
+    expect(row.accountId).toBeNull();
+    expect(row.manualAccountId).toBe("man-1");
+    expect(row.source).toBe("manual");
   });
 });

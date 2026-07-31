@@ -70,9 +70,119 @@ Key modules in `lib/`:
   both modes (dataviz-skill validator). Rules baked in: fixed slot order,
   never generate a 7th+ hue (fold into "Other" via `foldTail`), legend for ≥2
   series, every chart ships a table twin, text never wears series color.
+- `dashboard-widgets.ts` — Phase 8 widget registry and prefs. Layout lives in
+  the existing client-writable `profiles.dashboard_prefs` JSON (no migration),
+  shared with `sidebarCollapsed` and the legacy hide flags — so every writer
+  read-merge-writes rather than overwriting the column. `normalizeWidgetPrefs`
+  is deliberately total: it takes `unknown` and always returns a usable layout,
+  appending any widget missing from a stored order so a new one is never hidden
+  from users who saved a layout before it existed. `computeCumulativeSpendByDay`
+  (in `dashboard.ts`) returns **null, never zero**, for a day not yet reached
+  and for a day past a shorter previous month's end — a zero there draws a line
+  along the floor that reads as "spent nothing". The chart's table twin
+  forward-fills; the plotted line stops.
 - `export.ts` — the privacy-safe export contract (date/merchant/amount/
   category), shared by `/api/export/csv` and `/api/export/json`;
-  `/api/export/report` serves the weekly PDF on demand.
+  `/api/export/report` serves the weekly PDF on demand, and
+  `/api/export/report-csv` the Reports page's filtered row set (`isExportAllowed`
+  is the shared `ai_export_enabled` gate for exports that build their own rows).
+- `sankey.ts` — pure Sankey geometry for `components/charts/SankeyChart.tsx`.
+  Two invariants: one value→pixel scale is shared by every column (per-column
+  scaling silently breaks flow conservation), and ribbon thickness is never
+  floored even though node heights are — floor a ribbon and the ones arriving at
+  a node sum to more than the node. `foldSankeyOverflow` caps a column and
+  rewrites its edges; the chart's table twin keeps the unfolded detail.
+- `reports.ts` — Phase 6 aggregation: `buildCashFlowSankeyData` (transfers
+  excluded, so refunds and card payments cannot double-count; "Net Income" on a
+  surplus, "Unfunded Spending" on a deficit, link values always non-negative),
+  `summarizeTransactions` (totals come from `financeTotals`, which is what keeps
+  Reports reconciling with Cash Flow), and the versioned saved-report filter
+  schema — strict `parseReportFilters` for stored jsonb, forgiving
+  `reportFiltersFromSearchParams` for URLs. `reports-data.ts` is the single
+  loader the page and the CSV route share, so a download always matches the
+  chart above it.
+- `goals-v2.ts` — Phase 7 funded goals. A goal's progress has three sources
+  (typed-in `saved_amount`, account allocations capped at the real balance, and
+  the `goal_progress_events` ledger) and the failure mode is counting the same
+  money twice — so **pay-down goals use the balance delta alone**, never the
+  ledger on top. `validateAllocation` mirrors the `set_goal_allocation`
+  database function's rules for a fast error message, but that function is the
+  enforcement point: its rules are cross-row and it holds a row lock.
+  `goalContributionsForMonth` feeds the Budget page, and reads only the event
+  ledger — a balance moving is not a contribution.
+  `goal-templates.ts` whitelists `image_slug` before it becomes a URL.
+- `investments.ts` — Phase 9A holdings aggregation: `buildInvestmentsPage`
+  groups active holdings into a fixed asset-class slot order (never a 7th+
+  hue, same rule as the chart palette), computes weight/day-change/top-movers
+  purely from already-fetched rows, and `normalizeManualHolding` validates a
+  manual entry (quantity/price/as-of all required — a manual value never
+  claims market freshness it doesn't have). `externalFlowsFromTransactions`
+  flips Plaid's debit-positive sign onto "money added is positive" for
+  `investment-performance.ts`.
+- `investment-sync.ts` — item-scoped Plaid holdings and investment-transaction
+  sync. Mark-and-sweep (deactivating a holding absent from a response) runs
+  only after a full successful response, scoped to *that item's* own accounts
+  — a user-wide account map would let one item's absent holdings deactivate
+  another item's. `PRODUCT_NOT_READY`, a missing Investments product, and
+  rate limiting are reported as distinct non-failure outcomes, never a broken
+  connection. Investment sync writes `sync_jobs.job_type = 'investments'`
+  (see the invariant below) and is isolated in its own try/catch from
+  transaction sync in the daily cron — a broken Investments item must never
+  make a bank sync look like it failed.
+- `investment-performance.ts` — `computeTimeWeightedReturn`: a simplified
+  per-sub-period Modified Dietz, chain-linked, that removes deposits and
+  withdrawals so a balance chart can't be mistaken for market performance. A
+  sub-period whose starting base is zero returns 0%, not an infinite result.
+  `hasSufficientPerformanceData` (>=2 valuation points) is what a chart checks
+  before it's allowed to say "Portfolio performance" instead of "Balance."
+- `benchmark-provider.ts` — the `BenchmarkProvider` interface and a caching
+  wrapper exist, but `UNAVAILABLE_BENCHMARK_PROVIDER` is the only
+  implementation and nothing renders it. Do not wire a benchmark comparison
+  into any page until a licensed market-data source is provisioned and its
+  terms are documented — this is a legal exposure, not a missing feature.
+- `forecasting.ts` — `computeWhatIfProjection` is the dashboard's What-if
+  sandbox math (extracted out of `WhatIfPanel`'s own `useMemo`, behavior
+  unchanged). `forecastNetWorth`'s three scenarios spread **additively**
+  (+/-2 percentage points around the entered rate), not multiplicatively — a
+  multiplicative spread inverts conservative/optimistic ordering the moment
+  the entered rate goes negative. Every projection surface must say
+  "projection," never "prediction" or a confidence level this module doesn't
+  compute.
+- `advice.ts` / `advice-content.ts` — `ADVICE_LIBRARY` is reviewed education
+  content, not user data; `ALLOWED_SOURCE_HOSTS` is an enforcement allowlist
+  (a security-review test, not documentation) restricting sources to neutral
+  federal-agency domains, never a specific fund/insurer/broker.
+  `validateAdviceLibrary` is a content-review guard run as a test against the
+  real library — it already caught two items whose own risk disclaimers
+  tripped the prohibited-guarantee-language check. `buildAdviceView` treats a
+  user's saved priority order as a decision (shown even if `relevantWhen` no
+  longer matches), and intersects stored progress against an item's *current*
+  task ids so a later content edit can't inflate a completion count.
+- `manual-transaction.ts` — `normalizeManualTxn` validates a manual ledger
+  entry and resolves its stored sign (debit positive, credit negative,
+  matching Plaid's convention). Stored with `plaid_transaction_id =
+  manual-<uuid>`, mirroring `import.ts`'s `import-<hash>` prefix convention —
+  `lib/finance-domain.ts`'s `fromTransactionRow` derives provenance from this
+  prefix, not the newer `source` column, because the prefix is already relied
+  on by the sync overlap guard.
+- `ledger-columns.ts` — which optional ledger columns are visible, persisted
+  as a repeated `col` GET param plus a `colsSubmitted` marker (distinguishing
+  "every column explicitly unchecked" from "the menu was never touched," an
+  ambiguity a plain multi-checkbox form can't otherwise resolve) rather than
+  client state.
+- `tags.ts` — `planTagRename` treats renaming a tag to an existing name as a
+  merge (a tag's identity is its name, not a row id); the actual rewrite runs
+  through the `rename_user_tag` SQL function so it can never race a
+  concurrent annotation edit into a lost update.
+- `profile.ts` — `validateProfilePatch`: every field is optional, `null`
+  clears it, an absent key leaves the stored value untouched (same PATCH
+  semantics as the advice profile).
+- `components/settings/settings-nav.ts` — `SettingsSection` +
+  `sectionFromParam` (invalid/absent falls back to `"profile"`, never a 404 —
+  Settings is a control center people bookmark) and the `DisplayPrefs`
+  parse/validate pair: `parseDisplayPrefs` is forgiving (for reading whatever
+  is already stored), `validateDisplayPrefsPatch` is strict (a write with a
+  bad value fails loudly instead of silently substituting a default).
 - `import.ts` — pure CSV-statement parsing/normalization for
   `/api/import/csv` (pre-Plaid backfill). Invariants: output uses the Plaid
   sign convention; imported rows carry deterministic `import-<hash>`
@@ -138,10 +248,20 @@ client components.
   (trusted via `strict-dynamic`) and its beacons hit the same-origin
   `/_vercel/insights/*` (covered by `connect-src 'self'`).
 - Every user table has RLS with owner-only `select` (client writes allowed only
-  on `budgets` and the `profiles` preference columns). Migrations live in
-  `supabase/migrations/` and are applied via the Supabase CLI or dashboard SQL
-  editor — there is no migration runner in CI. Code that reads a column from a
-  new migration fails until that migration is applied to the live project.
+  on `budgets`, `saved_reports`, `user_tags`, and the `profiles` preference
+  columns — all four hold nothing but user-authored configuration, which is
+  the test for joining that list; a provider-synced table never qualifies,
+  see `20260730180000_recurring_streams_revert_client_write.sql`). Migrations
+  live in `supabase/migrations/` and are applied via the Supabase CLI or
+  dashboard SQL editor — there is no migration runner in CI. Code that reads a
+  column from a new migration fails until that migration is applied to the
+  live project.
+- Two private Supabase Storage buckets, both user-prefixed-path RLS
+  (`(storage.foldername(name))[1] = auth.uid()::text`): `receipts` (Phase 12
+  migration; schema only, no upload route built yet) and `avatars` (Phase 13,
+  backing `ProfileSection`'s photo upload). Both render through short-lived
+  signed URLs; the existing `img-src 'self' data: https:` CSP directive
+  already permits them, so a new bucket needs no CSP change.
 - Bank-connection health: `ITEM` webhooks and sync failures set
   `plaid_items.status`/`error_code`; Settings offers update-mode reconnection
   (`/api/plaid/link-token` with `item_id` → `/api/plaid/reconnect`). Don't

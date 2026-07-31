@@ -52,7 +52,7 @@ function getAttentionItems(data: DashboardData): AttentionItem[] {
     items.push({
       label: "Budget pace",
       detail: `${riskyBudgets.length} budget${riskyBudgets.length === 1 ? "" : "s"} projected to need attention.`,
-      href: "/settings#budgets",
+      href: "/settings?section=categories",
       tone: riskyBudgets.some((budget) => budget.status === "over")
         ? "danger"
         : "warning",

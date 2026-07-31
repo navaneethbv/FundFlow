@@ -24,7 +24,13 @@ interface RuleFilterRow {
   merchant_name: string | null;
   name: string | null;
   pfc_primary: string | null;
-  account_id: string;
+  account_id: string | null;
+  manual_account_id?: string | null;
+}
+
+/** A row's resolved account key, whichever of the two FKs is set. */
+function resolvedAccountId(row: RuleFilterRow): string {
+  return row.account_id ?? row.manual_account_id ?? "";
 }
 
 /**
@@ -46,7 +52,7 @@ export function filterRowsWithRules<T extends RuleFilterRow>(
       id: row.id,
       merchant: row.merchant_name ?? row.name ?? "",
       category: row.pfc_primary,
-      accountName: accountNamesById.get(row.account_id) ?? "",
+      accountName: accountNamesById.get(resolvedAccountId(row)) ?? "",
     })),
     rules,
   );

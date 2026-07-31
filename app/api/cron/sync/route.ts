@@ -3,6 +3,7 @@ import { serverEnv } from "@/lib/env.server";
 import { safeEqual } from "@/lib/crypto";
 import { createServiceClient } from "@/lib/supabase/service";
 import { syncAllForUser } from "@/lib/sync";
+import { syncInvestmentsForUser } from "@/lib/investment-sync";
 import { refreshRecurringForUser } from "@/lib/recurring";
 import { errorResponse } from "@/lib/http";
 import { logError } from "@/lib/log";
@@ -13,9 +14,12 @@ import { processNotificationsForUser } from "@/lib/notifications";
 import { sendDailyDigestEmail } from "@/lib/reporting";
 import { alertCronFailure } from "@/lib/cron-alert";
 import { writeDailyAccountSnapshots } from "@/lib/account-history";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// Raised from 60: investment holdings sync (Phase 9A) adds one more
+// per-item Plaid round trip to every user's daily run.
+export const maxDuration = 300;
 
 /** Reduce an exception to a safe token for the alert email: a Plaid-style
  *  UPPER_SNAKE code if the message is one, otherwise the error's class name. */
@@ -52,6 +56,21 @@ export async function GET(request: NextRequest) {
     for (const userId of userIds) {
       try {
         await syncAllForUser(userId);
+        // Gated on investmentsPage (not just isolated in a try/catch): before
+        // 20260730210000_investments.sql is applied, `holdings` and
+        // `holding_snapshots` don't exist, and running this unconditionally
+        // would mean a Plaid Investments call plus a guaranteed write failure
+        // for every user, every day, for a feature nobody can reach yet.
+        if (isFeatureEnabled("investmentsPage")) {
+          try {
+            // Isolated from the transaction sync above: a broken or
+            // rate-limited Investments item must never make transaction sync,
+            // recurring, or net-worth look like they failed for this user.
+            await syncInvestmentsForUser(userId);
+          } catch (investmentsError) {
+            logError("cron.sync.investments", investmentsError);
+          }
+        }
         await writeDailyAccountSnapshots(userId);
         await refreshRecurringForUser(userId);
         await writeNetWorthSnapshot(userId);
@@ -144,7 +163,7 @@ export async function GET(request: NextRequest) {
           })),
           transactions: (txns ?? []).map((t) => ({
             id: t.id as string,
-            accountId: t.account_id as string,
+            accountId: t.account_id as string | null,
             plaidTransactionId: t.plaid_transaction_id as string | null,
             pending: Boolean(t.pending),
             date: t.date as string,

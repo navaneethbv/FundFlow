@@ -15,8 +15,11 @@ describe("settings UI restyle", () => {
       "components/settings/DangerZone.tsx",
     ].map((file) => readFileSync(file, "utf8"));
 
-    expect(page).toContain('id="budgets"');
-    expect(page).toContain('id="reports"');
+    // Phase 13 replaced anchor ids with a `section` query param and a real
+    // side nav (components/settings/SettingsLayout.tsx) — see
+    // settings-nav.test.ts for the section-routing contract.
+    expect(page).toContain("SettingsLayout");
+    expect(page).toContain("sectionFromParam");
     for (const source of sections) {
       expect(source).toContain("Panel");
     }
@@ -27,5 +30,13 @@ describe("settings UI restyle", () => {
   it("DashboardPrefs includes an optional sidebarCollapsed flag", () => {
     const prefs: DashboardPrefs = { sidebarCollapsed: true };
     expect(prefs.sidebarCollapsed).toBe(true);
+  });
+
+  it("keeps /settings gated until its profile_and_tags migration is applied", () => {
+    // Profile/Display/Tags read new profiles columns and user_tags; the rest
+    // of the page uses tables that already existed and must stay reachable.
+    const page = readFileSync("app/settings/page.tsx", "utf8");
+    expect(page).toContain("settingsIa");
+    expect(page).toContain("migrationDependentSections");
   });
 });

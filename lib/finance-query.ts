@@ -11,7 +11,7 @@ import { scopeQueryUserId, type FinancialScope } from "@/lib/financial-scope";
  */
 
 export const FINANCE_TRANSACTION_COLUMNS =
-  "id, user_id, account_id, plaid_transaction_id, date, amount, merchant_name, name, pfc_primary, pfc_detailed, pending";
+  "id, user_id, account_id, manual_account_id, plaid_transaction_id, date, amount, merchant_name, name, pfc_primary, pfc_detailed, pending";
 
 /** Supabase caps a single range request; page well under it. */
 export const FINANCE_PAGE_SIZE = 1000;

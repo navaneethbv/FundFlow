@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { createClient } from "@/lib/supabase/server";
 import AutoRefresh from "@/components/AutoRefresh";
 import AppShell from "@/components/shell/AppShell";
@@ -14,9 +15,13 @@ import TransactionEditor from "@/components/transactions/TransactionEditor";
 import MobileLedgerList, { type LedgerCardRow } from "@/components/transactions/MobileLedgerList";
 import SavedViewsBar from "@/components/transactions/SavedViewsBar";
 import BulkTagBar from "@/components/transactions/BulkTagBar";
+import AddTransactionModal from "@/components/transactions/AddTransactionModal";
+import ColumnsMenu from "@/components/transactions/ColumnsMenu";
 import { formatCurrency, titleCase, formatMonth } from "@/lib/format";
 import { applyMerchantRules } from "@/lib/planning";
 import { filterRowsWithRules, hasRemapRules } from "@/lib/ledger-filter";
+import { parseLedgerColumns } from "@/lib/ledger-columns";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +38,8 @@ interface PageProps {
     merchant?: string;
     flow?: string;
     accountType?: string;
+    col?: string | string[];
+    colsSubmitted?: string;
   }>;
 }
 
@@ -68,6 +75,13 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     params.accountType === "depository" || params.accountType === "credit"
       ? params.accountType
       : "";
+  const visibleColumns = parseLedgerColumns({ col: params.col, colsSubmitted: params.colsSubmitted });
+  const columnsAreDefault = !params.colsSubmitted;
+  // Gated: manual_account_id/source only exist once
+  // 20260730240000_manual_transactions_receipts.sql is applied. /transactions
+  // is already live, so this must default to the pre-Phase-12 query shape
+  // rather than 500ing every visit on an unmigrated deployment.
+  const transactionsParityEnabled = isFeatureEnabled("transactionsParity");
 
   const supabase = await createClient();
   // The ledger has no household scope selector, so every query below is the
@@ -89,10 +103,13 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   }>);
 
   // Fetch accounts and rules first to allow type-based filtration.
-  const [{ data: accounts }, { data: merchantRules }] = await Promise.all([
-    supabase.from("accounts").select("id, name, mask, type").eq("user_id", ownerId).order("name"),
-    supabase.from("merchant_rules").select("match_type, pattern, display_name, category, enabled").order("created_at"),
-  ]);
+  const [{ data: accounts }, { data: manualAccounts }, { data: merchantRules }, { data: goalRows }] =
+    await Promise.all([
+      supabase.from("accounts").select("id, name, mask, type").eq("user_id", ownerId).order("name"),
+      supabase.from("manual_accounts").select("id, name").eq("user_id", ownerId).order("name"),
+      supabase.from("merchant_rules").select("match_type, pattern, display_name, category, enabled").order("created_at"),
+      supabase.from("goals").select("id, name").eq("user_id", ownerId).order("name"),
+    ]);
 
   const rulesList = (merchantRules ?? []).map((r) => ({
     matchType: r.match_type as "merchant" | "keyword" | "account",
@@ -102,23 +119,33 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     enabled: r.enabled,
   }));
 
+  // A row's resolved account key, whichever of the two FKs is set — a manual
+  // transaction (Phase 12) has no `account_id`.
+  const resolvedAccountId = (r: { account_id: string | null; manual_account_id?: string | null }) =>
+    r.account_id ?? r.manual_account_id ?? "";
+
   // Account name without the mask, for rule matching — mirrors the dashboard so
   // the ledger's rules-applied filter agrees with the drill it came from.
-  const accountNamesById = new Map(
-    (accounts ?? []).map((a) => [a.id as string, (a.name ?? "") as string]),
-  );
+  const accountNamesById = new Map([
+    ...(accounts ?? []).map((a) => [a.id as string, (a.name ?? "") as string] as const),
+    ...(manualAccounts ?? []).map((a) => [a.id as string, (a.name ?? "") as string] as const),
+  ]);
 
   // Merchant rules recategorize/rename rows in-app, so a `category`/`merchant`
   // filter can't be expressed in SQL once such rules exist. In that case fetch
   // the rule-independent scope and filter on the rules-applied values instead.
   const ruleAwareFilter = Boolean(category || merchant) && hasRemapRules(rulesList);
 
+  const baseColumns = "id, date, amount, iso_currency_code, merchant_name, name, pfc_primary, pending, account_id";
+  // Typed `: string` rather than left as a literal union: supabase-js parses
+  // a literal `.select()` string at the type level to infer the row shape,
+  // and a computed union of two literals defeats that parser (ParserError).
+  // Widening to `string` falls back to the untyped overload instead, which
+  // is what every downstream `as string`/`?? null` read already expects.
+  const columns: string = transactionsParityEnabled ? `${baseColumns}, manual_account_id, source` : baseColumns;
   let query = supabase
     .from("transactions")
-    .select(
-      "id, date, amount, iso_currency_code, merchant_name, name, pfc_primary, pending, account_id",
-      ruleAwareFilter ? {} : { count: "exact" },
-    )
+    .select(columns, ruleAwareFilter ? {} : { count: "exact" })
     .eq("user_id", ownerId)
     .order("date", { ascending: false })
     .order("id", { ascending: true });
@@ -127,8 +154,15 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   if (bounds) {
     query = query.gte("date", bounds.start).lte("date", bounds.end);
   }
-  if (accountId) {
-    query = query.eq("account_id", accountId);
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (accountId && UUID_RE.test(accountId)) {
+    // accountId may name either a Plaid or a manual account (Phase 12).
+    // Validated as a UUID before going into this raw `.or()` filter string —
+    // account ids are the only thing interpolated here, and PostgREST filter
+    // syntax has no special meaning inside a UUID's own character set.
+    query = transactionsParityEnabled
+      ? query.or(`account_id.eq.${accountId},manual_account_id.eq.${accountId}`)
+      : query.eq("account_id", accountId);
   }
   if (q) {
     // Match merchant, raw name, or category (e.g. "food", "travel").
@@ -171,14 +205,32 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     ? await query.limit(RULE_AWARE_FETCH_CAP)
     : await query.range(offset, offset + PAGE_SIZE - 1);
 
-  const accountName = new Map(
-    (accounts ?? []).map((a) => {
+  const accountName = new Map([
+    ...(accounts ?? []).map((a) => {
       const mask = a.mask ? ` ••${a.mask}` : "";
-      return [a.id as string, `${a.name ?? "Account"}${mask}`];
+      return [a.id as string, `${a.name ?? "Account"}${mask}`] as const;
     }),
-  );
+    ...(manualAccounts ?? []).map((a) => [a.id as string, `${a.name ?? "Account"} (manual)`] as const),
+  ]);
 
-  const fetchedRows = pageResult.data ?? [];
+  interface LedgerRow {
+    id: string;
+    date: string;
+    amount: number;
+    iso_currency_code: string | null;
+    merchant_name: string | null;
+    name: string | null;
+    pfc_primary: string | null;
+    pending: boolean;
+    account_id: string | null;
+    manual_account_id?: string | null;
+    source?: "plaid" | "import" | "manual";
+  }
+  // The select() string is computed (transactionsParityEnabled), so
+  // supabase-js's literal-string type inference can't parse it — it falls
+  // back to an opaque error type. This cast is the escape hatch, matching
+  // the same pattern lib/dashboard.ts uses for its own raw transactions read.
+  const fetchedRows = (pageResult.data ?? []) as unknown as LedgerRow[];
   let rawRows = fetchedRows;
   let total = pageResult.count ?? fetchedRows.length;
   if (ruleAwareFilter) {
@@ -215,7 +267,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     id: r.id,
     merchant: r.merchant_name ?? r.name ?? "",
     category: r.pfc_primary,
-    accountName: accountNamesById.get(r.account_id) || "",
+    accountName: accountNamesById.get(resolvedAccountId(r)) || "",
   }));
 
   const appliedTxns = applyMerchantRules(cleanupTxns, rulesList);
@@ -238,6 +290,13 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     ]),
   ].sort((a, b) => a.localeCompare(b));
 
+  // Day-group headers: rows arrive sorted by date desc, so a signed total per
+  // date is all a header needs.
+  const dayTotals = new Map<string, number>();
+  for (const r of rows) {
+    dayTotals.set(r.date as string, (dayTotals.get(r.date as string) ?? 0) + (r.amount as number));
+  }
+
   const cardRows: LedgerCardRow[] = rows.map((t) => {
     const ann = annById.get(t.id as string);
     return {
@@ -245,7 +304,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
       date: t.date as string,
       merchant: (t.merchant_name ?? t.name ?? "Unknown") as string,
       category: t.pfc_primary as string | null,
-      accountLabel: accountName.get(t.account_id) ?? "-",
+      accountLabel: accountName.get(resolvedAccountId(t)) ?? "-",
       amount: t.amount as number,
       currency: (t.iso_currency_code ?? "USD") as string,
       pending: Boolean(t.pending),
@@ -269,14 +328,37 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     return `/transactions?${parts.join("&")}`;
   };
 
+  const accountOptions = [
+    ...(accounts ?? []).map((a) => ({ id: a.id as string, name: (a.name ?? "Account") as string, source: "plaid" as const })),
+    ...(manualAccounts ?? []).map((a) => ({ id: a.id as string, name: a.name as string, source: "manual" as const })),
+  ];
+  const goalOptions = (goalRows ?? []).map((g) => ({ id: g.id as string, name: g.name as string }));
+  const columnsFormParams = Object.fromEntries(
+    Object.entries({
+      month: params.month,
+      accountId: params.accountId,
+      q: params.q,
+      category: params.category,
+      sub: params.sub,
+      merchant: params.merchant,
+      flow: params.flow,
+      accountType: params.accountType,
+    }).filter(([, value]) => typeof value === "string" && value.length > 0),
+  ) as Record<string, string>;
+
   return (
     <AppShell active="transactions" email={user?.email}>
       <div className="mx-auto max-w-4xl space-y-5">
         <AutoRefresh />
 
-        <header>
-          <p className="eyebrow">Ledger</p>
-          <h1 className="display mt-2 text-3xl sm:text-4xl">Transactions</h1>
+        <header className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="eyebrow">Ledger</p>
+            <h1 className="display mt-2 text-3xl sm:text-4xl">Transactions</h1>
+          </div>
+          {transactionsParityEnabled && accountOptions.length > 0 && (
+            <AddTransactionModal accounts={accountOptions} goals={goalOptions} categories={categoryOptions} />
+          )}
         </header>
 
         <RefundReview />
@@ -327,6 +409,10 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
             )}
           </form>
         </Panel>
+
+        {transactionsParityEnabled && (
+          <ColumnsMenu visible={visibleColumns} isDefault={columnsAreDefault} otherParams={columnsFormParams} />
+        )}
 
         {(category || sub || merchant || flow || accountType) && (
           <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -384,8 +470,12 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                   <tr className="border-b border-panel-border text-left text-xs uppercase tracking-wider text-muted">
                     <th className="px-4 py-3 font-semibold">Date</th>
                     <th className="px-4 py-3 font-semibold">Merchant</th>
-                    <th className="hidden px-4 py-3 font-semibold sm:table-cell">Category</th>
-                    <th className="hidden px-4 py-3 font-semibold md:table-cell">Account</th>
+                    {visibleColumns.has("category") && (
+                      <th className="hidden px-4 py-3 font-semibold sm:table-cell">Category</th>
+                    )}
+                    {visibleColumns.has("account") && (
+                      <th className="hidden px-4 py-3 font-semibold md:table-cell">Account</th>
+                    )}
                     <th className="px-4 py-3 text-right font-semibold">Amount</th>
                     <th className="px-4 py-3 text-right font-semibold">
                       <span className="sr-only">Notes and splits</span>
@@ -393,12 +483,27 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                   </tr>
                 </thead>
                 <tbody className="tabular-nums">
-                  {rows.map((t) => {
+                  {rows.map((t, index) => {
                     const ann = annById.get(t.id as string);
                     const txnSplits = splitsById.get(t.id as string) ?? [];
+                    const isNewDay = index === 0 || rows[index - 1]!.date !== t.date;
+                    const dayTotal = dayTotals.get(t.date as string) ?? 0;
+                    const rowColumnCount =
+                      4 + (visibleColumns.has("category") ? 1 : 0) + (visibleColumns.has("account") ? 1 : 0);
                     return (
+                    <Fragment key={t.id}>
+                      {isNewDay && (
+                        <tr className="border-b border-panel-border bg-panel/60">
+                          <td colSpan={rowColumnCount} className="px-4 py-1.5 text-xs font-semibold text-muted">
+                            {t.date}
+                            <span className="ml-2 font-normal">
+                              {dayTotal < 0 ? "+" : "-"}
+                              {formatCurrency(Math.abs(dayTotal))} net
+                            </span>
+                          </td>
+                        </tr>
+                      )}
                     <tr
-                      key={t.id}
                       className="border-b border-panel-border last:border-0 hover:bg-panel-hover"
                     >
                       <td className="whitespace-nowrap px-4 py-3 align-top text-muted">{t.date}</td>
@@ -407,6 +512,11 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                         {t.pending && (
                           <Badge tone="warning" className="ml-2">
                             pending
+                          </Badge>
+                        )}
+                        {visibleColumns.has("source") && t.source === "manual" && (
+                          <Badge tone="accent" className="ml-2">
+                            manual
                           </Badge>
                         )}
                         {(ann?.note || (ann?.tags?.length ?? 0) > 0 || txnSplits.length > 0) && (
@@ -419,12 +529,16 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                           </span>
                         )}
                       </td>
-                      <td className="hidden px-4 py-3 align-top text-muted sm:table-cell">
-                        {titleCase(t.pfc_primary) || "-"}
-                      </td>
-                      <td className="hidden px-4 py-3 align-top text-muted md:table-cell">
-                        {accountName.get(t.account_id) ?? "-"}
-                      </td>
+                      {visibleColumns.has("category") && (
+                        <td className="hidden px-4 py-3 align-top text-muted sm:table-cell">
+                          {titleCase(t.pfc_primary) || "-"}
+                        </td>
+                      )}
+                      {visibleColumns.has("account") && (
+                        <td className="hidden px-4 py-3 align-top text-muted md:table-cell">
+                          {accountName.get(resolvedAccountId(t)) ?? "-"}
+                        </td>
+                      )}
                       <td
                         className="whitespace-nowrap px-4 py-3 text-right align-top font-semibold"
                         style={t.amount < 0 ? { color: "var(--success)" } : { color: "var(--danger)" }}
@@ -447,6 +561,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                         />
                       </td>
                     </tr>
+                    </Fragment>
                     );
                   })}
                 </tbody>

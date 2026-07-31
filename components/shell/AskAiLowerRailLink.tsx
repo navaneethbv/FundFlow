@@ -12,7 +12,7 @@ export default async function AskAiLowerRailLink() {
 
   return (
     <Link
-      href="/settings#ask-ai"
+      href="/settings?section=integrations"
       title="Ask your money"
       className="mt-4 inline-flex w-full items-center gap-3 rounded-field px-3 py-2.5 text-sm font-semibold text-muted transition-colors duration-150 hover:bg-panel-hover hover:text-foreground focus-visible:outline-2 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0"
     >

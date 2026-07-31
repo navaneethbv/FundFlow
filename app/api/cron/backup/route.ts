@@ -8,6 +8,7 @@ import { alertCronFailure } from "@/lib/cron-alert";
 import { errorResponse } from "@/lib/http";
 import { logError } from "@/lib/log";
 import { writeAudit } from "@/lib/audit";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -46,6 +47,10 @@ export async function GET(request: NextRequest) {
     const today = new Date().toISOString().slice(0, 10);
     let sent = 0;
     const failures: string[] = [];
+    // Gated: before 20260730210000_investments.sql is applied, these tables
+    // don't exist, and querying them unconditionally would fail every user's
+    // backup, not just investors'.
+    const investmentsEnabled = isFeatureEnabled("investmentsPage");
 
     for (const profile of profiles ?? []) {
       const userId = profile.id as string;
@@ -80,6 +85,36 @@ export async function GET(request: NextRequest) {
             .from("budget_periods")
             .select("budget_id, month, planned")
             .eq("user_id", userId),
+          service
+            .from("saved_reports")
+            .select("name, report_type, filters")
+            .eq("user_id", userId),
+          investmentsEnabled
+            ? service
+                .from("holdings")
+                .select("account_id, manual_account_id, quantity, cost_basis, institution_price, institution_value, as_of, source, is_active")
+                .eq("user_id", userId)
+            : Promise.resolve({ data: [], error: null }),
+          investmentsEnabled
+            ? service
+                .from("holding_snapshots")
+                .select("holding_id, snapshot_date, quantity, price, value")
+                .eq("user_id", userId)
+            : Promise.resolve({ data: [], error: null }),
+          investmentsEnabled
+            // Manual securities only — Plaid-sourced ones (user_id null) are
+            // shared reference data, not this user's own record to protect.
+            ? service
+                .from("securities")
+                .select("name, ticker, security_type, security_subtype")
+                .eq("user_id", userId)
+            : Promise.resolve({ data: [], error: null }),
+          investmentsEnabled
+            ? service
+                .from("investment_transactions")
+                .select("date, name, amount, quantity, price, fees, txn_type, txn_subtype")
+                .eq("user_id", userId)
+            : Promise.resolve({ data: [], error: null }),
         ]);
         const failed = results.find((result) => result.error);
         if (failed?.error) throw failed.error;
@@ -92,6 +127,11 @@ export async function GET(request: NextRequest) {
           manualAccounts,
           accountBalanceSnapshots,
           budgetPeriods,
+          savedReports,
+          holdings,
+          holdingSnapshots,
+          securities,
+          investmentTransactions,
         ] = results.map((result) => result.data);
 
         const protectedSections = [
@@ -103,6 +143,11 @@ export async function GET(request: NextRequest) {
           manualAccounts,
           accountBalanceSnapshots,
           budgetPeriods,
+          savedReports,
+          holdings,
+          holdingSnapshots,
+          securities,
+          investmentTransactions,
         ];
         if (!protectedSections.some((rows) => (rows ?? []).length > 0)) {
           continue;
@@ -120,6 +165,11 @@ export async function GET(request: NextRequest) {
             manual_accounts: manualAccounts ?? [],
             account_balance_snapshots: accountBalanceSnapshots ?? [],
             budget_periods: budgetPeriods ?? [],
+            saved_reports: savedReports ?? [],
+            holdings: holdings ?? [],
+            holding_snapshots: holdingSnapshots ?? [],
+            securities: securities ?? [],
+            investment_transactions: investmentTransactions ?? [],
           },
           backupKey,
         );

@@ -91,4 +91,16 @@ describe("filterRowsWithRules", () => {
       filterRowsWithRules(rows, [], accountNames, { merchant: "netflix.com" }).map((r) => r.id),
     ).toEqual(["a"]);
   });
+
+  it("resolves a manual transaction's account name through manual_account_id (Phase 12)", () => {
+    const namesWithManual = new Map([...accountNames, ["man-1", "Cash"]]);
+    const rows = [
+      row({ id: "a", account_id: null, manual_account_id: "man-1", pfc_primary: "FOOD_AND_DRINK" }),
+    ];
+    // No crash resolving a null account_id, and the row still matches its
+    // own category filter — manual transactions aren't silently excluded.
+    expect(
+      filterRowsWithRules(rows, [], namesWithManual, { category: "FOOD_AND_DRINK" }).map((r) => r.id),
+    ).toEqual(["a"]);
+  });
 });

@@ -1,8 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { buildPayoffPlan } from "@/lib/debt";
-import { computeRunwayMonths } from "@/lib/insights";
+import { computeWhatIfProjection } from "@/lib/forecasting";
 import { formatCurrency } from "@/lib/format";
 
 interface WhatIfDebt {
@@ -33,28 +32,20 @@ export default function WhatIfPanel({
   const [spendDelta, setSpendDelta] = useState(0);
   const [extraDebt, setExtraDebt] = useState(0);
 
-  const projection = useMemo(() => {
-    const surplus =
-      monthlyIncome + incomeDelta - (monthlySpend + spendDelta);
-
-    const adjustedEssentials = monthlyEssentials.map((amount) =>
-      Math.max(0, amount + spendDelta),
-    );
-    const runwayMonths =
-      adjustedEssentials.length > 0
-        ? computeRunwayMonths({
-            liquidBalance: cashBalance,
-            monthlyEssentials: adjustedEssentials,
-          })
-        : null;
-
-    const plan =
-      debts.length > 0
-        ? buildPayoffPlan({ debts, extraMonthly: extraDebt, strategy: "avalanche" })
-        : null;
-
-    return { surplus, runwayMonths, plan };
-  }, [cashBalance, monthlyIncome, monthlySpend, monthlyEssentials, debts, incomeDelta, spendDelta, extraDebt]);
+  const projection = useMemo(
+    () =>
+      computeWhatIfProjection({
+        cashBalance,
+        monthlyIncome,
+        monthlySpend,
+        monthlyEssentials,
+        debts,
+        incomeDelta,
+        spendDelta,
+        extraDebt,
+      }),
+    [cashBalance, monthlyIncome, monthlySpend, monthlyEssentials, debts, incomeDelta, spendDelta, extraDebt],
+  );
 
   const signed = (value: number) =>
     `${value >= 0 ? "+" : "−"}${formatCurrency(Math.abs(value))}/mo`;

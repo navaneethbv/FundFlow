@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  goalContributionsForMonth,
+  type GoalV2Row,
+} from "@/lib/goals-v2";
+import {
   budgetWindow,
   buildBudgetView,
   proposeBudgetFromHistory,
@@ -10,6 +14,7 @@ import {
   type BudgetViewData,
 } from "@/lib/budget-page";
 import { partitionCashFlowByCurrency } from "@/lib/cash-flow";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 import {
   parseFinancialScope,
   scopeQueryUserId,
@@ -54,6 +59,25 @@ interface RecurringRow {
 
 interface SyncRow {
   updated_at: string;
+}
+
+type GoalContributionSource = Pick<
+  GoalV2Row,
+  "id" | "name" | "monthly_contribution"
+>;
+
+interface GoalEventRow {
+  goal_id: string;
+  event_date: string;
+  amount: number | string;
+}
+
+/** First day of the month after `month`, for an exclusive date bound. */
+function getMonthEndExclusive(month: string): string {
+  const match = MONTH_REGEX.exec(month);
+  if (!match) throw new Error("invalid_budget_month");
+  const total = Number(match[1]) * 12 + Number(match[2]);
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}-01`;
 }
 
 export interface BudgetLoadResult {
@@ -163,8 +187,28 @@ export async function loadBudgetData(
     .from("sync_jobs")
     .select("updated_at")
     .eq("status", "done")
+    .eq("job_type", "transactions")
     .order("updated_at", { ascending: false })
     .limit(1);
+  // Phase 7 contributions: planned comes from the goal, actual from the event
+  // ledger for this month only. Balance movement is deliberately not read here
+  // (see goalContributionsForMonth).
+  //
+  // Gated: `goal_progress_events` only exists once 20260730200000_goals_v2.sql
+  // is applied, and /budget is already released. With the flag off the page
+  // behaves exactly as it did before Phase 7 instead of erroring.
+  const goalsV2Enabled = isFeatureEnabled("goalsV2");
+  let goalsQuery = supabase
+    .from("goals")
+    .select("id,name,monthly_contribution")
+    .order("name")
+    .limit(DEPENDENCY_LIMIT);
+  let goalEventsQuery = supabase
+    .from("goal_progress_events")
+    .select("goal_id,event_date,amount")
+    .gte("event_date", `${input.anchorMonth}-01`)
+    .lt("event_date", getMonthEndExclusive(input.anchorMonth))
+    .limit(DEPENDENCY_LIMIT);
 
   if (userId) {
     budgetsQuery = budgetsQuery.eq("user_id", userId);
@@ -172,6 +216,8 @@ export async function loadBudgetData(
     sinkingFundsQuery = sinkingFundsQuery.eq("user_id", userId);
     recurringQuery = recurringQuery.eq("user_id", userId);
     syncQuery = syncQuery.eq("user_id", userId);
+    goalsQuery = goalsQuery.eq("user_id", userId);
+    goalEventsQuery = goalEventsQuery.eq("user_id", userId);
   }
 
   const [
@@ -181,6 +227,8 @@ export async function loadBudgetData(
     recurringResult,
     syncResult,
     projection,
+    goalsResult,
+    goalEventsResult,
   ] = await Promise.all([
     budgetsQuery,
     periodsQuery,
@@ -195,6 +243,10 @@ export async function loadBudgetData(
       },
       maxRows: FINANCE_MAX_ROWS,
     }),
+    goalsV2Enabled ? goalsQuery : Promise.resolve({ data: [], error: null }),
+    goalsV2Enabled
+      ? goalEventsQuery
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   assertBudgetQuery("budgets", budgetsResult);
@@ -202,6 +254,8 @@ export async function loadBudgetData(
   assertBudgetQuery("sinking_funds", sinkingFundsResult);
   assertBudgetQuery("recurring_streams", recurringResult);
   assertBudgetQuery("sync_jobs", syncResult);
+  assertBudgetQuery("goals", goalsResult);
+  assertBudgetQuery("goal_progress_events", goalEventsResult);
 
   const budgets: BudgetRecord[] = (
     (budgetsResult.data ?? []) as BudgetRow[]
@@ -278,6 +332,19 @@ export async function loadBudgetData(
       periods,
       txns: selectedTransactions,
       sinkingFunds,
+      goalContributions: goalContributionsForMonth(
+        (goalsResult.data ?? []) as GoalContributionSource[],
+        ((goalEventsResult.data ?? []) as GoalEventRow[]).map((row) => ({
+          goal_id: row.goal_id,
+          event_date: row.event_date,
+          amount: Number(row.amount),
+        })),
+        input.anchorMonth,
+      ).map((line) => ({
+        name: line.name,
+        planned: line.planned,
+        actual: line.actual,
+      })),
     }),
     scope,
     visibleHouseholdIds,

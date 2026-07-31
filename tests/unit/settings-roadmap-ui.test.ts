@@ -21,7 +21,5 @@ describe("settings roadmap workflows", () => {
     expect(page).not.toContain("NotificationsSection");
     expect(page).not.toContain("PlanningPreferencesSection");
     expect(page).toContain('href="/notifications"');
-    expect(page).toContain('id="cleanup"');
-    expect(page).toContain('id="alerts"');
   });
 });

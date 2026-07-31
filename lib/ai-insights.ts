@@ -1,7 +1,10 @@
 export interface AiInsightRow {
   month?: string;
   merchant?: string;
-  category?: string;
+  /** Nullable, not just optional: it comes from the nullable `pfc_primary`
+   *  column, and the `?? "UNCATEGORIZED"` fallback below already handles a
+   *  null. Typing it `string | undefined` made a real row shape unassignable. */
+  category?: string | null;
   amount?: number;
 }
 
