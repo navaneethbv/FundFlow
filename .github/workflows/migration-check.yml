@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
       SUPABASE_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +23,7 @@ jobs:
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: 2.109.0
+          version: 2.110.0
 
       - name: Start Supabase local stack
         run: supabase start
@@ -31,7 +32,7 @@ jobs:
         run: supabase db reset --local --no-seed
 
       - name: Assert RLS on every public table
-        run: supabase db query --local --file scripts/check-rls.sql
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-rls.sql
 
       - name: Stop Supabase local stack
         if: always()
