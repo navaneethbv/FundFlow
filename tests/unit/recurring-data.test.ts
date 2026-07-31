@@ -231,5 +231,31 @@ describe("loadRecurringData", () => {
         anchorMonth: "2026-07",
       }),
     ).rejects.toThrow("recurring_query_failed:recurring_streams:PGRST116");
+
+    const clientNoCode = makeClient({
+      recurring_streams: { error: {} },
+    });
+    await expect(
+      loadRecurringData(clientNoCode as never, {
+        userId: "user-1",
+        anchorMonth: "2026-07",
+      }),
+    ).rejects.toThrow("recurring_query_failed:recurring_streams");
+  });
+
+  it("maps transaction dates from stream transaction joins", async () => {
+    const client = makeClient({
+      recurring_stream_transactions: {
+        data: [{ recurring_stream_id: "stream-1", transaction_id: "t-100" }],
+      },
+      transactions: {
+        data: [{ id: "t-100", date: "2026-07-02" }],
+      },
+    });
+    const result = await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-07",
+    });
+    expect(result).toBeDefined();
   });
 });

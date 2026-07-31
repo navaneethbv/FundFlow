@@ -120,4 +120,14 @@ describe("computeYearInMoney", () => {
     expect(result.quietestMonth).toBeNull();
     expect(result.largestPurchase).toBeNull();
   });
+
+  it("handles null category and zero amount transactions", () => {
+    const nullCat = [
+      txn("2026-05-01", 50, "Vendor", null),
+      txn("2026-05-02", 0, "Zero Vendor", null),
+    ];
+    const result = computeYearInMoney(nullCat, "2026")!;
+    expect(result.topCategories[0]!.category).toBe("UNCATEGORIZED");
+    expect(result.totalSpend).toBe(50);
+  });
 });

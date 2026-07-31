@@ -507,4 +507,47 @@ describe("accountsViewIsFiltered", () => {
       accountsViewIsFiltered({ visibility: "all", hiddenIds: ["cash-1"] }),
     ).toBe(true);
   });
+
+  it("handles minute/day singular formatting and groupKey filter in applyAccountsPageView", () => {
+    const built = buildAccountsPageData(
+      [
+        account({
+          id: "m-1",
+          name: "1 Min Ago",
+          type: "depository",
+          currentBalance: 50,
+          updatedAt: "2026-07-29T11:59:00.000Z",
+        }),
+        account({
+          id: "d-1",
+          name: "1 Day Ago",
+          type: "credit",
+          currentBalance: 100,
+          updatedAt: "2026-07-28T12:00:00.000Z",
+        }),
+        account({
+          id: "null-date",
+          name: "Null Date",
+          type: "depository",
+          currentBalance: 50,
+          updatedAt: "invalid-date",
+        }),
+      ],
+      [],
+      NOW,
+    );
+
+    const cashRow = built.groups.cash.rows.find((r) => r.id === "m-1");
+    const creditRow = built.groups.credit.rows.find((r) => r.id === "d-1");
+    const nullRow = built.groups.cash.rows.find((r) => r.id === "null-date");
+
+    expect(cashRow?.updatedAgo).toBe("1 minute ago");
+    expect(creditRow?.updatedAgo).toBe("1 day ago");
+    expect(nullRow?.updatedAgo).toBe("unknown");
+    expect(nullRow?.stale).toBe(true);
+
+    const groupFiltered = applyAccountsPageView(built, { groupKey: "credit" });
+    expect(groupFiltered.groups.cash.rows).toHaveLength(0);
+    expect(groupFiltered.groups.credit.rows).toHaveLength(1);
+  });
 });

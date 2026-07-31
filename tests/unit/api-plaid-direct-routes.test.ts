@@ -189,7 +189,7 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
     it("disconnects bank item successfully", async () => {
       mockGetItem.mockResolvedValue({ id: "item-1", institution_name: "Chase" });
       mockItemRemove.mockResolvedValue({ data: {} });
-      serviceClient = clientStub({ from: () => ({ delete: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }) }) }) }) });
+      serviceClient = clientStub({ plaid_items: { error: null } });
 
       const req = new NextRequest("http://localhost/api/plaid/disconnect", {
         method: "POST",

@@ -49,7 +49,7 @@ vi.mock("@/lib/supabase/service", () => ({
 import { POST as previewPost } from "@/app/api/import/preview/route";
 import { POST as commitPost } from "@/app/api/import/commit/route";
 import { POST as csvPost } from "@/app/api/import/csv/route";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 describe("Import API Routes", () => {
   beforeEach(() => {
@@ -400,6 +400,33 @@ describe("Import API Routes", () => {
           }),
         }),
       );
+    });
+
+    it("returns 401 when requireUser fails or handles missing account / DB error in import csv route", async () => {
+      mockRequireUser.mockResolvedValue(new NextResponse("unauthorized", { status: 401 }));
+      const unauthRes = await csvPost({} as NextRequest);
+      expect(unauthRes.status).toBe(401);
+
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+      const file = new File(["2026-07-01,Store,10.00"], "statement.csv", { type: "text/csv" });
+      const formDataMissingAcc = new FormData();
+      formDataMissingAcc.set("file", file);
+      const resNoAcc = await csvPost({ formData: () => Promise.resolve(formDataMissingAcc) } as unknown as NextRequest);
+      expect(resNoAcc.status).toBe(400);
+
+      const formDataWithAcc = new FormData();
+      formDataWithAcc.set("file", file);
+      formDataWithAcc.set("account_id", "a1");
+      const mockSupabaseNullAcc = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        }),
+      };
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: mockSupabaseNullAcc });
+      const resNullAcc = await csvPost({ formData: () => Promise.resolve(formDataWithAcc) } as unknown as NextRequest);
+      expect(resNullAcc.status).toBe(404);
     });
   });
 });

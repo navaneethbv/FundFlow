@@ -250,5 +250,27 @@ describe("lib/sync", () => {
       );
       expect(updateJob).toHaveBeenCalledWith({ status: "failed", last_error: "ITEM_LOGIN_REQUIRED" });
     });
+
+    it("handles sync job record errors and null institution name fallback", async () => {
+      const itemNoName: PlaidItemRow = { ...dummyItem, institution_name: null };
+      mockListActiveItems.mockResolvedValue([itemNoName]);
+
+      mockServiceClient.from.mockImplementation(() => {
+        throw new Error("Job Record DB Error");
+      });
+
+      mockTransactionsSync.mockRejectedValueOnce(new Error("Generic Sync Error"));
+
+      const res = await syncAllForUser("user-1");
+
+      expect(res).toEqual({ added: 0, modified: 0, removed: 0 });
+      expect(mockLogError).toHaveBeenCalledWith("sync.job-record", expect.any(Error));
+      expect(mockCreateNotification).toHaveBeenCalledWith(
+        "user-1",
+        "broken_bank",
+        expect.objectContaining({ title: "Bank connection issue: Bank" }),
+        "item-db-1",
+      );
+    });
   });
 });

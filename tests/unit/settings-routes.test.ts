@@ -30,7 +30,7 @@ import {
   GET as sessionsGet,
   DELETE as sessionsDelete,
 } from "@/app/api/settings/sessions/route";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 describe("Settings API Routes", () => {
   beforeEach(() => {
@@ -174,6 +174,20 @@ describe("Settings API Routes", () => {
       const res = await sessionsDelete(request);
       expect(res.status).toBe(400);
       expect(mockBadRequest).toHaveBeenCalledWith("session_id is required");
+    });
+
+    it("returns 401 when requireUser fails or handles DB error on revoke", async () => {
+      mockRequireUser.mockResolvedValue(new NextResponse("unauthorized", { status: 401 }));
+      const res = await sessionsDelete({ json: () => Promise.resolve({ session_id: "s1" }) } as unknown as NextRequest);
+      expect(res.status).toBe(401);
+
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+      mockServiceClient.from.mockReturnValue({
+        update: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: new Error("Revoke Error") }) }) }),
+      });
+      mockErrorResponse.mockReturnValue(new Response("error", { status: 500 }));
+      const errRes = await sessionsDelete({ json: () => Promise.resolve({ session_id: "s1" }) } as unknown as NextRequest);
+      expect(errRes.status).toBe(500);
     });
   });
 });

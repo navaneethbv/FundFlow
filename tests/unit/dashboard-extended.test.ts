@@ -222,6 +222,17 @@ describe("lib/dashboard extended features", () => {
             { id: "g-1", name: "Emergency Fund", target_amount: 10000, current_amount: 4000, target_date: "2026-12-31" },
           ]);
         }
+        if (table === "account_snapshots") {
+          return createChainableMock([
+            { snapshot_month: "2026-06-01", assets: 10000, liabilities: 2000 },
+            { snapshot_month: "2026-07-01", assets: 12000, liabilities: 1500 },
+          ]);
+        }
+        if (table === "budget_targets" || table === "budget_envelopes") {
+          return createChainableMock([
+            { category: "FOOD_AND_DRINK", amount: 500 },
+          ]);
+        }
         return createChainableMock([]);
       }),
     } as unknown as SupabaseClient;
@@ -231,12 +242,205 @@ describe("lib/dashboard extended features", () => {
       "acc-1",
       "2026-07",
       "user-1",
-      { scope: "personal" },
+      { scope: "mine" },
     );
 
     expect(data).toBeDefined();
     expect(data.accounts).toHaveLength(1);
     expect(data.insights.sinkingFunds).toBeDefined();
     expect(data.insights.runwayMonths).toBeDefined();
+  });
+
+  it("handles category and merchant drilldown options in getDashboardData", async () => {
+    const rawAccounts = [
+      {
+        id: "acc-1",
+        user_id: "user-1",
+        plaid_account_id: "p-acc-1",
+        name: "Checking",
+        type: "depository",
+        subtype: "checking",
+        current_balance: 5000,
+        available_balance: 5000,
+        credit_limit: null,
+        iso_currency_code: "USD",
+        apr: null,
+      },
+    ];
+
+    const rawTxns = [
+      {
+        id: "t-1",
+        user_id: "user-1",
+        account_id: "acc-1",
+        plaid_transaction_id: "pt-1",
+        amount: 150,
+        iso_currency_code: "USD",
+        date: "2026-07-15",
+        name: "Trader Joes",
+        merchant_name: "Trader Joes",
+        pfc_primary: "FOOD_AND_DRINK",
+        pfc_detailed: "FOOD_AND_DRINK_GROCERIES",
+        pending: false,
+      },
+    ];
+
+    const createChainableMock = (resolvedData: unknown = []) => {
+      const chain: Record<string, unknown> = {};
+      const returnSelf = () => chain;
+      const resolveData = () => Promise.resolve({ data: resolvedData, error: null });
+
+      chain.select = returnSelf;
+      chain.eq = returnSelf;
+      chain.gte = returnSelf;
+      chain.lt = returnSelf;
+      chain.in = returnSelf;
+      chain.order = returnSelf;
+      chain.limit = returnSelf;
+      chain.maybeSingle = () =>
+        Promise.resolve({
+          data: Array.isArray(resolvedData) ? resolvedData[0] ?? null : resolvedData,
+          error: null,
+        });
+      chain.single = chain.maybeSingle;
+      chain.then = (onfulfilled: (res: { data: unknown; error: null }) => unknown) =>
+        resolveData().then(onfulfilled);
+      return chain;
+    };
+
+    const mockSupabase = {
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === "accounts") return createChainableMock(rawAccounts);
+        if (table === "transactions") return createChainableMock(rawTxns);
+        return createChainableMock([]);
+      }),
+    } as unknown as SupabaseClient;
+
+    const catData = await getDashboardData(
+      mockSupabase,
+      undefined,
+      "2026-07",
+      "user-1",
+      { drill: { category: "FOOD_AND_DRINK", sub: "FOOD_AND_DRINK_GROCERIES" } },
+    );
+    expect(catData.drilldown).toBeDefined();
+
+    const merchData = await getDashboardData(
+      mockSupabase,
+      undefined,
+      "2026-07",
+      "user-1",
+      { drill: { merchant: "Trader Joes" } },
+    );
+    expect(merchData.drilldown).toBeDefined();
+  });
+
+  it("handles itemId option, manual accounts, stream description fallbacks, and sync job metrics", async () => {
+    const rawAccounts = [
+      {
+        id: "acc-1",
+        user_id: "user-1",
+        plaid_account_id: "p-acc-1",
+        name: "Card",
+        type: "credit",
+        subtype: "credit card",
+        current_balance: 1200,
+        available_balance: 3800,
+        credit_limit: 5000,
+        iso_currency_code: "USD",
+        apr: 21.99,
+        mask: "4321",
+        item_id: "item-1",
+      },
+    ];
+
+    const rawManualAccounts = [
+      {
+        id: "macc-1",
+        user_id: "user-1",
+        name: "Custom Investment",
+        account_type: "investment",
+        balance: 15000,
+        currency: "USD",
+      },
+    ];
+
+    const rawManualTxns = [
+      {
+        id: "mt-1",
+        user_id: "user-1",
+        manual_account_id: "macc-1",
+        amount: 250,
+        date: "2026-07-10",
+        name: "Stock Dividend",
+        merchant_name: null,
+        category: null,
+      },
+    ];
+
+    const rawStreams = [
+      {
+        id: "s-1",
+        user_id: "user-1",
+        merchant_name: null,
+        description: "Cloud Hosting",
+        average_amount: null,
+        last_amount: 45,
+        frequency: "MONTHLY",
+        stream_type: "outflow",
+        is_active: true,
+        account_id: "acc-1",
+      },
+    ];
+
+    const rawSyncJob = {
+      id: "job-1",
+      updated_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    };
+
+    const createChainableMock = (resolvedData: unknown = []) => {
+      const chain: Record<string, unknown> = {};
+      const returnSelf = () => chain;
+      const resolveData = () => Promise.resolve({ data: resolvedData, error: null });
+
+      chain.select = returnSelf;
+      chain.eq = returnSelf;
+      chain.gte = returnSelf;
+      chain.lt = returnSelf;
+      chain.in = returnSelf;
+      chain.order = returnSelf;
+      chain.limit = returnSelf;
+      chain.maybeSingle = () =>
+        Promise.resolve({
+          data: Array.isArray(resolvedData) ? resolvedData[0] ?? null : resolvedData,
+          error: null,
+        });
+      chain.single = chain.maybeSingle;
+      chain.then = (onfulfilled: (res: { data: unknown; error: null }) => unknown) =>
+        resolveData().then(onfulfilled);
+      return chain;
+    };
+
+    const mockSupabase = {
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === "accounts") return createChainableMock(rawAccounts);
+        if (table === "manual_accounts") return createChainableMock(rawManualAccounts);
+        if (table === "manual_transactions") return createChainableMock(rawManualTxns);
+        if (table === "recurring_streams") return createChainableMock(rawStreams);
+        if (table === "sync_jobs") return createChainableMock([rawSyncJob]);
+        return createChainableMock([]);
+      }),
+    } as unknown as SupabaseClient;
+
+    const data = await getDashboardData(
+      mockSupabase,
+      undefined,
+      "2026-07",
+      "user-1",
+      { itemId: "item-1" },
+    );
+
+    expect(data.lastSyncAgoMinutes).toBeLessThan(15);
+    expect(data.insights.debt?.usesAssumedApr).toBe(false);
   });
 });

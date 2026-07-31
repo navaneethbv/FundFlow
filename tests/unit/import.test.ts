@@ -174,6 +174,21 @@ describe("parseImportCsv", () => {
     expect(rows).toHaveLength(0);
     expect(errors[0]).toContain("Could not detect columns");
   });
+
+  it("handles empty CSVs, 0-debit/credit lines, and missing descriptions", () => {
+    expect(getCsvColumns("")).toBeNull();
+    const emptyRes = parseImportCsv("", { positiveIsIncome: false });
+    expect(emptyRes.errors[0]).toBe("File has no data rows.");
+
+    const splitZero = [
+      "Date,Description,Debit,Credit",
+      "2026-07-01,Zero Txn,0,0",
+      "2026-07-02,,10,0",
+    ].join("\n");
+    const { rows, errors } = parseImportCsv(splitZero, { positiveIsIncome: false });
+    expect(rows[0]!.amount).toBe(0);
+    expect(errors).toContain('Line 3: empty description.');
+  });
 });
 
 describe("makeImportId", () => {

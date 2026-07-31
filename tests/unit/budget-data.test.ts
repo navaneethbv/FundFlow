@@ -193,4 +193,37 @@ describe("loadBudgetData", () => {
       }),
     ).rejects.toThrow("budget_query_failed:budgets:42501");
   });
+
+  it("handles recurring categories matching trailing complete transactions", async () => {
+    const supabase = makeClient({
+      recurring_streams: { data: [{ category: "FOOD_AND_DRINK" }] },
+      transactions: {
+        data: [
+          {
+            id: "tx-trailing",
+            user_id: "user-1",
+            account_id: "usd-account",
+            plaid_transaction_id: "p-tr",
+            date: "2026-06-15",
+            amount: 120,
+            merchant_name: "Supermarket",
+            name: "SUPERMARKET",
+            pfc_primary: "FOOD_AND_DRINK",
+            pfc_detailed: "GROCERIES",
+            pending: false,
+          },
+        ],
+      },
+    });
+
+    const result = await loadBudgetData(supabase as never, {
+      userId: "user-1",
+      anchorMonth: "2026-07",
+      horizon: "monthly",
+      requestedCurrency: "USD",
+      now: new Date("2026-07-29T12:00:00.000Z"),
+    });
+
+    expect(result).toBeDefined();
+  });
 });

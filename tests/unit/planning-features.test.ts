@@ -299,4 +299,61 @@ describe("planning roadmap features", () => {
     expect(canManageHousehold({ userId: "u1", householdOwnerId: "u1", role: "owner" })).toBe(true);
     expect(canManageHousehold({ userId: "u2", householdOwnerId: "u1", role: "read_only" })).toBe(false);
   });
+
+  it("builds planning depth view and supports snowball strategy for debt payoff", async () => {
+    const { buildPlanningDepthView, planDebtPayoff } = await import("@/lib/planning-depth");
+
+    const planSnowball = planDebtPayoff(
+      [
+        { id: "d1", name: "Card 1", balance: 1000, apr: 18, minimumPayment: 30 },
+        { id: "d2", name: "Card 2", balance: 500, apr: 22, minimumPayment: 20 },
+      ],
+      100,
+      "snowball",
+    );
+    expect(planSnowball.strategy).toBe("snowball");
+    expect(planSnowball.order[0]!.name).toBe("Card 2");
+
+    const depthView = buildPlanningDepthView({
+      accounts: [
+        { name: "Checking", type: "depository", balance: 5000 },
+        { name: "Credit Card", type: "credit", balance: 1200, apr: 20 },
+      ],
+      monthlyIncome: 4000,
+      monthlySpend: 2500,
+      goals: [
+        { id: "g1", name: "Vacation", targetAmount: 1200, currentAmount: 600, monthsRemaining: 6 },
+      ],
+    });
+
+    expect(depthView.debtPayoff).not.toBeNull();
+    expect(depthView.sinkingFunds).toHaveLength(1);
+    expect(depthView.sinkingFunds[0]!.monthlyContribution).toBe(100);
+  });
+
+  it("builds recurring statuses with late, expected, paid, and unusual amount reviews", async () => {
+    const { buildRecurringStatuses } = await import("@/lib/planning-depth");
+
+    const statuses = buildRecurringStatuses({
+      asOf: "2026-07-20",
+      unusualAmountPct: 0.1,
+      items: [
+        { id: "i1", name: "Gym", amount: 50, itemType: "expense", nextDate: "2026-07-10" },
+        { id: "i2", name: "Water", amount: 30, itemType: "expense", nextDate: "2026-07-19" },
+        { id: "i3", name: "Electric", amount: 100, itemType: "expense", nextDate: "2026-07-15" },
+        { id: "i4", name: "Bonus", amount: 500, itemType: "income", nextDate: "2026-07-15" },
+      ],
+      transactions: [
+        { id: "t1", date: "2026-07-15", merchant: "Electric", amount: 150 },
+        { id: "t2", date: "2026-07-15", merchant: "Bonus", amount: 700 },
+      ],
+    });
+
+    expect(statuses[0]!.status).toBe("late");
+    expect(statuses[1]!.status).toBe("expected");
+    expect(statuses[2]!.status).toBe("unusual_amount");
+    expect(statuses[2]!.reviewPrompt).toContain("Review Electric");
+    expect(statuses[3]!.status).toBe("unusual_amount");
+    expect(statuses[3]!.reviewPrompt).toBeNull();
+  });
 });

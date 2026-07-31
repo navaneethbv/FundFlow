@@ -87,4 +87,37 @@ describe("getWeeklyReportData", () => {
     expect(result?.userEmail).toBe("user@example.com");
     expect(result?.totalSpend).toBe(20);
   });
+
+  it("returns null when user has no email or getUserById returns null", async () => {
+    const mockSupabaseNoEmail = {
+      auth: {
+        admin: {
+          getUserById: vi.fn().mockResolvedValue({
+            data: { user: { email: null } },
+            error: null,
+          }),
+        },
+      },
+    } as never;
+
+    const period = { start: "2026-07-06", end: "2026-07-12", previousStart: "2026-06-29", previousEnd: "2026-07-05" };
+    const res = await getWeeklyReportData(mockSupabaseNoEmail, "user-1", period);
+    expect(res).toBeNull();
+  });
+
+  it("throws error when query or user lookup fails", async () => {
+    const mockSupabaseError = {
+      auth: {
+        admin: {
+          getUserById: vi.fn().mockResolvedValue({
+            data: null,
+            error: new Error("User error"),
+          }),
+        },
+      },
+    } as never;
+
+    const period = { start: "2026-07-06", end: "2026-07-12", previousStart: "2026-06-29", previousEnd: "2026-07-05" };
+    await expect(getWeeklyReportData(mockSupabaseError, "user-1", period)).rejects.toThrow("weekly report user: User error");
+  });
 });

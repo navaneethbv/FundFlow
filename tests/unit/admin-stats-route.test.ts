@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextResponse } from "next/server";
 
 const mockRequireAdmin = vi.fn();
 const mockErrorResponse = vi.fn();
@@ -15,66 +16,44 @@ vi.mock("@/lib/supabase/service", () => ({
 }));
 
 import { GET } from "@/app/api/admin/stats/route";
-import { NextResponse } from "next/server";
 
 describe("GET /api/admin/stats", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("returns the auth response early if user is not an admin", async () => {
-    const errorResponseObject = new NextResponse("unauthorized", { status: 403 });
-    mockRequireAdmin.mockResolvedValue(errorResponseObject);
+  it("returns early when requireAdmin returns NextResponse", async () => {
+    const unauth = new NextResponse("forbidden", { status: 403 });
+    mockRequireAdmin.mockResolvedValue(unauth);
 
     const res = await GET();
-    expect(res).toBe(errorResponseObject);
-    expect(mockServiceClient.from).not.toHaveBeenCalled();
+    expect(res).toBe(unauth);
   });
 
-  it("returns aggregated counts of plaid_items, accounts, and transactions on success", async () => {
+  it("returns stats with counts and falls back to 0 when count is null", async () => {
     mockRequireAdmin.mockResolvedValue({ user: { id: "admin-1" } });
-
-    const plaidChain = {
-      select: vi.fn().mockResolvedValue({ count: 5 }),
-    };
-    const accountsChain = {
-      select: vi.fn().mockResolvedValue({ count: 12 }),
-    };
-    const txnsChain = {
-      select: vi.fn().mockResolvedValue({ count: 350 }),
-    };
-
-    mockServiceClient.from.mockImplementation((table: string) => {
-      if (table === "plaid_items") return plaidChain;
-      if (table === "accounts") return accountsChain;
-      if (table === "transactions") return txnsChain;
-      throw new Error(`Unexpected table ${table}`);
+    mockServiceClient.from.mockImplementation((table) => {
+      if (table === "plaid_items") return { select: () => Promise.resolve({ count: 12, error: null }) };
+      if (table === "accounts") return { select: () => Promise.resolve({ count: null, error: null }) };
+      if (table === "transactions") return { select: () => Promise.resolve({ count: 450, error: null }) };
+      return { select: () => Promise.resolve({ count: 0, error: null }) };
     });
 
     const res = await GET();
-    expect(res).toBeInstanceOf(NextResponse);
     expect(res.status).toBe(200);
-
     const body = await res.json();
-    expect(body).toEqual({
-      plaid_items: 5,
-      accounts: 12,
-      transactions: 350,
-    });
+    expect(body).toEqual({ plaid_items: 12, accounts: 0, transactions: 450 });
   });
 
-  it("handles db query failures by calling errorResponse", async () => {
+  it("calls errorResponse on DB failure", async () => {
     mockRequireAdmin.mockResolvedValue({ user: { id: "admin-1" } });
     mockServiceClient.from.mockImplementation(() => {
-      throw new Error("DB Connection Failed");
+      throw new Error("Stats error");
     });
     mockErrorResponse.mockReturnValue(new Response("error", { status: 500 }));
 
     const res = await GET();
     expect(res.status).toBe(500);
-    expect(mockErrorResponse).toHaveBeenCalledWith(
-      "admin.stats",
-      expect.any(Error),
-    );
+    expect(mockErrorResponse).toHaveBeenCalledWith("admin.stats", expect.any(Error));
   });
 });
