@@ -55,6 +55,10 @@ export async function POST(request: NextRequest) {
         name: imported.merchant,
         merchant_name: imported.merchant,
         pending: false,
+        // The `import-` prefix (see makeImportId) is what lib/finance-domain.ts
+        // actually reads for provenance; this column exists so SQL can filter
+        // by source directly (e.g. the ledger's ColumnsMenu) without parsing it.
+        source: "import",
       };
     });
 

@@ -213,7 +213,9 @@ export function financeTotals(rows: CanonicalFinanceTransaction[]): FinanceTotal
 export interface TransactionRow {
   id: string;
   user_id: string;
-  account_id: string;
+  /** Null for a manual row — see `manual_account_id` below (Phase 12). */
+  account_id: string | null;
+  manual_account_id?: string | null;
   /** Absent when a caller selects a narrower column set; provenance then
    *  falls back to "plaid" rather than throwing. */
   plaid_transaction_id?: string | null;
@@ -233,9 +235,12 @@ function sourceFromProviderId(providerId: string): FinanceSource {
 }
 
 /**
- * Adapts today's schema to the canonical input. Provenance comes from the
- * `plaid_transaction_id` prefix convention (`import-`, `manual-`); Phase 12
- * replaces this with the explicit `source` and `manual_account_id` columns.
+ * Adapts today's schema to the canonical input. Provenance still comes from
+ * the `plaid_transaction_id` prefix convention (`import-`, `manual-`) rather
+ * than the `source` column added alongside `manual_account_id` — the prefix
+ * is already relied on elsewhere (the sync overlap guard) and duplicating the
+ * signal onto two columns risks them disagreeing; `source` is queryable in
+ * SQL (e.g. the ledger's ColumnsMenu filter) without needing this parse.
  */
 export function fromTransactionRow(row: TransactionRow): RawFinanceTransaction {
   const providerId = row.plaid_transaction_id ?? "";
@@ -246,7 +251,7 @@ export function fromTransactionRow(row: TransactionRow): RawFinanceTransaction {
     providerTransactionId: providerId,
     userId: row.user_id,
     accountId: row.account_id,
-    manualAccountId: null,
+    manualAccountId: row.manual_account_id ?? null,
     date: row.date,
     amount: row.amount,
     merchant: row.merchant_name,

@@ -65,7 +65,7 @@ describe("dashboard command center", () => {
       "warning",
     ]);
     expect(attention[0]?.href).toBe("/settings");
-    expect(attention[3]?.href).toBe("/settings#budgets");
+    expect(attention[3]?.href).toBe("/settings?section=categories");
 
     const withoutBudgets = buildPrioritySignals({
       brokenBankCount: 0,
@@ -79,7 +79,7 @@ describe("dashboard command center", () => {
     expect(withoutBudgets[3]).toEqual({
       label: "Budgets not set",
       tone: "neutral",
-      href: "/settings#budgets",
+      href: "/settings?section=categories",
     });
   });
 
@@ -128,7 +128,7 @@ describe("dashboard command center", () => {
     );
 
     expect(items).toEqual([
-      { label: "Create a monthly budget", href: "/settings#budgets" },
+      { label: "Create a monthly budget", href: "/settings?section=categories" },
       { label: "Add a savings goal", href: "/goals" },
       { label: "Refresh recurring transactions", href: "/settings" },
     ]);

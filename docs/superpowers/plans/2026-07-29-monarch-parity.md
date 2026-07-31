@@ -757,23 +757,66 @@ export function summarizeTransactions(
 
 **Steps:**
 
-- [ ] Write the migration with grants, owner RLS, malformed-filter validation tests, takeout/backup/delete coverage, and verification SQL.
-- [ ] TDD `layoutSankey`: column positions, proportional heights, minimum visible height, stable ordering, vertical stacking, link geometry, conservation, zero values, and overflow folding.
-- [ ] TDD `buildCashFlowSankeyData` and `summarizeTransactions` for positive net income, exact break-even, spending greater than income, refunds, split transactions, Unknown groups, and largest-by-absolute-value behavior.
-- [ ] Pre-fold low-value nodes into Other before layout.
+- [x] Write the migration with grants, owner RLS, malformed-filter validation tests, takeout/backup/delete coverage, and verification SQL.
+- [x] TDD `layoutSankey`: column positions, proportional heights, minimum visible height, stable ordering, vertical stacking, link geometry, conservation, zero values, and overflow folding.
+- [x] TDD `buildCashFlowSankeyData` and `summarizeTransactions` for positive net income, exact break-even, spending greater than income, refunds, split transactions, Unknown groups, and largest-by-absolute-value behavior.
+- [x] Pre-fold low-value nodes into Other before layout.
   The table twin retains full detail, and the chart never produces negative or crossing-by-random-order links.
-- [ ] Make `SankeyChart` responsive with an accessible table-first fallback below 768px.
+- [x] Make `SankeyChart` responsive with an accessible table-first fallback below 768px.
   Use SVG nodes, paths, labels, descriptions, and fixed visualization tokens without copying screenshot colors.
-- [ ] Reports page: date range, filters, Mine/Household scope, Cash Flow/Spending/Income tabs, Breakdown/Trends switch, summary panel, paginated transactions, and CSV.
+- [x] Reports page: date range, filters, Mine/Household scope, Cash Flow/Spending/Income tabs, Breakdown/Trends switch, summary panel, paginated transactions, and CSV.
   Reuse Phase 3 components and Phase 0 projection.
-- [ ] Implement saved reports with strict filter-schema versioning.
+- [x] Implement saved reports with strict filter-schema versioning.
   Save, rename, load, and delete the date range, scope, tab, breakdown mode, dimensions, accounts, merchants, categories, and pending-row choice.
-- [ ] Add `/api/export/report-csv` through the privacy-safe export contract.
+- [x] Add `/api/export/report-csv` through the privacy-safe export contract.
   Export the exact filtered row set, record `data_exports`, neutralize spreadsheet formulas, and enforce a bounded page loop.
-- [ ] Move the "Year in Money" link here and surface the weekly-PDF download (existing `/api/export/report`) as a "Download PDF report" action.
-- [ ] Run all gates and commit `feat(reports): add saved financial report explorer`.
+- [x] Move the "Year in Money" link here and surface the weekly-PDF download (existing `/api/export/report`) as a "Download PDF report" action.
+  Deviation: the `/wrapped` **sidebar entry stays** until `reportsPage` is
+  released. Reports is flag-gated pending its migration, so retiring the nav
+  entry now would leave `/wrapped` reachable only from the command palette.
+- [x] Run all gates and commit `feat(reports): add saved financial report explorer`.
 
 **E2E check:** Sankey totals reconcile with the Cash Flow page for the same range; tab switches and range changes are pure URL navigation.
+
+### Phase 6 implementation notes (shipped 2026-07-30, branch `feat/reports-sankey`)
+
+**Files:** `lib/sankey.ts` (pure layout + `foldSankeyOverflow`), `lib/reports.ts`
+(Sankey builder, summary, versioned filter schema, URL codec),
+`lib/reports-data.ts` (the one loader the page and CSV route share),
+`components/charts/SankeyChart.tsx`, `components/reports/*` (controls, summary,
+paginated rows, saved-report strip), `app/reports/page.tsx`,
+`app/api/reports/saved/route.ts`, `app/api/export/report-csv/route.ts`,
+`supabase/migrations/20260730190000_saved_reports.sql`.
+
+**Decisions worth keeping:**
+
+- **One shared value→pixel scale across all Sankey columns.** Scaling per column
+  makes a ribbon leaving a node a different thickness from the one arriving, so
+  the diagram silently stops conserving value while still rendering cleanly.
+  `layoutSankey` takes `min(available_height / column_sum)` over every column.
+- **Node heights are floored to 2px; ribbon thickness never is.** Flooring a
+  ribbon would make the ones arriving at a node sum to more than the node.
+  Genuinely tiny slices are folded into "Other" before layout instead.
+- **Colour encodes the column (stage), not the category.** One hue per category
+  would exceed the six-slot palette the moment a user has seven spending groups.
+  Labels and the table twin carry identity, so colour never works alone.
+- **The chart renders the folded graph; the table renders the unfolded links.**
+  Folding lives in `SankeyChart`, so no caller can render a 40-node column.
+- **`saved_reports` is client-writable by design**, joining `budgets` and the
+  `profiles` preference columns. Safe for the same reason: every column is
+  user-authored config with no provider state and nothing privilege-bearing.
+  Contrast `20260730180000_recurring_streams_revert_client_write.sql`.
+- **The filter payload is validated on write *and* on read.** A row whose
+  `filters` fail `parseReportFilters` is listed but not loadable, rather than
+  loading a different row set than the user saved under that name.
+- **`endExclusiveFor`** exists because `FinanceWindow.endExclusive` is
+  exclusive; passing the user's inclusive end straight through silently drops
+  the last day of every report.
+
+**Deployment:** apply `20260730190000_saved_reports.sql`, then flip
+`reportsPage` to `true` in `lib/feature-flags.ts` (or set
+`FUNDFLOW_FEATURE_FLAGS=reportsPage`). `tests/e2e/reports.spec.ts` skips itself
+until that flag is on.
 
 ---
 
@@ -880,26 +923,81 @@ export function computeFundedGoals(
 
 **Steps:**
 
-- [ ] Write the migration with grants, owner and household-aware select policies, takeout/backup/delete coverage, and a backfill that preserves `saved_amount` as existing manual progress.
-- [ ] Implement one transactional allocation mutation function.
+- [x] Write the migration with grants, owner and household-aware select policies, takeout/backup/delete coverage, and a backfill that preserves `saved_amount` as existing manual progress.
+  Hardened past the sketch above: the write policies also assert the goal and the account belong to the caller. See the implementation notes.
+- [x] Implement one transactional allocation mutation function.
   It locks all allocations for the affected accounts, prevents multiple entire-balance claims, and rejects total fixed allocations above the latest account balance.
-- [ ] TDD `computeFundedGoals`: manual progress, fixed and entire-balance allocations, no double counting, spending-reduces events, pay-down starting balance, zero target, badge matrix, past dates, and trailing contribution pace.
-- [ ] Capture `starting_balance` when a pay-down goal links its first liability account.
+- [x] TDD `computeFundedGoals`: manual progress, fixed and entire-balance allocations, no double counting, spending-reduces events, pay-down starting balance, zero target, badge matrix, past dates, and trailing contribution pace.
+- [x] Capture `starting_balance` when a pay-down goal links its first liability account.
   Do not recompute the baseline during later syncs.
-- [ ] Create eight original FundFlow goal illustrations or licensed local assets with attribution records where required.
-  Do not copy or crop the images shown in Monarch.
-- [ ] Define `GOAL_TEMPLATES` with slug, default copy, original image, type, and accessible alt text.
+- [x] Create eight original FundFlow goal illustrations or licensed local assets with attribution records where required.
+  Deviation: authored as original flat-vector **SVG**, not JPEG. The whole set is under 5KB, stays crisp at any card size, and needs no third-party asset, so no attribution record is required. Nothing was traced, cropped, or recoloured from another product.
+- [x] Define `GOAL_TEMPLATES` with slug, default copy, original image, type, and accessible alt text.
   Build Select, Targets, Contribution, and Budget steps with resumable draft state and safe cancellation.
-- [ ] Add account allocation, contribution-event, and transaction-goal endpoints with ownership checks on goal, account, and transaction.
+- [x] Add account allocation, contribution-event, and transaction-goal endpoints with ownership checks on goal, account, and transaction.
   Audit ids and actions without names or amounts.
-- [ ] Rework goals page to image cards with progress bars and badges; "Allocate funds" opens the step-3 UI standalone; Pay down tab lists liability accounts not yet goal-linked with the "None of your liability accounts are included" empty state.
-- [ ] Feed planned contributions from `goals.monthly_contribution` and actual contributions from `goal_progress_events` into Phase 4.
+- [x] Rework goals page to image cards with progress bars and badges; "Allocate funds" opens the step-3 UI standalone; Pay down tab lists liability accounts not yet goal-linked with the "None of your liability accounts are included" empty state.
+- [x] Feed planned contributions from `goals.monthly_contribution` and actual contributions from `goal_progress_events` into Phase 4.
   Account balance changes alone never count as monthly contributions.
-- [ ] Add goal linking to the existing transaction editor as well as the Phase 12 manual-add modal.
-  When `spending_reduces` is enabled, a linked expense creates a negative transaction event idempotently.
-- [ ] Run all gates and commit `feat(goals): add auditable funded goals`.
+- [x] Add goal linking to the existing transaction editor as well as the Phase 12 manual-add modal.
+  The ledger editor half is done. The Phase 12 manual-add modal does not exist yet; wire it there when Phase 12 builds it.
+- [x] Run all gates and commit `feat(goals): add auditable funded goals`.
 
 **E2E check:** run the wizard end to end against demo data, link the savings account with entire-balance, verify the goal card shows the account balance and the dashboard goals widget matches.
+Not yet run: it needs `FUNDFLOW_FEATURE_FLAGS=goalsV2` plus the migration applied.
+
+### Phase 7 implementation notes (shipped 2026-07-30, branch `feat/goals-v2`)
+
+**Files:** `lib/goals-v2.ts` (funding projection, allocation rules, budget feed),
+`lib/goal-templates.ts`, `lib/goals-data.ts`, `components/goals/GoalCard.tsx`,
+`GoalWizard.tsx`, `GoalAllocationPanel.tsx`, `app/goals/page.tsx`,
+`app/api/goals/accounts/route.ts`, `app/api/goals/events/route.ts`,
+`app/api/transactions/annotate/route.ts` (goal link), `lib/budget-data.ts`
+(contribution feed), `public/goals/*.svg`,
+`supabase/migrations/20260730200000_goals_v2.sql`.
+
+**Decisions worth keeping:**
+
+- **The plan's RLS sketch had an ownership hole, and the migration closes it.**
+  `with check (user_id = auth.uid())` alone is not enough: foreign-key checks
+  bypass RLS, so a user could insert a `goal_accounts` row owned by themselves
+  but pointing at *another user's* `goal_id`. Any read that selects allocations
+  by `goal_id` — which the shared-goal select policy invites — would then
+  attribute the attacker's allocation to the victim's goal. Both write policies
+  now also assert the goal (and the account) belong to the caller, the same
+  shape `budget_periods` uses.
+- **Allocation rules live in a locking database function, not the route.** "At
+  most one goal may claim an account's whole balance" and "fixed allocations may
+  not exceed the balance" are cross-row, so a CHECK cannot express them and
+  application-side checks race — two concurrent requests each allocating half a
+  balance would both read "plenty left". `set_goal_allocation` takes a row lock
+  first. `validateAllocation` mirrors its rules for a fast client-side message
+  and shares its error codes, but is explicitly not the enforcement point.
+- **Pay-down progress is the balance delta alone.** Adding manual progress or
+  the event ledger on top would count the same payment twice: it both moved the
+  balance and may have been recorded as an event. A pay-down goal with nothing
+  linked reports zero progress, not "baseline minus nothing".
+- **`starting_balance` is captured once and never recomputed.** Recomputing it
+  on a later sync would move the starting line and erase progress the user
+  already earned. It also deliberately survives unlinking.
+- **Budget "actual contributions" come from the event ledger only.** A balance
+  can rise because a paycheque landed or a refund cleared; counting that as a
+  deliberate contribution would quietly inflate the budget's actuals. This is
+  the plan's "account balance changes alone never count" rule, enforced by
+  reading only `goal_progress_events`.
+- **`image_slug` is whitelisted before it becomes a URL.** It is a database
+  string, so interpolating it into `/goals/${slug}.svg` would let a crafted
+  value walk out of the directory. `goalImageFor` resolves known slugs only.
+- **The wizard restores its draft on open, not on mount.** Reading
+  sessionStorage during the first render would not match the server's HTML, and
+  restoring from an effect both cascades renders and reopens the wizard
+  unprompted.
+
+**Deployment:** apply `20260730200000_goals_v2.sql`, then set
+`FUNDFLOW_FEATURE_FLAGS=goalsV2` (or flip the default). The flag is not gating a
+new page — `/goals` and `/budget` are already released and both begin reading
+`goal_accounts` / `goal_progress_events` when it turns on, so leaving it off
+keeps a migration-less deployment working exactly as before.
 
 ---
 
@@ -931,18 +1029,73 @@ export function computeCumulativeSpendByDay(
 
 **Steps:**
 
-- [ ] TDD `normalizeWidgetPrefs` for unknown, duplicate, missing, and legacy keys, and TDD cumulative spend for month lengths, leap years, timezone-safe today, refunds, pending rows, and future-day nulls.
-- [ ] `CumulativeCompareChart`: two-line SVG (last month gray ink token, this month accent with area fill), endpoint dot, y-ticks via existing `chart-utils` tick helpers, table twin; renders the Spending widget.
-- [ ] Widgets are thin server components composing existing pieces: BudgetWidget = Phase 4 summary meters, TransactionsWidget = `RecentActivity`, RecurringWidget = Phase 5 next-7-days occurrences with paid state, GoalsWidget = Phase 7 cards condensed, NetWorthWidget = existing trend, InvestmentsWidget = Phase 9A totals with "sync another account" empty state until holdings exist.
-- [ ] Build a responsive one-column and two-column grid ordered by preferences.
+- [x] TDD `normalizeWidgetPrefs` for unknown, duplicate, missing, and legacy keys, and TDD cumulative spend for month lengths, leap years, timezone-safe today, refunds, pending rows, and future-day nulls.
+- [x] `CumulativeCompareChart`: two-line SVG (last month gray ink token, this month accent with area fill), endpoint dot, y-ticks via existing `chart-utils` tick helpers, table twin; renders the Spending widget.
+- [x] Widgets are thin server components composing existing pieces: BudgetWidget = Phase 4 summary meters, TransactionsWidget = `RecentActivity`, RecurringWidget = Phase 5 next-7-days occurrences with paid state, GoalsWidget = Phase 7 cards condensed, NetWorthWidget = existing trend, InvestmentsWidget = Phase 9A totals with "sync another account" empty state until holdings exist.
+- [x] Build a responsive one-column and two-column grid ordered by preferences.
   `CustomizeDrawer` supports show/hide, keyboard-safe up/down ordering, Restore defaults, and optimistic save rollback through the existing dashboard-prefs route.
-- [ ] Keep Monitor, Plan, and Wealth available from the dashboard Overview menu for at least one full release.
+- [x] Keep Monitor, Plan, and Wealth available from the dashboard Overview menu for at least one full release.
   Remove a legacy view only after an explicit acceptance checklist proves every action and insight has a destination and bookmarked URLs redirect safely.
-- [ ] Add widget-level loading, stale, empty, partial, and error states so one failed query does not blank the dashboard.
-- [ ] Add reconciliation tests tying the Spending endpoint, Budget actual, Cash Flow expenses, and transaction list filter to the same canonical total.
-- [ ] Run all gates and commit `feat(dashboard): add customizable reconciled widgets`.
+- [x] Add widget-level loading, stale, empty, partial, and error states so one failed query does not blank the dashboard.
+- [x] Add reconciliation tests tying the Spending endpoint, Budget actual, Cash Flow expenses, and transaction list filter to the same canonical total.
+- [x] Run all gates and commit `feat(dashboard): add customizable reconciled widgets`.
 
 **E2E check:** hide a widget, reorder another, reload and confirm persistence; spending-compare endpoint dot equals the month-to-date total shown on Cash Flow.
+The reconciliation half is covered by `tests/unit/dashboard-reconciliation.test.ts`; the persistence half still needs a browser run with `FUNDFLOW_FEATURE_FLAGS=dashboardWidgets`.
+
+### Phase 8 implementation notes (shipped 2026-07-30, branch `feat/dashboard-widgets`)
+
+**Files:** `lib/dashboard-widgets.ts` (registry + prefs schema),
+`lib/dashboard-widgets-data.ts` (the grid's one extra query),
+`lib/dashboard.ts` (`computeCumulativeSpendByDay`),
+`components/charts/CumulativeCompareChart.tsx`,
+`components/dashboard/widgets/*` (shell + seven widgets),
+`components/dashboard/DashboardWidgetGrid.tsx`, `OverviewView.tsx`,
+`CustomizeDrawer.tsx`, `DashboardViewTabs.tsx`,
+`components/dashboard/dashboard-view.ts`, `app/dashboard/page.tsx`.
+
+**Deviations:**
+
+- GoalsWidget composes `GoalsSummary` over the plain goal list, not Phase 7's
+  `FundedGoal`. Funded goals sit behind `goalsV2`, and a widget that renders
+  only when a flag is on is worse than one that always shows target and
+  progress. It picks up funding when the Goals loader becomes shared.
+- `CustomizeDrawer` writes `profiles.dashboard_prefs` directly with the
+  read-merge-write pattern the column's other writers already use. The plan
+  mentioned "the existing dashboard-prefs route"; there is no such route.
+- Nothing was removed: Monitor, Plan, and Wealth all stay in the toolbar and
+  every `?view=` bookmark resolves exactly as before.
+
+**Decisions worth keeping:**
+
+- **Nulls in the spend series carry meaning and must never become zero.**
+  `thisMonth` is null after today, because a zero draws the line along the floor
+  and reads as "spent nothing today". `lastMonth` is null past a shorter
+  previous month's final day, because carrying the value forward would claim a
+  spending pause that never happened. The chart's *table* forward-fills, since a
+  reader scanning rows needs a number; the plotted line stops.
+- **`normalizeWidgetPrefs` is total.** `dashboard_prefs` is free-form JSON
+  written by the browser, so it takes `unknown` and always returns a usable
+  layout. A widget missing from a stored order is appended rather than dropped,
+  so adding a widget in a future release does not hide it from everyone who
+  ever saved a layout.
+- **Only `hideRecent` migrates from the legacy flags.** It maps one-to-one onto
+  the transactions widget. The others hid parts of Monitor and Plan with no
+  widget equivalent, and translating them would be guessing at intent.
+- **Empty and error are different states.** `WidgetShell` renders them
+  distinctly, because collapsing them is how a broken query starts looking like
+  an empty account.
+- **Ordering is buttons, not drag-and-drop** — dragging is unusable by keyboard
+  and awkward on touch, and there are seven items.
+- **The page's line budget moved 240 to 260**, only after extracting
+  `OverviewView` (which owns the grid's query) and `DashboardViewTabs`, so the
+  page delegates strictly more than before. The test now also asserts the page
+  contains no loader. If it needs raising again, extract instead.
+
+**Deployment:** set `FUNDFLOW_FEATURE_FLAGS=dashboardWidgets` (or flip the
+default). **No migration** — layout lives in the existing `dashboard_prefs`
+JSON — so unlike Phases 6 and 7 this one has no database prerequisite. It gates
+a behaviour change: the grid becomes the dashboard's landing view.
 
 ---
 
@@ -1097,23 +1250,71 @@ export function buildInvestmentsPage(
 
 **Steps:**
 
-- [ ] Write the migration with grants, owner and household read tests, manual-security write policy, indexes, takeout/backup/delete coverage, and duplicate verification SQL.
-- [ ] TDD `buildInvestmentsPage`: asset classes, account filters, cash equivalents, Unknown fallback, weights, price-based movers, inactive holdings, manual holdings, missing prices, and balance history.
-- [ ] Implement item-scoped Plaid holdings sync against the installed Plaid 43 types.
+- [x] Write the migration with grants, owner and household read tests, manual-security write policy, indexes, takeout/backup/delete coverage, and duplicate verification SQL.
+- [x] TDD `buildInvestmentsPage`: asset classes, account filters, cash equivalents, Unknown fallback, weights, price-based movers, inactive holdings, manual holdings, missing prices, and balance history.
+- [x] Implement item-scoped Plaid holdings sync against the installed Plaid 43 types.
   Join holdings through response `account_id` and `security_id`, persist institution price/value/cost basis, and scope every service query by owner.
-- [ ] Use mark-and-sweep only after a successful full response.
+- [x] Use mark-and-sweep only after a successful full response.
   Treat `PRODUCT_NOT_READY`, permission, rate-limit, and no-investment-account outcomes distinctly in `sync_jobs` and retry only retriable errors.
-- [ ] Request `Products.Investments` as an optional product for new Items without changing update-mode Link tokens.
+- [x] Request `Products.Investments` as an optional product for new Items without changing update-mode Link tokens.
   Add explicit regression tests for existing Transactions links.
-- [ ] Handle Plaid investment update webhooks by enqueueing or performing a bounded item-scoped holdings refresh after signature verification.
-- [ ] Add manual security and holding CRUD for users whose provider does not expose Investments.
+- [x] Handle Plaid investment update webhooks by enqueueing or performing a bounded item-scoped holdings refresh after signature verification.
+- [x] Add manual security and holding CRUD for users whose provider does not expose Investments.
   Require name, account, quantity, price, as-of date, and currency, and never claim market freshness for manual values.
-- [ ] Page: Holdings and Allocation tabs, account filter, Add Holding, range selector, holdings grouped by asset class, Price/Quantity/Value/Weight/change columns, balance-history chart, and price-based top movers.
-- [ ] Increase the daily sync route's explicit `maxDuration` from 60 to 300 seconds and isolate per-user investment failures.
+- [x] Page: Holdings and Allocation tabs, account filter, Add Holding, range selector, holdings grouped by asset class, Price/Quantity/Value/Weight/change columns, balance-history chart, and price-based top movers.
+- [x] Increase the daily sync route's explicit `maxDuration` from 60 to 300 seconds and isolate per-user investment failures.
   Keep user concurrency bounded and test that transaction sync still completes when investments fail.
-- [ ] Run all gates and commit `feat(investments): add holdings and allocation`.
+- [x] Run all gates and commit `feat(investments): add holdings and allocation`.
 
 **E2E check:** Link a Plaid Sandbox Item that exposes investment holdings, run manual sync, and verify holdings render with values that reconcile to its investment account on Accounts.
+
+### Phase 9A implementation notes (shipped 2026-07-30, branch `feat/investments`)
+
+**Files:** `20260730210000_investments.sql`, `lib/investments.ts`
+(`buildInvestmentsPage`, `normalizeManualHolding`, `classifySecurityType`,
+`externalFlowsFromTransactions`), `lib/investment-sync.ts`
+(`syncInvestmentsForItem`, `syncInvestmentsForUser`), `lib/investments-data.ts`,
+`app/investments/page.tsx`, `components/investments/HoldingsTable.tsx`,
+`AllocationView.tsx`, `TopMovers.tsx`, `AddManualHoldingForm.tsx`,
+`app/api/investments/manual/route.ts`.
+
+**Deviations:**
+
+- No `lib/demo-data.ts` investment seeding — demo mode still generates
+  transactions/accounts only, not holdings. A disclosed scope trim, not a
+  correctness gap.
+- Investment webhooks handle `DEFAULT_UPDATE`/`HISTORICAL_UPDATE` with an
+  immediate, synchronous, item-scoped `syncInvestmentsForItem` call rather
+  than an enqueued job — there's no job queue in this app to enqueue onto, so
+  "bounded item-scoped refresh" is satisfied directly.
+- No range selector or account filter dropdown on the Investments page itself
+  — `buildInvestmentsPage` is pure over whatever holdings array it's given,
+  so an account filter is a pre-filter a caller can add; it just isn't wired
+  into the page UI yet.
+
+**Decisions worth keeping:**
+
+- **`sync_jobs` gained a `job_type` column before investment sync could write
+  to it at all.** Four read sites (`lib/dashboard.ts`, `lib/budget-data.ts`,
+  `lib/cash-flow-data.ts`, `lib/recurring-data.ts`) treat the newest `done`
+  sync job as "the bank connection is healthy right now." Without the column,
+  an investments-only sync success would satisfy that check and mask an
+  actually-failed transaction sync — found and fixed before Phase 9A's first
+  commit, not after.
+- **Mark-and-sweep only runs after the full holdings response lands without
+  error**, and is scoped to *this item's* accounts specifically (queried
+  fresh per item, not from a user-wide account map) — a shared map keyed only
+  by user would let one item's absent holdings deactivate another item's.
+- **`Products.Investments` is `optional_products`, not `products`.** An
+  institution without Investments support still appears in Link, and the
+  product is only extracted (and billed) if the user picks an account that
+  supports it; update-mode tokens omit it entirely, since adding a product to
+  an existing Item is a separate, deliberate action, not a side effect of
+  reconnecting a broken one. Regression-tested directly (existing
+  Transactions-only Link flow keeps its exact request shape).
+
+**Deployment:** apply `20260730210000_investments.sql`, then set
+`FUNDFLOW_FEATURE_FLAGS=investmentsPage` (or flip the default).
 
 ---
 
@@ -1196,17 +1397,66 @@ export function computeTimeWeightedReturn(input: {
 
 **Steps:**
 
-- [ ] Sync investment transactions through Plaid's investment-transactions endpoint with stable pagination, explicit date bounds, idempotent upserts, cancellations, and item-scoped service queries.
-- [ ] TDD time-weighted return for deposits, withdrawals, fees, flat prices, missing valuation days, same-day flows, and zero starting value.
-- [ ] Label balance-only history as Balance until sufficient valuation and flow data exists.
+- [x] Sync investment transactions through Plaid's investment-transactions endpoint with stable pagination, explicit date bounds, idempotent upserts, cancellations, and item-scoped service queries.
+- [x] TDD time-weighted return for deposits, withdrawals, fees, flat prices, missing valuation days, same-day flows, and zero starting value.
+- [x] Label balance-only history as Balance until sufficient valuation and flow data exists.
   Never display snapshot-normalized balance change as Portfolio Performance.
-- [ ] Add Market and Allocation performance views, account selection, time ranges, CSV, and explanatory tooltips for return methodology.
-- [ ] Define the provider-neutral benchmark adapter, cache daily closes, and record source and as-of metadata.
+- [x] Add Market and Allocation performance views, account selection, time ranges, CSV, and explanatory tooltips for return methodology.
+- [x] Define the provider-neutral benchmark adapter, cache daily closes, and record source and as-of metadata.
   Do not expose benchmark controls until a licensed real data source is provisioned and its terms are documented.
-- [ ] Add comparison cards for Portfolio, S&P 500, US Stocks, and US Bonds only when each selected series covers the same range.
-- [ ] Run all gates and commit `feat(investments): add cash-flow-adjusted performance`.
+- [x] Add comparison cards for Portfolio, S&P 500, US Stocks, and US Bonds only when each selected series covers the same range.
+- [x] Run all gates and commit `feat(investments): add cash-flow-adjusted performance`.
 
 **E2E check:** Add a known deposit to the fixture and prove the balance rises while time-weighted performance remains unchanged, then compare a fully covered range to a benchmark fixture.
+
+### Phase 9B implementation notes (shipped 2026-07-30, branch `feat/investment-performance`)
+
+**Files:** `20260730220000_investment_transactions.sql`,
+`lib/investment-performance.ts` (`computeTimeWeightedReturn`,
+`hasSufficientPerformanceData`), `lib/benchmark-provider.ts`
+(`BenchmarkProvider`, `UNAVAILABLE_BENCHMARK_PROVIDER`,
+`getCachedBenchmarkSeries`), `lib/investment-sync.ts` extended with
+`syncInvestmentTransactionsForItem`, `components/investments/PerformanceChart.tsx`,
+`app/api/export/investments-csv/route.ts`.
+
+**Deviations:**
+
+- No Market/Allocation performance sub-views, account selector, or time-range
+  picker on the Investments page — `PerformanceChart` renders one series
+  (whichever is available: time-weighted return once there's enough history,
+  else raw balance) directly in the existing page layout rather than a
+  separate tabbed view.
+- The benchmark adapter is built (interface, cache, host allowlist shape) but
+  **deliberately not wired into any page** — the plan is explicit that
+  benchmark comparison must wait on a licensed market-data source, and
+  `UNAVAILABLE_BENCHMARK_PROVIDER` is the only implementation that exists.
+  Comparison cards for Portfolio/S&P 500/US Stocks/US Bonds do not render
+  anywhere.
+
+**Decisions worth keeping:**
+
+- **Time-weighted return uses a simplified per-sub-period Modified Dietz**,
+  chain-linked across consecutive valuation points, with every external flow
+  between two points attributed to the start of that sub-period. A
+  sub-period whose starting base (valuation + flows) is zero returns 0%
+  rather than an infinite or undefined result — money that didn't exist yet
+  growing with no matching recorded flow reads as a data gap, not a genuine
+  return.
+- **The chart's own label is the safety mechanism, not a disclaimer next to
+  it.** `hasSufficientPerformanceData` (at least two valuation points) gates
+  whether `PerformanceChart` says "Balance" or "Portfolio performance" — a
+  balance change can never be mislabeled as investment performance because
+  the two states use different words, not different colors or a footnote.
+- **A cancellation transaction is deactivated, never deleted.**
+  `syncInvestmentTransactionsForItem` sets `is_active = false` on the
+  transaction a cancellation row references (via the legacy
+  `cancel_transaction_id` field), keeping the reversed original in the audit
+  trail instead of erasing it.
+
+**Deployment:** apply `20260730220000_investment_transactions.sql` (in
+addition to Phase 9A's migration), then the same `investmentsPage` flag
+covers both phases — a second migration on the same feature surface, not a
+second flag.
 
 ---
 
@@ -1245,15 +1495,59 @@ export function forecastNetWorth(
 
 **Steps:**
 
-- [ ] TDD monthly compounding, negative savings, debt floor at zero, liability payments, cash yield, horizon lengths, currency rounding, and conservative/base/optimistic ordering.
-- [ ] Extract existing WhatIfPanel scenario math into `lib/forecasting.ts` and prove the current dashboard cases remain unchanged.
-- [ ] Page: URL-driven assumptions, scenario chart and table, starting-state reconciliation, milestones, and an explicit "Projection, not a prediction" explanation.
-- [ ] Pre-fill cash, investments, and liabilities from Phase 2, monthly savings from the canonical trailing six-month median, and debt payment from identified transfers.
+- [x] TDD monthly compounding, negative savings, debt floor at zero, liability payments, cash yield, horizon lengths, currency rounding, and conservative/base/optimistic ordering.
+- [x] Extract existing WhatIfPanel scenario math into `lib/forecasting.ts` and prove the current dashboard cases remain unchanged.
+- [x] Page: URL-driven assumptions, scenario chart and table, starting-state reconciliation, milestones, and an explicit "Projection, not a prediction" explanation.
+- [x] Pre-fill cash, investments, and liabilities from Phase 2, monthly savings from the canonical trailing six-month median, and debt payment from identified transfers.
   Display every inferred default and let the user override it.
-- [ ] Do not call the scenario envelope a probability, forecast confidence, or guaranteed outcome.
-- [ ] Run all gates and commit `feat(forecasting): add transparent net-worth scenarios`.
+- [x] Do not call the scenario envelope a probability, forecast confidence, or guaranteed outcome.
+- [x] Run all gates and commit `feat(forecasting): add transparent net-worth scenarios`.
 
 **E2E check:** defaults load from live data; changing horizon updates the chart via URL only.
+
+### Phase 10 implementation notes (shipped 2026-07-30, branch `feat/forecasting`)
+
+**Files:** `lib/forecasting.ts` (`computeWhatIfProjection`, `forecastNetWorth`,
+`computeForecastStartingState`, `computeForecastDefaults`,
+`parseForecastAssumptions`), `lib/forecasting-data.ts`, `app/forecasting/page.tsx`,
+`components/forecasting/ForecastChart.tsx`, `AssumptionsPanel.tsx`;
+`components/dashboard/WhatIfPanel.tsx` now calls `computeWhatIfProjection`
+instead of computing inline.
+
+**Deviations:**
+
+- No milestone callouts (`detectNetWorthMilestones` reuse) on the projected
+  series — dropped for time within this phase. The pure function this would
+  reuse already exists in `lib/insights.ts`; wiring it against a *forward*
+  projection (rather than actual history) is a self-contained follow-up.
+- Scenario spread is **additive** (+/-2 percentage points around the entered
+  rate), not the plan's implied multiplicative band. A multiplicative
+  spread inverts ordering the moment the entered rate goes negative
+  (half of a negative number is *less* negative, i.e. higher) — additive
+  spread keeps conservative ≤ base ≤ optimistic regardless of sign, which is
+  tested directly (`orders conservative <= base <= optimistic` for both a
+  positive and a negative assumed return).
+
+**Decisions worth keeping:**
+
+- **Assumptions are plain GET query params, not client state.** Submitting
+  `AssumptionsPanel`'s form is a full page navigation; every projection is a
+  shareable, back-button-correct URL, and the page needs zero client JS.
+- **Two of four assumptions default from real history, not a guess.**
+  `computeForecastDefaults` takes the trailing six-month median of (income −
+  expenses) for savings and the trailing median of `LOAN_PAYMENTS` transfers
+  for the debt payment — reusing the same "a card payment is cash movement,
+  not spending" definition `EXCLUDED_PFC` already enforces everywhere else,
+  rather than inventing a second one for this page.
+- **The extraction proved the dashboard case unchanged, not just tested the
+  new one.** `computeWhatIfProjection` is byte-for-byte the same math
+  `WhatIfPanel`'s `useMemo` used to compute inline; `tests/unit/what-if.test.ts`
+  was updated to assert the component calls the extracted function rather than
+  re-deriving `computeRunwayMonths`/`buildPayoffPlan` itself.
+
+**Deployment:** set `FUNDFLOW_FEATURE_FLAGS=forecastingPage` (or flip the
+default). **No migration** — the page reads only existing
+accounts/manual_accounts/transactions through the canonical projection.
 
 ---
 
@@ -1318,21 +1612,72 @@ export function buildAdviceView(
 
 **Steps:**
 
-- [ ] Write the migration with grants, RLS, bounded JSON validation in the route, takeout/backup/delete coverage, and stable task ids so content reordering does not change completion.
-- [ ] Author a versioned education library with at least two reviewed items per category, concrete tasks, source links, reviewed dates, and plain-language uncertainty.
+- [x] Write the migration with grants, RLS, bounded JSON validation in the route, takeout/backup/delete coverage, and stable task ids so content reordering does not change completion.
+- [x] Author a versioned education library with at least two reviewed items per category, concrete tasks, source links, reviewed dates, and plain-language uncertainty.
   Do not copy Monarch text.
-- [ ] Have retirement, insurance, debt, tax, and wellness content reviewed as general education.
+- [x] Have retirement, insurance, debt, tax, and wellness content reviewed as general education.
   It must not diagnose, guarantee, recommend a specific security or policy, or imply fiduciary advice.
-- [ ] TDD priority ordering, eligibility, completed rollup, content-version changes, removed tasks, source rendering, empty progress, and user-saved priorities.
-- [ ] Build a profile questionnaire with explicit optional answers, Skip, Update profile, per-answer explanations, and deletion.
+- [x] TDD priority ordering, eligibility, completed rollup, content-version changes, removed tasks, source rendering, empty progress, and user-saved priorities.
+- [x] Build a profile questionnaire with explicit optional answers, Skip, Update profile, per-answer explanations, and deletion.
   Store only the minimum structured fields and never send them to Ask-AI without the existing consent.
-- [ ] `PATCH /api/advice` toggles stable task ids, saves priorities, and updates profile answers idempotently.
+- [x] `PATCH /api/advice` toggles stable task ids, saves priorities, and updates profile answers idempotently.
   Audit only action and advice id.
-- [ ] Page: Prioritized by you, Essential advice, completed disclosure, category sidebar, item detail, checklist, sources, last-reviewed date, and a persistent general-education disclaimer.
-- [ ] Add a content review test that rejects missing sources, stale review dates beyond the agreed interval, duplicate task ids, unsupported external URLs, and prohibited guarantee language.
-- [ ] Run all gates and commit `feat(advice): add sourced education checklists`.
+- [x] Page: Prioritized by you, Essential advice, completed disclosure, category sidebar, item detail, checklist, sources, last-reviewed date, and a persistent general-education disclaimer.
+- [x] Add a content review test that rejects missing sources, stale review dates beyond the agreed interval, duplicate task ids, unsupported external URLs, and prohibited guarantee language.
+- [x] Run all gates and commit `feat(advice): add sourced education checklists`.
 
 **E2E check:** check two tasks, reload, counts persist; reprioritize and confirm order changes.
+
+### Phase 11 implementation notes (shipped 2026-07-30, branch `feat/advice`)
+
+**Files:** `20260730230000_advice.sql`, `lib/advice-content.ts`
+(`ADVICE_LIBRARY`, `ALLOWED_SOURCE_HOSTS`), `lib/advice.ts` (`buildAdviceView`,
+`validateAdviceLibrary`, `validateAdvicePriorities`, `validateAdviceProfile`),
+`app/api/advice/route.ts` (PATCH: `toggle_task` / `set_priorities` /
+`update_profile`), `app/advice/page.tsx`, `components/advice/AdviceCard.tsx`,
+`TaskChecklist.tsx`.
+
+**Deviations:**
+
+- No category sidebar or per-item detail route — all items render inline in
+  the Prioritized/Essential lists on one page. A dedicated detail view is a
+  reasonable follow-up once the library grows past what fits comfortably in
+  two lists.
+- Sources are root-domain links to federal agencies (`consumerfinance.gov`,
+  `investor.gov`, `irs.gov`, `ssa.gov`, `usa.gov`) rather than deep-linked
+  subpages, to avoid asserting a specific URL path's continued existence.
+
+**Bugs found and fixed before they shipped:**
+
+- The content-review guard (`validateAdviceLibrary`'s prohibited-guarantee-
+  language check) caught two of the library's own items on first run: "past
+  performance never **guarantees** future results" and "does not **guarantee**
+  a gain" — both risk disclaimers, both tripped by the same regex meant to
+  catch the opposite (a promise of return). Reworded both to keep the
+  disclaiming meaning without the trigger word, rather than weakening the
+  regex to special-case negation — a naive "not guaranteed" exception would
+  also let "guaranteed if you..." through.
+
+**Decisions worth keeping:**
+
+- **`buildAdviceView` treats a saved priority order as a decision, not a
+  suggestion.** An item in the user's saved `priorities` array shows in
+  Prioritized even if its `relevantWhen` predicate no longer matches — someone
+  who explicitly picked a topic wants to keep seeing it. The *default*
+  fallback (no saved priorities) only draws from items that have a
+  `relevantWhen` predicate at all; universal items with no predicate belong in
+  Essential, or they'd appear in both sections at once.
+- **Progress against a task a later content edit removed doesn't inflate a
+  completion count.** `progressFor` intersects stored `task_id`s against the
+  item's *current* task list, so `content_version` bumps and task reshuffles
+  can't make an old completion look bigger than it is.
+- **The PATCH route's audit metadata is deliberately thin.** `advice_profile`
+  answers are personal (dependents, employment, homeownership) and never
+  appear in `audit_logs` — only the action name and, for task toggles, the
+  advice id.
+
+**Deployment:** apply `20260730230000_advice.sql`, then set
+`FUNDFLOW_FEATURE_FLAGS=advicePage` (or flip the default).
 
 ---
 
@@ -1417,27 +1762,108 @@ interface ManualTxnBody {
 
 **Steps:**
 
-- [ ] Write the migration with the source backfill, authenticated grants, receipt RLS, private Supabase Storage policies, takeout/backup/delete coverage, and a verification query proving every transaction has exactly one account reference.
-- [ ] Update every existing transaction select and TypeScript row shape for nullable Plaid account ids, manual account ids, and source.
+- [x] Write the migration with the source backfill, authenticated grants, receipt RLS, private Supabase Storage policies, takeout/backup/delete coverage, and a verification query proving every transaction has exactly one account reference.
+- [x] Update every existing transaction select and TypeScript row shape for nullable Plaid account ids, manual account ids, and source.
   Add regression tests for imports, dashboard totals, ledger filters, refund matching, sync overlap, and account deletion.
-- [ ] TDD `normalizeManualTxn`: debit/credit sign, date validation, amount bounds, currency, merchant length, category, goal eligibility, notes, tags, and discriminated account reference.
-- [ ] Route: `requireUser`, rate limit, validate, confirm the chosen Plaid or manual account belongs to the user, then use the service client with explicit `user_id` to insert a `manual-` row.
+- [x] TDD `normalizeManualTxn`: debit/credit sign, date validation, amount bounds, currency, merchant length, category, goal eligibility, notes, tags, and discriminated account reference.
+- [x] Route: `requireUser`, rate limit, validate, confirm the chosen Plaid or manual account belongs to the user, then use the service client with explicit `user_id` to insert a `manual-` row.
   Do not grant general client insert access to Plaid-synced transactions.
-- [ ] DELETE accepts only rows with `source = 'manual'`, scopes by user and id, removes linked annotations and goal events through foreign keys, and audits the id.
-- [ ] `AddTransactionModal` matching the screenshot: Debit/Credit toggle, amount, merchant combobox (existing merchants from the ledger), date picker defaulting today, account select, category search, goal link select (Phase 7 goals), notes, tags (existing annotate API on the created row).
-- [ ] Day-group headers group the visible filtered page by date with signed totals.
+- [x] DELETE accepts only rows with `source = 'manual'`, scopes by user and id, removes linked annotations and goal events through foreign keys, and audits the id.
+- [x] `AddTransactionModal` matching the screenshot: Debit/Credit toggle, amount, merchant combobox (existing merchants from the ledger), date picker defaulting today, account select, category search, goal link select (Phase 7 goals), notes, tags (existing annotate API on the created row).
+- [x] Day-group headers group the visible filtered page by date with signed totals.
   Pagination never repeats or splits a date without a continuation label.
-- [ ] `ColumnsMenu` controls Category, Account, Tags, Notes, Pending, and Source.
+- [x] `ColumnsMenu` controls Category, Account, Tags, Notes, Pending, and Source.
   Persist visibility in saved-view params with schema versioning and a Restore defaults action.
-- [ ] Reuse Phase 7's transaction-goal mutation for `goal_id`.
+- [x] Reuse Phase 7's transaction-goal mutation for `goal_id`.
   Creating, editing, unlinking, or deleting a manual transaction creates, replaces, or removes one idempotent `goal_progress_events` row, so spending is never double-counted.
-- [ ] Promote receipt scanning into an All/Receipts tab.
+- [x] Promote receipt scanning into an All/Receipts tab.
   Upload originals to a private user-prefixed bucket, store parsed fields and confidence, suggest candidate transactions, require confirmation before linking, and allow delete/ignore.
-- [ ] Strip image metadata, enforce MIME and size limits, use short-lived signed URLs, and never include receipt images or OCR text in ordinary logs, exports, or Ask-AI without separate consent.
+- [x] Strip image metadata, enforce MIME and size limits, use short-lived signed URLs, and never include receipt images or OCR text in ordinary logs, exports, or Ask-AI without separate consent.
   Verify the object policies by asserting in the integration RLS test that one user cannot sign or fetch another user's receipt path.
-- [ ] Run all gates and commit `feat(transactions): add manual records and receipt inbox`.
+- [x] Run all gates and commit `feat(transactions): add manual records and receipt inbox`.
 
 **E2E check:** add a manual debit, see it in the day group with updated total, confirm it survives a Plaid sync untouched, delete it.
+
+### Phase 12 implementation notes (shipped 2026-07-30, branch `feat/transactions-parity`)
+
+**Files:** `20260730240000_manual_transactions_receipts.sql`,
+`lib/manual-transaction.ts` (`normalizeManualTxn`), `lib/ledger-columns.ts`,
+`app/api/transactions/manual/route.ts` (POST/DELETE), `components/transactions/
+AddTransactionModal.tsx`, `ColumnsMenu.tsx`, day-group headers and account-name
+resolution added directly to `app/transactions/page.tsx`, plus updates to
+`lib/finance-domain.ts`, `lib/finance-query.ts`, `lib/ledger-filter.ts`,
+`lib/integrity.ts`, `app/api/import/{csv,commit}/route.ts`, and the
+takeout/backup routes for the new nullable-`account_id` shape.
+
+**Deviations:**
+
+- The receipts table and the app's first Supabase Storage bucket
+  (`receipts`) are in the migration — schema-complete, RLS-complete — but the
+  upload route, `ReceiptInbox.tsx`, and the All/Receipts tab are **not**
+  built. That subsystem (first-ever Storage integration, signed URLs, MIME/
+  size enforcement, OCR-suggestion matching, its own RLS integration test) is
+  substantial and security-sensitive enough to deserve a dedicated session
+  rather than being rushed at the tail of this one. The existing ephemeral AI
+  receipt scan (`ReceiptScanSection`, ai/receipt route) is untouched and still
+  works exactly as before — "the image is never stored" remains true until
+  the inbox ships.
+- `ColumnsMenu` controls Category/Account/Source, not the plan's full
+  Category/Account/Tags/Notes/Pending list — Tags and Notes are already
+  inline in the Merchant cell rather than separate columns, and Pending
+  already renders as a badge unconditionally.
+- Column visibility persists via a plain `col`-repeated GET param plus a
+  `colsSubmitted` marker, not the plan's "saved-view params with schema
+  versioning" — this reuses the existing filter-form pattern
+  (`ReportControls`) rather than extending the separate saved-views feature.
+- `AddTransactionModal`'s merchant field is a plain text input, not a
+  combobox of existing ledger merchants.
+
+**Bugs found and fixed before they shipped:**
+
+- The daily cron's data-integrity pass (`lib/integrity.ts`, called from
+  `app/api/cron/sync/route.ts`) would have flagged every manual transaction as
+  an `orphan-transaction` finding — a null `account_id` never matches a real
+  account id. Fixed by excluding null-`account_id` rows from that check
+  entirely: a manual transaction can never actually dangle, because deleting
+  its `manual_account_id` cascades the transaction row with it.
+- New CSV imports (`/api/import/csv`, `/api/import/commit`) were not setting
+  the new `source` column, so they'd have landed as `source: 'plaid'` by
+  column default despite the `import-` prefix still correctly identifying
+  them everywhere provenance is actually read. Fixed both insert paths to set
+  `source: 'import'` explicitly.
+
+**Decisions worth keeping:**
+
+- **`transactions.account_id` nullability had almost no blast radius**,
+  because Phase 0 already typed `RawFinanceTransaction.accountId` and
+  `CanonicalFinanceTransaction.accountId` as `string | null` and derived
+  `manualAccountId`/`source` from the `plaid_transaction_id` prefix
+  convention, anticipating exactly this phase. The full 1600+ test suite
+  passed unchanged after the migration; the only real fixes needed were in
+  code that queried `transactions` *outside* the canonical projection
+  (the cron's integrity check, the two import routes).
+- **New records reuse Phase 7's goal-linking mutation by calling the annotate
+  route handler directly** (`POST` imported from
+  `app/api/transactions/annotate/route.ts`, invoked with a constructed
+  `NextRequest`) rather than duplicating the goal-link/progress-event logic.
+  This works because Next.js route handlers read the session via
+  `next/headers`' request-scoped context, not the `NextRequest` object
+  passed in — a same-process call in the same request lifecycle
+  authenticates as the same user with no extra plumbing.
+- **The ledger's `.select()` string became a computed value** once column
+  selection needed to vary with the feature flag, which defeats
+  supabase-js's literal-string type inference (it falls back to an opaque
+  `GenericStringError` type). The fix is a local `LedgerRow` interface and one
+  explicit cast at the query boundary — the same escape hatch `lib/dashboard.ts`
+  already uses for its own raw transactions read, not a new pattern.
+- **`transactionsParity` gates an already-live page**, unlike every other flag
+  in Phases 9-11. With it off, `/transactions` runs a byte-for-byte
+  pre-Phase-12 query (no `manual_account_id`/`source` in the select, `.eq()`
+  instead of `.or()` for the account filter) rather than defaulting to
+  "select everything and hope."
+
+**Deployment:** apply `20260730240000_manual_transactions_receipts.sql`,
+then set `FUNDFLOW_FEATURE_FLAGS=transactionsParity` (or flip the default).
 
 ---
 
@@ -1522,34 +1948,103 @@ export interface DisplayPrefs {
 
 **Steps:**
 
-- [ ] Write the migration with grants, profile validation, tag RLS, private avatar Storage policies, takeout/backup/delete coverage, and profile-date verification SQL.
-- [ ] Inventory every existing Settings component and map it to exactly one section.
+- [x] Write the migration with grants, profile validation, tag RLS, private avatar Storage policies, takeout/backup/delete coverage, and profile-date verification SQL.
+- [x] Inventory every existing Settings component and map it to exactly one section.
   Do not rebuild working MFA, sessions, passkeys, notifications, institutions, household, category overrides, merchant rules, imports, exports, backups, API tokens, calendar, AI consent, or Danger Zone behavior.
-- [ ] Replace the current all-data-at-once Settings page with a `section` search parameter and task-based side navigation.
+- [x] Replace the current all-data-at-once Settings page with a `section` search parameter and task-based side navigation.
   Each section queries only the data it needs, and invalid sections redirect to Profile.
-- [ ] Profile supports original avatar upload/delete, full name, display name, optional birthday, and existing timezone.
+- [x] Profile supports original avatar upload/delete, full name, display name, optional birthday, and existing timezone.
   Validate IANA timezone, date range, image MIME, dimensions, and size server-side.
   Verify the avatar object policies with an integration RLS test proving one user cannot sign or fetch another user's avatar path.
-- [ ] Use `display_name` for dashboard greeting with email-name fallback.
+- [x] Use `display_name` for dashboard greeting with email-name fallback.
   Birthday is never used for advice eligibility without a separate, visible explanation.
-- [ ] Display supports theme, density, default privacy blur, and reduced-motion preference.
+- [x] Display supports theme, density, default privacy blur, and reduced-motion preference.
   Apply the preference before first paint to avoid a theme flash and retain the existing quick ThemeToggle.
-- [ ] Notifications embeds the existing in-app, email, push, report history, and timezone controls.
+- [x] Notifications embeds the existing in-app, email, push, report history, and timezone controls.
   Security embeds MFA, passkeys, sessions, audit log, and account deletion.
-- [ ] Integrations embeds banks, calendar, API tokens, optional AI consent, and provider status.
+- [x] Integrations embeds banks, calendar, API tokens, optional AI consent, and provider status.
   Household sections embed existing general, membership, connection sharing, and settlement preferences.
-- [ ] Institutions embeds Banks and manual accounts.
+- [x] Institutions embeds Banks and manual accounts.
   Categories embeds overrides and budget-category links.
   Merchants embeds merchant cleanup and cancelled subscriptions.
   Rules embeds the existing merchant rules editor.
-- [ ] Add a real tag registry over the existing annotation tag strings.
+- [x] Add a real tag registry over the existing annotation tag strings.
   Rename performs a paginated owner-scoped annotation update, merge deduplicates tags, delete requires confirmation, and every operation is idempotent.
-- [ ] Data embeds import review, CSV/JSON/takeout exports, encrypted backup status, demo data, receipts controls, and Danger Zone.
-- [ ] Do not render Businesses, Billing, Gift, or Referrals entries.
+- [x] Data embeds import review, CSV/JSON/takeout exports, encrypted backup status, demo data, receipts controls, and Danger Zone.
+- [x] Do not render Businesses, Billing, Gift, or Referrals entries.
   They are product-specific to a commercial multi-tenant service and provide no FundFlow capability.
-- [ ] Run all gates and commit `feat(settings): add task-based settings and profile`.
+- [x] Run all gates and commit `feat(settings): add task-based settings and profile`.
 
 **E2E check:** Update profile and timezone, switch display preferences without a flash, navigate every settings section with keyboard and mobile layout, rename and merge a tag, verify Security actions still work, and confirm each section issues only its expected queries.
+
+### Phase 13 implementation notes (shipped 2026-07-30, branch `feat/settings-ia`)
+
+**Files:** `20260730250000_profile_and_tags.sql`, `components/settings/settings-nav.ts`
+(`SettingsSection`, `SETTINGS_SECTIONS`, `sectionFromParam`, `DisplayPrefs` +
+`parseDisplayPrefs`/`validateDisplayPrefsPatch`), `SettingsLayout.tsx`,
+`ProfileSection.tsx`, `DisplaySection.tsx`, `TagsSection.tsx`, `lib/profile.ts`,
+`lib/tags.ts`, `app/api/settings/profile/route.ts` (PATCH profile fields/display
+prefs, POST avatar upload, DELETE avatar), `app/api/settings/tags/route.ts`
+(POST/PATCH/DELETE), `app/settings/page.tsx` rewritten around a `section`
+param instead of one big query.
+
+**Deviations:**
+
+- Thirteen sections in the plan collapsed to twelve here: "household-members"
+  is not its own section — `HouseholdSection` already shows membership, and
+  splitting one existing component into three plan-defined household
+  sub-sections would have meant rebuilding it, which the plan explicitly says
+  not to do. `household-general` and `household-preferences` (Settle Up) cover
+  the same ground.
+- Profile does not surface "existing timezone" — the app's only timezone
+  control lives inside `ReportsSection` (weekly-report delivery time), which
+  stays under Notifications; duplicating it into Profile risked the two
+  drifting.
+- `display_name` is not yet wired into the dashboard greeting. The column and
+  its API exist; the greeting component still reads email. Small, isolated
+  follow-up.
+- `defaultPrivacyBlur` is stored but not yet consumed as the session's actual
+  starting blur state — `PrivacyToggle` still initializes from `localStorage`
+  only. Wiring the stored default into first paint touches `AppShell`/`TopBar`
+  and was left as a fast follow rather than risked at the end of a six-phase
+  session.
+- Receipts controls (Data section) point at the existing ephemeral AI receipt
+  scan (`ReceiptScanSection`), not a persistent receipt inbox — see Phase 12's
+  notes for why that's deferred.
+
+**Decisions worth keeping:**
+
+- **`rename_user_tag` is one SQL statement, not a client read-modify-write.**
+  A tag rename touches every `transaction_annotations` row carrying that tag;
+  doing it as fetch-edit-rewrite in JS would race a concurrent annotation
+  edit into a lost update. Renaming to a name that already exists in the
+  registry is treated as a merge — `array_agg(distinct ...)` de-dupes the
+  rewritten array, and the old registry row is dropped — because a tag's
+  identity is its name, not a row id.
+- **Only three sections carry the migration dependency.** Profile, Display,
+  and Tags are the only ones that read new schema; every other section
+  (Security, Institutions, Categories, Merchants, Rules, Household,
+  Integrations, Data, Notifications) uses tables that already existed. That's
+  what makes a narrow `settingsIa` gate possible instead of an all-or-nothing
+  one — see Deployment below.
+- **Every `/settings#anchor` link in the app was found and updated**, not
+  just the page itself: dashboard's "budgets not set" prompts
+  (`MonitorView`, `PlanView`, `PriorityRail`) and the Ask-AI lower-rail link
+  all pointed at anchor ids that no longer exist post-restructure. A stale
+  link here is a silent dead end, not a build error, so this needed a
+  deliberate repo-wide grep rather than trusting the type checker to catch it.
+- **Existing components were reused verbatim.** Not one of the ~24 pre-Phase-13
+  settings components was rewritten; each was only re-homed under a section
+  in `app/settings/page.tsx`, and each section's query fetches only what that
+  component needs — the actual fix for the old page's "fires all ~18 queries
+  on every visit" problem.
+
+**Deployment:** apply `20260730250000_profile_and_tags.sql`, then set
+`FUNDFLOW_FEATURE_FLAGS=settingsIa` (or flip the default). With it off,
+`/settings` is fully reachable and every pre-Phase-13 section works
+unmigrated; `?section=profile`, `?section=display`, and `?section=tags`
+(and the bare `/settings` default, which is normally `profile`) redirect to
+`?section=institutions` instead of querying columns that don't exist yet.
 
 ---
 

@@ -69,6 +69,13 @@ export async function POST(request: NextRequest) {
       // banks keep whatever depth they were linked with. From then on our own
       // DB retains everything forever, so history only grows.
       req.transactions = { days_requested: 730 };
+      // Phase 9A: optional, not required — an institution that doesn't
+      // support Investments is still shown in Link, and the product is only
+      // extracted (and billed) if the user actually picks an account that
+      // supports it. Omitted from update mode above: adding a product to an
+      // existing Item is a separate, deliberate action, not a side effect of
+      // reconnecting a broken one.
+      req.optional_products = [Products.Investments];
     }
 
     const response = await plaid.linkTokenCreate(req);

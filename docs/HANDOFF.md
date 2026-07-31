@@ -2,7 +2,275 @@
 
 Last updated: 2026-07-30. Read this first to resume.
 
-## START HERE: Phase 5 Recurring is implemented
+## START HERE: Phases 9A–13 are implemented — the fourteen-phase program is complete
+
+All six remaining phases (9A Investments, 9B Investment performance, 10
+Forecasting, 11 Advice, 12 Transactions parity, 13 Settings IA) were
+implemented in one continuous session, each on its own branch stacked on the
+last, on top of `feat/dashboard-widgets` (Phase 8):
+`feat/investments` (914525b) → `feat/investment-performance` (5c4f230) →
+`feat/forecasting` (77eb98d) → `feat/advice` (c0ee5f6) →
+`feat/transactions-parity` (1c6f469) → `feat/settings-ia` (bdd4380). **No
+phases remain** — `docs/superpowers/plans/2026-07-29-monarch-parity.md` has
+every checkbox ticked and an implementation-notes subsection per phase.
+
+Gates on the full stack: `npm run build` PASS, `npm run lint` PASS,
+`npx tsc --noEmit` PASS, `npm run test:unit` PASS (**175 files / 1669 tests**).
+
+**The six flags — all default OFF, all independent, flip in any order**
+
+| Flag | Migration | Why it's off |
+| --- | --- | --- |
+| `investmentsPage` | `20260730210000_investments.sql` + `20260730220000_investment_transactions.sql` | New page + cron read/write new tables (9A and 9B share one flag — one feature surface, two migrations) |
+| `forecastingPage` | none | Review gate only |
+| `advicePage` | `20260730230000_advice.sql` | New page reads new tables |
+| `transactionsParity` | `20260730240000_manual_transactions_receipts.sql` | Gates an **already-live** page — with it off, `/transactions` runs the exact pre-Phase-12 query |
+| `settingsIa` | `20260730250000_profile_and_tags.sql` | Also an already-live page — only Profile/Display/Tags (the sections reading new schema) redirect to Institutions when off |
+
+**To release everything:** apply the five migrations above in that order to
+the live Supabase project, then set as many flags as reviewed via
+`FUNDFLOW_FEATURE_FLAGS=investmentsPage,forecastingPage,advicePage,transactionsParity,settingsIa`
+(or flip individual defaults in `lib/feature-flags.ts`). They don't depend on
+each other's flags — `transactionsParity` and `settingsIa` are unrelated
+schema surfaces despite shipping in the same session.
+
+**One deliberate scope cut:** Phase 12's migration includes a `receipts`
+table and the app's first Supabase Storage bucket (schema and RLS only,
+verified-correct), but the actual upload route, `ReceiptInbox.tsx`, and
+All/Receipts tab are **not built** — that's a separate, security-sensitive
+piece of work (signed URLs, MIME/size limits, an RLS integration test proving
+cross-user isolation) better done as its own session than rushed at the tail
+of this one. The existing ephemeral AI receipt scan in Settings
+(`ReceiptScanSection`, `/api/ai/receipt`) is untouched and keeps working
+exactly as before either way.
+
+**Two real bugs found and fixed before they shipped, not after:**
+
+1. `sync_jobs` had no way to distinguish an investments-only sync from a
+   transactions sync. Four surfaces (`lib/dashboard.ts`, `budget-data.ts`,
+   `cash-flow-data.ts`, `recurring-data.ts`) read the newest `done` job as
+   "the bank connection is healthy" — an investments success would have
+   satisfied that check and masked an actually-failed transaction sync.
+   Fixed with a `job_type` column in the Phase 9A migration, before
+   investment sync could write a single row.
+2. The daily cron's integrity check (`lib/integrity.ts`) would have flagged
+   every manual transaction (Phase 12) as an `orphan-transaction` — a null
+   `account_id` never matches a real account id. Fixed by excluding
+   null-`account_id` rows from that check: a manual transaction can never
+   actually dangle, since deleting its manual account cascades the
+   transaction with it.
+
+**Why the canonical projection absorbed Phase 12 with almost no blast
+radius:** `RawFinanceTransaction.accountId`/`manualAccountId` and the
+`source`-from-prefix derivation in `lib/finance-domain.ts` were already typed
+and built this way back in Phase 0, anticipating manual transactions before
+they existed. Widening `transactions.account_id` to nullable and adding
+`manual_account_id`/`source` broke nothing in the 1600+ existing tests — the
+only real fixes needed were in code that queried `transactions` *outside*
+the projection (the integrity check above, and two import routes that needed
+to set `source: 'import'` explicitly since the column default is `'plaid'`).
+
+**What a reviewer should do next:**
+
+1. Read the Implementation notes subsection for each phase in the parity
+   plan (search for "implementation notes" — one per phase, right after that
+   phase's E2E check) for the full deviation list; the summary above only
+   hits the highlights.
+2. Apply the five migrations in order on a staging project; run the
+   verification SQL comments at the bottom of each migration file.
+3. Flip one flag at a time in staging, exercise the corresponding page, then
+   move to the next.
+4. Decide on the receipts-upload follow-up (schema is ready, UI is not) as
+   its own piece of work.
+
+Not yet run: any browser E2E pass for these six phases — every E2E check
+listed in the plan for 9A-13 is still open, same as Phase 8's browser
+half was at the time it shipped.
+
+## START HERE: Phase 8 Dashboard widgets is implemented (flag-gated)
+
+Phase 8 is implemented on `feat/dashboard-widgets`, stacked on `feat/goals-v2`
+(Phase 7) which stacks on `feat/reports-sankey` (Phase 6). The stack has
+`origin/main` merged in at `520bf60`. **Phases 9A-13 remain.**
+
+Gates: `npm run build` PASS, `npm run lint` PASS, `npx tsc --noEmit` PASS,
+`npm run test:unit` PASS (**1429 tests**).
+
+**What shipped**
+
+- **`lib/dashboard-widgets.ts`** — the widget registry and a *total*
+  `normalizeWidgetPrefs`: `dashboard_prefs` is free-form JSON written by the
+  browser, so it takes `unknown` and always returns a usable layout. A widget
+  missing from a stored order is appended, so a future widget is not hidden
+  from everyone who ever saved a layout.
+- **`computeCumulativeSpendByDay`** in `lib/dashboard.ts` — spend this month
+  against last, aligned by day. Two nulls are load-bearing: a day after today is
+  `null` (a zero would draw the line along the floor and read as "spent nothing
+  today"), and a day past a shorter previous month's end is `null` (carrying it
+  forward would claim a spending pause that never happened). The chart's table
+  twin forward-fills; the plotted line stops.
+- **Seven widgets** over data the page already loaded, each with distinct
+  empty / stale / error states via `WidgetShell` — collapsing "nothing yet" into
+  "failed to load" is how a broken query starts looking like an empty account.
+- **`CustomizeDrawer`** — show/hide plus up/down reordering with buttons rather
+  than drag-and-drop (unusable by keyboard, awkward on touch), Restore
+  defaults, and an optimistic save that rolls back on failure. It read-merge-
+  writes `dashboard_prefs` so it cannot clobber `sidebarCollapsed` or the
+  hidden-account ids that share the column.
+- **Reconciliation tests** (`tests/unit/dashboard-reconciliation.test.ts`) tying
+  the dashboard endpoint, Budget actual, Cash Flow expenses, the Reports
+  filter, and `financeTotals` to the same monthly figure — including the refund
+  pair, card payment, pending, and split cases that usually break it.
+
+**To release:** set `FUNDFLOW_FEATURE_FLAGS=dashboardWidgets`. **No migration**
+— unlike Phases 6 and 7 this has no database prerequisite. It gates a behaviour
+change: the grid becomes the dashboard's landing view. Monitor, Plan, and
+Wealth stay in the toolbar and every `?view=` bookmark resolves as before.
+
+**One judgement call to review:** `tests/unit/dashboard-ui.test.ts` capped
+`app/dashboard/page.tsx` at 240 lines to keep it an orchestrator. Phase 8 added
+a fourth view and the page is now 256, so the cap moved to 260 — but only after
+extracting `OverviewView` (which owns the grid's query) and `DashboardViewTabs`,
+so the page delegates strictly more than it did before. The test also now
+asserts the page contains no loader. If it ever needs raising again, extract.
+
+Not yet run: the browser half of the E2E check (hide a widget, reorder, reload,
+confirm persistence).
+
+## Phase 7 Goals is implemented (flag-gated)
+
+Phase 7 (Goals revamp) is implemented on `feat/goals-v2`, which **stacks on
+`feat/reports-sankey`** (Phase 6) rather than branching from `main` — Phase 6 is
+not merged yet, and stacking is the precedent this repo already set with
+`feat/cash-flow-page` on `feat/accounts-page`. Phase 7 itself depends only on
+Phase 4, which is on `main`. **Phases 8–13 remain.**
+
+Gates: `npm run build` PASS, `npm run lint` PASS, `npx tsc --noEmit` PASS,
+`npm run test:unit` PASS (**152 files / 1317 tests**; Phase 7 adds 3 files and
+104 tests on top of Phase 6's 149/1213).
+
+**What shipped**
+
+- **`lib/goals-v2.ts`** — `computeFundedGoals` merges three progress sources:
+  hand-typed `saved_amount`, live account allocations (capped at what the
+  account actually holds), and a dated signed event ledger. **Pay-down goals use
+  the balance delta alone**, because a payment both moves the balance and may
+  have been recorded as an event, so adding the ledger would count it twice.
+  Also the badge matrix, `validateAllocation`, and `goalContributionsForMonth`.
+- **`supabase/migrations/20260730200000_goals_v2.sql`** — new goal columns,
+  `goal_accounts`, `goal_progress_events`, `transaction_annotations.goal_id`, and
+  the `set_goal_allocation` function that holds a row lock while it checks the
+  cross-row allocation rules.
+- **Wizard and cards** — four steps (Select → Targets → Contribution → Review)
+  over eight original SVG illustrations in `public/goals/`, image cards with
+  progress bars and badges, a standalone "Allocate funds" panel, and a Pay down
+  tab listing unlinked liability accounts.
+- **Routes** — `/api/goals/accounts` (allocations through the function, plus
+  one-time pay-down baseline capture) and `/api/goals/events` (the contribution
+  ledger). `/api/transactions/annotate` now takes `goal_id` and, for a
+  `spending_reduces` goal, writes a negative transaction event idempotently.
+- **Budget feed** — planned contributions from `goals.monthly_contribution`,
+  actual from `goal_progress_events` only.
+
+**Two security details worth knowing**
+
+1. The plan's RLS sketch had an ownership hole. `with check (user_id =
+   auth.uid())` alone is not enough, because foreign-key checks bypass RLS: a
+   user could insert a `goal_accounts` row owned by themselves but pointing at
+   another user's `goal_id`, and any read selecting allocations by `goal_id`
+   would attribute it to the victim's goal. The migration's write policies also
+   assert the goal and account belong to the caller.
+2. `image_slug` is a database string that becomes a URL, so `goalImageFor`
+   resolves known slugs only rather than interpolating it into a path.
+
+**Before this is user-visible**
+
+1. **Apply `supabase/migrations/20260730200000_goals_v2.sql`.**
+2. **Set `FUNDFLOW_FEATURE_FLAGS=goalsV2`** (or flip the default in
+   `lib/feature-flags.ts`). Note this flag is *not* gating a new page the way
+   `reportsPage` is: `/goals` and `/budget` are already released, and both begin
+   reading `goal_accounts` / `goal_progress_events` the moment it turns on.
+   Leaving it off keeps a migration-less deployment working exactly as before.
+
+Not yet done for Phase 7: the E2E acceptance run (needs the flag on and the
+migration applied), and goal linking from the Phase 12 manual-add modal, which
+does not exist yet.
+
+## Phase 6 Reports is implemented (flag-gated)
+
+Phase 6 (Reports page with Sankey) is implemented on `feat/reports-sankey`,
+branched from `main` at `b9e2019`. Phases 0–5 were already merged; **Phases 7–13
+remain**. Gates: `npm run build` PASS, `npm run lint` PASS, `npx tsc --noEmit`
+PASS, `npm run test:unit` PASS (**149 files / 1213 tests**, up from 144/993 —
+133 new tests, no new failures).
+
+**What shipped**
+
+- **`lib/sankey.ts`** — pure layout (`layoutSankey`) plus `foldSankeyOverflow`.
+  One value→pixel scale is shared across every column, or a ribbon leaving a
+  node stops matching the one arriving and the diagram silently stops conserving
+  value. Node heights floor to 2px so a tiny real category stays visible; ribbon
+  thickness deliberately never floors, or ribbons would sum to more than their
+  node.
+- **`lib/reports.ts`** — `buildCashFlowSankeyData` (income categories → hub →
+  expense groups → categories, with a terminal "Net Income" on a surplus and an
+  "Unfunded Spending" source on a deficit, so the graph balances instead of
+  drawing a negative ribbon; transfers are excluded by `flow`, so neither half of
+  a linked refund nor a credit-card payment can double-count),
+  `summarizeTransactions`, and the **versioned saved-report filter schema** —
+  a strict `parseReportFilters` for stored payloads and a forgiving
+  `reportFiltersFromSearchParams` for hand-edited URLs.
+- **`components/charts/SankeyChart.tsx`** — server-rendered SVG, no client JS
+  (so the nonce CSP needs no exception), colour by *stage* rather than category
+  (one hue per category would blow past the six-slot palette), full-detail table
+  twin, and table-first below 768px.
+- **`app/reports/page.tsx`** + `components/reports/*` — date range, Cash
+  Flow/Spending/Income tabs, Breakdown/Trends, Mine/Household scope, pending
+  toggle, removable filter chips, a five-figure summary, paginated rows, and the
+  CSV / weekly-PDF / Year-in-Money actions. Every control is a `<Link>` or a
+  plain GET form, so all report state is URL state and nothing needs syncing.
+- **`app/api/reports/saved/route.ts`** — save / rename / update / delete, with
+  the filter payload re-validated server-side, a 50-report cap, `23505` mapped to
+  a 409, and audit writes.
+- **`app/api/export/report-csv/route.ts`** — the exact filtered row set through
+  the privacy-safe contract (date/merchant/amount/category only),
+  formula-neutralized via `toCsv`, bounded, recorded in `data_exports`.
+- `saved_reports` added to takeout and the monthly encrypted backup; deletion
+  cascades through the `auth.users` FK, so `app/api/account/route.ts` needed no
+  edit.
+
+**Two things to do before this is user-visible**
+
+1. **Apply `supabase/migrations/20260730190000_saved_reports.sql`** to the live
+   project (`zrxbmmtqqhlwtrinocww`). There is no migration runner in CI.
+2. **Flip `reportsPage` to `true`** in `lib/feature-flags.ts`, or set
+   `FUNDFLOW_FEATURE_FLAGS=reportsPage`. It defaults to **OFF** on purpose: the
+   page reads `saved_reports`, and reading a table that does not exist yet is a
+   500, not a graceful degrade. In that same change, drop the "Year in Money"
+   entry from `NAV_ITEMS` — the Reports page already links to `/wrapped`, and
+   removing it earlier would strand that page behind the command palette.
+   `tests/e2e/reports.spec.ts` skips itself until the flag is on.
+
+**Also in this branch (pre-existing repairs, unrelated to Phase 6):** two type
+errors that were already failing `npx tsc --noEmit` on `main` —
+`tests/unit/dashboard-extended.test.ts` passed an invalid `scope: "personal"`,
+and `tests/unit/api-plaid-direct-routes.test.ts` passed a delete-chain stub
+where `clientStub` expects a per-table seeds map. Both fixed, so the typecheck
+gate is honestly green rather than green-except-two.
+
+**Local test note:** 12 test files import route handlers that transitively load
+`lib/env.ts` and fail without `.env.local` — environmental, not a code failure.
+Supply dummy values inline and all 149 files pass:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL="https://example.supabase.co" \
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="sb_publishable_test" \
+SUPABASE_SECRET_KEY="sb_secret_test" \
+PLAID_TOKEN_ENC_KEY="$(node -e 'process.stdout.write(Buffer.alloc(32,7).toString("base64"))')" \
+CRON_SECRET="test-cron-secret" npm run test:unit
+```
+
+## Phase 5 Recurring is implemented
 
 Phase 5 is implemented on `feat/recurring-page` (Tasks 1-15 of its test-first plan).
 It delivers the Recurring page: the occurrence review workflow, manual recurring items, a sidebar unreviewed-stream badge, and Mine/Household scope.

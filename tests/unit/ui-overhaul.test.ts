@@ -74,8 +74,8 @@ describe("UI overhaul primitives and shell", () => {
       expect(source).toContain(activeMarker);
     }
 
+    // Phase 13: anchor ids gave way to a `section` query param + side nav.
     const settings = readFileSync("app/settings/page.tsx", "utf8");
-    expect(settings).toContain('id="budgets"');
-    expect(settings).toContain('id="reports"');
+    expect(settings).toContain("SettingsLayout");
   });
 });

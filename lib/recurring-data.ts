@@ -198,6 +198,7 @@ export async function loadRecurringData(
     .from("sync_jobs")
     .select("updated_at")
     .eq("status", "done")
+    .eq("job_type", "transactions")
     .order("updated_at", { ascending: false })
     .limit(1);
 

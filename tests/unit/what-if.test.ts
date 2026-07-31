@@ -2,18 +2,18 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 /**
- * Source-level checks (repo convention for view wiring): the underlying
- * math (computeRunwayMonths, buildPayoffPlan) is unit-tested in
- * insights.test.ts / debt.test.ts; these assert the what-if panel actually
- * drives it client-side.
+ * Source-level checks (repo convention for view wiring): the underlying math
+ * (computeWhatIfProjection, in turn computeRunwayMonths / buildPayoffPlan) is
+ * unit-tested in forecasting.test.ts (Phase 10 extracted it out of this
+ * component's own useMemo so it's testable without React); these assert the
+ * what-if panel actually drives it client-side.
  */
 describe("what-if simulator panel", () => {
   const source = readFileSync("components/dashboard/WhatIfPanel.tsx", "utf8");
 
   it("is a client component driving the pure planning math", () => {
     expect(source).toContain('"use client"');
-    expect(source).toContain("computeRunwayMonths");
-    expect(source).toContain("buildPayoffPlan");
+    expect(source).toContain("computeWhatIfProjection");
     expect(source).toContain("formatCurrency");
   });
 

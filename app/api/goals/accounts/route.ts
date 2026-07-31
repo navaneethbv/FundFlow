@@ -1,0 +1,186 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { requireUser, errorResponse, badRequest } from "@/lib/http";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { writeAudit, getClientIp } from "@/lib/audit";
+import {
+  ALLOCATION_ERROR_MESSAGES,
+  isLiabilityAccount,
+  type AllocationError,
+} from "@/lib/goals-v2";
+
+/**
+ * Goal account allocations (Phase 7).
+ *
+ * Every write goes through the `set_goal_allocation` database function rather
+ * than a direct insert. Two of its rules are cross-row — at most one goal may
+ * claim an account's whole balance, and fixed allocations may not exceed the
+ * balance — so they cannot be a CHECK constraint, and evaluating them in
+ * application code would race: two concurrent requests each allocating half a
+ * balance would both read "plenty left" and both succeed. The function takes a
+ * row lock first.
+ *
+ * Audit metadata is ids and actions only, never goal names or amounts.
+ */
+
+const ALLOCATION_ERRORS = new Set<string>(Object.keys(ALLOCATION_ERROR_MESSAGES));
+
+/** The function raises bare codes; surface the matching message verbatim. */
+function allocationErrorFrom(message: string | undefined): AllocationError | null {
+  if (!message) return null;
+  for (const code of ALLOCATION_ERRORS) {
+    if (message.includes(code)) return code as AllocationError;
+  }
+  return null;
+}
+
+function parseId(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+export async function POST(request: NextRequest) {
+  const auth = await requireUser();
+  if (auth instanceof NextResponse) return auth;
+  const { user, supabase } = auth;
+
+  try {
+    if (!(await checkRateLimit(`goal-allocation:${user.id}`, 40, 60))) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
+
+    const body = (await request.json().catch(() => null)) as {
+      goalId?: unknown;
+      accountId?: unknown;
+      allocatedAmount?: unknown;
+      useEntireBalance?: unknown;
+    } | null;
+
+    const goalId = parseId(body?.goalId);
+    const accountId = parseId(body?.accountId);
+    if (!goalId) return badRequest("goalId is required");
+    if (!accountId) return badRequest("accountId is required");
+
+    const useEntireBalance = body?.useEntireBalance === true;
+    let allocatedAmount: number | null = null;
+    if (!useEntireBalance) {
+      const raw = body?.allocatedAmount;
+      if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0) {
+        return badRequest(ALLOCATION_ERROR_MESSAGES.allocation_amount_required);
+      }
+      // Money is stored to the cent; rounding here keeps the value the user is
+      // shown identical to the value the check ran against.
+      allocatedAmount = Math.round(raw * 100) / 100;
+    } else if (body?.allocatedAmount !== undefined && body.allocatedAmount !== null) {
+      return badRequest(ALLOCATION_ERROR_MESSAGES.allocation_mode_conflict);
+    }
+
+    // Ownership, not visibility: RLS also exposes a household member's shared
+    // goals and accounts, and neither is writable by them. The database
+    // function re-checks both, but failing here gives a 404 instead of a 500.
+    const [{ data: goal }, { data: account }] = await Promise.all([
+      supabase
+        .from("goals")
+        .select("id, goal_type, starting_balance")
+        .eq("id", goalId)
+        .eq("user_id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("accounts")
+        .select("id, type, current_balance")
+        .eq("id", accountId)
+        .eq("user_id", user.id)
+        .maybeSingle(),
+    ]);
+    if (!goal) return NextResponse.json({ error: "Goal not found" }, { status: 404 });
+    if (!account) {
+      return NextResponse.json({ error: "Account not found" }, { status: 404 });
+    }
+
+    const { data: allocationId, error } = await supabase.rpc("set_goal_allocation", {
+      p_goal_id: goalId,
+      p_account_id: accountId,
+      p_allocated_amount: allocatedAmount,
+      p_use_entire_balance: useEntireBalance,
+    });
+    if (error) {
+      const code = allocationErrorFrom(error.message);
+      if (code) {
+        return NextResponse.json(
+          { error: ALLOCATION_ERROR_MESSAGES[code], code },
+          { status: 409 },
+        );
+      }
+      throw error;
+    }
+
+    // Capture the pay-down baseline exactly once, on the first liability link.
+    // Recomputing it on a later sync would move the starting line and make
+    // progress the user already earned disappear.
+    let baselineCaptured = false;
+    if (
+      goal.goal_type === "pay_down" &&
+      goal.starting_balance === null &&
+      isLiabilityAccount(account.type as string | null)
+    ) {
+      const { error: baselineError } = await supabase
+        .from("goals")
+        .update({ starting_balance: account.current_balance ?? 0 })
+        .eq("id", goalId)
+        .eq("user_id", user.id)
+        .is("starting_balance", null);
+      if (baselineError) throw baselineError;
+      baselineCaptured = true;
+    }
+
+    await writeAudit({
+      userId: user.id,
+      action: "goal_allocation_set",
+      metadata: { goal_id: goalId, account_id: accountId, baselineCaptured },
+      ip: getClientIp(request),
+    });
+
+    return NextResponse.json({ ok: true, id: allocationId, baselineCaptured });
+  } catch (error) {
+    return errorResponse("goals.accounts.post", error);
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const auth = await requireUser();
+  if (auth instanceof NextResponse) return auth;
+  const { user, supabase } = auth;
+
+  try {
+    const goalId = request.nextUrl.searchParams.get("goalId")?.trim();
+    const accountId = request.nextUrl.searchParams.get("accountId")?.trim();
+    if (!goalId || !accountId) {
+      return badRequest("goalId and accountId are required");
+    }
+
+    const { data, error } = await supabase
+      .from("goal_accounts")
+      .delete()
+      .eq("goal_id", goalId)
+      .eq("account_id", accountId)
+      .eq("user_id", user.id)
+      .select("id")
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) {
+      return NextResponse.json({ error: "Allocation not found" }, { status: 404 });
+    }
+
+    // `starting_balance` deliberately survives unlinking: it is the baseline the
+    // goal's progress was measured from, and re-linking later must not silently
+    // reset it to whatever the balance happens to be that day.
+    await writeAudit({
+      userId: user.id,
+      action: "goal_allocation_removed",
+      metadata: { goal_id: goalId, account_id: accountId },
+      ip: getClientIp(request),
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return errorResponse("goals.accounts.delete", error);
+  }
+}

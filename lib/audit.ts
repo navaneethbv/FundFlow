@@ -42,7 +42,28 @@ export type AuditAction =
   | "recurring_stream_amount_corrected"
   | "manual_recurring_item_created"
   | "manual_recurring_item_updated"
-  | "manual_recurring_item_deleted";
+  | "manual_recurring_item_deleted"
+  | "saved_report_created"
+  | "saved_report_updated"
+  | "saved_report_deleted"
+  | "goal_allocation_set"
+  | "goal_allocation_removed"
+  | "goal_contribution_recorded"
+  | "goal_contribution_removed"
+  | "goal_transaction_linked"
+  | "manual_holding_created"
+  | "manual_holding_deleted"
+  | "advice_task_toggled"
+  | "advice_priorities_updated"
+  | "advice_profile_updated"
+  | "manual_transaction_created"
+  | "manual_transaction_deleted"
+  | "tag_renamed"
+  | "tag_merged"
+  | "tag_deleted"
+  | "profile_updated"
+  | "avatar_updated"
+  | "display_prefs_updated";
 
 interface AuditParams {
   userId: string | null;

@@ -121,6 +121,7 @@ export async function POST(request: NextRequest) {
           ? row.category.toUpperCase().replace(/\s+/g, "_")
           : null,
         pending: false,
+        source: "import",
       };
     });
 

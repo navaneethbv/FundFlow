@@ -18,7 +18,10 @@ export function runIntegrityChecks(input: {
   syncJobs: { status: string; updatedAt: string }[];
   transactions: {
     id: string;
-    accountId: string;
+    /** Null for a manual transaction (Phase 12) — never orphaned, since a
+     *  manual account's deletion cascades to it via the FK instead of
+     *  leaving a dangling reference. */
+    accountId: string | null;
     plaidTransactionId: string | null;
     pending?: boolean;
     date?: string;
@@ -41,7 +44,9 @@ export function runIntegrityChecks(input: {
   }
 
   const accounts = new Set(input.accountIds);
-  const orphans = input.transactions.filter((txn) => !accounts.has(txn.accountId));
+  const orphans = input.transactions.filter(
+    (txn) => txn.accountId !== null && !accounts.has(txn.accountId),
+  );
   if (orphans.length > 0) {
     findings.push({
       check: "orphan-transaction",

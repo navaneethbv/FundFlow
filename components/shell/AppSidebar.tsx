@@ -23,7 +23,8 @@ function NavLink({
   const Icon = item.icon;
   const isActive =
     item.key === active ||
-    (item.key === "dashboard" && ["monitor", "plan", "wealth"].includes(active));
+    (item.key === "dashboard" &&
+      ["overview", "monitor", "plan", "wealth"].includes(active));
 
   return (
     <Link

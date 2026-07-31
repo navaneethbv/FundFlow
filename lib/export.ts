@@ -19,6 +19,23 @@ export type ExportFetchResult =
   | { allowed: false }
   | { allowed: true; rows: ExportRow[] };
 
+/**
+ * The `ai_export_enabled` opt-out on its own, for exports that build their own
+ * row set (the Reports CSV filters the canonical projection rather than reading
+ * `transactions` directly) but must still honour the same gate.
+ */
+export async function isExportAllowed(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<boolean> {
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("ai_export_enabled")
+    .eq("id", userId)
+    .single();
+  return profile?.ai_export_enabled !== false;
+}
+
 export async function fetchPrivacySafeRows(
   supabase: SupabaseClient,
   userId: string,

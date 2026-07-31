@@ -9,6 +9,8 @@ import StatTile from "@/components/charts/StatTile";
 import AreaSparkline from "@/components/charts/AreaSparkline";
 import MiniBars from "@/components/charts/MiniBars";
 import RadialGauge from "@/components/charts/RadialGauge";
+import SankeyChart from "@/components/charts/SankeyChart";
+import CumulativeCompareChart from "@/components/charts/CumulativeCompareChart";
 
 /**
  * The chart components are server-rendered SVG; rendering them to markup is
@@ -240,5 +242,154 @@ describe("RadialGauge", () => {
     const html = renderToStaticMarkup(createElement(RadialGauge, { value: 75 }));
     expect(html).toContain("svg");
     expect(html).toContain("circle");
+  });
+});
+
+describe("SankeyChart", () => {
+  const nodes = [
+    { id: "src:Wages", label: "Wages", value: 4000, column: 0 },
+    { id: "hub", label: "Income", value: 4000, column: 1 },
+    { id: "grp:Rent", label: "Rent", value: 1200, column: 2 },
+    { id: "grp:__net__", label: "Net Income", value: 2800, column: 2 },
+    { id: "cat:Rent::Rent", label: "Monthly rent", value: 1200, column: 3 },
+  ];
+  const links = [
+    { source: "src:Wages", target: "hub", value: 4000 },
+    { source: "hub", target: "grp:Rent", value: 1200 },
+    { source: "hub", target: "grp:__net__", value: 2800 },
+    { source: "grp:Rent", target: "cat:Rent::Rent", value: 1200 },
+  ];
+  const html = renderToStaticMarkup(
+    createElement(SankeyChart, { nodes, links, title: "July cash flow" }),
+  );
+
+  it("renders ribbons and nodes without NaN coordinates", () => {
+    expect(html).not.toContain("NaN");
+    expect(html).toContain("<path");
+    expect(html).toContain("<rect");
+  });
+
+  it("colours by stage using viz tokens, never a hard-coded hex", () => {
+    expect(html).toContain("var(--viz-1)");
+    expect(html).toContain("var(--viz-2)");
+    expect(html).toContain("var(--viz-3)");
+    expect(html).not.toMatch(/fill="#[0-9a-f]{3,6}"/i);
+  });
+
+  it("has an accessible name, tooltips, a stage legend, and a table twin", () => {
+    expect(html).toContain("July cash flow");
+    expect(html).toContain("<title>");
+    expect(html).toContain("Sources");
+    expect(html).toContain("Categories");
+    expect(html).toContain("View data table");
+  });
+
+  it("labels every flow in the table using node labels, not raw ids", () => {
+    expect(html).toContain("Monthly rent");
+    expect(html).toContain("Net Income");
+    expect(html).not.toContain("grp:__net__<");
+  });
+
+  it("keeps the label text off the series colour", () => {
+    expect(html).toContain('fill="var(--viz-ink)"');
+  });
+
+  it("renders a table-first fallback for small screens", () => {
+    expect(html).toContain("md:hidden");
+    expect(html).toContain("Shown as a table on small screens.");
+  });
+
+  it("folds an oversized column but keeps full detail in the table", () => {
+    const manyNodes = [
+      { id: "hub", label: "Income", value: 100, column: 0 },
+      ...Array.from({ length: 12 }, (_, index) => ({
+        id: `g${index}`,
+        label: `Group ${index}`,
+        value: 100 - index,
+        column: 1,
+      })),
+    ];
+    const manyLinks = manyNodes
+      .filter((node) => node.column === 1)
+      .map((node) => ({ source: "hub", target: node.id, value: node.value }));
+    const folded = renderToStaticMarkup(
+      createElement(SankeyChart, {
+        nodes: manyNodes,
+        links: manyLinks,
+        title: "Folded",
+        maxNodesPerColumn: 4,
+      }),
+    );
+
+    expect(folded).toContain("Other");
+    // The table twin still lists the folded-away groups.
+    expect(folded).toContain("Group 11");
+  });
+
+  it("renders an empty state rather than an empty chart", () => {
+    expect(
+      renderToStaticMarkup(
+        createElement(SankeyChart, { nodes: [], links: [], title: "Nothing" }),
+      ),
+    ).toContain("No data yet.");
+  });
+});
+
+describe("CumulativeCompareChart", () => {
+  const days = [
+    { day: 1, thisMonth: 100, lastMonth: 80 },
+    { day: 2, thisMonth: 250, lastMonth: 190 },
+    { day: 3, thisMonth: null, lastMonth: 300 },
+    { day: 4, thisMonth: null, lastMonth: null },
+  ];
+  const html = renderToStaticMarkup(
+    createElement(CumulativeCompareChart, {
+      days,
+      monthLabel: "July",
+      previousMonthLabel: "June",
+    }),
+  );
+
+  it("draws both series without NaN and using viz tokens", () => {
+    expect(html).not.toContain("NaN");
+    expect(html).toContain('stroke="var(--viz-1)"');
+    expect(html).toContain('stroke="var(--viz-ink-2)"');
+    expect(html).not.toMatch(/stroke="#[0-9a-f]{3,6}"/i);
+  });
+
+  it("has an accessible name, a legend, and a table twin", () => {
+    expect(html).toContain("Cumulative spending");
+    expect(html).toContain("July");
+    expect(html).toContain("June");
+    expect(html).toContain("View data table");
+  });
+
+  it("marks the current endpoint with a dot and its value", () => {
+    expect(html).toContain("<circle");
+    expect(html).toContain("$250");
+  });
+
+  it("shows an em dash for a day that has not happened", () => {
+    // A zero here would read as "spent nothing today" rather than "not yet".
+    expect(html).toContain("—");
+  });
+
+  it("forward-fills the shorter previous month in the table only", () => {
+    // Day 4 has no June counterpart, so the table repeats June's final 300
+    // while the plotted line simply ended.
+    const rows = html.split("<tr").filter((row) => row.includes("<td"));
+    expect(rows.at(-1)).toContain("$300");
+  });
+
+  it("renders an empty state rather than an empty chart", () => {
+    expect(
+      renderToStaticMarkup(
+        createElement(CumulativeCompareChart, {
+          days: [],
+          monthLabel: "July",
+          previousMonthLabel: "June",
+        }),
+      ),
+    ).toContain("No spending yet.");
   });
 });

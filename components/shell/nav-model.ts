@@ -1,8 +1,12 @@
 import type { ComponentType } from "react";
 import {
   ArrowLeftRight,
+  BarChart3,
+  Compass,
   Landmark,
   LayoutDashboard,
+  LineChart,
+  TrendingUp,
   Mail,
   PiggyBank,
   Repeat,
@@ -29,7 +33,12 @@ export type NavItemKey =
   | "notifications"
   | "wrapped";
 
-export type AppShellActive = NavItemKey | "monitor" | "plan" | "wealth";
+export type AppShellActive =
+  | NavItemKey
+  | "overview"
+  | "monitor"
+  | "plan"
+  | "wealth";
 
 import type { FeatureFlag, FeatureFlagEnv } from "@/lib/feature-flags";
 import { isFeatureEnabled } from "@/lib/feature-flags";
@@ -49,9 +58,13 @@ export const NAV_ITEMS: NavItemDefinition[] = [
   { key: "accounts", label: "Accounts", href: "/accounts", icon: Landmark, category: "primary", featureFlag: "accountsPage", hint: "Grouped balances and history" },
   { key: "transactions", label: "Transactions", href: "/transactions", icon: Wallet, category: "primary", hint: "Ledger" },
   { key: "cashflow", label: "Cash Flow", href: "/cash-flow", icon: ArrowLeftRight, category: "primary", featureFlag: "cashFlowPage", hint: "Income, expenses, savings rate" },
+  { key: "reports", label: "Reports", href: "/reports", icon: BarChart3, category: "primary", featureFlag: "reportsPage", hint: "Saved reports, Sankey, exports" },
   { key: "budget", label: "Budget", href: "/budget", icon: PiggyBank, category: "planning", featureFlag: "budgetPage", hint: "Monthly envelopes" },
   { key: "recurring", label: "Recurring", href: "/recurring", icon: Repeat, category: "planning", featureFlag: "recurringPage", hint: "Bills, subscriptions, and income" },
   { key: "goals", label: "Goals", href: "/goals", icon: Target, category: "planning", hint: "Savings goals" },
+  { key: "investments", label: "Investments", href: "/investments", icon: LineChart, category: "planning", featureFlag: "investmentsPage", hint: "Holdings and allocation" },
+  { key: "forecasting", label: "Forecasting", href: "/forecasting", icon: TrendingUp, category: "planning", featureFlag: "forecastingPage", hint: "Net worth projections" },
+  { key: "advice", label: "Advice", href: "/advice", icon: Compass, category: "planning", featureFlag: "advicePage", hint: "Sourced education checklists" },
   { key: "notifications", label: "Notifications", href: "/notifications", icon: Mail, category: "manage", hint: "Alerts and digests" },
   { key: "settings", label: "Settings", href: "/settings", icon: Settings, category: "manage", hint: "Control center" },
   { key: "wrapped", label: "Year in Money", href: "/wrapped", icon: Sparkles, category: "manage", hint: "Annual recap" },

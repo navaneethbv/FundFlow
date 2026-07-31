@@ -30,7 +30,7 @@ export function getPlanSetupItems(
   if (data.budgetEnvelopes.length === 0) {
     items.push({
       label: "Create a monthly budget",
-      href: "/settings#budgets",
+      href: "/settings?section=categories",
     });
   }
   if (goals.length === 0) {
@@ -170,7 +170,7 @@ export default function PlanView({
               })}
             </div>
             <Link
-              href="/settings#budgets"
+              href="/settings?section=categories"
               className="mt-4 inline-block text-xs font-semibold text-accent hover:underline"
             >
               Manage budgets

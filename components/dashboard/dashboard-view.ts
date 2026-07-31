@@ -1,19 +1,31 @@
-export type DashboardView = "monitor" | "plan" | "wealth";
+/** "overview" is the Phase 8 widget grid; the other three predate it. */
+export type DashboardView = "overview" | "monitor" | "plan" | "wealth";
 
-export function resolveDashboardView({
-  view,
-  tab,
-}: {
-  view?: string;
-  tab?: string;
-}): DashboardView {
-  if (view === "monitor" || view === "plan" || view === "wealth") {
-    return view;
+const VIEWS: readonly DashboardView[] = ["overview", "monitor", "plan", "wealth"];
+
+/**
+ * `defaultView` stays "monitor" so existing callers and bookmarked URLs behave
+ * exactly as before. The dashboard passes "overview" only when the
+ * `dashboardWidgets` flag is on, which is what makes the grid the landing view
+ * without changing anyone's default mid-release.
+ */
+export function resolveDashboardView(
+  {
+    view,
+    tab,
+  }: {
+    view?: string;
+    tab?: string;
+  },
+  defaultView: DashboardView = "monitor",
+): DashboardView {
+  if (VIEWS.includes(view as DashboardView)) {
+    return view as DashboardView;
   }
   if (tab === "breakdowns" || tab === "cashflow") {
     return "wealth";
   }
-  return "monitor";
+  return defaultView;
 }
 
 export function dashboardHref({
@@ -30,3 +42,9 @@ export function dashboardHref({
   if (month) params.set("month", month);
   return `/dashboard?${params.toString()}`;
 }
+
+/** Toolbar tab order. Overview only appears once the Phase 8 flag is on. */
+export const DASHBOARD_VIEW_TABS: Record<"withOverview" | "legacy", readonly DashboardView[]> = {
+  withOverview: ["overview", "monitor", "plan", "wealth"],
+  legacy: ["monitor", "plan", "wealth"],
+};

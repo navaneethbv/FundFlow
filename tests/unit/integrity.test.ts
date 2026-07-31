@@ -67,4 +67,14 @@ describe("runIntegrityChecks", () => {
       expect.objectContaining({ check: "stale-pending", count: 1 }),
     ]);
   });
+
+  it("never flags a manual transaction (null accountId) as an orphan", () => {
+    const findings = runIntegrityChecks({
+      nowMs: NOW,
+      syncJobs: [],
+      transactions: [{ id: "t1", accountId: null, plaidTransactionId: "manual-abc" }],
+      accountIds: ["a1"],
+    });
+    expect(findings.map((f) => f.check)).not.toContain("orphan-transaction");
+  });
 });

@@ -1,7 +1,6 @@
 import AppShell from "@/components/shell/AppShell";
 import AutoRefresh from "@/components/AutoRefresh";
 import EmptyState from "@/components/ui/EmptyState";
-import Tabs from "@/components/ui/Tabs";
 import { Landmark } from "@/components/ui/icons";
 import ConnectBankButton from "@/components/ConnectBankButton";
 import DashboardToolbar from "@/components/dashboard/DashboardToolbar";
@@ -11,6 +10,9 @@ import PlanView from "@/components/dashboard/PlanView";
 import PriorityRail from "@/components/dashboard/PriorityRail";
 import WealthView from "@/components/dashboard/WealthView";
 import { resolveDashboardView } from "@/components/dashboard/dashboard-view";
+import OverviewView from "@/components/dashboard/OverviewView";
+import DashboardViewTabs from "@/components/dashboard/DashboardViewTabs";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 import { computeNetWorth, computeSavingsRate } from "@/components/dashboard/metrics";
 import { getRecentTransactions } from "@/lib/recent-transactions";
 import { getDashboardData } from "@/lib/dashboard";
@@ -50,7 +52,10 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
   const selectedAccountId = params.accountId;
   const selectedMonth = params.month;
   const selectedItemId = params.itemId;
-  const activeView = resolveDashboardView(params);
+  // The grid is the landing view only when the flag is on; existing bookmarks
+  // to ?view=monitor|plan|wealth keep resolving exactly as before.
+  const widgetsEnabled = isFeatureEnabled("dashboardWidgets");
+  const activeView = resolveDashboardView(params, widgetsEnabled ? "overview" : "monitor");
   const drillQuery = {
     category: params.category,
     sub: params.sub,
@@ -164,17 +169,17 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
             lastSyncAgoMinutes={data.lastSyncAgoMinutes}
             extraParams={extraParams}
           />
-          <Tabs
-            items={(["monitor", "plan", "wealth"] as const).map((view) => ({
-              label: view[0]!.toUpperCase() + view.slice(1),
-              href: dashboardUrl({
+          <DashboardViewTabs
+            activeView={activeView}
+            withOverview={widgetsEnabled}
+            hrefFor={(view) =>
+              dashboardUrl({
                 view,
                 accountId: selectedAccountId,
                 month: selectedMonth,
                 ...extraParams,
-              }),
-              active: activeView === view,
-            }))}
+              })
+            }
           />
 
           {hasHousehold && (
@@ -198,6 +203,18 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
             anomalyCount={data.spendingAnomalies.length}
           />
 
+          {activeView === "overview" && (
+            <OverviewView
+              prefsRaw={profileRow?.dashboard_prefs}
+              data={data}
+              goals={goals}
+              recent={recentTransactions}
+              accountNames={accountNames}
+              userId={user?.id ?? ""}
+              household={dashboardScope === "household"}
+              month={data.selectedMonth}
+            />
+          )}
           {activeView === "monitor" && (
             <MonitorView
               data={data}

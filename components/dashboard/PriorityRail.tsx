@@ -22,13 +22,13 @@ export type PrioritySignal = {
 
 function buildBudgetSignal(budgetCount: number, budgetRiskCount: number): PrioritySignal {
   if (budgetCount === 0) {
-    return { label: "Budgets not set", tone: "neutral", href: "/settings#budgets" };
+    return { label: "Budgets not set", tone: "neutral", href: "/settings?section=categories" };
   }
   if (budgetRiskCount > 0) {
     return {
       label: `${budgetRiskCount} budget${budgetRiskCount === 1 ? "" : "s"} need attention`,
       tone: "warning",
-      href: "/settings#budgets",
+      href: "/settings?section=categories",
     };
   }
   return { label: "Budgets on track", tone: "neutral" };
