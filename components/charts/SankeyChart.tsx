@@ -38,15 +38,15 @@ import {
  */
 const VIEW_WIDTH = 1280;
 /** Floor, not the height: the canvas grows with the busiest column. */
-const MIN_VIEW_HEIGHT = 460;
-const NODE_WIDTH = 14;
-const NODE_PADDING = 10;
-const MARGIN_X = 10;
+const MIN_VIEW_HEIGHT = 520;
+const NODE_WIDTH = 18;
+const NODE_PADDING = 14;
+const MARGIN_X = 24;
 /** Headroom for the hub label, which sits above its bar. */
-const MARGIN_TOP = 18;
-const LABEL_GAP = 6;
+const MARGIN_TOP = 28;
+const LABEL_GAP = 8;
 /** Names are short Title Case now, so this rarely bites. */
-const MAX_LABEL_CHARS = 26;
+const MAX_LABEL_CHARS = 22;
 /** Per column, so no column outgrows the canvas. */
 const DEFAULT_MAX_NODES_PER_COLUMN = 20;
 const SOURCE_COLUMN = 0;
