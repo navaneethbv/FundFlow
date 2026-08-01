@@ -70,6 +70,16 @@ Key modules in `lib/`:
   both modes (dataviz-skill validator). Rules baked in: fixed slot order,
   never generate a 7th+ hue (fold into "Other" via `foldTail`), legend for ≥2
   series, every chart ships a table twin, text never wears series color.
+  The six-slot cap is a measured limit, not a style preference: re-run
+  `scripts/validate_palette.js` from the dataviz skill before proposing a
+  seventh. A 12-hue set fails at ΔE 0.4 under deuteranopia (identical colors)
+  and 6.7 under **normal** vision; even an evenly spaced 7-hue set fails
+  all-pairs. Only the shipped six clear it, and only because their lightness
+  varies. Note the shipped **dark** palette passes `--pairs adjacent` but
+  **fails `--pairs all`**: dark `--viz-5` violet and `--viz-1` blue are ΔE 1.9
+  apart under protanopia. Charts where any two series can sit side by side
+  (scatter, bubble, Sankey ribbons) must therefore not rely on dark-mode hue
+  alone — see `docs/TODO.md`.
 - `dashboard-widgets.ts` — Phase 8 widget registry and prefs. Layout lives in
   the existing client-writable `profiles.dashboard_prefs` JSON (no migration),
   shared with `sidebarCollapsed` and the legacy hide flags — so every writer
@@ -92,6 +102,12 @@ Key modules in `lib/`:
   floored even though node heights are — floor a ribbon and the ones arriving at
   a node sum to more than the node. `foldSankeyOverflow` caps a column and
   rewrites its edges; the chart's table twin keeps the unfolded detail.
+  `sankeyCanvasHeight` sizes the canvas to the busiest column — a fixed height
+  crushes every node toward `MIN_SANKEY_NODE_HEIGHT` and smears the labels
+  while still rendering, so nothing announces the failure. In `SankeyChart`,
+  color encodes the **spending group** and a category inherits its parent's
+  hue; sources/hub label to the right and groups/categories to the left, since
+  labelling both sides toward the middle is what made columns 2 and 3 collide.
 - `reports.ts` — Phase 6 aggregation: `buildCashFlowSankeyData` (transfers
   excluded, so refunds and card payments cannot double-count; "Net Income" on a
   surplus, "Unfunded Spending" on a deficit, link values always non-negative),

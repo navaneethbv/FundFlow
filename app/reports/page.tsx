@@ -192,6 +192,7 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
                 nodes={sankey.nodes}
                 links={sankey.links}
                 title={`Cash flow ${filters.start} to ${filters.end}`}
+                currency={currencyLabel}
               />
             ) : (
               <BreakdownBars

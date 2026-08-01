@@ -269,19 +269,44 @@ describe("SankeyChart", () => {
     expect(html).toContain("<rect");
   });
 
-  it("colours by stage using viz tokens, never a hard-coded hex", () => {
+  it("colours by group using viz tokens, never a hard-coded hex", () => {
     expect(html).toContain("var(--viz-1)");
     expect(html).toContain("var(--viz-2)");
-    expect(html).toContain("var(--viz-3)");
+    // Surplus is an outcome, not a spending group, so it takes the diverging
+    // pole the rest of the app already uses for money kept.
+    expect(html).toContain("var(--viz-pos)");
     expect(html).not.toMatch(/fill="#[0-9a-f]{3,6}"/i);
   });
 
-  it("has an accessible name, tooltips, a stage legend, and a table twin", () => {
+  it("gives a category its parent group's colour", () => {
+    // "Rent" the group and "Monthly rent" the category are one family; a
+    // category that picked its own hue would read as unrelated to its parent.
+    const groupFill = /<rect[^>]*><title>Rent: /.exec(html);
+    const categoryFill = /<rect[^>]*><title>Monthly rent: /.exec(html);
+    const hueOf = (match: RegExpExecArray | null) =>
+      /fill="(var\(--viz-[^)]*\))"/.exec(match?.[0] ?? "")?.[1];
+
+    expect(hueOf(groupFill)).toBeDefined();
+    expect(hueOf(categoryFill)).toBe(hueOf(groupFill));
+  });
+
+  it("has an accessible name, tooltips, and a table twin", () => {
     expect(html).toContain("July cash flow");
     expect(html).toContain("<title>");
-    expect(html).toContain("Sources");
-    expect(html).toContain("Categories");
     expect(html).toContain("View data table");
+  });
+
+  it("drops the stage legend now that colour no longer encodes the column", () => {
+    expect(html).not.toContain("Sources");
+    expect(html).not.toContain("Stage ");
+  });
+
+  it("labels amounts with a share of total money in, and keeps the blur hook", () => {
+    // Rent is 1200 of the 4000 that came in.
+    expect(html).toContain("$1,200.00 (30.0%)");
+    // Money rendered without these hooks escapes the privacy blur.
+    expect(html).toContain('class="money"');
+    expect(html).toContain("data-money");
   });
 
   it("labels every flow in the table using node labels, not raw ids", () => {

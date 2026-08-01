@@ -1,7 +1,9 @@
-import { compactCurrency } from "@/lib/chart-utils";
+import { formatCurrency } from "@/lib/format";
 import {
   foldSankeyOverflow,
   layoutSankey,
+  sankeyCanvasHeight,
+  MIN_LABELLED_NODE_HEIGHT,
   type SankeyLink,
   type SankeyNode,
 } from "@/lib/sankey";
@@ -11,34 +13,65 @@ import {
  * every other component in `components/charts/`, which is what keeps the
  * nonce-based CSP in `proxy.ts` free of exceptions.
  *
- * Colour encodes the *stage* (which column a node sits in), not the individual
- * category: a flow diagram with one hue per category would blow straight past
- * the six-slot categorical palette the moment a user has seven spending groups.
- * Identity is carried by the visible labels and the table twin instead, so
- * colour never works alone.
+ * Colour encodes the **spending group**, and a category inherits its parent
+ * group's hue, so a column reads as related families rather than as a stack of
+ * unrelated bars. This reverses the earlier rule (colour by column) but it does
+ * not raise the hue count: the categorical palette is still the six validated
+ * `--viz-*` slots, assigned to the six largest groups. Groups past the sixth
+ * render in a neutral rather than in a seventh generated hue, because a
+ * seventh hue cannot be told from the others under protanopia — measured, not
+ * assumed. Identity therefore never rests on colour alone: every node is
+ * labelled, and the table twin repeats every figure.
  *
  * Below 768px the SVG is replaced by the table rather than squeezed: a Sankey
  * at phone width is unreadable, and `hidden`/`md:hidden` means exactly one of
  * the two is in the accessibility tree at any viewport.
  */
 
-const VIEW_WIDTH = 960;
-const VIEW_HEIGHT = 420;
+/**
+ * Wide on purpose. Labels sit in the gaps *between* columns (sources read
+ * rightward, groups and categories leftward), so the gaps — not the outer
+ * edges — are what has to fit text. Narrowing this crowds the labels back
+ * into each other.
+ */
+const VIEW_WIDTH = 1240;
+/** Floor, not the height: the canvas grows with the busiest column. */
+const MIN_VIEW_HEIGHT = 420;
 const NODE_WIDTH = 12;
 const NODE_PADDING = 10;
 const MARGIN_X = 6;
+/** Headroom for the hub label, which sits above its bar. */
+const MARGIN_TOP = 18;
 const LABEL_GAP = 6;
-/** Longer labels are truncated in the SVG; full text lives in title + table. */
-const MAX_LABEL_CHARS = 22;
-/** Per column, so no column can outgrow the palette or the canvas. */
-const DEFAULT_MAX_NODES_PER_COLUMN = 8;
+/** Names are short Title Case now, so this rarely bites. */
+const MAX_LABEL_CHARS = 26;
+/** Per column, so no column outgrows the canvas. */
+const DEFAULT_MAX_NODES_PER_COLUMN = 20;
+/** How many groups can carry a categorical hue. See the header note. */
+const COLOURED_GROUP_SLOTS = 6;
 
-const DEFAULT_COLUMN_LABELS = ["Sources", "Total", "Groups", "Categories"];
+const SOURCE_COLUMN = 0;
+const HUB_COLUMN = 1;
+const GROUP_COLUMN = 2;
 
-/** Stage hue. Six slots exist; a graph with more columns wraps rather than
- *  inventing a seventh hue. */
-function slotForColumn(column: number): number {
-  return (column % 6) + 1;
+/** Terminal nodes that mean surplus and shortfall, not a spending group. */
+const NET_INCOME_ID = "grp:__net__";
+const UNFUNDED_ID = "src:__unfunded__";
+
+/**
+ * Groups past the palette, and the folded tail, share this. It is a text-ink
+ * grey rather than the lighter `--viz-axis`: at the 0.35 ribbon opacity an
+ * axis-weight grey washes out to nearly the surface colour, which reads as
+ * "no spending here" instead of "no hue left to give this".
+ */
+const NEUTRAL = "var(--viz-ink-2)";
+
+/**
+ * Node ids carry `:` and `::` separators, which cannot go straight into a
+ * `url(#…)` reference, so gradients are keyed by position instead.
+ */
+function gradientId(index: number): string {
+  return `sankey-flow-${index}`;
 }
 
 function truncate(value: string): string {
@@ -47,14 +80,56 @@ function truncate(value: string): string {
     : value;
 }
 
+/**
+ * Node id → fill. Built once so the ribbons and the rectangles cannot disagree
+ * about what colour a node is.
+ *
+ * A category has no colour of its own: it looks up the group that feeds it, so
+ * "Rent" is always the same hue as "Rent And Utilities" whatever else changes.
+ */
+function buildColours(
+  nodes: SankeyNode[],
+  links: SankeyLink[],
+): Map<string, string> {
+  const colours = new Map<string, string>();
+
+  for (const node of nodes) {
+    if (node.column === SOURCE_COLUMN) colours.set(node.id, "var(--viz-1)");
+    if (node.column === HUB_COLUMN) colours.set(node.id, "var(--viz-2)");
+  }
+  // Surplus and shortfall are outcomes, not categories, so they take the
+  // diverging poles the rest of the app already uses for the same meaning.
+  colours.set(NET_INCOME_ID, "var(--viz-pos)");
+  colours.set(UNFUNDED_ID, "var(--viz-neg)");
+
+  const groups = nodes
+    .filter((node) => node.column === GROUP_COLUMN && node.id !== NET_INCOME_ID)
+    .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
+
+  groups.forEach((group, index) => {
+    colours.set(
+      group.id,
+      index < COLOURED_GROUP_SLOTS ? `var(--viz-${index + 1})` : NEUTRAL,
+    );
+  });
+
+  // Categories inherit from whichever node feeds them.
+  for (const link of links) {
+    if (colours.has(link.target)) continue;
+    const parent = colours.get(link.source);
+    if (parent) colours.set(link.target, parent);
+  }
+
+  return colours;
+}
+
 export interface SankeyChartProps {
   nodes: SankeyNode[];
   links: SankeyLink[];
   /** Used for the SVG's accessible name. */
   title: string;
-  valueFormatter?: (value: number) => string;
-  /** Stage names, shown in the legend. Defaults to the cash-flow stages. */
-  columnLabels?: string[];
+  /** ISO code, or `UNKNOWN_CURRENCY` for a bare number. */
+  currency?: string;
   maxNodesPerColumn?: number;
 }
 
@@ -62,66 +137,120 @@ export default function SankeyChart({
   nodes,
   links,
   title,
-  valueFormatter = compactCurrency,
-  columnLabels = DEFAULT_COLUMN_LABELS,
+  currency = "USD",
   maxNodesPerColumn = DEFAULT_MAX_NODES_PER_COLUMN,
 }: Readonly<SankeyChartProps>) {
   if (nodes.length === 0 || links.length === 0) {
     return <p className="py-4 text-sm opacity-60">No data yet.</p>;
   }
 
+  const money = (value: number): string => formatCurrency(value, currency);
+
   // The chart folds; the table below keeps every original row.
   const folded = foldSankeyOverflow(nodes, links, maxNodesPerColumn);
+  const viewHeight = sankeyCanvasHeight(
+    folded.nodes,
+    NODE_PADDING,
+    MIN_VIEW_HEIGHT,
+  );
   const layout = layoutSankey(
     folded.nodes,
     folded.links,
     VIEW_WIDTH - MARGIN_X * 2,
-    VIEW_HEIGHT,
+    viewHeight,
     NODE_WIDTH,
     NODE_PADDING,
   );
 
-  const lastColumn = Math.max(...folded.nodes.map((node) => node.column));
+  const colours = buildColours(folded.nodes, folded.links);
   const labelById = new Map(nodes.map((node) => [node.id, node.label]));
-  const positionedById = new Map(layout.nodes.map((node) => [node.id, node]));
-  const usedColumns = [...new Set(folded.nodes.map((node) => node.column))].sort(
-    (a, b) => a - b,
-  );
+
+  // Every percentage is a share of total money in, so any two ribbons anywhere
+  // in the diagram compare directly. A per-column basis would make the same
+  // ribbon read as two different percentages at its two ends.
+  const totalIn = folded.nodes
+    .filter((node) => node.column === HUB_COLUMN)
+    .reduce((sum, node) => sum + node.value, 0);
+  const share = (value: number): string =>
+    totalIn > 0 ? ` (${((value / totalIn) * 100).toFixed(1)}%)` : "";
 
   return (
     <div>
       <div className="hidden md:block">
         <svg
-          viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
+          viewBox={`0 0 ${VIEW_WIDTH} ${viewHeight + MARGIN_TOP}`}
           className="h-auto w-full"
           role="img"
           aria-label={`${title}. Flow diagram; the data table below carries the same figures.`}
         >
-          <g transform={`translate(${MARGIN_X} 0)`}>
+          <defs>
+            {/* A ribbon fades from its source's hue to its target's, which is
+                what makes a flow read as travelling rather than as a static
+                band sitting between two bars. */}
+            {layout.links.map((link, index) => (
+              <linearGradient
+                key={`${link.source}->${link.target}`}
+                id={gradientId(index)}
+                x1="0"
+                x2="1"
+                y1="0"
+                y2="0"
+              >
+                <stop
+                  offset="0%"
+                  stopColor={colours.get(link.source) ?? NEUTRAL}
+                />
+                <stop
+                  offset="100%"
+                  stopColor={colours.get(link.target) ?? NEUTRAL}
+                />
+              </linearGradient>
+            ))}
+          </defs>
+
+          <g transform={`translate(${MARGIN_X} ${MARGIN_TOP})`}>
             {/* Ribbons first so node rectangles and labels sit on top. */}
-            {layout.links.map((link) => {
-              const source = positionedById.get(link.source);
+            {layout.links.map((link, index) => {
               const sourceLabel = labelById.get(link.source) ?? link.source;
               const targetLabel = labelById.get(link.target) ?? link.target;
               return (
                 <path
                   key={`${link.source}->${link.target}`}
                   d={link.path}
-                  fill={`var(--viz-${slotForColumn(source?.column ?? 0)})`}
-                  fillOpacity={0.32}
+                  fill={`url(#${gradientId(index)})`}
+                  fillOpacity={0.35}
                 >
                   <title>
-                    {`${sourceLabel} to ${targetLabel}: ${valueFormatter(link.value)}`}
+                    {`${sourceLabel} to ${targetLabel}: ${money(link.value)}`}
                   </title>
                 </path>
               );
             })}
 
             {layout.nodes.map((node) => {
-              const isLast = node.column === lastColumn;
-              const labelX = isLast
-                ? node.x - LABEL_GAP
-                : node.x + NODE_WIDTH + LABEL_GAP;
+              // Sources read rightward into the ribbon they feed; groups and
+              // categories read leftward. Labelling both sides toward the same
+              // gap is what made columns 2 and 3 collide.
+              const labelsLeft = node.column >= GROUP_COLUMN;
+              // The hub is the exception: it is one full-height bar with the
+              // source labels in the gap to its left and the group labels in
+              // the gap to its right, so either side would collide. It sits
+              // above its own bar instead, where nothing else ever is.
+              const isHub = node.column === HUB_COLUMN;
+              // Too thin to carry text without overrunning its neighbour: the
+              // `<title>` and the table twin still name it.
+              const labelled = node.height >= MIN_LABELLED_NODE_HEIGHT;
+
+              let labelX = node.x + NODE_WIDTH + LABEL_GAP;
+              let anchor: "start" | "middle" | "end" = "start";
+              if (labelsLeft) {
+                labelX = node.x - LABEL_GAP;
+                anchor = "end";
+              } else if (isHub) {
+                labelX = node.x + NODE_WIDTH / 2;
+                anchor = "middle";
+              }
+
               return (
                 <g key={node.id}>
                   <rect
@@ -130,47 +259,41 @@ export default function SankeyChart({
                     width={NODE_WIDTH}
                     height={node.height}
                     rx={2}
-                    fill={`var(--viz-${slotForColumn(node.column)})`}
+                    fill={colours.get(node.id) ?? NEUTRAL}
                   >
-                    <title>{`${node.label}: ${valueFormatter(node.value)}`}</title>
+                    <title>{`${node.label}: ${money(node.value)}`}</title>
                   </rect>
-                  {/* A halo keeps labels legible where they cross a ribbon,
-                      without the text ever wearing a series colour. */}
-                  <text
-                    x={labelX}
-                    y={node.y + node.height / 2}
-                    dominantBaseline="middle"
-                    textAnchor={isLast ? "end" : "start"}
-                    fontSize={11}
-                    fill="var(--viz-ink)"
-                    stroke="var(--panel)"
-                    strokeWidth={3}
-                    paintOrder="stroke"
-                  >
-                    {truncate(node.label)}
-                    <tspan className="money" fill="var(--viz-muted)" dx={5} fontSize={10}>
-                      {valueFormatter(node.value)}
-                    </tspan>
-                  </text>
+                  {labelled && (
+                    /* A halo keeps labels legible where they cross a ribbon,
+                       without the text ever wearing a series colour. */
+                    <text
+                      x={labelX}
+                      y={isHub ? node.y - LABEL_GAP : node.y + node.height / 2}
+                      dominantBaseline={isHub ? "auto" : "middle"}
+                      textAnchor={anchor}
+                      fontSize={11}
+                      fill="var(--viz-ink)"
+                      stroke="var(--panel)"
+                      strokeWidth={3}
+                      paintOrder="stroke"
+                    >
+                      {truncate(node.label)}
+                      <tspan
+                        className="money"
+                        data-money
+                        fill="var(--viz-muted)"
+                        dx={5}
+                        fontSize={10}
+                      >
+                        {`${money(node.value)}${share(node.value)}`}
+                      </tspan>
+                    </text>
+                  )}
                 </g>
               );
             })}
           </g>
         </svg>
-
-        <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-          {usedColumns.map((column) => (
-            <li key={column} className="flex items-center gap-1.5">
-              <span
-                className="inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full"
-                style={{ background: `var(--viz-${slotForColumn(column)})` }}
-              />
-              <span style={{ color: "var(--viz-ink-2)" }}>
-                {columnLabels[column] ?? `Stage ${column + 1}`}
-              </span>
-            </li>
-          ))}
-        </ul>
 
         <details className="mt-1">
           <summary
@@ -179,11 +302,7 @@ export default function SankeyChart({
           >
             View data table
           </summary>
-          <FlowTable
-            links={links}
-            labelById={labelById}
-            valueFormatter={valueFormatter}
-          />
+          <FlowTable links={links} labelById={labelById} money={money} />
         </details>
       </div>
 
@@ -193,11 +312,7 @@ export default function SankeyChart({
         <p className="mt-1 text-xs text-muted">
           Shown as a table on small screens.
         </p>
-        <FlowTable
-          links={links}
-          labelById={labelById}
-          valueFormatter={valueFormatter}
-        />
+        <FlowTable links={links} labelById={labelById} money={money} />
       </div>
     </div>
   );
@@ -207,11 +322,11 @@ export default function SankeyChart({
 function FlowTable({
   links,
   labelById,
-  valueFormatter,
+  money,
 }: Readonly<{
   links: SankeyLink[];
   labelById: Map<string, string>;
-  valueFormatter: (value: number) => string;
+  money: (value: number) => string;
 }>) {
   return (
     <table className="mt-2 w-full text-xs">
@@ -233,7 +348,7 @@ function FlowTable({
           >
             <td className="py-1 pr-2">{labelById.get(link.source) ?? link.source}</td>
             <td className="py-1 pr-2">{labelById.get(link.target) ?? link.target}</td>
-            <td data-money className="py-1 pr-2 text-right">{valueFormatter(link.value)}</td>
+            <td data-money className="py-1 pr-2 text-right">{money(link.value)}</td>
           </tr>
         ))}
       </tbody>

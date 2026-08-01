@@ -110,7 +110,7 @@ describe("buildCashFlowSankeyData with income above spending", () => {
   });
 
   it("splits each expense group into its categories", () => {
-    const rent = nodes.find((node) => node.label === "RENT_AND_UTILITIES")!;
+    const rent = nodes.find((node) => node.label === "Rent And Utilities")!;
     const outOfRent = linkTotal(links, (link) => link.source === rent.id);
     expect(outOfRent).toBeCloseTo(1200);
     expect(nodes.filter((node) => node.column === 3)).toHaveLength(2);
@@ -200,7 +200,7 @@ describe("buildCashFlowSankeyData exclusions", () => {
       expense(100, "GENERAL_MERCHANDISE", "Household"),
     ];
     const { nodes, links } = buildCashFlowSankeyData(rows);
-    const group = nodes.find((node) => node.label === "GENERAL_MERCHANDISE")!;
+    const group = nodes.find((node) => node.label === "General Merchandise")!;
 
     expect(group.value).toBeCloseTo(300);
     expect(linkTotal(links, (link) => link.source === group.id)).toBeCloseTo(300);
@@ -257,11 +257,45 @@ describe("buildCashFlowSankeyData exclusions", () => {
       expense(400, "A_GROUP", "A_CAT"),
     ]);
     const sources = nodes.filter((node) => node.column === 0);
-    expect(sources.map((node) => node.label)).toEqual(["BIG", "SMALL"]);
+    expect(sources.map((node) => node.label)).toEqual(["Big", "Small"]);
     const groups = nodes
       .filter((node) => node.column === 2 && node.label !== "Net Income")
       .map((node) => node.label);
-    expect(groups).toEqual(["A_GROUP", "B_GROUP"]);
+    expect(groups).toEqual(["A Group", "B Group"]);
+  });
+
+  it("renders Plaid keys as readable names, not raw enums", () => {
+    const { nodes } = buildCashFlowSankeyData([
+      income(1000, "INCOME_SALARY"),
+      expense(300, "RENT_AND_UTILITIES", "RENT_AND_UTILITIES_RENT"),
+    ]);
+    const labels = nodes.map((node) => node.label);
+
+    // The category sheds its parent's prefix; the group keeps its own name.
+    expect(labels).toContain("Salary");
+    expect(labels).toContain("Rent And Utilities");
+    expect(labels).toContain("Rent");
+    expect(labels.some((text) => text.includes("_"))).toBe(false);
+  });
+
+  it("keeps two groups' same-named categories as separate nodes", () => {
+    // Every Plaid group has its own `_OTHER`, and all of them render "Other".
+    // Keying totals by display name instead of raw key would merge these into
+    // one node worth 500 - a wrong number that still draws cleanly.
+    const { nodes } = buildCashFlowSankeyData([
+      income(2000, "INCOME_WAGES"),
+      expense(200, "TRAVEL", "TRAVEL_OTHER"),
+      expense(300, "GENERAL_SERVICES", "GENERAL_SERVICES_OTHER"),
+    ]);
+    const others = nodes.filter(
+      (node) => node.column === 3 && node.label === "Other",
+    );
+
+    expect(others).toHaveLength(2);
+    expect(others.map((node) => node.value).sort((a, b) => a - b)).toEqual([
+      200, 300,
+    ]);
+    expect(new Set(others.map((node) => node.id)).size).toBe(2);
   });
 });
 

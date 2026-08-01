@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   foldSankeyOverflow,
   layoutSankey,
+  sankeyCanvasHeight,
+  MIN_LABELLED_NODE_HEIGHT,
   MIN_SANKEY_NODE_HEIGHT,
   type SankeyLink,
   type SankeyNode,
@@ -366,5 +368,55 @@ describe("foldSankeyOverflow", () => {
     const targets = result.nodes.filter((node) => node.column === 1);
     const targetHeight = targets.reduce((sum, node) => sum + node.height, 0);
     expect(targetHeight).toBeCloseTo(hub.height, 1);
+  });
+});
+
+describe("sankeyCanvasHeight", () => {
+  function column(count: number, col: number): SankeyNode[] {
+    return Array.from({ length: count }, (_, i) => ({
+      id: `${col}-${i}`,
+      label: `N${i}`,
+      value: 10,
+      column: col,
+    }));
+  }
+
+  it("returns the floor when every column is small", () => {
+    expect(sankeyCanvasHeight(column(3, 0), 10, 420)).toBe(420);
+  });
+
+  it("returns the floor for an empty graph", () => {
+    expect(sankeyCanvasHeight([], 10, 420)).toBe(420);
+  });
+
+  it("grows past the floor once a column would be crushed", () => {
+    // 25 nodes cannot breathe in 420px: at the old fixed height every one of
+    // them collapses toward MIN_SANKEY_NODE_HEIGHT and the labels smear.
+    const tall = sankeyCanvasHeight(column(25, 0), 10, 420);
+    expect(tall).toBeGreaterThan(420);
+  });
+
+  it("sizes to the busiest column, not the node total", () => {
+    const spread = [...column(4, 0), ...column(4, 1), ...column(4, 2)];
+    const single = column(4, 0);
+    expect(sankeyCanvasHeight(spread, 10, 100)).toBe(
+      sankeyCanvasHeight(single, 10, 100),
+    );
+  });
+
+  it("gives every node room for a label at the height it returns", () => {
+    const count = 30;
+    const height = sankeyCanvasHeight(column(count, 0), NODE_PADDING, 420);
+    const result = layoutSankey(
+      column(count, 0),
+      [],
+      WIDTH,
+      height,
+      NODE_WIDTH,
+      NODE_PADDING,
+    );
+    for (const node of result.nodes) {
+      expect(node.height).toBeGreaterThanOrEqual(MIN_LABELLED_NODE_HEIGHT);
+    }
   });
 });
