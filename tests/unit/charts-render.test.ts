@@ -301,6 +301,43 @@ describe("SankeyChart", () => {
     expect(html).not.toContain("Stage ");
   });
 
+  it("spends all seven validated slots, then falls back to a neutral", () => {
+    // Eight groups. Seven is the measured ceiling for the categorical palette
+    // (an eighth hue drops CVD separation to deltaE 2.4), so the eighth group
+    // must take the neutral rather than a generated `--viz-8`.
+    const many = [
+      { id: "src:w", label: "Wages", value: 800, column: 0 },
+      { id: "hub", label: "Income", value: 800, column: 1 },
+      ...Array.from({ length: 8 }, (_, i) => ({
+        id: `grp:g${i}`,
+        label: `Group ${i}`,
+        value: 100 - i,
+        column: 2,
+      })),
+    ];
+    const manyLinks = [
+      { source: "src:w", target: "hub", value: 800 },
+      ...Array.from({ length: 8 }, (_, i) => ({
+        source: "hub",
+        target: `grp:g${i}`,
+        value: 100 - i,
+      })),
+    ];
+    const rendered = renderToStaticMarkup(
+      createElement(SankeyChart, {
+        nodes: many,
+        links: manyLinks,
+        title: "Eight groups",
+      }),
+    );
+
+    for (let slot = 1; slot <= 7; slot += 1) {
+      expect(rendered).toContain(`var(--viz-${slot})`);
+    }
+    expect(rendered).not.toContain("var(--viz-8)");
+    expect(rendered).toContain("var(--viz-ink-2)");
+  });
+
   it("labels amounts with a share of total money in, and keeps the blur hook", () => {
     // Rent is 1200 of the 4000 that came in.
     expect(html).toContain("$1,200.00 (30.0%)");

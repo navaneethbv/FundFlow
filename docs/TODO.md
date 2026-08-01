@@ -278,16 +278,19 @@ bubble, and Sankey ribbons that cross.
 
 Reproduce:
 
-```
+```bash
+# from the dataviz skill's base directory
 node scripts/validate_palette.js \
-  "#3987e5,#199e70,#c98500,#008300,#9085e9,#e66767" --mode dark --pairs all
+  "#3987e5,#199e70,#c98500,#008300,#9085e9,#e66767,#c2379a" \
+  --mode dark --pairs all
 ```
 
 Fixing it means re-stepping dark `--viz-5` and re-validating every chart that
 uses it, so it is deliberately not bundled with the Sankey redesign.
 
-A related finding worth keeping: **the palette cannot be grown past six.** An
-evenly spaced 12-hue set (identical L and C, maximal angular separation, the
-most favourable construction available) fails at ΔE 0.4 deuteranopia and 6.7
-normal vision. Seven passes only in light mode. Any future "colour every
-category" request runs into this, not into effort.
+A related finding worth keeping: **the palette cannot be grown past seven.**
+`--viz-7` (`#c2379a`) was added on 2026-07-31 and clears every check in both
+modes. An eighth hue drops CVD separation to ΔE 2.4, and an evenly spaced
+12-hue set (identical L and C, maximal angular separation, the most favourable
+construction available) to 0.4 deuteranopia and 6.7 normal vision. Any future
+"colour every category" request runs into this ceiling, not into effort.

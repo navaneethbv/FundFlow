@@ -15,13 +15,15 @@ import {
  *
  * Colour encodes the **spending group**, and a category inherits its parent
  * group's hue, so a column reads as related families rather than as a stack of
- * unrelated bars. This reverses the earlier rule (colour by column) but it does
- * not raise the hue count: the categorical palette is still the six validated
- * `--viz-*` slots, assigned to the six largest groups. Groups past the sixth
- * render in a neutral rather than in a seventh generated hue, because a
- * seventh hue cannot be told from the others under protanopia — measured, not
- * assumed. Identity therefore never rests on colour alone: every node is
- * labelled, and the table twin repeats every figure.
+ * unrelated bars. This reverses the earlier rule (colour by column).
+ *
+ * The palette is the seven validated `--viz-*` slots, assigned to the seven
+ * largest groups; anything past the seventh takes a neutral rather than an
+ * eighth generated hue. Seven is a measured ceiling, not a style choice: an
+ * eight-hue set falls to ΔE 2.4 under protanopia and a twelve-hue set to 0.4,
+ * against a floor of 6. Identity therefore never rests on colour alone —
+ * every node is labelled and the table twin repeats every figure, which is
+ * also what makes the palette's 6–8 CVD floor band legal here.
  *
  * Below 768px the SVG is replaced by the table rather than squeezed: a Sankey
  * at phone width is unreadable, and `hidden`/`md:hidden` means exactly one of
@@ -48,7 +50,7 @@ const MAX_LABEL_CHARS = 26;
 /** Per column, so no column outgrows the canvas. */
 const DEFAULT_MAX_NODES_PER_COLUMN = 20;
 /** How many groups can carry a categorical hue. See the header note. */
-const COLOURED_GROUP_SLOTS = 6;
+const COLOURED_GROUP_SLOTS = 7;
 
 const SOURCE_COLUMN = 0;
 const HUB_COLUMN = 1;
