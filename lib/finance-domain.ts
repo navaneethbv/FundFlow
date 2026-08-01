@@ -12,8 +12,21 @@ import { validateSplits, type TransactionSplit } from "@/lib/transaction-quality
  * Sign convention follows Plaid throughout: positive = money out.
  */
 
-/** Categories that are cash movement, not spending or earning. */
-export const TRANSFER_GROUPS = new Set(["TRANSFER_IN", "TRANSFER_OUT", "LOAN_PAYMENTS"]);
+/**
+ * Categories that are cash movement, not spending or earning.
+ *
+ * `LOAN_DISBURSEMENTS` belongs here for the same reason `LOAN_PAYMENTS` does,
+ * and the two must stay together: excluding the repayment while counting the
+ * draw as income reports borrowed money as earnings and then hides the
+ * repayment that cancels it, which inflates income, net, and savings rate
+ * everywhere at once.
+ */
+export const TRANSFER_GROUPS = new Set([
+  "TRANSFER_IN",
+  "TRANSFER_OUT",
+  "LOAN_PAYMENTS",
+  "LOAN_DISBURSEMENTS",
+]);
 
 export const UNCATEGORIZED = "UNCATEGORIZED";
 

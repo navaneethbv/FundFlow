@@ -262,3 +262,35 @@ Still open, all needing credentials or an owner decision rather than code:
   (2026-07-23): `docker-compose.selfhost.yml`.
 - **Audit MFA enrollment** server-side — promoted to the must-have list above
   (item 7).
+
+## Dark-mode categorical palette fails all-pairs CVD (found 2026-07-31)
+
+The shipped dark `--viz-*` palette was validated with the dataviz validator's
+default `--pairs adjacent`, which only compares neighbouring slots. Under
+`--pairs all` it fails: dark `--viz-5` (`#9085e9` violet) and `--viz-1`
+(`#3987e5` blue) are **ΔE 1.9 apart under protanopia** and 9.8 under normal
+vision, against a floor of 6 and 15 respectively.
+
+Adjacent-pairs is the correct check for stacked bars and lines, where only
+neighbours touch, so the existing charts are not wrong. It is the wrong check
+for any chart where two arbitrary series can sit side by side — scatter,
+bubble, and Sankey ribbons that cross.
+
+Reproduce:
+
+```bash
+# from the dataviz skill's base directory
+node scripts/validate_palette.js \
+  "#3987e5,#199e70,#c98500,#008300,#9085e9,#e66767,#c2379a" \
+  --mode dark --pairs all
+```
+
+Fixing it means re-stepping dark `--viz-5` and re-validating every chart that
+uses it, so it is deliberately not bundled with the Sankey redesign.
+
+A related finding worth keeping: **the palette cannot be grown past seven.**
+`--viz-7` (`#c2379a`) was added on 2026-07-31 and clears every check in both
+modes. An eighth hue drops CVD separation to ΔE 2.4, and an evenly spaced
+12-hue set (identical L and C, maximal angular separation, the most favourable
+construction available) to 0.4 deuteranopia and 6.7 normal vision. Any future
+"colour every category" request runs into this ceiling, not into effort.

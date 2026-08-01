@@ -1,6 +1,8 @@
 import { financeTotals, type CanonicalFinanceTransaction } from "@/lib/finance-domain";
 import type { BreakdownDimension } from "@/lib/cash-flow";
 import type { SankeyLink, SankeyNode } from "@/lib/sankey";
+import { subcategoryLabel } from "@/lib/drilldown";
+import { titleCase } from "@/lib/format";
 
 /**
  * Report aggregation over the canonical Phase 0 projection. Pure: no Supabase,
@@ -13,6 +15,9 @@ import type { SankeyLink, SankeyNode } from "@/lib/sankey";
 
 /** The label a blank or uncategorized key is shown as, matching Cash Flow. */
 const UNKNOWN_LABEL = "Unknown";
+
+/** The projection's sentinel for "we do not know". */
+const UNCATEGORIZED_KEY = "UNCATEGORIZED";
 
 const HUB_ID = "hub";
 const UNFUNDED_ID = "src:__unfunded__";
@@ -30,24 +35,73 @@ function round2(value: number): number {
 
 /**
  * Blank keys and the projection's `UNCATEGORIZED` sentinel both mean "we do
- * not know", so they fold into one bucket rather than reading as two
+ * not know", so they normalize to one key rather than reading as two
  * different categories.
  */
-function label(key: string): string {
+function normalizeKey(key: string): string {
   const trimmed = key.trim();
-  if (!trimmed || trimmed.toUpperCase() === "UNCATEGORIZED") return UNKNOWN_LABEL;
-  return trimmed;
+  return !trimmed || trimmed.toUpperCase() === UNCATEGORIZED_KEY
+    ? UNCATEGORIZED_KEY
+    : trimmed;
 }
 
-function addTo(totals: Map<string, number>, key: string, amount: number): void {
-  totals.set(key, (totals.get(key) ?? 0) + amount);
+/**
+ * A group's own display name: `RENT_AND_UTILITIES` -> "Rent And Utilities".
+ */
+function groupDisplay(rawGroupKey: string): string {
+  return rawGroupKey === UNCATEGORIZED_KEY
+    ? UNKNOWN_LABEL
+    : titleCase(rawGroupKey);
 }
 
-/** Value descending, label ascending — deterministic for a given input. */
-function ranked(totals: Map<string, number>): Array<[string, number]> {
+/**
+ * A category's display name, stripped of its parent's prefix:
+ * `RENT_AND_UTILITIES_RENT` inside `RENT_AND_UTILITIES` -> "Rent".
+ */
+function categoryDisplay(rawGroupKey: string, rawCategoryKey: string): string {
+  return rawCategoryKey === UNCATEGORIZED_KEY
+    ? UNKNOWN_LABEL
+    : subcategoryLabel(rawGroupKey, rawCategoryKey);
+}
+
+/**
+ * Totals keyed by the *raw* Plaid key, carrying the display name alongside.
+ *
+ * Keying by display name instead would silently merge two distinct keys that
+ * happen to render alike — every group's own `_OTHER` category collapses to
+ * "Other", so `TRAVEL_OTHER` and `GENERAL_SERVICES_OTHER` would become one
+ * node whose value is the sum of two unrelated things.
+ */
+type LabeledTotals = Map<string, { display: string; amount: number }>;
+
+function addTo(
+  totals: LabeledTotals,
+  key: string,
+  display: string,
+  amount: number,
+): void {
+  const existing = totals.get(key);
+  if (existing) {
+    existing.amount += amount;
+    return;
+  }
+  totals.set(key, { display, amount });
+}
+
+export interface RankedEntry {
+  /** Raw Plaid key; unique, and what node ids are built from. */
+  key: string;
+  /** Human-readable name; may repeat across groups. */
+  display: string;
+  amount: number;
+}
+
+/** Value descending, display ascending — deterministic for a given input. */
+function ranked(totals: LabeledTotals): RankedEntry[] {
   return [...totals]
-    .filter(([, amount]) => amount > 0)
-    .sort(([labelA, a], [labelB, b]) => b - a || labelA.localeCompare(labelB));
+    .filter(([, entry]) => entry.amount > 0)
+    .map(([key, entry]) => ({ key, display: entry.display, amount: entry.amount }))
+    .sort((a, b) => b.amount - a.amount || a.display.localeCompare(b.display));
 }
 
 /**
@@ -63,35 +117,46 @@ function ranked(totals: Map<string, number>): Array<[string, number]> {
 export function buildCashFlowSankeyData(
   txns: CanonicalFinanceTransaction[],
 ): { nodes: SankeyNode[]; links: SankeyLink[] } {
-  const incomeByCategory = new Map<string, number>();
-  const expenseByGroup = new Map<string, number>();
-  const expenseByGroupCategory = new Map<string, Map<string, number>>();
+  const incomeByCategory: LabeledTotals = new Map();
+  const expenseByGroup: LabeledTotals = new Map();
+  const expenseByGroupCategory = new Map<string, LabeledTotals>();
 
   for (const row of txns) {
     const amount = Math.abs(row.signedAmount);
     if (amount <= 0) continue;
 
+    const groupKey = normalizeKey(row.groupKey);
+    const categoryKey = normalizeKey(row.categoryKey);
+
     if (row.flow === "income") {
-      addTo(incomeByCategory, label(row.categoryKey), amount);
+      addTo(
+        incomeByCategory,
+        categoryKey,
+        categoryDisplay(groupKey, categoryKey),
+        amount,
+      );
       continue;
     }
     if (row.flow !== "expense") continue;
 
-    const groupLabel = label(row.groupKey);
-    addTo(expenseByGroup, groupLabel, amount);
-    const categories =
-      expenseByGroupCategory.get(groupLabel) ?? new Map<string, number>();
-    addTo(categories, label(row.categoryKey), amount);
-    expenseByGroupCategory.set(groupLabel, categories);
+    addTo(expenseByGroup, groupKey, groupDisplay(groupKey), amount);
+    const categories = expenseByGroupCategory.get(groupKey) ?? new Map();
+    addTo(
+      categories,
+      categoryKey,
+      categoryDisplay(groupKey, categoryKey),
+      amount,
+    );
+    expenseByGroupCategory.set(groupKey, categories);
   }
 
   const incomeRows = ranked(incomeByCategory);
   const groupRows = ranked(expenseByGroup);
   const totalIncome = round2(
-    incomeRows.reduce((sum, [, amount]) => sum + amount, 0),
+    incomeRows.reduce((sum, entry) => sum + entry.amount, 0),
   );
   const totalExpenses = round2(
-    groupRows.reduce((sum, [, amount]) => sum + amount, 0),
+    groupRows.reduce((sum, entry) => sum + entry.amount, 0),
   );
   if (totalIncome <= 0 && totalExpenses <= 0) return { nodes: [], links: [] };
 
@@ -105,11 +170,11 @@ export function buildCashFlowSankeyData(
 
   // Column 0 — income sources, with the shortfall last so it reads as the
   // remainder that had to come from somewhere else.
-  for (const [name, amount] of incomeRows) {
+  for (const entry of incomeRows) {
     nodes.push({
-      id: `src:${name}`,
-      label: name,
-      value: round2(amount),
+      id: `src:${entry.key}`,
+      label: entry.display,
+      value: round2(entry.amount),
       column: SOURCE_COLUMN,
     });
   }
@@ -130,11 +195,11 @@ export function buildCashFlowSankeyData(
   });
 
   // Column 2 — expense groups, then the surplus as a terminal node.
-  for (const [name, amount] of groupRows) {
+  for (const entry of groupRows) {
     nodes.push({
-      id: `grp:${name}`,
-      label: name,
-      value: round2(amount),
+      id: `grp:${entry.key}`,
+      label: entry.display,
+      value: round2(entry.amount),
       column: GROUP_COLUMN,
     });
   }
@@ -149,40 +214,48 @@ export function buildCashFlowSankeyData(
 
   // Column 3 — categories, emitted in their parent group's order so ribbons
   // stack without crossing (layoutSankey stacks a column in array order).
-  for (const [groupName] of groupRows) {
-    const categories = expenseByGroupCategory.get(groupName);
+  for (const group of groupRows) {
+    const categories = expenseByGroupCategory.get(group.key);
     if (!categories) continue;
-    for (const [categoryName, amount] of ranked(categories)) {
+    for (const entry of ranked(categories)) {
       nodes.push({
-        id: `cat:${groupName}::${categoryName}`,
-        label: categoryName,
-        value: round2(amount),
+        id: `cat:${group.key}::${entry.key}`,
+        label: entry.display,
+        value: round2(entry.amount),
         column: CATEGORY_COLUMN,
       });
     }
   }
 
   // Links follow the same order as the nodes above, for the same reason.
-  for (const [name, amount] of incomeRows) {
-    links.push({ source: `src:${name}`, target: HUB_ID, value: round2(amount) });
+  for (const entry of incomeRows) {
+    links.push({
+      source: `src:${entry.key}`,
+      target: HUB_ID,
+      value: round2(entry.amount),
+    });
   }
   if (shortfall > 0) {
     links.push({ source: UNFUNDED_ID, target: HUB_ID, value: shortfall });
   }
-  for (const [name, amount] of groupRows) {
-    links.push({ source: HUB_ID, target: `grp:${name}`, value: round2(amount) });
+  for (const entry of groupRows) {
+    links.push({
+      source: HUB_ID,
+      target: `grp:${entry.key}`,
+      value: round2(entry.amount),
+    });
   }
   if (surplus > 0) {
     links.push({ source: HUB_ID, target: NET_INCOME_ID, value: surplus });
   }
-  for (const [groupName] of groupRows) {
-    const categories = expenseByGroupCategory.get(groupName);
+  for (const group of groupRows) {
+    const categories = expenseByGroupCategory.get(group.key);
     if (!categories) continue;
-    for (const [categoryName, amount] of ranked(categories)) {
+    for (const entry of ranked(categories)) {
       links.push({
-        source: `grp:${groupName}`,
-        target: `cat:${groupName}::${categoryName}`,
-        value: round2(amount),
+        source: `grp:${group.key}`,
+        target: `cat:${group.key}::${entry.key}`,
+        value: round2(entry.amount),
       });
     }
   }

@@ -68,8 +68,23 @@ Key modules in `lib/`:
   library, no client JS, CSP-safe) driven by the `--viz-*` tokens in
   `app/globals.css` — a categorical palette validated for CVD + contrast in
   both modes (dataviz-skill validator). Rules baked in: fixed slot order,
-  never generate a 7th+ hue (fold into "Other" via `foldTail`), legend for ≥2
+  never generate an 8th+ hue (fold into "Other" via `foldTail`), legend for ≥2
   series, every chart ships a table twin, text never wears series color.
+  **Seven slots is a measured ceiling, not a style preference.** `--viz-7`
+  (`#c2379a`) was added 2026-07-31 and is the same hex in both modes because it
+  independently clears both lightness bands. An 8th hue drops CVD separation to
+  ΔE 2.4 and a 12-hue set to 0.4 (identical colors to a deuteranope) plus 6.7
+  under **normal** vision, against floors of 6 and 15. Re-run
+  `scripts/validate_palette.js` from the dataviz skill before proposing an
+  eighth; do not reason about it.
+  Two standing caveats. The palette sits in the 6–8 CVD floor band, which is
+  legal **only** with secondary encoding, so every chart using it must keep
+  direct labels or a table twin. And the shipped **dark** palette passes
+  `--pairs adjacent` (the standard it was validated at) but **fails
+  `--pairs all`**: dark `--viz-5` violet and `--viz-1` blue are ΔE 1.9 apart
+  under protanopia. Charts where any two series can sit side by side (scatter,
+  bubble, Sankey ribbons) must not rely on dark-mode hue alone — see
+  `docs/TODO.md`.
 - `dashboard-widgets.ts` — Phase 8 widget registry and prefs. Layout lives in
   the existing client-writable `profiles.dashboard_prefs` JSON (no migration),
   shared with `sidebarCollapsed` and the legacy hide flags — so every writer
@@ -92,6 +107,12 @@ Key modules in `lib/`:
   floored even though node heights are — floor a ribbon and the ones arriving at
   a node sum to more than the node. `foldSankeyOverflow` caps a column and
   rewrites its edges; the chart's table twin keeps the unfolded detail.
+  `sankeyCanvasHeight` sizes the canvas to the busiest column — a fixed height
+  crushes every node toward `MIN_SANKEY_NODE_HEIGHT` and smears the labels
+  while still rendering, so nothing announces the failure. In `SankeyChart`,
+  color encodes the **spending group** and a category inherits its parent's
+  hue; sources/hub label to the right and groups/categories to the left, since
+  labelling both sides toward the middle is what made columns 2 and 3 collide.
 - `reports.ts` — Phase 6 aggregation: `buildCashFlowSankeyData` (transfers
   excluded, so refunds and card payments cannot double-count; "Net Income" on a
   surplus, "Unfunded Spending" on a deficit, link values always non-negative),
