@@ -182,6 +182,25 @@ describe("projectFinanceTransactions", () => {
     expect(byId(rows, "t-card-payment")?.flow).toBe("transfer");
   });
 
+  it("treats a loan disbursement as a transfer, not income", () => {
+    // Borrowing is cash movement. Counting the draw as income while
+    // LOAN_PAYMENTS excludes the repayment would report borrowed money as
+    // earnings and then hide the repayment that cancels it.
+    const rows = project([
+      raw({
+        id: "t-loan-draw",
+        date: "2026-07-02",
+        amount: -7800,
+        merchant: "Bank Loan",
+        pfcPrimary: "LOAN_DISBURSEMENTS",
+        pfcDetailed: "LOAN_DISBURSEMENTS_OTHER",
+      }),
+    ]);
+
+    expect(rows[0]!.flow).toBe("transfer");
+    expect(financeTotals(rows).income).toBe(0);
+  });
+
   it("preserves the Plaid sign convention on signedAmount", () => {
     const rows = project();
     expect(byId(rows, "t-groceries")?.signedAmount).toBe(120.5);
