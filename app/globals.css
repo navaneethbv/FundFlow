@@ -45,6 +45,23 @@
   --viz-axis: #c3c2b7;
   --viz-good: #006300; /* delta "good direction" text */
   --viz-bad: #d03b3b;
+
+  /* Reports Sankey roles. These stay separate from the shared chart slots so
+     source, hub, and spending families keep their visual meaning. */
+  --sankey-surface: #ffffff;
+  --sankey-border: rgba(16, 24, 40, 0.1);
+  --sankey-source: #0fa8c7;
+  --sankey-hub: #2ca66d;
+  --sankey-group-1: #d33b99;
+  --sankey-group-2: #eb5557;
+  --sankey-group-3: #4d6fe4;
+  --sankey-group-4: #f3bb3f;
+  --sankey-group-5: #ff6b2e;
+  --sankey-group-6: #3b9c8e;
+  --sankey-group-7: #8666cc;
+  --sankey-net: #2ca66d;
+  --sankey-unfunded: #e05b5d;
+  --sankey-flow-opacity: 0.18;
 }
 
 :root[data-theme="light"] {
@@ -85,6 +102,20 @@
   --viz-axis: #c3c2b7;
   --viz-good: #006300;
   --viz-bad: #d03b3b;
+  --sankey-surface: #ffffff;
+  --sankey-border: rgba(16, 24, 40, 0.1);
+  --sankey-source: #0fa8c7;
+  --sankey-hub: #2ca66d;
+  --sankey-group-1: #d33b99;
+  --sankey-group-2: #eb5557;
+  --sankey-group-3: #4d6fe4;
+  --sankey-group-4: #f3bb3f;
+  --sankey-group-5: #ff6b2e;
+  --sankey-group-6: #3b9c8e;
+  --sankey-group-7: #8666cc;
+  --sankey-net: #2ca66d;
+  --sankey-unfunded: #e05b5d;
+  --sankey-flow-opacity: 0.18;
 }
 
 @theme inline {
@@ -151,6 +182,20 @@
   --viz-axis: #383835;
   --viz-good: #0ca30c;
   --viz-bad: #e66767;
+  --sankey-surface: #202120;
+  --sankey-border: rgba(255, 255, 255, 0.08);
+  --sankey-source: #0ea7c5;
+  --sankey-hub: #31aa70;
+  --sankey-group-1: #d13d98;
+  --sankey-group-2: #ed5859;
+  --sankey-group-3: #4d6fe2;
+  --sankey-group-4: #f2b73e;
+  --sankey-group-5: #ff7040;
+  --sankey-group-6: #3eaa9a;
+  --sankey-group-7: #9274d8;
+  --sankey-net: #31aa70;
+  --sankey-unfunded: #ed5859;
+  --sankey-flow-opacity: 0.3;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -192,6 +237,42 @@
     --viz-axis: #383835;
     --viz-good: #0ca30c;
     --viz-bad: #e66767;
+    --sankey-surface: #202120;
+    --sankey-border: rgba(255, 255, 255, 0.08);
+    --sankey-source: #0ea7c5;
+    --sankey-hub: #31aa70;
+    --sankey-group-1: #d13d98;
+    --sankey-group-2: #ed5859;
+    --sankey-group-3: #4d6fe2;
+    --sankey-group-4: #f2b73e;
+    --sankey-group-5: #ff7040;
+    --sankey-group-6: #3eaa9a;
+    --sankey-group-7: #9274d8;
+    --sankey-net: #31aa70;
+    --sankey-unfunded: #ed5859;
+    --sankey-flow-opacity: 0.3;
+  }
+}
+
+.reports-chart-panel {
+  overflow: hidden;
+  border-color: var(--sankey-border);
+  background: var(--sankey-surface);
+}
+
+.reports-chart-panel > .mb-4 {
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--sankey-border);
+  padding: 1.25rem 1.25rem 1rem;
+}
+
+.reports-chart-content {
+  padding: 0.75rem 0.75rem 1rem;
+}
+
+@media (min-width: 640px) {
+  .reports-chart-content {
+    padding: 1rem 1.25rem 1.25rem;
   }
 }
 

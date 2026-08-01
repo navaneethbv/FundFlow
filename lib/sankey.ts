@@ -47,20 +47,20 @@ export interface SankeyLayout {
 }
 
 /** A positive node thinner than this would be invisible, so it gets this. */
-export const MIN_SANKEY_NODE_HEIGHT = 2;
+export const MIN_SANKEY_NODE_HEIGHT = 3;
 
 /**
  * A node shorter than this cannot carry a legible label beside it, so the
  * chart renders it unlabelled and leaves its identity to the `<title>` and the
  * table twin. Set from the 11px label plus its leading.
  */
-export const MIN_LABELLED_NODE_HEIGHT = 13;
+export const MIN_LABELLED_NODE_HEIGHT = 16;
 
 /**
  * Vertical room one node needs before its label starts colliding with its
  * neighbour's. Drives `sankeyCanvasHeight`, not the layout itself.
  */
-const COMFORTABLE_ROW_HEIGHT = 18;
+const COMFORTABLE_ROW_HEIGHT = 22;
 
 /**
  * The canvas height a graph needs so its busiest column can breathe.

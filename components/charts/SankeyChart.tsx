@@ -36,22 +36,19 @@ import {
  * edges — are what has to fit text. Narrowing this crowds the labels back
  * into each other.
  */
-const VIEW_WIDTH = 1240;
+const VIEW_WIDTH = 1280;
 /** Floor, not the height: the canvas grows with the busiest column. */
-const MIN_VIEW_HEIGHT = 420;
-const NODE_WIDTH = 12;
-const NODE_PADDING = 10;
-const MARGIN_X = 6;
+const MIN_VIEW_HEIGHT = 520;
+const NODE_WIDTH = 18;
+const NODE_PADDING = 14;
+const MARGIN_X = 24;
 /** Headroom for the hub label, which sits above its bar. */
-const MARGIN_TOP = 18;
-const LABEL_GAP = 6;
+const MARGIN_TOP = 28;
+const LABEL_GAP = 8;
 /** Names are short Title Case now, so this rarely bites. */
-const MAX_LABEL_CHARS = 26;
+const MAX_LABEL_CHARS = 22;
 /** Per column, so no column outgrows the canvas. */
 const DEFAULT_MAX_NODES_PER_COLUMN = 20;
-/** How many groups can carry a categorical hue. See the header note. */
-const COLOURED_GROUP_SLOTS = 7;
-
 const SOURCE_COLUMN = 0;
 const HUB_COLUMN = 1;
 const GROUP_COLUMN = 2;
@@ -60,9 +57,19 @@ const GROUP_COLUMN = 2;
 const NET_INCOME_ID = "grp:__net__";
 const UNFUNDED_ID = "src:__unfunded__";
 
+const GROUP_COLOURS = [
+  "var(--sankey-group-1)",
+  "var(--sankey-group-2)",
+  "var(--sankey-group-3)",
+  "var(--sankey-group-4)",
+  "var(--sankey-group-5)",
+  "var(--sankey-group-6)",
+  "var(--sankey-group-7)",
+] as const;
+
 /**
  * Groups past the palette, and the folded tail, share this. It is a text-ink
- * grey rather than the lighter `--viz-axis`: at the 0.35 ribbon opacity an
+ * grey rather than the lighter `--viz-axis`: at the theme ribbon opacity an
  * axis-weight grey washes out to nearly the surface colour, which reads as
  * "no spending here" instead of "no hue left to give this".
  */
@@ -96,23 +103,24 @@ function buildColours(
   const colours = new Map<string, string>();
 
   for (const node of nodes) {
-    if (node.column === SOURCE_COLUMN) colours.set(node.id, "var(--viz-1)");
-    if (node.column === HUB_COLUMN) colours.set(node.id, "var(--viz-2)");
+    if (node.column === SOURCE_COLUMN) {
+      colours.set(node.id, "var(--sankey-source)");
+    }
+    if (node.column === HUB_COLUMN) {
+      colours.set(node.id, "var(--sankey-hub)");
+    }
   }
   // Surplus and shortfall are outcomes, not categories, so they take the
   // diverging poles the rest of the app already uses for the same meaning.
-  colours.set(NET_INCOME_ID, "var(--viz-pos)");
-  colours.set(UNFUNDED_ID, "var(--viz-neg)");
+  colours.set(NET_INCOME_ID, "var(--sankey-net)");
+  colours.set(UNFUNDED_ID, "var(--sankey-unfunded)");
 
   const groups = nodes
     .filter((node) => node.column === GROUP_COLUMN && node.id !== NET_INCOME_ID)
     .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
 
   groups.forEach((group, index) => {
-    colours.set(
-      group.id,
-      index < COLOURED_GROUP_SLOTS ? `var(--viz-${index + 1})` : NEUTRAL,
-    );
+    colours.set(group.id, GROUP_COLOURS[index] ?? NEUTRAL);
   });
 
   // Categories inherit from whichever node feeds them.
@@ -220,7 +228,7 @@ export default function SankeyChart({
                   key={`${link.source}->${link.target}`}
                   d={link.path}
                   fill={`url(#${gradientId(index)})`}
-                  fillOpacity={0.35}
+                  fillOpacity="var(--sankey-flow-opacity)"
                 >
                   <title>
                     {`${sourceLabel} to ${targetLabel}: ${money(link.value)}`}
@@ -273,9 +281,9 @@ export default function SankeyChart({
                       y={isHub ? node.y - LABEL_GAP : node.y + node.height / 2}
                       dominantBaseline={isHub ? "auto" : "middle"}
                       textAnchor={anchor}
-                      fontSize={11}
+                      fontSize={12}
                       fill="var(--viz-ink)"
-                      stroke="var(--panel)"
+                      stroke="var(--sankey-surface)"
                       strokeWidth={3}
                       paintOrder="stroke"
                     >
@@ -285,7 +293,7 @@ export default function SankeyChart({
                         data-money
                         fill="var(--viz-muted)"
                         dx={5}
-                        fontSize={10}
+                        fontSize={10.5}
                       >
                         {`${money(node.value)}${share(node.value)}`}
                       </tspan>

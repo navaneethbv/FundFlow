@@ -25,15 +25,15 @@ const RUN = Boolean(
 const stamp = Date.now();
 const password = "ReportsE2E-Password-123!";
 const email = `reports-e2e-${stamp}@example.com`;
+const activeMonth = new Date().toISOString().slice(0, 7);
 
 /**
  * Phase 6 (Reports page with Sankey) acceptance journey.
  *
  * Same live-Supabase pattern as cash-flow.spec.ts: a throwaway auth user,
- * signed in through the real UI, deleted in afterAll. The account has no Plaid
- * data, which is deliberate — it proves the controls, saved-report CRUD, and
- * export links all work from the empty state, the situation a new user actually
- * lands in.
+ * signed in through the real UI, deleted in afterAll. Its disconnected fake
+ * item and deterministic transactions prove the controls, saved-report CRUD,
+ * export links, Sankey, and table twin against a real non-empty report.
  */
 test.describe.serial("Phase 6: reports and Sankey", () => {
   test.skip(
@@ -55,6 +55,80 @@ test.describe.serial("Phase 6: reports and Sankey", () => {
     });
     if (error) throw error;
     userId = data.user.id;
+
+    // Keep the user disposable, but give the chart and export assertions a
+    // real report to exercise instead of letting them stop at the empty state.
+    const { data: item, error: itemError } = await admin
+      .from("plaid_items")
+      .insert({
+        user_id: userId,
+        plaid_item_id: `reports-e2e-item-${stamp}`,
+        institution_name: "Reports E2E Bank",
+        status: "disconnected",
+        access_token_ciphertext: "e2e",
+        access_token_iv: "e2e",
+        access_token_tag: "e2e",
+      })
+      .select("id")
+      .single();
+    if (itemError) throw itemError;
+
+    const { data: account, error: accountError } = await admin
+      .from("accounts")
+      .insert({
+        user_id: userId,
+        plaid_item_id: item.id,
+        plaid_account_id: `reports-e2e-account-${stamp}`,
+        name: "Reports E2E Checking",
+        type: "depository",
+        subtype: "checking",
+        current_balance: 1075,
+        available_balance: 1075,
+        iso_currency_code: "USD",
+      })
+      .select("id")
+      .single();
+    if (accountError) throw accountError;
+
+    const { error: transactionError } = await admin.from("transactions").insert([
+      {
+        user_id: userId,
+        account_id: account.id,
+        plaid_transaction_id: `reports-e2e-paycheck-${stamp}`,
+        date: `${activeMonth}-01`,
+        amount: -1500,
+        name: "REPORTS E2E PAYROLL",
+        merchant_name: "Reports E2E Payroll",
+        pfc_primary: "INCOME",
+        pfc_detailed: "INCOME_WAGES",
+        pending: false,
+      },
+      {
+        user_id: userId,
+        account_id: account.id,
+        plaid_transaction_id: `reports-e2e-groceries-${stamp}`,
+        date: `${activeMonth}-02`,
+        amount: 300,
+        name: "REPORTS E2E GROCERIES",
+        merchant_name: "Reports E2E Groceries",
+        pfc_primary: "FOOD_AND_DRINK",
+        pfc_detailed: "FOOD_AND_DRINK_GROCERIES",
+        pending: false,
+      },
+      {
+        user_id: userId,
+        account_id: account.id,
+        plaid_transaction_id: `reports-e2e-shopping-${stamp}`,
+        date: `${activeMonth}-03`,
+        amount: 125,
+        name: "REPORTS E2E SHOPPING",
+        merchant_name: "Reports E2E Shopping",
+        pfc_primary: "GENERAL_MERCHANDISE",
+        pfc_detailed: "GENERAL_MERCHANDISE_OTHER",
+        pending: false,
+      },
+    ]);
+    if (transactionError) throw transactionError;
   });
 
   test.afterAll(async () => {
@@ -109,8 +183,8 @@ test.describe.serial("Phase 6: reports and Sankey", () => {
 
   test("the date range round-trips through the Apply form", async ({ page }) => {
     await page.goto("/reports");
-    await page.getByLabel("From").fill("2026-01-01");
-    await page.getByLabel("To").fill("2026-03-31");
+    await page.getByRole("textbox", { name: "From", exact: true }).fill("2026-01-01");
+    await page.getByRole("textbox", { name: "To", exact: true }).fill("2026-03-31");
     await page.getByRole("button", { name: "Apply" }).click();
 
     await expect(page).toHaveURL(/start=2026-01-01/);
@@ -187,7 +261,11 @@ test.describe.serial("Phase 6: reports and Sankey", () => {
 
     await page.getByLabel("Save these filters as").fill("E2E duplicate");
     await page.getByRole("button", { name: "Save report" }).click();
-    await expect(page.getByRole("alert")).toContainText("already have");
+    await expect(
+      page.getByText("You already have a saved report with that name.", {
+        exact: true,
+      }),
+    ).toBeVisible();
 
     await page.getByRole("button", { name: "Delete" }).first().click();
   });
@@ -206,7 +284,7 @@ test.describe.serial("Phase 6: reports and Sankey", () => {
       page.getByRole("link", { name: "Download PDF report" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("link", { name: "Year in Money" }),
+      page.getByRole("main").getByRole("link", { name: "Year in Money" }),
     ).toBeVisible();
   });
 
