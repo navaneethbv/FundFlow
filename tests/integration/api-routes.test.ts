@@ -7,6 +7,7 @@ import { encryptSecret } from "@/lib/crypto";
 const mockSyncAllForUser = vi.fn();
 const mockRefreshRecurringForUser = vi.fn();
 const mockSyncItemTransactions = vi.fn();
+const mockSyncInvestmentsForUser = vi.fn();
 
 vi.mock("@/lib/sync", () => ({
   syncAllForUser: (...args: unknown[]) => mockSyncAllForUser(...args),
@@ -15,6 +16,10 @@ vi.mock("@/lib/sync", () => ({
 
 vi.mock("@/lib/recurring", () => ({
   refreshRecurringForUser: (...args: unknown[]) => mockRefreshRecurringForUser(...args),
+}));
+
+vi.mock("@/lib/investment-sync", () => ({
+  syncInvestmentsForUser: (...args: unknown[]) => mockSyncInvestmentsForUser(...args),
 }));
 
 const mockLinkTokenCreate = vi.fn();
@@ -180,6 +185,10 @@ suite("API routes integration", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSyncInvestmentsForUser.mockResolvedValue({
+      outcome: "synced",
+      holdingsSynced: 0,
+    });
     activeUser = null;
     activeSupabaseClient = null;
     activeAdminUser = null;

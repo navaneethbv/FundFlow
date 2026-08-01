@@ -270,12 +270,17 @@ describe("SankeyChart", () => {
   });
 
   it("colours by group using viz tokens, never a hard-coded hex", () => {
-    expect(html).toContain("var(--viz-1)");
-    expect(html).toContain("var(--viz-2)");
+    expect(html).toContain("var(--sankey-source)");
+    expect(html).toContain("var(--sankey-hub)");
+    expect(html).toContain("var(--sankey-group-1)");
     // Surplus is an outcome, not a spending group, so it takes the diverging
     // pole the rest of the app already uses for money kept.
-    expect(html).toContain("var(--viz-pos)");
+    expect(html).toContain("var(--sankey-net)");
     expect(html).not.toMatch(/fill="#[0-9a-f]{3,6}"/i);
+  });
+
+  it("uses theme-driven ribbon opacity", () => {
+    expect(html).toContain('fill-opacity="var(--sankey-flow-opacity)"');
   });
 
   it("gives a category its parent group's colour", () => {
@@ -284,7 +289,7 @@ describe("SankeyChart", () => {
     const groupFill = /<rect[^>]*><title>Rent: /.exec(html);
     const categoryFill = /<rect[^>]*><title>Monthly rent: /.exec(html);
     const hueOf = (match: RegExpExecArray | null) =>
-      /fill="(var\(--viz-[^)]*\))"/.exec(match?.[0] ?? "")?.[1];
+      /fill="(var\(--(?:sankey|viz)-[^)]*\))"/.exec(match?.[0] ?? "")?.[1];
 
     expect(hueOf(groupFill)).toBeDefined();
     expect(hueOf(categoryFill)).toBe(hueOf(groupFill));
@@ -332,9 +337,9 @@ describe("SankeyChart", () => {
     );
 
     for (let slot = 1; slot <= 7; slot += 1) {
-      expect(rendered).toContain(`var(--viz-${slot})`);
+      expect(rendered).toContain(`var(--sankey-group-${slot})`);
     }
-    expect(rendered).not.toContain("var(--viz-8)");
+    expect(rendered).not.toContain("var(--sankey-group-8)");
     expect(rendered).toContain("var(--viz-ink-2)");
   });
 

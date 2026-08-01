@@ -184,28 +184,32 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
           <Panel
             eyebrow={filters.mode === "trends" ? "Trends" : filters.dimension}
             title={TAB_HEADINGS[filters.tab]}
+            padding="none"
+            className="reports-chart-panel"
           >
-            {filters.mode === "trends" ? (
-              <PeriodBars periods={periods} currency={currencyLabel} />
-            ) : filters.tab === "cash_flow" ? (
-              <SankeyChart
-                nodes={sankey.nodes}
-                links={sankey.links}
-                title={`Cash flow ${filters.start} to ${filters.end}`}
-                currency={currencyLabel}
-              />
-            ) : (
-              <BreakdownBars
-                title={filters.tab === "income" ? "Income" : "Expenses"}
-                rows={breakdownBy(
-                  rows,
-                  filters.dimension,
-                  filters.tab === "income" ? "income" : "expense",
-                )}
-                currency={currencyLabel}
-                dimension={filters.dimension}
-              />
-            )}
+            <div className="reports-chart-content">
+              {filters.mode === "trends" ? (
+                <PeriodBars periods={periods} currency={currencyLabel} />
+              ) : filters.tab === "cash_flow" ? (
+                <SankeyChart
+                  nodes={sankey.nodes}
+                  links={sankey.links}
+                  title={`Cash flow ${filters.start} to ${filters.end}`}
+                  currency={currencyLabel}
+                />
+              ) : (
+                <BreakdownBars
+                  title={filters.tab === "income" ? "Income" : "Expenses"}
+                  rows={breakdownBy(
+                    rows,
+                    filters.dimension,
+                    filters.tab === "income" ? "income" : "expense",
+                  )}
+                  currency={currencyLabel}
+                  dimension={filters.dimension}
+                />
+              )}
+            </div>
           </Panel>
 
           <Panel
