@@ -207,8 +207,8 @@ describe("RecurringList — tabs are URL-driven, not client state", () => {
       }),
     );
     expect(html).toContain(`href="${LINKS.upcoming}"`);
-    expect(html).toContain(`href="${LINKS.complete.replace("&", "&amp;")}"`);
-    expect(html).toContain(`href="${LINKS.manage.replace("&", "&amp;")}"`);
+    expect(html).toContain(`href="${LINKS.complete.replaceAll("&", "&amp;")}"`);
+    expect(html).toContain(`href="${LINKS.manage.replaceAll("&", "&amp;")}"`);
     expect(html).toContain("Upcoming (1)");
     expect(html).toContain("Manage (1)");
   });
