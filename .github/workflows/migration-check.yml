@@ -18,7 +18,7 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
       SUPABASE_TELEMETRY_DISABLED: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v3
