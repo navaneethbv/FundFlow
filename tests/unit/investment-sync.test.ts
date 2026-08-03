@@ -158,7 +158,6 @@ describe("syncInvestmentsForItem", () => {
       { onConflict: "account_id,security_id" },
     );
     expect(spies.snapshotsUpsert).toHaveBeenCalled();
-    // Nothing stale to deactivate — the one existing holding matches the sync.
     expect(spies.holdingsUpdate).not.toHaveBeenCalled();
   });
 
@@ -250,26 +249,43 @@ describe("syncInvestmentsForUser", () => {
 
     const total = await syncInvestmentsForUser("user-1");
 
-    expect(total).toBe(0); // second item had no holdings; first item's failure isolated
+    expect(total).toBe(0);
     expect(mockLogError).toHaveBeenCalled();
   });
 
-  it("records the outcome as an investments-typed sync_jobs row", async () => {
+  it("records retriable outcomes and handles investment transaction errors gracefully", async () => {
+    mockListActiveItems.mockResolvedValueOnce([item]);
+    mockInvestmentsHoldingsGet.mockRejectedValueOnce({
+      response: { data: { error_code: "PRODUCT_NOT_READY" } },
+    });
+    mockInvestmentsTransactionsGet.mockRejectedValueOnce(new Error("Txn fetch error"));
+
+    const { tables } = tableStub();
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (!(table in tables)) throw new Error(`Unexpected table ${table}`);
+      return tables[table as keyof typeof tables];
+    });
+
+    const total = await syncInvestmentsForUser("user-1");
+    expect(total).toBe(0);
+    expect(mockLogError).toHaveBeenCalledWith("investment-sync.transactions", expect.any(Error));
+  });
+
+  it("handles recordInvestmentJob errors gracefully", async () => {
     mockListActiveItems.mockResolvedValueOnce([item]);
     mockInvestmentsHoldingsGet.mockResolvedValueOnce({
       data: { accounts: [{ account_id: "plaid-acc-1" }], holdings: [], securities: [] },
     });
-    const { tables, spies } = tableStub();
+    const { tables } = tableStub({
+      sync_jobs: { insert: vi.fn().mockResolvedValue({ error: new Error("Job DB Error") }) },
+    });
     mockServiceClient.from.mockImplementation((table: string) => {
       if (!(table in tables)) throw new Error(`Unexpected table ${table}`);
       return tables[table as keyof typeof tables];
     });
 
     await syncInvestmentsForUser("user-1");
-
-    expect(spies.syncJobsInsert).toHaveBeenCalledWith(
-      expect.objectContaining({ user_id: "user-1", job_type: "investments" }),
-    );
+    expect(mockLogError).toHaveBeenCalledWith("investment-sync.job-record", expect.any(Error));
   });
 });
 

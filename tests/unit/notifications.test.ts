@@ -388,4 +388,31 @@ describe("notifications manager", () => {
     mockGte.mockResolvedValueOnce({ data: null, error: new Error("Dedupe Error") });
     await expect(createNotification("user-1", "low_cash_forecast", { title: "t", body: "b" })).rejects.toThrow("Dedupe Error");
   });
+
+  it("handles milestone processing errors gracefully", async () => {
+    mockGetDashboardData.mockResolvedValue({
+      cashFlowForecast: { lowBalanceRisk: false },
+      budgetEnvelopes: [],
+      netWorthSnapshot: { assets: 15000, liabilities: 0, netWorth: 15000 },
+      netWorthHistory: [
+        { month: "2026-06", netWorth: 5000 },
+        { month: "2026-07", netWorth: 15000 },
+      ],
+    });
+    mockGetGoals.mockResolvedValue([]);
+    mockSingle.mockResolvedValue({ data: { broken_bank: true }, error: null });
+
+    mockFrom.mockImplementation((table) => {
+      if (table === "milestones") {
+        return {
+          select: () => {
+            throw new Error("Milestones table error");
+          },
+        };
+      }
+      return mockQueryChain;
+    });
+
+    await expect(processNotificationsForUser("user-1")).resolves.not.toThrow();
+  });
 });

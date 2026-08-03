@@ -558,4 +558,32 @@ describe("detectNetWorthMilestones", () => {
     expect(res.paychecks[1]!.nextPayDate).toBe("2026-10-01");
     expect(res.paychecks[2]!.nextPayDate).toBe("2027-07-01");
   });
+
+  it("handles merchant drift zero earlier average and suggestBudgets non-positive amounts", () => {
+    const drift = computeMerchantPriceDrift({
+      txns: [
+        { date: "2026-07-10", merchant: "ZeroMerch", amount: 100 },
+        { date: "2026-07-15", merchant: "ZeroMerch", amount: 100 },
+        { date: "2026-03-10", merchant: "ZeroMerch", amount: 0 },
+        { date: "2026-03-15", merchant: "ZeroMerch", amount: 0 },
+      ],
+      asOfMonth: "2026-07",
+      minCharges: 2,
+    });
+    expect(drift.items).toEqual([]);
+
+    const suggestions = suggestBudgets({
+      history: [
+        { month: "2026-06", category: "DINING", amount: -50 },
+        { month: "2026-06", category: "DINING", amount: 0 },
+        { month: "2026-06", category: "DINING", amount: 200 },
+        { month: "2026-07", category: "DINING", amount: 250 },
+      ],
+      existingCategories: [],
+      minMonths: 2,
+    });
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0].category).toBe("DINING");
+  });
+
 });

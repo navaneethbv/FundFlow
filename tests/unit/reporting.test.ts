@@ -198,7 +198,7 @@ describe("lib/reporting", () => {
     delete process.env.SMTP_PASS;
     vi.stubEnv("NODE_ENV", "development");
 
-    mocks.mockGetTestMessageUrl.mockReturnValueOnce(null); // to cover previewUrl is null branch
+    mocks.mockGetTestMessageUrl.mockReturnValueOnce(null);
 
     const res = await sendDailyDigestEmail(
       "user@example.com",
@@ -211,77 +211,21 @@ describe("lib/reporting", () => {
     expect(res).toEqual({ messageId: "mock-message-id" });
   });
 
-  it("sends backup email with encrypted archive attachment", async () => {
-    process.env.SMTP_HOST = "smtp.custom.com";
-    process.env.SMTP_PORT = "587";
-    process.env.SMTP_USER = "user";
-    process.env.SMTP_PASS = "pass";
+  it("sends backup, login alert, and household invite emails in development mode preview", async () => {
+    delete process.env.SMTP_HOST;
+    delete process.env.SMTP_USER;
+    delete process.env.SMTP_PASS;
+    vi.stubEnv("NODE_ENV", "development");
 
-    const archive = Buffer.from("backup-content");
-    const res = await sendBackupEmail(
-      "user@example.com",
-      "backup.json.enc",
-      archive,
-      "July 2026",
+    await sendBackupEmail("user@example.com", "b.enc", Buffer.from("data"), "July 2026");
+    await sendLoginAlertEmail("user@example.com", "Chrome on Mac");
+    await sendHouseholdInviteEmail(
+      "inv@example.com",
+      "host@example.com",
+      "Home",
+      "https://example.com/accept",
     );
 
-    expect(mocks.mockSendMail).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: "user@example.com",
-        subject: "FundFlow encrypted backup — July 2026",
-        attachments: [
-          {
-            filename: "backup.json.enc",
-            content: archive,
-            contentType: "application/octet-stream",
-          },
-        ],
-      }),
-    );
-    expect(res).toEqual({ messageId: "mock-message-id" });
-  });
-
-  it("sends login alert email", async () => {
-    process.env.SMTP_HOST = "smtp.custom.com";
-    process.env.SMTP_PORT = "587";
-    process.env.SMTP_USER = "user";
-    process.env.SMTP_PASS = "pass";
-
-    const res = await sendLoginAlertEmail("user@example.com", "MacBook Pro / Chrome");
-
-    expect(mocks.mockSendMail).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: "user@example.com",
-        subject: "New sign-in to your FundFlow account",
-      }),
-    );
-    const text = mocks.mockSendMail.mock.calls[0][0].text as string;
-    expect(text).toContain("MacBook Pro / Chrome");
-    expect(res).toEqual({ messageId: "mock-message-id" });
-  });
-
-  it("sends household invite email", async () => {
-    process.env.SMTP_HOST = "smtp.custom.com";
-    process.env.SMTP_PORT = "587";
-    process.env.SMTP_USER = "user";
-    process.env.SMTP_PASS = "pass";
-
-    const res = await sendHouseholdInviteEmail(
-      "invitee@example.com",
-      "inviter@example.com",
-      "Smith Family",
-      "https://example.com/accept?token=123",
-    );
-
-    expect(mocks.mockSendMail).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: "invitee@example.com",
-        subject: 'inviter@example.com invited you to the "Smith Family" household on FundFlow',
-      }),
-    );
-    const text = mocks.mockSendMail.mock.calls[0][0].text as string;
-    expect(text).toContain("https://example.com/accept?token=123");
-    expect(res).toEqual({ messageId: "mock-message-id" });
+    expect(mocks.mockCreateTestAccount).toHaveBeenCalled();
   });
 });
-

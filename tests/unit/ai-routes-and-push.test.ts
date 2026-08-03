@@ -497,4 +497,20 @@ describe("POST /api/ai/insights", () => {
     const res = await insightsPost();
     expect(res.status).toBe(200);
   });
+
+  it("handles sendPushToUser outer error logging", async () => {
+    const { sendPushToUser } = await import("@/lib/push");
+    process.env.VAPID_PUBLIC_KEY = "pub-key";
+    process.env.VAPID_PRIVATE_KEY = "priv-key";
+
+    // DB service client throws error
+    const { createServiceClient } = await import("@/lib/supabase/service");
+    vi.spyOn({ createServiceClient }, "createServiceClient").mockImplementationOnce(() => {
+      throw new Error("Service error");
+    });
+
+    await expect(
+      sendPushToUser("user-1", { title: "title", body: "body" }),
+    ).resolves.not.toThrow();
+  });
 });

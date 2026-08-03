@@ -45,4 +45,10 @@ describe("planTagRename", () => {
   it("rejects an invalid new name", () => {
     expect(planTagRename("travel", "", existing).ok).toBe(false);
   });
+
+  it("rejects an invalid old name", () => {
+    const result = planTagRename("", "vacation", existing);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain("old name");
+  });
 });

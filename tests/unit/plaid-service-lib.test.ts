@@ -273,13 +273,21 @@ describe("lib/plaid-service", () => {
   });
 
   it("throws errors when DB operations fail", async () => {
+    const chain: Record<string, unknown> = {};
+    chain.eq = () => chain;
+    chain.maybeSingle = () => Promise.resolve({ data: null, error: new Error("DB Error") });
+    chain.then = (res: (v: unknown) => unknown) => res({ data: null, error: new Error("DB List Error") });
+
     mockServiceClient.from.mockReturnValue({
-      select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: new Error("DB Error") }) }) }),
+      select: () => chain,
       upsert: () => Promise.resolve({ error: new Error("Upsert Error") }),
       update: () => ({ eq: () => Promise.resolve({ error: new Error("Update Error") }) }),
     });
 
     await expect(getItemByPlaidItemId("p1")).rejects.toThrow("DB Error");
+    await expect(listActiveItems("u1")).rejects.toThrow("DB List Error");
+    await expect(getItem("u1", "i1")).rejects.toThrow("DB Error");
+    await expect(getAccountIdMap("u1")).rejects.toThrow("DB List Error");
     await expect(upsertAccounts("u1", "i1", [{ account_id: "a1", balances: {} }] as never)).rejects.toThrow("Upsert Error");
     await expect(updateItemCursor("i1", "c1")).rejects.toThrow("Update Error");
     await expect(setItemStatus("i1", "error")).rejects.toThrow("Update Error");

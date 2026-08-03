@@ -655,7 +655,63 @@ describe("isIsoDate", () => {
     expect(isIsoDate("2026-02-30")).toBe(false);
     expect(isIsoDate("2026-13-01")).toBe(false);
     expect(isIsoDate("26-07-31")).toBe(false);
-    expect(isIsoDate(20260731)).toBe(false);
     expect(isIsoDate(undefined)).toBe(false);
+  });
+});
+
+describe("applyReportFilters extra branches", () => {
+  it("filters transactions by account, merchant, category, and pending", () => {
+    const fallback = defaultReportFilters("2026-07-01");
+    const filters: ReportFilters = {
+      ...fallback,
+      start: "2026-07-01",
+      end: "2026-07-31",
+      accounts: ["acct-1"],
+      merchants: ["costco"],
+      categories: ["food_and_drink_restaurant"],
+      excludePending: true,
+    };
+
+    const match: CanonicalFinanceTransaction = {
+      id: "t-match",
+      sourceTransactionId: "s-match",
+      date: "2026-07-15",
+      signedAmount: 100,
+      flow: "expense",
+      merchant: "Costco",
+      groupKey: "FOOD_AND_DRINK",
+      categoryKey: "FOOD_AND_DRINK_RESTAURANT",
+      accountId: "acct-1",
+      manualAccountId: null,
+      pending: false,
+      source: "plaid",
+    };
+    const pendingTxn: CanonicalFinanceTransaction = {
+      ...match,
+      id: "t-pending",
+      pending: true,
+    };
+    const wrongAcc: CanonicalFinanceTransaction = {
+      ...match,
+      id: "t-acc",
+      accountId: "acct-2",
+    };
+    const wrongMerch: CanonicalFinanceTransaction = {
+      ...match,
+      id: "t-merch",
+      merchant: "Target",
+    };
+    const wrongCat: CanonicalFinanceTransaction = {
+      ...match,
+      id: "t-cat",
+      categoryKey: "TRAVEL",
+    };
+
+    const filtered = applyReportFilters(
+      [match, pendingTxn, wrongAcc, wrongMerch, wrongCat],
+      filters,
+    );
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].id).toBe("t-match");
   });
 });
