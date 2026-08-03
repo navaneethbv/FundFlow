@@ -164,6 +164,28 @@ describe("buildAccountsPageData", () => {
       { currency: "CAD", amount: 3000 },
       { currency: "USD", amount: 300 },
     ]);
+    // Assets/liabilities also break down by group, per currency, for the
+    // right-rail stacked bar — and each currency's group amounts still sum
+    // to that currency's plain total above.
+    expect(data.summary.assetsByGroup.USD).toEqual([
+      { group: "cash", label: "Cash", amount: 1000 },
+    ]);
+    expect(data.summary.assetsByGroup.CAD).toEqual([
+      { group: "investment", label: "Investments", amount: 3000 },
+    ]);
+    expect(data.summary.liabilitiesByGroup.USD).toEqual(
+      expect.arrayContaining([
+        { group: "credit", label: "Credit cards", amount: 200 },
+        { group: "loan", label: "Loans", amount: 500 },
+      ]),
+    );
+    // Sorted largest-amount-first, so the stacked bar's biggest segment
+    // always draws first.
+    expect(data.summary.liabilitiesByGroup.USD![0]).toEqual({
+      group: "loan",
+      label: "Loans",
+      amount: 500,
+    });
   });
 
   it("does not coerce a missing balance to zero", () => {
@@ -231,8 +253,38 @@ describe("buildAccountsPageData", () => {
     expect(row.spark).toHaveLength(30);
     expect(row.spark[0]).toBe(5);
     expect(row.spark.at(-1)).toBe(34);
+    // sparkLong is the full, unsliced history behind spark's last-30-days
+    // window — the second, longer-window trend column.
+    expect(row.sparkLong).toHaveLength(35);
+    expect(row.sparkLong[0]).toBe(0);
+    expect(row.sparkLong.at(-1)).toBe(34);
     expect(row.monthChange).toEqual({ amount: 30, pct: 750 });
     expect(data.historyStartsOn).toBe("2026-06-25");
+  });
+
+  it("sums each row's monthChange into a per-currency group change annotation", () => {
+    const history1 = [snapshot("cash-1", "2026-06-25", 100), snapshot("cash-1", "2026-07-25", 150)];
+    const history2 = [snapshot("cash-2", "2026-06-25", 50), snapshot("cash-2", "2026-07-25", 30)];
+    const data = buildAccountsPageData(
+      [
+        account({ id: "cash-1", name: "Checking", type: "depository", currentBalance: 150 }),
+        account({ id: "cash-2", name: "Savings", type: "depository", currentBalance: 30 }),
+      ],
+      [...history1, ...history2],
+      NOW,
+    );
+
+    // +50 (Checking) and -20 (Savings) net to +30 for the group as a whole.
+    expect(data.groups.cash.changes).toEqual([{ currency: "USD", amount: 30 }]);
+  });
+
+  it("gives a group with no change history yet an empty changes list, not a crash", () => {
+    const data = buildAccountsPageData(
+      [account({ id: "cash-1", name: "Checking", type: "depository", currentBalance: 100 })],
+      [],
+      NOW,
+    );
+    expect(data.groups.cash.changes).toEqual([]);
   });
 
   it("uses null percent when the starting balance is zero", () => {

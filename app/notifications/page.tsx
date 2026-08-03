@@ -1,10 +1,12 @@
 import AppShell from "@/components/shell/AppShell";
+import PageHeader from "@/components/shell/PageHeader";
 import EmailPreferences from "@/components/notifications/EmailPreferences";
 import InAppPreferences from "@/components/notifications/InAppPreferences";
 import PushSection from "@/components/notifications/PushSection";
 import NotificationFeed, { type NotificationRow } from "@/components/notifications/NotificationFeed";
 import Badge from "@/components/ui/Badge";
 import Panel from "@/components/ui/Panel";
+import { formatDate } from "@/lib/format-date";
 import { DEFAULT_REPORT_TIMEZONE } from "@/lib/report-period";
 import { createClient } from "@/lib/supabase/server";
 
@@ -53,14 +55,13 @@ export default async function NotificationsPage() {
 
   return (
     <AppShell active="notifications" email={user?.email}>
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="eyebrow">Stay informed</p>
-          <h1 className="display mt-2 text-3xl sm:text-4xl">Notifications</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">Control optional email and planning alerts while keeping critical bank and security notices on.</p>
-        </div>
-        <Badge tone="accent">Private by default</Badge>
-      </header>
+      <PageHeader
+        title="Notifications"
+        actions={<Badge tone="accent">Private by default</Badge>}
+      />
+      <p className="max-w-2xl text-sm leading-6 text-muted">
+        Control optional email and planning alerts while keeping critical bank and security notices on.
+      </p>
 
       <EmailPreferences
         email={user?.email ?? "your sign-up email"}
@@ -85,8 +86,8 @@ export default async function NotificationsPage() {
               {(deliveries ?? []).map((delivery) => (
                 <div key={`${delivery.period_start}-${delivery.attempted_at}`} className="flex items-center justify-between gap-3 rounded-field bg-panel-2 p-3">
                   <span>
-                    <span className="block font-semibold">{delivery.period_start} to {delivery.period_end}</span>
-                    <span className="block text-xs text-muted">{delivery.sent_at ? `Sent ${new Date(delivery.sent_at).toLocaleDateString()}` : "Delivery attempted"}</span>
+                    <span className="block font-semibold">{formatDate(delivery.period_start)} to {formatDate(delivery.period_end)}</span>
+                    <span className="block text-xs text-muted">{delivery.sent_at ? `Sent ${formatDate(delivery.sent_at)}` : "Delivery attempted"}</span>
                   </span>
                   <Badge tone={deliveryStatusTone(delivery.status)}>{delivery.status}</Badge>
                 </div>

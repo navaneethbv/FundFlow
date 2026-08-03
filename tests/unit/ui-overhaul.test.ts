@@ -13,7 +13,7 @@ describe("UI overhaul primitives and shell", () => {
     for (const file of [
       "components/shell/AppShell.tsx",
       "components/shell/AppSidebar.tsx",
-      "components/shell/TopBar.tsx",
+      "components/shell/UserMenu.tsx",
       "components/shell/AuthShell.tsx",
       "app/goals/page.tsx",
     ]) {
@@ -40,16 +40,23 @@ describe("UI overhaul primitives and shell", () => {
     expect(navSource).toContain("MobileNavigation");
   });
 
-  it("keeps primary navigation out of the utility top bar", () => {
-    const topBar = readFileSync("components/shell/TopBar.tsx", "utf8");
+  it("keeps primary navigation out of the utility icon row", () => {
+    const utilityIcons = readFileSync(
+      "components/shell/SidebarUtilityIcons.tsx",
+      "utf8",
+    );
 
     // Primary destinations (transactions, goals, dashboard, ...) live only in
     // the sidebar/mobile pill nav. Settings is a utility action (alongside
     // search and notifications), not a primary destination, so it's expected
     // here (Phase 1 IA, Task 4).
-    expect(topBar).not.toContain('href="/transactions"');
-    expect(topBar).toContain("ThemeToggle");
-    expect(topBar).toContain("LogoutButton");
+    expect(utilityIcons).not.toContain('href="/transactions"');
+  });
+
+  it("moved the account controls into the sidebar's user menu (V1 shell restructure)", () => {
+    const userMenu = readFileSync("components/shell/UserMenu.tsx", "utf8");
+    expect(userMenu).toContain("ThemeToggle");
+    expect(userMenu).toContain("LogoutButton");
   });
 
   it("keeps goals protected and dynamic", () => {

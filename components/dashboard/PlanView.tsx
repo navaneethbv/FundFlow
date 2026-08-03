@@ -293,11 +293,8 @@ export default function PlanView({
               <p className="mb-3 text-sm">
                 Repeat merchants cost{" "}
                 <span
-                  className="font-bold"
-                  style={{
-                    color:
-                      priceDrift.overallDriftPct > 0 ? "var(--viz-bad)" : "var(--viz-good)",
-                  }}
+                  data-money
+                  className={priceDrift.overallDriftPct > 0 ? "font-bold text-danger" : "font-bold text-success"}
                 >
                   {priceDrift.overallDriftPct > 0 ? "+" : ""}
                   {priceDrift.overallDriftPct}%
@@ -312,8 +309,8 @@ export default function PlanView({
                   <span className="shrink-0 text-xs text-muted">
                     {formatCurrency(item.earlierAvg)} → {formatCurrency(item.recentAvg)}{" "}
                     <span
-                      className="font-bold"
-                      style={{ color: item.driftPct > 0 ? "var(--viz-bad)" : "var(--viz-good)" }}
+                      data-money
+                      className={item.driftPct > 0 ? "font-bold text-danger" : "font-bold text-success"}
                     >
                       ({item.driftPct > 0 ? "+" : ""}
                       {item.driftPct}%)

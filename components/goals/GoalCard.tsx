@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Badge from "@/components/ui/Badge";
+import ProgressBar, { type ProgressBarTone } from "@/components/ui/ProgressBar";
 import { formatCurrency } from "@/lib/format";
 import { goalImageAlt, goalImageFor } from "@/lib/goal-templates";
 import type { FundedGoal, GoalBadge } from "@/lib/goals-v2";
@@ -13,29 +14,35 @@ import type { FundedGoal, GoalBadge } from "@/lib/goals-v2";
  * being able to distinguish green from amber.
  */
 
+// Monarch tints both On track and Completed green (a lighter tint for
+// On track) — Badge only has one green tone, so both map to "success"; the
+// label text (not just color) is what actually distinguishes them.
 const BADGE_COPY: Record<GoalBadge, { label: string; tone: "success" | "warning" | "danger" | "neutral" }> = {
   completed: { label: "Completed", tone: "success" },
-  "on-track": { label: "On track", tone: "neutral" },
+  "on-track": { label: "On track", tone: "success" },
   "at-risk": { label: "At risk", tone: "warning" },
   behind: { label: "Behind", tone: "danger" },
 };
 
-const BAR_TONE: Record<GoalBadge, string> = {
-  completed: "var(--viz-good)",
-  "on-track": "var(--viz-1)",
-  "at-risk": "var(--viz-3)",
-  behind: "var(--viz-bad)",
+const BAR_TONE: Record<GoalBadge, ProgressBarTone> = {
+  completed: "success",
+  "on-track": "accent",
+  "at-risk": "warning",
+  behind: "danger",
 };
 
 export default function GoalCard({
   goal,
   currency,
   action,
+  menu,
 }: Readonly<{
   goal: FundedGoal;
   currency: string;
   /** Slot for the client-side "Allocate funds" control. */
   action?: React.ReactNode;
+  /** Slot for the card's `⋯` menu (edit/contribute/household/delete). */
+  menu?: React.ReactNode;
 }>) {
   const image = goalImageFor(goal.image_slug);
   const badge = BADGE_COPY[goal.badge];
@@ -60,7 +67,10 @@ export default function GoalCard({
       <div className="p-5">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <h3 className="text-base font-semibold">{goal.name}</h3>
-          <Badge tone={badge.tone}>{badge.label}</Badge>
+          <span className="flex items-center gap-1">
+            <Badge tone={badge.tone}>{badge.label}</Badge>
+            {menu}
+          </span>
         </div>
 
         <p className="mt-3 text-2xl font-semibold tabular-nums">
@@ -71,19 +81,12 @@ export default function GoalCard({
           </span>
         </p>
 
-        <div
-          className="mt-3 h-2 w-full overflow-hidden rounded-full bg-panel-2"
-          role="img"
-          aria-label={`${goal.progressPct}% funded`}
-        >
-          <div
-            className="h-full rounded-full"
-            style={{
-              width: `${goal.progressPct}%`,
-              background: BAR_TONE[goal.badge],
-            }}
-          />
-        </div>
+        <ProgressBar
+          className="mt-3"
+          percent={goal.progressPct}
+          tone={BAR_TONE[goal.badge]}
+          label={`${goal.progressPct}% funded`}
+        />
 
         <dl className="mt-4 space-y-1 text-sm">
           <div className="flex justify-between gap-3">

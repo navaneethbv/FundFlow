@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import AppShell from "@/components/shell/AppShell";
+import PageHeader from "@/components/shell/PageHeader";
 import AssumptionsPanel from "@/components/forecasting/AssumptionsPanel";
 import ForecastChart from "@/components/forecasting/ForecastChart";
 import Panel from "@/components/ui/Panel";
@@ -37,13 +38,11 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
   return (
     <AppShell active="forecasting" email={user.email}>
       <div className="space-y-6">
-        <header>
-          <h1 className="text-2xl font-bold tracking-tight">Forecasting</h1>
-          <p className="text-sm text-muted">
-            A projection, not a prediction — three scenarios compounding your own assumptions forward.
-            Nothing here is a guarantee or a statistical forecast.
-          </p>
-        </header>
+        <PageHeader title="Forecasting" />
+        <p className="text-sm text-muted">
+          A projection, not a prediction — three scenarios compounding your own assumptions forward.
+          Nothing here is a guarantee or a statistical forecast.
+        </p>
 
         <Panel padding="lg">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Starting point</h2>

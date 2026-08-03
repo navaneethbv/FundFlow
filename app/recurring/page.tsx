@@ -1,14 +1,18 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import AppShell from "@/components/shell/AppShell";
+import PageHeader from "@/components/shell/PageHeader";
 import MonthSummary from "@/components/recurring/MonthSummary";
 import ReviewBanner from "@/components/recurring/ReviewBanner";
-import RecurringList from "@/components/recurring/RecurringList";
+import RecurringList, { type RecurringTab } from "@/components/recurring/RecurringList";
 import Panel from "@/components/ui/Panel";
-import Link from "next/link";
+import SegmentedControl from "@/components/ui/SegmentedControl";
+import ButtonLink from "@/components/ui/ButtonLink";
+import { ChevronLeft, ChevronRight } from "@/components/ui/icons";
+import { formatMonth } from "@/lib/format";
 import { loadRecurringData } from "@/lib/recurring-data";
 import { serializeFinancialScope } from "@/lib/financial-scope";
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import { formatMonth } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -17,10 +21,12 @@ interface PageProps {
   searchParams: Promise<{
     month?: string | string[];
     scope?: string | string[];
+    tab?: string | string[];
   }>;
 }
 
 const MONTH_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
+const RECURRING_TABS: RecurringTab[] = ["upcoming", "complete", "manage"];
 
 function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -32,9 +38,14 @@ function shiftMonth(month: string, delta: number): string {
   return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
 }
 
-function recurringHref(input: { month: string; scope?: string }): string {
+function parseTab(value: string | undefined): RecurringTab {
+  return RECURRING_TABS.includes(value as RecurringTab) ? (value as RecurringTab) : "upcoming";
+}
+
+function recurringHref(input: { month: string; scope?: string; tab?: RecurringTab }): string {
   const params = new URLSearchParams({ month: input.month });
   if (input.scope) params.set("scope", input.scope);
+  if (input.tab && input.tab !== "upcoming") params.set("tab", input.tab);
   return `/recurring?${params.toString()}`;
 }
 
@@ -49,8 +60,10 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
   if (!user) notFound();
 
   const currentMonth = new Date().toISOString().slice(0, 7);
+  const today = new Date().toISOString().slice(0, 10);
   const rawMonth = first(params.month);
   const month = rawMonth && MONTH_REGEX.test(rawMonth) ? rawMonth : currentMonth;
+  const tab = parseTab(first(params.tab));
 
   const loaded = await loadRecurringData(supabase, {
     userId: user.id,
@@ -59,48 +72,69 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
   });
   const scope = serializeFinancialScope(loaded.scope);
   const baseLink = { month, scope };
+  const links: Record<RecurringTab, string> = {
+    upcoming: recurringHref({ ...baseLink, tab: "upcoming" }),
+    complete: recurringHref({ ...baseLink, tab: "complete" }),
+    manage: recurringHref({ ...baseLink, tab: "manage" }),
+  };
 
   return (
     <AppShell active="recurring" email={user.email}>
-      <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="eyebrow">{formatMonth(month)}</p>
-          <h1 className="display mt-2 text-3xl sm:text-4xl">Recurring</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-            Bills, subscriptions, and income Plaid detects automatically, plus anything you track manually.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+      <PageHeader
+        title="Recurring"
+        actions={
+          <>
+            <SegmentedControl
+              ariaLabel="Financial scope"
+              items={[
+                {
+                  label: "Mine",
+                  href: recurringHref({ ...baseLink, tab, scope: undefined }),
+                  active: loaded.scope.kind === "mine",
+                },
+                ...(loaded.visibleHouseholdIds[0]
+                  ? [
+                      {
+                        label: "Household",
+                        href: recurringHref({ ...baseLink, tab, scope: loaded.visibleHouseholdIds[0] }),
+                        active: loaded.scope.kind === "household",
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+            <ButtonLink href={links.manage} variant="primary">
+              Manage recurring
+            </ButtonLink>
+          </>
+        }
+      />
+
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        <Link
+          href={recurringHref({ ...baseLink, tab, month: shiftMonth(month, -1) })}
+          aria-label="Previous month"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-panel-border bg-panel"
+        >
+          <ChevronLeft aria-hidden className="h-4 w-4" />
+        </Link>
+        <span className="min-w-[7rem] text-center text-sm font-bold">{formatMonth(month)}</span>
+        <Link
+          href={recurringHref({ ...baseLink, tab, month: shiftMonth(month, 1) })}
+          aria-label="Next month"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-panel-border bg-panel"
+        >
+          <ChevronRight aria-hidden className="h-4 w-4" />
+        </Link>
+        {month !== currentMonth && (
           <Link
-            href={recurringHref({ ...baseLink, month: shiftMonth(month, -1) })}
+            href={recurringHref({ ...baseLink, tab, month: currentMonth })}
             className="inline-flex min-h-11 items-center rounded-field border border-panel-border bg-panel px-4 text-sm font-semibold"
           >
-            Previous
+            Today
           </Link>
-          <Link
-            href={recurringHref({ ...baseLink, month: shiftMonth(month, 1) })}
-            className="inline-flex min-h-11 items-center rounded-field border border-panel-border bg-panel px-4 text-sm font-semibold"
-          >
-            Next
-          </Link>
-          <Link
-            href={recurringHref({ ...baseLink, scope: undefined })}
-            aria-current={loaded.scope.kind === "mine" ? "page" : undefined}
-            className="inline-flex min-h-11 items-center rounded-field border border-panel-border bg-panel px-4 text-sm font-semibold"
-          >
-            Mine
-          </Link>
-          {loaded.visibleHouseholdIds[0] && (
-            <Link
-              href={recurringHref({ ...baseLink, scope: loaded.visibleHouseholdIds[0] })}
-              aria-current={loaded.scope.kind === "household" ? "page" : undefined}
-              className="inline-flex min-h-11 items-center rounded-field border border-panel-border bg-panel px-4 text-sm font-semibold"
-            >
-              Household
-            </Link>
-          )}
-        </div>
-      </header>
+        )}
+      </div>
 
       <div className="mt-6 space-y-4">
         {loaded.stale && (
@@ -110,21 +144,21 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
           </Panel>
         )}
 
-        <ReviewBanner reviewCount={loaded.view.reviewCount}>
-          <p className="text-sm text-muted">Open the &quot;All&quot; tab below to confirm or dismiss each one.</p>
-        </ReviewBanner>
+        <ReviewBanner reviewCount={loaded.view.reviewCount} reviewHref={links.manage} />
 
-        <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-          <Panel title="Occurrences" eyebrow="This month">
-            <RecurringList
-              occurrences={loaded.view.occurrences}
-              streams={loaded.allStreams}
-              manualItems={loaded.manualItems}
-              currency={loaded.currency}
-            />
-          </Panel>
-          <MonthSummary totals={loaded.view.totals} currency={loaded.currency} />
-        </div>
+        <MonthSummary totals={loaded.view.totals} currency={loaded.currency} />
+
+        <Panel title="Occurrences" eyebrow="This month">
+          <RecurringList
+            occurrences={loaded.view.occurrences}
+            streams={loaded.allStreams}
+            manualItems={loaded.manualItems}
+            currency={loaded.currency}
+            today={today}
+            tab={tab}
+            links={links}
+          />
+        </Panel>
       </div>
     </AppShell>
   );

@@ -337,14 +337,35 @@ describe("DashboardWidgetGrid", () => {
     expect(html).not.toContain("Sync another account");
   });
 
-  it("gives the wide widget both columns", () => {
+  it("splits widgets into Monarch's fixed left/right columns, not the saved order", () => {
     const html = renderToStaticMarkup(
       createElement(DashboardWidgetGrid, {
         ...baseProps,
-        prefs: { order: ["spendingCompare"], hidden: [] },
+        prefs: { order: ["spendingCompare", "goals", "budget"], hidden: [] },
       }),
     );
-    expect(html).toContain("xl:col-span-2");
+    const leftColumn = html.slice(
+      html.indexOf('data-dashboard-column="left"'),
+      html.indexOf('data-dashboard-column="right"'),
+    );
+    const rightColumn = html.slice(html.indexOf('data-dashboard-column="right"'));
+    // goals/budget are left-column widgets regardless of where they sit in
+    // the saved order relative to a right-column widget like spendingCompare.
+    expect(leftColumn).toContain("Goals");
+    expect(leftColumn).toContain("Budget");
+    expect(leftColumn).not.toContain("View data table");
+    expect(rightColumn).toContain("View data table");
+  });
+
+  it("preserves the saved order within a single column", () => {
+    const html = renderToStaticMarkup(
+      createElement(DashboardWidgetGrid, {
+        ...baseProps,
+        prefs: { order: ["netWorth", "goals", "budget"], hidden: [] },
+      }),
+    );
+    expect(html.indexOf("Net worth")).toBeLessThan(html.indexOf("Goals"));
+    expect(html.indexOf("Goals")).toBeLessThan(html.indexOf("Budget"));
   });
 
   it("explains itself when the user has hidden everything", () => {

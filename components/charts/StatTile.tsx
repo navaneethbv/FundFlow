@@ -33,8 +33,7 @@ export default function StatTile({
   // one thing a delta must never do: imply a movement that did not happen.
   const isFlat = delta === 0;
   const isGood = delta !== undefined && (delta > 0) === upIsGood;
-  let deltaColor = "var(--viz-muted)";
-  if (!isFlat) deltaColor = isGood ? "var(--viz-good)" : "var(--viz-bad)";
+  const deltaClass = isFlat ? "text-muted" : isGood ? "text-success" : "text-danger";
 
   return (
     <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
@@ -46,20 +45,20 @@ export default function StatTile({
         <h3 className="eyebrow">{label}</h3>
         {chart ?? (trend && trend.length >= 2 && <Sparkline values={trend} />)}
       </div>
-      <p className="metric-value mt-3 text-3xl">
+      <p data-money className="metric-value mt-3 text-3xl">
         {formatCurrency(value)}
       </p>
       {showDelta && (
-        <p className="mt-2 text-sm font-bold" style={{ color: deltaColor }}>
+        <p className={`mt-2 text-sm font-bold ${deltaClass}`}>
           {isFlat ? (
             "No change"
           ) : (
             <>
               {delta! > 0 ? "▲" : "▼"}{" "}
-              <span className="money">{formatCurrency(Math.abs(delta!))}</span>
+              <span data-money>{formatCurrency(Math.abs(delta!))}</span>
             </>
           )}{" "}
-          <span style={{ color: "var(--viz-muted)" }}>vs {deltaVs}</span>
+          <span className="text-muted">vs {deltaVs}</span>
         </p>
       )}
     </section>

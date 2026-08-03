@@ -122,14 +122,14 @@ export default function SeedBudgetButton({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="budget-proposal-title"
         onKeyDown={handleDialogKeyDown}
-        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-card border border-panel-border bg-panel p-5 shadow-xl sm:p-6"
+        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-card border border-panel-border bg-panel p-5 shadow-float sm:p-6"
       >
         <div className="flex items-start gap-3">
           <Sparkles aria-hidden className="mt-1 h-5 w-5 text-accent" />

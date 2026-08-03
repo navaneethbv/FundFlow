@@ -1,13 +1,14 @@
-import Link from "next/link";
 import AppShell from "@/components/shell/AppShell";
+import PageHeader from "@/components/shell/PageHeader";
 import GoalsManager from "@/components/goals/GoalsManager";
 import GoalAllocationPanel from "@/components/goals/GoalAllocationPanel";
 import GoalCard from "@/components/goals/GoalCard";
+import GoalCardMenu from "@/components/goals/GoalCardMenu";
 import GoalWizard, { type WizardAccount } from "@/components/goals/GoalWizard";
 import EmptyState from "@/components/ui/EmptyState";
 import Panel from "@/components/ui/Panel";
+import Tabs from "@/components/ui/Tabs";
 import { Target } from "@/components/ui/icons";
-import { cn } from "@/lib/cn";
 import { getDashboardData } from "@/lib/dashboard";
 import { getGoals } from "@/lib/goals";
 import { isFeatureEnabled } from "@/lib/feature-flags";
@@ -80,46 +81,31 @@ export default async function GoalsPage({ searchParams }: Readonly<PageProps>) {
 
   return (
     <AppShell active="goals" email={user?.email}>
-      <div>
-        <p className="eyebrow">Planning</p>
-        <h1 className="display mt-2 text-3xl sm:text-4xl">Goals</h1>
-        <p className="mt-2 text-sm text-muted">
-          Set targets, fund them from real balances, and record contributions as
-          you go.
-        </p>
-      </div>
+      <PageHeader
+        title="Goals"
+        actions={goalsV2Enabled ? <GoalWizard accounts={wizardAccounts} defaultGoalType={tab} /> : undefined}
+      />
 
       {goalsV2Enabled && (
         <>
-      <nav aria-label="Goal type" className="flex flex-wrap gap-1">
-        {TABS.map((entry) => (
-          <Link
-            key={entry.key}
-            href={`/goals?tab=${entry.key}`}
-            aria-current={tab === entry.key ? "page" : undefined}
-            className={cn(
-              "inline-flex min-h-11 items-center rounded-field px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-2",
-              tab === entry.key
-                ? "bg-accent-soft text-accent"
-                : "text-muted hover:bg-panel-hover hover:text-foreground",
-            )}
-          >
-            {entry.label}
-          </Link>
-        ))}
-      </nav>
+          <Tabs
+            items={TABS.map((entry) => ({
+              label: entry.label,
+              href: `/goals?tab=${entry.key}`,
+              active: tab === entry.key,
+            }))}
+          />
 
-      <GoalWizard accounts={wizardAccounts} defaultGoalType={tab} />
-
-      {visible.length === 0 ? (
+          {visible.length === 0 ? (
         <EmptyState
           icon={<Target aria-hidden className="h-5 w-5" />}
-          title={tab === "pay_down" ? "No payoff goals yet" : "No savings goals yet"}
+          title={tab === "pay_down" ? "No payoff goals yet" : "Plan for your future"}
           description={
             tab === "pay_down"
               ? "Turn a credit card or loan balance into a goal and watch it close."
-              : "Pick a template above to set your first target."
+              : "Pick a template to set your first savings target."
           }
+          action={<GoalWizard accounts={wizardAccounts} defaultGoalType={tab} />}
         />
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
@@ -128,6 +114,7 @@ export default async function GoalsPage({ searchParams }: Readonly<PageProps>) {
               key={goal.id}
               goal={goal}
               currency={currency}
+              menu={<GoalCardMenu goal={goal} householdId={householdId} />}
               action={
                 <GoalAllocationPanel
                   goalId={goal.id}
@@ -169,11 +156,17 @@ export default async function GoalsPage({ searchParams }: Readonly<PageProps>) {
         </>
       )}
 
-      <GoalsManager
-        initialGoals={goals}
-        monthlyNet={monthlyNet}
-        householdId={householdId}
-      />
+      {/* v2 cards are the single source of truth for edit/contribute/
+          household-visibility (via each card's `⋯` menu) once goalsV2 is
+          on — GoalsManager's flat list only remains as the whole page for a
+          deployment that has the flag off. */}
+      {!goalsV2Enabled && (
+        <GoalsManager
+          initialGoals={goals}
+          monthlyNet={monthlyNet}
+          householdId={householdId}
+        />
+      )}
     </AppShell>
   );
 }

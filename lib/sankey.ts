@@ -52,15 +52,21 @@ export const MIN_SANKEY_NODE_HEIGHT = 3;
 /**
  * A node shorter than this cannot carry a legible label beside it, so the
  * chart renders it unlabelled and leaves its identity to the `<title>` and the
- * table twin. Set from the 11px label plus its leading.
+ * table twin. Set from the two-line label block (name + amount/percent, each
+ * ~12px) it needs to clear without touching a neighbour's label.
  */
-export const MIN_LABELLED_NODE_HEIGHT = 16;
+export const MIN_LABELLED_NODE_HEIGHT = 28;
 
 /**
  * Vertical room one node needs before its label starts colliding with its
  * neighbour's. Drives `sankeyCanvasHeight`, not the layout itself.
+ *
+ * Sized for a two-line label (name line + a bold amount/percent line, ~12px
+ * each) rather than the single line this used to reserve for: a label slot
+ * that only fits one line leaves the second line with nowhere to go but on
+ * top of the next node's label.
  */
-const COMFORTABLE_ROW_HEIGHT = 22;
+const COMFORTABLE_ROW_HEIGHT = 30;
 
 /**
  * The canvas height a graph needs so its busiest column can breathe.
@@ -103,6 +109,14 @@ export function layoutSankey(
   height: number,
   nodeWidth: number,
   nodePadding: number,
+  /**
+   * Optional per-column x position, as a fraction (0-1) of the usable width
+   * (`width - nodeWidth`), indexed by column number. A caller with a reason
+   * for uneven gaps (the cash-flow diagram widens the hub-to-groups gap to
+   * make room for both sides' labels) passes this; omitting it keeps the
+   * default even division across `0..maxColumn`.
+   */
+  columnPositions?: readonly number[],
 ): SankeyLayout {
   if (nodes.length === 0) return { nodes: [], links: [] };
 
@@ -114,6 +128,11 @@ export function layoutSankey(
   // A single column has nowhere to spread to; dividing by maxColumn would be a
   // divide-by-zero.
   const columnStride = maxColumn > 0 ? (width - nodeWidth) / maxColumn : 0;
+  const usableWidth = width - nodeWidth;
+  const xForColumn = (column: number): number => {
+    const fraction = columnPositions?.[column];
+    return fraction !== undefined ? fraction * usableWidth : column * columnStride;
+  };
 
   // One shared scale: the tightest column decides it, so no column overflows.
   let scale = Number.POSITIVE_INFINITY;
@@ -149,7 +168,7 @@ export function layoutSankey(
       const nodeHeight = heightFor(node.value);
       positioned.set(node.id, {
         ...node,
-        x: round2(column * columnStride),
+        x: round2(xForColumn(column)),
         y: round2(y),
         height: round2(nodeHeight),
       });

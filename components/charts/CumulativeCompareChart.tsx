@@ -15,8 +15,9 @@ import type { CumulativeSpendDay } from "@/lib/dashboard";
  *     because a reader scanning rows needs a number, and "same as day 28" is
  *     true — it just is not a data point worth plotting.
  *
- * Last month is the muted ink token and this month is the accent, so the two
- * series differ in lightness as well as hue.
+ * This month is the money-accent orange (line + gradient area fill,
+ * matching Monarch); last month is a plain grey line — the two series
+ * differ in lightness/saturation as well as which one carries a fill.
  */
 
 const WIDTH = 640;
@@ -108,9 +109,8 @@ export default function CumulativeCompareChart({
           <path
             d={linePath(lastPoints)}
             fill="none"
-            stroke="var(--viz-ink-2)"
+            stroke="var(--viz-muted)"
             strokeWidth={2}
-            strokeDasharray="4 3"
           >
             <title>{previousMonthLabel}</title>
           </path>
@@ -120,13 +120,13 @@ export default function CumulativeCompareChart({
           <>
             <path
               d={areaPath(thisPoints, PAD_TOP + plotHeight)}
-              fill="var(--viz-1)"
-              fillOpacity={0.12}
+              fill="var(--accent)"
+              fillOpacity={0.16}
             />
             <path
               d={linePath(thisPoints)}
               fill="none"
-              stroke="var(--viz-1)"
+              stroke="var(--accent)"
               strokeWidth={2}
             >
               <title>{monthLabel}</title>
@@ -136,7 +136,7 @@ export default function CumulativeCompareChart({
 
         {endpoint && endpointValue?.thisMonth !== null && endpointValue && (
           <>
-            <circle cx={endpoint.x} cy={endpoint.y} r={3.5} fill="var(--viz-1)" />
+            <circle cx={endpoint.x} cy={endpoint.y} r={3.5} fill="var(--accent)" />
             <text
               x={Math.min(endpoint.x + 6, WIDTH - PAD_RIGHT)}
               y={Math.max(endpoint.y - 6, PAD_TOP + 8)}
@@ -174,16 +174,16 @@ export default function CumulativeCompareChart({
         <li className="flex items-center gap-1.5">
           <span
             className="inline-block h-0.5 w-4 flex-shrink-0"
-            style={{ background: "var(--viz-1)" }}
+            style={{ background: "var(--viz-muted)" }}
           />
-          <span style={{ color: "var(--viz-ink-2)" }}>{monthLabel}</span>
+          <span style={{ color: "var(--viz-ink-2)" }}>{previousMonthLabel}</span>
         </li>
         <li className="flex items-center gap-1.5">
           <span
             className="inline-block h-0.5 w-4 flex-shrink-0"
-            style={{ background: "var(--viz-ink-2)" }}
+            style={{ background: "var(--accent)" }}
           />
-          <span style={{ color: "var(--viz-ink-2)" }}>{previousMonthLabel}</span>
+          <span style={{ color: "var(--viz-ink-2)" }}>{monthLabel}</span>
         </li>
       </ul>
 

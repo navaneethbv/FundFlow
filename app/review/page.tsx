@@ -1,4 +1,5 @@
 import AppShell from "@/components/shell/AppShell";
+import PageHeader from "@/components/shell/PageHeader";
 import BarList from "@/components/dashboard/BarList";
 import ButtonLink from "@/components/ui/ButtonLink";
 import Panel from "@/components/ui/Panel";
@@ -36,20 +37,17 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
 
   return (
     <AppShell active="reports" email={user?.email}>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="eyebrow">Monthly Review</p>
-          <h1 className="display mt-2 text-3xl sm:text-4xl">
-            {formatMonth(data.selectedMonth)} review
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted">
-            A guided snapshot of income, spending, budgets, goals, and notable changes for the month.
-          </p>
-        </div>
-        <ButtonLink href={`/api/export/report?month=${data.selectedMonth}`}>
-          Export PDF
-        </ButtonLink>
-      </div>
+      <PageHeader
+        title={`${formatMonth(data.selectedMonth)} review`}
+        actions={
+          <ButtonLink href={`/api/export/report?month=${data.selectedMonth}`}>
+            Export PDF
+          </ButtonLink>
+        }
+      />
+      <p className="max-w-2xl text-sm text-muted">
+        A guided snapshot of income, spending, budgets, goals, and notable changes for the month.
+      </p>
 
       <div className="grid gap-4 md:grid-cols-3">
         <Panel title="Income">

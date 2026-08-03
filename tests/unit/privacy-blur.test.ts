@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 /**
- * Privacy blur mode: a TopBar toggle sets data-privacy="blur" on <html>
- * (persisted per device in localStorage), and globals.css blurs the marked
- * amounts.
+ * Privacy blur mode: a toggle in the sidebar's account menu sets
+ * data-privacy="blur" on <html> (persisted per device in localStorage), and
+ * globals.css blurs the marked amounts.
  *
  * The blur once keyed on `.metric-value` alone, on the assumption that it was
  * "the class already worn by all major amount displays". It was not: the class
@@ -21,8 +21,8 @@ describe("privacy blur mode", () => {
     expect(source).toContain("aria-pressed");
   });
 
-  it("is mounted in the top bar", () => {
-    const source = readFileSync("components/shell/TopBar.tsx", "utf8");
+  it("is mounted in the sidebar's account menu", () => {
+    const source = readFileSync("components/shell/UserMenu.tsx", "utf8");
     expect(source).toContain("PrivacyToggle");
   });
 

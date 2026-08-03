@@ -131,8 +131,8 @@ export default function ProfileSection({
         </Field>
         {error && <p className="text-sm text-danger">{error}</p>}
         {status && <p className="text-sm text-success">{status}</p>}
-        <Button type="submit" disabled={busy}>
-          {busy ? "Saving…" : "Save"}
+        <Button type="submit" size="lg" disabled={busy}>
+          {busy ? "Saving…" : "Update Profile"}
         </Button>
       </form>
     </Panel>

@@ -206,6 +206,10 @@ test.describe.serial("accounts page", () => {
     ).toBeVisible();
     await page.getByRole("link", { name: "Totals" }).click();
 
+    // The GET filter form lives behind a collapsible "Filters" disclosure,
+    // closed by default (no active filter yet) — open it before touching
+    // the fields inside.
+    await page.getByText("Filters", { exact: true }).click();
     await page.getByLabel("Institution").selectOption({
       label: "Demo Bank (sample data)",
     });
@@ -225,12 +229,18 @@ test.describe.serial("accounts page", () => {
     ).toBeHidden();
 
     await page.goto("/accounts");
-    const preferences = page
-      .locator("details")
-      .filter({ hasText: "Account visibility and order" });
-    await preferences
-      .getByText("Account visibility and order", { exact: true })
-      .click();
+    // Account preferences now live inside the same Filters disclosure —
+    // open it first.
+    await page.getByText("Filters", { exact: true }).click();
+    // Locate via the summary's own parent rather than filtering `details`
+    // by text content: the outer Filters `<details>` now also contains this
+    // phrase (as a nested descendant), so a text-content filter on
+    // `details` would match both and be ambiguous.
+    const preferencesSummary = page.getByText("Account visibility and order", {
+      exact: true,
+    });
+    const preferences = preferencesSummary.locator("xpath=..");
+    await preferencesSummary.click();
     const checkingPreference = preferences
       .locator("div")
       .filter({ hasText: /^Demo Checking \(\.\.\.0001\)UpDownHide$/ })
@@ -248,6 +258,9 @@ test.describe.serial("accounts page", () => {
     ).toBeHidden();
 
     await page.getByRole("link", { name: "Household" }).click();
+    // Switching scope navigates to a fresh URL that drops the other filter
+    // params, so the Filters disclosure closes again — reopen it.
+    await page.getByText("Filters", { exact: true }).click();
     await page.getByLabel("Owner").selectOption(memberId);
     await page.getByLabel("Visibility").selectOption("visible");
     await page.getByRole("button", { name: "Apply filters" }).click();
@@ -266,13 +279,17 @@ test.describe.serial("accounts page", () => {
     );
 
     await page.goto("/accounts");
+    // Open the Filters disclosure so its fields (and the nested account
+    // preferences trigger) are actually rendered/interactable for the sweep.
+    await page.getByText("Filters", { exact: true }).click();
     const touchTargets = [
       page.getByRole("button", { name: "Hide amounts" }),
       page.getByRole("button", { name: /Switch to .* mode/ }),
       page.getByRole("button", { name: "Sign out" }),
       page.getByRole("button", { name: "Connect a bank" }),
       page.getByRole("button", { name: "Refresh" }),
-      page.getByRole("link", { name: "Export CSV" }),
+      page.getByRole("link", { name: "Download CSV" }),
+      page.getByText("Filters", { exact: true }),
       page.getByLabel("Institution"),
       page.getByLabel("Account type"),
       page.getByLabel("Visibility"),

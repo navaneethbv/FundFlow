@@ -7,6 +7,11 @@ import type {
   AppShellActive,
   NavItemKey,
 } from "@/components/shell/nav-model";
+import { OPEN_COMMAND_PALETTE_EVENT } from "@/components/shell/command-palette-events";
+import PrivacyToggle from "@/components/PrivacyToggle";
+import ThemeToggle from "@/components/ThemeToggle";
+import LogoutButton from "@/components/LogoutButton";
+import { LogoMark } from "@/components/ui/Logo";
 import {
   ArrowLeftRight,
   BarChart3,
@@ -18,6 +23,7 @@ import {
   Menu,
   PiggyBank,
   Repeat,
+  Search,
   Settings,
   Sparkles,
   Target,
@@ -164,9 +170,9 @@ export default function MobileNavigation({
             className="relative max-h-[85vh] w-full overflow-y-auto rounded-t-2xl border border-panel-border bg-panel p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-pop"
           >
             <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="eyebrow">Navigate</p>
-                <h2 className="mt-1 text-lg font-bold">All destinations</h2>
+              <div className="flex items-center gap-2.5">
+                <LogoMark className="h-7 w-7 shrink-0" />
+                <h2 className="text-lg font-bold">All destinations</h2>
               </div>
               <button
                 ref={closeButtonRef}
@@ -222,6 +228,40 @@ export default function MobileNavigation({
                   </section>
                 );
               })}
+
+              {/* The controls the old top bar carried, folded in here now
+                  that the shell has no bar of its own on mobile either. */}
+              <section>
+                <h3 className="eyebrow mb-2">Account</h3>
+                <div className="space-y-1 rounded-field bg-panel-2 p-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT));
+                    }}
+                    className="flex min-h-12 w-full items-center gap-3 rounded-field px-3 py-2 text-left text-sm font-semibold text-muted transition-colors hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"
+                  >
+                    <Search aria-hidden className="h-4 w-4 shrink-0" />
+                    Search
+                  </button>
+                  <div className="flex min-h-12 items-center justify-between gap-3 rounded-field px-3 py-2">
+                    <span className="text-sm font-semibold text-foreground">
+                      Hide amounts
+                    </span>
+                    <PrivacyToggle />
+                  </div>
+                  <div className="flex min-h-12 items-center justify-between gap-3 rounded-field px-3 py-2">
+                    <span className="text-sm font-semibold text-foreground">
+                      Theme
+                    </span>
+                    <ThemeToggle variant="switch" />
+                  </div>
+                  <div className="px-2 py-1">
+                    <LogoutButton />
+                  </div>
+                </div>
+              </section>
             </div>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ProgressBar from "@/components/ui/ProgressBar";
 import { formatCurrency } from "@/lib/format";
 import { goalSummary, type Goal } from "@/lib/goals";
 
@@ -31,15 +32,11 @@ export default function GoalsSummary({ goals }: Readonly<{ goals: Goal[] }>) {
                 {formatCurrency(goal.saved_amount)} / {formatCurrency(goal.target_amount)}
               </span>
             </div>
-            <span className="block h-2 rounded-full bg-panel-hover">
-              <span
-                className="block h-2 rounded-full"
-                style={{
-                  width: `${progressPct}%`,
-                  backgroundColor: complete ? "var(--viz-good)" : "var(--accent)",
-                }}
-              />
-            </span>
+            <ProgressBar
+              percent={progressPct}
+              tone={complete ? "success" : "accent"}
+              label={`${goal.name}: ${Math.round(Math.min(100, progressPct))}% saved`}
+            />
             <p className="mt-1 text-xs text-muted">
               {complete
                 ? "Goal complete"

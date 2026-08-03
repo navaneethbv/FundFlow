@@ -1,6 +1,8 @@
 import Badge from "@/components/ui/Badge";
 import TransactionEditor from "@/components/transactions/TransactionEditor";
+import { MerchantAvatar } from "@/components/ui/Avatar";
 import { formatCurrency, titleCase } from "@/lib/format";
+import { formatDate } from "@/lib/format-date";
 
 export interface LedgerCardRow {
   id: string;
@@ -26,13 +28,14 @@ export default function MobileLedgerList({ rows }: Readonly<{ rows: LedgerCardRo
     <ul className="divide-y divide-panel-border">
       {rows.map((row) => (
         <li key={row.id} className="flex items-start gap-3 px-4 py-3">
+          <MerchantAvatar name={row.merchant} size={32} className="mt-0.5 shrink-0" />
           <div className="min-w-0 flex-1">
             <p className="flex flex-wrap items-center gap-2">
               <span className="truncate font-medium">{row.merchant}</span>
               {row.pending && <Badge tone="warning">pending</Badge>}
             </p>
             <p className="mt-0.5 text-xs text-muted">
-              {row.date} · {titleCase(row.category) || "Uncategorized"} ·{" "}
+              {formatDate(row.date)} · {titleCase(row.category) || "Uncategorized"} ·{" "}
               {row.accountLabel}
             </p>
             {(row.note || row.tags.length > 0 || row.splits.length > 0) && (
@@ -50,11 +53,10 @@ export default function MobileLedgerList({ rows }: Readonly<{ rows: LedgerCardRo
           <div className="flex shrink-0 flex-col items-end gap-1">
             <span
               data-money
-              className="whitespace-nowrap font-semibold tabular-nums"
-              style={
+              className={
                 row.amount < 0
-                  ? { color: "var(--success)" }
-                  : { color: "var(--danger)" }
+                  ? "whitespace-nowrap font-semibold tabular-nums text-success"
+                  : "whitespace-nowrap font-semibold tabular-nums text-foreground"
               }
             >
               {row.amount < 0 ? "+" : "-"}

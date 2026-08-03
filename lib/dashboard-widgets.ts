@@ -93,13 +93,23 @@ export function visibleWidgets(prefs: DashboardWidgetPrefs): WidgetKey[] {
   return prefs.order.filter((key) => !hidden.has(key));
 }
 
+export type WidgetColumn = "left" | "right";
+
 export interface WidgetDefinition {
   key: WidgetKey;
   label: string;
   /** One line explaining what the widget shows, used by the customize drawer. */
   hint: string;
-  /** Widgets that read a whole-page-width chart get the full column span. */
-  wide: boolean;
+  /**
+   * Which side of the dashboard's asymmetric two-column grid this widget
+   * renders in — a fixed placement matching Monarch's own layout (left:
+   * Budget/Net worth/Goals; right: Spending/Transactions/Recurring/
+   * Investments), not a free per-user choice. A user's saved `order` still
+   * controls arrangement *within* a column; it can no longer move a widget
+   * across the left/right split, the same way it never controlled a
+   * widget's card styling.
+   */
+  column: WidgetColumn;
 }
 
 export const WIDGET_DEFINITIONS: Record<WidgetKey, WidgetDefinition> = {
@@ -107,43 +117,43 @@ export const WIDGET_DEFINITIONS: Record<WidgetKey, WidgetDefinition> = {
     key: "budget",
     label: "Budget",
     hint: "Planned against actual for this month",
-    wide: false,
+    column: "left",
   },
   spendingCompare: {
     key: "spendingCompare",
     label: "Spending vs last month",
     hint: "Cumulative spend, day by day",
-    wide: true,
+    column: "right",
   },
   netWorth: {
     key: "netWorth",
     label: "Net worth",
     hint: "Assets minus liabilities over time",
-    wide: false,
+    column: "left",
   },
   transactions: {
     key: "transactions",
     label: "Recent transactions",
     hint: "The latest activity across accounts",
-    wide: false,
+    column: "right",
   },
   recurring: {
     key: "recurring",
     label: "Recurring",
     hint: "What is due in the next seven days",
-    wide: false,
+    column: "right",
   },
   goals: {
     key: "goals",
     label: "Goals",
     hint: "Progress toward each target",
-    wide: false,
+    column: "left",
   },
   investments: {
     key: "investments",
     label: "Investments",
     hint: "Holdings and allocation",
-    wide: false,
+    column: "right",
   },
 };
 

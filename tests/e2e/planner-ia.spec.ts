@@ -22,8 +22,8 @@ const email = `planner-ia-e2e-${stamp}@example.com`;
  * cash-flow.spec.ts: a throwaway auth user is created via the admin client,
  * signed in through the real UI, and deleted in afterAll. No household or
  * Plaid data is needed here -- this suite only exercises the app shell
- * (sidebar, top bar, command palette), which renders the same regardless of
- * the signed-in user's data.
+ * (sidebar, its utility icon row, command palette), which renders the same
+ * regardless of the signed-in user's data.
  */
 test.describe.serial("Phase 1: navigation and information architecture", () => {
   test.skip(!RUN, "Supabase browser and service credentials are required");
@@ -95,7 +95,7 @@ test.describe.serial("Phase 1: navigation and information architecture", () => {
     ).toBeVisible();
   });
 
-  test("search opens the command palette via the top-bar button and Cmd+K", async ({
+  test("search opens the command palette via the sidebar button and Cmd+K", async ({
     page,
   }) => {
     await page.goto("/dashboard");
@@ -119,17 +119,19 @@ test.describe.serial("Phase 1: navigation and information architecture", () => {
     await page.keyboard.press("Escape");
   });
 
-  test("notifications and settings top-bar links navigate correctly", async ({
+  test("notifications and settings utility-icon links navigate correctly", async ({
     page,
   }) => {
     await page.goto("/dashboard");
-    // Notifications and Settings are also sidebar nav items, so scope to
-    // the top bar (the <header>, implicit role "banner") to disambiguate.
-    const topBar = page.getByRole("banner");
-    await topBar.getByRole("link", { name: /Notifications/ }).click();
+    // Notifications and Settings are also sidebar nav-list items (V1 keeps
+    // both on purpose, so collapsing the sidebar never hides a
+    // destination), so scope to the utility icon row's own nav landmark to
+    // disambiguate from the nav-list copy.
+    const utilities = page.getByRole("navigation", { name: "Shell utilities" });
+    await utilities.getByRole("link", { name: /Notifications/ }).click();
     await expect(page).toHaveURL(/\/notifications$/);
     await page.goBack();
-    await topBar.getByRole("link", { name: "Settings" }).click();
+    await utilities.getByRole("link", { name: "Settings" }).click();
     await expect(page).toHaveURL(/\/settings$/);
   });
 

@@ -1,4 +1,5 @@
 import { formatCurrency } from "@/lib/format";
+import { emojiForLabel } from "@/lib/category-emoji";
 import {
   foldSankeyOverflow,
   layoutSankey,
@@ -17,13 +18,16 @@ import {
  * group's hue, so a column reads as related families rather than as a stack of
  * unrelated bars. This reverses the earlier rule (colour by column).
  *
- * The palette is the seven validated `--viz-*` slots, assigned to the seven
- * largest groups; anything past the seventh takes a neutral rather than an
- * eighth generated hue. Seven is a measured ceiling, not a style choice: an
- * eight-hue set falls to ΔE 2.4 under protanopia and a twelve-hue set to 0.4,
- * against a floor of 6. Identity therefore never rests on colour alone —
- * every node is labelled and the table twin repeats every figure, which is
- * also what makes the palette's 6–8 CVD floor band legal here.
+ * The palette is the seven validated `--viz-*` slots. A group whose identity
+ * is in `KNOWN_GROUP_SLOTS` always takes that slot (Shopping is always
+ * magenta, whatever else is in the diagram); an unrecognised group fills
+ * whichever slots the known ones left, by size, and anything past the
+ * seventh takes a neutral rather than an eighth generated hue. Seven is a
+ * measured ceiling, not a style choice: an eight-hue set falls to ΔE 2.4
+ * under protanopia and a twelve-hue set to 0.4, against a floor of 6.
+ * Identity therefore never rests on colour alone — every node is labelled and
+ * the table twin repeats every figure, which is also what makes the
+ * palette's 6–8 CVD floor band legal here.
  *
  * Below 768px the SVG is replaced by the table rather than squeezed: a Sankey
  * at phone width is unreadable, and `hidden`/`md:hidden` means exactly one of
@@ -39,19 +43,43 @@ import {
 const VIEW_WIDTH = 1280;
 /** Floor, not the height: the canvas grows with the busiest column. */
 const MIN_VIEW_HEIGHT = 520;
-const NODE_WIDTH = 18;
+/** Thin and sharp-cornered, matching the reference diagram's bars. */
+const NODE_WIDTH = 10;
 const NODE_PADDING = 14;
 const MARGIN_X = 24;
-/** Headroom for the hub label, which sits above its bar. */
-const MARGIN_TOP = 28;
+/**
+ * Small breathing room above the topmost node. The hub label used to need
+ * headroom above its own bar; it now sits beside the bar like every other
+ * node (see `isHub` below), so this is no longer load-bearing height.
+ */
+const MARGIN_TOP = 12;
 const LABEL_GAP = 8;
+/** Vertical distance between a label's two stacked lines. */
+const LABEL_LINE_GAP = 13;
 /** Names are short Title Case now, so this rarely bites. */
 const MAX_LABEL_CHARS = 22;
-/** Per column, so no column outgrows the canvas. */
-const DEFAULT_MAX_NODES_PER_COLUMN = 20;
+/**
+ * Per column, so no column outgrows the canvas. Raised from the original 20:
+ * a real cash-flow month has on the order of 30-40 leaf categories, and the
+ * reference diagram labels every one of them rather than folding into
+ * "Other" this early. `foldSankeyOverflow` stays as the backstop for
+ * pathological data; the table twin always carries the unfolded detail.
+ */
+const DEFAULT_MAX_NODES_PER_COLUMN = 60;
 const SOURCE_COLUMN = 0;
 const HUB_COLUMN = 1;
 const GROUP_COLUMN = 2;
+/** Column 3 (categories) has no named constant — nothing branches on it by
+ * number; `labelsLeft` below covers it via `column >= GROUP_COLUMN`. */
+
+/**
+ * Column x-positions as a fraction of the diagram's usable width. Uneven on
+ * purpose: the hub sits in a narrow lane, but the gap right of it carries
+ * both the hub's own label and the incoming edges of the group labels to its
+ * right, so it gets roughly twice the room of the other two gaps. Sampled
+ * from the reference diagram, not derived from anything else in this file.
+ */
+const COLUMN_X_FRACTIONS = [0, 0.34, 0.72, 1] as const;
 
 /** Terminal nodes that mean surplus and shortfall, not a spending group. */
 const NET_INCOME_ID = "grp:__net__";
@@ -74,6 +102,24 @@ const GROUP_COLOURS = [
  * "no spending here" instead of "no hue left to give this".
  */
 const NEUTRAL = "var(--viz-ink-2)";
+
+/**
+ * Fixes a group's hue to its identity rather than its rank by size, so
+ * "Shopping" is always magenta whether it is this month's largest group or
+ * its fifth. Matched case-insensitively against the display label, the same
+ * as `emojiForLabel`. A group not listed here — including any group name this
+ * mapping has never seen — falls back to size-order assignment among
+ * whatever slots the known groups did not already take (see `buildColours`).
+ */
+const KNOWN_GROUP_SLOTS: Readonly<Record<string, number>> = {
+  shopping: 1,
+  financial: 2,
+  "travel & lifestyle": 3,
+  "food & dining": 4,
+  housing: 5,
+  "health & wellness": 6,
+  "auto & transport": 7,
+};
 
 /**
  * Node ids carry `:` and `::` separators, which cannot go straight into a
@@ -119,9 +165,37 @@ function buildColours(
     .filter((node) => node.column === GROUP_COLUMN && node.id !== NET_INCOME_ID)
     .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
 
-  groups.forEach((group, index) => {
-    colours.set(group.id, GROUP_COLOURS[index] ?? NEUTRAL);
-  });
+  // Two passes: pin every group whose identity has a fixed slot first, then
+  // fill whatever slots remain, by size order, for groups this month has that
+  // the mapping above has never seen.
+  const takenSlots = new Set<number>();
+  const slotByGroupId = new Map<string, number>();
+  for (const group of groups) {
+    const slot = KNOWN_GROUP_SLOTS[group.label.trim().toLowerCase()];
+    if (slot !== undefined && !takenSlots.has(slot)) {
+      slotByGroupId.set(group.id, slot);
+      takenSlots.add(slot);
+    }
+  }
+  let nextCandidate = 1;
+  const claimNextFreeSlot = (): number => {
+    while (takenSlots.has(nextCandidate)) nextCandidate += 1;
+    return nextCandidate;
+  };
+  for (const group of groups) {
+    if (slotByGroupId.has(group.id)) continue;
+    const slot = claimNextFreeSlot();
+    slotByGroupId.set(group.id, slot);
+    takenSlots.add(slot);
+  }
+
+  for (const group of groups) {
+    const slot = slotByGroupId.get(group.id);
+    colours.set(
+      group.id,
+      slot !== undefined ? (GROUP_COLOURS[slot - 1] ?? NEUTRAL) : NEUTRAL,
+    );
+  }
 
   // Categories inherit from whichever node feeds them.
   for (const link of links) {
@@ -170,6 +244,7 @@ export default function SankeyChart({
     viewHeight,
     NODE_WIDTH,
     NODE_PADDING,
+    COLUMN_X_FRACTIONS,
   );
 
   const colours = buildColours(folded.nodes, folded.links);
@@ -181,8 +256,12 @@ export default function SankeyChart({
   const totalIn = folded.nodes
     .filter((node) => node.column === HUB_COLUMN)
     .reduce((sum, node) => sum + node.value, 0);
+  // Two decimals with trailing zeros trimmed: "92.91%", "20.1%", "100%" —
+  // never a fixed one decimal, which turns "100%" into the wrong "100.0%".
+  const formatPercent = (fraction: number): string =>
+    `${Number(fraction.toFixed(2))}`;
   const share = (value: number): string =>
-    totalIn > 0 ? ` (${((value / totalIn) * 100).toFixed(1)}%)` : "";
+    totalIn > 0 ? ` (${formatPercent((value / totalIn) * 100)}%)` : "";
 
   return (
     <div>
@@ -242,11 +321,11 @@ export default function SankeyChart({
               // categories read leftward. Labelling both sides toward the same
               // gap is what made columns 2 and 3 collide.
               const labelsLeft = node.column >= GROUP_COLUMN;
-              // The hub is the exception: it is one full-height bar with the
-              // source labels in the gap to its left and the group labels in
-              // the gap to its right, so either side would collide. It sits
-              // above its own bar instead, where nothing else ever is.
               const isHub = node.column === HUB_COLUMN;
+              // Surplus/shortfall are outcomes, not real spending categories,
+              // so they never carry an emoji — same rule as the hub.
+              const isOutcome =
+                node.id === NET_INCOME_ID || node.id === UNFUNDED_ID;
               // Too thin to carry text without overrunning its neighbour: the
               // `<title>` and the table twin still name it.
               const labelled = node.height >= MIN_LABELLED_NODE_HEIGHT;
@@ -256,10 +335,19 @@ export default function SankeyChart({
               if (labelsLeft) {
                 labelX = node.x - LABEL_GAP;
                 anchor = "end";
-              } else if (isHub) {
-                labelX = node.x + NODE_WIDTH / 2;
-                anchor = "middle";
               }
+              // The hub used to sit above its own bar to dodge the source and
+              // group labels on either side of it. The widened hub-to-groups
+              // gap (`COLUMN_X_FRACTIONS`) now leaves room for its label to
+              // sit beside the bar like every other node, so it no longer
+              // needs the exception — or the taller `MARGIN_TOP` that made
+              // room for it.
+
+              const emoji = isHub || isOutcome ? "" : emojiForLabel(node.label);
+              const nameText = emoji
+                ? `${emoji} ${truncate(node.label)}`
+                : truncate(node.label);
+              const centerY = node.y + node.height / 2;
 
               return (
                 <g key={node.id}>
@@ -268,32 +356,40 @@ export default function SankeyChart({
                     y={node.y}
                     width={NODE_WIDTH}
                     height={node.height}
-                    rx={2}
+                    rx={1}
                     fill={colours.get(node.id) ?? NEUTRAL}
                   >
                     <title>{`${node.label}: ${money(node.value)}`}</title>
                   </rect>
                   {labelled && (
                     /* A halo keeps labels legible where they cross a ribbon,
-                       without the text ever wearing a series colour. */
+                       without the text ever wearing a series colour. Two
+                       stacked lines: the name, then the amount and share —
+                       both full ink weight, neither muted or smaller, so the
+                       figure reads as clearly as the name beside it. */
                     <text
-                      x={labelX}
-                      y={isHub ? node.y - LABEL_GAP : node.y + node.height / 2}
-                      dominantBaseline={isHub ? "auto" : "middle"}
                       textAnchor={anchor}
                       fontSize={12}
-                      fill="var(--viz-ink)"
                       stroke="var(--sankey-surface)"
                       strokeWidth={3}
                       paintOrder="stroke"
                     >
-                      {truncate(node.label)}
                       <tspan
+                        x={labelX}
+                        y={centerY - LABEL_LINE_GAP / 2}
+                        dominantBaseline="middle"
+                        fill="var(--viz-ink)"
+                      >
+                        {nameText}
+                      </tspan>
+                      <tspan
+                        x={labelX}
+                        y={centerY + LABEL_LINE_GAP / 2}
+                        dominantBaseline="middle"
                         className="money"
                         data-money
-                        fill="var(--viz-muted)"
-                        dx={5}
-                        fontSize={10.5}
+                        fill="var(--viz-ink)"
+                        fontWeight={600}
                       >
                         {`${money(node.value)}${share(node.value)}`}
                       </tspan>

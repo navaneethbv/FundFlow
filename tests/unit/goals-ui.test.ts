@@ -29,6 +29,12 @@ describe("goals feature", () => {
     expect(page).toContain("GoalsManager");
   });
 
+  it("only renders the legacy GoalsManager panel when goalsV2 is off (v2 cards are the source of truth otherwise)", () => {
+    const page = readFileSync("app/goals/page.tsx", "utf8");
+    expect(page).toContain("{!goalsV2Enabled && (");
+    expect(page).toContain("GoalCardMenu");
+  });
+
   it("surfaces goals on the dashboard overview", () => {
     expect(readFileSync("components/dashboard/PlanView.tsx", "utf8")).toContain("GoalsSummary");
   });

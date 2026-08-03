@@ -1,5 +1,7 @@
 import { Fragment } from "react";
+import { InstitutionAvatar } from "@/components/ui/Avatar";
 import EmptyState from "@/components/ui/EmptyState";
+import { cn } from "@/lib/cn";
 import { formatCurrency } from "@/lib/format";
 import type { InvestmentsPage } from "@/lib/investments";
 
@@ -24,8 +26,8 @@ export default function HoldingsTable({
           <tr className="border-b border-panel-border text-left text-xs uppercase tracking-wide text-muted">
             <th className="py-2 pr-3 font-semibold">Security</th>
             <th className="py-2 pr-3 font-semibold">Account</th>
-            <th className="py-2 pr-3 text-right font-semibold">Quantity</th>
             <th className="py-2 pr-3 text-right font-semibold">Price</th>
+            <th className="py-2 pr-3 text-right font-semibold">Quantity</th>
             <th className="py-2 pr-3 text-right font-semibold">Value</th>
             <th className="py-2 pr-3 text-right font-semibold">Weight</th>
             <th className="py-2 pr-0 text-right font-semibold">Change</th>
@@ -34,7 +36,7 @@ export default function HoldingsTable({
         <tbody>
           {page.byClass.map((group) => (
             <Fragment key={group.label}>
-              <tr className="border-b border-panel-border/60 bg-panel/60">
+              <tr className="border-b border-panel-border/60 bg-panel-2">
                 <td colSpan={7} className="py-1.5 pr-3 text-xs font-semibold uppercase tracking-wide text-muted">
                   {group.label} · {formatCurrency(group.subtotal, currency)}
                 </td>
@@ -42,28 +44,33 @@ export default function HoldingsTable({
               {group.holdings.map((h) => (
                 <tr key={h.id} className="border-b border-panel-border/40">
                   <td className="py-2 pr-3">
-                    <div className="font-medium">{h.securityName}</div>
-                    {h.ticker && <div className="text-xs text-muted">{h.ticker}</div>}
+                    <div className="flex items-center gap-2.5">
+                      <InstitutionAvatar name={h.securityName} size={28} className="shrink-0" />
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">{h.securityName}</div>
+                        {h.ticker && <div className="text-xs text-muted">{h.ticker}</div>}
+                      </div>
+                    </div>
                   </td>
                   <td className="py-2 pr-3 text-muted">{h.accountName}</td>
-                  <td className="py-2 pr-3 text-right tabular-nums">{h.quantity ?? "—"}</td>
                   <td className="py-2 pr-3 text-right tabular-nums">
                     {h.price != null ? formatCurrency(h.price, currency) : "—"}
                   </td>
-                  <td className="py-2 pr-3 text-right tabular-nums font-medium">
+                  <td className="py-2 pr-3 text-right tabular-nums">{h.quantity ?? "—"}</td>
+                  <td data-money className="py-2 pr-3 text-right tabular-nums font-medium">
                     {formatCurrency(h.value, currency)}
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums text-muted">{h.weightPct.toFixed(1)}%</td>
                   <td
-                    className="py-2 pr-0 text-right tabular-nums"
-                    style={{
-                      color:
-                        h.periodChangePct == null
-                          ? undefined
-                          : h.periodChangePct >= 0
-                            ? "var(--viz-good)"
-                            : "var(--viz-bad)",
-                    }}
+                    data-money
+                    className={cn(
+                      "py-2 pr-0 text-right tabular-nums",
+                      h.periodChangePct == null
+                        ? "text-muted"
+                        : h.periodChangePct >= 0
+                          ? "text-success"
+                          : "text-danger",
+                    )}
                   >
                     {h.periodChangePct == null
                       ? "—"
@@ -74,6 +81,18 @@ export default function HoldingsTable({
             </Fragment>
           ))}
         </tbody>
+        <tfoot>
+          <tr className="border-t border-panel-border bg-panel-2 font-semibold">
+            <td className="py-2 pr-3" colSpan={4}>
+              Total
+            </td>
+            <td data-money className="py-2 pr-3 text-right tabular-nums">
+              {formatCurrency(page.total, currency)}
+            </td>
+            <td className="py-2 pr-3 text-right tabular-nums text-muted">100%</td>
+            <td className="py-2 pr-0" />
+          </tr>
+        </tfoot>
       </table>
     </div>
   );

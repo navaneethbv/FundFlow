@@ -50,7 +50,9 @@ export default function PerformanceChart({
         <span className="text-xs font-semibold uppercase tracking-wide text-muted">
           {sufficient ? "Portfolio performance" : "Balance"}
         </span>
-        <span className="tabular-nums font-medium" style={sufficient ? { color: latest >= 0 ? "var(--viz-good)" : "var(--viz-bad)" } : undefined}>
+        <span
+          className={`tabular-nums font-medium ${sufficient ? (latest >= 0 ? "text-success" : "text-danger") : ""}`}
+        >
           {sufficient ? `${latest >= 0 ? "+" : ""}${latest.toFixed(1)}%` : formatCurrency(latest, currency)}
         </span>
       </div>

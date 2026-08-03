@@ -1,20 +1,19 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import BudgetSummary, {
-  type BudgetSummaryTab,
-} from "@/components/budget/BudgetSummary";
+import BudgetRightRail from "@/components/budget/BudgetRightRail";
 import BudgetTable, {
   type BudgetLinePatch,
 } from "@/components/budget/BudgetTable";
 import Panel from "@/components/ui/Panel";
+import { cn } from "@/lib/cn";
 import { formatCurrency, formatMonth } from "@/lib/format";
 import type {
   BudgetLine,
   BudgetPageData,
   BudgetSeedProposal,
+  BudgetSummaryTab,
   BudgetViewData,
 } from "@/lib/budget-page";
 import SeedBudgetButton from "@/components/budget/SeedBudgetButton";
@@ -104,30 +103,52 @@ function recalculate(
   };
 }
 
-function SummaryTabs({
-  active,
-  links,
+/** The grey strip grouping Income / Expenses / Contributions, each holding
+ * one or more `BudgetTable`s. Column captions repeat Monarch's own layout;
+ * not scroll-sticky (unlike the design's literal "sticky sub-header band")
+ * — stacking several independently-sticky strips without knowing the
+ * others' rendered heights risks them overlapping, which isn't something
+ * this sandbox can visually verify, so this ships as a static band instead. */
+function SuperBand({ label }: Readonly<{ label: string }>) {
+  return (
+    <div className="flex items-center justify-between rounded-card bg-panel-2 px-5 py-2.5">
+      <span className="text-xs font-bold uppercase tracking-wide text-muted">{label}</span>
+      <span className="hidden gap-10 text-xs font-bold uppercase tracking-wide text-muted sm:flex">
+        <span className="w-20 text-right">Planned</span>
+        <span className="w-20 text-right">Actual</span>
+        <span className="w-24 text-right">Remaining</span>
+      </span>
+    </div>
+  );
+}
+
+function TotalsRow({
+  label,
+  planned,
+  actual,
+  remaining,
+  currency,
 }: Readonly<{
-  active: BudgetSummaryTab;
-  links: Record<BudgetSummaryTab, string>;
+  label: string;
+  planned: number;
+  actual: number;
+  remaining: number;
+  currency: string;
 }>) {
   return (
-    <nav aria-label="Budget summary" className="flex flex-wrap gap-2">
-      {(["summary", "income", "expenses"] as const).map((tab) => (
-        <Link
-          key={tab}
-          href={links[tab]}
-          aria-current={tab === active ? "page" : undefined}
-          className={`inline-flex min-h-11 items-center rounded-field px-4 text-sm font-semibold capitalize ${
-            tab === active
-              ? "bg-accent text-accent-foreground"
-              : "bg-panel text-muted hover:text-foreground"
-          }`}
+    <div className="flex items-center justify-between rounded-field bg-panel-2 px-5 py-3 text-sm font-bold">
+      <span>{label}</span>
+      <span className="flex gap-6">
+        <span data-money className="w-20 text-right">{formatCurrency(planned, currency)}</span>
+        <span data-money className="w-20 text-right">{formatCurrency(actual, currency)}</span>
+        <span
+          data-money
+          className={cn("w-24 text-right", remaining < 0 ? "text-danger" : "text-foreground")}
         >
-          {tab}
-        </Link>
-      ))}
-    </nav>
+          {formatCurrency(remaining, currency)}
+        </span>
+      </span>
+    </div>
   );
 }
 
@@ -299,47 +320,111 @@ export default function BudgetPlanner({
   }
   if (!monthlyData) return null;
 
+  const incomeSection = monthlyData.sections.find((section) => section.key === "income");
+  const expenseSections = monthlyData.sections.filter((section) => section.key !== "income");
+  const contributionsPlanned = round2(
+    monthlyData.contributions.goals.reduce((total, goal) => total + goal.planned, 0),
+  );
+  const contributionsActual = round2(
+    monthlyData.contributions.goals.reduce((total, goal) => total + goal.actual, 0),
+  );
+
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <SummaryTabs active={summaryTab} links={summaryLinks} />
-        <SeedBudgetButton
-          proposals={proposals}
-          month={month}
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0 space-y-5">
+          <div className="flex justify-end">
+            <SeedBudgetButton proposals={proposals} month={month} currency={currency} />
+          </div>
+
+          <div className="space-y-3">
+            <SuperBand label="Income" />
+            {incomeSection && (
+              <BudgetTable
+                section={incomeSection}
+                currency={currency}
+                disabled={saving}
+                onUpdate={updateLine}
+              />
+            )}
+            <TotalsRow
+              label="Total Income"
+              planned={monthlyData.totalIncome.planned}
+              actual={monthlyData.totalIncome.actual}
+              remaining={round2(monthlyData.totalIncome.actual - monthlyData.totalIncome.planned)}
+              currency={currency}
+            />
+          </div>
+
+          <div className="space-y-3">
+            <SuperBand label="Expenses" />
+            {expenseSections.map((section) => (
+              <BudgetTable
+                key={section.key}
+                section={section}
+                currency={currency}
+                disabled={saving}
+                onUpdate={updateLine}
+              />
+            ))}
+            <TotalsRow
+              label="Total Expenses"
+              planned={monthlyData.totalExpenses.planned}
+              actual={monthlyData.totalExpenses.actual}
+              remaining={monthlyData.totalExpenses.remaining}
+              currency={currency}
+            />
+          </div>
+
+          <div className="space-y-3">
+            <SuperBand label="Contributions" />
+            <Panel eyebrow="Goals" title="Savings and payoff goals">
+              {monthlyData.contributions.goals.length === 0 ? (
+                <p className="text-sm text-muted">
+                  Goal contribution events arrive in Phase 7. No contribution
+                  activity is inferred from balance changes.
+                </p>
+              ) : (
+                <ul className="space-y-2 text-sm">
+                  {monthlyData.contributions.goals.map((goal) => (
+                    <li key={goal.name} className="flex justify-between gap-3">
+                      <span>{goal.name}</span>
+                      <span data-money>{formatCurrency(goal.actual, currency)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+            {monthlyData.contributions.goals.length > 0 && (
+              <TotalsRow
+                label="Total Contributions"
+                planned={contributionsPlanned}
+                actual={contributionsActual}
+                remaining={round2(contributionsPlanned - contributionsActual)}
+                currency={currency}
+              />
+            )}
+          </div>
+
+          <div
+            className={cn(
+              "flex items-center justify-between rounded-card px-5 py-4 text-base font-bold text-white",
+              monthlyData.leftToBudget < 0 ? "bg-danger" : "bg-success",
+            )}
+          >
+            <span>Left to Budget</span>
+            <span data-money>{formatCurrency(monthlyData.leftToBudget, currency)}</span>
+          </div>
+        </div>
+
+        <BudgetRightRail
+          data={monthlyData}
           currency={currency}
+          tab={summaryTab}
+          links={summaryLinks}
         />
       </div>
-      <BudgetSummary
-        data={monthlyData}
-        currency={currency}
-        tab={summaryTab}
-      />
-      {monthlyData.sections.map((section) => (
-        <BudgetTable
-          key={section.key}
-          section={section}
-          currency={currency}
-          disabled={saving}
-          onUpdate={updateLine}
-        />
-      ))}
-      <Panel title="Contributions" eyebrow="Goals">
-        {monthlyData.contributions.goals.length === 0 ? (
-          <p className="text-sm text-muted">
-            Goal contribution events arrive in Phase 7. No contribution
-            activity is inferred from balance changes.
-          </p>
-        ) : (
-          <ul className="space-y-2 text-sm">
-            {monthlyData.contributions.goals.map((goal) => (
-              <li key={goal.name} className="flex justify-between gap-3">
-                <span>{goal.name}</span>
-                <span>{formatCurrency(goal.actual, currency)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
+
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>

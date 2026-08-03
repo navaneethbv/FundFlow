@@ -1,5 +1,4 @@
 import type { ComponentProps } from "react";
-import { cn } from "@/lib/cn";
 import BudgetWidget from "@/components/dashboard/widgets/BudgetWidget";
 import GoalsWidget from "@/components/dashboard/widgets/GoalsWidget";
 import InvestmentsWidget from "@/components/dashboard/widgets/InvestmentsWidget";
@@ -25,8 +24,10 @@ import type { BudgetEnvelope } from "@/lib/planning";
  *
  * Every widget is a thin server component over data the page already loaded,
  * so the grid adds no queries of its own beyond the cumulative-spend window.
- * Widgets are laid out in the user's saved order; the ones that carry a
- * full-width chart span both columns so their x-axis has room to breathe.
+ * Widgets render in Monarch's fixed asymmetric two-column split (left:
+ * Budget/Net worth/Goals; right: Spending/Transactions/Recurring/
+ * Investments — see `WidgetDefinition.column`); the user's saved `order`
+ * still controls arrangement within whichever column a widget belongs to.
  */
 
 export interface DashboardWidgetGridData {
@@ -80,6 +81,7 @@ export default function DashboardWidgetGrid({
             days={cumulativeSpend}
             monthLabel={monthLabel}
             previousMonthLabel={previousMonthLabel}
+            currency={currency}
           />
         );
       case "netWorth":
@@ -108,23 +110,27 @@ export default function DashboardWidgetGrid({
     }
   };
 
-  return (
-    <div className="grid gap-5 xl:grid-cols-2">
-      {keys.map((key) => (
+  const left = keys.filter((key) => WIDGET_DEFINITIONS[key].column === "left");
+  const right = keys.filter((key) => WIDGET_DEFINITIONS[key].column === "right");
+
+  const column = (side: WidgetKey[], name: string) => (
+    <div data-dashboard-column={name} className="min-w-0 space-y-5">
+      {side.map((key) => (
         // min-w-0: a grid item defaults to min-width:auto, so a widget with a
         // wide child (table, chart, long merchant name) stretches its track
         // instead of scrolling inside itself, and takes the whole page into
         // horizontal overflow on a phone.
-        <div
-          key={key}
-          className={cn(
-            "min-w-0",
-            WIDGET_DEFINITIONS[key].wide && "xl:col-span-2",
-          )}
-        >
+        <div key={key} className="min-w-0">
           {render(key)}
         </div>
       ))}
+    </div>
+  );
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[6fr_5fr] lg:items-start">
+      {column(left, "left")}
+      {column(right, "right")}
     </div>
   );
 }

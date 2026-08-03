@@ -1,14 +1,13 @@
 import { cn } from "@/lib/cn";
 
-type Tone = "neutral" | "success" | "danger" | "warning" | "accent";
+export type BadgeTone = "neutral" | "success" | "danger" | "warning" | "accent";
+type Tone = BadgeTone;
 
 const tones: Record<Tone, string> = {
   neutral: "border-panel-border bg-panel-2 text-muted",
-  success:
-    "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  danger: "border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300",
-  warning:
-    "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  success: "border-success/25 bg-success/10 text-success",
+  danger: "border-danger/25 bg-danger/10 text-danger",
+  warning: "border-warning/30 bg-warning/10 text-warning",
   accent: "border-accent/25 bg-accent-soft text-accent",
 };
 

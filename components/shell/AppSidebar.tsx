@@ -4,8 +4,11 @@ import { getEnabledNavItems, type AppShellActive, type NavItemDefinition } from 
 import AskAiLowerRailLink from "@/components/shell/AskAiLowerRailLink";
 import MobileNavigation from "@/components/shell/MobileNavigation";
 import SidebarShell from "@/components/shell/SidebarShell";
+import SidebarUtilityIcons from "@/components/shell/SidebarUtilityIcons";
+import UserMenu from "@/components/shell/UserMenu";
 import { createClient } from "@/lib/supabase/server";
 import { countUnreviewedStreams } from "@/lib/recurring-page";
+import { resolveDisplayName } from "@/lib/greeting";
 import type { DashboardPrefs } from "@/components/settings/DashboardPrefsSection";
 
 export type { AppShellActive };
@@ -65,29 +68,44 @@ function NavLink({
   );
 }
 
-export default async function AppSidebar({ active }: Readonly<{ active: AppShellActive }>) {
+export default async function AppSidebar({
+  active,
+  email,
+}: Readonly<{ active: AppShellActive; email?: string | null }>) {
   const enabledItems = getEnabledNavItems();
 
   const primaryItems = enabledItems.filter((i) => i.category === "primary");
   const planningItems = enabledItems.filter((i) => i.category === "planning");
   const manageItems = enabledItems.filter((i) => i.category === "manage");
 
-  // Resolve the persisted collapse state server-side so SidebarShell can
-  // seed its initial render correctly, instead of flashing expanded and
-  // then animating shut on every page load (Task 6 review finding #2).
+  // Resolve the persisted collapse state and the account-menu identity in
+  // one query so every page load costs a single extra round trip, not two.
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   let initialCollapsed = false;
+  let displayName = resolveDisplayName({ email });
+  let avatarUrl: string | null = null;
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("dashboard_prefs")
+      .select("dashboard_prefs, display_name, full_name, avatar_path")
       .eq("id", user.id)
       .maybeSingle();
     const dashboardPrefs = (profile?.dashboard_prefs ?? {}) as DashboardPrefs;
     initialCollapsed = dashboardPrefs.sidebarCollapsed === true;
+    displayName = resolveDisplayName({
+      displayName: profile?.display_name as string | null,
+      fullName: profile?.full_name as string | null,
+      email,
+    });
+    if (profile?.avatar_path) {
+      const { data: signed } = await supabase.storage
+        .from("avatars")
+        .createSignedUrl(profile.avatar_path as string, 3600);
+      avatarUrl = signed?.signedUrl ?? null;
+    }
   }
 
   let unreviewedRecurringCount = 0;
@@ -116,6 +134,13 @@ export default async function AppSidebar({ active }: Readonly<{ active: AppShell
   return (
     <SidebarShell
       initialCollapsed={initialCollapsed}
+      utilityIcons={<SidebarUtilityIcons />}
+      bottomBlock={
+        <div className="space-y-1">
+          <AskAiLowerRailLink />
+          <UserMenu displayName={displayName} email={email} avatarUrl={avatarUrl} />
+        </div>
+      }
       mobileNav={
         <MobileNavigation
           active={active}
@@ -145,7 +170,6 @@ export default async function AppSidebar({ active }: Readonly<{ active: AppShell
         {manageItems.map((item) => (
           <NavLink key={item.key} item={item} active={active} />
         ))}
-        <AskAiLowerRailLink />
       </nav>
     </SidebarShell>
   );

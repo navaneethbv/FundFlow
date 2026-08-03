@@ -1,4 +1,3 @@
-import CustomizeDrawer from "@/components/dashboard/CustomizeDrawer";
 import DashboardWidgetGrid, {
   type DashboardWidgetGridData,
 } from "@/components/dashboard/DashboardWidgetGrid";
@@ -47,9 +46,6 @@ export default async function OverviewView({
 
   return (
     <>
-      <div className="flex justify-end">
-        <CustomizeDrawer initialPrefs={normalizeWidgetPrefs(prefsRaw)} />
-      </div>
       <DashboardWidgetGrid
         prefs={normalizeWidgetPrefs(prefsRaw)}
         data={data}

@@ -1,6 +1,6 @@
-import Link from "next/link";
 import GoalsSummary from "@/components/dashboard/GoalsSummary";
 import WidgetShell from "@/components/dashboard/widgets/WidgetShell";
+import DropdownButton from "@/components/ui/DropdownButton";
 import type { Goal } from "@/lib/goals";
 
 /**
@@ -17,15 +17,9 @@ export default function GoalsWidget({
   return (
     <WidgetShell
       title="Goals"
-      hint="Progress"
       error={error}
       action={
-        <Link
-          href="/goals"
-          className="text-sm font-semibold text-accent hover:underline"
-        >
-          Open
-        </Link>
+        <DropdownButton label="All goals" items={[{ label: "Open Goals", href: "/goals" }]} />
       }
     >
       {/* GoalsSummary carries its own empty state with a create link. */}

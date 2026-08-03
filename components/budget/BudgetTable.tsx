@@ -1,6 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Badge from "@/components/ui/Badge";
+import CategoryChip from "@/components/ui/CategoryChip";
+import ProgressBar from "@/components/ui/ProgressBar";
+import { cn } from "@/lib/cn";
+import { Eye, EyeOff } from "@/components/ui/icons";
 import { formatCurrency } from "@/lib/format";
 import type {
   BudgetGroup,
@@ -15,6 +20,139 @@ export interface BudgetLinePatch {
   sortOrder?: number;
 }
 
+export type PlannedAmountValidation =
+  | { ok: true; value: number; changed: boolean }
+  | { ok: false };
+
+/**
+ * The quiet inline Planned input auto-saves on blur rather than behind an
+ * explicit Save button, so every blur — including just tabbing through
+ * without editing — must not fire a network request, and an unparseable or
+ * negative value must revert rather than silently save. `changed: false`
+ * lets the caller skip the request without reverting the field, since the
+ * value shown is already correct.
+ */
+export function validatePlannedAmount(
+  rawValue: string,
+  currentBasePlanned: number,
+): PlannedAmountValidation {
+  const value = Number(rawValue);
+  if (!Number.isFinite(value) || value < 0) return { ok: false };
+  return { ok: true, value, changed: value !== currentBasePlanned };
+}
+
+/**
+ * The group/rollover/order controls, moved off the row into a small "⋯"
+ * popover — Monarch never shows these inline. Not built on `DropdownButton`:
+ * that primitive's `items` are label+link/action rows, and this needs real
+ * form controls (a select, a checkbox, a number field), so it gets its own
+ * small trigger+backdrop+Escape popover using the same visual chrome
+ * (rounded trigger, `rounded-card` panel, `shadow-float`) rather than
+ * forcing an ill-fitting shape onto the shared primitive.
+ */
+function RowMenu({
+  line,
+  disabled,
+  onUpdate,
+}: Readonly<{
+  line: BudgetLine;
+  disabled: boolean;
+  onUpdate: (line: BudgetLine, patch: BudgetLinePatch) => Promise<void>;
+}>) {
+  const [open, setOpen] = useState(false);
+  const [sortOrder, setSortOrder] = useState(String(line.sortOrder));
+
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  async function saveSortOrder() {
+    const value = Number(sortOrder);
+    if (!Number.isInteger(value) || value < 0) {
+      setSortOrder(String(line.sortOrder));
+      return;
+    }
+    await onUpdate(line, { sortOrder: value });
+  }
+
+  return (
+    <div className="relative inline-block">
+      {open && (
+        <button
+          type="button"
+          aria-hidden
+          tabIndex={-1}
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-30 cursor-default"
+        />
+      )}
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`More options for ${line.label}`}
+        className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"
+      >
+        <span aria-hidden className="text-lg leading-none">⋯</span>
+      </button>
+      {open && (
+        <div
+          role="menu"
+          aria-label={`Plan controls for ${line.label}`}
+          className="absolute right-0 z-40 mt-2 w-64 space-y-3 rounded-card border border-panel-border bg-panel p-3 shadow-float"
+        >
+          <label className="block text-xs font-semibold text-muted">
+            Group
+            <select
+              value={line.group}
+              disabled={disabled}
+              onChange={(event) =>
+                onUpdate(line, { group: event.target.value as BudgetGroup })
+              }
+              className="mt-1 min-h-11 w-full rounded-field border border-panel-border bg-panel-2 px-2 text-sm text-foreground"
+            >
+              <option value="income">Income</option>
+              <option value="fixed">Fixed</option>
+              <option value="flexible">Flexible</option>
+              <option value="non_monthly">Non-Monthly</option>
+            </select>
+          </label>
+          <label className="flex min-h-11 items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={line.rolloverEnabled}
+              disabled={disabled || line.group === "income"}
+              onChange={(event) =>
+                onUpdate(line, { rolloverEnabled: event.target.checked })
+              }
+            />
+            Rollover unused budget
+          </label>
+          <label className="block text-xs font-semibold text-muted">
+            Sort order
+            <input
+              aria-label={`Sort order for ${line.label}`}
+              type="number"
+              min="0"
+              step="1"
+              value={sortOrder}
+              onChange={(event) => setSortOrder(event.target.value)}
+              onBlur={saveSortOrder}
+              className="mt-1 min-h-11 w-full rounded-field border border-panel-border bg-panel-2 px-2 text-sm text-foreground"
+            />
+          </label>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BudgetRow({
   line,
   currency,
@@ -27,135 +165,86 @@ function BudgetRow({
   onUpdate: (line: BudgetLine, patch: BudgetLinePatch) => Promise<void>;
 }>) {
   const [planned, setPlanned] = useState(String(line.basePlanned));
-  const [sortOrder, setSortOrder] = useState(String(line.sortOrder));
 
   if (!line.budgetId) {
     return (
       <tr className="border-t border-panel-border">
         <th scope="row" className="px-4 py-3 text-left font-medium">
-          {line.label}
-          <span className="ml-2 rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-600">
-            Unbudgeted
-          </span>
+          <div className="flex items-center gap-2">
+            <CategoryChip label={line.label} />
+            <Badge tone="warning">Unbudgeted</Badge>
+          </div>
         </th>
         <td className="px-4 py-3 text-right">{formatCurrency(0, currency)}</td>
         <td className="px-4 py-3 text-right text-muted">
           {formatCurrency(line.actual, currency)}
         </td>
-        <td className="px-4 py-3 text-right font-semibold text-danger">
-          {formatCurrency(line.remaining, currency)}
+        <td className="px-4 py-3 text-right">
+          <Badge tone="danger">{formatCurrency(line.remaining, currency)}</Badge>
         </td>
-        <td className="px-4 py-3 text-muted">Create a budget to edit</td>
+        <td className="px-4 py-3 text-xs text-muted">Create a budget to edit</td>
       </tr>
     );
   }
 
   async function savePlanned() {
-    const value = Number(planned);
-    if (!Number.isFinite(value) || value < 0) {
+    const result = validatePlannedAmount(planned, line.basePlanned);
+    if (!result.ok) {
       setPlanned(String(line.basePlanned));
       return;
     }
-    await onUpdate(line, { planned: value });
+    if (!result.changed) return;
+    await onUpdate(line, { planned: result.value });
   }
 
-  async function saveSortOrder() {
-    const value = Number(sortOrder);
-    if (!Number.isInteger(value) || value < 0) {
-      setSortOrder(String(line.sortOrder));
-      return;
-    }
-    await onUpdate(line, { sortOrder: value });
-  }
+  const pct = line.planned > 0 ? Math.round((line.actual / line.planned) * 100) : 0;
+  const over = line.remaining < 0;
 
   return (
     <tr className="border-t border-panel-border">
-      <th scope="row" className="px-4 py-3 text-left font-medium">
-        {line.label}
+      <th scope="row" className="px-4 py-3 text-left align-top font-medium">
+        <CategoryChip label={line.label} />
         {line.rolloverCarry !== 0 && (
           <span className="mt-1 block text-xs font-normal text-muted">
             {formatCurrency(line.rolloverCarry, currency)} carried from last month
           </span>
         )}
+        <ProgressBar
+          className="mt-2 max-w-40"
+          size="sm"
+          percent={pct}
+          tone={over ? "danger" : "success"}
+          ariaLabel={`${line.label} spent`}
+        />
       </th>
-      <td className="px-4 py-3">
-        <div className="flex min-w-40 items-center justify-end gap-2">
-          <input
-            aria-label={`Planned amount for ${line.label}`}
-            type="number"
-            min="0"
-            step="0.01"
-            value={planned}
-            onChange={(event) => setPlanned(event.target.value)}
-            className="min-h-11 w-24 rounded-field border border-panel-border bg-background px-3 text-right"
-          />
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={savePlanned}
-            className="min-h-11 rounded-field bg-accent px-3 text-xs font-bold text-accent-foreground disabled:opacity-50"
-          >
-            Save
-          </button>
-        </div>
+      <td className="px-4 py-3 text-right align-top">
+        {/* Quiet inline input, auto-saves on blur — no separate Save
+            button. Optimistic update + rollback still happens in the
+            parent's onUpdate, same as before. */}
+        <input
+          aria-label={`Planned amount for ${line.label}`}
+          type="number"
+          min="0"
+          step="0.01"
+          value={planned}
+          disabled={disabled}
+          onChange={(event) => setPlanned(event.target.value)}
+          onBlur={savePlanned}
+          className="min-h-11 w-24 rounded-field border border-transparent bg-transparent px-2 text-right transition-colors hover:border-panel-border focus:border-accent focus:bg-panel-2 focus:outline-none"
+        />
       </td>
-      <td className="px-4 py-3 text-right text-muted">
+      <td className="px-4 py-3 text-right align-top text-muted">
         {formatCurrency(line.actual, currency)}
       </td>
-      <td
-        className={`px-4 py-3 text-right font-semibold ${
-          line.remaining < 0 ? "text-danger" : "text-foreground"
-        }`}
-      >
-        {formatCurrency(line.remaining, currency)}
+      <td className="px-4 py-3 text-right align-top">
+        {over ? (
+          <Badge tone="danger">{formatCurrency(line.remaining, currency)}</Badge>
+        ) : (
+          <span className="font-semibold">{formatCurrency(line.remaining, currency)}</span>
+        )}
       </td>
-      <td className="px-4 py-3">
-        <div className="flex min-w-72 items-center gap-3">
-          <label className="text-xs text-muted">
-            <span className="sr-only">Group for {line.label}</span>
-            <select
-              value={line.group}
-              disabled={disabled}
-              onChange={(event) =>
-                onUpdate(line, {
-                  group: event.target.value as BudgetGroup,
-                })
-              }
-              className="min-h-11 rounded-field border border-panel-border bg-background px-2"
-            >
-              <option value="income">Income</option>
-              <option value="fixed">Fixed</option>
-              <option value="flexible">Flexible</option>
-              <option value="non_monthly">Non-Monthly</option>
-            </select>
-          </label>
-          <label className="flex min-h-11 items-center gap-2 text-xs text-muted">
-            <input
-              type="checkbox"
-              checked={line.rolloverEnabled}
-              disabled={disabled || line.group === "income"}
-              onChange={(event) =>
-                onUpdate(line, {
-                  rolloverEnabled: event.target.checked,
-                })
-              }
-            />
-            Rollover
-          </label>
-          <label className="flex items-center gap-2 text-xs text-muted">
-            Order
-            <input
-              aria-label={`Sort order for ${line.label}`}
-              type="number"
-              min="0"
-              step="1"
-              value={sortOrder}
-              onChange={(event) => setSortOrder(event.target.value)}
-              onBlur={saveSortOrder}
-              className="min-h-11 w-16 rounded-field border border-panel-border bg-background px-2"
-            />
-          </label>
-        </div>
+      <td className="px-2 py-3 text-right align-top">
+        <RowMenu line={line} disabled={disabled} onUpdate={onUpdate} />
       </td>
     </tr>
   );
@@ -180,32 +269,30 @@ export default function BudgetTable({
   return (
     <section className="overflow-hidden rounded-card border border-panel-border bg-panel shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
-        <div>
-          <h2 className="font-semibold">{section.label}</h2>
-          <p data-money className="mt-1 text-xs text-muted">
-            {formatCurrency(section.planned, currency)} planned,{" "}
-            {formatCurrency(section.actual, currency)} actual
-          </p>
+        <h3 className="font-semibold">{section.label}</h3>
+        <div className="flex items-center gap-4 text-right text-xs text-muted">
+          <span data-money>{formatCurrency(section.planned, currency)} planned</span>
+          <span data-money>{formatCurrency(section.actual, currency)} actual</span>
+          <span
+            data-money
+            className={cn("text-sm font-bold", section.remaining < 0 ? "text-danger" : "text-foreground")}
+          >
+            {formatCurrency(section.remaining, currency)} remaining
+          </span>
         </div>
-        <p
-          data-money
-          className={`text-sm font-bold ${
-            section.remaining < 0 ? "text-danger" : "text-foreground"
-          }`}
-        >
-          {formatCurrency(section.remaining, currency)} remaining
-        </p>
       </div>
       {lines.length > 0 ? (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-panel-2 text-xs text-muted">
               <tr>
                 <th scope="col" className="px-4 py-3 text-left">Category</th>
                 <th scope="col" className="px-4 py-3 text-right">Planned</th>
                 <th scope="col" className="px-4 py-3 text-right">Actual</th>
                 <th scope="col" className="px-4 py-3 text-right">Remaining</th>
-                <th scope="col" className="px-4 py-3 text-left">Plan controls</th>
+                <th scope="col" className="px-2 py-3 text-right">
+                  <span className="sr-only">Plan controls</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -236,8 +323,13 @@ export default function BudgetTable({
           <button
             type="button"
             onClick={() => setShowUnbudgeted((value) => !value)}
-            className="min-h-11 text-sm font-semibold text-accent"
+            className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-accent"
           >
+            {showUnbudgeted ? (
+              <EyeOff aria-hidden className="h-4 w-4" />
+            ) : (
+              <Eye aria-hidden className="h-4 w-4" />
+            )}
             {showUnbudgeted ? "Hide" : "Show"} {section.unbudgetedCount} unbudgeted
           </button>
         </div>

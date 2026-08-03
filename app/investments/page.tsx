@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import AppShell from "@/components/shell/AppShell";
+import PageHeader from "@/components/shell/PageHeader";
 import AddManualHoldingForm from "@/components/investments/AddManualHoldingForm";
 import AllocationView from "@/components/investments/AllocationView";
 import HoldingsTable from "@/components/investments/HoldingsTable";
@@ -47,26 +48,26 @@ export default async function InvestmentsPage() {
   return (
     <AppShell active="investments" email={user.email}>
       <div className="space-y-6">
-        <header className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Investments</h1>
-            <p className="text-sm text-muted">
-              <span className="money">{formatCurrency(page.total, currency)}</span> total
-              {page.dayChange && (
-                <span
-                  className="ml-2"
-                  style={{ color: page.dayChange.amount >= 0 ? "var(--viz-good)" : "var(--viz-bad)" }}
-                >
-                  {page.dayChange.amount >= 0 ? "+" : ""}
-                  {formatCurrency(page.dayChange.amount, currency)} ({page.dayChange.pct.toFixed(1)}%) today
-                </span>
-              )}
-            </p>
-          </div>
-          {accountOptions.length > 0 ? (
-            <AddManualHoldingForm accounts={accountOptions} />
-          ) : null}
-        </header>
+        <PageHeader
+          title={
+            <span className="flex flex-col gap-0.5">
+              <span>Investments</span>
+              <span className="text-sm font-normal text-muted">
+                <span data-money className="money">{formatCurrency(page.total, currency)}</span> total
+                {page.dayChange && (
+                  <span
+                    data-money
+                    className={page.dayChange.amount >= 0 ? "ml-2 text-success" : "ml-2 text-danger"}
+                  >
+                    {page.dayChange.amount >= 0 ? "+" : ""}
+                    {formatCurrency(page.dayChange.amount, currency)} ({page.dayChange.pct.toFixed(1)}%) today
+                  </span>
+                )}
+              </span>
+            </span>
+          }
+          actions={accountOptions.length > 0 ? <AddManualHoldingForm accounts={accountOptions} /> : null}
+        />
 
         {holdings.length === 0 ? (
           <EmptyState

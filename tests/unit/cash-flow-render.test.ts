@@ -196,6 +196,19 @@ describe("CashFlowSummary", () => {
     expect(html).toContain("1,000.00");
     expect(html).not.toContain("$1,000.00");
   });
+
+  it("uses semantic color tokens, never a raw viz-good/viz-bad inline style", () => {
+    const html = renderToStaticMarkup(
+      createElement(CashFlowSummary, {
+        period: periods[1]!,
+        currency: "USD",
+      }),
+    );
+    expect(html).toContain("text-success");
+    expect(html).toContain("text-danger");
+    expect(html).not.toContain("var(--viz-good)");
+    expect(html).not.toContain("var(--viz-bad)");
+  });
 });
 
 describe("CashFlowControls", () => {

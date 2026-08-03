@@ -132,6 +132,47 @@ describe("layoutSankey heights", () => {
   });
 });
 
+describe("layoutSankey weighted column positions", () => {
+  it("places each column at its given fraction of the usable width", () => {
+    const nodes: SankeyNode[] = [
+      { id: "a", label: "A", value: 100, column: 0 },
+      { id: "b", label: "B", value: 100, column: 1 },
+      { id: "c", label: "C", value: 100, column: 2 },
+      { id: "d", label: "D", value: 100, column: 3 },
+    ];
+    const links: SankeyLink[] = [
+      { source: "a", target: "b", value: 100 },
+      { source: "b", target: "c", value: 100 },
+      { source: "c", target: "d", value: 100 },
+    ];
+    const result = layoutSankey(
+      nodes,
+      links,
+      WIDTH,
+      HEIGHT,
+      NODE_WIDTH,
+      NODE_PADDING,
+      [0, 0.34, 0.72, 1],
+    );
+    const byId = new Map(result.nodes.map((node) => [node.id, node]));
+    const usable = WIDTH - NODE_WIDTH;
+
+    expect(byId.get("a")!.x).toBe(0);
+    expect(byId.get("b")!.x).toBeCloseTo(0.34 * usable);
+    expect(byId.get("c")!.x).toBeCloseTo(0.72 * usable);
+    expect(byId.get("d")!.x).toBeCloseTo(usable);
+  });
+
+  it("keeps the original even division when no positions are given", () => {
+    const { nodes, links } = simpleGraph();
+    // No seventh argument: this must be identical to the pre-existing
+    // behaviour, since every caller that predates weighted columns omits it.
+    const result = layout(nodes, links);
+    const byId = new Map(result.nodes.map((node) => [node.id, node]));
+    expect(byId.get("hub")!.x).toBeCloseTo((WIDTH - NODE_WIDTH) / 2);
+  });
+});
+
 describe("layoutSankey vertical stacking", () => {
   it("stacks a column top to bottom with the padding between neighbours", () => {
     const { nodes, links } = simpleGraph();

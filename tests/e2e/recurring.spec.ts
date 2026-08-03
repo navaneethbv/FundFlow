@@ -207,10 +207,13 @@ test.describe.serial("Phase 5: recurring page", () => {
       ),
     ).toBeVisible();
 
-    // Confirm it from the "All" tab; both the banner and the sidebar badge
-    // clear (router.refresh() re-renders the server-rendered page, which
-    // includes AppSidebar).
-    await page.getByRole("tab", { name: /^All/ }).click();
+    // Confirm it from the "Manage" tab; both the banner and the sidebar
+    // badge clear (router.refresh() re-renders the server-rendered page,
+    // which includes AppSidebar). "Manage" (the in-page tab, showing a
+    // count) is deliberately a different label than the header's "Manage
+    // recurring" button, which links to the same tab — same text would make
+    // the two links ambiguous to a role-based locator.
+    await page.getByRole("link", { name: /^Manage \(/ }).click();
     const manageRow = page.locator("li").filter({ hasText: merchantName });
     await expect(manageRow.getByRole("button", { name: "Confirm" })).toBeVisible();
     const confirmPatch = page.waitForResponse(
@@ -236,7 +239,7 @@ test.describe.serial("Phase 5: recurring page", () => {
     // stays editable.
     await expect(manageRow.getByRole("button", { name: "Confirm" })).toHaveCount(0);
 
-    // Editing the expected amount in "All" changes the Upcoming tab's total.
+    // Editing the expected amount in "Manage" changes the Upcoming tab's total.
     // The field is untouched (no prior user_amount override), so it starts
     // empty and shows Plaid's tracked average only as a placeholder hint --
     // see Fix 2 of the whole-branch review: seeding the value itself from
@@ -256,14 +259,14 @@ test.describe.serial("Phase 5: recurring page", () => {
     await amountInput.fill("55");
     await amountInput.blur();
     await amountPatch;
-    await page.getByRole("tab", { name: /^Upcoming/ }).click();
-    const upcomingRow = page.locator("li").filter({ hasText: merchantName });
+    await page.getByRole("link", { name: /^Upcoming \(/ }).click();
+    const upcomingRow = page.locator("tr").filter({ hasText: merchantName });
     await expect(upcomingRow.getByText("$55.00", { exact: true })).toBeVisible();
 
     // Month navigation preserves scope in the URL.
     await page.goto(`/recurring?month=${month}&scope=${householdId}`);
     await expect(page).toHaveURL(new RegExp(`scope=${householdId}`));
-    await page.getByRole("link", { name: "Next", exact: true }).click();
+    await page.getByRole("link", { name: "Next month" }).click();
     await expect(page).toHaveURL(new RegExp(`scope=${householdId}`));
     await expect(page).not.toHaveURL(new RegExp(`month=${month}&`));
 
@@ -300,8 +303,11 @@ test.describe.serial("Phase 5: recurring page", () => {
     await page.setViewportSize({ width: 390, height: 844 });
 
     await page.goto("/dashboard");
+    // The greeting heading is dynamic (time-of-day word + display name), so
+    // match its stable shape rather than a literal string (V1 shell
+    // restructure replaced "Financial command center" with this greeting).
     await expect(
-      page.getByRole("heading", { name: "Financial command center" }),
+      page.getByRole("heading", { name: /^Good (morning|afternoon|evening),/ }),
     ).toBeVisible();
 
     const geometry = await page.evaluate(() => ({

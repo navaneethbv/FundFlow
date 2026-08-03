@@ -16,8 +16,8 @@ export default function TopMovers({
             {m.ticker && <span className="ml-1 text-xs text-muted">{m.ticker}</span>}
           </span>
           <span
-            className="tabular-nums font-medium"
-            style={{ color: m.changePct >= 0 ? "var(--viz-good)" : "var(--viz-bad)" }}
+            data-money
+            className={m.changePct >= 0 ? "tabular-nums font-medium text-success" : "tabular-nums font-medium text-danger"}
           >
             {m.changePct >= 0 ? "+" : ""}
             {m.changePct.toFixed(1)}%

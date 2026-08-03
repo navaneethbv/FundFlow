@@ -155,7 +155,7 @@ export default function TransactionEditor({
           <div
             role="dialog"
             aria-modal="true"
-            className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-panel-border bg-panel p-5 shadow-pop sm:rounded-2xl"
+            className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-[0.75rem] border border-panel-border bg-panel p-5 shadow-float sm:rounded-[0.75rem]"
           >
             <div className="mb-4">
               <p className="text-xs uppercase tracking-wider text-muted">

@@ -1,13 +1,19 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 
-describe("TopBar utility actions", () => {
-  it("renders SearchButton, NotificationsBell, and a Settings link, hidden below sm", () => {
-    const source = readFileSync("components/shell/TopBar.tsx", "utf8");
+/**
+ * Formerly `topbar.test.ts`: these three utility actions moved from a
+ * separate top bar into the sidebar's own icon row (V1 shell restructure —
+ * there is no top bar left to mount them in).
+ */
+describe("SidebarUtilityIcons", () => {
+  it("renders SearchButton, NotificationsBell, and a Settings link, hidden at narrower widths and while collapsed", () => {
+    const source = readFileSync("components/shell/SidebarUtilityIcons.tsx", "utf8");
     expect(source).toContain("SearchButton");
     expect(source).toContain("NotificationsBell");
     expect(source).toContain('href="/settings"');
-    expect(source).toContain("sm:flex");
+    expect(source).toContain("lg:flex");
+    expect(source).toContain("group-data-[collapsed=true]/sidebar:hidden");
   });
 
   it("SearchButton dispatches the shared open-command-palette event", () => {
