@@ -95,4 +95,3 @@ describe("syncAllForUser error isolation & sync job tracking", () => {
     expect(mockLogError).toHaveBeenCalledWith("sync.broken_bank_notification", expect.any(Error));
   });
 });
-
