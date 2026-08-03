@@ -55,7 +55,12 @@ export default function ConnectBankButton() {
   }, []);
 
   const onSuccess = useCallback(
-    async (publicToken: string) => {
+    async (publicToken: string | null) => {
+      if (resume?.mode !== "reconnect" && publicToken === null) {
+        setError("Bank connection did not return a public token.");
+        return;
+      }
+
       setBusy(true);
       setError(null);
       try {
