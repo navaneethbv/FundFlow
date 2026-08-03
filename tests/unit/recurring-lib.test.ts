@@ -425,4 +425,51 @@ describe("lib/recurring", () => {
     expect(total).toBe(0);
     expect(mockLogError).toHaveBeenCalledWith("recurring.item", expect.any(Error));
   });
+
+  it("handles inflow streams and new subscription alert error handling", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce({
+      data: {
+        inflow_streams: [
+          {
+            stream_id: "inflow-1",
+            merchant_name: "Employer",
+            description: "Payroll",
+            last_amount: { amount: 3000 },
+            is_active: true,
+            transaction_ids: [],
+          },
+        ],
+        outflow_streams: [
+          {
+            stream_id: "outflow-new",
+            merchant_name: "Gym",
+            description: "Membership",
+            last_amount: { amount: 50 },
+            is_active: true,
+            transaction_ids: [],
+          },
+        ],
+      },
+    });
+
+    const mock = createRecurringSupabaseMock({
+      existingStreams: {
+        data: [{ stream_id: "existing-old-stream", last_amount: 10 }],
+        error: null,
+      },
+      upserted: {
+        data: [
+          { id: "row-1", stream_id: "inflow-1" },
+          { id: "row-2", stream_id: "outflow-new" },
+        ],
+        error: null,
+      },
+    });
+    mockServiceClient.from.mockImplementation(mock.from);
+    mockCreateNotification.mockRejectedValueOnce(new Error("Notification failed"));
+
+    const count = await refreshRecurringForItem(dummyItem);
+    expect(count).toBe(2);
+    expect(mockLogError).toHaveBeenCalledWith("recurring.alert.new_subscription", expect.any(Error));
+  });
 });

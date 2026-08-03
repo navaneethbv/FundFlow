@@ -172,4 +172,22 @@ describe("roadmap completion helpers", () => {
     ]);
     expect(generateAiInsightSummaries({ enabled: false, rows: [] })).toEqual([]);
   });
+
+  it("handles aggregateSpendWithSplits uncategorized fallback and detectRefundPairs mismatched attributes", () => {
+    const agg = aggregateSpendWithSplits(
+      [{ id: "t1", amount: 100, category: null }],
+      [],
+    );
+    expect(agg).toEqual([{ category: "UNCATEGORIZED", amount: 100 }]);
+
+    const pairs = detectRefundPairs(
+      [
+        { id: "c1", date: "2026-07-01", merchant: "Store A", amount: 100 },
+        { id: "r1", date: "2026-07-02", merchant: "Store B", amount: -100 },
+        { id: "r2", date: "2026-07-03", merchant: "Store A", amount: -50 },
+      ],
+      7,
+    );
+    expect(pairs).toEqual([]);
+  });
 });

@@ -78,3 +78,15 @@ describe("dashboardScopeKey", () => {
     ).toBe("all:default:all:-:-:-:household");
   });
 });
+
+import { createDashboardCache } from "@/lib/dashboard-cache";
+
+describe("createDashboardCache expiration", () => {
+  it("deletes expired records when accessed after TTL", async () => {
+    const cache = createDashboardCache<string>(1);
+    await cache.set("user-exp", "scope-1", "val-1");
+    await new Promise((res) => setTimeout(res, 5));
+    const val = await cache.get("user-exp", "scope-1");
+    expect(val).toBeNull();
+  });
+});

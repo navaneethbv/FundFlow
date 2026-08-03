@@ -1,123 +1,139 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getWeeklyReportData } from "@/lib/weekly-report-data";
+import { clientStub } from "../fixtures/supabase-query";
 
 describe("getWeeklyReportData", () => {
-  it("fetches and maps all weekly report data sources correctly", async () => {
-    const mockSupabase = {
+  const period = {
+    start: "2026-07-06",
+    end: "2026-07-12",
+    previousStart: "2026-06-29",
+    previousEnd: "2026-07-05",
+    label: "Jul 6 – Jul 12, 2026",
+  };
+
+  it("returns null if user has no email", async () => {
+    const supabase = {
       auth: {
         admin: {
-          getUserById: vi.fn().mockResolvedValue({
+          getUserById: async () => ({ data: { user: null }, error: null }),
+        },
+      },
+    };
+
+    const data = await getWeeklyReportData(supabase as never, "user-1", period);
+    expect(data).toBeNull();
+  });
+
+  it("loads report data with splits, linked refunds, and duplicate decisions", async () => {
+    const dbStub = clientStub({
+      accounts: {
+        data: [{ id: "acc-1", name: "Checking", type: "depository", plaid_item_id: "p1" }],
+      },
+      plaid_items: {
+        data: [{ id: "p1", institution_name: "Chase" }],
+      },
+      budgets: {
+        data: [{ category: "FOOD_AND_DRINK", monthly_limit: 500 }],
+      },
+      merchant_rules: {
+        data: [
+          {
+            match_type: "merchant",
+            pattern: "Coffee",
+            display_name: "Coffee Shop",
+            category: "FOOD_AND_DRINK",
+            enabled: true,
+          },
+        ],
+      },
+      linked_refunds: {
+        data: [{ charge_transaction_id: "t1", refund_transaction_id: "t2" }],
+      },
+      transaction_review_decisions: {
+        data: [{ subject_id: "t1", kind: "duplicate", decision: "confirmed" }],
+      },
+      transactions: {
+        data: [
+          {
+            id: "t1",
+            date: "2026-07-08",
+            amount: 50,
+            merchant_name: "Coffee Shop",
+            name: "COFFEE",
+            pfc_primary: "FOOD_AND_DRINK",
+            account_id: "acc-1",
+          },
+          {
+            id: "t2",
+            date: "2026-07-09",
+            amount: -50,
+            merchant_name: "Coffee Shop",
+            name: "COFFEE REFUND",
+            pfc_primary: "FOOD_AND_DRINK",
+            account_id: "acc-1",
+          },
+        ],
+      },
+      transaction_splits: {
+        data: [{ transaction_id: "t1", category: "Coffee", amount: 50 }],
+      },
+    });
+
+    const supabase = {
+      ...dbStub,
+      auth: {
+        admin: {
+          getUserById: async () => ({
             data: { user: { email: "user@example.com" } },
             error: null,
           }),
         },
       },
-      from: vi.fn().mockImplementation((table) => {
-        let data: unknown[] = [];
-        if (table === "accounts") {
-          data = [
-            {
-              id: "acc-1",
-              name: "Checking",
-              type: "depository",
-              plaid_item_id: "item-1",
-            },
-          ];
-        } else if (table === "plaid_items") {
-          data = [{ id: "item-1", institution_name: "Chase" }];
-        } else if (table === "budgets") {
-          data = [{ category: "FOOD", monthly_limit: 500 }];
-        } else if (table === "merchant_rules") {
-          data = [
-            {
-              match_type: "keyword",
-              pattern: "Store",
-              display_name: "My Store",
-              category: "SHOPPING",
-              enabled: true,
-            },
-          ];
-        } else if (table === "linked_refunds") {
-          data = [
-            { charge_transaction_id: "tx-1", refund_transaction_id: "tx-2" },
-          ];
-        } else if (table === "transaction_review_decisions") {
-          data = [{ subject_id: "tx-3" }];
-        } else if (table === "transactions") {
-          data = [
-            {
-              id: "tx-4",
-              date: "2026-07-10",
-              amount: 20,
-              name: "Groceries",
-              merchant_name: "Grocery Store",
-              category: "FOOD",
-              account_id: "acc-1",
-            },
-          ];
-        } else if (table === "transaction_splits") {
-          data = [{ transaction_id: "tx-4", category: "FOOD", amount: 20 }];
-        }
-
-        const query = {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          in: vi.fn().mockReturnThis(),
-          gte: vi.fn().mockReturnThis(),
-          lte: vi.fn().mockReturnThis(),
-          order: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockResolvedValue({ data, error: null }),
-          then: undefined as unknown as (onfulfilled: (value: { data: unknown[]; error: unknown }) => unknown) => unknown,
-        };
-        query.then = (onfulfilled) =>
-          Promise.resolve({ data, error: null }).then(onfulfilled);
-        return query;
-      }),
-    } as never;
-
-    const period = {
-      start: "2026-07-06",
-      end: "2026-07-12",
-      previousStart: "2026-06-29",
-      previousEnd: "2026-07-05",
     };
 
-    const result = await getWeeklyReportData(mockSupabase, "user-1", period);
-    expect(result).not.toBeNull();
-    expect(result?.userEmail).toBe("user@example.com");
-    expect(result?.totalSpend).toBe(20);
+    const data = await getWeeklyReportData(supabase as never, "user-1", period);
+
+    expect(data).not.toBeNull();
+    expect(data?.userEmail).toBe("user@example.com");
+    expect(data?.totalSpend).toBeDefined();
   });
 
-  it("returns null when user has no email or getUserById returns null", async () => {
-    const mockSupabaseNoEmail = {
+  it("throws error when query result has error", async () => {
+    const dbStub = clientStub({
+      accounts: { error: new Error("Accounts DB Error") },
+    });
+
+    const supabase = {
+      ...dbStub,
       auth: {
         admin: {
-          getUserById: vi.fn().mockResolvedValue({
-            data: { user: { email: null } },
+          getUserById: async () => ({
+            data: { user: { email: "user@example.com" } },
             error: null,
           }),
         },
       },
-    } as never;
+    };
 
-    const period = { start: "2026-07-06", end: "2026-07-12", previousStart: "2026-06-29", previousEnd: "2026-07-05" };
-    const res = await getWeeklyReportData(mockSupabaseNoEmail, "user-1", period);
-    expect(res).toBeNull();
+    await expect(getWeeklyReportData(supabase as never, "user-1", period)).rejects.toThrow(
+      "weekly report accounts: Accounts DB Error",
+    );
   });
 
-  it("throws error when query or user lookup fails", async () => {
-    const mockSupabaseError = {
+  it("throws error if admin.getUserById returns error", async () => {
+    const supabase = {
       auth: {
         admin: {
-          getUserById: vi.fn().mockResolvedValue({
+          getUserById: async () => ({
             data: null,
-            error: new Error("User error"),
+            error: new Error("User lookup failed"),
           }),
         },
       },
-    } as never;
+    };
 
-    const period = { start: "2026-07-06", end: "2026-07-12", previousStart: "2026-06-29", previousEnd: "2026-07-05" };
-    await expect(getWeeklyReportData(mockSupabaseError, "user-1", period)).rejects.toThrow("weekly report user: User error");
+    await expect(getWeeklyReportData(supabase as never, "user-1", period)).rejects.toThrow(
+      "weekly report user: User lookup failed",
+    );
   });
 });

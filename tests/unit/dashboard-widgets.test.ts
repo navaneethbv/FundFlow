@@ -3,6 +3,7 @@ import {
   DEFAULT_WIDGET_ORDER,
   normalizeWidgetPrefs,
   visibleWidgets,
+  mergeWidgetPrefs,
   WIDGET_KEYS,
   type DashboardWidgetPrefs,
 } from "@/lib/dashboard-widgets";
@@ -122,5 +123,30 @@ describe("visibleWidgets", () => {
     expect(
       visibleWidgets({ order: [...WIDGET_KEYS], hidden: [...WIDGET_KEYS] }),
     ).toEqual([]);
+  });
+});
+
+describe("mergeWidgetPrefs", () => {
+  it("merges widget prefs into an existing record", () => {
+    const widgets: DashboardWidgetPrefs = {
+      order: ["goals", "budget"],
+      hidden: ["netWorth"],
+    };
+    const result = mergeWidgetPrefs(
+      { sidebarCollapsed: true, hideRecent: false },
+      widgets,
+    );
+    expect(result.sidebarCollapsed).toBe(true);
+    expect(result.hideRecent).toBe(false);
+    expect(result.widgets).toEqual(widgets);
+  });
+
+  it("wraps non-object existing into a fresh record", () => {
+    const widgets: DashboardWidgetPrefs = {
+      order: DEFAULT_WIDGET_ORDER,
+      hidden: [],
+    };
+    const result = mergeWidgetPrefs(null, widgets);
+    expect(result.widgets).toEqual(widgets);
   });
 });

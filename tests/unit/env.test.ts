@@ -81,5 +81,8 @@ describe("serverEnv lazy getters", () => {
     expect(serverEnv.plaidEnv).toBe("sandbox");
     expect(serverEnv.plaidProducts).toEqual(["transactions"]);
     expect(serverEnv.plaidCountryCodes).toEqual(["US"]);
+    expect(serverEnv.backupEncKey).toBe(process.env.BACKUP_ENC_KEY);
+    expect(serverEnv.plaidRedirectUri).toBe(process.env.PLAID_REDIRECT_URI);
+    expect(serverEnv.anthropicApiKey).toBe(process.env.ANTHROPIC_API_KEY);
   });
 });
