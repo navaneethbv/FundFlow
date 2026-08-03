@@ -51,6 +51,9 @@ export interface BudgetSection {
 
 export type BudgetHorizon = "monthly" | "yearly" | "decade";
 
+/** Which figures the right rail's Summary/Income/Expenses tab shows. */
+export type BudgetSummaryTab = "summary" | "income" | "expenses";
+
 export interface BudgetPageData {
   month: string;
   horizon: "monthly";

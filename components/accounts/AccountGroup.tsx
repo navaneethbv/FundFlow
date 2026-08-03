@@ -1,8 +1,10 @@
 import AccountRow from "@/components/accounts/AccountRow";
+import { cn } from "@/lib/cn";
 import { formatCurrency } from "@/lib/format";
 import type {
   AccountGroupKey,
   AccountsPageData,
+  CurrencyTotal,
 } from "@/lib/accounts-page";
 
 export default function AccountGroup({
@@ -13,6 +15,9 @@ export default function AccountGroup({
   group: AccountsPageData["groups"][AccountGroupKey];
 }>) {
   if (group.rows.length === 0) return null;
+
+  const changeFor = (currency: string): CurrencyTotal | undefined =>
+    group.changes.find((change) => change.currency === currency);
 
   return (
     <details
@@ -27,15 +32,31 @@ export default function AccountGroup({
           </span>
         </span>
         <span className="flex flex-wrap justify-end gap-2">
-          {group.totals.map((total) => (
-            <span
-              key={`${groupKey}-${total.currency}`}
-              data-money
-              className="rounded-full bg-panel-2 px-2.5 py-1 font-mono text-xs font-bold tabular-nums"
-            >
-              {formatCurrency(total.amount, total.currency)}
-            </span>
-          ))}
+          {group.totals.map((total) => {
+            const change = changeFor(total.currency);
+            return (
+              <span key={`${groupKey}-${total.currency}`} className="text-right">
+                <span
+                  data-money
+                  className="block rounded-full bg-panel-2 px-2.5 py-1 font-mono text-xs font-bold tabular-nums"
+                >
+                  {formatCurrency(total.amount, total.currency)}
+                </span>
+                {change && change.amount !== 0 && (
+                  <span
+                    data-money
+                    className={cn(
+                      "mt-1 block text-xs font-semibold tabular-nums",
+                      change.amount >= 0 ? "text-success" : "text-danger",
+                    )}
+                  >
+                    {change.amount >= 0 ? "+" : ""}
+                    {formatCurrency(change.amount, change.currency)} this month
+                  </span>
+                )}
+              </span>
+            );
+          })}
         </span>
       </summary>
       <ul>

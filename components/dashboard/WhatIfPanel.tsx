@@ -118,11 +118,8 @@ export default function WhatIfPanel({
         <div className="rounded-field border border-panel-border bg-panel-2 p-3">
           <dt className="text-xs text-muted">Monthly surplus</dt>
           <dd
-            className="metric-value mt-1 text-lg font-bold"
-            style={{
-              color:
-                projection.surplus >= 0 ? "var(--viz-good)" : "var(--viz-bad)",
-            }}
+            data-money
+            className={`metric-value mt-1 text-lg font-bold ${projection.surplus >= 0 ? "text-success" : "text-danger"}`}
           >
             {projection.surplus >= 0 ? "+" : "−"}
             {formatCurrency(Math.abs(projection.surplus))}

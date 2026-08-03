@@ -45,7 +45,12 @@ test.describe.serial("authenticated golden path", () => {
 
   test("dashboard renders the command center (tiles when banks exist)", async () => {
     await page.goto("/dashboard");
-    await expect(page.getByText("Financial command center")).toBeVisible();
+    // The greeting heading is dynamic (time-of-day word + display name), so
+    // match its stable shape rather than a literal string (V1 shell
+    // restructure replaced "Financial command center" with this greeting).
+    await expect(
+      page.getByText(/^Good (morning|afternoon|evening),/),
+    ).toBeVisible();
 
     const emptyState = page.getByText("No banks connected");
     if (await emptyState.isVisible().catch(() => false)) {

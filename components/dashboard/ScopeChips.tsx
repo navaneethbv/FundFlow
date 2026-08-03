@@ -1,10 +1,11 @@
 import { dashboardUrl } from "@/lib/drilldown";
 import { formatCurrency } from "@/lib/format";
+import SegmentedControl from "@/components/ui/SegmentedControl";
 
 /**
- * Household scope toggle (4.2/4.3): "Just mine" vs "Household" link chips
- * plus the per-person spend attribution line when partner data is present.
- * Server-rendered — scope is a URL parameter, not client state.
+ * Household scope toggle (4.2/4.3): "Just mine" vs "Household" segmented
+ * control plus the per-person spend attribution line when partner data is
+ * present. Server-rendered — scope is a URL parameter, not client state.
  */
 export default function ScopeChips({
   activeView,
@@ -22,34 +23,36 @@ export default function ScopeChips({
   spendPerPerson: { mine: number; household: number } | null;
 }>) {
   return (
-    <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
-      {(
-        [
-          { label: "Just mine", scope: undefined, active: dashboardScope === "mine" },
-          { label: "Household", scope: "household", active: dashboardScope === "household" },
-        ] as const
-      ).map((option) => (
-        <a
-          key={option.label}
-          href={dashboardUrl({
-            view: activeView,
-            month: selectedMonth,
-            accountId: selectedAccountId,
-            itemId: selectedItemId,
-            scope: option.scope,
-          })}
-          aria-current={option.active ? "true" : undefined}
-          className={
-            option.active
-              ? "rounded-field bg-accent-soft px-2.5 py-1 text-accent"
-              : "rounded-field px-2.5 py-1 text-muted transition-colors hover:bg-panel-hover hover:text-foreground"
-          }
-        >
-          {option.label}
-        </a>
-      ))}
+    <div className="flex flex-wrap items-center gap-3">
+      <SegmentedControl
+        ariaLabel="Financial scope"
+        items={[
+          {
+            label: "Just mine",
+            href: dashboardUrl({
+              view: activeView,
+              month: selectedMonth,
+              accountId: selectedAccountId,
+              itemId: selectedItemId,
+              scope: undefined,
+            }),
+            active: dashboardScope === "mine",
+          },
+          {
+            label: "Household",
+            href: dashboardUrl({
+              view: activeView,
+              month: selectedMonth,
+              accountId: selectedAccountId,
+              itemId: selectedItemId,
+              scope: "household",
+            }),
+            active: dashboardScope === "household",
+          },
+        ]}
+      />
       {spendPerPerson && (
-        <span className="ml-1 text-muted">
+        <span className="text-xs font-semibold text-muted">
           You {formatCurrency(spendPerPerson.mine)} · household{" "}
           {formatCurrency(spendPerPerson.household)} this month
         </span>

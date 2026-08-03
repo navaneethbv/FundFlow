@@ -82,13 +82,10 @@ export default function ReportTransactions({
               <td className="py-2 pr-3">{flowLabel(row)}</td>
               <td
                 data-money
-                className="py-2 pr-3 text-right"
-                style={{
-                  color:
-                    row.flow === "income"
-                      ? "var(--viz-good)"
-                      : "var(--viz-ink)",
-                }}
+                className={cn(
+                  "py-2 pr-3 text-right",
+                  row.flow === "income" ? "text-success" : "text-foreground",
+                )}
               >
                 {formatCurrency(Math.abs(row.signedAmount), currency)}
               </td>

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import AppShell from "@/components/shell/AppShell";
+import PageHeader from "@/components/shell/PageHeader";
 import SettingsLayout from "@/components/settings/SettingsLayout";
 import ProfileSection from "@/components/settings/ProfileSection";
 import DisplaySection from "@/components/settings/DisplaySection";
@@ -362,10 +363,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
   return (
     <AppShell active="settings" email={user?.email}>
       <div className="space-y-6">
-        <header>
-          <p className="eyebrow">Control center</p>
-          <h1 className="display mt-2 text-3xl sm:text-4xl">Settings</h1>
-        </header>
+        <PageHeader title="Settings" />
         <SettingsLayout
           active={active}
           hiddenSections={settingsIaReady ? [] : migrationDependentSections}

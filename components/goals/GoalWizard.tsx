@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
+import { ChevronLeft, X } from "@/components/ui/icons";
 import { createClient } from "@/lib/supabase/client";
 import { GOAL_TEMPLATES, goalImageFor } from "@/lib/goal-templates";
 import type { GoalType } from "@/lib/goals-v2";
@@ -66,7 +67,7 @@ function isDirty(draft: Draft): boolean {
   );
 }
 
-const STEP_TITLES = ["Choose a goal", "Set the target", "Plan contributions", "Review"];
+const STEP_TITLES = ["Select", "Targets", "Contribution", "Budget"];
 
 export default function GoalWizard({
   accounts,
@@ -219,7 +220,7 @@ export default function GoalWizard({
   if (!open) {
     return (
       <Button type="button" onClick={openWizard}>
-        New goal
+        Add goal
       </Button>
     );
   }
@@ -227,38 +228,58 @@ export default function GoalWizard({
   const selectedAccount = accounts.find((item) => item.id === draft.accountId);
 
   return (
-    <section
+    <div
+      role="dialog"
+      aria-modal="true"
       aria-label="New goal"
-      className="rounded-card border border-panel-border bg-panel p-5 shadow-card"
+      className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-background"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="eyebrow">
-            Step {draft.step} of 4
-          </p>
-          <h2 className="mt-1 text-lg font-semibold">
-            {STEP_TITLES[draft.step - 1]}
-          </h2>
+      <div className="border-b border-panel-border">
+        <div className="flex items-center justify-between gap-2 px-4 py-3 sm:px-6">
+          <button
+            type="button"
+            onClick={draft.step > 1 ? () => patch({ step: draft.step - 1 }) : cancel}
+            aria-label={draft.step > 1 ? "Back" : "Cancel"}
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"
+          >
+            <ChevronLeft aria-hidden className="h-5 w-5" />
+          </button>
+          <ol className="flex gap-2" aria-label={`Step ${draft.step} of 4`}>
+            {STEP_TITLES.map((title, index) => (
+              <li
+                key={title}
+                aria-current={index === draft.step - 1 ? "step" : undefined}
+                className={
+                  index === draft.step - 1
+                    ? "rounded-full bg-accent-soft px-3 py-1.5 text-xs font-bold text-accent"
+                    : "hidden rounded-full px-3 py-1.5 text-xs font-semibold text-muted sm:block"
+                }
+              >
+                {title}
+              </li>
+            ))}
+          </ol>
+          <button
+            type="button"
+            onClick={cancel}
+            aria-label="Close"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"
+          >
+            <X aria-hidden className="h-5 w-5" />
+          </button>
         </div>
-        <Button type="button" variant="ghost" size="sm" onClick={cancel}>
-          Cancel
-        </Button>
+        <div className="h-1 bg-panel-2">
+          <div
+            className="h-1 bg-accent transition-all duration-150"
+            style={{ width: `${(draft.step / STEP_TITLES.length) * 100}%` }}
+          />
+        </div>
       </div>
 
-      <ol className="mt-3 flex gap-1" aria-hidden>
-        {STEP_TITLES.map((title, index) => (
-          <li
-            key={title}
-            className="h-1 flex-1 rounded-full"
-            style={{
-              background:
-                index < draft.step ? "var(--accent)" : "var(--panel-2)",
-            }}
-          />
-        ))}
-      </ol>
+      <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-6 sm:px-6">
+        <h2 className="text-lg font-semibold">{STEP_TITLES[draft.step - 1]}</h2>
 
-      {draft.step === 1 && (
+        {draft.step === 1 && (
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {GOAL_TEMPLATES.map((template) => {
             const selected = draft.slug === template.slug;
@@ -460,39 +481,42 @@ export default function GoalWizard({
         </div>
       )}
 
-      {error && (
-        <p role="alert" className="mt-4 text-sm text-danger">
-          {error}
-        </p>
-      )}
-
-      <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-panel-border pt-4">
-        {draft.step > 1 && (
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => patch({ step: draft.step - 1 })}
-          >
-            Back
-          </Button>
-        )}
-        {draft.step < 4 ? (
-          <Button
-            type="button"
-            disabled={!stepValid()}
-            onClick={() => {
-              if (!stepValid()) return;
-              patch({ step: draft.step + 1 });
-            }}
-          >
-            Continue
-          </Button>
-        ) : (
-          <Button type="button" disabled={busy} onClick={finish}>
-            {busy ? "Creating…" : "Create goal"}
-          </Button>
+        {error && (
+          <p role="alert" className="mt-4 text-sm text-danger">
+            {error}
+          </p>
         )}
       </div>
-    </section>
+
+      <div className="border-t border-panel-border px-4 py-4 sm:px-6">
+        <div className="mx-auto flex w-full max-w-2xl justify-center gap-3">
+          {draft.step === 3 && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => patch({ step: draft.step + 1 })}
+            >
+              Skip
+            </Button>
+          )}
+          {draft.step < 4 ? (
+            <Button
+              type="button"
+              disabled={!stepValid()}
+              onClick={() => {
+                if (!stepValid()) return;
+                patch({ step: draft.step + 1 });
+              }}
+            >
+              Continue
+            </Button>
+          ) : (
+            <Button type="button" disabled={busy} onClick={finish}>
+              {busy ? "Creating…" : "Create goal"}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

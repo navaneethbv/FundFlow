@@ -1,8 +1,10 @@
 import AppShell from "@/components/shell/AppShell";
+import PageHeader from "@/components/shell/PageHeader";
 import AutoRefresh from "@/components/AutoRefresh";
 import EmptyState from "@/components/ui/EmptyState";
 import { Landmark } from "@/components/ui/icons";
 import ConnectBankButton from "@/components/ConnectBankButton";
+import DashboardHeaderActions from "@/components/dashboard/DashboardHeaderActions";
 import DashboardToolbar from "@/components/dashboard/DashboardToolbar";
 import FreshnessBanner from "@/components/dashboard/FreshnessBanner";
 import MonitorView from "@/components/dashboard/MonitorView";
@@ -19,7 +21,7 @@ import { getDashboardData } from "@/lib/dashboard";
 import { getCachedDashboardData } from "@/lib/dashboard-cache";
 import { dashboardUrl } from "@/lib/drilldown";
 import { getGoals } from "@/lib/goals";
-import { formatMonth } from "@/lib/format";
+import { resolveDisplayName, greetingWord } from "@/lib/greeting";
 import ScopeChips from "@/components/dashboard/ScopeChips";
 import type { DashboardPrefs } from "@/components/settings/DashboardPrefsSection";
 import { createClient } from "@/lib/supabase/server";
@@ -100,10 +102,16 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
   const hasHousehold = (householdRows ?? []).length > 0;
   const { data: profileRow } = await supabase
     .from("profiles")
-    .select("dashboard_prefs")
+    .select("dashboard_prefs, display_name, full_name")
     .eq("id", user?.id ?? "")
     .maybeSingle();
   const dashboardPrefs = (profileRow?.dashboard_prefs ?? {}) as DashboardPrefs;
+  const greetingName = resolveDisplayName({
+    displayName: profileRow?.display_name as string | null,
+    fullName: profileRow?.full_name as string | null,
+    email: user?.email,
+  });
+  const greeting = greetingWord(new Date().getHours());
 
   const plaidItems = (items ?? []) as PlaidItem[];
   const hasBanks = plaidItems.length > 0;
@@ -137,15 +145,10 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
     <AppShell active={activeView} email={user?.email}>
       {hasBanks && <AutoRefresh />}
 
-      <header>
-        <p className="eyebrow">{formatMonth(data.selectedMonth)}</p>
-        <h1 className="display mt-2 text-3xl sm:text-4xl">
-          Financial command center
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-          Monitor today, plan what comes next, and track your balance sheet.
-        </p>
-      </header>
+      <PageHeader
+        title={`Good ${greeting}, ${greetingName}!`}
+        actions={<DashboardHeaderActions activeView={activeView} prefsRaw={profileRow?.dashboard_prefs} />}
+      />
 
       <FreshnessBanner brokenBanks={brokenBanks} isStale={data.syncIsStale} />
 

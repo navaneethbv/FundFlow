@@ -1,7 +1,7 @@
-import Link from "next/link";
+import type { ComponentProps } from "react";
 import RecentActivity from "@/components/dashboard/RecentActivity";
 import WidgetShell from "@/components/dashboard/widgets/WidgetShell";
-import type { ComponentProps } from "react";
+import DropdownButton from "@/components/ui/DropdownButton";
 
 export default function TransactionsWidget({
   transactions,
@@ -14,16 +14,13 @@ export default function TransactionsWidget({
 }>) {
   return (
     <WidgetShell
-      title="Recent transactions"
-      hint="Latest activity"
+      title="Transactions"
       error={error}
       action={
-        <Link
-          href="/transactions"
-          className="text-sm font-semibold text-accent hover:underline"
-        >
-          Ledger
-        </Link>
+        <DropdownButton
+          label="All transactions"
+          items={[{ label: "Open the ledger", href: "/transactions" }]}
+        />
       }
     >
       {/* RecentActivity carries its own empty state, so no `empty` here. */}

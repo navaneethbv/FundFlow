@@ -42,9 +42,7 @@ export default function Panel({
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             {eyebrow && <p className="eyebrow">{eyebrow}</p>}
-            {title && (
-              <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
-            )}
+            {title && <h2 className="card-title">{title}</h2>}
           </div>
           {action}
         </div>

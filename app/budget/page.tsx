@@ -1,20 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import AppShell from "@/components/shell/AppShell";
+import PageHeader from "@/components/shell/PageHeader";
 import BudgetPlanner from "@/components/budget/BudgetPlanner";
-import type { BudgetSummaryTab } from "@/components/budget/BudgetSummary";
 import Panel from "@/components/ui/Panel";
+import SegmentedControl from "@/components/ui/SegmentedControl";
 import {
   parseBudgetHorizon,
   parseBudgetMonth,
   type BudgetHorizon,
+  type BudgetSummaryTab,
 } from "@/lib/budget-page";
 import { loadBudgetData } from "@/lib/budget-data";
 import {
   serializeFinancialScope,
 } from "@/lib/financial-scope";
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import { formatMonth, UNKNOWN_CURRENCY } from "@/lib/format";
+import { UNKNOWN_CURRENCY } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -101,32 +103,19 @@ export default async function BudgetPage({
 
   return (
     <AppShell active="budget" email={user.email}>
-      <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="eyebrow">{formatMonth(month)}</p>
-          <h1 className="display mt-2 text-3xl sm:text-4xl">Budget</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-            Plan each category, compare it with canonical transaction
-            actuals, and carry selected envelopes between months.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {(["monthly", "yearly", "decade"] as const).map((value) => (
-            <Link
-              key={value}
-              href={budgetHref({ ...baseLink, horizon: value })}
-              aria-current={value === horizon ? "page" : undefined}
-              className={`inline-flex min-h-11 items-center rounded-field px-4 text-sm font-semibold capitalize ${
-                value === horizon
-                  ? "bg-accent text-accent-foreground"
-                  : "border border-panel-border bg-panel text-muted"
-              }`}
-            >
-              {value === "monthly" ? "Month" : value === "yearly" ? "Year" : "Decade"}
-            </Link>
-          ))}
-        </div>
-      </header>
+      <PageHeader
+        title="Budget"
+        actions={
+          <SegmentedControl
+            ariaLabel="Horizon"
+            items={(["monthly", "yearly", "decade"] as const).map((value) => ({
+              label: value === "monthly" ? "Month" : value === "yearly" ? "Year" : "Decade",
+              href: budgetHref({ ...baseLink, horizon: value }),
+              active: value === horizon,
+            }))}
+          />
+        }
+      />
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
         <Link
@@ -147,35 +136,35 @@ export default async function BudgetPage({
         >
           Next
         </Link>
-        <Link
-          href={budgetHref({ ...baseLink, scope: undefined })}
-          aria-current={loaded.scope.kind === "mine" ? "page" : undefined}
-          className="inline-flex min-h-11 items-center rounded-field border border-panel-border bg-panel px-4 text-sm font-semibold"
-        >
-          Mine
-        </Link>
-        {loaded.visibleHouseholdIds[0] && (
-          <Link
-            href={budgetHref({
-              ...baseLink,
-              scope: loaded.visibleHouseholdIds[0],
-            })}
-            aria-current={loaded.scope.kind === "household" ? "page" : undefined}
-            className="inline-flex min-h-11 items-center rounded-field border border-panel-border bg-panel px-4 text-sm font-semibold"
-          >
-            Household
-          </Link>
+        <SegmentedControl
+          ariaLabel="Financial scope"
+          items={[
+            {
+              label: "Mine",
+              href: budgetHref({ ...baseLink, scope: undefined }),
+              active: loaded.scope.kind === "mine",
+            },
+            ...(loaded.visibleHouseholdIds[0]
+              ? [
+                  {
+                    label: "Household",
+                    href: budgetHref({ ...baseLink, scope: loaded.visibleHouseholdIds[0] }),
+                    active: loaded.scope.kind === "household",
+                  },
+                ]
+              : []),
+          ]}
+        />
+        {loaded.currencies.length > 1 && (
+          <SegmentedControl
+            ariaLabel="Currency"
+            items={loaded.currencies.map((value) => ({
+              label: value,
+              href: budgetHref({ ...baseLink, currency: value }),
+              active: value === loaded.selectedCurrency,
+            }))}
+          />
         )}
-        {loaded.currencies.map((value) => (
-          <Link
-            key={value}
-            href={budgetHref({ ...baseLink, currency: value })}
-            aria-current={value === loaded.selectedCurrency ? "page" : undefined}
-            className="inline-flex min-h-11 items-center rounded-field border border-panel-border bg-panel px-4 text-sm font-semibold"
-          >
-            {value}
-          </Link>
-        ))}
       </div>
 
       <div className="mt-6 space-y-4">

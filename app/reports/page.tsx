@@ -1,15 +1,18 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import AppShell from "@/components/shell/AppShell";
+import PageHeader from "@/components/shell/PageHeader";
 import BreakdownBars from "@/components/cash-flow/BreakdownBars";
 import PeriodBars from "@/components/cash-flow/PeriodBars";
 import SankeyChart from "@/components/charts/SankeyChart";
-import ReportControls, { reportHref } from "@/components/reports/ReportControls";
+import ReportControls, { reportHref, TAB_LABELS } from "@/components/reports/ReportControls";
+import ReportRightRail from "@/components/reports/ReportRightRail";
 import ReportSummaryPanel from "@/components/reports/ReportSummaryPanel";
 import ReportTransactions from "@/components/reports/ReportTransactions";
 import SavedReportsSection from "@/components/reports/SavedReportsSection";
 import EmptyState from "@/components/ui/EmptyState";
 import Panel from "@/components/ui/Panel";
+import Tabs from "@/components/ui/Tabs";
 import { LineChart } from "@/components/ui/icons";
 import {
   breakdownBy,
@@ -26,6 +29,7 @@ import {
   reportFiltersToSearchParams,
   summarizeTransactions,
   type ReportFilters,
+  type ReportTab,
 } from "@/lib/reports";
 import {
   loadReportData,
@@ -109,16 +113,15 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
 
   return (
     <AppShell active="reports" email={user.email}>
-      <header>
-        <p className="eyebrow">
-          {filters.start} to {filters.end}
-        </p>
-        <h1 className="display mt-2 text-3xl sm:text-4xl">Reports</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-          Explore any date range, save the views you return to, and export the
-          exact rows behind a figure.
-        </p>
-      </header>
+      <PageHeader title="Reports" />
+
+      <Tabs
+        items={(Object.keys(TAB_LABELS) as ReportTab[]).map((tab) => ({
+          label: TAB_LABELS[tab],
+          href: reportHref(filters, { tab }),
+          active: filters.tab === tab,
+        }))}
+      />
 
       {loaded.truncated && (
         <Panel tone="warning">
@@ -212,41 +215,42 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
             </div>
           </Panel>
 
-          <Panel
-            eyebrow="Rows"
-            title="Transactions in this report"
-            action={
-              <div className="flex flex-wrap gap-2">
-                <Link
-                  href={`/api/export/report-csv?${exportParams.toString()}`}
-                  prefetch={false}
-                  className="inline-flex min-h-11 items-center rounded-field border border-panel-border bg-panel px-3 py-2 text-sm font-semibold hover:bg-panel-2 focus-visible:outline-2"
-                >
-                  Download CSV
-                </Link>
-                <Link
-                  href="/api/export/report"
-                  prefetch={false}
-                  className="inline-flex min-h-11 items-center rounded-field border border-panel-border bg-panel px-3 py-2 text-sm font-semibold hover:bg-panel-2 focus-visible:outline-2"
-                >
-                  Download PDF report
-                </Link>
-                <Link
-                  href="/wrapped"
-                  className="inline-flex min-h-11 items-center rounded-field border border-panel-border bg-panel px-3 py-2 text-sm font-semibold hover:bg-panel-2 focus-visible:outline-2"
-                >
-                  Year in Money
-                </Link>
-              </div>
-            }
-          >
-            <ReportTransactions
-              transactions={rows}
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
+            <Panel
+              eyebrow="Rows"
+              title="Transactions in this report"
+              className="min-w-0"
+              action={
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    href="/api/export/report"
+                    prefetch={false}
+                    className="inline-flex min-h-11 items-center rounded-field border border-panel-border bg-panel px-3 py-2 text-sm font-semibold hover:bg-panel-2 focus-visible:outline-2"
+                  >
+                    Download PDF report
+                  </Link>
+                  <Link
+                    href="/wrapped"
+                    className="inline-flex min-h-11 items-center rounded-field border border-panel-border bg-panel px-3 py-2 text-sm font-semibold hover:bg-panel-2 focus-visible:outline-2"
+                  >
+                    Year in Money
+                  </Link>
+                </div>
+              }
+            >
+              <ReportTransactions
+                transactions={rows}
+                currency={currencyLabel}
+                page={page}
+                hrefForPage={hrefForPage}
+              />
+            </Panel>
+            <ReportRightRail
+              summary={summary}
               currency={currencyLabel}
-              page={page}
-              hrefForPage={hrefForPage}
+              exportHref={`/api/export/report-csv?${exportParams.toString()}`}
             />
-          </Panel>
+          </div>
         </>
       )}
 

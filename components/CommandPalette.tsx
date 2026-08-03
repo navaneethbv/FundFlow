@@ -94,7 +94,7 @@ export default function CommandPalette({ items }: Readonly<{ items: Command[] }>
         type="button"
         tabIndex={-1}
         aria-label="Close command palette"
-        className="absolute inset-0 h-full w-full cursor-default bg-black/40"
+        className="absolute inset-0 h-full w-full cursor-default bg-black/50"
         onClick={close}
       />
       <div

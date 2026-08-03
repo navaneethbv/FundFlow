@@ -1,6 +1,7 @@
-import Link from "next/link";
-import Sparkline from "@/components/charts/Sparkline";
+import AreaSparkline from "@/components/charts/AreaSparkline";
 import WidgetShell from "@/components/dashboard/widgets/WidgetShell";
+import Badge from "@/components/ui/Badge";
+import DropdownButton from "@/components/ui/DropdownButton";
 import { formatCurrency } from "@/lib/format";
 
 export interface NetWorthPoint {
@@ -29,33 +30,27 @@ export default function NetWorthWidget({
   return (
     <WidgetShell
       title="Net worth"
-      hint="Assets minus liabilities"
       error={error}
       empty={latest ? null : "Connect an account to start tracking net worth."}
       action={
-        <Link
-          href="/accounts"
-          className="text-sm font-semibold text-accent hover:underline"
-        >
-          Accounts
-        </Link>
+        <DropdownButton
+          label="1 month"
+          items={[{ label: "View accounts", href: "/accounts" }]}
+        />
       }
     >
-      <p className="metric-value text-2xl sm:text-3xl">
+      <p data-money className="metric-value text-2xl sm:text-3xl">
         {formatCurrency(latest?.netWorth ?? 0, currency)}
       </p>
       {change !== null && (
-        <p
-          className="mt-1 text-sm tabular-nums"
-          style={{ color: change >= 0 ? "var(--viz-good)" : "var(--viz-bad)" }}
-        >
-          {change >= 0 ? "Up" : "Down"} {formatCurrency(Math.abs(change), currency)}{" "}
-          in the last month
-        </p>
+        <Badge tone={change >= 0 ? "success" : "danger"} className="mt-2">
+          {change >= 0 ? "Up" : "Down"} {formatCurrency(Math.abs(change), currency)} in
+          the last month
+        </Badge>
       )}
       {history.length > 1 && (
         <div className="mt-3">
-          <Sparkline values={history.map((point) => point.netWorth)} />
+          <AreaSparkline values={history.map((point) => point.netWorth)} color="var(--viz-1)" />
         </div>
       )}
     </WidgetShell>

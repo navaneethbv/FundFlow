@@ -1,4 +1,5 @@
 import AppShell from "@/components/shell/AppShell";
+import PageHeader from "@/components/shell/PageHeader";
 import Badge from "@/components/ui/Badge";
 import Panel from "@/components/ui/Panel";
 import { createClient } from "@/lib/supabase/server";
@@ -105,13 +106,10 @@ export default async function AdminObservabilityPage() {
 
   return (
     <AppShell active="settings" email={user?.email}>
-      <div>
-        <p className="eyebrow">Admin</p>
-        <h1 className="display mt-2 text-3xl sm:text-4xl">Observability</h1>
-        <p className="mt-2 text-sm text-muted">
-          Redacted operational view for sync jobs, bank health, audit events, and alerts.
-        </p>
-      </div>
+      <PageHeader title="Observability" />
+      <p className="text-sm text-muted">
+        Redacted operational view for sync jobs, bank health, audit events, and alerts.
+      </p>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {stats.map((stat) => (

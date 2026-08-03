@@ -17,6 +17,9 @@ const eslintConfig = defineConfig([
     ".remember/**",
     "img/**",
     ".agents/**",
+    // Reference mirror of session changes (docs/HANDOFF.md, new_changes/README.md) —
+    // a snapshot for review, never compiled or linted as live source.
+    "new_changes/**",
   ]),
 ]);
 

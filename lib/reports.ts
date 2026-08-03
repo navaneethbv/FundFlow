@@ -194,20 +194,24 @@ export function buildCashFlowSankeyData(
     column: HUB_COLUMN,
   });
 
-  // Column 2 — expense groups, then the surplus as a terminal node.
-  for (const entry of groupRows) {
-    nodes.push({
-      id: `grp:${entry.key}`,
-      label: entry.display,
-      value: round2(entry.amount),
-      column: GROUP_COLUMN,
-    });
-  }
+  // Column 2 — the surplus first, then expense groups. Net Income is an
+  // outcome, not a spending group ranked by size: it sits at the top of the
+  // column regardless of whether it out-values the largest group, matching
+  // the reference design's fixed ordering rather than a value sort that would
+  // move it around from month to month.
   if (surplus > 0) {
     nodes.push({
       id: NET_INCOME_ID,
       label: "Net Income",
       value: surplus,
+      column: GROUP_COLUMN,
+    });
+  }
+  for (const entry of groupRows) {
+    nodes.push({
+      id: `grp:${entry.key}`,
+      label: entry.display,
+      value: round2(entry.amount),
       column: GROUP_COLUMN,
     });
   }
@@ -238,15 +242,17 @@ export function buildCashFlowSankeyData(
   if (shortfall > 0) {
     links.push({ source: UNFUNDED_ID, target: HUB_ID, value: shortfall });
   }
+  // Same order as the nodes above, so the ribbons leave the hub top-to-bottom
+  // in the order their targets are stacked and never cross.
+  if (surplus > 0) {
+    links.push({ source: HUB_ID, target: NET_INCOME_ID, value: surplus });
+  }
   for (const entry of groupRows) {
     links.push({
       source: HUB_ID,
       target: `grp:${entry.key}`,
       value: round2(entry.amount),
     });
-  }
-  if (surplus > 0) {
-    links.push({ source: HUB_ID, target: NET_INCOME_ID, value: surplus });
   }
   for (const group of groupRows) {
     const categories = expenseByGroupCategory.get(group.key);

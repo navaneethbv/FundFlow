@@ -35,6 +35,12 @@ export interface CurrencyTotal {
   amount: number;
 }
 
+export interface GroupAmount {
+  group: AccountGroupKey;
+  label: string;
+  amount: number;
+}
+
 export interface BalanceChange {
   amount: number;
   pct: number | null;
@@ -53,6 +59,13 @@ export interface AccountsPageRow {
   updatedAgo: string;
   stale: boolean;
   spark: number[];
+  /**
+   * The full available snapshot history (unsliced), for a second, longer-
+   * window trend column next to `spark`'s last-30-days one — Monarch shows
+   * both side by side per row, and this is the same per-account series
+   * `spark` is already sliced from, just not truncated.
+   */
+  sparkLong: number[];
   monthChange: BalanceChange | null;
   includeInNetWorth: boolean;
 }
@@ -63,6 +76,14 @@ export interface AccountsPageData {
     {
       label: string;
       totals: CurrencyTotal[];
+      /**
+       * Sum of each row's own `monthChange.amount`, bucketed by currency —
+       * the group header's change annotation next to its total pill. A row
+       * with no `monthChange` (not enough history) simply contributes zero,
+       * so a brand-new account never blocks the rest of the group from
+       * reporting a change.
+       */
+      changes: CurrencyTotal[];
       rows: AccountsPageRow[];
     }
   >;
@@ -74,6 +95,15 @@ export interface AccountsPageData {
     netWorth: CurrencyTotal[];
     netWorthSeries: Record<string, Array<{ date: string; value: number }>>;
     netWorthMonthChange: Record<string, BalanceChange | null>;
+    /**
+     * Assets/liabilities broken down by account group, keyed by currency —
+     * the right-rail Summary card's stacked bar + legend. Sorted by amount
+     * descending so the bar's largest segment always draws first. Same
+     * `includeInNetWorth` filter as `assets`/`liabilities`, so the two stay
+     * reconcilable (each currency's group amounts sum to its plain total).
+     */
+    assetsByGroup: Record<string, GroupAmount[]>;
+    liabilitiesByGroup: Record<string, GroupAmount[]>;
   };
   historyStartsOn: string | null;
 }
@@ -238,11 +268,11 @@ export function buildAccountsPageData(
   now: Date,
 ): AccountsPageData {
   const groups: AccountsPageData["groups"] = {
-    credit: { label: GROUP_LABELS.credit, totals: [], rows: [] },
-    cash: { label: GROUP_LABELS.cash, totals: [], rows: [] },
-    investment: { label: GROUP_LABELS.investment, totals: [], rows: [] },
-    loan: { label: GROUP_LABELS.loan, totals: [], rows: [] },
-    other: { label: GROUP_LABELS.other, totals: [], rows: [] },
+    credit: { label: GROUP_LABELS.credit, totals: [], changes: [], rows: [] },
+    cash: { label: GROUP_LABELS.cash, totals: [], changes: [], rows: [] },
+    investment: { label: GROUP_LABELS.investment, totals: [], changes: [], rows: [] },
+    loan: { label: GROUP_LABELS.loan, totals: [], changes: [], rows: [] },
+    other: { label: GROUP_LABELS.other, totals: [], changes: [], rows: [] },
   };
 
   const snapshotsBySource = new Map<string, AccountBalanceSnapshot[]>();
@@ -282,6 +312,7 @@ export function buildAccountsPageData(
       updatedAgo: freshness.label,
       stale: freshness.stale,
       spark: values.slice(-30),
+      sparkLong: values,
       monthChange: changeFromSeries(rowSeries),
       includeInNetWorth: account.includeInNetWorth,
     });
@@ -290,23 +321,42 @@ export function buildAccountsPageData(
   for (const group of Object.values(groups)) {
     group.rows.sort((a, b) => a.name.localeCompare(b.name));
     const totals = new Map<string, number>();
+    const changes = new Map<string, number>();
     for (const row of group.rows) {
       if (row.balance !== null) addAmount(totals, row.currency, row.balance);
+      if (row.monthChange) addAmount(changes, row.currency, row.monthChange.amount);
     }
     group.totals = totalsFromMap(totals);
+    group.changes = totalsFromMap(changes);
   }
 
   const assets = new Map<string, number>();
   const liabilities = new Map<string, number>();
+  const assetsByGroup = new Map<string, Map<AccountGroupKey, number>>();
+  const liabilitiesByGroup = new Map<string, Map<AccountGroupKey, number>>();
   for (const account of accounts) {
     if (!account.includeInNetWorth || account.currentBalance === null) continue;
     const group = groupKeyFor(account.type, account.subtype);
     const balance = displayBalance(group, account.currentBalance)!;
-    addAmount(
-      group === "credit" || group === "loan" ? liabilities : assets,
-      account.currency,
-      balance,
-    );
+    const isLiability = group === "credit" || group === "loan";
+    addAmount(isLiability ? liabilities : assets, account.currency, balance);
+
+    const byGroupMap = isLiability ? liabilitiesByGroup : assetsByGroup;
+    const byGroup = byGroupMap.get(account.currency) ?? new Map<AccountGroupKey, number>();
+    byGroup.set(group, (byGroup.get(group) ?? 0) + balance);
+    byGroupMap.set(account.currency, byGroup);
+  }
+
+  function groupAmountsFromMap(
+    byGroupMap: Map<string, Map<AccountGroupKey, number>>,
+  ): Record<string, GroupAmount[]> {
+    const result: Record<string, GroupAmount[]> = {};
+    for (const [currency, byGroup] of byGroupMap) {
+      result[currency] = [...byGroup]
+        .map(([group, amount]) => ({ group, label: GROUP_LABELS[group], amount: round(amount) }))
+        .sort((a, b) => b.amount - a.amount);
+    }
+    return result;
   }
 
   const netWorth = new Map<string, number>();
@@ -375,6 +425,8 @@ export function buildAccountsPageData(
       netWorth: totalsFromMap(netWorth),
       netWorthSeries,
       netWorthMonthChange,
+      assetsByGroup: groupAmountsFromMap(assetsByGroup),
+      liabilitiesByGroup: groupAmountsFromMap(liabilitiesByGroup),
     },
     historyStartsOn,
   };

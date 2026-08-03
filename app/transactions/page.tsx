@@ -2,6 +2,7 @@ import { Fragment } from "react";
 import { createClient } from "@/lib/supabase/server";
 import AutoRefresh from "@/components/AutoRefresh";
 import AppShell from "@/components/shell/AppShell";
+import PageHeader from "@/components/shell/PageHeader";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import ButtonLink from "@/components/ui/ButtonLink";
@@ -17,7 +18,11 @@ import SavedViewsBar from "@/components/transactions/SavedViewsBar";
 import BulkTagBar from "@/components/transactions/BulkTagBar";
 import AddTransactionModal from "@/components/transactions/AddTransactionModal";
 import ColumnsMenu from "@/components/transactions/ColumnsMenu";
+import TableToolbar from "@/components/transactions/TableToolbar";
+import { MerchantAvatar } from "@/components/ui/Avatar";
+import CategoryChip from "@/components/ui/CategoryChip";
 import { formatCurrency, titleCase, formatMonth } from "@/lib/format";
+import { formatDate } from "@/lib/format-date";
 import { applyMerchantRules } from "@/lib/planning";
 import { filterRowsWithRules, hasRemapRules } from "@/lib/ledger-filter";
 import { parseLedgerColumns } from "@/lib/ledger-columns";
@@ -348,18 +353,17 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
 
   return (
     <AppShell active="transactions" email={user?.email}>
-      <div className="mx-auto max-w-4xl space-y-5">
         <AutoRefresh />
 
-        <header className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="eyebrow">Ledger</p>
-            <h1 className="display mt-2 text-3xl sm:text-4xl">Transactions</h1>
-          </div>
-          {transactionsParityEnabled && accountOptions.length > 0 && (
-            <AddTransactionModal accounts={accountOptions} goals={goalOptions} categories={categoryOptions} />
-          )}
-        </header>
+        <PageHeader
+          title="Transactions"
+          actions={
+            transactionsParityEnabled &&
+            accountOptions.length > 0 && (
+              <AddTransactionModal accounts={accountOptions} goals={goalOptions} categories={categoryOptions} />
+            )
+          }
+        />
 
         <RefundReview />
 
@@ -425,10 +429,6 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
           </form>
         </Panel>
 
-        {transactionsParityEnabled && (
-          <ColumnsMenu visible={visibleColumns} isDefault={columnsAreDefault} otherParams={columnsFormParams} />
-        )}
-
         {(category || sub || merchant || flow || accountType) && (
           <div className="flex flex-wrap items-center gap-2 text-xs">
             {(
@@ -476,9 +476,14 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
             <div className="sm:hidden">
               <MobileLedgerList rows={cardRows} />
             </div>
-            <div className="border-b border-panel-border px-4 py-2 sm:px-5">
-              <BulkTagBar transactionIds={rows.map((t) => t.id)} />
-            </div>
+            <TableToolbar
+              bulkTagBar={<BulkTagBar transactionIds={rows.map((t) => t.id)} />}
+              columnsMenu={
+                transactionsParityEnabled ? (
+                  <ColumnsMenu visible={visibleColumns} isDefault={columnsAreDefault} otherParams={columnsFormParams} />
+                ) : undefined
+              }
+            />
             <div className="hidden overflow-x-auto sm:block">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 z-10 bg-panel-2">
@@ -509,20 +514,27 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                     <Fragment key={t.id}>
                       {isNewDay && (
                         <tr className="border-b border-panel-border bg-panel/60">
-                          <td colSpan={rowColumnCount} className="px-4 py-1.5 text-xs font-semibold text-muted">
-                            {t.date}
-                            <span data-money className="ml-2 font-normal">
-                              {dayTotal < 0 ? "+" : "-"}
-                              {formatCurrency(Math.abs(dayTotal))} net
-                            </span>
+                          <td colSpan={rowColumnCount} className="px-4 py-1.5">
+                            <div className="flex items-center justify-between gap-3 text-xs font-semibold text-muted">
+                              <span>{formatDate(t.date as string)}</span>
+                              <span data-money className="font-normal">
+                                {dayTotal < 0 ? "+" : "-"}
+                                {formatCurrency(Math.abs(dayTotal))} net
+                              </span>
+                            </div>
                           </td>
                         </tr>
                       )}
                     <tr
                       className="border-b border-panel-border last:border-0 hover:bg-panel-hover"
                     >
-                      <td className="whitespace-nowrap px-4 py-3 align-top text-muted">{t.date}</td>
+                      <td className="whitespace-nowrap px-4 py-3 align-top text-muted">
+                        {formatDate(t.date as string)}
+                      </td>
                       <td className="px-4 py-3 align-top">
+                        <div className="flex items-start gap-2.5">
+                          <MerchantAvatar name={(t.merchant_name ?? t.name ?? "?") as string} size={28} className="mt-0.5" />
+                          <span className="min-w-0">
                         <span className="font-medium">{t.merchant_name ?? t.name ?? "Unknown"}</span>
                         {t.pending && (
                           <Badge tone="warning" className="ml-2">
@@ -543,10 +555,12 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                             {ann?.note && <span className="text-xs text-muted">{ann.note}</span>}
                           </span>
                         )}
+                          </span>
+                        </div>
                       </td>
                       {visibleColumns.has("category") && (
                         <td className="hidden px-4 py-3 align-top text-muted sm:table-cell">
-                          {titleCase(t.pfc_primary) || "-"}
+                          {t.pfc_primary ? <CategoryChip label={titleCase(t.pfc_primary)} /> : "-"}
                         </td>
                       )}
                       {visibleColumns.has("account") && (
@@ -556,8 +570,11 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                       )}
                       <td
                         data-money
-                        className="whitespace-nowrap px-4 py-3 text-right align-top font-semibold"
-                        style={t.amount < 0 ? { color: "var(--success)" } : { color: "var(--danger)" }}
+                        className={
+                          t.amount < 0
+                            ? "whitespace-nowrap px-4 py-3 text-right align-top font-semibold text-success"
+                            : "whitespace-nowrap px-4 py-3 text-right align-top font-semibold text-foreground"
+                        }
                       >
                         {t.amount < 0 ? "+" : "-"}
                         {formatCurrency(Math.abs(t.amount), t.iso_currency_code ?? "USD")}
@@ -607,7 +624,6 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
             )}
           </nav>
         )}
-      </div>
     </AppShell>
   );
 }

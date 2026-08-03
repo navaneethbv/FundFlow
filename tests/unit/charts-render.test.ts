@@ -150,7 +150,7 @@ describe("Sparkline and StatTile", () => {
     expect(html).toContain("$1,020.00");
     expect(html).toContain("▲");
     expect(html).toContain("vs May 2026");
-    expect(html).toContain("var(--viz-bad)"); // spending up = bad direction
+    expect(html).toContain("text-danger"); // spending up = bad direction
   });
 });
 
@@ -344,11 +344,95 @@ describe("SankeyChart", () => {
   });
 
   it("labels amounts with a share of total money in, and keeps the blur hook", () => {
-    // Rent is 1200 of the 4000 that came in.
-    expect(html).toContain("$1,200.00 (30.0%)");
+    // Rent is 1200 of the 4000 that came in. Two decimals with trailing
+    // zeros trimmed, so an exact 30% renders as "30%", not "30.0%".
+    expect(html).toContain("$1,200.00 (30%)");
     // Money rendered without these hooks escapes the privacy blur.
     expect(html).toContain('class="money"');
     expect(html).toContain("data-money");
+  });
+
+  it("keeps two decimals of precision instead of rounding to one", () => {
+    const uneven = [
+      { id: "src:Wages", label: "Wages", value: 10000, column: 0 },
+      { id: "hub", label: "Income", value: 10000, column: 1 },
+      { id: "grp:Rent", label: "Rent", value: 3333, column: 2 },
+      { id: "grp:__net__", label: "Net Income", value: 6667, column: 2 },
+    ];
+    const unevenLinks = [
+      { source: "src:Wages", target: "hub", value: 10000 },
+      { source: "hub", target: "grp:Rent", value: 3333 },
+      { source: "hub", target: "grp:__net__", value: 6667 },
+    ];
+    const rendered = renderToStaticMarkup(
+      createElement(SankeyChart, {
+        nodes: uneven,
+        links: unevenLinks,
+        title: "Uneven split",
+      }),
+    );
+    // 3333 / 10000 = 33.33%. A fixed one-decimal format would round this to
+    // the wrong "33.3%".
+    expect(rendered).toContain("(33.33%)");
+  });
+
+  it("prefixes real source, group, and category labels with an emoji, but never the hub or an outcome node", () => {
+    const emojiNodes = [
+      { id: "src:Wages", label: "Paychecks", value: 4000, column: 0 },
+      { id: "hub", label: "Income", value: 4000, column: 1 },
+      { id: "grp:Shopping", label: "Shopping", value: 1200, column: 2 },
+      { id: "grp:__net__", label: "Net Income", value: 2800, column: 2 },
+      { id: "cat:Shopping::Clothing", label: "Clothing", value: 1200, column: 3 },
+    ];
+    const emojiLinks = [
+      { source: "src:Wages", target: "hub", value: 4000 },
+      { source: "hub", target: "grp:Shopping", value: 1200 },
+      { source: "hub", target: "grp:__net__", value: 2800 },
+      { source: "grp:Shopping", target: "cat:Shopping::Clothing", value: 1200 },
+    ];
+    const rendered = renderToStaticMarkup(
+      createElement(SankeyChart, {
+        nodes: emojiNodes,
+        links: emojiLinks,
+        title: "Emoji check",
+      }),
+    );
+    expect(rendered).toContain("💵 Paychecks");
+    expect(rendered).toContain("🛍️ Shopping");
+    expect(rendered).toContain("👕 Clothing");
+    // The hub and the surplus outcome render their bare name, with no emoji
+    // prepended, even though neither is in the emoji map to begin with.
+    expect(rendered).toMatch(/>Income<\/tspan>/);
+    expect(rendered).toMatch(/>Net Income<\/tspan>/);
+  });
+
+  it("pins a known group's hue to its identity, not its rank by value", () => {
+    // "Uncommon Group" outvalues "Shopping" here, but Shopping still takes
+    // slot 1 because that slot is its fixed identity — a value-ranked
+    // assignment would hand slot 1 to whichever group happens to be largest
+    // this month, so the same category would shift hue from month to month.
+    const pinned = [
+      { id: "src:w", label: "Wages", value: 1000, column: 0 },
+      { id: "hub", label: "Income", value: 1000, column: 1 },
+      { id: "grp:big", label: "Uncommon Group", value: 700, column: 2 },
+      { id: "grp:small", label: "Shopping", value: 300, column: 2 },
+    ];
+    const pinnedLinks = [
+      { source: "src:w", target: "hub", value: 1000 },
+      { source: "hub", target: "grp:big", value: 700 },
+      { source: "hub", target: "grp:small", value: 300 },
+    ];
+    const rendered = renderToStaticMarkup(
+      createElement(SankeyChart, {
+        nodes: pinned,
+        links: pinnedLinks,
+        title: "Hue pinning",
+      }),
+    );
+    const shoppingRect = /<rect[^>]*><title>Shopping: /.exec(rendered);
+    const hueOf = (match: RegExpExecArray | null) =>
+      /fill="(var\(--sankey-group-\d\))"/.exec(match?.[0] ?? "")?.[1];
+    expect(hueOf(shoppingRect)).toBe("var(--sankey-group-1)");
   });
 
   it("labels every flow in the table using node labels, not raw ids", () => {
@@ -417,10 +501,10 @@ describe("CumulativeCompareChart", () => {
     }),
   );
 
-  it("draws both series without NaN and using viz tokens", () => {
+  it("draws this month in accent orange and last month in muted grey", () => {
     expect(html).not.toContain("NaN");
-    expect(html).toContain('stroke="var(--viz-1)"');
-    expect(html).toContain('stroke="var(--viz-ink-2)"');
+    expect(html).toContain('stroke="var(--accent)"');
+    expect(html).toContain('stroke="var(--viz-muted)"');
     expect(html).not.toMatch(/stroke="#[0-9a-f]{3,6}"/i);
   });
 

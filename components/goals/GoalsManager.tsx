@@ -115,11 +115,8 @@ function GoalRow({
       <div className="mt-3 flex items-center gap-3">
         <span className="block h-2 flex-1 rounded-full bg-panel-hover">
           <span
-            className="block h-2 rounded-full"
-            style={{
-              width: `${pct}%`,
-              backgroundColor: complete ? "var(--viz-good)" : "var(--accent)",
-            }}
+            className={complete ? "block h-2 rounded-full bg-success" : "block h-2 rounded-full bg-accent"}
+            style={{ width: `${pct}%` }}
           />
         </span>
         <span className="shrink-0 text-xs font-bold tabular-nums">{pct}%</span>

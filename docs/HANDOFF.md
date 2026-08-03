@@ -1,6 +1,310 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-07-31. Read this first to resume.
+Last updated: 2026-08-02. Read this first to resume.
+
+## START HERE: Monarch visual-parity — every phase (V0 through V11) is done
+
+The 14-phase Monarch **feature**-parity program below is complete and
+released. A new, separate program starts now: **visual** parity with Monarch
+Money, from 29 reference screenshots in `img/Monarch Design/`. Plan:
+`docs/superpowers/plans/2026-08-02-monarch-visual-parity.md`. Design:
+`docs/superpowers/specs/2026-08-02-monarch-visual-parity-design.md`. A full
+copy of every file this work touched, plus a detailed writeup, is in
+`new_changes/README.md`.
+
+**Thirteen pieces landed, all gated green** (`npx tsc --noEmit`, `npm run lint`,
+`npm run test:unit` — 189 files / 1809 tests, `npm run build` — all four
+with the dummy env vars documented below). **The only thing this entire
+program still needs is a real browser pass** (light + dark, the
+credentialed E2E specs, and a Playwright visual-snapshot baseline) — every
+phase below was verified by the automated gate plus careful manual review,
+never an actual rendered screenshot:
+
+1. **Sankey exact-match** (`/reports` cash-flow diagram). Nine deltas closed
+   the gap with Monarch's own Sankey: two-line labels (name + bold amount/
+   percent), emoji prefixes (new `lib/category-emoji.ts`), trimmed two-decimal
+   percentages, a weighted hub-to-groups column gap, the hub label moved
+   beside its bar instead of floating above it, thinner sharper bars, more
+   saturated ribbons, Net Income pinned to the top of the group column
+   regardless of value, and group hues pinned by identity (Shopping is always
+   magenta) rather than by that month's size ranking. Both existing geometry
+   invariants (one shared value→pixel scale, ribbons never floored) hold.
+2. **Phase V0 — token retheme.** FundFlow's cool-blue identity became
+   Monarch's warm cream + orange one. Colors were **pixel-sampled** from the
+   screenshots with a small `sharp` script, not guessed — see the sampling
+   method and the important caveat in `new_changes/README.md` and the design
+   doc's §2.1: the provided "dark" screenshots are very likely a simulated/
+   forced dark-mode filter (the CTA desaturates from vivid `#FF6A2D` in light
+   to a muted `#92472A` in "dark" at the *same hue*, which real dark themes
+   never do on purpose), so the dark theme keeps the sampled neutrals but a
+   **vivid** accent rather than the filtered one. New tokens: `--pill`
+   (neutral nav/segmented-control active surface) and `--settings-active`
+   (a blue tint reserved for Settings' active row — Monarch's one deliberate
+   exception to "accent is never used for selection"). Buttons are now pills,
+   the four modal recipes are unified (`bg-black/50`, `rounded-card`,
+   `shadow-float`), `.metric-value` switched from Geist Mono to Geist Sans
+   (class name unchanged — the privacy-blur selector keys on it), and several
+   flagged internal inconsistencies were fixed in passing (Badge's raw
+   Tailwind tone colors, the Accounts Mine/Household pill having no visible
+   active state, TransactionEditor's off-token 16px radius).
+3. **Phase V1 — shell restructure.** The 64px top bar spanning above the
+   sidebar is gone; the sidebar (`components/shell/SidebarShell.tsx`) is now
+   full height with a three-region layout: a fixed top strip (logo +
+   `SidebarUtilityIcons` — search/bell/settings, hidden below `lg` and while
+   collapsed + the existing collapse toggle), a scrollable nav list
+   (unchanged), and a fixed bottom block (`AskAiLowerRailLink` + the new
+   `UserMenu` — avatar/initials + display name + a dropdown holding
+   Settings, the privacy-blur toggle, the theme toggle, and sign-out).
+   `components/shell/TopBar.tsx` is deleted; every page's header migrated
+   from the old eyebrow + `.display` H1 + description pattern to a new slim
+   `PageHeader` (title left, actions right) — 16 pages total, including a
+   Dashboard-specific "Good {morning|afternoon|evening}, {name}!" greeting
+   (`lib/greeting.ts`, name resolved from the profile via the same
+   `dashboard_prefs` query AppSidebar already ran, so no extra round trip).
+   **Deliberately kept, unlike Monarch:** Settings/Notifications stay in the
+   nav list *in addition to* the new icon row, specifically so collapsing
+   the sidebar (which hides the icon row for space) never makes either
+   unreachable. Also fixed in passing: `/transactions` was the only page
+   capped at `max-w-4xl` instead of the shared `max-w-[1320px]`.
+
+4. **Phase V2 — shared component kit, built and wired.** Six new
+   `components/ui/` primitives (`SegmentedControl`, `DropdownButton`,
+   `ProgressBar`, `Avatar.tsx`'s `MerchantAvatar`/`InstitutionAvatar`,
+   `CategoryChip`) plus `lib/format-date.ts`. Not just built — wired
+   broadly: `SegmentedControl` replaced toggle controls across ScopeChips,
+   Accounts, Cash Flow, Reports, Budget, and Recurring (finding two more
+   "no visual active state" bugs along the way, same class as the one V0
+   fixed on Accounts' scope pills); `ProgressBar` replaced four ad-hoc bars
+   (and moved two of them off raw `--viz-*` chart tokens onto the semantic
+   `--success`/`--danger`/`--warning` ones, since they're status indicators,
+   not chart series); `MerchantAvatar`/`CategoryChip`/`formatDate` landed in
+   the Transactions ledger, Dashboard's RecentActivity, and Recurring's rows.
+   Two structural pieces pulled forward from later phases while the
+   primitives were already in hand: a new `NetWorthHero.tsx` on Accounts
+   (the headline figure + trend chart, previously buried inside a card, now
+   its own hero above the fold — V4), and Recurring's `MonthSummary`
+   rebuilt from a right-rail column into Monarch's full-width 3-column
+   strip above the list (V7). `DropdownButton` is built and tested but not
+   wired anywhere real yet — its first candidates (Dashboard widget period
+   switches, Transactions' toolbar) need more than a drop-in swap.
+   **Also fixed:** `tsconfig.json`/`eslint.config.mjs` didn't exclude
+   `new_changes/`, so a stale mirror copy could fail the real typecheck
+   once a real file's exported prop types changed — both now exclude it.
+5. **Phase V6 — Budget rebuild.** `BudgetTable.tsx` rewritten: a quiet
+   borderless Planned input that auto-saves `onBlur` (new pure
+   `validatePlannedAmount` helper — rejects unparseable/negative values,
+   skips the request when nothing actually changed) replaces the old
+   labeled-field-plus-Save-button row; a per-row `ProgressBar` sits under
+   the category name; the Group/Rollover/Sort-order controls that used to
+   sit inline on every row moved into a per-row `⋯` popover (`RowMenu`, its
+   own small backdrop+Escape popover rather than forced onto
+   `DropdownButton`, since it needs real form controls, not link/action
+   rows). The old `BudgetSummary` stat-card grid is deleted, replaced by
+   `BudgetRightRail.tsx` (new) — a tinted "Left to budget" hero plus the
+   same Summary/Income/Expenses tab switch, now with a `GroupMiniSummary`
+   (progress bar + spent/remaining) per expense group. `BudgetPlanner.tsx`
+   groups sections into Income/Expenses/Contributions bands (new
+   `SuperBand`/`TotalsRow` helpers) each followed by a totals row, in a
+   two-column layout with the sticky right rail. `SuperBand` is
+   deliberately **not** scroll-sticky (documented inline) — stacking
+   independently-sticky strips without a browser to verify rendered
+   heights risks silent overlap. New `tests/unit/budget-planner-render.test.ts`
+   (14 tests) covers `validatePlannedAmount`, `BudgetTable`,
+   `BudgetRightRail`, and `BudgetPlanner`.
+6. **Phase V7 — Recurring rebuild.** `RecurringList.tsx` rewritten: Upcoming/
+   Complete render as real tables (`OccurrenceTable`/`OccurrenceTableRow`,
+   new) — merchant, date with an orange overdue annotation (finally wiring
+   up `formatDueAnnotation`/`daysUntil`, built in V2's `lib/format-date.ts`
+   but unused until now), payment account, category, amount (a
+   `CheckCircle2` mark when complete), and a `⋯` menu — each ending in a
+   grey total-band row. Confirm/Not recurring/Restore/amount-correction
+   moved onto that per-row menu (`OccurrenceRowMenu`, new, same bespoke
+   popover chrome as Budget's `RowMenu`), which looks up the occurrence's
+   underlying stream or manual item and branches: read-only "Shared · view
+   only" for a non-owned stream, the full review controls for an owned one,
+   Enabled/Delete for a manual item. The full stream list on the Manage tab
+   is **kept**, not removed — a stream due outside the viewed month never
+   appears in that month's Upcoming/Complete tables, so Manage is still the
+   only reliable place to review it. Tab selection moved from client
+   `useState` to the URL (`tab`/`links` props, `Tabs` component) — this
+   page had been the one holdout against the app's link-driven-controls
+   convention — which is also what makes `ReviewBanner`'s new "Review now"
+   link (replacing inert warning-toned text) actually work: it's now a real
+   `<Link>` to the Manage tab instead of two server/client siblings with no
+   way to reach across. The page also gained a visible month title between
+   icon Previous/Next buttons plus a conditional "Today" link (previously
+   just Previous/Next text links with no month shown at all). New
+   `tests/unit/recurring-list-render.test.ts` (11 tests, the
+   `renderToStaticMarkup` pattern V6 introduced) covers all of the above;
+   the pre-existing `tests/unit/recurring-list.test.ts` needed **zero**
+   changes, confirming the rewrite preserved every Phase 5 behavior it
+   checks. `tests/e2e/recurring.spec.ts` updated (not executed — no live
+   Supabase credentials here) for the Tabs-as-links change, the
+   table-not-list occurrence markup, and icon-only Previous/Next.
+7. **Phase V3 — Dashboard rebuild.** `lib/dashboard-widgets.ts`'s
+   `WidgetDefinition.wide` (one widget spanning both columns) became
+   `column: "left" | "right"` — Monarch's fixed asymmetric split (Budget/
+   Net worth/Goals left, Spending/Transactions/Recurring/Investments
+   right), not a free per-user choice; `DashboardWidgetGrid.tsx` renders
+   two stacks instead of one grid with a col-span escape hatch.
+   `WidgetShell.tsx` replaced the stacked eyebrow-above-title with
+   Monarch's bold-title-plus-inline-value line, and every widget's plain
+   "Open" link became a `DropdownButton` — each with exactly **one** honest
+   item (a real navigation, never a decorative option), finally wiring in
+   the primitive V2 built and deliberately left unused. Caught in the same
+   pass: `DropdownButton`'s trigger/menu items were `min-h-9` (below this
+   app's 44px floor) since V2 — never actually rendered on a real page
+   until now — fixed to `min-h-11`. Per-widget: Net worth's delta is now a
+   `Badge` (was raw `--viz-good`/`--viz-bad`, a V2 semantic-token fix that
+   had missed this widget) over a blue `AreaSparkline` (gained an optional
+   `color` prop + a `useId()` gradient id, fixing a latent duplicate-id bug
+   when multiple instances render on one page); Spending's chart flipped to
+   accent-orange-this-month/grey-last-month (was blue/dashed-grey);
+   RecentActivity (shared by the Transactions widget, Monitor, and
+   Overview) gained `CategoryChip` and dropped debit-red coloring (see V5).
+   `CustomizeDrawer` became a real modal (matching `SeedBudgetButton`'s
+   recipe) specifically so its trigger could move into the page header via
+   new `DashboardHeaderActions.tsx` (kept `app/dashboard/page.tsx` under
+   its enforced 260-line orchestrator budget). Deferred: Budget widget's
+   3-group-row content (needs the Budget page's own group data wired into
+   the dashboard loader) and Investments' day-change/top-movers strip
+   (needs data the loader doesn't fetch).
+8. **Phase V4 — Accounts rebuild.** `lib/accounts-page.ts` gained
+   `AccountsPageRow.sparkLong` (the full snapshot history `spark`'s
+   last-30-days slice was already computed from — no new query, just no
+   longer thrown away) for a second, longer-window sparkline column per
+   row; `groups[key].changes` (each group's total pill now shows a
+   green/red "+$45.00 this month" summed from its rows' own
+   `monthChange`); and `summary.assetsByGroup`/`liabilitiesByGroup`
+   (`GroupAmount[]` per currency) for `SummaryPanel.tsx`'s rebuilt right
+   rail — an assets bar segmented by group (cash/investment/other, the
+   only three it can ever contain, pinned to `--viz-1/2/3` by identity)
+   with a legend, and a single-color red liabilities bar per Monarch (not
+   segmented). The page moved to a real two-column layout
+   (`grid-cols-[minmax(0,1fr)_340px]`, matching V6's Budget rail pattern)
+   and the "Export CSV" button relocated from the header into the Summary
+   card as "Download CSV." `AccountsFilters.tsx`'s always-open GET form
+   became a `<details>` behind a "Filters" trigger (auto-open when a filter
+   is already active), with `AccountPreferences` now nested inside it as
+   `children` — "relocates behind the Filters panel" per the design doc.
+   `tests/e2e/accounts.spec.ts` updated: the filter fields and account
+   preferences are no longer immediately interactable without opening
+   Filters first, and the CSV link's accessible name changed.
+9. **Phase V5 — Transactions rebuild.** The debit/credit color rule
+   (Monarch never colors a debit red, only credits get green) landed
+   across the desktop ledger table, `MobileLedgerList.tsx`, and — during
+   V3 — Dashboard's `RecentActivity`. Day-group headers now put the date
+   and net total at opposite ends of a `flex justify-between` band instead
+   of one text run. New `TableToolbar.tsx` collapses "Edit multiple"
+   (`BulkTagBar`) and "Columns" (`ColumnsMenu`) behind pill triggers,
+   replacing two bars that used to render unconditionally above the
+   table — both existing components pass through unchanged as
+   already-rendered nodes from the server page. Deferred: a real "Sort ▾"
+   control (needs new query-level sort logic, not a UI wrapper — a
+   decorative dropdown with no effect would be exactly the anti-pattern
+   this program has avoided everywhere else) and splitting the single
+   inline GET filter form into three separate header popovers.
+10. **Phase V8 — Goals rebuild.** New `GoalCardMenu.tsx` (bespoke popover,
+    same chrome as Budget's `RowMenu`) gives every v2 `GoalCard` an Edit
+    (name/date, plus `target_amount` for save-up or `target_balance` for
+    pay-down — never `starting_balance`, a baseline the
+    `set_goal_allocation` database function captures once by design),
+    Add contribution (save-up only — `computeFundedGoals` never adds
+    `eventTotal` for pay-down, so this posts to the audited
+    `POST /api/goals/events` route rather than writing `saved_amount`
+    directly), household-visibility toggle, and Delete. This makes v2
+    cards the single source of truth, so `app/goals/page.tsx` now renders
+    the legacy `GoalsManager` panel **only when `goalsV2` is off**
+    (defaults to on) instead of always underneath the v2 cards.
+    `GoalWizard.tsx`'s shell became a full-screen overlay (back arrow +
+    centered stepper pills + progress bar + close × header, centered
+    Continue/Skip footer) — internal step logic untouched. On-track
+    badge tone fixed `neutral` → `success` (Monarch tints On track and
+    Completed both green). Deferred: real photos for the 8 templates (no
+    image assets available in this sandbox).
+11. **Phase V9 — Reports rebuild.** `ReportSummaryPanel.tsx`'s stat tiles
+    flipped to value-first with an uppercase micro-label below (was
+    label-above-value), colors fixed to semantic `text-success` (income)
+    /`text-danger` (spending) — deliberately the opposite convention from
+    the ledger row's never-color-a-debit-red rule, since this is an
+    aggregate tile, not a transaction row. New `ReportRightRail.tsx`
+    beside the transactions table surfaces the same `summarizeTransactions`
+    output as a Total transactions/Largest/Average/Total income/Total
+    spending/First/Last-transaction/Download-CSV card — deliberately
+    duplicating some top-tile figures, since Monarch shows both a
+    quick-glance strip and a detail card, not one replacing the other.
+    The Cash Flow/Spending/Income tab `SegmentedControl` moved out of
+    `ReportControls`' filter panel into an underline `Tabs` row inline
+    next to the page title (removed, not duplicated, from the old
+    location).
+12. **Phase V10 — Investments/Advice/Settings rebuild.** Investments:
+    "+ Add Holding" became the standard modal recipe; `HoldingsTable.tsx`
+    gained a security avatar, reordered columns (Price before Quantity),
+    and a grand Total row; the `--viz-good`/`--viz-bad` inline-style bug
+    (same pattern V3 fixed on Dashboard widgets) was fixed across
+    `HoldingsTable`/`TopMovers`/`PerformanceChart`/the page's day-change
+    figure. Advice: `AdviceCard.tsx` rewritten as a native `<details>`
+    disclosure (category icon, `line-clamp-2` description, Not-started/
+    In-progress/Completed meta, per-section "Show N completed" toggle);
+    new `?category=` Categories rail. **Flagged finding**: the design
+    doc's "Update profile" header pill assumes an "existing advice-profile
+    questionnaire" that does not actually exist anywhere in this
+    codebase (only `advice_priorities`/`advice_profile` profile columns
+    and their API — no UI) — not built, since linking to a nonexistent
+    page would be worse than omitting the button. Settings:
+    `SettingsLayout.tsx`'s flat 13-item nav split into "Account" (5) and
+    "Household" (8) grouped cards, exactly Monarch's split with no
+    section added or removed; the active-row tint was already the
+    correct "accent at low alpha" style. `ProfileSection.tsx`'s submit
+    button became full-width and reads "Update Profile."
+13. **Phase V11 — sweep.** Read all five no-reference pages (Cash Flow,
+    Forecasting, Notifications, Review, Wrapped) end to end.
+    Forecasting/Notifications/Review had already fully inherited V0–V2's
+    tokens and primitives with nothing left over. Real fixes:
+    `CashFlowSummary.tsx` had the same raw `--viz-good`/`--viz-bad`
+    inline-style bug this program kept finding elsewhere (fixed to
+    semantic tokens, layout unchanged — this page has no reference
+    screenshot, so reordering to Reports' value-first tile anatomy would
+    be inventing a redesign); `app/wrapped/page.tsx`'s year chips were
+    below the 44px touch-target floor and its largest-purchase date
+    rendered as a raw ISO string instead of `formatDate` (both fixed);
+    `app/notifications/page.tsx`'s delivery-history dates used
+    `toLocaleDateString` instead of the shared helper (fixed for
+    consistency). **Grepping the whole repo for that same
+    `var(--viz-good)`/`var(--viz-bad)` pattern** — the exact bug being
+    fixed on the five target pages — turned up four more real instances
+    outside them, fixed in the same pass since a repo-wide sweep is
+    exactly when to close out a repo-wide pattern:
+    `components/charts/StatTile.tsx` (shared, used by Wrapped and
+    Dashboard's Monitor view), `PlanView.tsx` (price-drift figures),
+    `WhatIfPanel.tsx` (surplus figure), `GoalsManager.tsx` (legacy
+    progress bar, still reachable with `goalsV2` off), and
+    `ReportTransactions.tsx` (already had the correct no-red-debits logic,
+    just needed the token conversion). **Not done**: dark-mode screenshot
+    QA and a Playwright visual-snapshot baseline — both need a real
+    browser this sandbox doesn't have.
+
+**Not done, and not started:** nothing — every phase in the design doc
+(V0–V11) is now done. Each still has its own small, named,
+deliberately-deferred remainder documented in its own numbered entry
+above and in `new_changes/README.md`'s "What's next" — none of it is a
+silent gap, and none of it blocks anything else.
+
+**Verification gap:** live browser screenshots were attempted
+(`npm run dev` + Playwright) but blocked in this sandbox — Turbopack's
+Google Fonts loader can't reach `fonts.gstatic.com` from the dev server
+process even though plain `curl` from the same shell can. This is a sandbox
+network limitation unrelated to the change (`app/layout.tsx`'s font loading
+is untouched) and would not reproduce in a normal dev environment. The two
+credentialed E2E specs that exercise the shell (`tests/e2e/planner-ia.spec.ts`,
+plus dashboard-heading assertions in `tests/e2e/recurring.spec.ts` and
+`tests/e2e/golden-path.spec.ts`) were updated to match the new structure but
+could not be run here either (no live Supabase credentials — they auto-skip
+rather than fail). Whoever picks this up next should do a real browser pass
+(light + dark, a few breakpoints, sidebar collapsed + expanded, the account
+menu open) and run those E2E specs before trusting the visual and
+interactive result on faith — the automated gate proves the code is
+correct, not that it looks or behaves right.
 
 ## START HERE: every phase flag is now ON by default (2026-07-31)
 

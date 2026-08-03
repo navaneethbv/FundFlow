@@ -1,4 +1,8 @@
+import { MerchantAvatar } from "@/components/ui/Avatar";
+import CategoryChip from "@/components/ui/CategoryChip";
+import { ChevronRight } from "@/components/ui/icons";
 import { formatCurrency, titleCase } from "@/lib/format";
+import { formatDate } from "@/lib/format-date";
 
 export type RecentTransaction = {
   id: string;
@@ -29,25 +33,29 @@ export default function RecentActivity({
         const income = transaction.amount < 0;
         return (
           <li key={transaction.id} className="flex items-center gap-3 rounded-field p-2 hover:bg-panel-hover">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-field bg-accent-soft text-sm font-black text-accent">
-              {merchant.charAt(0).toUpperCase()}
-            </span>
+            <MerchantAvatar name={merchant} size={36} className="shrink-0" />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-semibold">{merchant}</span>
-              <span className="block truncate text-xs text-muted">
-                {titleCase(transaction.pfc_primary) || "Uncategorized"} - {accountNames.get(transaction.account_id) ?? "Account"}
+              <span className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted">
+                {transaction.pfc_primary ? (
+                  <CategoryChip label={titleCase(transaction.pfc_primary)} />
+                ) : (
+                  <span>Uncategorized</span>
+                )}
+                <span className="truncate">· {accountNames.get(transaction.account_id) ?? "Account"}</span>
               </span>
             </span>
             <span className="text-right">
               <span
                 data-money
-                className={income ? "block text-sm font-bold text-success" : "block text-sm font-bold text-danger"}
+                className={income ? "block text-sm font-bold text-success" : "block text-sm font-bold text-foreground"}
               >
-                {income ? "+" : "-"}
+                {income ? "+" : ""}
                 {formatCurrency(Math.abs(transaction.amount), transaction.iso_currency_code ?? "USD")}
               </span>
-              <span className="block text-xs text-muted">{transaction.date}</span>
+              <span className="block text-xs text-muted">{formatDate(transaction.date)}</span>
             </span>
+            <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-muted" />
           </li>
         );
       })}

@@ -89,10 +89,10 @@ export default function AddTransactionModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <form
         onSubmit={submit}
-        className="w-full max-w-md space-y-3 rounded-card border border-panel-border bg-background p-5 shadow-pop"
+        className="w-full max-w-md space-y-3 rounded-card border border-panel-border bg-panel p-5 shadow-float"
       >
         <h2 className="text-lg font-bold">Add transaction</h2>
         <div className="flex gap-2">

@@ -43,6 +43,19 @@ describe("MobileLedgerList", () => {
     expect(html).toContain("+$100.00");
   });
 
+  it("colors credits green but leaves debits plain foreground (Monarch does not color debits red)", () => {
+    const credit = renderToStaticMarkup(
+      React.createElement(MobileLedgerList, { rows: [{ ...baseRow, amount: -100 }] }),
+    );
+    expect(credit).toContain("text-success");
+
+    const debit = renderToStaticMarkup(
+      React.createElement(MobileLedgerList, { rows: [baseRow] }),
+    );
+    expect(debit).toContain("text-foreground");
+    expect(debit).not.toContain("text-danger");
+  });
+
   it("shows the pending badge only when pending", () => {
     const pendingHtml = renderToStaticMarkup(
       React.createElement(MobileLedgerList, {

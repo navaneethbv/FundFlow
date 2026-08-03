@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import { createClient } from "@/lib/supabase/client";
@@ -23,16 +23,31 @@ import {
  * The save is optimistic with an explicit rollback — the grid re-renders from
  * the server after `router.refresh()`, so leaving local state ahead of a failed
  * write would show a layout the database does not have.
+ *
+ * Renders as a modal overlay (the same `bg-black/50` + `rounded-card` +
+ * `shadow-float` recipe as `SeedBudgetButton`/`TransactionEditor`) rather
+ * than an inline-expanding section, specifically so the trigger — Monarch's
+ * "Customize" white pill — can sit in the page header without its open
+ * panel pushing header content around.
  */
 export default function CustomizeDrawer({
   initialPrefs,
 }: Readonly<{ initialPrefs: DashboardWidgetPrefs }>) {
   const router = useRouter();
   const supabase = createClient();
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [prefs, setPrefs] = useState<DashboardWidgetPrefs>(initialPrefs);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const firstControl = dialogRef.current?.querySelector<HTMLElement>(
+      "button, input, select",
+    );
+    firstControl?.focus();
+  }, [open]);
 
   function move(key: WidgetKey, delta: -1 | 1) {
     setPrefs((current) => {
@@ -56,6 +71,34 @@ export default function CustomizeDrawer({
 
   function restoreDefaults() {
     setPrefs({ order: [...DEFAULT_WIDGET_ORDER], hidden: [] });
+  }
+
+  function close() {
+    setPrefs(initialPrefs);
+    setError(null);
+    setOpen(false);
+  }
+
+  function handleDialogKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      close();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const controls = dialogRef.current?.querySelectorAll<HTMLElement>(
+      "button:not([disabled]), input:not([disabled]), select:not([disabled])",
+    );
+    if (!controls || controls.length === 0) return;
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 
   async function save() {
@@ -113,86 +156,85 @@ export default function CustomizeDrawer({
   }
 
   return (
-    <section
-      aria-label="Customize dashboard widgets"
-      className="rounded-card border border-panel-border bg-panel p-4 shadow-card"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold">Customize widgets</h2>
-        <Button type="button" variant="ghost" size="sm" onClick={restoreDefaults}>
-          Restore defaults
-        </Button>
-      </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="customize-widgets-title"
+        onKeyDown={handleDialogKeyDown}
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-card border border-panel-border bg-panel p-5 shadow-float sm:p-6"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="customize-widgets-title" className="text-xl font-bold">
+            Customize widgets
+          </h2>
+          <Button type="button" variant="ghost" size="sm" onClick={restoreDefaults}>
+            Restore defaults
+          </Button>
+        </div>
 
-      <ul className="mt-4 space-y-2">
-        {prefs.order.map((key, index) => {
-          const definition = WIDGET_DEFINITIONS[key];
-          const hidden = prefs.hidden.includes(key);
-          return (
-            <li
-              key={key}
-              className="flex flex-wrap items-center gap-2 border-t border-panel-border pt-2 first:border-t-0 first:pt-0"
-            >
-              <label className="flex min-w-0 flex-1 items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={!hidden}
-                  onChange={() => toggle(key)}
-                />
-                <span className="min-w-0">
-                  <span className="block font-semibold">{definition.label}</span>
-                  <span className="block text-xs text-muted">{definition.hint}</span>
-                </span>
-              </label>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                disabled={index === 0}
-                onClick={() => move(key, -1)}
+        <ul className="mt-4 space-y-2">
+          {prefs.order.map((key, index) => {
+            const definition = WIDGET_DEFINITIONS[key];
+            const hidden = prefs.hidden.includes(key);
+            return (
+              <li
+                key={key}
+                className="flex flex-wrap items-center gap-2 border-t border-panel-border pt-2 first:border-t-0 first:pt-0"
               >
-                <span aria-hidden>↑</span>
-                <span className="sr-only">Move {definition.label} up</span>
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                disabled={index === prefs.order.length - 1}
-                onClick={() => move(key, 1)}
-              >
-                <span aria-hidden>↓</span>
-                <span className="sr-only">Move {definition.label} down</span>
-              </Button>
-            </li>
-          );
-        })}
-      </ul>
+                <label className="flex min-w-0 flex-1 items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={!hidden}
+                    onChange={() => toggle(key)}
+                  />
+                  <span className="min-w-0">
+                    <span className="block font-semibold">{definition.label}</span>
+                    <span className="block text-xs text-muted">{definition.hint}</span>
+                  </span>
+                </label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={index === 0}
+                  onClick={() => move(key, -1)}
+                >
+                  <span aria-hidden>↑</span>
+                  <span className="sr-only">Move {definition.label} up</span>
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={index === prefs.order.length - 1}
+                  onClick={() => move(key, 1)}
+                >
+                  <span aria-hidden>↓</span>
+                  <span className="sr-only">Move {definition.label} down</span>
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
 
-      {error && (
-        <p role="alert" className="mt-3 text-sm text-danger">
-          {error}
-        </p>
-      )}
+        {error && (
+          <p role="alert" className="mt-3 text-sm text-danger">
+            {error}
+          </p>
+        )}
 
-      <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-panel-border pt-3">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            setPrefs(initialPrefs);
-            setError(null);
-            setOpen(false);
-          }}
-        >
-          Cancel
-        </Button>
-        <Button type="button" size="sm" disabled={busy} onClick={save}>
-          {busy ? "Saving…" : "Save layout"}
-        </Button>
+        <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-panel-border pt-3">
+          <Button type="button" variant="ghost" size="sm" onClick={close}>
+            Cancel
+          </Button>
+          <Button type="button" size="sm" disabled={busy} onClick={save}>
+            {busy ? "Saving…" : "Save layout"}
+          </Button>
+        </div>
       </div>
-    </section>
+    </div>
   );
 }

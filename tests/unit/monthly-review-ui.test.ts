@@ -9,7 +9,11 @@ describe("monthly review UI", () => {
     const dashboard = readFileSync("app/dashboard/page.tsx", "utf8");
     const toolbar = readFileSync("components/dashboard/DashboardToolbar.tsx", "utf8");
 
-    expect(review).toContain("Monthly Review");
+    // The page's own header title carries the period (V1 shell restructure
+    // dropped the separate "Monthly Review" eyebrow label in favor of a
+    // single PageHeader title, matching every other page).
+    expect(review).toContain("PageHeader");
+    expect(review).toContain("formatMonth(data.selectedMonth)} review");
     expect(review).toContain("getDashboardData");
     expect(review).toContain("getGoals");
     expect(dashboard).toContain("DashboardToolbar");

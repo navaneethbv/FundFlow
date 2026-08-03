@@ -1,6 +1,11 @@
-import Link from "next/link";
+import { MerchantAvatar } from "@/components/ui/Avatar";
+import Badge, { type BadgeTone } from "@/components/ui/Badge";
+import ButtonLink from "@/components/ui/ButtonLink";
+import DropdownButton from "@/components/ui/DropdownButton";
+import { Repeat } from "@/components/ui/icons";
 import WidgetShell from "@/components/dashboard/widgets/WidgetShell";
 import { formatCurrency } from "@/lib/format";
+import { daysUntil, formatDueAnnotation } from "@/lib/format-date";
 
 export interface UpcomingRecurringItem {
   name: string;
@@ -34,11 +39,11 @@ const STATUS_LABEL: Record<UpcomingRecurringItem["status"], string> = {
   unusual_amount: "Check amount",
 };
 
-const STATUS_TONE: Record<UpcomingRecurringItem["status"], string> = {
-  paid: "var(--viz-good)",
-  expected: "var(--viz-ink-2)",
-  late: "var(--viz-bad)",
-  unusual_amount: "var(--viz-3)",
+const STATUS_TONE: Record<UpcomingRecurringItem["status"], BadgeTone> = {
+  paid: "success",
+  expected: "neutral",
+  late: "danger",
+  unusual_amount: "warning",
 };
 
 export default function RecurringWidget({
@@ -57,37 +62,46 @@ export default function RecurringWidget({
   return (
     <WidgetShell
       title="Recurring"
-      hint="Next seven days"
       error={error}
-      empty={upcoming.length === 0 ? "Nothing due in the next seven days." : null}
       action={
-        <Link
-          href="/recurring"
-          className="text-sm font-semibold text-accent hover:underline"
-        >
-          Open
-        </Link>
+        <DropdownButton
+          label="This month"
+          items={[{ label: "Manage recurring", href: "/recurring" }]}
+        />
       }
     >
-      <ul className="space-y-2">
-        {upcoming.map((item) => (
-          <li
-            key={`${item.name}-${item.nextDate}`}
-            className="flex flex-wrap items-baseline justify-between gap-2 text-sm"
+      {upcoming.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 py-6 text-center">
+          <span
+            aria-hidden
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-panel-2 text-muted"
           >
-            <span className="min-w-0 truncate font-medium">{item.name}</span>
-            <span className="flex items-baseline gap-2">
-              {/* The state is spelled out, so the colour is never the only cue. */}
-              <span className="text-xs" style={{ color: STATUS_TONE[item.status] }}>
-                {STATUS_LABEL[item.status]} {item.nextDate.slice(5)}
+            <Repeat className="h-5 w-5" />
+          </span>
+          <p className="text-sm font-semibold">Stay on top of your bills</p>
+          <p className="text-xs text-muted">Nothing due in the next seven days.</p>
+          <ButtonLink href="/recurring" variant="primary" size="sm">
+            Manage recurring
+          </ButtonLink>
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {upcoming.map((item) => (
+            <li
+              key={`${item.name}-${item.nextDate}`}
+              className="flex items-center gap-3 text-sm"
+            >
+              <MerchantAvatar name={item.name} size={32} className="shrink-0" />
+              <span className="min-w-0 flex-1 truncate font-medium">{item.name}</span>
+              <Badge tone={STATUS_TONE[item.status]}>{STATUS_LABEL[item.status]}</Badge>
+              <span data-money className="whitespace-nowrap tabular-nums text-xs text-muted">
+                {formatCurrency(Math.abs(item.amount), currency)} /{" "}
+                {formatDueAnnotation(daysUntil(item.nextDate, today))}
               </span>
-              <span className="tabular-nums">
-                {formatCurrency(Math.abs(item.amount), currency)}
-              </span>
-            </span>
-          </li>
-        ))}
-      </ul>
+            </li>
+          ))}
+        </ul>
+      )}
     </WidgetShell>
   );
 }

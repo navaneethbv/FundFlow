@@ -1,15 +1,16 @@
-import Link from "next/link";
 import WidgetShell from "@/components/dashboard/widgets/WidgetShell";
+import DropdownButton from "@/components/ui/DropdownButton";
+import ProgressBar, { type ProgressBarTone } from "@/components/ui/ProgressBar";
 import { formatCurrency } from "@/lib/format";
 import type { BudgetEnvelope } from "@/lib/planning";
 
 /** The envelopes closest to trouble first — a widget has room for a few. */
 const VISIBLE = 4;
 
-const STATUS_TONE: Record<string, string> = {
-  over: "var(--viz-bad)",
-  "at-risk": "var(--viz-3)",
-  "on-track": "var(--viz-good)",
+const STATUS_TONE: Record<string, ProgressBarTone> = {
+  over: "danger",
+  "at-risk": "warning",
+  "on-track": "success",
 };
 
 export default function BudgetWidget({
@@ -28,25 +29,19 @@ export default function BudgetWidget({
       return rank(a.status) - rank(b.status) || b.spent - a.spent;
     })
     .slice(0, VISIBLE);
+  const totalSpent = envelopes.reduce((sum, envelope) => sum + envelope.spent, 0);
 
   return (
     <WidgetShell
       title="Budget"
-      hint="This month"
+      value={ranked.length > 0 ? `${formatCurrency(totalSpent, currency)} spent` : undefined}
       error={error}
       empty={
         ranked.length === 0
           ? "No budgets set. Add one to track planned against actual."
           : null
       }
-      action={
-        <Link
-          href="/budget"
-          className="text-sm font-semibold text-accent hover:underline"
-        >
-          Open
-        </Link>
-      }
+      action={<DropdownButton label="This month" items={[{ label: "Open Budget", href: "/budget" }]} />}
     >
       <ul className="space-y-3">
         {ranked.map((envelope) => {
@@ -63,19 +58,13 @@ export default function BudgetWidget({
                   {formatCurrency(envelope.monthlyLimit, currency)}
                 </span>
               </div>
-              <div
-                className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-panel-2"
-                role="img"
-                aria-label={`${envelope.category}: ${pct}% of budget used, ${envelope.status}`}
-              >
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    width: `${pct}%`,
-                    background: STATUS_TONE[envelope.status] ?? "var(--viz-1)",
-                  }}
-                />
-              </div>
+              <ProgressBar
+                className="mt-1"
+                size="sm"
+                percent={pct}
+                tone={STATUS_TONE[envelope.status] ?? "accent"}
+                label={`${envelope.category}: ${pct}% of budget used, ${envelope.status}`}
+              />
             </li>
           );
         })}

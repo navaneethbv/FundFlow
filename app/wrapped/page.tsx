@@ -1,5 +1,6 @@
 import Link from "next/link";
 import AppShell from "@/components/shell/AppShell";
+import PageHeader from "@/components/shell/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import Panel from "@/components/ui/Panel";
 import MiniBars from "@/components/charts/MiniBars";
@@ -8,6 +9,7 @@ import BarList from "@/components/dashboard/BarList";
 import { LineChart } from "@/components/ui/icons";
 import { computeYearInMoney, type AnnualTxn } from "@/lib/annual";
 import { formatCurrency, formatMonth, titleCase } from "@/lib/format";
+import { formatDate } from "@/lib/format-date";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -52,28 +54,27 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
 
   return (
     <AppShell active="wrapped" email={user?.email}>
-      <header>
-        <p className="eyebrow">Year in money</p>
-        <h1 className="display mt-2 text-3xl sm:text-4xl">
-          {year}, in your own numbers
-        </h1>
-        <div className="mt-3 flex gap-1 text-xs font-semibold">
-          {yearChips.map((chip) => (
-            <Link
-              key={chip}
-              href={`/wrapped?year=${chip}`}
-              aria-current={chip === year ? "true" : undefined}
-              className={
-                chip === year
-                  ? "rounded-field bg-accent-soft px-2.5 py-1 text-accent"
-                  : "rounded-field px-2.5 py-1 text-muted transition-colors hover:bg-panel-hover hover:text-foreground"
-              }
-            >
-              {chip}
-            </Link>
-          ))}
-        </div>
-      </header>
+      <PageHeader
+        title={`${year}, in your own numbers`}
+        actions={
+          <div className="flex gap-1 text-xs font-semibold">
+            {yearChips.map((chip) => (
+              <Link
+                key={chip}
+                href={`/wrapped?year=${chip}`}
+                aria-current={chip === year ? "true" : undefined}
+                className={
+                  chip === year
+                    ? "inline-flex min-h-11 items-center rounded-field bg-accent-soft px-2.5 text-accent"
+                    : "inline-flex min-h-11 items-center rounded-field px-2.5 text-muted transition-colors hover:bg-panel-hover hover:text-foreground"
+                }
+              >
+                {chip}
+              </Link>
+            ))}
+          </div>
+        }
+      />
 
       {!recap ? (
         <EmptyState
@@ -173,7 +174,7 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
                     {formatCurrency(recap.largestPurchase.amount)}
                   </span>
                   <span className="block text-xs text-muted">
-                    {recap.largestPurchase.date}
+                    {formatDate(recap.largestPurchase.date)}
                   </span>
                 </div>
               )}

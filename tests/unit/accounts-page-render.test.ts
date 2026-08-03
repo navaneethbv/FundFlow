@@ -10,6 +10,7 @@ vi.mock("@/lib/supabase/client", () => ({
 import AccountGroup from "@/components/accounts/AccountGroup";
 import AccountPreferences from "@/components/accounts/AccountPreferences";
 import AccountsFilters from "@/components/accounts/AccountsFilters";
+import NetWorthHero from "@/components/accounts/NetWorthHero";
 import SummaryPanel from "@/components/accounts/SummaryPanel";
 
 const row = {
@@ -25,21 +26,23 @@ const row = {
   updatedAgo: "2 days ago",
   stale: true,
   spark: [900, 1000],
+  sparkLong: [800, 850, 900, 1000],
   monthChange: { amount: 100, pct: 11.11 },
   includeInNetWorth: true,
 };
 
 const data: AccountsPageData = {
   groups: {
-    credit: { label: "Credit cards", totals: [], rows: [] },
+    credit: { label: "Credit cards", totals: [], changes: [], rows: [] },
     cash: {
       label: "Cash",
       totals: [{ currency: "USD", amount: 1000 }],
+      changes: [{ currency: "USD", amount: 100 }],
       rows: [row],
     },
-    investment: { label: "Investments", totals: [], rows: [] },
-    loan: { label: "Loans", totals: [], rows: [] },
-    other: { label: "Other", totals: [], rows: [] },
+    investment: { label: "Investments", totals: [], changes: [], rows: [] },
+    loan: { label: "Loans", totals: [], changes: [], rows: [] },
+    other: { label: "Other", totals: [], changes: [], rows: [] },
   },
   summary: {
     currencies: ["CAD", "USD"],
@@ -62,6 +65,13 @@ const data: AccountsPageData = {
     netWorthMonthChange: {
       CAD: null,
       USD: { amount: 100, pct: 14.29 },
+    },
+    assetsByGroup: {
+      CAD: [{ group: "investment", label: "Investments", amount: 3000 }],
+      USD: [{ group: "cash", label: "Cash", amount: 1000 }],
+    },
+    liabilitiesByGroup: {
+      USD: [{ group: "credit", label: "Credit cards", amount: 200 }],
     },
   },
   historyStartsOn: "2026-07-29",
@@ -97,18 +107,28 @@ describe("Accounts page components", () => {
     expect(html).toContain('class="hidden min-h-11 sm:block"');
   });
 
-  it("renders honest currency and history disclosures with a table twin", () => {
+  it("renders an honest currency-mismatch disclosure", () => {
     const html = renderToStaticMarkup(
       createElement(SummaryPanel, {
         summary: data.summary,
-        historyStartsOn: data.historyStartsOn,
         mode: "totals",
+        exportHref: "/api/export/accounts-csv",
       }),
     );
 
     expect(html).toContain(
       "Totals are separated by currency because FundFlow does not guess exchange rates.",
     );
+  });
+
+  it("NetWorthHero renders the history disclosure with a table twin", () => {
+    const html = renderToStaticMarkup(
+      createElement(NetWorthHero, {
+        summary: data.summary,
+        historyStartsOn: data.historyStartsOn,
+      }),
+    );
+
     expect(html).toContain(
       "Daily balance history starts on 2026-07-29. Earlier history is unavailable.",
     );
@@ -120,8 +140,8 @@ describe("Accounts page components", () => {
     const html = renderToStaticMarkup(
       createElement(SummaryPanel, {
         summary: data.summary,
-        historyStartsOn: data.historyStartsOn,
         mode: "percent",
+        exportHref: "/api/export/accounts-csv",
       }),
     );
 
@@ -133,8 +153,8 @@ describe("Accounts page components", () => {
     const html = renderToStaticMarkup(
       createElement(SummaryPanel, {
         summary: data.summary,
-        historyStartsOn: data.historyStartsOn,
         mode: "totals",
+        exportHref: "/api/export/accounts-csv",
         query: {
           scope: "household-1",
           institution: "Test Bank",
@@ -145,6 +165,57 @@ describe("Accounts page components", () => {
     expect(html).toContain(
       'href="/accounts?scope=household-1&amp;institution=Test+Bank&amp;summary=percent"',
     );
+  });
+
+  it("renders the assets bar segmented by group and the liabilities bar as a single red bar", () => {
+    const html = renderToStaticMarkup(
+      createElement(SummaryPanel, {
+        summary: data.summary,
+        mode: "totals",
+        exportHref: "/api/export/accounts-csv",
+      }),
+    );
+
+    // USD's one asset group (Cash) and one liability group (Credit cards).
+    expect(html).toContain("Cash");
+    expect(html).toContain("Credit cards");
+    expect(html).toContain("bg-danger");
+    expect(html).toContain("var(--viz-1)");
+  });
+
+  it("links Download CSV to the given export href", () => {
+    const html = renderToStaticMarkup(
+      createElement(SummaryPanel, {
+        summary: data.summary,
+        mode: "totals",
+        exportHref: "/api/export/accounts-csv?scope=household-1",
+      }),
+    );
+
+    expect(html).toContain('href="/api/export/accounts-csv?scope=household-1"');
+    expect(html).toContain("Download CSV");
+  });
+
+  it("shows the group's month-over-month change annotation next to its total pill", () => {
+    const html = renderToStaticMarkup(
+      createElement(AccountGroup, {
+        groupKey: "cash",
+        group: data.groups.cash,
+      }),
+    );
+
+    expect(html).toContain("+$100.00 this month");
+  });
+
+  it("omits the change annotation for a group with no net change", () => {
+    const html = renderToStaticMarkup(
+      createElement(AccountGroup, {
+        groupKey: "cash",
+        group: { ...data.groups.cash, changes: [{ currency: "USD", amount: 0 }] },
+      }),
+    );
+
+    expect(html).not.toContain("this month");
   });
 
   it("shows owner filtering only for household scope", () => {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import AppShell from "@/components/shell/AppShell";
+import PageHeader from "@/components/shell/PageHeader";
 import AccountGroup from "@/components/accounts/AccountGroup";
 import AccountPreferences, {
   type AccountsPagePreferences,
@@ -8,10 +9,10 @@ import AccountPreferences, {
 import AccountsFilters, {
   type AccountsFilterValues,
 } from "@/components/accounts/AccountsFilters";
+import NetWorthHero from "@/components/accounts/NetWorthHero";
 import SummaryPanel from "@/components/accounts/SummaryPanel";
 import ConnectBankButton from "@/components/ConnectBankButton";
 import RefreshButton from "@/components/RefreshButton";
-import ButtonLink from "@/components/ui/ButtonLink";
 import EmptyState from "@/components/ui/EmptyState";
 import { Landmark } from "@/components/ui/icons";
 import {
@@ -305,36 +306,25 @@ export default async function AccountsPage({
     summary: params.summary === "percent" ? "percent" : "totals",
   };
   const allRows = Object.values(built.groups).flatMap((group) => group.rows);
+  const exportHref = `/api/export/accounts-csv${
+    first(params.scope) ? `?scope=${encodeURIComponent(first(params.scope)!)}` : ""
+  }`;
 
   return (
     <AppShell active="accounts" email={user.email}>
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="eyebrow">Balance sheet</p>
-          <h1 className="display mt-2 text-3xl sm:text-4xl">Accounts</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-            See every balance, its freshness, and the daily history FundFlow has
-            actually captured.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {/* The empty state below owns the connect CTA when there is nothing
-              to show. Rendering both mounts two Plaid Link instances on one
-              page, which Plaid explicitly calls unsupported. */}
-          {accounts.length > 0 && <ConnectBankButton />}
-          {plaidAccounts.length > 0 && <RefreshButton />}
-          <ButtonLink
-            href={`/api/export/accounts-csv${
-              first(params.scope)
-                ? `?scope=${encodeURIComponent(first(params.scope)!)}`
-                : ""
-            }`}
-            size="sm"
-          >
-            Export CSV
-          </ButtonLink>
-        </div>
-      </header>
+      <PageHeader
+        title="Accounts"
+        actions={
+          <>
+            {/* The empty state below owns the connect CTA when there is
+                nothing to show. Rendering both mounts two Plaid Link
+                instances on one page, which Plaid explicitly calls
+                unsupported. */}
+            {accounts.length > 0 && <ConnectBankButton />}
+            {plaidAccounts.length > 0 && <RefreshButton />}
+          </>
+        }
+      />
 
       {visibleHouseholdIds.length > 0 && (
         <nav
@@ -344,14 +334,22 @@ export default async function AccountsPage({
           <Link
             href="/accounts"
             aria-current={!isHouseholdScope(scope) ? "page" : undefined}
-            className="min-h-11 rounded-field border border-panel-border px-4 py-2.5 focus-visible:outline-2"
+            className={`min-h-11 rounded-field border px-4 py-2.5 focus-visible:outline-2 ${
+              !isHouseholdScope(scope)
+                ? "border-accent/30 bg-accent-soft text-accent"
+                : "border-panel-border text-muted hover:bg-panel-hover"
+            }`}
           >
             Mine
           </Link>
           <Link
             href={`/accounts?scope=${visibleHouseholdIds[0]}`}
             aria-current={isHouseholdScope(scope) ? "page" : undefined}
-            className="min-h-11 rounded-field border border-panel-border px-4 py-2.5 focus-visible:outline-2"
+            className={`min-h-11 rounded-field border px-4 py-2.5 focus-visible:outline-2 ${
+              isHouseholdScope(scope)
+                ? "border-accent/30 bg-accent-soft text-accent"
+                : "border-panel-border text-muted hover:bg-panel-hover"
+            }`}
           >
             Household
           </Link>
@@ -367,32 +365,38 @@ export default async function AccountsPage({
         />
       ) : (
         <>
+          <NetWorthHero summary={built.summary} historyStartsOn={built.historyStartsOn} />
           <AccountsFilters
             current={filterValues}
             institutions={institutions}
             householdScope={isHouseholdScope(scope)}
             ownerOptions={ownerOptions}
-          />
-          <SummaryPanel
-            summary={built.summary}
-            historyStartsOn={built.historyStartsOn}
-            mode={filterValues.summary ?? "totals"}
-            query={filterValues}
-            filtered={accountsViewIsFiltered(viewOptions)}
-          />
-          <div className="space-y-4">
-            {(Object.keys(view.groups) as AccountGroupKey[]).map((key) => (
-              <AccountGroup
-                key={key}
-                groupKey={key}
-                group={view.groups[key]}
+          >
+            <AccountPreferences
+              accounts={allRows.map((row) => ({ id: row.id, name: row.name }))}
+              initialPrefs={prefs}
+            />
+          </AccountsFilters>
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
+            <div className="min-w-0 space-y-4">
+              {(Object.keys(view.groups) as AccountGroupKey[]).map((key) => (
+                <AccountGroup
+                  key={key}
+                  groupKey={key}
+                  group={view.groups[key]}
+                />
+              ))}
+            </div>
+            <div className="lg:sticky lg:top-5">
+              <SummaryPanel
+                summary={built.summary}
+                mode={filterValues.summary ?? "totals"}
+                query={filterValues}
+                filtered={accountsViewIsFiltered(viewOptions)}
+                exportHref={exportHref}
               />
-            ))}
+            </div>
           </div>
-          <AccountPreferences
-            accounts={allRows.map((row) => ({ id: row.id, name: row.name }))}
-            initialPrefs={prefs}
-          />
         </>
       )}
     </AppShell>

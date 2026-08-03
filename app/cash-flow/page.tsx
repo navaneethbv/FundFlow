@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import AppShell from "@/components/shell/AppShell";
+import PageHeader from "@/components/shell/PageHeader";
 import BreakdownBars from "@/components/cash-flow/BreakdownBars";
 import CashFlowControls, {
   type CashFlowControlValues,
@@ -24,7 +25,7 @@ import {
   serializeFinancialScope,
 } from "@/lib/financial-scope";
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import { formatMonth, UNKNOWN_CURRENCY } from "@/lib/format";
+import { UNKNOWN_CURRENCY } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -159,16 +160,7 @@ export default async function CashFlowPage({
 
   return (
     <AppShell active="cashflow" email={user.email}>
-      <header>
-        <p className="eyebrow">
-          {rangeMonths} months ending {formatMonth(anchorMonth)}
-        </p>
-        <h1 className="display mt-2 text-3xl sm:text-4xl">Cash Flow</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-          See what came in, what went out, and how much remained across
-          each period.
-        </p>
-      </header>
+      <PageHeader title="Cash Flow" />
 
       {loaded.truncated && (
         <Panel tone="warning">

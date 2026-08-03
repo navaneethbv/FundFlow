@@ -2,6 +2,141 @@
 
 Nice-to-have features and enhancements, deferred out of the initial build.
 
+## Active program: Monarch visual parity (started 2026-08-02)
+
+Plan: `docs/superpowers/plans/2026-08-02-monarch-visual-parity.md`. Design:
+`docs/superpowers/specs/2026-08-02-monarch-visual-parity-design.md`. Distinct
+from the *feature*-parity program below (which is complete) — this closes the
+remaining visual gap against 29 Monarch Money screenshots. Full writeup of
+work done so far: `new_changes/README.md`.
+
+- **Sankey exact-match.** Done (2026-08-02). Nine deltas on the `/reports`
+  cash-flow diagram: two-line labels, emoji prefixes (`lib/category-emoji.ts`),
+  trimmed two-decimal percentages, weighted column spacing, hub label beside
+  its bar, thinner bars, more saturated ribbons, Net Income pinned to the top
+  of the group column, and group hues pinned by identity instead of size rank.
+- **Phase V0 — token retheme.** Done (2026-08-02). `app/globals.css` rewritten
+  to Monarch's warm cream + orange identity, colors pixel-sampled from the
+  screenshots (see the dark-mode-is-likely-filtered caveat in the design doc
+  §2.1 and `new_changes/README.md`). Pill buttons, unified modal recipes,
+  `.metric-value` off monospace, new `--pill`/`--settings-active` tokens, a
+  handful of flagged internal inconsistencies fixed in passing.
+- **Phase V1 — shell restructure.** Done (2026-08-02). `components/shell/TopBar.tsx`
+  deleted; the sidebar (`SidebarShell.tsx`) is now full height with a fixed
+  top strip (logo + `SidebarUtilityIcons`), scrollable nav, and a fixed
+  bottom block (`AskAiLowerRailLink` + the new `UserMenu` — avatar, display
+  name, dropdown with Settings/privacy/theme/sign-out). Every page (16 total)
+  migrated to a new `PageHeader` (title + actions), including a Dashboard
+  greeting variant (`lib/greeting.ts`). Settings/Notifications deliberately
+  kept in the nav list *in addition to* the new icon row, so collapsing the
+  sidebar never makes either unreachable. Also fixed: `/transactions`'s
+  stray `max-w-4xl` (every other page is `max-w-[1320px]`).
+- **Phase V2 — shared component kit.** Done (2026-08-02). Six new primitives
+  in `components/ui/`: `SegmentedControl` (link-based pill group, replaces
+  three divergent chip recipes), `DropdownButton` (client popover),
+  `ProgressBar` (replaces four ad-hoc bar recipes), `Avatar.tsx`
+  (`MerchantAvatar`/`InstitutionAvatar`, deterministic initial-disc, no logo
+  migration yet), `CategoryChip` (emoji + label). Plus `lib/format-date.ts`
+  (humanized dates, relative freshness, due-date annotations). **Also wired
+  broadly**, not just built: `SegmentedControl` replaced the toggle controls
+  in ScopeChips, Accounts SummaryPanel, Cash Flow controls, Report controls,
+  Budget (horizon/scope/currency + the summary tabs), and Recurring's scope
+  toggle; `ProgressBar` replaced the bars in BudgetWidget, GoalCard,
+  GoalsSummary, and Recurring's MonthSummary; `MerchantAvatar`/`CategoryChip`/
+  `formatDate` landed in the Transactions ledger (desktop + mobile), Dashboard
+  RecentActivity, and Recurring's occurrence rows. Institution-logo migration
+  and the Recurring due-date relative annotation (needs a `today` value
+  threaded through data it doesn't currently carry) are deferred to their
+  page-specific phases.
+- **Phase V6 — Budget rebuild.** Done (2026-08-02). `BudgetTable.tsx`
+  rewritten: quiet borderless Planned input auto-saving `onBlur` (new pure
+  `validatePlannedAmount`) replaces the labeled-field-plus-Save-button row;
+  a per-row `ProgressBar` under the category name; Group/Rollover/Sort-order
+  controls moved off the row into a per-row `⋯` popover (`RowMenu`). Old
+  `BudgetSummary` stat-card grid deleted, replaced by `BudgetRightRail.tsx`
+  (new) — tinted "Left to budget" hero + the same Summary/Income/Expenses
+  tabs, now with a progress-bar mini-summary per expense group.
+  `BudgetPlanner.tsx` groups sections into Income/Expenses/Contributions
+  bands with totals rows, in a two-column layout with the sticky right
+  rail. `SuperBand` section headers are deliberately not scroll-sticky
+  pending a real browser check. New `tests/unit/budget-planner-render.test.ts`
+  (14 tests).
+- **Phase V7 — Recurring rebuild.** Done (2026-08-02). `RecurringList.tsx`
+  rewritten: Upcoming/Complete render as real tables (merchant, date with
+  an orange overdue annotation via `formatDueAnnotation`/`daysUntil`,
+  payment account, category, amount with a check mark when complete, a
+  `⋯` menu) ending in a grey total-band row. Confirm/Not recurring/Restore/
+  amount-correction moved onto that per-row menu (`OccurrenceRowMenu`),
+  which looks up the occurrence's stream or manual item and branches
+  read-only/full-controls/enabled-toggle accordingly; the full stream list
+  on the Manage tab is kept (streams due outside the viewed month have no
+  other way to be reviewed). Tab selection moved from client state to the
+  URL (`tab`/`links` props), which is what makes the restyled
+  `ReviewBanner`'s new "Review now" link actually work. Page gained a
+  visible month title + icon Previous/Next + conditional Today link. New
+  `tests/unit/recurring-list-render.test.ts` (11 tests); the pre-existing
+  `recurring-list.test.ts` needed no changes.
+- **Phase V3 — Dashboard rebuild.** Done (2026-08-02). Asymmetric two-column
+  widget grid (`WidgetDefinition.column`, replacing the old `wide` full-span
+  flag); `WidgetShell` header anatomy (bold title + inline value +
+  `DropdownButton`, each with one honest item) wired across all seven
+  widgets; Net worth `Badge` + blue `AreaSparkline`; Spending chart
+  orange-vs-grey; Recurring rich empty state + `Badge` statuses;
+  `RecentActivity` `CategoryChip` + no debit-red; `CustomizeDrawer` rebuilt
+  as a modal so its trigger moved into the page header. Deferred: Budget
+  widget's group rows and Investments' day-change/top-movers (both need new
+  data-loader wiring).
+- **Phase V4 — Accounts rebuild.** Done (2026-08-02). `sparkLong` (second,
+  longer-window sparkline column); per-group month-change annotation;
+  `SummaryPanel` rebuilt with an assets bar segmented by group + legend and
+  a single-color liabilities bar; real two-column page layout with a sticky
+  Summary rail; `AccountsFilters` collapsible behind a "Filters" trigger
+  with `AccountPreferences` nested inside it.
+- **Phase V5 — Transactions rebuild.** Done (2026-08-02). Debit/credit color
+  rule (no red debits) across the ledger, mobile cards, and dashboard
+  RecentActivity; day-group header date/total split to opposite ends of the
+  band; new `TableToolbar` collapses Edit multiple/Columns behind pill
+  triggers. Deferred: a real Sort control and splitting the filter form into
+  separate header popovers.
+- **Phase V8 — Goals rebuild.** Done (2026-08-02). New `GoalCardMenu`
+  (Edit/Add contribution/household toggle/Delete) makes v2 `GoalCard`s the
+  single source of truth; `GoalsManager` now only renders when `goalsV2`
+  is off. `GoalWizard` rewritten as a full-screen overlay (stepper pills +
+  progress bar + centered footer), step logic unchanged. On-track badge
+  tone fixed to green. Deferred: real photos for the 8 templates.
+- **Phase V9 — Reports rebuild.** Done (2026-08-02). Stat tiles flipped to
+  value-first with semantic income-green/spending-red colors; new
+  `ReportRightRail` Summary card beside the transactions table; Cash
+  Flow/Spending/Income tabs moved from a pill control inside the filter
+  panel to underline `Tabs` next to the page title.
+- **Phase V10 — Investments/Advice/Settings rebuild.** Done (2026-08-02).
+  Investments: Add Holding is now a modal; holdings table gained an
+  avatar, reordered columns, and a grand Total row; semantic-color fixes.
+  Advice: `AdviceCard` rewritten as a `<details>` disclosure with a
+  category icon and status meta; new Categories filter rail. Flagged: the
+  design doc's "Update profile" pill would link to a questionnaire page
+  that doesn't exist in this codebase — not built. Settings: nav split
+  into Account/Household grouped cards; Profile's submit button is now
+  full-width "Update Profile."
+- **Phase V11 — sweep.** Done (2026-08-02). Read all five no-reference
+  pages (Cash Flow, Forecasting, Notifications, Review, Wrapped);
+  Forecasting/Notifications/Review were already clean. Fixed:
+  `CashFlowSummary`'s raw `--viz-good`/`--viz-bad` colors (semantic tokens,
+  layout unchanged — no reference screenshot to justify a redesign);
+  Wrapped's year-chip touch targets and raw ISO date; Notifications'
+  `toLocaleDateString` → shared `formatDate`. Grepping for that same color
+  bug repo-wide found four more real instances (`StatTile`, `PlanView`,
+  `WhatIfPanel`, `GoalsManager`, `ReportTransactions`), fixed in the same
+  pass. Not done: dark-mode screenshot QA and a Playwright visual-snapshot
+  baseline — both need a real browser this sandbox doesn't have.
+
+**Every phase in the Monarch visual-parity program (V0–V11) is now done.**
+The one thing every phase still needs: a real browser visual pass. This
+sandbox's `npm run dev` can't reach Google Fonts (Turbopack-specific; `curl` from the
+same shell works fine), so verification so far is the automated gate
+(build/lint/typecheck/unit tests) plus manual review, not an actual screenshot
+comparison against the references.
+
 ## Active program: financial-planner parity (started 2026-07-29)
 
 Plan: `docs/superpowers/plans/2026-07-29-monarch-parity.md`.

@@ -1,4 +1,5 @@
 import AreaSparkline from "@/components/charts/AreaSparkline";
+import { InstitutionAvatar } from "@/components/ui/Avatar";
 import { formatCurrency } from "@/lib/format";
 import type { AccountsPageRow } from "@/lib/accounts-page";
 
@@ -20,13 +21,33 @@ export default function AccountRow({
 }: Readonly<{ row: AccountsPageRow }>) {
   const change = formatChange(row);
   return (
-    <li className="grid gap-3 border-t border-panel-border px-4 py-4 first:border-t-0 sm:grid-cols-[minmax(0,1.4fr)_minmax(8rem,0.8fr)_8rem_minmax(8rem,0.8fr)] sm:items-center">
-      <div className="min-w-0">
-        <p className="truncate text-sm font-semibold">{row.name}</p>
-        <p className="mt-1 text-xs text-muted">
-          {[row.institution, row.subtype ?? row.type]
-            .filter(Boolean)
-            .join(" · ") || "Manual account"}
+    <li className="grid gap-3 border-t border-panel-border px-4 py-4 first:border-t-0 sm:grid-cols-[minmax(0,1.3fr)_7rem_7rem_minmax(8rem,0.8fr)] sm:items-center">
+      <div className="flex min-w-0 items-center gap-3">
+        <InstitutionAvatar name={row.institution ?? row.name} size={32} className="shrink-0" />
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">{row.name}</p>
+          <p className="mt-1 text-xs text-muted">
+            {row.subtype ?? row.type ?? "Manual account"}
+          </p>
+        </div>
+      </div>
+      <div
+        className={row.spark.length < 2 ? "hidden min-h-11 sm:block" : "min-h-11"}
+        aria-label={`${row.name} 30-day trend`}
+      >
+        <AreaSparkline values={row.spark} />
+      </div>
+      <div
+        className={row.sparkLong.length < 2 ? "hidden min-h-11 sm:block" : "min-h-11"}
+        aria-label={`${row.name} full-history trend`}
+      >
+        <AreaSparkline values={row.sparkLong} />
+      </div>
+      <div className="text-left sm:text-right">
+        <p data-money className="font-mono text-sm font-bold tabular-nums">
+          {row.balance === null
+            ? "Unavailable"
+            : formatCurrency(row.balance, row.currency)}
         </p>
         <p
           className={
@@ -35,30 +56,9 @@ export default function AccountRow({
               : "mt-1 text-xs text-muted"
           }
         >
-          {row.stale
-            ? `Stale, updated ${row.updatedAgo}`
-            : `Updated ${row.updatedAgo}`}
+          {row.stale ? `Stale, updated ${row.updatedAgo}` : row.updatedAgo}
         </p>
-      </div>
-      <div>
-        <p className="text-xs text-muted">Balance</p>
-        <p data-money className="mt-1 font-mono text-sm font-bold tabular-nums">
-          {row.balance === null
-            ? "Unavailable"
-            : formatCurrency(row.balance, row.currency)}
-        </p>
-      </div>
-      <div
-        className={
-          row.spark.length < 2 ? "hidden min-h-11 sm:block" : "min-h-11"
-        }
-        aria-label={`${row.name} balance trend`}
-      >
-        <AreaSparkline values={row.spark} />
-      </div>
-      <div>
-        <p className="text-xs text-muted">30-day change</p>
-        <p className="mt-1 text-sm font-semibold tabular-nums">
+        <p className="mt-1 text-xs text-muted tabular-nums">
           {change ?? "Not enough history"}
         </p>
       </div>

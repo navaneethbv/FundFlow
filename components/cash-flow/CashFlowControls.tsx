@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { cn } from "@/lib/cn";
+import SegmentedControl from "@/components/ui/SegmentedControl";
 
 export interface CashFlowControlValues {
   period: "monthly" | "quarterly" | "yearly";
@@ -34,31 +33,6 @@ function cashFlowHref(
   return `/cash-flow?${params.toString()}`;
 }
 
-function ControlLink({
-  href,
-  active,
-  children,
-}: Readonly<{
-  href: string;
-  active: boolean;
-  children: React.ReactNode;
-}>) {
-  return (
-    <Link
-      href={href}
-      aria-current={active ? "page" : undefined}
-      className={cn(
-        "inline-flex min-h-11 items-center rounded-field px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-2",
-        active
-          ? "bg-accent-soft text-accent"
-          : "text-muted hover:bg-panel-hover hover:text-foreground",
-      )}
-    >
-      {children}
-    </Link>
-  );
-}
-
 export default function CashFlowControls({
   current,
   periods,
@@ -78,37 +52,26 @@ export default function CashFlowControls({
       <div className="grid gap-4 xl:grid-cols-[auto_auto_1fr] xl:items-end">
         <fieldset>
           <legend className="eyebrow mb-2">Period</legend>
-          <div className="flex flex-wrap gap-1">
-            {(["monthly", "quarterly", "yearly"] as const).map((period) => (
-              <ControlLink
-                key={period}
-                href={cashFlowHref(current, {
-                  period,
-                  selected: undefined,
-                })}
-                active={current.period === period}
-              >
-                {period[0]!.toUpperCase() + period.slice(1)}
-              </ControlLink>
-            ))}
-          </div>
+          <SegmentedControl
+            ariaLabel="Period"
+            items={(["monthly", "quarterly", "yearly"] as const).map((period) => ({
+              label: period[0]!.toUpperCase() + period.slice(1),
+              href: cashFlowHref(current, { period, selected: undefined }),
+              active: current.period === period,
+            }))}
+          />
         </fieldset>
 
         <fieldset>
           <legend className="eyebrow mb-2">Break down by</legend>
-          <div className="flex flex-wrap gap-1">
-            {(["category", "group", "merchant"] as const).map(
-              (dimension) => (
-                <ControlLink
-                  key={dimension}
-                  href={cashFlowHref(current, { dimension })}
-                  active={current.dimension === dimension}
-                >
-                  {dimension[0]!.toUpperCase() + dimension.slice(1)}
-                </ControlLink>
-              ),
-            )}
-          </div>
+          <SegmentedControl
+            ariaLabel="Break down by"
+            items={(["category", "group", "merchant"] as const).map((dimension) => ({
+              label: dimension[0]!.toUpperCase() + dimension.slice(1),
+              href: cashFlowHref(current, { dimension }),
+              active: current.dimension === dimension,
+            }))}
+          />
         </fieldset>
 
         <form
@@ -166,37 +129,35 @@ export default function CashFlowControls({
           {householdId && (
             <fieldset>
               <legend className="sr-only">Scope</legend>
-              <div className="flex gap-1">
-                <ControlLink
-                  href={cashFlowHref(current, { scope: undefined })}
-                  active={!current.scope}
-                >
-                  Just mine
-                </ControlLink>
-                <ControlLink
-                  href={cashFlowHref(current, { scope: householdId })}
-                  active={current.scope === householdId}
-                >
-                  Household
-                </ControlLink>
-              </div>
+              <SegmentedControl
+                ariaLabel="Financial scope"
+                items={[
+                  {
+                    label: "Just mine",
+                    href: cashFlowHref(current, { scope: undefined }),
+                    active: !current.scope,
+                  },
+                  {
+                    label: "Household",
+                    href: cashFlowHref(current, { scope: householdId }),
+                    active: current.scope === householdId,
+                  },
+                ]}
+              />
             </fieldset>
           )}
 
           {currencies.length > 1 && (
             <fieldset>
               <legend className="eyebrow mb-1">Currency</legend>
-              <div className="flex flex-wrap gap-1">
-                {currencies.map((currency) => (
-                  <ControlLink
-                    key={currency}
-                    href={cashFlowHref(current, { currency })}
-                    active={current.currency === currency}
-                  >
-                    {currency}
-                  </ControlLink>
-                ))}
-              </div>
+              <SegmentedControl
+                ariaLabel="Currency"
+                items={currencies.map((currency) => ({
+                  label: currency,
+                  href: cashFlowHref(current, { currency }),
+                  active: current.currency === currency,
+                }))}
+              />
             </fieldset>
           )}
         </div>

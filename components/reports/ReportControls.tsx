@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { cn } from "@/lib/cn";
+import SegmentedControl from "@/components/ui/SegmentedControl";
 import {
   reportFiltersToSearchParams,
   type ReportFilters,
@@ -15,7 +15,7 @@ import type { BreakdownDimension } from "@/lib/cash-flow";
  * any report state shareable and back-button-correct.
  */
 
-const TAB_LABELS: Record<ReportTab, string> = {
+export const TAB_LABELS: Record<ReportTab, string> = {
   cash_flow: "Cash Flow",
   spending: "Spending",
   income: "Income",
@@ -39,27 +39,6 @@ export function reportHref(
   return `/reports?${reportFiltersToSearchParams({ ...filters, ...patch }).toString()}`;
 }
 
-function ControlLink({
-  href,
-  active,
-  children,
-}: Readonly<{ href: string; active: boolean; children: React.ReactNode }>) {
-  return (
-    <Link
-      href={href}
-      aria-current={active ? "page" : undefined}
-      className={cn(
-        "inline-flex min-h-11 items-center rounded-field px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-2",
-        active
-          ? "bg-accent-soft text-accent"
-          : "text-muted hover:bg-panel-hover hover:text-foreground",
-      )}
-    >
-      {children}
-    </Link>
-  );
-}
-
 export default function ReportControls({
   filters,
   householdId,
@@ -69,35 +48,17 @@ export default function ReportControls({
       aria-label="Report controls"
       className="rounded-card border border-panel-border bg-panel p-4 shadow-card"
     >
-      <div className="grid gap-4 xl:grid-cols-[auto_auto_1fr] xl:items-end">
-        <fieldset>
-          <legend className="eyebrow mb-2">Report</legend>
-          <div className="flex flex-wrap gap-1">
-            {(Object.keys(TAB_LABELS) as ReportTab[]).map((tab) => (
-              <ControlLink
-                key={tab}
-                href={reportHref(filters, { tab })}
-                active={filters.tab === tab}
-              >
-                {TAB_LABELS[tab]}
-              </ControlLink>
-            ))}
-          </div>
-        </fieldset>
-
+      <div className="grid gap-4 xl:grid-cols-[auto_1fr] xl:items-end">
         <fieldset>
           <legend className="eyebrow mb-2">View</legend>
-          <div className="flex flex-wrap gap-1">
-            {(Object.keys(MODE_LABELS) as ReportMode[]).map((mode) => (
-              <ControlLink
-                key={mode}
-                href={reportHref(filters, { mode })}
-                active={filters.mode === mode}
-              >
-                {MODE_LABELS[mode]}
-              </ControlLink>
-            ))}
-          </div>
+          <SegmentedControl
+            ariaLabel="View"
+            items={(Object.keys(MODE_LABELS) as ReportMode[]).map((mode) => ({
+              label: MODE_LABELS[mode],
+              href: reportHref(filters, { mode }),
+              active: filters.mode === mode,
+            }))}
+          />
         </fieldset>
 
         <form
@@ -156,56 +117,55 @@ export default function ReportControls({
       <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-panel-border pt-4">
         <fieldset>
           <legend className="eyebrow mb-1">Break down by</legend>
-          <div className="flex flex-wrap gap-1">
-            {(Object.keys(DIMENSION_LABELS) as BreakdownDimension[]).map(
-              (dimension) => (
-                <ControlLink
-                  key={dimension}
-                  href={reportHref(filters, { dimension })}
-                  active={filters.dimension === dimension}
-                >
-                  {DIMENSION_LABELS[dimension]}
-                </ControlLink>
-              ),
+          <SegmentedControl
+            ariaLabel="Break down by"
+            items={(Object.keys(DIMENSION_LABELS) as BreakdownDimension[]).map(
+              (dimension) => ({
+                label: DIMENSION_LABELS[dimension],
+                href: reportHref(filters, { dimension }),
+                active: filters.dimension === dimension,
+              }),
             )}
-          </div>
+          />
         </fieldset>
 
         <fieldset>
           <legend className="eyebrow mb-1">Pending</legend>
-          <div className="flex gap-1">
-            <ControlLink
-              href={reportHref(filters, { excludePending: false })}
-              active={!filters.excludePending}
-            >
-              Included
-            </ControlLink>
-            <ControlLink
-              href={reportHref(filters, { excludePending: true })}
-              active={filters.excludePending}
-            >
-              Excluded
-            </ControlLink>
-          </div>
+          <SegmentedControl
+            ariaLabel="Pending"
+            items={[
+              {
+                label: "Included",
+                href: reportHref(filters, { excludePending: false }),
+                active: !filters.excludePending,
+              },
+              {
+                label: "Excluded",
+                href: reportHref(filters, { excludePending: true }),
+                active: filters.excludePending,
+              },
+            ]}
+          />
         </fieldset>
 
         {householdId && (
           <fieldset>
             <legend className="eyebrow mb-1">Scope</legend>
-            <div className="flex gap-1">
-              <ControlLink
-                href={reportHref(filters, { scope: null })}
-                active={!filters.scope}
-              >
-                Just mine
-              </ControlLink>
-              <ControlLink
-                href={reportHref(filters, { scope: householdId })}
-                active={filters.scope === householdId}
-              >
-                Household
-              </ControlLink>
-            </div>
+            <SegmentedControl
+              ariaLabel="Financial scope"
+              items={[
+                {
+                  label: "Just mine",
+                  href: reportHref(filters, { scope: null }),
+                  active: !filters.scope,
+                },
+                {
+                  label: "Household",
+                  href: reportHref(filters, { scope: householdId }),
+                  active: filters.scope === householdId,
+                },
+              ]}
+            />
           </fieldset>
         )}
       </div>

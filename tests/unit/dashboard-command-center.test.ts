@@ -231,13 +231,13 @@ describe("dashboard command center", () => {
     const statTile = readFileSync("components/charts/StatTile.tsx", "utf8");
 
     for (const token of [
-      "--background: #f5f7fa",
-      "--foreground: #101828",
-      "--muted: #667085",
-      "--accent: #175cd3",
-      "--success: #067647",
+      "--background: #f6f5f3",
+      "--foreground: #222220",
+      "--muted: #6b6b68",
+      "--accent: #ff6b2e",
+      "--success: #2aa36b",
       "--warning: #b54708",
-      "--danger: #b42318",
+      "--danger: #e14a4a",
     ]) {
       expect(globals).toContain(token);
     }
