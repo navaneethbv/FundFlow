@@ -15,7 +15,6 @@ vi.mock("@/lib/report-delivery", () => ({
   claimWeeklyDelivery: vi.fn(),
   markWeeklyDeliveryFailed: vi.fn(),
   markWeeklyDeliverySent: vi.fn(),
-  safeDeliveryError: (e: { message: string }) => e.message,
 }));
 
 const mockGetWeeklyReportData = vi.fn();
@@ -331,6 +330,25 @@ describe("GET /api/cron/weekly-report", () => {
       firstError: "DB Error",
     });
     expect(mockErrorResponse).toHaveBeenCalledWith("cron.weekly-report", expect.any(Error));
+  });
+
+  it("redacts email addresses out of the whole-run failure alert", async () => {
+    mockSafeEqual.mockReturnValue(true);
+    const request = new NextRequest("http://localhost/api/cron/weekly-report", {
+      headers: { authorization: "Bearer test-secret" },
+    });
+
+    mockServiceClient.from.mockImplementation(() => {
+      throw new Error("relay refused for owner@gmail.com");
+    });
+
+    const res = await GET(request);
+    expect(res.status).toBe(500);
+    expect(mockAlertCronFailure).toHaveBeenCalledWith("weekly-report", {
+      failed: 1,
+      total: 1,
+      firstError: "relay refused for [redacted]",
+    });
   });
 
   it("skips user report when delivery claim is not claimed", async () => {

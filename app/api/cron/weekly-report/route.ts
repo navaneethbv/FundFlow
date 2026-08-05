@@ -18,6 +18,7 @@ import {
 import { errorResponse } from "@/lib/http";
 import { logError } from "@/lib/log";
 import { alertCronFailure } from "@/lib/cron-alert";
+import { describeDeliveryError, redactEmails } from "@/lib/delivery-error";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -30,16 +31,6 @@ type WeeklyRunResult = {
   reports_failed: number;
   first_error?: string;
 };
-
-function safeDeliveryError(error: unknown): string {
-  if (error instanceof Error && error.message.includes("SMTP is not configured")) {
-    return "smtp_not_configured";
-  }
-  if (error instanceof Error && /pdf|font/i.test(error.message)) {
-    return "pdf_render_failed";
-  }
-  return "email_send_failed";
-}
 
 export async function runWeeklyReports(
   reference = new Date(),
@@ -124,7 +115,7 @@ export async function runWeeklyReports(
       result.reports_sent += 1;
     } catch (userError) {
       result.reports_failed += 1;
-      result.first_error ??= safeDeliveryError(userError);
+      result.first_error ??= describeDeliveryError(userError);
       logError("cron.weekly-report.user", userError);
       if (deliveryId) {
         try {
@@ -132,7 +123,7 @@ export async function runWeeklyReports(
             service,
             userId,
             deliveryId,
-            safeDeliveryError(userError),
+            describeDeliveryError(userError),
           );
         } catch (deliveryError) {
           logError("cron.weekly-report.delivery", deliveryError);
@@ -165,7 +156,9 @@ export async function GET(request: NextRequest) {
     await alertCronFailure("weekly-report", {
       failed: 1,
       total: 1,
-      firstError: error instanceof Error ? error.message : String(error),
+      firstError: redactEmails(
+        error instanceof Error ? error.message : String(error),
+      ),
     });
     return errorResponse("cron.weekly-report", error);
   }

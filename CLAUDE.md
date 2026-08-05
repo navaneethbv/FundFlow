@@ -254,7 +254,13 @@ client components.
   returned to the browser, or stored plaintext.
 - Cron routes (`/api/cron/*`) authenticate `Authorization: Bearer $CRON_SECRET`
   via `safeEqual`. Vercel sends this automatically for registered crons
-  (`vercel.json`: daily sync 07:00 UTC, weekly report Sunday 07:00 UTC).
+  (`vercel.json`: daily sync 07:00 UTC).
+  The weekly report is not a Vercel cron: `.github/workflows/weekly-report.yml`
+  calls it hourly so each user can be served at their own local Monday 08:00,
+  and the period stays due for the rest of the week so a dropped hour or a
+  transient send failure can catch up. A send the provider rejects with a 5xx
+  is permanent (`isPermanentDeliveryError`) and is not retried, otherwise an
+  undeliverable address burns an attempt every hour until the period rolls.
 - `/api/plaid/webhook` verifies the `plaid-verification` JWT outside sandbox:
   pinned `alg: ES256`, key via `webhookVerificationKeyGet`, signature checked
   with `dsaEncoding: "ieee-p1363"` (JWS raw r||s, not DER — omitting this
