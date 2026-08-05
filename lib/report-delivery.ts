@@ -1,18 +1,23 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { WeeklyReportPeriod } from "@/lib/report-period";
+import { isPermanentDeliveryError } from "@/lib/delivery-error";
 
 const STALE_PROCESSING_MS = 60 * 60 * 1000;
 
 export type DeliveryClaim = "claim" | "retry" | "skip";
 
 export function classifyDeliveryClaim(
-  existing: { status: string; attemptedAt: string } | null,
+  existing: { status: string; attemptedAt: string; errorCode?: string | null } | null,
   now: Date,
 ): DeliveryClaim {
   if (!existing) return "claim";
   if (existing.status === "sent" || existing.status === "skipped") return "skip";
-  if (existing.status === "failed") return "retry";
+  // The period stays due all week (see report-period), so without this a
+  // permanently undeliverable address is retried on every hourly run.
+  if (existing.status === "failed") {
+    return isPermanentDeliveryError(existing.errorCode) ? "skip" : "retry";
+  }
   if (existing.status !== "processing") return "skip";
   const attemptedAt = new Date(existing.attemptedAt).getTime();
   return Number.isFinite(attemptedAt) && now.getTime() - attemptedAt >= STALE_PROCESSING_MS
@@ -46,7 +51,7 @@ export async function claimWeeklyDelivery(
 
   const { data: existing, error: existingError } = await supabase
     .from("weekly_report_deliveries")
-    .select("id, status, attempted_at")
+    .select("id, status, attempted_at, error_code")
     .eq("user_id", userId)
     .eq("period_start", period.start)
     .maybeSingle();
@@ -54,7 +59,11 @@ export async function claimWeeklyDelivery(
   if (!existing) return { claimed: false };
 
   const decision = classifyDeliveryClaim(
-    { status: existing.status as string, attemptedAt: existing.attempted_at as string },
+    {
+      status: existing.status as string,
+      attemptedAt: existing.attempted_at as string,
+      errorCode: existing.error_code as string | null,
+    },
     now,
   );
   if (decision !== "retry") return { claimed: false };

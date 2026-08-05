@@ -51,6 +51,32 @@ describe("weekly report delivery claims", () => {
     }
   });
 
+  it("stops retrying a delivery the provider rejected permanently", () => {
+    expect(
+      classifyDeliveryClaim(
+        {
+          status: "failed",
+          attemptedAt: "2026-07-13T13:15:00.000Z",
+          errorCode: "smtp_550: Invalid `to` field.",
+        },
+        now,
+      ),
+    ).toBe("skip");
+  });
+
+  it("still retries a delivery that failed transiently", () => {
+    expect(
+      classifyDeliveryClaim(
+        {
+          status: "failed",
+          attemptedAt: "2026-07-13T13:15:00.000Z",
+          errorCode: "smtp_451: try again later",
+        },
+        now,
+      ),
+    ).toBe("retry");
+  });
+
   describe("claimWeeklyDelivery DB operations", () => {
     it("successfully inserts processing row on first claim", async () => {
       const single = vi.fn().mockResolvedValue({ data: { id: "delivery-1" }, error: null });
@@ -101,6 +127,37 @@ describe("weekly report delivery claims", () => {
 
       const result = await claimWeeklyDelivery(mockSupabase, "user-1", period, now);
       expect(result).toEqual({ claimed: true, deliveryId: "delivery-1" });
+    });
+
+    it("does not re-claim a row the provider rejected permanently", async () => {
+      const singleInsert = vi.fn().mockResolvedValue({
+        data: null,
+        error: { code: "23505", message: "duplicate" },
+      });
+      const selectInsert = vi.fn().mockReturnValue({ single: singleInsert });
+      const insert = vi.fn().mockReturnValue({ select: selectInsert });
+
+      const maybeSingleExisting = vi.fn().mockResolvedValue({
+        data: {
+          id: "delivery-1",
+          status: "failed",
+          attempted_at: "2026-07-13T10:00:00.000Z",
+          error_code: "smtp_550: Invalid `to` field.",
+        },
+        error: null,
+      });
+      const eqStart = vi.fn().mockReturnValue({ maybeSingle: maybeSingleExisting });
+      const eqUser = vi.fn().mockReturnValue({ eq: eqStart });
+      const selectExisting = vi.fn().mockReturnValue({ eq: eqUser });
+
+      const from = vi.fn().mockReturnValue({ insert, select: selectExisting });
+      const mockSupabase = { from } as unknown as SupabaseClient;
+
+      const result = await claimWeeklyDelivery(mockSupabase, "user-1", period, now);
+      expect(result).toEqual({ claimed: false });
+      expect(selectExisting).toHaveBeenCalledWith(
+        expect.stringContaining("error_code"),
+      );
     });
 
     it("returns claimed: false when existing delivery is active and skip decision is made", async () => {
