@@ -345,6 +345,9 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   const columnsFormParams = Object.fromEntries(
     queryEntries.filter(([key]) => key !== "page" && key !== "col" && key !== "colsSubmitted"),
   ) as Record<string, string>;
+  const hasCommittedFilters = hasActiveLedgerFilters(state);
+  const showEmptyLedger = !ledgerError && rows.length === 0;
+  const showLedgerRows = !ledgerError && rows.length > 0;
 
   return (
     <AppShell active="transactions" email={user?.email}>
@@ -384,20 +387,22 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
           </p>
         )}
 
-        {ledgerError ? (
+        {ledgerError && (
           <Panel tone="danger" role="alert" title="Transactions unavailable">
             <p className="text-sm text-muted">{ledgerError}</p>
           </Panel>
-        ) : rows.length === 0 ? (
+        )}
+        {showEmptyLedger && (
           <EmptyState
-            title={hasActiveLedgerFilters(state) ? "No transactions match these filters" : "No transactions yet"}
+            title={hasCommittedFilters ? "No transactions match these filters" : "No transactions yet"}
             description={
-              hasActiveLedgerFilters(state)
+              hasCommittedFilters
                 ? "Try changing or clearing the filters."
                 : "Connect an account or add a transaction to begin."
             }
           />
-        ) : (
+        )}
+        {showLedgerRows && (
           <Panel padding="none" className="overflow-hidden">
             <TableToolbar
               bulkTagBar={<BulkTagBar transactionIds={rows.map((t) => t.id)} />}

@@ -41,7 +41,7 @@ export default function TransactionSortMenu({
   const [draftDirection, setDraftDirection] = useState(direction);
   const [isPending, startTransition] = useTransition();
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -96,7 +96,7 @@ export default function TransactionSortMenu({
         <ChevronDown aria-hidden className="h-4 w-4" />
       </button>
       {open && (
-        <div ref={panelRef} role="dialog" aria-label="Sort transactions" className="absolute right-0 z-40 mt-2 w-72 space-y-4 rounded-card border border-panel-border bg-panel p-4 shadow-float">
+        <dialog open ref={panelRef} aria-label="Sort transactions" className="absolute left-auto right-0 top-auto z-40 m-0 mt-2 w-72 space-y-4 rounded-card border border-panel-border bg-panel p-4 text-foreground shadow-float">
           <label className="block text-xs font-semibold text-muted">
             Sort by
             <Select aria-label="Sort by" value={draftField} onChange={(event) => setDraftField(event.target.value as LedgerSortField)} className="mt-1">
@@ -114,9 +114,9 @@ export default function TransactionSortMenu({
             <Button variant="ghost" onClick={close}>Cancel</Button>
             <Button onClick={apply} loading={isPending}>Apply</Button>
           </div>
-        </div>
+        </dialog>
       )}
-      {isPending && <span className="sr-only" role="status">Updating transaction sorting</span>}
+      {isPending && <output className="sr-only">Updating transaction sorting</output>}
     </div>
   );
 }

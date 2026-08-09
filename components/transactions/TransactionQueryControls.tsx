@@ -61,8 +61,8 @@ export default function TransactionQueryControls({
   const [filterDraft, setFilterDraft] = useState(committed);
   const dateTriggerRef = useRef<HTMLButtonElement>(null);
   const filtersTriggerRef = useRef<HTMLButtonElement>(null);
-  const datePanelRef = useRef<HTMLDivElement>(null);
-  const filtersPanelRef = useRef<HTMLDivElement>(null);
+  const datePanelRef = useRef<HTMLDialogElement>(null);
+  const filtersPanelRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -216,7 +216,7 @@ export default function TransactionQueryControls({
             <ChevronDown aria-hidden className="h-4 w-4" />
           </button>
           {open === "date" && (
-            <div ref={datePanelRef} role="dialog" aria-label="Date filter" className="absolute right-0 z-40 mt-2 w-72 space-y-4 rounded-card border border-panel-border bg-panel p-4 shadow-float">
+            <dialog open ref={datePanelRef} aria-label="Date filter" className="absolute left-auto right-0 top-auto z-40 m-0 mt-2 w-72 space-y-4 rounded-card border border-panel-border bg-panel p-4 text-foreground shadow-float">
               <label className="block text-xs font-semibold text-muted">
                 Month
                 <Input aria-label="Month" type="month" value={monthDraft} onChange={(event) => setMonthDraft(event.target.value)} className="mt-1" />
@@ -233,7 +233,7 @@ export default function TransactionQueryControls({
                   Apply
                 </Button>
               </div>
-            </div>
+            </dialog>
           )}
         </div>
 
@@ -253,7 +253,7 @@ export default function TransactionQueryControls({
             <ChevronDown aria-hidden className="h-4 w-4" />
           </button>
           {open === "filters" && (
-            <div ref={filtersPanelRef} role="dialog" aria-label="Transaction filters" className="absolute right-0 z-40 mt-2 w-[min(24rem,calc(100vw-2rem))] space-y-4 rounded-card border border-panel-border bg-panel p-4 shadow-float">
+            <dialog open ref={filtersPanelRef} aria-label="Transaction filters" className="absolute left-auto right-0 top-auto z-40 m-0 mt-2 w-[min(24rem,calc(100vw-2rem))] space-y-4 rounded-card border border-panel-border bg-panel p-4 text-foreground shadow-float">
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="text-xs font-semibold text-muted">
                   Account
@@ -304,7 +304,7 @@ export default function TransactionQueryControls({
                 <Button variant="ghost" onClick={() => close("filters")}>Cancel</Button>
                 <Button onClick={applyFilters} loading={isPending && pendingAction === "filters"}>Apply</Button>
               </div>
-            </div>
+            </dialog>
           )}
         </div>
       </div>
@@ -331,7 +331,7 @@ export default function TransactionQueryControls({
           )}
         </div>
       )}
-      {isPending && <span className="sr-only" role="status">Updating transactions</span>}
+      {isPending && <output className="sr-only">Updating transactions</output>}
     </div>
   );
 }

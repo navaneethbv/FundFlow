@@ -14,6 +14,8 @@ const password = "TransactionsE2E-Password-123!";
 const activeMonth = new Date().toISOString().slice(0, 7);
 
 test.describe.serial("transaction sorting and filters", () => {
+  // This skip is intentional because the spec creates and deletes live Auth users and financial rows.
+  // Secretless CI runs the non-destructive smoke suite instead.
   test.skip(!RUN, "Supabase browser and service credentials are required");
 
   let admin: SupabaseClient;
@@ -196,13 +198,13 @@ test.describe.serial("transaction sorting and filters", () => {
     await expect(page).toHaveURL(/sort=merchant/);
     await expect(page).toHaveURL(/direction=asc/);
 
+    await page.emulateMedia({ reducedMotion: "reduce" });
     for (const theme of ["light", "dark"] as const) {
       await page.evaluate((value) => {
         localStorage.setItem("fundflow-theme", value);
         document.documentElement.dataset.theme = value;
       }, theme);
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-      await page.waitForTimeout(200);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       await page.screenshot({ path: testInfo.outputPath(`transactions-desktop-${theme}.png`), fullPage: true });
     }
