@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   findReceiptCandidates,
+  receiptAmountBandFilter,
   type ReceiptCandidate,
 } from "@/lib/receipts";
 
@@ -45,13 +46,19 @@ export async function loadReceiptCandidates(
   from.setUTCDate(from.getUTCDate() - 3);
   const to = new Date(`${receipt.purchase_date}T00:00:00.000Z`);
   to.setUTCDate(to.getUTCDate() + 3);
+  // The amount predicate keeps the ±3-day window small enough that the cap is
+  // a safety valve rather than a filter. Without it the true match can sit past
+  // row 100 of an unordered page and simply never be considered — a silently
+  // wrong "no candidates" rather than a visible failure.
   const { data, error } = await supabase
     .from("transactions")
     .select("id,date,amount,merchant_name,name")
     .eq("user_id", userId)
     .gte("date", from.toISOString().slice(0, 10))
     .lte("date", to.toISOString().slice(0, 10))
-    .limit(100);
+    .or(receiptAmountBandFilter(total))
+    .order("date", { ascending: true })
+    .limit(500);
   if (error) throw error;
   return findReceiptCandidates(
     {

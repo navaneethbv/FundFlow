@@ -24,6 +24,28 @@ export interface ReceiptCandidate {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** The ±% band on the receipt total that `findReceiptCandidates` will accept. */
+const AMOUNT_TOLERANCE_PERCENT = 1;
+
+/**
+ * A PostgREST `.or()` filter for the amount band this matcher accepts, so a
+ * caller can push the predicate into the query instead of paging rows into JS
+ * and hoping the real match landed inside an unordered row cap.
+ *
+ * Both signs are covered because the matcher compares `Math.abs(amount)`; a
+ * positive-only predicate would silently disagree with it. The extra cent of
+ * slack absorbs rounding on stored amounts.
+ */
+export function receiptAmountBandFilter(total: number): string {
+  const factor = AMOUNT_TOLERANCE_PERCENT / 100;
+  const low = total * (1 - factor) - 0.01;
+  const high = total * (1 + factor) + 0.01;
+  return [
+    `and(amount.gte.${low},amount.lte.${high})`,
+    `and(amount.gte.${-high},amount.lte.${-low})`,
+  ].join(",");
+}
+
 function parseIsoDay(value: string): number | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return null;

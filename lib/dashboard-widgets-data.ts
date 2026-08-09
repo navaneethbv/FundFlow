@@ -78,12 +78,44 @@ export interface DashboardInvestmentSummary {
   topMovers: { name: string; ticker: string | null; changePct: number }[] | null;
 }
 
+/**
+ * How far back the widget will look for the previous valuation point.
+ *
+ * The widget needs the two most recent snapshot dates, not the history — and
+ * this runs on every dashboard render, which `AutoRefresh` repeats every two
+ * minutes. A window keeps the read bounded; a gap wider than this leaves
+ * `dayChange` null, which is the honest answer anyway, since a comparison
+ * against a months-old valuation is not a day change.
+ */
+const SNAPSHOT_LOOKBACK_DAYS = 30;
+
+function isoDaysBefore(date: string, days: number): string {
+  const parsed = new Date(`${date}T00:00:00.000Z`);
+  parsed.setUTCDate(parsed.getUTCDate() - days);
+  return parsed.toISOString().slice(0, 10);
+}
+
+async function latestSnapshotDate(supabase: SupabaseClient): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("holding_snapshots")
+    .select("snapshot_date")
+    .order("snapshot_date", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  return (data?.[0]?.snapshot_date as string | undefined) ?? null;
+}
+
 export async function loadDashboardInvestmentSummary(
   supabase: SupabaseClient,
 ): Promise<DashboardInvestmentSummary> {
+  const newest = await latestSnapshotDate(supabase);
   const [holdings, snapshots] = await Promise.all([
     loadHoldings(supabase),
-    loadHoldingSnapshots(supabase),
+    newest
+      ? loadHoldingSnapshots(supabase, {
+          since: isoDaysBefore(newest, SNAPSHOT_LOOKBACK_DAYS),
+        })
+      : Promise.resolve([]),
   ]);
   const latestDates = [...new Set(snapshots.map((row) => row.snapshotDate))]
     .sort((left, right) => right.localeCompare(left))

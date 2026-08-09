@@ -137,9 +137,17 @@ function evaluateDuplicateCandidate(
   return { subjectId, first, second, dateDistanceDays };
 }
 
+/**
+ * @param linkedTransactionIds ids already on either side of a confirmed link.
+ *   `linked_duplicates` is unique per transaction on both the kept and the
+ *   excluded column, so a transaction that is already linked can never join a
+ *   second pair — offering it produces a pair whose confirmation the database
+ *   rejects. Three near-identical rows is all it takes to hit this.
+ */
 export function detectDuplicatePairs(
   transactions: DuplicateTransaction[],
   decisions: ReviewDecision[],
+  linkedTransactionIds: ReadonlySet<string> = new Set(),
 ): DuplicatePair[] {
   const resolved = new Set(
     decisions
@@ -147,7 +155,9 @@ export function detectDuplicatePairs(
       .map((decision) => decision.subjectId),
   );
   const candidates: DuplicatePair[] = [];
-  const expenses = transactions.filter((transaction) => transaction.amount > 0);
+  const expenses = transactions.filter(
+    (transaction) => transaction.amount > 0 && !linkedTransactionIds.has(transaction.id),
+  );
   for (let firstIndex = 0; firstIndex < expenses.length; firstIndex += 1) {
     const first = expenses[firstIndex]!;
     for (let secondIndex = firstIndex + 1; secondIndex < expenses.length; secondIndex += 1) {

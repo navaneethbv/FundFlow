@@ -45,18 +45,27 @@ function resolveMfaAuditAction(action: MfaAction): AuditAction {
   return "mfa_unenroll";
 }
 
+/** Server-side cap; `components/settings/MfaSection.tsx` mirrors it in the UI. */
+const MAX_TOTP_FACTORS = 10;
+
 async function handleMfaEnroll(
   supabase: SupabaseClient,
   factorId: string,
 ): Promise<{ mfaEnrolled?: boolean; errorResponse?: NextResponse }> {
   const { data, error: factorError } = await supabase.auth.mfa.listFactors();
   if (factorError) throw factorError;
-  const factor = [...(data?.totp ?? [])].find((candidate) => candidate.id === factorId);
-  if (!factor) return { errorResponse: badRequest("MFA factor does not belong to this user") };
-  if ((data?.totp ?? []).length > 10) {
-    if (factor.status !== "verified") {
-      await supabase.auth.mfa.unenroll({ factorId });
-    }
+  const totpFactors = data?.totp ?? [];
+  if (!totpFactors.some((candidate) => candidate.id === factorId)) {
+    return { errorResponse: badRequest("MFA factor does not belong to this user") };
+  }
+
+  // The client creates and verifies the factor before calling here, so the one
+  // being finalized is already in the list — count the others. Rejecting has to
+  // unenroll it whatever its status: the client verifies first, so a
+  // status-conditional cleanup would leave the over-limit factor active on the
+  // account while the response claimed the enrollment was refused.
+  if (totpFactors.filter((candidate) => candidate.id !== factorId).length >= MAX_TOTP_FACTORS) {
+    await supabase.auth.mfa.unenroll({ factorId });
     return { errorResponse: badRequest("A maximum of ten TOTP factors is allowed") };
   }
   const verifiedFactors = getVerifiedFactors(data);

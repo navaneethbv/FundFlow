@@ -174,16 +174,19 @@
   --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-lift: 0 8px 28px rgba(0, 0, 0, 0.55), 0 2px 10px rgba(0, 0, 0, 0.4);
   --shadow-glow: 0 4px 16px rgba(255, 107, 46, 0.45);
-  /* Wholesale dark categorical re-step approved on 2026-08-09. The set
-     clears the owned all-pairs normal, protanopia, and deuteranopia gates.
+  /* Dark categorical re-step, 2026-08-09. Clears the all-pairs normal,
+     protanopia, and deuteranopia gates AND WCAG 1.4.11 non-text contrast
+     (>= 3:1 on --panel #222221) on every slot, at the light set's hues so
+     both modes read as one identity. Both gates are enforced by
+     scripts/validate_palette.js — re-step with it, never by eye.
      Direct labels and table twins remain required secondary encoding. */
-  --viz-1: #9f12a0;
-  --viz-2: #a457ef;
-  --viz-3: #2c94b0;
-  --viz-4: #8e5223;
-  --viz-5: #449546;
-  --viz-6: #544ec5;
-  --viz-7: #cb5790;
+  --viz-1: #77a9ea;
+  --viz-2: #55c795;
+  --viz-3: #f1a824;
+  --viz-4: #299525;
+  --viz-5: #755efd;
+  --viz-6: #d57c75;
+  --viz-7: #d33ea7;
   --viz-pos: #3987e5;
   --viz-neg: #e66767;
   --viz-ink: #ffffff;
@@ -235,13 +238,13 @@
     --shadow-lift: 0 8px 28px rgba(0, 0, 0, 0.55), 0 2px 10px rgba(0, 0, 0, 0.4);
     --shadow-glow: 0 4px 16px rgba(255, 107, 46, 0.45);
     /* Keep in sync with the approved [data-theme=dark] set above. */
-    --viz-1: #9f12a0;
-    --viz-2: #a457ef;
-    --viz-3: #2c94b0;
-    --viz-4: #8e5223;
-    --viz-5: #449546;
-    --viz-6: #544ec5;
-    --viz-7: #cb5790;
+    --viz-1: #77a9ea;
+    --viz-2: #55c795;
+    --viz-3: #f1a824;
+    --viz-4: #299525;
+    --viz-5: #755efd;
+    --viz-6: #d57c75;
+    --viz-7: #d33ea7;
     --viz-pos: #3987e5;
     --viz-neg: #e66767;
     --viz-ink: #ffffff;

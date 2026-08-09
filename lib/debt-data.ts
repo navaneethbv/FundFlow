@@ -66,7 +66,11 @@ export function buildDebtPlannerData(
 ): DebtPlannerData {
   const debts = accounts
     .map((account) => {
-      const balance = round2(Math.abs(account.balance));
+      // `current_balance` is Plaid's `balances.current` verbatim: positive is
+      // money owed. A negative balance is an overpaid card — a credit, not a
+      // debt — so it is filtered out below rather than made absolute, which is
+      // also what `lib/dashboard.ts`'s planner does.
+      const balance = round2(account.balance);
       const aprAssumed = account.apr === null;
       const apr = account.apr ?? ASSUMED_APR;
       return {
@@ -91,8 +95,12 @@ export function buildDebtPlannerData(
   }
 
   const normalizedExtra = Math.max(0, round2(extraMonthly));
+  // `DebtInput.name` is the plan's identity key — it is what comes back in
+  // `PayoffPlan.order` and `PayoffPlan.debts[].name`. Account names are not
+  // unique (two cards can both be "Visa"), so the id goes in and the display
+  // name is resolved from `debts` by the view. Do not pass `debt.name` here.
   const planDebts = debts.map((debt) => ({
-    name: debt.name,
+    name: debt.id,
     balance: debt.balance,
     apr: debt.apr,
     minPayment: debt.minimumPayment,

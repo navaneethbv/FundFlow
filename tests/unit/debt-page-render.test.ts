@@ -53,6 +53,30 @@ describe("DebtPlannerView", () => {
     expect(html).toContain("/settings?section=institutions#card-aprs");
   });
 
+  it("keeps two same-named debts as distinct rows", () => {
+    const data = buildDebtPlannerData(
+      [
+        { id: "visa-a", name: "Visa", balance: 1000, apr: 24 },
+        { id: "visa-b", name: "Visa", balance: 4000, apr: 10 },
+      ],
+      100,
+    );
+    const html = renderToStaticMarkup(
+      createElement(DebtPlannerView, {
+        data,
+        strategy: "avalanche",
+        extraMonthly: 100,
+      }),
+    );
+
+    // Both balances have to appear: a name-keyed join renders the same debt
+    // twice and drops the other one entirely.
+    expect(html).toContain("$1,000.00");
+    expect(html).toContain("$4,000.00");
+    expect(html).toContain("24.00%");
+    expect(html).toContain("10.00%");
+  });
+
   it("renders an honest empty state", () => {
     const html = renderToStaticMarkup(
       createElement(DebtPlannerView, {

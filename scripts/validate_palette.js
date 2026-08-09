@@ -2,6 +2,38 @@ const NORMAL_FLOOR = 15;
 const CVD_FLOOR = 6;
 const CVD_TARGET = 8;
 
+/**
+ * WCAG 1.4.11 non-text contrast. A series color is a meaningful graphical
+ * object, so it has to be distinguishable from the surface it is drawn on and
+ * not only from the other series. Pairwise ΔE alone does not imply this: a set
+ * can separate perfectly from itself while sitting invisibly on its panel.
+ */
+const SURFACE_CONTRAST_FLOOR = 3;
+
+/** The panel each theme's charts are drawn on (`--panel` in app/globals.css). */
+const THEME_SURFACES = {
+  light: "#ffffff",
+  dark: "#222221",
+};
+
+/**
+ * Pre-existing light-mode slots below the floor, carried deliberately.
+ *
+ * Both are the classic on-white problem — a saturated aqua and a yellow cannot
+ * reach 3:1 against #ffffff without turning olive/brown and abandoning the V0
+ * identity. They ride on WCAG 1.4.11's relief: FundFlow already mandates direct
+ * labels and a table twin on every chart, so series color is never the only
+ * means of conveying the information.
+ *
+ * This list is a ratchet, not an excuse. It exists so a NEW slot dropping below
+ * the floor still fails the build. Do not add to it to make a re-step pass —
+ * re-step until the slot clears instead, which the dark set does on all seven.
+ */
+const KNOWN_SURFACE_EXCEPTIONS = {
+  light: new Set([2, 3]),
+  dark: new Set(),
+};
+
 const CVD_MATRICES = {
   protanopia: [
     [0.152286, 1.052583, -0.204868],
@@ -92,6 +124,21 @@ function deltaEOklab(first, second, mode) {
   );
 }
 
+function relativeLuminance(hex) {
+  const rgb = hexToRgb(hex);
+  return (
+    0.2126 * srgbToLinear(rgb.r) +
+    0.7152 * srgbToLinear(rgb.g) +
+    0.0722 * srgbToLinear(rgb.b)
+  );
+}
+
+function contrastRatio(first, second) {
+  const a = relativeLuminance(first);
+  const b = relativeLuminance(second);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
 function pairDistances(colors, mode) {
   const pairs = [];
   for (let first = 0; first < colors.length; first += 1) {
@@ -108,6 +155,24 @@ function pairDistances(colors, mode) {
 function validatePalette(theme, colors) {
   const failures = [];
   const warnings = [];
+  const surface = THEME_SURFACES[theme];
+  if (surface) {
+    const exempt = KNOWN_SURFACE_EXCEPTIONS[theme] ?? new Set();
+    colors.forEach((color, index) => {
+      const slot = index + 1;
+      const ratio = Number(contrastRatio(color, surface).toFixed(2));
+      if (ratio >= SURFACE_CONTRAST_FLOOR) return;
+      const entry = {
+        theme,
+        mode: "surface",
+        pair: [slot, slot],
+        distance: ratio,
+        floor: SURFACE_CONTRAST_FLOOR,
+      };
+      if (exempt.has(slot)) warnings.push(entry);
+      else failures.push(entry);
+    });
+  }
   for (const { pair, distance } of pairDistances(colors)) {
     if (distance < NORMAL_FLOOR) {
       failures.push({
@@ -149,7 +214,7 @@ function palettesFromCss(source) {
     const theme = explicitTheme || "light";
     const colors = [];
     for (let index = 1; index <= 7; index += 1) {
-      const match = body.match(new RegExp(`--viz-${index}:\\s*(#[0-9a-f]{6})`, "i"));
+      const match = body.match(new RegExp(String.raw`--viz-${index}:\s*(#[0-9a-f]{6})`, "i"));
       if (!match) break;
       colors.push(match[1].toLowerCase());
     }
@@ -172,13 +237,17 @@ async function runCli(path) {
   const warnings = results.flatMap((result) => result.warnings);
   for (const warning of warnings) {
     console.warn(
-      `${warning.theme} ${warning.mode} viz-${warning.pair[0]}/viz-${warning.pair[1]} distance=${warning.distance} target=${warning.floor}`,
+      warning.mode === "surface"
+        ? `${warning.theme} surface-contrast viz-${warning.pair[0]} ratio=${warning.distance} floor=${warning.floor} (known exception, relies on direct labels + table twin)`
+        : `${warning.theme} ${warning.mode} viz-${warning.pair[0]}/viz-${warning.pair[1]} distance=${warning.distance} target=${warning.floor}`,
     );
   }
   if (failures.length > 0) {
     for (const failure of failures) {
       console.error(
-        `${failure.theme} ${failure.mode} viz-${failure.pair[0]}/viz-${failure.pair[1]} distance=${failure.distance} floor=${failure.floor}`,
+        failure.mode === "surface"
+          ? `${failure.theme} surface-contrast viz-${failure.pair[0]} ratio=${failure.distance} floor=${failure.floor}`
+          : `${failure.theme} ${failure.mode} viz-${failure.pair[0]}/viz-${failure.pair[1]} distance=${failure.distance} floor=${failure.floor}`,
       );
     }
     return 1;

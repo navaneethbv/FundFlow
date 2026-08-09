@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { normalizeReceiptImage } from "@/lib/receipt-image";
@@ -107,7 +108,7 @@ describe("loadReceiptCandidates & loadReceiptInbox & publicReceipt", () => {
     const { clientStub } = await import("../fixtures/supabase-query");
     const supabase = clientStub();
     const incomplete = { ...sampleReceipt, merchant: null };
-    expect(await loadReceiptCandidates(supabase, "u1", incomplete)).toEqual([]);
+    expect(await loadReceiptCandidates(supabase as unknown as SupabaseClient, "u1", incomplete)).toEqual([]);
   });
 
   it("loads candidates for a valid receipt row", async () => {
@@ -117,7 +118,7 @@ describe("loadReceiptCandidates & loadReceiptInbox & publicReceipt", () => {
         data: [{ id: "t1", date: "2026-08-09", amount: 25.5, merchant_name: "Cafe", name: "CAFE" }],
       },
     });
-    const candidates = await loadReceiptCandidates(supabase, "u1", sampleReceipt);
+    const candidates = await loadReceiptCandidates(supabase as unknown as SupabaseClient, "u1", sampleReceipt);
     expect(candidates).toHaveLength(1);
     expect(candidates[0].transactionId).toBe("t1");
   });
@@ -127,7 +128,7 @@ describe("loadReceiptCandidates & loadReceiptInbox & publicReceipt", () => {
     const supabase = clientStub({
       transactions: { data: null, error: { message: "Query failed" } },
     });
-    await expect(loadReceiptCandidates(supabase, "u1", sampleReceipt)).rejects.toMatchObject({
+    await expect(loadReceiptCandidates(supabase as unknown as SupabaseClient, "u1", sampleReceipt)).rejects.toMatchObject({
       message: "Query failed",
     });
   });
@@ -162,7 +163,7 @@ describe("loadReceiptCandidates & loadReceiptInbox & publicReceipt", () => {
       },
     };
 
-    const inbox = await loadReceiptInbox(supabase, service as never, "u1");
+    const inbox = await loadReceiptInbox(supabase as unknown as SupabaseClient, service as never, "u1");
     expect(inbox).toHaveLength(1);
     expect(inbox[0].imageUrl).toBe("https://signed.url/r1.jpg");
   });

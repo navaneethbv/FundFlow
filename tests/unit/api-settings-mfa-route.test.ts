@@ -56,6 +56,41 @@ describe("POST /api/settings/mfa", () => {
     expect(res.status).toBe(400);
   });
 
+  it("unenrolls an over-limit factor even once it is already verified", async () => {
+    // The client verifies before finalizing, so the refused factor arrives here
+    // as "verified". Leaving it in place would keep an eleventh active factor
+    // on the account while the response claims enrollment was refused.
+    const totp = [
+      ...Array.from({ length: 10 }, (_, i) => ({ id: `existing-${i}`, status: "verified" })),
+      { id: "eleventh", status: "verified" },
+    ];
+    const unenroll = vi.fn().mockResolvedValue({ error: null });
+    const listFactors = vi.fn().mockResolvedValue({ data: { totp }, error: null });
+    const supabase = { ...clientStub(), auth: { mfa: { listFactors, unenroll } } };
+    mockRequireUser.mockResolvedValue({ user: { id: USER_ID }, supabase });
+
+    const res = await POST(request({ action: "enroll", factorId: "eleventh" }));
+
+    expect(res.status).toBe(400);
+    expect(unenroll).toHaveBeenCalledWith({ factorId: "eleventh" });
+  });
+
+  it("allows the tenth factor through", async () => {
+    const totp = [
+      ...Array.from({ length: 9 }, (_, i) => ({ id: `existing-${i}`, status: "verified" })),
+      { id: "tenth", status: "verified" },
+    ];
+    const unenroll = vi.fn().mockResolvedValue({ error: null });
+    const listFactors = vi.fn().mockResolvedValue({ data: { totp }, error: null });
+    const supabase = { ...clientStub(), auth: { mfa: { listFactors, unenroll } } };
+    mockRequireUser.mockResolvedValue({ user: { id: USER_ID }, supabase });
+
+    const res = await POST(request({ action: "enroll", factorId: "tenth" }));
+
+    expect(res.status).toBe(200);
+    expect(unenroll).not.toHaveBeenCalled();
+  });
+
   it("handles enroll action: over 10 factors limit", async () => {
     const totp = Array.from({ length: 11 }, (_, i) => ({ id: `f${i}`, status: "unverified" }));
     const unenroll = vi.fn().mockResolvedValue({ error: null });

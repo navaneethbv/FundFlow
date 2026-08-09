@@ -49,6 +49,10 @@ export default function DebtPlannerView({
 
   const selectedPlan = data[strategy];
   const comparison = data[strategy === "avalanche" ? "snowball" : "avalanche"];
+  const debtById = new Map(data.debts.map((debt) => [debt.id, debt]));
+  const resultById = new Map(
+    (selectedPlan?.debts ?? []).map((result) => [result.name, result]),
+  );
 
   return (
     <div className="space-y-6">
@@ -163,11 +167,14 @@ export default function DebtPlannerView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-panel-border">
-                {selectedPlan.order.map((name, index) => {
-                  const debt = data.debts.find((row) => row.name === name)!;
-                  const result = selectedPlan.debts.find((row) => row.name === name)!;
+                {selectedPlan.order.map((accountId, index) => {
+                  // The plan identifies debts by account id, not display name —
+                  // two accounts can share a name. See `lib/debt-data.ts`.
+                  const debt = debtById.get(accountId);
+                  const result = resultById.get(accountId);
+                  if (!debt || !result) return null;
                   return (
-                    <tr key={debt.id}>
+                    <tr key={accountId}>
                       <td className="px-3 py-3 font-semibold">{index + 1}</td>
                       <td className="px-3 py-3">
                         <span className="font-semibold">{debt.name}</span>

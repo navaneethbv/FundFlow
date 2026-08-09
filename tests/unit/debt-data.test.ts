@@ -31,10 +31,10 @@ describe("debt planner URL input", () => {
 });
 
 describe("buildDebtPlannerData", () => {
-  it("normalizes liability balances and discloses each unknown APR", () => {
+  it("carries balances owed through and discloses each unknown APR", () => {
     const result = buildDebtPlannerData(
       [
-        { id: "card", name: "Travel card", balance: -2000, apr: 19.5 },
+        { id: "card", name: "Travel card", balance: 2000, apr: 19.5 },
         { id: "loan", name: "Student loan", balance: 5000, apr: null },
       ],
       100,
@@ -60,8 +60,22 @@ describe("buildDebtPlannerData", () => {
     ]);
     expect(result.totalBalance).toBe(7000);
     expect(result.totalMonthlyBudget).toBe(240);
-    expect(result.avalanche?.order).toEqual(["Student loan", "Travel card"]);
-    expect(result.snowball?.order).toEqual(["Travel card", "Student loan"]);
+    // Plan identity is the account id, not the display name — see lib/debt-data.ts.
+    expect(result.avalanche?.order).toEqual(["loan", "card"]);
+    expect(result.snowball?.order).toEqual(["card", "loan"]);
+  });
+
+  it("excludes an overpaid card instead of reading its credit as debt", () => {
+    const result = buildDebtPlannerData(
+      [
+        { id: "card", name: "Travel card", balance: -2000, apr: 19.5 },
+        { id: "loan", name: "Student loan", balance: 5000, apr: null },
+      ],
+      0,
+    );
+
+    expect(result.debts.map((debt) => debt.id)).toEqual(["loan"]);
+    expect(result.totalBalance).toBe(5000);
   });
 
   it("returns an explicit empty state without manufacturing a projection", () => {

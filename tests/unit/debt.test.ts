@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 import { buildPayoffPlan } from "@/lib/debt";
 import {
@@ -154,7 +155,7 @@ describe("buildDebtPlannerData & loadDebtPlannerData", () => {
   it("builds debt planner data with assumed APR when APR is null", () => {
     const data = buildDebtPlannerData(
       [
-        { id: "a1", name: "Card 1", balance: -2000, apr: null },
+        { id: "a1", name: "Card 1", balance: 2000, apr: null },
         { id: "a2", name: "Zero Balance", balance: 0, apr: 15 },
       ],
       100,
@@ -173,6 +174,31 @@ describe("buildDebtPlannerData & loadDebtPlannerData", () => {
     expect(data.avalanche).not.toBeNull();
   });
 
+  it("drops an overpaid card rather than reading its credit balance as debt", () => {
+    // Plaid reports a credit account's `current` as positive when money is
+    // owed, so a negative balance is a credit the user is owed, not a debt.
+    const data = buildDebtPlannerData(
+      [{ id: "a1", name: "Overpaid Card", balance: -150, apr: null }],
+      0,
+    );
+    expect(data.debts).toEqual([]);
+    expect(data.totalBalance).toBe(0);
+    expect(data.avalanche).toBeNull();
+  });
+
+  it("keys the payoff plan by account id so same-named debts stay distinct", () => {
+    const data = buildDebtPlannerData(
+      [
+        { id: "a1", name: "Visa", balance: 1000, apr: 24 },
+        { id: "a2", name: "Visa", balance: 4000, apr: 10 },
+      ],
+      100,
+    );
+    expect(data.avalanche?.order).toEqual(["a1", "a2"]);
+    expect(data.snowball?.order).toEqual(["a1", "a2"]);
+    expect(data.avalanche?.debts.map((debt) => debt.name)).toEqual(["a1", "a2"]);
+  });
+
   it("loads debt planner data from Supabase client", async () => {
     const { clientStub } = await import("../fixtures/supabase-query");
     const supabase = clientStub({
@@ -184,14 +210,29 @@ describe("buildDebtPlannerData & loadDebtPlannerData", () => {
       },
     });
 
-    const data = await loadDebtPlannerData(supabase, {
-      scope: { type: "user", userId: "u1" },
+    const data = await loadDebtPlannerData(supabase as unknown as SupabaseClient, {
+      scope: { kind: "mine", ownerUserId: "u1" },
       extraMonthly: 50,
     });
 
     expect(data.debts).toHaveLength(1);
     expect(data.debts[0].name).toBe("Credit Card");
     expect(data.debts[0].apr).toBe(18.5);
+    expect(supabase.scopedToUser("accounts", "u1")).toBe(true);
+  });
+
+  it("drops the user_id filter under household scope so RLS blends shared rows", async () => {
+    const { clientStub } = await import("../fixtures/supabase-query");
+    const supabase = clientStub({ accounts: { data: [] } });
+
+    await loadDebtPlannerData(supabase as unknown as SupabaseClient, {
+      scope: { kind: "household", householdId: "h1" },
+      extraMonthly: 0,
+    });
+
+    expect(
+      supabase.callsOn("accounts").some(({ method, args }) => method === "eq" && args[0] === "user_id"),
+    ).toBe(false);
   });
 
   it("throws error when loadDebtPlannerData query fails", async () => {
@@ -201,8 +242,8 @@ describe("buildDebtPlannerData & loadDebtPlannerData", () => {
     });
 
     await expect(
-      loadDebtPlannerData(supabase, {
-        scope: { type: "all" },
+      loadDebtPlannerData(supabase as unknown as SupabaseClient, {
+        scope: { kind: "household", householdId: "h1" },
         extraMonthly: 0,
       }),
     ).rejects.toThrow("debt_accounts_query_failed:42501");

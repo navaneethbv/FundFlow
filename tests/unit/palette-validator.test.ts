@@ -19,13 +19,13 @@ const LIGHT = [
 ];
 
 const DARK = [
-  "#9f12a0",
-  "#a457ef",
-  "#2c94b0",
-  "#8e5223",
-  "#449546",
-  "#544ec5",
-  "#cb5790",
+  "#77a9ea",
+  "#55c795",
+  "#f1a824",
+  "#299525",
+  "#755efd",
+  "#d57c75",
+  "#d33ea7",
 ];
 
 describe("palette validator", () => {
@@ -52,7 +52,36 @@ describe("palette validator", () => {
     expect(validatePalette("light", LIGHT)).toMatchObject({ valid: true, failures: [] });
     expect(validatePalette("dark", DARK)).toMatchObject({ valid: true, failures: [] });
     expect(validatePalette("dark", DARK).warnings).toContainEqual(
-      expect.objectContaining({ mode: "tritanopia", pair: [3, 5] }),
+      expect.objectContaining({ mode: "tritanopia", pair: [1, 2] }),
+    );
+  });
+
+  it("holds every dark slot above the 3:1 non-text contrast floor", () => {
+    // Pairwise separation does not imply visibility on the panel: the
+    // 2026-08-09 re-step separated cleanly and still put three slots under 3:1.
+    const surfaceFailures = validatePalette("dark", DARK).failures.filter(
+      (failure: { mode: string }) => failure.mode === "surface",
+    );
+    expect(surfaceFailures).toEqual([]);
+  });
+
+  it("fails a dark slot that disappears into the panel", () => {
+    const sunk = [...DARK];
+    sunk[0] = "#2b2b2a"; // barely off the #222221 panel
+    const result = validatePalette("dark", sunk);
+
+    expect(result.valid).toBe(false);
+    expect(result.failures).toContainEqual(
+      expect.objectContaining({ theme: "dark", mode: "surface", pair: [1, 1], floor: 3 }),
+    );
+  });
+
+  it("carries the two known light-mode exceptions as warnings, not failures", () => {
+    const result = validatePalette("light", LIGHT);
+
+    expect(result.valid).toBe(true);
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({ theme: "light", mode: "surface", pair: [3, 3] }),
     );
   });
 

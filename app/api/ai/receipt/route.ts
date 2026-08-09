@@ -5,7 +5,7 @@ import { requireUser, errorResponse, badRequest } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { serverEnv } from "@/lib/env.server";
 import { writeAudit, getClientIp } from "@/lib/audit";
-import { findReceiptCandidates } from "@/lib/receipts";
+import { findReceiptCandidates, receiptAmountBandFilter } from "@/lib/receipts";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
@@ -113,12 +113,16 @@ export async function POST(request: NextRequest) {
       from.setUTCDate(from.getUTCDate() - 3);
       const to = new Date(extracted.date);
       to.setUTCDate(to.getUTCDate() + 3);
+      // Bounded by the same ±1% amount band the matcher applies, so the row
+      // cap cannot page the true match out of an unordered result.
       const { data: candidates } = await supabase
         .from("transactions")
         .select("id, date, amount, merchant_name, name")
         .gte("date", from.toISOString().slice(0, 10))
         .lte("date", to.toISOString().slice(0, 10))
-        .limit(100);
+        .or(receiptAmountBandFilter(extracted.amount))
+        .order("date", { ascending: true })
+        .limit(500);
       matchedTransactionId = findReceiptCandidates(
         {
           merchant: extracted.merchant,

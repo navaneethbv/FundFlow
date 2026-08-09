@@ -78,13 +78,24 @@ export async function GET() {
       decision: row.decision as ReviewDecision["decision"],
     }));
     const byId = new Map(transactions.map((transaction) => [transaction.id, transaction]));
-    const confirmed = (linksResult.data ?? []).map((link) => ({
+    const links = linksResult.data ?? [];
+    const confirmed = links.map((link) => ({
       subjectId: link.subject_id as string,
       kept: byId.get(link.kept_transaction_id as string) ?? null,
       excluded: byId.get(link.excluded_transaction_id as string) ?? null,
     }));
+    // A transaction already on either side of a link cannot take part in a
+    // second one — see the unique constraints in the linked_duplicates
+    // migration. Withholding it here is what keeps the UI from offering a pair
+    // the RPC will refuse.
+    const linkedTransactionIds = new Set(
+      links.flatMap((link) => [
+        link.kept_transaction_id as string,
+        link.excluded_transaction_id as string,
+      ]),
+    );
     return NextResponse.json({
-      pairs: detectDuplicatePairs(transactions, decisions),
+      pairs: detectDuplicatePairs(transactions, decisions, linkedTransactionIds),
       confirmed,
     });
   } catch (error) {
@@ -92,31 +103,48 @@ export async function GET() {
   }
 }
 
+interface DuplicateDecisionBody {
+  subjectId: string;
+  keptTransactionId: string;
+  excludedTransactionId: string;
+  decision: "confirmed" | "dismissed";
+}
+
+/** Validates the decision payload, returning the ready 400 when it does not hold. */
+function parseDecisionBody(
+  raw: unknown,
+): DuplicateDecisionBody | NextResponse {
+  const body = raw as Partial<Record<keyof DuplicateDecisionBody, unknown>> | null;
+  if (
+    typeof body?.subjectId !== "string" ||
+    typeof body.keptTransactionId !== "string" ||
+    typeof body.excludedTransactionId !== "string" ||
+    (body.decision !== "confirmed" && body.decision !== "dismissed")
+  ) {
+    return badRequest("subject, transaction ids, and decision are required");
+  }
+  if (
+    body.keptTransactionId === body.excludedTransactionId ||
+    body.subjectId !== duplicateSubjectId(body.keptTransactionId, body.excludedTransactionId)
+  ) {
+    return badRequest("subject does not match the transaction ids");
+  }
+  return {
+    subjectId: body.subjectId,
+    keptTransactionId: body.keptTransactionId,
+    excludedTransactionId: body.excludedTransactionId,
+    decision: body.decision,
+  };
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
 
   try {
-    const body = await request.json().catch(() => null) as {
-      subjectId?: unknown;
-      keptTransactionId?: unknown;
-      excludedTransactionId?: unknown;
-      decision?: unknown;
-    } | null;
-    if (
-      typeof body?.subjectId !== "string" ||
-      typeof body.keptTransactionId !== "string" ||
-      typeof body.excludedTransactionId !== "string" ||
-      (body.decision !== "confirmed" && body.decision !== "dismissed")
-    ) {
-      return badRequest("subject, transaction ids, and decision are required");
-    }
-    if (
-      body.keptTransactionId === body.excludedTransactionId ||
-      body.subjectId !== duplicateSubjectId(body.keptTransactionId, body.excludedTransactionId)
-    ) {
-      return badRequest("subject does not match the transaction ids");
-    }
+    const body = parseDecisionBody(await request.json().catch(() => null));
+    if (body instanceof NextResponse) return body;
+
     const { data: owned, error: ownershipError } = await auth.supabase
       .from("transactions")
       .select("id")
@@ -135,6 +163,14 @@ export async function POST(request: NextRequest) {
         p_kept_transaction_id: body.keptTransactionId,
         p_excluded_transaction_id: body.excludedTransactionId,
       });
+      // The GET already withholds linked transactions, so this only fires on a
+      // stale client or two tabs racing. It is a conflict, not a server fault.
+      if (error?.message?.includes("duplicate_link_conflict")) {
+        return NextResponse.json(
+          { error: "One of these transactions is already linked to another duplicate." },
+          { status: 409 },
+        );
+      }
       if (error) throw error;
     } else {
       const { error } = await service
