@@ -428,17 +428,21 @@ Still open, all needing credentials or an owner decision rather than code:
 
 ## ~~Dark-mode categorical palette fails all-pairs CVD (found 2026-07-31)~~ Fixed 2026-08-09
 
-Both modes now pass `--pairs all` **and** `--pairs adjacent`. Dark `--viz-1`
-blue, `--viz-2` aqua, and `--viz-6` red were re-stepped in `app/globals.css`
-(both the `[data-theme=dark]` block and the `prefers-color-scheme` block):
+Both modes now pass the pairwise gates **and** the 3:1 surface-contrast gate.
+The dark set was re-stepped wholesale in `app/globals.css` (both the
+`[data-theme=dark]` block and the `prefers-color-scheme` block):
 
 ```css
---viz-1: #4158bd; /* was #3987e5 */
---viz-2: #41a083; /* was #199e70 */
---viz-6: #d63907; /* was #e66767 */
+--viz-1: #77a9ea; /* was #3987e5 */
+--viz-2: #55c795; /* was #199e70 */
+--viz-3: #f1a824; /* was #c98500 */
+--viz-4: #299525; /* was #008300 */
+--viz-5: #755efd; /* was #9085e9 */
+--viz-6: #d57c75; /* was #e66767 */
+--viz-7: #d33ea7; /* was #c2379a */
 ```
 
-Three things this turned up that the original entry had wrong, worth keeping:
+Four things this turned up, worth keeping:
 
 1. **The palette was failing three pairs, not one.** Besides the reported
    `--viz-5` violet ↔ `--viz-1` blue (ΔE 1.9 protan), `--viz-2` aqua ↔
@@ -446,15 +450,31 @@ Three things this turned up that the original entry had wrong, worth keeping:
    both under the **normal-vision** floor of 15 — confusable for
    full-colour-vision users, not only for a protanope. The original entry
    framed this as CVD-only.
-2. **Re-stepping `--viz-5` alone cannot work.** Holding the other six fixed and
+2. **Re-stepping one slot alone cannot work.** Holding the other six fixed and
    sweeping 14,077 in-gamut candidates for slot 5 across the whole hue circle
-   yields zero passes. Slot 5 was the worst pair, never the binding one. The
-   fix moves exactly one colour out of each failing pair, which is why
-   `--viz-5` is untouched.
-3. **The standard is not free.** No variant found clears `--pairs all` while
-   keeping all seven above 3:1 contrast (searched at 3 and 4 changed slots).
-   Dark `--viz-1` sits at 2.78:1, so it carries the same direct-label /
-   table-twin relief the 6–8 CVD floor band already requires.
+   yields zero passes. Slot 5 was the worst pair, never the binding one.
+3. **Pairwise ΔE and surface contrast are independent, and the validator was
+   only measuring the first.** An intermediate re-step
+   (`#9f12a0`, `#a457ef`, `#2c94b0`, `#8e5223`, `#449546`, `#544ec5`,
+   `#cb5790`) passed every pairwise gate and put `--viz-1`, `--viz-4`, and
+   `--viz-6` at 2.33:1, 2.56:1, and 2.48:1 against the dark panel, below WCAG
+   1.4.11's 3:1 minimum — a regression from the previous set, whose worst slot
+   was 3.22:1. `scripts/validate_palette.js` now gates both, so this class of
+   change cannot pass silently again.
+4. **An earlier note here claimed no variant clears both gates. That was
+   wrong.** Constraining the search to per-slot candidates that already clear
+   3:1 and anchoring each slot to the light palette's OKLCH hue finds passing
+   sets readily; the shipped one clears every pairwise gate with a worst-case
+   surface contrast of 3.62:1 and **zero** hue drift from light mode, so the
+   two themes keep one identity. The earlier search had been sweeping the full
+   lightness band and only re-stepping 3–4 slots.
+
+Light `--viz-2` (2.82:1) and `--viz-3` (2.17:1) remain below the contrast floor
+on white and are carried as two named exceptions in the validator: a saturated
+aqua and a yellow cannot reach 3:1 on `#ffffff` without abandoning the V0
+identity. They rely on the same direct-label / table-twin relief the 6–8 CVD
+band already requires. That exception list is a ratchet — never extend it to
+make a re-step pass.
 
 `--viz-pos`/`--viz-neg` are the diverging pair and keep the old blue/red — a
 different job on their own charts (`DivergingColumns`, `BreakdownBars`), never
@@ -463,7 +483,7 @@ mixed with the categorical slots.
 **Closed 2026-08-09:** the palette is validated numerically and included in the authenticated dark-mode route matrix and reviewed visual baselines.
 
 A related finding worth keeping: **the palette cannot be grown past seven.**
-`--viz-7` (`#c2379a`) was added on 2026-07-31 and clears every check in both
+`--viz-7` was added on 2026-07-31 and clears every check in both
 modes. An eighth hue drops CVD separation to ΔE 2.4, and an evenly spaced
 12-hue set (identical L and C, maximal angular separation, the most favourable
 construction available) to 0.4 deuteranopia and 6.7 normal vision. Any future

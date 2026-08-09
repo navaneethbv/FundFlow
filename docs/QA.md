@@ -35,6 +35,47 @@ Live Supabase evidence:
 - GitHub Actions has a dedicated non-MFA E2E login plus the public Supabase URL and publishable key.
 - The Supabase service key remains local and is not exposed to the pull-request workflow.
 
+### Post-review repair pass, 2026-08-09
+
+A code review of the completed branch found nine defects; all were fixed on the same branch.
+
+- `npx tsc --noEmit` was failing on the newest unit tests. Two of those tests also passed a
+  `{ type, userId }` object where `FinancialScope` is `{ kind, ownerUserId }`, so `scopeQueryUserId`
+  returned undefined and the tests exercised the unscoped accounts query while reading as coverage
+  of the scoped one. Both now assert the scoping they claim.
+- The dark categorical re-step cleared every pairwise gate and still put `--viz-1`, `--viz-4`, and
+  `--viz-6` at 2.33:1, 2.56:1, and 2.48:1 against the dark panel, under WCAG 1.4.11's 3:1 minimum.
+  `scripts/validate_palette.js` measured only pairwise ΔE, so "validation passed" never covered it.
+  The validator now gates surface contrast as well, and the dark set was re-stepped again to
+  `#77a9ea`, `#55c795`, `#f1a824`, `#299525`, `#755efd`, `#d57c75`, `#d33ea7` — both gates green on
+  all seven slots (worst 3.62:1), at the light palette's own hues. Light `--viz-2` and `--viz-3` are
+  carried as two named, pre-existing exceptions.
+- Five dark visual baselines (dashboard, accounts, transactions, investments, forecasting) were
+  regenerated for the new palette and matched deterministically on a second run. The other 21 were
+  unaffected.
+- `/debt` joined payoff rows back to accounts by name, so two liability accounts sharing a name
+  rendered duplicated figures and a duplicate React key. Plan identity is now the account id.
+- `buildDebtPlannerData` took `Math.abs` of the balance, turning an overpaid card into a debt with
+  an assumed 22% APR. Overpaid cards are now excluded, matching `lib/dashboard.ts`.
+- `loadDashboardInvestmentSummary` select-alled `holding_snapshots` to keep two dates, on a page
+  that re-renders every two minutes. It is now bounded to a 30-day window.
+- The duplicates route still offered transactions already in `linked_duplicates`; confirming one
+  tripped the RPC's unique constraint and surfaced as an opaque 500. Linked transactions are now
+  withheld from new pairs, and a genuine race returns 409.
+- Receipt matching paged an unordered `.limit(100)` over the ±3-day window, so past 100 rows the
+  true match could be truncated away silently. Both call sites now push the ±1% amount band into
+  the query.
+- The MFA factor cap ran after the client had already verified the new factor and only unenrolled
+  unverified ones, so a refused eleventh factor stayed active while the response reported failure.
+
+Plan-completeness gap closed in the same pass:
+
+- Phase C1 required an RLS integration test proving cross-user isolation for both the receipts table
+  and the Storage bucket. It did not exist. `tests/integration/receipts-rls.test.ts` now covers
+  owner read, cross-user read, the absence of any client write path, a cross-user insert under the
+  owner's id, direct object download by both users, and a server-minted signed URL. Six cases pass
+  against the live project.
+
 ## Accounts Phase 2 Release Evidence
 
 Live migrations:

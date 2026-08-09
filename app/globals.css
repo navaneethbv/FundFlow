@@ -389,12 +389,19 @@ a {
   -webkit-tap-highlight-color: transparent;
 }
 
-.scrollbar-none {
-  scrollbar-width: none;
-}
-
+/* Both rules are required: neither alone hides the scrollbar everywhere.
+   The WebKit pseudo-element covers Chrome/Safari/Edge (including Chrome < 121,
+   which predates `scrollbar-width`), and the standard property covers Firefox,
+   which has no such pseudo-element. The `@supports` guard is what keeps the
+   modern property from being applied where it is not understood. */
 .scrollbar-none::-webkit-scrollbar {
   display: none;
+}
+
+@supports (scrollbar-width: none) {
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -45,7 +45,7 @@ Local verification, live Supabase state, browser acceptance, and remote checks a
 - Modify: chart render tests selected with `rg -- '--viz-'`
 - Modify: `CLAUDE.md` if it records the shipped palette
 
-**Interfaces:** Fixes dark tokens in order to `#9f12a0`, `#a457ef`, `#2c94b0`, `#8e5223`, `#449546`, `#544ec5`, and `#cb5790`.
+**Interfaces:** Fixes dark tokens in order to `#77a9ea`, `#55c795`, `#f1a824`, `#299525`, `#755efd`, `#d57c75`, and `#d33ea7`, which clear the pairwise gates and the 3:1 surface-contrast gate together.
 
 - [ ] Write or update failing token tests for the exact approved values and unchanged light and diverging tokens.
 - [ ] Run the palette and chart tests and confirm the old dark values fail.

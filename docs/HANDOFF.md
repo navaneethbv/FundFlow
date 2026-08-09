@@ -25,6 +25,26 @@ Two test-harness traps are worth knowing before writing more specs.
 Playwright's default `caret: "hide"` on `page.screenshot()` mutates inline styles and races hydration on the next reload, so visual captures use `caret: "initial"`.
 `getByLabel` substring-matches, so a bare `"History"` or `"Owner"` collides with sparkline labels and with the signed-in user's own email address.
 
+### Post-review repair pass
+
+A review of the finished branch found nine defects, all fixed on the same branch; `docs/QA.md` records each one.
+The two worth carrying forward as rules rather than as fixed bugs:
+
+Pairwise colour separation and surface contrast are independent properties, and passing one says nothing about the other.
+The first dark re-step cleared every pairwise gate in `scripts/validate_palette.js` and still left three of seven slots under WCAG's 3:1 non-text minimum against the dark panel, because the validator only measured ΔE between series.
+It now gates both, the dark set was re-stepped again to clear both at the light palette's own hues, and light `--viz-2`/`--viz-3` are carried as two named exceptions.
+That exception list is a ratchet: never extend it to make a re-step pass.
+
+A payoff plan keyed debts by display name, and account names are not unique.
+Anything that joins a computed result back to its source rows must key on the id.
+
+Phase C1 also shipped without the RLS integration test its plan required.
+`tests/integration/receipts-rls.test.ts` now proves cross-user isolation over both the row and the Storage object, including that no client has a write path and that the object is reachable only through a server-minted signed URL.
+
+One approved-plan deviation is worth knowing: Phase D4 called for one-time backup codes, and the branch removed the custom backup-code store instead.
+The reasoning is recorded in the PR and in `docs/TODO.md` — Supabase Auth does not expose backup-code consumption as an authentication factor, so multiple named TOTP factors are the supported recovery path.
+That was a deliberate substitution, not an oversight, but it is a scope change from the reviewed plan.
+
 ## Previous delivery: transaction sorting and staged filters
 
 The Transactions page now has explicit Search, Date, Filters, and one shared Sort popover across desktop and mobile.
@@ -456,7 +476,7 @@ Phase 8 is implemented on `feat/dashboard-widgets`, stacked on `feat/goals-v2`
 Gates: `npm run build` PASS, `npm run lint` PASS, `npx tsc --noEmit` PASS,
 `npm run test:unit` PASS (**1429 tests**).
 
-**What shipped**
+### What shipped
 
 - **`lib/dashboard-widgets.ts`** — the widget registry and a *total*
   `normalizeWidgetPrefs`: `dashboard_prefs` is free-form JSON written by the
@@ -509,7 +529,7 @@ Gates: `npm run build` PASS, `npm run lint` PASS, `npx tsc --noEmit` PASS,
 `npm run test:unit` PASS (**152 files / 1317 tests**; Phase 7 adds 3 files and
 104 tests on top of Phase 6's 149/1213).
 
-**What shipped**
+### What shipped
 
 - **`lib/goals-v2.ts`** — `computeFundedGoals` merges three progress sources:
   hand-typed `saved_amount`, live account allocations (capped at what the
@@ -532,7 +552,7 @@ Gates: `npm run build` PASS, `npm run lint` PASS, `npx tsc --noEmit` PASS,
 - **Budget feed** — planned contributions from `goals.monthly_contribution`,
   actual from `goal_progress_events` only.
 
-**Two security details worth knowing**
+### Two security details worth knowing
 
 1. The plan's RLS sketch had an ownership hole. `with check (user_id =
    auth.uid())` alone is not enough, because foreign-key checks bypass RLS: a
@@ -543,7 +563,7 @@ Gates: `npm run build` PASS, `npm run lint` PASS, `npx tsc --noEmit` PASS,
 2. `image_slug` is a database string that becomes a URL, so `goalImageFor`
    resolves known slugs only rather than interpolating it into a path.
 
-**Before this is user-visible**
+### Before this is user-visible
 
 1. **Apply `supabase/migrations/20260730200000_goals_v2.sql`.**
 2. **Set `FUNDFLOW_FEATURE_FLAGS=goalsV2`** (or flip the default in
@@ -563,7 +583,7 @@ remain**. Gates: `npm run build` PASS, `npm run lint` PASS, `npx tsc --noEmit`
 PASS, `npm run test:unit` PASS (**149 files / 1213 tests**, up from 144/993 —
 133 new tests, no new failures).
 
-**What shipped**
+### What shipped
 
 - **`lib/sankey.ts`** — pure layout (`layoutSankey`) plus `foldSankeyOverflow`.
   One value→pixel scale is shared across every column, or a ribbon leaving a
@@ -598,7 +618,7 @@ PASS, `npm run test:unit` PASS (**149 files / 1213 tests**, up from 144/993 —
   cascades through the `auth.users` FK, so `app/api/account/route.ts` needed no
   edit.
 
-**Two things to do before this is user-visible**
+### Two things to do before this is user-visible
 
 1. **Apply `supabase/migrations/20260730190000_saved_reports.sql`** to the live
    project (`zrxbmmtqqhlwtrinocww`). There is no migration runner in CI.

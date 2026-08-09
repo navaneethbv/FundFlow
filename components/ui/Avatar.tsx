@@ -2,11 +2,11 @@ import { cn } from "@/lib/cn";
 
 /**
  * Deterministic identity avatars for merchant and institution rows —
- * Transactions, Recurring, Accounts, Dashboard, Reports. No logo storage
- * exists yet (that's a deliberately deferred data-layer change — see
- * the design doc §7 and §4.2), so every avatar renders an initial disc
- * today; `logoUrl` is accepted now so call sites don't need to change
- * shape once a logo pipeline lands.
+ * Transactions, Recurring, Accounts, Dashboard, Reports. Institution logos
+ * captured by `lib/plaid-institution.ts` arrive as `logoUrl` and win when
+ * present; everything else (and any institution Plaid has no logo for) falls
+ * back to the initial disc below, which is why the fallback is deterministic
+ * rather than a placeholder.
  *
  * The disc's hue is picked from the seven validated `--viz-*` chart slots,
  * hashed from the name so the same merchant always gets the same color —
@@ -23,7 +23,7 @@ const AVATAR_HUE_VARS = [
 function hueVarFor(name: string): string {
   let hash = 0;
   for (let index = 0; index < name.length; index += 1) {
-    hash = (hash * 31 + name.charCodeAt(index)) >>> 0;
+    hash = (hash * 31 + (name.codePointAt(index) ?? 0)) >>> 0;
   }
   return AVATAR_HUE_VARS[hash % AVATAR_HUE_VARS.length]!;
 }

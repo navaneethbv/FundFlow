@@ -7,24 +7,30 @@ Phase A, Phase B1, and the transaction-specific browser journey are already impl
 
 ## Dark categorical palette
 
-Dark mode will use a fully re-stepped seven-slot palette rather than preserving the previous light and dark hue correspondence.
+Dark mode uses a fully re-stepped seven-slot palette.
 The slots are fixed in this order:
 
-1. `--viz-1: #9f12a0`
-2. `--viz-2: #a457ef`
-3. `--viz-3: #2c94b0`
-4. `--viz-4: #8e5223`
-5. `--viz-5: #449546`
-6. `--viz-6: #544ec5`
-7. `--viz-7: #cb5790`
+1. `--viz-1: #77a9ea`
+2. `--viz-2: #55c795`
+3. `--viz-3: #f1a824`
+4. `--viz-4: #299525`
+5. `--viz-5: #755efd`
+6. `--viz-6: #d57c75`
+7. `--viz-7: #d33ea7`
+
+An earlier re-step (`#9f12a0`, `#a457ef`, `#2c94b0`, `#8e5223`, `#449546`, `#544ec5`, `#cb5790`) cleared every pairwise gate and was superseded, because it put `--viz-1`, `--viz-4`, and `--viz-6` at 2.33:1, 2.56:1, and 2.48:1 against the dark panel: below WCAG 1.4.11's 3:1 non-text minimum.
+Pairwise separation and surface contrast are independent properties, and the validator was measuring only the first.
+The set above clears both, with a worst-case surface contrast of 3.62:1, and does so at the light palette's own OKLCH hues, so the light and dark hue correspondence is preserved rather than abandoned.
 
 The light palette remains unchanged.
 The positive and negative diverging tokens remain separate from the categorical set.
 No eighth categorical hue will be introduced.
 
 The repository will own a deterministic palette validator under `scripts/validate_palette.js` so validation no longer depends on an unavailable external skill file.
-The validator will preserve the canonical skill methodology: an OKLab distance times 100 normal-vision floor of 15 and a simulated protanopia and deuteranopia floor of 6 for every pair.
-It will report tritanopia separation in both light and dark modes as advisory evidence because the canonical validator does not gate on it and the approved dark set has a 4.3 tritanopia pair.
+The validator preserves the canonical skill methodology: an OKLab distance times 100 normal-vision floor of 15 and a simulated protanopia and deuteranopia floor of 6 for every pair.
+It additionally gates every slot at a 3:1 WCAG 1.4.11 contrast ratio against its own theme's panel, which is what the first re-step attempt failed undetected.
+Light `--viz-2` and `--viz-3` sit below that floor on white and are carried as two named exceptions, because a saturated aqua and a yellow cannot reach 3:1 on `#ffffff` without abandoning the V0 identity; the exception list is a ratchet and must never be extended to make a re-step pass.
+It reports tritanopia separation in both light and dark modes as advisory evidence because the canonical validator does not gate on it.
 Every chart will retain direct labels, a legend, or a table twin because passing color separation does not make color the sole carrier of meaning.
 
 ## Browser verification
