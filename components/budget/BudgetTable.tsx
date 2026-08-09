@@ -296,9 +296,7 @@ export default function BudgetTable({
                 <th scope="col" className="px-4 py-3 text-right">Planned</th>
                 <th scope="col" className="px-4 py-3 text-right">Actual</th>
                 <th scope="col" className="px-4 py-3 text-right">Remaining</th>
-                <th scope="col" className="px-2 py-3 text-right">
-                  <span className="sr-only">Plan controls</span>
-                </th>
+                <th scope="col" aria-label="Plan controls" className="px-2 py-3 text-right" />
               </tr>
             </thead>
             <tbody>

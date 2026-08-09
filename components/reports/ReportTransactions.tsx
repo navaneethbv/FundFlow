@@ -46,7 +46,8 @@ export default function ReportTransactions({
 
   return (
     <div>
-      <table className="w-full text-sm">
+      <div className="overflow-x-auto">
+      <table className="min-w-[42rem] w-full text-sm">
         <caption className="sr-only">
           Transactions matching the current report filters.
         </caption>
@@ -93,6 +94,7 @@ export default function ReportTransactions({
           ))}
         </tbody>
       </table>
+      </div>
 
       {pageCount > 1 && (
         <nav

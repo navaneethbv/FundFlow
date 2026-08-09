@@ -79,7 +79,6 @@ export default function MfaSection() {
         friendlyName: name,
       });
       if (enrollError) throw enrollError;
-      await finalizeMfaAction("enroll", data.id);
       setEnrolling({ factorId: data.id, qr: data.totp.qr_code, secret: data.totp.secret });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Enrollment failed");
@@ -101,6 +100,7 @@ export default function MfaSection() {
         code,
       });
       if (verify.error) throw verify.error;
+      await finalizeMfaAction("enroll", enrolling.factorId);
       await finalizeMfaAction("verify", enrolling.factorId);
       if (replacementFactorId) {
         await finalizeMfaAction("unenroll", replacementFactorId);

@@ -36,6 +36,7 @@ export default function GoalCard({
   currency,
   action,
   menu,
+  priorityImage = false,
 }: Readonly<{
   goal: FundedGoal;
   currency: string;
@@ -43,6 +44,8 @@ export default function GoalCard({
   action?: React.ReactNode;
   /** Slot for the card's `⋯` menu (edit/contribute/household/delete). */
   menu?: React.ReactNode;
+  /** Eagerly load only the first above-the-fold goal illustration. */
+  priorityImage?: boolean;
 }>) {
   const image = goalImageFor(goal.image_slug);
   const badge = BADGE_COPY[goal.badge];
@@ -56,6 +59,7 @@ export default function GoalCard({
           alt={goalImageAlt(goal.image_slug)}
           width={320}
           height={200}
+          priority={priorityImage}
           className="h-32 w-full object-cover"
         />
       ) : (

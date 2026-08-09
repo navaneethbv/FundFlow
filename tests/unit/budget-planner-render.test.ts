@@ -89,6 +89,8 @@ describe("BudgetTable", () => {
     expect(html).toContain("🛒"); // Groceries' mapped emoji
     expect(html).toContain("Groceries");
     expect(html).toContain('role="progressbar"');
+    expect(html).toContain('aria-label="Plan controls"');
+    expect(html).not.toContain('class="sr-only">Plan controls');
     expect(html).not.toContain(">Save<");
   });
 

@@ -109,11 +109,12 @@ export default async function GoalsPage({ searchParams }: Readonly<PageProps>) {
         />
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-          {visible.map((goal) => (
+          {visible.map((goal, index) => (
             <GoalCard
               key={goal.id}
               goal={goal}
               currency={currency}
+              priorityImage={index === 0}
               menu={<GoalCardMenu goal={goal} householdId={householdId} />}
               action={
                 <GoalAllocationPanel

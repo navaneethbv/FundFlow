@@ -22,8 +22,11 @@ export default defineConfig({
   reporter: process.env.CI ? [["github"], ["list"]] : [["list"]],
   use: {
     baseURL,
+    colorScheme: "light",
+    screenshot: "only-on-failure",
     trace: "on-first-retry",
   },
+  snapshotPathTemplate: "{testDir}/__screenshots__/{projectName}/{testFilePath}/{arg}{ext}",
   projects: [
     {
       name: "chromium",

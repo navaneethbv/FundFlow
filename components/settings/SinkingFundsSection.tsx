@@ -198,16 +198,18 @@ export default function SinkingFundsSection({
       )}
 
       <form onSubmit={submit} className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <Field label="Name">
+        <Field label="Name" htmlFor="sinking-fund-name">
           <Input
+            id="sinking-fund-name"
             maxLength={120}
             placeholder="Car insurance"
             value={name}
             onChange={(event) => setName(event.target.value)}
           />
         </Field>
-        <Field label="Amount">
+        <Field label="Amount" htmlFor="sinking-fund-amount">
           <Input
+            id="sinking-fund-amount"
             type="number"
             min="0.01"
             step="0.01"
@@ -216,15 +218,17 @@ export default function SinkingFundsSection({
             onChange={(event) => setAmount(event.target.value)}
           />
         </Field>
-        <Field label="Due date">
+        <Field label="Due date" htmlFor="sinking-fund-due-date">
           <Input
+            id="sinking-fund-due-date"
             type="date"
             value={dueDate}
             onChange={(event) => setDueDate(event.target.value)}
           />
         </Field>
-        <Field label="Cadence">
+        <Field label="Cadence" htmlFor="sinking-fund-cadence">
           <Select
+            id="sinking-fund-cadence"
             value={cadence}
             onChange={(event) => setCadence(event.target.value as SinkingFundCadence)}
           >
@@ -234,8 +238,9 @@ export default function SinkingFundsSection({
           </Select>
         </Field>
         {cadence === "custom" && (
-          <Field label="Months per cycle">
+          <Field label="Months per cycle" htmlFor="sinking-fund-custom-interval">
             <Input
+              id="sinking-fund-custom-interval"
               type="number"
               min="1"
               max="120"

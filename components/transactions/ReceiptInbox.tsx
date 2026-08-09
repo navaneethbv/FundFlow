@@ -115,22 +115,23 @@ export default function ReceiptInbox({
     <div className="space-y-6">
       <Panel title="Upload receipt" eyebrow="Private image storage">
         <form onSubmit={upload} className="grid items-end gap-3 md:grid-cols-4">
-          <Field label="Image">
+          <Field label="Image" htmlFor="receipt-image">
             <Input
+              id="receipt-image"
               name="file"
               type="file"
               accept="image/jpeg,image/png,image/webp,image/gif"
               required
             />
           </Field>
-          <Field label="Merchant (optional)">
-            <Input name="merchant" maxLength={160} placeholder="Corner Cafe" />
+          <Field label="Merchant (optional)" htmlFor="receipt-merchant">
+            <Input id="receipt-merchant" name="merchant" maxLength={160} placeholder="Corner Cafe" />
           </Field>
-          <Field label="Purchase date (optional)">
-            <Input name="purchaseDate" type="date" />
+          <Field label="Purchase date (optional)" htmlFor="receipt-purchase-date">
+            <Input id="receipt-purchase-date" name="purchaseDate" type="date" />
           </Field>
-          <Field label="Total (optional)">
-            <Input name="total" type="number" min="0.01" step="0.01" placeholder="24.50" />
+          <Field label="Total (optional)" htmlFor="receipt-total">
+            <Input id="receipt-total" name="total" type="number" min="0.01" step="0.01" placeholder="24.50" />
           </Field>
           <div className="md:col-span-full">
             <Button type="submit" disabled={uploading}>
