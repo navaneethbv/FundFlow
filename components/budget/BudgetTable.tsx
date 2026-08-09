@@ -109,7 +109,12 @@ function RowMenu({
         >
           <label className="block text-xs font-semibold text-muted">
             Group
+            {/* Per-row accessible names, matching the Sort order input below.
+                Without them every open row menu exposes a control called just
+                "Group" / "Rollover unused budget". Each name still contains its
+                visible label text, so WCAG 2.5.3 holds. */}
             <select
+              aria-label={`Group for ${line.label}`}
               value={line.group}
               disabled={disabled}
               onChange={(event) =>
@@ -125,6 +130,7 @@ function RowMenu({
           </label>
           <label className="flex min-h-11 items-center gap-2 text-sm text-foreground">
             <input
+              aria-label={`Rollover unused budget for ${line.label}`}
               type="checkbox"
               checked={line.rolloverEnabled}
               disabled={disabled || line.group === "income"}

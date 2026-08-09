@@ -7,19 +7,20 @@ import Button from "@/components/ui/Button";
 export default function PasskeysSection() {
   const [status, setStatus] = useState<string | null>(null);
 
-  async function checkSupport() {
+  function checkSupport() {
     if (!("credentials" in navigator) || !window.PublicKeyCredential) {
-      setStatus("This browser does not expose WebAuthn passkeys.");
+      setStatus("This browser does not support passkeys.");
       return;
     }
-    setStatus("This browser supports passkeys. Supabase passkey enrollment can be enabled without weakening MFA step-up checks.");
+    setStatus("This browser supports passkeys, so you will be able to use them once FundFlow adds them.");
   }
 
   return (
-    <Panel title="Passkeys and backup codes" eyebrow="Account recovery">
+    <Panel title="Passkeys" eyebrow="Not yet available">
       <p className="text-sm text-muted">
-        Passkeys sit alongside email and TOTP. Server-side MFA enforcement remains in `requireUser`
-        and `proxy.ts`, so recovery paths cannot bypass step-up checks.
+        FundFlow does not support passkeys or backup codes yet. Sign-in today is email and password
+        or Google, with a TOTP authenticator app as the second factor. You can check whether this
+        browser would support passkeys when they arrive.
       </p>
       <Button className="mt-4" variant="secondary" onClick={checkSupport}>
         Check passkey support

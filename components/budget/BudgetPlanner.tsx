@@ -135,15 +135,20 @@ function TotalsRow({
   remaining: number;
   currency: string;
 }>) {
+  // Wraps below `sm` instead of overflowing. The three fixed-width columns plus
+  // gap-6 need ~344px before the label, which does not fit a 390px phone.
+  // SuperBand above solves the same problem by hiding its captions, but figures
+  // cannot be hidden, so they wrap instead. The `sm:` widths keep the columns
+  // aligned with SuperBand's captions at every size that still shows them.
   return (
-    <div className="flex items-center justify-between rounded-field bg-panel-2 px-5 py-3 text-sm font-bold">
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-field bg-panel-2 px-5 py-3 text-sm font-bold">
       <span>{label}</span>
-      <span className="flex gap-6">
-        <span data-money className="w-20 text-right">{formatCurrency(planned, currency)}</span>
-        <span data-money className="w-20 text-right">{formatCurrency(actual, currency)}</span>
+      <span className="flex flex-wrap justify-end gap-x-3 gap-y-1 sm:gap-6">
+        <span data-money className="text-right sm:w-20">{formatCurrency(planned, currency)}</span>
+        <span data-money className="text-right sm:w-20">{formatCurrency(actual, currency)}</span>
         <span
           data-money
-          className={cn("w-24 text-right", remaining < 0 ? "text-danger" : "text-foreground")}
+          className={cn("text-right sm:w-24", remaining < 0 ? "text-danger" : "text-foreground")}
         >
           {formatCurrency(remaining, currency)}
         </span>

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { loadEnvConfig } from "@next/env";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { expectNoHorizontalPageScroll } from "./layout-checks";
 
 loadEnvConfig(process.cwd());
 
@@ -274,13 +275,7 @@ test.describe.serial("Phase 5: recurring page", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/recurring?month=${month}`);
     await expect(page.getByRole("heading", { name: "Recurring" })).toBeVisible();
-    const scrollWidth = await page.evaluate(
-      () => document.documentElement.scrollWidth,
-    );
-    const clientWidth = await page.evaluate(
-      () => document.documentElement.clientWidth,
-    );
-    expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+    await expectNoHorizontalPageScroll(page);
 
     const unexpectedConsoleIssues = consoleIssues.filter(
       (message) =>

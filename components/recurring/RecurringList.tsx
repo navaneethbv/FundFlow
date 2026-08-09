@@ -366,7 +366,13 @@ function OccurrenceTable({
   const total = occurrences.reduce((sum, occurrence) => sum + occurrence.amount, 0);
 
   return (
-    <div className="overflow-x-auto">
+    // `relative` is load-bearing, not decoration. The Actions column header is
+    // an `sr-only` span, which Tailwind implements as `position: absolute`. A
+    // static scroll container is not a containing block, so that span was
+    // positioned against the viewport instead and escaped the clip entirely —
+    // sitting at x=1013 on a 390px phone and giving the whole *page* 623px of
+    // horizontal scroll while the table itself scrolled correctly.
+    <div className="relative overflow-x-auto">
       <table className="w-full min-w-[720px] text-sm">
         <thead className="bg-panel-2 text-xs text-muted">
           <tr>

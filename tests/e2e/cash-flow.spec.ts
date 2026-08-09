@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { loadEnvConfig } from "@next/env";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import path from "node:path";
+import { isKnownEnvironmentNoise } from "./console-noise";
 
 loadEnvConfig(process.cwd());
 
@@ -544,15 +545,6 @@ test.describe.serial("cash flow page", () => {
         await expect(
           page.getByRole("heading", { name: "Cash Flow" }),
         ).toBeVisible();
-        const signOutLines = await page
-          .getByRole("button", { name: "Sign out" })
-          .evaluate((button) => {
-            const range = document.createRange();
-            range.selectNodeContents(button);
-            return range.getClientRects().length;
-          });
-        expect(signOutLines, "Sign out must remain on one line").toBe(1);
-
         await page.screenshot({
           path: SCREENSHOT_DIR
             ? path.join(
@@ -562,17 +554,37 @@ test.describe.serial("cash flow page", () => {
             : undefined,
           fullPage: true,
           animations: "disabled",
+          // `caret: "hide"` (the default) sets an inline
+          // `caret-color: transparent !important` on every field and restores
+          // it afterwards. On the next iteration's reload that mutation races
+          // hydration, and React logs an attribute mismatch listing exactly
+          // those hidden inputs — a harness artifact that failed this spec
+          // roughly three runs in four. Nothing here needs the caret hidden.
+          caret: "initial",
         });
+
+        // Sign out is no longer on the page itself — it sits behind the
+        // sidebar's account menu above `md`, and behind the mobile nav's "More"
+        // sheet below it. Measured after the screenshot so the capture is of
+        // the page, not of an open menu; the next iteration's reload closes it.
+        if (viewport.width < 768) {
+          await page.getByRole("button", { name: "More" }).click();
+        } else {
+          await page.getByRole("button", { name: /^Account menu/ }).click();
+        }
+        const signOutLines = await page
+          .getByRole("button", { name: "Sign out" })
+          .evaluate((button) => {
+            const range = document.createRange();
+            range.selectNodeContents(button);
+            return range.getClientRects().length;
+          });
+        expect(signOutLines, "Sign out must remain on one line").toBe(1);
       }
     }
 
     const unexpectedConsoleIssues = consoleIssues.filter(
-      (message) =>
-        !/^\[\.WebGL-/.test(message) &&
-        message !== "No available adapters." &&
-        !/^Failed to load resource: net::ERR_NAME_NOT_RESOLVED$/.test(
-          message,
-        ),
+      (message) => !isKnownEnvironmentNoise(message),
     );
     expect(pageErrors).toEqual([]);
     expect(failedAppRequests).toEqual([]);

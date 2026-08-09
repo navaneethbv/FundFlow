@@ -1,7 +1,8 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { loadEnvConfig } from "@next/env";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import path from "node:path";
+import { isKnownEnvironmentNoise } from "./console-noise";
 
 loadEnvConfig(process.cwd());
 
@@ -129,11 +130,14 @@ test.describe.serial("accounts page", () => {
   test("renders, filters, exports, and remains responsive in both themes", async ({
     page,
   }) => {
-    const consoleIssues: string[] = [];
+    // `url` alongside `text`: a bare message leaves you guessing which of a
+    // dozen navigations produced it. Kept as a separate field so the
+    // known-noise filter below still matches against the raw message.
+    const consoleIssues: Array<{ url: string; text: string }> = [];
     const pageErrors: string[] = [];
     page.on("console", (message) => {
       if (message.type() === "error" || message.type() === "warning") {
-        consoleIssues.push(message.text());
+        consoleIssues.push({ url: page.url(), text: message.text() });
       }
     });
     page.on("pageerror", (error) => pageErrors.push(error.message));
@@ -215,7 +219,11 @@ test.describe.serial("accounts page", () => {
     });
     await page.getByLabel("Account type").selectOption("cash");
     await page.getByLabel("Visibility").selectOption("all");
-    await page.getByLabel("History").selectOption("90");
+    // Anchored regex, not a bare string: getByLabel substring-matches, and
+    // every row's long sparkline is labelled "<name> full-history trend".
+    // `exact` can't be used either — the wrapping <label> puts the option text
+    // in the name, so this field's label reads "History30 days90 days12 months".
+    await page.getByLabel(/^History/).selectOption("90");
     await page.getByRole("button", { name: "Apply filters" }).click();
     await expect(page).toHaveURL(/institution=Demo\+Bank/);
     await expect(page).toHaveURL(/type=cash/);
@@ -258,10 +266,19 @@ test.describe.serial("accounts page", () => {
     ).toBeHidden();
 
     await page.getByRole("link", { name: "Household" }).click();
-    // Switching scope navigates to a fresh URL that drops the other filter
-    // params, so the Filters disclosure closes again — reopen it.
+    // Wait for the scope navigation to land before touching the disclosure.
+    // The page we came from (`?visibility=hidden`) has an active filter, so its
+    // Filters `<details>` is already open; clicking mid-navigation would toggle
+    // that one *closed*, and the scope render then arrives closed too. That
+    // race is what made this spec fail intermittently at different lines.
+    await expect(page).toHaveURL(/scope=/);
+    // Switching scope drops the other filter params, so the disclosure is
+    // closed on arrival — open it.
     await page.getByText("Filters", { exact: true }).click();
-    await page.getByLabel("Owner").selectOption(memberId);
+    // Anchored: the sidebar's "Account menu for <email>" button matches a bare
+    // "Owner" whenever the signed-in address happens to contain it, as the
+    // throwaway owner fixture's does.
+    await page.getByLabel(/^Owner/).selectOption(memberId);
     await page.getByLabel("Visibility").selectOption("visible");
     await page.getByRole("button", { name: "Apply filters" }).click();
     await expect(page).toHaveURL(new RegExp(`owner=${memberId}`));
@@ -282,28 +299,35 @@ test.describe.serial("accounts page", () => {
     // Open the Filters disclosure so its fields (and the nested account
     // preferences trigger) are actually rendered/interactable for the sweep.
     await page.getByText("Filters", { exact: true }).click();
-    const touchTargets = [
-      page.getByRole("button", { name: "Hide amounts" }),
-      page.getByRole("button", { name: /Switch to .* mode/ }),
-      page.getByRole("button", { name: "Sign out" }),
-      page.getByRole("button", { name: "Connect a bank" }),
-      page.getByRole("button", { name: "Refresh" }),
-      page.getByRole("link", { name: "Download CSV" }),
-      page.getByText("Filters", { exact: true }),
-      page.getByLabel("Institution"),
-      page.getByLabel("Account type"),
-      page.getByLabel("Visibility"),
-      page.getByLabel("History"),
-      page.getByRole("button", { name: "Apply filters" }),
-      page.getByRole("link", { name: "Totals" }),
-      page.getByRole("link", { name: "Percent" }),
+    // The privacy, theme and sign-out controls moved into the sidebar's account
+    // menu popover, so they are not in the DOM until it is opened. Everything
+    // else in the sweep lives on the page itself.
+    await page.getByRole("button", { name: /^Account menu/ }).click();
+    // Named, so a failure says *which* control is undersized rather than just
+    // reporting a number.
+    const touchTargets: Array<[string, Locator]> = [
+      ["Hide amounts", page.getByRole("button", { name: "Hide amounts" })],
+      ["Theme switch", page.getByRole("button", { name: /Switch to .* mode/ })],
+      ["Sign out", page.getByRole("button", { name: "Sign out" })],
+      ["Connect a bank", page.getByRole("button", { name: "Connect a bank" })],
+      ["Refresh", page.getByRole("button", { name: "Refresh" })],
+      ["Download CSV", page.getByRole("link", { name: "Download CSV" })],
+      ["Filters summary", page.getByText("Filters", { exact: true })],
+      ["Institution", page.getByLabel("Institution")],
+      ["Account type", page.getByLabel("Account type")],
+      ["Visibility", page.getByLabel("Visibility")],
+      ["History", page.getByLabel(/^History/)],
+      ["Apply filters", page.getByRole("button", { name: "Apply filters" })],
+      ["Totals", page.getByRole("link", { name: "Totals" })],
+      ["Percent", page.getByRole("link", { name: "Percent" })],
     ];
-    for (const target of touchTargets) {
+    for (const [name, target] of touchTargets) {
       const box = await target.boundingBox();
-      expect(box, "touch target must be rendered").not.toBeNull();
-      expect(box!.height, "touch target must be at least 44px high").toBeGreaterThanOrEqual(
-        44,
-      );
+      expect(box, `${name} touch target must be rendered`).not.toBeNull();
+      expect(
+        box!.height,
+        `${name} touch target must be at least 44px high`,
+      ).toBeGreaterThanOrEqual(44);
     }
     const viewports = [
       { name: "desktop", width: 1440, height: 900 },
@@ -351,16 +375,16 @@ test.describe.serial("accounts page", () => {
           path: screenshotPath,
           fullPage: true,
           animations: "disabled",
+          // See cash-flow.spec.ts: the default `caret: "hide"` mutates inline
+          // styles and races hydration on the next reload.
+          caret: "initial",
         });
       }
     }
 
-    const unexpectedConsoleIssues = consoleIssues.filter(
-      (message) =>
-        !/^\[\.WebGL-/.test(message) &&
-        message !== "No available adapters." &&
-        !/^Failed to load resource: net::ERR_NAME_NOT_RESOLVED$/.test(message),
-    );
+    const unexpectedConsoleIssues = consoleIssues
+      .filter(({ text }) => !isKnownEnvironmentNoise(text))
+      .map(({ url, text }) => `[${url}] ${text}`);
     expect(pageErrors).toEqual([]);
     expect(failedAppRequests).toEqual([]);
     expect(failedAppResponses).toEqual([]);

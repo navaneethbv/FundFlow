@@ -1,6 +1,31 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-08-08. Read this first to resume.
+Last updated: 2026-08-09. Read this first to resume.
+
+## Latest delivery: shipped-defect repair and a green E2E baseline
+
+Branch `fix/shipped-defects`, uncommitted.
+Two phases of the plan in `~/.claude/plans/create-a-plan-on-toasty-treehouse.md`.
+
+**Phase A (defects).**
+The feature-flag kill switch works again: `-flagName` forces a flag off, where before every default was `true` and the env var could only ever turn things *on*.
+The Security panel no longer advertises passkeys and backup codes it does not implement.
+Real PWA icons replace the Next.js logo, and `theme_color` is the post-retheme orange.
+`npm run lint` went from 29,152 problems to zero, because it had been scanning a sibling git worktree.
+The dark chart palette now passes `--pairs all`; see the CLAUDE.md section for why three slots moved and `--viz-5` did not.
+
+**Phase B1 (E2E baseline).**
+The whole `tests/e2e` suite passes on two consecutive full runs.
+All three recorded diagnoses in `docs/TODO.md` were wrong and are corrected there, along with the real defects the repair surfaced.
+Those were two touch-target misses in shared `components/ui` primitives, a mobile overflow in `BudgetPlanner`, 623px of page scroll on `/recurring` from an `sr-only` span escaping its scroll container, and a data regression that had removed Planned/Actual expenses from the Budget right rail.
+
+Two test-harness traps are worth knowing before writing more specs.
+Playwright's default `caret: "hide"` on `page.screenshot()` mutates inline styles and races hydration on the next reload; it failed cash-flow three runs in four until `caret: "initial"`.
+And `getByLabel` substring-matches, so a bare `"History"` or `"Owner"` collides with sparkline labels and with the signed-in user's own email address.
+
+**Not verified in a browser.**
+Phase B2 still owes a real light/dark pass.
+It now also owes a look at the re-stepped dark palette, and at every surface using `SegmentedControl` and `Tabs`, whose heights changed.
 
 ## Latest delivery: transaction sorting and staged filters
 

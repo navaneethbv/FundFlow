@@ -20,6 +20,11 @@ const eslintConfig = defineConfig([
     // Reference mirror of session changes (docs/HANDOFF.md, new_changes/README.md) —
     // a snapshot for review, never compiled or linted as live source.
     "new_changes/**",
+    // Local git worktrees check out the whole repo again, so without this
+    // every sibling branch's sources get linted as if they were this one's —
+    // and their vendored mockups drowned the real output in ~29k problems.
+    // `img/**` above does not cover them: it anchors at the repo root.
+    ".worktrees/**",
   ]),
 ]);
 

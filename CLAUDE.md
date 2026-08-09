@@ -77,14 +77,23 @@ Key modules in `lib/`:
   under **normal** vision, against floors of 6 and 15. Re-run
   `scripts/validate_palette.js` from the dataviz skill before proposing an
   eighth; do not reason about it.
-  Two standing caveats. The palette sits in the 6–8 CVD floor band, which is
+  One standing caveat: the palette sits in the 6–8 CVD floor band, which is
   legal **only** with secondary encoding, so every chart using it must keep
-  direct labels or a table twin. And the shipped **dark** palette passes
-  `--pairs adjacent` (the standard it was validated at) but **fails
-  `--pairs all`**: dark `--viz-5` violet and `--viz-1` blue are ΔE 1.9 apart
-  under protanopia. Charts where any two series can sit side by side (scatter,
-  bubble, Sankey ribbons) must not rely on dark-mode hue alone — see
-  `docs/TODO.md`.
+  direct labels or a table twin. Dark `--viz-1` (`#4158bd`) is additionally
+  below 3:1 against the dark surface, which obligates the same relief rather
+  than being dismissable.
+  **Both modes now pass `--pairs all` and `--pairs adjacent`.** Dark `--viz-1`
+  blue, `--viz-2` aqua, and `--viz-6` red were re-stepped 2026-08-09 to get
+  there. The old set failed three pairs, and only one of them was the
+  protanopia case that had been reported: `--viz-2` aqua ↔ `--viz-4` green
+  (ΔE 11.9) and `--viz-3` yellow ↔ `--viz-6` red (13.0) were failing the
+  **normal-vision** floor of 15, i.e. confusable for full-colour-vision users
+  too. Exactly one colour from each failing pair moved, which is why `--viz-5`
+  violet is unchanged despite being the slot the original report named.
+  Re-step with the validator, never by eye: changing one slot cannot fix a
+  pair problem, and a 14,077-candidate sweep of `--viz-5` alone found nothing
+  that passes. `--viz-pos`/`--viz-neg` are the diverging pair, a different job
+  on their own charts, and are deliberately not part of this set.
 - `dashboard-widgets.ts` — Phase 8 widget registry and prefs. Layout lives in
   the existing client-writable `profiles.dashboard_prefs` JSON (no migration),
   shared with `sidebarCollapsed` and the legacy hide flags — so every writer

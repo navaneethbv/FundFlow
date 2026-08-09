@@ -31,14 +31,20 @@ export default function AccountRow({
           </p>
         </div>
       </div>
+      {/* `role="img"` is what makes the label real: `aria-label` is prohibited
+          on a bare div (role `generic`) and assistive tech drops it, so these
+          two charts were shipping with no text alternative at all. Matches the
+          idiom already used in SummaryPanel and NetWorthHero. */}
       <div
         className={row.spark.length < 2 ? "hidden min-h-11 sm:block" : "min-h-11"}
+        role="img"
         aria-label={`${row.name} 30-day trend`}
       >
         <AreaSparkline values={row.spark} />
       </div>
       <div
         className={row.sparkLong.length < 2 ? "hidden min-h-11 sm:block" : "min-h-11"}
+        role="img"
         aria-label={`${row.name} full-history trend`}
       >
         <AreaSparkline values={row.sparkLong} />

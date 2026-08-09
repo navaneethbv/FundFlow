@@ -33,7 +33,12 @@ export default function SegmentedControl({
           href={item.href}
           aria-current={item.active ? "page" : undefined}
           className={cn(
-            "inline-flex min-h-9 items-center justify-center rounded-full px-3.5 text-sm font-semibold transition-colors duration-150 focus-visible:outline-2",
+            // `min-h-11` (44px), matching Button/Input/DropdownButton. This was
+            // the one interactive primitive left at `min-h-9`: the 4px track
+            // padding brought the *group* to 44px, but each individual segment
+            // — the actual tap target — stayed 36px on all six surfaces that
+            // use this control.
+            "inline-flex min-h-11 items-center justify-center rounded-full px-3.5 text-sm font-semibold transition-colors duration-150 focus-visible:outline-2",
             item.active
               ? "bg-panel text-foreground shadow-sm"
               : "text-muted hover:text-foreground",
