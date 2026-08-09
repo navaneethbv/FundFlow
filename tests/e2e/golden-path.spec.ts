@@ -83,6 +83,7 @@ test.describe.serial("authenticated golden path", () => {
   });
 
   test("CSV export honors the privacy contract (or the opt-out)", async () => {
+    // Skipped: test requires server-side Supabase service key environment variable.
     test.skip(
       !process.env.SUPABASE_SECRET_KEY,
       "the export audit write requires the server-side Supabase service key",

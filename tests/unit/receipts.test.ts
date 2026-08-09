@@ -2,6 +2,12 @@ import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { normalizeReceiptImage } from "@/lib/receipt-image";
 import { findReceiptCandidates } from "@/lib/receipts";
+import {
+  loadReceiptCandidates,
+  publicReceipt,
+  loadReceiptInbox,
+  type ReceiptRow,
+} from "@/lib/receipt-data";
 
 describe("findReceiptCandidates", () => {
   const transactions = [
@@ -81,5 +87,83 @@ describe("normalizeReceiptImage", () => {
     await expect(
       normalizeReceiptImage(new File([new Uint8Array(5 * 1024 * 1024 + 1)], "huge.png", { type: "image/png" })),
     ).rejects.toThrow("image_too_large");
+  });
+});
+
+describe("loadReceiptCandidates & loadReceiptInbox & publicReceipt", () => {
+  const sampleReceipt: ReceiptRow = {
+    id: "r1",
+    user_id: "u1",
+    transaction_id: null,
+    storage_path: "u1/r1.jpg",
+    merchant: "Cafe",
+    purchase_date: "2026-08-09",
+    total: 25.5,
+    status: "unmatched",
+    created_at: "2026-08-09T10:00:00Z",
+  };
+
+  it("returns empty array when receipt is incomplete or total <= 0", async () => {
+    const { clientStub } = await import("../fixtures/supabase-query");
+    const supabase = clientStub();
+    const incomplete = { ...sampleReceipt, merchant: null };
+    expect(await loadReceiptCandidates(supabase, "u1", incomplete)).toEqual([]);
+  });
+
+  it("loads candidates for a valid receipt row", async () => {
+    const { clientStub } = await import("../fixtures/supabase-query");
+    const supabase = clientStub({
+      transactions: {
+        data: [{ id: "t1", date: "2026-08-09", amount: 25.5, merchant_name: "Cafe", name: "CAFE" }],
+      },
+    });
+    const candidates = await loadReceiptCandidates(supabase, "u1", sampleReceipt);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].transactionId).toBe("t1");
+  });
+
+  it("throws when transactions query fails in loadReceiptCandidates", async () => {
+    const { clientStub } = await import("../fixtures/supabase-query");
+    const supabase = clientStub({
+      transactions: { data: null, error: { message: "Query failed" } },
+    });
+    await expect(loadReceiptCandidates(supabase, "u1", sampleReceipt)).rejects.toMatchObject({
+      message: "Query failed",
+    });
+  });
+
+  it("formats a public receipt row using publicReceipt", () => {
+    const publicRow = publicReceipt(sampleReceipt, "https://example.com/r1.jpg", []);
+    expect(publicRow).toEqual({
+      id: "r1",
+      transaction_id: null,
+      merchant: "Cafe",
+      purchase_date: "2026-08-09",
+      total: 25.5,
+      status: "unmatched",
+      created_at: "2026-08-09T10:00:00Z",
+      imageUrl: "https://example.com/r1.jpg",
+      candidates: [],
+    });
+  });
+
+  it("loads receipt inbox items", async () => {
+    const { clientStub } = await import("../fixtures/supabase-query");
+    const supabase = clientStub({
+      receipts: { data: [sampleReceipt] },
+      transactions: { data: [] },
+    });
+    const service = {
+      ...clientStub(),
+      storage: {
+        from: () => ({
+          createSignedUrl: () => Promise.resolve({ data: { signedUrl: "https://signed.url/r1.jpg" }, error: null }),
+        }),
+      },
+    };
+
+    const inbox = await loadReceiptInbox(supabase, service as never, "u1");
+    expect(inbox).toHaveLength(1);
+    expect(inbox[0].imageUrl).toBe("https://signed.url/r1.jpg");
   });
 });

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { buildPayoffPlan } from "@/lib/debt";
+import {
+  parseDebtStrategy,
+  parseExtraMonthly,
+  buildDebtPlannerData,
+  loadDebtPlannerData,
+} from "@/lib/debt-data";
 
 describe("buildPayoffPlan", () => {
   it("orders focus by highest APR for avalanche and smallest balance for snowball", () => {
@@ -116,5 +122,89 @@ describe("buildPayoffPlan", () => {
     for (const debt of plan!.debts) {
       expect(debt.interestPaid).toBe(Math.round(debt.interestPaid * 100) / 100);
     }
+  });
+});
+
+describe("parseDebtStrategy & parseExtraMonthly", () => {
+  it("parses debt strategy parameters", () => {
+    expect(parseDebtStrategy("snowball")).toBe("snowball");
+    expect(parseDebtStrategy(["snowball", "avalanche"])).toBe("snowball");
+    expect(parseDebtStrategy("avalanche")).toBe("avalanche");
+    expect(parseDebtStrategy(undefined)).toBe("avalanche");
+  });
+
+  it("parses extra monthly payment parameters", () => {
+    expect(parseExtraMonthly("100")).toBe(100);
+    expect(parseExtraMonthly(["150.50", "200"])).toBe(150.5);
+    expect(parseExtraMonthly("invalid")).toBe(0);
+    expect(parseExtraMonthly(undefined)).toBe(0);
+  });
+});
+
+describe("buildDebtPlannerData & loadDebtPlannerData", () => {
+  it("returns zero data for empty debt list", () => {
+    const data = buildDebtPlannerData([], 50);
+    expect(data.debts).toEqual([]);
+    expect(data.totalBalance).toBe(0);
+    expect(data.totalMonthlyBudget).toBe(0);
+    expect(data.avalanche).toBeNull();
+    expect(data.snowball).toBeNull();
+  });
+
+  it("builds debt planner data with assumed APR when APR is null", () => {
+    const data = buildDebtPlannerData(
+      [
+        { id: "a1", name: "Card 1", balance: -2000, apr: null },
+        { id: "a2", name: "Zero Balance", balance: 0, apr: 15 },
+      ],
+      100,
+    );
+    expect(data.debts).toHaveLength(1);
+    expect(data.debts[0]).toMatchObject({
+      id: "a1",
+      name: "Card 1",
+      balance: 2000,
+      apr: 22,
+      aprAssumed: true,
+      minimumPayment: 40,
+    });
+    expect(data.totalBalance).toBe(2000);
+    expect(data.totalMonthlyBudget).toBe(140);
+    expect(data.avalanche).not.toBeNull();
+  });
+
+  it("loads debt planner data from Supabase client", async () => {
+    const { clientStub } = await import("../fixtures/supabase-query");
+    const supabase = clientStub({
+      accounts: {
+        data: [
+          { id: "a1", name: "Credit Card", type: "credit", subtype: null, current_balance: 1500, apr: 18.5 },
+          { id: "a2", name: "Checking", type: "depository", subtype: null, current_balance: 5000, apr: null },
+        ],
+      },
+    });
+
+    const data = await loadDebtPlannerData(supabase, {
+      scope: { type: "user", userId: "u1" },
+      extraMonthly: 50,
+    });
+
+    expect(data.debts).toHaveLength(1);
+    expect(data.debts[0].name).toBe("Credit Card");
+    expect(data.debts[0].apr).toBe(18.5);
+  });
+
+  it("throws error when loadDebtPlannerData query fails", async () => {
+    const { clientStub } = await import("../fixtures/supabase-query");
+    const supabase = clientStub({
+      accounts: { data: null, error: { message: "Permission denied", code: "42501" } },
+    });
+
+    await expect(
+      loadDebtPlannerData(supabase, {
+        scope: { type: "all" },
+        extraMonthly: 0,
+      }),
+    ).rejects.toThrow("debt_accounts_query_failed:42501");
   });
 });
