@@ -13,6 +13,7 @@ export interface LedgerCardRow {
   amount: number;
   currency: string;
   pending: boolean;
+  excludedDuplicate?: boolean;
   note: string | null;
   tags: string[];
   splits: { category: string; amount: number }[];
@@ -33,6 +34,7 @@ export default function MobileLedgerList({ rows }: Readonly<{ rows: LedgerCardRo
             <p className="flex flex-wrap items-center gap-2">
               <span className="truncate font-medium">{row.merchant}</span>
               {row.pending && <Badge tone="warning">pending</Badge>}
+              {row.excludedDuplicate && <Badge tone="warning">Excluded duplicate</Badge>}
             </p>
             <p className="mt-0.5 text-xs text-muted">
               {formatDate(row.date)} · {titleCase(row.category) || "Uncategorized"} ·{" "}
