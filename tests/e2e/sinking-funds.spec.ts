@@ -1,6 +1,7 @@
 import { hasLiveCredentials, test, expect } from "./fixtures/authenticated";
 
 test.describe("recurring sinking funds", () => {
+  // Skipped: E2E test requires live Supabase environment credentials.
   test.skip(!hasLiveCredentials, "Live Supabase credentials are required");
 
   test("creates, edits, and removes an annual sinking fund", async ({ authenticatedPage: page }) => {

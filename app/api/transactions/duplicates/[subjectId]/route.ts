@@ -13,7 +13,7 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
 
   try {
     const subjectId = decodeURIComponent((await params).subjectId);
-    if (!subjectId || !subjectId.includes(":")) return badRequest("subjectId is invalid");
+    if (!subjectId?.includes(":")) return badRequest("subjectId is invalid");
     const { data: link, error: linkError } = await auth.supabase
       .from("linked_duplicates")
       .select("subject_id")

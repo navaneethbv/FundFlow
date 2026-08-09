@@ -1,6 +1,7 @@
 import { hasLiveCredentials, signIn, test, expect } from "./fixtures/authenticated";
 
 test.describe("duplicate review", () => {
+  // Skipped: E2E test requires live Supabase environment credentials.
   test.skip(!hasLiveCredentials, "Live Supabase credentials are required");
 
   test("confirms a cross-account duplicate, shows exclusion, and undoes it", async ({ page, account, seed }) => {

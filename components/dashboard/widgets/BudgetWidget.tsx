@@ -35,10 +35,12 @@ export default function BudgetWidget({
     >
       <ul className="space-y-3">
         {groups.map((group) => {
-          const pct =
-            group.monthlyLimit > 0
-              ? Math.min(100, Math.round((group.spent / group.monthlyLimit) * 100))
-              : group.spent > 0 ? 100 : 0;
+          let pct = 0;
+          if (group.monthlyLimit > 0) {
+            pct = Math.min(100, Math.round((group.spent / group.monthlyLimit) * 100));
+          } else if (group.spent > 0) {
+            pct = 100;
+          }
           return (
             <li key={group.key}>
               <div className="flex justify-between gap-3 text-sm">

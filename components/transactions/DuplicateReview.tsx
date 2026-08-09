@@ -74,8 +74,8 @@ export default function DuplicateReview({
       if (decision === "confirmed") {
         setConfirmed((rows) => [{ subjectId: pair.subjectId, kept, excluded }, ...rows]);
       }
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not save duplicate decision.");
+    } catch (error_) {
+      setError(error_ instanceof Error ? error_.message : "Could not save duplicate decision.");
     } finally {
       setBusyId(null);
     }
@@ -100,8 +100,8 @@ export default function DuplicateReview({
           dateDistanceDays: 0,
         }, ...rows]);
       }
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not undo duplicate link.");
+    } catch (error_) {
+      setError(error_ instanceof Error ? error_.message : "Could not undo duplicate link.");
     } finally {
       setBusyId(null);
     }
@@ -122,6 +122,7 @@ export default function DuplicateReview({
                 <label key={transaction.id} className="flex min-h-11 cursor-pointer gap-3 rounded-field border border-panel-border bg-panel p-3 text-sm">
                   <input
                     type="radio"
+                    aria-label={`Keep ${transaction.merchant} from ${transaction.accountName}`}
                     name={`keep-${pair.subjectId}`}
                     value={transaction.id}
                     checked={keepBySubject[pair.subjectId] === transaction.id}

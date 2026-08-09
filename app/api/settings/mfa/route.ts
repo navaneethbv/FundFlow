@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
-import { writeAudit, getClientIp } from "@/lib/audit";
+import { writeAudit, getClientIp, type AuditAction } from "@/lib/audit";
 
 type MfaAction = "enroll" | "verify" | "unenroll";
 
@@ -39,6 +39,58 @@ async function setProfileMfaFlag(
   if (error) throw error;
 }
 
+function resolveMfaAuditAction(action: MfaAction): AuditAction {
+  if (action === "enroll") return "mfa_enroll";
+  if (action === "verify") return "mfa_verify";
+  return "mfa_unenroll";
+}
+
+async function handleMfaEnroll(
+  supabase: SupabaseClient,
+  factorId: string,
+): Promise<{ mfaEnrolled?: boolean; errorResponse?: NextResponse }> {
+  const { data, error: factorError } = await supabase.auth.mfa.listFactors();
+  if (factorError) throw factorError;
+  const factor = [...(data?.totp ?? [])].find((candidate) => candidate.id === factorId);
+  if (!factor) return { errorResponse: badRequest("MFA factor does not belong to this user") };
+  if ((data?.totp ?? []).length > 10) {
+    if (factor.status !== "verified") {
+      await supabase.auth.mfa.unenroll({ factorId });
+    }
+    return { errorResponse: badRequest("A maximum of ten TOTP factors is allowed") };
+  }
+  const verifiedFactors = getVerifiedFactors(data);
+  return { mfaEnrolled: verifiedFactors.length > 0 };
+}
+
+async function handleMfaVerify(
+  supabase: SupabaseClient,
+  userId: string,
+  factorId: string,
+): Promise<{ mfaEnrolled?: boolean; errorResponse?: NextResponse }> {
+  const verifiedFactors = await listVerifiedFactors(supabase);
+  const isVerified = verifiedFactors.some((factor) => factor.id === factorId);
+  if (!isVerified) {
+    return { errorResponse: badRequest("MFA factor must be verified before finalizing enrollment") };
+  }
+  await setProfileMfaFlag(supabase, userId, true);
+  return { mfaEnrolled: true };
+}
+
+async function handleMfaUnenroll(
+  supabase: SupabaseClient,
+  userId: string,
+  factorId: string,
+): Promise<{ mfaEnrolled: boolean }> {
+  const { error: unenrollError } = await supabase.auth.mfa.unenroll({ factorId });
+  if (unenrollError) throw unenrollError;
+
+  const verifiedFactors = await listVerifiedFactors(supabase);
+  const mfaEnrolled = verifiedFactors.length > 0;
+  await setProfileMfaFlag(supabase, userId, mfaEnrolled);
+  return { mfaEnrolled };
+}
+
 export async function POST(req: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof Response) return auth;
@@ -62,44 +114,22 @@ export async function POST(req: NextRequest) {
     let mfaEnrolled = false;
 
     if (mfaAction === "enroll") {
-      const { data, error: factorError } = await supabase.auth.mfa.listFactors();
-      if (factorError) throw factorError;
-      const factor = [...(data?.totp ?? [])].find((candidate) => candidate.id === factorId);
-      if (!factor) return badRequest("MFA factor does not belong to this user");
-      if ((data?.totp ?? []).length > 10) {
-        if (factor.status !== "verified") {
-          await supabase.auth.mfa.unenroll({ factorId });
-        }
-        return badRequest("A maximum of ten TOTP factors is allowed");
-      }
-      const verifiedFactors = getVerifiedFactors(data);
-      mfaEnrolled = verifiedFactors.length > 0;
+      const res = await handleMfaEnroll(supabase, factorId);
+      if (res.errorResponse) return res.errorResponse;
+      mfaEnrolled = res.mfaEnrolled!;
     } else if (mfaAction === "verify") {
-      const verifiedFactors = await listVerifiedFactors(supabase);
-      const isVerified = verifiedFactors.some((factor) => factor.id === factorId);
-      if (!isVerified) {
-        return badRequest("MFA factor must be verified before finalizing enrollment");
-      }
-      await setProfileMfaFlag(supabase, user.id, true);
-      mfaEnrolled = true;
+      const res = await handleMfaVerify(supabase, user.id, factorId);
+      if (res.errorResponse) return res.errorResponse;
+      mfaEnrolled = res.mfaEnrolled!;
     } else {
-      const { error: unenrollError } = await supabase.auth.mfa.unenroll({ factorId });
-      if (unenrollError) throw unenrollError;
-
-      const verifiedFactors = await listVerifiedFactors(supabase);
-      mfaEnrolled = verifiedFactors.length > 0;
-      await setProfileMfaFlag(supabase, user.id, mfaEnrolled);
+      const res = await handleMfaUnenroll(supabase, user.id, factorId);
+      mfaEnrolled = res.mfaEnrolled;
     }
 
     const ip = getClientIp(req);
     await writeAudit({
       userId: user.id,
-      action:
-        mfaAction === "enroll"
-          ? "mfa_enroll"
-          : mfaAction === "verify"
-            ? "mfa_verify"
-            : "mfa_unenroll",
+      action: resolveMfaAuditAction(mfaAction),
       metadata: { factorId },
       ip,
     });

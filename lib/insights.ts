@@ -532,6 +532,22 @@ function anchoredMonthDate(anchor: string, monthOffset: number): string {
   return `${targetYear}-${String(targetMonth + 1).padStart(2, "0")}-${String(Math.min(day!, daysInMonth)).padStart(2, "0")}`;
 }
 
+function getSinkingFundInterval(
+  cadence: SinkingFundCadence,
+  customIntervalMonths: number | null,
+): number {
+  switch (cadence) {
+    case "annual":
+      return 12;
+    case "semiannual":
+      return 6;
+    case "quarterly":
+      return 3;
+    default:
+      return Math.max(1, Math.min(120, customIntervalMonths ?? 1));
+  }
+}
+
 export function resolveNextSinkingFundDue(input: {
   cadence: SinkingFundCadence;
   customIntervalMonths: number | null;
@@ -540,13 +556,7 @@ export function resolveNextSinkingFundDue(input: {
   asOf: string;
 }): string {
   if (input.cadence === "one_time") return input.dueDate;
-  const interval = input.cadence === "annual"
-    ? 12
-    : input.cadence === "semiannual"
-      ? 6
-      : input.cadence === "quarterly"
-        ? 3
-        : Math.max(1, Math.min(120, input.customIntervalMonths ?? 1));
+  const interval = getSinkingFundInterval(input.cadence, input.customIntervalMonths);
   const [anchorYear, anchorMonth] = input.cycleAnchorDate.split("-").map(Number);
   const [asOfYear, asOfMonth] = input.asOf.split("-").map(Number);
   const elapsedMonths = Math.max(

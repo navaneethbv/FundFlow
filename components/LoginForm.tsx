@@ -50,7 +50,7 @@ export default function LoginForm() {
       setPasskeyAvailability(
         getPasskeyAvailability(window.location.hostname, window.isSecureContext, {
           browserSupported:
-            "credentials" in navigator && typeof window.PublicKeyCredential !== "undefined",
+            "credentials" in navigator && window.PublicKeyCredential !== undefined,
         }),
       );
     });
@@ -207,7 +207,7 @@ export default function LoginForm() {
           </Button>
           <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-muted">
             <span className="h-px flex-1 bg-panel-border" />
-            or
+            <span>or</span>
             <span className="h-px flex-1 bg-panel-border" />
           </div>
           <Button

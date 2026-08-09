@@ -28,6 +28,7 @@ async function enroll(page: import("@playwright/test").Page, name: string, butto
 }
 
 test.describe("MFA recovery", () => {
+  // Skipped: E2E test requires live Supabase environment credentials.
   test.skip(!hasLiveCredentials, "Live Supabase credentials are required");
 
   test("enrolls two named TOTP factors and removes the backup from AAL2", async ({ authenticatedPage: page }) => {

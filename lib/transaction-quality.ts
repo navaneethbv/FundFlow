@@ -122,6 +122,21 @@ export function duplicateSubjectId(firstId: string, secondId: string): string {
   return [firstId, secondId].sort((left, right) => left.localeCompare(right)).join(":");
 }
 
+function evaluateDuplicateCandidate(
+  first: DuplicateTransaction,
+  second: DuplicateTransaction,
+  resolved: Set<string>,
+): DuplicatePair | null {
+  if (first.accountId === second.accountId) return null;
+  if (round2(first.amount) !== round2(second.amount)) return null;
+  if (normalize(first.merchant) !== normalize(second.merchant)) return null;
+  const dateDistanceDays = Math.abs(parseDate(first.date) - parseDate(second.date)) / 86_400_000;
+  if (dateDistanceDays > 2) return null;
+  const subjectId = duplicateSubjectId(first.id, second.id);
+  if (resolved.has(subjectId)) return null;
+  return { subjectId, first, second, dateDistanceDays };
+}
+
 export function detectDuplicatePairs(
   transactions: DuplicateTransaction[],
   decisions: ReviewDecision[],
@@ -137,14 +152,8 @@ export function detectDuplicatePairs(
     const first = expenses[firstIndex]!;
     for (let secondIndex = firstIndex + 1; secondIndex < expenses.length; secondIndex += 1) {
       const second = expenses[secondIndex]!;
-      if (first.accountId === second.accountId) continue;
-      if (round2(first.amount) !== round2(second.amount)) continue;
-      if (normalize(first.merchant) !== normalize(second.merchant)) continue;
-      const dateDistanceDays = Math.abs(parseDate(first.date) - parseDate(second.date)) / 86_400_000;
-      if (dateDistanceDays > 2) continue;
-      const subjectId = duplicateSubjectId(first.id, second.id);
-      if (resolved.has(subjectId)) continue;
-      candidates.push({ subjectId, first, second, dateDistanceDays });
+      const candidate = evaluateDuplicateCandidate(first, second, resolved);
+      if (candidate) candidates.push(candidate);
     }
   }
 

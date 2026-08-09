@@ -28,6 +28,43 @@ async function loadOwnedReceipt(
   return data as OwnedReceipt | null;
 }
 
+interface PatchResult {
+  update: { transaction_id: string | null; status: "matched" | "ignored" | "unmatched" };
+  auditAction: AuditAction;
+  response?: NextResponse;
+}
+
+async function prepareReceiptPatch(
+  supabase: SupabaseClient,
+  userId: string,
+  action: string,
+  transactionId?: unknown,
+): Promise<PatchResult> {
+  if (action === "attach") {
+    if (typeof transactionId !== "string" || !transactionId) {
+      return { update: { transaction_id: null, status: "matched" }, auditAction: "receipt_attached", response: badRequest("transactionId is required") };
+    }
+    const { data: transaction, error: transactionError } = await supabase
+      .from("transactions")
+      .select("id")
+      .eq("id", transactionId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (transactionError) throw transactionError;
+    if (!transaction) {
+      return { update: { transaction_id: null, status: "matched" }, auditAction: "receipt_attached", response: NextResponse.json({ error: "Transaction not found" }, { status: 404 }) };
+    }
+    return {
+      update: { transaction_id: transactionId, status: "matched" },
+      auditAction: "receipt_attached",
+    };
+  }
+  if (action === "ignore") {
+    return { update: { transaction_id: null, status: "ignored" }, auditAction: "receipt_ignored" };
+  }
+  return { update: { transaction_id: null, status: "unmatched" }, auditAction: "receipt_restored" };
+}
+
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -48,31 +85,14 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       return badRequest("action is not supported");
     }
 
-    let update: { transaction_id: string | null; status: "matched" | "ignored" | "unmatched" };
-    let auditAction: AuditAction;
-    if (body.action === "attach") {
-      if (typeof body.transactionId !== "string" || !body.transactionId) {
-        return badRequest("transactionId is required");
-      }
-      const { data: transaction, error: transactionError } = await auth.supabase
-        .from("transactions")
-        .select("id")
-        .eq("id", body.transactionId)
-        .eq("user_id", auth.user.id)
-        .maybeSingle();
-      if (transactionError) throw transactionError;
-      if (!transaction) {
-        return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
-      }
-      update = { transaction_id: body.transactionId, status: "matched" };
-      auditAction = "receipt_attached";
-    } else if (body.action === "ignore") {
-      update = { transaction_id: null, status: "ignored" };
-      auditAction = "receipt_ignored";
-    } else {
-      update = { transaction_id: null, status: "unmatched" };
-      auditAction = "receipt_restored";
-    }
+    const patchPrep = await prepareReceiptPatch(
+      auth.supabase,
+      auth.user.id,
+      String(body.action),
+      body.transactionId,
+    );
+    if (patchPrep.response) return patchPrep.response;
+    const { update, auditAction } = patchPrep;
 
     const service = createServiceClient();
     const { data: updated, error } = await service

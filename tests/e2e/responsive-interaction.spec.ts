@@ -48,6 +48,7 @@ function observePage(page: Page) {
 }
 
 test.describe("responsive interaction matrix", () => {
+  // Skipped: E2E test requires live Supabase environment credentials.
   test.skip(!hasLiveCredentials, "Live Supabase credentials are required");
 
   for (const viewport of VIEWPORTS) {

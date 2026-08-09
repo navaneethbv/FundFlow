@@ -2,6 +2,7 @@ import { expectNoHorizontalPageScroll } from "./layout-checks";
 import { hasLiveCredentials, signIn, test, expect } from "./fixtures/authenticated";
 
 test.describe("investments page", () => {
+  // Skipped: E2E test requires live Supabase environment credentials.
   test.skip(!hasLiveCredentials, "Live Supabase credentials are required");
 
   test("renders holdings, allocation, performance, and movers at desktop and mobile", async ({

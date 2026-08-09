@@ -1,6 +1,7 @@
 import { hasLiveCredentials, signIn, test, expect } from "./fixtures/authenticated";
 
 test.describe("settings completion", () => {
+  // Skipped: E2E test requires live Supabase environment credentials.
   test.skip(!hasLiveCredentials, "Live Supabase credentials are required");
 
   test("previews QFX without CSV controls and explains local passkey availability", async ({

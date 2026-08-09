@@ -80,7 +80,7 @@ export function isUndeliverableRecipient(
   if (!domain) return false;
   const labels = domain.split(".");
   return (
-    RESERVED_TLDS.has(labels[labels.length - 1] ?? "") ||
+    RESERVED_TLDS.has(labels.at(-1) ?? "") ||
     RESERVED_DOMAINS.has(labels.slice(-2).join("."))
   );
 }

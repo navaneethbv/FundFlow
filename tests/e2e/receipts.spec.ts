@@ -6,6 +6,7 @@ const PNG = Buffer.from(
 );
 
 test.describe("receipt inbox", () => {
+  // Skipped: E2E test requires live Supabase environment credentials.
   test.skip(!hasLiveCredentials, "Live Supabase credentials are required");
 
   test("uploads, matches, ignores, restores, and deletes a private receipt", async ({ page, account, seed }) => {

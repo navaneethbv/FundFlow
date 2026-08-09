@@ -20,6 +20,37 @@ function isIsoDate(value: string): boolean {
   return date.toISOString().slice(0, 10) === value;
 }
 
+interface ParsedReceiptForm {
+  file: File;
+  merchant: string | null;
+  purchaseDate: string | null;
+  total: number | null;
+  errorResponse?: NextResponse;
+}
+
+function parseReceiptUploadForm(form: FormData | null): ParsedReceiptForm {
+  const file = form?.get("file");
+  if (!(file instanceof File)) {
+    return { file: null as unknown as File, merchant: null, purchaseDate: null, total: null, errorResponse: badRequest("file is required") };
+  }
+  const merchantValue = form?.get("merchant");
+  const merchant = typeof merchantValue === "string" && merchantValue.trim() ? merchantValue.trim() : null;
+  if (merchant && merchant.length > 160) {
+    return { file, merchant: null, purchaseDate: null, total: null, errorResponse: badRequest("merchant is too long") };
+  }
+  const purchaseDateValue = form?.get("purchaseDate");
+  const purchaseDate = typeof purchaseDateValue === "string" && purchaseDateValue ? purchaseDateValue : null;
+  if (purchaseDate && !isIsoDate(purchaseDate)) {
+    return { file, merchant, purchaseDate: null, total: null, errorResponse: badRequest("purchaseDate is invalid") };
+  }
+  const totalValue = form?.get("total");
+  const total = typeof totalValue === "string" && totalValue ? Number(totalValue) : null;
+  if (total !== null && (!Number.isFinite(total) || total <= 0)) {
+    return { file, merchant, purchaseDate, total: null, errorResponse: badRequest("total must be positive") };
+  }
+  return { file, merchant, purchaseDate, total };
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -31,25 +62,9 @@ export async function POST(request: NextRequest) {
     }
 
     const form = await request.formData().catch(() => null);
-    const file = form?.get("file");
-    if (!(file instanceof File)) return badRequest("file is required");
-    const merchantValue = form?.get("merchant");
-    const merchant = typeof merchantValue === "string" && merchantValue.trim()
-      ? merchantValue.trim()
-      : null;
-    if (merchant && merchant.length > 160) return badRequest("merchant is too long");
-    const purchaseDateValue = form?.get("purchaseDate");
-    const purchaseDate = typeof purchaseDateValue === "string" && purchaseDateValue
-      ? purchaseDateValue
-      : null;
-    if (purchaseDate && !isIsoDate(purchaseDate)) return badRequest("purchaseDate is invalid");
-    const totalValue = form?.get("total");
-    const total = typeof totalValue === "string" && totalValue
-      ? Number(totalValue)
-      : null;
-    if (total !== null && (!Number.isFinite(total) || total <= 0)) {
-      return badRequest("total must be positive");
-    }
+    const parsedForm = parseReceiptUploadForm(form);
+    if (parsedForm.errorResponse) return parsedForm.errorResponse;
+    const { file, merchant, purchaseDate, total } = parsedForm;
 
     let image;
     try {

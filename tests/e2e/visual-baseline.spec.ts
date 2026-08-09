@@ -17,6 +17,7 @@ const ROUTES = [
 ] as const;
 
 test.describe("authenticated visual baseline", () => {
+  // Skipped: E2E test requires live Supabase environment credentials.
   test.skip(!hasLiveCredentials, "Live Supabase credentials are required");
 
   test("matches reviewed desktop routes in both themes", async ({ page, account, seed }) => {

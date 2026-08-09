@@ -86,7 +86,7 @@ export default function DebtPlannerView({
           <input type="hidden" name="strategy" value={strategy} />
           {scopeParam && <input type="hidden" name="scope" value={scopeParam} />}
           <label className="grid gap-1.5 text-sm font-semibold">
-            Extra monthly payment
+            <span>Extra monthly payment</span>
             <input
               name="extra"
               type="number"

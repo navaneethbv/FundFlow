@@ -27,6 +27,12 @@ async function finalizeMfaAction(action: "enroll" | "verify" | "unenroll", facto
   }
 }
 
+function getEnrollButtonLabel(isReplacement: boolean, hasActiveFactors: boolean): string {
+  if (isReplacement) return "Add replacement";
+  if (hasActiveFactors) return "Add authenticator";
+  return "Enable 2FA";
+}
+
 export default function MfaSection() {
   const [supabase] = useState(createClient);
   const [factors, setFactors] = useState<Factor[]>([]);
@@ -210,7 +216,7 @@ export default function MfaSection() {
               variant="secondary"
               disabled={active.length >= MAX_TOTP_FACTORS}
             >
-              {replacementFactorId ? "Add replacement" : active.length > 0 ? "Add authenticator" : "Enable 2FA"}
+              {getEnrollButtonLabel(Boolean(replacementFactorId), active.length > 0)}
             </Button>
           </div>
           {replacementFactorId && (

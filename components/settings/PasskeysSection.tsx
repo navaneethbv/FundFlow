@@ -49,7 +49,7 @@ export default function PasskeysSection() {
       if (!active) return;
       const next = getPasskeyAvailability(window.location.hostname, window.isSecureContext, {
         browserSupported:
-          "credentials" in navigator && typeof window.PublicKeyCredential !== "undefined",
+          "credentials" in navigator && window.PublicKeyCredential !== undefined,
       });
       setAvailability(next);
       if (next.available) {

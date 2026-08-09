@@ -1,6 +1,7 @@
 import { hasLiveCredentials, signIn, test, expect } from "./fixtures/authenticated";
 
 test.describe("debt payoff", () => {
+  // Skipped: E2E test requires live Supabase environment credentials.
   test.skip(!hasLiveCredentials, "Live Supabase credentials are required");
 
   test("compares avalanche and snowball projections with extra payment", async ({ page, account, seed }) => {

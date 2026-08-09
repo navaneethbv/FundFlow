@@ -35,7 +35,9 @@ export interface DebtPlannerData {
 const ASSUMED_APR = 22;
 const LIABILITY_TYPES = new Set(["credit", "loan", "liability", "debt"]);
 
-function first(value: string | readonly string[] | undefined): string | undefined {
+type QueryParamValue = string | readonly string[] | undefined;
+
+function first(value: QueryParamValue): string | undefined {
   return typeof value === "string" ? value : value?.[0];
 }
 
@@ -44,13 +46,13 @@ function round2(value: number): number {
 }
 
 export function parseDebtStrategy(
-  value: string | readonly string[] | undefined,
+  value: QueryParamValue,
 ): DebtStrategy {
   return first(value) === "snowball" ? "snowball" : "avalanche";
 }
 
 export function parseExtraMonthly(
-  value: string | readonly string[] | undefined,
+  value: QueryParamValue,
 ): number {
   const raw = first(value);
   if (!raw || !/^\d+(?:\.\d{1,2})?$/.test(raw)) return 0;
