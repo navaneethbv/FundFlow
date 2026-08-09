@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { sendLoginAlertEmail } from "@/lib/reporting";
 import { logError } from "@/lib/log";
+import { isUndeliverableRecipient } from "@/lib/delivery-error";
 
 /**
  * New-device login alerts (7.1). Called when a session record is first
@@ -18,7 +19,7 @@ export async function notifyNewDeviceLogin(
   userAgent: string | null,
 ): Promise<void> {
   try {
-    if (!email || !userAgent) return;
+    if (!email || !userAgent || isUndeliverableRecipient(email)) return;
 
     const service = createServiceClient();
     const twentySecondsAgo = new Date(Date.now() - 20_000).toISOString();

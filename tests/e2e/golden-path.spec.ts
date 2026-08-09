@@ -73,10 +73,12 @@ test.describe.serial("authenticated golden path", () => {
     await expect(page.getByPlaceholder("Search transactions")).toBeVisible();
   });
 
-  test("settings renders budgets, export, and calendar-feed sections", async () => {
-    await page.goto("/settings");
+  test("settings renders task-specific categories, data, and integration sections", async () => {
+    await page.goto("/settings?section=categories");
     await expect(page.getByText("Budget limits", { exact: true })).toBeVisible();
+    await page.goto("/settings?section=data");
     await expect(page.getByText("Export data", { exact: true })).toBeVisible();
+    await page.goto("/settings?section=integrations");
     await expect(page.getByText("Calendar feed", { exact: true })).toBeVisible();
   });
 
@@ -100,6 +102,7 @@ test.describe.serial("authenticated golden path", () => {
     await page.goto("/dashboard");
     const html = page.locator("html");
 
+    await page.getByRole("button", { name: /^Account menu for/ }).click();
     await page.getByRole("button", { name: "Hide amounts" }).click();
     await expect(html).toHaveAttribute("data-privacy", "blur");
 

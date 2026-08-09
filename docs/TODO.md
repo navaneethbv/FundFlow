@@ -2,13 +2,18 @@
 
 Nice-to-have features and enhancements, deferred out of the initial build.
 
-## Active program: Monarch visual parity (started 2026-08-02)
+## Completed 2026-08-09: shipped-defect follow-up
 
-Plan: `docs/superpowers/plans/2026-08-02-monarch-visual-parity.md`. Design:
-`docs/superpowers/specs/2026-08-02-monarch-visual-parity-design.md`. Distinct
-from the *feature*-parity program below (which is complete) — this closes the
-remaining visual gap against 29 Monarch Money screenshots. Full writeup of
-work done so far: `new_changes/README.md`.
+All approved phases from `~/.claude/plans/create-a-plan-on-toasty-treehouse.md` are implemented in PR #99.
+This includes persistent receipts, grouped budget and investment dashboard widgets, institution branding, goal artwork, OFX/QFX import, debt payoff planning, recurring sinking funds, duplicate review, passkeys, and multiple named TOTP recovery factors.
+The four new migrations are applied to the live Supabase project, institution branding is backfilled, and production passkey configuration targets the canonical FundFlow origin.
+The browser gap is closed by deterministic feature journeys, a four-viewport and two-theme interaction matrix, and 26 reviewed desktop visual baselines.
+
+## Completed program: Monarch visual parity (started 2026-08-02)
+
+Plan: `docs/superpowers/plans/2026-08-02-monarch-visual-parity.md`.
+Design: `docs/superpowers/specs/2026-08-02-monarch-visual-parity-design.md`.
+This is distinct from the feature-parity program below, which is also complete.
 
 - **Sankey exact-match.** Done (2026-08-02). Nine deltas on the `/reports`
   cash-flow diagram: two-line labels, emoji prefixes (`lib/category-emoji.ts`),
@@ -18,7 +23,7 @@ work done so far: `new_changes/README.md`.
 - **Phase V0 — token retheme.** Done (2026-08-02). `app/globals.css` rewritten
   to Monarch's warm cream + orange identity, colors pixel-sampled from the
   screenshots (see the dark-mode-is-likely-filtered caveat in the design doc
-  §2.1 and `new_changes/README.md`). Pill buttons, unified modal recipes,
+  §2.1). Pill buttons, unified modal recipes,
   `.metric-value` off monospace, new `--pill`/`--settings-active` tokens, a
   handful of flagged internal inconsistencies fixed in passing.
 - **Phase V1 — shell restructure.** Done (2026-08-02). `components/shell/TopBar.tsx`
@@ -456,10 +461,7 @@ Three things this turned up that the original entry had wrong, worth keeping:
 different job on their own charts (`DivergingColumns`, `BreakdownBars`), never
 mixed with the categorical slots.
 
-**Still open:** the browser pass. The palette is validated numerically and the
-build is green, but the new dark hues have not been looked at on a real screen
-— fold that into the Phase B2 dark-mode QA rather than trusting the validator
-alone.
+**Closed 2026-08-09:** the palette is validated numerically and included in the authenticated dark-mode route matrix and reviewed visual baselines.
 
 A related finding worth keeping: **the palette cannot be grown past seven.**
 `--viz-7` (`#c2379a`) was added on 2026-07-31 and clears every check in both
