@@ -234,11 +234,10 @@ Fourteen phases bringing FundFlow to parity with the reference planner screensho
   the other Phase 9-11 flags this gates an *already-live* page: with it off,
   `/transactions` runs the exact pre-Phase-12 query. Apply
   `20260730240000_manual_transactions_receipts.sql` first.
-  The migration also adds a `receipts` table and the app's first Supabase
-  Storage bucket (schema and RLS only) — the persistent receipt-upload UI and
-  route are intentionally deferred as a separate follow-up, distinct from the
-  completed manual-transactions work above. The existing ephemeral AI receipt
-  scan in Settings is unaffected either way.
+  The migration also added a `receipts` table and the app's first Supabase
+  Storage bucket.
+  The persistent receipt workflow was completed in PR #99 on 2026-08-09.
+  The existing ephemeral AI receipt scan in Settings remains available separately.
 - **Phase 13: Settings IA.** Done (2026-07-30), branch `feat/settings-ia`.
   A section-based Settings page (a `section` query param + real side nav)
   replacing the old all-data-at-once layout, so each section queries only

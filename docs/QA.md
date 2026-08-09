@@ -3,6 +3,38 @@
 This runbook covers roadmap items that require live credentials, browser state,
 or screenshots. Keep it current when flows change.
 
+## PR #99 Completion Evidence
+
+The approved shipped-defect program was verified on branch `fix/shipped-defects` on 2026-08-09.
+
+Repository gates:
+
+- `npm run lint` passed with zero findings.
+- `npx tsc --noEmit` passed.
+- `npm test` passed 2,186 tests across 247 files, including the live integration suites.
+- `npm run build` passed and generated 57 application routes.
+- `npm run validate:palette` passed the dark and light categorical-palette checks.
+- `git diff --check` passed.
+
+Browser acceptance:
+
+- The complete Playwright suite passed twice consecutively with `--retries=0`: 49 passed and one explicitly opt-in Plaid Sandbox test skipped on each run.
+- The authenticated golden path used the dedicated non-MFA CI account and passed sign-in, dashboard, transactions, task-specific Settings sections, export, and privacy controls.
+- The Reports suite ran with `FUNDFLOW_FEATURE_FLAGS=reportsPage` and passed all nine cases.
+- New journeys cover dashboard persistence, investments, goals, debt payoff, private receipt lifecycle, cross-source duplicate decisions, recurring sinking funds, OFX/QFX preview, and two named TOTP factors.
+- The responsive matrix covers 14 primary routes at 375, 430, 768, and 1440 pixels in light and dark themes.
+- Shell acceptance covers collapsed and expanded desktop navigation, the account menu, and the mobile destination dialog.
+- Twenty-six reviewed desktop screenshots cover 13 authenticated routes in both themes and match deterministically on repeated runs.
+
+Live Supabase evidence:
+
+- Migrations `20260809191458`, `20260809192302`, `20260809193528`, `20260809194242`, and `20260809195308` are applied to the linked project.
+- The obsolete `mfa_backup_codes` table is absent after migration `20260809195308`.
+- Passkeys are enabled for RP ID `fund-flow-swart.vercel.app` and origin `https://fund-flow-swart.vercel.app`.
+- The institution backfill updated all six items, with four logos and six brand colours populated.
+- GitHub Actions has a dedicated non-MFA E2E login plus the public Supabase URL and publishable key.
+- The Supabase service key remains local and is not exposed to the pull-request workflow.
+
 ## Accounts Phase 2 Release Evidence
 
 Live migrations:

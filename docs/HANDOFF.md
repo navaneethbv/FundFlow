@@ -401,15 +401,9 @@ override, but nothing needs it now. The flags don't depend on each other —
 `transactionsParity` and `settingsIa` are unrelated schema surfaces despite
 shipping in the same session.
 
-**One deliberate scope cut:** Phase 12's migration includes a `receipts`
-table and the app's first Supabase Storage bucket (schema and RLS only,
-verified-correct), but the actual upload route, `ReceiptInbox.tsx`, and
-All/Receipts tab are **not built** — that's a separate, security-sensitive
-piece of work (signed URLs, MIME/size limits, an RLS integration test proving
-cross-user isolation) better done as its own session than rushed at the tail
-of this one. The existing ephemeral AI receipt scan in Settings
-(`ReceiptScanSection`, `/api/ai/receipt`) is untouched and keeps working
-exactly as before either way.
+**Historical scope cut, closed 2026-08-09:** Phase 12 originally shipped only the `receipts` table and private Storage bucket.
+The latest delivery adds the upload, signed-view, matching, ignore, restore, delete, and cross-user isolation flows.
+The existing ephemeral AI receipt scan in Settings remains available separately.
 
 **Two real bugs found and fixed before they shipped, not after:**
 
