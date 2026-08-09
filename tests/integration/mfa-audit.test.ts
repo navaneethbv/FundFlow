@@ -139,7 +139,7 @@ suite("MFA auditing integration", () => {
     expect((logs![0].metadata as Record<string, unknown>).factorId).toBe(`f-enr-${stamp}`);
   });
 
-  it("rejects enroll finalization when the factor is not verified", async () => {
+  it("rejects verification finalization when the factor is not verified", async () => {
     activeUser = tempUserObj;
     activeSupabaseClient = clientWithMfa({
       factors: [{ id: `f-unverified-${stamp}`, status: "unverified" }],
@@ -147,7 +147,7 @@ suite("MFA auditing integration", () => {
 
     const req = new NextRequest("http://localhost/api/settings/mfa", {
       method: "POST",
-      body: JSON.stringify({ action: "enroll", factorId: `f-unverified-${stamp}` }),
+      body: JSON.stringify({ action: "verify", factorId: `f-unverified-${stamp}` }),
     });
     const resp = await mfaAuditPost(req);
     expect(resp.status).toBe(400);
@@ -163,11 +163,11 @@ suite("MFA auditing integration", () => {
       .from("audit_logs")
       .select("id", { count: "exact", head: true })
       .eq("user_id", tempUserId)
-      .eq("action", "mfa_enroll");
+      .eq("action", "mfa_verify");
     expect(count).toBe(0);
   });
 
-  it("server-finalizes enroll by setting the profile flag and writing audit", async () => {
+  it("server-finalizes verification by setting the profile flag and writing audit", async () => {
     activeUser = tempUserObj;
     activeSupabaseClient = clientWithMfa({
       factors: [{ id: `f-verified-${stamp}`, status: "verified" }],
@@ -175,7 +175,7 @@ suite("MFA auditing integration", () => {
 
     const req = new NextRequest("http://localhost/api/settings/mfa", {
       method: "POST",
-      body: JSON.stringify({ action: "enroll", factorId: `f-verified-${stamp}` }),
+      body: JSON.stringify({ action: "verify", factorId: `f-verified-${stamp}` }),
     });
     const resp = await mfaAuditPost(req);
     expect(resp.status).toBe(200);
@@ -191,7 +191,7 @@ suite("MFA auditing integration", () => {
       .from("audit_logs")
       .select("action, metadata")
       .eq("user_id", tempUserId)
-      .eq("action", "mfa_enroll");
+      .eq("action", "mfa_verify");
     expect(logs).toHaveLength(1);
     expect((logs![0].metadata as Record<string, unknown>).factorId).toBe(`f-verified-${stamp}`);
   });

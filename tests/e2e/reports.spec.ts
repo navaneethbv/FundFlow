@@ -189,7 +189,9 @@ test.describe.serial("Phase 6: reports and Sankey", () => {
 
     await expect(page).toHaveURL(/start=2026-01-01/);
     await expect(page).toHaveURL(/end=2026-03-31/);
-    await expect(page.getByText("2026-01-01 to 2026-03-31")).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "From", exact: true })).toHaveValue("2026-01-01");
+    await expect(page.getByRole("textbox", { name: "To", exact: true })).toHaveValue("2026-03-31");
+    await expect(page.getByRole("heading", { name: "Nothing in this range" })).toBeVisible();
   });
 
   test("the pending toggle and breakdown dimension are URL-driven", async ({
