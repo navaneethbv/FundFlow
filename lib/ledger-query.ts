@@ -151,7 +151,9 @@ export function ledgerHref(
   patch: LedgerQueryPatch,
   options: { resetPage?: boolean } = {},
 ): string {
-  const params = new URLSearchParams(entries);
+  const params = new URLSearchParams(
+    entries.map(([key, value]) => [key, value]),
+  );
   if (options.resetPage !== false) params.delete("page");
 
   for (const [key, value] of Object.entries(patch)) {

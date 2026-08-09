@@ -1,4 +1,8 @@
-import { applyMerchantRules, type MerchantRule } from "@/lib/planning";
+import {
+  filterProjectedLedgerRows,
+  projectLedgerDisplayRows,
+} from "@/lib/ledger-projection";
+import type { MerchantRule } from "@/lib/planning";
 
 /**
  * The ledger's `category`/`merchant` filters run in SQL against the *stored*
@@ -28,11 +32,6 @@ interface RuleFilterRow {
   manual_account_id?: string | null;
 }
 
-/** A row's resolved account key, whichever of the two FKs is set. */
-function resolvedAccountId(row: RuleFilterRow): string {
-  return row.account_id ?? row.manual_account_id ?? "";
-}
-
 /**
  * Filter rows by the rules-applied category and/or merchant. `category` matches
  * the applied primary category (null → "UNCATEGORIZED", the same sentinel the
@@ -47,21 +46,9 @@ export function filterRowsWithRules<T extends RuleFilterRow>(
 ): T[] {
   if (!filter.category && !filter.merchant) return rows;
 
-  const applied = applyMerchantRules(
-    rows.map((row) => ({
-      id: row.id,
-      merchant: row.merchant_name ?? row.name ?? "",
-      category: row.pfc_primary,
-      accountName: accountNamesById.get(resolvedAccountId(row)) ?? "",
-    })),
-    rules,
+  const projected = projectLedgerDisplayRows(rows, rules, accountNamesById);
+  const selected = new Set(
+    filterProjectedLedgerRows(projected, filter).map((row) => row.id),
   );
-
-  const wantMerchant = filter.merchant?.trim().toLowerCase();
-  return rows.filter((_, index) => {
-    const row = applied[index]!;
-    if (filter.category && (row.category ?? "UNCATEGORIZED") !== filter.category) return false;
-    if (wantMerchant && row.merchant.trim().toLowerCase() !== wantMerchant) return false;
-    return true;
-  });
+  return rows.filter((row) => selected.has(row.id));
 }
