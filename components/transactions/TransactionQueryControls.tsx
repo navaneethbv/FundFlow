@@ -180,7 +180,7 @@ export default function TransactionQueryControls({
           className="flex min-w-64 flex-1 items-center gap-2"
           onSubmit={(event) => {
             event.preventDefault();
-            navigate({ q: search }, "search");
+            navigate({ q: search.trim() || null }, "search");
           }}
         >
           <div className="relative flex-1">
@@ -212,14 +212,14 @@ export default function TransactionQueryControls({
             className={triggerClasses}
           >
             <Calendar aria-hidden className="h-4 w-4" />
-            Date
+            {committed.month ? `Date: ${formatMonth(committed.month)}` : "Date"}
             <ChevronDown aria-hidden className="h-4 w-4" />
           </button>
           {open === "date" && (
             <div ref={datePanelRef} role="dialog" aria-label="Date filter" className="absolute right-0 z-40 mt-2 w-72 space-y-4 rounded-card border border-panel-border bg-panel p-4 shadow-float">
               <label className="block text-xs font-semibold text-muted">
                 Month
-                <Input type="month" value={monthDraft} onChange={(event) => setMonthDraft(event.target.value)} className="mt-1" />
+                <Input aria-label="Month" type="month" value={monthDraft} onChange={(event) => setMonthDraft(event.target.value)} className="mt-1" />
               </label>
               <div className="flex justify-end gap-2">
                 <Button variant="ghost" onClick={() => close("date")}>Cancel</Button>
@@ -257,35 +257,35 @@ export default function TransactionQueryControls({
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="text-xs font-semibold text-muted">
                   Account
-                  <Select value={filterDraft.accountId} onChange={(event) => setFilterDraft((value) => ({ ...value, accountId: event.target.value }))} className="mt-1">
+                  <Select aria-label="Account" value={filterDraft.accountId} onChange={(event) => setFilterDraft((value) => ({ ...value, accountId: event.target.value }))} className="mt-1">
                     <option value="">All accounts</option>
                     {options.accounts.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </Select>
                 </label>
                 <label className="text-xs font-semibold text-muted">
                   Category
-                  <Select value={filterDraft.category} onChange={(event) => setFilterDraft((value) => ({ ...value, category: event.target.value, sub: "" }))} className="mt-1">
+                  <Select aria-label="Category" value={filterDraft.category} onChange={(event) => setFilterDraft((value) => ({ ...value, category: event.target.value, sub: "" }))} className="mt-1">
                     <option value="">All categories</option>
                     {options.categories.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </Select>
                 </label>
                 <label className="text-xs font-semibold text-muted">
                   Subcategory
-                  <Select disabled={!filterDraft.category} value={filterDraft.sub} onChange={(event) => setFilterDraft((value) => ({ ...value, sub: event.target.value }))} className="mt-1">
+                  <Select aria-label="Subcategory" disabled={!filterDraft.category} value={filterDraft.sub} onChange={(event) => setFilterDraft((value) => ({ ...value, sub: event.target.value }))} className="mt-1">
                     <option value="">All subcategories</option>
                     {categorySubcategories.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </Select>
                 </label>
                 <label className="text-xs font-semibold text-muted">
                   Merchant
-                  <Input list="transaction-merchant-options" value={filterDraft.merchant} onChange={(event) => setFilterDraft((value) => ({ ...value, merchant: event.target.value }))} className="mt-1" placeholder="Any merchant" />
+                  <Input aria-label="Merchant" list="transaction-merchant-options" value={filterDraft.merchant} onChange={(event) => setFilterDraft((value) => ({ ...value, merchant: event.target.value }))} className="mt-1" placeholder="Any merchant" />
                   <datalist id="transaction-merchant-options">
                     {options.merchants.map((option) => <option key={option} value={option} />)}
                   </datalist>
                 </label>
                 <label className="text-xs font-semibold text-muted">
                   Money direction
-                  <Select value={filterDraft.flow} onChange={(event) => setFilterDraft((value) => ({ ...value, flow: event.target.value as LedgerFilters["flow"] }))} className="mt-1">
+                  <Select aria-label="Money direction" value={filterDraft.flow} onChange={(event) => setFilterDraft((value) => ({ ...value, flow: event.target.value as LedgerFilters["flow"] }))} className="mt-1">
                     <option value="">Money in and out</option>
                     <option value="in">Money in</option>
                     <option value="out">Money out</option>
@@ -293,7 +293,7 @@ export default function TransactionQueryControls({
                 </label>
                 <label className="text-xs font-semibold text-muted">
                   Account type
-                  <Select value={filterDraft.accountType} onChange={(event) => setFilterDraft((value) => ({ ...value, accountType: event.target.value as LedgerFilters["accountType"] }))} className="mt-1">
+                  <Select aria-label="Account type" value={filterDraft.accountType} onChange={(event) => setFilterDraft((value) => ({ ...value, accountType: event.target.value as LedgerFilters["accountType"] }))} className="mt-1">
                     <option value="">All account types</option>
                     <option value="depository">Depository</option>
                     <option value="credit">Credit</option>

@@ -62,6 +62,10 @@ export function needsProjectedLedgerPage(
   );
 }
 
+export function shouldShowLedgerDayGroups(sort: LedgerSortField): boolean {
+  return sort === "date";
+}
+
 export function selectProjectedLedgerPage<T extends LedgerProjectedRow>(
   rows: T[],
   input: {

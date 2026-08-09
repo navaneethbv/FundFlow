@@ -99,13 +99,13 @@ export default function TransactionSortMenu({
         <div ref={panelRef} role="dialog" aria-label="Sort transactions" className="absolute right-0 z-40 mt-2 w-72 space-y-4 rounded-card border border-panel-border bg-panel p-4 shadow-float">
           <label className="block text-xs font-semibold text-muted">
             Sort by
-            <Select value={draftField} onChange={(event) => setDraftField(event.target.value as LedgerSortField)} className="mt-1">
+            <Select aria-label="Sort by" value={draftField} onChange={(event) => setDraftField(event.target.value as LedgerSortField)} className="mt-1">
               {Object.entries(FIELD_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </Select>
           </label>
           <label className="block text-xs font-semibold text-muted">
             Direction
-            <Select value={draftDirection} onChange={(event) => setDraftDirection(event.target.value as LedgerSortDirection)} className="mt-1">
+            <Select aria-label="Direction" value={draftDirection} onChange={(event) => setDraftDirection(event.target.value as LedgerSortDirection)} className="mt-1">
               <option value="asc">{directionLabel(draftField, "asc")}</option>
               <option value="desc">{directionLabel(draftField, "desc")}</option>
             </Select>

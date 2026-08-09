@@ -34,7 +34,7 @@ describe("TransactionQueryControls", () => {
 
     expect(html).toContain('aria-label="Search transactions"');
     expect(html).toContain(">Search<");
-    expect(html).toContain(">Date<");
+    expect(html).toContain("Date: Aug 2026");
     expect(html).toContain(">Filters<");
     expect(html).toContain('aria-label="Remove search filter coffee"');
     expect(html).toContain('aria-label="Remove date filter Aug 2026"');

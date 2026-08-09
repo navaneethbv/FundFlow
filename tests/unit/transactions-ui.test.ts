@@ -26,5 +26,6 @@ describe("transactions UI restyle", () => {
     expect(source).toContain("TableToolbar");
     expect(source).toContain("bulkTagBar={<BulkTagBar");
     expect(source).toContain("columnsMenu={");
+    expect(source.indexOf("<TableToolbar")).toBeLessThan(source.indexOf("<MobileLedgerList"));
   });
 });

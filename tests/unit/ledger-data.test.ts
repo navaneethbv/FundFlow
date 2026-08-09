@@ -4,6 +4,7 @@ import {
   ledgerDatabaseOrder,
   needsProjectedLedgerPage,
   selectProjectedLedgerPage,
+  shouldShowLedgerDayGroups,
 } from "@/lib/ledger-data";
 import { projectLedgerRows } from "@/lib/ledger-projection";
 
@@ -76,6 +77,16 @@ describe("needsProjectedLedgerPage", () => {
     expect(needsProjectedLedgerPage("account", false)).toBe(true);
     expect(needsProjectedLedgerPage("date", true)).toBe(true);
     expect(needsProjectedLedgerPage("amount", false)).toBe(false);
+  });
+});
+
+describe("shouldShowLedgerDayGroups", () => {
+  it("shows date subtotals only while date is the primary sort", () => {
+    expect(shouldShowLedgerDayGroups("date")).toBe(true);
+    expect(shouldShowLedgerDayGroups("amount")).toBe(false);
+    expect(shouldShowLedgerDayGroups("merchant")).toBe(false);
+    expect(shouldShowLedgerDayGroups("category")).toBe(false);
+    expect(shouldShowLedgerDayGroups("account")).toBe(false);
   });
 });
 

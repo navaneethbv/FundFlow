@@ -23,6 +23,7 @@ import { formatCurrency, titleCase, formatMonth } from "@/lib/format";
 import { formatDate } from "@/lib/format-date";
 import { hasRemapRules } from "@/lib/ledger-filter";
 import {
+  hasActiveLedgerFilters,
   ledgerHref,
   ledgerQueryEntries,
   parseLedgerQuery,
@@ -34,6 +35,7 @@ import {
   ledgerDatabaseOrder,
   needsProjectedLedgerPage,
   selectProjectedLedgerPage,
+  shouldShowLedgerDayGroups,
 } from "@/lib/ledger-data";
 import {
   buildLedgerFilterOptions,
@@ -312,6 +314,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   for (const r of rows) {
     dayTotals.set(r.date as string, (dayTotals.get(r.date as string) ?? 0) + (r.amount as number));
   }
+  const showDayGroups = shouldShowLedgerDayGroups(state.sort);
 
   const cardRows: LedgerCardRow[] = rows.map((t) => {
     const ann = annById.get(t.id);
@@ -373,11 +376,13 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
           />
         </Panel>
 
-        <p className="text-xs text-muted">
-          {total.toLocaleString()} transaction{total === 1 ? "" : "s"}
-          {month && bounds ? ` in ${formatMonth(month)}` : ""}. Positive amounts are money out
-          (Plaid sign convention).
-        </p>
+        {!ledgerError && (
+          <p className="text-xs text-muted">
+            {total.toLocaleString()} transaction{total === 1 ? "" : "s"}
+            {month && bounds ? ` in ${formatMonth(month)}` : ""}. Positive amounts are money out
+            (Plaid sign convention).
+          </p>
+        )}
 
         {ledgerError ? (
           <Panel tone="danger" role="alert" title="Transactions unavailable">
@@ -385,23 +390,27 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
           </Panel>
         ) : rows.length === 0 ? (
           <EmptyState
-            title="No transactions found"
-            description="Try clearing filters, or refresh from the dashboard."
+            title={hasActiveLedgerFilters(state) ? "No transactions match these filters" : "No transactions yet"}
+            description={
+              hasActiveLedgerFilters(state)
+                ? "Try changing or clearing the filters."
+                : "Connect an account or add a transaction to begin."
+            }
           />
         ) : (
           <Panel padding="none" className="overflow-hidden">
-            <div className="sm:hidden">
-              <MobileLedgerList rows={cardRows} />
-            </div>
             <TableToolbar
               bulkTagBar={<BulkTagBar transactionIds={rows.map((t) => t.id)} />}
-              sortMenu={<TransactionSortMenu field={state.sort} direction={state.direction} entries={queryEntries} />}
+              sortMenu={<TransactionSortMenu key="sort" field={state.sort} direction={state.direction} entries={queryEntries} />}
               columnsMenu={
                 transactionsParityEnabled ? (
                   <ColumnsMenu visible={visibleColumns} isDefault={columnsAreDefault} otherParams={columnsFormParams} />
                 ) : undefined
               }
             />
+            <div className="sm:hidden">
+              <MobileLedgerList rows={cardRows} />
+            </div>
             <div className="hidden overflow-x-auto sm:block">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 z-10 bg-panel-2">
@@ -424,7 +433,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                   {rows.map((t, index) => {
                     const ann = annById.get(t.id as string);
                     const txnSplits = splitsById.get(t.id as string) ?? [];
-                    const isNewDay = index === 0 || rows[index - 1]!.date !== t.date;
+                    const isNewDay = showDayGroups && (index === 0 || rows[index - 1]!.date !== t.date);
                     const dayTotal = dayTotals.get(t.date as string) ?? 0;
                     const rowColumnCount =
                       4 + (visibleColumns.has("category") ? 1 : 0) + (visibleColumns.has("account") ? 1 : 0);
@@ -525,7 +534,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
           <nav className="flex items-center justify-between text-sm">
             {page > 1 ? (
               <ButtonLink href={pageLink(page - 1)} variant="secondary">
-                Newer
+                Previous
               </ButtonLink>
             ) : (
               <span />
@@ -535,7 +544,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
             </span>
             {page < totalPages ? (
               <ButtonLink href={pageLink(page + 1)} variant="secondary">
-                Older
+                Next
               </ButtonLink>
             ) : (
               <span />

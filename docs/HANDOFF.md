@@ -1,6 +1,18 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-08-02. Read this first to resume.
+Last updated: 2026-08-08. Read this first to resume.
+
+## Latest delivery: transaction sorting and staged filters
+
+The Transactions page now has explicit Search, Date, Filters, and one shared Sort popover across desktop and mobile.
+Date, account, category, subcategory, merchant, money direction, and account type changes are staged locally until Apply, while search applies on Enter or its Search button.
+Applied chips, Clear filters, pagination, browser history, column state, and saved views all preserve the normalized ledger URL contract.
+Date and displayed signed amount use deterministic database ordering, while merchant, category, and account sort the complete rule-adjusted display projection before selecting each 50-row page.
+The previous silent 4,000-row rule-aware cutoff is gone, failed chunks no longer appear as successful empty results, and every financial query remains explicitly owner-scoped.
+No migration or exchange-rate handling was added because this ledger is USD-only.
+
+Verification passed with repository-wide lint, TypeScript, unit tests, the production build, and `tests/e2e/transactions.spec.ts` against a disposable Supabase user with 56 seeded transactions.
+The browser journey covered all five sort fields in both directions, complete ordering across two pages, merchant-rule display values, staged Apply behavior, saved-view restoration, Back and Forward, client navigation without reload, mobile controls, Escape handling, and focus restoration.
 
 ## START HERE: Monarch visual-parity — every phase (V0 through V11) is done
 
