@@ -14,7 +14,7 @@ Phase D adds debt payoff planning, recurring sinking funds, persisted cross-sour
 The unusable custom backup-code table was removed because Supabase Auth does not expose backup-code consumption as an authentication factor.
 Passkeys retain the existing server-side AAL2 invariant, so an account with verified TOTP still receives the TOTP step-up after passkey sign-in.
 
-The four new migrations are applied to the linked live Supabase project.
+The five new migrations are applied to the linked live Supabase project.
 Production Auth has passkeys enabled for `fund-flow-swart.vercel.app` with the canonical HTTPS origin.
 The institution backfill updated all six live Plaid items, including four available logos and six brand colours.
 
