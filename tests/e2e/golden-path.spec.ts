@@ -83,6 +83,10 @@ test.describe.serial("authenticated golden path", () => {
   });
 
   test("CSV export honors the privacy contract (or the opt-out)", async () => {
+    test.skip(
+      !process.env.SUPABASE_SECRET_KEY,
+      "the export audit write requires the server-side Supabase service key",
+    );
     // page.request shares the signed-in context's cookies.
     const response = await page.request.get("/api/export/csv");
     expect([200, 403]).toContain(response.status());
