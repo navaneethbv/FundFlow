@@ -4,6 +4,7 @@ import {
   claimWeeklyDelivery,
   markWeeklyDeliverySent,
   markWeeklyDeliveryFailed,
+  markWeeklyDeliverySkipped,
 } from "@/lib/report-delivery";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -226,6 +227,42 @@ describe("weekly report delivery claims", () => {
           error_code: longError.slice(0, 80),
         }),
       );
+    });
+
+    it("markWeeklyDeliverySkipped parks the period without a failure", async () => {
+      const eqUser = vi.fn().mockResolvedValue({ error: null });
+      const eqId = vi.fn().mockReturnValue({ eq: eqUser });
+      const update = vi.fn().mockReturnValue({ eq: eqId });
+
+      const mockSupabase = {
+        from: vi.fn().mockReturnValue({ update }),
+      } as unknown as SupabaseClient;
+
+      await markWeeklyDeliverySkipped(
+        mockSupabase,
+        "user-1",
+        "del-1",
+        "recipient_undeliverable",
+      );
+      expect(update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "skipped",
+          error_code: "recipient_undeliverable",
+        }),
+      );
+    });
+
+    it("a skipped delivery is never reclaimed", () => {
+      expect(
+        classifyDeliveryClaim(
+          {
+            status: "skipped",
+            attemptedAt: "2026-07-13T13:15:00.000Z",
+            errorCode: "recipient_undeliverable",
+          },
+          now,
+        ),
+      ).toBe("skip");
     });
 
     it("throws errors when DB update operations fail", async () => {

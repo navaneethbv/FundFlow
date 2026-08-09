@@ -49,3 +49,38 @@ export function describeDeliveryError(error: unknown): string {
 export function isPermanentDeliveryError(code: string | null | undefined): boolean {
   return /^smtp_5\d\d\b/.test(code ?? "");
 }
+
+/** Stored on a delivery we declined to attempt, not one the provider refused. */
+export const UNDELIVERABLE_RECIPIENT_CODE = "recipient_undeliverable";
+
+/** RFC 2606 §2: reserved second-level domains. */
+const RESERVED_DOMAINS = new Set(["example.com", "example.net", "example.org"]);
+
+/** RFC 2606 §2 and RFC 6761: reserved top-level domains. */
+const RESERVED_TLDS = new Set(["test", "example", "invalid", "localhost"]);
+
+/**
+ * True when the address is in a domain reserved by the RFCs above, which is
+ * guaranteed never to accept mail. Sending to one wastes a provider attempt and
+ * earns a 5xx that looks exactly like a real bank-report delivery failure.
+ *
+ * This is not hypothetical here: `tests/integration/` creates throwaway
+ * `@example.com` users in the same Supabase project production runs against, so
+ * while a test run is in flight those rows are visible to the weekly-report
+ * cron and it would page the admin about a cron that is working correctly.
+ *
+ * Deliberately narrow. Anything it cannot parse is *not* declared
+ * undeliverable — the provider is the better judge of a real address, and a
+ * false positive here silently drops a user's report.
+ */
+export function isUndeliverableRecipient(
+  email: string | null | undefined,
+): boolean {
+  const domain = (email ?? "").trim().toLowerCase().split("@")[1];
+  if (!domain) return false;
+  const labels = domain.split(".");
+  return (
+    RESERVED_TLDS.has(labels[labels.length - 1] ?? "") ||
+    RESERVED_DOMAINS.has(labels.slice(-2).join("."))
+  );
+}

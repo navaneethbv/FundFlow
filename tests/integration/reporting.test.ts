@@ -37,6 +37,17 @@ vi.mock("nodemailer", () => {
   };
 });
 
+vi.mock("@/lib/delivery-error", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/lib/delivery-error")>();
+  return {
+    ...original,
+    // This test already replaces SMTP so it can exercise success and failure
+    // isolation. Keep its persisted recipients on a reserved domain so a real
+    // cron that overlaps the test run can never attempt delivery.
+    isUndeliverableRecipient: vi.fn().mockReturnValue(false),
+  };
+});
+
 suite("weekly financial reporting integration", () => {
   if (!run) return;
 

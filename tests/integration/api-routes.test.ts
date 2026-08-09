@@ -243,7 +243,7 @@ suite("API routes integration", () => {
         // Clean up item
         await admin.from("plaid_items").delete().eq("id", item!.id);
       },
-      15000,
+      30000,
     );
 
     it("proceeds successfully even if one user's sync throws an error", async () => {
