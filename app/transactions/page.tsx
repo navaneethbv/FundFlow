@@ -16,6 +16,7 @@ import AddTransactionModal from "@/components/transactions/AddTransactionModal";
 import ColumnsMenu from "@/components/transactions/ColumnsMenu";
 import TableToolbar from "@/components/transactions/TableToolbar";
 import TransactionQueryControls from "@/components/transactions/TransactionQueryControls";
+import TransactionSortMenu from "@/components/transactions/TransactionSortMenu";
 import { MerchantAvatar } from "@/components/ui/Avatar";
 import CategoryChip from "@/components/ui/CategoryChip";
 import { formatCurrency, titleCase, formatMonth } from "@/lib/format";
@@ -394,6 +395,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
             </div>
             <TableToolbar
               bulkTagBar={<BulkTagBar transactionIds={rows.map((t) => t.id)} />}
+              sortMenu={<TransactionSortMenu field={state.sort} direction={state.direction} entries={queryEntries} />}
               columnsMenu={
                 transactionsParityEnabled ? (
                   <ColumnsMenu visible={visibleColumns} isDefault={columnsAreDefault} otherParams={columnsFormParams} />

@@ -17,7 +17,8 @@ type Panel = "none" | "edit" | "columns";
 export default function TableToolbar({
   bulkTagBar,
   columnsMenu,
-}: Readonly<{ bulkTagBar: React.ReactNode; columnsMenu?: React.ReactNode }>) {
+  sortMenu,
+}: Readonly<{ bulkTagBar: React.ReactNode; columnsMenu?: React.ReactNode; sortMenu?: React.ReactNode }>) {
   const [open, setOpen] = useState<Panel>("none");
 
   function toggle(panel: Panel) {
@@ -36,6 +37,7 @@ export default function TableToolbar({
   return (
     <div className="border-b border-panel-border px-4 py-2 sm:px-5">
       <div className="flex flex-wrap items-center justify-end gap-2">
+        {sortMenu}
         <button type="button" onClick={() => toggle("edit")} className={triggerClass("edit")}>
           Edit multiple
         </button>
