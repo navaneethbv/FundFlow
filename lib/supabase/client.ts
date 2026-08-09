@@ -9,5 +9,6 @@ export function createClient() {
   return createBrowserClient(
     publicEnv.supabaseUrl,
     publicEnv.supabasePublishableKey,
+    { auth: { experimental: { passkey: true } } },
   );
 }

@@ -20,6 +20,7 @@ describe("supabase browser client creator", () => {
     expect(mockCreateBrowserClient).toHaveBeenCalledWith(
       "https://mock-supabase-url.supabase.co",
       "mock-publishable-key",
+      { auth: { experimental: { passkey: true } } },
     );
   });
 });
