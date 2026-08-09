@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
 import { writeAudit, getClientIp } from "@/lib/audit";
 
-type MfaAction = "enroll" | "unenroll";
+type MfaAction = "enroll" | "verify" | "unenroll";
 
 interface MfaFactor {
   id: string;
@@ -51,8 +51,8 @@ export async function POST(req: NextRequest) {
     }
 
     const { action, factorId } = body;
-    if (!action || !["enroll", "unenroll"].includes(action)) {
-      return badRequest("Invalid action: must be 'enroll' or 'unenroll'");
+    if (!action || !["enroll", "verify", "unenroll"].includes(action)) {
+      return badRequest("Invalid action: must be 'enroll', 'verify', or 'unenroll'");
     }
     if (!factorId || typeof factorId !== "string") {
       return badRequest("Invalid factorId: must be a string");
@@ -62,6 +62,19 @@ export async function POST(req: NextRequest) {
     let mfaEnrolled = false;
 
     if (mfaAction === "enroll") {
+      const { data, error: factorError } = await supabase.auth.mfa.listFactors();
+      if (factorError) throw factorError;
+      const factor = [...(data?.totp ?? [])].find((candidate) => candidate.id === factorId);
+      if (!factor) return badRequest("MFA factor does not belong to this user");
+      if ((data?.totp ?? []).length > 10) {
+        if (factor.status !== "verified") {
+          await supabase.auth.mfa.unenroll({ factorId });
+        }
+        return badRequest("A maximum of ten TOTP factors is allowed");
+      }
+      const verifiedFactors = getVerifiedFactors(data);
+      mfaEnrolled = verifiedFactors.length > 0;
+    } else if (mfaAction === "verify") {
       const verifiedFactors = await listVerifiedFactors(supabase);
       const isVerified = verifiedFactors.some((factor) => factor.id === factorId);
       if (!isVerified) {
@@ -81,7 +94,12 @@ export async function POST(req: NextRequest) {
     const ip = getClientIp(req);
     await writeAudit({
       userId: user.id,
-      action: mfaAction === "enroll" ? "mfa_enroll" : "mfa_unenroll",
+      action:
+        mfaAction === "enroll"
+          ? "mfa_enroll"
+          : mfaAction === "verify"
+            ? "mfa_verify"
+            : "mfa_unenroll",
       metadata: { factorId },
       ip,
     });

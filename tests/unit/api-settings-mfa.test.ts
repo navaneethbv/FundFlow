@@ -58,7 +58,9 @@ describe("POST /api/settings/mfa", () => {
     });
     const res = await POST(req);
     expect(res.status).toBe(400);
-    expect(mockBadRequest).toHaveBeenCalledWith("Invalid action: must be 'enroll' or 'unenroll'");
+    expect(mockBadRequest).toHaveBeenCalledWith(
+      "Invalid action: must be 'enroll', 'verify', or 'unenroll'",
+    );
   });
 
   it("returns badRequest if factorId is invalid or missing", async () => {
@@ -107,7 +109,7 @@ describe("POST /api/settings/mfa", () => {
     );
   });
 
-  it("returns badRequest on enroll if factor is not verified", async () => {
+  it("returns badRequest on verify if factor is not verified", async () => {
     const listFactors = vi.fn().mockResolvedValue({
       data: {
         totp: [{ id: "f-1", status: "unverified" }],
@@ -122,12 +124,39 @@ describe("POST /api/settings/mfa", () => {
 
     const req = new NextRequest("http://localhost/api/settings/mfa", {
       method: "POST",
-      body: JSON.stringify({ action: "enroll", factorId: "f-1" }),
+      body: JSON.stringify({ action: "verify", factorId: "f-1" }),
     });
     const res = await POST(req);
     expect(res.status).toBe(400);
     expect(mockBadRequest).toHaveBeenCalledWith(
       "MFA factor must be verified before finalizing enrollment",
+    );
+  });
+
+  it("derives the profile flag and audit event after verification", async () => {
+    const listFactors = vi.fn().mockResolvedValue({
+      data: { totp: [{ id: "f-1", status: "verified" }] },
+      error: null,
+    });
+    const eq = vi.fn().mockResolvedValue({ error: null });
+    const update = vi.fn().mockReturnValue({ eq });
+    const mockSupabase = {
+      auth: { mfa: { listFactors } },
+      from: vi.fn().mockReturnValue({ update }),
+    } as unknown as SupabaseClient;
+    mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase: mockSupabase });
+
+    const response = await POST(
+      new NextRequest("http://localhost/api/settings/mfa", {
+        method: "POST",
+        body: JSON.stringify({ action: "verify", factorId: "f-1" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(eq).toHaveBeenCalledWith("id", "user-1");
+    expect(mockWriteAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "mfa_verify", metadata: { factorId: "f-1" } }),
     );
   });
 
