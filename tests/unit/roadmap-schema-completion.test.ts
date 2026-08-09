@@ -45,4 +45,12 @@ describe("roadmap completion schema", () => {
     expect(migration).toContain("revoke insert, update, delete on public.sinking_funds from authenticated");
     expect(migration).toContain("grant select on public.sinking_funds to authenticated");
   });
+
+  it("limits receipt rows and objects to server-side mutations", () => {
+    expect(migration).toContain("drop policy if exists \"receipts_all_own\"");
+    expect(migration).toContain("create policy \"receipts_select_own\"");
+    expect(migration).toContain("revoke insert, update, delete on public.receipts from authenticated");
+    expect(migration).toContain("grant select on public.receipts to authenticated");
+    expect(migration).toContain("drop policy if exists \"receipt_objects_all_own\" on storage.objects");
+  });
 });
