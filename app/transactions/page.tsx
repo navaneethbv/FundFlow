@@ -4,13 +4,9 @@ import AutoRefresh from "@/components/AutoRefresh";
 import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
 import Badge from "@/components/ui/Badge";
-import Button from "@/components/ui/Button";
 import ButtonLink from "@/components/ui/ButtonLink";
 import EmptyState from "@/components/ui/EmptyState";
-import Input from "@/components/ui/Input";
 import Panel from "@/components/ui/Panel";
-import Select from "@/components/ui/Select";
-import { Search } from "@/components/ui/icons";
 import RefundReview from "@/components/transactions/RefundReview";
 import TransactionEditor from "@/components/transactions/TransactionEditor";
 import MobileLedgerList, { type LedgerCardRow } from "@/components/transactions/MobileLedgerList";
@@ -19,6 +15,7 @@ import BulkTagBar from "@/components/transactions/BulkTagBar";
 import AddTransactionModal from "@/components/transactions/AddTransactionModal";
 import ColumnsMenu from "@/components/transactions/ColumnsMenu";
 import TableToolbar from "@/components/transactions/TableToolbar";
+import TransactionQueryControls from "@/components/transactions/TransactionQueryControls";
 import { MerchantAvatar } from "@/components/ui/Avatar";
 import CategoryChip from "@/components/ui/CategoryChip";
 import { formatCurrency, titleCase, formatMonth } from "@/lib/format";
@@ -61,8 +58,6 @@ function monthBounds(month: string): { start: string; end: string } | null {
   const lastDay = new Date(year, monthIdx + 1, 0).getDate();
   return { start: `${month}-01`, end: `${month}-${String(lastDay).padStart(2, "0")}` };
 }
-
-const FLOW_LABELS: Record<string, string> = { in: "Money in", out: "Money out" };
 
 export default async function TransactionsPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
@@ -369,81 +364,13 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
         />
 
         <Panel>
-          <form method="get" action="/transactions" className="flex flex-wrap items-center gap-2 text-sm">
-            <div className="relative min-w-52 flex-1">
-              <Search aria-hidden className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted" />
-              <Input
-                type="search"
-                name="q"
-                aria-label="Search transactions"
-                defaultValue={params.q ?? ""}
-                placeholder="Search transactions"
-                className="pl-9"
-              />
-            </div>
-            {/* An empty month input paints as "--------- ----" with no visible
-                clue what it filters, so it carries its own name. */}
-            <Input
-              type="month"
-              name="month"
-              aria-label="Filter by month"
-              title="Filter by month"
-              defaultValue={month}
-              className="w-auto"
-            />
-            <Select
-              name="accountId"
-              aria-label="Filter by account"
-              defaultValue={accountId}
-              className="max-w-52"
-            >
-              <option value="">All accounts</option>
-              {(accounts ?? []).map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name ?? "Account"}
-                  {a.mask ? ` **${a.mask}` : ""}
-                </option>
-              ))}
-            </Select>
-            <Button type="submit">Filters</Button>
-            {(month || accountId || params.q || category || sub || merchant || flow || accountType) && (
-              <ButtonLink href="/transactions" variant="ghost">
-                Clear
-              </ButtonLink>
-            )}
-          </form>
+          <TransactionQueryControls
+            key={JSON.stringify(queryEntries)}
+            committed={{ q, month, accountId, category, sub, merchant, flow, accountType }}
+            entries={queryEntries}
+            options={filterOptions}
+          />
         </Panel>
-
-        {(category || sub || merchant || flow || accountType) && (
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            {(
-              [
-                ["category", category ? titleCase(category) : ""],
-                ["sub", sub ? titleCase(sub) : ""],
-                ["merchant", merchant],
-                ["flow", FLOW_LABELS[flow ?? ""] ?? ""],
-                ["accountType", accountType ? titleCase(accountType) : ""],
-              ] as const
-            )
-              .filter(([, label]) => label)
-              .map(([key, label]) => {
-                const remaining = new URLSearchParams();
-                if (month) remaining.set("month", month);
-                if (accountId) remaining.set("accountId", accountId);
-                if (q) remaining.set("q", q);
-                if (category && key !== "category") remaining.set("category", category);
-                if (sub && key !== "sub" && key !== "category") remaining.set("sub", sub);
-                if (merchant && key !== "merchant") remaining.set("merchant", merchant);
-                if (flow && key !== "flow") remaining.set("flow", flow);
-                if (accountType && key !== "accountType") remaining.set("accountType", accountType);
-                return (
-                  <ButtonLink key={key} href={`/transactions?${remaining.toString()}`} variant="ghost">
-                    {label} ×
-                  </ButtonLink>
-                );
-              })}
-          </div>
-        )}
 
         <p className="text-xs text-muted">
           {total.toLocaleString()} transaction{total === 1 ? "" : "s"}
