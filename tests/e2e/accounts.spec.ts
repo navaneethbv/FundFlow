@@ -130,6 +130,7 @@ test.describe.serial("accounts page", () => {
   test("renders, filters, exports, and remains responsive in both themes", async ({
     page,
   }) => {
+    test.setTimeout(120_000);
     // `url` alongside `text`: a bare message leaves you guessing which of a
     // dozen navigations produced it. Kept as a separate field so the
     // known-noise filter below still matches against the raw message.

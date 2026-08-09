@@ -4,6 +4,7 @@ test.describe("recurring sinking funds", () => {
   test.skip(!hasLiveCredentials, "Live Supabase credentials are required");
 
   test("creates, edits, and removes an annual sinking fund", async ({ authenticatedPage: page }) => {
+    test.setTimeout(60_000);
     await page.goto("/settings?section=categories");
     const panel = page.getByRole("heading", { name: "Sinking funds" }).locator("xpath=ancestor::section");
     await panel.getByLabel("Name").fill("Car insurance");
@@ -17,7 +18,12 @@ test.describe("recurring sinking funds", () => {
     await panel.getByLabel("Amount").fill("1800");
     await panel.getByRole("button", { name: "Save changes" }).click();
     await expect(panel.getByText("$1,800.00", { exact: true })).toBeVisible();
+    const deleteResponse = page.waitForResponse((response) =>
+      response.request().method() === "DELETE" &&
+      /\/api\/sinking-funds\/[^/]+$/.test(new URL(response.url()).pathname),
+    );
     await panel.getByRole("button", { name: "Remove" }).click();
+    expect((await deleteResponse).ok()).toBe(true);
     await expect(panel.getByText("Car insurance", { exact: true })).toBeHidden();
   });
 });

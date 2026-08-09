@@ -421,6 +421,7 @@ test.describe.serial("budget page", () => {
       name: "Annual Insurance",
       target_amount: 600,
       due_date: dueDate.toISOString().slice(0, 10),
+      cycle_anchor_date: dueDate.toISOString().slice(0, 10),
     });
     if (fundError) throw fundError;
 
