@@ -12,7 +12,8 @@
     "test:unit": "vitest run tests/unit",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "validate:palette": "node scripts/validate_palette.js app/globals.css"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

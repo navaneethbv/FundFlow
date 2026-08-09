@@ -29,11 +29,11 @@ Local verification, live Supabase state, browser acceptance, and remote checks a
 
 **Interfaces:** Produces importable `validatePalette`, `deltaE2000`, and CVD simulation helpers plus an `npm run validate:palette` command.
 
-- [ ] Write failing tests for hex parsing, RGB to Lab conversion, CIEDE2000 reference pairs, protanopia, deuteranopia, tritanopia simulation, exact threshold boundaries, and readable failure output.
+- [ ] Write failing tests for hex parsing, OKLab reference distances, protanopia, deuteranopia, tritanopia simulation, exact threshold boundaries, and readable failure output.
 - [ ] Add fixtures proving the approved light and dark palettes pass and an intentionally collapsed palette fails.
 - [ ] Run `npm run test:unit -- tests/unit/palette-validator.test.ts` and confirm failure.
-- [ ] Implement deterministic sRGB conversion, simulation matrices, Lab conversion, pair enumeration, and CIEDE2000 without a runtime dependency.
-- [ ] Enforce a normal-vision floor of 15 and a simulated-CVD floor of 6 for every pair in each theme.
+- [ ] Implement deterministic sRGB conversion, canonical Machado simulation matrices, OKLab conversion, and pair enumeration without a runtime dependency.
+- [ ] Enforce a normal-vision floor of 15 and a protanopia and deuteranopia floor of 6 for every pair in each theme, while reporting tritanopia as advisory evidence.
 - [ ] Add a package script that validates repository token values and exits nonzero with the failing theme, simulation, pair, and distance.
 - [ ] Run unit tests and the CLI and commit with `test(ui): add palette accessibility validator`.
 

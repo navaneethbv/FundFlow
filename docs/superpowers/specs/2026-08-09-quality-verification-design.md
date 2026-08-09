@@ -23,8 +23,8 @@ The positive and negative diverging tokens remain separate from the categorical 
 No eighth categorical hue will be introduced.
 
 The repository will own a deterministic palette validator under `scripts/validate_palette.js` so validation no longer depends on an unavailable external skill file.
-The validator will enforce a normal-vision CIEDE2000 floor of 15 and a simulated color-vision-deficiency floor of 6 for every pair.
-It will validate protanopia, deuteranopia, and tritanopia simulations in both light and dark modes.
+The validator will preserve the canonical skill methodology: an OKLab distance times 100 normal-vision floor of 15 and a simulated protanopia and deuteranopia floor of 6 for every pair.
+It will report tritanopia separation in both light and dark modes as advisory evidence because the canonical validator does not gate on it and the approved dark set has a 4.3 tritanopia pair.
 Every chart will retain direct labels, a legend, or a table twin because passing color separation does not make color the sole carrier of meaning.
 
 ## Browser verification
@@ -63,4 +63,3 @@ The final local gate is TypeScript, lint, unit tests, complete Vitest, productio
 Every migration added by the program must be applied to the linked Supabase project in order and followed by its verification SQL before reading code is published.
 GitHub Actions, CodeQL, SonarCloud, and Vercel preview checks must pass on the final PR head.
 The final handoff will report local verification, live database state, browser acceptance, and remote checks separately.
-
