@@ -197,7 +197,7 @@ export default async function AccountsPage({
     snapshotQuery,
     supabase
       .from("plaid_items")
-      .select("id,institution_name")
+      .select("id,institution_name,institution_logo,institution_brand_color")
       .eq("user_id", user.id),
     supabase
       .from("profiles")
@@ -218,7 +218,11 @@ export default async function AccountsPage({
   const institutionByItem = new Map(
     (itemResult.data ?? []).map((item) => [
       item.id as string,
-      item.institution_name as string | null,
+      {
+        name: item.institution_name as string | null,
+        logo: item.institution_logo as string | null,
+        brandColor: item.institution_brand_color as string | null,
+      },
     ]),
   );
   const plaidAccounts = (accountsResult.data ?? []) as PlaidAccountRow[];
@@ -235,7 +239,10 @@ export default async function AccountsPage({
       currentBalance: numeric(account.current_balance),
       availableBalance: numeric(account.available_balance),
       currency: account.iso_currency_code?.toUpperCase() || "USD",
-      institution: institutionByItem.get(account.plaid_item_id) ?? null,
+      institution: institutionByItem.get(account.plaid_item_id)?.name ?? null,
+      institutionLogo: institutionByItem.get(account.plaid_item_id)?.logo ?? null,
+      institutionBrandColor:
+        institutionByItem.get(account.plaid_item_id)?.brandColor ?? null,
       updatedAt: account.updated_at,
       includeInNetWorth: true,
     })),
@@ -251,6 +258,8 @@ export default async function AccountsPage({
       availableBalance: null,
       currency: "USD",
       institution: null,
+      institutionLogo: null,
+      institutionBrandColor: null,
       updatedAt: account.updated_at,
       includeInNetWorth: account.include_in_net_worth,
     })),

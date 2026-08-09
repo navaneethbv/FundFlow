@@ -53,4 +53,9 @@ describe("roadmap completion schema", () => {
     expect(migration).toContain("grant select on public.receipts to authenticated");
     expect(migration).toContain("drop policy if exists \"receipt_objects_all_own\" on storage.objects");
   });
+
+  it("stores optional Plaid institution branding on each item", () => {
+    expect(migration).toContain("add column institution_logo text");
+    expect(migration).toContain("add column institution_brand_color text");
+  });
 });

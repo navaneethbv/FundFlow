@@ -6,6 +6,8 @@ export interface PlaidItemRow {
   plaid_item_id: string;
   institution_id: string | null;
   institution_name: string | null;
+  institution_logo?: string | null;
+  institution_brand_color?: string | null;
   access_token_ciphertext: string;
   access_token_iv: string;
   access_token_tag: string;

@@ -35,6 +35,17 @@ export interface AvatarProps {
   className?: string;
 }
 
+export function institutionLogoDataUri(value: string | null | undefined): string | null {
+  if (
+    typeof value !== "string" ||
+    !value.startsWith("iVBORw0KGgo") ||
+    !/^[A-Za-z0-9+/]+={0,2}$/.test(value)
+  ) {
+    return null;
+  }
+  return `data:image/png;base64,${value}`;
+}
+
 function Avatar({ name, logoUrl, size = 36, className }: Readonly<AvatarProps>) {
   const trimmed = name.trim();
   const initial = trimmed.charAt(0).toUpperCase() || "?";
@@ -72,6 +83,9 @@ export function MerchantAvatar(props: Readonly<AvatarProps>) {
 }
 
 /** A bank/institution row identity (Accounts, Recurring payment account). */
-export function InstitutionAvatar(props: Readonly<AvatarProps>) {
-  return <Avatar {...props} />;
+export function InstitutionAvatar({
+  logoBase64,
+  ...props
+}: Readonly<AvatarProps & { logoBase64?: string | null }>) {
+  return <Avatar {...props} logoUrl={institutionLogoDataUri(logoBase64) ?? props.logoUrl} />;
 }

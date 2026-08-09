@@ -17,6 +17,8 @@ export interface UnifiedAccountSummary {
   availableBalance: number | null;
   currency: string;
   institution: string | null;
+  institutionLogo: string | null;
+  institutionBrandColor: string | null;
   updatedAt: string;
   includeInNetWorth: boolean;
 }
@@ -56,6 +58,8 @@ export interface AccountsPageRow {
   balance: number | null;
   currency: string;
   institution: string | null;
+  institutionLogo: string | null;
+  institutionBrandColor: string | null;
   updatedAgo: string;
   stale: boolean;
   spark: number[];
@@ -309,6 +313,8 @@ export function buildAccountsPageData(
       balance: displayBalance(group, account.currentBalance),
       currency: account.currency,
       institution: account.institution,
+      institutionLogo: account.institutionLogo,
+      institutionBrandColor: account.institutionBrandColor,
       updatedAgo: freshness.label,
       stale: freshness.stale,
       spark: values.slice(-30),

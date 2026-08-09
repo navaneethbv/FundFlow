@@ -13,7 +13,8 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "validate:palette": "node scripts/validate_palette.js app/globals.css"
+    "validate:palette": "node scripts/validate_palette.js app/globals.css",
+    "backfill:institution-logos": "node --env-file=.env.local --experimental-strip-types scripts/backfill-institution-logos.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
