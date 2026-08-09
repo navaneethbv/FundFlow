@@ -67,6 +67,19 @@ describe("filterRowsWithRules", () => {
     expect(result.map((r) => r.id).sort()).toEqual(["a", "b"]);
   });
 
+  it("preserves source row order after rule-aware filtering", () => {
+    const rows = [
+      row({ id: "b", merchant_name: "Safeway", pfc_primary: "FOOD_AND_DRINK" }),
+      row({ id: "a", merchant_name: "SQ *BlueBottle Coffee", pfc_primary: "GENERAL_MERCHANDISE" }),
+    ];
+
+    expect(
+      filterRowsWithRules(rows, renameAndRecategorize, accountNames, {
+        category: "FOOD_AND_DRINK",
+      }).map((item) => item.id),
+    ).toEqual(["b", "a"]);
+  });
+
   it("excludes a row a rule moved OUT of the filtered category", () => {
     const rows = [
       row({ id: "a", merchant_name: "SQ *BlueBottle Coffee", pfc_primary: "GENERAL_MERCHANDISE" }),
