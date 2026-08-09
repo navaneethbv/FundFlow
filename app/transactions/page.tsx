@@ -356,10 +356,14 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
         <PageHeader
           title="Transactions"
           actions={
-            transactionsParityEnabled &&
-            accountOptions.length > 0 && (
-              <AddTransactionModal accounts={accountOptions} goals={goalOptions} categories={categoryOptions} />
-            )
+            <>
+              <ButtonLink href="/transactions/receipts" variant="secondary">
+                Receipts
+              </ButtonLink>
+              {transactionsParityEnabled && accountOptions.length > 0 && (
+                <AddTransactionModal accounts={accountOptions} goals={goalOptions} categories={categoryOptions} />
+              )}
+            </>
           }
         />
 
