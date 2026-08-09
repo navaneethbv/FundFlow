@@ -146,12 +146,18 @@ export async function loadCanonicalProjection(
     .select("charge_transaction_id,refund_transaction_id")
     .order("charge_transaction_id")
     .limit(FINANCE_MAX_ROWS);
+  let duplicatesQuery = supabase
+    .from("linked_duplicates")
+    .select("excluded_transaction_id")
+    .order("created_at")
+    .limit(FINANCE_MAX_ROWS);
 
   if (userId) {
     accountsQuery = accountsQuery.eq("user_id", userId);
     rulesQuery = rulesQuery.eq("user_id", userId);
     overridesQuery = overridesQuery.eq("user_id", userId);
     refundsQuery = refundsQuery.eq("user_id", userId);
+    duplicatesQuery = duplicatesQuery.eq("user_id", userId);
   }
 
   interface SplitRow {
@@ -175,12 +181,13 @@ export async function loadCanonicalProjection(
     }
   }
 
-  const [accountsRes, rulesRes, overridesRes, refundsRes, ...splitResChunks] =
+  const [accountsRes, rulesRes, overridesRes, refundsRes, duplicatesRes, ...splitResChunks] =
     await Promise.all([
       accountsQuery,
       rulesQuery,
       overridesQuery,
       refundsQuery,
+      duplicatesQuery,
       ...splitChunksPromises,
     ]);
 
@@ -188,6 +195,7 @@ export async function loadCanonicalProjection(
   assertProjectionQuery("merchant_rules", rulesRes);
   assertProjectionQuery("category_overrides", overridesRes);
   assertProjectionQuery("linked_refunds", refundsRes);
+  assertProjectionQuery("linked_duplicates", duplicatesRes);
   for (const sRes of splitResChunks) {
     assertProjectionQuery("transaction_splits", sRes);
   }
@@ -259,6 +267,10 @@ export async function loadCanonicalProjection(
       categoryOverrides,
       splits,
       linkedRefunds,
+      excludedTransactionIds: new Set(
+        ((duplicatesRes.data ?? []) as Array<{ excluded_transaction_id: string }>)
+          .map((row) => row.excluded_transaction_id),
+      ),
     }),
     currencyByAccountId,
     truncated: fetchResult.truncated,

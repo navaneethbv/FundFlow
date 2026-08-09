@@ -230,6 +230,7 @@ describe("loadCanonicalProjection", () => {
         ],
       },
       linked_refunds: { data: [] },
+      linked_duplicates: { data: [] },
       ...overrides,
     });
   }
@@ -283,6 +284,7 @@ describe("loadCanonicalProjection", () => {
       "category_overrides",
       "transaction_splits",
       "linked_refunds",
+      "linked_duplicates",
     ]) {
       expect(mineClient.scopedToUser(table, "user-1")).toBe(true);
     }
@@ -298,6 +300,7 @@ describe("loadCanonicalProjection", () => {
       "category_overrides",
       "transaction_splits",
       "linked_refunds",
+      "linked_duplicates",
     ]) {
       expect(householdClient.scopedToUser(table, "user-1")).toBe(false);
     }
@@ -319,6 +322,18 @@ describe("loadCanonicalProjection", () => {
     expect(splitChunks).toHaveLength(2);
     expect(splitChunks[0]?.args[1]).toHaveLength(500);
     expect(splitChunks[1]?.args[1]).toHaveLength(1);
+  });
+
+  it("excludes only the confirmed duplicate id loaded in the active scope", async () => {
+    const supabase = projectionClient({
+      linked_duplicates: {
+        data: [{ excluded_transaction_id: "expense-1" }],
+      },
+    });
+
+    const result = await loadCanonicalProjection(supabase as never, { scope: MINE });
+
+    expect(result.transactions).toEqual([]);
   });
 
   it("reports dependency failures without exposing database messages", async () => {

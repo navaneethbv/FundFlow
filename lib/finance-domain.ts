@@ -84,6 +84,7 @@ export interface ProjectFinanceInput {
   categoryOverrides: CategoryOverrideRow[];
   splits: TransactionSplit[];
   linkedRefunds: LinkedRefundPair[];
+  excludedTransactionIds?: Set<string>;
   /** Account id → name, only needed for merchant rules that match on account. */
   accountNames?: Map<string, string>;
 }
@@ -113,11 +114,14 @@ export function projectFinanceTransactions(
   input: ProjectFinanceInput,
 ): CanonicalFinanceTransaction[] {
   const { rows, merchantRules, categoryOverrides, splits, linkedRefunds } = input;
+  const rowsToProject = input.excludedTransactionIds
+    ? rows.filter((row) => !input.excludedTransactionIds!.has(row.id))
+    : rows;
   const accountNames = input.accountNames ?? new Map<string, string>();
 
   // 1. Merchant rules (rename + recategorize) over the raw descriptor.
   const cleaned = applyMerchantRules(
-    rows.map((row) => ({
+    rowsToProject.map((row) => ({
       id: row.id,
       merchant: displayMerchant(row),
       category: row.pfcPrimary,
@@ -146,7 +150,7 @@ export function projectFinanceTransactions(
 
   const projected: CanonicalFinanceTransaction[] = [];
 
-  rows.forEach((row, index) => {
+  rowsToProject.forEach((row, index) => {
     const clean = cleaned[index]!;
     const groupKey = overrideCategory(overrides, clean.category) ?? UNCATEGORIZED;
     const flow = nettedIds.has(row.id) ? "transfer" : flowFor(row.amount, groupKey);

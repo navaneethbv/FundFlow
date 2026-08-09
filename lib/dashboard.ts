@@ -271,6 +271,7 @@ export async function getDashboardData(
     { data: merchantRules },
     { data: snapshots },
     { data: linkedRefunds },
+    { data: linkedDuplicates },
     { data: categoryOverrideRows },
     { data: sinkingFundRows },
   ] = await Promise.all([
@@ -322,6 +323,11 @@ export async function getDashboardData(
       supabase
         .from("linked_refunds")
         .select("charge_transaction_id, refund_transaction_id"),
+    ),
+    scopeUser(
+      supabase
+        .from("linked_duplicates")
+        .select("excluded_transaction_id"),
     ),
     scopeUser(
       supabase
@@ -413,6 +419,10 @@ export async function getDashboardData(
       chargeTransactionId: row.charge_transaction_id,
       refundTransactionId: row.refund_transaction_id,
     })),
+    excludedTransactionIds: new Set(
+      ((linkedDuplicates ?? []) as Array<{ excluded_transaction_id: string }>)
+        .map((row) => row.excluded_transaction_id),
+    ),
     accountNames: accountNamesById,
   });
 
