@@ -58,4 +58,16 @@ describe("roadmap completion schema", () => {
     expect(migration).toContain("add column institution_logo text");
     expect(migration).toContain("add column institution_brand_color text");
   });
+
+  it("persists duplicate links through service-only atomic functions", () => {
+    expect(migration).toContain("create table public.linked_duplicates");
+    expect(migration).toContain("unique (user_id, kept_transaction_id)");
+    expect(migration).toContain("unique (user_id, excluded_transaction_id)");
+    expect(migration).toContain("create policy \"linked_duplicates_select_own\"");
+    expect(migration).toContain("revoke insert, update, delete on public.linked_duplicates from authenticated");
+    expect(migration).toContain("create or replace function private.confirm_transaction_duplicate");
+    expect(migration).toContain("create or replace function private.undo_transaction_duplicate");
+    expect(migration).toContain("grant execute on function private.confirm_transaction_duplicate(uuid, text, uuid, uuid) to service_role");
+    expect(migration).toContain("grant execute on function private.undo_transaction_duplicate(uuid, text) to service_role");
+  });
 });
