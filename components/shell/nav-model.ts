@@ -4,6 +4,7 @@ import {
   BarChart3,
   Bell,
   Compass,
+  CreditCard,
   Landmark,
   LayoutDashboard,
   LineChart,
@@ -27,6 +28,7 @@ export type NavItemKey =
   | "recurring"
   | "goals"
   | "investments"
+  | "debt"
   | "forecasting"
   | "advice"
   | "settings"
@@ -63,6 +65,7 @@ export const NAV_ITEMS: NavItemDefinition[] = [
   { key: "recurring", label: "Recurring", href: "/recurring", icon: Repeat, category: "planning", featureFlag: "recurringPage", hint: "Bills, subscriptions, and income" },
   { key: "goals", label: "Goals", href: "/goals", icon: Target, category: "planning", hint: "Savings goals" },
   { key: "investments", label: "Investments", href: "/investments", icon: LineChart, category: "planning", featureFlag: "investmentsPage", hint: "Holdings and allocation" },
+  { key: "debt", label: "Debt payoff", href: "/debt", icon: CreditCard, category: "planning", hint: "Avalanche and snowball projections" },
   { key: "forecasting", label: "Forecasting", href: "/forecasting", icon: TrendingUp, category: "planning", featureFlag: "forecastingPage", hint: "Net worth projections" },
   { key: "advice", label: "Advice", href: "/advice", icon: Compass, category: "planning", featureFlag: "advicePage", hint: "Sourced education checklists" },
   { key: "notifications", label: "Notifications", href: "/notifications", icon: Bell, category: "manage", hint: "Alerts and digests" },

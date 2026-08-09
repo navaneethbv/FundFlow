@@ -51,7 +51,7 @@ export default function CardAprSection({
   }
 
   return (
-    <Panel title="Card APRs" eyebrow="Debt payoff accuracy">
+    <Panel id="card-aprs" title="Card APRs" eyebrow="Debt payoff accuracy">
       <p className="mb-4 text-sm text-muted">
         Enter each card&apos;s APR so the debt payoff planner uses real rates
         instead of assuming 22%.

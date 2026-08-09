@@ -39,6 +39,14 @@ describe("Sidebar Navigation Contract", () => {
     expect(existsSync("app/forecasting/page.tsx")).toBe(true);
   });
 
+  it("includes the debt payoff planner in the planning category", () => {
+    const debt = NAV_ITEMS.find((item) => item.key === "debt");
+    expect(debt).toBeDefined();
+    expect(debt!.category).toBe("planning");
+    expect(debt!.href).toBe("/debt");
+    expect(existsSync("app/debt/page.tsx")).toBe(true);
+  });
+
   it("includes an investments entry gated by investmentsPage in the planning category", () => {
     const investments = NAV_ITEMS.find((item) => item.key === "investments");
     expect(investments).toBeDefined();
