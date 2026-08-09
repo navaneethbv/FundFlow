@@ -6,9 +6,8 @@ const mockRequireUser = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/http", () => ({
   requireUser: () => mockRequireUser(),
   badRequest: (message: string) => NextResponse.json({ error: message }, { status: 400 }),
-  errorResponse: (_context: string, error: unknown) => {
-    throw error;
-  },
+  errorResponse: (_context: string, error: unknown) =>
+    NextResponse.json({ error: error instanceof Error ? error.message : "error" }, { status: 500 }),
 }));
 
 const mockWriteAudit = vi.fn();
@@ -84,9 +83,33 @@ describe("GET /api/transactions/duplicates", () => {
     expect(supabase.scopedToUser("transactions", USER_ID)).toBe(true);
     expect(supabase.scopedToUser("transaction_review_decisions", USER_ID)).toBe(true);
   });
+
+  it("returns 500 when transactions query fails", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ transactions: { data: null, error: { message: "DB Error" } } }),
+    });
+    const response = await GET();
+    expect(response.status).toBe(500);
+  });
 });
 
 describe("POST /api/transactions/duplicates", () => {
+  it("rejects an invalid payload or missing fields", async () => {
+    const response = await POST(request("POST", { subjectId: SUBJECT }));
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects identical kept and excluded IDs", async () => {
+    const response = await POST(request("POST", {
+      subjectId: `${FIRST_ID}:${FIRST_ID}`,
+      keptTransactionId: FIRST_ID,
+      excludedTransactionId: FIRST_ID,
+      decision: "confirmed",
+    }));
+    expect(response.status).toBe(400);
+  });
+
   it("rejects a subject that does not match the supplied ids", async () => {
     const response = await POST(request("POST", {
       subjectId: `${SECOND_ID}:${FIRST_ID}`,
@@ -97,6 +120,20 @@ describe("POST /api/transactions/duplicates", () => {
 
     expect(response.status).toBe(400);
     expect(service.rpc).not.toHaveBeenCalled();
+  });
+
+  it("404s when user does not own both transactions", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ transactions: { data: [{ id: FIRST_ID }] } }),
+    });
+    const response = await POST(request("POST", {
+      subjectId: SUBJECT,
+      keptTransactionId: FIRST_ID,
+      excludedTransactionId: SECOND_ID,
+      decision: "confirmed",
+    }));
+    expect(response.status).toBe(404);
   });
 
   it("confirms through the atomic service-only function after ownership checks", async () => {
@@ -120,6 +157,17 @@ describe("POST /api/transactions/duplicates", () => {
     }));
   });
 
+  it("returns 500 when RPC returns an error on confirmed decision", async () => {
+    service.rpc = vi.fn().mockResolvedValue({ data: null, error: { message: "RPC Error" } });
+    const response = await POST(request("POST", {
+      subjectId: SUBJECT,
+      keptTransactionId: FIRST_ID,
+      excludedTransactionId: SECOND_ID,
+      decision: "confirmed",
+    }));
+    expect(response.status).toBe(500);
+  });
+
   it("persists dismissal without creating an exclusion link", async () => {
     service = makeService({ transaction_review_decisions: { data: null, error: null } });
 
@@ -139,9 +187,40 @@ describe("POST /api/transactions/duplicates", () => {
     });
     expect(service.rpc).not.toHaveBeenCalled();
   });
+
+  it("returns 500 when upserting dismissal returns an error", async () => {
+    service = makeService({ transaction_review_decisions: { data: null, error: { message: "Upsert Error" } } });
+    const response = await POST(request("POST", {
+      subjectId: SUBJECT,
+      keptTransactionId: FIRST_ID,
+      excludedTransactionId: SECOND_ID,
+      decision: "dismissed",
+    }));
+    expect(response.status).toBe(500);
+  });
 });
 
 describe("DELETE /api/transactions/duplicates/[subjectId]", () => {
+  it("rejects an invalid subjectId without colon", async () => {
+    const response = await DELETE(
+      request("DELETE"),
+      { params: Promise.resolve({ subjectId: "nocolon" }) },
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it("404s when duplicate link is not found", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ linked_duplicates: { data: null } }),
+    });
+    const response = await DELETE(
+      request("DELETE"),
+      { params: Promise.resolve({ subjectId: encodeURIComponent(SUBJECT) }) },
+    );
+    expect(response.status).toBe(404);
+  });
+
   it("undoes an owned link atomically", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: USER_ID },
@@ -158,5 +237,19 @@ describe("DELETE /api/transactions/duplicates/[subjectId]", () => {
       p_user_id: USER_ID,
       p_subject_id: SUBJECT,
     });
+  });
+
+  it("returns 500 when undo RPC fails", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: ownedClient({ linked_duplicates: { data: { subject_id: SUBJECT } } }),
+    });
+    service.rpc = vi.fn().mockResolvedValue({ data: null, error: { message: "Undo Error" } });
+
+    const response = await DELETE(
+      request("DELETE"),
+      { params: Promise.resolve({ subjectId: encodeURIComponent(SUBJECT) }) },
+    );
+    expect(response.status).toBe(500);
   });
 });

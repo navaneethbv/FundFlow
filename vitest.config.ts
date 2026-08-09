@@ -29,7 +29,8 @@ export default defineConfig({
         "scripts/**/*.{ts,mjs,js}",
         "components/charts/**",
         "components/dashboard/metrics.ts",
-        "components/dashboard/dashboard-view.ts"
+        "components/dashboard/dashboard-view.ts",
+        "components/settings/settings-nav.ts"
       ],
       exclude: [
         "lib/types.ts",

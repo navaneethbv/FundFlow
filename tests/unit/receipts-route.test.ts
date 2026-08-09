@@ -6,9 +6,8 @@ const mockRequireUser = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/http", () => ({
   requireUser: () => mockRequireUser(),
   badRequest: (message: string) => NextResponse.json({ error: message }, { status: 400 }),
-  errorResponse: (_context: string, error: unknown) => {
-    throw error;
-  },
+  errorResponse: (_context: string, error: unknown) =>
+    NextResponse.json({ error: error instanceof Error ? error.message : "error" }, { status: 500 }),
 }));
 
 const mockCheckRateLimit = vi.fn();
@@ -151,11 +150,18 @@ describe("POST /api/receipts", () => {
     );
   });
 
+  it("returns 500 when storage upload returns error", async () => {
+    service = makeService({}, { uploadError: { message: "Storage Upload Error" } });
+
+    const response = await POST(uploadRequest());
+    expect(response.status).toBe(500);
+  });
+
   it("removes the uploaded object when row insertion fails", async () => {
-    service = makeService({ receipts: { data: null, error: new Error("insert failed") } });
+    service = makeService({ receipts: { data: null, error: { message: "insert failed" } } });
 
-    await expect(POST(uploadRequest())).rejects.toThrow("insert failed");
-
+    const response = await POST(uploadRequest());
+    expect(response.status).toBe(500);
     expect(service.remove).toHaveBeenCalledWith([expect.stringMatching(new RegExp(`^${USER_ID}/`))]);
   });
 });
@@ -175,9 +181,44 @@ describe("GET /api/receipts", () => {
     expect(payload.receipts[0].storage_path).toBeUndefined();
     expect(service.createSignedUrl).toHaveBeenCalledWith(RECEIPT.storage_path, 3600);
   });
+
+  it("returns 500 when receipts list query fails", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ receipts: { data: null, error: { message: "List error" } } }),
+    });
+
+    const response = await GET();
+    expect(response.status).toBe(500);
+  });
 });
 
 describe("PATCH /api/receipts/[id]", () => {
+  it("rejects an invalid action with 400", async () => {
+    const response = await PATCH(jsonRequest("PATCH", { action: "invalid_action" }), context);
+    expect(response.status).toBe(400);
+  });
+
+  it("404s when the target receipt is not found", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ receipts: { data: null } }),
+    });
+
+    const response = await PATCH(jsonRequest("PATCH", { action: "ignore" }), context);
+    expect(response.status).toBe(404);
+  });
+
+  it("404s when attaching to a non-existent transaction", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ receipts: { data: RECEIPT }, transactions: { data: null } }),
+    });
+
+    const response = await PATCH(jsonRequest("PATCH", { action: "attach", transactionId: "missing-t" }), context);
+    expect(response.status).toBe(404);
+  });
+
   it("attaches only to an owned transaction and scopes the service update", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: USER_ID },
@@ -209,6 +250,16 @@ describe("PATCH /api/receipts/[id]", () => {
 });
 
 describe("DELETE /api/receipts/[id]", () => {
+  it("404s when deleting a non-existent receipt", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ receipts: { data: null } }),
+    });
+
+    const response = await DELETE(jsonRequest("DELETE"), context);
+    expect(response.status).toBe(404);
+  });
+
   it("removes the private object before deleting the owner-scoped row", async () => {
     service = makeService({ receipts: { error: null } });
 
@@ -220,9 +271,10 @@ describe("DELETE /api/receipts/[id]", () => {
   });
 
   it("leaves the database row recoverable when object removal fails", async () => {
-    service = makeService({}, { removeError: new Error("storage down") });
+    service = makeService({}, { removeError: { message: "storage down" } });
 
-    await expect(DELETE(jsonRequest("DELETE"), context)).rejects.toThrow("storage down");
+    const response = await DELETE(jsonRequest("DELETE"), context);
+    expect(response.status).toBe(500);
 
     expect(service.callsOn("receipts")).toEqual([]);
   });

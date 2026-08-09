@@ -1,8 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockRequireUser = vi.fn<(...args: unknown[]) => unknown>();
-const mockErrorResponse = vi.fn<(...args: unknown[]) => unknown>();
-const mockBadRequest = vi.fn<(...args: unknown[]) => unknown>((msg: unknown) => new Response(String(msg), { status: 400 }));
+const mockErrorResponse = vi.fn<(...args: unknown[]) => unknown>(
+  (_context: unknown, error: unknown) => NextResponse.json({ error: String(error) }, { status: 500 }),
+);
+const mockBadRequest = vi.fn<(...args: unknown[]) => unknown>(
+  (msg: unknown) => NextResponse.json({ error: String(msg) }, { status: 400 }),
+);
 vi.mock("@/lib/http", () => ({
   requireUser: () => mockRequireUser(),
   errorResponse: (...args: unknown[]) => mockErrorResponse(...args),
@@ -298,6 +302,72 @@ describe("Import API Routes", () => {
         batch_id: "batch-ofx",
         rows: [{ id: "row-ofx", description: "Coffee shop" }],
       });
+    });
+
+    it("returns bad request when column map is invalid", async () => {
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+      const file = new File(["col1,col2"], "statement.csv", { type: "text/csv" });
+      const formData = new FormData();
+      formData.set("file", file);
+      formData.set("column_map", "{}");
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockGetCsvColumns.mockReturnValue({ headers: ["a", "b"], sample: ["1", "2"] });
+      mockNormalizeColumnMap.mockReturnValue(null);
+
+      const res = await previewPost(request);
+      expect(res.status).toBe(400);
+    });
+
+    it("returns bad request when 0 rows parsed and no headers exist", async () => {
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+      const file = new File([""], "empty.csv", { type: "text/csv" });
+      const formData = new FormData();
+      formData.set("file", file);
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockParseImportCsv.mockReturnValue({ rows: [], errors: ["No importable rows found"] });
+      mockGetCsvColumns.mockReturnValue(null);
+
+      const res = await previewPost(request);
+      expect(res.status).toBe(400);
+    });
+
+    it("returns 500 when batch insert fails", async () => {
+      const mockSupabase = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue({ data: [] }),
+          }),
+        }),
+      };
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: mockSupabase });
+      const file = new File(["2026-07-01,Store,10.00"], "statement.csv", { type: "text/csv" });
+      const formData = new FormData();
+      formData.set("file", file);
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockParseImportCsv.mockReturnValue({
+        rows: [{ date: "2026-07-01", merchant: "Store", amount: 10 }],
+        errors: [],
+      });
+      mockBuildImportReview.mockReturnValue({
+        rows: [{ rowHash: "h1", row: { date: "2026-07-01", merchant: "Store", amount: 10 }, flags: [] }],
+      });
+      mockServiceClient.from.mockReturnValue({
+        insert: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: null, error: { message: "Batch Insert error" } }),
+      });
+
+      const res = await previewPost(request);
+      expect(res.status).toBe(500);
     });
   });
 

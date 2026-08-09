@@ -7,9 +7,8 @@ vi.mock("@/lib/http", () => ({
   requireUser: () => mockRequireUser(),
   badRequest: (message: string) =>
     NextResponse.json({ error: message }, { status: 400 }),
-  errorResponse: (_context: string, error: unknown) => {
-    throw error;
-  },
+  errorResponse: (_context: string, error: unknown) =>
+    NextResponse.json({ error: error instanceof Error ? error.message : "error" }, { status: 500 }),
 }));
 
 let serviceClient = clientStub();
@@ -102,9 +101,32 @@ describe("POST /api/sinking-funds", () => {
       ip: "127.0.0.1",
     });
   });
+
+  it("returns 500 when insert fails", async () => {
+    serviceClient = clientStub({ sinking_funds: { data: null, error: { message: "Insert error" } } });
+    const response = await POST(request("POST", {
+      name: "Car insurance",
+      targetAmount: 600,
+      dueDate: "2027-01-31",
+      cadence: "semiannual",
+    }));
+    expect(response.status).toBe(500);
+  });
 });
 
 describe("PATCH /api/sinking-funds/[id]", () => {
+  it("rejects invalid input body with 400", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ sinking_funds: { data: { id: FUND.id } } }),
+    });
+    const response = await PATCH(
+      request("PATCH", { name: " ", targetAmount: -5, dueDate: "bad", cadence: "annual" }),
+      context(FUND.id),
+    );
+    expect(response.status).toBe(400);
+  });
+
   it("returns 404 when the owned row is not visible", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: USER_ID },
@@ -159,9 +181,38 @@ describe("PATCH /api/sinking-funds/[id]", () => {
       }),
     );
   });
+
+  it("returns 500 when service update fails", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ sinking_funds: { data: { id: FUND.id } } }),
+    });
+    serviceClient = clientStub({ sinking_funds: { data: null, error: { message: "Update error" } } });
+
+    const response = await PATCH(
+      request("PATCH", {
+        name: "Car insurance",
+        targetAmount: 600,
+        dueDate: "2027-02-28",
+        cadence: "annual",
+      }),
+      context(FUND.id),
+    );
+    expect(response.status).toBe(500);
+  });
 });
 
 describe("DELETE /api/sinking-funds/[id]", () => {
+  it("404s when the fund is not found", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ sinking_funds: { data: null } }),
+    });
+
+    const response = await DELETE(request("DELETE"), context("missing-id"));
+    expect(response.status).toBe(404);
+  });
+
   it("deletes by id and user id and audits the action", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: USER_ID },
@@ -179,5 +230,16 @@ describe("DELETE /api/sinking-funds/[id]", () => {
         metadata: { sinking_fund_id: FUND.id },
       }),
     );
+  });
+
+  it("returns 500 when service delete fails", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ sinking_funds: { data: { id: FUND.id } } }),
+    });
+    serviceClient = clientStub({ sinking_funds: { error: { message: "Delete error" } } });
+
+    const response = await DELETE(request("DELETE"), context(FUND.id));
+    expect(response.status).toBe(500);
   });
 });
