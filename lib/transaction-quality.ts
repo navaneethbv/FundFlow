@@ -29,6 +29,19 @@ export interface ReviewDecision {
   decision: "confirmed" | "dismissed";
 }
 
+export interface DuplicateTransaction extends LedgerTransaction {
+  accountId: string;
+  plaidItemId: string | null;
+  accountName: string;
+}
+
+export interface DuplicatePair {
+  subjectId: string;
+  first: DuplicateTransaction;
+  second: DuplicateTransaction;
+  dateDistanceDays: number;
+}
+
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -103,6 +116,51 @@ export function detectRefundPairs(transactions: LedgerTransaction[], windowDays:
   }
 
   return pairs;
+}
+
+export function duplicateSubjectId(firstId: string, secondId: string): string {
+  return [firstId, secondId].sort((left, right) => left.localeCompare(right)).join(":");
+}
+
+export function detectDuplicatePairs(
+  transactions: DuplicateTransaction[],
+  decisions: ReviewDecision[],
+): DuplicatePair[] {
+  const resolved = new Set(
+    decisions
+      .filter((decision) => decision.kind === "duplicate")
+      .map((decision) => decision.subjectId),
+  );
+  const candidates: DuplicatePair[] = [];
+  const expenses = transactions.filter((transaction) => transaction.amount > 0);
+  for (let firstIndex = 0; firstIndex < expenses.length; firstIndex += 1) {
+    const first = expenses[firstIndex]!;
+    for (let secondIndex = firstIndex + 1; secondIndex < expenses.length; secondIndex += 1) {
+      const second = expenses[secondIndex]!;
+      if (first.accountId === second.accountId) continue;
+      if (round2(first.amount) !== round2(second.amount)) continue;
+      if (normalize(first.merchant) !== normalize(second.merchant)) continue;
+      const dateDistanceDays = Math.abs(parseDate(first.date) - parseDate(second.date)) / 86_400_000;
+      if (dateDistanceDays > 2) continue;
+      const subjectId = duplicateSubjectId(first.id, second.id);
+      if (resolved.has(subjectId)) continue;
+      candidates.push({ subjectId, first, second, dateDistanceDays });
+    }
+  }
+
+  candidates.sort((left, right) =>
+    left.dateDistanceDays - right.dateDistanceDays ||
+    normalize(left.first.merchant).localeCompare(normalize(right.first.merchant)) ||
+    left.first.amount - right.first.amount ||
+    left.subjectId.localeCompare(right.subjectId),
+  );
+  const used = new Set<string>();
+  return candidates.filter((candidate) => {
+    if (used.has(candidate.first.id) || used.has(candidate.second.id)) return false;
+    used.add(candidate.first.id);
+    used.add(candidate.second.id);
+    return true;
+  });
 }
 
 export function filterReviewDecisions(anomalies: ReviewAnomaly[], decisions: ReviewDecision[]): ReviewAnomaly[] {
