@@ -43,6 +43,11 @@ export const test = base.extend<AuthenticatedFixtures>({
       email_confirm: true,
     });
     if (error) throw error;
+    const { error: profileError } = await admin
+      .from("profiles")
+      .update({ display_name: "Quality Reviewer" })
+      .eq("id", data.user.id);
+    if (profileError) throw profileError;
     await provide({ id: data.user.id, email, password, stamp });
     await admin.auth.admin.deleteUser(data.user.id);
   },

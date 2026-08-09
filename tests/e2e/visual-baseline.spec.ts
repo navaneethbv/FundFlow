@@ -41,7 +41,6 @@ test.describe("authenticated visual baseline", () => {
           animations: "disabled",
           caret: "initial",
           fullPage: true,
-          mask: [page.getByRole("button", { name: /Account menu for/ })],
         });
       }
     }
