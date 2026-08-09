@@ -15,7 +15,6 @@ describe("roadmap completion schema", () => {
       "linked_refunds",
       "transaction_review_decisions",
       "user_session_records",
-      "mfa_backup_codes",
     ]) {
       expect(migration).toContain(`create table public.${table}`);
       expect(migration).toContain(`alter table public.${table} enable row level security`);
@@ -29,10 +28,12 @@ describe("roadmap completion schema", () => {
     expect(migration).toContain("unique (user_id, kind, subject_id)");
   });
 
-  it("keeps active-session and backup-code rows user-owned", () => {
+  it("keeps active-session rows user-owned and removes unsupported backup codes", () => {
     expect(migration).toContain("user_session_records_select_own");
-    expect(migration).toContain("mfa_backup_codes_update_own");
-    expect(migration).toContain("code_hash");
+    expect(migration).toContain("drop table if exists public.mfa_backup_codes");
+    expect(migration.lastIndexOf("drop table if exists public.mfa_backup_codes")).toBeGreaterThan(
+      migration.lastIndexOf("create table public.mfa_backup_codes"),
+    );
   });
 
   it("extends sinking funds with recurrence and requires server-side writes", () => {

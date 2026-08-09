@@ -55,6 +55,11 @@ suite("roadmap feature RLS", () => {
     if (idB) await admin.auth.admin.deleteUser(idB);
   });
 
+  it("does not expose the removed MFA backup-code store", async () => {
+    const { error } = await admin.from("mfa_backup_codes").select("id").limit(1);
+    expect(error?.code).toBe("PGRST205");
+  });
+
   it("isolates user-owned roadmap tables", async () => {
     const inserts = [
       clientA.from("merchant_rules").insert({
