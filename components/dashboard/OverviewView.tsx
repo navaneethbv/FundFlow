@@ -2,8 +2,11 @@ import DashboardWidgetGrid, {
   type DashboardWidgetGridData,
 } from "@/components/dashboard/DashboardWidgetGrid";
 import RecentActivity from "@/components/dashboard/RecentActivity";
-import { normalizeWidgetPrefs } from "@/lib/dashboard-widgets";
-import { loadCumulativeSpend } from "@/lib/dashboard-widgets-data";
+import {
+  normalizeWidgetPrefs,
+  visibleWidgets,
+} from "@/lib/dashboard-widgets";
+import { loadOverviewWidgetData } from "@/lib/dashboard-widgets-data";
 import type { Goal } from "@/lib/goals";
 import { createClient } from "@/lib/supabase/server";
 import type { ComponentProps } from "react";
@@ -27,7 +30,7 @@ export default async function OverviewView({
   month,
 }: Readonly<{
   prefsRaw: unknown;
-  data: DashboardWidgetGridData;
+  data: Omit<DashboardWidgetGridData, "investments">;
   goals: Goal[];
   recent: ComponentProps<typeof RecentActivity>["transactions"];
   accountNames: Map<string, string>;
@@ -37,22 +40,24 @@ export default async function OverviewView({
 }>) {
   const today = new Date().toISOString().slice(0, 10);
   const supabase = await createClient();
-  const spend = await loadCumulativeSpend(supabase, {
+  const prefs = normalizeWidgetPrefs(prefsRaw);
+  const loaded = await loadOverviewWidgetData(supabase, {
     month,
     today,
     userId,
     household,
+    visible: visibleWidgets(prefs),
   });
 
   return (
     <>
       <DashboardWidgetGrid
-        prefs={normalizeWidgetPrefs(prefsRaw)}
-        data={data}
+        prefs={prefs}
+        data={{ ...data, investments: loaded.investments }}
         goals={goals}
-        cumulativeSpend={spend.days}
-        monthLabel={spend.monthLabel}
-        previousMonthLabel={spend.previousMonthLabel}
+        cumulativeSpend={loaded.cumulativeSpend.days}
+        monthLabel={loaded.cumulativeSpend.monthLabel}
+        previousMonthLabel={loaded.cumulativeSpend.previousMonthLabel}
         recentTransactions={recent}
         accountNames={accountNames}
         today={today}

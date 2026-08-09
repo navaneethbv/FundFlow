@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { loadCumulativeSpend, EMPTY_CUMULATIVE_SPEND } from "@/lib/dashboard-widgets-data";
+import {
+  buildDashboardBudgetGroups,
+  EMPTY_CUMULATIVE_SPEND,
+  loadCumulativeSpend,
+  loadDashboardInvestmentSummary,
+  loadOverviewWidgetData,
+} from "@/lib/dashboard-widgets-data";
+import type { BudgetEnvelope } from "@/lib/planning";
 import { clientStub } from "../fixtures/supabase-query";
 
 describe("loadCumulativeSpend", () => {
@@ -60,5 +67,159 @@ describe("loadCumulativeSpend", () => {
   it("provides EMPTY_CUMULATIVE_SPEND constant", () => {
     expect(EMPTY_CUMULATIVE_SPEND.days).toEqual([]);
     expect(EMPTY_CUMULATIVE_SPEND.monthLabel).toBe("");
+  });
+});
+
+function envelope(
+  category: string,
+  monthlyLimit: number,
+  spent: number,
+  status: BudgetEnvelope["status"] = "on-track",
+): BudgetEnvelope {
+  return {
+    category,
+    monthlyLimit,
+    spent,
+    remaining: monthlyLimit - spent,
+    projectedSpend: spent,
+    status,
+    lastMonthSpend: 0,
+    threeMonthAverage: 0,
+    carry: 0,
+    effectiveLimit: monthlyLimit,
+  };
+}
+
+describe("buildDashboardBudgetGroups", () => {
+  it("returns the three expense groups and preserves planned and spent sums", () => {
+    const groups = buildDashboardBudgetGroups(
+      [
+        { category: "Rent", groupName: "fixed" },
+        { category: "Dining", groupName: "flexible" },
+        { category: "Insurance", groupName: "non_monthly" },
+        { category: "Paycheck", groupName: "income" },
+      ],
+      [
+        envelope("Rent", 2000, 2000),
+        envelope("Dining", 500, 300),
+        envelope("Insurance", 120, 40),
+        envelope("Paycheck", 6000, 6000),
+      ],
+    );
+
+    expect(groups.map((group) => group.label)).toEqual([
+      "Fixed",
+      "Flexible",
+      "Non-monthly",
+    ]);
+    expect(groups.reduce((sum, group) => sum + group.monthlyLimit, 0)).toBe(2620);
+    expect(groups.reduce((sum, group) => sum + group.spent, 0)).toBe(2340);
+  });
+
+  it("uses the worst category status and treats zero planned spend as over", () => {
+    const groups = buildDashboardBudgetGroups(
+      [
+        { category: "Utilities", groupName: "fixed" },
+        { category: "Fees", groupName: "fixed" },
+      ],
+      [
+        envelope("Utilities", 200, 150, "at-risk"),
+        envelope("Fees", 0, 25, "over"),
+      ],
+    );
+
+    expect(groups).toEqual([
+      {
+        key: "fixed",
+        label: "Fixed",
+        monthlyLimit: 200,
+        spent: 175,
+        remaining: 25,
+        status: "over",
+      },
+    ]);
+  });
+
+  it("defaults an unknown expense group to flexible", () => {
+    expect(
+      buildDashboardBudgetGroups(
+        [{ category: "Other", groupName: "legacy" }],
+        [envelope("Other", 50, 10)],
+      ),
+    ).toMatchObject([{ key: "flexible", spent: 10 }]);
+  });
+});
+
+describe("loadDashboardInvestmentSummary", () => {
+  it("uses only the latest two snapshot dates for day change and top movers", async () => {
+    const supabase = clientStub({
+      holdings: {
+        data: [
+          {
+            id: "holding-1",
+            account_id: null,
+            manual_account_id: null,
+            quantity: 10,
+            institution_price: 15,
+            institution_value: 150,
+            source: "manual",
+            is_active: true,
+            securities: {
+              name: "Fund A",
+              ticker: "FUNDA",
+              security_type: "etf",
+              close_price: 15,
+            },
+          },
+        ],
+      },
+      holding_snapshots: {
+        data: [
+          { holding_id: "holding-1", snapshot_date: "2026-07-01", quantity: 10, price: 5, value: 50 },
+          { holding_id: "holding-1", snapshot_date: "2026-07-09", quantity: 10, price: 10, value: 100 },
+          { holding_id: "holding-1", snapshot_date: "2026-07-10", quantity: 10, price: 15, value: 150 },
+        ],
+      },
+    });
+
+    const result = await loadDashboardInvestmentSummary(supabase as never);
+
+    expect(result.total).toBe(150);
+    expect(result.dayChange).toEqual({ amount: 50, pct: 50 });
+    expect(result.topMovers).toEqual([
+      { name: "Fund A", ticker: "FUNDA", changePct: 50 },
+    ]);
+  });
+});
+
+describe("loadOverviewWidgetData", () => {
+  const options = {
+    month: "2026-07",
+    today: "2026-07-15",
+    userId: "user-1",
+    household: false,
+  };
+
+  it("does not issue spend or investment queries when both widgets are hidden", async () => {
+    const supabase = clientStub();
+    const result = await loadOverviewWidgetData(supabase as never, {
+      ...options,
+      visible: ["budget"],
+    });
+
+    expect(supabase.from).not.toHaveBeenCalled();
+    expect(result.cumulativeSpend).toEqual(EMPTY_CUMULATIVE_SPEND);
+    expect(result.investments).toBeNull();
+  });
+
+  it("loads investments without loading cumulative spend when only investments is visible", async () => {
+    const supabase = clientStub({ holdings: { data: [] }, holding_snapshots: { data: [] } });
+    await loadOverviewWidgetData(supabase as never, {
+      ...options,
+      visible: ["investments"],
+    });
+
+    expect(supabase.from).toHaveBeenCalledWith("holdings");
+    expect(supabase.from).not.toHaveBeenCalledWith("transactions");
   });
 });

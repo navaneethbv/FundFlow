@@ -6,6 +6,14 @@ import {
 } from "@/lib/dashboard";
 import { loadCanonicalProjection } from "@/lib/finance-query";
 import { formatMonth } from "@/lib/format";
+import { buildInvestmentsPage } from "@/lib/investments";
+import {
+  loadHoldings,
+  loadHoldingSnapshots,
+} from "@/lib/investments-data";
+import type { WidgetKey } from "@/lib/dashboard-widgets";
+
+export { buildDashboardBudgetGroups } from "@/lib/dashboard-budget-groups";
 
 /**
  * The one extra read the Phase 8 widget grid needs.
@@ -63,3 +71,55 @@ export const EMPTY_CUMULATIVE_SPEND: CumulativeSpendView = {
   monthLabel: "",
   previousMonthLabel: "",
 };
+
+export interface DashboardInvestmentSummary {
+  total: number;
+  dayChange: { amount: number; pct: number } | null;
+  topMovers: { name: string; ticker: string | null; changePct: number }[] | null;
+}
+
+export async function loadDashboardInvestmentSummary(
+  supabase: SupabaseClient,
+): Promise<DashboardInvestmentSummary> {
+  const [holdings, snapshots] = await Promise.all([
+    loadHoldings(supabase),
+    loadHoldingSnapshots(supabase),
+  ]);
+  const latestDates = [...new Set(snapshots.map((row) => row.snapshotDate))]
+    .sort((left, right) => right.localeCompare(left))
+    .slice(0, 2);
+  const latestDateSet = new Set(latestDates);
+  const page = buildInvestmentsPage(
+    holdings,
+    snapshots.filter((row) => latestDateSet.has(row.snapshotDate)),
+  );
+  return {
+    total: page.total,
+    dayChange: page.dayChange,
+    topMovers: page.topMovers?.slice(0, 3) ?? null,
+  };
+}
+
+export async function loadOverviewWidgetData(
+  supabase: SupabaseClient,
+  options: Readonly<{
+    month: string;
+    today: string;
+    userId: string;
+    household: boolean;
+    visible: readonly WidgetKey[];
+  }>,
+): Promise<{
+  cumulativeSpend: CumulativeSpendView;
+  investments: DashboardInvestmentSummary | null;
+}> {
+  const [cumulativeSpend, investments] = await Promise.all([
+    options.visible.includes("spendingCompare")
+      ? loadCumulativeSpend(supabase, options)
+      : Promise.resolve(EMPTY_CUMULATIVE_SPEND),
+    options.visible.includes("investments")
+      ? loadDashboardInvestmentSummary(supabase)
+      : Promise.resolve(null),
+  ]);
+  return { cumulativeSpend, investments };
+}

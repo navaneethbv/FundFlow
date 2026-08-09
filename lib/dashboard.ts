@@ -48,6 +48,10 @@ import {
   type DrillParams,
   type DrillTxn,
 } from "@/lib/drilldown";
+import {
+  buildDashboardBudgetGroups,
+  type DashboardBudgetGroup,
+} from "@/lib/dashboard-budget-groups";
 
 
 /**
@@ -112,6 +116,7 @@ export interface DashboardData {
   spendPerBank: { name: string; amount: number; itemId: string | null }[];
   cashFlow: { deposits: number; withdrawals: number; net: number };
   budgetEnvelopes: BudgetEnvelope[];
+  budgetGroups: DashboardBudgetGroup[];
   cashFlowForecast: CashFlowForecast;
   recurringWeeks: ReturnType<typeof groupRecurringByWeek>;
   spendingAnomalies: SpendingAnomaly[];
@@ -283,7 +288,7 @@ export async function getDashboardData(
         .eq("is_active", true),
     ),
     scopeUser(supabase.from("plaid_items").select("id, institution_name")),
-    scopeUser(supabase.from("budgets").select("category, monthly_limit, rollover_enabled")),
+    scopeUser(supabase.from("budgets").select("category, monthly_limit, group_name, rollover_enabled")),
     scopeUser(
       supabase
         .from("sync_jobs")
@@ -336,6 +341,7 @@ export async function getDashboardData(
   const allBudgets = (budgets ?? []) as Array<{
     category: string;
     monthly_limit: number;
+    group_name: string;
     rollover_enabled?: boolean | null;
   }>;
   const allSnapshots = (snapshots ?? []) as Array<{ snapshot_month: string; assets: number; liabilities: number }>;
@@ -743,6 +749,13 @@ export async function getDashboardData(
     dayOfMonth: activeDay,
     daysInMonth: activeDaysInMonth,
   });
+  const budgetGroups = buildDashboardBudgetGroups(
+    allBudgets.map((budget) => ({
+      category: budget.category,
+      groupName: budget.group_name,
+    })),
+    budgetEnvelopes,
+  );
 
   const recurringItems = [
     ...subscriptions.map((stream) => ({
@@ -1039,6 +1052,7 @@ export async function getDashboardData(
     spendPerBank,
     cashFlow,
     budgetEnvelopes,
+    budgetGroups,
     cashFlowForecast,
     recurringWeeks,
     spendingAnomalies,
