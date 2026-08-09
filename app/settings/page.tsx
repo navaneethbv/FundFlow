@@ -282,7 +282,10 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
           .eq("user_id", userId)
           .gte("date", monthStart(-4))
           .lt("date", monthStart(0)),
-        supabase.from("sinking_funds").select("id, name, target_amount, due_date").order("due_date"),
+        supabase
+          .from("sinking_funds")
+          .select("id, name, target_amount, due_date, cadence, custom_interval_months, cycle_anchor_date")
+          .order("due_date"),
       ]);
     const { data: households } = await supabase.from("households").select("id").limit(1);
     const historyByMonthCategory = new Map<string, number>();
@@ -316,7 +319,15 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
           />
         </div>
         <SinkingFundsSection
-          initialFunds={(sinkingFunds ?? []) as Array<{ id: string; name: string; target_amount: number; due_date: string }>}
+          initialFunds={(sinkingFunds ?? []) as Array<{
+            id: string;
+            name: string;
+            target_amount: number;
+            due_date: string;
+            cadence: "one_time" | "annual" | "semiannual" | "quarterly" | "custom";
+            custom_interval_months: number | null;
+            cycle_anchor_date: string;
+          }>}
         />
       </>
     );

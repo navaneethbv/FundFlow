@@ -20,6 +20,7 @@ import {
   computeSafeToSpend,
   computeSavingsRateSeries,
   computeSinkingFunds,
+  type SinkingFundInput,
   type SinkingFundPlan,
   detectPaychecks,
   medianOf,
@@ -330,7 +331,7 @@ export async function getDashboardData(
     scopeUser(
       supabase
         .from("sinking_funds")
-        .select("name, target_amount, due_date")
+        .select("name, target_amount, due_date, cadence, custom_interval_months, cycle_anchor_date")
         .order("due_date"),
     ),
   ]);
@@ -828,10 +829,16 @@ export async function getDashboardData(
       name: string;
       target_amount: number;
       due_date: string;
+      cadence: SinkingFundInput["cadence"];
+      custom_interval_months: number | null;
+      cycle_anchor_date: string;
     }>).map((row) => ({
       name: row.name,
       targetAmount: Number(row.target_amount),
       dueDate: row.due_date,
+      cadence: row.cadence,
+      customIntervalMonths: row.custom_interval_months,
+      cycleAnchorDate: row.cycle_anchor_date,
     })),
     asOf: insightsAsOf,
   });

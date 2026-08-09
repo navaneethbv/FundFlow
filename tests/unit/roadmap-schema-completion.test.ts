@@ -34,4 +34,15 @@ describe("roadmap completion schema", () => {
     expect(migration).toContain("mfa_backup_codes_update_own");
     expect(migration).toContain("code_hash");
   });
+
+  it("extends sinking funds with recurrence and requires server-side writes", () => {
+    expect(migration).toContain("add column cadence text");
+    expect(migration).toContain("add column custom_interval_months integer");
+    expect(migration).toContain("add column cycle_anchor_date date");
+    expect(migration).toContain("cadence in ('one_time', 'annual', 'semiannual', 'quarterly', 'custom')");
+    expect(migration).toContain("custom_interval_months between 1 and 120");
+    expect(migration).toContain("drop policy if exists \"sinking_funds_insert_own\"");
+    expect(migration).toContain("revoke insert, update, delete on public.sinking_funds from authenticated");
+    expect(migration).toContain("grant select on public.sinking_funds to authenticated");
+  });
 });

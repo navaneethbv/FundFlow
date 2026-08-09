@@ -500,7 +500,17 @@ export interface SinkingFundInput {
   name: string;
   targetAmount: number;
   dueDate: string;
+  cadence?: SinkingFundCadence;
+  customIntervalMonths?: number | null;
+  cycleAnchorDate?: string;
 }
+
+export type SinkingFundCadence =
+  | "one_time"
+  | "annual"
+  | "semiannual"
+  | "quarterly"
+  | "custom";
 
 export interface SinkingFundPlan {
   name: string;
@@ -512,6 +522,45 @@ export interface SinkingFundPlan {
 }
 
 const SINKING_DUE_SOON_DAYS = 45;
+
+function anchoredMonthDate(anchor: string, monthOffset: number): string {
+  const [year, month, day] = anchor.split("-").map(Number);
+  const totalMonth = year! * 12 + month! - 1 + monthOffset;
+  const targetYear = Math.floor(totalMonth / 12);
+  const targetMonth = totalMonth % 12;
+  const daysInMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+  return `${targetYear}-${String(targetMonth + 1).padStart(2, "0")}-${String(Math.min(day!, daysInMonth)).padStart(2, "0")}`;
+}
+
+export function resolveNextSinkingFundDue(input: {
+  cadence: SinkingFundCadence;
+  customIntervalMonths: number | null;
+  cycleAnchorDate: string;
+  dueDate: string;
+  asOf: string;
+}): string {
+  if (input.cadence === "one_time") return input.dueDate;
+  const interval = input.cadence === "annual"
+    ? 12
+    : input.cadence === "semiannual"
+      ? 6
+      : input.cadence === "quarterly"
+        ? 3
+        : Math.max(1, Math.min(120, input.customIntervalMonths ?? 1));
+  const [anchorYear, anchorMonth] = input.cycleAnchorDate.split("-").map(Number);
+  const [asOfYear, asOfMonth] = input.asOf.split("-").map(Number);
+  const elapsedMonths = Math.max(
+    0,
+    (asOfYear! - anchorYear!) * 12 + asOfMonth! - anchorMonth!,
+  );
+  let cycle = Math.floor(elapsedMonths / interval);
+  let candidate = anchoredMonthDate(input.cycleAnchorDate, cycle * interval);
+  if (candidate < input.asOf) {
+    cycle += 1;
+    candidate = anchoredMonthDate(input.cycleAnchorDate, cycle * interval);
+  }
+  return candidate;
+}
 
 /**
  * Sinking funds (planned irregular expenses): spread each target over the
@@ -526,7 +575,14 @@ export function computeSinkingFunds(input: {
   const dueSoonCutoff = addDays(input.asOf, SINKING_DUE_SOON_DAYS);
 
   const items = input.funds.map((fund) => {
-    const [dueYear, dueMonth, dueDay] = fund.dueDate.split("-").map(Number);
+    const dueDate = resolveNextSinkingFundDue({
+      cadence: fund.cadence ?? "one_time",
+      customIntervalMonths: fund.customIntervalMonths ?? null,
+      cycleAnchorDate: fund.cycleAnchorDate ?? fund.dueDate,
+      dueDate: fund.dueDate,
+      asOf: input.asOf,
+    });
+    const [dueYear, dueMonth, dueDay] = dueDate.split("-").map(Number);
     const wholeMonths =
       (dueYear! - asOfYear!) * 12 +
       (dueMonth! - asOfMonth!) +
@@ -535,10 +591,10 @@ export function computeSinkingFunds(input: {
     return {
       name: fund.name,
       targetAmount: round2(fund.targetAmount),
-      dueDate: fund.dueDate,
+      dueDate,
       monthsLeft,
       monthlySetAside: round2(fund.targetAmount / monthsLeft),
-      dueSoon: fund.dueDate <= dueSoonCutoff,
+      dueSoon: dueDate <= dueSoonCutoff,
     };
   });
 
