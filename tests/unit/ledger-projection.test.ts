@@ -77,6 +77,30 @@ describe("projectLedgerRows", () => {
       displayedAmount: 500,
     });
   });
+
+  it("matches account rules with the plain name while projecting the masked label", () => {
+    const accountRule: MerchantRule[] = [
+      {
+        matchType: "account",
+        pattern: "everyday checking",
+        displayName: "Checking purchase",
+        category: null,
+        enabled: true,
+      },
+    ];
+
+    const projected = projectLedgerRows(
+      [row({ id: "1", merchant_name: "Raw merchant" })],
+      accountRule,
+      new Map([["a-checking", "Everyday Checking"]]),
+      accountNames,
+    );
+
+    expect(projected[0]).toMatchObject({
+      merchant: "Checking purchase",
+      accountLabel: "Everyday Checking ••1234",
+    });
+  });
 });
 
 describe("sortLedgerRows", () => {

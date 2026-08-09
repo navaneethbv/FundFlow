@@ -60,7 +60,8 @@ export function resolvedLedgerAccountId(
 export function projectLedgerDisplayRows<T extends LedgerDisplaySourceRow>(
   rows: T[],
   rules: MerchantRule[],
-  accountNamesById: Map<string, string>,
+  ruleAccountNamesById: Map<string, string>,
+  displayAccountLabelsById: Map<string, string> = ruleAccountNamesById,
 ): LedgerDisplayRow[] {
   const applied = applyMerchantRules(
     rows.map((row) => ({
@@ -68,7 +69,7 @@ export function projectLedgerDisplayRows<T extends LedgerDisplaySourceRow>(
       merchant: row.merchant_name ?? row.name ?? "",
       category: row.pfc_primary,
       accountName:
-        accountNamesById.get(resolvedLedgerAccountId(row)) ?? "",
+        ruleAccountNamesById.get(resolvedLedgerAccountId(row)) ?? "",
     })),
     rules,
   );
@@ -78,19 +79,21 @@ export function projectLedgerDisplayRows<T extends LedgerDisplaySourceRow>(
     merchant: applied[index]!.merchant,
     category: applied[index]!.category,
     accountLabel:
-      accountNamesById.get(resolvedLedgerAccountId(row)) ?? "",
+      displayAccountLabelsById.get(resolvedLedgerAccountId(row)) ?? "",
   }));
 }
 
 export function projectLedgerRows<T extends LedgerProjectionSourceRow>(
   rows: T[],
   rules: MerchantRule[],
-  accountNamesById: Map<string, string>,
+  ruleAccountNamesById: Map<string, string>,
+  displayAccountLabelsById: Map<string, string> = ruleAccountNamesById,
 ): Array<T & LedgerProjectedRow> {
   const displayRows = projectLedgerDisplayRows(
     rows,
     rules,
-    accountNamesById,
+    ruleAccountNamesById,
+    displayAccountLabelsById,
   );
   return rows.map((row, index) => ({
     ...row,

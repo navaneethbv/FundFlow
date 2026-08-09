@@ -23,9 +23,26 @@ import { MerchantAvatar } from "@/components/ui/Avatar";
 import CategoryChip from "@/components/ui/CategoryChip";
 import { formatCurrency, titleCase, formatMonth } from "@/lib/format";
 import { formatDate } from "@/lib/format-date";
-import { applyMerchantRules } from "@/lib/planning";
-import { filterRowsWithRules, hasRemapRules } from "@/lib/ledger-filter";
-import { parseLedgerColumns } from "@/lib/ledger-columns";
+import { hasRemapRules } from "@/lib/ledger-filter";
+import {
+  ledgerHref,
+  ledgerQueryEntries,
+  parseLedgerQuery,
+  savedLedgerViewParams,
+  type LedgerRawSearchParams,
+} from "@/lib/ledger-query";
+import {
+  collectLedgerChunks,
+  ledgerDatabaseOrder,
+  needsProjectedLedgerPage,
+  selectProjectedLedgerPage,
+} from "@/lib/ledger-data";
+import {
+  buildLedgerFilterOptions,
+  projectLedgerRows,
+  type LedgerProjectedRow,
+  type LedgerProjectionSourceRow,
+} from "@/lib/ledger-projection";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 
 export const dynamic = "force-dynamic";
@@ -33,19 +50,7 @@ export const dynamic = "force-dynamic";
 const PAGE_SIZE = 50;
 
 interface PageProps {
-  searchParams: Promise<{
-    month?: string;
-    accountId?: string;
-    q?: string;
-    page?: string;
-    category?: string;
-    sub?: string;
-    merchant?: string;
-    flow?: string;
-    accountType?: string;
-    col?: string | string[];
-    colsSubmitted?: string;
-  }>;
+  searchParams: Promise<LedgerRawSearchParams>;
 }
 
 function monthBounds(month: string): { start: string; end: string } | null {
@@ -57,31 +62,14 @@ function monthBounds(month: string): { start: string; end: string } | null {
   return { start: `${month}-01`, end: `${month}-${String(lastDay).padStart(2, "0")}` };
 }
 
-/** Strip characters that carry meaning in PostgREST filter syntax. */
-function sanitizeSearch(q: string): string {
-  return q.replace(/[%_,()."\\]/g, " ").replace(/\s+/g, " ").trim();
-}
-
 const FLOW_LABELS: Record<string, string> = { in: "Money in", out: "Money out" };
 
 export default async function TransactionsPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
-  const month = params.month ?? "";
-  const accountId = params.accountId ?? "";
-  const q = sanitizeSearch(params.q ?? "");
-  const page = Math.max(1, Number(params.page) || 1);
-
-  const CATEGORY_RE = /^[A-Z][A-Z0-9_]*$/;
-  const category = CATEGORY_RE.test(params.category ?? "") ? params.category! : "";
-  const sub = CATEGORY_RE.test(params.sub ?? "") ? params.sub! : "";
-  const merchant = sanitizeSearch(params.merchant ?? "");
-  const flow = params.flow === "in" || params.flow === "out" ? params.flow : "";
-  const accountType =
-    params.accountType === "depository" || params.accountType === "credit"
-      ? params.accountType
-      : "";
-  const visibleColumns = parseLedgerColumns({ col: params.col, colsSubmitted: params.colsSubmitted });
-  const columnsAreDefault = !params.colsSubmitted;
+  const state = parseLedgerQuery(params);
+  const { month, accountId, q, page, category, sub, merchant, flow, accountType } = state;
+  const visibleColumns = state.columns;
+  const columnsAreDefault = !state.columnsSubmitted;
   // Gated: manual_account_id/source only exist once
   // 20260730240000_manual_transactions_receipts.sql is applied. /transactions
   // is already live, so this must default to the pre-Phase-12 query shape
@@ -97,24 +85,44 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     data: { user },
   } = await supabase.auth.getUser();
   const ownerId = user?.id ?? "";
-  const { data: savedViewRows } = await supabase
+  const savedViewsResult = await supabase
     .from("saved_views")
     .select("id, name, params")
+    .eq("user_id", ownerId)
     .order("created_at");
-  const savedViews = ((savedViewRows ?? []) as Array<{
+  const savedViews = ((savedViewsResult.data ?? []) as Array<{
     id: string;
     name: string;
     params: Record<string, string>;
   }>);
 
   // Fetch accounts and rules first to allow type-based filtration.
-  const [{ data: accounts }, { data: manualAccounts }, { data: merchantRules }, { data: goalRows }] =
-    await Promise.all([
+  const [accountsResult, manualAccountsResult, merchantRulesResult, goalRowsResult] = await Promise.all([
       supabase.from("accounts").select("id, name, mask, type").eq("user_id", ownerId).order("name"),
       supabase.from("manual_accounts").select("id, name").eq("user_id", ownerId).order("name"),
-      supabase.from("merchant_rules").select("match_type, pattern, display_name, category, enabled").order("created_at"),
+      supabase
+        .from("merchant_rules")
+        .select("match_type, pattern, display_name, category, enabled")
+        .eq("user_id", ownerId)
+        .order("created_at"),
       supabase.from("goals").select("id, name").eq("user_id", ownerId).order("name"),
     ]);
+
+  const accounts = accountsResult.data ?? [];
+  const manualAccounts = manualAccountsResult.data ?? [];
+  const merchantRules = merchantRulesResult.data ?? [];
+  const goalRows = goalRowsResult.data ?? [];
+  const setupErrors = [
+    savedViewsResult.error,
+    accountsResult.error,
+    manualAccountsResult.error,
+    merchantRulesResult.error,
+    goalRowsResult.error,
+  ].filter(Boolean);
+  let ledgerError = setupErrors.length > 0 ? "We couldn't load your transaction controls. Try again." : "";
+  if (setupErrors.length > 0) {
+    console.error("Transaction setup query failed", setupErrors.map((error) => error?.code ?? "unknown"));
+  }
 
   const rulesList = (merchantRules ?? []).map((r) => ({
     matchType: r.match_type as "merchant" | "keyword" | "account",
@@ -126,136 +134,161 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
 
   // A row's resolved account key, whichever of the two FKs is set — a manual
   // transaction (Phase 12) has no `account_id`.
-  const resolvedAccountId = (r: { account_id: string | null; manual_account_id?: string | null }) =>
-    r.account_id ?? r.manual_account_id ?? "";
-
   // Account name without the mask, for rule matching — mirrors the dashboard so
   // the ledger's rules-applied filter agrees with the drill it came from.
   const accountNamesById = new Map([
-    ...(accounts ?? []).map((a) => [a.id as string, (a.name ?? "") as string] as const),
-    ...(manualAccounts ?? []).map((a) => [a.id as string, (a.name ?? "") as string] as const),
+    ...accounts.map((a) => [a.id as string, (a.name ?? "") as string] as const),
+    ...manualAccounts.map((a) => [a.id as string, (a.name ?? "") as string] as const),
   ]);
+
+  const accountLabelsById = new Map([
+    ...accounts.map((a) => {
+      const mask = a.mask ? ` ••${a.mask}` : "";
+      return [a.id as string, `${a.name ?? "Account"}${mask}`] as const;
+    }),
+    ...manualAccounts.map((a) => [a.id as string, `${a.name ?? "Account"} (manual)`] as const),
+  ]);
+
+  const accountOptions = [
+    ...accounts.map((a) => ({ id: a.id as string, name: (a.name ?? "Account") as string, source: "plaid" as const })),
+    ...manualAccounts.map((a) => ({ id: a.id as string, name: (a.name ?? "Account") as string, source: "manual" as const })),
+  ];
 
   // Merchant rules recategorize/rename rows in-app, so a `category`/`merchant`
   // filter can't be expressed in SQL once such rules exist. In that case fetch
   // the rule-independent scope and filter on the rules-applied values instead.
   const ruleAwareFilter = Boolean(category || merchant) && hasRemapRules(rulesList);
 
-  const baseColumns = "id, date, amount, iso_currency_code, merchant_name, name, pfc_primary, pending, account_id";
+  const baseColumns = "id, date, amount, iso_currency_code, merchant_name, name, pfc_primary, pfc_detailed, pending, account_id";
   // Typed `: string` rather than left as a literal union: supabase-js parses
   // a literal `.select()` string at the type level to infer the row shape,
   // and a computed union of two literals defeats that parser (ParserError).
   // Widening to `string` falls back to the untyped overload instead, which
   // is what every downstream `as string`/`?? null` read already expects.
   const columns: string = transactionsParityEnabled ? `${baseColumns}, manual_account_id, source` : baseColumns;
-  let query = supabase
-    .from("transactions")
-    .select(columns, ruleAwareFilter ? {} : { count: "exact" })
-    .eq("user_id", ownerId)
-    .order("date", { ascending: false })
-    .order("id", { ascending: true });
-
   const bounds = month ? monthBounds(month) : null;
-  if (bounds) {
-    query = query.gte("date", bounds.start).lte("date", bounds.end);
+  const typedIds = accountType
+    ? accounts.filter((account) => account.type === accountType).map((account) => account.id as string)
+    : [];
+  const missingAccountId = "00000000-0000-0000-0000-000000000000";
+
+  let projectedScope: LedgerProjectedRow[] = [];
+  try {
+    const sourceRows = await collectLedgerChunks<LedgerProjectionSourceRow>(async (from, to) => {
+      let facetQuery = supabase
+        .from("transactions")
+        .select(columns)
+        .eq("user_id", ownerId)
+        .order("date", { ascending: false })
+        .order("id", { ascending: true });
+      if (bounds) facetQuery = facetQuery.gte("date", bounds.start).lte("date", bounds.end);
+      if (accountId) {
+        facetQuery = transactionsParityEnabled
+          ? facetQuery.or(`account_id.eq.${accountId},manual_account_id.eq.${accountId}`)
+          : facetQuery.eq("account_id", accountId);
+      }
+      if (q) {
+        const categorySearch = q.replace(/\s+/g, "_");
+        facetQuery = facetQuery.or(
+          `merchant_name.ilike.%${q}%,name.ilike.%${q}%,pfc_primary.ilike.%${categorySearch}%,pfc_detailed.ilike.%${categorySearch}%`,
+        );
+      }
+      if (flow === "in") facetQuery = facetQuery.lt("amount", 0);
+      if (flow === "out") facetQuery = facetQuery.gt("amount", 0);
+      if (accountType) facetQuery = facetQuery.in("account_id", typedIds.length ? typedIds : [missingAccountId]);
+
+      const result = await facetQuery.range(from, to);
+      return {
+        rows: (result.data ?? []) as unknown as LedgerProjectionSourceRow[],
+        error: result.error,
+      };
+    });
+    projectedScope = projectLedgerRows(sourceRows, rulesList, accountNamesById, accountLabelsById);
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "unknown";
+    console.error("Transaction projection query failed", code);
+    ledgerError = "We couldn't load your transactions. Try changing the filters or refresh the page.";
   }
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (accountId && UUID_RE.test(accountId)) {
-    // accountId may name either a Plaid or a manual account (Phase 12).
-    // Validated as a UUID before going into this raw `.or()` filter string —
-    // account ids are the only thing interpolated here, and PostgREST filter
-    // syntax has no special meaning inside a UUID's own character set.
-    query = transactionsParityEnabled
-      ? query.or(`account_id.eq.${accountId},manual_account_id.eq.${accountId}`)
-      : query.eq("account_id", accountId);
-  }
-  if (q) {
-    // Match merchant, raw name, or category (e.g. "food", "travel").
-    const catQ = q.replace(/\s+/g, "_"); // categories are SNAKE_CASE
-    query = query.or(
-      `merchant_name.ilike.%${q}%,name.ilike.%${q}%,pfc_primary.ilike.%${catQ}%,pfc_detailed.ilike.%${catQ}%`,
-    );
-  }
-  if (sub) query = query.eq("pfc_detailed", sub);
-  if (flow === "in") query = query.lt("amount", 0);
-  if (flow === "out") query = query.gt("amount", 0);
-  if (accountType) {
-    const typedIds = (accounts ?? [])
-      .filter((a) => a.type === accountType)
-      .map((a) => a.id as string);
-    query = query.in("account_id", typedIds.length ? typedIds : ["-"]);
-  }
-  // category/merchant go through SQL only on the fast path; the rule-aware path
-  // filters them in-app below (over the rules-applied values).
-  if (!ruleAwareFilter) {
+
+  const projectedPath = needsProjectedLedgerPage(state.sort, ruleAwareFilter);
+  let rows: LedgerProjectedRow[] = [];
+  let total = 0;
+  if (!ledgerError && projectedPath) {
+    const selected = selectProjectedLedgerPage(projectedScope, { ...state, pageSize: PAGE_SIZE });
+    rows = selected.rows;
+    total = selected.total;
+  } else if (!ledgerError) {
+    let directQuery = supabase
+      .from("transactions")
+      .select(columns, { count: "exact" })
+      .eq("user_id", ownerId);
+    if (bounds) directQuery = directQuery.gte("date", bounds.start).lte("date", bounds.end);
+    if (accountId) {
+      directQuery = transactionsParityEnabled
+        ? directQuery.or(`account_id.eq.${accountId},manual_account_id.eq.${accountId}`)
+        : directQuery.eq("account_id", accountId);
+    }
+    if (q) {
+      const categorySearch = q.replace(/\s+/g, "_");
+      directQuery = directQuery.or(
+        `merchant_name.ilike.%${q}%,name.ilike.%${q}%,pfc_primary.ilike.%${categorySearch}%,pfc_detailed.ilike.%${categorySearch}%`,
+      );
+    }
     if (category) {
-      // Uncategorized rows store NULL, not the literal "UNCATEGORIZED" the
-      // dashboard drill uses as a sentinel — match both so the drill's ledger
-      // link isn't empty.
-      query =
-        category === "UNCATEGORIZED"
-          ? query.or("pfc_primary.is.null,pfc_primary.eq.UNCATEGORIZED")
-          : query.eq("pfc_primary", category);
+      directQuery = category === "UNCATEGORIZED"
+        ? directQuery.or("pfc_primary.is.null,pfc_primary.eq.UNCATEGORIZED")
+        : directQuery.eq("pfc_primary", category);
     }
-    if (merchant) {
-      query = query.or(`merchant_name.ilike.${merchant},name.ilike.${merchant}`);
+    if (sub) directQuery = directQuery.eq("pfc_detailed", sub);
+    if (merchant) directQuery = directQuery.or(`merchant_name.ilike.${merchant},name.ilike.${merchant}`);
+    if (flow === "in") directQuery = directQuery.lt("amount", 0);
+    if (flow === "out") directQuery = directQuery.gt("amount", 0);
+    if (accountType) directQuery = directQuery.in("account_id", typedIds.length ? typedIds : [missingAccountId]);
+    const databaseSort = state.sort === "amount" ? "amount" : "date";
+    for (const order of ledgerDatabaseOrder(databaseSort, state.direction)) {
+      directQuery = directQuery.order(order.column, { ascending: order.ascending });
+    }
+    const offset = (page - 1) * PAGE_SIZE;
+    const result = await directQuery.range(offset, offset + PAGE_SIZE - 1);
+    if (result.error) {
+      console.error("Transaction page query failed", result.error.code ?? "unknown");
+      ledgerError = "We couldn't load your transactions. Try changing the filters or refresh the page.";
+    } else {
+      rows = projectLedgerRows(
+        (result.data ?? []) as unknown as LedgerProjectionSourceRow[],
+        rulesList,
+        accountNamesById,
+        accountLabelsById,
+      );
+      total = result.count ?? rows.length;
     }
   }
-
-  const offset = (page - 1) * PAGE_SIZE;
-  // Drills always carry a month, so the rule-aware fetch stays small; the cap
-  // only bounds the rare unfiltered-by-month manual URL.
-  const RULE_AWARE_FETCH_CAP = 4000;
-  const pageResult = ruleAwareFilter
-    ? await query.limit(RULE_AWARE_FETCH_CAP)
-    : await query.range(offset, offset + PAGE_SIZE - 1);
-
-  const accountName = new Map([
-    ...(accounts ?? []).map((a) => {
-      const mask = a.mask ? ` ••${a.mask}` : "";
-      return [a.id as string, `${a.name ?? "Account"}${mask}`] as const;
-    }),
-    ...(manualAccounts ?? []).map((a) => [a.id as string, `${a.name ?? "Account"} (manual)`] as const),
-  ]);
-
-  interface LedgerRow {
-    id: string;
-    date: string;
-    amount: number;
-    iso_currency_code: string | null;
-    merchant_name: string | null;
-    name: string | null;
-    pfc_primary: string | null;
-    pending: boolean;
-    account_id: string | null;
-    manual_account_id?: string | null;
-    source?: "plaid" | "import" | "manual";
-  }
-  // The select() string is computed (transactionsParityEnabled), so
-  // supabase-js's literal-string type inference can't parse it — it falls
-  // back to an opaque error type. This cast is the escape hatch, matching
-  // the same pattern lib/dashboard.ts uses for its own raw transactions read.
-  const fetchedRows = (pageResult.data ?? []) as unknown as LedgerRow[];
-  let rawRows = fetchedRows;
-  let total = pageResult.count ?? fetchedRows.length;
-  if (ruleAwareFilter) {
-    const filtered = filterRowsWithRules(fetchedRows, rulesList, accountNamesById, { category, merchant });
-    total = filtered.length;
-    rawRows = filtered.slice(offset, offset + PAGE_SIZE);
-  }
+  const filterOptions = buildLedgerFilterOptions(
+    projectedScope,
+    accountOptions.map((account) => ({ value: account.id, label: accountLabelsById.get(account.id) ?? account.name })),
+  );
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // User annotations (note/tags) and category splits for the visible rows.
   // `transaction_splits` is readable for any transaction the caller can see,
   // which now includes a household member's shared rows — filter to the
   // caller's own so their categories are never rewritten by someone else's.
-  const txnIds = rawRows.map((r) => r.id as string);
-  const [{ data: annotations }, { data: splits }] = txnIds.length
+  const txnIds = rows.map((row) => row.id);
+  const [annotationsResult, splitsResult] = txnIds.length
     ? await Promise.all([
         supabase.from("transaction_annotations").select("transaction_id, note, tags").eq("user_id", ownerId).in("transaction_id", txnIds),
         supabase.from("transaction_splits").select("transaction_id, category, amount").eq("user_id", ownerId).in("transaction_id", txnIds),
       ])
-    : [{ data: [] as { transaction_id: string; note: string | null; tags: string[] }[] }, { data: [] as { transaction_id: string; category: string; amount: number }[] }];
+    : [
+        { data: [] as { transaction_id: string; note: string | null; tags: string[] }[], error: null },
+        { data: [] as { transaction_id: string; category: string; amount: number }[], error: null },
+      ];
+  const annotations = annotationsResult.data;
+  const splits = splitsResult.data;
+  if (annotationsResult.error || splitsResult.error) {
+    console.error("Transaction detail query failed", [annotationsResult.error?.code, splitsResult.error?.code].filter(Boolean));
+    ledgerError = "We couldn't load transaction details. Refresh the page to try again.";
+  }
 
   const annById = new Map<string, { note: string | null; tags: string[] }>();
   for (const a of annotations ?? []) {
@@ -268,29 +301,11 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     splitsById.set(s.transaction_id as string, list);
   }
 
-  const cleanupTxns = rawRows.map((r) => ({
-    id: r.id,
-    merchant: r.merchant_name ?? r.name ?? "",
-    category: r.pfc_primary,
-    accountName: accountNamesById.get(resolvedAccountId(r)) || "",
-  }));
-
-  const appliedTxns = applyMerchantRules(cleanupTxns, rulesList);
-
-  const rows = rawRows.map((r, index) => {
-    const clean = appliedTxns[index]!;
-    return {
-      ...r,
-      merchant_name: clean.merchant,
-      pfc_primary: clean.category,
-    };
-  });
-
   // Category suggestions for the split editor: categories seen on this page
   // plus any already used in splits.
   const categoryOptions = [
     ...new Set([
-      ...rows.map((r) => r.pfc_primary).filter((c): c is string => Boolean(c)),
+      ...rows.map((row) => row.category).filter((value): value is string => Boolean(value)),
       ...[...splitsById.values()].flat().map((s) => s.category),
     ]),
   ].sort((a, b) => a.localeCompare(b));
@@ -303,52 +318,33 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   }
 
   const cardRows: LedgerCardRow[] = rows.map((t) => {
-    const ann = annById.get(t.id as string);
+    const ann = annById.get(t.id);
     return {
-      id: t.id as string,
-      date: t.date as string,
-      merchant: (t.merchant_name ?? t.name ?? "Unknown") as string,
-      category: t.pfc_primary as string | null,
-      accountLabel: accountName.get(resolvedAccountId(t)) ?? "-",
-      amount: t.amount as number,
-      currency: (t.iso_currency_code ?? "USD") as string,
-      pending: Boolean(t.pending),
+      id: t.id,
+      date: t.date,
+      merchant: t.merchant || "Unknown",
+      category: t.category,
+      accountLabel: t.accountLabel || "-",
+      amount: t.amount,
+      currency: t.iso_currency_code ?? "USD",
+      pending: t.pending,
       note: ann?.note ?? null,
       tags: ann?.tags ?? [],
-      splits: splitsById.get(t.id as string) ?? [],
+      splits: splitsById.get(t.id) ?? [],
       categoryOptions,
     };
   });
 
-  const pageLink = (p: number) => {
-    const parts = [`page=${p}`];
-    if (month) parts.push(`month=${month}`);
-    if (accountId) parts.push(`accountId=${accountId}`);
-    if (params.q) parts.push(`q=${encodeURIComponent(params.q)}`);
-    if (category) parts.push(`category=${category}`);
-    if (sub) parts.push(`sub=${sub}`);
-    if (merchant) parts.push(`merchant=${encodeURIComponent(merchant)}`);
-    if (flow) parts.push(`flow=${flow}`);
-    if (accountType) parts.push(`accountType=${accountType}`);
-    return `/transactions?${parts.join("&")}`;
-  };
+  const queryEntries = ledgerQueryEntries(state);
+  const pageLink = (nextPage: number) => ledgerHref(
+    queryEntries,
+    { page: String(nextPage) },
+    { resetPage: false },
+  );
 
-  const accountOptions = [
-    ...(accounts ?? []).map((a) => ({ id: a.id as string, name: (a.name ?? "Account") as string, source: "plaid" as const })),
-    ...(manualAccounts ?? []).map((a) => ({ id: a.id as string, name: a.name as string, source: "manual" as const })),
-  ];
-  const goalOptions = (goalRows ?? []).map((g) => ({ id: g.id as string, name: g.name as string }));
+  const goalOptions = goalRows.map((goal) => ({ id: goal.id as string, name: goal.name as string }));
   const columnsFormParams = Object.fromEntries(
-    Object.entries({
-      month: params.month,
-      accountId: params.accountId,
-      q: params.q,
-      category: params.category,
-      sub: params.sub,
-      merchant: params.merchant,
-      flow: params.flow,
-      accountType: params.accountType,
-    }).filter(([, value]) => typeof value === "string" && value.length > 0),
+    queryEntries.filter(([key]) => key !== "page" && key !== "col" && key !== "colsSubmitted"),
   ) as Record<string, string>;
 
   return (
@@ -369,18 +365,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
 
         <SavedViewsBar
           initialViews={savedViews}
-          currentParams={Object.fromEntries(
-            Object.entries({
-              month: params.month,
-              accountId: params.accountId,
-              q: params.q,
-              category: params.category,
-              sub: params.sub,
-              merchant: params.merchant,
-              flow: params.flow,
-              accountType: params.accountType,
-            }).filter(([, value]) => typeof value === "string" && value.length > 0),
-          ) as Record<string, string>}
+          currentParams={savedLedgerViewParams(state)}
         />
 
         <Panel>
@@ -445,7 +430,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                 const remaining = new URLSearchParams();
                 if (month) remaining.set("month", month);
                 if (accountId) remaining.set("accountId", accountId);
-                if (params.q) remaining.set("q", params.q);
+                if (q) remaining.set("q", q);
                 if (category && key !== "category") remaining.set("category", category);
                 if (sub && key !== "sub" && key !== "category") remaining.set("sub", sub);
                 if (merchant && key !== "merchant") remaining.set("merchant", merchant);
@@ -466,7 +451,11 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
           (Plaid sign convention).
         </p>
 
-        {rows.length === 0 ? (
+        {ledgerError ? (
+          <Panel tone="danger" role="alert" title="Transactions unavailable">
+            <p className="text-sm text-muted">{ledgerError}</p>
+          </Panel>
+        ) : rows.length === 0 ? (
           <EmptyState
             title="No transactions found"
             description="Try clearing filters, or refresh from the dashboard."
@@ -533,9 +522,9 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                       </td>
                       <td className="px-4 py-3 align-top">
                         <div className="flex items-start gap-2.5">
-                          <MerchantAvatar name={(t.merchant_name ?? t.name ?? "?") as string} size={28} className="mt-0.5" />
+                          <MerchantAvatar name={t.merchant || "?"} size={28} className="mt-0.5" />
                           <span className="min-w-0">
-                        <span className="font-medium">{t.merchant_name ?? t.name ?? "Unknown"}</span>
+                        <span className="font-medium">{t.merchant || "Unknown"}</span>
                         {t.pending && (
                           <Badge tone="warning" className="ml-2">
                             pending
@@ -560,12 +549,12 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                       </td>
                       {visibleColumns.has("category") && (
                         <td className="hidden px-4 py-3 align-top text-muted sm:table-cell">
-                          {t.pfc_primary ? <CategoryChip label={titleCase(t.pfc_primary)} /> : "-"}
+                          {t.category ? <CategoryChip label={titleCase(t.category)} /> : "-"}
                         </td>
                       )}
                       {visibleColumns.has("account") && (
                         <td className="hidden px-4 py-3 align-top text-muted md:table-cell">
-                          {accountName.get(resolvedAccountId(t)) ?? "-"}
+                          {t.accountLabel || "-"}
                         </td>
                       )}
                       <td
@@ -582,10 +571,10 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                       <td className="px-2 py-3 text-right align-top">
                         <TransactionEditor
                           transaction={{
-                            id: t.id as string,
-                            merchant: (t.merchant_name ?? t.name ?? "Unknown") as string,
-                            amount: t.amount as number,
-                            currency: (t.iso_currency_code ?? "USD") as string,
+                            id: t.id,
+                            merchant: t.merchant || "Unknown",
+                            amount: t.amount,
+                            currency: t.iso_currency_code ?? "USD",
                           }}
                           note={ann?.note ?? null}
                           tags={ann?.tags ?? []}
