@@ -32,6 +32,7 @@
     "react-dom": "19.2.8",
     "react-plaid-link": "^5.0.0",
     "server-only": "^0.0.1",
+    "sharp": "0.35.3",
     "tailwind-merge": "^3.6.0",
     "web-push": "^3.6.7"
   },
@@ -51,7 +52,6 @@
     "vitest": "^4.1.10"
   },
   "overrides": {
-    "postcss": "^8.5.23",
-    "sharp": "^0.35.3"
+    "postcss": "^8.5.23"
   }
 }

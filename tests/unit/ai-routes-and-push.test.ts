@@ -285,7 +285,10 @@ describe("POST /api/ai/receipt", () => {
   });
 
   it("extracts the receipt and matches it to a ledger row", async () => {
-    scanningUser([{ id: "txn-1", date: "2026-07-02", amount: 24.5 }]);
+    scanningUser([
+      { id: "txn-wrong", date: "2026-07-02", amount: 24.5, merchant_name: "Market", name: "MARKET" },
+      { id: "txn-1", date: "2026-07-02", amount: 24.5, merchant_name: "Cafe", name: "CAFE" },
+    ]);
     mockMessagesCreate.mockResolvedValue(
       textResponse(
         JSON.stringify({
