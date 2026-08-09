@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { looksLikeOfx, parseOfx } from "@/lib/import-ofx";
+import { isOfxFileName, looksLikeOfx, parseOfx } from "@/lib/import-ofx";
 
 /** SGML-style OFX 1.x: field values end at the newline, no closing tags. */
 const SGML_FIXTURE = `OFXHEADER:100
@@ -73,6 +73,18 @@ describe("looksLikeOfx", () => {
   it("rejects CSV content", () => {
     expect(looksLikeOfx("date,description,amount\n2024-01-01,Coffee,4.50\n")).toBe(false);
   });
+});
+
+describe("isOfxFileName", () => {
+  it.each(["checking.ofx", "CARD.QFX", "statement.OfX"])(
+    "recognizes %s",
+    (name) => expect(isOfxFileName(name)).toBe(true),
+  );
+
+  it.each(["statement.csv", "ofx.csv", "statement.qfx.txt"])(
+    "rejects %s",
+    (name) => expect(isOfxFileName(name)).toBe(false),
+  );
 });
 
 describe("parseOfx (SGML 1.x)", () => {

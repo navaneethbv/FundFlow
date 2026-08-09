@@ -27,6 +27,13 @@ vi.mock("@/lib/import", () => ({
   normalizeColumnMap: (...args: unknown[]) => mockNormalizeColumnMap(...args),
 }));
 
+const mockLooksLikeOfx = vi.fn<(...args: unknown[]) => boolean>();
+const mockParseOfx = vi.fn<(...args: unknown[]) => unknown[]>();
+vi.mock("@/lib/import-ofx", () => ({
+  looksLikeOfx: (...args: unknown[]) => mockLooksLikeOfx(...args),
+  parseOfx: (...args: unknown[]) => mockParseOfx(...args),
+}));
+
 const mockCheckRateLimit = vi.fn<(...args: unknown[]) => unknown>(() => Promise.resolve(true));
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
@@ -54,6 +61,7 @@ import { NextRequest, NextResponse } from "next/server";
 describe("Import API Routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockLooksLikeOfx.mockReturnValue(false);
   });
 
   describe("POST /api/import/preview", () => {
@@ -194,6 +202,101 @@ describe("Import API Routes", () => {
           },
         ],
         parse_errors: [],
+      });
+    });
+
+    it("sends OFX rows through the existing staged review pipeline", async () => {
+      const mockSupabase = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue({ data: [] }),
+          }),
+        }),
+      };
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: mockSupabase,
+      });
+      const file = new File(["OFXHEADER:100\n<OFX>...</OFX>"], "checking.qfx", {
+        type: "application/x-ofx",
+      });
+      const formData = new FormData();
+      formData.set("file", file);
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockLooksLikeOfx.mockReturnValue(true);
+      mockParseOfx.mockReturnValue([
+        {
+          date: "2026-07-01",
+          description: "Coffee shop",
+          amount: 10.25,
+          fitid: "fit-1",
+        },
+      ]);
+      mockBuildImportReview.mockReturnValue({
+        rows: [
+          {
+            rowHash: "h1",
+            row: {
+              date: "2026-07-01",
+              merchant: "Coffee shop",
+              amount: 10.25,
+              category: null,
+            },
+            flags: [],
+          },
+        ],
+      });
+
+      mockServiceClient.from.mockImplementation((table) => {
+        if (table === "import_review_batches") {
+          return {
+            insert: vi.fn().mockReturnThis(),
+            select: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({
+              data: { id: "batch-ofx" },
+              error: null,
+            }),
+          };
+        }
+        return {
+          insert: vi.fn().mockReturnThis(),
+          select: vi.fn().mockResolvedValue({
+            data: [
+              {
+                id: "row-ofx",
+                date: "2026-07-01",
+                description: "Coffee shop",
+                amount: 10.25,
+                status: "pending",
+              },
+            ],
+            error: null,
+          }),
+        };
+      });
+
+      const res = await previewPost(request);
+
+      expect(res.status).toBe(200);
+      expect(mockParseImportCsv).not.toHaveBeenCalled();
+      expect(mockGetCsvColumns).not.toHaveBeenCalled();
+      expect(mockBuildImportReview).toHaveBeenCalledWith(
+        [
+          {
+            date: "2026-07-01",
+            merchant: "Coffee shop",
+            amount: 10.25,
+            category: null,
+          },
+        ],
+        new Set(),
+      );
+      await expect(res.json()).resolves.toMatchObject({
+        batch_id: "batch-ofx",
+        rows: [{ id: "row-ofx", description: "Coffee shop" }],
       });
     });
   });

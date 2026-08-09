@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { buildImportReview } from "@/lib/planning";
 import { getCsvColumns, normalizeColumnMap, parseImportCsv, type ColumnMap } from "@/lib/import";
+import { looksLikeOfx, parseOfx } from "@/lib/import-ofx";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -18,23 +19,35 @@ export async function POST(request: NextRequest) {
     if (!(file instanceof File)) return badRequest("file is required");
 
     const text = await file.text();
+    const isOfx = looksLikeOfx(text);
 
     // An explicit column map (from the manual-mapping UI) overrides detection.
     const columnMapRaw = form.get("column_map");
     let columns: ColumnMap | undefined;
-    if (typeof columnMapRaw === "string" && columnMapRaw.length > 0) {
+    if (!isOfx && typeof columnMapRaw === "string" && columnMapRaw.length > 0) {
       const header = getCsvColumns(text);
       const parsed = header ? normalizeColumnMap(JSON.parse(columnMapRaw), header.headers.length) : null;
       if (!parsed) return badRequest("Invalid column mapping. Map at least a date, description, and amount (or debit/credit).");
       columns = parsed;
     }
 
-    const { rows, errors } = parseImportCsv(text, { positiveIsIncome, columns });
+    const parsed = isOfx
+      ? {
+          rows: parseOfx(text).map((row) => ({
+            date: row.date,
+            merchant: row.description,
+            amount: row.amount,
+            category: null,
+          })),
+          errors: [] as string[],
+        }
+      : parseImportCsv(text, { positiveIsIncome, columns });
+    const { rows, errors } = parsed;
     if (rows.length === 0) {
       // With no explicit map, auto-detection couldn't produce rows — hand the
       // headers back so the UI can offer manual column mapping instead of a
       // dead-end error.
-      if (!columns) {
+      if (!isOfx && !columns) {
         const header = getCsvColumns(text);
         if (header && header.headers.length > 0) {
           return NextResponse.json({
@@ -45,7 +58,9 @@ export async function POST(request: NextRequest) {
           });
         }
       }
-      return badRequest(errors[0] ?? "No importable rows found");
+      return badRequest(
+        errors[0] ?? (isOfx ? "No importable OFX rows found" : "No importable rows found"),
+      );
     }
 
     const { data: existing } = await supabase
