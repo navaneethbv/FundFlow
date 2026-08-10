@@ -157,7 +157,7 @@ describe("POST /api/plaid/webhook", () => {
     const ffModule = await import("@/lib/feature-flags");
     vi.spyOn(ffModule, "isFeatureEnabled").mockReturnValue(true);
     const syncInvModule = await import("@/lib/investment-sync");
-    const mockSyncInv = vi.spyOn(syncInvModule, "syncInvestmentsForItem").mockResolvedValue(undefined as any);
+    const mockSyncInv = vi.spyOn(syncInvModule, "syncInvestmentsForItem").mockResolvedValue(undefined as never);
 
     mockGetItemByPlaidItemId.mockResolvedValue(sampleItem);
 

@@ -30,8 +30,8 @@ describe("API Routes Branches Extra", () => {
 
     it("returns 429 when rate limit is exceeded", async () => {
       vi.spyOn(http, "requireUser").mockResolvedValue({
-        user: { id: "user-1" } as any,
-        supabase: {} as any,
+        user: { id: "user-1" } as never,
+        supabase: {} as never,
       });
       const rateLimitModule = await import("@/lib/rate-limit");
       vi.spyOn(rateLimitModule, "checkRateLimit").mockResolvedValueOnce(false);
@@ -43,8 +43,8 @@ describe("API Routes Branches Extra", () => {
 
     it("rejects invalid multipart form data", async () => {
       vi.spyOn(http, "requireUser").mockResolvedValue({
-        user: { id: "user-1" } as any,
-        supabase: {} as any,
+        user: { id: "user-1" } as never,
+        supabase: {} as never,
       });
 
       const req = new NextRequest("http://localhost/api/import/csv", {
@@ -64,10 +64,10 @@ describe("API Routes Branches Extra", () => {
             }),
           }),
         }),
-      } as any;
+      } as never;
 
       vi.spyOn(http, "requireUser").mockResolvedValue({
-        user: { id: "user-1" } as any,
+        user: { id: "user-1" } as never,
         supabase: mockSupabase,
       });
 
@@ -98,8 +98,8 @@ describe("API Routes Branches Extra", () => {
       const ffModule = await import("@/lib/feature-flags");
       vi.spyOn(ffModule, "isFeatureEnabled").mockReturnValue(true);
       vi.spyOn(http, "requireUser").mockResolvedValue({
-        user: { id: "user-1" } as any,
-        supabase: {} as any,
+        user: { id: "user-1" } as never,
+        supabase: {} as never,
       });
 
       const req = new NextRequest("http://localhost/api/settings/profile", {
@@ -119,9 +119,9 @@ describe("API Routes Branches Extra", () => {
             eq: vi.fn().mockResolvedValue({ error: null }),
           }),
         }),
-      } as any;
+      } as never;
       vi.spyOn(http, "requireUser").mockResolvedValue({
-        user: { id: "user-1" } as any,
+        user: { id: "user-1" } as never,
         supabase: mockSupabase,
       });
 
@@ -151,9 +151,9 @@ describe("API Routes Branches Extra", () => {
             eq: vi.fn().mockResolvedValue({ error: null }),
           }),
         }),
-      } as any;
+      } as never;
       vi.spyOn(http, "requireUser").mockResolvedValue({
-        user: { id: "user-1" } as any,
+        user: { id: "user-1" } as never,
         supabase: mockSupabase,
       });
 
@@ -190,9 +190,9 @@ describe("API Routes Branches Extra", () => {
             eq: vi.fn().mockResolvedValue({ error: null }),
           }),
         }),
-      } as any;
+      } as never;
       vi.spyOn(http, "requireUser").mockResolvedValue({
-        user: { id: "user-1" } as any,
+        user: { id: "user-1" } as never,
         supabase: mockSupabase,
       });
 

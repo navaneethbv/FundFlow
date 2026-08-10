@@ -16,6 +16,10 @@ vi.mock("@/lib/audit", () => ({
   getClientIp: () => "127.0.0.1",
 }));
 
+vi.mock("@/lib/plaid", () => ({
+  getPlaidClient: () => ({ itemRemove: vi.fn().mockResolvedValue({ data: {} }) }),
+}));
+
 let serviceClient = clientStub();
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => serviceClient,

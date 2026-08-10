@@ -21,16 +21,6 @@ function makeSupabase(seeds: Record<string, unknown> = {}) {
   return { from: mockFrom };
 }
 
-const DEPOSITORY = {
-  official_name: null,
-  mask: null,
-  subtype: "checking",
-  current_balance: 1000,
-  available_balance: 1000,
-  credit_limit: null,
-  iso_currency_code: "USD",
-};
-
 describe("getDashboardData", () => {
   it("loads full dashboard data with recurring stream matches and net worth snapshots", async () => {
     const mockFrom = vi.fn((table: string) => {

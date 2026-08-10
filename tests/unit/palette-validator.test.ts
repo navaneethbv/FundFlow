@@ -106,7 +106,7 @@ describe("palette validator", () => {
   });
 
   it("throws error for invalid CVD mode", () => {
-    expect(() => simulateCvd(hexToRgb("#ffffff"), "unknown" as any)).toThrow("invalid_cvd_mode");
+    expect(() => simulateCvd(hexToRgb("#ffffff"), "unknown")).toThrow("invalid_cvd_mode");
   });
 
   it("parses palettes from CSS source code", () => {
@@ -130,7 +130,10 @@ describe("palette validator", () => {
         --viz-7: #d33ea7;
       }
     `;
-    const palettes = paletteValidator.palettesFromCss(css);
+    const palettes = paletteValidator.palettesFromCss(css) as Record<
+      string,
+      string[]
+    >;
     expect(palettes.light).toHaveLength(7);
     expect(palettes.dark).toHaveLength(7);
   });

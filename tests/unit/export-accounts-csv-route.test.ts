@@ -20,9 +20,9 @@ describe("GET /api/export/accounts-csv", () => {
   });
 
   it("returns 403 if data export is disabled", async () => {
-    const mockSupabase = {} as any;
+    const mockSupabase = {} as never;
     vi.spyOn(http, "requireUser").mockResolvedValue({
-      user: { id: "user-123" } as any,
+      user: { id: "user-123" } as never,
       supabase: mockSupabase,
     });
     vi.spyOn(exportLib, "isExportAllowed").mockResolvedValue(false);
@@ -44,10 +44,10 @@ describe("GET /api/export/accounts-csv", () => {
         }
         return {};
       }),
-    } as any;
+    } as never;
 
     vi.spyOn(http, "requireUser").mockResolvedValue({
-      user: { id: "user-123" } as any,
+      user: { id: "user-123" } as never,
       supabase: mockSupabase,
     });
     vi.spyOn(exportLib, "isExportAllowed").mockResolvedValue(true);
@@ -168,10 +168,10 @@ describe("GET /api/export/accounts-csv", () => {
         }
         return {};
       }),
-    } as any;
+    } as never;
 
     vi.spyOn(http, "requireUser").mockResolvedValue({
-      user: { id: "user-123" } as any,
+      user: { id: "user-123" } as never,
       supabase: mockSupabase,
     });
     vi.spyOn(exportLib, "isExportAllowed").mockResolvedValue(true);

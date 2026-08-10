@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { POST as calendarTokenPost, DELETE as calendarTokenDelete } from "@/app/api/calendar/token/route";
 import { GET as sessionsGet, DELETE as sessionsDelete } from "@/app/api/settings/sessions/route";
 import { POST as tokensPost, DELETE as tokensDelete } from "@/app/api/tokens/route";
@@ -51,10 +51,10 @@ describe("PR #110 Route Handlers Coverage Boost", () => {
             }),
           }),
         }),
-      } as any;
+      } as never;
 
       vi.spyOn(http, "requireUser").mockResolvedValue({
-        user: { id: "user-1" } as any,
+        user: { id: "user-1" } as never,
         supabase: mockSupabase,
       });
 
@@ -101,10 +101,10 @@ describe("PR #110 Route Handlers Coverage Boost", () => {
         auth: {
           getSession: vi.fn().mockResolvedValue({ data: { session: { id: "s-1" } } }),
         },
-      } as any;
+      } as never;
 
       vi.spyOn(http, "requireUser").mockResolvedValue({
-        user: { id: "user-1" } as any,
+        user: { id: "user-1" } as never,
         supabase: mockSupabase,
       });
 
@@ -145,10 +145,10 @@ describe("PR #110 Route Handlers Coverage Boost", () => {
             }),
           }),
         }),
-      } as any;
+      } as never;
 
       vi.spyOn(http, "requireUser").mockResolvedValue({
-        user: { id: "user-1" } as any,
+        user: { id: "user-1" } as never,
         supabase: mockSupabase,
       });
 
@@ -193,10 +193,10 @@ describe("PR #110 Route Handlers Coverage Boost", () => {
             }),
           }),
         }),
-      } as any;
+      } as never;
 
       vi.spyOn(http, "requireUser").mockResolvedValue({
-        user: { id: "user-1" } as any,
+        user: { id: "user-1" } as never,
         supabase: mockSupabase,
       });
 
@@ -242,10 +242,10 @@ describe("PR #110 Route Handlers Coverage Boost", () => {
             }),
           }),
         }),
-      } as any;
+      } as never;
 
       vi.spyOn(http, "requireUser").mockResolvedValue({
-        user: { id: "user-1" } as any,
+        user: { id: "user-1" } as never,
         supabase: mockSupabase,
       });
 

@@ -55,12 +55,12 @@ describe("Chart React Components Unit Tests", () => {
   });
 
   it("renders SankeyChart with nodes and links", () => {
-    const emptySankey = SankeyChart({ nodes: [], links: [] });
+    const emptySankey = SankeyChart({ nodes: [], links: [], title: "Cash flow" });
     expect(emptySankey).toBeDefined();
 
     const sankey = SankeyChart({
       nodes: [
-        { id: "in", label: "Income Very Long Category Label Exceeding Max Chars", value: 500, column: 0, href: "/income" },
+        { id: "in", label: "Income Very Long Category Label Exceeding Max Chars", value: 500, column: 0 },
         { id: "hub", label: "Hub", value: 500, column: 1 },
         { id: "group:net-income", label: "Net Income", value: 300, column: 2 },
         { id: "group:unfunded", label: "Unfunded", value: 200, column: 2 },
