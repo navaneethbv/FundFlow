@@ -52,7 +52,7 @@ describe("POST / DELETE /api/push/subscribe", () => {
       const req = new NextRequest("http://localhost/api/push/subscribe", {
         method: "POST",
         body: JSON.stringify({
-          endpoint: "https://push.com/sub-1",
+          endpoint: "https://fcm.googleapis.com/sub-1",
           keys: { p256dh: "key-p256dh", auth: "key-auth" },
         }),
       });
@@ -64,12 +64,28 @@ describe("POST / DELETE /api/push/subscribe", () => {
       expect(upsert).toHaveBeenCalledWith(
         {
           user_id: "user-1",
-          endpoint: "https://push.com/sub-1",
+          endpoint: "https://fcm.googleapis.com/sub-1",
           p256dh: "key-p256dh",
           auth: "key-auth",
         },
         { onConflict: "endpoint" },
       );
+    });
+
+    it("rejects a non-allowlisted push endpoint (SSRF guard)", async () => {
+      mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase: {} });
+
+      const req = new NextRequest("http://localhost/api/push/subscribe", {
+        method: "POST",
+        body: JSON.stringify({
+          endpoint: "https://internal.example.com/sub-1",
+          keys: { p256dh: "key-p256dh", auth: "key-auth" },
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(400);
+      expect(mockBadRequest).toHaveBeenCalledWith("Unsupported push endpoint");
     });
 
     it("calls errorResponse on upsert error", async () => {
@@ -82,7 +98,7 @@ describe("POST / DELETE /api/push/subscribe", () => {
       const req = new NextRequest("http://localhost/api/push/subscribe", {
         method: "POST",
         body: JSON.stringify({
-          endpoint: "https://push.com/sub-1",
+          endpoint: "https://fcm.googleapis.com/sub-1",
           keys: { p256dh: "key-p256dh", auth: "key-auth" },
         }),
       });

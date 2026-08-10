@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
+import { isAllowedPushEndpoint } from "@/lib/push";
 
 /** Register/unregister a browser push subscription (owner RLS writes). */
 export async function POST(request: NextRequest) {
@@ -14,6 +15,9 @@ export async function POST(request: NextRequest) {
     } | null;
     if (!body?.endpoint || !body.keys?.p256dh || !body.keys.auth) {
       return badRequest("A push subscription (endpoint + keys) is required");
+    }
+    if (!isAllowedPushEndpoint(body.endpoint)) {
+      return badRequest("Unsupported push endpoint");
     }
 
     const { error } = await supabase.from("push_subscriptions").upsert(

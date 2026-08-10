@@ -15,6 +15,32 @@ export function isPushConfigured(): boolean {
   return Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
 }
 
+const PUSH_SERVICE_HOSTS = new Set([
+  "fcm.googleapis.com",
+  "android.googleapis.com",
+  "web.push.apple.com",
+  "push.services.mozilla.com",
+  "updates.push.services.mozilla.com",
+]);
+
+/**
+ * Reject push endpoints that are not https URLs on a known push service.
+ * Without this an authenticated user could point a subscription at an
+ * internal TLS-speaking host and turn notification delivery into an SSRF.
+ */
+export function isAllowedPushEndpoint(endpoint: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:") return false;
+  if (url.username || url.password) return false;
+  if (url.port && url.port !== "443") return false;
+  return PUSH_SERVICE_HOSTS.has(url.hostname);
+}
+
 export async function sendPushToUser(
   userId: string,
   payload: { title: string; body: string },
