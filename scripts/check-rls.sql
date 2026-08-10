@@ -102,7 +102,7 @@ BEGIN
       OR EXISTS (
         SELECT 1
         FROM unnest(p.proacl) acl
-        WHERE acl LIKE '%=X/%' OR acl LIKE '%=U/%'
+        WHERE acl::text LIKE '%=X/%' OR acl::text LIKE '%=U/%'
       )
     );
   IF risky IS NOT NULL THEN
