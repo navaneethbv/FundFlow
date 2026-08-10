@@ -257,7 +257,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
     content = (
       <>
         <div className="grid gap-6 xl:grid-cols-2">
-          <BanksSection initialItems={items ?? []} hasHousehold={(households ?? []).length > 0} />
+          <BanksSection initialItems={items ?? []} householdId={(households ?? [])[0]?.id ?? null} />
           <ManualAccountsSection initialAccounts={manualAccounts ?? []} />
         </div>
         <CardAprSection

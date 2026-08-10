@@ -144,18 +144,29 @@ describe("POST /api/plaid/share", () => {
     expect(res.status).toBe(400);
   });
 
+  it("requires a householdId when sharing", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER },
+      supabase: clientStub({ plaid_items: { data: { id: "i1" } } }),
+    });
+    const res = await sharePost(
+      post("http://localhost/api/plaid/share", { itemId: "i1", share: true }),
+    );
+    expect(res.status).toBe(400);
+  });
+
   it("404s when the item does not resolve for the caller", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: USER },
       supabase: clientStub({ plaid_items: { data: null } }),
     });
     const res = await sharePost(
-      post("http://localhost/api/plaid/share", { itemId: "i1", share: true }),
+      post("http://localhost/api/plaid/share", { itemId: "i1", share: true, householdId: "h1" }),
     );
     expect(res.status).toBe(404);
   });
 
-  it("refuses to share when the caller has no household", async () => {
+  it("refuses to share into a household the caller is not a member of", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: USER },
       supabase: clientStub({
@@ -164,12 +175,12 @@ describe("POST /api/plaid/share", () => {
       }),
     });
     const res = await sharePost(
-      post("http://localhost/api/plaid/share", { itemId: "i1", share: true }),
+      post("http://localhost/api/plaid/share", { itemId: "i1", share: true, householdId: "h1" }),
     );
     expect(res.status).toBe(400);
   });
 
-  it("stamps the household id on the item, scoped to the owner", async () => {
+  it("stamps the explicit household id on the item, scoped to the owner", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: USER },
       supabase: clientStub({
@@ -178,7 +189,7 @@ describe("POST /api/plaid/share", () => {
       }),
     });
     const res = await sharePost(
-      post("http://localhost/api/plaid/share", { itemId: "i1", share: true }),
+      post("http://localhost/api/plaid/share", { itemId: "i1", share: true, householdId: "h1" }),
     );
 
     expect(res.status).toBe(200);

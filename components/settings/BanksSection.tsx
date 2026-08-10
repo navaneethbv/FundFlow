@@ -22,10 +22,10 @@ function needsReconnect(item: Item): boolean {
 
 export default function BanksSection({
   initialItems,
-  hasHousehold = false,
+  householdId = null,
 }: Readonly<{
   initialItems: Item[];
-  hasHousehold?: boolean;
+  householdId?: string | null;
 }>) {
   const router = useRouter();
   const [items, setItems] = useState<Item[]>(initialItems);
@@ -33,11 +33,15 @@ export default function BanksSection({
   const [error, setError] = useState<string | null>(null);
 
   async function toggleShare(id: string, share: boolean) {
+    if (share && !householdId) {
+      setError("Create or join a household first.");
+      return;
+    }
     setError(null);
     const res = await fetch("/api/plaid/share", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ itemId: id, share }),
+      body: JSON.stringify({ itemId: id, share, householdId }),
     });
     const json = (await res.json().catch(() => null)) as {
       householdId?: string | null;
@@ -97,7 +101,7 @@ export default function BanksSection({
                 {i.error_code === "PENDING_EXPIRATION" && (
                   <span className="text-xs text-warning">Consent expiring soon</span>
                 )}
-                {hasHousehold && (
+                {householdId && (
                   <label className="mt-1 flex items-center gap-1.5 text-xs text-muted">
                     <input
                       type="checkbox"
