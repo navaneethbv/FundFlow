@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createHash } from "node:crypto";
 
 const mockServiceClient = {
   from: vi.fn(),
@@ -52,6 +53,8 @@ import {
   getAccountIdMap,
   rotateItemAccessToken,
   rotateStaleItemTokens,
+  storeLinkToken,
+  consumeLinkToken,
   TOKEN_ROTATION_DAYS,
 } from "@/lib/plaid-service";
 import type { PlaidItemRow } from "@/lib/types";
@@ -393,5 +396,254 @@ describe("lib/plaid-service", () => {
     await expect(upsertAccounts("u1", "i1", [{ account_id: "a1", balances: {} }] as never)).rejects.toThrow("Upsert Error");
     await expect(updateItemCursor("i1", "c1")).rejects.toThrow("Update Error");
     await expect(setItemStatus("i1", "error")).rejects.toThrow("Update Error");
+  });
+
+  it("decryptItemTokenAndUpgrade skips the DB write when the current key was used", async () => {
+    mockDecryptSecretDetailed.mockReturnValueOnce({
+      plaintext: "access-token-plain",
+      usedFallbackKey: false,
+    });
+
+    const token = await decryptItemTokenAndUpgrade(dummyItem);
+
+    expect(token).toBe("access-token-plain");
+    expect(mockServiceClient.from).not.toHaveBeenCalled();
+  });
+
+  it("getItemByPlaidItemId returns null when no item matches", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    const eq = vi.fn().mockReturnValue({ maybeSingle });
+    const select = vi.fn().mockReturnValue({ eq });
+    mockServiceClient.from.mockReturnValue({ select });
+
+    const item = await getItemByPlaidItemId("missing-item");
+    expect(item).toBeNull();
+  });
+
+  it("listActiveItems returns an empty list when no rows exist", async () => {
+    const eqStatus = vi.fn().mockResolvedValue({ data: null, error: null });
+    const eqUser = vi.fn().mockReturnValue({ eq: eqStatus });
+    const select = vi.fn().mockReturnValue({ eq: eqUser });
+    mockServiceClient.from.mockReturnValue({ select });
+
+    const items = await listActiveItems("user-1");
+    expect(items).toEqual([]);
+  });
+
+  it("getItem returns null when no matching item exists", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    const eqItem = vi.fn().mockReturnValue({ maybeSingle });
+    const eqUser = vi.fn().mockReturnValue({ eq: eqItem });
+    const select = vi.fn().mockReturnValue({ eq: eqUser });
+    mockServiceClient.from.mockReturnValue({ select });
+
+    const item = await getItem("user-1", "no-such-item");
+    expect(item).toBeNull();
+  });
+
+  it("storeLinkToken inserts a hashed, user-bound token", async () => {
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    mockServiceClient.from.mockReturnValue({ insert });
+
+    await storeLinkToken("user-1", "link-token-abc", "2026-08-10T00:00:00Z");
+
+    expect(insert).toHaveBeenCalledWith({
+      user_id: "user-1",
+      token_hash: createHash("sha256").update("link-token-abc").digest("hex"),
+      expires_at: "2026-08-10T00:00:00Z",
+    });
+  });
+
+  it("storeLinkToken stores null expiration when none is provided", async () => {
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    mockServiceClient.from.mockReturnValue({ insert });
+
+    await storeLinkToken("user-1", "link-token-abc", null);
+
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ expires_at: null }));
+  });
+
+  it("storeLinkToken throws when the insert fails", async () => {
+    const insert = vi.fn().mockResolvedValue({ error: new Error("Insert error") });
+    mockServiceClient.from.mockReturnValue({ insert });
+
+    await expect(storeLinkToken("user-1", "link-token-abc", null)).rejects.toThrow("Insert error");
+  });
+
+  it("consumeLinkToken consumes an unused, unexpired token and returns true", async () => {
+    const updateEqConsumed = vi.fn().mockResolvedValue({ error: null });
+    const updateEq = vi.fn().mockReturnValue({ eq: updateEqConsumed });
+    const update = vi.fn().mockReturnValue({ eq: updateEq });
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: { id: "lt-1", expires_at: null, consumed_at: null },
+      error: null,
+    });
+    const eqHash = vi.fn().mockReturnValue({ maybeSingle });
+    const eqUser = vi.fn().mockReturnValue({ eq: eqHash });
+    const select = vi.fn().mockReturnValue({ eq: eqUser });
+    mockServiceClient.from.mockReturnValue({ select, update });
+
+    const ok = await consumeLinkToken("user-1", "link-token-abc");
+
+    expect(ok).toBe(true);
+    expect(update).toHaveBeenCalledWith({ consumed_at: expect.any(String) });
+  });
+
+  it("consumeLinkToken returns false when the token is not found", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    const eqHash = vi.fn().mockReturnValue({ maybeSingle });
+    const eqUser = vi.fn().mockReturnValue({ eq: eqHash });
+    const select = vi.fn().mockReturnValue({ eq: eqUser });
+    mockServiceClient.from.mockReturnValue({ select });
+
+    const ok = await consumeLinkToken("user-1", "link-token-abc");
+    expect(ok).toBe(false);
+  });
+
+  it("consumeLinkToken returns false for an already-consumed token", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: { id: "lt-1", expires_at: null, consumed_at: "2026-01-01T00:00:00Z" },
+      error: null,
+    });
+    const eqHash = vi.fn().mockReturnValue({ maybeSingle });
+    const eqUser = vi.fn().mockReturnValue({ eq: eqHash });
+    const select = vi.fn().mockReturnValue({ eq: eqUser });
+    mockServiceClient.from.mockReturnValue({ select });
+
+    const ok = await consumeLinkToken("user-1", "link-token-abc");
+    expect(ok).toBe(false);
+  });
+
+  it("consumeLinkToken returns false for an expired token", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: { id: "lt-1", expires_at: "2020-01-01T00:00:00Z", consumed_at: null },
+      error: null,
+    });
+    const eqHash = vi.fn().mockReturnValue({ maybeSingle });
+    const eqUser = vi.fn().mockReturnValue({ eq: eqHash });
+    const select = vi.fn().mockReturnValue({ eq: eqUser });
+    mockServiceClient.from.mockReturnValue({ select });
+
+    const ok = await consumeLinkToken("user-1", "link-token-abc");
+    expect(ok).toBe(false);
+  });
+
+  it("consumeLinkToken consumes a token that has not expired yet", async () => {
+    const future = new Date(Date.now() + 3600_000).toISOString();
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: { id: "lt-1", expires_at: future, consumed_at: null },
+      error: null,
+    });
+    const updateEqConsumed = vi.fn().mockResolvedValue({ error: null });
+    const updateEq = vi.fn().mockReturnValue({ eq: updateEqConsumed });
+    const update = vi.fn().mockReturnValue({ eq: updateEq });
+    const eqHash = vi.fn().mockReturnValue({ maybeSingle });
+    const eqUser = vi.fn().mockReturnValue({ eq: eqHash });
+    const select = vi.fn().mockReturnValue({ eq: eqUser });
+    mockServiceClient.from.mockReturnValue({ select, update });
+
+    const ok = await consumeLinkToken("user-1", "link-token-abc");
+    expect(ok).toBe(true);
+  });
+
+  it("consumeLinkToken throws when the token lookup fails", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: new Error("Lookup error") });
+    const eqHash = vi.fn().mockReturnValue({ maybeSingle });
+    const eqUser = vi.fn().mockReturnValue({ eq: eqHash });
+    const select = vi.fn().mockReturnValue({ eq: eqUser });
+    mockServiceClient.from.mockReturnValue({ select });
+
+    await expect(consumeLinkToken("user-1", "link-token-abc")).rejects.toThrow("Lookup error");
+  });
+
+  it("consumeLinkToken throws when marking the token consumed fails", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: { id: "lt-1", expires_at: null, consumed_at: null },
+      error: null,
+    });
+    const updateEqConsumed = vi.fn().mockResolvedValue({ error: new Error("Consume error") });
+    const updateEq = vi.fn().mockReturnValue({ eq: updateEqConsumed });
+    const update = vi.fn().mockReturnValue({ eq: updateEq });
+    const eqHash = vi.fn().mockReturnValue({ maybeSingle });
+    const eqUser = vi.fn().mockReturnValue({ eq: eqHash });
+    const select = vi.fn().mockReturnValue({ eq: eqUser });
+    mockServiceClient.from.mockReturnValue({ select, update });
+
+    await expect(consumeLinkToken("user-1", "link-token-abc")).rejects.toThrow("Consume error");
+  });
+
+  it("rotateItemAccessToken returns false when Plaid omits the new token", async () => {
+    mockItemAccessTokenInvalidate.mockResolvedValueOnce({ data: { new_access_token: null } });
+    mockServiceClient.from.mockReturnValue({ update: vi.fn() });
+
+    const ok = await rotateItemAccessToken(dummyItem);
+
+    expect(ok).toBe(false);
+    expect(mockEncryptSecret).not.toHaveBeenCalled();
+  });
+
+  it("rotateItemAccessToken logs and returns false when persisting the rotated token fails", async () => {
+    mockItemAccessTokenInvalidate.mockResolvedValueOnce({
+      data: { new_access_token: "rotated-token" },
+    });
+    const eq = vi.fn().mockResolvedValue({ error: new Error("Update error") });
+    const update = vi.fn().mockReturnValue({ eq });
+    mockServiceClient.from.mockReturnValue({ update });
+
+    const ok = await rotateItemAccessToken(dummyItem);
+
+    expect(ok).toBe(false);
+    expect(mockLogError).toHaveBeenCalledWith("plaid-service.token-rotation", expect.any(Error));
+  });
+
+  it("rotateStaleItemTokens throws when the item lookup fails", async () => {
+    const eqStatus = vi.fn().mockResolvedValue({ data: null, error: new Error("DB Error") });
+    const eqUser = vi.fn().mockReturnValue({ eq: eqStatus });
+    const select = vi.fn().mockReturnValue({ eq: eqUser });
+    mockServiceClient.from.mockReturnValue({ select });
+
+    await expect(rotateStaleItemTokens("user-1")).rejects.toThrow("DB Error");
+  });
+
+  it("rotateStaleItemTokens returns 0 when there are no items", async () => {
+    const eqStatus = vi.fn().mockResolvedValue({ data: null, error: null });
+    const eqUser = vi.fn().mockReturnValue({ eq: eqStatus });
+    const select = vi.fn().mockReturnValue({ eq: eqUser });
+    mockServiceClient.from.mockReturnValue({ select });
+
+    const rotated = await rotateStaleItemTokens("user-1");
+    expect(rotated).toBe(0);
+  });
+
+  it("rotateStaleItemTokens counts only items whose rotation succeeded", async () => {
+    const staleItem = { ...dummyItem, id: "item-stale" };
+    const eqStatus = vi.fn().mockResolvedValue({ data: [staleItem], error: null });
+    const eqUser = vi.fn().mockReturnValue({ eq: eqStatus });
+    const select = vi.fn().mockReturnValue({ eq: eqUser });
+    mockServiceClient.from.mockReturnValue({ select });
+    mockItemAccessTokenInvalidate.mockRejectedValueOnce(new Error("Plaid failure"));
+
+    const rotated = await rotateStaleItemTokens("user-1");
+    expect(rotated).toBe(0);
+  });
+
+  it("updateItemBranding throws when the update fails", async () => {
+    const eqUser = vi.fn().mockResolvedValue({ error: new Error("Branding error") });
+    const eqId = vi.fn().mockReturnValue({ eq: eqUser });
+    const update = vi.fn().mockReturnValue({ eq: eqId });
+    mockServiceClient.from.mockReturnValue({ update });
+
+    await expect(
+      updateItemBranding("user-1", "item-db-1", { name: "X", logo: null, brandColor: null }),
+    ).rejects.toThrow("Branding error");
+  });
+
+  it("getAccountIdMap returns an empty map when no accounts exist", async () => {
+    const eq = vi.fn().mockResolvedValue({ data: null, error: null });
+    const select = vi.fn().mockReturnValue({ eq });
+    mockServiceClient.from.mockReturnValue({ select });
+
+    const map = await getAccountIdMap("user-1");
+    expect(map.size).toBe(0);
   });
 });

@@ -258,4 +258,130 @@ describe("loadRecurringData", () => {
     });
     expect(result).toBeDefined();
   });
+
+  it("handles null rows from every aggregate-feeding table", async () => {
+    const client = makeClient({
+      households: { data: null },
+      recurring_streams: { data: null },
+      manual_recurring_items: { data: null },
+      accounts: { data: null },
+    });
+    const result = await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-07",
+    });
+    expect(result.view.occurrences).toHaveLength(0);
+    expect(result.allStreams).toHaveLength(0);
+    expect(result.currency).toBe("USD");
+  });
+
+  it("skips transaction ids that do not resolve to a date row", async () => {
+    const client = makeClient({
+      recurring_stream_transactions: {
+        data: [{ recurring_stream_id: "stream-1", transaction_id: "t-missing" }],
+      },
+      transactions: { data: null },
+    });
+    const result = await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-07",
+    });
+    expect(result.view.occurrences[0]?.matchedTransactionId).toBeNull();
+  });
+
+  it("maps unknown frequencies, unknown statuses, null amounts, and unresolved accounts safely", async () => {
+    const client = makeClient({
+      recurring_streams: {
+        data: [
+          {
+            id: "stream-odd",
+            user_id: "user-1",
+            merchant_name: "Odd charge",
+            description: null,
+            stream_type: "outflow",
+            status: null,
+            is_active: true,
+            reviewed_at: null,
+            dismissed_at: null,
+            user_amount: 42,
+            average_amount: null,
+            last_amount: null,
+            frequency: null,
+            first_date: "2026-01-15",
+            last_date: "2026-06-15",
+            predicted_next_date: "2026-07-15",
+            account_id: "ghost-account",
+            category: null,
+          },
+        ],
+      },
+    });
+    const result = await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-07",
+    });
+    const stream = result.allStreams[0]!;
+    expect(stream.status).toBe("UNKNOWN");
+    expect(stream.userAmount).toBe(42);
+    expect(stream.averageAmount).toBeNull();
+    expect(stream.accountName).toBeNull();
+    expect(result.view.occurrences[0]?.frequency).toBe("Recurring");
+  });
+
+  it("chunks stream and transaction lookups into 500-id batches in household scope", async () => {
+    const rows = Array.from({ length: 1000 }, (_, i) => ({
+      id: `stream-${i}`,
+      user_id: "user-1",
+      merchant_name: `Merchant ${i}`,
+      description: null,
+      stream_type: "outflow",
+      status: "MATURE",
+      is_active: true,
+      reviewed_at: null,
+      dismissed_at: null,
+      user_amount: null,
+      average_amount: null,
+      last_amount: null,
+      frequency: "MONTHLY",
+      first_date: null,
+      last_date: null,
+      predicted_next_date: null,
+      account_id: null,
+      category: null,
+    }));
+    const joins = rows.map((row, i) => ({
+      recurring_stream_id: row.id,
+      transaction_id: `txn-${i}`,
+    }));
+    const txns = Array.from({ length: 1000 }, (_, i) => ({
+      id: `txn-${i}`,
+      date: "2026-07-10",
+    }));
+    const client = clientStub({
+      households: { data: [{ id: "household-1" }] },
+      recurring_streams: { data: rows },
+      recurring_stream_transactions: { data: joins },
+      transactions: { data: txns },
+      manual_recurring_items: { data: [] },
+      accounts: { data: [] },
+      sync_jobs: { data: null },
+    });
+    const result = await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-07",
+      rawScope: "household-1",
+    });
+    expect(result.allStreams).toHaveLength(1000);
+  });
+
+  it("tolerates null join rows when resolving stream transactions", async () => {
+    const client = makeClient({
+      recurring_stream_transactions: { data: null },
+    });
+    const result = await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-07",
+    });
+    expect(result.view.occurrences).toHaveLength(1);
+  });
 });

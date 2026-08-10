@@ -261,6 +261,74 @@ describe("weekly report model budget sorting", () => {
   });
 });
 
+describe("weekly report model branch coverage", () => {
+  it("covers missing merchant names, null categories, and unknown institutions", () => {
+    const report = buildWeeklyReportModel({
+      userId: "user-1",
+      userEmail: "person@example.com",
+      period: {
+        start: "2026-07-06",
+        end: "2026-07-12",
+        previousStart: "2026-06-29",
+        previousEnd: "2026-07-05",
+      },
+      transactions: [
+        { id: "named", date: "2026-07-08", amount: 100, merchantName: null, name: "Fallback Name", category: "FOOD", accountId: "acc-a" },
+        { id: "unknown", date: "2026-07-08", amount: 100, merchantName: null, name: null, category: "TRAVEL", accountId: "acc-a" },
+        { id: "nullcat", date: "2026-07-08", amount: 50, merchantName: "Null Cat Store", name: null, category: null, accountId: "acc-a" },
+        { id: "over", date: "2026-07-10", amount: 60, merchantName: "Over Spend", name: null, category: "OVER", accountId: "acc-a" },
+      ],
+      accounts: [{ id: "acc-a", name: "Checking", type: "depository", plaidItemId: "inst-1" }],
+      institutions: [{ id: "inst-1", name: null }],
+      budgets: [{ category: "OVER", monthlyLimit: 120 }],
+      merchantRules: [],
+      splits: [],
+      linkedRefundTransactionIds: new Set(),
+      duplicateTransactionIds: new Set(),
+    });
+
+    expect(report.merchants.map((m) => m.merchant)).toContain("Unknown merchant");
+    expect(report.merchants.map((m) => m.merchant)).toContain("Fallback Name");
+    expect(report.banks).toEqual([{ name: "Other bank", amount: 310 }]);
+    expect(report.budgets[0]!.status).toBe("over");
+  });
+
+  it("ties bank totals with equal amounts and sorts by name", () => {
+    const report = buildWeeklyReportModel({
+      userId: "user-1",
+      userEmail: "person@example.com",
+      period: {
+        start: "2026-07-06",
+        end: "2026-07-12",
+        previousStart: "2026-06-29",
+        previousEnd: "2026-07-05",
+      },
+      transactions: [
+        { id: "x1", date: "2026-07-08", amount: 100, merchantName: "Z Bank", name: null, category: "FOOD", accountId: "acc-z" },
+        { id: "x2", date: "2026-07-08", amount: 100, merchantName: "A Bank", name: null, category: "FOOD", accountId: "acc-a" },
+      ],
+      accounts: [
+        { id: "acc-z", name: "Z", type: "depository", plaidItemId: "inst-z" },
+        { id: "acc-a", name: "A", type: "depository", plaidItemId: "inst-a" },
+      ],
+      institutions: [
+        { id: "inst-z", name: "Zed Bank" },
+        { id: "inst-a", name: "Alpha Bank" },
+      ],
+      budgets: [],
+      merchantRules: [],
+      splits: [],
+      linkedRefundTransactionIds: new Set(),
+      duplicateTransactionIds: new Set(),
+    });
+
+    expect(report.banks).toEqual([
+      { name: "Alpha Bank", amount: 100 },
+      { name: "Zed Bank", amount: 100 },
+    ]);
+  });
+});
+
 describe("weekly report model edge cases and branch coverage", () => {
   it("covers missing accounts, missing institutions, merchant tie-breakers, and budget statuses", () => {
     const report = buildWeeklyReportModel({
@@ -396,5 +464,31 @@ describe("getWeeklyReportData", () => {
     };
 
     await expect(getWeeklyReportData(supabase as never, "user-1", period)).rejects.toThrow("weekly report user: User error");
+  });
+
+  it("handles empty transactions array without querying splits", async () => {
+    const { clientStub } = await import("../fixtures/supabase-query");
+    const baseClient = clientStub({
+      accounts: { data: [] },
+      plaid_items: { data: [] },
+      budgets: { data: [] },
+      merchant_rules: { data: [] },
+      linked_refunds: { data: [] },
+      linked_duplicates: { data: [] },
+      transactions: { data: [] },
+      transaction_splits: { data: [] },
+    });
+    const supabase = {
+      ...baseClient,
+      auth: {
+        admin: {
+          getUserById: vi.fn().mockResolvedValue({ data: { user: { email: "user@example.com" } }, error: null }),
+        },
+      },
+    };
+
+    const data = await getWeeklyReportData(supabase as never, "user-1", period);
+    expect(data).not.toBeNull();
+    expect(data?.totalSpend).toBe(0);
   });
 });

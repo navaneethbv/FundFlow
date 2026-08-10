@@ -260,6 +260,7 @@ module.exports = {
   deltaEOklab,
   hexToRgb,
   palettesFromCss,
+  runCli,
   simulateCvd,
   validatePalette,
 };

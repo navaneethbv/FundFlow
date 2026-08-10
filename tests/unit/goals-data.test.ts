@@ -89,4 +89,63 @@ describe("loadGoalsPageData", () => {
       loadGoalsPageData(supabase as never, "user-1", new Date("2026-07-15")),
     ).rejects.toThrow("goals_query_failed:goals:PGRST100");
   });
+
+  it("formats a query failure without a code", async () => {
+    const supabase = clientStub({
+      goals: { error: { message: "boom" } },
+      goal_accounts: { data: [] },
+      goal_progress_events: { data: [] },
+      accounts: { data: [] },
+    });
+
+    await expect(
+      loadGoalsPageData(supabase as never, "user-1", new Date("2026-07-15")),
+    ).rejects.toThrow("goals_query_failed:goals");
+  });
+
+  it("handles null rows from every table", async () => {
+    const supabase = clientStub({
+      goals: { data: null },
+      goal_accounts: { data: null },
+      goal_progress_events: { data: null },
+      accounts: { data: null },
+    });
+
+    const data = await loadGoalsPageData(supabase as never, "user-1", new Date("2026-07-15"));
+
+    expect(data.goals).toHaveLength(0);
+    expect(data.accounts).toHaveLength(0);
+    expect(data.linksByGoal.size).toBe(0);
+  });
+
+  it("defaults missing goal fields, null balances and names, and the reference date", async () => {
+    const supabase = clientStub({
+      goals: {
+        data: [{ id: "g-min", name: "Minimal Goal" }],
+      },
+      goal_accounts: {
+        data: [
+          {
+            goal_id: "g-min",
+            account_id: "acc-null",
+            allocated_amount: null,
+            use_entire_balance: false,
+          },
+        ],
+      },
+      goal_progress_events: { data: null },
+      accounts: {
+        data: [
+          { id: "acc-null", name: null, current_balance: null, type: "depository" },
+        ],
+      },
+    });
+
+    const data = await loadGoalsPageData(supabase as never, "user-1");
+
+    expect(data.goals).toHaveLength(1);
+    expect(data.accounts[0]?.current_balance).toBeNull();
+    expect(data.accountNames.get("acc-null")).toBe("Account");
+    expect(data.linksByGoal.get("g-min")).toHaveLength(1);
+  });
 });

@@ -472,4 +472,380 @@ describe("lib/recurring", () => {
     expect(count).toBe(2);
     expect(mockLogError).toHaveBeenCalledWith("recurring.alert.new_subscription", expect.any(Error));
   });
+
+  it("maps missing stream fields to null and skips streams without an upserted row", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce({
+      data: {
+        inflow_streams: [],
+        outflow_streams: [
+          {
+            stream_id: "stream-null",
+            merchant_name: "Plain",
+            description: null,
+            is_active: true,
+            transaction_ids: [],
+          },
+          {
+            stream_id: "stream-ghost",
+            merchant_name: "Ghost",
+            is_active: true,
+            transaction_ids: [],
+          },
+        ],
+      },
+    });
+
+    const mock = createRecurringSupabaseMock({
+      existingStreams: { data: [], error: null },
+      upserted: {
+        data: [{ id: "row-1", stream_id: "stream-null" }],
+        error: null,
+      },
+    });
+    mockServiceClient.from.mockImplementation(mock.from);
+
+    const count = await refreshRecurringForItem(dummyItem);
+
+    expect(count).toBe(2);
+    expect(mock.upsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          stream_id: "stream-null",
+          description: null,
+          last_amount: null,
+        }),
+      ]),
+      { onConflict: "stream_id" },
+    );
+    expect(mock.rstDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it("chunks transaction id lookups into 500-id batches and tolerates a null read", async () => {
+    const ids = Array.from({ length: 500 }, (_, i) => `plaid-txn-${i}`);
+    mockTransactionsRecurringGet.mockResolvedValueOnce({
+      data: {
+        inflow_streams: [],
+        outflow_streams: [
+          {
+            stream_id: "stream-1",
+            description: "Netflix",
+            is_active: true,
+            transaction_ids: ids,
+          },
+        ],
+      },
+    });
+
+    const mock = createRecurringSupabaseMock({
+      existingStreams: { data: [], error: null },
+      upserted: { data: [{ id: "row-1", stream_id: "stream-1" }], error: null },
+      transactions: { data: null, error: null },
+    });
+    mockServiceClient.from.mockImplementation(mock.from);
+
+    await refreshRecurringForItem(dummyItem);
+
+    expect(mock.txIn).toHaveBeenCalledWith("plaid_transaction_id", ids);
+  });
+
+  it("propagates a failed transaction id read", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce({
+      data: {
+        inflow_streams: [],
+        outflow_streams: [
+          {
+            stream_id: "stream-1",
+            description: "Netflix",
+            is_active: true,
+            transaction_ids: ["t-1"],
+          },
+        ],
+      },
+    });
+
+    const mock = createRecurringSupabaseMock({
+      existingStreams: { data: [], error: null },
+      upserted: { data: [{ id: "row-1", stream_id: "stream-1" }], error: null },
+      transactions: { data: [], error: new Error("txn read failed") },
+    });
+    mockServiceClient.from.mockImplementation(mock.from);
+
+    await expect(refreshRecurringForItem(dummyItem)).rejects.toThrow("txn read failed");
+  });
+
+  it("throws when deactivating stale streams fails", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce({
+      data: {
+        inflow_streams: [],
+        outflow_streams: [
+          {
+            stream_id: "stream-1",
+            description: "Netflix",
+            is_active: true,
+            transaction_ids: [],
+          },
+        ],
+      },
+    });
+
+    const mock = createRecurringSupabaseMock({
+      existingStreams: {
+        data: [
+          { stream_id: "stream-1", last_amount: 15.99 },
+          { stream_id: "gone-stream", last_amount: 9.99 },
+        ],
+        error: null,
+      },
+      upserted: { data: [{ id: "row-1", stream_id: "stream-1" }], error: null },
+    });
+    mock.updateIn.mockResolvedValueOnce({ error: new Error("deactivate failed") });
+    mockServiceClient.from.mockImplementation(mock.from);
+
+    await expect(refreshRecurringForItem(dummyItem)).rejects.toThrow("deactivate failed");
+  });
+
+  it("throws when deleting a stream's old joins fails", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce({
+      data: {
+        inflow_streams: [],
+        outflow_streams: [
+          {
+            stream_id: "stream-1",
+            description: "Netflix",
+            is_active: true,
+            transaction_ids: ["t-1"],
+          },
+        ],
+      },
+    });
+
+    const mock = createRecurringSupabaseMock({
+      existingStreams: { data: [], error: null },
+      upserted: { data: [{ id: "row-1", stream_id: "stream-1" }], error: null },
+      transactions: { data: [{ id: "local-1", plaid_transaction_id: "t-1" }], error: null },
+    });
+    mock.rstDeleteEqUser.mockResolvedValueOnce({ error: new Error("delete failed") });
+    mockServiceClient.from.mockImplementation(mock.from);
+
+    await expect(refreshRecurringForItem(dummyItem)).rejects.toThrow("delete failed");
+  });
+
+  it("throws when inserting a stream's new joins fails", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce({
+      data: {
+        inflow_streams: [],
+        outflow_streams: [
+          {
+            stream_id: "stream-1",
+            description: "Netflix",
+            is_active: true,
+            transaction_ids: ["t-1"],
+          },
+        ],
+      },
+    });
+
+    const mock = createRecurringSupabaseMock({
+      existingStreams: { data: [], error: null },
+      upserted: { data: [{ id: "row-1", stream_id: "stream-1" }], error: null },
+      transactions: { data: [{ id: "local-1", plaid_transaction_id: "t-1" }], error: null },
+    });
+    mock.rstInsert.mockResolvedValueOnce({ error: new Error("insert failed") });
+    mockServiceClient.from.mockImplementation(mock.from);
+
+    await expect(refreshRecurringForItem(dummyItem)).rejects.toThrow("insert failed");
+  });
+
+  it("tolerates a null accounts read and persists streams without an account link", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce({
+      data: {
+        inflow_streams: [],
+        outflow_streams: [
+          {
+            stream_id: "stream-1",
+            description: "Netflix",
+            is_active: true,
+            transaction_ids: [],
+          },
+        ],
+      },
+    });
+
+    const mock = createRecurringSupabaseMock({
+      accounts: { data: null, error: null },
+      existingStreams: { data: [], error: null },
+      upserted: { data: [{ id: "row-1", stream_id: "stream-1" }], error: null },
+    });
+    mockServiceClient.from.mockImplementation(mock.from);
+
+    await refreshRecurringForItem(dummyItem);
+
+    expect(mock.upsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ stream_id: "stream-1", account_id: null }),
+      ]),
+      { onConflict: "stream_id" },
+    );
+  });
+
+  it("throws when the stream upsert fails", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce({
+      data: {
+        inflow_streams: [],
+        outflow_streams: [
+          {
+            stream_id: "stream-1",
+            description: "Netflix",
+            is_active: true,
+            transaction_ids: [],
+          },
+        ],
+      },
+    });
+
+    const mock = createRecurringSupabaseMock({
+      existingStreams: { data: [], error: null },
+    });
+    mock.upsertSelect.mockResolvedValueOnce({ data: [], error: new Error("upsert failed") });
+    mockServiceClient.from.mockImplementation(mock.from);
+
+    await expect(refreshRecurringForItem(dummyItem)).rejects.toThrow("upsert failed");
+  });
+
+  it("handles a null upsert response by skipping join replacement", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce({
+      data: {
+        inflow_streams: [],
+        outflow_streams: [
+          {
+            stream_id: "stream-1",
+            description: "Netflix",
+            is_active: true,
+            transaction_ids: [],
+          },
+        ],
+      },
+    });
+
+    const mock = createRecurringSupabaseMock({
+      existingStreams: { data: [], error: null },
+      upserted: { data: null, error: null },
+    });
+    mockServiceClient.from.mockImplementation(mock.from);
+
+    const count = await refreshRecurringForItem(dummyItem);
+
+    expect(count).toBe(1);
+    expect(mock.rstDelete).not.toHaveBeenCalled();
+  });
+
+  it("tolerates null stored stream rows", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce({
+      data: {
+        inflow_streams: [],
+        outflow_streams: [
+          {
+            stream_id: "stream-1",
+            description: "Netflix",
+            is_active: true,
+            transaction_ids: [],
+          },
+        ],
+      },
+    });
+
+    const mock = createRecurringSupabaseMock({
+      existingStreams: { data: null, error: null },
+      upserted: { data: [{ id: "row-1", stream_id: "stream-1" }], error: null },
+    });
+    mockServiceClient.from.mockImplementation(mock.from);
+
+    const count = await refreshRecurringForItem(dummyItem);
+    expect(count).toBe(1);
+    expect(mock.update).not.toHaveBeenCalled();
+  });
+
+  it("handles a null stored last amount and falls back to description or Unknown for names", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce({
+      data: {
+        inflow_streams: [],
+        outflow_streams: [
+          {
+            stream_id: "stream-1",
+            merchant_name: null,
+            description: "Membership",
+            is_active: true,
+            last_amount: { amount: 50 },
+            transaction_ids: [],
+          },
+          {
+            stream_id: "stream-2",
+            merchant_name: null,
+            description: null,
+            is_active: true,
+            last_amount: { amount: 20 },
+            transaction_ids: [],
+          },
+        ],
+      },
+    });
+
+    const mock = createRecurringSupabaseMock({
+      existingStreams: {
+        data: [{ stream_id: "stream-1", last_amount: null }],
+        error: null,
+      },
+      upserted: {
+        data: [
+          { id: "row-1", stream_id: "stream-1" },
+          { id: "row-2", stream_id: "stream-2" },
+        ],
+        error: null,
+      },
+    });
+    mockServiceClient.from.mockImplementation(mock.from);
+
+    const count = await refreshRecurringForItem(dummyItem);
+
+    expect(count).toBe(2);
+    expect(mockCreateNotification).toHaveBeenCalledWith(
+      "user-1",
+      "new_subscription",
+      expect.objectContaining({ title: expect.stringContaining("Unknown") }),
+      "Unknown",
+    );
+  });
+
+  it("logs and continues when a price hike notification fails", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce({
+      data: {
+        inflow_streams: [],
+        outflow_streams: [
+          {
+            stream_id: "stream-1",
+            merchant_name: "Netflix",
+            description: "Netflix Subscription",
+            last_amount: { amount: 19.99 },
+            is_active: true,
+            transaction_ids: [],
+          },
+        ],
+      },
+    });
+
+    const mock = createRecurringSupabaseMock({
+      existingStreams: {
+        data: [{ stream_id: "stream-1", last_amount: 15.99 }],
+        error: null,
+      },
+      upserted: { data: [{ id: "row-1", stream_id: "stream-1" }], error: null },
+    });
+    mockCreateNotification.mockRejectedValueOnce(new Error("Notification failed"));
+    mockServiceClient.from.mockImplementation(mock.from);
+
+    const count = await refreshRecurringForItem(dummyItem);
+
+    expect(count).toBe(1);
+    expect(mockLogError).toHaveBeenCalledWith("recurring.alert.price_hike", expect.any(Error));
+  });
 });

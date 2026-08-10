@@ -66,6 +66,7 @@ describe("Import API Routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLooksLikeOfx.mockReturnValue(false);
+    mockCheckRateLimit.mockResolvedValue(true);
   });
 
   describe("POST /api/import/preview", () => {
@@ -368,6 +369,401 @@ describe("Import API Routes", () => {
 
       const res = await previewPost(request);
       expect(res.status).toBe(500);
+    });
+
+    it("returns the auth response when not signed in", async () => {
+      mockRequireUser.mockResolvedValue(new NextResponse("unauthorized", { status: 401 }));
+      const res = await previewPost({} as NextRequest);
+      expect(res.status).toBe(401);
+    });
+
+    it("returns bad request when rate limited", async () => {
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+      mockCheckRateLimit.mockResolvedValue(false);
+      const res = await previewPost({} as NextRequest);
+      expect(res.status).toBe(400);
+      expect(mockBadRequest).toHaveBeenCalledWith(
+        "Too many previews. Please wait a while.",
+      );
+    });
+
+    it("returns bad request when the file is too large", async () => {
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+      const file = new File([""], "big.csv", { type: "text/csv" });
+      Object.defineProperty(file, "size", { value: 3 * 1024 * 1024 });
+      const formData = new FormData();
+      formData.set("file", file);
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      const res = await previewPost(request);
+      expect(res.status).toBe(400);
+      expect(mockBadRequest).toHaveBeenCalledWith("File too large (2 MB max)");
+    });
+
+    it("returns bad request when the column map does not match any headers", async () => {
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+      const file = new File(["col1,col2"], "statement.csv", { type: "text/csv" });
+      const formData = new FormData();
+      formData.set("file", file);
+      formData.set("column_map", "{}");
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockGetCsvColumns.mockReturnValue(null);
+
+      const res = await previewPost(request);
+      expect(res.status).toBe(400);
+      expect(mockBadRequest).toHaveBeenCalledWith(
+        "Invalid column mapping. Map at least a date, description, and amount (or debit/credit).",
+      );
+    });
+
+    it("returns bad request when the file has too many rows", async () => {
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+      const file = new File(["data"], "huge.csv", { type: "text/csv" });
+      const formData = new FormData();
+      formData.set("file", file);
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockParseImportCsv.mockReturnValue({
+        rows: Array.from({ length: 20_001 }, (_, i) => ({
+          date: "2026-07-01",
+          merchant: `M${i}`,
+          amount: 10,
+        })),
+        errors: [],
+      });
+
+      const res = await previewPost(request);
+      expect(res.status).toBe(400);
+      expect(mockBadRequest).toHaveBeenCalledWith(
+        "Too many rows (20000 max per file)",
+      );
+    });
+
+    it("falls back to the OFX message when an OFX file yields no rows", async () => {
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+      const file = new File(["OFXHEADER:100"], "empty.qfx", {
+        type: "application/x-ofx",
+      });
+      const formData = new FormData();
+      formData.set("file", file);
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockLooksLikeOfx.mockReturnValue(true);
+      mockParseOfx.mockReturnValue([]);
+
+      const res = await previewPost(request);
+      expect(res.status).toBe(400);
+      expect(mockBadRequest).toHaveBeenCalledWith(
+        "No importable OFX rows found",
+      );
+    });
+
+    it("falls back to the CSV message when a mapped file yields no rows", async () => {
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+      const file = new File(["col1,col2"], "empty.csv", { type: "text/csv" });
+      const formData = new FormData();
+      formData.set("file", file);
+      formData.set("column_map", "{}");
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockGetCsvColumns.mockReturnValue({ headers: ["a", "b"], sample: ["1", "2"] });
+      mockNormalizeColumnMap.mockReturnValue({
+        date: 0,
+        description: 1,
+        amount: 2,
+      });
+      mockParseImportCsv.mockReturnValue({ rows: [], errors: [] });
+
+      const res = await previewPost(request);
+      expect(res.status).toBe(400);
+      expect(mockBadRequest).toHaveBeenCalledWith(
+        "No importable rows found",
+      );
+    });
+
+    it("fingerprints existing rows with missing merchant and name", async () => {
+      const mockSupabase = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue({
+              data: [
+                { date: "2026-07-01", amount: 10, merchant_name: "Store", name: "S" },
+                { date: "2026-07-02", amount: 11, merchant_name: null, name: "PayPal" },
+                { date: "2026-07-03", amount: 12, merchant_name: null, name: null },
+              ],
+            }),
+          }),
+        }),
+      };
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: mockSupabase,
+      });
+      const file = new File(["2026-07-01,Store,10.00"], "statement.csv", {
+        type: "text/csv",
+      });
+      const formData = new FormData();
+      formData.set("file", file);
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockParseImportCsv.mockReturnValue({
+        rows: [{ date: "2026-07-01", merchant: "Store", amount: 10 }],
+        errors: [],
+      });
+      mockBuildImportReview.mockReturnValue({
+        rows: [
+          {
+            rowHash: "h1",
+            row: { date: "2026-07-01", merchant: "Store", amount: 10 },
+            flags: ["possible_duplicate"],
+          },
+        ],
+      });
+      mockServiceClient.from.mockImplementation((table) => {
+        if (table === "import_review_batches") {
+          return {
+            insert: vi.fn().mockReturnThis(),
+            select: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: { id: "batch-1" }, error: null }),
+          };
+        }
+        return {
+          insert: vi.fn().mockReturnThis(),
+          select: vi.fn().mockResolvedValue({
+            data: [
+              { id: "row-1", date: "2026-07-01", description: "Store", amount: 10, status: "rejected" },
+            ],
+            error: null,
+          }),
+        };
+      });
+
+      const res = await previewPost(request);
+      expect(res.status).toBe(200);
+      expect(mockBuildImportReview).toHaveBeenCalledWith(
+        expect.any(Array),
+        new Set(["2026-07-01|10.00|Store", "2026-07-02|11.00|PayPal", "2026-07-03|12.00|"]),
+      );
+    });
+
+    it("defaults the file name and rejects flagged rows", async () => {
+      const mockSupabase = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue({ data: [] }),
+          }),
+        }),
+      };
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: mockSupabase,
+      });
+      const file = new File(["2026-07-01,Store,10.00"], "", { type: "text/csv" });
+      const formData = new FormData();
+      formData.set("file", file);
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockParseImportCsv.mockReturnValue({
+        rows: [{ date: "2026-07-01", merchant: "Store", amount: 10 }],
+        errors: [],
+      });
+      mockBuildImportReview.mockReturnValue({
+        rows: [
+          {
+            rowHash: "h1",
+            row: { date: "2026-07-01", merchant: "Store", amount: 10 },
+            flags: ["possible_duplicate"],
+          },
+        ],
+      });
+
+      const insertMock = vi.fn().mockReturnValue({ file_name: "statement.csv" });
+      const rowsChain = {
+        insert: vi.fn().mockReturnThis(),
+        select: vi.fn().mockResolvedValue({
+          data: [
+            { id: "row-1", date: "2026-07-01", description: "Store", amount: 10, status: "rejected" },
+          ],
+          error: null,
+        }),
+      };
+      mockServiceClient.from.mockImplementation((table) => {
+        if (table === "import_review_batches") {
+          return {
+            insert: (payload: unknown) => {
+              insertMock(payload);
+              return { select: vi.fn().mockReturnThis(), single: vi.fn().mockResolvedValue({ data: { id: "batch-1" }, error: null }) };
+            },
+          };
+        }
+        return rowsChain;
+      });
+
+      const res = await previewPost(request);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.rows).toEqual([
+        { id: "row-1", date: "2026-07-01", description: "Store", amount: 10, status: "rejected", flags: ["possible_duplicate"] },
+      ]);
+      expect(insertMock).toHaveBeenCalledWith(
+        expect.objectContaining({ file_name: "statement.csv" }),
+      );
+      expect(rowsChain.insert).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ status: "rejected" }),
+        ]),
+      );
+    });
+
+    it("returns 500 when inserting review rows fails", async () => {
+      const mockSupabase = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue({ data: [] }),
+          }),
+        }),
+      };
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: mockSupabase });
+      const file = new File(["2026-07-01,Store,10.00"], "statement.csv", { type: "text/csv" });
+      const formData = new FormData();
+      formData.set("file", file);
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockParseImportCsv.mockReturnValue({
+        rows: [{ date: "2026-07-01", merchant: "Store", amount: 10 }],
+        errors: [],
+      });
+      mockBuildImportReview.mockReturnValue({
+        rows: [{ rowHash: "h1", row: { date: "2026-07-01", merchant: "Store", amount: 10 }, flags: [] }],
+      });
+      mockServiceClient.from.mockImplementation((table) => {
+        if (table === "import_review_batches") {
+          return {
+            insert: vi.fn().mockReturnThis(),
+            select: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: { id: "batch-1" }, error: null }),
+          };
+        }
+        return {
+          insert: vi.fn().mockReturnThis(),
+          select: vi.fn().mockResolvedValue({ data: null, error: { message: "Rows error" } }),
+        };
+      });
+
+      const res = await previewPost(request);
+      expect(res.status).toBe(500);
+    });
+
+    it("returns empty rows when the insert returns no data", async () => {
+      const mockSupabase = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue({ data: [] }),
+          }),
+        }),
+      };
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: mockSupabase });
+      const file = new File(["2026-07-01,Store,10.00"], "statement.csv", { type: "text/csv" });
+      const formData = new FormData();
+      formData.set("file", file);
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockParseImportCsv.mockReturnValue({
+        rows: [{ date: "2026-07-01", merchant: "Store", amount: 10 }],
+        errors: [],
+      });
+      mockBuildImportReview.mockReturnValue({
+        rows: [{ rowHash: "h1", row: { date: "2026-07-01", merchant: "Store", amount: 10 }, flags: [] }],
+      });
+      mockServiceClient.from.mockImplementation((table) => {
+        if (table === "import_review_batches") {
+          return {
+            insert: vi.fn().mockReturnThis(),
+            select: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: { id: "batch-1" }, error: null }),
+          };
+        }
+        return {
+          insert: vi.fn().mockReturnThis(),
+          select: vi.fn().mockResolvedValue({ data: null, error: null }),
+        };
+      });
+
+      const res = await previewPost(request);
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toMatchObject({ rows: [] });
+    });
+
+    it("falls back to an empty flag list for unmatched inserted rows", async () => {
+      const mockSupabase = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue({ data: [] }),
+          }),
+        }),
+      };
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: mockSupabase });
+      const file = new File(["2026-07-01,Store,10.00"], "statement.csv", { type: "text/csv" });
+      const formData = new FormData();
+      formData.set("file", file);
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockParseImportCsv.mockReturnValue({
+        rows: [{ date: "2026-07-01", merchant: "Store", amount: 10 }],
+        errors: [],
+      });
+      mockBuildImportReview.mockReturnValue({
+        rows: [{ rowHash: "h1", row: { date: "2026-07-01", merchant: "Store", amount: 10 }, flags: [] }],
+      });
+      mockServiceClient.from.mockImplementation((table) => {
+        if (table === "import_review_batches") {
+          return {
+            insert: vi.fn().mockReturnThis(),
+            select: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: { id: "batch-1" }, error: null }),
+          };
+        }
+        return {
+          insert: vi.fn().mockReturnThis(),
+          select: vi.fn().mockResolvedValue({
+            data: [
+              { id: "row-1", date: "2026-07-01", description: "Store", amount: 10, status: "pending" },
+              { id: "row-2", date: "2026-07-02", description: "Other", amount: 5, status: "pending" },
+            ],
+            error: null,
+          }),
+        };
+      });
+
+      const res = await previewPost(request);
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toMatchObject({
+        rows: [
+          { id: "row-1", flags: [] },
+          { id: "row-2", flags: [] },
+        ],
+      });
     });
   });
 

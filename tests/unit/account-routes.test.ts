@@ -28,6 +28,7 @@ import {
   DELETE as cancelledDelete,
 } from "@/app/api/subscriptions/cancelled/route";
 import { GET as healthGet } from "@/app/api/health/route";
+import { DELETE as accountDelete } from "@/app/api/account/route";
 import { NextResponse, NextRequest } from "next/server";
 
 const USER = "user-1";
@@ -342,5 +343,101 @@ describe("GET /api/health", () => {
     const res = await healthGet();
     expect(res.status).toBe(503);
     await expect(res.json()).resolves.toEqual({ ok: false, db: false });
+  });
+});
+
+describe("DELETE /api/account", () => {
+  it("returns auth response if user is unauthenticated", async () => {
+    mockRequireUser.mockResolvedValue(unauthorized());
+    const res = await accountDelete(del("http://localhost/api/account", {}));
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects invalid or missing re-auth method", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER, email: "user@example.com" },
+      supabase: clientStub(),
+    });
+    const res = await accountDelete(del("http://localhost/api/account", { method: "invalid", code: "123" }));
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects empty verification code", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER, email: "user@example.com" },
+      supabase: clientStub(),
+    });
+    const res = await accountDelete(del("http://localhost/api/account", { method: "password", code: "" }));
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 401 when password re-auth step-up fails", async () => {
+    const mockSupabase = {
+      auth: {
+        signInWithPassword: vi.fn().mockResolvedValue({ error: { message: "Wrong password" } }),
+      },
+    };
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER, email: "user@example.com" },
+      supabase: mockSupabase,
+    });
+    const res = await accountDelete(del("http://localhost/api/account", { method: "password", code: "wrong" }));
+    expect(res.status).toBe(401);
+    expect(mockWriteAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "account_delete_failed" }),
+    );
+  });
+
+  it("returns 401 when TOTP step-up fails", async () => {
+    const mockSupabase = {
+      auth: {
+        mfa: {
+          listFactors: vi.fn().mockResolvedValue({
+            data: { totp: [{ id: "f1", status: "verified" }] },
+          }),
+          challengeAndVerify: vi.fn().mockResolvedValue({ error: { message: "Invalid code" } }),
+        },
+      },
+    };
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER, email: "user@example.com" },
+      supabase: mockSupabase,
+    });
+    const res = await accountDelete(del("http://localhost/api/account", { method: "totp", code: "000000" }));
+    expect(res.status).toBe(401);
+  });
+
+  it("deletes user account when password step-up succeeds", async () => {
+    const mockSupabase = {
+      auth: {
+        signInWithPassword: vi.fn().mockResolvedValue({ error: null }),
+      },
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+        }),
+      }),
+    };
+    serviceClient = Object.assign(
+      clientStub({ plaid_items: { data: [] } }),
+      {
+        auth: {
+          admin: {
+            deleteUser: vi.fn().mockResolvedValue({ error: null }),
+          },
+        },
+      },
+    );
+
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER, email: "user@example.com" },
+      supabase: mockSupabase,
+    });
+
+    const res = await accountDelete(del("http://localhost/api/account", { method: "password", code: "secret" }));
+    expect(res.status).toBe(200);
+    expect(mockWriteAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "account_delete" }),
+    );
   });
 });

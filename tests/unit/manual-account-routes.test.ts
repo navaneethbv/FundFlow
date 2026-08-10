@@ -249,4 +249,23 @@ describe("DELETE /api/manual-accounts", () => {
       }),
     );
   });
+
+  it("handles auth response and missing id on DELETE", async () => {
+    const unauthorized = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    mockRequireUser.mockResolvedValue(unauthorized);
+    await expect(DELETE(request("DELETE", {}))).resolves.toBe(unauthorized);
+
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub(),
+    });
+    const badReqRes = await DELETE(request("DELETE", {}));
+    expect(badReqRes.status).toBe(400);
+  });
+
+  it("handles auth response on PATCH", async () => {
+    const unauthorized = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    mockRequireUser.mockResolvedValue(unauthorized);
+    await expect(PATCH(request("PATCH", {}))).resolves.toBe(unauthorized);
+  });
 });

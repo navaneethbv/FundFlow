@@ -69,4 +69,24 @@ describe("loadForecastPageData", () => {
 
     await expect(loadForecastPageData(supabase as never, "user-1", "2026-07-15")).rejects.toThrow();
   });
+
+  it("handles null balances and empty accounts data", async () => {
+    const supabase = clientStub({
+      accounts: {
+        data: [{ type: "depository", subtype: "checking", current_balance: null }],
+      },
+      manual_accounts: {
+        data: [{ account_type: "investment", balance: null }],
+      },
+      transactions: { data: [] },
+      merchant_rules: { data: [] },
+      category_overrides: { data: [] },
+      transaction_splits: { data: [] },
+      linked_refunds: { data: [] },
+    });
+
+    const data = await loadForecastPageData(supabase as never, "user-1", "2026-07-15");
+    expect(data.startingState.cash).toBe(0);
+    expect(data.startingState.investments).toBe(0);
+  });
 });

@@ -415,4 +415,127 @@ describe("notifications manager", () => {
 
     await expect(processNotificationsForUser("user-1")).resolves.not.toThrow();
   });
+
+  it("uses default alert preferences when no preferences row exists", async () => {
+    await createNotification("user-1", "goal_reached", { title: "Goal", body: "You did it" });
+    expect(mockInsert).toHaveBeenCalled();
+  });
+
+  it("throws when inserting the notification fails", async () => {
+    mockSingle.mockResolvedValueOnce({ data: { goal_reached: true }, error: null });
+    mockGte.mockResolvedValueOnce({ data: [], error: null });
+    mockSingle.mockResolvedValueOnce({ data: null, error: new Error("Insert failed") });
+
+    await expect(
+      createNotification("user-1", "goal_reached", { title: "t", body: "b" }),
+    ).rejects.toThrow("Insert failed");
+  });
+
+  it("skips notifications when nothing is due and result lists are null", async () => {
+    mockGetDashboardData.mockResolvedValue({
+      cashFlowForecast: { lowBalanceRisk: false },
+      netWorthSnapshot: { assets: 100, liabilities: 0, netWorth: 100 },
+      netWorthHistory: [],
+    });
+    mockGetGoals.mockResolvedValue([
+      { id: "g1", name: "Trip", target_amount: 5000, saved_amount: 1000 },
+    ]);
+    mockSingle.mockResolvedValue({ data: { broken_bank: true }, error: null });
+    mockFrom.mockImplementation((table) => {
+      if (table === "milestones") {
+        return { select: () => ({ eq: () => Promise.resolve({ data: null, error: null }) }) };
+      }
+      if (table === "plaid_items") {
+        return { select: () => ({ eq: () => Promise.resolve({ data: null, error: null }) }) };
+      }
+      return mockQueryChain;
+    });
+
+    const inserted: string[] = [];
+    mockInsert.mockImplementation((val) => {
+      inserted.push(val.type);
+      return {
+        select: vi.fn().mockReturnValue({
+          single: () => Promise.resolve({ data: val, error: null }),
+        }),
+      };
+    });
+
+    await processNotificationsForUser("user-1");
+    expect(inserted).toEqual([]);
+  });
+
+  it("silently skips milestone keys that fail to claim", async () => {
+    mockGetDashboardData.mockResolvedValue({
+      cashFlowForecast: { lowBalanceRisk: false },
+      budgetEnvelopes: [],
+      netWorthSnapshot: { assets: 15000, liabilities: 0, netWorth: 15000 },
+      netWorthHistory: [
+        { month: "2026-06", netWorth: 5000 },
+        { month: "2026-07", netWorth: 15000 },
+      ],
+    });
+    mockGetGoals.mockResolvedValue([]);
+    mockSingle.mockResolvedValue({ data: { broken_bank: true }, error: null });
+    mockFrom.mockImplementation((table) => {
+      if (table === "milestones") {
+        return {
+          select: () => ({
+            eq: () => Promise.resolve({ data: [{ key: "networth:positive" }], error: null }),
+          }),
+          insert: () => Promise.resolve({ error: new Error("Claimed") }),
+        };
+      }
+      if (table === "plaid_items") {
+        return { select: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) };
+      }
+      return mockQueryChain;
+    });
+
+    await expect(processNotificationsForUser("user-1")).resolves.not.toThrow();
+  });
+
+  it("handles broken bank items missing institution and error metadata", async () => {
+    mockGetDashboardData.mockResolvedValue({
+      cashFlowForecast: { lowBalanceRisk: false },
+      budgetEnvelopes: [],
+      netWorthSnapshot: { assets: 100, liabilities: 0, netWorth: 100 },
+      netWorthHistory: [],
+    });
+    mockGetGoals.mockResolvedValue([]);
+    mockSingle.mockResolvedValue({ data: { broken_bank: true }, error: null });
+    mockFrom.mockImplementation((table) => {
+      if (table === "milestones") {
+        return { select: () => ({ eq: () => Promise.resolve({ data: null, error: null }) }) };
+      }
+      if (table === "plaid_items") {
+        return {
+          select: () => ({
+            eq: () =>
+              Promise.resolve({
+                data: [
+                  { id: "ok", institution_name: "Chase", status: "ok", error_code: null },
+                  { id: "bare", institution_name: null, status: "error", error_code: null },
+                ],
+                error: null,
+              }),
+          }),
+        };
+      }
+      return mockQueryChain;
+    });
+
+    const bodies: string[] = [];
+    mockInsert.mockImplementation((val) => {
+      bodies.push(val.body);
+      return {
+        select: vi.fn().mockReturnValue({
+          single: () => Promise.resolve({ data: val, error: null }),
+        }),
+      };
+    });
+
+    await processNotificationsForUser("user-1");
+    expect(bodies.some((b) => b.includes("your bank") && b.includes("unknown"))).toBe(true);
+  });
 });

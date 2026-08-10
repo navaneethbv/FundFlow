@@ -33,6 +33,11 @@ vi.mock("@/lib/security-account", () => ({
   buildDataTakeout: (data: unknown) => mockBuildDataTakeout(data),
 }));
 
+let takeoutInvestmentsEnabled = true;
+vi.mock("@/lib/feature-flags", () => ({
+  isFeatureEnabled: () => takeoutInvestmentsEnabled,
+}));
+
 const mockGetWeeklyReportData = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/weekly-report-data", () => ({
   getWeeklyReportData: (...args: unknown[]) => mockGetWeeklyReportData(...args),
@@ -53,6 +58,7 @@ import { NextResponse, NextRequest } from "next/server";
 describe("Export API Routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    takeoutInvestmentsEnabled = true;
   });
 
   describe("GET /api/export/json", () => {
@@ -124,6 +130,21 @@ describe("Export API Routes", () => {
   });
 
   describe("GET /api/export/takeout", () => {
+    function takeoutClient(
+      seed: (table: string) => { data?: unknown; error?: unknown },
+    ) {
+      return {
+        from: vi.fn((table: string) => ({
+          select: vi.fn(() => ({
+            eq: vi.fn().mockResolvedValue(seed(table)),
+            or: vi.fn().mockResolvedValue(seed(table)),
+            then: (resolve: (v: unknown) => unknown) =>
+              Promise.resolve(seed(table)).then(resolve),
+          })),
+        })),
+      };
+    }
+
     it("returns early if not authenticated", async () => {
       mockRequireUser.mockResolvedValue(new NextResponse("unauthorized", { status: 401 }));
       const res = await takeoutGet();
@@ -242,6 +263,56 @@ describe("Export API Routes", () => {
 
       const res = await takeoutGet();
       expect(res.status).toBe(500);
+    });
+
+    it("uses empty placeholders for investment tables while the feature is off", async () => {
+      takeoutInvestmentsEnabled = false;
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: takeoutClient(() => ({ data: [], error: null })),
+      });
+
+      const res = await takeoutGet();
+      expect(res.status).toBe(200);
+      expect(mockBuildDataTakeout).toHaveBeenCalledWith(
+        expect.objectContaining({
+          holdings: [],
+          holding_snapshots: [],
+          securities: [],
+          investment_transactions: [],
+        }),
+      );
+    });
+
+    it("coerces null query data to empty arrays", async () => {
+      takeoutInvestmentsEnabled = true;
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: takeoutClient(() => ({ data: null, error: null })),
+      });
+
+      const res = await takeoutGet();
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.takeout.accounts).toEqual([]);
+      expect(body.takeout.transactions).toEqual([]);
+      expect(body.takeout.households).toEqual([]);
+    });
+
+    it("fails the takeout when any owned query errors", async () => {
+      takeoutInvestmentsEnabled = true;
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: takeoutClient((table) =>
+          table === "accounts"
+            ? { data: null, error: { message: "select failed" } }
+            : { data: [], error: null },
+        ),
+      });
+
+      const res = await takeoutGet();
+      expect(res.status).toBe(500);
+      expect(mockBuildDataTakeout).not.toHaveBeenCalled();
     });
   });
 

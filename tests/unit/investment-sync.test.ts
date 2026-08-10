@@ -224,6 +224,354 @@ describe("syncInvestmentsForItem", () => {
     });
     await expect(syncInvestmentsForItem(item)).rejects.toBeTruthy();
   });
+
+  it("returns no_investment_product when Plaid reports no accounts", async () => {
+    mockInvestmentsHoldingsGet.mockResolvedValueOnce({
+      data: { accounts: [], holdings: [], securities: [] },
+    });
+    const { tables } = tableStub();
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (!(table in tables)) throw new Error(`Unexpected table ${table}`);
+      return tables[table as keyof typeof tables];
+    });
+
+    const result = await syncInvestmentsForItem(item);
+    expect(result).toEqual({ outcome: "no_investment_product", holdingsSynced: 0 });
+  });
+
+  it("returns no_investment_product when the item has no stored accounts", async () => {
+    mockInvestmentsHoldingsGet.mockResolvedValueOnce({
+      data: { accounts: [{ account_id: "plaid-acc-1" }], holdings: [], securities: [] },
+    });
+    const accountsSelectEq = vi.fn().mockResolvedValue({ data: null, error: null });
+    const accountsSelect = vi.fn().mockReturnValue({ eq: accountsSelectEq });
+    const { tables } = tableStub({ accounts: { select: accountsSelect } });
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (!(table in tables)) throw new Error(`Unexpected table ${table}`);
+      return tables[table as keyof typeof tables];
+    });
+
+    const result = await syncInvestmentsForItem(item);
+    expect(result).toEqual({ outcome: "no_investment_product", holdingsSynced: 0 });
+  });
+
+  it("throws when the item account lookup fails", async () => {
+    mockInvestmentsHoldingsGet.mockResolvedValueOnce({
+      data: { accounts: [{ account_id: "plaid-acc-1" }], holdings: [], securities: [] },
+    });
+    const accountsSelectEq = vi.fn().mockResolvedValue({ data: null, error: new Error("Accounts error") });
+    const accountsSelect = vi.fn().mockReturnValue({ eq: accountsSelectEq });
+    const { tables } = tableStub({ accounts: { select: accountsSelect } });
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (!(table in tables)) throw new Error(`Unexpected table ${table}`);
+      return tables[table as keyof typeof tables];
+    });
+
+    await expect(syncInvestmentsForItem(item)).rejects.toThrow("Accounts error");
+  });
+
+  it("throws when the securities upsert fails", async () => {
+    mockInvestmentsHoldingsGet.mockResolvedValueOnce({
+      data: {
+        accounts: [{ account_id: "plaid-acc-1" }],
+        holdings: [],
+        securities: [{ security_id: "sec-a" }],
+      },
+    });
+    const securitiesUpsertSelect = vi.fn().mockResolvedValue({ data: null, error: new Error("Securities error") });
+    const securitiesUpsert = vi.fn().mockReturnValue({ select: securitiesUpsertSelect });
+    const { tables } = tableStub({ securities: { upsert: securitiesUpsert } });
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (!(table in tables)) throw new Error(`Unexpected table ${table}`);
+      return tables[table as keyof typeof tables];
+    });
+
+    await expect(syncInvestmentsForItem(item)).rejects.toThrow("Securities error");
+  });
+
+  it("maps missing security fields to nulls and defaults", async () => {
+    mockInvestmentsHoldingsGet.mockResolvedValueOnce({
+      data: {
+        accounts: [{ account_id: "plaid-acc-1" }],
+        holdings: [],
+        securities: [
+          { security_id: "sec-a" },
+          { security_id: "sec-b", ticker_symbol: "ABC" },
+        ],
+      },
+    });
+    const securitiesUpsertSelect = vi.fn().mockResolvedValue({
+      data: [
+        { id: "db-a", plaid_security_id: "sec-a" },
+        { id: "db-b", plaid_security_id: "sec-b" },
+      ],
+      error: null,
+    });
+    const securitiesUpsert = vi.fn().mockReturnValue({ select: securitiesUpsertSelect });
+    const { tables } = tableStub({ securities: { upsert: securitiesUpsert } });
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (!(table in tables)) throw new Error(`Unexpected table ${table}`);
+      return tables[table as keyof typeof tables];
+    });
+
+    await syncInvestmentsForItem(item);
+
+    expect(securitiesUpsert).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          ticker: null,
+          name: "Unnamed security",
+          security_type: null,
+          security_subtype: null,
+          close_price: null,
+          close_price_as_of: null,
+          iso_currency_code: null,
+        }),
+        expect.objectContaining({ ticker: "ABC", name: "ABC" }),
+      ],
+      { onConflict: "plaid_security_id" },
+    );
+  });
+
+  it("tolerates a securities upsert returning no rows", async () => {
+    mockInvestmentsHoldingsGet.mockResolvedValueOnce({
+      data: {
+        accounts: [{ account_id: "plaid-acc-1" }],
+        holdings: [{ account_id: "plaid-acc-1", security_id: "sec-plaid-1" }],
+        securities: [{ security_id: "sec-plaid-1" }],
+      },
+    });
+    const securitiesUpsertSelect = vi.fn().mockResolvedValue({ data: null, error: null });
+    const securitiesUpsert = vi.fn().mockReturnValue({ select: securitiesUpsertSelect });
+    const { tables, spies } = tableStub({ securities: { upsert: securitiesUpsert } });
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (!(table in tables)) throw new Error(`Unexpected table ${table}`);
+      return tables[table as keyof typeof tables];
+    });
+
+    const result = await syncInvestmentsForItem(item);
+    expect(result).toEqual({ outcome: "synced", holdingsSynced: 0 });
+    expect(spies.holdingsUpsert).not.toHaveBeenCalled();
+  });
+
+  it("filters out a holding whose account is not in the item account map", async () => {
+    mockInvestmentsHoldingsGet.mockResolvedValueOnce({
+      data: {
+        accounts: [{ account_id: "plaid-acc-1" }],
+        holdings: [{ account_id: "unknown-acc", security_id: "sec-plaid-1", quantity: 5 }],
+        securities: [{ security_id: "sec-plaid-1" }],
+      },
+    });
+    const { tables, spies } = tableStub();
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (!(table in tables)) throw new Error(`Unexpected table ${table}`);
+      return tables[table as keyof typeof tables];
+    });
+
+    const result = await syncInvestmentsForItem(item);
+    expect(result).toEqual({ outcome: "synced", holdingsSynced: 0 });
+    expect(spies.holdingsUpsert).not.toHaveBeenCalled();
+  });
+
+  it("maps missing holding fields to nulls and pairs snapshots by upserted key", async () => {
+    mockInvestmentsHoldingsGet.mockResolvedValueOnce({
+      data: {
+        accounts: [{ account_id: "plaid-acc-1" }],
+        holdings: [{ account_id: "plaid-acc-1", security_id: "sec-plaid-1" }],
+        securities: [{ security_id: "sec-plaid-1", name: "VTI" }],
+      },
+    });
+    const holdingsUpsertSelect = vi.fn().mockResolvedValue({
+      data: [{ id: "holding-db-1", account_id: "db-acc-1", security_id: "sec-db-1" }],
+      error: null,
+    });
+    const holdingsUpsert = vi.fn().mockReturnValue({ select: holdingsUpsertSelect });
+    const holdingsSelect = vi.fn().mockReturnValue({
+      in: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+        }),
+      }),
+    });
+    const holdingsUpdate = vi.fn().mockReturnValue({
+      in: vi.fn().mockResolvedValue({ error: null }),
+    });
+    const snapshotsUpsert = vi.fn().mockResolvedValue({ error: null });
+    const { tables } = tableStub({
+      holdings: { upsert: holdingsUpsert, select: holdingsSelect, update: holdingsUpdate },
+      holding_snapshots: { upsert: snapshotsUpsert },
+    });
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (!(table in tables)) throw new Error(`Unexpected table ${table}`);
+      return tables[table as keyof typeof tables];
+    });
+
+    const result = await syncInvestmentsForItem(item);
+    expect(result).toEqual({ outcome: "synced", holdingsSynced: 1 });
+    expect(holdingsUpsert).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          quantity: null,
+          cost_basis: null,
+          institution_price: null,
+          institution_value: null,
+          as_of: null,
+        }),
+      ],
+      { onConflict: "account_id,security_id,source" },
+    );
+    expect(snapshotsUpsert).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          holding_id: "holding-db-1",
+          quantity: null,
+          price: null,
+          value: null,
+        }),
+      ],
+      { onConflict: "holding_id,snapshot_date" },
+    );
+  });
+
+  it("throws when the holdings upsert fails", async () => {
+    mockInvestmentsHoldingsGet.mockResolvedValueOnce({
+      data: {
+        accounts: [{ account_id: "plaid-acc-1" }],
+        holdings: [{ account_id: "plaid-acc-1", security_id: "sec-plaid-1" }],
+        securities: [{ security_id: "sec-plaid-1" }],
+      },
+    });
+    const holdingsUpsertSelect = vi.fn().mockResolvedValue({ data: null, error: new Error("Holdings error") });
+    const holdingsUpsert = vi.fn().mockReturnValue({ select: holdingsUpsertSelect });
+    const { tables } = tableStub({ holdings: { upsert: holdingsUpsert } });
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (!(table in tables)) throw new Error(`Unexpected table ${table}`);
+      return tables[table as keyof typeof tables];
+    });
+
+    await expect(syncInvestmentsForItem(item)).rejects.toThrow("Holdings error");
+  });
+
+  it("tolerates a holdings upsert returning no rows", async () => {
+    mockInvestmentsHoldingsGet.mockResolvedValueOnce({
+      data: {
+        accounts: [{ account_id: "plaid-acc-1" }],
+        holdings: [{ account_id: "plaid-acc-1", security_id: "sec-plaid-1" }],
+        securities: [{ security_id: "sec-plaid-1" }],
+      },
+    });
+    const holdingsUpsertSelect = vi.fn().mockResolvedValue({ data: null, error: null });
+    const holdingsUpsert = vi.fn().mockReturnValue({ select: holdingsUpsertSelect });
+    const { tables } = tableStub({
+      holdings: {
+        upsert: holdingsUpsert,
+        select: vi.fn().mockReturnValue({
+          in: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+            }),
+          }),
+        }),
+        update: vi.fn().mockReturnValue({ in: vi.fn().mockResolvedValue({ error: null }) }),
+      },
+    });
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (!(table in tables)) throw new Error(`Unexpected table ${table}`);
+      return tables[table as keyof typeof tables];
+    });
+
+    const result = await syncInvestmentsForItem(item);
+    expect(result).toEqual({ outcome: "synced", holdingsSynced: 1 });
+  });
+
+  it("throws when the holding snapshot upsert fails", async () => {
+    mockInvestmentsHoldingsGet.mockResolvedValueOnce({
+      data: {
+        accounts: [{ account_id: "plaid-acc-1" }],
+        holdings: [{ account_id: "plaid-acc-1", security_id: "sec-plaid-1" }],
+        securities: [{ security_id: "sec-plaid-1" }],
+      },
+    });
+    const holdingsUpsertSelect = vi.fn().mockResolvedValue({
+      data: [{ id: "holding-db-1", account_id: "db-acc-1", security_id: "sec-db-1" }],
+      error: null,
+    });
+    const holdingsUpsert = vi.fn().mockReturnValue({ select: holdingsUpsertSelect });
+    const snapshotsUpsert = vi.fn().mockResolvedValue({ error: new Error("Snapshot error") });
+    const { tables } = tableStub({
+      holdings: { upsert: holdingsUpsert },
+      holding_snapshots: { upsert: snapshotsUpsert },
+    });
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (!(table in tables)) throw new Error(`Unexpected table ${table}`);
+      return tables[table as keyof typeof tables];
+    });
+
+    await expect(syncInvestmentsForItem(item)).rejects.toThrow("Snapshot error");
+  });
+
+  it("throws when the existing-holdings lookup fails", async () => {
+    mockInvestmentsHoldingsGet.mockResolvedValueOnce({
+      data: { accounts: [{ account_id: "plaid-acc-1" }], holdings: [], securities: [] },
+    });
+    const holdingsSelectEqEq = vi.fn().mockResolvedValue({ data: null, error: new Error("Existing error") });
+    const holdingsSelectEq1 = vi.fn().mockReturnValue({ eq: holdingsSelectEqEq });
+    const holdingsSelectIn = vi.fn().mockReturnValue({ eq: holdingsSelectEq1 });
+    const holdingsSelect = vi.fn().mockReturnValue({ in: holdingsSelectIn });
+    const { tables } = tableStub({ holdings: { select: holdingsSelect } });
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (!(table in tables)) throw new Error(`Unexpected table ${table}`);
+      return tables[table as keyof typeof tables];
+    });
+
+    await expect(syncInvestmentsForItem(item)).rejects.toThrow("Existing error");
+  });
+
+  it("tolerates a null existing-holdings result", async () => {
+    mockInvestmentsHoldingsGet.mockResolvedValueOnce({
+      data: { accounts: [{ account_id: "plaid-acc-1" }], holdings: [], securities: [] },
+    });
+    const holdingsSelectEqEq = vi.fn().mockResolvedValue({ data: null, error: null });
+    const holdingsSelectEq1 = vi.fn().mockReturnValue({ eq: holdingsSelectEqEq });
+    const holdingsSelectIn = vi.fn().mockReturnValue({ eq: holdingsSelectEq1 });
+    const holdingsSelect = vi.fn().mockReturnValue({ in: holdingsSelectIn });
+    const holdingsUpdateIn = vi.fn();
+    const holdingsUpdate = vi.fn().mockReturnValue({ in: holdingsUpdateIn });
+    const { tables } = tableStub({
+      holdings: { select: holdingsSelect, update: holdingsUpdate },
+    });
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (!(table in tables)) throw new Error(`Unexpected table ${table}`);
+      return tables[table as keyof typeof tables];
+    });
+
+    const result = await syncInvestmentsForItem(item);
+    expect(result).toEqual({ outcome: "synced", holdingsSynced: 0 });
+    expect(holdingsUpdate).not.toHaveBeenCalled();
+  });
+
+  it("throws when deactivating a stale holding fails", async () => {
+    mockInvestmentsHoldingsGet.mockResolvedValueOnce({
+      data: { accounts: [{ account_id: "plaid-acc-1" }], holdings: [], securities: [] },
+    });
+    const holdingsUpsertSelect = vi.fn().mockResolvedValue({ data: [], error: null });
+    const holdingsUpsert = vi.fn().mockReturnValue({ select: holdingsUpsertSelect });
+    const holdingsSelectEqEq = vi.fn().mockResolvedValue({ data: [{ id: "stale-holding" }], error: null });
+    const holdingsSelectEq1 = vi.fn().mockReturnValue({ eq: holdingsSelectEqEq });
+    const holdingsSelectIn = vi.fn().mockReturnValue({ eq: holdingsSelectEq1 });
+    const holdingsSelect = vi.fn().mockReturnValue({ in: holdingsSelectIn });
+    const holdingsUpdateIn = vi.fn().mockResolvedValue({ error: new Error("Deactivate error") });
+    const holdingsUpdate = vi.fn().mockReturnValue({ in: holdingsUpdateIn });
+    const { tables } = tableStub({
+      holdings: { upsert: holdingsUpsert, select: holdingsSelect, update: holdingsUpdate },
+    });
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (!(table in tables)) throw new Error(`Unexpected table ${table}`);
+      return tables[table as keyof typeof tables];
+    });
+
+    await expect(syncInvestmentsForItem(item)).rejects.toThrow("Deactivate error");
+  });
 });
 
 describe("syncInvestmentsForUser", () => {
@@ -286,6 +634,25 @@ describe("syncInvestmentsForUser", () => {
 
     await syncInvestmentsForUser("user-1");
     expect(mockLogError).toHaveBeenCalledWith("investment-sync.job-record", expect.any(Error));
+  });
+
+  it("records sync_failed when the error carries no Plaid code", async () => {
+    mockListActiveItems.mockResolvedValueOnce([item]);
+    mockInvestmentsHoldingsGet.mockRejectedValueOnce(new Error("Network failure"));
+    mockInvestmentsTransactionsGet.mockResolvedValueOnce({
+      data: { investment_transactions: [], total_investment_transactions: 0 },
+    });
+    const { tables, spies } = tableStub();
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (!(table in tables)) throw new Error(`Unexpected table ${table}`);
+      return tables[table as keyof typeof tables];
+    });
+
+    const total = await syncInvestmentsForUser("user-1");
+    expect(total).toBe(0);
+    expect(spies.syncJobsInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed", last_error: "sync_failed" }),
+    );
   });
 });
 
@@ -404,5 +771,257 @@ describe("syncInvestmentTransactionsForItem", () => {
     });
     const result = await syncInvestmentTransactionsForItem(item, "2026-07-30");
     expect(result).toEqual({ outcome: "product_not_ready", transactionsSynced: 0 });
+  });
+
+  it("reports a missing Investments product distinctly without throwing", async () => {
+    mockInvestmentsTransactionsGet.mockRejectedValueOnce({
+      response: { data: { error_code: "ADDITIONAL_CONSENT_REQUIRED" } },
+    });
+    const result = await syncInvestmentTransactionsForItem(item, "2026-07-30");
+    expect(result).toEqual({ outcome: "no_investment_product", transactionsSynced: 0 });
+  });
+
+  it("reports rate limiting as retriable without throwing", async () => {
+    mockInvestmentsTransactionsGet.mockRejectedValueOnce({
+      response: { data: { error_code: "RATE_LIMIT_EXCEEDED" } },
+    });
+    const result = await syncInvestmentTransactionsForItem(item, "2026-07-30");
+    expect(result).toEqual({ outcome: "rate_limited", transactionsSynced: 0 });
+  });
+
+  it("rethrows an unrecognized Plaid error during transaction sync", async () => {
+    mockInvestmentsTransactionsGet.mockRejectedValueOnce({
+      response: { data: { error_code: "ITEM_LOGIN_REQUIRED" } },
+    });
+    await expect(syncInvestmentTransactionsForItem(item, "2026-07-30")).rejects.toBeTruthy();
+  });
+
+  it("throws when the accounts lookup fails during transaction sync", async () => {
+    mockInvestmentsTransactionsGet.mockResolvedValueOnce({
+      data: {
+        investment_transactions: [
+          {
+            investment_transaction_id: "t1",
+            account_id: "plaid-acc-1",
+            security_id: "sec-plaid-1",
+            date: "2026-07-15",
+            amount: 100,
+          },
+        ],
+        total_investment_transactions: 1,
+      },
+    });
+    const accountsSelectEq = vi.fn().mockResolvedValue({ data: null, error: new Error("Accounts error") });
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (table === "accounts") return { select: () => ({ eq: accountsSelectEq }) };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    await expect(syncInvestmentTransactionsForItem(item, "2026-07-30")).rejects.toThrow("Accounts error");
+  });
+
+  it("tolerates a null item-accounts result during transaction sync", async () => {
+    mockInvestmentsTransactionsGet.mockResolvedValueOnce({
+      data: {
+        investment_transactions: [
+          {
+            investment_transaction_id: "t1",
+            account_id: "plaid-acc-1",
+            security_id: "sec-plaid-1",
+            date: "2026-07-15",
+            amount: 100,
+          },
+        ],
+        total_investment_transactions: 1,
+      },
+    });
+    const accountsSelectEq = vi.fn().mockResolvedValue({ data: null, error: null });
+    const securitiesSelectIn = vi.fn().mockResolvedValue({
+      data: [{ id: "sec-db-1", plaid_security_id: "sec-plaid-1" }],
+      error: null,
+    });
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (table === "accounts") return { select: () => ({ eq: accountsSelectEq }) };
+      if (table === "securities") return { select: () => ({ in: securitiesSelectIn }) };
+      if (table === "investment_transactions") return { upsert: vi.fn(), update: vi.fn() };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    const result = await syncInvestmentTransactionsForItem(item, "2026-07-30");
+    expect(result).toEqual({ outcome: "synced", transactionsSynced: 0 });
+  });
+
+  it("throws when the securities lookup fails during transaction sync", async () => {
+    mockInvestmentsTransactionsGet.mockResolvedValueOnce({
+      data: {
+        investment_transactions: [
+          {
+            investment_transaction_id: "t1",
+            account_id: "plaid-acc-1",
+            security_id: "sec-plaid-1",
+            date: "2026-07-15",
+            amount: 100,
+          },
+        ],
+        total_investment_transactions: 1,
+      },
+    });
+    const accountsSelectEq = vi.fn().mockResolvedValue({
+      data: [{ id: "db-acc-1", plaid_account_id: "plaid-acc-1" }],
+      error: null,
+    });
+    const securitiesSelectIn = vi.fn().mockResolvedValue({ data: null, error: new Error("Securities error") });
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (table === "accounts") return { select: () => ({ eq: accountsSelectEq }) };
+      if (table === "securities") return { select: () => ({ in: securitiesSelectIn }) };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    await expect(syncInvestmentTransactionsForItem(item, "2026-07-30")).rejects.toThrow("Securities error");
+  });
+
+  it("maps an unknown security id to null in a transaction row", async () => {
+    mockInvestmentsTransactionsGet.mockResolvedValueOnce({
+      data: {
+        investment_transactions: [
+          {
+            investment_transaction_id: "t1",
+            account_id: "plaid-acc-1",
+            security_id: "sec-plaid-1",
+            date: "2026-07-15",
+            amount: 100,
+          },
+        ],
+        total_investment_transactions: 1,
+      },
+    });
+    const accountsSelectEq = vi.fn().mockResolvedValue({
+      data: [{ id: "db-acc-1", plaid_account_id: "plaid-acc-1" }],
+      error: null,
+    });
+    const securitiesSelectIn = vi.fn().mockResolvedValue({ data: null, error: null });
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (table === "accounts") return { select: () => ({ eq: accountsSelectEq }) };
+      if (table === "securities") return { select: () => ({ in: securitiesSelectIn }) };
+      if (table === "investment_transactions") return { upsert, update: vi.fn() };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    const result = await syncInvestmentTransactionsForItem(item, "2026-07-30");
+    expect(result).toEqual({ outcome: "synced", transactionsSynced: 1 });
+    expect(upsert).toHaveBeenCalledWith(
+      [expect.objectContaining({ security_id: null })],
+      { onConflict: "plaid_investment_transaction_id" },
+    );
+  });
+
+  it("maps missing transaction fields to null", async () => {
+    mockInvestmentsTransactionsGet.mockResolvedValueOnce({
+      data: {
+        investment_transactions: [
+          {
+            investment_transaction_id: "t1",
+            account_id: "plaid-acc-1",
+            date: "2026-07-15",
+            amount: 100,
+          },
+        ],
+        total_investment_transactions: 1,
+      },
+    });
+    const accountsSelectEq = vi.fn().mockResolvedValue({
+      data: [{ id: "db-acc-1", plaid_account_id: "plaid-acc-1" }],
+      error: null,
+    });
+    const securitiesSelectIn = vi.fn().mockResolvedValue({ data: null, error: null });
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (table === "accounts") return { select: () => ({ eq: accountsSelectEq }) };
+      if (table === "securities") return { select: () => ({ in: securitiesSelectIn }) };
+      if (table === "investment_transactions") return { upsert, update: vi.fn() };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    await syncInvestmentTransactionsForItem(item, "2026-07-30");
+
+    expect(upsert).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          name: null,
+          quantity: null,
+          price: null,
+          fees: null,
+          txn_type: null,
+          txn_subtype: null,
+          iso_currency_code: null,
+        }),
+      ],
+      { onConflict: "plaid_investment_transaction_id" },
+    );
+  });
+
+  it("throws when the investment transaction upsert fails", async () => {
+    mockInvestmentsTransactionsGet.mockResolvedValueOnce({
+      data: {
+        investment_transactions: [
+          {
+            investment_transaction_id: "t1",
+            account_id: "plaid-acc-1",
+            security_id: "sec-plaid-1",
+            date: "2026-07-15",
+            amount: 100,
+          },
+        ],
+        total_investment_transactions: 1,
+      },
+    });
+    const accountsSelectEq = vi.fn().mockResolvedValue({
+      data: [{ id: "db-acc-1", plaid_account_id: "plaid-acc-1" }],
+      error: null,
+    });
+    const securitiesSelectIn = vi.fn().mockResolvedValue({ data: null, error: null });
+    const upsert = vi.fn().mockResolvedValue({ error: new Error("Txn upsert error") });
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (table === "accounts") return { select: () => ({ eq: accountsSelectEq }) };
+      if (table === "securities") return { select: () => ({ in: securitiesSelectIn }) };
+      if (table === "investment_transactions") return { upsert, update: vi.fn() };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    await expect(syncInvestmentTransactionsForItem(item, "2026-07-30")).rejects.toThrow("Txn upsert error");
+  });
+
+  it("throws when deactivating a cancelled transaction fails", async () => {
+    mockInvestmentsTransactionsGet.mockResolvedValueOnce({
+      data: {
+        investment_transactions: [
+          {
+            investment_transaction_id: "t-cancel",
+            cancel_transaction_id: "t1",
+            account_id: "plaid-acc-1",
+            date: "2026-07-16",
+            amount: -1,
+          },
+        ],
+        total_investment_transactions: 1,
+      },
+    });
+    const accountsSelectEq = vi.fn().mockResolvedValue({
+      data: [{ id: "db-acc-1", plaid_account_id: "plaid-acc-1" }],
+      error: null,
+    });
+    const securitiesSelectIn = vi.fn().mockResolvedValue({ data: null, error: null });
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    const updateIn = vi.fn().mockResolvedValue({ error: new Error("Cancel error") });
+    const update = vi.fn().mockReturnValue({ in: updateIn });
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (table === "accounts") return { select: () => ({ eq: accountsSelectEq }) };
+      if (table === "securities") return { select: () => ({ in: securitiesSelectIn }) };
+      if (table === "investment_transactions") return { upsert, update };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    await expect(syncInvestmentTransactionsForItem(item, "2026-07-30")).rejects.toThrow("Cancel error");
   });
 });

@@ -356,4 +356,164 @@ describe("planning roadmap features", () => {
     expect(statuses[3]!.status).toBe("unusual_amount");
     expect(statuses[3]!.reviewPrompt).toBeNull();
   });
+
+  it("handles partial dates and null starting balances in forecasts", () => {
+    const forecast = forecastCashFlow({
+      startingBalance: null,
+      asOf: "2026",
+      horizonDays: 30,
+      items: [
+        { name: "Rent", amount: 1000, itemType: "expense", frequency: "monthly", nextDate: "2026-01-15" },
+      ],
+      lowBalanceThreshold: 0,
+    });
+    expect(forecast.events).toHaveLength(1);
+    expect(forecast.projectedBalance).toBe(-1000);
+    expect(forecast.assumptions[0]).toBe("Starts from $0.00 cash.");
+  });
+
+  it("sorts same-day forecast events by name", () => {
+    const forecast = forecastCashFlow({
+      startingBalance: 0,
+      asOf: "2026-07-01",
+      horizonDays: 10,
+      items: [
+        { name: "Rent", amount: 1000, itemType: "expense", frequency: "monthly", nextDate: "2026-07-05" },
+        { name: "Paycheck", amount: 2000, itemType: "income", frequency: "biweekly", nextDate: "2026-07-05" },
+      ],
+      lowBalanceThreshold: 0,
+    });
+    expect(forecast.events.map((e) => e.name)).toEqual(["Paycheck", "Rent"]);
+  });
+
+  it("advances quarterly and yearly recurring items across the horizon", () => {
+    const forecast = forecastCashFlow({
+      startingBalance: 1000,
+      asOf: "2026-01-01",
+      horizonDays: 400,
+      items: [
+        { name: "Insurance", amount: 300, itemType: "expense", frequency: "quarterly", nextDate: "2026-01-15" },
+        { name: "Taxes", amount: 500, itemType: "expense", frequency: "yearly", nextDate: "2026-01-20" },
+      ],
+      lowBalanceThreshold: 0,
+    });
+    expect(forecast.events.filter((e) => e.name === "Insurance").length).toBeGreaterThan(1);
+    expect(forecast.events.filter((e) => e.name === "Taxes")).toHaveLength(2);
+  });
+
+  it("defaults missing current spend and rollover windows in budget envelopes", () => {
+    const envelopes = buildBudgetEnvelopes({
+      budgets: [{ category: "SHOPPING", monthlyLimit: 300, rolloverEnabled: true }],
+      currentSpend: [],
+      previousSpend: [],
+      dayOfMonth: 5,
+      daysInMonth: 30,
+    });
+    expect(envelopes[0]).toMatchObject({
+      spent: 0,
+      carry: 0,
+      effectiveLimit: 300,
+      status: "on-track",
+    });
+  });
+
+  it("skips recurring items outside the grouping horizon", () => {
+    const groups = groupRecurringByWeek(
+      [
+        { name: "Past", amount: 10, itemType: "expense", frequency: "weekly", nextDate: "2026-06-20" },
+        { name: "Future", amount: 10, itemType: "expense", frequency: "weekly", nextDate: "2026-08-20" },
+        { name: "Due", amount: 10, itemType: "expense", frequency: "weekly", nextDate: "2026-07-05" },
+      ],
+      "2026-07-01",
+      14,
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.items.map((i) => i.name)).toEqual(["Due"]);
+  });
+
+  it("sorts items within a week group by name when due the same day", () => {
+    const groups = groupRecurringByWeek(
+      [
+        { name: "Rent", amount: 1800, itemType: "expense", frequency: "monthly", nextDate: "2026-07-05" },
+        { name: "Payroll", amount: 2500, itemType: "income", frequency: "biweekly", nextDate: "2026-07-05" },
+      ],
+      "2026-07-01",
+      14,
+    );
+    expect(groups[0]!.items.map((i) => i.name)).toEqual(["Payroll", "Rent"]);
+  });
+
+  it("sorts expanded bill rows by name within a period", () => {
+    const groups = groupRecurringByPeriod(
+      [
+        { name: "Netflix", amount: 10, itemType: "expense", frequency: "monthly", nextDate: "2026-08-05" },
+        { name: "Hulu", amount: 10, itemType: "expense", frequency: "monthly", nextDate: "2026-08-05" },
+      ],
+      "2026-08-01",
+      40,
+      "monthly",
+    );
+    expect(groups[0]!.items.map((i) => i.name)).toEqual(["Hulu", "Netflix"]);
+  });
+
+  it("ignores disabled and blank merchant rules", () => {
+    expect(
+      applyMerchantRules(
+        [{ id: "d", merchant: "Starbucks", category: "FOOD" }],
+        [{ matchType: "keyword", pattern: "starbucks", displayName: "SB", category: "COFFEE", enabled: false }],
+      ),
+    ).toEqual([{ id: "d", merchant: "Starbucks", category: "FOOD" }]);
+    expect(
+      applyMerchantRules(
+        [{ id: "e", merchant: "Starbucks", category: "FOOD" }],
+        [{ matchType: "keyword", pattern: "   ", displayName: "SB", category: "COFFEE", enabled: true }],
+      ),
+    ).toEqual([{ id: "e", merchant: "Starbucks", category: "FOOD" }]);
+  });
+
+  it("matches account and merchant rules with fallbacks for empty display fields", () => {
+    const applied = applyMerchantRules(
+      [
+        { id: "a1", merchant: "Payment", category: "GENERAL", accountName: "Chase Checking" },
+        { id: "a2", merchant: "Payment", category: "GENERAL", accountName: null },
+        { id: "m", merchant: "Exact Co", category: "GENERAL" },
+        { id: "f", merchant: "Raw Cafe", category: "DINING" },
+      ],
+      [
+        { matchType: "account", pattern: "chase", displayName: "Chase Acct", category: "CHASE", enabled: true },
+        { matchType: "merchant", pattern: "exact co", displayName: "Exact Co Inc", category: "BIZ", enabled: true },
+        { matchType: "keyword", pattern: "raw cafe", displayName: "", category: "", enabled: true },
+      ],
+    );
+    expect(applied[0]).toEqual({ id: "a1", merchant: "Chase Acct", category: "CHASE", accountName: "Chase Checking" });
+    expect(applied[1]).toEqual({ id: "a2", merchant: "Payment", category: "GENERAL", accountName: null });
+    expect(applied[2]).toEqual({ id: "m", merchant: "Exact Co Inc", category: "BIZ" });
+    expect(applied[3]).toEqual({ id: "f", merchant: "Raw Cafe", category: "DINING" });
+  });
+
+  it("falls back to the transaction merchant and category for null rule fields", () => {
+    const applied = applyMerchantRules(
+      [{ id: "g", merchant: "Raw Cafe", category: null }],
+      [{ matchType: "keyword", pattern: "raw cafe", displayName: null, category: null, enabled: true }],
+    );
+    expect(applied[0]).toEqual({ id: "g", merchant: "Raw Cafe", category: null });
+  });
+
+  it("handles null balances and types in the net worth snapshot", () => {
+    expect(
+      computeNetWorthSnapshot([
+        { name: "Pension", type: null, balance: null },
+        { name: "Debt", type: "loan", balance: null },
+      ]),
+    ).toEqual({ assets: 0, liabilities: 0, netWorth: 0 });
+  });
+
+  it("leaves non-duplicate import rows unflagged", () => {
+    const review = buildImportReview(
+      [{ date: "2026-07-01", amount: 9.99, merchant: "New Store", category: null }],
+      new Set(["2026-07-01|4.50|Coffee"]),
+    );
+    expect(review.rows[0]!.flags).toEqual([]);
+    expect(review.rows[0]!.status).toBe("pending");
+  });
 });
