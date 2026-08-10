@@ -226,4 +226,36 @@ describe("loadBudgetData", () => {
 
     expect(result).toBeDefined();
   });
+
+  it("loads recurrence fields and advances a past annual sinking fund", async () => {
+    const supabase = makeClient({
+      sinking_funds: {
+        data: [{
+          name: "Insurance",
+          target_amount: 1200,
+          due_date: "2025-01-31",
+          cadence: "annual",
+          custom_interval_months: null,
+          cycle_anchor_date: "2025-01-31",
+        }],
+      },
+    });
+
+    const result = await loadBudgetData(supabase as never, {
+      userId: "user-1",
+      anchorMonth: "2026-02",
+      horizon: "monthly",
+      now: new Date("2026-02-01T12:00:00.000Z"),
+    });
+
+    expect(supabase.callsOn("sinking_funds")).toContainEqual({
+      method: "select",
+      args: [
+        "name,target_amount,due_date,cadence,custom_interval_months,cycle_anchor_date",
+      ],
+    });
+    expect(result.view.horizon).toBe("monthly");
+    if (result.view.horizon !== "monthly") throw new Error("wrong horizon");
+    expect(result.view.month.sinkingFundsTotal).toBe(100);
+  });
 });

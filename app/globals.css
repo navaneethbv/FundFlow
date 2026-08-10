@@ -174,13 +174,19 @@
   --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-lift: 0 8px 28px rgba(0, 0, 0, 0.55), 0 2px 10px rgba(0, 0, 0, 0.4);
   --shadow-glow: 0 4px 16px rgba(255, 107, 46, 0.45);
-  --viz-1: #3987e5;
-  --viz-2: #199e70;
-  --viz-3: #c98500;
-  --viz-4: #008300;
-  --viz-5: #9085e9;
-  --viz-6: #e66767;
-  --viz-7: #c2379a;
+  /* Dark categorical re-step, 2026-08-09. Clears the all-pairs normal,
+     protanopia, and deuteranopia gates AND WCAG 1.4.11 non-text contrast
+     (>= 3:1 on --panel #222221) on every slot, at the light set's hues so
+     both modes read as one identity. Both gates are enforced by
+     scripts/validate_palette.js — re-step with it, never by eye.
+     Direct labels and table twins remain required secondary encoding. */
+  --viz-1: #77a9ea;
+  --viz-2: #55c795;
+  --viz-3: #f1a824;
+  --viz-4: #299525;
+  --viz-5: #755efd;
+  --viz-6: #d57c75;
+  --viz-7: #d33ea7;
   --viz-pos: #3987e5;
   --viz-neg: #e66767;
   --viz-ink: #ffffff;
@@ -231,13 +237,14 @@
     --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-lift: 0 8px 28px rgba(0, 0, 0, 0.55), 0 2px 10px rgba(0, 0, 0, 0.4);
     --shadow-glow: 0 4px 16px rgba(255, 107, 46, 0.45);
-    --viz-1: #3987e5;
-    --viz-2: #199e70;
-    --viz-3: #c98500;
-    --viz-4: #008300;
-    --viz-5: #9085e9;
-    --viz-6: #e66767;
-    --viz-7: #c2379a;
+    /* Keep in sync with the approved [data-theme=dark] set above. */
+    --viz-1: #77a9ea;
+    --viz-2: #55c795;
+    --viz-3: #f1a824;
+    --viz-4: #299525;
+    --viz-5: #755efd;
+    --viz-6: #d57c75;
+    --viz-7: #d33ea7;
     --viz-pos: #3987e5;
     --viz-neg: #e66767;
     --viz-ink: #ffffff;
@@ -382,12 +389,19 @@ a {
   -webkit-tap-highlight-color: transparent;
 }
 
-.scrollbar-none {
-  scrollbar-width: none;
-}
-
+/* Both rules are required: neither alone hides the scrollbar everywhere.
+   The WebKit pseudo-element covers Chrome/Safari/Edge (including Chrome < 121,
+   which predates `scrollbar-width`), and the standard property covers Firefox,
+   which has no such pseudo-element. The `@supports` guard is what keeps the
+   modern property from being applied where it is not understood. */
 .scrollbar-none::-webkit-scrollbar {
   display: none;
+}
+
+@supports (scrollbar-width: none) {
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

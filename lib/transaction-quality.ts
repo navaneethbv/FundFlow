@@ -29,6 +29,19 @@ export interface ReviewDecision {
   decision: "confirmed" | "dismissed";
 }
 
+export interface DuplicateTransaction extends LedgerTransaction {
+  accountId: string;
+  plaidItemId: string | null;
+  accountName: string;
+}
+
+export interface DuplicatePair {
+  subjectId: string;
+  first: DuplicateTransaction;
+  second: DuplicateTransaction;
+  dateDistanceDays: number;
+}
+
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -103,6 +116,70 @@ export function detectRefundPairs(transactions: LedgerTransaction[], windowDays:
   }
 
   return pairs;
+}
+
+export function duplicateSubjectId(firstId: string, secondId: string): string {
+  return [firstId, secondId].sort((left, right) => left.localeCompare(right)).join(":");
+}
+
+function evaluateDuplicateCandidate(
+  first: DuplicateTransaction,
+  second: DuplicateTransaction,
+  resolved: Set<string>,
+): DuplicatePair | null {
+  if (first.accountId === second.accountId) return null;
+  if (round2(first.amount) !== round2(second.amount)) return null;
+  if (normalize(first.merchant) !== normalize(second.merchant)) return null;
+  const dateDistanceDays = Math.abs(parseDate(first.date) - parseDate(second.date)) / 86_400_000;
+  if (dateDistanceDays > 2) return null;
+  const subjectId = duplicateSubjectId(first.id, second.id);
+  if (resolved.has(subjectId)) return null;
+  return { subjectId, first, second, dateDistanceDays };
+}
+
+/**
+ * @param linkedTransactionIds ids already on either side of a confirmed link.
+ *   `linked_duplicates` is unique per transaction on both the kept and the
+ *   excluded column, so a transaction that is already linked can never join a
+ *   second pair — offering it produces a pair whose confirmation the database
+ *   rejects. Three near-identical rows is all it takes to hit this.
+ */
+export function detectDuplicatePairs(
+  transactions: DuplicateTransaction[],
+  decisions: ReviewDecision[],
+  linkedTransactionIds: ReadonlySet<string> = new Set(),
+): DuplicatePair[] {
+  const resolved = new Set(
+    decisions
+      .filter((decision) => decision.kind === "duplicate")
+      .map((decision) => decision.subjectId),
+  );
+  const candidates: DuplicatePair[] = [];
+  const expenses = transactions.filter(
+    (transaction) => transaction.amount > 0 && !linkedTransactionIds.has(transaction.id),
+  );
+  for (let firstIndex = 0; firstIndex < expenses.length; firstIndex += 1) {
+    const first = expenses[firstIndex]!;
+    for (let secondIndex = firstIndex + 1; secondIndex < expenses.length; secondIndex += 1) {
+      const second = expenses[secondIndex]!;
+      const candidate = evaluateDuplicateCandidate(first, second, resolved);
+      if (candidate) candidates.push(candidate);
+    }
+  }
+
+  candidates.sort((left, right) =>
+    left.dateDistanceDays - right.dateDistanceDays ||
+    normalize(left.first.merchant).localeCompare(normalize(right.first.merchant)) ||
+    left.first.amount - right.first.amount ||
+    left.subjectId.localeCompare(right.subjectId),
+  );
+  const used = new Set<string>();
+  return candidates.filter((candidate) => {
+    if (used.has(candidate.first.id) || used.has(candidate.second.id)) return false;
+    used.add(candidate.first.id);
+    used.add(candidate.second.id);
+    return true;
+  });
 }
 
 export function filterReviewDecisions(anomalies: ReviewAnomaly[], decisions: ReviewDecision[]): ReviewAnomaly[] {

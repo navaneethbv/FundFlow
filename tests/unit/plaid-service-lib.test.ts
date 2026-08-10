@@ -40,6 +40,7 @@ import {
   upsertAccounts,
   updateItemCursor,
   setItemStatus,
+  updateItemBranding,
   getAccountIdMap,
 } from "@/lib/plaid-service";
 import type { PlaidItemRow } from "@/lib/types";
@@ -76,6 +77,8 @@ describe("lib/plaid-service", () => {
       accessToken: "secret-token",
       institutionId: "inst-1",
       institutionName: "Test Bank",
+      institutionLogo: "logo-base64",
+      institutionBrandColor: "#112233",
     });
 
     expect(id).toBe("new-item-id");
@@ -84,6 +87,8 @@ describe("lib/plaid-service", () => {
       expect.objectContaining({
         user_id: "user-1",
         access_token_ciphertext: "cipher-123",
+        institution_logo: "logo-base64",
+        institution_brand_color: "#112233",
       }),
     );
   });
@@ -254,6 +259,27 @@ describe("lib/plaid-service", () => {
       status: "error",
       error_code: "ITEM_LOGIN_REQUIRED",
     });
+  });
+
+  it("updates institution branding with explicit owner scope", async () => {
+    const eqUser = vi.fn().mockResolvedValue({ error: null });
+    const eqId = vi.fn().mockReturnValue({ eq: eqUser });
+    const update = vi.fn().mockReturnValue({ eq: eqId });
+    mockServiceClient.from.mockReturnValue({ update });
+
+    await updateItemBranding("user-1", "item-db-1", {
+      name: "Test Bank",
+      logo: "logo-base64",
+      brandColor: "#112233",
+    });
+
+    expect(update).toHaveBeenCalledWith({
+      institution_name: "Test Bank",
+      institution_logo: "logo-base64",
+      institution_brand_color: "#112233",
+    });
+    expect(eqId).toHaveBeenCalledWith("id", "item-db-1");
+    expect(eqUser).toHaveBeenCalledWith("user_id", "user-1");
   });
 
   it("getAccountIdMap returns map of plaid_account_id to account id", async () => {

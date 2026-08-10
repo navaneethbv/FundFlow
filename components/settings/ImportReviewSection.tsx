@@ -6,6 +6,7 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Panel from "@/components/ui/Panel";
 import Select from "@/components/ui/Select";
+import { isOfxFileName } from "@/lib/import-ofx";
 
 interface AccountOption {
   id: string;
@@ -92,7 +93,7 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
     const fileInput = event.currentTarget.elements.namedItem("file") as HTMLInputElement;
     const file = fileInput.files?.[0];
     if (!file || !accountId) {
-      setError("Choose a CSV file and a target account.");
+      setError("Choose a CSV, OFX, or QFX file and a target account.");
       return;
     }
     setPendingFile(file);
@@ -171,9 +172,9 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
   );
 
   return (
-    <Panel title="Import with review" eyebrow="CSV backfill">
+    <Panel title="Import with review" eyebrow="Statement backfill">
       <p className="mb-4 text-sm text-muted">
-        Preview a bank-statement CSV before importing. Rows that look like duplicates of
+        Preview a bank-statement CSV, OFX, or QFX file before importing. Rows that look like duplicates of
         existing transactions are flagged and left unchecked; you decide what lands.
       </p>
 
@@ -181,7 +182,14 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
         <p className="text-sm text-muted">Connect a bank first. Imports attach to an account.</p>
       ) : (
         <form onSubmit={onPreview} className="space-y-3 text-sm">
-          <Input type="file" name="file" accept=".csv,text/csv" required className="max-w-xs" />
+          <Input
+            type="file"
+            name="file"
+            accept=".csv,.ofx,.qfx,text/csv,application/x-ofx"
+            required
+            className="max-w-xs"
+            onChange={(event) => setPendingFile(event.target.files?.[0] ?? null)}
+          />
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2">
               Into account
@@ -194,14 +202,18 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
                 ))}
               </Select>
             </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={positiveIsIncome}
-                onChange={(event) => setPositiveIsIncome(event.target.checked)}
-              />
-              Positive amounts are deposits
-            </label>
+            {!pendingFile || !isOfxFileName(pendingFile.name) ? (
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={positiveIsIncome}
+                  onChange={(event) => setPositiveIsIncome(event.target.checked)}
+                />
+                Positive amounts are deposits
+              </label>
+            ) : (
+              <p className="text-muted">OFX sign conventions are detected automatically.</p>
+            )}
           </div>
           <Button type="submit" loading={busy} variant="secondary">
             Preview file

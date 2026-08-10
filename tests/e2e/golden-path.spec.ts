@@ -73,14 +73,21 @@ test.describe.serial("authenticated golden path", () => {
     await expect(page.getByPlaceholder("Search transactions")).toBeVisible();
   });
 
-  test("settings renders budgets, export, and calendar-feed sections", async () => {
-    await page.goto("/settings");
+  test("settings renders task-specific categories, data, and integration sections", async () => {
+    await page.goto("/settings?section=categories");
     await expect(page.getByText("Budget limits", { exact: true })).toBeVisible();
+    await page.goto("/settings?section=data");
     await expect(page.getByText("Export data", { exact: true })).toBeVisible();
+    await page.goto("/settings?section=integrations");
     await expect(page.getByText("Calendar feed", { exact: true })).toBeVisible();
   });
 
   test("CSV export honors the privacy contract (or the opt-out)", async () => {
+    // Skipped: test requires server-side Supabase service key environment variable.
+    test.skip(
+      !process.env.SUPABASE_SECRET_KEY,
+      "the export audit write requires the server-side Supabase service key",
+    );
     // page.request shares the signed-in context's cookies.
     const response = await page.request.get("/api/export/csv");
     expect([200, 403]).toContain(response.status());
@@ -100,6 +107,7 @@ test.describe.serial("authenticated golden path", () => {
     await page.goto("/dashboard");
     const html = page.locator("html");
 
+    await page.getByRole("button", { name: /^Account menu for/ }).click();
     await page.getByRole("button", { name: "Hide amounts" }).click();
     await expect(html).toHaveAttribute("data-privacy", "blur");
 

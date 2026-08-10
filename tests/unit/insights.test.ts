@@ -3,6 +3,7 @@ import {
   buildCategoryOverrideMap,
   computeMerchantPriceDrift,
   computeSinkingFunds,
+  resolveNextSinkingFundDue,
   projectNetWorth,
   computeRunwayMonths,
   computeSafeToSpend,
@@ -482,6 +483,85 @@ describe("computeSinkingFunds", () => {
       monthsLeft: 1,
       monthlySetAside: 90,
       dueSoon: true,
+    });
+  });
+
+  it.each([
+    ["annual", 12, "2027-01-31"],
+    ["semiannual", 6, "2026-07-31"],
+    ["quarterly", 3, "2026-04-30"],
+    ["custom", 5, "2026-06-30"],
+  ] as const)(
+    "resolves %s cadence from an end-of-month anchor",
+    (cadence, customIntervalMonths, expected) => {
+      expect(
+        resolveNextSinkingFundDue({
+          cadence,
+          customIntervalMonths: cadence === "custom" ? customIntervalMonths : null,
+          cycleAnchorDate: "2026-01-31",
+          dueDate: "2026-01-31",
+          asOf: "2026-02-01",
+        }),
+      ).toBe(expected);
+    },
+  );
+
+  it("advances across multiple elapsed recurring cycles without mutating the anchor", () => {
+    expect(
+      resolveNextSinkingFundDue({
+        cadence: "quarterly",
+        customIntervalMonths: null,
+        cycleAnchorDate: "2025-01-31",
+        dueDate: "2025-01-31",
+        asOf: "2026-08-01",
+      }),
+    ).toBe("2026-10-31");
+  });
+
+  it("keeps a recurring due date that equals the planning date", () => {
+    expect(
+      resolveNextSinkingFundDue({
+        cadence: "annual",
+        customIntervalMonths: null,
+        cycleAnchorDate: "2025-07-23",
+        dueDate: "2025-07-23",
+        asOf: "2026-07-23",
+      }),
+    ).toBe("2026-07-23");
+  });
+
+  it("keeps one-time past-due behavior while recurring funds move to their next cycle", () => {
+    const result = computeSinkingFunds({
+      funds: [
+        {
+          name: "One time",
+          targetAmount: 120,
+          dueDate: "2025-01-31",
+          cadence: "one_time",
+          customIntervalMonths: null,
+          cycleAnchorDate: "2025-01-31",
+        },
+        {
+          name: "Annual",
+          targetAmount: 1200,
+          dueDate: "2025-01-31",
+          cadence: "annual",
+          customIntervalMonths: null,
+          cycleAnchorDate: "2025-01-31",
+        },
+      ],
+      asOf: "2026-02-01",
+    });
+
+    expect(result.items[0]).toMatchObject({
+      dueDate: "2025-01-31",
+      monthsLeft: 1,
+      monthlySetAside: 120,
+    });
+    expect(result.items[1]).toMatchObject({
+      dueDate: "2027-01-31",
+      monthsLeft: 12,
+      monthlySetAside: 100,
     });
   });
 });

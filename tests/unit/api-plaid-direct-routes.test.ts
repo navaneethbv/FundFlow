@@ -69,6 +69,11 @@ vi.mock("@/lib/log", () => ({
   logError: (...args: unknown[]) => mockLogError(...args),
 }));
 
+const mockFetchInstitutionBranding = vi.fn<(...args: unknown[]) => unknown>();
+vi.mock("@/lib/plaid-institution", () => ({
+  fetchInstitutionBranding: (...args: unknown[]) => mockFetchInstitutionBranding(...args),
+}));
+
 import { DELETE as accountDelete } from "@/app/api/account/route";
 import { POST as disconnectPost } from "@/app/api/plaid/disconnect/route";
 import { POST as exchangePost } from "@/app/api/plaid/exchange/route";
@@ -229,7 +234,12 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
         data: { access_token: "access-123", item_id: "plaid-item-1" },
       });
       mockItemGet.mockResolvedValue({ data: { item: { institution_id: "inst-1" } } });
-      mockInstitutionsGetById.mockResolvedValue({ data: { institution: { name: "Bank of America" } } });
+      mockFetchInstitutionBranding.mockResolvedValue({
+        institutionId: "inst-1",
+        name: "Bank of America",
+        logo: "logo-base64",
+        brandColor: "#112233",
+      });
       mockStoreItem.mockResolvedValue("item-db-1");
       mockAccountsGet.mockResolvedValue({ data: { accounts: [] } });
       mockUpsertAccounts.mockResolvedValue(undefined);
@@ -245,6 +255,41 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
 
       expect(res.status).toBe(200);
       expect(json).toEqual({ ok: true, institution_name: "Bank of America" });
+      expect(mockStoreItem).toHaveBeenCalledWith(expect.objectContaining({
+        institutionLogo: "logo-base64",
+        institutionBrandColor: "#112233",
+      }));
+    });
+
+    it("logs error and continues when institution get or initial sync fails", async () => {
+      mockItemPublicTokenExchange.mockResolvedValue({
+        data: { access_token: "access-123", item_id: "plaid-item-1" },
+      });
+      mockItemGet.mockRejectedValue(new Error("Plaid itemGet failed"));
+      mockStoreItem.mockResolvedValue("item-db-1");
+      mockAccountsGet.mockResolvedValue({ data: { accounts: [] } });
+      mockUpsertAccounts.mockResolvedValue(undefined);
+      mockGetItem.mockResolvedValue({ id: "item-db-1" });
+      mockSyncItemTransactions.mockRejectedValue(new Error("Sync failed"));
+
+      const req = new NextRequest("http://localhost/api/plaid/exchange", {
+        method: "POST",
+        body: JSON.stringify({ public_token: "public-tok-123" }),
+      });
+      const res = await exchangePost(req);
+      expect(res.status).toBe(200);
+      expect(mockLogError).toHaveBeenCalledWith("plaid.exchange.institution", expect.any(Error));
+      expect(mockLogError).toHaveBeenCalledWith("plaid.exchange.initial-sync", expect.any(Error));
+    });
+
+    it("returns 500 when public token exchange throws", async () => {
+      mockItemPublicTokenExchange.mockRejectedValue(new Error("Exchange failed"));
+      const req = new NextRequest("http://localhost/api/plaid/exchange", {
+        method: "POST",
+        body: JSON.stringify({ public_token: "public-tok-123" }),
+      });
+      const res = await exchangePost(req);
+      expect(res.status).toBe(500);
     });
   });
 

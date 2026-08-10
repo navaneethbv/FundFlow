@@ -24,6 +24,10 @@ export function looksLikeOfx(content: string): boolean {
   return /OFXHEADER/i.test(head) || /<OFX>/i.test(head);
 }
 
+export function isOfxFileName(fileName: string): boolean {
+  return /\.(?:ofx|qfx)$/i.test(fileName.trim());
+}
+
 function decodeEntities(value: string): string {
   return value
     .replace(/&lt;/gi, "<")

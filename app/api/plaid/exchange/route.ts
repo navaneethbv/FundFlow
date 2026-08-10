@@ -8,6 +8,7 @@ import { storeItem, getItem, upsertAccounts } from "@/lib/plaid-service";
 import { syncItemTransactions } from "@/lib/sync";
 import { writeAudit, getClientIp } from "@/lib/audit";
 import { logError } from "@/lib/log";
+import { fetchInstitutionBranding } from "@/lib/plaid-institution";
 
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
@@ -49,15 +50,19 @@ export async function POST(request: NextRequest) {
     // Best-effort institution metadata (name is nice-to-have, not required).
     let institutionId: string | null = null;
     let institutionName: string | null = null;
+    let institutionLogo: string | null = null;
+    let institutionBrandColor: string | null = null;
     try {
       const itemResp = await plaid.itemGet({ access_token: accessToken });
       institutionId = itemResp.data.item.institution_id ?? null;
       if (institutionId) {
-        const inst = await plaid.institutionsGetById({
-          institution_id: institutionId,
-          country_codes: serverEnv.plaidCountryCodes as unknown as CountryCode[],
+        const branding = await fetchInstitutionBranding(plaid, {
+          institutionId,
+          countryCodes: serverEnv.plaidCountryCodes as unknown as CountryCode[],
         });
-        institutionName = inst.data.institution.name ?? null;
+        institutionName = branding?.name ?? null;
+        institutionLogo = branding?.logo ?? null;
+        institutionBrandColor = branding?.brandColor ?? null;
       }
     } catch (error) {
       logError("plaid.exchange.institution", error);
@@ -70,6 +75,8 @@ export async function POST(request: NextRequest) {
       accessToken,
       institutionId,
       institutionName,
+      institutionLogo,
+      institutionBrandColor,
     });
 
     await writeAudit({

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   describeDeliveryError,
   isPermanentDeliveryError,
+  isUndeliverableRecipient,
   redactEmails,
 } from "@/lib/delivery-error";
 
@@ -87,5 +88,49 @@ describe("isPermanentDeliveryError", () => {
     expect(isPermanentDeliveryError("smtp_not_configured")).toBe(false);
     expect(isPermanentDeliveryError("pdf_render_failed")).toBe(false);
     expect(isPermanentDeliveryError(null)).toBe(false);
+  });
+
+});
+
+describe("isUndeliverableRecipient", () => {
+  it("rejects the RFC 2606 reserved second-level domains", () => {
+    for (const domain of ["example.com", "example.net", "example.org"]) {
+      expect(isUndeliverableRecipient(`rep-123@${domain}`)).toBe(true);
+    }
+  });
+
+  it("rejects the RFC 2606 / RFC 6761 reserved top-level domains", () => {
+    for (const tld of ["test", "invalid", "localhost", "example"]) {
+      expect(isUndeliverableRecipient(`someone@fundflow.${tld}`)).toBe(true);
+    }
+  });
+
+  it("rejects subdomains of a reserved domain", () => {
+    expect(isUndeliverableRecipient("someone@mail.example.com")).toBe(true);
+  });
+
+  it("ignores case and surrounding whitespace", () => {
+    expect(isUndeliverableRecipient("  Rep-123@EXAMPLE.COM  ")).toBe(true);
+  });
+
+  it("accepts a real recipient domain", () => {
+    for (const email of [
+      "owner@gmail.com",
+      "someone@fundflow.app",
+      // Not reserved: only the bare label and its subdomains are.
+      "someone@example.io",
+      "someone@notexample.com",
+      "someone@testing.com",
+    ]) {
+      expect(isUndeliverableRecipient(email)).toBe(false);
+    }
+  });
+
+  it("does not claim to know about an unparseable address", () => {
+    // The provider is a better judge than a regex; only reserved domains,
+    // which can never accept mail, are decided here.
+    for (const value of ["", "   ", "not-an-address", null, undefined]) {
+      expect(isUndeliverableRecipient(value)).toBe(false);
+    }
   });
 });

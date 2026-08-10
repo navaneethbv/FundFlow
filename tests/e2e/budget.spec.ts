@@ -421,6 +421,7 @@ test.describe.serial("budget page", () => {
       name: "Annual Insurance",
       target_amount: 600,
       due_date: dueDate.toISOString().slice(0, 10),
+      cycle_anchor_date: dueDate.toISOString().slice(0, 10),
     });
     if (fundError) throw fundError;
 
@@ -547,7 +548,9 @@ test.describe.serial("budget page", () => {
       page.getByText("Actual Expenses").locator(".."),
     ).toContainText("$1,600.00");
 
-    await page.goto(`/budget?month=${month}&currency=USD`);
+    // `summary=expenses` so the right rail is on the Expenses tab: the rollback
+    // assertion below reads "Planned expenses", which lives under that tab.
+    await page.goto(`/budget?month=${month}&currency=USD&summary=expenses`);
     const plannedInput = page.getByRole("spinbutton", {
       name: "Planned amount for Rent",
     });
@@ -563,7 +566,11 @@ test.describe.serial("budget page", () => {
       await route.continue();
     });
     await plannedInput.fill("1400");
-    await rentRow.getByRole("button", { name: "Save" }).click();
+    // The per-row Save button is gone: the planned amount is a quiet inline
+    // input that commits on blur (BudgetTable's `savePlanned`). Optimistic
+    // update and rollback still run in the parent's `onUpdate`, so everything
+    // asserted below is unchanged.
+    await plannedInput.blur();
     await expect(
       page.getByText("Rent was not saved. All totals were rolled back."),
     ).toBeVisible();
@@ -574,22 +581,35 @@ test.describe.serial("budget page", () => {
     await page.unroute("**/api/budget");
 
     await plannedInput.fill("1300");
-    await rentRow.getByRole("button", { name: "Save" }).click();
+    await plannedInput.blur();
     await expect(page.getByText("Rent saved.")).toBeVisible();
     await page.reload();
     await expect(
       page.getByRole("spinbutton", { name: "Planned amount for Rent" }),
     ).toHaveValue("1300");
 
+    // Group, rollover and sort order moved off the row and into its "⋯" menu,
+    // so each needs the menu opened first. It closes on navigation/refresh,
+    // which is why it is reopened for the rollover toggle.
     const updatedRentRow = page.getByRole("row", { name: /^Rent / });
+    await updatedRentRow
+      .getByRole("button", { name: "More options for Rent" })
+      .click();
     await updatedRentRow
       .getByRole("combobox", { name: "Group for Rent" })
       .selectOption("non_monthly");
     await expect(page.getByText("Rent saved.")).toBeVisible();
     const movedRentRow = page.getByRole("row", { name: /^Rent / });
+    await movedRentRow
+      .getByRole("button", { name: "More options for Rent" })
+      .click();
     await movedRentRow.getByRole("checkbox", { name: "Rollover" }).check();
     await expect(page.getByText("Rent saved.")).toBeVisible();
 
+    // The row menu stays open after a save, and its click-outside scrim covers
+    // the page — dismiss it before touching anything else. Escape rather than a
+    // reload, since RowMenu ships a keyboard dismiss and this exercises it.
+    await page.keyboard.press("Escape");
     await page.getByRole("link", { name: "Year", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: `${year} monthly plan` }),
@@ -667,9 +687,21 @@ test.describe.serial("budget page", () => {
         );
         const controlCount = await controls.count();
         for (let index = 0; index < controlCount; index += 1) {
-          const box = await controls.nth(index).boundingBox();
+          const control = controls.nth(index);
+          const box = await control.boundingBox();
           if (!box) continue;
-          expect(box.height).toBeGreaterThanOrEqual(44);
+          // Name the control in the failure message: an anonymous "expected 44,
+          // got 42" over every link and button on the page is unactionable.
+          const label = await control.evaluate(
+            (element) =>
+              element.getAttribute("aria-label") ??
+              element.textContent?.trim().slice(0, 60) ??
+              element.tagName,
+          );
+          expect(
+            box.height,
+            `${viewport.name} ${theme}: "${label}" must be at least 44px high`,
+          ).toBeGreaterThanOrEqual(44);
         }
         await page.screenshot({
           path: SCREENSHOT_DIR
@@ -680,6 +712,9 @@ test.describe.serial("budget page", () => {
             : undefined,
           fullPage: true,
           animations: "disabled",
+          // See cash-flow.spec.ts: the default `caret: "hide"` mutates inline
+          // styles and races hydration on the next reload.
+          caret: "initial",
         });
       }
     }

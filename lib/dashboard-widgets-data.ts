@@ -6,6 +6,14 @@ import {
 } from "@/lib/dashboard";
 import { loadCanonicalProjection } from "@/lib/finance-query";
 import { formatMonth } from "@/lib/format";
+import { buildInvestmentsPage } from "@/lib/investments";
+import {
+  loadHoldings,
+  loadHoldingSnapshots,
+} from "@/lib/investments-data";
+import type { WidgetKey } from "@/lib/dashboard-widgets";
+
+export { buildDashboardBudgetGroups } from "@/lib/dashboard-budget-groups";
 
 /**
  * The one extra read the Phase 8 widget grid needs.
@@ -63,3 +71,87 @@ export const EMPTY_CUMULATIVE_SPEND: CumulativeSpendView = {
   monthLabel: "",
   previousMonthLabel: "",
 };
+
+export interface DashboardInvestmentSummary {
+  total: number;
+  dayChange: { amount: number; pct: number } | null;
+  topMovers: { name: string; ticker: string | null; changePct: number }[] | null;
+}
+
+/**
+ * How far back the widget will look for the previous valuation point.
+ *
+ * The widget needs the two most recent snapshot dates, not the history — and
+ * this runs on every dashboard render, which `AutoRefresh` repeats every two
+ * minutes. A window keeps the read bounded; a gap wider than this leaves
+ * `dayChange` null, which is the honest answer anyway, since a comparison
+ * against a months-old valuation is not a day change.
+ */
+const SNAPSHOT_LOOKBACK_DAYS = 30;
+
+function isoDaysBefore(date: string, days: number): string {
+  const parsed = new Date(`${date}T00:00:00.000Z`);
+  parsed.setUTCDate(parsed.getUTCDate() - days);
+  return parsed.toISOString().slice(0, 10);
+}
+
+async function latestSnapshotDate(supabase: SupabaseClient): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("holding_snapshots")
+    .select("snapshot_date")
+    .order("snapshot_date", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  return (data?.[0]?.snapshot_date as string | undefined) ?? null;
+}
+
+export async function loadDashboardInvestmentSummary(
+  supabase: SupabaseClient,
+): Promise<DashboardInvestmentSummary> {
+  const newest = await latestSnapshotDate(supabase);
+  const [holdings, snapshots] = await Promise.all([
+    loadHoldings(supabase),
+    newest
+      ? loadHoldingSnapshots(supabase, {
+          since: isoDaysBefore(newest, SNAPSHOT_LOOKBACK_DAYS),
+        })
+      : Promise.resolve([]),
+  ]);
+  const latestDates = [...new Set(snapshots.map((row) => row.snapshotDate))]
+    .sort((left, right) => right.localeCompare(left))
+    .slice(0, 2);
+  const latestDateSet = new Set(latestDates);
+  const page = buildInvestmentsPage(
+    holdings,
+    snapshots.filter((row) => latestDateSet.has(row.snapshotDate)),
+  );
+  return {
+    total: page.total,
+    dayChange: page.dayChange,
+    topMovers: page.topMovers?.slice(0, 3) ?? null,
+  };
+}
+
+export async function loadOverviewWidgetData(
+  supabase: SupabaseClient,
+  options: Readonly<{
+    month: string;
+    today: string;
+    userId: string;
+    household: boolean;
+    visible: readonly WidgetKey[];
+  }>,
+): Promise<{
+  cumulativeSpend: CumulativeSpendView;
+  investments: DashboardInvestmentSummary | null;
+}> {
+  const [cumulativeSpend, investments] = await Promise.all([
+    options.visible.includes("spendingCompare")
+      ? loadCumulativeSpend(supabase, options)
+      : Promise.resolve(EMPTY_CUMULATIVE_SPEND),
+    options.visible.includes("investments")
+      ? loadDashboardInvestmentSummary(supabase)
+      : Promise.resolve(null),
+  ]);
+  return { cumulativeSpend, investments };
+}

@@ -51,6 +51,9 @@ interface SinkingFundRow {
   name: string;
   target_amount: number | string;
   due_date: string;
+  cadence: SinkingFundInput["cadence"];
+  custom_interval_months: number | null;
+  cycle_anchor_date: string;
 }
 
 interface RecurringRow {
@@ -175,7 +178,9 @@ export async function loadBudgetData(
     .limit(DEPENDENCY_LIMIT);
   let sinkingFundsQuery = supabase
     .from("sinking_funds")
-    .select("name,target_amount,due_date")
+    .select(
+      "name,target_amount,due_date,cadence,custom_interval_months,cycle_anchor_date",
+    )
     .order("due_date")
     .limit(DEPENDENCY_LIMIT);
   let recurringQuery = supabase
@@ -280,6 +285,9 @@ export async function loadBudgetData(
     name: row.name,
     targetAmount: Number(row.target_amount),
     dueDate: row.due_date,
+    cadence: row.cadence,
+    customIntervalMonths: row.custom_interval_months,
+    cycleAnchorDate: row.cycle_anchor_date,
   }));
   const sinkingFunds = computeSinkingFunds({
     funds: sinkingFundInputs,

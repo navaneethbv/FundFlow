@@ -12,7 +12,9 @@
     "test:unit": "vitest run tests/unit",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "validate:palette": "node scripts/validate_palette.js app/globals.css",
+    "backfill:institution-logos": "node --env-file=.env.local --experimental-strip-types scripts/backfill-institution-logos.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
@@ -31,6 +33,7 @@
     "react-dom": "19.2.8",
     "react-plaid-link": "^5.0.0",
     "server-only": "^0.0.1",
+    "sharp": "0.35.3",
     "tailwind-merge": "^3.6.0",
     "web-push": "^3.6.7"
   },
@@ -50,7 +53,6 @@
     "vitest": "^4.1.10"
   },
   "overrides": {
-    "postcss": "^8.5.23",
-    "sharp": "^0.35.3"
+    "postcss": "^8.5.23"
   }
 }

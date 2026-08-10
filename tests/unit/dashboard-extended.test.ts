@@ -233,6 +233,16 @@ describe("lib/dashboard extended features", () => {
             { category: "FOOD_AND_DRINK", amount: 500 },
           ]);
         }
+        if (table === "sinking_funds") {
+          return createChainableMock([{
+            name: "Insurance",
+            target_amount: 1200,
+            due_date: "2025-01-31",
+            cadence: "annual",
+            custom_interval_months: null,
+            cycle_anchor_date: "2025-01-31",
+          }]);
+        }
         return createChainableMock([]);
       }),
     } as unknown as SupabaseClient;
@@ -248,6 +258,10 @@ describe("lib/dashboard extended features", () => {
     expect(data).toBeDefined();
     expect(data.accounts).toHaveLength(1);
     expect(data.insights.sinkingFunds).toBeDefined();
+    expect(data.insights.sinkingFunds.items[0]).toMatchObject({
+      dueDate: "2027-01-31",
+      monthlySetAside: 200,
+    });
     expect(data.insights.runwayMonths).toBeDefined();
   });
 

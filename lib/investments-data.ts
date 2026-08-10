@@ -82,14 +82,27 @@ export async function loadHoldings(
   });
 }
 
-/** Loads snapshot history for the caller's own holdings (used for balance history and movers). */
+/**
+ * Loads snapshot history for the caller's own holdings (used for balance
+ * history and movers).
+ *
+ * `since` bounds the read to a date window. The Investments page's performance
+ * chart genuinely needs the whole history and omits it; the dashboard widget
+ * needs only the newest two dates and must pass one, because the dashboard
+ * re-renders every two minutes and CLAUDE.md's frugality invariant forbids
+ * reintroducing a select-all on that path.
+ */
 export async function loadHoldingSnapshots(
   supabase: SupabaseClient,
+  options?: Readonly<{ since?: string }>,
 ): Promise<HoldingSnapshotRow[]> {
-  const { data, error } = await supabase
+  let query = supabase
     .from("holding_snapshots")
     .select("holding_id, snapshot_date, quantity, price, value")
     .order("snapshot_date", { ascending: true });
+  if (options?.since) query = query.gte("snapshot_date", options.since);
+
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []).map((row) => ({
     holdingId: row.holding_id as string,

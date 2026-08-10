@@ -34,6 +34,8 @@ function account(
     availableBalance: null,
     currency: "USD",
     institution: null,
+    institutionLogo: null,
+    institutionBrandColor: null,
     updatedAt: "2026-07-29T11:00:00.000Z",
     includeInNetWorth: true,
     ...input,
@@ -76,6 +78,26 @@ describe("groupKeyFor", () => {
 });
 
 describe("buildAccountsPageData", () => {
+  it("projects stored institution branding without per-row lookups", () => {
+    const data = buildAccountsPageData([
+      account({
+        id: "cash-logo",
+        name: "Checking",
+        type: "depository",
+        currentBalance: 100,
+        institution: "Test Bank",
+        institutionLogo: "logo-base64",
+        institutionBrandColor: "#112233",
+      }),
+    ], [], NOW);
+
+    expect(data.groups.cash.rows[0]).toMatchObject({
+      institution: "Test Bank",
+      institutionLogo: "logo-base64",
+      institutionBrandColor: "#112233",
+    });
+  });
+
   it("groups Plaid and manual rows and keeps liability balances positive", () => {
     const data = buildAccountsPageData(
       [

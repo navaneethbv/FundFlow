@@ -8,6 +8,7 @@ import ButtonLink from "@/components/ui/ButtonLink";
 import EmptyState from "@/components/ui/EmptyState";
 import Panel from "@/components/ui/Panel";
 import RefundReview from "@/components/transactions/RefundReview";
+import DuplicateReview from "@/components/transactions/DuplicateReview";
 import TransactionEditor from "@/components/transactions/TransactionEditor";
 import MobileLedgerList, { type LedgerCardRow } from "@/components/transactions/MobileLedgerList";
 import SavedViewsBar from "@/components/transactions/SavedViewsBar";
@@ -272,19 +273,21 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   // which now includes a household member's shared rows — filter to the
   // caller's own so their categories are never rewritten by someone else's.
   const txnIds = rows.map((row) => row.id);
-  const [annotationsResult, splitsResult] = txnIds.length
+  const [annotationsResult, splitsResult, duplicatesResult] = txnIds.length
     ? await Promise.all([
         supabase.from("transaction_annotations").select("transaction_id, note, tags").eq("user_id", ownerId).in("transaction_id", txnIds),
         supabase.from("transaction_splits").select("transaction_id, category, amount").eq("user_id", ownerId).in("transaction_id", txnIds),
+        supabase.from("linked_duplicates").select("excluded_transaction_id").eq("user_id", ownerId).in("excluded_transaction_id", txnIds),
       ])
     : [
         { data: [] as { transaction_id: string; note: string | null; tags: string[] }[], error: null },
         { data: [] as { transaction_id: string; category: string; amount: number }[], error: null },
+        { data: [] as { excluded_transaction_id: string }[], error: null },
       ];
   const annotations = annotationsResult.data;
   const splits = splitsResult.data;
-  if (annotationsResult.error || splitsResult.error) {
-    console.error("Transaction detail query failed", [annotationsResult.error?.code, splitsResult.error?.code].filter(Boolean));
+  if (annotationsResult.error || splitsResult.error || duplicatesResult.error) {
+    console.error("Transaction detail query failed", [annotationsResult.error?.code, splitsResult.error?.code, duplicatesResult.error?.code].filter(Boolean));
     ledgerError = "We couldn't load transaction details. Refresh the page to try again.";
   }
 
@@ -298,6 +301,9 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     list.push({ category: s.category as string, amount: Number(s.amount) });
     splitsById.set(s.transaction_id as string, list);
   }
+  const excludedDuplicateIds = new Set(
+    (duplicatesResult.data ?? []).map((row) => row.excluded_transaction_id as string),
+  );
 
   // Category suggestions for the split editor: categories seen on this page
   // plus any already used in splits.
@@ -312,6 +318,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   // date is all a header needs.
   const dayTotals = new Map<string, number>();
   for (const r of rows) {
+    if (excludedDuplicateIds.has(r.id)) continue;
     dayTotals.set(r.date as string, (dayTotals.get(r.date as string) ?? 0) + (r.amount as number));
   }
   const showDayGroups = shouldShowLedgerDayGroups(state.sort);
@@ -327,6 +334,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
       amount: t.amount,
       currency: t.iso_currency_code ?? "USD",
       pending: t.pending,
+      excludedDuplicate: excludedDuplicateIds.has(t.id),
       note: ann?.note ?? null,
       tags: ann?.tags ?? [],
       splits: splitsById.get(t.id) ?? [],
@@ -356,14 +364,19 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
         <PageHeader
           title="Transactions"
           actions={
-            transactionsParityEnabled &&
-            accountOptions.length > 0 && (
-              <AddTransactionModal accounts={accountOptions} goals={goalOptions} categories={categoryOptions} />
-            )
+            <>
+              <ButtonLink href="/transactions/receipts" variant="secondary">
+                Receipts
+              </ButtonLink>
+              {transactionsParityEnabled && accountOptions.length > 0 && (
+                <AddTransactionModal accounts={accountOptions} goals={goalOptions} categories={categoryOptions} />
+              )}
+            </>
           }
         />
 
         <RefundReview />
+        <DuplicateReview />
 
         <SavedViewsBar
           initialViews={savedViews}
@@ -471,6 +484,11 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                         {t.pending && (
                           <Badge tone="warning" className="ml-2">
                             pending
+                          </Badge>
+                        )}
+                        {excludedDuplicateIds.has(t.id) && (
+                          <Badge tone="warning" className="ml-2">
+                            Excluded duplicate
                           </Badge>
                         )}
                         {visibleColumns.has("source") && t.source === "manual" && (

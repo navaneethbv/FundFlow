@@ -23,6 +23,8 @@ const row = {
   balance: 1000,
   currency: "USD",
   institution: "Test Bank",
+  institutionLogo: null,
+  institutionBrandColor: null,
   updatedAgo: "2 days ago",
   stale: true,
   spark: [900, 1000],

@@ -21,9 +21,29 @@ describe("feature flags", () => {
   });
 
   it("ignores unknown names instead of throwing", () => {
-    const env = { [FEATURE_FLAG_ENV]: "notAFlag,,accountsPage" };
+    const env = { [FEATURE_FLAG_ENV]: "notAFlag,,accountsPage,-alsoNotAFlag" };
     expect(() => resolveFeatureFlags(env)).not.toThrow();
     expect(resolveFeatureFlags(env).accountsPage).toBe(true);
+  });
+
+  it("forces a released flag off with a - prefix", () => {
+    const env = { [FEATURE_FLAG_ENV]: "-reportsPage" };
+    expect(FEATURE_FLAG_DEFAULTS.reportsPage).toBe(true);
+    expect(isFeatureEnabled("reportsPage", env)).toBe(false);
+    expect(resolveFeatureFlags(env).reportsPage).toBe(false);
+  });
+
+  it("scopes a force-off to the named flag only", () => {
+    const env = { [FEATURE_FLAG_ENV]: " -reportsPage , goalsV2 " };
+    const resolved = resolveFeatureFlags(env);
+    expect(resolved.reportsPage).toBe(false);
+    expect(resolved.goalsV2).toBe(true);
+    expect(resolved.accountsPage).toBe(true);
+  });
+
+  it("lets force-off win over an explicit force-on for the same flag", () => {
+    const env = { [FEATURE_FLAG_ENV]: "reportsPage,-reportsPage" };
+    expect(isFeatureEnabled("reportsPage", env)).toBe(false);
   });
 
   it("resolves every known flag", () => {

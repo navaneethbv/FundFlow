@@ -17,7 +17,8 @@ import {
 } from "@/lib/dashboard-widgets";
 import type { CumulativeSpendDay } from "@/lib/dashboard";
 import type { Goal } from "@/lib/goals";
-import type { BudgetEnvelope } from "@/lib/planning";
+import type { DashboardBudgetGroup } from "@/lib/dashboard-budget-groups";
+import type { DashboardInvestmentSummary } from "@/lib/dashboard-widgets-data";
 
 /**
  * The customizable widget grid (Phase 8).
@@ -31,9 +32,10 @@ import type { BudgetEnvelope } from "@/lib/planning";
  */
 
 export interface DashboardWidgetGridData {
-  budgetEnvelopes: BudgetEnvelope[];
+  budgetGroups: DashboardBudgetGroup[];
   netWorthHistory: { month: string; netWorth: number }[];
   recurringStatuses: UpcomingRecurringItem[];
+  investments: DashboardInvestmentSummary | null;
 }
 
 export default function DashboardWidgetGrid({
@@ -73,7 +75,7 @@ export default function DashboardWidgetGrid({
     switch (key) {
       case "budget":
         return (
-          <BudgetWidget envelopes={data.budgetEnvelopes} currency={currency} />
+          <BudgetWidget groups={data.budgetGroups} currency={currency} />
         );
       case "spendingCompare":
         return (
@@ -106,7 +108,7 @@ export default function DashboardWidgetGrid({
       case "goals":
         return <GoalsWidget goals={goals} />;
       case "investments":
-        return <InvestmentsWidget currency={currency} />;
+        return <InvestmentsWidget currency={currency} summary={data.investments} />;
     }
   };
 

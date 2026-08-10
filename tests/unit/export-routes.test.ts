@@ -107,6 +107,18 @@ describe("Export API Routes", () => {
         ip: "127.0.0.1",
       });
     });
+
+    it("returns 500 when fetchPrivacySafeRows throws in json export", async () => {
+      const request = new NextRequest("http://localhost/api/export/json");
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: {},
+      });
+      mockFetchPrivacySafeRows.mockRejectedValue(new Error("Export failure"));
+
+      const res = await jsonGet(request);
+      expect(res.status).toBe(500);
+    });
   });
 
   describe("GET /api/export/takeout", () => {

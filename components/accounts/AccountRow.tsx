@@ -23,7 +23,12 @@ export default function AccountRow({
   return (
     <li className="grid gap-3 border-t border-panel-border px-4 py-4 first:border-t-0 sm:grid-cols-[minmax(0,1.3fr)_7rem_7rem_minmax(8rem,0.8fr)] sm:items-center">
       <div className="flex min-w-0 items-center gap-3">
-        <InstitutionAvatar name={row.institution ?? row.name} size={32} className="shrink-0" />
+        <InstitutionAvatar
+          name={row.institution ?? row.name}
+          logoBase64={row.institutionLogo}
+          size={32}
+          className="shrink-0"
+        />
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{row.name}</p>
           <p className="mt-1 text-xs text-muted">
@@ -31,14 +36,20 @@ export default function AccountRow({
           </p>
         </div>
       </div>
+      {/* `role="img"` is what makes the label real: `aria-label` is prohibited
+          on a bare div (role `generic`) and assistive tech drops it, so these
+          two charts were shipping with no text alternative at all. Matches the
+          idiom already used in SummaryPanel and NetWorthHero. */}
       <div
         className={row.spark.length < 2 ? "hidden min-h-11 sm:block" : "min-h-11"}
+        role="img"
         aria-label={`${row.name} 30-day trend`}
       >
         <AreaSparkline values={row.spark} />
       </div>
       <div
         className={row.sparkLong.length < 2 ? "hidden min-h-11 sm:block" : "min-h-11"}
+        role="img"
         aria-label={`${row.name} full-history trend`}
       >
         <AreaSparkline values={row.sparkLong} />

@@ -5,6 +5,11 @@
  * never gate authentication, MFA, RLS scoping, or audit writes — those run
  * identically whether a flag is on or off, so a stray flag can never widen
  * access.
+ *
+ * `FUNDFLOW_FEATURE_FLAGS` is a comma-separated override list: `reportsPage`
+ * forces a flag on, `-reportsPage` forces it off. Since every default below is
+ * now `true`, the `-` form is the only way to re-gate a surface without a
+ * redeploy — reach for it first when a released page needs to go dark.
  */
 
 /** Every known flag and its shipped default. */
@@ -16,8 +21,8 @@ export const FEATURE_FLAG_DEFAULTS = {
   /**
    * Phase 6. Released: `20260730190000_saved_reports.sql` is applied, so the
    * page's `saved_reports` reads resolve. A deployment that somehow lags the
-   * migration would 500 on /reports rather than degrade — re-gate by removing
-   * the default here, not by editing the page.
+   * migration would 500 on /reports rather than degrade — re-gate with
+   * `FUNDFLOW_FEATURE_FLAGS=-reportsPage`, not by editing the page.
    */
   reportsPage: true,
   /**
@@ -80,13 +85,32 @@ export const FEATURE_FLAG_ENV = "FUNDFLOW_FEATURE_FLAGS";
 /** Only the one variable is read, so tests can pass a bare object. */
 export type FeatureFlagEnv = Record<string, string | undefined>;
 
-function enabledSet(env: FeatureFlagEnv): Set<string> {
-  return new Set(
-    (env[FEATURE_FLAG_ENV] ?? "")
-      .split(",")
-      .map((name) => name.trim())
-      .filter(Boolean),
-  );
+interface FlagOverrides {
+  on: Set<string>;
+  off: Set<string>;
+}
+
+/**
+ * A bare name forces the flag on; a `-` prefix forces it off. Force-off is
+ * what makes the env var a kill switch: every default is currently `true`, so
+ * without it the variable could only ever turn flags on and re-gating a broken
+ * surface would need a code change and a redeploy.
+ */
+function parseOverrides(env: FeatureFlagEnv): FlagOverrides {
+  const on = new Set<string>();
+  const off = new Set<string>();
+  for (const raw of (env[FEATURE_FLAG_ENV] ?? "").split(",")) {
+    const name = raw.trim();
+    if (!name) continue;
+    if (name.startsWith("-")) off.add(name.slice(1));
+    else on.add(name);
+  }
+  return { on, off };
+}
+
+function resolve(flag: FeatureFlag, overrides: FlagOverrides): boolean {
+  if (overrides.off.has(flag)) return false;
+  return FEATURE_FLAG_DEFAULTS[flag] || overrides.on.has(flag);
 }
 
 /**
@@ -94,15 +118,15 @@ function enabledSet(env: FeatureFlagEnv): Set<string> {
  * are ignored rather than throwing, so a typo cannot take a deployment down.
  */
 export function isFeatureEnabled(flag: FeatureFlag, env: FeatureFlagEnv = process.env): boolean {
-  return FEATURE_FLAG_DEFAULTS[flag] || enabledSet(env).has(flag);
+  return resolve(flag, parseOverrides(env));
 }
 
 /** The full resolved map, for pages that branch on several flags at once. */
 export function resolveFeatureFlags(env: FeatureFlagEnv = process.env): Record<FeatureFlag, boolean> {
-  const on = enabledSet(env);
+  const overrides = parseOverrides(env);
   const resolved = {} as Record<FeatureFlag, boolean>;
   for (const flag of Object.keys(FEATURE_FLAG_DEFAULTS) as FeatureFlag[]) {
-    resolved[flag] = FEATURE_FLAG_DEFAULTS[flag] || on.has(flag);
+    resolved[flag] = resolve(flag, overrides);
   }
   return resolved;
 }

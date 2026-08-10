@@ -169,6 +169,23 @@ function project(rows: RawFinanceTransaction[] = ALL_ROWS) {
   });
 }
 
+it("removes confirmed duplicate ids before split and refund projection", () => {
+  const rows = projectFinanceTransactions({
+    rows: [GROCERIES, SPLIT_PARENT],
+    merchantRules: [],
+    categoryOverrides: [],
+    splits: [
+      { transactionId: "t-split", category: "Food", amount: 60 },
+      { transactionId: "t-split", category: "Home", amount: 40 },
+    ],
+    linkedRefunds: [],
+    excludedTransactionIds: new Set(["t-split"]),
+  });
+
+  expect(rows.map((row) => row.sourceTransactionId)).toEqual(["t-groceries"]);
+  expect(financeTotals(rows).expenses).toBe(120.5);
+});
+
 function byId(rows: ReturnType<typeof project>, id: string) {
   return rows.find((row) => row.id === id);
 }

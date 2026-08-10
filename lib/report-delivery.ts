@@ -108,6 +108,25 @@ export async function markWeeklyDeliverySent(
   if (error) throw error;
 }
 
+/**
+ * Parks a period we deliberately did not attempt. Distinct from "failed": the
+ * cron is healthy, so this must not alert, and `classifyDeliveryClaim` treats
+ * `skipped` as terminal so the rest of the week does not retry it.
+ */
+export async function markWeeklyDeliverySkipped(
+  supabase: SupabaseClient,
+  userId: string,
+  deliveryId: string,
+  reason: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("weekly_report_deliveries")
+    .update({ status: "skipped", error_code: reason.slice(0, 80) })
+    .eq("id", deliveryId)
+    .eq("user_id", userId);
+  if (error) throw error;
+}
+
 export async function markWeeklyDeliveryFailed(
   supabase: SupabaseClient,
   userId: string,

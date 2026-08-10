@@ -20,6 +20,7 @@ import {
   computeSafeToSpend,
   computeSavingsRateSeries,
   computeSinkingFunds,
+  type SinkingFundInput,
   type SinkingFundPlan,
   detectPaychecks,
   medianOf,
@@ -48,6 +49,10 @@ import {
   type DrillParams,
   type DrillTxn,
 } from "@/lib/drilldown";
+import {
+  buildDashboardBudgetGroups,
+  type DashboardBudgetGroup,
+} from "@/lib/dashboard-budget-groups";
 
 
 /**
@@ -112,6 +117,7 @@ export interface DashboardData {
   spendPerBank: { name: string; amount: number; itemId: string | null }[];
   cashFlow: { deposits: number; withdrawals: number; net: number };
   budgetEnvelopes: BudgetEnvelope[];
+  budgetGroups: DashboardBudgetGroup[];
   cashFlowForecast: CashFlowForecast;
   recurringWeeks: ReturnType<typeof groupRecurringByWeek>;
   spendingAnomalies: SpendingAnomaly[];
@@ -265,6 +271,7 @@ export async function getDashboardData(
     { data: merchantRules },
     { data: snapshots },
     { data: linkedRefunds },
+    { data: linkedDuplicates },
     { data: categoryOverrideRows },
     { data: sinkingFundRows },
   ] = await Promise.all([
@@ -283,7 +290,7 @@ export async function getDashboardData(
         .eq("is_active", true),
     ),
     scopeUser(supabase.from("plaid_items").select("id, institution_name")),
-    scopeUser(supabase.from("budgets").select("category, monthly_limit, rollover_enabled")),
+    scopeUser(supabase.from("budgets").select("category, monthly_limit, group_name, rollover_enabled")),
     scopeUser(
       supabase
         .from("sync_jobs")
@@ -319,13 +326,18 @@ export async function getDashboardData(
     ),
     scopeUser(
       supabase
+        .from("linked_duplicates")
+        .select("excluded_transaction_id"),
+    ),
+    scopeUser(
+      supabase
         .from("category_overrides")
         .select("source_category, display_category"),
     ),
     scopeUser(
       supabase
         .from("sinking_funds")
-        .select("name, target_amount, due_date")
+        .select("name, target_amount, due_date, cadence, custom_interval_months, cycle_anchor_date")
         .order("due_date"),
     ),
   ]);
@@ -336,6 +348,7 @@ export async function getDashboardData(
   const allBudgets = (budgets ?? []) as Array<{
     category: string;
     monthly_limit: number;
+    group_name: string;
     rollover_enabled?: boolean | null;
   }>;
   const allSnapshots = (snapshots ?? []) as Array<{ snapshot_month: string; assets: number; liabilities: number }>;
@@ -406,6 +419,10 @@ export async function getDashboardData(
       chargeTransactionId: row.charge_transaction_id,
       refundTransactionId: row.refund_transaction_id,
     })),
+    excludedTransactionIds: new Set(
+      ((linkedDuplicates ?? []) as Array<{ excluded_transaction_id: string }>)
+        .map((row) => row.excluded_transaction_id),
+    ),
     accountNames: accountNamesById,
   });
 
@@ -743,6 +760,13 @@ export async function getDashboardData(
     dayOfMonth: activeDay,
     daysInMonth: activeDaysInMonth,
   });
+  const budgetGroups = buildDashboardBudgetGroups(
+    allBudgets.map((budget) => ({
+      category: budget.category,
+      groupName: budget.group_name,
+    })),
+    budgetEnvelopes,
+  );
 
   const recurringItems = [
     ...subscriptions.map((stream) => ({
@@ -815,10 +839,16 @@ export async function getDashboardData(
       name: string;
       target_amount: number;
       due_date: string;
+      cadence: SinkingFundInput["cadence"];
+      custom_interval_months: number | null;
+      cycle_anchor_date: string;
     }>).map((row) => ({
       name: row.name,
       targetAmount: Number(row.target_amount),
       dueDate: row.due_date,
+      cadence: row.cadence,
+      customIntervalMonths: row.custom_interval_months,
+      cycleAnchorDate: row.cycle_anchor_date,
     })),
     asOf: insightsAsOf,
   });
@@ -1039,6 +1069,7 @@ export async function getDashboardData(
     spendPerBank,
     cashFlow,
     budgetEnvelopes,
+    budgetGroups,
     cashFlowForecast,
     recurringWeeks,
     spendingAnomalies,

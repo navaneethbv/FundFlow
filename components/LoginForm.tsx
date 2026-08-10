@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { needsMfaStepUp } from "@/lib/mfa";
+import { getPasskeyAvailability, passkeyErrorMessage } from "@/lib/passkeys";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 import Button from "@/components/ui/Button";
 import Field from "@/components/ui/Field";
@@ -22,7 +23,7 @@ const CALLBACK_ERRORS: Record<string, string> = {
 export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const supabase = createClient();
+  const [supabase] = useState(createClient);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,11 +33,32 @@ export default function LoginForm() {
     CALLBACK_ERRORS[searchParams.get("error") ?? ""] ?? null,
   );
   const [loading, setLoading] = useState(false);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+  const [passkeyAvailability, setPasskeyAvailability] = useState({
+    available: false,
+    reason: "Checking passkey availability..." as string | null,
+  });
   const digitRefs = useRef<HTMLInputElement[]>([]);
 
   // A user who abandoned the TOTP step (or was redirected here by the proxy
   // with an aal1 session) should resume at the code prompt, not the password
   // form. Same async-check-then-set pattern as MfaSection's factor load.
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      setPasskeyAvailability(
+        getPasskeyAvailability(window.location.hostname, window.isSecureContext, {
+          browserSupported:
+            "credentials" in navigator && window.PublicKeyCredential !== undefined,
+        }),
+      );
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   useEffect(() => {
     let active = true;
     (async () => {
@@ -85,13 +107,32 @@ export default function LoginForm() {
     }
   }
 
+  async function handlePasskeySignIn() {
+    if (!passkeyAvailability.available) return;
+    setError(null);
+    setPasskeyLoading(true);
+    try {
+      const { error: signInError } = await supabase.auth.signInWithPasskey();
+      if (signInError) throw signInError;
+      const done = await completeIfMfaRequired();
+      if (done) {
+        router.push("/dashboard");
+        router.refresh();
+      }
+    } catch (err) {
+      setError(passkeyErrorMessage(err));
+    } finally {
+      setPasskeyLoading(false);
+    }
+  }
+
   async function handleMfaSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
       const { data: factors } = await supabase.auth.mfa.listFactors();
-      const totp = factors?.totp?.[0];
+      const totp = factors?.totp?.find((factor) => factor.status === "verified");
       if (!totp) throw new Error("No TOTP factor found");
 
       const challenge = await supabase.auth.mfa.challenge({ factorId: totp.id });
@@ -161,9 +202,27 @@ export default function LoginForm() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </Field>
-          <Button type="submit" loading={loading} size="lg">
+          <Button type="submit" loading={loading} size="lg" disabled={passkeyLoading}>
             {loading ? "Signing in..." : "Sign in"}
           </Button>
+          <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-muted">
+            <span className="h-px flex-1 bg-panel-border" />
+            <span>or</span>
+            <span className="h-px flex-1 bg-panel-border" />
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            loading={passkeyLoading}
+            disabled={loading || !passkeyAvailability.available}
+            onClick={handlePasskeySignIn}
+          >
+            {passkeyLoading ? "Waiting for passkey..." : "Use a passkey"}
+          </Button>
+          {!passkeyAvailability.available && passkeyAvailability.reason && (
+            <p className="text-xs text-muted">{passkeyAvailability.reason}</p>
+          )}
         </form>
       ) : (
         <form onSubmit={handleMfaSubmit} className="space-y-4">

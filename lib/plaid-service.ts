@@ -6,7 +6,7 @@ import type { PlaidItemRow } from "@/lib/types";
 import { logError } from "@/lib/log";
 
 const ITEM_COLUMNS =
-  "id, user_id, plaid_item_id, institution_id, institution_name, access_token_ciphertext, access_token_iv, access_token_tag, sync_cursor, status, error_code";
+  "id, user_id, plaid_item_id, institution_id, institution_name, institution_logo, institution_brand_color, access_token_ciphertext, access_token_iv, access_token_tag, sync_cursor, status, error_code";
 
 /**
  * Encrypt and store a Plaid access token as a new plaid_items row. Returns the
@@ -18,6 +18,8 @@ export async function storeItem(params: {
   accessToken: string;
   institutionId?: string | null;
   institutionName?: string | null;
+  institutionLogo?: string | null;
+  institutionBrandColor?: string | null;
 }): Promise<string> {
   const supabase = createServiceClient();
   const enc = encryptSecret(params.accessToken);
@@ -29,6 +31,8 @@ export async function storeItem(params: {
       plaid_item_id: params.plaidItemId,
       institution_id: params.institutionId ?? null,
       institution_name: params.institutionName ?? null,
+      institution_logo: params.institutionLogo ?? null,
+      institution_brand_color: params.institutionBrandColor ?? null,
       access_token_ciphertext: enc.ciphertext,
       access_token_iv: enc.iv,
       access_token_tag: enc.tag,
@@ -182,6 +186,28 @@ export async function setItemStatus(
     .from("plaid_items")
     .update({ status, error_code: errorCode })
     .eq("id", itemDbId);
+  if (error) throw error;
+}
+
+export async function updateItemBranding(
+  userId: string,
+  itemDbId: string,
+  branding: {
+    name: string;
+    logo: string | null;
+    brandColor: string | null;
+  },
+): Promise<void> {
+  const supabase = createServiceClient();
+  const { error } = await supabase
+    .from("plaid_items")
+    .update({
+      institution_name: branding.name,
+      institution_logo: branding.logo,
+      institution_brand_color: branding.brandColor,
+    })
+    .eq("id", itemDbId)
+    .eq("user_id", userId);
   if (error) throw error;
 }
 

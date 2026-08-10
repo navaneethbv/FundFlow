@@ -5,6 +5,7 @@ import { requireUser, errorResponse, badRequest } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { serverEnv } from "@/lib/env.server";
 import { writeAudit, getClientIp } from "@/lib/audit";
+import { findReceiptCandidates, receiptAmountBandFilter } from "@/lib/receipts";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
@@ -105,23 +106,43 @@ export async function POST(request: NextRequest) {
       line_items: string[];
     };
 
-    // Match against the ledger: amount within 1%, date within ±3 days.
+    // Match against the ledger within the shared receipt candidate rules.
     let matchedTransactionId: string | null = null;
     if (extracted.amount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(extracted.date)) {
-      const spread = Math.max(0.01, extracted.amount * 0.01);
       const from = new Date(extracted.date);
       from.setUTCDate(from.getUTCDate() - 3);
       const to = new Date(extracted.date);
       to.setUTCDate(to.getUTCDate() + 3);
+      // Bounded by the same ±1% amount band the matcher applies, so the row
+      // cap cannot page the true match out of an unordered result.
       const { data: candidates } = await supabase
         .from("transactions")
         .select("id, date, amount, merchant_name, name")
         .gte("date", from.toISOString().slice(0, 10))
         .lte("date", to.toISOString().slice(0, 10))
-        .gte("amount", extracted.amount - spread)
-        .lte("amount", extracted.amount + spread)
-        .limit(3);
-      matchedTransactionId = (candidates?.[0]?.id as string | undefined) ?? null;
+        .or(receiptAmountBandFilter(extracted.amount))
+        .order("date", { ascending: true })
+        .limit(500);
+      matchedTransactionId = findReceiptCandidates(
+        {
+          merchant: extracted.merchant,
+          total: extracted.amount,
+          purchaseDate: extracted.date,
+        },
+        ((candidates ?? []) as Array<{
+          id: string;
+          date: string;
+          amount: number;
+          merchant_name: string | null;
+          name: string | null;
+        }>).map((candidate) => ({
+          id: candidate.id,
+          date: candidate.date,
+          amount: Number(candidate.amount),
+          merchantName: candidate.merchant_name,
+          name: candidate.name,
+        })),
+      )[0]?.transactionId ?? null;
     }
 
     await writeAudit({

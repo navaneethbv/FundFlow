@@ -205,7 +205,8 @@ describe("summarizeUserAgent", () => {
 describe("notifyNewDeviceLogin", () => {
   it.each([
     ["no email", null, "Mozilla/5.0 Safari/605"],
-    ["no user agent", "u@example.com", null],
+    ["no user agent", "u@fundflow.dev", null],
+    ["reserved test recipient", "u@example.com", "Mozilla/5.0 Safari/605"],
   ])("does nothing with %s", async (_label, email, userAgent) => {
     await notifyNewDeviceLogin(USER, email, userAgent);
     expect(mockSendLoginAlertEmail).not.toHaveBeenCalled();
@@ -214,7 +215,7 @@ describe("notifyNewDeviceLogin", () => {
   it("stays quiet for a device already seen on the account", async () => {
     serviceClient = clientStub({ user_session_records: { count: 3 } });
 
-    await notifyNewDeviceLogin(USER, "u@example.com", "Mozilla/5.0 Safari/605");
+    await notifyNewDeviceLogin(USER, "u@fundflow.dev", "Mozilla/5.0 Safari/605");
 
     expect(mockSendLoginAlertEmail).not.toHaveBeenCalled();
   });
@@ -224,12 +225,12 @@ describe("notifyNewDeviceLogin", () => {
 
     await notifyNewDeviceLogin(
       USER,
-      "u@example.com",
+      "u@fundflow.dev",
       "Mozilla/5.0 (Macintosh; Intel Mac OS X) Safari/605.1",
     );
 
     expect(mockSendLoginAlertEmail).toHaveBeenCalledWith(
-      "u@example.com",
+      "u@fundflow.dev",
       "Safari on macOS",
     );
     expect(serviceClient.scopedToUser("user_session_records", USER)).toBe(true);
@@ -239,7 +240,7 @@ describe("notifyNewDeviceLogin", () => {
     serviceClient = clientStub({ user_session_records: { count: 0 } });
     mockCheckRateLimit.mockResolvedValue(false);
 
-    await notifyNewDeviceLogin(USER, "u@example.com", "Mozilla/5.0 Safari/605");
+    await notifyNewDeviceLogin(USER, "u@fundflow.dev", "Mozilla/5.0 Safari/605");
 
     expect(mockCheckRateLimit).toHaveBeenCalledWith(
       `login-alert:${USER}`,
@@ -254,7 +255,7 @@ describe("notifyNewDeviceLogin", () => {
     mockSendLoginAlertEmail.mockRejectedValueOnce(new Error("smtp down"));
 
     await expect(
-      notifyNewDeviceLogin(USER, "u@example.com", "Mozilla/5.0 Safari/605"),
+      notifyNewDeviceLogin(USER, "u@fundflow.dev", "Mozilla/5.0 Safari/605"),
     ).resolves.toBeUndefined();
     expect(mockLogError).toHaveBeenCalledWith("login-alert", expect.anything());
   });

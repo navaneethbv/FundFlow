@@ -70,21 +70,34 @@ Key modules in `lib/`:
   both modes (dataviz-skill validator). Rules baked in: fixed slot order,
   never generate an 8th+ hue (fold into "Other" via `foldTail`), legend for ≥2
   series, every chart ships a table twin, text never wears series color.
-  **Seven slots is a measured ceiling, not a style preference.** `--viz-7`
-  (`#c2379a`) was added 2026-07-31 and is the same hex in both modes because it
-  independently clears both lightness bands. An 8th hue drops CVD separation to
-  ΔE 2.4 and a 12-hue set to 0.4 (identical colors to a deuteranope) plus 6.7
-  under **normal** vision, against floors of 6 and 15. Re-run
-  `scripts/validate_palette.js` from the dataviz skill before proposing an
-  eighth; do not reason about it.
-  Two standing caveats. The palette sits in the 6–8 CVD floor band, which is
-  legal **only** with secondary encoding, so every chart using it must keep
-  direct labels or a table twin. And the shipped **dark** palette passes
-  `--pairs adjacent` (the standard it was validated at) but **fails
-  `--pairs all`**: dark `--viz-5` violet and `--viz-1` blue are ΔE 1.9 apart
-  under protanopia. Charts where any two series can sit side by side (scatter,
-  bubble, Sankey ribbons) must not rely on dark-mode hue alone — see
-  `docs/TODO.md`.
+  **Seven slots is a measured ceiling, not a style preference.** An 8th hue
+  drops CVD separation to ΔE 2.4 and a 12-hue set to 0.4 (identical colors to a
+  deuteranope) plus 6.7 under **normal** vision, against floors of 6 and 15.
+  Re-run `scripts/validate_palette.js` before proposing an eighth; do not
+  reason about it.
+  **The validator now enforces two independent gates**, and both must stay
+  green: pairwise separation (normal ΔE ≥ 15, protan/deutan ΔE ≥ 6) *and* WCAG
+  1.4.11 non-text contrast of ≥ 3:1 for every slot against its own theme's
+  `--panel`. The second gate was added 2026-08-09 after a dark re-step passed
+  the first and put three of seven slots under 3:1 — pairwise ΔE says nothing
+  about whether a series is visible on the surface it is drawn on, so a set can
+  separate perfectly from itself and still disappear.
+  **The dark set was re-stepped wholesale on 2026-08-09** and now clears both
+  gates on all seven slots (worst surface contrast 3.62:1), at the light set's
+  own OKLCH hues — so the two modes read as one identity rather than dark mode
+  becoming a different-looking chart. Re-step with the validator, never by eye:
+  changing one slot cannot fix a pair problem, and a 14,077-candidate sweep of
+  a single slot found nothing that passes.
+  Two standing caveats, both requiring the same relief. The palette sits in the
+  6–8 CVD band, which is legal **only** with secondary encoding; and light
+  `--viz-2` (2.82:1) and `--viz-3` (2.17:1) are below the contrast floor on
+  white, carried as named exceptions in the validator because a saturated aqua
+  and a yellow cannot reach 3:1 on `#ffffff` without abandoning the V0 identity.
+  So every chart must keep direct labels or a table twin — that is what makes
+  both caveats legal, and neither is dismissable without it. The exception list
+  is a ratchet: never extend it to make a re-step pass.
+  `--viz-pos`/`--viz-neg` are the diverging pair, a different job on their own
+  charts, and are deliberately not part of this set.
 - `dashboard-widgets.ts` — Phase 8 widget registry and prefs. Layout lives in
   the existing client-writable `profiles.dashboard_prefs` JSON (no migration),
   shared with `sidebarCollapsed` and the legacy hide flags — so every writer

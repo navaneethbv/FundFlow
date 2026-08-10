@@ -11,10 +11,21 @@ vi.mock("@/lib/http", () => ({
 
 const mockGetItem = vi.fn<(...args: unknown[]) => unknown>();
 const mockSetItemStatus = vi.fn<(...args: unknown[]) => unknown>();
+const mockDecryptItemToken = vi.fn<(...args: unknown[]) => unknown>();
+const mockUpdateItemBranding = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/plaid-service", () => ({
   getItem: (...args: unknown[]) => mockGetItem(...args),
   setItemStatus: (...args: unknown[]) => mockSetItemStatus(...args),
+  decryptItemToken: (...args: unknown[]) => mockDecryptItemToken(...args),
+  updateItemBranding: (...args: unknown[]) => mockUpdateItemBranding(...args),
 }));
+
+const mockFetchInstitutionBranding = vi.fn<(...args: unknown[]) => unknown>();
+vi.mock("@/lib/plaid-institution", () => ({
+  fetchInstitutionBranding: (...args: unknown[]) => mockFetchInstitutionBranding(...args),
+}));
+
+vi.mock("@/lib/plaid", () => ({ getPlaidClient: () => ({}) }));
 
 const mockSyncItemTransactions = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/sync", () => ({
@@ -39,6 +50,13 @@ import { NextRequest } from "next/server";
 describe("POST /api/plaid/reconnect", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockDecryptItemToken.mockReturnValue("access-token");
+    mockFetchInstitutionBranding.mockResolvedValue({
+      institutionId: "inst-1",
+      name: "Chase",
+      logo: "logo-base64",
+      brandColor: "#112233",
+    });
   });
 
   it("returns bad request if JSON is invalid", async () => {
@@ -80,7 +98,7 @@ describe("POST /api/plaid/reconnect", () => {
       json: () => Promise.resolve({ item_id: "item-1" }),
     } as unknown as NextRequest;
 
-    const mockItem = { id: "item-1", institution_name: "Chase" };
+    const mockItem = { id: "item-1", institution_id: "inst-1", institution_name: "Chase" };
     mockGetItem.mockResolvedValue(mockItem);
 
     const res = await POST(request);
@@ -89,6 +107,11 @@ describe("POST /api/plaid/reconnect", () => {
     expect(body).toEqual({ ok: true });
 
     expect(mockSetItemStatus).toHaveBeenCalledWith("item-1", "active", null);
+    expect(mockUpdateItemBranding).toHaveBeenCalledWith("u1", "item-1", {
+      name: "Chase",
+      logo: "logo-base64",
+      brandColor: "#112233",
+    });
     expect(mockSyncItemTransactions).toHaveBeenCalledWith({
       ...mockItem,
       status: "active",
@@ -117,5 +140,33 @@ describe("POST /api/plaid/reconnect", () => {
       "plaid.reconnect.sync",
       expect.any(Error),
     );
+  });
+
+  it("proceeds successfully when updateItemBranding throws an error", async () => {
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+    const request = {
+      json: () => Promise.resolve({ item_id: "item-1" }),
+    } as unknown as NextRequest;
+
+    mockGetItem.mockResolvedValue({ id: "item-1", institution_id: "inst-1", institution_name: "Chase" });
+    mockUpdateItemBranding.mockRejectedValue(new Error("Branding update failed"));
+
+    const res = await POST(request);
+    expect(res.status).toBe(200);
+    expect(mockLogError).toHaveBeenCalledWith("plaid.reconnect.branding", expect.any(Error));
+  });
+
+  it("calls errorResponse when unexpected exception occurs", async () => {
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+    const request = {
+      json: () => Promise.resolve({ item_id: "item-1" }),
+    } as unknown as NextRequest;
+
+    mockGetItem.mockRejectedValue(new Error("DB Down"));
+    mockErrorResponse.mockReturnValue(new Response("DB Error", { status: 500 }));
+
+    const res = await POST(request);
+    expect(res.status).toBe(500);
+    expect(mockErrorResponse).toHaveBeenCalledWith("plaid.reconnect", expect.any(Error));
   });
 });

@@ -9,6 +9,7 @@ import {
   claimWeeklyDelivery,
   markWeeklyDeliveryFailed,
   markWeeklyDeliverySent,
+  markWeeklyDeliverySkipped,
 } from "@/lib/report-delivery";
 import {
   getWeeklyReportPeriod,
@@ -18,7 +19,12 @@ import {
 import { errorResponse } from "@/lib/http";
 import { logError } from "@/lib/log";
 import { alertCronFailure } from "@/lib/cron-alert";
-import { describeDeliveryError, redactEmails } from "@/lib/delivery-error";
+import {
+  describeDeliveryError,
+  isUndeliverableRecipient,
+  redactEmails,
+  UNDELIVERABLE_RECIPIENT_CODE,
+} from "@/lib/delivery-error";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -81,6 +87,17 @@ export async function runWeeklyReports(
         );
         result.reports_failed += 1;
         result.first_error ??= "missing_account_email";
+        continue;
+      }
+
+      if (isUndeliverableRecipient(report.userEmail)) {
+        await markWeeklyDeliverySkipped(
+          service,
+          userId,
+          deliveryId,
+          UNDELIVERABLE_RECIPIENT_CODE,
+        );
+        result.reports_skipped += 1;
         continue;
       }
 

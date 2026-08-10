@@ -33,14 +33,14 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: build-placeholder
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://example.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'build-placeholder' }}
 
       - name: Start server
         run: npm start &
         env:
-          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: build-placeholder
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://example.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'build-placeholder' }}
 
       - name: Wait for server
         run: |
@@ -55,6 +55,8 @@ jobs:
         run: npm run test:e2e
         env:
           E2E_BASE_URL: http://localhost:3000
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
 
       - name: Upload traces on failure
         if: failure()

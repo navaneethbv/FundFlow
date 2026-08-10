@@ -125,6 +125,11 @@ export async function loadCashFlowData(
     .select("charge_transaction_id,refund_transaction_id")
     .order("charge_transaction_id")
     .limit(REFUND_LIMIT);
+  let duplicatesQuery = supabase
+    .from("linked_duplicates")
+    .select("excluded_transaction_id")
+    .order("created_at")
+    .limit(REFUND_LIMIT);
   let syncQuery = supabase
     .from("sync_jobs")
     .select("updated_at")
@@ -138,6 +143,7 @@ export async function loadCashFlowData(
     rulesQuery = rulesQuery.eq("user_id", userId);
     overridesQuery = overridesQuery.eq("user_id", userId);
     refundsQuery = refundsQuery.eq("user_id", userId);
+    duplicatesQuery = duplicatesQuery.eq("user_id", userId);
     syncQuery = syncQuery.eq("user_id", userId);
   }
   const syncSingleQuery = syncQuery.maybeSingle();
@@ -161,6 +167,7 @@ export async function loadCashFlowData(
     rulesResult,
     overridesResult,
     refundsResult,
+    duplicatesResult,
     syncResult,
     splitResults,
   ] = await Promise.all([
@@ -168,6 +175,7 @@ export async function loadCashFlowData(
     rulesQuery,
     overridesQuery,
     refundsQuery,
+    duplicatesQuery,
     syncSingleQuery,
     Promise.all(splitQueries),
   ]);
@@ -176,6 +184,7 @@ export async function loadCashFlowData(
   assertQuery("merchant_rules", rulesResult);
   assertQuery("category_overrides", overridesResult);
   assertQuery("linked_refunds", refundsResult);
+  assertQuery("linked_duplicates", duplicatesResult);
   assertQuery("sync_jobs", syncResult);
   splitResults.forEach((result) =>
     assertQuery("transaction_splits", result),
@@ -233,6 +242,10 @@ export async function loadCashFlowData(
       categoryOverrides,
       splits,
       linkedRefunds,
+      excludedTransactionIds: new Set(
+        ((duplicatesResult.data ?? []) as Array<{ excluded_transaction_id: string }>)
+          .map((row) => row.excluded_transaction_id),
+      ),
       accountNames,
     }),
     currencyByAccountId,

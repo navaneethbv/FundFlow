@@ -114,18 +114,37 @@ export default function BudgetRightRail({
           )}
 
           {tab === "expenses" && (
-            <div className="flex justify-between text-sm">
-              <span className="text-muted">Expense remaining</span>
-              <span
-                data-money
-                className={cn(
-                  "font-semibold",
-                  data.totalExpenses.remaining < 0 ? "text-danger" : "text-foreground",
-                )}
-              >
-                {formatCurrency(data.totalExpenses.remaining, currency)}
-              </span>
-            </div>
+            <>
+              {/* Planned and Actual mirror the Income tab above. They were
+                  dropped when the 4-card stat grid became these tabs, which
+                  left Expenses showing only a remainder — and left "Actual
+                  expenses", the figure that reconciles this page against Cash
+                  Flow, with nowhere to appear. */}
+              <div className="flex justify-between text-sm">
+                <span className="text-muted">Planned expenses</span>
+                <span data-money className="font-semibold">
+                  {formatCurrency(data.totalExpenses.planned, currency)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted">Actual expenses</span>
+                <span data-money className="font-semibold">
+                  {formatCurrency(data.totalExpenses.actual, currency)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted">Expense remaining</span>
+                <span
+                  data-money
+                  className={cn(
+                    "font-semibold",
+                    data.totalExpenses.remaining < 0 ? "text-danger" : "text-foreground",
+                  )}
+                >
+                  {formatCurrency(data.totalExpenses.remaining, currency)}
+                </span>
+              </div>
+            </>
           )}
 
           {tab === "summary" && data.sinkingFundsTotal > 0 && (

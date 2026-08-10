@@ -30,7 +30,7 @@ export const SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
   { key: "profile", label: "Profile", hint: "Name, avatar, birthday" },
   { key: "display", label: "Display", hint: "Theme, density, motion" },
   { key: "notifications", label: "Notifications", hint: "Alerts and delivery" },
-  { key: "security", label: "Security", hint: "MFA, passkeys, sessions, audit log" },
+  { key: "security", label: "Security", hint: "MFA, sessions, audit log" },
   { key: "integrations", label: "Integrations", hint: "Calendar, API tokens, AI consent" },
   { key: "household-general", label: "Household", hint: "Members and sharing" },
   { key: "household-preferences", label: "Settle up", hint: "Shared expense settlement" },
@@ -68,9 +68,9 @@ export const DEFAULT_DISPLAY_PREFS: DisplayPrefs = {
   reducedMotion: "system",
 };
 
-const THEMES: ThemePreference[] = ["system", "light", "dark"];
-const DENSITIES: DensityPreference[] = ["comfortable", "compact"];
-const MOTIONS: ReducedMotionPreference[] = ["system", "reduce", "no-preference"];
+const THEMES = new Set<ThemePreference>(["system", "light", "dark"]);
+const DENSITIES = new Set<DensityPreference>(["comfortable", "compact"]);
+const MOTIONS = new Set<ReducedMotionPreference>(["system", "reduce", "no-preference"]);
 
 export type DisplayPrefsPatch = Partial<DisplayPrefs>;
 export type DisplayPrefsPatchResult =
@@ -90,11 +90,11 @@ export function validateDisplayPrefsPatch(body: unknown): DisplayPrefsPatchResul
   const patch: DisplayPrefsPatch = {};
 
   if (b.theme !== undefined) {
-    if (!THEMES.includes(b.theme as ThemePreference)) return { ok: false, error: "invalid theme" };
+    if (!THEMES.has(b.theme as ThemePreference)) return { ok: false, error: "invalid theme" };
     patch.theme = b.theme as ThemePreference;
   }
   if (b.density !== undefined) {
-    if (!DENSITIES.includes(b.density as DensityPreference)) return { ok: false, error: "invalid density" };
+    if (!DENSITIES.has(b.density as DensityPreference)) return { ok: false, error: "invalid density" };
     patch.density = b.density as DensityPreference;
   }
   if (b.defaultPrivacyBlur !== undefined) {
@@ -104,7 +104,7 @@ export function validateDisplayPrefsPatch(body: unknown): DisplayPrefsPatchResul
     patch.defaultPrivacyBlur = b.defaultPrivacyBlur;
   }
   if (b.reducedMotion !== undefined) {
-    if (!MOTIONS.includes(b.reducedMotion as ReducedMotionPreference)) {
+    if (!MOTIONS.has(b.reducedMotion as ReducedMotionPreference)) {
       return { ok: false, error: "invalid reducedMotion" };
     }
     patch.reducedMotion = b.reducedMotion as ReducedMotionPreference;
@@ -118,12 +118,12 @@ export function parseDisplayPrefs(raw: unknown): DisplayPrefs {
   if (!raw || typeof raw !== "object") return { ...DEFAULT_DISPLAY_PREFS };
   const r = raw as Record<string, unknown>;
   return {
-    theme: THEMES.includes(r.theme as ThemePreference) ? (r.theme as ThemePreference) : DEFAULT_DISPLAY_PREFS.theme,
-    density: DENSITIES.includes(r.density as DensityPreference)
+    theme: THEMES.has(r.theme as ThemePreference) ? (r.theme as ThemePreference) : DEFAULT_DISPLAY_PREFS.theme,
+    density: DENSITIES.has(r.density as DensityPreference)
       ? (r.density as DensityPreference)
       : DEFAULT_DISPLAY_PREFS.density,
     defaultPrivacyBlur: typeof r.defaultPrivacyBlur === "boolean" ? r.defaultPrivacyBlur : DEFAULT_DISPLAY_PREFS.defaultPrivacyBlur,
-    reducedMotion: MOTIONS.includes(r.reducedMotion as ReducedMotionPreference)
+    reducedMotion: MOTIONS.has(r.reducedMotion as ReducedMotionPreference)
       ? (r.reducedMotion as ReducedMotionPreference)
       : DEFAULT_DISPLAY_PREFS.reducedMotion,
   };

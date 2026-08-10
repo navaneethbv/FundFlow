@@ -1,8 +1,51 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-08-08. Read this first to resume.
+Last updated: 2026-08-09. Read this first to resume.
 
-## Latest delivery: transaction sorting and staged filters
+## Latest delivery: every approved shipped-defect phase is implemented
+
+Branch `fix/shipped-defects`, PR #99.
+The reviewed plan is `~/.claude/plans/create-a-plan-on-toasty-treehouse.md`.
+
+Phase A repairs the PWA identity, restores an environment kill switch for default-on feature flags, removes false security claims, makes the seven-slot dark chart palette pass the repository validator, and restores a clean lint boundary.
+Phase B1 repairs the legacy browser baseline and the UI defects it exposed.
+Phase C completes persistent private receipts, grouped dashboard budgets, investment day movement and movers, institution branding, bundled goal artwork, and OFX/QFX import preview.
+Phase D adds debt payoff planning, recurring sinking funds, persisted cross-source duplicate review, Supabase passkeys, and multiple named TOTP factors as the recovery path.
+The unusable custom backup-code table was removed because Supabase Auth does not expose backup-code consumption as an authentication factor.
+Passkeys retain the existing server-side AAL2 invariant, so an account with verified TOTP still receives the TOTP step-up after passkey sign-in.
+
+The five new migrations are applied to the linked live Supabase project.
+Production Auth has passkeys enabled for `fund-flow-swart.vercel.app` with the canonical HTTPS origin.
+The institution backfill updated all six live Plaid items, including four available logos and six brand colours.
+
+Browser coverage now uses disposable live-Supabase users and deterministic finance fixtures.
+It covers the completed feature journeys, the primary-route responsive matrix at 375, 430, 768, and 1440 pixels in both themes, collapsed and expanded shell states, the account menu, and 26 reviewed desktop visual baselines.
+
+Two test-harness traps are worth knowing before writing more specs.
+Playwright's default `caret: "hide"` on `page.screenshot()` mutates inline styles and races hydration on the next reload, so visual captures use `caret: "initial"`.
+`getByLabel` substring-matches, so a bare `"History"` or `"Owner"` collides with sparkline labels and with the signed-in user's own email address.
+
+### Post-review repair pass
+
+A review of the finished branch found nine defects, all fixed on the same branch; `docs/QA.md` records each one.
+The two worth carrying forward as rules rather than as fixed bugs:
+
+Pairwise colour separation and surface contrast are independent properties, and passing one says nothing about the other.
+The first dark re-step cleared every pairwise gate in `scripts/validate_palette.js` and still left three of seven slots under WCAG's 3:1 non-text minimum against the dark panel, because the validator only measured ΔE between series.
+It now gates both, the dark set was re-stepped again to clear both at the light palette's own hues, and light `--viz-2`/`--viz-3` are carried as two named exceptions.
+That exception list is a ratchet: never extend it to make a re-step pass.
+
+A payoff plan keyed debts by display name, and account names are not unique.
+Anything that joins a computed result back to its source rows must key on the id.
+
+Phase C1 also shipped without the RLS integration test its plan required.
+`tests/integration/receipts-rls.test.ts` now proves cross-user isolation over both the row and the Storage object, including that no client has a write path and that the object is reachable only through a server-minted signed URL.
+
+One approved-plan deviation is worth knowing: Phase D4 called for one-time backup codes, and the branch removed the custom backup-code store instead.
+The reasoning is recorded in the PR and in `docs/TODO.md` — Supabase Auth does not expose backup-code consumption as an authentication factor, so multiple named TOTP factors are the supported recovery path.
+That was a deliberate substitution, not an oversight, but it is a scope change from the reviewed plan.
+
+## Previous delivery: transaction sorting and staged filters
 
 The Transactions page now has explicit Search, Date, Filters, and one shared Sort popover across desktop and mobile.
 Date, account, category, subcategory, merchant, money direction, and account type changes are staged locally until Apply, while search applies on Enter or its Search button.
@@ -16,21 +59,10 @@ The browser journey covered all five sort fields in both directions, complete or
 
 ## START HERE: Monarch visual-parity — every phase (V0 through V11) is done
 
-The 14-phase Monarch **feature**-parity program below is complete and
-released. A new, separate program starts now: **visual** parity with Monarch
-Money, from 29 reference screenshots in `img/Monarch Design/`. Plan:
-`docs/superpowers/plans/2026-08-02-monarch-visual-parity.md`. Design:
-`docs/superpowers/specs/2026-08-02-monarch-visual-parity-design.md`. A full
-copy of every file this work touched, plus a detailed writeup, is in
-`new_changes/README.md`.
-
-**Thirteen pieces landed, all gated green** (`npx tsc --noEmit`, `npm run lint`,
-`npm run test:unit` — 189 files / 1809 tests, `npm run build` — all four
-with the dummy env vars documented below). **The only thing this entire
-program still needs is a real browser pass** (light + dark, the
-credentialed E2E specs, and a Playwright visual-snapshot baseline) — every
-phase below was verified by the automated gate plus careful manual review,
-never an actual rendered screenshot:
+The 14-phase Monarch feature-parity program below is complete and released.
+The follow-up visual-parity plan is `docs/superpowers/plans/2026-08-02-monarch-visual-parity.md`.
+Its design is `docs/superpowers/specs/2026-08-02-monarch-visual-parity-design.md`.
+The latest delivery section records the completed browser, responsive, and visual-baseline verification that closed the historical gap described below.
 
 1. **Sankey exact-match** (`/reports` cash-flow diagram). Nine deltas closed
    the gap with Monarch's own Sankey: two-line labels (name + bold amount/
@@ -44,7 +76,7 @@ never an actual rendered screenshot:
 2. **Phase V0 — token retheme.** FundFlow's cool-blue identity became
    Monarch's warm cream + orange one. Colors were **pixel-sampled** from the
    screenshots with a small `sharp` script, not guessed — see the sampling
-   method and the important caveat in `new_changes/README.md` and the design
+   method and the important caveat in the visual-parity design
    doc's §2.1: the provided "dark" screenshots are very likely a simulated/
    forced dark-mode filter (the CTA desaturates from vivid `#FF6A2D` in light
    to a muted `#92472A` in "dark" at the *same hue*, which real dark themes
@@ -299,7 +331,7 @@ never an actual rendered screenshot:
 **Not done, and not started:** nothing — every phase in the design doc
 (V0–V11) is now done. Each still has its own small, named,
 deliberately-deferred remainder documented in its own numbered entry
-above and in `new_changes/README.md`'s "What's next" — none of it is a
+above and in the visual-parity design's "What's next" section — none of it is a
 silent gap, and none of it blocks anything else.
 
 **Verification gap:** live browser screenshots were attempted
@@ -389,15 +421,9 @@ override, but nothing needs it now. The flags don't depend on each other —
 `transactionsParity` and `settingsIa` are unrelated schema surfaces despite
 shipping in the same session.
 
-**One deliberate scope cut:** Phase 12's migration includes a `receipts`
-table and the app's first Supabase Storage bucket (schema and RLS only,
-verified-correct), but the actual upload route, `ReceiptInbox.tsx`, and
-All/Receipts tab are **not built** — that's a separate, security-sensitive
-piece of work (signed URLs, MIME/size limits, an RLS integration test proving
-cross-user isolation) better done as its own session than rushed at the tail
-of this one. The existing ephemeral AI receipt scan in Settings
-(`ReceiptScanSection`, `/api/ai/receipt`) is untouched and keeps working
-exactly as before either way.
+**Historical scope cut, closed 2026-08-09:** Phase 12 originally shipped only the `receipts` table and private Storage bucket.
+The latest delivery adds the upload, signed-view, matching, ignore, restore, delete, and cross-user isolation flows.
+The existing ephemeral AI receipt scan in Settings remains available separately.
 
 **Two real bugs found and fixed before they shipped, not after:**
 
@@ -438,9 +464,8 @@ to set `source: 'import'` explicitly since the column default is `'plaid'`).
 4. Decide on the receipts-upload follow-up (schema is ready, UI is not) as
    its own piece of work.
 
-Not yet run: any browser E2E pass for these six phases — every E2E check
-listed in the plan for 9A-13 is still open, same as Phase 8's browser
-half was at the time it shipped.
+Historical note: browser E2E had not run when these six phases first landed.
+The latest delivery section records the completed acceptance coverage.
 
 ## START HERE: Phase 8 Dashboard widgets is implemented (flag-gated)
 
@@ -451,7 +476,7 @@ Phase 8 is implemented on `feat/dashboard-widgets`, stacked on `feat/goals-v2`
 Gates: `npm run build` PASS, `npm run lint` PASS, `npx tsc --noEmit` PASS,
 `npm run test:unit` PASS (**1429 tests**).
 
-**What shipped**
+### What shipped
 
 - **`lib/dashboard-widgets.ts`** — the widget registry and a *total*
   `normalizeWidgetPrefs`: `dashboard_prefs` is free-form JSON written by the
@@ -504,7 +529,7 @@ Gates: `npm run build` PASS, `npm run lint` PASS, `npx tsc --noEmit` PASS,
 `npm run test:unit` PASS (**152 files / 1317 tests**; Phase 7 adds 3 files and
 104 tests on top of Phase 6's 149/1213).
 
-**What shipped**
+### What shipped
 
 - **`lib/goals-v2.ts`** — `computeFundedGoals` merges three progress sources:
   hand-typed `saved_amount`, live account allocations (capped at what the
@@ -527,7 +552,7 @@ Gates: `npm run build` PASS, `npm run lint` PASS, `npx tsc --noEmit` PASS,
 - **Budget feed** — planned contributions from `goals.monthly_contribution`,
   actual from `goal_progress_events` only.
 
-**Two security details worth knowing**
+### Two security details worth knowing
 
 1. The plan's RLS sketch had an ownership hole. `with check (user_id =
    auth.uid())` alone is not enough, because foreign-key checks bypass RLS: a
@@ -538,7 +563,7 @@ Gates: `npm run build` PASS, `npm run lint` PASS, `npx tsc --noEmit` PASS,
 2. `image_slug` is a database string that becomes a URL, so `goalImageFor`
    resolves known slugs only rather than interpolating it into a path.
 
-**Before this is user-visible**
+### Before this is user-visible
 
 1. **Apply `supabase/migrations/20260730200000_goals_v2.sql`.**
 2. **Set `FUNDFLOW_FEATURE_FLAGS=goalsV2`** (or flip the default in
@@ -547,9 +572,8 @@ Gates: `npm run build` PASS, `npm run lint` PASS, `npx tsc --noEmit` PASS,
    reading `goal_accounts` / `goal_progress_events` the moment it turns on.
    Leaving it off keeps a migration-less deployment working exactly as before.
 
-Not yet done for Phase 7: the E2E acceptance run (needs the flag on and the
-migration applied), and goal linking from the Phase 12 manual-add modal, which
-does not exist yet.
+Historical Phase 7 note: browser acceptance was still open when the phase first landed.
+Goal linking from the Phase 12 manual-add modal was also absent at that point.
 
 ## Phase 6 Reports is implemented (flag-gated)
 
@@ -559,7 +583,7 @@ remain**. Gates: `npm run build` PASS, `npm run lint` PASS, `npx tsc --noEmit`
 PASS, `npm run test:unit` PASS (**149 files / 1213 tests**, up from 144/993 —
 133 new tests, no new failures).
 
-**What shipped**
+### What shipped
 
 - **`lib/sankey.ts`** — pure layout (`layoutSankey`) plus `foldSankeyOverflow`.
   One value→pixel scale is shared across every column, or a ribbon leaving a
@@ -594,7 +618,7 @@ PASS, `npm run test:unit` PASS (**149 files / 1213 tests**, up from 144/993 —
   cascades through the `auth.users` FK, so `app/api/account/route.ts` needed no
   edit.
 
-**Two things to do before this is user-visible**
+### Two things to do before this is user-visible
 
 1. **Apply `supabase/migrations/20260730190000_saved_reports.sql`** to the live
    project (`zrxbmmtqqhlwtrinocww`). There is no migration runner in CI.

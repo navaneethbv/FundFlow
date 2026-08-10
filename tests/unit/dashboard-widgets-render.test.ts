@@ -15,6 +15,7 @@ import DashboardWidgetGrid from "@/components/dashboard/DashboardWidgetGrid";
 import WidgetShell from "@/components/dashboard/widgets/WidgetShell";
 import { DEFAULT_WIDGET_ORDER } from "@/lib/dashboard-widgets";
 import type { BudgetEnvelope } from "@/lib/planning";
+import type { DashboardBudgetGroup } from "@/lib/dashboard-budget-groups";
 
 /**
  * Widgets are server-rendered, so markup is the regression net for their
@@ -36,6 +37,20 @@ function envelope(partial: Partial<BudgetEnvelope> = {}): BudgetEnvelope {
     carry: 0,
     ...partial,
   } as BudgetEnvelope;
+}
+
+function budgetGroup(
+  partial: Partial<DashboardBudgetGroup> = {},
+): DashboardBudgetGroup {
+  return {
+    key: "flexible",
+    label: "Flexible",
+    monthlyLimit: 500,
+    spent: 200,
+    remaining: 300,
+    status: "on-track",
+    ...partial,
+  };
 }
 
 describe("WidgetShell states", () => {
@@ -79,49 +94,26 @@ describe("WidgetShell states", () => {
 });
 
 describe("BudgetWidget", () => {
-  it("puts over-budget envelopes first, then at-risk, then by spend", () => {
+  it("renders fixed, flexible, and non-monthly groups in planning order", () => {
     const html = renderToStaticMarkup(
       createElement(BudgetWidget, {
         currency: "USD",
-        envelopes: [
-          envelope({ category: "fine", status: "on-track", spent: 200 }),
-          envelope({ category: "blown", status: "over", spent: 900 }),
-          envelope({ category: "close", status: "at-risk", spent: 480 }),
-          envelope({ category: "tiniest", spent: 1 }),
-          envelope({ category: "smaller", spent: 2 }),
-          envelope({ category: "bigger", spent: 3 }),
+        groups: [
+          budgetGroup({ key: "fixed", label: "Fixed", status: "over" }),
+          budgetGroup(),
+          budgetGroup({ key: "non_monthly", label: "Non-monthly", status: "at-risk" }),
         ],
       }),
     );
-    expect(html.indexOf("blown")).toBeLessThan(html.indexOf("close"));
-    expect(html.indexOf("close")).toBeLessThan(html.indexOf("fine"));
-  });
-
-  it("caps the list at four, keeping the highest-spend of the rest", () => {
-    const html = renderToStaticMarkup(
-      createElement(BudgetWidget, {
-        currency: "USD",
-        envelopes: [
-          envelope({ category: "fine", status: "on-track", spent: 200 }),
-          envelope({ category: "blown", status: "over", spent: 900 }),
-          envelope({ category: "close", status: "at-risk", spent: 480 }),
-          envelope({ category: "tiniest", spent: 1 }),
-          envelope({ category: "smaller", spent: 2 }),
-          envelope({ category: "bigger", spent: 3 }),
-        ],
-      }),
-    );
-    // Four slots: blown, close, fine, then the largest remaining on-track one.
-    expect(html).toContain("bigger");
-    expect(html).not.toContain("smaller");
-    expect(html).not.toContain("tiniest");
+    expect(html.indexOf("Fixed")).toBeLessThan(html.indexOf("Flexible"));
+    expect(html.indexOf("Flexible")).toBeLessThan(html.indexOf("Non-monthly"));
   });
 
   it("names the status in the bar's label, so colour is not the only cue", () => {
     const html = renderToStaticMarkup(
       createElement(BudgetWidget, {
         currency: "USD",
-        envelopes: [envelope({ status: "over", spent: 900 })],
+        groups: [budgetGroup({ status: "over", spent: 900 })],
       }),
     );
     expect(html).toContain("of budget used, over");
@@ -130,7 +122,7 @@ describe("BudgetWidget", () => {
   it("has an empty state when nothing is budgeted", () => {
     expect(
       renderToStaticMarkup(
-        createElement(BudgetWidget, { currency: "USD", envelopes: [] }),
+        createElement(BudgetWidget, { currency: "USD", groups: [] }),
       ),
     ).toContain("No budgets set");
   });
@@ -247,18 +239,23 @@ describe("InvestmentsWidget", () => {
     expect(html).toContain("Sync another account");
   });
 
-  it("totals holdings once they do", () => {
+  it("shows the total, day change, and top movers", () => {
     const html = renderToStaticMarkup(
       createElement(InvestmentsWidget, {
         currency: "USD",
-        totals: [
-          { label: "Equities", value: 8000 },
-          { label: "Bonds", value: 2000 },
-        ],
+        summary: {
+          total: 10000,
+          dayChange: { amount: 50, pct: 0.5 },
+          topMovers: [
+            { name: "Fund A", ticker: "FUNDA", changePct: 2.5 },
+          ],
+        },
       }),
     );
-    expect(html).toContain("Equities");
     expect(html).toContain("$10,000");
+    expect(html).toContain("+$50.00 today");
+    expect(html).toContain("Fund A");
+    expect(html).toContain("+2.5%");
   });
 });
 
@@ -305,8 +302,10 @@ describe("DashboardWidgetGrid", () => {
   const baseProps = {
     data: {
       budgetEnvelopes: [envelope()],
+      budgetGroups: [budgetGroup()],
       netWorthHistory: [{ month: "2026-07", netWorth: 100 }],
       recurringStatuses: [],
+      investments: null,
     },
     goals: [],
     cumulativeSpend: [{ day: 1, thisMonth: 10, lastMonth: 5 }],

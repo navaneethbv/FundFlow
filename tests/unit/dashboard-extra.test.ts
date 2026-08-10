@@ -60,6 +60,11 @@ describe("getDashboardData", () => {
             target_amount: 600,
             due_date: "2026-07-25",
           },
+          {
+            name: "Past Fund",
+            target_amount: 300,
+            due_date: "2026-06-01",
+          },
         ];
       } else if (table === "plaid_items") {
         data = [{ id: "item-1", institution_name: "Chase" }];

@@ -3,9 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mockRequireUser = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/http", () => ({
   requireUser: () => mockRequireUser(),
-  errorResponse: (_context: string, error: unknown) => {
-    throw error;
-  },
+  errorResponse: (_context: string, error: unknown) =>
+    NextResponse.json({ error: error instanceof Error ? error.message : "error" }, { status: 500 }),
 }));
 
 const mockWriteAudit = vi.fn();
@@ -81,5 +80,12 @@ describe("GET /api/export/investments-csv", () => {
     expect(mockWriteAudit).toHaveBeenCalledWith(
       expect.objectContaining({ action: "data_export", metadata: expect.objectContaining({ kind: "investments_csv" }) }),
     );
+  });
+
+  it("returns 500 when loading holdings fails", async () => {
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: {} });
+    mockLoadHoldings.mockRejectedValue(new Error("Database failure"));
+    const res = await GET(request());
+    expect(res.status).toBe(500);
   });
 });

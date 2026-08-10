@@ -2,13 +2,18 @@
 
 Nice-to-have features and enhancements, deferred out of the initial build.
 
-## Active program: Monarch visual parity (started 2026-08-02)
+## Completed 2026-08-09: shipped-defect follow-up
 
-Plan: `docs/superpowers/plans/2026-08-02-monarch-visual-parity.md`. Design:
-`docs/superpowers/specs/2026-08-02-monarch-visual-parity-design.md`. Distinct
-from the *feature*-parity program below (which is complete) — this closes the
-remaining visual gap against 29 Monarch Money screenshots. Full writeup of
-work done so far: `new_changes/README.md`.
+All approved phases from `~/.claude/plans/create-a-plan-on-toasty-treehouse.md` are implemented in PR #99.
+This includes persistent receipts, grouped budget and investment dashboard widgets, institution branding, goal artwork, OFX/QFX import, debt payoff planning, recurring sinking funds, duplicate review, passkeys, and multiple named TOTP recovery factors.
+The four new migrations are applied to the live Supabase project, institution branding is backfilled, and production passkey configuration targets the canonical FundFlow origin.
+The browser gap is closed by deterministic feature journeys, a four-viewport and two-theme interaction matrix, and 26 reviewed desktop visual baselines.
+
+## Completed program: Monarch visual parity (started 2026-08-02)
+
+Plan: `docs/superpowers/plans/2026-08-02-monarch-visual-parity.md`.
+Design: `docs/superpowers/specs/2026-08-02-monarch-visual-parity-design.md`.
+This is distinct from the feature-parity program below, which is also complete.
 
 - **Sankey exact-match.** Done (2026-08-02). Nine deltas on the `/reports`
   cash-flow diagram: two-line labels, emoji prefixes (`lib/category-emoji.ts`),
@@ -18,7 +23,7 @@ work done so far: `new_changes/README.md`.
 - **Phase V0 — token retheme.** Done (2026-08-02). `app/globals.css` rewritten
   to Monarch's warm cream + orange identity, colors pixel-sampled from the
   screenshots (see the dark-mode-is-likely-filtered caveat in the design doc
-  §2.1 and `new_changes/README.md`). Pill buttons, unified modal recipes,
+  §2.1). Pill buttons, unified modal recipes,
   `.metric-value` off monospace, new `--pill`/`--settings-active` tokens, a
   handful of flagged internal inconsistencies fixed in passing.
 - **Phase V1 — shell restructure.** Done (2026-08-02). `components/shell/TopBar.tsx`
@@ -229,11 +234,10 @@ Fourteen phases bringing FundFlow to parity with the reference planner screensho
   the other Phase 9-11 flags this gates an *already-live* page: with it off,
   `/transactions` runs the exact pre-Phase-12 query. Apply
   `20260730240000_manual_transactions_receipts.sql` first.
-  The migration also adds a `receipts` table and the app's first Supabase
-  Storage bucket (schema and RLS only) — the persistent receipt-upload UI and
-  route are intentionally deferred as a separate follow-up, distinct from the
-  completed manual-transactions work above. The existing ephemeral AI receipt
-  scan in Settings is unaffected either way.
+  The migration also added a `receipts` table and the app's first Supabase
+  Storage bucket.
+  The persistent receipt workflow was completed in PR #99 on 2026-08-09.
+  The existing ephemeral AI receipt scan in Settings remains available separately.
 - **Phase 13: Settings IA.** Done (2026-07-30), branch `feat/settings-ia`.
   A section-based Settings page (a `section` query param + real side nav)
   replacing the old all-data-at-once layout, so each section queries only
@@ -254,25 +258,49 @@ independently, in any order, after review.
 
 Excluded from the program by decision, revisit only if asked: credit score (no consented bureau integration), billing/free-trial/referrals (not a commercial product), Retail Sync (no authorized data source), and investment benchmark overlays (needs a licensed market-data feed, deferred inside Phase 9B).
 
-## Added 2026-07-31 (UI review) — three pre-existing E2E failures
+## ~~Added 2026-07-31 (UI review) — three pre-existing E2E failures~~
 
-Found while verifying the UI-fix pass. Each reproduces on `main` **without**
-that pass's changes (confirmed by stashing), so they predate it and are not
-regressions. All three block a spec that otherwise passes.
+**Fixed 2026-08-09.**
+The whole `tests/e2e` suite now passes on two consecutive full runs: 19 specs, with the 16 golden-path and reports specs still skipping without `E2E_EMAIL`/`E2E_PASSWORD`.
 
-1. **`POST /api/demo` returns 500** in `accounts.spec.ts`'s setup
-   (`tests/e2e/accounts.spec.ts:164`), so the whole accounts spec never gets to
-   its assertions. The route works for a plain user — the spec's fixture is a
-   household **owner** who can already see a *member's* `shared_household_id`
-   Plaid item, which is the case the route's `hasRealBank` check and its
-   service-client inserts were not written for. Start there.
-2. **`cash-flow.spec.ts` trips the Plaid "link-initialize.js embedded more than
-   once" warning.** The `/accounts` empty-state double-mount that caused the
-   same warning is fixed, and client-side navigation was verified to keep
-   exactly one script tag and one instance — so a *second* source remains and
-   was not reproducible locally. `ReconnectBankButton` renders once per broken
-   item, which is the most likely remaining multi-instance surface.
-3. **`budget.spec.ts` fails** at `tests/e2e/budget.spec.ts:467`; not diagnosed.
+Every one of the three original diagnoses was wrong, so they are recorded rather than deleted.
+
+1. **`POST /api/demo` does not 500.**
+   The route is fine for a household owner.
+   The accounts spec died later, at `getByLabel("History")`, which matched four elements: the filter field plus every row's `"<name> full-history trend"` sparkline.
+   Underneath sat a real defect.
+   Those sparkline labels were `aria-label` on a bare `<div>`, which is `role="generic"` and cannot carry an accessible name, so both charts shipped with **no** text alternative at all.
+   Fixed with `role="img"`, matching `SummaryPanel` and `NetWorthHero`.
+2. **Nothing mounts Plaid Link twice.**
+   The warning is React Strict Mode, which means `next dev` only.
+   `react-plaid-link`'s `useScript` cleanup removes the `<script>` and deletes its cache entry while it is still loading, so the Strict-Mode remount appends a second one and the first still executes.
+   Verified absent from a production build.
+   `budget`, `recurring` and `transactions` had each already filtered this warning with their own undocumented copy; that is now one explained helper, `tests/e2e/console-noise.ts`.
+3. **`budget.spec.ts:467` was a data regression.**
+   The Expenses tab of `BudgetRightRail` lost its Planned and Actual totals when the four-card stat grid became tabs, while Income kept both.
+   The component's own doc comment still claimed both were there.
+   "Actual expenses" is the figure that reconciles Budget against Cash Flow, so it had nowhere left to appear.
+   Restored.
+
+Real defects the repair surfaced, all fixed:
+
+- `SegmentedControl` segments were 36px and `Tabs` 42px, against the app's own 44px bar that every other `components/ui` primitive meets.
+- `TotalsRow` in `BudgetPlanner` overflowed a 390px phone: three fixed-width columns plus `gap-6` need about 344px before the label even starts.
+  `SuperBand` solves the same problem by hiding its captions, but figures cannot be hidden, so these wrap instead.
+- `/recurring` gave a 390px phone **623px of horizontal page scroll**.
+  The occurrence table is correctly wrapped in `overflow-x-auto`, but its `sr-only` Actions header is `position: absolute`, and a `position: static` scroll container is not a containing block.
+  That span was therefore positioned against the viewport and escaped the clip entirely.
+  One `relative` class fixes it.
+- The row menu's Group select and Rollover checkbox had no per-row accessible name, unlike the Sort order input beside them.
+
+**Still open (follow-ups, not blockers):**
+
+- Five specs still assert `documentElement.scrollWidth <= clientWidth`.
+  That agrees with reality but names nothing, so a failure says the page is broken without saying where.
+  `tests/e2e/layout-checks.ts` is the replacement, and it explains why its offender sweep alone is insufficient: the sweep cannot see an absolutely-positioned escapee, which is exactly the `/recurring` bug above.
+- `recurring.spec.ts` was recorded as the passing reference spec.
+  It was not.
+  It failed on `main` for the `/recurring` overflow above, confirmed independently by stashing every UI change.
 
 ## Must-have before real-bank production use
 
@@ -398,33 +426,64 @@ Still open, all needing credentials or an owner decision rather than code:
 - **Audit MFA enrollment** server-side — promoted to the must-have list above
   (item 7).
 
-## Dark-mode categorical palette fails all-pairs CVD (found 2026-07-31)
+## ~~Dark-mode categorical palette fails all-pairs CVD (found 2026-07-31)~~ Fixed 2026-08-09
 
-The shipped dark `--viz-*` palette was validated with the dataviz validator's
-default `--pairs adjacent`, which only compares neighbouring slots. Under
-`--pairs all` it fails: dark `--viz-5` (`#9085e9` violet) and `--viz-1`
-(`#3987e5` blue) are **ΔE 1.9 apart under protanopia** and 9.8 under normal
-vision, against a floor of 6 and 15 respectively.
+Both modes now pass the pairwise gates **and** the 3:1 surface-contrast gate.
+The dark set was re-stepped wholesale in `app/globals.css` (both the
+`[data-theme=dark]` block and the `prefers-color-scheme` block):
 
-Adjacent-pairs is the correct check for stacked bars and lines, where only
-neighbours touch, so the existing charts are not wrong. It is the wrong check
-for any chart where two arbitrary series can sit side by side — scatter,
-bubble, and Sankey ribbons that cross.
-
-Reproduce:
-
-```bash
-# from the dataviz skill's base directory
-node scripts/validate_palette.js \
-  "#3987e5,#199e70,#c98500,#008300,#9085e9,#e66767,#c2379a" \
-  --mode dark --pairs all
+```css
+--viz-1: #77a9ea; /* was #3987e5 */
+--viz-2: #55c795; /* was #199e70 */
+--viz-3: #f1a824; /* was #c98500 */
+--viz-4: #299525; /* was #008300 */
+--viz-5: #755efd; /* was #9085e9 */
+--viz-6: #d57c75; /* was #e66767 */
+--viz-7: #d33ea7; /* was #c2379a */
 ```
 
-Fixing it means re-stepping dark `--viz-5` and re-validating every chart that
-uses it, so it is deliberately not bundled with the Sankey redesign.
+Four things this turned up, worth keeping:
+
+1. **The palette was failing three pairs, not one.** Besides the reported
+   `--viz-5` violet ↔ `--viz-1` blue (ΔE 1.9 protan), `--viz-2` aqua ↔
+   `--viz-4` green (11.9) and `--viz-3` yellow ↔ `--viz-6` red (13.0) were
+   both under the **normal-vision** floor of 15 — confusable for
+   full-colour-vision users, not only for a protanope. The original entry
+   framed this as CVD-only.
+2. **Re-stepping one slot alone cannot work.** Holding the other six fixed and
+   sweeping 14,077 in-gamut candidates for slot 5 across the whole hue circle
+   yields zero passes. Slot 5 was the worst pair, never the binding one.
+3. **Pairwise ΔE and surface contrast are independent, and the validator was
+   only measuring the first.** An intermediate re-step
+   (`#9f12a0`, `#a457ef`, `#2c94b0`, `#8e5223`, `#449546`, `#544ec5`,
+   `#cb5790`) passed every pairwise gate and put `--viz-1`, `--viz-4`, and
+   `--viz-6` at 2.33:1, 2.56:1, and 2.48:1 against the dark panel, below WCAG
+   1.4.11's 3:1 minimum — a regression from the previous set, whose worst slot
+   was 3.22:1. `scripts/validate_palette.js` now gates both, so this class of
+   change cannot pass silently again.
+4. **An earlier note here claimed no variant clears both gates. That was
+   wrong.** Constraining the search to per-slot candidates that already clear
+   3:1 and anchoring each slot to the light palette's OKLCH hue finds passing
+   sets readily; the shipped one clears every pairwise gate with a worst-case
+   surface contrast of 3.62:1 and **zero** hue drift from light mode, so the
+   two themes keep one identity. The earlier search had been sweeping the full
+   lightness band and only re-stepping 3–4 slots.
+
+Light `--viz-2` (2.82:1) and `--viz-3` (2.17:1) remain below the contrast floor
+on white and are carried as two named exceptions in the validator: a saturated
+aqua and a yellow cannot reach 3:1 on `#ffffff` without abandoning the V0
+identity. They rely on the same direct-label / table-twin relief the 6–8 CVD
+band already requires. That exception list is a ratchet — never extend it to
+make a re-step pass.
+
+`--viz-pos`/`--viz-neg` are the diverging pair and keep the old blue/red — a
+different job on their own charts (`DivergingColumns`, `BreakdownBars`), never
+mixed with the categorical slots.
+
+**Closed 2026-08-09:** the palette is validated numerically and included in the authenticated dark-mode route matrix and reviewed visual baselines.
 
 A related finding worth keeping: **the palette cannot be grown past seven.**
-`--viz-7` (`#c2379a`) was added on 2026-07-31 and clears every check in both
+`--viz-7` was added on 2026-07-31 and clears every check in both
 modes. An eighth hue drops CVD separation to ΔE 2.4, and an evenly spaced
 12-hue set (identical L and C, maximal angular separation, the most favourable
 construction available) to 0.4 deuteranopia and 6.7 normal vision. Any future

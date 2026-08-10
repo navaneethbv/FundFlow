@@ -30,7 +30,7 @@ export async function getWeeklyReportData(
     budgetsResult,
     rulesResult,
     refundsResult,
-    decisionsResult,
+    duplicatesResult,
     transactionsResult,
   ] = await Promise.all([
     supabase
@@ -55,11 +55,9 @@ export async function getWeeklyReportData(
       .select("charge_transaction_id, refund_transaction_id")
       .eq("user_id", userId),
     supabase
-      .from("transaction_review_decisions")
-      .select("subject_id")
-      .eq("user_id", userId)
-      .eq("kind", "duplicate")
-      .eq("decision", "confirmed"),
+      .from("linked_duplicates")
+      .select("excluded_transaction_id")
+      .eq("user_id", userId),
     supabase
       .from("transactions")
       .select("id, date, amount, merchant_name, name, pfc_primary, account_id")
@@ -74,7 +72,7 @@ export async function getWeeklyReportData(
     ["budgets", budgetsResult],
     ["merchant rules", rulesResult],
     ["linked refunds", refundsResult],
-    ["duplicate decisions", decisionsResult],
+    ["linked duplicates", duplicatesResult],
     ["transactions", transactionsResult],
   ] as const) {
     throwIfError(result.error, `weekly report ${context}`);
@@ -147,8 +145,8 @@ export async function getWeeklyReportData(
     })),
     linkedRefundTransactionIds,
     duplicateTransactionIds: new Set(
-      (decisionsResult.data ?? []).map(
-        (decision) => decision.subject_id as string,
+      (duplicatesResult.data ?? []).map(
+        (duplicate) => duplicate.excluded_transaction_id as string,
       ),
     ),
   });

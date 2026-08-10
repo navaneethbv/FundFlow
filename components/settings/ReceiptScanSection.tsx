@@ -22,6 +22,7 @@ interface ScanResult {
  */
 export default function ReceiptScanSection({ enabled }: Readonly<{ enabled: boolean }>) {
   const [result, setResult] = useState<ScanResult | null>(null);
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -32,6 +33,7 @@ export default function ReceiptScanSection({ enabled }: Readonly<{ enabled: bool
     const input = e.currentTarget.elements.namedItem("file") as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
+    setSourceFile(file);
     setBusy(true);
     try {
       const form = new FormData();
@@ -66,12 +68,29 @@ export default function ReceiptScanSection({ enabled }: Readonly<{ enabled: bool
     setStatus(response.ok ? "Attached to the matching transaction." : "Could not attach the note.");
   }
 
+  async function saveToInbox() {
+    if (!result || !sourceFile) return;
+    setStatus(null);
+    const form = new FormData();
+    form.set("file", sourceFile);
+    form.set("merchant", result.merchant);
+    form.set("purchaseDate", result.date);
+    form.set("total", String(result.amount));
+    const response = await fetch("/api/receipts", { method: "POST", body: form });
+    const payload = await response.json().catch(() => null) as { error?: string } | null;
+    setStatus(
+      response.ok
+        ? "Saved to the receipt inbox."
+        : payload?.error ?? "Could not save the receipt.",
+    );
+  }
+
   return (
     <Panel title="Scan a receipt" eyebrow="Photo to ledger">
       <p className="mb-4 text-sm text-muted">
         Upload a receipt photo; the AI extracts merchant, total, and line
         items and finds the matching transaction. The image is processed by
-        the AI provider and never stored.
+        the AI provider and is stored only when you explicitly save it.
       </p>
       {!enabled && (
         <p className="mb-3 text-xs text-warning">Enable AI insights above to use this.</p>
@@ -92,6 +111,9 @@ export default function ReceiptScanSection({ enabled }: Readonly<{ enabled: bool
             <p className="mt-1 text-xs text-muted">{result.lineItems.join(" · ")}</p>
           )}
           <p className="mt-2 text-xs">
+            <Button onClick={() => void saveToInbox()} variant="secondary" size="sm">
+              Save to receipt inbox
+            </Button>
             {result.matchedTransactionId ? (
               <Button onClick={attach} variant="ghost" size="sm">
                 Attach to matching transaction

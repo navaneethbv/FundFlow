@@ -15,6 +15,7 @@ vi.mock("@/lib/report-delivery", () => ({
   claimWeeklyDelivery: vi.fn(),
   markWeeklyDeliveryFailed: vi.fn(),
   markWeeklyDeliverySent: vi.fn(),
+  markWeeklyDeliverySkipped: vi.fn(),
 }));
 
 const mockGetWeeklyReportData = vi.fn();
@@ -426,6 +427,68 @@ describe("GET /api/cron/weekly-report", () => {
     expect(body.reports_failed).toBe(1);
     expect(body.first_error).toBe("missing_account_email");
     expect(markWeeklyDeliveryFailed).toHaveBeenCalledWith(expect.any(Object), "u1", "d1", "missing_account_email");
+  });
+
+  // Integration tests create throwaway @example.com users in the same Supabase
+  // project this cron runs against, so for the length of a test run they are
+  // real rows in `profiles`. Attempting delivery to a reserved domain can only
+  // ever 550, which used to page the admin about a healthy cron.
+  it("skips a reserved-domain recipient instead of failing the run", async () => {
+    mockSafeEqual.mockReturnValue(true);
+    const request = new NextRequest("http://localhost/api/cron/weekly-report", {
+      headers: { authorization: "Bearer test-secret" },
+    });
+
+    mockServiceClient.from.mockImplementation((table) => {
+      let data: unknown[] = [];
+      if (table === "profiles") {
+        data = [{ id: "u1", timezone: "America/New_York" }];
+      }
+      const query = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
+      };
+      query.then = (onfulfilled) =>
+        Promise.resolve({ data, error: null }).then(onfulfilled);
+      return query;
+    });
+
+    mockGetWeeklyReportPeriod.mockReturnValue({ start: "2026-07-06" });
+    mockGetEligibleWeeklyReportUsers.mockResolvedValue(["u1"]);
+    const { claimWeeklyDelivery, markWeeklyDeliverySkipped } = await import(
+      "@/lib/report-delivery"
+    );
+    vi.mocked(claimWeeklyDelivery).mockResolvedValue({
+      claimed: true,
+      deliveryId: "d1",
+    });
+    vi.mocked(markWeeklyDeliverySkipped).mockResolvedValue(undefined);
+
+    mockGetWeeklyReportData.mockResolvedValue({
+      id: "r1",
+      userEmail: "rep-1754756320@example.com",
+    });
+    mockRenderWeeklyReportPdf.mockResolvedValue(Buffer.from("pdf"));
+
+    const res = await GET(request);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.reports_skipped).toBe(1);
+    expect(body.reports_failed).toBe(0);
+    expect(body.first_error).toBeUndefined();
+    expect(markWeeklyDeliverySkipped).toHaveBeenCalledWith(
+      expect.any(Object),
+      "u1",
+      "d1",
+      "recipient_undeliverable",
+    );
+    // Never spend a provider send, and never render a PDF, for an address
+    // that cannot receive it.
+    expect(mockSendWeeklyReportEmail).not.toHaveBeenCalled();
+    expect(mockRenderWeeklyReportPdf).not.toHaveBeenCalled();
+    expect(mockAlertCronFailure).not.toHaveBeenCalled();
   });
 
   it("handles SMTP not configured error during email delivery", async () => {

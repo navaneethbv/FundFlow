@@ -6,9 +6,8 @@ vi.mock("@/lib/http", () => ({
   requireUser: () => mockRequireUser(),
   badRequest: (msg: unknown) =>
     Response.json({ error: String(msg) }, { status: 400 }),
-  errorResponse: (_context: unknown, error: unknown) => {
-    throw error;
-  },
+  errorResponse: (_context: unknown, error: unknown) =>
+    Response.json({ error: error instanceof Error ? error.message : "error" }, { status: 500 }),
 }));
 
 const mockWriteAudit = vi.fn<(...args: unknown[]) => unknown>();
@@ -109,6 +108,18 @@ describe("POST /api/accounts/apr", () => {
     expect(mockWriteAudit).toHaveBeenCalledWith(
       expect.objectContaining({ userId: USER, action: "apr_updated" }),
     );
+  });
+
+  it("returns 500 when account update fails", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER },
+      supabase: clientStub({ accounts: { data: { id: "a1" } } }),
+    });
+    serviceClient = clientStub({ accounts: { error: { message: "DB Error" } } });
+    const res = await aprPost(
+      post("http://localhost/api/accounts/apr", { accountId: "a1", apr: 21.5 }),
+    );
+    expect(res.status).toBe(500);
   });
 
   it("accepts a null apr, which clears it", async () => {
@@ -246,11 +257,10 @@ describe("/api/subscriptions/cancelled", () => {
         cancelled_subscriptions: { error: { message: "permission denied" } },
       }),
     });
-    await expect(
-      cancelledPost(
-        post("http://localhost/api/subscriptions/cancelled", { merchant: "Netflix" }),
-      ),
-    ).rejects.toMatchObject({ message: "permission denied" });
+    const res = await cancelledPost(
+      post("http://localhost/api/subscriptions/cancelled", { merchant: "Netflix" }),
+    );
+    expect(res.status).toBe(500);
   });
 
   it("requires a merchant on DELETE", async () => {

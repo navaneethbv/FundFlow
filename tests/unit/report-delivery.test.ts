@@ -4,6 +4,7 @@ import {
   claimWeeklyDelivery,
   markWeeklyDeliverySent,
   markWeeklyDeliveryFailed,
+  markWeeklyDeliverySkipped,
 } from "@/lib/report-delivery";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -35,6 +36,12 @@ describe("weekly report delivery claims", () => {
     expect(
       classifyDeliveryClaim(
         { status: "processing", attemptedAt: "2026-07-13T15:10:00.000Z" },
+        now,
+      ),
+    ).toBe("skip");
+    expect(
+      classifyDeliveryClaim(
+        { status: "processing", attemptedAt: "invalid-date" },
         now,
       ),
     ).toBe("skip");
@@ -188,6 +195,63 @@ describe("weekly report delivery claims", () => {
       const result = await claimWeeklyDelivery(mockSupabase, "user-1", period, now);
       expect(result).toEqual({ claimed: false });
     });
+
+    it("throws existingError when select existing delivery query fails", async () => {
+      const singleInsert = vi.fn().mockResolvedValue({
+        data: null,
+        error: { code: "23505", message: "duplicate" },
+      });
+      const selectInsert = vi.fn().mockReturnValue({ single: singleInsert });
+      const insert = vi.fn().mockReturnValue({ select: selectInsert });
+
+      const maybeSingleExisting = vi.fn().mockResolvedValue({
+        data: null,
+        error: new Error("DB Error on select"),
+      });
+      const eqStart = vi.fn().mockReturnValue({ maybeSingle: maybeSingleExisting });
+      const eqUser = vi.fn().mockReturnValue({ eq: eqStart });
+      const selectExisting = vi.fn().mockReturnValue({ eq: eqUser });
+
+      const from = vi.fn().mockImplementation((table: string) => {
+        if (table === "weekly_report_deliveries") {
+          return { insert, select: selectExisting };
+        }
+        throw new Error(`Unexpected table ${table}`);
+      });
+
+      const mockSupabase = { from } as unknown as SupabaseClient;
+
+      await expect(claimWeeklyDelivery(mockSupabase, "user-1", period, now)).rejects.toThrow("DB Error on select");
+    });
+
+    it("returns claimed: false when existing delivery record is null", async () => {
+      const singleInsert = vi.fn().mockResolvedValue({
+        data: null,
+        error: { code: "23505", message: "duplicate" },
+      });
+      const selectInsert = vi.fn().mockReturnValue({ single: singleInsert });
+      const insert = vi.fn().mockReturnValue({ select: selectInsert });
+
+      const maybeSingleExisting = vi.fn().mockResolvedValue({
+        data: null,
+        error: null,
+      });
+      const eqStart = vi.fn().mockReturnValue({ maybeSingle: maybeSingleExisting });
+      const eqUser = vi.fn().mockReturnValue({ eq: eqStart });
+      const selectExisting = vi.fn().mockReturnValue({ eq: eqUser });
+
+      const from = vi.fn().mockImplementation((table: string) => {
+        if (table === "weekly_report_deliveries") {
+          return { insert, select: selectExisting };
+        }
+        throw new Error(`Unexpected table ${table}`);
+      });
+
+      const mockSupabase = { from } as unknown as SupabaseClient;
+
+      const result = await claimWeeklyDelivery(mockSupabase, "user-1", period, now);
+      expect(result).toEqual({ claimed: false });
+    });
   });
 
   describe("markWeeklyDeliverySent and markWeeklyDeliveryFailed", () => {
@@ -226,6 +290,42 @@ describe("weekly report delivery claims", () => {
           error_code: longError.slice(0, 80),
         }),
       );
+    });
+
+    it("markWeeklyDeliverySkipped parks the period without a failure", async () => {
+      const eqUser = vi.fn().mockResolvedValue({ error: null });
+      const eqId = vi.fn().mockReturnValue({ eq: eqUser });
+      const update = vi.fn().mockReturnValue({ eq: eqId });
+
+      const mockSupabase = {
+        from: vi.fn().mockReturnValue({ update }),
+      } as unknown as SupabaseClient;
+
+      await markWeeklyDeliverySkipped(
+        mockSupabase,
+        "user-1",
+        "del-1",
+        "recipient_undeliverable",
+      );
+      expect(update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "skipped",
+          error_code: "recipient_undeliverable",
+        }),
+      );
+    });
+
+    it("a skipped delivery is never reclaimed", () => {
+      expect(
+        classifyDeliveryClaim(
+          {
+            status: "skipped",
+            attemptedAt: "2026-07-13T13:15:00.000Z",
+            errorCode: "recipient_undeliverable",
+          },
+          now,
+        ),
+      ).toBe("skip");
     });
 
     it("throws errors when DB update operations fail", async () => {
