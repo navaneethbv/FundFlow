@@ -32,6 +32,8 @@ describe("POST /api/plaid/webhook", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env = { ...originalEnv };
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("PLAID_ENV", "sandbox");
   });
 
   afterEach(() => {
