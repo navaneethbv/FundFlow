@@ -179,6 +179,9 @@ export const config = {
     // `public/` — routing it through the proxy in dev broke registration. It
     // is a public static file with no user data, so it needs no session
     // refresh; it does mean the SW response carries no CSP of its own.
-    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    // `manifest.webmanifest` is excluded for the same reason: it is public PWA
+    // metadata, and redirecting it to /login for signed-out visitors made the
+    // browser parse a login page as JSON ("manifest is not valid JSON data").
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };
