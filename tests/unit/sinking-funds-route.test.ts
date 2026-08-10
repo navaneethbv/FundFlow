@@ -112,6 +112,17 @@ describe("POST /api/sinking-funds", () => {
     }));
     expect(response.status).toBe(500);
   });
+
+  it("returns 500 when insert returns no row and no error", async () => {
+    serviceClient = clientStub({ sinking_funds: { data: null, error: null } });
+    const response = await POST(request("POST", {
+      name: "Car insurance",
+      targetAmount: 600,
+      dueDate: "2027-01-31",
+      cadence: "semiannual",
+    }));
+    expect(response.status).toBe(500);
+  });
 });
 
 describe("PATCH /api/sinking-funds/[id]", () => {
@@ -188,6 +199,25 @@ describe("PATCH /api/sinking-funds/[id]", () => {
       supabase: clientStub({ sinking_funds: { data: { id: FUND.id } } }),
     });
     serviceClient = clientStub({ sinking_funds: { data: null, error: { message: "Update error" } } });
+
+    const response = await PATCH(
+      request("PATCH", {
+        name: "Car insurance",
+        targetAmount: 600,
+        dueDate: "2027-02-28",
+        cadence: "annual",
+      }),
+      context(FUND.id),
+    );
+    expect(response.status).toBe(500);
+  });
+
+  it("returns 500 when service update returns no row and no error", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ sinking_funds: { data: { id: FUND.id } } }),
+    });
+    serviceClient = clientStub({ sinking_funds: { data: null, error: null } });
 
     const response = await PATCH(
       request("PATCH", {

@@ -241,4 +241,19 @@ describe("loadCashFlowData", () => {
     expect(missingResult.stale).toBe(true);
     expect(oldResult.stale).toBe(true);
   });
+
+  it("throws error when query fails without a code property", async () => {
+    const supabase = clientStub({
+      transactions: { data: [] },
+      accounts: { data: null, error: { message: "Query failed" } },
+    });
+
+    await expect(
+      loadCashFlowData(supabase as never, {
+        scope: MINE,
+        anchorMonth: "2026-07",
+        rangeMonths: 6,
+      }),
+    ).rejects.toThrow("cash_flow_query_failed:accounts");
+  });
 });

@@ -168,6 +168,19 @@ describe("POST /api/transactions/duplicates", () => {
     expect(response.status).toBe(500);
   });
 
+  it("returns 409 conflict when transaction is already linked to another duplicate", async () => {
+    service.rpc = vi.fn().mockResolvedValue({ data: null, error: { message: "duplicate_link_conflict: already linked" } });
+    const response = await POST(request("POST", {
+      subjectId: SUBJECT,
+      keptTransactionId: FIRST_ID,
+      excludedTransactionId: SECOND_ID,
+      decision: "confirmed",
+    }));
+    expect(response.status).toBe(409);
+    const json = await response.json();
+    expect(json.error).toBe("One of these transactions is already linked to another duplicate.");
+  });
+
   it("persists dismissal without creating an exclusion link", async () => {
     service = makeService({ transaction_review_decisions: { data: null, error: null } });
 

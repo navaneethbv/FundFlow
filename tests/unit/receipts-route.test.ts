@@ -164,6 +164,30 @@ describe("POST /api/receipts", () => {
     expect(response.status).toBe(500);
     expect(service.remove).toHaveBeenCalledWith([expect.stringMatching(new RegExp(`^${USER_ID}/`))]);
   });
+
+  it.each([
+    ["merchant too long", "merchant", "x".repeat(161), "merchant is too long"],
+    ["invalid purchaseDate", "purchaseDate", "invalid-date", "purchaseDate is invalid"],
+    ["negative total", "total", "-10", "total must be positive"],
+  ])("rejects invalid form payload with 400 when %s", async (_name, field, value, expectedError) => {
+    const form = new FormData();
+    form.set("file", new File([new Uint8Array([1])], "receipt.png", { type: "image/png" }));
+    form.set(field, value);
+    const req = new NextRequest("http://localhost/api/receipts", { method: "POST", body: form });
+
+    const response = await POST(req);
+    expect(response.status).toBe(400);
+    const json = await response.json();
+    expect(json.error).toBe(expectedError);
+  });
+
+  it("throws signedError when createSignedUrl fails", async () => {
+    service = makeService();
+    service.createSignedUrl.mockResolvedValueOnce({ data: null, error: new Error("Signed URL failed") });
+
+    const response = await POST(uploadRequest());
+    expect(response.status).toBe(500);
+  });
 });
 
 describe("GET /api/receipts", () => {
@@ -234,6 +258,29 @@ describe("PATCH /api/receipts/[id]", () => {
     expect(response.status).toBe(200);
     expect(service.writtenTo("receipts")).toEqual({ transaction_id: "transaction-1", status: "matched" });
     expect(service.scopedToUser("receipts", USER_ID)).toBe(true);
+  });
+
+  it("rejects an attach action missing transactionId with 400", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ receipts: { data: RECEIPT } }),
+    });
+
+    const response = await PATCH(jsonRequest("PATCH", { action: "attach" }), context);
+    expect(response.status).toBe(400);
+    const json = await response.json();
+    expect(json.error).toBe("transactionId is required");
+  });
+
+  it("returns 500 when service update returns an error", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ receipts: { data: RECEIPT } }),
+    });
+    service = makeService({ receipts: { data: null, error: { message: "Update Error" } } });
+
+    const response = await PATCH(jsonRequest("PATCH", { action: "ignore" }), context);
+    expect(response.status).toBe(500);
   });
 
   it.each([
