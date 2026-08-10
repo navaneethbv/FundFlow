@@ -30,6 +30,14 @@ vi.mock("@/lib/log", () => ({
   logError: (...args: unknown[]) => mockLogError(...args),
 }));
 
+const mockItemAccessTokenInvalidate = vi.fn();
+vi.mock("@/lib/plaid", () => ({
+  getPlaidClient: () => ({
+    itemAccessTokenInvalidate: (...args: unknown[]) =>
+      mockItemAccessTokenInvalidate(...args),
+  }),
+}));
+
 import {
   storeItem,
   decryptItemToken,
@@ -42,6 +50,9 @@ import {
   setItemStatus,
   updateItemBranding,
   getAccountIdMap,
+  rotateItemAccessToken,
+  rotateStaleItemTokens,
+  TOKEN_ROTATION_DAYS,
 } from "@/lib/plaid-service";
 import type { PlaidItemRow } from "@/lib/types";
 import type { AccountBase } from "plaid";
@@ -296,6 +307,71 @@ describe("lib/plaid-service", () => {
     const map = await getAccountIdMap("user-1");
     expect(map.get("plaid-acc-1")).toBe("db-acc-1");
     expect(map.get("plaid-acc-2")).toBe("db-acc-2");
+  });
+
+  it("rotateItemAccessToken rotates the token and persists it encrypted", async () => {
+    mockItemAccessTokenInvalidate.mockResolvedValueOnce({
+      data: { new_access_token: "rotated-token" },
+    });
+    const eq = vi.fn().mockResolvedValue({ error: null });
+    const update = vi.fn().mockReturnValue({ eq });
+    mockServiceClient.from.mockReturnValue({ update });
+
+    const ok = await rotateItemAccessToken(dummyItem);
+
+    expect(ok).toBe(true);
+    expect(mockItemAccessTokenInvalidate).toHaveBeenCalledWith({
+      access_token: "access-token-plain",
+    });
+    expect(mockEncryptSecret).toHaveBeenCalledWith("rotated-token");
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        access_token_ciphertext: "cipher-123",
+        access_token_rotated_at: expect.any(String),
+      }),
+    );
+    expect(eq).toHaveBeenCalledWith("id", "item-db-1");
+  });
+
+  it("rotateItemAccessToken logs and returns false when rotation fails", async () => {
+    mockItemAccessTokenInvalidate.mockRejectedValueOnce(new Error("Plaid failure"));
+    mockServiceClient.from.mockReturnValue({ update: vi.fn() });
+
+    const ok = await rotateItemAccessToken(dummyItem);
+
+    expect(ok).toBe(false);
+    expect(mockLogError).toHaveBeenCalledWith(
+      "plaid-service.token-rotation",
+      expect.any(Error),
+    );
+  });
+
+  it("rotateStaleItemTokens rotates only items never or not recently rotated", async () => {
+    const staleItem: PlaidItemRow = { ...dummyItem, id: "item-stale" };
+    const freshItem: PlaidItemRow = {
+      ...dummyItem,
+      id: "item-fresh",
+      access_token_rotated_at: new Date().toISOString(),
+    };
+    const eqStatus = vi.fn().mockResolvedValue({
+      data: [staleItem, freshItem],
+      error: null,
+    });
+    const eqUser = vi.fn().mockReturnValue({ eq: eqStatus });
+    const select = vi.fn().mockReturnValue({ eq: eqUser });
+    const updateEq = vi.fn().mockResolvedValue({ error: null });
+    const update = vi.fn().mockReturnValue({ eq: updateEq });
+    mockServiceClient.from.mockReturnValue({ select, update });
+    mockItemAccessTokenInvalidate.mockResolvedValue({
+      data: { new_access_token: "rotated-token" },
+    });
+
+    const rotated = await rotateStaleItemTokens("user-1");
+
+    expect(rotated).toBe(1);
+    expect(mockItemAccessTokenInvalidate).toHaveBeenCalledTimes(1);
+    expect(mockServiceClient.from).toHaveBeenCalledWith("plaid_items");
+    expect(TOKEN_ROTATION_DAYS).toBeGreaterThan(0);
   });
 
   it("throws errors when DB operations fail", async () => {
