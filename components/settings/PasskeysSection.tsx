@@ -8,7 +8,11 @@ import Panel from "@/components/ui/Panel";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 
-async function auditPasskey(action: "register" | "rename" | "delete", passkeyId: string) {
+async function recordPasskeyChange(action: "register" | "rename" | "delete", passkeyId: string) {
+  // For delete the server performs the actual removal (via the admin passkey
+  // API) after verifying the passkey exists; for register/rename the browser
+  // has already run the WebAuthn ceremony and the server just confirms and
+  // audits. Either way, a non-2xx means the change was NOT made.
   const response = await fetch("/api/settings/passkeys", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -82,7 +86,7 @@ export default function PasskeysSection() {
         friendlyName: name,
       });
       if (updateError) throw updateError;
-      await auditPasskey("register", data.id);
+      await recordPasskeyChange("register", data.id);
       setFriendlyName("");
       setStatus("Passkey added.");
       await loadPasskeys();
@@ -104,7 +108,7 @@ export default function PasskeysSection() {
         friendlyName: name,
       });
       if (updateError) throw updateError;
-      await auditPasskey("rename", passkeyId);
+      await recordPasskeyChange("rename", passkeyId);
       setEditingId(null);
       setEditName("");
       setStatus("Passkey renamed.");
@@ -124,9 +128,7 @@ export default function PasskeysSection() {
     setError(null);
     setLoading(true);
     try {
-      const { error: deleteError } = await supabase.auth.passkey.delete({ passkeyId });
-      if (deleteError) throw deleteError;
-      await auditPasskey("delete", passkeyId);
+      await recordPasskeyChange("delete", passkeyId);
       setStatus("Passkey deleted.");
       await loadPasskeys();
     } catch (err) {
