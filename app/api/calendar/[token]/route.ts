@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { buildBillsCalendar, type CalendarBill } from "@/lib/ical";
 import { errorResponse } from "@/lib/http";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { writeAudit } from "@/lib/audit";
 
 function normalizeFrequency(
   frequency: string | null,
@@ -33,12 +35,19 @@ export async function GET(
     }
     const tokenHash = createHash("sha256").update(token).digest("hex");
 
+    // The capability token is the only credential, so the feed is rate-limited
+    // by token to blunt brute-force / token-harvesting scans.
+    if (!(await checkRateLimit(`calendar-feed:${tokenHash}`, 60, 3600))) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
+
     const service = createServiceClient();
     const { data: row } = await service
       .from("calendar_tokens")
       .select("user_id, include_amounts")
       .eq("token_hash", tokenHash)
       .is("revoked_at", null)
+      .gt("expires_at", new Date().toISOString())
       .maybeSingle();
     if (!row) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -46,13 +55,14 @@ export async function GET(
 
     const { data: streams } = await service
       .from("recurring_streams")
-      .select("merchant_name, description, average_amount, last_amount, frequency, stream_type, is_active")
+      .select("id, merchant_name, description, average_amount, last_amount, frequency, stream_type, is_active")
       .eq("user_id", row.user_id)
       .eq("is_active", true);
 
     const today = new Date().toISOString().slice(0, 10);
     const anchor = `${today.slice(0, 7)}-15`;
     const bills: CalendarBill[] = (streams ?? []).map((stream) => ({
+      id: stream.id as string,
       name: stream.merchant_name ?? stream.description ?? "Recurring",
       amount: Math.abs(Number(stream.last_amount ?? stream.average_amount ?? 0)),
       itemType: stream.stream_type === "inflow" ? "income" : "expense",
@@ -65,6 +75,12 @@ export async function GET(
       asOf: today,
       horizonDays: 60,
       includeAmounts: Boolean(row.include_amounts),
+    });
+
+    await writeAudit({
+      userId: row.user_id,
+      action: "calendar_feed_read",
+      metadata: { include_amounts: Boolean(row.include_amounts) },
     });
 
     return new NextResponse(ics, {

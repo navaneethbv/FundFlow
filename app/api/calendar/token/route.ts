@@ -8,6 +8,8 @@ import { writeAudit, getClientIp } from "@/lib/audit";
  * the plaintext token is returned exactly once. Rows are written with the
  * user-scoped client, so owner RLS applies.
  */
+const TOKEN_TTL_MS = 180 * 24 * 60 * 60 * 1000; // 180 days
+
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -26,6 +28,7 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         token_hash: tokenHash,
         include_amounts: Boolean(body.includeAmounts),
+        expires_at: new Date(Date.now() + TOKEN_TTL_MS).toISOString(),
       })
       .select("id, include_amounts, created_at")
       .single();
@@ -56,6 +59,7 @@ export async function DELETE(request: NextRequest) {
     const { error } = await supabase
       .from("calendar_tokens")
       .update({ revoked_at: new Date().toISOString() })
+      .eq("user_id", user.id)
       .eq("id", body.id);
     if (error) throw error;
 

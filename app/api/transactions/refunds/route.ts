@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { detectRefundPairs, filterReviewDecisions } from "@/lib/transaction-quality";
 
 const WINDOW_DAYS = 14;
@@ -18,6 +19,9 @@ export async function GET() {
   const { supabase, user } = auth;
 
   try {
+    if (!(await checkRateLimit(`refunds:${user.id}:read`, 60, 60))) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
     const since = isoDaysAgo(LOOKBACK_DAYS);
     const [{ data: txns }, { data: decisions }] = await Promise.all([
       // Own ledger only: pairing a charge against a household member's shared
@@ -87,6 +91,9 @@ export async function POST(request: NextRequest) {
   const { user, supabase } = auth;
 
   try {
+    if (!(await checkRateLimit(`refunds:${user.id}:write`, 30, 3600))) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
     const body = await request.json().catch(() => null);
     const subjectId = body?.subject_id;
     const decision = body?.decision;
@@ -108,6 +115,18 @@ export async function POST(request: NextRequest) {
       const amount = Number(body?.amount);
       if (typeof chargeId !== "string" || typeof refundId !== "string" || !Number.isFinite(amount)) {
         return badRequest("charge_id, refund_id, and amount are required to link a refund");
+      }
+      // Both sides of a link must be rows in the caller's own ledger — an
+      // arbitrary transaction_id would forge a netting link against someone
+      // else's money.
+      const { data: owned, error: verifyError } = await supabase
+        .from("transactions")
+        .select("id")
+        .eq("user_id", user.id)
+        .in("id", [chargeId, refundId]);
+      if (verifyError) throw verifyError;
+      if ((owned ?? []).length !== 2) {
+        return badRequest("charge and refund must both be your own transactions");
       }
       const { error: linkError } = await supabase.from("linked_refunds").upsert(
         {

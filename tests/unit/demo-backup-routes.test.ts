@@ -253,6 +253,7 @@ describe("GET /api/cron/backup", () => {
         ],
       }),
       "backup-key",
+      USER,
     );
     expect(mockSendBackupEmail).toHaveBeenCalledWith(
       "user@example.com",

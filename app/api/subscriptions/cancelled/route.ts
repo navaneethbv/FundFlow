@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
-  const { supabase } = auth;
+  const { user, supabase } = auth;
 
   try {
     const body = (await request.json().catch(() => null)) as { merchant?: string } | null;
@@ -40,6 +40,7 @@ export async function DELETE(request: NextRequest) {
     const { error } = await supabase
       .from("cancelled_subscriptions")
       .delete()
+      .eq("user_id", user.id)
       .eq("merchant", merchant);
     if (error) throw error;
 

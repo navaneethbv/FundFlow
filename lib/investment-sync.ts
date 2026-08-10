@@ -147,21 +147,31 @@ export async function syncInvestmentsForItem(
     const { data: upserted, error } = await supabase
       .from("holdings")
       .upsert(rows, { onConflict: "account_id,security_id,source" })
-      .select("id");
+      .select("id, account_id, security_id");
     if (error) throw error;
     syncedIds = new Set((upserted ?? []).map((r) => r.id as string));
 
     // Daily price/quantity/value point for balance history and (Phase 9B)
-    // time-weighted return.
+    // time-weighted return. Postgres does not guarantee RETURNING order, so
+    // snapshots are paired to holdings by their stable (account_id,
+    // security_id) key rather than by array index.
+    const idByKey = new Map(
+      (upserted ?? []).map((r) => [
+        `${r.account_id as string}:${r.security_id as string}`,
+        r.id as string,
+      ]),
+    );
     const today = new Date().toISOString().slice(0, 10);
-    const snapshotRows = (upserted ?? []).map((r, i) => ({
-      user_id: item.user_id,
-      holding_id: r.id as string,
-      snapshot_date: today,
-      quantity: rows[i].quantity,
-      price: rows[i].institution_price,
-      value: rows[i].institution_value,
-    }));
+    const snapshotRows = rows
+      .filter((row) => idByKey.has(`${row.account_id}:${row.security_id}`))
+      .map((row) => ({
+        user_id: item.user_id,
+        holding_id: idByKey.get(`${row.account_id}:${row.security_id}`),
+        snapshot_date: today,
+        quantity: row.quantity,
+        price: row.institution_price,
+        value: row.institution_value,
+      }));
     const { error: snapshotError } = await supabase
       .from("holding_snapshots")
       .upsert(snapshotRows, { onConflict: "holding_id,snapshot_date" });

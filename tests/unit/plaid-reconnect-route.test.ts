@@ -25,7 +25,12 @@ vi.mock("@/lib/plaid-institution", () => ({
   fetchInstitutionBranding: (...args: unknown[]) => mockFetchInstitutionBranding(...args),
 }));
 
-vi.mock("@/lib/plaid", () => ({ getPlaidClient: () => ({}) }));
+const mockItemGet = vi.fn<(...args: unknown[]) => unknown>(() =>
+  Promise.resolve({ data: { item: {} } }),
+);
+vi.mock("@/lib/plaid", () => ({
+  getPlaidClient: () => ({ itemGet: (...args: unknown[]) => mockItemGet(...args) }),
+}));
 
 const mockSyncItemTransactions = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/sync", () => ({
@@ -42,6 +47,11 @@ vi.mock("@/lib/audit", () => ({
 const mockLogError = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/log", () => ({
   logError: (...args: unknown[]) => mockLogError(...args),
+}));
+
+const mockCheckRateLimit = vi.fn<(...args: unknown[]) => unknown>(() => true);
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
 }));
 
 import { POST } from "@/app/api/plaid/reconnect/route";
@@ -154,6 +164,23 @@ describe("POST /api/plaid/reconnect", () => {
     const res = await POST(request);
     expect(res.status).toBe(200);
     expect(mockLogError).toHaveBeenCalledWith("plaid.reconnect.branding", expect.any(Error));
+  });
+
+  it("returns 400 when the re-link cannot be confirmed at Plaid", async () => {
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+    const request = {
+      json: () => Promise.resolve({ item_id: "item-1" }),
+    } as unknown as NextRequest;
+    mockGetItem.mockResolvedValue({ id: "item-1", institution_name: "Chase" });
+    mockItemGet.mockRejectedValue(new Error("ITEM_NOT_FOUND"));
+
+    const res = await POST(request);
+    expect(res.status).toBe(400);
+    expect(mockLogError).toHaveBeenCalledWith(
+      "plaid.reconnect.itemGet",
+      expect.any(Error),
+    );
+    expect(mockSetItemStatus).not.toHaveBeenCalled();
   });
 
   it("calls errorResponse when unexpected exception occurs", async () => {

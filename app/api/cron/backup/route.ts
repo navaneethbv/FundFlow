@@ -294,6 +294,7 @@ export async function GET(request: NextRequest) {
             households: households ?? [],
           },
           backupKey,
+          userId,
         );
 
         const { data: userData } = await service.auth.admin.getUserById(userId);

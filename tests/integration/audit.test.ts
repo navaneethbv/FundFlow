@@ -4,21 +4,28 @@ import { getClientIp, writeAudit } from "@/lib/audit";
 import { createClient } from "@supabase/supabase-js";
 
 describe("getClientIp", () => {
-  it("extracts the first IP from x-forwarded-for", () => {
+  it("extracts the IP from x-real-ip", () => {
     const req = new NextRequest("http://localhost", {
-      headers: { "x-forwarded-for": "203.0.113.195, 70.41.3.18, 150.172.238.178" },
+      headers: { "x-real-ip": "203.0.113.195" },
     });
     expect(getClientIp(req)).toBe("203.0.113.195");
   });
 
-  it("extracts x-real-ip if x-forwarded-for is missing", () => {
+  it("extracts x-vercel-forwarded-for if x-real-ip is missing", () => {
     const req = new NextRequest("http://localhost", {
-      headers: { "x-real-ip": "203.0.113.196" },
+      headers: { "x-vercel-forwarded-for": "203.0.113.196, 10.0.0.1" },
     });
     expect(getClientIp(req)).toBe("203.0.113.196");
   });
 
-  it("returns null if neither header is present", () => {
+  it("ignores client-forgeable x-forwarded-for", () => {
+    const req = new NextRequest("http://localhost", {
+      headers: { "x-forwarded-for": "203.0.113.197" },
+    });
+    expect(getClientIp(req)).toBeNull();
+  });
+
+  it("returns null if no trusted header is present", () => {
     const req = new NextRequest("http://localhost");
     expect(getClientIp(req)).toBeNull();
   });

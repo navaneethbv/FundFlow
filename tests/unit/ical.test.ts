@@ -131,6 +131,45 @@ describe("buildBillsCalendar", () => {
     expect(ics).toContain("SUMMARY:Rent\\; Apt 4\\, LLC\\\\");
   });
 
+  it("encodes newlines and colons so a name cannot inject iCal lines", () => {
+    const ics = buildBillsCalendar({
+      bills: [
+        {
+          name: "Cafe\nSUMMARY:PHISHING:open",
+          amount: 5,
+          itemType: "expense",
+          frequency: "monthly",
+          nextDate: "2026-07-05",
+        },
+      ],
+      asOf: "2026-07-01",
+      horizonDays: 10,
+      includeAmounts: false,
+    });
+    // Bare CR/LF never survives into the output (the CRLF check above would
+    // fail too) and `:` inside the name is escaped as `\:`.
+    expect(ics).toContain("SUMMARY:Cafe\\nSUMMARY\\:PHISHING\\:open");
+    expect(ics.replace(/\r\n/g, "")).not.toContain("\n");
+  });
+
+  it("includes the stream id in the VEVENT UID when provided", () => {
+    const ics = buildBillsCalendar({
+      bills: [{ ...netflix, id: "stream-42" }],
+      asOf: "2026-07-01",
+      horizonDays: 20,
+      includeAmounts: false,
+    });
+    expect(ics).toContain("UID:fundflow-stream-42-20260715@fundflow");
+    // A different stream with the same display name must not collide.
+    const other = buildBillsCalendar({
+      bills: [{ ...netflix, id: "stream-7" }],
+      asOf: "2026-07-01",
+      horizonDays: 20,
+      includeAmounts: false,
+    });
+    expect(other).toContain("UID:fundflow-stream-7-20260715@fundflow");
+  });
+
   it("emits deterministic UIDs and DTSTAMP so output is pure", () => {
     const build = () =>
       buildBillsCalendar({

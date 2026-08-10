@@ -32,6 +32,21 @@ function request() {
   return new NextRequest("http://localhost/api/export/investments-csv");
 }
 
+/** User-scoped supabase stub with the profiles row the export opt-out reads. */
+function userClient() {
+  return {
+    from: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({
+            data: { ai_export_enabled: true },
+          }),
+        }),
+      }),
+    }),
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   flagEnabled = true;
@@ -53,7 +68,7 @@ describe("GET /api/export/investments-csv", () => {
   });
 
   it("exports holdings grouped by asset class as CSV and audits it", async () => {
-    mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: {} });
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: userClient() });
     mockLoadHoldings.mockResolvedValue([
       {
         id: "h1",

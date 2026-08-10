@@ -17,6 +17,11 @@ vi.mock("@/lib/transaction-quality", () => ({
     mockFilterReviewDecisions(...args),
 }));
 
+const mockCheckRateLimit = vi.fn<(...args: unknown[]) => unknown>(() => true);
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
+}));
+
 import { GET, POST } from "@/app/api/transactions/refunds/route";
 import { NextRequest } from "next/server";
 
@@ -113,8 +118,15 @@ describe("Transactions Refunds API Route", () => {
     });
 
     it("upserts decision and links refund if confirmed", async () => {
+      const owned = vi.fn().mockReturnValue({
+        in: vi.fn().mockResolvedValue({
+          data: [{ id: "charge-1" }, { id: "refund-1" }],
+          error: null,
+        }),
+      });
       const mockSupabase = {
         from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({ eq: owned }),
           upsert: vi.fn().mockResolvedValue({ error: null }),
         }),
       };
@@ -142,6 +154,39 @@ describe("Transactions Refunds API Route", () => {
         "transaction_review_decisions",
       );
       expect(mockSupabase.from).toHaveBeenCalledWith("linked_refunds");
+    });
+
+    it("rejects a confirmed link when the transactions are not the caller's", async () => {
+      const owned = vi.fn().mockReturnValue({
+        in: vi.fn().mockResolvedValue({ data: [{ id: "charge-1" }], error: null }),
+      });
+      const mockSupabase = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({ eq: owned }),
+          upsert: vi.fn().mockResolvedValue({ error: null }),
+        }),
+      };
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: mockSupabase,
+      });
+      const request = {
+        json: () =>
+          Promise.resolve({
+            subject_id: "charge-1:refund-1",
+            decision: "confirmed",
+            charge_id: "charge-1",
+            refund_id: "refund-1",
+            amount: 50,
+          }),
+      } as unknown as NextRequest;
+
+      const res = await POST(request);
+      expect(res.status).toBe(400);
+      expect(mockBadRequest).toHaveBeenCalledWith(
+        "charge and refund must both be your own transactions",
+      );
+      expect(mockSupabase.from).not.toHaveBeenCalledWith("linked_refunds");
     });
 
     it("upserts decision and does not link if dismissed", async () => {

@@ -24,6 +24,7 @@ export type AuditAction =
   | "account_delete"
   | "calendar_token_created"
   | "calendar_token_revoked"
+  | "calendar_feed_read"
   | "data_backup"
   | "account_delete_failed"
   | "household_invite_sent"
@@ -112,9 +113,17 @@ export async function writeAudit({
   }
 }
 
-/** Extract a best-effort client IP from proxy headers. */
+/**
+ * Extract a best-effort client IP from platform-trusted headers only.
+ * `x-forwarded-for` is client-controllable (an attacker can send their own
+ * value, which proxies append to rather than replace), so it is ignored to
+ * keep audit_logs forensically sound. On Vercel the edge sets both
+ * `x-real-ip` and `x-vercel-forwarded-for` and strips client-set copies.
+ */
 export function getClientIp(request: NextRequest): string | null {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0]!.trim();
-  return request.headers.get("x-real-ip");
+  const realIp = request.headers.get("x-real-ip");
+  if (realIp) return realIp;
+  const vercelForwarded = request.headers.get("x-vercel-forwarded-for");
+  if (vercelForwarded) return vercelForwarded.split(",")[0]!.trim();
+  return null;
 }

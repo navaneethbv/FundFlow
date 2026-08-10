@@ -8,8 +8,10 @@ vi.mock("@/lib/http", () => ({
 }));
 
 const mockFetchPrivacySafeRows = vi.fn<(...args: unknown[]) => unknown>();
+const mockIsExportAllowed = vi.fn<(...args: unknown[]) => unknown>(() => true);
 vi.mock("@/lib/export", () => ({
   fetchPrivacySafeRows: (...args: unknown[]) => mockFetchPrivacySafeRows(...args),
+  isExportAllowed: (...args: unknown[]) => mockIsExportAllowed(...args),
 }));
 
 const mockWriteAudit = vi.fn<(...args: unknown[]) => unknown>();

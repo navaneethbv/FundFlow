@@ -123,7 +123,8 @@ describe("POST / DELETE /api/push/subscribe", () => {
     });
 
     it("deletes subscription from push_subscriptions", async () => {
-      const eq = vi.fn().mockResolvedValue({ error: null });
+      const eq = vi.fn();
+      eq.mockReturnValue({ eq });
       const del = vi.fn().mockReturnValue({ eq });
       const mockSupabase = { from: vi.fn().mockReturnValue({ delete: del }) } as unknown as SupabaseClient;
 
@@ -138,11 +139,14 @@ describe("POST / DELETE /api/push/subscribe", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body).toEqual({ ok: true });
+      expect(eq).toHaveBeenCalledWith("user_id", "user-1");
       expect(eq).toHaveBeenCalledWith("endpoint", "https://push.com/sub-1");
     });
 
     it("calls errorResponse on delete failure", async () => {
-      const eq = vi.fn().mockResolvedValue({ error: new Error("DB Error") });
+      const eq = vi.fn();
+      eq.mockReturnValueOnce({ eq });
+      eq.mockReturnValueOnce({ error: new Error("DB Error") });
       const del = vi.fn().mockReturnValue({ eq });
       const mockSupabase = { from: vi.fn().mockReturnValue({ delete: del }) } as unknown as SupabaseClient;
 

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getClientIp, writeAudit } from "@/lib/audit";
 import { toCsv } from "@/lib/csv";
+import { isExportAllowed } from "@/lib/export";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { errorResponse, requireUser } from "@/lib/http";
 import { buildInvestmentsPage } from "@/lib/investments";
@@ -15,6 +16,13 @@ export async function GET(request: NextRequest) {
   const { user, supabase } = auth;
 
   try {
+    if (!(await isExportAllowed(supabase, user.id))) {
+      return NextResponse.json(
+        { error: "Data export is disabled in your settings." },
+        { status: 403 },
+      );
+    }
+
     const [holdings, snapshots] = await Promise.all([
       loadHoldings(supabase),
       loadHoldingSnapshots(supabase),

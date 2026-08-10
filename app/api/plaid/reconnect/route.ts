@@ -1,13 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { CountryCode } from "plaid";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
-import { getItem, setItemStatus, updateItemBranding } from "@/lib/plaid-service";
+import { getItem, setItemStatus, updateItemBranding, decryptItemToken } from "@/lib/plaid-service";
 import { syncItemTransactions } from "@/lib/sync";
 import { writeAudit, getClientIp } from "@/lib/audit";
 import { logError } from "@/lib/log";
 import { getPlaidClient } from "@/lib/plaid";
 import { fetchInstitutionBranding } from "@/lib/plaid-institution";
 import { serverEnv } from "@/lib/env.server";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 /**
  * Finalize a Plaid Link update-mode flow. Update mode repairs the item's
@@ -31,10 +32,29 @@ export async function POST(request: NextRequest) {
     return badRequest("item_id is required");
   }
 
+  if (!(await checkRateLimit(`reconnect:${user.id}`, 10, 60))) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   try {
     const item = await getItem(user.id, itemId);
     if (!item) {
       return NextResponse.json({ error: "Item not found" }, { status: 404 });
+    }
+
+    // Confirm the re-link actually succeeded before trusting the item again:
+    // a stale/forged item_id must not be able to flip an item back to active.
+    // /item/get succeeds for any live item (update mode repairs the token in
+    // place, it doesn't mint a new one), so a failure here means the item is
+    // gone at Plaid or the token is unusable.
+    try {
+      await getPlaidClient().itemGet({ access_token: decryptItemToken(item) });
+    } catch (error) {
+      logError("plaid.reconnect.itemGet", error);
+      return NextResponse.json(
+        { error: "Could not confirm the re-link. Try connecting again." },
+        { status: 400 },
+      );
     }
 
     await setItemStatus(item.id, "active", null);

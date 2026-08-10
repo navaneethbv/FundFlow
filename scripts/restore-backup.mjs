@@ -9,11 +9,13 @@
  * via Settings → Import (the JSON rows are import-compatible) — see
  * docs/CHANGES-roadmap-2026-07-23.md for the runbook.
  */
-import { createDecipheriv } from "node:crypto";
+import { createDecipheriv, hkdfSync } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
+
+const KDF_INFO = "fundflow-backup-v1";
 
 export function restoreBackup(file, key) {
   if (!file || !key) {
@@ -35,9 +37,22 @@ export function restoreBackup(file, key) {
     throw new Error("Unsupported backup envelope.");
   }
 
+  // Per-user archives (kdf field) derive the AES key from BACKUP_ENC_KEY +
+  // the envelope's user id; older archives decrypt with the raw key.
+  const decipherKey =
+    envelope.kdf === "hkdf-sha256-v1" && envelope.user_id
+      ? hkdfSync(
+          "sha256",
+          keyBuffer,
+          Buffer.from(envelope.user_id, "utf8"),
+          Buffer.from(KDF_INFO, "utf8"),
+          32,
+        )
+      : keyBuffer;
+
   const decipher = createDecipheriv(
     "aes-256-gcm",
-    keyBuffer,
+    decipherKey,
     Buffer.from(envelope.iv, "base64"),
   );
   decipher.setAuthTag(Buffer.from(envelope.tag, "base64"));

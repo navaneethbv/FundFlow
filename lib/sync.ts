@@ -129,7 +129,10 @@ async function syncItemTransactionsInner(
     added.push(...data.added);
     modified.push(...data.modified);
     removed.push(...data.removed);
-    latestAccounts = data.accounts;
+    // Plaid omits `accounts` on later pages; only take the page that has them
+    // so a multi-page sync can't finish with an empty array and silently stop
+    // refreshing balances.
+    if (data.accounts.length > 0) latestAccounts = data.accounts;
 
     cursor = data.next_cursor;
     hasMore = data.has_more;
