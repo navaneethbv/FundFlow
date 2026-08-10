@@ -3,6 +3,30 @@
 This runbook covers roadmap items that require live credentials, browser state,
 or screenshots. Keep it current when flows change.
 
+## Diagnosing "the app looks broken" reports
+
+Added 2026-08-10, after a report of broken web login that was an ad blocker.
+
+An app rendering as unstyled HTML (serif text, native buttons, an oversized logo) is a blocked stylesheet, not an auth or deployment failure.
+Sign-in keeps working underneath the missing styles, so confirm what is actually broken before debugging the server.
+
+Order of checks:
+
+1. Ask for the reporter's Network tab. A blocked request reads as blocked, not as a 404, and an extension's request log names the filter rule that matched.
+2. Check whether an ad blocker, content blocker, or filtering VPN is active. These affect every browser on the machine, including private windows, while leaving mobile unaffected, which makes a client-side block look like a server-side outage.
+3. Only then check the deployment.
+
+`curl` and Playwright load no browser extensions.
+A passing reproduction in either one rules out the server and proves nothing about the reporter's browser.
+Treating a green Playwright run as "production is healthy, so it must be their cache" is what sent the 2026-08-10 investigation down two wrong root causes.
+
+Useful commands:
+
+```bash
+curl -sS -D - -o /tmp/page.html https://<host>/login | head -20   # status, CSP, cache headers
+curl -sS -o /dev/null -w '%{http_code}\n' https://<host>/_next/static/chunks/<hash>.css
+```
+
 ## PR #99 Completion Evidence
 
 The approved shipped-defect program was verified on branch `fix/shipped-defects` on 2026-08-09.
