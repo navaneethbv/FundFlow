@@ -9,6 +9,7 @@ vi.mock("@/lib/plaid", () => ({
 
 const mockServiceClient = {
   from: vi.fn(),
+  rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
 };
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => mockServiceClient,
@@ -144,6 +145,43 @@ describe("lib/sync", () => {
       );
       expect(mockUpdateItemCursor).toHaveBeenCalledWith("item-db-1", "cursor-next");
       expect(mockSetItemStatus).toHaveBeenCalledWith("item-db-1", "active", null);
+    });
+
+    it("skips the sync when another run already holds the item claim", async () => {
+      mockServiceClient.rpc.mockResolvedValueOnce({ data: false, error: null });
+
+      const res = await syncItemTransactions(dummyItem);
+
+      expect(res).toEqual({ added: 0, modified: 0, removed: 0 });
+      expect(mockTransactionsSync).not.toHaveBeenCalled();
+      expect(mockUpdateItemCursor).not.toHaveBeenCalled();
+      expect(mockServiceClient.rpc).toHaveBeenCalledWith("claim_item_sync", {
+        p_item_id: "item-db-1",
+        p_stale_seconds: 300,
+      });
+    });
+
+    it("releases the claim after a successful sync", async () => {
+      mockTransactionsSync.mockResolvedValueOnce({
+        data: {
+          added: [],
+          modified: [],
+          removed: [],
+          accounts: [],
+          next_cursor: "cursor-next",
+          has_more: false,
+        },
+      });
+      mockServiceClient.from.mockImplementation(() => {
+        throw new Error("Unexpected table");
+      });
+
+      const res = await syncItemTransactions(dummyItem);
+
+      expect(res).toEqual({ added: 0, modified: 0, removed: 0 });
+      expect(mockServiceClient.rpc).toHaveBeenCalledWith("release_item_sync", {
+        p_item_id: "item-db-1",
+      });
     });
 
     it("throws error if transactions upsert fails", async () => {

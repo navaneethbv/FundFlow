@@ -155,7 +155,7 @@ describe("syncInvestmentsForItem", () => {
           is_active: true,
         }),
       ],
-      { onConflict: "account_id,security_id" },
+      { onConflict: "account_id,security_id,source" },
     );
     expect(spies.snapshotsUpsert).toHaveBeenCalled();
     expect(spies.holdingsUpdate).not.toHaveBeenCalled();

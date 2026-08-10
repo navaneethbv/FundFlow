@@ -146,7 +146,7 @@ export async function syncInvestmentsForItem(
   if (rows.length > 0) {
     const { data: upserted, error } = await supabase
       .from("holdings")
-      .upsert(rows, { onConflict: "account_id,security_id" })
+      .upsert(rows, { onConflict: "account_id,security_id,source" })
       .select("id");
     if (error) throw error;
     syncedIds = new Set((upserted ?? []).map((r) => r.id as string));

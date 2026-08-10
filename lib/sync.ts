@@ -22,6 +22,15 @@ export interface SyncResult {
   removed: number;
 }
 
+/**
+ * How long a crashed run's `syncing_at` claim is honored before another run
+ * may reclaim the item. Long enough that a slow sync finishes well inside it,
+ * short enough that a crashed run doesn't stall the item for long.
+ */
+const STALE_SYNC_SECONDS = 5 * 60;
+
+const NOOP_RESULT: SyncResult = { added: 0, modified: 0, removed: 0 };
+
 function mapTransactionRow(
   userId: string,
   accountDbId: string,
@@ -58,6 +67,47 @@ function mapTransactionRow(
 export async function syncItemTransactions(
   item: PlaidItemRow,
 ): Promise<SyncResult> {
+  const supabase = createServiceClient();
+
+  // Serialize per item: only one run may own an item's sync at a time, so
+  // overlapping triggers (webhook, cron, manual sync, auto-refresh, exchange)
+  // can't double-spend Plaid API calls, duplicate notifications, or regress
+  // the cursor. A stale claim from a crashed run is reclaimed automatically.
+  const { data: claimed, error: claimError } = await supabase.rpc(
+    "claim_item_sync",
+    {
+      p_item_id: item.id,
+      p_stale_seconds: STALE_SYNC_SECONDS,
+    },
+  );
+  if (claimError) {
+    // Never let the guard break a sync: proceed, just without the claim.
+    logError("sync.claim", claimError);
+  } else if (claimed === false) {
+    // Another run owns this item right now — skip; it will persist the cursor.
+    return NOOP_RESULT;
+  }
+  const holdsClaim = !claimError && claimed === true;
+
+  try {
+    return await syncItemTransactionsInner(item, supabase);
+  } finally {
+    // Only release a claim we actually took — releasing on a claim error could
+    // clear a legitimate in-progress run's marker.
+    if (holdsClaim) {
+      try {
+        await supabase.rpc("release_item_sync", { p_item_id: item.id });
+      } catch (err) {
+        logError("sync.release", err);
+      }
+    }
+  }
+}
+
+async function syncItemTransactionsInner(
+  item: PlaidItemRow,
+  supabase: ReturnType<typeof createServiceClient>,
+): Promise<SyncResult> {
   const plaid = getPlaidClient();
   const accessToken = await decryptItemTokenAndUpgrade(item);
 
@@ -84,8 +134,6 @@ export async function syncItemTransactions(
     cursor = data.next_cursor;
     hasMore = data.has_more;
   }
-
-  const supabase = createServiceClient();
 
   // Refresh accounts (and balances) first so transactions can FK to them.
   await upsertAccounts(item.user_id, item.id, latestAccounts);
