@@ -4,11 +4,20 @@ import { getCsvColumns, normalizeColumnMap, parseImportCsv, type ColumnMap } fro
 import { looksLikeOfx, parseOfx } from "@/lib/import-ofx";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { createServiceClient } from "@/lib/supabase/service";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+const MAX_FILE_BYTES = 2 * 1024 * 1024;
+const MAX_ROWS = 20_000;
 
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
   const { user, supabase } = auth;
+
+  const allowed = await checkRateLimit(`import-preview:${user.id}`, 10, 3600);
+  if (!allowed) {
+    return badRequest("Too many previews. Please wait a while.");
+  }
 
   try {
     const form = await request.formData().catch(() => null);
@@ -17,6 +26,9 @@ export async function POST(request: NextRequest) {
     const file = form.get("file");
     const positiveIsIncome = form.get("positive_is_income") !== "false";
     if (!(file instanceof File)) return badRequest("file is required");
+    if (file.size > MAX_FILE_BYTES) {
+      return badRequest("File too large (2 MB max)");
+    }
 
     const text = await file.text();
     const isOfx = looksLikeOfx(text);
@@ -43,6 +55,9 @@ export async function POST(request: NextRequest) {
         }
       : parseImportCsv(text, { positiveIsIncome, columns });
     const { rows, errors } = parsed;
+    if (rows.length > MAX_ROWS) {
+      return badRequest(`Too many rows (${MAX_ROWS} max per file)`);
+    }
     if (rows.length === 0) {
       // With no explicit map, auto-detection couldn't produce rows — hand the
       // headers back so the UI can offer manual column mapping instead of a

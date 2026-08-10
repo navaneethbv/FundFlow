@@ -25,6 +25,7 @@ export type AuditAction =
   | "calendar_token_created"
   | "calendar_token_revoked"
   | "data_backup"
+  | "account_delete_failed"
   | "household_invite_sent"
   | "household_invite_accepted"
   | "apr_updated"
