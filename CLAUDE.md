@@ -1,7 +1,7 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with
-code in this repository.
+How to work in this repository. What the repository *contains* is documented in
+`docs/ARCHITECTURE.md`; keep that split when adding to either file.
 
 @AGENTS.md
 
@@ -12,325 +12,106 @@ npm run dev         # Next.js dev server on http://localhost:3000
 npm run build       # production build (also the fastest full type/route check)
 npm run lint        # eslint (flat config, eslint.config.mjs)
 npx tsc --noEmit    # typecheck only
-npm run test:unit   # unit tests only — no external services needed
-npm test            # unit + integration tests (integration hits the live Supabase project)
+npm run test:unit   # unit tests only, no external services needed
+npm test            # unit + integration tests (integration hits live Supabase)
 npm run test:watch  # vitest watch mode
 ```
 
-Run a single test file: `npx vitest run tests/unit/csv.test.ts`.
+Run one file: `npx vitest run tests/unit/csv.test.ts`.
 
-Integration tests (`tests/integration/`) require `.env.local` with Supabase URL
-+ publishable + secret keys and the migrations applied; they **auto-skip**
-(`describe.skip`) when those vars are missing. They create throwaway users
-(deleted in `afterAll`) against the real FundFlow Supabase project — never point
-them at a production database with real user data.
+Integration tests (`tests/integration/`) need `.env.local` plus applied
+migrations and auto-skip without them. They create throwaway users against the
+real Supabase project, so never point them at a database with real user data.
 
 ## What this app is
 
-FundFlow is a personal-finance app for 1–2 users: Next.js 16 App Router
-(TypeScript, Tailwind 4) deployed on Vercel, Supabase for auth + Postgres,
-Plaid for bank data. There is deliberately **no in-app AI** — the user exports
-a privacy-safe CSV (date/merchant/amount/category only) and feeds it to an AI
-tool of their choice.
+A personal-finance app for 1-2 users: Next.js 16 App Router (TypeScript,
+Tailwind 4) on Vercel, Supabase for auth + Postgres, Plaid for bank data.
+There is deliberately **no in-app AI**: the user exports a privacy-safe CSV and
+feeds it to a tool of their choice.
 
-## Architecture
+## Rules that must not be broken
 
-```
-Browser (React, publishable key only, RLS-bound)
-   │ HttpOnly cookie session
-proxy.ts  ── session refresh (getUser), CSP nonce, security headers, page-auth redirects
-   │
-app/api/* route handlers (the trust boundary)
-   │           │             │
-Supabase Auth  Supabase PG   Plaid API (server-only client, lib/plaid.ts)
-(email+TOTP)   (RLS on all   link-token / exchange / transactions/sync /
-               user tables)  recurring / webhook verification
-```
+### Data access
 
-Key modules in `lib/`:
+- Two Supabase clients. `lib/supabase/server.ts` `createClient()` is
+  cookie-bound and RLS applies; use it for reads. `lib/supabase/service.ts`
+  `createServiceClient()` **bypasses RLS** and is only for writes RLS
+  intentionally blocks, plus cron. **Every service-client query must filter
+  `user_id` explicitly** - a missing filter is exactly how the weekly report
+  once leaked cross-user account balances.
+- Never import `lib/env.server.ts` (server-only secrets) into client
+  components. `lib/env.ts` holds the `NEXT_PUBLIC_*` values.
+- Client writes are allowed only on `budgets`, `saved_reports`, `user_tags`,
+  and the `profiles` preference columns. User-authored configuration is the
+  test for joining that list; a provider-synced table never qualifies.
+- Migrations in `supabase/migrations/` are applied by hand (CLI or dashboard).
+  There is no migration runner in CI, so code reading a new column fails until
+  someone applies it to the live project.
 
-- `crypto.ts` — AES-256-GCM for Plaid access tokens at rest (key:
-  `PLAID_TOKEN_ENC_KEY`, 32 bytes base64). Rotation: decryption falls back to
-  `PLAID_TOKEN_ENC_KEY_PREVIOUS` (`decryptSecretDetailed` reports which key
-  worked); the daily sync re-encrypts fallback-decrypted tokens. Also
-  `safeEqual` for constant-time secret comparison (cron auth, webhook hash).
-- `plaid-service.ts` — item storage (encrypt/decrypt), account upserts, cursor,
-  `decryptItemTokenAndUpgrade` (rotation), `getItemByPlaidItemId` (webhooks).
-- `sync.ts` — idempotent `/transactions/sync`: upsert on unique
-  `plaid_transaction_id`; the cursor is persisted only after a fully successful
-  run, so re-runs re-apply pages without duplicates. Each item sync records a
-  `sync_jobs` row (running → done/failed with the Plaid `error_code`); the
-  dashboard's stale-data banner reads the newest `done` job.
-- `origin.ts` — pure `isCrossOrigin`; `proxy.ts` 403s mutating `/api` requests
-  with a mismatched Origin header (absent Origin passes — non-browser callers).
-- `chart-utils.ts` — pure chart geometry (ticks, paths, donut arcs, tail-fold);
-  unit-tested. `components/charts/` are **server-rendered SVG** (no chart
-  library, no client JS, CSP-safe) driven by the `--viz-*` tokens in
-  `app/globals.css` — a categorical palette validated for CVD + contrast in
-  both modes (dataviz-skill validator). Rules baked in: fixed slot order,
-  never generate an 8th+ hue (fold into "Other" via `foldTail`), legend for ≥2
-  series, every chart ships a table twin, text never wears series color.
-  **Seven slots is a measured ceiling, not a style preference.** An 8th hue
-  drops CVD separation to ΔE 2.4 and a 12-hue set to 0.4 (identical colors to a
-  deuteranope) plus 6.7 under **normal** vision, against floors of 6 and 15.
-  Re-run `scripts/validate_palette.js` before proposing an eighth; do not
-  reason about it.
-  **The validator now enforces two independent gates**, and both must stay
-  green: pairwise separation (normal ΔE ≥ 15, protan/deutan ΔE ≥ 6) *and* WCAG
-  1.4.11 non-text contrast of ≥ 3:1 for every slot against its own theme's
-  `--panel`. The second gate was added 2026-08-09 after a dark re-step passed
-  the first and put three of seven slots under 3:1 — pairwise ΔE says nothing
-  about whether a series is visible on the surface it is drawn on, so a set can
-  separate perfectly from itself and still disappear.
-  **The dark set was re-stepped wholesale on 2026-08-09** and now clears both
-  gates on all seven slots (worst surface contrast 3.62:1), at the light set's
-  own OKLCH hues — so the two modes read as one identity rather than dark mode
-  becoming a different-looking chart. Re-step with the validator, never by eye:
-  changing one slot cannot fix a pair problem, and a 14,077-candidate sweep of
-  a single slot found nothing that passes.
-  Two standing caveats, both requiring the same relief. The palette sits in the
-  6–8 CVD band, which is legal **only** with secondary encoding; and light
-  `--viz-2` (2.82:1) and `--viz-3` (2.17:1) are below the contrast floor on
-  white, carried as named exceptions in the validator because a saturated aqua
-  and a yellow cannot reach 3:1 on `#ffffff` without abandoning the V0 identity.
-  So every chart must keep direct labels or a table twin — that is what makes
-  both caveats legal, and neither is dismissable without it. The exception list
-  is a ratchet: never extend it to make a re-step pass.
-  `--viz-pos`/`--viz-neg` are the diverging pair, a different job on their own
-  charts, and are deliberately not part of this set.
-- `dashboard-widgets.ts` — Phase 8 widget registry and prefs. Layout lives in
-  the existing client-writable `profiles.dashboard_prefs` JSON (no migration),
-  shared with `sidebarCollapsed` and the legacy hide flags — so every writer
-  read-merge-writes rather than overwriting the column. `normalizeWidgetPrefs`
-  is deliberately total: it takes `unknown` and always returns a usable layout,
-  appending any widget missing from a stored order so a new one is never hidden
-  from users who saved a layout before it existed. `computeCumulativeSpendByDay`
-  (in `dashboard.ts`) returns **null, never zero**, for a day not yet reached
-  and for a day past a shorter previous month's end — a zero there draws a line
-  along the floor that reads as "spent nothing". The chart's table twin
-  forward-fills; the plotted line stops.
-- `export.ts` — the privacy-safe export contract (date/merchant/amount/
-  category), shared by `/api/export/csv` and `/api/export/json`;
-  `/api/export/report` serves the weekly PDF on demand, and
-  `/api/export/report-csv` the Reports page's filtered row set (`isExportAllowed`
-  is the shared `ai_export_enabled` gate for exports that build their own rows).
-- `sankey.ts` — pure Sankey geometry for `components/charts/SankeyChart.tsx`.
-  Two invariants: one value→pixel scale is shared by every column (per-column
-  scaling silently breaks flow conservation), and ribbon thickness is never
-  floored even though node heights are — floor a ribbon and the ones arriving at
-  a node sum to more than the node. `foldSankeyOverflow` caps a column and
-  rewrites its edges; the chart's table twin keeps the unfolded detail.
-  `sankeyCanvasHeight` sizes the canvas to the busiest column — a fixed height
-  crushes every node toward `MIN_SANKEY_NODE_HEIGHT` and smears the labels
-  while still rendering, so nothing announces the failure. In `SankeyChart`,
-  color encodes the **spending group** and a category inherits its parent's
-  hue; sources/hub label to the right and groups/categories to the left, since
-  labelling both sides toward the middle is what made columns 2 and 3 collide.
-- `reports.ts` — Phase 6 aggregation: `buildCashFlowSankeyData` (transfers
-  excluded, so refunds and card payments cannot double-count; "Net Income" on a
-  surplus, "Unfunded Spending" on a deficit, link values always non-negative),
-  `summarizeTransactions` (totals come from `financeTotals`, which is what keeps
-  Reports reconciling with Cash Flow), and the versioned saved-report filter
-  schema — strict `parseReportFilters` for stored jsonb, forgiving
-  `reportFiltersFromSearchParams` for URLs. `reports-data.ts` is the single
-  loader the page and the CSV route share, so a download always matches the
-  chart above it.
-- `goals-v2.ts` — Phase 7 funded goals. A goal's progress has three sources
-  (typed-in `saved_amount`, account allocations capped at the real balance, and
-  the `goal_progress_events` ledger) and the failure mode is counting the same
-  money twice — so **pay-down goals use the balance delta alone**, never the
-  ledger on top. `validateAllocation` mirrors the `set_goal_allocation`
-  database function's rules for a fast error message, but that function is the
-  enforcement point: its rules are cross-row and it holds a row lock.
-  `goalContributionsForMonth` feeds the Budget page, and reads only the event
-  ledger — a balance moving is not a contribution.
-  `goal-templates.ts` whitelists `image_slug` before it becomes a URL.
-- `investments.ts` — Phase 9A holdings aggregation: `buildInvestmentsPage`
-  groups active holdings into a fixed asset-class slot order (never a 7th+
-  hue, same rule as the chart palette), computes weight/day-change/top-movers
-  purely from already-fetched rows, and `normalizeManualHolding` validates a
-  manual entry (quantity/price/as-of all required — a manual value never
-  claims market freshness it doesn't have). `externalFlowsFromTransactions`
-  flips Plaid's debit-positive sign onto "money added is positive" for
-  `investment-performance.ts`.
-- `investment-sync.ts` — item-scoped Plaid holdings and investment-transaction
-  sync. Mark-and-sweep (deactivating a holding absent from a response) runs
-  only after a full successful response, scoped to *that item's* own accounts
-  — a user-wide account map would let one item's absent holdings deactivate
-  another item's. `PRODUCT_NOT_READY`, a missing Investments product, and
-  rate limiting are reported as distinct non-failure outcomes, never a broken
-  connection. Investment sync writes `sync_jobs.job_type = 'investments'`
-  (see the invariant below) and is isolated in its own try/catch from
-  transaction sync in the daily cron — a broken Investments item must never
-  make a bank sync look like it failed.
-- `investment-performance.ts` — `computeTimeWeightedReturn`: a simplified
-  per-sub-period Modified Dietz, chain-linked, that removes deposits and
-  withdrawals so a balance chart can't be mistaken for market performance. A
-  sub-period whose starting base is zero returns 0%, not an infinite result.
-  `hasSufficientPerformanceData` (>=2 valuation points) is what a chart checks
-  before it's allowed to say "Portfolio performance" instead of "Balance."
-- `benchmark-provider.ts` — the `BenchmarkProvider` interface and a caching
-  wrapper exist, but `UNAVAILABLE_BENCHMARK_PROVIDER` is the only
-  implementation and nothing renders it. Do not wire a benchmark comparison
-  into any page until a licensed market-data source is provisioned and its
-  terms are documented — this is a legal exposure, not a missing feature.
-- `forecasting.ts` — `computeWhatIfProjection` is the dashboard's What-if
-  sandbox math (extracted out of `WhatIfPanel`'s own `useMemo`, behavior
-  unchanged). `forecastNetWorth`'s three scenarios spread **additively**
-  (+/-2 percentage points around the entered rate), not multiplicatively — a
-  multiplicative spread inverts conservative/optimistic ordering the moment
-  the entered rate goes negative. Every projection surface must say
-  "projection," never "prediction" or a confidence level this module doesn't
-  compute.
-- `advice.ts` / `advice-content.ts` — `ADVICE_LIBRARY` is reviewed education
-  content, not user data; `ALLOWED_SOURCE_HOSTS` is an enforcement allowlist
-  (a security-review test, not documentation) restricting sources to neutral
-  federal-agency domains, never a specific fund/insurer/broker.
-  `validateAdviceLibrary` is a content-review guard run as a test against the
-  real library — it already caught two items whose own risk disclaimers
-  tripped the prohibited-guarantee-language check. `buildAdviceView` treats a
-  user's saved priority order as a decision (shown even if `relevantWhen` no
-  longer matches), and intersects stored progress against an item's *current*
-  task ids so a later content edit can't inflate a completion count.
-- `manual-transaction.ts` — `normalizeManualTxn` validates a manual ledger
-  entry and resolves its stored sign (debit positive, credit negative,
-  matching Plaid's convention). Stored with `plaid_transaction_id =
-  manual-<uuid>`, mirroring `import.ts`'s `import-<hash>` prefix convention —
-  `lib/finance-domain.ts`'s `fromTransactionRow` derives provenance from this
-  prefix, not the newer `source` column, because the prefix is already relied
-  on by the sync overlap guard.
-- `ledger-columns.ts` — which optional ledger columns are visible, persisted
-  as a repeated `col` GET param plus a `colsSubmitted` marker (distinguishing
-  "every column explicitly unchecked" from "the menu was never touched," an
-  ambiguity a plain multi-checkbox form can't otherwise resolve) rather than
-  client state.
-- `tags.ts` — `planTagRename` treats renaming a tag to an existing name as a
-  merge (a tag's identity is its name, not a row id); the actual rewrite runs
-  through the `rename_user_tag` SQL function so it can never race a
-  concurrent annotation edit into a lost update.
-- `profile.ts` — `validateProfilePatch`: every field is optional, `null`
-  clears it, an absent key leaves the stored value untouched (same PATCH
-  semantics as the advice profile).
-- `components/settings/settings-nav.ts` — `SettingsSection` +
-  `sectionFromParam` (invalid/absent falls back to `"profile"`, never a 404 —
-  Settings is a control center people bookmark) and the `DisplayPrefs`
-  parse/validate pair: `parseDisplayPrefs` is forgiving (for reading whatever
-  is already stored), `validateDisplayPrefsPatch` is strict (a write with a
-  bad value fails loudly instead of silently substituting a default).
-- `import.ts` — pure CSV-statement parsing/normalization for
-  `/api/import/csv` (pre-Plaid backfill). Invariants: output uses the Plaid
-  sign convention; imported rows carry deterministic `import-<hash>`
-  transaction ids (the prefix marks non-Plaid rows — the overlap guard and
-  any future logic key off it); rows on/after the account's earliest
-  Plaid-synced date are skipped, never merged.
-- `recurring.ts` — recurring streams (subscriptions + income).
-- `dashboard.ts` — pure aggregation over RLS-scoped queries; exports
-  `EXCLUDED_PFC` (transfers/loan payments are cash movement, not spending —
-  every spend total in the app must apply it or credit-card payments get
-  double-counted).
-- `reporting.ts` — weekly PDF (pdfkit) + email (nodemailer). Runs under the
-  cron with the **service client**, so every query must scope `user_id`
-  explicitly. In production, missing `SMTP_*` env throws (never falls back to
-  the public Ethereal test inbox); in dev, Ethereal + preview URL.
-- `http.ts` — `requireUser()` / `requireAdmin()` return either an
-  `AuthedContext` or a ready `NextResponse` (check `instanceof NextResponse`).
-  `errorResponse()` hides details in production.
-- `rate-limit.ts` — Postgres fixed-window limiter (`rate_limit_hit` RPC),
-  **fails open** by design.
-- `audit.ts` — best-effort `audit_logs` writes (never throws, never PII).
-- `log.ts` — `logError` logs message/stack only; `redact()` for objects.
-- `csv.ts` — RFC-4180 builder with spreadsheet formula-injection
-  neutralization (leading `=+-@`/tab/CR on strings get an apostrophe prefix).
+### Security
 
-## The two Supabase clients — the most important rule here
+- MFA is enforced server-side in both `proxy.ts` (pages) and `requireUser()`
+  (APIs). Do not add an auth entry point that skips the AAL check.
+- Plaid `access_token`s are encrypted app-side before insert, and are never
+  logged, returned to the browser, or stored plaintext.
+- Cron routes authenticate `Authorization: Bearer $CRON_SECRET` via `safeEqual`.
+- `/api/plaid/webhook` verifies the JWT outside sandbox. Keep `dsaEncoding:
+  "ieee-p1363"`; omitting it rejects all genuine webhooks.
+- CSP lives in `proxy.ts` (not `middleware.ts`, Next 16 renamed it) and is
+  nonce-based. A new external script or host requires a change there.
+- Exports carry only date/merchant/amount/category, gated by `ai_export_enabled`.
+- `public/sw.js` caches only content-addressed static assets, only when
+  `response.ok`, and **never an HTML document**: documents hold per-user
+  financial data that Cache Storage would keep readable after sign-out.
+  Nothing is precached. Navigations are network-only.
+- The proxy matcher excludes `sw.js` and `manifest.webmanifest`. Matcher values
+  must stay plain string literals, because Next statically analyzes them at
+  build time and silently ignores anything else - `String.raw` (Sonar S7780)
+  would disable the matcher entirely.
 
-- `lib/supabase/server.ts` `createClient()` — cookie-bound, runs **as the
-  user**, RLS applies. Default for reads in pages and routes.
-- `lib/supabase/service.ts` `createServiceClient()` — secret key, **bypasses
-  RLS**. Only for writes RLS intentionally blocks (tokens, synced data, audit
-  logs) and cron jobs. Every service-client query **must** filter by
-  `user_id` explicitly; RLS will not save you. (A missing filter here is
-  exactly how the weekly report once leaked cross-user account balances.)
+### Money and correctness
 
-`lib/env.server.ts` (secrets, lazy getters) is guarded by `server-only`;
-`lib/env.ts` holds the `NEXT_PUBLIC_*` values. Never import server env into
-client components.
+- Amount sign follows Plaid: **positive = money out**, negative = money in.
+- Dates are `YYYY-MM-DD` strings end to end; month keys are `YYYY-MM`.
+- Every spend total must apply `EXCLUDED_PFC` (`dashboard.ts`), or credit-card
+  payments get double-counted.
+- Anything that joins a computed result back to its source rows keys on the id,
+  never on a display name.
+- Say "projection", never "prediction" or a confidence level nothing computes.
+- Do not wire up a benchmark comparison until a licensed market-data source is
+  provisioned. That is a legal exposure, not a missing feature.
 
-## Security invariants (do not regress)
+### Charts
 
-- **MFA is enforced server-side.** `lib/mfa.ts` (`needsMfaStepUp`) is checked
-  in both `proxy.ts` (pages: aal1-pending sessions are redirected to `/login`,
-  which resumes at the TOTP prompt) and `requireUser()` (APIs: 401). Auth
-  entry points: email+password and Google OAuth (`signInWithOAuth` →
-  `/auth/callback`); both are subject to the same AAL check.
-- Plaid `access_token`s are encrypted app-side before insert and never logged,
-  returned to the browser, or stored plaintext.
-- Cron routes (`/api/cron/*`) authenticate `Authorization: Bearer $CRON_SECRET`
-  via `safeEqual`. Vercel sends this automatically for registered crons
-  (`vercel.json`: daily sync 07:00 UTC).
-  The weekly report is not a Vercel cron: `.github/workflows/weekly-report.yml`
-  calls it hourly so each user can be served at their own local Monday 08:00,
-  and the period stays due for the rest of the week so a dropped hour or a
-  transient send failure can catch up. A send the provider rejects with a 5xx
-  is permanent (`isPermanentDeliveryError`) and is not retried, otherwise an
-  undeliverable address burns an attempt every hour until the period rolls.
-- `/api/plaid/webhook` verifies the `plaid-verification` JWT outside sandbox:
-  pinned `alg: ES256`, key via `webhookVerificationKeyGet`, signature checked
-  with `dsaEncoding: "ieee-p1363"` (JWS raw r||s, not DER — omitting this
-  rejects all genuine webhooks), body SHA-256 compared with `safeEqual`, 5-min
-  `iat` freshness. Sandbox and `NODE_ENV=test` skip verification.
-- The CSV export contains only date/merchant/amount/category and is gated by
-  the profile's `ai_export_enabled` flag.
-- CSP (in `proxy.ts`, not middleware — Next 16 renamed it) is nonce-based with
-  `strict-dynamic`; only Plaid + the Supabase host are allowed. New external
-  scripts/hosts require a CSP change there. Vercel Web Analytics (`<Analytics/>`
-  in `app/layout.tsx`) needs no CSP entry: its script is dynamically injected
-  (trusted via `strict-dynamic`) and its beacons hit the same-origin
-  `/_vercel/insights/*` (covered by `connect-src 'self'`).
-- Every user table has RLS with owner-only `select` (client writes allowed only
-  on `budgets`, `saved_reports`, `user_tags`, and the `profiles` preference
-  columns — all four hold nothing but user-authored configuration, which is
-  the test for joining that list; a provider-synced table never qualifies,
-  see `20260730180000_recurring_streams_revert_client_write.sql`). Migrations
-  live in `supabase/migrations/` and are applied via the Supabase CLI or
-  dashboard SQL editor — there is no migration runner in CI. Code that reads a
-  column from a new migration fails until that migration is applied to the
-  live project.
-- Two private Supabase Storage buckets, both user-prefixed-path RLS
-  (`(storage.foldername(name))[1] = auth.uid()::text`): `receipts` (Phase 12
-  migration; schema only, no upload route built yet) and `avatars` (Phase 13,
-  backing `ProfileSection`'s photo upload). Both render through short-lived
-  signed URLs; the existing `img-src 'self' data: https:` CSP directive
-  already permits them, so a new bucket needs no CSP change.
-- Bank-connection health: `ITEM` webhooks and sync failures set
-  `plaid_items.status`/`error_code`; Settings offers update-mode reconnection
-  (`/api/plaid/link-token` with `item_id` → `/api/plaid/reconnect`). Don't
-  create a second item for the same bank to "fix" a broken one.
-- Live updates: `components/AutoRefresh.tsx` re-renders the page every 2 min
-  (no Plaid calls) and triggers `/api/plaid/sync` with `{source:"auto"}` at
-  most once per 30 min — the window is enforced **server-side** via the
-  `autosync:` rate-limit key (client timers/localStorage are only a courtesy).
-  A consumed window returns 200 `{skipped:true}`, never an error; auto runs
-  are recorded in `sync_jobs` but deliberately not in `audit_logs` (audit is
-  for user actions). Don't shorten the window without checking Plaid quotas.
-- Plaid-call frugality invariants: auto-pulls skip `refreshRecurringForUser`
-  (manual Refresh + daily cron keep streams fresh); webhook verification keys
-  are cached by `kid` (expired keys never cached); link tokens request
-  `days_requested: 730` (max history, set per-link); `getDashboardData`
-  fetches transactions **bounded to the 6-month render window** (oldest-date
-  probe drives the month browser) — don't reintroduce a select-all, the
-  2-minute auto re-render multiplies whatever this costs.
+- Seven `--viz-*` slots, fixed order, never an 8th hue (fold via `foldTail`).
+- `scripts/validate_palette.js` gates CVD separation *and* surface contrast, and
+  both must stay green. Re-step with the validator, never by eye, and never
+  extend its exception list to make a re-step pass. See `docs/PALETTE.md`.
+- Every chart ships direct labels or a table twin. Text never wears series color.
+
+### Plaid frugality
+
+- Auto-pull runs at most once per 30 min, enforced server-side. Don't shorten
+  the window without checking quotas, and don't reintroduce a select-all in
+  `getDashboardData`.
 
 ## Conventions
 
-- Route handlers follow the pattern: `requireUser()` → early-return the
-  `NextResponse` → rate limit (where sensitive) → validate body with
-  `badRequest()` → work → `writeAudit()` → JSON; all wrapped so failures hit
-  `errorResponse(context, error)`.
-- Amount sign follows Plaid: **positive = money out**, negative = money in.
-- Dates are handled as `YYYY-MM-DD` strings end-to-end; month keys are
-  `YYYY-MM` (`monthKey()` in `dashboard.ts`).
-- Tests mock modules with `vi.mock` and import route handlers directly
-  (`POST as plaidWebhookPost`) rather than spinning up a server.
-- `docs/HANDOFF.md` is the session-resume note; `docs/TODO.md` is the deferred
-  feature list. Update both when finishing significant work.
+- Route handlers: `requireUser()` → early-return the `NextResponse` → rate limit
+  where sensitive → validate with `badRequest()` → work → `writeAudit()` → JSON,
+  wrapped so failures hit `errorResponse(context, error)`.
+- Tests mock with `vi.mock` and import route handlers directly rather than
+  spinning up a server.
+- A bug report starts with reproducing it the way the user hit it. `curl` and
+  Playwright load no browser extensions, so a green run there rules out the
+  server and proves nothing about the reporter's browser.
+
+## Where to read more
+
+- `docs/ARCHITECTURE.md` - request path, every `lib/` module, subsystem
+  invariants in full. Read the relevant section before changing a subsystem.
+- `docs/PALETTE.md` - the measurements behind the chart palette rules.
+- `docs/HANDOFF.md` - session-resume note. `docs/TODO.md` - deferred work.
+  Update both when finishing significant work.
+- `docs/QA.md` - runbook for flows needing live credentials or screenshots.

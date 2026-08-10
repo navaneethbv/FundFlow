@@ -60,6 +60,7 @@ Supabase Auth   Supabase Postgres    Plaid API (server-only)
 - **CSV import for pre-Plaid history** (Settings → Import) — backfill older years from bank-statement CSVs. Auto-detects date/description/amount (or debit/credit) columns, normalizes to the Plaid sign convention, skips rows overlapping the account's Plaid-synced range, and uses deterministic ids so re-importing never duplicates.
 - **Notification control** — `/notifications` controls optional weekly reports, daily digests, planning alerts, and delivery timezone. Bank or sync failures and Auth security messages remain enabled.
 - **Least privilege** — the browser uses the publishable key (RLS-bound); the secret key is used only in trusted server routes.
+- **Offline cache holds no personal data**: the service worker (`public/sw.js`) caches only content-addressed static assets (styles, scripts, fonts, images), and only on a successful response. HTML documents are never cached, because they render per-user financial data and Cache Storage outlives sign-out; navigations are network-only. Nothing is precached, so a cached document can never survive a deploy and reference asset chunks that no longer exist.
 - **Dependency scanning** — Dependabot + `npm audit` in CI.
 
 ## Setup
@@ -165,8 +166,23 @@ lib/
   supabase/        browser / server / service clients
   audit.ts log.ts rate-limit.ts http.ts env*.ts
 supabase/migrations/                                schema + RLS + rate limiter
+public/sw.js                                        static-asset cache + web push
 proxy.ts                                            session refresh + CSP + route guard
 ```
+
+## Troubleshooting
+
+**The app renders as unstyled HTML: serif text, native buttons, an oversized logo.**
+The stylesheet was blocked before it reached the browser.
+Nothing is wrong with the app, the deployment, or your session, and sign-in still works underneath the missing styles.
+A browser ad blocker or filtering extension is the usual cause.
+It affects every browser on the machine, including private windows, while leaving your phone unaffected, which makes it look like a server-side problem.
+Check the Network tab: a blocked request reads as blocked rather than as a 404, and the extension's own request log names the filter rule that matched.
+Be aware that `curl` and Playwright load no extensions, so a clean reproduction in either one rules out the server and says nothing about the browser.
+
+**A signed-out request for `/manifest.webmanifest` returns HTML instead of JSON.**
+The proxy matcher in `proxy.ts` has to exclude it, alongside `sw.js`.
+Routing it through the page-auth guard redirects it to `/login`, and the browser then reports that the manifest is not valid JSON data.
 
 ## Known Notes / Future Todos
 
