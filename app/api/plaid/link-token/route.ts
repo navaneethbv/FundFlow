@@ -4,7 +4,7 @@ import type { LinkTokenCreateRequest } from "plaid";
 import { getPlaidClient } from "@/lib/plaid";
 import { serverEnv } from "@/lib/env.server";
 import { requireUser, errorResponse } from "@/lib/http";
-import { getItem, decryptItemToken } from "@/lib/plaid-service";
+import { getItem, decryptItemToken, storeLinkToken } from "@/lib/plaid-service";
 
 /**
  * Create a Plaid Link token. Two modes:
@@ -79,6 +79,11 @@ export async function POST(request: NextRequest) {
     }
 
     const response = await plaid.linkTokenCreate(req);
+
+    // Persist a hashed, user-bound record of the link token so the exchange
+    // step can verify the public token belongs to this user's Link session.
+    await storeLinkToken(user.id, response.data.link_token, response.data.expiration ?? null);
+
     return NextResponse.json({ link_token: response.data.link_token });
   } catch (error) {
     return errorResponse("plaid.link-token", error);

@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import type { AccountBase } from "plaid";
 import { createServiceClient } from "@/lib/supabase/service";
 import { encryptSecret, decryptSecret, decryptSecretDetailed } from "@/lib/crypto";
@@ -173,6 +174,70 @@ export async function updateItemCursor(
     .update({ sync_cursor: cursor })
     .eq("id", itemDbId);
   if (error) throw error;
+}
+
+/**
+ * SHA-256 hash of a Plaid link token. Only the hash is ever stored, so a leak
+ * of the plaid_link_tokens table cannot be used to replay an exchange.
+ */
+export function hashLinkToken(linkToken: string): string {
+  return createHash("sha256").update(linkToken).digest("hex");
+}
+
+/**
+ * Persist a hashed, user-bound record of a freshly created link token so the
+ * exchange step can prove the submitted public token came from a link token
+ * this user actually created. Uses Plaid's expiration when present; link tokens
+ * otherwise default to 4h (new items) / 30m (update mode).
+ */
+export async function storeLinkToken(
+  userId: string,
+  linkToken: string,
+  expirationIso: string | null,
+): Promise<void> {
+  const supabase = createServiceClient();
+  const { error } = await supabase.from("plaid_link_tokens").insert({
+    user_id: userId,
+    token_hash: hashLinkToken(linkToken),
+    expires_at: expirationIso ?? null,
+  });
+  if (error) throw error;
+}
+
+/**
+ * Verify and single-use consume a link token for the exchange step-up. Returns
+ * true only when the token was created for this user, is unexpired, and is not
+ * already consumed; it then marks it consumed so a replayed public token cannot
+ * be exchanged twice. The compare-and-set on consumed_at keeps two concurrent
+ * exchanges from both passing.
+ */
+export async function consumeLinkToken(
+  userId: string,
+  linkToken: string,
+): Promise<boolean> {
+  const supabase = createServiceClient();
+  const { data, error } = await supabase
+    .from("plaid_link_tokens")
+    .select("id, expires_at, consumed_at")
+    .eq("user_id", userId)
+    .eq("token_hash", hashLinkToken(linkToken))
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return false;
+  if (data.consumed_at) return false;
+  if (
+    data.expires_at &&
+    new Date(data.expires_at as string).getTime() < Date.now()
+  ) {
+    return false;
+  }
+  const { error: updateError } = await supabase
+    .from("plaid_link_tokens")
+    .update({ consumed_at: new Date().toISOString() })
+    .eq("id", data.id)
+    .eq("consumed_at", null);
+  if (updateError) throw updateError;
+  return true;
 }
 
 /** Mark an item's status (and optional error code, never PII). */

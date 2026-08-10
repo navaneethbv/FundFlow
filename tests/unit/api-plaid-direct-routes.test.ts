@@ -28,6 +28,7 @@ const mockItemGet = vi.fn<(...args: unknown[]) => unknown>();
 const mockInstitutionsGetById = vi.fn<(...args: unknown[]) => unknown>();
 const mockAccountsGet = vi.fn<(...args: unknown[]) => unknown>();
 const mockLinkTokenCreate = vi.fn<(...args: unknown[]) => unknown>();
+const mockLinkTokenGet = vi.fn<(...args: unknown[]) => unknown>();
 
 vi.mock("@/lib/plaid", () => ({
   getPlaidClient: () => ({
@@ -37,6 +38,7 @@ vi.mock("@/lib/plaid", () => ({
     institutionsGetById: (...args: unknown[]) => mockInstitutionsGetById(...args),
     accountsGet: (...args: unknown[]) => mockAccountsGet(...args),
     linkTokenCreate: (...args: unknown[]) => mockLinkTokenCreate(...args),
+    linkTokenGet: (...args: unknown[]) => mockLinkTokenGet(...args),
   }),
 }));
 
@@ -45,6 +47,8 @@ const mockDecryptItemToken = vi.fn<(...args: unknown[]) => unknown>();
 const mockGetItem = vi.fn<(...args: unknown[]) => unknown>();
 const mockStoreItem = vi.fn<(...args: unknown[]) => unknown>();
 const mockUpsertAccounts = vi.fn<(...args: unknown[]) => unknown>();
+const mockStoreLinkToken = vi.fn<(...args: unknown[]) => unknown>();
+const mockConsumeLinkToken = vi.fn<(...args: unknown[]) => unknown>();
 
 vi.mock("@/lib/plaid-service", () => ({
   listActiveItems: (...args: unknown[]) => mockListActiveItems(...args),
@@ -52,6 +56,8 @@ vi.mock("@/lib/plaid-service", () => ({
   getItem: (...args: unknown[]) => mockGetItem(...args),
   storeItem: (...args: unknown[]) => mockStoreItem(...args),
   upsertAccounts: (...args: unknown[]) => mockUpsertAccounts(...args),
+  storeLinkToken: (...args: unknown[]) => mockStoreLinkToken(...args),
+  consumeLinkToken: (...args: unknown[]) => mockConsumeLinkToken(...args),
 }));
 
 const mockCheckRateLimit = vi.fn<(...args: unknown[]) => unknown>();
@@ -79,7 +85,19 @@ import { POST as disconnectPost } from "@/app/api/plaid/disconnect/route";
 import { POST as exchangePost } from "@/app/api/plaid/exchange/route";
 import { POST as linkTokenPost } from "@/app/api/plaid/link-token/route";
 
-const USER = { user: { id: "user-1" } };
+const stepUpSupabase = {
+  auth: {
+    mfa: {
+      listFactors: vi.fn().mockResolvedValue({ data: { totp: [], phone: [] } }),
+    },
+    signInWithPassword: vi.fn().mockResolvedValue({ error: null }),
+  },
+} as unknown as never;
+
+const USER = {
+  user: { id: "user-1", email: "user@example.com" },
+  supabase: stepUpSupabase,
+};
 
 describe("Direct Plaid & Account Routes Unit Tests", () => {
   beforeEach(() => {
@@ -88,6 +106,8 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
     mockRequireUser.mockResolvedValue(USER);
     mockDecryptItemToken.mockReturnValue("decrypted-token");
     mockCheckRateLimit.mockResolvedValue(true);
+    mockLinkTokenGet.mockResolvedValue({ data: { link_sessions: [] } });
+    mockConsumeLinkToken.mockResolvedValue(true);
   });
 
   describe("DELETE /api/account", () => {
@@ -110,7 +130,10 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
         },
       } as unknown as typeof serviceClient;
 
-      const req = new NextRequest("http://localhost/api/account", { method: "DELETE" });
+      const req = new NextRequest("http://localhost/api/account", {
+        method: "DELETE",
+        body: JSON.stringify({ method: "password", code: "Password123!" }),
+      });
       const res = await accountDelete(req);
       const json = await res.json();
 
@@ -131,7 +154,10 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
         },
       } as unknown as typeof serviceClient;
 
-      const req = new NextRequest("http://localhost/api/account", { method: "DELETE" });
+      const req = new NextRequest("http://localhost/api/account", {
+        method: "DELETE",
+        body: JSON.stringify({ method: "password", code: "Password123!" }),
+      });
       const res = await accountDelete(req);
       const json = await res.json();
 
@@ -151,7 +177,10 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
         },
       } as unknown as typeof serviceClient;
 
-      const req = new NextRequest("http://localhost/api/account", { method: "DELETE" });
+      const req = new NextRequest("http://localhost/api/account", {
+        method: "DELETE",
+        body: JSON.stringify({ method: "password", code: "Password123!" }),
+      });
       const res = await accountDelete(req);
       const json = await res.json();
 
@@ -229,6 +258,17 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
       expect(res2.status).toBe(400);
     });
 
+    it("rejects an exchange when the link token is missing or unconsumable", async () => {
+      mockConsumeLinkToken.mockResolvedValue(false);
+      const req = new NextRequest("http://localhost/api/plaid/exchange", {
+        method: "POST",
+        body: JSON.stringify({ public_token: "public-tok-123", link_token: "link-123" }),
+      });
+      const res = await exchangePost(req);
+      expect(res.status).toBe(400);
+      expect(mockItemPublicTokenExchange).not.toHaveBeenCalled();
+    });
+
     it("exchanges token, stores item, and completes initial sync", async () => {
       mockItemPublicTokenExchange.mockResolvedValue({
         data: { access_token: "access-123", item_id: "plaid-item-1" },
@@ -248,7 +288,7 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
 
       const req = new NextRequest("http://localhost/api/plaid/exchange", {
         method: "POST",
-        body: JSON.stringify({ public_token: "public-tok-123" }),
+        body: JSON.stringify({ public_token: "public-tok-123", link_token: "link-123" }),
       });
       const res = await exchangePost(req);
       const json = await res.json();
@@ -259,6 +299,21 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
         institutionLogo: "logo-base64",
         institutionBrandColor: "#112233",
       }));
+    });
+
+    it("rejects a public token minted by a different link token", async () => {
+      mockLinkTokenGet.mockResolvedValue({
+        data: {
+          link_sessions: [{ on_success: { public_token: "other-public-token" } }],
+        },
+      });
+      const req = new NextRequest("http://localhost/api/plaid/exchange", {
+        method: "POST",
+        body: JSON.stringify({ public_token: "public-tok-123", link_token: "link-123" }),
+      });
+      const res = await exchangePost(req);
+      expect(res.status).toBe(400);
+      expect(mockItemPublicTokenExchange).not.toHaveBeenCalled();
     });
 
     it("logs error and continues when institution get or initial sync fails", async () => {
@@ -274,7 +329,7 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
 
       const req = new NextRequest("http://localhost/api/plaid/exchange", {
         method: "POST",
-        body: JSON.stringify({ public_token: "public-tok-123" }),
+        body: JSON.stringify({ public_token: "public-tok-123", link_token: "link-123" }),
       });
       const res = await exchangePost(req);
       expect(res.status).toBe(200);
@@ -286,7 +341,7 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
       mockItemPublicTokenExchange.mockRejectedValue(new Error("Exchange failed"));
       const req = new NextRequest("http://localhost/api/plaid/exchange", {
         method: "POST",
-        body: JSON.stringify({ public_token: "public-tok-123" }),
+        body: JSON.stringify({ public_token: "public-tok-123", link_token: "link-123" }),
       });
       const res = await exchangePost(req);
       expect(res.status).toBe(500);
@@ -302,6 +357,8 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
 
       expect(res.status).toBe(200);
       expect(json).toEqual({ link_token: "link-sandbox-123" });
+      // The link token is persisted (hashed, user-bound) for exchange binding.
+      expect(mockStoreLinkToken).toHaveBeenCalledWith("user-1", "link-sandbox-123", null);
       // Investments is optional, not required: existing Transactions-only
       // links keep working, and an institution without Investments support
       // still shows up in Link instead of being filtered out.
