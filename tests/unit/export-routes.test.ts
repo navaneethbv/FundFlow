@@ -131,13 +131,31 @@ describe("Export API Routes", () => {
     it("returns data takeout payload scoped to the caller", async () => {
       // Tables with a household-shared read policy must be filtered by
       // user_id, or takeout hands the caller a household member's records.
+      // Household-owned tables are scoped differently (ownership/involvement)
+      // and asserted separately below.
       const scopedTables = new Set([
         "accounts",
         "transactions",
         "account_balance_snapshots",
         "budget_periods",
+        "transaction_splits",
+        "transaction_annotations",
+        "linked_refunds",
+        "linked_duplicates",
+        "receipts",
+        "user_tags",
+        "sinking_funds",
+        "recurring_streams",
+        "recurring_stream_transactions",
+        "milestones",
+        "goal_accounts",
+        "goal_progress_events",
+        "advice_progress",
+        "category_overrides",
+        "net_worth_snapshots",
       ]);
       const eqCalls: Array<[string, string, string]> = [];
+      const orCalls: Array<[string, string, string]> = [];
       const mockSupabase = {
         from: vi.fn((table: string) => ({
           select: vi.fn(() => {
@@ -145,6 +163,10 @@ describe("Export API Routes", () => {
             const chain = {
               eq: vi.fn((column: string, value: string) => {
                 eqCalls.push([table, column, value]);
+                return Promise.resolve(result);
+              }),
+              or: vi.fn((filter: string) => {
+                orCalls.push([table, "or", filter]);
                 return Promise.resolve(result);
               }),
               then: (resolve: (value: { data: never[] }) => unknown) =>
@@ -164,6 +186,10 @@ describe("Export API Routes", () => {
       for (const table of scopedTables) {
         expect(eqCalls).toContainEqual([table, "user_id", "u1"]);
       }
+      // Household-owned tables: the caller's own households and their share of
+      // shared expenses — never the whole household.
+      expect(eqCalls).toContainEqual(["households", "owner_user_id", "u1"]);
+      expect(orCalls).toContainEqual(["shared_expenses", "or", "paid_by.eq.u1,owed_user_id.eq.u1"]);
       const body = await res.json();
       expect(body).toHaveProperty("takeout");
       expect(mockSupabase.from).toHaveBeenCalledWith(
@@ -173,6 +199,7 @@ describe("Export API Routes", () => {
         expect.objectContaining({
           account_balance_snapshots: [],
           budget_periods: [],
+          transaction_splits: [],
         }),
       );
     });

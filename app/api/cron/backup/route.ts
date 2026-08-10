@@ -115,6 +115,77 @@ export async function GET(request: NextRequest) {
                 .select("date, name, amount, quantity, price, fees, txn_type, txn_subtype")
                 .eq("user_id", userId)
             : Promise.resolve({ data: [], error: null }),
+          service
+            .from("transaction_splits")
+            .select("transaction_id, category, amount, created_at")
+            .eq("user_id", userId),
+          service
+            .from("transaction_annotations")
+            .select("transaction_id, note, tags, created_at, updated_at")
+            .eq("user_id", userId),
+          service
+            .from("linked_refunds")
+            .select("charge_transaction_id, refund_transaction_id, amount, created_at")
+            .eq("user_id", userId),
+          service
+            .from("linked_duplicates")
+            .select("subject_id, kept_transaction_id, excluded_transaction_id, created_at")
+            .eq("user_id", userId),
+          service
+            .from("receipts")
+            .select("transaction_id, storage_path, merchant, purchase_date, total, status, created_at")
+            .eq("user_id", userId),
+          service
+            .from("user_tags")
+            .select("name, color_slot, created_at")
+            .eq("user_id", userId),
+          service
+            .from("sinking_funds")
+            .select("name, target_amount, due_date, created_at")
+            .eq("user_id", userId),
+          service
+            .from("recurring_streams")
+            .select("stream_type, description, merchant_name, average_amount, last_amount, frequency, status, category, is_active, first_date, last_date, predicted_next_date, user_amount, created_at")
+            .eq("user_id", userId),
+          service
+            .from("recurring_stream_transactions")
+            .select("recurring_stream_id, transaction_id, created_at")
+            .eq("user_id", userId),
+          service
+            .from("milestones")
+            .select("key, title, created_at")
+            .eq("user_id", userId),
+          service
+            .from("goal_accounts")
+            .select("goal_id, account_id, allocated_amount, use_entire_balance, created_at")
+            .eq("user_id", userId),
+          service
+            .from("goal_progress_events")
+            .select("goal_id, event_date, amount, event_type, created_at")
+            .eq("user_id", userId),
+          service
+            .from("advice_progress")
+            .select("advice_id, task_id, content_version, completed_at")
+            .eq("user_id", userId),
+          service
+            .from("category_overrides")
+            .select("source_category, display_category, created_at")
+            .eq("user_id", userId),
+          // No user_id column: the user's share of a household's debts. The
+          // or() filter keeps one member's backup from carrying the whole
+          // household's expenses.
+          service
+            .from("shared_expenses")
+            .select("description, amount, paid_by, owed_user_id, settled_at, created_at")
+            .or(`paid_by.eq.${userId},owed_user_id.eq.${userId}`),
+          service
+            .from("net_worth_snapshots")
+            .select("snapshot_month, assets, liabilities, created_at")
+            .eq("user_id", userId),
+          service
+            .from("households")
+            .select("name, created_at, updated_at")
+            .eq("owner_user_id", userId),
         ]);
         const failed = results.find((result) => result.error);
         if (failed?.error) throw failed.error;
@@ -132,6 +203,23 @@ export async function GET(request: NextRequest) {
           holdingSnapshots,
           securities,
           investmentTransactions,
+          transactionSplits,
+          transactionAnnotations,
+          linkedRefunds,
+          linkedDuplicates,
+          receipts,
+          userTags,
+          sinkingFunds,
+          recurringStreams,
+          recurringStreamTransactions,
+          milestones,
+          goalAccounts,
+          goalProgressEvents,
+          adviceProgress,
+          categoryOverrides,
+          sharedExpenses,
+          netWorthSnapshots,
+          households,
         ] = results.map((result) => result.data);
 
         const protectedSections = [
@@ -148,6 +236,23 @@ export async function GET(request: NextRequest) {
           holdingSnapshots,
           securities,
           investmentTransactions,
+          transactionSplits,
+          transactionAnnotations,
+          linkedRefunds,
+          linkedDuplicates,
+          receipts,
+          userTags,
+          sinkingFunds,
+          recurringStreams,
+          recurringStreamTransactions,
+          milestones,
+          goalAccounts,
+          goalProgressEvents,
+          adviceProgress,
+          categoryOverrides,
+          sharedExpenses,
+          netWorthSnapshots,
+          households,
         ];
         if (!protectedSections.some((rows) => (rows ?? []).length > 0)) {
           continue;
@@ -170,6 +275,23 @@ export async function GET(request: NextRequest) {
             holding_snapshots: holdingSnapshots ?? [],
             securities: securities ?? [],
             investment_transactions: investmentTransactions ?? [],
+            transaction_splits: transactionSplits ?? [],
+            transaction_annotations: transactionAnnotations ?? [],
+            linked_refunds: linkedRefunds ?? [],
+            linked_duplicates: linkedDuplicates ?? [],
+            receipts: receipts ?? [],
+            user_tags: userTags ?? [],
+            sinking_funds: sinkingFunds ?? [],
+            recurring_streams: recurringStreams ?? [],
+            recurring_stream_transactions: recurringStreamTransactions ?? [],
+            milestones: milestones ?? [],
+            goal_accounts: goalAccounts ?? [],
+            goal_progress_events: goalProgressEvents ?? [],
+            advice_progress: adviceProgress ?? [],
+            category_overrides: categoryOverrides ?? [],
+            shared_expenses: sharedExpenses ?? [],
+            net_worth_snapshots: netWorthSnapshots ?? [],
+            households: households ?? [],
           },
           backupKey,
         );
