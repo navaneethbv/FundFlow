@@ -7,12 +7,12 @@ import { isSessionRevoked } from "@/lib/session-revocation";
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
-const PUBLIC_PAGE_PATHS = ["/login", "/signup"];
+const PUBLIC_PAGE_PATHS = new Set(["/login", "/signup"]);
 
 function isPublicPage(pathname: string): boolean {
   return (
     pathname === "/" ||
-    PUBLIC_PAGE_PATHS.includes(pathname) ||
+    PUBLIC_PAGE_PATHS.has(pathname) ||
     pathname.startsWith("/auth")
   );
 }
@@ -182,6 +182,13 @@ export const config = {
     // `manifest.webmanifest` is excluded for the same reason: it is public PWA
     // metadata, and redirecting it to /login for signed-out visitors made the
     // browser parse a login page as JSON ("manifest is not valid JSON data").
+    // NOSONAR typescript:S7780 — `String.raw` would silently disable this
+    // matcher. Next requires matcher values to be constants it can statically
+    // analyze at build time ("dynamic values such as variables will be
+    // ignored", node_modules/next/dist/docs/01-app/03-api-reference/
+    // 03-file-conventions/proxy.md); a tagged template is a function call, not
+    // a literal, so the proxy would fall back to running on every request and
+    // the exclusions above would stop applying. The escaping stays.
     "/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

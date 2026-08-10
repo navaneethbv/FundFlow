@@ -8,7 +8,7 @@ const CACHE_NAME = "fundflow-offline-v1";
 // HTML: a precached document kept pointing at the hashed chunks of the build
 // that cached it, the next deploy deleted those chunks from the CDN, and the
 // app then rendered completely unstyled until the user cleared their cache.
-self.addEventListener("install", (event) => {
+self.addEventListener("install", () => {
   self.skipWaiting();
 });
 

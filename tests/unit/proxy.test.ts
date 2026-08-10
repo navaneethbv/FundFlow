@@ -10,8 +10,10 @@ describe("proxy.ts default-deny for new private paths", () => {
     // Extract PUBLIC_PAGE_PATHS array from the source.
     // This guards against any accidental addition to the public allowlist,
     // including phase-1 destinations that should remain private.
+    // The `new Set(...)` wrapper is optional so this guard keeps working
+    // whichever container the allowlist uses; it is the *contents* that matter.
     const allowlistMatch = source.match(
-      /const\s+PUBLIC_PAGE_PATHS\s*=\s*\[([^\]]*)\]/,
+      /const\s+PUBLIC_PAGE_PATHS\s*=\s*(?:new Set\()?\s*\[([^\]]*)\]/,
     );
     expect(allowlistMatch).not.toBeNull();
 
