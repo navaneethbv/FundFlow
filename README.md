@@ -26,13 +26,21 @@ FundFlow can also deliver a visual weekly report for the previous Monday through
 
 ## Architecture
 
-```
-Browser (React, no secrets)
-   │  fetch, HttpOnly cookie session
-Next.js server routes / proxy (the trust boundary)
-   │              │                   │
-Supabase Auth   Supabase Postgres    Plaid API (server-only)
-(email + MFA)   (+ RLS, cron)        exchange / accounts / sync / recurring
+```mermaid
+flowchart TB
+    browser["<b>Browser</b><br/>React, no secrets"]
+    server["<b>Next.js server routes / proxy</b><br/>the trust boundary"]
+    auth["<b>Supabase Auth</b><br/>email + MFA"]
+    db[("<b>Supabase Postgres</b><br/>RLS, cron")]
+    plaid["<b>Plaid API</b><br/>server-only<br/>exchange · accounts · sync · recurring"]
+
+    browser -- "fetch · HttpOnly cookie session" --> server
+    server --> auth
+    server --> db
+    server --> plaid
+
+    classDef boundary stroke:#ff6b2e,stroke-width:3px
+    class server boundary
 ```
 
 - Plaid `client_id`/`secret` and all `access_token`s live **only** in server code.

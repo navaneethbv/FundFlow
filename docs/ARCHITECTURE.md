@@ -9,16 +9,28 @@ Read the relevant section here before changing a subsystem it covers.
 
 ## Request path
 
-```
-Browser (React, publishable key only, RLS-bound)
-   │ HttpOnly cookie session
-proxy.ts  ── session refresh (getUser), CSP nonce, security headers, page-auth redirects
-   │
-app/api/* route handlers (the trust boundary)
-   │           │             │
-Supabase Auth  Supabase PG   Plaid API (server-only client, lib/plaid.ts)
-(email+TOTP)   (RLS on all   link-token / exchange / transactions/sync /
-               user tables)  recurring / webhook verification
+```mermaid
+flowchart TB
+    browser["<b>Browser</b><br/>React · publishable key only · RLS-bound"]
+
+    subgraph trust ["Trust boundary"]
+        direction TB
+        proxy["<b>proxy.ts</b><br/>session refresh via getUser · CSP nonce<br/>security headers · page-auth redirects"]
+        routes["<b>app/api/* route handlers</b>"]
+        proxy --> routes
+    end
+
+    auth["<b>Supabase Auth</b><br/>email + TOTP"]
+    db[("<b>Supabase Postgres</b><br/>RLS on all user tables")]
+    plaid["<b>Plaid API</b><br/>server-only client, lib/plaid.ts<br/>link-token · exchange · transactions/sync<br/>recurring · webhook verification"]
+
+    browser -- "HttpOnly cookie session" --> proxy
+    routes --> auth
+    routes --> db
+    routes --> plaid
+
+    classDef zone fill:transparent,stroke:#ff6b2e,stroke-width:2px,stroke-dasharray:6 4
+    class trust zone
 ```
 
 ## Key modules in `lib/`
