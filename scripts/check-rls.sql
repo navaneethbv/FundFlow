@@ -102,7 +102,11 @@ BEGIN
       OR EXISTS (
         SELECT 1
         FROM unnest(p.proacl) acl
-        WHERE acl::text LIKE '%=X/%' OR acl::text LIKE '%=U/%'
+        -- aclitem text is `grantee=privs/grantor`; PUBLIC is an empty
+        -- grantee, so the string starts with `=`. A leading `%` would also
+        -- match role grants (`authenticated=X/...`) and flag every function
+        -- with an explicit EXECUTE grant.
+        WHERE acl::text LIKE '=X/%' OR acl::text LIKE '=U/%'
       )
     );
   IF risky IS NOT NULL THEN

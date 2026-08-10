@@ -77,6 +77,14 @@ revoke all on function public.release_item_sync(uuid) from public, anon, authent
 grant execute on function public.claim_item_sync(uuid, int) to service_role;
 grant execute on function public.release_item_sync(uuid) to service_role;
 
+-- The private implementations are SECURITY DEFINER too, so revoke the default
+-- PUBLIC execute on them as well. They are reached only through the public
+-- wrappers above (which run as the definer), never as a browser RPC.
+revoke all on function private.claim_item_sync(uuid, int) from public, anon, authenticated;
+revoke all on function private.release_item_sync(uuid) from public, anon, authenticated;
+grant execute on function private.claim_item_sync(uuid, int) to service_role;
+grant execute on function private.release_item_sync(uuid) to service_role;
+
 -- Verification (expect 0 rows):
 --   select count(*) from public.plaid_items
 --   where syncing_at is not null and syncing_at >= now() - interval '1 hour';
