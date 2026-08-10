@@ -32,6 +32,22 @@ describe("POST /api/settings/passkeys", () => {
       }),
     );
     expect(response.status).toBe(400);
+
+    const badActionRes = await POST(
+      new NextRequest("http://localhost/api/settings/passkeys", {
+        method: "POST",
+        body: JSON.stringify({ action: "invalid_action", passkeyId: "p1" }),
+      }),
+    );
+    expect(badActionRes.status).toBe(400);
+
+    const badJsonRes = await POST(
+      new NextRequest("http://localhost/api/settings/passkeys", {
+        method: "POST",
+        body: "bad json",
+      }),
+    );
+    expect(badJsonRes.status).toBe(400);
   });
 
   it("records only the action and passkey id", async () => {

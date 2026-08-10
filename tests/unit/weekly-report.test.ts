@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildWeeklyReportModel, formatCardLabel } from "@/lib/weekly-report";
+import { getWeeklyReportData } from "@/lib/weekly-report-data";
 
 const period = {
   start: "2026-07-06",
@@ -334,5 +335,66 @@ describe("weekly report model edge cases and branch coverage", () => {
       { merchant: "Merchant B", amount: 100 },
       { merchant: "Merchant C", amount: 100 },
     ]);
+  });
+});
+
+describe("getWeeklyReportData", () => {
+  it("returns null if user has no email address", async () => {
+    const { clientStub } = await import("../fixtures/supabase-query");
+    const supabase = {
+      ...clientStub(),
+      auth: {
+        admin: {
+          getUserById: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
+        },
+      },
+    };
+
+    const data = await getWeeklyReportData(supabase as never, "user-1", period);
+    expect(data).toBeNull();
+  });
+
+  it("loads and builds weekly report data when user and rows exist", async () => {
+    const { clientStub } = await import("../fixtures/supabase-query");
+    const baseClient = clientStub({
+      accounts: { data: [{ id: "acc-1", name: "Checking", type: "depository", plaid_item_id: "p1" }] },
+      plaid_items: { data: [{ id: "p1", institution_name: "Chase" }] },
+      budgets: { data: [{ category: "FOOD", monthly_limit: 500 }] },
+      merchant_rules: { data: [] },
+      linked_refunds: { data: [] },
+      linked_duplicates: { data: [{ excluded_transaction_id: "dup-1" }] },
+      transactions: {
+        data: [
+          { id: "t1", date: "2026-07-08", amount: 50, merchant_name: "Food", name: "FOOD", pfc_primary: "FOOD", account_id: "acc-1" },
+        ],
+      },
+      transaction_splits: { data: [] },
+    });
+    const supabase = {
+      ...baseClient,
+      auth: {
+        admin: {
+          getUserById: vi.fn().mockResolvedValue({ data: { user: { email: "user@example.com" } }, error: null }),
+        },
+      },
+    };
+
+    const data = await getWeeklyReportData(supabase as never, "user-1", period);
+    expect(data).not.toBeNull();
+    expect(data?.totalSpend).toBe(50);
+  });
+
+  it("throws error when user fetch or query returns error", async () => {
+    const { clientStub } = await import("../fixtures/supabase-query");
+    const supabase = {
+      ...clientStub(),
+      auth: {
+        admin: {
+          getUserById: vi.fn().mockResolvedValue({ data: null, error: { message: "User error" } }),
+        },
+      },
+    };
+
+    await expect(getWeeklyReportData(supabase as never, "user-1", period)).rejects.toThrow("weekly report user: User error");
   });
 });

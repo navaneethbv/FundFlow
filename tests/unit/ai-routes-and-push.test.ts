@@ -338,6 +338,13 @@ describe("POST /api/ai/receipt", () => {
     const res = await receiptPost(receiptRequest(image()));
     expect(res.status).toBe(422);
   });
+
+  it("throws error when messages.create fails", async () => {
+    scanningUser();
+    mockMessagesCreate.mockRejectedValue(new Error("AI API Error"));
+
+    await expect(receiptPost(receiptRequest(image()))).rejects.toThrow("AI API Error");
+  });
 });
 
 describe("lib/push", () => {

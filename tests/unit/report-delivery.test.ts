@@ -39,6 +39,12 @@ describe("weekly report delivery claims", () => {
         now,
       ),
     ).toBe("skip");
+    expect(
+      classifyDeliveryClaim(
+        { status: "processing", attemptedAt: "invalid-date" },
+        now,
+      ),
+    ).toBe("skip");
   });
 
   it("retries failed and stale processing deliveries", () => {
@@ -171,6 +177,63 @@ describe("weekly report delivery claims", () => {
 
       const maybeSingleExisting = vi.fn().mockResolvedValue({
         data: { id: "delivery-1", status: "sent", attempted_at: now.toISOString() },
+        error: null,
+      });
+      const eqStart = vi.fn().mockReturnValue({ maybeSingle: maybeSingleExisting });
+      const eqUser = vi.fn().mockReturnValue({ eq: eqStart });
+      const selectExisting = vi.fn().mockReturnValue({ eq: eqUser });
+
+      const from = vi.fn().mockImplementation((table: string) => {
+        if (table === "weekly_report_deliveries") {
+          return { insert, select: selectExisting };
+        }
+        throw new Error(`Unexpected table ${table}`);
+      });
+
+      const mockSupabase = { from } as unknown as SupabaseClient;
+
+      const result = await claimWeeklyDelivery(mockSupabase, "user-1", period, now);
+      expect(result).toEqual({ claimed: false });
+    });
+
+    it("throws existingError when select existing delivery query fails", async () => {
+      const singleInsert = vi.fn().mockResolvedValue({
+        data: null,
+        error: { code: "23505", message: "duplicate" },
+      });
+      const selectInsert = vi.fn().mockReturnValue({ single: singleInsert });
+      const insert = vi.fn().mockReturnValue({ select: selectInsert });
+
+      const maybeSingleExisting = vi.fn().mockResolvedValue({
+        data: null,
+        error: new Error("DB Error on select"),
+      });
+      const eqStart = vi.fn().mockReturnValue({ maybeSingle: maybeSingleExisting });
+      const eqUser = vi.fn().mockReturnValue({ eq: eqStart });
+      const selectExisting = vi.fn().mockReturnValue({ eq: eqUser });
+
+      const from = vi.fn().mockImplementation((table: string) => {
+        if (table === "weekly_report_deliveries") {
+          return { insert, select: selectExisting };
+        }
+        throw new Error(`Unexpected table ${table}`);
+      });
+
+      const mockSupabase = { from } as unknown as SupabaseClient;
+
+      await expect(claimWeeklyDelivery(mockSupabase, "user-1", period, now)).rejects.toThrow("DB Error on select");
+    });
+
+    it("returns claimed: false when existing delivery record is null", async () => {
+      const singleInsert = vi.fn().mockResolvedValue({
+        data: null,
+        error: { code: "23505", message: "duplicate" },
+      });
+      const selectInsert = vi.fn().mockReturnValue({ single: singleInsert });
+      const insert = vi.fn().mockReturnValue({ select: selectInsert });
+
+      const maybeSingleExisting = vi.fn().mockResolvedValue({
+        data: null,
         error: null,
       });
       const eqStart = vi.fn().mockReturnValue({ maybeSingle: maybeSingleExisting });

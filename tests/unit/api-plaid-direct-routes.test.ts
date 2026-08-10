@@ -260,6 +260,37 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
         institutionBrandColor: "#112233",
       }));
     });
+
+    it("logs error and continues when institution get or initial sync fails", async () => {
+      mockItemPublicTokenExchange.mockResolvedValue({
+        data: { access_token: "access-123", item_id: "plaid-item-1" },
+      });
+      mockItemGet.mockRejectedValue(new Error("Plaid itemGet failed"));
+      mockStoreItem.mockResolvedValue("item-db-1");
+      mockAccountsGet.mockResolvedValue({ data: { accounts: [] } });
+      mockUpsertAccounts.mockResolvedValue(undefined);
+      mockGetItem.mockResolvedValue({ id: "item-db-1" });
+      mockSyncItemTransactions.mockRejectedValue(new Error("Sync failed"));
+
+      const req = new NextRequest("http://localhost/api/plaid/exchange", {
+        method: "POST",
+        body: JSON.stringify({ public_token: "public-tok-123" }),
+      });
+      const res = await exchangePost(req);
+      expect(res.status).toBe(200);
+      expect(mockLogError).toHaveBeenCalledWith("plaid.exchange.institution", expect.any(Error));
+      expect(mockLogError).toHaveBeenCalledWith("plaid.exchange.initial-sync", expect.any(Error));
+    });
+
+    it("returns 500 when public token exchange throws", async () => {
+      mockItemPublicTokenExchange.mockRejectedValue(new Error("Exchange failed"));
+      const req = new NextRequest("http://localhost/api/plaid/exchange", {
+        method: "POST",
+        body: JSON.stringify({ public_token: "public-tok-123" }),
+      });
+      const res = await exchangePost(req);
+      expect(res.status).toBe(500);
+    });
   });
 
   describe("POST /api/plaid/link-token", () => {

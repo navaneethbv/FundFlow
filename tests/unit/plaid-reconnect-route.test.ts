@@ -141,4 +141,32 @@ describe("POST /api/plaid/reconnect", () => {
       expect.any(Error),
     );
   });
+
+  it("proceeds successfully when updateItemBranding throws an error", async () => {
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+    const request = {
+      json: () => Promise.resolve({ item_id: "item-1" }),
+    } as unknown as NextRequest;
+
+    mockGetItem.mockResolvedValue({ id: "item-1", institution_id: "inst-1", institution_name: "Chase" });
+    mockUpdateItemBranding.mockRejectedValue(new Error("Branding update failed"));
+
+    const res = await POST(request);
+    expect(res.status).toBe(200);
+    expect(mockLogError).toHaveBeenCalledWith("plaid.reconnect.branding", expect.any(Error));
+  });
+
+  it("calls errorResponse when unexpected exception occurs", async () => {
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+    const request = {
+      json: () => Promise.resolve({ item_id: "item-1" }),
+    } as unknown as NextRequest;
+
+    mockGetItem.mockRejectedValue(new Error("DB Down"));
+    mockErrorResponse.mockReturnValue(new Response("DB Error", { status: 500 }));
+
+    const res = await POST(request);
+    expect(res.status).toBe(500);
+    expect(mockErrorResponse).toHaveBeenCalledWith("plaid.reconnect", expect.any(Error));
+  });
 });

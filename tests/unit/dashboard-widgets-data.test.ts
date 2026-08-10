@@ -190,6 +190,14 @@ describe("loadDashboardInvestmentSummary", () => {
       { name: "Fund A", ticker: "FUNDA", changePct: 50 },
     ]);
   });
+
+  it("throws error when holding_snapshots query fails", async () => {
+    const supabase = clientStub({
+      holding_snapshots: { data: null, error: { message: "Query error" } },
+    });
+
+    await expect(loadDashboardInvestmentSummary(supabase as never)).rejects.toThrow("Query error");
+  });
 });
 
 describe("loadOverviewWidgetData", () => {
