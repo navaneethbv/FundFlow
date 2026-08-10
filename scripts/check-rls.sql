@@ -69,7 +69,7 @@ BEGIN
   FROM pg_policies p
   WHERE p.schemaname = 'public'
     AND p.cmd = 'SELECT'
-    AND p.permissive
+    AND p.permissive = 'PERMISSIVE'
     AND NOT (
       p.qual ILIKE '%auth.uid()%'
       OR p.qual ILIKE '%is_household_member%'
