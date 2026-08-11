@@ -1,14 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { CountryCode } from "plaid";
-import { requireUser, errorResponse, badRequest } from "@/lib/http";
-import { getItem, setItemStatus, updateItemBranding, decryptItemToken } from "@/lib/plaid-service";
+import { errorResponse } from "@/lib/http";
+import { setItemStatus, updateItemBranding, decryptItemToken } from "@/lib/plaid-service";
+import { requireOwnedItem } from "@/lib/plaid-item-route";
 import { syncItemTransactions } from "@/lib/sync";
 import { writeAudit, getClientIp } from "@/lib/audit";
 import { logError } from "@/lib/log";
 import { getPlaidClient } from "@/lib/plaid";
 import { fetchInstitutionBranding } from "@/lib/plaid-institution";
 import { serverEnv } from "@/lib/env.server";
-import { checkRateLimit } from "@/lib/rate-limit";
 
 /**
  * Finalize a Plaid Link update-mode flow. Update mode repairs the item's
@@ -17,30 +17,12 @@ import { checkRateLimit } from "@/lib/rate-limit";
  * enforced by getItem's user_id scope.
  */
 export async function POST(request: NextRequest) {
-  const auth = await requireUser();
-  if (auth instanceof NextResponse) return auth;
-  const { user } = auth;
-
-  let body: unknown;
   try {
-    body = await request.json();
-  } catch {
-    return badRequest("Invalid JSON body");
-  }
-  const itemId = (body as { item_id?: unknown }).item_id;
-  if (typeof itemId !== "string" || itemId.length === 0) {
-    return badRequest("item_id is required");
-  }
-
-  if (!(await checkRateLimit(`reconnect:${user.id}`, 10, 60))) {
-    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
-  }
-
-  try {
-    const item = await getItem(user.id, itemId);
-    if (!item) {
-      return NextResponse.json({ error: "Item not found" }, { status: 404 });
-    }
+    const owned = await requireOwnedItem(request, {
+      rateLimitKey: (userId) => `reconnect:${userId}`,
+    });
+    if (!owned.ok) return owned.response;
+    const { user, item } = owned;
 
     // Confirm the re-link actually succeeded before trusting the item again:
     // a stale/forged item_id must not be able to flip an item back to active.

@@ -7,6 +7,8 @@ import { needsMfaStepUp } from "@/lib/mfa";
 import { notifyNewDeviceLogin } from "@/lib/login-alert";
 import { logError } from "@/lib/log";
 import { decodeSessionId } from "@/lib/session-token";
+import { safeEqual } from "@/lib/crypto";
+import { serverEnv } from "@/lib/env.server";
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -120,6 +122,22 @@ export function errorResponse(
 
 export function badRequest(message: string): NextResponse {
   return NextResponse.json({ error: message }, { status: 400 });
+}
+
+/**
+ * Verify the Vercel Cron bearer secret. Returns the standard 401 response when
+ * the `Authorization` header doesn't match CRON_SECRET, or null when it does.
+ * Shared by every `/api/cron/*` route so the check can't drift between them.
+ */
+export function requireCronAuth(
+  request: Pick<Request, "headers">,
+): NextResponse | null {
+  const header = request.headers.get("authorization") ?? "";
+  const expected = `Bearer ${serverEnv.cronSecret}`;
+  if (!safeEqual(header, expected)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return null;
 }
 
 /**

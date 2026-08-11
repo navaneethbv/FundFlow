@@ -81,9 +81,13 @@ const mockErrorResponse = vi.fn((context, err) => {
   console.error("MOCKED CRON SYNC ERROR:", context, err);
   return new Response("error", { status: 500 });
 });
-vi.mock("@/lib/http", () => ({
-  errorResponse: (context: string, err: unknown) => mockErrorResponse(context, err),
-}));
+vi.mock("@/lib/http", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/http")>();
+  return {
+    ...actual,
+    errorResponse: (context: string, err: unknown) => mockErrorResponse(context, err),
+  };
+});
 
 import { GET } from "@/app/api/cron/sync/route";
 import { NextRequest } from "next/server";
