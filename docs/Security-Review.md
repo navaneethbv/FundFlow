@@ -1,4 +1,13 @@
-FundFlow Supabase Security Review
+# FundFlow Supabase Security Review
+
+Date: 2026-08-10
+Status: Historical audit snapshot remediated by PR #110.
+
+The findings below describe the database and application before the PR #110 fixes and are retained as audit evidence.
+They are not an open action list.
+All nine PR migrations are applied to the linked live Supabase project.
+The remaining live-only `public.rls_auto_enable()` event-trigger grants are documented separately in `docs/HANDOFF.md` because that function is not created by this repository.
+
 Overall posture: Strong. Every user-data table has RLS enabled with owner-scoped policies, no plaintext secrets are stored (Plaid tokens are AES-256-GCM; all bearer/capability tokens are SHA-256 hashes), all service-role writes I traced scope by user_id, and MFA/passkey/session-revocation logic is sound at the application layer. No CRITICAL cross-user data-leak was found. The findings below are hardening gaps and latent flaws, with the two most notable being (a) an exposed SECURITY DEFINER RPC reachable by unauthenticated users, and (b) the MFA/session-revocation guarantees living only in app code, not in the database.
 
 1. RLS coverage and permissive policies
@@ -155,9 +164,10 @@ update_budget_period is defined twice (20260729210000:95, 20260730015000:3) via 
 8.3 — INFO — Older tables rely on Supabase default privileges rather than explicit grants
 0001_init.sql and 0004_goals.sql create tables and RLS policies but issue no grant/revoke statements (the newer migrations all do, e.g. 20260707012910:172-183, 20260729210000:30-31). This works on hosted Supabase because default privileges grant anon/authenticated on new public tables — and RLS then blocks anon. But it silently breaks on a self-hosted stack (docker-compose.selfhost.yml exists) if default privileges aren't configured, and there is no revoke all from anon on those tables to make the intent explicit. Recommendation: add explicit grant ... to authenticated + revoke all from anon on the 0001/0004 tables for parity and self-host safety.
 
-Highest-priority fixes (in order)
-Revoke PUBLIC execute on rate_limit_hit (2.1) — unauthenticated DoS surface on a SECURITY DEFINER function.
-Move is_household_member out of the public RPC surface (2.2).
-Add FK-ownership checks to transaction_splits/linked_refunds/transaction_annotations write policies (1.1) and drop pg_temp from the two SECURITY DEFINER RPCs' search paths (2.3).
-Verify/enable MFA enforcement at the Supabase project level and revoke Supabase-auth sessions server-side so MFA and session revocation hold against direct Data API access (3.1, 3.2).
-Fix the broken takeout goals select (6.3) and update the tests still referencing mfa_backup_codes (5.2).
+## Original highest-priority fixes, completed by PR #110
+
+- Completed: revoke `PUBLIC` execution of `rate_limit_hit` (2.1).
+- Completed: remove anonymous access to `is_household_member` (2.2).
+- Completed: add foreign-key ownership checks to transaction metadata policies and remove `pg_temp` from the two security-definer RPC search paths (1.1, 2.3).
+- Completed: enforce MFA and session revocation in sensitive RLS policies and revoke sessions server-side (3.1, 3.2).
+- Completed: fix the takeout goals selection and remove obsolete `mfa_backup_codes` test assumptions (6.3, 5.2).

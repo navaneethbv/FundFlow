@@ -4,16 +4,19 @@ Last updated: 2026-08-10. Read this first to resume.
 
 ## Latest delivery: security hardening (PR #110)
 
-A full-repository security review (`docs/CODE_REVIEW.md`, `docs/Security-Review.md`) and the fixes for every finding it raised: H1–H5, M1–M15, L1–L12, plus the Next.js 16.3.0 upgrade for the `sharp`/libvips CVEs.
+A full-repository security review (`docs/CODE_REVIEW.md`, `docs/Security-Review.md`) and the fixes for every finding it raised: H1-H5, M1-M15, L1-L12, plus the Next.js 16.3.0 upgrade for the `sharp`/libvips CVEs.
 
-**Before this merges to `main`, apply all eight `supabase/migrations/20260810*` files by hand.**
-This is the single blocking step.
-Vercel deploys on merge, every one of those migrations is headed `APPLY BEFORE DEPLOYING`, and the app code already reads the columns they add.
-A probe of the live project on 2026-08-10 confirmed none of them are applied yet: `plaid_items.access_token_rotated_at`, `plaid_items.syncing_at`, `calendar_tokens.expires_at`, the `plaid_link_tokens` table, and the `claim_item_sync` / `release_item_sync` RPCs are all still missing.
-Deploying first takes Plaid sync, the calendar feed, and `/api/plaid/exchange` down at once.
-The same gap is why 24 integration tests fail locally today; they pass once the migrations land.
+All nine `supabase/migrations/20260810*` files are applied to the linked live Supabase project `zrxbmmtqqhlwtrinocww`.
+The final migration, `20260810180000_recurring_streams_drop_client_write.sql`, was applied on 2026-08-10 before merge.
+A post-apply migration dry run reports that the remote database is up to date.
+Live verification confirms the guarded `recurring_streams_select_visible` policy remains and the unintended `recurring_streams_update_own` client-write policy is gone.
+The database prerequisite for merging PR #110 is complete.
 
-Two behaviour changes worth remembering.
+The live-only `public.rls_auto_enable()` event-trigger function is not created by this repository and remains executable by `PUBLIC`, `anon`, and `authenticated`.
+Both `scripts/check-rls.sql` and the Supabase security advisor flag those grants.
+This is a separate follow-up, not a PR #110 migration prerequisite, and it should be corrected through a checked-in migration or Supabase-managed configuration rather than an undocumented live-only change.
+
+Two behavior changes worth remembering.
 `/api/plaid/exchange` now requires a `link_token` in the body and consumes it single-use, so any caller other than `ConnectBankButton` has to send one.
 The webhook route no longer honours the `NODE_ENV === "test"` bypass, so tests that need to skip signature verification must pin `PLAID_ENV=sandbox` with a non-production `NODE_ENV`; `tests/integration/webhook.test.ts` does this explicitly now.
 

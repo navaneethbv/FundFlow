@@ -3,6 +3,11 @@
 Date: 2026-08-10
 Scope: Full repository audit (app/, lib/, components/, supabase/migrations/, scripts/, tests/, config).
 Method: Manual review of all 60 API route handlers, Plaid integration, all 36 SQL migrations, RLS policies, crypto/env handling, export/takeout/calendar/push/backup code, plus `npm audit`, `tsc --noEmit`, `eslint`, and the Vitest suite.
+Status: Historical audit snapshot remediated by PR #110.
+
+The findings below describe the repository before the PR #110 fixes and are retained as audit evidence.
+They are not an open action list.
+The current deployment and remaining live-environment follow-up are recorded in `docs/HANDOFF.md`.
 
 ## Summary
 
@@ -207,32 +212,29 @@ Recommendation: fix the select to `name, target_amount, saved_amount, target_dat
 
 ---
 
-## Testing / CI status (as of 2026-08-10)
+## Remediation verification
 
-- `tsc --noEmit`: passes clean.
-- `eslint`: passes clean.
-- Vitest: 2275 of 2276 tests pass. One integration test fails: `tests/integration/api-routes.test.ts` > `/api/cron/sync` > "runs successfully..." times out at 30s. This test hits a real cron route and is likely environment-dependent/flaky; investigate whether it should mock the sync or receive a longer timeout.
-- Two tests reference the dropped `mfa_backup_codes` table:
-  - `tests/unit/roadmap-schema-completion.test.ts:33` checks the drop migration exists (passes today).
-  - `tests/integration/roadmap-rls.test.ts:59` runs `admin.from("mfa_backup_codes").select("id")` against a live DB; verify it still passes once the table is dropped, or update it.
-- `npm audit`: 2 HIGH severity via `sharp` (transitive of Next.js 16.2.x); fix requires Next.js 16.3.0.
-- Plaid test environment: `.env.local` has `PLAID_ENV=sandbox`. Combined with H1, confirm production explicitly sets `PLAID_ENV=production`.
+- PR #110's code head passed lint, type checking, unit tests, the production build, migration smoke-check, E2E smoke, CodeQL, SonarQube Cloud, and Vercel preview checks before this documentation closeout.
+- Next.js 16.3.0 and its patched `sharp` dependency are included.
+- Migrations `20260810100000` through `20260810180000` are recorded in the linked live Supabase migration ledger.
+- A post-apply dry run reports that the remote database is up to date.
+- The live-only `public.rls_auto_enable()` event-trigger grants remain a separate environment follow-up documented in `docs/HANDOFF.md`.
 
 ---
 
-## Priority action list
+## Original priority action list, completed by PR #110
 
-1. Fix the Plaid webhook fail-open default (H1) and confirm `PLAID_ENV=production` in production.
-2. Revoke PUBLIC execute on `rate_limit_hit` and move `is_household_member` out of the public RPC surface (H4, M10).
-3. Add size/row/rate limits to `/api/import/preview` (H2) and step-up auth to account deletion (H3).
-4. Fix the takeout `goals` select (M15) and complete takeout/backup table coverage (M7).
-5. Serialize per-item syncs and fix the holdings upsert conflict target (M13, M14).
-6. Bind Plaid exchange to the link token, add token rotation (M1, M2).
-7. Validate push endpoints against an allowlist (M3).
-8. Add FK-ownership checks to splits/refunds/annotations write policies and remove `pg_temp` from SECURITY DEFINER search paths (M8, M9).
-9. Enable MFA enforcement at the project level and revoke sessions server-side (M4).
-10. Upgrade Next.js to 16.3.0 for the sharp/libvips CVEs (H5).
-11. Extend `scripts/check-rls.sql` to catch the policy classes it currently misses.
+1. Completed: fix the Plaid webhook fail-open default (H1) and require explicit production configuration.
+2. Completed: revoke `PUBLIC` execution of `rate_limit_hit` and remove anonymous access to `is_household_member` (H4, M10).
+3. Completed: add size, row, and rate limits to `/api/import/preview`, plus step-up authentication for account deletion (H2, H3).
+4. Completed: fix the takeout `goals` selection and complete takeout and backup coverage (M15, M7).
+5. Completed: serialize per-item synchronization and fix the holdings upsert conflict target (M13, M14).
+6. Completed: bind Plaid exchange to the link token and add access-token rotation (M1, M2).
+7. Completed: validate push endpoints against an allowlist (M3).
+8. Completed: add foreign-key ownership checks to splits, refunds, and annotations, and remove `pg_temp` from security-definer search paths (M8, M9).
+9. Completed: enforce MFA and session revocation in sensitive RLS policies and revoke sessions server-side (M4).
+10. Completed: upgrade Next.js to 16.3.0 for the `sharp` and libvips CVEs (H5).
+11. Completed: extend `scripts/check-rls.sql` to detect unscoped `SELECT` policies and security-definer functions executable by `PUBLIC`.
 
 ---
 
