@@ -22,6 +22,13 @@
 -- is enforced at the application layer.
 -- ---------------------------------------------------------------------------
 
+--
+-- Both helpers are called as `(select ...)` inside every policy below. That is
+-- the same InitPlan trick this schema already uses for `(select auth.uid())`:
+-- a bare call is evaluated once per candidate row, so on `transactions` it
+-- would run two SECURITY DEFINER EXISTS probes per row on the dashboard's hot
+-- path. Wrapped in a scalar subquery the planner evaluates each one once per
+-- query. Neither helper takes row-dependent arguments, so this is safe.
 create or replace function private.session_not_revoked()
 returns boolean
 language sql
@@ -68,8 +75,8 @@ create policy "plaid_items_select_own" on public.plaid_items
   for select to authenticated
   using (
     user_id = (select auth.uid())
-    and private.session_not_revoked()
-    and private.mfa_satisfied()
+    and (select private.session_not_revoked())
+    and (select private.mfa_satisfied())
   );
 
 drop policy if exists "accounts_select_visible" on public.accounts;
@@ -79,8 +86,8 @@ create policy "accounts_select_visible"
   to authenticated
   using (
     (user_id = (select auth.uid()) or private.can_read_shared_account(id))
-    and private.session_not_revoked()
-    and private.mfa_satisfied()
+    and (select private.session_not_revoked())
+    and (select private.mfa_satisfied())
   );
 
 drop policy if exists "transactions_select_visible" on public.transactions;
@@ -90,8 +97,8 @@ create policy "transactions_select_visible"
   to authenticated
   using (
     (user_id = (select auth.uid()) or private.can_read_shared_account(account_id))
-    and private.session_not_revoked()
-    and private.mfa_satisfied()
+    and (select private.session_not_revoked())
+    and (select private.mfa_satisfied())
   );
 
 drop policy if exists "account_balance_snapshots_select_visible" on public.account_balance_snapshots;
@@ -107,8 +114,8 @@ create policy "account_balance_snapshots_select_visible"
         and private.can_read_shared_account(account_id)
       )
     )
-    and private.session_not_revoked()
-    and private.mfa_satisfied()
+    and (select private.session_not_revoked())
+    and (select private.mfa_satisfied())
   );
 
 drop policy if exists "recurring_streams_select_visible" on public.recurring_streams;
@@ -118,8 +125,8 @@ create policy "recurring_streams_select_visible"
   to authenticated
   using (
     (user_id = (select auth.uid()) or private.can_read_shared_stream(id))
-    and private.session_not_revoked()
-    and private.mfa_satisfied()
+    and (select private.session_not_revoked())
+    and (select private.mfa_satisfied())
   );
 
 drop policy if exists "recurring_streams_update_own" on public.recurring_streams;
@@ -129,13 +136,13 @@ create policy "recurring_streams_update_own"
   to authenticated
   using (
     user_id = (select auth.uid())
-    and private.session_not_revoked()
-    and private.mfa_satisfied()
+    and (select private.session_not_revoked())
+    and (select private.mfa_satisfied())
   )
   with check (
     user_id = (select auth.uid())
-    and private.session_not_revoked()
-    and private.mfa_satisfied()
+    and (select private.session_not_revoked())
+    and (select private.mfa_satisfied())
   );
 
 -- budgets: one consolidated visible SELECT + guarded owner writes.
@@ -152,8 +159,8 @@ create policy "budgets_select_visible"
         and public.is_household_member(household_id)
       )
     )
-    and private.session_not_revoked()
-    and private.mfa_satisfied()
+    and (select private.session_not_revoked())
+    and (select private.mfa_satisfied())
   );
 
 drop policy if exists "budgets_insert_own" on public.budgets;
@@ -165,8 +172,8 @@ create policy "budgets_insert_own" on public.budgets
       household_id is null
       or public.is_household_member_for(household_id, (select auth.uid()))
     )
-    and private.session_not_revoked()
-    and private.mfa_satisfied()
+    and (select private.session_not_revoked())
+    and (select private.mfa_satisfied())
   );
 
 drop policy if exists "budgets_update_own" on public.budgets;
@@ -174,8 +181,8 @@ create policy "budgets_update_own" on public.budgets
   for update to authenticated
   using (
     user_id = (select auth.uid())
-    and private.session_not_revoked()
-    and private.mfa_satisfied()
+    and (select private.session_not_revoked())
+    and (select private.mfa_satisfied())
   )
   with check (
     user_id = (select auth.uid())
@@ -183,8 +190,8 @@ create policy "budgets_update_own" on public.budgets
       household_id is null
       or public.is_household_member_for(household_id, (select auth.uid()))
     )
-    and private.session_not_revoked()
-    and private.mfa_satisfied()
+    and (select private.session_not_revoked())
+    and (select private.mfa_satisfied())
   );
 
 drop policy if exists "budgets_delete_own" on public.budgets;
@@ -192,8 +199,8 @@ create policy "budgets_delete_own" on public.budgets
   for delete to authenticated
   using (
     user_id = (select auth.uid())
-    and private.session_not_revoked()
-    and private.mfa_satisfied()
+    and (select private.session_not_revoked())
+    and (select private.mfa_satisfied())
   );
 
 -- goals: consolidate the two owner/household SELECT policies into one guarded
@@ -212,8 +219,8 @@ create policy "goals_select_visible"
         and public.is_household_member(household_id)
       )
     )
-    and private.session_not_revoked()
-    and private.mfa_satisfied()
+    and (select private.session_not_revoked())
+    and (select private.mfa_satisfied())
   );
 
 drop policy if exists "goals_insert_own" on public.goals;
@@ -225,8 +232,8 @@ create policy "goals_insert_own" on public.goals
       household_id is null
       or public.is_household_member_for(household_id, (select auth.uid()))
     )
-    and private.session_not_revoked()
-    and private.mfa_satisfied()
+    and (select private.session_not_revoked())
+    and (select private.mfa_satisfied())
   );
 
 drop policy if exists "goals_update_own" on public.goals;
@@ -234,8 +241,8 @@ create policy "goals_update_own" on public.goals
   for update to authenticated
   using (
     user_id = (select auth.uid())
-    and private.session_not_revoked()
-    and private.mfa_satisfied()
+    and (select private.session_not_revoked())
+    and (select private.mfa_satisfied())
   )
   with check (
     user_id = (select auth.uid())
@@ -243,8 +250,8 @@ create policy "goals_update_own" on public.goals
       household_id is null
       or public.is_household_member_for(household_id, (select auth.uid()))
     )
-    and private.session_not_revoked()
-    and private.mfa_satisfied()
+    and (select private.session_not_revoked())
+    and (select private.mfa_satisfied())
   );
 
 drop policy if exists "goals_delete_own" on public.goals;
@@ -252,6 +259,6 @@ create policy "goals_delete_own" on public.goals
   for delete to authenticated
   using (
     user_id = (select auth.uid())
-    and private.session_not_revoked()
-    and private.mfa_satisfied()
+    and (select private.session_not_revoked())
+    and (select private.mfa_satisfied())
   );

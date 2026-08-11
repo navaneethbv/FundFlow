@@ -235,13 +235,19 @@ export async function consumeLinkToken(
   ) {
     return false;
   }
-  const { error: updateError } = await supabase
+  // Compare-and-set: `.is(..., null)` is the only filter PostgREST reads as an
+  // IS NULL test (`.eq(col, null)` sends `eq.null`, which errors on a timestamp
+  // column), and the returning `select` is what makes the CAS observable, because an
+  // update that matched no row reports no error, so without it a second
+  // concurrent exchange would also be told it won.
+  const { data: consumed, error: updateError } = await supabase
     .from("plaid_link_tokens")
     .update({ consumed_at: new Date().toISOString() })
     .eq("id", data.id)
-    .eq("consumed_at", null);
+    .is("consumed_at", null)
+    .select("id");
   if (updateError) throw updateError;
-  return true;
+  return (consumed ?? []).length > 0;
 }
 
 /** Mark an item's status (and optional error code, never PII). */
@@ -258,26 +264,107 @@ export async function setItemStatus(
   if (error) throw error;
 }
 
+/** Attempts left to store a rotated token before the connection is written off. */
+const PERSIST_RETRIES = 3;
+
+/**
+ * Seconds before a crashed run's item claim may be taken over. Mirrors
+ * STALE_SYNC_SECONDS in lib/sync.ts; duplicated rather than imported because
+ * lib/sync.ts already imports from this module.
+ */
+const STALE_CLAIM_SECONDS = 5 * 60;
+
+/**
+ * Flag an item whose access token was invalidated at Plaid but could not be
+ * stored. Only a re-link can recover it, so surface it the same way any other
+ * broken connection is surfaced rather than leaving it "active" with a dead
+ * token.
+ */
+async function markItemTokenLost(itemDbId: string): Promise<void> {
+  try {
+    await setItemStatus(itemDbId, "error", "TOKEN_ROTATION_LOST");
+  } catch (error) {
+    logError("plaid-service.token-rotation-status", error);
+  }
+}
+
 /**
  * Rotate a single item's Plaid access token via /item/access_token/invalidate,
  * which returns a fresh token and immediately invalidates the old one. The new
  * token is re-encrypted and persisted, and `access_token_rotated_at` is
- * stamped. Best-effort: a failure (e.g. the token is already unusable) is
- * logged and the old token stays in place, so rotation can never break a sync.
- * Use this directly to rotate immediately after a suspected compromise.
+ * stamped. Use this directly to rotate immediately after a suspected
+ * compromise.
+ *
+ * The invalidate call is the point of no return: once Plaid answers, the old
+ * token is dead whether or not we manage to store its replacement, so losing
+ * the new token here bricks the connection until the user re-links. Everything
+ * after that call is therefore retried, and a persist that still fails is
+ * logged as a token-loss event and marks the item `error` so the user is told
+ * to reconnect instead of watching syncs fail silently. A failure *before*
+ * Plaid answers leaves the old token working, so rotation never breaks a sync
+ * on its own.
+ *
+ * Rotation takes the same per-item claim a sync does. Without it, invalidating
+ * the token while a webhook- or cron-triggered sync is mid-flight kills that
+ * run's token underneath it, which surfaces to the user as a spurious "bank
+ * disconnected" alert. Rotation is periodic and best-effort, so if the item is
+ * busy we simply leave it for the next daily pass.
  */
 export async function rotateItemAccessToken(item: PlaidItemRow): Promise<boolean> {
+  const claimClient = createServiceClient();
+  const { data: claimed, error: claimError } = await claimClient.rpc(
+    "claim_item_sync",
+    { p_item_id: item.id, p_stale_seconds: STALE_CLAIM_SECONDS },
+  );
+  if (claimError) {
+    // Can't prove the item is idle, so don't risk pulling the token out from
+    // under an in-flight sync.
+    logError("plaid-service.token-rotation-claim", claimError);
+    return false;
+  }
+  if (claimed !== true) return false;
+
+  try {
+    return await rotateClaimedItemAccessToken(item);
+  } finally {
+    try {
+      await claimClient.rpc("release_item_sync", { p_item_id: item.id });
+    } catch (error) {
+      logError("plaid-service.token-rotation-release", error);
+    }
+  }
+}
+
+async function rotateClaimedItemAccessToken(
+  item: PlaidItemRow,
+): Promise<boolean> {
   const plaintext = decryptItemToken(item);
+  let newToken: string | null | undefined;
   try {
     const plaid = getPlaidClient();
     const response = await plaid.itemAccessTokenInvalidate({
       access_token: plaintext,
     });
-    const newToken = response.data.new_access_token;
-    if (!newToken) return false;
+    newToken = response.data.new_access_token;
+  } catch (error) {
+    // Old token still valid, so nothing was rotated.
+    logError("plaid-service.token-rotation", error);
+    return false;
+  }
 
-    const enc = encryptSecret(newToken);
-    const supabase = createServiceClient();
+  if (!newToken) {
+    // Plaid invalidated the old token but gave us nothing to replace it with.
+    logError(
+      "plaid-service.token-rotation-lost",
+      new Error(`Plaid returned no new access token for item ${item.id}`),
+    );
+    await markItemTokenLost(item.id);
+    return false;
+  }
+
+  const enc = encryptSecret(newToken);
+  const supabase = createServiceClient();
+  for (let attempt = 0; attempt < PERSIST_RETRIES; attempt += 1) {
     const { error } = await supabase
       .from("plaid_items")
       .update({
@@ -287,12 +374,16 @@ export async function rotateItemAccessToken(item: PlaidItemRow): Promise<boolean
         access_token_rotated_at: new Date().toISOString(),
       })
       .eq("id", item.id);
-    if (error) throw error;
-    return true;
-  } catch (error) {
-    logError("plaid-service.token-rotation", error);
-    return false;
+    if (!error) return true;
+    logError("plaid-service.token-rotation-persist", error);
   }
+
+  logError(
+    "plaid-service.token-rotation-lost",
+    new Error(`Could not persist rotated access token for item ${item.id}`),
+  );
+  await markItemTokenLost(item.id);
+  return false;
 }
 
 /**

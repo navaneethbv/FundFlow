@@ -104,7 +104,9 @@ export default function DangerZone() {
               id="danger-zone-step-up"
               type={stepUpMethod === "totp" ? "text" : "password"}
               required
-              autoComplete="current-password"
+              autoComplete={
+                stepUpMethod === "totp" ? "one-time-code" : "current-password"
+              }
               inputMode={stepUpMethod === "totp" ? "numeric" : undefined}
               pattern={stepUpMethod === "totp" ? "[0-9]*" : undefined}
               maxLength={stepUpMethod === "totp" ? 6 : undefined}

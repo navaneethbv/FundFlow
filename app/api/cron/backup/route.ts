@@ -3,7 +3,11 @@ import { serverEnv } from "@/lib/env.server";
 import { safeEqual } from "@/lib/crypto";
 import { createServiceClient } from "@/lib/supabase/service";
 import { buildBackupArchive } from "@/lib/backup";
-import { collectUserData, countUserDataRows } from "@/lib/user-data";
+import {
+  collectUserData,
+  countUserDataRows,
+  countUserRecordRows,
+} from "@/lib/user-data";
 import { sendBackupEmail } from "@/lib/reporting";
 import { alertCronFailure } from "@/lib/cron-alert";
 import { errorResponse } from "@/lib/http";
@@ -59,7 +63,9 @@ export async function GET(request: NextRequest) {
         // records, or annotations. The shared_expenses or() filter keeps one
         // member's backup from carrying the whole household's expenses.
         const sections = await collectUserData(service, userId);
-        if (countUserDataRows(sections) === 0) {
+        // Preference rows alone don't earn a monthly archive email: an account
+        // that only ever toggled a notification setting has nothing to restore.
+        if (countUserRecordRows(sections) === 0) {
           continue;
         }
 

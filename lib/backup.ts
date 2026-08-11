@@ -15,11 +15,17 @@ import { gzipSync, gunzipSync } from "node:zlib";
  * viable for years of history.
  *
  * New archives are encrypted with a per-user key derived from BACKUP_ENC_KEY
- * via HKDF-SHA256 (salt = user id, info = version tag). A compromise of the
- * master key alone is therefore not enough to decrypt an archive — the
- * attacker would also need each user id — and a leak of one derived key does
- * not expose other users' archives. Archives written before this scheme still
- * decrypt with the raw BACKUP_ENC_KEY (no `kdf` field in the envelope).
+ * via HKDF-SHA256 (salt = user id, info = version tag). What this buys is key
+ * separation: a leaked derived key opens exactly one user's archives and tells
+ * an attacker nothing about the master key or anyone else's.
+ *
+ * It is NOT defense against master-key compromise. The user id is stored in
+ * the envelope in the clear (the restore path needs it), so whoever holds
+ * BACKUP_ENC_KEY and an archive can always re-derive that archive's key.
+ * Protect BACKUP_ENC_KEY accordingly.
+ *
+ * Archives written before this scheme still decrypt with the raw
+ * BACKUP_ENC_KEY (no `kdf` field in the envelope).
  */
 
 interface BackupEnvelope {

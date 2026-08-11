@@ -53,8 +53,13 @@ function advance(date: string, frequency: CalendarBill["frequency"]): string {
 /**
  * RFC 5545 TEXT escaping — backslash first, then structural characters.
  * Bare CR/LF (which would terminate the property line and inject synthetic
- * iCal content) are encoded as the literal two characters `\n`, and `:` is
- * escaped so names cannot inject a value separator.
+ * iCal content) are encoded as the literal two characters `\n`.
+ *
+ * `:` is deliberately left alone: RFC 5545 §3.3.11 defines TEXT as
+ * `*(TSAFE-CHAR / ":" / DQUOTE / ESCAPED-CHAR)`, so a colon is legal bare and
+ * `\:` is not one of the four valid escapes. Escaping it makes strict parsers
+ * render a literal backslash in names like "Netflix: Premium". The value
+ * separator cannot be injected anyway once CR/LF are encoded.
  */
 function escapeText(value: string): string {
   return value
@@ -63,8 +68,7 @@ function escapeText(value: string): string {
     .replaceAll("\r", String.raw`\n`)
     .replaceAll("\n", String.raw`\n`)
     .replaceAll(";", String.raw`\;`)
-    .replaceAll(",", String.raw`\,`)
-    .replaceAll(":", String.raw`\:`);
+    .replaceAll(",", String.raw`\,`);
 }
 
 function slug(value: string): string {

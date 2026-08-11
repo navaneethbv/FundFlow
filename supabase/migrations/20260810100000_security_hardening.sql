@@ -12,11 +12,17 @@
 -- ---------------------------------------------------------------------------
 
 -- H4: rate_limit_hit is a SECURITY DEFINER function in the public schema, so
--- PostgREST exposes it to anon by default. Only the app (service_role) and
--- authenticated sessions may call it.
+-- PostgREST exposes it as an RPC to anon by default. Only the app may call it.
+--
+-- service_role is the ONLY grantee: lib/rate-limit.ts always goes through
+-- createServiceClient(). Leaving EXECUTE with `authenticated` would keep the
+-- exact DoS this finding is about, just behind a login: any signed-in user
+-- could burn another user's counters by calling
+-- rate_limit_hit('account-delete:<their-uuid>', ...) until the window closes,
+-- locking them out of their own rate-limited routes.
 revoke all on function public.rate_limit_hit(text, int, int) from public;
 revoke all on function public.rate_limit_hit(text, int, int) from anon;
-grant execute on function public.rate_limit_hit(text, int, int) to authenticated;
+revoke all on function public.rate_limit_hit(text, int, int) from authenticated;
 grant execute on function public.rate_limit_hit(text, int, int) to service_role;
 
 -- M10: is_household_member is referenced from RLS policies, so `authenticated`

@@ -189,5 +189,32 @@ describe("Cron API Route Handlers Unit Tests", () => {
       expect(res.status).toBe(200);
       expect(mockAlertCronFailure).toHaveBeenCalledWith("backup", expect.objectContaining({ failed: 1 }));
     });
+
+    it("returns 500 and alerts when the profiles query crashes the run", async () => {
+      const db = {
+        ...clientStub({
+          profiles: { data: null, error: { message: "profiles select failed" } },
+        }),
+        auth: {
+          admin: {
+            getUserById: async () => ({
+              data: { user: { email: "user@example.com" } },
+              error: null,
+            }),
+          },
+        },
+      };
+      mockCreateServiceClient.mockReturnValue(db);
+
+      const req = new NextRequest("http://localhost/api/cron/backup", {
+        headers: { authorization: "Bearer test-cron-secret" },
+      });
+      const res = await cronBackupGet(req);
+      expect(res.status).toBe(500);
+      expect(mockAlertCronFailure).toHaveBeenCalledWith(
+        "backup",
+        expect.objectContaining({ failed: 1, total: 1, firstError: "run_crashed" }),
+      );
+    });
   });
 });

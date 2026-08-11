@@ -3,6 +3,9 @@ import { createHash } from "node:crypto";
 
 const mockServiceClient = {
   from: vi.fn(),
+  // Rotation claims the item before touching Plaid; default to winning the
+  // claim so each test can focus on the rotation behaviour itself.
+  rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
 };
 
 vi.mock("@/lib/supabase/service", () => ({
@@ -471,8 +474,11 @@ describe("lib/plaid-service", () => {
   });
 
   it("consumeLinkToken consumes an unused, unexpired token and returns true", async () => {
-    const updateEqConsumed = vi.fn().mockResolvedValue({ error: null });
-    const updateEq = vi.fn().mockReturnValue({ eq: updateEqConsumed });
+    const updateSelect = vi
+      .fn()
+      .mockResolvedValue({ data: [{ id: "lt-1" }], error: null });
+    const updateIs = vi.fn().mockReturnValue({ select: updateSelect });
+    const updateEq = vi.fn().mockReturnValue({ is: updateIs });
     const update = vi.fn().mockReturnValue({ eq: updateEq });
     const maybeSingle = vi.fn().mockResolvedValue({
       data: { id: "lt-1", expires_at: null, consumed_at: null },
@@ -514,6 +520,28 @@ describe("lib/plaid-service", () => {
     expect(ok).toBe(false);
   });
 
+  it("consumeLinkToken returns false when a concurrent exchange won the compare-and-set", async () => {
+    // The row looked unconsumed at select time, but the conditional update
+    // matched nothing because the other request got there first.
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: { id: "lt-1", expires_at: null, consumed_at: null },
+      error: null,
+    });
+    const updateSelect = vi.fn().mockResolvedValue({ data: [], error: null });
+    const updateIs = vi.fn().mockReturnValue({ select: updateSelect });
+    const updateEq = vi.fn().mockReturnValue({ is: updateIs });
+    const update = vi.fn().mockReturnValue({ eq: updateEq });
+    const eqHash = vi.fn().mockReturnValue({ maybeSingle });
+    const eqUser = vi.fn().mockReturnValue({ eq: eqHash });
+    const select = vi.fn().mockReturnValue({ eq: eqUser });
+    mockServiceClient.from.mockReturnValue({ select, update });
+
+    const ok = await consumeLinkToken("user-1", "link-token-abc");
+
+    expect(ok).toBe(false);
+    expect(updateIs).toHaveBeenCalledWith("consumed_at", null);
+  });
+
   it("consumeLinkToken returns false for an expired token", async () => {
     const maybeSingle = vi.fn().mockResolvedValue({
       data: { id: "lt-1", expires_at: "2020-01-01T00:00:00Z", consumed_at: null },
@@ -534,8 +562,11 @@ describe("lib/plaid-service", () => {
       data: { id: "lt-1", expires_at: future, consumed_at: null },
       error: null,
     });
-    const updateEqConsumed = vi.fn().mockResolvedValue({ error: null });
-    const updateEq = vi.fn().mockReturnValue({ eq: updateEqConsumed });
+    const updateSelect = vi
+      .fn()
+      .mockResolvedValue({ data: [{ id: "lt-1" }], error: null });
+    const updateIs = vi.fn().mockReturnValue({ select: updateSelect });
+    const updateEq = vi.fn().mockReturnValue({ is: updateIs });
     const update = vi.fn().mockReturnValue({ eq: updateEq });
     const eqHash = vi.fn().mockReturnValue({ maybeSingle });
     const eqUser = vi.fn().mockReturnValue({ eq: eqHash });
@@ -561,8 +592,11 @@ describe("lib/plaid-service", () => {
       data: { id: "lt-1", expires_at: null, consumed_at: null },
       error: null,
     });
-    const updateEqConsumed = vi.fn().mockResolvedValue({ error: new Error("Consume error") });
-    const updateEq = vi.fn().mockReturnValue({ eq: updateEqConsumed });
+    const updateSelect = vi
+      .fn()
+      .mockResolvedValue({ data: null, error: new Error("Consume error") });
+    const updateIs = vi.fn().mockReturnValue({ select: updateSelect });
+    const updateEq = vi.fn().mockReturnValue({ is: updateIs });
     const update = vi.fn().mockReturnValue({ eq: updateEq });
     const eqHash = vi.fn().mockReturnValue({ maybeSingle });
     const eqUser = vi.fn().mockReturnValue({ eq: eqHash });
@@ -572,17 +606,88 @@ describe("lib/plaid-service", () => {
     await expect(consumeLinkToken("user-1", "link-token-abc")).rejects.toThrow("Consume error");
   });
 
-  it("rotateItemAccessToken returns false when Plaid omits the new token", async () => {
+  it("rotateItemAccessToken marks the item errored when Plaid omits the new token", async () => {
+    // Plaid has already invalidated the old token at this point, so there is
+    // nothing left to sync with, so the item has to be flagged for a re-link.
     mockItemAccessTokenInvalidate.mockResolvedValueOnce({ data: { new_access_token: null } });
-    mockServiceClient.from.mockReturnValue({ update: vi.fn() });
+    const eq = vi.fn().mockResolvedValue({ error: null });
+    const update = vi.fn().mockReturnValue({ eq });
+    mockServiceClient.from.mockReturnValue({ update });
 
     const ok = await rotateItemAccessToken(dummyItem);
 
     expect(ok).toBe(false);
     expect(mockEncryptSecret).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith({
+      status: "error",
+      error_code: "TOKEN_ROTATION_LOST",
+    });
+    expect(mockLogError).toHaveBeenCalledWith(
+      "plaid-service.token-rotation-lost",
+      expect.any(Error),
+    );
   });
 
-  it("rotateItemAccessToken logs and returns false when persisting the rotated token fails", async () => {
+  it("rotateItemAccessToken skips an item another run is already syncing", async () => {
+    // Invalidating the token mid-sync would kill the in-flight run's token and
+    // surface as a spurious "bank disconnected" alert.
+    mockServiceClient.rpc.mockResolvedValueOnce({ data: false, error: null });
+
+    const ok = await rotateItemAccessToken(dummyItem);
+
+    expect(ok).toBe(false);
+    expect(mockItemAccessTokenInvalidate).not.toHaveBeenCalled();
+  });
+
+  it("rotateItemAccessToken releases the claim after rotating", async () => {
+    mockItemAccessTokenInvalidate.mockResolvedValueOnce({
+      data: { new_access_token: "rotated-token" },
+    });
+    const eq = vi.fn().mockResolvedValue({ error: null });
+    mockServiceClient.from.mockReturnValue({ update: vi.fn().mockReturnValue({ eq }) });
+
+    const ok = await rotateItemAccessToken(dummyItem);
+
+    expect(ok).toBe(true);
+    expect(mockServiceClient.rpc).toHaveBeenCalledWith("release_item_sync", {
+      p_item_id: "item-db-1",
+    });
+  });
+
+  it("rotateItemAccessToken leaves the item alone when Plaid itself fails", async () => {
+    // The invalidate call never landed, so the old token still works.
+    mockItemAccessTokenInvalidate.mockRejectedValueOnce(new Error("Plaid down"));
+    const update = vi.fn();
+    mockServiceClient.from.mockReturnValue({ update });
+
+    const ok = await rotateItemAccessToken(dummyItem);
+
+    expect(ok).toBe(false);
+    expect(update).not.toHaveBeenCalled();
+    expect(mockLogError).toHaveBeenCalledWith(
+      "plaid-service.token-rotation",
+      expect.any(Error),
+    );
+  });
+
+  it("rotateItemAccessToken retries a failed persist and succeeds", async () => {
+    mockItemAccessTokenInvalidate.mockResolvedValueOnce({
+      data: { new_access_token: "rotated-token" },
+    });
+    const eq = vi
+      .fn()
+      .mockResolvedValueOnce({ error: new Error("Update error") })
+      .mockResolvedValueOnce({ error: null });
+    const update = vi.fn().mockReturnValue({ eq });
+    mockServiceClient.from.mockReturnValue({ update });
+
+    const ok = await rotateItemAccessToken(dummyItem);
+
+    expect(ok).toBe(true);
+    expect(eq).toHaveBeenCalledTimes(2);
+  });
+
+  it("rotateItemAccessToken marks the item errored when the rotated token cannot be stored", async () => {
     mockItemAccessTokenInvalidate.mockResolvedValueOnce({
       data: { new_access_token: "rotated-token" },
     });
@@ -593,7 +698,16 @@ describe("lib/plaid-service", () => {
     const ok = await rotateItemAccessToken(dummyItem);
 
     expect(ok).toBe(false);
-    expect(mockLogError).toHaveBeenCalledWith("plaid-service.token-rotation", expect.any(Error));
+    expect(mockLogError).toHaveBeenCalledWith(
+      "plaid-service.token-rotation-lost",
+      expect.any(Error),
+    );
+    // Last write is the status flag, so the user sees a broken connection
+    // instead of a silently dead one.
+    expect(update).toHaveBeenLastCalledWith({
+      status: "error",
+      error_code: "TOKEN_ROTATION_LOST",
+    });
   });
 
   it("rotateStaleItemTokens throws when the item lookup fails", async () => {

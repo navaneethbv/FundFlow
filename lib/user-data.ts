@@ -274,3 +274,25 @@ export function countUserDataRows(sections: Record<string, unknown[]>): number {
     0,
   );
 }
+
+/**
+ * Sections that hold settings rather than records. A row appears in these the
+ * moment someone flips a single toggle, so counting them would make an account
+ * that has never linked a bank or entered a transaction look worth backing up.
+ */
+const PREFERENCE_SECTION_KEYS = new Set(["alert_preferences", "ai_settings"]);
+
+/**
+ * Row count across the sections that represent actual financial records. The
+ * monthly backup uses this to decide whether a user has anything to archive;
+ * {@link countUserDataRows} still reports everything the archive contains.
+ */
+export function countUserRecordRows(
+  sections: Record<string, unknown[]>,
+): number {
+  return Object.entries(sections).reduce(
+    (total, [key, rows]) =>
+      PREFERENCE_SECTION_KEYS.has(key) ? total : total + rows.length,
+    0,
+  );
+}

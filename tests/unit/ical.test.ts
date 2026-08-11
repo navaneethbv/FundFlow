@@ -131,7 +131,7 @@ describe("buildBillsCalendar", () => {
     expect(ics).toContain("SUMMARY:Rent\\; Apt 4\\, LLC\\\\");
   });
 
-  it("encodes newlines and colons so a name cannot inject iCal lines", () => {
+  it("encodes newlines so a name cannot inject iCal lines", () => {
     const ics = buildBillsCalendar({
       bills: [
         {
@@ -146,9 +146,10 @@ describe("buildBillsCalendar", () => {
       horizonDays: 10,
       includeAmounts: false,
     });
-    // Bare CR/LF never survives into the output (the CRLF check above would
-    // fail too) and `:` inside the name is escaped as `\:`.
-    expect(ics).toContain("SUMMARY:Cafe\\nSUMMARY\\:PHISHING\\:open");
+    // Bare CR/LF never survives into the output, which is what stops the
+    // injected SUMMARY from becoming its own property. `:` stays bare: RFC 5545
+    // allows it inside TEXT, and `\:` is not a valid escape.
+    expect(ics).toContain("SUMMARY:Cafe\\nSUMMARY:PHISHING:open");
     expect(ics.replace(/\r\n/g, "")).not.toContain("\n");
   });
 

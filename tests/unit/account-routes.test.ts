@@ -357,12 +357,12 @@ describe("DELETE /api/account", () => {
     expect(res.status).toBe(401);
   });
 
-  it("rejects invalid or missing re-auth method", async () => {
+  it("rejects a missing verification code", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: USER, email: "user@example.com" },
       supabase: clientStub(),
     });
-    const res = await accountDelete(del("http://localhost/api/account", { method: "invalid", code: "123" }));
+    const res = await accountDelete(del("http://localhost/api/account", {}));
     expect(res.status).toBe(400);
   });
 
@@ -371,21 +371,54 @@ describe("DELETE /api/account", () => {
       user: { id: USER, email: "user@example.com" },
       supabase: clientStub(),
     });
-    const res = await accountDelete(del("http://localhost/api/account", { method: "password", code: "" }));
+    const res = await accountDelete(del("http://localhost/api/account", { code: "" }));
     expect(res.status).toBe(400);
   });
 
-  it("returns 401 when password re-auth step-up fails", async () => {
+  it("never accepts a password when the user has a verified TOTP factor", async () => {
+    // The request body must not be able to downgrade the step-up: a stolen
+    // session plus a known password is exactly what MFA is there to stop.
+    const signInWithPassword = vi.fn().mockResolvedValue({ error: null });
     const mockSupabase = {
       auth: {
-        signInWithPassword: vi.fn().mockResolvedValue({ error: { message: "Wrong password" } }),
+        signInWithPassword,
+        mfa: {
+          listFactors: vi.fn().mockResolvedValue({
+            data: { totp: [{ id: "f1", status: "verified" }] },
+          }),
+          challengeAndVerify: vi
+            .fn()
+            .mockResolvedValue({ error: { message: "Invalid code" } }),
+        },
       },
     };
     mockRequireUser.mockResolvedValue({
       user: { id: USER, email: "user@example.com" },
       supabase: mockSupabase,
     });
-    const res = await accountDelete(del("http://localhost/api/account", { method: "password", code: "wrong" }));
+
+    const res = await accountDelete(
+      del("http://localhost/api/account", { method: "password", code: "secret" }),
+    );
+
+    expect(res.status).toBe(401);
+    expect(signInWithPassword).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 when password re-auth step-up fails", async () => {
+    const mockSupabase = {
+      auth: {
+        signInWithPassword: vi.fn().mockResolvedValue({ error: { message: "Wrong password" } }),
+        mfa: {
+          listFactors: vi.fn().mockResolvedValue({ data: { totp: [] } }),
+        },
+      },
+    };
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER, email: "user@example.com" },
+      supabase: mockSupabase,
+    });
+    const res = await accountDelete(del("http://localhost/api/account", { code: "wrong" }));
     expect(res.status).toBe(401);
     expect(mockWriteAudit).toHaveBeenCalledWith(
       expect.objectContaining({ action: "account_delete_failed" }),
@@ -407,7 +440,7 @@ describe("DELETE /api/account", () => {
       user: { id: USER, email: "user@example.com" },
       supabase: mockSupabase,
     });
-    const res = await accountDelete(del("http://localhost/api/account", { method: "totp", code: "000000" }));
+    const res = await accountDelete(del("http://localhost/api/account", { code: "000000" }));
     expect(res.status).toBe(401);
   });
 
@@ -415,6 +448,9 @@ describe("DELETE /api/account", () => {
     const mockSupabase = {
       auth: {
         signInWithPassword: vi.fn().mockResolvedValue({ error: null }),
+        mfa: {
+          listFactors: vi.fn().mockResolvedValue({ data: { totp: [] } }),
+        },
       },
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({
@@ -438,7 +474,7 @@ describe("DELETE /api/account", () => {
       supabase: mockSupabase,
     });
 
-    const res = await accountDelete(del("http://localhost/api/account", { method: "password", code: "secret" }));
+    const res = await accountDelete(del("http://localhost/api/account", { code: "secret" }));
     expect(res.status).toBe(200);
     expect(mockWriteAudit).toHaveBeenCalledWith(
       expect.objectContaining({ action: "account_delete" }),

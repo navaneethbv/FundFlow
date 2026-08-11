@@ -361,6 +361,18 @@ describe("GET /api/cron/backup", () => {
     expect(mockSendBackupEmail).not.toHaveBeenCalled();
   });
 
+  it("reports zero users when the profiles query returns no rows", async () => {
+    serviceClient = buildServiceClient({
+      profiles: { data: null, error: null },
+    });
+
+    const res = await backupGet(cronRequest());
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ ok: true, users: 0, sent: 0 });
+    expect(mockSendBackupEmail).not.toHaveBeenCalled();
+  });
+
   it("isolates a per-user failure and alerts once for the run", async () => {
     serviceClient = buildServiceClient({
       profiles: { data: [{ id: USER }], error: null },

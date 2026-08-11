@@ -28,7 +28,7 @@ vi.mock("@/lib/supabase/service", () => ({
   }),
 }));
 
-describe("PR #110 Route Handlers Coverage Boost", () => {
+describe("route handler edge cases", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

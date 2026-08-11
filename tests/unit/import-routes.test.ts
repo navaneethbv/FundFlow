@@ -377,14 +377,14 @@ describe("Import API Routes", () => {
       expect(res.status).toBe(401);
     });
 
-    it("returns bad request when rate limited", async () => {
+    it("returns 429 when rate limited", async () => {
       mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
       mockCheckRateLimit.mockResolvedValue(false);
       const res = await previewPost({} as NextRequest);
-      expect(res.status).toBe(400);
-      expect(mockBadRequest).toHaveBeenCalledWith(
-        "Too many previews. Please wait a while.",
-      );
+      expect(res.status).toBe(429);
+      await expect(res.json()).resolves.toEqual({
+        error: "Too many previews. Please wait a while.",
+      });
     });
 
     it("returns bad request when the file is too large", async () => {
@@ -888,6 +888,72 @@ describe("Import API Routes", () => {
       expect(mockBadRequest).toHaveBeenCalledWith("File too large (2 MB max)");
     });
 
+    it("returns bad request when form data parsing fails", async () => {
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: {
+          from: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
+          }),
+        },
+      });
+      const request = {
+        formData: () => Promise.reject(new Error("Form fail")),
+      } as unknown as NextRequest;
+
+      const res = await csvPost(request);
+      expect(res.status).toBe(400);
+      expect(mockBadRequest).toHaveBeenCalledWith(
+        "Expected multipart form data",
+      );
+    });
+
+    it("returns bad request when the file is missing", async () => {
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: {
+          from: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
+          }),
+        },
+      });
+      const formData = new FormData();
+      formData.set("account_id", "a1");
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      const res = await csvPost(request);
+      expect(res.status).toBe(400);
+      expect(mockBadRequest).toHaveBeenCalledWith("file is required");
+    });
+
+    it("returns bad request when the account id is missing", async () => {
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: {
+          from: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
+          }),
+        },
+      });
+      const formData = new FormData();
+      formData.set("file", new File(["2026-07-01,Store,10.00"], "statement.csv", { type: "text/csv" }));
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      const res = await csvPost(request);
+      expect(res.status).toBe(400);
+      expect(mockBadRequest).toHaveBeenCalledWith("account_id is required");
+    });
+
     it("imports CSV records within pre-Plaid boundary and writes audit log", async () => {
       mockCheckRateLimit.mockResolvedValue(true);
       const mockSupabase = {
@@ -969,6 +1035,329 @@ describe("Import API Routes", () => {
           }),
         }),
       );
+    });
+
+    it("imports OFX rows through the same pre-Plaid pipeline", async () => {
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: {
+          from: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
+          }),
+        },
+      });
+      const file = new File(["OFXHEADER:100\n<OFX>...</OFX>"], "bank.ofx", {
+        type: "application/x-ofx",
+      });
+      const formData = new FormData();
+      formData.set("file", file);
+      formData.set("account_id", "a1");
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockLooksLikeOfx.mockReturnValue(true);
+      mockParseOfx.mockReturnValue([
+        { date: "2026-06-15", description: "", amount: 100, fitid: "fit-1" },
+        { date: "2026-07-15", description: "Salary", amount: -200, fitid: "fit-2" },
+      ]);
+      const boundary = {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              not: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({
+                      data: { date: "2026-07-01" },
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      };
+      const upsert = vi.fn().mockResolvedValue({ error: null });
+      mockServiceClient.from.mockImplementation((table: string) => {
+        if (table === "transactions") {
+          return { select: boundary.select, upsert };
+        }
+        return null as never;
+      });
+
+      const res = await csvPost(request);
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({
+        ok: true,
+        imported: 1,
+        skipped_overlap: 1,
+        parse_errors: [],
+      });
+      expect(mockParseImportCsv).not.toHaveBeenCalled();
+      expect(upsert).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ name: "Imported" }),
+        ]),
+        expect.objectContaining({ onConflict: "plaid_transaction_id" }),
+      );
+    });
+
+    it("imports every row when the boundary query finds no synced row", async () => {
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: {
+          from: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
+          }),
+        },
+      });
+      const file = new File(["2026-06-15,Store,10.00"], "statement.csv", {
+        type: "text/csv",
+      });
+      const formData = new FormData();
+      formData.set("file", file);
+      formData.set("account_id", "a1");
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockParseImportCsv.mockReturnValue({
+        rows: [{ date: "2026-06-15", merchant: "Store", amount: 10 }],
+        errors: [],
+      });
+      const boundary = {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              not: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({
+                      data: null,
+                      error: null,
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      };
+      const upsert = vi.fn().mockResolvedValue({ error: null });
+      mockServiceClient.from.mockImplementation((table: string) => {
+        if (table === "transactions") {
+          return { select: boundary.select, upsert };
+        }
+        return null as never;
+      });
+
+      const res = await csvPost(request);
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({
+        ok: true,
+        imported: 1,
+        skipped_overlap: 0,
+        parse_errors: [],
+      });
+    });
+
+    it("returns bad request when parse errors exist and no rows were parsed", async () => {
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: {
+          from: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
+          }),
+        },
+      });
+      const formData = new FormData();
+      formData.set("file", new File(["bad"], "x.csv", { type: "text/csv" }));
+      formData.set("account_id", "a1");
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockParseImportCsv.mockReturnValue({ rows: [], errors: ["Line 1: malformed"] });
+
+      const res = await csvPost(request);
+      expect(res.status).toBe(400);
+      expect(mockBadRequest).toHaveBeenCalledWith("Line 1: malformed");
+    });
+
+    it("falls back to the generic message when no rows parse without errors", async () => {
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: {
+          from: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
+          }),
+        },
+      });
+      const formData = new FormData();
+      formData.set("file", new File(["bad"], "x.csv", { type: "text/csv" }));
+      formData.set("account_id", "a1");
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockParseImportCsv.mockReturnValue({ rows: [], errors: [] });
+
+      const res = await csvPost(request);
+      expect(res.status).toBe(400);
+      expect(mockBadRequest).toHaveBeenCalledWith("No importable rows found");
+    });
+
+    it("returns bad request when the file has too many rows", async () => {
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: {
+          from: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
+          }),
+        },
+      });
+      const formData = new FormData();
+      formData.set("file", new File(["data"], "huge.csv", { type: "text/csv" }));
+      formData.set("account_id", "a1");
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockParseImportCsv.mockReturnValue({
+        rows: Array.from({ length: 20_001 }, (_, i) => ({
+          date: "2026-07-01",
+          merchant: `M${i}`,
+          amount: 10,
+        })),
+        errors: [],
+      });
+
+      const res = await csvPost(request);
+      expect(res.status).toBe(400);
+      expect(mockBadRequest).toHaveBeenCalledWith(
+        "Too many rows (20000 max per file)",
+      );
+    });
+
+    it("returns 500 when the boundary query fails", async () => {
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: {
+          from: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
+          }),
+        },
+      });
+      const formData = new FormData();
+      formData.set("file", new File(["2026-06-15,Store,10.00"], "s.csv", { type: "text/csv" }));
+      formData.set("account_id", "a1");
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockParseImportCsv.mockReturnValue({
+        rows: [{ date: "2026-06-15", merchant: "Store", amount: 10 }],
+        errors: [],
+      });
+      mockServiceClient.from.mockImplementation((table: string) => {
+        if (table === "transactions") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  not: vi.fn().mockReturnValue({
+                    order: vi.fn().mockReturnValue({
+                      limit: vi.fn().mockReturnValue({
+                        maybeSingle: vi.fn().mockResolvedValue({
+                          data: null,
+                          error: { message: "boundary failed" },
+                        }),
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+            upsert: vi.fn().mockResolvedValue({ error: null }),
+          };
+        }
+        return null as never;
+      });
+
+      const res = await csvPost(request);
+      expect(res.status).toBe(500);
+    });
+
+    it("returns 500 when the chunked upsert fails", async () => {
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: {
+          from: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
+          }),
+        },
+      });
+      const formData = new FormData();
+      formData.set("file", new File(["data"], "big.csv", { type: "text/csv" }));
+      formData.set("account_id", "a1");
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockParseImportCsv.mockReturnValue({
+        rows: Array.from({ length: 501 }, (_, i) => ({
+          date: "2026-06-15",
+          merchant: `M${i}`,
+          amount: 10,
+        })),
+        errors: [],
+      });
+      const boundary = {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              not: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({
+                      data: null,
+                      error: null,
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      };
+      const upsert = vi
+        .fn()
+        .mockResolvedValueOnce({ error: null })
+        .mockResolvedValueOnce({ error: { message: "dup key" } });
+      mockServiceClient.from.mockImplementation((table: string) => {
+        if (table === "transactions") {
+          return { select: boundary.select, upsert };
+        }
+        return null as never;
+      });
+
+      const res = await csvPost(request);
+      expect(res.status).toBe(500);
     });
 
     it("returns 401 when requireUser fails or handles missing account / DB error in import csv route", async () => {

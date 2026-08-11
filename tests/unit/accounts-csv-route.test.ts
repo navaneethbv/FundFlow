@@ -3,11 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { clientStub } from "../fixtures/supabase-query";
 
 const mockRequireUser = vi.fn<(...args: unknown[]) => unknown>();
+const mockErrorResponse = vi.fn(
+  () => NextResponse.json({ error: "boom" }, { status: 500 }),
+);
 vi.mock("@/lib/http", () => ({
   requireUser: () => mockRequireUser(),
-  errorResponse: (_context: string, error: unknown) => {
-    throw error;
-  },
+  errorResponse: () => mockErrorResponse(),
 }));
 
 const mockWriteAudit = vi.fn();
@@ -211,5 +212,175 @@ describe("GET /api/export/accounts-csv", () => {
         metadata: { kind: "accounts_csv", rows: 1 },
       }),
     );
+  });
+
+  it("exports when the households query returns null rows", async () => {
+    const userClient = clientStub({
+      households: { data: null },
+      accounts: { data: [] },
+      manual_accounts: { data: [] },
+    });
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: userClient,
+    });
+
+    const response = await GET(
+      new NextRequest("http://localhost/api/export/accounts-csv"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(userClient.scopedToUser("accounts", USER_ID)).toBe(true);
+  });
+
+  it.each([
+    ["null dashboard_prefs", { dashboard_prefs: null }],
+    ["non-object dashboard_prefs", { dashboard_prefs: "opaque" }],
+    ["accountsPage missing", { dashboard_prefs: {} }],
+    ["non-object accountsPage", { dashboard_prefs: { accountsPage: "x" } }],
+    ["hiddenIds not an array", { dashboard_prefs: { accountsPage: { hiddenIds: "a" } } }],
+    [
+      "hiddenIds with non-string entries",
+      { dashboard_prefs: { accountsPage: { hiddenIds: ["shown", 5] } } },
+    ],
+  ])("stays exportable when profiles says %s", async (_label, profile) => {
+    const userClient = clientStub({
+      households: { data: [] },
+      profiles: { data: profile },
+      accounts: {
+        data: [
+          {
+            id: "account-1",
+            user_id: USER_ID,
+            name: "Shown",
+            mask: null,
+            type: "depository",
+            subtype: "checking",
+            current_balance: 10,
+            iso_currency_code: null,
+            updated_at: "2026-07-29T09:00:00.000Z",
+          },
+        ],
+      },
+      manual_accounts: { data: [] },
+    });
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: userClient,
+    });
+
+    const response = await GET(
+      new NextRequest("http://localhost/api/export/accounts-csv"),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toContain("Shown");
+  });
+
+  it("exports a blank account name with the mask as the fallback name", async () => {
+    const userClient = clientStub({
+      households: { data: [] },
+      accounts: {
+        data: [
+          {
+            id: "account-1",
+            user_id: USER_ID,
+            name: "   ",
+            mask: "5678",
+            type: "depository",
+            subtype: "checking",
+            current_balance: 100,
+            iso_currency_code: "usd",
+            updated_at: "2026-07-29T09:00:00.000Z",
+          },
+        ],
+      },
+      manual_accounts: { data: [] },
+    });
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: userClient,
+    });
+
+    const response = await GET(
+      new NextRequest("http://localhost/api/export/accounts-csv"),
+    );
+
+    await expect(response.text()).resolves.toContain("Account (...5678)");
+  });
+
+  it("exports manual accounts without a hidden filter when prefs are missing", async () => {
+    const userClient = clientStub({
+      households: { data: [] },
+      accounts: { data: [] },
+      manual_accounts: {
+        data: [
+          {
+            id: "manual-1",
+            user_id: USER_ID,
+            name: "Brokerage",
+            account_type: "investment",
+            balance: -5000,
+            updated_at: "2026-07-29T09:00:00.000Z",
+          },
+        ],
+      },
+    });
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: userClient,
+    });
+
+    const response = await GET(
+      new NextRequest("http://localhost/api/export/accounts-csv"),
+    );
+
+    await expect(response.text()).resolves.toContain("Brokerage");
+  });
+
+  it("exports an empty csv when both account queries return null rows", async () => {
+    const userClient = clientStub({
+      households: { data: [] },
+      accounts: { data: null, error: null },
+      manual_accounts: { data: null, error: null },
+      profiles: { data: { dashboard_prefs: { accountsPage: { hiddenIds: [] } } }, error: null },
+    });
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: userClient,
+    });
+
+    const response = await GET(
+      new NextRequest("http://localhost/api/export/accounts-csv"),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe(
+      "group,name,subtype,balance,currency,as_of",
+    );
+  });
+
+  it.each([
+    ["accounts", "accounts"],
+    ["manual accounts", "manual_accounts"],
+    ["profiles", "profiles"],
+  ])("500s when the %s query errors", async (_label, table) => {
+    const userClient = clientStub({
+      households: { data: [] },
+      accounts: { data: [], error: null },
+      manual_accounts: { data: [], error: null },
+      profiles: { data: { dashboard_prefs: null }, error: null },
+      [table]: { data: null, error: { message: "query failed" } },
+    });
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: userClient,
+    });
+
+    const response = await GET(
+      new NextRequest("http://localhost/api/export/accounts-csv"),
+    );
+
+    expect(response.status).toBe(500);
   });
 });

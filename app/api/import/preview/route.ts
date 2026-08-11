@@ -16,7 +16,10 @@ export async function POST(request: NextRequest) {
 
   const allowed = await checkRateLimit(`import-preview:${user.id}`, 10, 3600);
   if (!allowed) {
-    return badRequest("Too many previews. Please wait a while.");
+    return NextResponse.json(
+      { error: "Too many previews. Please wait a while." },
+      { status: 429 },
+    );
   }
 
   try {

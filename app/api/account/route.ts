@@ -14,40 +14,41 @@ const MAX_ATTEMPTS_PER_HOUR = 5;
 
 /**
  * Verify a re-authentication step-up before a destructive action.
- * MFA-enrolled users confirm with a fresh TOTP code; everyone else confirms
- * with their account password. Returns "ok" | "invalid" | "unsupported".
+ *
+ * Which proof is acceptable is decided here, from the factors the user has
+ * actually enrolled, so the caller cannot pick the weaker one: a user with a
+ * verified TOTP factor must produce a fresh code, and only a user without one
+ * falls back to their password.
  */
-async function verifyTotpCode(
+async function verifyStepUp(
   supabase: SupabaseClient,
+  user: User,
   code: string,
 ): Promise<boolean> {
   const { data } = await supabase.auth.mfa.listFactors();
   const factors = (data?.totp ?? []).filter(
     (factor) => factor.status === "verified",
   );
-  for (const factor of factors) {
-    try {
-      const { error } = await supabase.auth.mfa.challengeAndVerify({
-        factorId: factor.id,
-        code,
-      });
-      if (!error) return true;
-    } catch {
-      // Wrong code for this factor; try the next verified factor.
-    }
-  }
-  return false;
-}
 
-async function verifyPassword(
-  supabase: SupabaseClient,
-  user: User,
-  password: string,
-): Promise<boolean> {
+  if (factors.length > 0) {
+    for (const factor of factors) {
+      try {
+        const { error } = await supabase.auth.mfa.challengeAndVerify({
+          factorId: factor.id,
+          code,
+        });
+        if (!error) return true;
+      } catch {
+        // Wrong code for this factor; try the next verified factor.
+      }
+    }
+    return false;
+  }
+
   if (!user.email) return false;
   const { error } = await supabase.auth.signInWithPassword({
     email: user.email,
-    password,
+    password: code,
   });
   return !error;
 }
@@ -84,22 +85,16 @@ export async function DELETE(request: NextRequest) {
   try {
     // Re-authentication step-up: a stolen session alone must never be able to
     // permanently destroy the account. MFA users confirm with a fresh TOTP
-    // code; everyone else re-enters their password.
+    // code; everyone else re-enters their password. The required method is
+    // decided here from the user's enrolled factors, never from the request
+    // body; otherwise an attacker holding a stolen session could downgrade an
+    // MFA-protected account to a password-only confirmation.
     const body = await request.json().catch(() => null);
-    const method = body?.method as unknown;
     const code = body?.code as unknown;
-    if (method !== "totp" && method !== "password") {
-      return badRequest(
-        "Re-authentication is required to delete your account.",
-      );
-    }
     if (typeof code !== "string" || code.length === 0) {
       return badRequest("A verification code is required.");
     }
-    const stepUpOk =
-      method === "totp"
-        ? await verifyTotpCode(supabase, code)
-        : await verifyPassword(supabase, user, code);
+    const stepUpOk = await verifyStepUp(supabase, user, code);
     if (!stepUpOk) {
       await writeAudit({
         userId: user.id,
