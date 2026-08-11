@@ -1,0 +1,29 @@
+-- Re-revert an owner-scoped UPDATE policy on recurring_streams.
+--
+-- 20260810120000_session_revocation_rls.sql set out to add the session/MFA
+-- guards to existing policies, but for recurring_streams it also *created*
+-- "recurring_streams_update_own", which had not existed since
+-- 20260730180000_recurring_streams_revert_client_write.sql deliberately
+-- dropped it. Applying 120000 therefore silently undid that decision and made
+-- the table directly client-writable again.
+--
+-- The original reasoning stands unchanged: recurring_streams is a Plaid-synced
+-- table, and an owner-scoped UPDATE policy exposes EVERY column to the browser
+-- (average_amount, frequency, merchant_name, stream_id, account_id, is_active,
+-- ...), not just the reviewed_at/dismissed_at/user_amount that PATCH
+-- /api/recurring means to expose. That breaks CLAUDE.md's invariant that
+-- client writes are confined to budgets, saved_reports, user_tags, and the
+-- profiles preference columns, and a provider-synced table never qualifies.
+--
+-- Confirmed on the live database before this migration: a signed-in user could
+-- set average_amount and merchant_name on their own Plaid-synced stream rows
+-- directly through the Data API.
+--
+-- No application code depends on the policy. app/api/recurring/route.ts writes
+-- through createServiceClient() with an explicit .eq("user_id", user.id), the
+-- same pattern every other Plaid-synced-table write uses, so ownership is
+-- enforced in code rather than by a client-write policy.
+--
+-- The SELECT guards that 120000 added (recurring_streams_select_visible) are
+-- correct and are left in place; only the write policy is removed.
+drop policy if exists "recurring_streams_update_own" on public.recurring_streams;
