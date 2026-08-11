@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { serverEnv } from "@/lib/env.server";
-import { safeEqual } from "@/lib/crypto";
 import { createServiceClient } from "@/lib/supabase/service";
 import { buildBackupArchive } from "@/lib/backup";
 import {
@@ -10,7 +9,7 @@ import {
 } from "@/lib/user-data";
 import { sendBackupEmail } from "@/lib/reporting";
 import { alertCronFailure } from "@/lib/cron-alert";
-import { errorResponse } from "@/lib/http";
+import { errorResponse, requireCronAuth } from "@/lib/http";
 import { logError } from "@/lib/log";
 import { writeAudit } from "@/lib/audit";
 
@@ -26,11 +25,8 @@ export const maxDuration = 60;
  * missing filter would cross-feed one user's data into another's backup.
  */
 export async function GET(request: NextRequest) {
-  const header = request.headers.get("authorization") ?? "";
-  const expected = `Bearer ${serverEnv.cronSecret}`;
-  if (!safeEqual(header, expected)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const unauthorized = requireCronAuth(request);
+  if (unauthorized) return unauthorized;
 
   const backupKey = serverEnv.backupEncKey;
   if (!backupKey) {

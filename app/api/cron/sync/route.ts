@@ -1,12 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { serverEnv } from "@/lib/env.server";
-import { safeEqual } from "@/lib/crypto";
 import { createServiceClient } from "@/lib/supabase/service";
 import { syncAllForUser } from "@/lib/sync";
 import { syncInvestmentsForUser } from "@/lib/investment-sync";
 import { rotateStaleItemTokens } from "@/lib/plaid-service";
 import { refreshRecurringForUser } from "@/lib/recurring";
-import { errorResponse } from "@/lib/http";
+import { errorResponse, requireCronAuth } from "@/lib/http";
 import { logError } from "@/lib/log";
 import { writeNetWorthSnapshot } from "@/lib/net-worth";
 import { syncCardAprsForUser } from "@/lib/liabilities";
@@ -36,11 +35,8 @@ function safeSyncError(err: unknown): string {
  * when the CRON_SECRET env var is set.
  */
 export async function GET(request: NextRequest) {
-  const header = request.headers.get("authorization") ?? "";
-  const expected = `Bearer ${serverEnv.cronSecret}`;
-  if (!safeEqual(header, expected)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const unauthorized = requireCronAuth(request);
+  if (unauthorized) return unauthorized;
 
   try {
     const service = createServiceClient();

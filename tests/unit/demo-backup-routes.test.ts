@@ -2,14 +2,18 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { clientStub } from "../fixtures/supabase-query";
 
 const mockRequireUser = vi.fn<(...args: unknown[]) => unknown>();
-vi.mock("@/lib/http", () => ({
-  requireUser: () => mockRequireUser(),
-  badRequest: (msg: unknown) =>
-    Response.json({ error: String(msg) }, { status: 400 }),
-  errorResponse: (_context: unknown, error: unknown) => {
-    throw error;
-  },
-}));
+vi.mock("@/lib/http", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/http")>();
+  return {
+    ...actual,
+    requireUser: () => mockRequireUser(),
+    badRequest: (msg: unknown) =>
+      Response.json({ error: String(msg) }, { status: 400 }),
+    errorResponse: (_context: unknown, error: unknown) => {
+      throw error;
+    },
+  };
+});
 
 const mockWriteAudit = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/audit", () => ({

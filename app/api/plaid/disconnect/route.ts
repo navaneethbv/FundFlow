@@ -1,41 +1,23 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getPlaidClient } from "@/lib/plaid";
-import { requireUser, errorResponse, badRequest } from "@/lib/http";
-import { getItem, decryptItemToken } from "@/lib/plaid-service";
+import { errorResponse } from "@/lib/http";
+import { decryptItemToken } from "@/lib/plaid-service";
+import { requireOwnedItem } from "@/lib/plaid-item-route";
 import { createServiceClient } from "@/lib/supabase/service";
 import { writeAudit, getClientIp } from "@/lib/audit";
 import { logError } from "@/lib/log";
-import { checkRateLimit } from "@/lib/rate-limit";
 
 /**
  * Disconnect a bank: remove the item at Plaid, then delete the local item and
  * all data derived from it (accounts, transactions, recurring cascade via FK).
  */
 export async function POST(request: NextRequest) {
-  const auth = await requireUser();
-  if (auth instanceof NextResponse) return auth;
-  const { user } = auth;
-
-  let body: unknown;
   try {
-    body = await request.json();
-  } catch {
-    return badRequest("Invalid JSON body");
-  }
-  const itemId = (body as { item_id?: unknown }).item_id;
-  if (typeof itemId !== "string" || itemId.length === 0) {
-    return badRequest("item_id is required");
-  }
-
-  if (!(await checkRateLimit(`disconnect:${user.id}`, 10, 60))) {
-    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
-  }
-
-  try {
-    const item = await getItem(user.id, itemId);
-    if (!item) {
-      return NextResponse.json({ error: "Item not found" }, { status: 404 });
-    }
+    const owned = await requireOwnedItem(request, {
+      rateLimitKey: (userId) => `disconnect:${userId}`,
+    });
+    if (!owned.ok) return owned.response;
+    const { user, item } = owned;
 
     // Best-effort remove at Plaid; proceed to delete local data regardless.
     try {

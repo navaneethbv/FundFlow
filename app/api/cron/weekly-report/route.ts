@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { serverEnv } from "@/lib/env.server";
-import { safeEqual } from "@/lib/crypto";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getWeeklyReportData } from "@/lib/weekly-report-data";
 import { generateWeeklyReportPdf } from "@/lib/report-pdf";
@@ -16,7 +15,7 @@ import {
   isWeeklyReportDue,
   normalizeReportTimezone,
 } from "@/lib/report-period";
-import { errorResponse } from "@/lib/http";
+import { errorResponse, requireCronAuth } from "@/lib/http";
 import { logError } from "@/lib/log";
 import { alertCronFailure } from "@/lib/cron-alert";
 import {
@@ -153,11 +152,8 @@ export async function runWeeklyReports(
 }
 
 export async function GET(request: NextRequest) {
-  const header = request.headers.get("authorization") ?? "";
-  const expected = `Bearer ${serverEnv.cronSecret}`;
-  if (!safeEqual(header, expected)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const unauthorized = requireCronAuth(request);
+  if (unauthorized) return unauthorized;
 
   try {
     const result = await runWeeklyReports();
