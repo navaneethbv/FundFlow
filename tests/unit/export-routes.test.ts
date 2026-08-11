@@ -8,8 +8,10 @@ vi.mock("@/lib/http", () => ({
 }));
 
 const mockFetchPrivacySafeRows = vi.fn<(...args: unknown[]) => unknown>();
+const mockIsExportAllowed = vi.fn<(...args: unknown[]) => unknown>(() => true);
 vi.mock("@/lib/export", () => ({
   fetchPrivacySafeRows: (...args: unknown[]) => mockFetchPrivacySafeRows(...args),
+  isExportAllowed: (...args: unknown[]) => mockIsExportAllowed(...args),
 }));
 
 const mockWriteAudit = vi.fn<(...args: unknown[]) => unknown>();
@@ -29,6 +31,11 @@ vi.mock("@/lib/supabase/service", () => ({
 const mockBuildDataTakeout = vi.fn<(...args: unknown[]) => unknown>((data) => ({ takeout: data }));
 vi.mock("@/lib/security-account", () => ({
   buildDataTakeout: (data: unknown) => mockBuildDataTakeout(data),
+}));
+
+let takeoutInvestmentsEnabled = true;
+vi.mock("@/lib/feature-flags", () => ({
+  isFeatureEnabled: () => takeoutInvestmentsEnabled,
 }));
 
 const mockGetWeeklyReportData = vi.fn<(...args: unknown[]) => unknown>();
@@ -51,6 +58,7 @@ import { NextResponse, NextRequest } from "next/server";
 describe("Export API Routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    takeoutInvestmentsEnabled = true;
   });
 
   describe("GET /api/export/json", () => {
@@ -122,6 +130,21 @@ describe("Export API Routes", () => {
   });
 
   describe("GET /api/export/takeout", () => {
+    function takeoutClient(
+      seed: (table: string) => { data?: unknown; error?: unknown },
+    ) {
+      return {
+        from: vi.fn((table: string) => ({
+          select: vi.fn(() => ({
+            eq: vi.fn().mockResolvedValue(seed(table)),
+            or: vi.fn().mockResolvedValue(seed(table)),
+            then: (resolve: (v: unknown) => unknown) =>
+              Promise.resolve(seed(table)).then(resolve),
+          })),
+        })),
+      };
+    }
+
     it("returns early if not authenticated", async () => {
       mockRequireUser.mockResolvedValue(new NextResponse("unauthorized", { status: 401 }));
       const res = await takeoutGet();
@@ -131,13 +154,31 @@ describe("Export API Routes", () => {
     it("returns data takeout payload scoped to the caller", async () => {
       // Tables with a household-shared read policy must be filtered by
       // user_id, or takeout hands the caller a household member's records.
+      // Household-owned tables are scoped differently (ownership/involvement)
+      // and asserted separately below.
       const scopedTables = new Set([
         "accounts",
         "transactions",
         "account_balance_snapshots",
         "budget_periods",
+        "transaction_splits",
+        "transaction_annotations",
+        "linked_refunds",
+        "linked_duplicates",
+        "receipts",
+        "user_tags",
+        "sinking_funds",
+        "recurring_streams",
+        "recurring_stream_transactions",
+        "milestones",
+        "goal_accounts",
+        "goal_progress_events",
+        "advice_progress",
+        "category_overrides",
+        "net_worth_snapshots",
       ]);
       const eqCalls: Array<[string, string, string]> = [];
+      const orCalls: Array<[string, string, string]> = [];
       const mockSupabase = {
         from: vi.fn((table: string) => ({
           select: vi.fn(() => {
@@ -145,6 +186,10 @@ describe("Export API Routes", () => {
             const chain = {
               eq: vi.fn((column: string, value: string) => {
                 eqCalls.push([table, column, value]);
+                return Promise.resolve(result);
+              }),
+              or: vi.fn((filter: string) => {
+                orCalls.push([table, "or", filter]);
                 return Promise.resolve(result);
               }),
               then: (resolve: (value: { data: never[] }) => unknown) =>
@@ -164,6 +209,10 @@ describe("Export API Routes", () => {
       for (const table of scopedTables) {
         expect(eqCalls).toContainEqual([table, "user_id", "u1"]);
       }
+      // Household-owned tables: the caller's own households and their share of
+      // shared expenses — never the whole household.
+      expect(eqCalls).toContainEqual(["households", "owner_user_id", "u1"]);
+      expect(orCalls).toContainEqual(["shared_expenses", "or", "paid_by.eq.u1,owed_user_id.eq.u1"]);
       const body = await res.json();
       expect(body).toHaveProperty("takeout");
       expect(mockSupabase.from).toHaveBeenCalledWith(
@@ -173,6 +222,7 @@ describe("Export API Routes", () => {
         expect.objectContaining({
           account_balance_snapshots: [],
           budget_periods: [],
+          transaction_splits: [],
         }),
       );
     });
@@ -213,6 +263,56 @@ describe("Export API Routes", () => {
 
       const res = await takeoutGet();
       expect(res.status).toBe(500);
+    });
+
+    it("uses empty placeholders for investment tables while the feature is off", async () => {
+      takeoutInvestmentsEnabled = false;
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: takeoutClient(() => ({ data: [], error: null })),
+      });
+
+      const res = await takeoutGet();
+      expect(res.status).toBe(200);
+      expect(mockBuildDataTakeout).toHaveBeenCalledWith(
+        expect.objectContaining({
+          holdings: [],
+          holding_snapshots: [],
+          securities: [],
+          investment_transactions: [],
+        }),
+      );
+    });
+
+    it("coerces null query data to empty arrays", async () => {
+      takeoutInvestmentsEnabled = true;
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: takeoutClient(() => ({ data: null, error: null })),
+      });
+
+      const res = await takeoutGet();
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.takeout.accounts).toEqual([]);
+      expect(body.takeout.transactions).toEqual([]);
+      expect(body.takeout.households).toEqual([]);
+    });
+
+    it("fails the takeout when any owned query errors", async () => {
+      takeoutInvestmentsEnabled = true;
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: takeoutClient((table) =>
+          table === "accounts"
+            ? { data: null, error: { message: "select failed" } }
+            : { data: [], error: null },
+        ),
+      });
+
+      const res = await takeoutGet();
+      expect(res.status).toBe(500);
+      expect(mockBuildDataTakeout).not.toHaveBeenCalled();
     });
   });
 

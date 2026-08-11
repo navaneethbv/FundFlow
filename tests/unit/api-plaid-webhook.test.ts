@@ -32,6 +32,8 @@ describe("POST /api/plaid/webhook", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env = { ...originalEnv };
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("PLAID_ENV", "sandbox");
   });
 
   afterEach(() => {
@@ -137,6 +139,40 @@ describe("POST /api/plaid/webhook", () => {
     });
     await POST(req);
     expect(mockSetItemStatus).toHaveBeenCalledWith("item-db-1", "disconnected", "USER_PERMISSION_REVOKED");
+
+    // ERROR with default code
+    req = new NextRequest("http://localhost/api/plaid/webhook", {
+      method: "POST",
+      body: JSON.stringify({
+        webhook_type: "ITEM",
+        webhook_code: "ERROR",
+        item_id: "plaid-item-1",
+      }),
+    });
+    await POST(req);
+    expect(mockSetItemStatus).toHaveBeenCalledWith("item-db-1", "error", "ITEM_ERROR");
+  });
+
+  it("handles HOLDINGS webhook when investmentsPage feature flag is enabled", async () => {
+    const ffModule = await import("@/lib/feature-flags");
+    vi.spyOn(ffModule, "isFeatureEnabled").mockReturnValue(true);
+    const syncInvModule = await import("@/lib/investment-sync");
+    const mockSyncInv = vi.spyOn(syncInvModule, "syncInvestmentsForItem").mockResolvedValue(undefined as never);
+
+    mockGetItemByPlaidItemId.mockResolvedValue(sampleItem);
+
+    const req = new NextRequest("http://localhost/api/plaid/webhook", {
+      method: "POST",
+      body: JSON.stringify({
+        webhook_type: "HOLDINGS",
+        webhook_code: "DEFAULT_UPDATE",
+        item_id: "plaid-item-1",
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(mockSyncInv).toHaveBeenCalledWith(sampleItem);
   });
 
   it("returns 401 when signature verification fails in production mode", async () => {

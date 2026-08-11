@@ -9,6 +9,7 @@ vi.mock("@/lib/plaid", () => ({
 
 const mockServiceClient = {
   from: vi.fn(),
+  rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
 };
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => mockServiceClient,
@@ -146,6 +147,43 @@ describe("lib/sync", () => {
       expect(mockSetItemStatus).toHaveBeenCalledWith("item-db-1", "active", null);
     });
 
+    it("skips the sync when another run already holds the item claim", async () => {
+      mockServiceClient.rpc.mockResolvedValueOnce({ data: false, error: null });
+
+      const res = await syncItemTransactions(dummyItem);
+
+      expect(res).toEqual({ added: 0, modified: 0, removed: 0 });
+      expect(mockTransactionsSync).not.toHaveBeenCalled();
+      expect(mockUpdateItemCursor).not.toHaveBeenCalled();
+      expect(mockServiceClient.rpc).toHaveBeenCalledWith("claim_item_sync", {
+        p_item_id: "item-db-1",
+        p_stale_seconds: 300,
+      });
+    });
+
+    it("releases the claim after a successful sync", async () => {
+      mockTransactionsSync.mockResolvedValueOnce({
+        data: {
+          added: [],
+          modified: [],
+          removed: [],
+          accounts: [],
+          next_cursor: "cursor-next",
+          has_more: false,
+        },
+      });
+      mockServiceClient.from.mockImplementation(() => {
+        throw new Error("Unexpected table");
+      });
+
+      const res = await syncItemTransactions(dummyItem);
+
+      expect(res).toEqual({ added: 0, modified: 0, removed: 0 });
+      expect(mockServiceClient.rpc).toHaveBeenCalledWith("release_item_sync", {
+        p_item_id: "item-db-1",
+      });
+    });
+
     it("throws error if transactions upsert fails", async () => {
       mockTransactionsSync.mockResolvedValueOnce({
         data: {
@@ -173,6 +211,336 @@ describe("lib/sync", () => {
 
       await expect(syncItemTransactions(dummyItem)).rejects.toThrow("Upsert error");
       expect(mockUpdateItemCursor).not.toHaveBeenCalled();
+    });
+
+    it("proceeds without a claim when the claim RPC fails, and does not release", async () => {
+      mockServiceClient.rpc.mockResolvedValueOnce({
+        data: null,
+        error: new Error("Claim error"),
+      });
+      mockTransactionsSync.mockResolvedValueOnce({
+        data: {
+          added: [],
+          modified: [],
+          removed: [],
+          accounts: [],
+          next_cursor: null,
+          has_more: false,
+        },
+      });
+
+      const res = await syncItemTransactions(dummyItem);
+
+      expect(res).toEqual({ added: 0, modified: 0, removed: 0 });
+      expect(mockLogError).toHaveBeenCalledWith("sync.claim", expect.any(Error));
+      expect(mockServiceClient.rpc).toHaveBeenCalledTimes(1);
+      expect(mockUpdateItemCursor).not.toHaveBeenCalled();
+    });
+
+    it("drops transactions whose account is unknown to the user", async () => {
+      mockTransactionsSync.mockResolvedValueOnce({
+        data: {
+          added: [
+            {
+              account_id: "unknown-acc",
+              transaction_id: "txn-orphan",
+              amount: 10,
+              date: "2026-07-28",
+            },
+          ],
+          modified: [],
+          removed: [],
+          accounts: [],
+          next_cursor: "cursor-next",
+          has_more: false,
+        },
+      });
+
+      mockServiceClient.from.mockImplementation(() => {
+        throw new Error("Unexpected table");
+      });
+
+      const res = await syncItemTransactions(dummyItem);
+
+      expect(res).toEqual({ added: 1, modified: 0, removed: 0 });
+      expect(mockUpdateItemCursor).toHaveBeenCalledWith("item-db-1", "cursor-next");
+      expect(mockSetItemStatus).toHaveBeenCalledWith("item-db-1", "active", null);
+    });
+
+    it("falls back to defaults for alert thresholds and merchant names", async () => {
+      mockTransactionsSync.mockResolvedValueOnce({
+        data: {
+          added: [
+            {
+              account_id: "plaid-acc-1",
+              transaction_id: "txn-a",
+              amount: 600,
+              date: "2026-07-28",
+              name: "POS MERCHANT",
+            },
+            {
+              account_id: "plaid-acc-1",
+              transaction_id: "txn-c",
+              amount: 900,
+              date: "2026-07-28",
+            },
+            {
+              account_id: "plaid-acc-1",
+              transaction_id: "txn-b",
+              amount: 100,
+              date: "2026-07-28",
+            },
+          ],
+          modified: [],
+          removed: [],
+          accounts: [{ account_id: "plaid-acc-1", name: "Checking" }],
+          next_cursor: "cursor-next",
+          has_more: false,
+        },
+      });
+
+      const upsertTxns = vi.fn().mockResolvedValue({ error: null });
+      const maybeSingleAlert = vi.fn().mockResolvedValue({ data: null });
+      const eqAlertUser = vi.fn().mockReturnValue({ maybeSingle: maybeSingleAlert });
+      const selectAlert = vi.fn().mockReturnValue({ eq: eqAlertUser });
+      const eqCancelledUser = vi.fn().mockResolvedValue({ data: [{ merchant: "NETFLIX" }] });
+      const selectCancelled = vi.fn().mockReturnValue({ eq: eqCancelledUser });
+
+      mockServiceClient.from.mockImplementation((table: string) => {
+        if (table === "transactions") return { upsert: upsertTxns };
+        if (table === "alert_preferences") return { select: selectAlert };
+        if (table === "cancelled_subscriptions") return { select: selectCancelled };
+        throw new Error(`Unexpected table ${table}`);
+      });
+
+      const res = await syncItemTransactions(dummyItem);
+
+      expect(res).toEqual({ added: 3, modified: 0, removed: 0 });
+      expect(mockCreateNotification).toHaveBeenCalledWith(
+        "user-1",
+        "large_transaction",
+        expect.objectContaining({ title: "Large transaction: POS MERCHANT" }),
+        "txn-a",
+      );
+      expect(mockCreateNotification).toHaveBeenCalledWith(
+        "user-1",
+        "large_transaction",
+        expect.objectContaining({ title: "Large transaction: Unknown" }),
+        "txn-c",
+      );
+      expect(mockCreateNotification).not.toHaveBeenCalledWith(
+        "user-1",
+        "large_transaction",
+        expect.objectContaining({ title: expect.stringContaining("txn-b") }),
+        expect.anything(),
+      );
+    });
+
+    it("skips cancellation watching when there are no cancelled subscriptions", async () => {
+      mockTransactionsSync.mockResolvedValueOnce({
+        data: {
+          added: [
+            {
+              account_id: "plaid-acc-1",
+              transaction_id: "txn-1",
+              amount: 50,
+              date: "2026-07-28",
+              merchant_name: "Spotify",
+            },
+          ],
+          modified: [],
+          removed: [],
+          accounts: [],
+          next_cursor: "cursor-next",
+          has_more: false,
+        },
+      });
+
+      const upsertTxns = vi.fn().mockResolvedValue({ error: null });
+      const maybeSingleAlert = vi.fn().mockResolvedValue({ data: null });
+      const eqAlertUser = vi.fn().mockReturnValue({ maybeSingle: maybeSingleAlert });
+      const selectAlert = vi.fn().mockReturnValue({ eq: eqAlertUser });
+      const eqCancelledUser = vi.fn().mockResolvedValue({ data: null });
+      const selectCancelled = vi.fn().mockReturnValue({ eq: eqCancelledUser });
+
+      mockServiceClient.from.mockImplementation((table: string) => {
+        if (table === "transactions") return { upsert: upsertTxns };
+        if (table === "alert_preferences") return { select: selectAlert };
+        if (table === "cancelled_subscriptions") return { select: selectCancelled };
+        throw new Error(`Unexpected table ${table}`);
+      });
+
+      await syncItemTransactions(dummyItem);
+
+      expect(mockCreateNotification).not.toHaveBeenCalledWith(
+        "user-1",
+        "cancellation_watch",
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it("throws when deleting removed transactions fails", async () => {
+      mockTransactionsSync.mockResolvedValueOnce({
+        data: {
+          added: [],
+          modified: [],
+          removed: [{ transaction_id: "txn-removed" }],
+          accounts: [],
+          next_cursor: "cursor-next",
+          has_more: false,
+        },
+      });
+
+      const eqDeleteIn = vi.fn().mockResolvedValue({ error: new Error("Delete error") });
+      const eqDeleteUser = vi.fn().mockReturnValue({ in: eqDeleteIn });
+      const deleteQuery = vi.fn().mockReturnValue({ eq: eqDeleteUser });
+      mockServiceClient.from.mockImplementation((table: string) => {
+        if (table === "transactions") return { delete: deleteQuery };
+        throw new Error(`Unexpected table ${table}`);
+      });
+
+      await expect(syncItemTransactions(dummyItem)).rejects.toThrow("Delete error");
+    });
+
+    it("logs when the large transaction notification fails", async () => {
+      mockTransactionsSync.mockResolvedValueOnce({
+        data: {
+          added: [
+            {
+              account_id: "plaid-acc-1",
+              transaction_id: "txn-1",
+              amount: 600,
+              date: "2026-07-28",
+              merchant_name: "Netflix",
+            },
+          ],
+          modified: [],
+          removed: [],
+          accounts: [],
+          next_cursor: "cursor-next",
+          has_more: false,
+        },
+      });
+      mockCreateNotification.mockRejectedValueOnce(new Error("Notification failed"));
+
+      const upsertTxns = vi.fn().mockResolvedValue({ error: null });
+      const maybeSingleAlert = vi.fn().mockResolvedValue({ data: null });
+      const eqAlertUser = vi.fn().mockReturnValue({ maybeSingle: maybeSingleAlert });
+      const selectAlert = vi.fn().mockReturnValue({ eq: eqAlertUser });
+      const eqCancelledUser = vi.fn().mockResolvedValue({ data: null });
+      const selectCancelled = vi.fn().mockReturnValue({ eq: eqCancelledUser });
+
+      mockServiceClient.from.mockImplementation((table: string) => {
+        if (table === "transactions") return { upsert: upsertTxns };
+        if (table === "alert_preferences") return { select: selectAlert };
+        if (table === "cancelled_subscriptions") return { select: selectCancelled };
+        throw new Error(`Unexpected table ${table}`);
+      });
+
+      await syncItemTransactions(dummyItem);
+
+      expect(mockLogError).toHaveBeenCalledWith("sync.large_txn_notification", expect.any(Error));
+    });
+
+    it("logs when releasing the item claim fails", async () => {
+      mockTransactionsSync.mockResolvedValueOnce({
+        data: {
+          added: [],
+          modified: [],
+          removed: [],
+          accounts: [],
+          next_cursor: "cursor-next",
+          has_more: false,
+        },
+      });
+      mockServiceClient.rpc
+        .mockResolvedValueOnce({ data: true, error: null })
+        .mockRejectedValueOnce(new Error("Release error"));
+
+      const res = await syncItemTransactions(dummyItem);
+
+      expect(res).toEqual({ added: 0, modified: 0, removed: 0 });
+      expect(mockLogError).toHaveBeenCalledWith("sync.release", expect.any(Error));
+    });
+
+    it("logs when the cancelled subscriptions query fails", async () => {
+      mockTransactionsSync.mockResolvedValueOnce({
+        data: {
+          added: [
+            {
+              account_id: "plaid-acc-1",
+              transaction_id: "txn-1",
+              amount: 50,
+              date: "2026-07-28",
+              merchant_name: "Spotify",
+            },
+          ],
+          modified: [],
+          removed: [],
+          accounts: [],
+          next_cursor: "cursor-next",
+          has_more: false,
+        },
+      });
+
+      const upsertTxns = vi.fn().mockResolvedValue({ error: null });
+      const maybeSingleAlert = vi.fn().mockResolvedValue({ data: null });
+      const eqAlertUser = vi.fn().mockReturnValue({ maybeSingle: maybeSingleAlert });
+      const selectAlert = vi.fn().mockReturnValue({ eq: eqAlertUser });
+      const eqCancelledUser = vi.fn().mockRejectedValue(new Error("Query failed"));
+      const selectCancelled = vi.fn().mockReturnValue({ eq: eqCancelledUser });
+
+      mockServiceClient.from.mockImplementation((table: string) => {
+        if (table === "transactions") return { upsert: upsertTxns };
+        if (table === "alert_preferences") return { select: selectAlert };
+        if (table === "cancelled_subscriptions") return { select: selectCancelled };
+        throw new Error(`Unexpected table ${table}`);
+      });
+
+      await syncItemTransactions(dummyItem);
+
+      expect(mockLogError).toHaveBeenCalledWith("sync.cancellation_watch", expect.any(Error));
+    });
+
+    it("logs when the cancellation watch notification fails", async () => {
+      mockTransactionsSync.mockResolvedValueOnce({
+        data: {
+          added: [
+            {
+              account_id: "plaid-acc-1",
+              transaction_id: "txn-1",
+              amount: 50,
+              date: "2026-07-28",
+              merchant_name: "Netflix",
+            },
+          ],
+          modified: [],
+          removed: [],
+          accounts: [],
+          next_cursor: "cursor-next",
+          has_more: false,
+        },
+      });
+      mockCreateNotification.mockRejectedValueOnce(new Error("Notification failed"));
+
+      const upsertTxns = vi.fn().mockResolvedValue({ error: null });
+      const maybeSingleAlert = vi.fn().mockResolvedValue({ data: null });
+      const eqAlertUser = vi.fn().mockReturnValue({ maybeSingle: maybeSingleAlert });
+      const selectAlert = vi.fn().mockReturnValue({ eq: eqAlertUser });
+      const eqCancelledUser = vi.fn().mockResolvedValue({ data: [{ merchant: "Netflix" }] });
+      const selectCancelled = vi.fn().mockReturnValue({ eq: eqCancelledUser });
+
+      mockServiceClient.from.mockImplementation((table: string) => {
+        if (table === "transactions") return { upsert: upsertTxns };
+        if (table === "alert_preferences") return { select: selectAlert };
+        if (table === "cancelled_subscriptions") return { select: selectCancelled };
+        throw new Error(`Unexpected table ${table}`);
+      });
+
+      await syncItemTransactions(dummyItem);
+
+      expect(mockLogError).toHaveBeenCalledWith("sync.cancellation_watch", expect.any(Error));
     });
   });
 
@@ -269,6 +637,70 @@ describe("lib/sync", () => {
         "user-1",
         "broken_bank",
         expect.objectContaining({ title: "Bank connection issue: Bank" }),
+        "item-db-1",
+      );
+    });
+
+    it("logs and continues when recording the job end fails", async () => {
+      mockListActiveItems.mockResolvedValue([dummyItem]);
+
+      const singleJob = vi.fn().mockResolvedValue({ data: { id: "job-1" }, error: null });
+      const insertJob = vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single: singleJob }) });
+      const eqJob = vi.fn().mockResolvedValue({ error: new Error("Job update error") });
+      const updateJob = vi.fn().mockReturnValue({ eq: eqJob });
+
+      mockServiceClient.from.mockImplementation((table: string) => {
+        if (table === "sync_jobs") {
+          return { insert: insertJob, update: updateJob };
+        }
+        throw new Error(`Unexpected table ${table}`);
+      });
+
+      mockTransactionsSync.mockResolvedValueOnce({
+        data: {
+          added: [],
+          modified: [],
+          removed: [],
+          accounts: [],
+          next_cursor: "cursor-1",
+          has_more: false,
+        },
+      });
+
+      const res = await syncAllForUser("user-1");
+
+      expect(res).toEqual({ added: 0, modified: 0, removed: 0 });
+      expect(mockLogError).toHaveBeenCalledWith("sync.job-record", expect.any(Error));
+      expect(mockInvalidateDashboardCache).toHaveBeenCalledWith("user-1");
+    });
+
+    it("continues when setting the item status to error fails", async () => {
+      mockListActiveItems.mockResolvedValue([dummyItem]);
+
+      const singleJob = vi.fn().mockResolvedValue({ data: { id: "job-1" }, error: null });
+      const insertJob = vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single: singleJob }) });
+      const eqJob = vi.fn().mockResolvedValue({ error: null });
+      const updateJob = vi.fn().mockReturnValue({ eq: eqJob });
+
+      mockServiceClient.from.mockImplementation((table: string) => {
+        if (table === "sync_jobs") {
+          return { insert: insertJob, update: updateJob };
+        }
+        throw new Error(`Unexpected table ${table}`);
+      });
+
+      mockTransactionsSync.mockRejectedValueOnce({
+        response: { data: { error_code: "ITEM_LOGIN_REQUIRED" } },
+      });
+      mockSetItemStatus.mockRejectedValueOnce(new Error("Set status failed"));
+
+      const res = await syncAllForUser("user-1");
+
+      expect(res).toEqual({ added: 0, modified: 0, removed: 0 });
+      expect(mockCreateNotification).toHaveBeenCalledWith(
+        "user-1",
+        "broken_bank",
+        expect.objectContaining({ title: expect.stringContaining("Chase Bank") }),
         "item-db-1",
       );
     });

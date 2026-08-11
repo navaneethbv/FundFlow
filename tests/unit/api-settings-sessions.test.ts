@@ -54,7 +54,8 @@ describe("GET / DELETE /api/settings/sessions", () => {
       });
       const order = vi.fn().mockReturnValue({ limit });
       const isNull = vi.fn().mockReturnValue({ order });
-      const select = vi.fn().mockReturnValue({ is: isNull });
+      const eq = vi.fn().mockReturnValue({ is: isNull });
+      const select = vi.fn().mockReturnValue({ eq });
       const mockSupabase = { from: vi.fn().mockReturnValue({ select }) } as unknown as SupabaseClient;
 
       mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase: mockSupabase });
@@ -77,7 +78,8 @@ describe("GET / DELETE /api/settings/sessions", () => {
       const limit = vi.fn().mockResolvedValue({ data: null, error: new Error("DB Error") });
       const order = vi.fn().mockReturnValue({ limit });
       const isNull = vi.fn().mockReturnValue({ order });
-      const select = vi.fn().mockReturnValue({ is: isNull });
+      const eq = vi.fn().mockReturnValue({ is: isNull });
+      const select = vi.fn().mockReturnValue({ eq });
       const mockSupabase = { from: vi.fn().mockReturnValue({ select }) } as unknown as SupabaseClient;
 
       mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase: mockSupabase });

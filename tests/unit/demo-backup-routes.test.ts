@@ -253,6 +253,7 @@ describe("GET /api/cron/backup", () => {
         ],
       }),
       "backup-key",
+      USER,
     );
     expect(mockSendBackupEmail).toHaveBeenCalledWith(
       "user@example.com",
@@ -357,6 +358,18 @@ describe("GET /api/cron/backup", () => {
     const res = await backupGet(cronRequest());
 
     await expect(res.json()).resolves.toMatchObject({ sent: 0 });
+    expect(mockSendBackupEmail).not.toHaveBeenCalled();
+  });
+
+  it("reports zero users when the profiles query returns no rows", async () => {
+    serviceClient = buildServiceClient({
+      profiles: { data: null, error: null },
+    });
+
+    const res = await backupGet(cronRequest());
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ ok: true, users: 0, sent: 0 });
     expect(mockSendBackupEmail).not.toHaveBeenCalled();
   });
 

@@ -256,4 +256,90 @@ describe("loadCashFlowData", () => {
       }),
     ).rejects.toThrow("cash_flow_query_failed:accounts");
   });
+
+  it("formats a query failure code when present", async () => {
+    const supabase = clientStub({
+      transactions: { data: [] },
+      accounts: { data: null, error: { code: "PGRST116" } },
+      merchant_rules: { data: [] },
+      category_overrides: { data: [] },
+      linked_refunds: { data: [] },
+      sync_jobs: { data: null },
+    });
+
+    await expect(
+      loadCashFlowData(supabase as never, {
+        scope: MINE,
+        anchorMonth: "2026-07",
+        rangeMonths: 6,
+      }),
+    ).rejects.toThrow("cash_flow_query_failed:accounts:PGRST116");
+  });
+
+  it("treats unparseable sync metadata as stale and defaults a missing name and currency", async () => {
+    const supabase = clientStub({
+      transactions: { data: [] },
+      accounts: {
+        data: [{ id: "account-1", name: null, iso_currency_code: null }],
+      },
+      merchant_rules: { data: [] },
+      category_overrides: { data: [] },
+      transaction_splits: { data: [] },
+      linked_refunds: { data: [] },
+      sync_jobs: { data: { updated_at: "not-a-date" } },
+    });
+
+    const result = await loadCashFlowData(supabase as never, {
+      scope: MINE,
+      anchorMonth: "2026-07",
+      rangeMonths: 6,
+    });
+
+    expect(result.stale).toBe(true);
+    expect(result.currencyByAccountId.get("account-1")).toBe("");
+  });
+
+  it("handles null payloads from every dependency table", async () => {
+    const supabase = clientStub({
+      transactions: { data: transactionRows },
+      accounts: { data: null },
+      merchant_rules: { data: null },
+      category_overrides: { data: null },
+      transaction_splits: { data: null },
+      linked_refunds: { data: null },
+      sync_jobs: { data: null },
+    });
+
+    const result = await loadCashFlowData(supabase as never, {
+      scope: MINE,
+      anchorMonth: "2026-07",
+      rangeMonths: 6,
+      now: new Date("2026-07-29T12:00:00.000Z"),
+    });
+
+    expect(result.transactions).toHaveLength(3);
+  });
+
+  it("excludes duplicate-linked transactions and defaults the reference now", async () => {
+    const supabase = clientStub({
+      transactions: { data: transactionRows },
+      accounts: { data: null },
+      merchant_rules: { data: null },
+      category_overrides: { data: null },
+      transaction_splits: { data: null },
+      linked_refunds: { data: null },
+      linked_duplicates: {
+        data: [{ excluded_transaction_id: "charge-1" }],
+      },
+      sync_jobs: { data: null },
+    });
+
+    const result = await loadCashFlowData(supabase as never, {
+      scope: MINE,
+      anchorMonth: "2026-07",
+      rangeMonths: 6,
+    });
+
+    expect(result.transactions.some((t) => t.id === "charge-1")).toBe(false);
+  });
 });

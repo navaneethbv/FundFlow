@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getClientIp, writeAudit } from "@/lib/audit";
 import { groupKeyFor } from "@/lib/accounts-page";
 import { toCsv } from "@/lib/csv";
+import { isExportAllowed } from "@/lib/export";
 import {
   parseFinancialScope,
   scopeQueryUserId,
@@ -61,6 +62,13 @@ export async function GET(request: NextRequest) {
   const { user, supabase } = auth;
 
   try {
+    if (!(await isExportAllowed(supabase, user.id))) {
+      return NextResponse.json(
+        { error: "Data export is disabled in your settings." },
+        { status: 403 },
+      );
+    }
+
     const { data: householdRows, error: householdError } = await supabase
       .from("households")
       .select("id");

@@ -54,6 +54,7 @@ export async function DELETE(request: NextRequest) {
     const { error } = await supabase
       .from("api_tokens")
       .update({ revoked_at: new Date().toISOString() })
+      .eq("user_id", user.id)
       .eq("id", body.id);
     if (error) throw error;
 

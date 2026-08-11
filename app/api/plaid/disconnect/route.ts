@@ -5,6 +5,7 @@ import { getItem, decryptItemToken } from "@/lib/plaid-service";
 import { createServiceClient } from "@/lib/supabase/service";
 import { writeAudit, getClientIp } from "@/lib/audit";
 import { logError } from "@/lib/log";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 /**
  * Disconnect a bank: remove the item at Plaid, then delete the local item and
@@ -24,6 +25,10 @@ export async function POST(request: NextRequest) {
   const itemId = (body as { item_id?: unknown }).item_id;
   if (typeof itemId !== "string" || itemId.length === 0) {
     return badRequest("item_id is required");
+  }
+
+  if (!(await checkRateLimit(`disconnect:${user.id}`, 10, 60))) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
 
   try {

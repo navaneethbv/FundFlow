@@ -45,6 +45,21 @@ suite("plaid webhook integration", () => {
   let itemDbId = "";
   const plaidItemId = `plaid-item-web-${stamp}`;
 
+  // These cases exercise the routing and DB effects downstream of signature
+  // verification, not verification itself; they cannot mint a real Plaid
+  // ES256 signature. Pin the one environment the route skips verification in
+  // (non-production running against sandbox). Without this the suite inherits
+  // whatever PLAID_ENV .env.local happens to carry and every case 401s. The
+  // signature path itself is covered in tests/unit/api-plaid-webhook.test.ts.
+  beforeAll(() => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("PLAID_ENV", "sandbox");
+  });
+
+  afterAll(() => {
+    vi.unstubAllEnvs();
+  });
+
   beforeAll(async () => {
     // 1. Create temporary user
     const { data: userData, error: userError } = await admin.auth.admin.createUser({

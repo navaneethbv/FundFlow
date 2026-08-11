@@ -3,12 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { clientStub, type QueryResult } from "../fixtures/supabase-query";
 
 const mockRequireUser = vi.fn<(...args: unknown[]) => unknown>();
+const mockErrorResponse = vi.fn();
 vi.mock("@/lib/http", () => ({
   requireUser: () => mockRequireUser(),
   badRequest: (message: string) => NextResponse.json({ error: message }, { status: 400 }),
-  errorResponse: (_context: string, error: unknown) => {
-    throw error;
-  },
+  errorResponse: (...args: unknown[]) => mockErrorResponse(...args),
 }));
 
 const mockWriteAudit = vi.fn();
@@ -53,6 +52,9 @@ function supabaseWith(overrides: Record<string, QueryResult> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   flagEnabled = true;
+  mockErrorResponse.mockImplementation((_context: string, error: unknown) => {
+    throw error;
+  });
 });
 
 describe("PATCH /api/settings/profile", () => {
@@ -109,9 +111,79 @@ describe("PATCH /api/settings/profile", () => {
     const res = await PATCH(jsonRequest("PATCH", { kind: "display", prefs: { theme: "purple" } }));
     expect(res.status).toBe(400);
   });
+
+  it("writes every provided profile field (name, birthday, display name)", async () => {
+    const { client } = supabaseWith({ profiles: { data: null, error: null } });
+    mockRequireUser.mockResolvedValue({ user: { id: USER_ID }, supabase: client });
+    const res = await PATCH(jsonRequest("PATCH", {
+      kind: "profile",
+      displayName: "Ada",
+      birthday: "1990-01-15",
+    }));
+    expect(res.status).toBe(200);
+    expect(client.writtenTo("profiles")).toEqual({
+      display_name: "Ada",
+      birthday: "1990-01-15",
+    });
+  });
+
+  it("500s when the profile update fails", async () => {
+    mockErrorResponse.mockReturnValue(NextResponse.json({ error: "boom" }, { status: 500 }));
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: supabaseWith({ profiles: { data: null, error: { message: "update failed" } } }).client,
+    });
+    const res = await PATCH(jsonRequest("PATCH", { kind: "profile", fullName: "Ada" }));
+    expect(res.status).toBe(500);
+  });
+
+  it("500s when the display prefs read fails", async () => {
+    mockErrorResponse.mockReturnValue(NextResponse.json({ error: "boom" }, { status: 500 }));
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: supabaseWith({ profiles: { data: null, error: { message: "read failed" } } }).client,
+    });
+    const res = await PATCH(jsonRequest("PATCH", { kind: "display", prefs: { theme: "dark" } }));
+    expect(res.status).toBe(500);
+  });
+
+  it("500s when the display prefs update fails", async () => {
+    mockErrorResponse.mockReturnValue(NextResponse.json({ error: "boom" }, { status: 500 }));
+    const { client } = supabaseWith({
+      profiles: { data: { display_prefs: { theme: "dark" } }, error: null },
+    });
+    const updateMock = vi.fn().mockResolvedValue({ error: { message: "update failed" } });
+    client.from = vi.fn().mockImplementation((table: string) => {
+      if (table !== "profiles") throw new Error("unexpected table");
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({ data: { display_prefs: { theme: "dark" } }, error: null }),
+          }),
+        }),
+        update: vi.fn().mockReturnValue({ eq: updateMock }),
+      };
+    });
+    mockRequireUser.mockResolvedValue({ user: { id: USER_ID }, supabase: client });
+    const res = await PATCH(jsonRequest("PATCH", { kind: "display", prefs: { theme: "dark" } }));
+    expect(res.status).toBe(500);
+  });
 });
 
 describe("POST /api/settings/profile (avatar upload)", () => {
+  it("404s while settingsIa is off, before touching auth", async () => {
+    flagEnabled = false;
+    const res = await POST(formRequest(null));
+    expect(res.status).toBe(404);
+    expect(mockRequireUser).not.toHaveBeenCalled();
+  });
+
+  it("returns the auth response when not signed in", async () => {
+    const unauthorized = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    mockRequireUser.mockResolvedValue(unauthorized);
+    await expect(POST(formRequest(null))).resolves.toBe(unauthorized);
+  });
+
   it("400s a missing file", async () => {
     mockRequireUser.mockResolvedValue({ user: { id: USER_ID }, supabase: supabaseWith().client });
     const res = await POST(formRequest(null));
@@ -147,9 +219,42 @@ describe("POST /api/settings/profile (avatar upload)", () => {
     expect(client.writtenTo("profiles")).toEqual({ avatar_path: `${USER_ID}/avatar.png` });
     expect(mockWriteAudit).toHaveBeenCalledWith(expect.objectContaining({ action: "avatar_updated" }));
   });
+
+  it("500s when the avatar upload fails", async () => {
+    mockErrorResponse.mockReturnValue(NextResponse.json({ error: "boom" }, { status: 500 }));
+    const { client } = supabaseWith();
+    client.storage.from = vi.fn().mockReturnValue({
+      upload: vi.fn().mockResolvedValue({ error: { message: "storage down" } }),
+      remove: vi.fn().mockResolvedValue({ error: null }),
+    });
+    mockRequireUser.mockResolvedValue({ user: { id: USER_ID }, supabase: client });
+    const res = await POST(formRequest(new File(["x"], "a.png", { type: "image/png" })));
+    expect(res.status).toBe(500);
+  });
+
+  it("500s when the avatar_path update fails", async () => {
+    mockErrorResponse.mockReturnValue(NextResponse.json({ error: "boom" }, { status: 500 }));
+    const { client } = supabaseWith({ profiles: { data: null, error: { message: "update failed" } } });
+    mockRequireUser.mockResolvedValue({ user: { id: USER_ID }, supabase: client });
+    const res = await POST(formRequest(new File(["x"], "a.png", { type: "image/png" })));
+    expect(res.status).toBe(500);
+  });
 });
 
 describe("DELETE /api/settings/profile (avatar removal)", () => {
+  it("404s while settingsIa is off, before touching auth", async () => {
+    flagEnabled = false;
+    const res = await DELETE(jsonRequest("DELETE", {}));
+    expect(res.status).toBe(404);
+    expect(mockRequireUser).not.toHaveBeenCalled();
+  });
+
+  it("returns the auth response when not signed in", async () => {
+    const unauthorized = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    mockRequireUser.mockResolvedValue(unauthorized);
+    await expect(DELETE(jsonRequest("DELETE", {}))).resolves.toBe(unauthorized);
+  });
+
   it("removes the stored object and clears avatar_path", async () => {
     const { client, remove } = supabaseWith({ profiles: { data: { avatar_path: "user-1/avatar.png" }, error: null } });
     mockRequireUser.mockResolvedValue({ user: { id: USER_ID }, supabase: client });
@@ -165,5 +270,38 @@ describe("DELETE /api/settings/profile (avatar removal)", () => {
     const res = await DELETE(jsonRequest("DELETE", {}));
     expect(res.status).toBe(200);
     expect(remove).not.toHaveBeenCalled();
+  });
+
+  it("500s when the avatar_path read fails", async () => {
+    mockErrorResponse.mockReturnValue(NextResponse.json({ error: "boom" }, { status: 500 }));
+    const { client } = supabaseWith({ profiles: { data: null, error: { message: "read failed" } } });
+    mockRequireUser.mockResolvedValue({ user: { id: USER_ID }, supabase: client });
+    const res = await DELETE(jsonRequest("DELETE", {}));
+    expect(res.status).toBe(500);
+  });
+
+  it("500s when the avatar_path clear fails", async () => {
+    mockErrorResponse.mockReturnValue(NextResponse.json({ error: "boom" }, { status: 500 }));
+    const { client } = supabaseWith({
+      profiles: { data: { avatar_path: "user-1/avatar.png" }, error: null },
+    });
+    const updateMock = vi.fn().mockResolvedValue({ error: { message: "update failed" } });
+    client.from = vi.fn().mockImplementation((table: string) => {
+      if (table !== "profiles") throw new Error("unexpected table");
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { avatar_path: "user-1/avatar.png" },
+              error: null,
+            }),
+          }),
+        }),
+        update: vi.fn().mockReturnValue({ eq: updateMock }),
+      };
+    });
+    mockRequireUser.mockResolvedValue({ user: { id: USER_ID }, supabase: client });
+    const res = await DELETE(jsonRequest("DELETE", {}));
+    expect(res.status).toBe(500);
   });
 });

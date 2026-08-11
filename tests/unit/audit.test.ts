@@ -57,27 +57,37 @@ describe("lib/audit", () => {
   });
 
   describe("getClientIp", () => {
-    it("returns the first IP from x-forwarded-for if present", () => {
+    it("returns the IP from x-real-ip when present", () => {
       const req = {
         headers: new Headers({
-          "x-forwarded-for": "203.0.113.195, 70.41.3.18, 150.172.238.178",
+          "x-real-ip": "203.0.113.195",
         }),
       } as unknown as NextRequest;
 
       expect(getClientIp(req)).toBe("203.0.113.195");
     });
 
-    it("falls back to x-real-ip when x-forwarded-for is missing", () => {
+    it("falls back to x-vercel-forwarded-for when x-real-ip is missing", () => {
       const req = {
         headers: new Headers({
-          "x-real-ip": "198.51.100.1",
+          "x-vercel-forwarded-for": "198.51.100.1, 10.0.0.1",
         }),
       } as unknown as NextRequest;
 
       expect(getClientIp(req)).toBe("198.51.100.1");
     });
 
-    it("returns null if neither header is present", () => {
+    it("ignores client-forgeable x-forwarded-for", () => {
+      const req = {
+        headers: new Headers({
+          "x-forwarded-for": "203.0.113.99",
+        }),
+      } as unknown as NextRequest;
+
+      expect(getClientIp(req)).toBeNull();
+    });
+
+    it("returns null if no trusted header is present", () => {
       const req = {
         headers: new Headers(),
       } as unknown as NextRequest;

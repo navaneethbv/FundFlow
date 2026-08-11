@@ -18,9 +18,13 @@ export async function POST(request: NextRequest) {
     const body = (await request.json().catch(() => null)) as {
       itemId?: string;
       share?: boolean;
+      householdId?: string;
     } | null;
     if (!body?.itemId || typeof body.share !== "boolean") {
       return badRequest("itemId and share are required");
+    }
+    if (body.share && typeof body.householdId !== "string") {
+      return badRequest("householdId is required when sharing");
     }
 
     // Owner-only: plaid_items has no household select policy, so this
@@ -36,13 +40,16 @@ export async function POST(request: NextRequest) {
 
     let householdId: string | null = null;
     if (body.share) {
+      // Explicit target household, verified as a member by RLS: the
+      // user-scoped client only resolves households the caller belongs to, so
+      // this cannot pick an arbitrary one for a multi-household user.
       const { data: household } = await supabase
         .from("households")
         .select("id")
-        .limit(1)
+        .eq("id", body.householdId)
         .maybeSingle();
       if (!household) {
-        return badRequest("Create or join a household first");
+        return badRequest("You are not a member of that household");
       }
       householdId = household.id as string;
     }

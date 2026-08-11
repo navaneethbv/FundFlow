@@ -14,6 +14,7 @@ export interface PlaidItemRow {
   sync_cursor: string | null;
   status: "active" | "disconnected" | "error";
   error_code: string | null;
+  access_token_rotated_at?: string | null;
 }
 
 export interface AccountRow {

@@ -104,4 +104,52 @@ describe("palette validator", () => {
       floor: 6,
     });
   });
+
+  it("throws error for invalid CVD mode", () => {
+    expect(() => simulateCvd(hexToRgb("#ffffff"), "unknown")).toThrow("invalid_cvd_mode");
+  });
+
+  it("parses palettes from CSS source code", () => {
+    const css = `
+      :root {
+        --viz-1: #2a78d6;
+        --viz-2: #1baf7a;
+        --viz-3: #eda100;
+        --viz-4: #008300;
+        --viz-5: #4a3aa7;
+        --viz-6: #e34948;
+        --viz-7: #c2379a;
+      }
+      :root[data-theme="dark"] {
+        --viz-1: #77a9ea;
+        --viz-2: #55c795;
+        --viz-3: #f1a824;
+        --viz-4: #299525;
+        --viz-5: #755efd;
+        --viz-6: #d57c75;
+        --viz-7: #d33ea7;
+      }
+    `;
+    const palettes = paletteValidator.palettesFromCss(css) as Record<
+      string,
+      string[]
+    >;
+    expect(palettes.light).toHaveLength(7);
+    expect(palettes.dark).toHaveLength(7);
+  });
+
+  it("handles dark sRGB values below 0.04045 linear threshold", () => {
+    const result = simulateCvd(hexToRgb("#010203"), "protanopia");
+    expect(result).toBeDefined();
+  });
+
+  it("runs CLI validation on app/globals.css", async () => {
+    const exitCode = await paletteValidator.runCli("app/globals.css");
+    expect(exitCode).toBe(0);
+  });
+
+  it("returns exit code 1 when CSS missing expected palettes", async () => {
+    const exitCode = await paletteValidator.runCli("package.json");
+    expect(exitCode).toBe(1);
+  });
 });

@@ -30,6 +30,7 @@ describe("lib/supabase/service", () => {
         auth: {
           autoRefreshToken: false,
           persistSession: false,
+          experimental: { passkey: true },
         },
       },
     );

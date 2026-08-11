@@ -23,6 +23,7 @@ vi.mock("@/lib/investment-sync", () => ({
 }));
 
 const mockLinkTokenCreate = vi.fn();
+const mockLinkTokenGet = vi.fn();
 const mockItemPublicTokenExchange = vi.fn();
 const mockItemGet = vi.fn();
 const mockInstitutionsGetById = vi.fn();
@@ -32,6 +33,7 @@ const mockAccountsGet = vi.fn();
 vi.mock("@/lib/plaid", () => ({
   getPlaidClient: () => ({
     linkTokenCreate: mockLinkTokenCreate,
+    linkTokenGet: mockLinkTokenGet,
     itemPublicTokenExchange: mockItemPublicTokenExchange,
     itemGet: mockItemGet,
     institutionsGetById: mockInstitutionsGetById,
@@ -724,6 +726,16 @@ suite("API routes integration", () => {
       activeUser = tempUserObj;
       activeSupabaseClient = tempUserClient;
 
+      // Bind a link token record for this user so the exchange step-up passes.
+      const { hashLinkToken } = await import("@/lib/plaid-service");
+      const { error: ltError } = await admin.from("plaid_link_tokens").insert({
+        user_id: tempUserId,
+        token_hash: hashLinkToken("link-sandbox-abc"),
+        expires_at: new Date(Date.now() + 3600_000).toISOString(),
+      });
+      expect(ltError).toBeNull();
+
+      mockLinkTokenGet.mockResolvedValue({ data: { link_sessions: [] } });
       mockItemPublicTokenExchange.mockResolvedValue({
         data: { access_token: `access-ex-${stamp}`, item_id: `plaid-item-ex-${stamp}` },
       });
@@ -740,7 +752,10 @@ suite("API routes integration", () => {
 
       const req = new NextRequest("http://localhost/api/plaid/exchange", {
         method: "POST",
-        body: JSON.stringify({ public_token: "public-sandbox-abc" }),
+        body: JSON.stringify({
+          public_token: "public-sandbox-abc",
+          link_token: "link-sandbox-abc",
+        }),
       });
       const resp = await plaidExchangePost(req);
       expect(resp.status).toBe(200);
@@ -797,7 +812,10 @@ suite("API routes integration", () => {
       activeUser = delUser.user!;
       activeSupabaseClient = delUserClient;
 
-      const req = new NextRequest("http://localhost/api/account", { method: "DELETE" });
+      const req = new NextRequest("http://localhost/api/account", {
+        method: "DELETE",
+        body: JSON.stringify({ method: "password", code: "Password123!" }),
+      });
       const resp = await accountDelete(req);
       expect(resp.status).toBe(200);
 
@@ -838,7 +856,10 @@ suite("API routes integration", () => {
       activeUser = delUser.user!;
       activeSupabaseClient = delUserClient;
 
-      const req = new NextRequest("http://localhost/api/account", { method: "DELETE" });
+      const req = new NextRequest("http://localhost/api/account", {
+        method: "DELETE",
+        body: JSON.stringify({ method: "password", code: "Password123!" }),
+      });
       const resp = await accountDelete(req);
       expect(resp.status).toBe(200);
 
@@ -853,7 +874,10 @@ suite("API routes integration", () => {
       activeUser = tempUserObj;
       activeSupabaseClient = tempUserClient;
 
-      const req = new NextRequest("http://localhost/api/account", { method: "DELETE" });
+      const req = new NextRequest("http://localhost/api/account", {
+        method: "DELETE",
+        body: JSON.stringify({ method: "password", code: "Password123!" }),
+      });
       const resp = await accountDelete(req);
       expect(resp.status).toBe(500);
 

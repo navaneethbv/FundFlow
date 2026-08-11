@@ -114,18 +114,20 @@ describe("Settings API Routes", () => {
       const mockSupabase = {
         from: vi.fn().mockReturnValue({
           select: vi.fn().mockReturnValue({
-            is: vi.fn().mockReturnValue({
-              order: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue({
-                  data: [
-                    {
-                      id: "s1",
-                      session_id: "session-active",
-                      user_agent: "Chrome",
-                      last_seen_at: "2026-07-13",
-                    },
-                  ],
-                  error: null,
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue({
+                    data: [
+                      {
+                        id: "s1",
+                        session_id: "session-active",
+                        user_agent: "Chrome",
+                        last_seen_at: "2026-07-13",
+                      },
+                    ],
+                    error: null,
+                  }),
                 }),
               }),
             }),

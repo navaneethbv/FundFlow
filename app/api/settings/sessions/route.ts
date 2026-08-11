@@ -6,13 +6,14 @@ import { createServiceClient } from "@/lib/supabase/service";
 export async function GET() {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
-  const { supabase } = auth;
+  const { user, supabase } = auth;
 
   try {
     const [{ data, error }, activeSessionId] = await Promise.all([
       supabase
         .from("user_session_records")
         .select("id, session_id, user_agent, revoked_at, last_seen_at")
+        .eq("user_id", user.id)
         .is("revoked_at", null)
         .order("last_seen_at", { ascending: false })
         .limit(20),

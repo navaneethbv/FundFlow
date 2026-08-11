@@ -4,6 +4,7 @@ import { safeEqual } from "@/lib/crypto";
 import { createServiceClient } from "@/lib/supabase/service";
 import { syncAllForUser } from "@/lib/sync";
 import { syncInvestmentsForUser } from "@/lib/investment-sync";
+import { rotateStaleItemTokens } from "@/lib/plaid-service";
 import { refreshRecurringForUser } from "@/lib/recurring";
 import { errorResponse } from "@/lib/http";
 import { logError } from "@/lib/log";
@@ -56,6 +57,14 @@ export async function GET(request: NextRequest) {
     for (const userId of userIds) {
       try {
         await syncAllForUser(userId);
+        // Periodic access-token rotation: any item not rotated in the last 30
+        // days gets a fresh token (old one invalidated immediately). Isolated
+        // so a rotation failure never fails the user's sync.
+        try {
+          await rotateStaleItemTokens(userId);
+        } catch (rotateError) {
+          logError("cron.sync.token-rotation", rotateError);
+        }
         // Gated on investmentsPage (not just isolated in a try/catch): before
         // 20260730210000_investments.sql is applied, `holdings` and
         // `holding_snapshots` don't exist, and running this unconditionally

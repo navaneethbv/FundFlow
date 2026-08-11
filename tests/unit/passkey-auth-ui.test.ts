@@ -15,7 +15,7 @@ describe("passkey authentication UI", () => {
     expect(source).toContain("auth.passkey.list");
     expect(source).toContain("auth.registerPasskey");
     expect(source).toContain("auth.passkey.update");
-    expect(source).toContain("auth.passkey.delete");
+    expect(source).toContain("recordPasskeyChange(\"delete\"");
     expect(source).toContain("passkeyId");
     expect(source).not.toContain("credential:");
   });

@@ -23,4 +23,34 @@ describe("isCrossOrigin", () => {
     expect(isCrossOrigin("null", "fundflow.app")).toBe(true);
     expect(isCrossOrigin("not a url", "fundflow.app")).toBe(true);
   });
+
+  it("allows an origin listed in the canonical app URL", () => {
+    expect(
+      isCrossOrigin(
+        "https://app.example.com",
+        "something-else.example.com",
+        { NEXT_PUBLIC_APP_URL: "https://app.example.com" },
+      ),
+    ).toBe(false);
+  });
+
+  it("allows the Vercel-managed deployment host", () => {
+    expect(
+      isCrossOrigin(
+        "https://preview-123.vercel.app",
+        "preview-123.vercel.app",
+        { VERCEL_URL: "preview-123.vercel.app" },
+      ),
+    ).toBe(false);
+  });
+
+  it("blocks an origin that matches neither the Host nor the allowlist", () => {
+    expect(
+      isCrossOrigin(
+        "https://evil.example",
+        "fundflow.app",
+        { NEXT_PUBLIC_APP_URL: "https://app.example.com" },
+      ),
+    ).toBe(true);
+  });
 });

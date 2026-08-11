@@ -90,6 +90,14 @@ describe("computeSavingsRateSeries", () => {
       { month: "2026-07", rate: 0 },
     ]);
   });
+
+  it("treats a month with no matching spending as a full-savings month", () => {
+    const income = [{ month: "2026-07", amount: 1000 }];
+    const spending = [{ month: "2026-06", amount: 800 }];
+    expect(computeSavingsRateSeries(income, spending)).toEqual([
+      { month: "2026-07", rate: 100 },
+    ]);
+  });
 });
 
 describe("computeRunwayMonths", () => {
@@ -191,6 +199,46 @@ describe("detectPaychecks", () => {
       asOf: "2026-07-24",
     });
     expect(result.paychecks[0]!.nextPayDate).toBe("2026-07-24");
+  });
+
+  it("keeps the latest deposit even when deposits arrive out of order", () => {
+    const result = detectPaychecks({
+      incomeStreams: [{ name: "Reorder Co", amount: 100, frequency: "monthly" }],
+      incomeTransactions: [
+        { date: "2026-07-10", merchant: "Reorder Co", amount: -100 },
+        { date: "2026-06-26", merchant: "Reorder Co", amount: -100 },
+      ],
+      asOf: "2026-07-20",
+    });
+    expect(result.paychecks[0]!.lastPaidDate).toBe("2026-07-10");
+    expect(result.paychecks[0]!.nextPayDate).toBe("2026-08-10");
+  });
+
+  it("tolerates partial deposit dates and gives up after a bounded advance", () => {
+    const result = detectPaychecks({
+      incomeStreams: [
+        { name: "Year Only", amount: 500, frequency: "monthly" },
+        { name: "No Parts", amount: 100, frequency: "weekly" },
+      ],
+      incomeTransactions: [
+        { date: "2026", merchant: "Year Only", amount: -500 },
+        { date: "", merchant: "No Parts", amount: -100 },
+      ],
+      asOf: "2026-07-20",
+    });
+    const yearOnly = result.paychecks.find((p) => p.name === "Year Only");
+    expect(yearOnly?.nextPayDate).toBe("2026-08-01");
+    expect(result.paychecks.find((p) => p.name === "No Parts")?.nextPayDate).toBeNull();
+  });
+
+  it("returns a null primary when no stream is anchored by a deposit", () => {
+    const result = detectPaychecks({
+      incomeStreams: [{ name: "Mystery", amount: 9000, frequency: "monthly" }],
+      incomeTransactions: [{ date: "2026-07-10", merchant: "Other Co", amount: -100 }],
+      asOf: "2026-07-20",
+    });
+    expect(result.paychecks[0]!.nextPayDate).toBeNull();
+    expect(result.primary).toBeNull();
   });
 });
 
@@ -309,6 +357,18 @@ describe("diffRecurringStreams", () => {
     expect(result.priceHikes).toEqual([]);
     expect(result.newStreams).toEqual([]);
   });
+
+  it("handles null amounts in previous and next streams", () => {
+    const result = diffRecurringStreams(
+      [{ streamId: "s1", lastAmount: null }],
+      [
+        { streamId: "s9", streamType: "outflow", name: "Zero New", lastAmount: null, isActive: true },
+        { streamId: "s1", streamType: "outflow", name: "Prev Null", lastAmount: 15, isActive: true },
+      ],
+    );
+    expect(result.newStreams).toEqual([]);
+    expect(result.priceHikes).toEqual([]);
+  });
 });
 
 describe("suggestBudgets", () => {
@@ -402,6 +462,48 @@ describe("computeMerchantPriceDrift", () => {
       asOfMonth: "2026-07",
     });
     expect(result.items.map((i) => i.merchant)).toEqual(["Big", "Small"]);
+  });
+
+  it("ignores transactions outside both comparison windows", () => {
+    const result = computeMerchantPriceDrift({
+      txns: [
+        txn("2026-01-10", "Old", 50),
+        txn("2026-08-10", "Future", 60),
+        txn("2026-05-10", "Power Co", 100),
+        txn("2026-06-10", "Power Co", 100),
+        txn("2026-03-10", "Power Co", 90),
+        txn("2026-04-10", "Power Co", 90),
+      ],
+      asOfMonth: "2026-07",
+    });
+    expect(result.items.map((i) => i.merchant)).toEqual(["Power Co"]);
+  });
+
+  it("skips merchants whose earlier average rounds to zero", () => {
+    const result = computeMerchantPriceDrift({
+      txns: [
+        txn("2026-03-10", "Tiny", 0.001),
+        txn("2026-04-10", "Tiny", 0.001),
+        txn("2026-06-10", "Tiny", 5),
+        txn("2026-07-10", "Tiny", 5),
+      ],
+      asOfMonth: "2026-07",
+    });
+    expect(result.items).toEqual([]);
+  });
+
+  it("returns null overall drift when recent averages round to zero", () => {
+    const result = computeMerchantPriceDrift({
+      txns: [
+        txn("2026-03-10", "R", 10),
+        txn("2026-04-10", "R", 10),
+        txn("2026-06-10", "R", 0.001),
+        txn("2026-07-10", "R", 0.001),
+      ],
+      asOfMonth: "2026-07",
+    });
+    expect(result.items).toHaveLength(1);
+    expect(result.overallDriftPct).toBeNull();
   });
 });
 

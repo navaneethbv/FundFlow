@@ -16,6 +16,10 @@ vi.mock("@/lib/audit", () => ({
   getClientIp: () => "127.0.0.1",
 }));
 
+vi.mock("@/lib/plaid", () => ({
+  getPlaidClient: () => ({ itemRemove: vi.fn().mockResolvedValue({ data: {} }) }),
+}));
+
 let serviceClient = clientStub();
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => serviceClient,
@@ -28,6 +32,7 @@ import {
   DELETE as cancelledDelete,
 } from "@/app/api/subscriptions/cancelled/route";
 import { GET as healthGet } from "@/app/api/health/route";
+import { DELETE as accountDelete } from "@/app/api/account/route";
 import { NextResponse, NextRequest } from "next/server";
 
 const USER = "user-1";
@@ -144,18 +149,29 @@ describe("POST /api/plaid/share", () => {
     expect(res.status).toBe(400);
   });
 
+  it("requires a householdId when sharing", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER },
+      supabase: clientStub({ plaid_items: { data: { id: "i1" } } }),
+    });
+    const res = await sharePost(
+      post("http://localhost/api/plaid/share", { itemId: "i1", share: true }),
+    );
+    expect(res.status).toBe(400);
+  });
+
   it("404s when the item does not resolve for the caller", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: USER },
       supabase: clientStub({ plaid_items: { data: null } }),
     });
     const res = await sharePost(
-      post("http://localhost/api/plaid/share", { itemId: "i1", share: true }),
+      post("http://localhost/api/plaid/share", { itemId: "i1", share: true, householdId: "h1" }),
     );
     expect(res.status).toBe(404);
   });
 
-  it("refuses to share when the caller has no household", async () => {
+  it("refuses to share into a household the caller is not a member of", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: USER },
       supabase: clientStub({
@@ -164,12 +180,12 @@ describe("POST /api/plaid/share", () => {
       }),
     });
     const res = await sharePost(
-      post("http://localhost/api/plaid/share", { itemId: "i1", share: true }),
+      post("http://localhost/api/plaid/share", { itemId: "i1", share: true, householdId: "h1" }),
     );
     expect(res.status).toBe(400);
   });
 
-  it("stamps the household id on the item, scoped to the owner", async () => {
+  it("stamps the explicit household id on the item, scoped to the owner", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: USER },
       supabase: clientStub({
@@ -178,7 +194,7 @@ describe("POST /api/plaid/share", () => {
       }),
     });
     const res = await sharePost(
-      post("http://localhost/api/plaid/share", { itemId: "i1", share: true }),
+      post("http://localhost/api/plaid/share", { itemId: "i1", share: true, householdId: "h1" }),
     );
 
     expect(res.status).toBe(200);
@@ -331,5 +347,137 @@ describe("GET /api/health", () => {
     const res = await healthGet();
     expect(res.status).toBe(503);
     await expect(res.json()).resolves.toEqual({ ok: false, db: false });
+  });
+});
+
+describe("DELETE /api/account", () => {
+  it("returns auth response if user is unauthenticated", async () => {
+    mockRequireUser.mockResolvedValue(unauthorized());
+    const res = await accountDelete(del("http://localhost/api/account", {}));
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects a missing verification code", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER, email: "user@example.com" },
+      supabase: clientStub(),
+    });
+    const res = await accountDelete(del("http://localhost/api/account", {}));
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects empty verification code", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER, email: "user@example.com" },
+      supabase: clientStub(),
+    });
+    const res = await accountDelete(del("http://localhost/api/account", { code: "" }));
+    expect(res.status).toBe(400);
+  });
+
+  it("never accepts a password when the user has a verified TOTP factor", async () => {
+    // The request body must not be able to downgrade the step-up: a stolen
+    // session plus a known password is exactly what MFA is there to stop.
+    const signInWithPassword = vi.fn().mockResolvedValue({ error: null });
+    const mockSupabase = {
+      auth: {
+        signInWithPassword,
+        mfa: {
+          listFactors: vi.fn().mockResolvedValue({
+            data: { totp: [{ id: "f1", status: "verified" }] },
+          }),
+          challengeAndVerify: vi
+            .fn()
+            .mockResolvedValue({ error: { message: "Invalid code" } }),
+        },
+      },
+    };
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER, email: "user@example.com" },
+      supabase: mockSupabase,
+    });
+
+    const res = await accountDelete(
+      del("http://localhost/api/account", { method: "password", code: "secret" }),
+    );
+
+    expect(res.status).toBe(401);
+    expect(signInWithPassword).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 when password re-auth step-up fails", async () => {
+    const mockSupabase = {
+      auth: {
+        signInWithPassword: vi.fn().mockResolvedValue({ error: { message: "Wrong password" } }),
+        mfa: {
+          listFactors: vi.fn().mockResolvedValue({ data: { totp: [] } }),
+        },
+      },
+    };
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER, email: "user@example.com" },
+      supabase: mockSupabase,
+    });
+    const res = await accountDelete(del("http://localhost/api/account", { code: "wrong" }));
+    expect(res.status).toBe(401);
+    expect(mockWriteAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "account_delete_failed" }),
+    );
+  });
+
+  it("returns 401 when TOTP step-up fails", async () => {
+    const mockSupabase = {
+      auth: {
+        mfa: {
+          listFactors: vi.fn().mockResolvedValue({
+            data: { totp: [{ id: "f1", status: "verified" }] },
+          }),
+          challengeAndVerify: vi.fn().mockResolvedValue({ error: { message: "Invalid code" } }),
+        },
+      },
+    };
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER, email: "user@example.com" },
+      supabase: mockSupabase,
+    });
+    const res = await accountDelete(del("http://localhost/api/account", { code: "000000" }));
+    expect(res.status).toBe(401);
+  });
+
+  it("deletes user account when password step-up succeeds", async () => {
+    const mockSupabase = {
+      auth: {
+        signInWithPassword: vi.fn().mockResolvedValue({ error: null }),
+        mfa: {
+          listFactors: vi.fn().mockResolvedValue({ data: { totp: [] } }),
+        },
+      },
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+        }),
+      }),
+    };
+    serviceClient = Object.assign(
+      clientStub({ plaid_items: { data: [] } }),
+      {
+        auth: {
+          admin: {
+            deleteUser: vi.fn().mockResolvedValue({ error: null }),
+          },
+        },
+      },
+    );
+
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER, email: "user@example.com" },
+      supabase: mockSupabase,
+    });
+
+    const res = await accountDelete(del("http://localhost/api/account", { code: "secret" }));
+    expect(res.status).toBe(200);
+    expect(mockWriteAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "account_delete" }),
+    );
   });
 });

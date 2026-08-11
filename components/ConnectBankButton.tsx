@@ -77,7 +77,12 @@ export default function ConnectBankButton() {
             : await fetch("/api/plaid/exchange", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ public_token: publicToken }),
+                body: JSON.stringify({
+                  public_token: publicToken,
+                  // Bind the exchange to the link token that opened this Link
+                  // session so the server can verify ownership.
+                  link_token: linkToken,
+                }),
               });
         if (!res.ok) {
           const json = await res.json().catch(() => ({}));
@@ -91,7 +96,7 @@ export default function ConnectBankButton() {
         setBusy(false);
       }
     },
-    [resume, router],
+    [resume, router, linkToken],
   );
 
   const { open, ready } = usePlaidLink({

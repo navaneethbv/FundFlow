@@ -38,8 +38,14 @@ async function getWebhookVerificationKey(kid: string): Promise<crypto.KeyObject>
 }
 
 async function verifyPlaidWebhook(req: NextRequest, bodyText: string): Promise<boolean> {
-  const plaidEnv = process.env.PLAID_ENV ?? "sandbox";
-  if (plaidEnv === "sandbox" || process.env.NODE_ENV === "test") {
+  // Fail closed: verification is only ever skipped in non-production setups
+  // that explicitly run against Plaid sandbox. In production — and whenever
+  // PLAID_ENV is anything other than "sandbox" — every webhook must carry a
+  // valid signature. An unset PLAID_ENV must not silently disable verification.
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.PLAID_ENV === "sandbox"
+  ) {
     return true;
   }
 

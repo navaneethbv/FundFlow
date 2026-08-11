@@ -4,7 +4,7 @@ import { getPlaidClient } from "@/lib/plaid";
 import { serverEnv } from "@/lib/env.server";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { storeItem, getItem, upsertAccounts } from "@/lib/plaid-service";
+import { storeItem, getItem, upsertAccounts, consumeLinkToken } from "@/lib/plaid-service";
 import { syncItemTransactions } from "@/lib/sync";
 import { writeAudit, getClientIp } from "@/lib/audit";
 import { logError } from "@/lib/log";
@@ -34,11 +34,41 @@ export async function POST(request: NextRequest) {
   if (typeof publicToken !== "string" || publicToken.length === 0) {
     return badRequest("public_token is required");
   }
+  const linkToken = (body as { link_token?: unknown }).link_token;
+  if (typeof linkToken !== "string" || linkToken.length === 0) {
+    return badRequest("link_token is required");
+  }
 
   const ip = getClientIp(request);
 
   try {
     const plaid = getPlaidClient();
+
+    // Bind the exchange to a link token this user actually created. The
+    // hashed, single-use record is the authoritative gate; linkTokenGet
+    // additionally proves the public token was minted by this exact link
+    // token when Plaid has session data available.
+    try {
+      const tokenInfo = await plaid.linkTokenGet({ link_token: linkToken });
+      const mintedPublicTokens = (tokenInfo.data.link_sessions ?? [])
+        .map((session) => session.on_success?.public_token)
+        .filter((token): token is string => typeof token === "string");
+      if (
+        mintedPublicTokens.length > 0 &&
+        !mintedPublicTokens.includes(publicToken)
+      ) {
+        return badRequest("Public token does not match this link token");
+      }
+    } catch (error) {
+      // linkTokenGet is best-effort (session data can lag); the hash-bound
+      // single-use check below remains the authoritative control.
+      logError("plaid.exchange.linkTokenGet", error);
+    }
+
+    const linkOk = await consumeLinkToken(user.id, linkToken);
+    if (!linkOk) {
+      return badRequest("Invalid or already-used link token");
+    }
 
     // Exchange the short-lived public_token for a durable access_token.
     const exchange = await plaid.itemPublicTokenExchange({

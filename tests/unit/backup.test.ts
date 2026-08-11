@@ -43,4 +43,25 @@ describe("backup archive", () => {
     const badEnvelope = Buffer.from(JSON.stringify({ v: 2, alg: "aes-256-gcm" }), "utf8");
     expect(() => readBackupArchive(badEnvelope, KEY)).toThrow("Unsupported backup envelope");
   });
+
+  it("derives a per-user key and round-trips with the master key", () => {
+    const archive = buildBackupArchive(payload, KEY, "user-123");
+    const envelope = JSON.parse(archive.toString("utf8"));
+    expect(envelope.kdf).toBe("hkdf-sha256-v1");
+    expect(envelope.user_id).toBe("user-123");
+    expect(readBackupArchive(archive, KEY)).toEqual(payload);
+  });
+
+  it("rejects an archive whose per-user id was tampered with", () => {
+    const archive = buildBackupArchive(payload, KEY, "user-123");
+    const envelope = JSON.parse(archive.toString("utf8"));
+    envelope.user_id = "user-999";
+    const tampered = Buffer.from(JSON.stringify(envelope), "utf8");
+    expect(() => readBackupArchive(tampered, KEY)).toThrow();
+  });
+
+  it("still decrypts legacy archives written without the kdf field", () => {
+    const archive = buildBackupArchive(payload, KEY);
+    expect(readBackupArchive(archive, KEY)).toEqual(payload);
+  });
 });

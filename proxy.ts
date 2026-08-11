@@ -68,12 +68,13 @@ export async function proxy(request: NextRequest) {
   // CSRF defense-in-depth: browser-sent mutating API requests must come from
   // our own origin. Non-browser callers (Plaid webhooks, cron) send no Origin
   // header and pass through; SameSite=Lax cookies remain the first layer.
+  // The expected host comes only from the platform-set `Host` header and an
+  // explicit origin allowlist — never the client-spoofable x-forwarded-host.
   if (
     request.nextUrl.pathname.startsWith("/api") &&
     MUTATING_METHODS.has(request.method)
   ) {
-    const host =
-      request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+    const host = request.headers.get("host");
     if (isCrossOrigin(request.headers.get("origin"), host)) {
       const denied = NextResponse.json(
         { error: "Cross-origin request rejected" },

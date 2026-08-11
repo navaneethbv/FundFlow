@@ -9,7 +9,7 @@ vi.mock("@/lib/plaid-service", () => ({
   decryptItemTokenAndUpgrade: vi.fn().mockResolvedValue("access-token"),
 }));
 
-const mockServiceClient = { from: vi.fn() };
+const mockServiceClient = { from: vi.fn(), rpc: vi.fn().mockResolvedValue({ data: true, error: null }) };
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => mockServiceClient,
 }));

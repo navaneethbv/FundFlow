@@ -9,6 +9,7 @@ import {
 } from "@/lib/report-period";
 import { createServiceClient } from "@/lib/supabase/service";
 import { writeAudit, getClientIp } from "@/lib/audit";
+import { isExportAllowed } from "@/lib/export";
 
 /**
  * On-demand download of the weekly PDF report, the same document the Monday
@@ -23,6 +24,13 @@ export async function GET(request: NextRequest) {
 
   try {
     const service = createServiceClient();
+    if (!(await isExportAllowed(service, user.id))) {
+      return NextResponse.json(
+        { error: "Data export is disabled in your settings." },
+        { status: 403 },
+      );
+    }
+
     const { data: profile } = await service
       .from("profiles")
       .select("timezone")

@@ -285,7 +285,7 @@ describe("/api/push/subscribe", () => {
 
     const res = await pushPost(
       jsonRequest(url, "POST", {
-        endpoint: "https://push.example/abc",
+        endpoint: "https://fcm.googleapis.com/abc",
         keys: { p256dh: "p-key", auth: "a-key" },
       }),
     );
@@ -293,7 +293,7 @@ describe("/api/push/subscribe", () => {
     expect(res.status).toBe(200);
     expect(userClient.writtenTo("push_subscriptions")).toEqual({
       user_id: USER,
-      endpoint: "https://push.example/abc",
+      endpoint: "https://fcm.googleapis.com/abc",
       p256dh: "p-key",
       auth: "a-key",
     });
@@ -314,7 +314,7 @@ describe("/api/push/subscribe", () => {
     mockRequireUser.mockResolvedValue({ user: { id: USER }, supabase: userClient });
 
     const res = await pushDelete(
-      jsonRequest(url, "DELETE", { endpoint: "https://push.example/abc" }),
+      jsonRequest(url, "DELETE", { endpoint: "https://fcm.googleapis.com/abc" }),
     );
 
     expect(res.status).toBe(200);
@@ -323,7 +323,7 @@ describe("/api/push/subscribe", () => {
         .callsOn("push_subscriptions")
         .some(
           ({ method, args }) =>
-            method === "eq" && args[1] === "https://push.example/abc",
+            method === "eq" && args[1] === "https://fcm.googleapis.com/abc",
         ),
     ).toBe(true);
   });

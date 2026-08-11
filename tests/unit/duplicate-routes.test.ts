@@ -70,6 +70,73 @@ beforeEach(() => {
 });
 
 describe("GET /api/transactions/duplicates", () => {
+  it("returns the auth response when not signed in", async () => {
+    mockRequireUser.mockResolvedValue(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
+    const response = await GET();
+    expect(response.status).toBe(401);
+  });
+
+  it("returns empty pairs when account and transaction data are missing", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({
+        transactions: { data: null, error: null },
+        accounts: { data: null, error: null },
+        transaction_review_decisions: { data: null, error: null },
+        linked_duplicates: { data: null, error: null },
+      }),
+    });
+    const response = await GET();
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ pairs: [], confirmed: [] });
+  });
+
+  it("falls back to placeholders when account and merchant details are sparse", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({
+        transactions: {
+          data: [
+            { id: FIRST_ID, date: "2026-08-01", merchant_name: null, name: null, amount: 20, account_id: "no-such-account-1" },
+            { id: SECOND_ID, date: "2026-08-02", merchant_name: null, name: null, amount: 20, account_id: "no-such-account-2" },
+          ],
+        },
+        accounts: {
+          data: [{ id: "account-1", name: null, plaid_item_id: null }],
+        },
+        transaction_review_decisions: { data: null },
+        linked_duplicates: { data: null },
+      }),
+    });
+    const response = await GET();
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.pairs[0].first.merchant).toBe("Unknown");
+    expect(payload.pairs[0].first.accountName).toBe("Account");
+    expect(payload.pairs[0].first.plaidItemId).toBe(null);
+  });
+
+  it("maps confirmed links even when one side is missing from the ledger", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: ownedClient({
+        linked_duplicates: {
+          data: [
+            { subject_id: SUBJECT, kept_transaction_id: FIRST_ID, excluded_transaction_id: "missing-id" },
+            { subject_id: SUBJECT, kept_transaction_id: "missing-id", excluded_transaction_id: SECOND_ID },
+          ],
+        },
+      }),
+    });
+    const response = await GET();
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.confirmed).toEqual([
+      { subjectId: SUBJECT, kept: expect.objectContaining({ id: FIRST_ID }), excluded: null },
+      { subjectId: SUBJECT, kept: null, excluded: expect.objectContaining({ id: SECOND_ID }) },
+    ]);
+  });
+
   it("returns unresolved owner-scoped pairs with account context", async () => {
     const supabase = ownedClient();
     mockRequireUser.mockResolvedValue({ user: { id: USER_ID }, supabase });
@@ -95,6 +162,40 @@ describe("GET /api/transactions/duplicates", () => {
 });
 
 describe("POST /api/transactions/duplicates", () => {
+  it("returns the auth response when not signed in", async () => {
+    mockRequireUser.mockResolvedValue(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
+    const response = await POST(request("POST", { subjectId: SUBJECT }));
+    expect(response.status).toBe(401);
+  });
+
+  it("returns 500 when the ownership query fails", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ transactions: { data: null, error: { message: "Ownership Error" } } }),
+    });
+    const response = await POST(request("POST", {
+      subjectId: SUBJECT,
+      keptTransactionId: FIRST_ID,
+      excludedTransactionId: SECOND_ID,
+      decision: "confirmed",
+    }));
+    expect(response.status).toBe(500);
+  });
+
+  it("404s when the ownership query returns no rows", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ transactions: { data: null, error: null } }),
+    });
+    const response = await POST(request("POST", {
+      subjectId: SUBJECT,
+      keptTransactionId: FIRST_ID,
+      excludedTransactionId: SECOND_ID,
+      decision: "confirmed",
+    }));
+    expect(response.status).toBe(404);
+  });
+
   it("rejects an invalid payload or missing fields", async () => {
     const response = await POST(request("POST", { subjectId: SUBJECT }));
     expect(response.status).toBe(400);

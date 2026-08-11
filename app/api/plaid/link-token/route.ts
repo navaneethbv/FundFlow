@@ -4,7 +4,8 @@ import type { LinkTokenCreateRequest } from "plaid";
 import { getPlaidClient } from "@/lib/plaid";
 import { serverEnv } from "@/lib/env.server";
 import { requireUser, errorResponse } from "@/lib/http";
-import { getItem, decryptItemToken } from "@/lib/plaid-service";
+import { getItem, decryptItemToken, storeLinkToken } from "@/lib/plaid-service";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 /**
  * Create a Plaid Link token. Two modes:
@@ -18,6 +19,12 @@ export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
   const { user } = auth;
+
+  // Each Link token bills Plaid — bound so a stuck client loop can't run up
+  // the account's bill.
+  if (!(await checkRateLimit(`link-token:${user.id}`, 10, 60))) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
 
   // Body is optional (the connect button sends none).
   let itemId: string | null = null;
@@ -79,6 +86,11 @@ export async function POST(request: NextRequest) {
     }
 
     const response = await plaid.linkTokenCreate(req);
+
+    // Persist a hashed, user-bound record of the link token so the exchange
+    // step can verify the public token belongs to this user's Link session.
+    await storeLinkToken(user.id, response.data.link_token, response.data.expiration ?? null);
+
     return NextResponse.json({ link_token: response.data.link_token });
   } catch (error) {
     return errorResponse("plaid.link-token", error);

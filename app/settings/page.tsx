@@ -252,12 +252,12 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
         .order("created_at"),
       supabase.from("manual_accounts").select("id, name, account_type, balance, include_in_net_worth").order("created_at"),
       supabase.from("accounts").select("id, name, mask, type, apr").eq("user_id", userId).order("name"),
-      supabase.from("households").select("id").limit(1),
+      supabase.from("households").select("id").order("created_at", { ascending: false }).limit(1),
     ]);
     content = (
       <>
         <div className="grid gap-6 xl:grid-cols-2">
-          <BanksSection initialItems={items ?? []} hasHousehold={(households ?? []).length > 0} />
+          <BanksSection initialItems={items ?? []} householdId={(households ?? [])[0]?.id ?? null} />
           <ManualAccountsSection initialAccounts={manualAccounts ?? []} />
         </div>
         <CardAprSection
@@ -287,7 +287,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
           .select("id, name, target_amount, due_date, cadence, custom_interval_months, cycle_anchor_date")
           .order("due_date"),
       ]);
-    const { data: households } = await supabase.from("households").select("id").limit(1);
+    const { data: households } = await supabase.from("households").select("id").order("created_at", { ascending: false }).limit(1);
     const historyByMonthCategory = new Map<string, number>();
     for (const row of (spendHistoryRows ?? []) as Array<{ date: string; amount: number; pfc_primary: string | null }>) {
       const amount = Number(row.amount);
