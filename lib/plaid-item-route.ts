@@ -18,7 +18,6 @@ export type OwnedItemResult =
   | {
       ok: true;
       user: { id: string };
-      itemId: string;
       item: PlaidItemRow;
     }
   | { ok: false; response: NextResponse };
@@ -41,6 +40,9 @@ export async function requireOwnedItem(
   } catch {
     return { ok: false, response: badRequest("Invalid JSON body") };
   }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false, response: badRequest("Invalid JSON body") };
+  }
   const itemId = (body as { item_id?: unknown }).item_id;
   if (typeof itemId !== "string" || itemId.length === 0) {
     return { ok: false, response: badRequest("item_id is required") };
@@ -61,5 +63,5 @@ export async function requireOwnedItem(
     };
   }
 
-  return { ok: true, user, itemId, item };
+  return { ok: true, user, item };
 }

@@ -91,6 +91,17 @@ describe("POST /api/plaid/reconnect", () => {
     expect(mockBadRequest).toHaveBeenCalledWith("item_id is required");
   });
 
+  it("returns bad request if the body is valid JSON null", async () => {
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+    const request = {
+      json: () => Promise.resolve(null),
+    } as unknown as NextRequest;
+
+    const res = await POST(request);
+    expect(res.status).toBe(400);
+    expect(mockBadRequest).toHaveBeenCalledWith("Invalid JSON body");
+  });
+
   it("returns 404 if item is not found", async () => {
     mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
     const request = {

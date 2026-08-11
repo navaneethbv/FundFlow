@@ -125,7 +125,7 @@ export function badRequest(message: string): NextResponse {
 }
 
 /**
- * Verify the Vercel Cron bearer secret. Returns the stale 401 response when
+ * Verify the Vercel Cron bearer secret. Returns the standard 401 response when
  * the `Authorization` header doesn't match CRON_SECRET, or null when it does.
  * Shared by every `/api/cron/*` route so the check can't drift between them.
  */
