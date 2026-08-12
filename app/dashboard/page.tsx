@@ -137,7 +137,8 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
   const linkParams = { view: activeView, month: selectedMonth, accountId: selectedAccountId, itemId: selectedItemId, scope: scopeParam };
   const extraParams = { itemId: selectedItemId, ...drillQuery, scope: scopeParam };
 
-  return (    <AppShell active={activeView} email={user?.email}>
+  return (
+    <AppShell active={activeView} email={user?.email}>
       {hasBanks && <AutoRefresh />}
 
       <PageHeader

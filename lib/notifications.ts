@@ -132,9 +132,14 @@ async function notifyNetWorthMilestones(
   }
 }
 
+// A broken connection stays broken until the user re-links it, so the subject
+// key carries the day: under `exact` dedupe an id-only key would alert once
+// ever, and the daily digest (which force-includes broken_bank) would go
+// silent with it. This keeps the legacy once-per-day cadence.
 async function notifyBrokenBanks(
   supabase: ReturnType<typeof createServiceClient>,
   userId: string,
+  today: string,
   tryNotify: TryNotify,
 ): Promise<void> {
   const { data: items } = await supabase
@@ -150,7 +155,7 @@ async function notifyBrokenBanks(
         title: `Bank connection issue: ${item.institution_name || "Bank"}`,
         body: `The connection to ${item.institution_name || "your bank"} needs to be updated (error: ${item.error_code || "unknown"}).`,
       },
-      `broken_bank:${item.id}`,
+      `broken_bank:${item.id}:${today}`,
     );
   }
 }
@@ -273,7 +278,7 @@ export async function processNotificationsForUser(userId: string) {
   await notifyBudgetEnvelopes(dashboardData, currentMonth, tryNotify);
   await notifyReachedGoals(supabase, userId, tryNotify);
   await notifyNetWorthMilestones(supabase, userId, dashboardData, tryNotify);
-  await notifyBrokenBanks(supabase, userId, tryNotify);
+  await notifyBrokenBanks(supabase, userId, today, tryNotify);
 }
 
 /**

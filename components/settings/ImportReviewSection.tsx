@@ -163,8 +163,12 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
   const columnOptions = (placeholder: string, includeNone = false) => (
     <>
       <option value="">{includeNone ? "None" : placeholder}</option>
+      {/* Keyed by index on purpose: CSV headers are arbitrary user input and
+          are routinely duplicated or blank, so a value-derived key collides.
+          The list is a fixed-order projection of one parsed file, never
+          reordered or spliced, which is exactly when an index key is correct. */}
       {(mapping?.headers ?? []).map((h, i) => (
-        <option key={`header-${h || "blank"}`} value={i}>
+        <option key={i} value={i}>
           {h || `Column ${i + 1}`}
         </option>
       ))}
@@ -231,18 +235,21 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
               <table className="w-full text-left text-xs">
                 <thead className="bg-panel text-muted">
                   <tr>
+                    {/* Index keys throughout this table: duplicate and blank
+                        CSV headers are normal, and two preview rows can be
+                        byte-identical, so a value-derived key collides. */}
                     {mapping.headers.map((h, i) => (
-                      <th key={`header-${h || "blank"}`} className="whitespace-nowrap p-2 font-semibold">
+                      <th key={i} className="whitespace-nowrap p-2 font-semibold">
                         {h || `Column ${i + 1}`}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {mapping.sample.map((r) => (
-                    <tr key={r.join("\u001f")} className="border-t border-panel-border">
+                  {mapping.sample.map((r, ri) => (
+                    <tr key={ri} className="border-t border-panel-border">
                       {mapping.headers.map((h, ci) => (
-                        <td key={`cell-${h || "blank"}-${r[ci] ?? ""}`} className="whitespace-nowrap p-2 text-muted">
+                        <td key={ci} className="whitespace-nowrap p-2 text-muted">
                           {r[ci] ?? ""}
                         </td>
                       ))}

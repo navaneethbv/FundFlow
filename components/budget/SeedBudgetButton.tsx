@@ -148,9 +148,10 @@ export default function SeedBudgetButton({
       <dialog
         open
         ref={dialogRef}
+        aria-modal="true"
         aria-labelledby="budget-proposal-title"
         onKeyDown={handleDialogKeyDown}
-        className="m-0 max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-card border border-panel-border bg-panel p-5 shadow-float sm:p-6"
+        className="relative m-0 max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-card border border-panel-border bg-panel p-5 shadow-float sm:p-6"
       >
         <div className="flex items-start gap-3">
           <Sparkles aria-hidden className="mt-1 h-5 w-5 text-accent" />

@@ -160,9 +160,10 @@ export default function CustomizeDrawer({
       <dialog
         open
         ref={dialogRef}
+        aria-modal="true"
         aria-labelledby="customize-widgets-title"
         onKeyDown={handleDialogKeyDown}
-        className="m-0 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-card border border-panel-border bg-panel p-5 shadow-float sm:p-6"
+        className="relative m-0 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-card border border-panel-border bg-panel p-5 shadow-float sm:p-6"
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 id="customize-widgets-title" className="text-xl font-bold">

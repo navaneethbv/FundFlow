@@ -52,8 +52,14 @@ export default function BreakdownBars({
                 value={Math.max(0, Math.min(100, row.pct))}
                 max={100}
                 aria-label={`${label}, ${row.pct}% of ${title.toLowerCase()}`}
-                className="h-2.5 w-full overflow-hidden rounded-full bg-panel-hover"
-                style={{ accentColor: color }}
+                // `appearance-none` is load-bearing: without it Blink/WebKit
+                // paint their own track and ignore `bg-panel-hover` and the
+                // radius. It also drops `accent-color`, so the fill is painted
+                // explicitly via the pseudo-elements, inheriting `currentColor`
+                // (Firefox fills `::-moz-progress-bar`, Blink/WebKit fill
+                // `::-webkit-progress-value` inside `::-webkit-progress-bar`).
+                className="h-2.5 w-full appearance-none overflow-hidden rounded-full bg-panel-hover [&::-moz-progress-bar]:rounded-full [&::-moz-progress-bar]:bg-[currentColor] [&::-webkit-progress-bar]:bg-transparent [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-[currentColor]"
+                style={{ color }}
               />
             </li>
           );

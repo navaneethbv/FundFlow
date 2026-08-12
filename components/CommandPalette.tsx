@@ -99,6 +99,7 @@ export default function CommandPalette({ items }: Readonly<{ items: Command[] }>
       />
       <dialog
         open
+        aria-modal="true"
         aria-label="Command palette"
         className="relative m-0 w-full max-w-lg rounded-card border border-panel-border bg-panel shadow-card"
       >

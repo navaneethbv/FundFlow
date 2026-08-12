@@ -99,8 +99,9 @@ export default function AddManualHoldingForm({
       <dialog
         open
         ref={dialogRef}
+        aria-modal="true"
         aria-labelledby="add-holding-title"
-        className="m-0 w-full max-w-md rounded-card border border-panel-border bg-panel p-5 shadow-float sm:p-6"
+        className="relative m-0 w-full max-w-md rounded-card border border-panel-border bg-panel p-5 shadow-float sm:p-6"
       >
         <h2 id="add-holding-title" className="text-xl font-bold">
           Add Holding

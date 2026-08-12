@@ -65,9 +65,13 @@ export default function GoalCardMenu({
   async function saveEdit(event: React.SyntheticEvent) {
     event.preventDefault();
     setError(null);
-    const parsedTarget = Number(targetAmount);
-    if (!name.trim() || !Number.isFinite(parsedTarget) || parsedTarget < 0) {
-      setError("Enter a name and a target of zero or more.");
+    // A positive target, matching GoalWizard's creation rule. `Number("")` is
+    // 0, so a "zero or more" check let a cleared field write `target_amount:
+    // 0` — which `goalTargetAmount` reads as an already-met target, rendering
+    // an untouched goal 100% complete and firing "Goal reached".
+    const parsedTarget = Number(targetAmount.trim());
+    if (!name.trim() || !Number.isFinite(parsedTarget) || parsedTarget <= 0) {
+      setError("Enter a name and a target greater than zero.");
       return;
     }
     setBusy(true);

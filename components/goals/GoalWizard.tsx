@@ -479,6 +479,7 @@ export default function GoalWizard({
   return (
     <dialog
       open
+      aria-modal="true"
       aria-label="New goal"
       className="fixed inset-0 z-50 m-0 flex flex-col overflow-y-auto border-0 bg-background p-0"
     >

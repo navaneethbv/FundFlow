@@ -324,8 +324,10 @@ describe("notifications manager", () => {
     });
 
     const processedNotifications: string[] = [];
+    const insertedRows: Array<{ type: string; subject_key: string | null }> = [];
     mockInsert.mockImplementation((val) => {
       processedNotifications.push(val.type);
+      insertedRows.push(val);
       return {
         select: vi.fn().mockReturnValue({
           single: () => Promise.resolve({ data: val, error: null }),
@@ -336,6 +338,13 @@ describe("notifications manager", () => {
     await processNotificationsForUser("user-1");
 
     expect(processedNotifications).toContain("broken_bank");
+
+    // The subject key must carry the day. Under `exact` dedupe an id-only key
+    // would alert once ever, so a connection that stays broken goes silent and
+    // takes the daily digest with it.
+    const brokenBank = insertedRows.find((row) => row.type === "broken_bank")!;
+    const today = new Date().toISOString().slice(0, 10);
+    expect(brokenBank.subject_key).toBe(`broken_bank:item-123:${today}`);
   });
 
   it("getUnreadNotificationCount returns unread count or 0 on error", async () => {

@@ -172,6 +172,7 @@ export default function MobileNavigation({
           />
           <dialog
             open
+            aria-modal="true"
             aria-label="All navigation"
             className="relative m-0 max-h-[85vh] w-full overflow-y-auto rounded-t-2xl border border-panel-border bg-panel p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-pop"
           >

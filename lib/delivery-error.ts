@@ -11,7 +11,11 @@
 /** The error_code column is `char_length(error_code) between 1 and 80`. */
 const ERROR_CODE_MAX = 80;
 
-const EMAIL_PATTERN = /\b[\w.%+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+\b/gi;
+// The local part is matched by exclusion, not by an allowlist: RFC-legal
+// addresses contain characters like `'` and `!`, and a `[\w.%+-]+` local part
+// leaves those prefixes behind ("o'brien@example.com" -> "o'[redacted]"),
+// which still leaks PII into the admin inbox and the logs.
+const EMAIL_PATTERN = /[^\s<>()[\]:;,"]+@[^\s<>()[\]:;,"]+\.[a-z]{2,}/gi;
 
 /** Alert summaries are documented as error messages only, never PII. */
 export function redactEmails(text: string): string {

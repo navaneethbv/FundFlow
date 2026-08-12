@@ -163,6 +163,7 @@ export default function TransactionEditor({
           />
           <dialog
             open
+            aria-modal="true"
             aria-labelledby={`${idPrefix}title-${transaction.id}`}
             className="relative m-0 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-[0.75rem] border border-panel-border bg-panel p-5 shadow-float sm:rounded-[0.75rem]"
           >

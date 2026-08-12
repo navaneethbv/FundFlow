@@ -297,14 +297,14 @@ export function buildAccountsPageData(
     const values = history.map((snapshot) =>
       displayBalance(group, snapshot.currentBalance)!,
     );
-    // Liability balances display absolute, but their change must follow the
-    // signed net-worth convention: growing debt is a negative change and
-    // paying debt down is a positive change, or "this month" would show
-    // debt growth as green success and payoff as red danger.
-    const isLiability = group === "credit" || group === "loan";
+    // Stays in the same space as the displayed balance and the sparkline: a
+    // card falling $5,200 -> $5,000 must read "-$200.00", not "+$200.00" next
+    // to a $5,000 balance and a declining spark. AccountRow prints this
+    // uncoloured, so it carries no tone to invert. The net-worth sign
+    // convention is applied where tone is actually derived: the group total.
     const rowSeries = history.map((snapshot, index) => ({
       date: snapshot.snapshotDate,
-      value: isLiability ? -values[index]! : values[index]!,
+      value: values[index]!,
     }));
     const freshness = humanizeUpdatedAt(account.updatedAt, now);
     const mask = account.mask ? ` (...${account.mask})` : "";
@@ -329,13 +329,18 @@ export function buildAccountsPageData(
     });
   }
 
-  for (const group of Object.values(groups)) {
+  for (const [groupKey, group] of Object.entries(groups)) {
     group.rows.sort((a, b) => a.name.localeCompare(b.name));
     const totals = new Map<string, number>();
     const changes = new Map<string, number>();
+    // AccountGroup colours this total success/danger, so it follows the signed
+    // net-worth convention: growing debt is a negative change and paying debt
+    // down is a positive one, or debt growth would render as green success.
+    const changeSign = groupKey === "credit" || groupKey === "loan" ? -1 : 1;
     for (const row of group.rows) {
       if (row.balance !== null) addAmount(totals, row.currency, row.balance);
-      if (row.monthChange) addAmount(changes, row.currency, row.monthChange.amount);
+      if (row.monthChange)
+        addAmount(changes, row.currency, changeSign * row.monthChange.amount);
     }
     group.totals = totalsFromMap(totals);
     group.changes = totalsFromMap(changes);
