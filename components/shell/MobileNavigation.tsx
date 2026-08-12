@@ -93,6 +93,7 @@ export default function MobileNavigation({
   active,
 }: Readonly<{ items: MobileNavItem[]; active: AppShellActive }>) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const activeKey = resolvedActive(active);
   const quickItems = items.filter((item) => QUICK_KEYS.has(item.key));
@@ -103,6 +104,7 @@ export default function MobileNavigation({
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     closeButtonRef.current?.focus();
+    const trigger = triggerRef.current;
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") setOpen(false);
@@ -111,6 +113,8 @@ export default function MobileNavigation({
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
+      // Restore focus to the "More" trigger when the dialog closes.
+      trigger?.focus();
     };
   }, [open]);
 
@@ -140,6 +144,7 @@ export default function MobileNavigation({
           );
         })}
         <button
+          ref={triggerRef}
           type="button"
           aria-expanded={open}
           aria-haspopup="dialog"
@@ -165,11 +170,11 @@ export default function MobileNavigation({
             className="absolute inset-0 h-full w-full cursor-default bg-black/50"
             onClick={() => setOpen(false)}
           />
-          <div
-            role="dialog"
-            aria-label="All navigation"
+          <dialog
+            open
             aria-modal="true"
-            className="relative max-h-[85vh] w-full overflow-y-auto rounded-t-2xl border border-panel-border bg-panel p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-pop"
+            aria-label="All navigation"
+            className="relative m-0 max-h-[85vh] w-full overflow-y-auto rounded-t-2xl border border-panel-border bg-panel p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-pop"
           >
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
@@ -265,7 +270,7 @@ export default function MobileNavigation({
                 </div>
               </section>
             </div>
-          </div>
+          </dialog>
         </div>
       )}
     </>

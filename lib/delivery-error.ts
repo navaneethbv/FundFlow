@@ -11,6 +11,10 @@
 /** The error_code column is `char_length(error_code) between 1 and 80`. */
 const ERROR_CODE_MAX = 80;
 
+// The local part is matched by exclusion, not by an allowlist: RFC-legal
+// addresses contain characters like `'` and `!`, and a `[\w.%+-]+` local part
+// leaves those prefixes behind ("o'brien@example.com" -> "o'[redacted]"),
+// which still leaks PII into the admin inbox and the logs.
 const EMAIL_PATTERN = /[^\s<>()[\]:;,"]+@[^\s<>()[\]:;,"]+\.[a-z]{2,}/gi;
 
 /** Alert summaries are documented as error messages only, never PII. */
@@ -28,7 +32,7 @@ export function describeDeliveryError(error: unknown): string {
     const detail = redactEmails(
       error.message
         .replace(/^Message failed:\s*/i, "")
-        .replace(new RegExp(`^${responseCode}\\s*`), "")
+        .replace(new RegExp(String.raw`^${responseCode}\s*`), "")
         .trim(),
     );
     return `smtp_${responseCode}: ${detail}`.slice(0, ERROR_CODE_MAX);

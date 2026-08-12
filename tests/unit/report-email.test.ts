@@ -45,6 +45,25 @@ describe("weekly report email", () => {
     expect(rendered.html).not.toContain("access_token");
   });
 
+  // Stripping the mask characters independently of the digits ate every
+  // literal x in a card name: "Amex Platinum ••••1234" became "Ame  Platinum".
+  it("strips the card mask without eating letters from the card name", () => {
+    const rendered = renderWeeklyReportEmail(
+      weeklyReportFixture({
+        cards: [
+          { name: "Amex Platinum ••••1234", amount: 40 },
+          { name: "Chase Freedom Flex", amount: 25 },
+        ],
+      }),
+      "https://fundflow.example/dashboard",
+    );
+
+    expect(rendered.text).toContain("Amex Platinum");
+    expect(rendered.text).toContain("Chase Freedom Flex");
+    expect(rendered.text).not.toContain("1234");
+    expect(rendered.html).not.toContain("1234");
+  });
+
   it("escapes daily digest notification content", () => {
     const rendered = renderDailyDigestEmail(
       [

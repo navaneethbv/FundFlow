@@ -1,5 +1,4 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { CanonicalFinanceTransaction } from "@/lib/finance-domain";
 import {
   buildBudgetEnvelopes,
   computeNetWorthSnapshot,
@@ -35,8 +34,8 @@ import { aggregateSpendWithSplits } from "@/lib/transaction-quality";
 import {
   fromTransactionRow,
   projectFinanceTransactions,
-  TRANSFER_GROUPS,
   UNCATEGORIZED,
+  type CanonicalFinanceTransaction,
   type FinanceFlow,
   type TransactionRow,
 } from "@/lib/finance-domain";
@@ -53,8 +52,6 @@ import {
   buildDashboardBudgetGroups,
   type DashboardBudgetGroup,
 } from "@/lib/dashboard-budget-groups";
-
-
 /**
  * Aggregations for the dashboard. Runs with the caller's user-scoped Supabase
  * client, so RLS guarantees only the current user's rows are visible.
@@ -68,7 +65,7 @@ import {
  * `TRANSFER_GROUPS` so the app has exactly one definition; prefer importing it
  * from `lib/finance-domain` in new code.
  */
-export const EXCLUDED_PFC = TRANSFER_GROUPS;
+export { TRANSFER_GROUPS as EXCLUDED_PFC } from "@/lib/finance-domain";
 
 export interface AccountSummary {
   id: string;

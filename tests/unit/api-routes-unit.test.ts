@@ -8,6 +8,7 @@ const mockCheckRateLimit = vi.fn().mockResolvedValue(true);
 const serviceDb = clientStub({
   accounts: { data: [] },
   data_exports: { data: [] },
+  profiles: { data: { ai_export_enabled: true } },
 });
 
 vi.mock("@/lib/http", async (importOriginal) => {

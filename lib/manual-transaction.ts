@@ -30,6 +30,17 @@ export type ManualTxnResult =
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_AMOUNT = 1_000_000;
 
+function validAccount(
+  account: { source?: unknown; id?: unknown } | undefined,
+): account is { source: "plaid" | "manual"; id: string } {
+  return Boolean(
+    account &&
+      (account.source === "plaid" || account.source === "manual") &&
+      typeof account.id === "string" &&
+      account.id,
+  );
+}
+
 /**
  * Validates a manual ledger entry and resolves its stored sign: a debit
  * (money out) is positive, a credit (money in) is negative, matching Plaid's
@@ -61,12 +72,7 @@ export function normalizeManualTxn(body: unknown, today: string): ManualTxnResul
   }
 
   const account = b.account as { source?: unknown; id?: unknown } | undefined;
-  if (
-    !account ||
-    (account.source !== "plaid" && account.source !== "manual") ||
-    typeof account.id !== "string" ||
-    !account.id
-  ) {
+  if (!validAccount(account)) {
     return { ok: false, error: "account must reference a plaid or manual account id" };
   }
 

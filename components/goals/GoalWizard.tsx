@@ -41,6 +41,12 @@ interface Draft {
   accountId: string;
   allocationMode: "none" | "fixed" | "entire";
   allocationAmount: string;
+  /**
+   * The goal row already created from this draft. Once the goal exists, a
+   * failed account link must not insert a second goal on retry; the retry
+   * reuses this id and only retries the allocation.
+   */
+  createdGoalId: string | null;
 }
 
 const EMPTY: Draft = {
@@ -55,6 +61,7 @@ const EMPTY: Draft = {
   accountId: "",
   allocationMode: "none",
   allocationAmount: "",
+  createdGoalId: null,
 };
 
 function isDirty(draft: Draft): boolean {
@@ -69,217 +76,47 @@ function isDirty(draft: Draft): boolean {
 
 const STEP_TITLES = ["Select", "Targets", "Contribution", "Budget"];
 
-export default function GoalWizard({
-  accounts,
-  defaultGoalType = "save_up",
-}: Readonly<{
+type GoalWizardProps = Readonly<{
   accounts: WizardAccount[];
   defaultGoalType?: GoalType;
+}>;
+
+function isStepValid(draft: Draft): boolean {
+  if (draft.step === 2) {
+    return draft.name.trim().length > 0 && Number(draft.targetAmount) > 0;
+  }
+  if (draft.step === 4 && draft.allocationMode === "fixed") {
+    return Number(draft.allocationAmount) > 0 && draft.accountId !== "";
+  }
+  if (draft.step === 4 && draft.allocationMode === "entire") {
+    return draft.accountId !== "";
+  }
+  return true;
+}
+
+function submitLabel(draft: Draft, busy: boolean): string {
+  if (busy) return draft.createdGoalId ? "Linking…" : "Creating…";
+  return draft.createdGoalId ? "Link account" : "Create goal";
+}
+
+function GoalWizardStepContent({
+  accounts,
+  draft,
+  error,
+  patch,
+}: Readonly<{
+  accounts: WizardAccount[];
+  draft: Draft;
+  error: string | null;
+  patch: (next: Partial<Draft>) => void;
 }>) {
-  const router = useRouter();
-  const supabase = createClient();
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<Draft>({ ...EMPTY, goalType: defaultGoalType });
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  /**
-   * Restore on open rather than on mount. Reading sessionStorage during the
-   * first render would not match the server's HTML, and restoring from an
-   * effect would both trigger a cascading render and reopen the wizard
-   * unprompted on an unrelated page visit. Opening it is the moment the user
-   * has actually asked for their draft back.
-   */
-  function openWizard() {
-    try {
-      const stored = sessionStorage.getItem(DRAFT_KEY);
-      if (stored) {
-        setDraft({ ...EMPTY, ...(JSON.parse(stored) as Partial<Draft>) });
-      }
-    } catch {
-      // A corrupt or unavailable store just means starting fresh.
-    }
-    setOpen(true);
-  }
-
-  useEffect(() => {
-    if (!open) return;
-    try {
-      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-    } catch {
-      // Private-mode storage failures must not break the wizard.
-    }
-  }, [draft, open]);
-
-  function patch(next: Partial<Draft>) {
-    setDraft((current) => ({ ...current, ...next }));
-  }
-
-  function discard() {
-    try {
-      sessionStorage.removeItem(DRAFT_KEY);
-    } catch {
-      /* nothing to clean up */
-    }
-    setDraft({ ...EMPTY, goalType: defaultGoalType });
-    setError(null);
-    setOpen(false);
-  }
-
-  function cancel() {
-    if (isDirty(draft) && !window.confirm("Discard this goal draft?")) return;
-    discard();
-  }
-
-  function stepValid(): boolean {
-    if (draft.step === 2) {
-      return draft.name.trim().length > 0 && Number(draft.targetAmount) > 0;
-    }
-    if (draft.step === 4 && draft.allocationMode === "fixed") {
-      return Number(draft.allocationAmount) > 0 && draft.accountId !== "";
-    }
-    if (draft.step === 4 && draft.allocationMode === "entire") {
-      return draft.accountId !== "";
-    }
-    return true;
-  }
-
-  async function finish() {
-    setError(null);
-    if (!stepValid()) {
-      setError("Fill in the highlighted fields first.");
-      return;
-    }
-    setBusy(true);
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      const targetAmount = Math.round(Number(draft.targetAmount) * 100) / 100;
-      const { data: goal, error: insertError } = await supabase
-        .from("goals")
-        .insert({
-          user_id: userData.user?.id,
-          name: draft.name.trim(),
-          target_amount: targetAmount,
-          target_date: draft.targetDate || null,
-          goal_type: draft.goalType,
-          image_slug: draft.slug,
-          monthly_contribution:
-            draft.monthlyContribution === ""
-              ? null
-              : Math.round(Number(draft.monthlyContribution) * 100) / 100,
-          spending_reduces: draft.spendingReduces,
-          target_balance: draft.goalType === "save_up" ? targetAmount : 0,
-        })
-        .select("id")
-        .single();
-      if (insertError) {
-        setError(insertError.message);
-        return;
-      }
-
-      if (draft.allocationMode !== "none" && draft.accountId) {
-        // The allocation goes through the API, not a direct insert: its
-        // cross-goal rules need the database function's row lock.
-        const response = await fetch("/api/goals/accounts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            goalId: goal.id,
-            accountId: draft.accountId,
-            useEntireBalance: draft.allocationMode === "entire",
-            allocatedAmount:
-              draft.allocationMode === "fixed"
-                ? Math.round(Number(draft.allocationAmount) * 100) / 100
-                : undefined,
-          }),
-        });
-        if (!response.ok) {
-          const body = (await response.json().catch(() => null)) as
-            | { error?: string }
-            | null;
-          // The goal itself saved; say so rather than implying nothing happened.
-          setError(
-            `Goal created, but the account could not be linked: ${
-              body?.error ?? "please try again from the goal card."
-            }`,
-          );
-          router.refresh();
-          return;
-        }
-      }
-
-      discard();
-      router.refresh();
-    } catch {
-      setError("Could not reach the server. Check your connection.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (!open) {
-    return (
-      <Button type="button" onClick={openWizard}>
-        Add goal
-      </Button>
-    );
-  }
-
   const selectedAccount = accounts.find((item) => item.id === draft.accountId);
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="New goal"
-      className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-background"
-    >
-      <div className="border-b border-panel-border">
-        <div className="flex items-center justify-between gap-2 px-4 py-3 sm:px-6">
-          <button
-            type="button"
-            onClick={draft.step > 1 ? () => patch({ step: draft.step - 1 }) : cancel}
-            aria-label={draft.step > 1 ? "Back" : "Cancel"}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"
-          >
-            <ChevronLeft aria-hidden className="h-5 w-5" />
-          </button>
-          <ol className="flex gap-2" aria-label={`Step ${draft.step} of 4`}>
-            {STEP_TITLES.map((title, index) => (
-              <li
-                key={title}
-                aria-current={index === draft.step - 1 ? "step" : undefined}
-                className={
-                  index === draft.step - 1
-                    ? "rounded-full bg-accent-soft px-3 py-1.5 text-xs font-bold text-accent"
-                    : "hidden rounded-full px-3 py-1.5 text-xs font-semibold text-muted sm:block"
-                }
-              >
-                {title}
-              </li>
-            ))}
-          </ol>
-          <button
-            type="button"
-            onClick={cancel}
-            aria-label="Close"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"
-          >
-            <X aria-hidden className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="h-1 bg-panel-2">
-          <div
-            className="h-1 bg-accent transition-all duration-150"
-            style={{ width: `${(draft.step / STEP_TITLES.length) * 100}%` }}
-          />
-        </div>
-      </div>
+    <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-6 sm:px-6">
+      <h2 className="text-lg font-semibold">{STEP_TITLES[draft.step - 1]}</h2>
 
-      <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-6 sm:px-6">
-        <h2 className="text-lg font-semibold">{STEP_TITLES[draft.step - 1]}</h2>
-
-        {draft.step === 1 && (
+      {draft.step === 1 && (
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {GOAL_TEMPLATES.map((template) => {
             const selected = draft.slug === template.slug;
@@ -334,7 +171,7 @@ export default function GoalWizard({
               value={draft.name}
               onChange={(e) => patch({ name: e.target.value })}
               maxLength={120}
-            />
+            />{" "}
           </label>
           <label className="text-sm font-semibold">
             <span className="mb-1 block text-xs text-muted">Target amount</span>
@@ -466,7 +303,9 @@ export default function GoalWizard({
                       min="0.01"
                       step="0.01"
                       value={draft.allocationAmount}
-                      onChange={(e) => patch({ allocationAmount: e.target.value })}
+                      onChange={(e) =>
+                        patch({ allocationAmount: e.target.value })
+                      }
                     />
                   </label>
                 )}
@@ -481,12 +320,218 @@ export default function GoalWizard({
         </div>
       )}
 
-        {error && (
-          <p role="alert" className="mt-4 text-sm text-danger">
-            {error}
-          </p>
-        )}
+      {error && (
+        <p role="alert" className="mt-4 text-sm text-danger">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+export default function GoalWizard({
+  accounts,
+  defaultGoalType = "save_up",
+}: GoalWizardProps) {
+  const router = useRouter();
+  const supabase = createClient();
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<Draft>({ ...EMPTY, goalType: defaultGoalType });
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  /**
+   * Restore on open rather than on mount. Reading sessionStorage during the
+   * first render would not match the server's HTML, and restoring from an
+   * effect would both trigger a cascading render and reopen the wizard
+   * unprompted on an unrelated page visit. Opening it is the moment the user
+   * has actually asked for their draft back.
+   */
+  function openWizard() {
+    try {
+      const stored = sessionStorage.getItem(DRAFT_KEY);
+      if (stored) {
+        setDraft({ ...EMPTY, ...(JSON.parse(stored) as Partial<Draft>) });
+      }
+    } catch {
+      // A corrupt or unavailable store just means starting fresh.
+    }
+    setOpen(true);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    } catch {
+      // Private-mode storage failures must not break the wizard.
+    }
+  }, [draft, open]);
+
+  function patch(next: Partial<Draft>) {
+    setDraft((current) => ({ ...current, ...next }));
+  }
+
+  function discard() {
+    try {
+      sessionStorage.removeItem(DRAFT_KEY);
+    } catch {
+      /* nothing to clean up */
+    }
+    setDraft({ ...EMPTY, goalType: defaultGoalType });
+    setError(null);
+    setOpen(false);
+  }
+
+  function cancel() {
+    if (isDirty(draft) && !window.confirm("Discard this goal draft?")) return;
+    discard();
+  }
+
+  async function finish() {
+    setError(null);
+    if (!isStepValid(draft)) {
+      setError("Fill in the highlighted fields first.");
+      return;
+    }
+    setBusy(true);
+    try {
+      // A retry after a failed account link reuses the already-created goal
+      // instead of inserting a duplicate row from the same draft.
+      let goalId = draft.createdGoalId;
+      if (!goalId) {
+        const { data: userData } = await supabase.auth.getUser();
+        const targetAmount = Math.round(Number(draft.targetAmount) * 100) / 100;
+        const { data: goal, error: insertError } = await supabase
+          .from("goals")
+          .insert({
+            user_id: userData.user?.id,
+            name: draft.name.trim(),
+            target_amount: targetAmount,
+            target_date: draft.targetDate || null,
+            goal_type: draft.goalType,
+            image_slug: draft.slug,
+            monthly_contribution:
+              draft.monthlyContribution === ""
+                ? null
+                : Math.round(Number(draft.monthlyContribution) * 100) / 100,
+            spending_reduces: draft.spendingReduces,
+            target_balance: draft.goalType === "save_up" ? targetAmount : 0,
+          })
+          .select("id")
+          .single();
+        if (insertError) {
+          setError(insertError.message);
+          return;
+        }
+        goalId = goal.id;
+        patch({ createdGoalId: goal.id });
+      }
+
+      if (draft.allocationMode !== "none" && draft.accountId) {
+        // The allocation goes through the API, not a direct insert: its
+        // cross-goal rules need the database function's row lock.
+        const response = await fetch("/api/goals/accounts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            goalId,
+            accountId: draft.accountId,
+            useEntireBalance: draft.allocationMode === "entire",
+            allocatedAmount:
+              draft.allocationMode === "fixed"
+                ? Math.round(Number(draft.allocationAmount) * 100) / 100
+                : undefined,
+          }),
+        });
+        if (!response.ok) {
+          const body = (await response.json().catch(() => null)) as
+            | { error?: string }
+            | null;
+          // The goal itself saved; say so rather than implying nothing happened.
+          setError(
+            `Goal created, but the account could not be linked: ${
+              body?.error ?? "please try again from the goal card."
+            }`,
+          );
+          router.refresh();
+          return;
+        }
+      }
+
+      discard();
+      router.refresh();
+    } catch {
+      setError("Could not reach the server. Check your connection.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <Button type="button" onClick={openWizard}>
+        Add goal
+      </Button>
+    );
+  }
+
+  return (
+    <dialog
+      open
+      aria-modal="true"
+      aria-label="New goal"
+      className="fixed inset-0 z-50 m-0 flex flex-col overflow-y-auto border-0 bg-background p-0"
+    >
+      <div className="border-b border-panel-border">
+        <div className="flex items-center justify-between gap-2 px-4 py-3 sm:px-6">
+          <button
+            type="button"
+            onClick={draft.step > 1 ? () => patch({ step: draft.step - 1 }) : cancel}
+            disabled={busy || draft.createdGoalId !== null}
+            aria-label={draft.step > 1 ? "Back" : "Cancel"}
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"
+          >
+            <ChevronLeft aria-hidden className="h-5 w-5" />
+          </button>
+          <ol className="flex gap-2" aria-label={`Step ${draft.step} of 4`}>
+            {STEP_TITLES.map((title, index) => (
+              <li
+                key={title}
+                aria-current={index === draft.step - 1 ? "step" : undefined}
+                className={
+                  index === draft.step - 1
+                    ? "rounded-full bg-accent-soft px-3 py-1.5 text-xs font-bold text-accent"
+                    : "hidden rounded-full px-3 py-1.5 text-xs font-semibold text-muted sm:block"
+                }
+              >
+                {title}
+              </li>
+            ))}
+          </ol>
+          <button
+            type="button"
+            onClick={cancel}
+            aria-label="Close"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"
+          >
+            <X aria-hidden className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="h-1 bg-panel-2">
+          <div
+            className="h-1 bg-accent transition-all duration-150"
+            style={{ width: `${(draft.step / STEP_TITLES.length) * 100}%` }}
+          />
+        </div>
       </div>
+
+      <GoalWizardStepContent
+        accounts={accounts}
+        draft={draft}
+        error={error}
+        patch={patch}
+      />
 
       <div className="border-t border-panel-border px-4 py-4 sm:px-6">
         <div className="mx-auto flex w-full max-w-2xl justify-center gap-3">
@@ -502,9 +547,9 @@ export default function GoalWizard({
           {draft.step < 4 ? (
             <Button
               type="button"
-              disabled={!stepValid()}
+              disabled={!isStepValid(draft)}
               onClick={() => {
-                if (!stepValid()) return;
+                if (!isStepValid(draft)) return;
                 patch({ step: draft.step + 1 });
               }}
             >
@@ -512,11 +557,11 @@ export default function GoalWizard({
             </Button>
           ) : (
             <Button type="button" disabled={busy} onClick={finish}>
-              {busy ? "Creating…" : "Create goal"}
+              {submitLabel(draft, busy)}
             </Button>
           )}
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

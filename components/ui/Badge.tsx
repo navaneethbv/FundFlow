@@ -1,9 +1,8 @@
 import { cn } from "@/lib/cn";
 
 export type BadgeTone = "neutral" | "success" | "danger" | "warning" | "accent";
-type Tone = BadgeTone;
 
-const tones: Record<Tone, string> = {
+const tones: Record<BadgeTone, string> = {
   neutral: "border-panel-border bg-panel-2 text-muted",
   success: "border-success/25 bg-success/10 text-success",
   danger: "border-danger/25 bg-danger/10 text-danger",
@@ -16,7 +15,7 @@ export default function Badge({
   className,
   children,
   ...props
-}: React.HTMLAttributes<HTMLSpanElement> & { tone?: Tone }) {
+}: React.HTMLAttributes<HTMLSpanElement> & { tone?: BadgeTone }) {
   return (
     <span
       className={cn(

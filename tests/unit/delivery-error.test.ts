@@ -71,6 +71,17 @@ describe("redactEmails", () => {
       "connection reset by peer",
     );
   });
+
+  // A local part is not limited to [\w.%+-]; an allowlist pattern leaves the
+  // leading characters behind, which still puts the address in the alert inbox.
+  it("redacts the whole address when the local part has RFC-legal punctuation", () => {
+    expect(redactEmails("bounced for o'brien@example.com")).toBe(
+      "bounced for [redacted]",
+    );
+    expect(redactEmails("bounced for a!b#c$d@example.com")).toBe(
+      "bounced for [redacted]",
+    );
+  });
 });
 
 describe("isPermanentDeliveryError", () => {

@@ -58,6 +58,12 @@ describe("report-delivery", () => {
       new Date("2026-07-15T12:00:00Z"),
     );
     await markWeeklyDeliveryFailed(supabase as never, "user-1", "del-1", "ERR_SMTP");
+    expect(supabase.writtenTo("weekly_report_deliveries")).toEqual({
+      status: "sent",
+      provider_message_id: "msg-123",
+      sent_at: "2026-07-15T12:00:00.000Z",
+      error_code: null,
+    });
   });
 
   it("handles conflict retry in claimWeeklyDelivery and throws query errors", async () => {

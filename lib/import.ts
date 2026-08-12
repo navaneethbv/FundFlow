@@ -25,6 +25,10 @@ export interface ImportParseResult {
 
 /** Minimal RFC-4180 parser: quoted fields, escaped quotes, CRLF/LF. */
 export function parseCsv(text: string): string[][] {
+  // A UTF-8 BOM (EF BB BF) lands at the start of text files exported from
+  // Excel/Google Sheets; without stripping it the first header cell carries
+  // the invisible characters and column auto-detection fails.
+  const body = text.codePointAt(0) === 0xfeff ? text.slice(1) : text;
   const rows: string[][] = [];
   let field = "";
   let row: string[] = [];
@@ -41,11 +45,11 @@ export function parseCsv(text: string): string[][] {
     row = [];
   };
 
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i]!;
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i]!;
     if (inQuotes) {
       if (ch === '"') {
-        if (text[i + 1] === '"') {
+        if (body[i + 1] === '"') {
           field += '"';
           i++;
         } else {

@@ -38,32 +38,29 @@ export default function BreakdownBars({
   return (
     <div>
       <ul className="space-y-3">
-        {chartRows.map((row) => {
+        {chartRows.map((row, index) => {
           const label = displayLabel(row.label);
           return (
-            <li key={row.label} data-breakdown-bar={label}>
+            <li key={`${index}-${row.label}`} data-breakdown-bar={label}>
               <div className="mb-1.5 flex justify-between gap-4 text-sm">
                 <span className="font-medium">{label}</span>
                 <span data-money className="tabular-nums font-semibold">
                   {formatCurrency(row.amount, currency)} ({row.pct}%)
                 </span>
               </div>
-              <div
-                role="progressbar"
+              <progress
+                value={Math.max(0, Math.min(100, row.pct))}
+                max={100}
                 aria-label={`${label}, ${row.pct}% of ${title.toLowerCase()}`}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={row.pct}
-                className="h-2.5 overflow-hidden rounded-full bg-panel-hover"
-              >
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    background: color,
-                    width: `${Math.max(0, Math.min(100, row.pct))}%`,
-                  }}
-                />
-              </div>
+                // `appearance-none` is load-bearing: without it Blink/WebKit
+                // paint their own track and ignore `bg-panel-hover` and the
+                // radius. It also drops `accent-color`, so the fill is painted
+                // explicitly via the pseudo-elements, inheriting `currentColor`
+                // (Firefox fills `::-moz-progress-bar`, Blink/WebKit fill
+                // `::-webkit-progress-value` inside `::-webkit-progress-bar`).
+                className="h-2.5 w-full appearance-none overflow-hidden rounded-full bg-panel-hover [&::-moz-progress-bar]:rounded-full [&::-moz-progress-bar]:bg-[currentColor] [&::-webkit-progress-bar]:bg-transparent [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-[currentColor]"
+                style={{ color }}
+              />
             </li>
           );
         })}

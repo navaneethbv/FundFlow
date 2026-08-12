@@ -55,8 +55,9 @@ export default function SignupForm() {
   return (
     <div className="space-y-6">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Email">
+        <Field label="Email" htmlFor="signup-email">
           <Input
+            id="signup-email"
             type="email"
             required
             placeholder="you@example.com"
@@ -64,8 +65,9 @@ export default function SignupForm() {
             onChange={(e) => setEmail(e.target.value)}
           />
         </Field>
-        <Field label="Password">
+        <Field label="Password" htmlFor="signup-password">
           <Input
+            id="signup-password"
             type="password"
             required
             placeholder="At least 10 characters"

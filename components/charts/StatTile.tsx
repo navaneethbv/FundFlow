@@ -33,7 +33,9 @@ export default function StatTile({
   // one thing a delta must never do: imply a movement that did not happen.
   const isFlat = delta === 0;
   const isGood = delta !== undefined && (delta > 0) === upIsGood;
-  const deltaClass = isFlat ? "text-muted" : isGood ? "text-success" : "text-danger";
+  let deltaClass = "text-danger";
+  if (isFlat) deltaClass = "text-muted";
+  else if (isGood) deltaClass = "text-success";
 
   return (
     <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">

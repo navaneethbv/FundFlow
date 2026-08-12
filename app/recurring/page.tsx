@@ -10,6 +10,7 @@ import SegmentedControl from "@/components/ui/SegmentedControl";
 import ButtonLink from "@/components/ui/ButtonLink";
 import { ChevronLeft, ChevronRight } from "@/components/ui/icons";
 import { formatMonth } from "@/lib/format";
+import { localDateKey, localMonthKey } from "@/lib/format-date";
 import { loadRecurringData } from "@/lib/recurring-data";
 import { serializeFinancialScope } from "@/lib/financial-scope";
 import { isFeatureEnabled } from "@/lib/feature-flags";
@@ -26,7 +27,7 @@ interface PageProps {
 }
 
 const MONTH_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
-const RECURRING_TABS: RecurringTab[] = ["upcoming", "complete", "manage"];
+const RECURRING_TABS = new Set<RecurringTab>(["upcoming", "complete", "manage"]);
 
 function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -39,7 +40,7 @@ function shiftMonth(month: string, delta: number): string {
 }
 
 function parseTab(value: string | undefined): RecurringTab {
-  return RECURRING_TABS.includes(value as RecurringTab) ? (value as RecurringTab) : "upcoming";
+  return RECURRING_TABS.has(value as RecurringTab) ? (value as RecurringTab) : "upcoming";
 }
 
 function recurringHref(input: { month: string; scope?: string; tab?: RecurringTab }): string {
@@ -59,8 +60,8 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
   } = await supabase.auth.getUser();
   if (!user) notFound();
 
-  const currentMonth = new Date().toISOString().slice(0, 7);
-  const today = new Date().toISOString().slice(0, 10);
+  const currentMonth = localMonthKey();
+  const today = localDateKey();
   const rawMonth = first(params.month);
   const month = rawMonth && MONTH_REGEX.test(rawMonth) ? rawMonth : currentMonth;
   const tab = parseTab(first(params.tab));

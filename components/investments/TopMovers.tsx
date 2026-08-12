@@ -10,7 +10,7 @@ export default function TopMovers({
   return (
     <ul className="space-y-2">
       {movers.map((m) => (
-        <li key={`${m.name}-${m.ticker ?? ""}`} className="flex items-center justify-between text-sm">
+        <li key={m.id} className="flex items-center justify-between text-sm">
           <span>
             {m.name}
             {m.ticker && <span className="ml-1 text-xs text-muted">{m.ticker}</span>}

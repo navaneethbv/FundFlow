@@ -13,21 +13,28 @@ interface SessionRow {
 export default function SessionsSection({ initialSessions }: Readonly<{ initialSessions: SessionRow[] }>) {
   const [sessions, setSessions] = useState(initialSessions);
   const [status, setStatus] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   async function revoke(id: string) {
+    if (busyId) return;
     setStatus(null);
-    const res = await fetch("/api/settings/sessions", {
-      method: "DELETE",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ session_id: id }),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setStatus(json.error ?? "Could not revoke session.");
-      return;
+    setBusyId(id);
+    try {
+      const res = await fetch("/api/settings/sessions", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ session_id: id }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setStatus(json.error ?? "Could not revoke session.");
+        return;
+      }
+      setSessions((current) => current.filter((session) => session.id !== id));
+      setStatus("Session revoked.");
+    } finally {
+      setBusyId(null);
     }
-    setSessions((current) => current.filter((session) => session.id !== id));
-    setStatus("Session revoked.");
   }
 
   return (
@@ -43,8 +50,14 @@ export default function SessionsSection({ initialSessions }: Readonly<{ initialS
                 {session.current && <span className="ml-2 text-xs text-muted">current</span>}
               </span>
               {!session.current && (
-                <Button size="sm" variant="danger" onClick={() => revoke(session.id)}>
-                  Revoke
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={() => revoke(session.id)}
+                  disabled={busyId !== null}
+                  loading={busyId === session.id}
+                >
+                  {busyId === session.id ? "Revoking…" : "Revoke"}
                 </Button>
               )}
             </li>

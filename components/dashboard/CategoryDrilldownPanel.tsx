@@ -17,6 +17,7 @@ export interface DrillLinkParams {
   month?: string;
   accountId?: string;
   itemId?: string;
+  scope?: string;
 }
 
 function ledgerUrl(params: Record<string, string | undefined>): string {

@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
     const [{ data: goal }, { data: account }] = await Promise.all([
       supabase
         .from("goals")
-        .select("id, goal_type, starting_balance")
+        .select("id, goal_type, starting_balance, target_amount")
         .eq("id", goalId)
         .eq("user_id", user.id)
         .maybeSingle(),
@@ -121,9 +121,20 @@ export async function POST(request: NextRequest) {
       goal.starting_balance === null &&
       isLiabilityAccount(account.type as string | null)
     ) {
+      const startingBalance = account.current_balance ?? 0;
+      // `target_balance` mirrors the entered payoff amount so a reader of the
+      // column (the edit menu, say) does not see a hardcoded zero. When no
+      // amount was entered it stays 0, meaning "pay it all off".
+      const targetBalance = Math.max(
+        0,
+        Math.round((startingBalance - (goal.target_amount ?? 0)) * 100) / 100,
+      );
       const { error: baselineError } = await supabase
         .from("goals")
-        .update({ starting_balance: account.current_balance ?? 0 })
+        .update({
+          starting_balance: startingBalance,
+          target_balance: goal.target_amount ? targetBalance : 0,
+        })
         .eq("id", goalId)
         .eq("user_id", user.id)
         .is("starting_balance", null);

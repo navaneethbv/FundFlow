@@ -22,11 +22,10 @@ export default function SegmentedControl({
   ariaLabel,
 }: Readonly<{ items: SegmentedControlItem[]; ariaLabel: string }>) {
   return (
-    <div
-      role="group"
-      aria-label={ariaLabel}
+    <fieldset
       className="inline-flex items-center gap-0.5 rounded-full bg-panel-2 p-1"
     >
+      <legend className="sr-only">{ariaLabel}</legend>
       {items.map((item) => (
         <Link
           key={item.label}
@@ -47,6 +46,6 @@ export default function SegmentedControl({
           {item.label}
         </Link>
       ))}
-    </div>
+    </fieldset>
   );
 }

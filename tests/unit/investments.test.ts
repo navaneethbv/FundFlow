@@ -232,7 +232,9 @@ describe("buildInvestmentsPage", () => {
       { holdingId: "a", snapshotDate: "2026-07-30", quantity: 10, price: 110, value: 1100 },
     ];
     const page = buildInvestmentsPage([holding({ id: "a" })], snapshots);
-    expect(page.topMovers).toEqual([{ name: "Vanguard Total Stock", ticker: "VTI", changePct: 10 }]);
+    expect(page.topMovers).toEqual([
+      { id: "a", name: "Vanguard Total Stock", ticker: "VTI", changePct: 10 },
+    ]);
   });
 
   it("returns null topMovers when no holding has snapshot history", () => {

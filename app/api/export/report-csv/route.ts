@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireUser, errorResponse } from "@/lib/http";
 import { toCsv } from "@/lib/csv";
+import { partitionCashFlowByCurrency } from "@/lib/cash-flow";
 import { isExportAllowed } from "@/lib/export";
 import { loadReportData, resolveReportScope } from "@/lib/reports-data";
 import {
@@ -59,12 +60,25 @@ export async function GET(request: NextRequest) {
       scope: serializeFinancialScope(scope) ?? null,
     };
 
-    const { transactions, truncated } = await loadReportData(supabase, {
-      scope,
-      filters,
-    });
+    const { transactions, currencyByAccountId, truncated } =
+      await loadReportData(supabase, {
+        scope,
+        filters,
+      });
 
-    const rows = transactions.map((row) => [
+    // The page partitions the visible report by currency and emits a single
+    // unlabeled amount column, so the CSV must carry the same partition.
+    // Without it, differently denominated rows would be combined in one file.
+    const requestedCurrency = request.nextUrl.searchParams.get("currency");
+    const byCurrency = partitionCashFlowByCurrency(
+      transactions,
+      currencyByAccountId,
+    );
+    const exportRows = requestedCurrency
+      ? (byCurrency.get(requestedCurrency) ?? [])
+      : transactions;
+
+    const rows = exportRows.map((row) => [
       row.date,
       row.merchant || "Unknown",
       row.signedAmount,

@@ -6,6 +6,21 @@ export interface CardStyle {
   network: "visa" | "mastercard" | "amex" | "apple" | "discover" | "generic";
 }
 
+function detectNetwork(normName: string): CardStyle["network"] {
+  if (normName.includes("visa")) return "visa";
+  if (normName.includes("mastercard") || normName.includes("mc")) return "mastercard";
+  if (
+    normName.includes("amex") ||
+    normName.includes("american express") ||
+    normName.includes("blue cash")
+  ) {
+    return "amex";
+  }
+  if (normName.includes("apple")) return "apple";
+  if (normName.includes("discover")) return "discover";
+  return "generic";
+}
+
 /**
  * Detect the design tokens for a card based on its name and Plaid metadata.
  */
@@ -18,22 +33,7 @@ export function detectCardDesign(
   const normName = `${name ?? ""} ${officialName ?? ""}`.toLowerCase();
 
   // 1. Identify Card Network
-  let network: CardStyle["network"] = "generic";
-  if (normName.includes("visa")) {
-    network = "visa";
-  } else if (normName.includes("mastercard") || normName.includes("mc")) {
-    network = "mastercard";
-  } else if (
-    normName.includes("amex") ||
-    normName.includes("american express") ||
-    normName.includes("blue cash")
-  ) {
-    network = "amex";
-  } else if (normName.includes("apple")) {
-    network = "apple";
-  } else if (normName.includes("discover")) {
-    network = "discover";
-  }
+  const network = detectNetwork(normName);
 
   // 2. Checking / Debit Accounts (Depository)
   if (type === "depository" || subtype === "checking" || subtype === "savings") {

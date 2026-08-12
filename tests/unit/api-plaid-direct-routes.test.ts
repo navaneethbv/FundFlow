@@ -304,7 +304,11 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
     it("rejects a public token minted by a different link token", async () => {
       mockLinkTokenGet.mockResolvedValue({
         data: {
-          link_sessions: [{ on_success: { public_token: "other-public-token" } }],
+          link_sessions: [{
+            results: {
+              item_add_results: [{ public_token: "other-public-token" }],
+            },
+          }],
         },
       });
       const req = new NextRequest("http://localhost/api/plaid/exchange", {

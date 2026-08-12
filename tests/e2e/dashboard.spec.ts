@@ -17,16 +17,16 @@ test.describe("dashboard completion", () => {
     await expect(page.getByText("Fixed", { exact: true })).toBeVisible();
     await expect(page.getByText("Flexible", { exact: true })).toBeVisible();
     await expect(page.getByText("Non-monthly", { exact: true })).toBeVisible();
-    await expect(page.getByText("Top movers today", { exact: true })).toBeVisible();
+    await expect(page.getByText("Top movers", { exact: true })).toBeVisible();
     await expect(page.getByText("+$500.00 today", { exact: false })).toBeVisible();
 
     await page.getByRole("button", { name: "Customize" }).click();
     const dialog = page.getByRole("dialog", { name: "Customize widgets" });
     await dialog.getByLabel(/Investments/).uncheck();
     await dialog.getByRole("button", { name: "Save layout" }).click();
-    await expect(page.getByText("Top movers today", { exact: true })).toBeHidden();
+    await expect(page.getByText("Top movers", { exact: true })).toBeHidden();
     await page.reload();
-    await expect(page.getByText("Top movers today", { exact: true })).toBeHidden();
+    await expect(page.getByText("Top movers", { exact: true })).toBeHidden();
 
     await page.setViewportSize({ width: 375, height: 812 });
     await expectNoHorizontalPageScroll(page);

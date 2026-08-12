@@ -75,7 +75,12 @@ export const EMPTY_CUMULATIVE_SPEND: CumulativeSpendView = {
 export interface DashboardInvestmentSummary {
   total: number;
   dayChange: { amount: number; pct: number } | null;
-  topMovers: { name: string; ticker: string | null; changePct: number }[] | null;
+  topMovers: {
+    id: string;
+    name: string;
+    ticker: string | null;
+    changePct: number;
+  }[] | null;
 }
 
 /**

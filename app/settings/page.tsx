@@ -33,7 +33,6 @@ import DashboardPrefsSection from "@/components/settings/DashboardPrefsSection";
 import DemoDataSection from "@/components/settings/DemoDataSection";
 import { buildAuditLogPage, buildSessionList } from "@/lib/security-account";
 import { currentSessionId } from "@/lib/http";
-import { EXCLUDED_PFC } from "@/lib/dashboard";
 import { suggestBudgets } from "@/lib/insights";
 import ButtonLink from "@/components/ui/ButtonLink";
 import Panel from "@/components/ui/Panel";
@@ -276,12 +275,11 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
       await Promise.all([
         supabase.from("budgets").select("id, category, monthly_limit, rollover_enabled, household_id").order("category"),
         supabase.from("category_overrides").select("id, source_category, display_category").order("source_category"),
-        supabase
-          .from("transactions")
-          .select("date, amount, pfc_primary")
-          .eq("user_id", userId)
-          .gte("date", monthStart(-4))
-          .lt("date", monthStart(0)),
+        supabase.rpc("budget_suggestion_history", {
+          p_user_id: userId,
+          p_start: monthStart(-4),
+          p_end: monthStart(0),
+        }),
         supabase
           .from("sinking_funds")
           .select("id, name, target_amount, due_date, cadence, custom_interval_months, cycle_anchor_date")
@@ -289,11 +287,12 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
       ]);
     const { data: households } = await supabase.from("households").select("id").order("created_at", { ascending: false }).limit(1);
     const historyByMonthCategory = new Map<string, number>();
-    for (const row of (spendHistoryRows ?? []) as Array<{ date: string; amount: number; pfc_primary: string | null }>) {
-      const amount = Number(row.amount);
-      if (amount <= 0 || EXCLUDED_PFC.has(row.pfc_primary ?? "")) continue;
-      const key = `${row.date.slice(0, 7)}|${row.pfc_primary ?? "UNCATEGORIZED"}`;
-      historyByMonthCategory.set(key, (historyByMonthCategory.get(key) ?? 0) + amount);
+    // The RPC aggregates by (month, category) in SQL, so the row count is the
+    // number of categories across four months — bounded and complete — instead
+    // of a raw transaction read that PostgREST could silently truncate.
+    for (const row of (spendHistoryRows ?? []) as Array<{ month: string; category: string; amount: number }>) {
+      const key = `${row.month}|${row.category}`;
+      historyByMonthCategory.set(key, (historyByMonthCategory.get(key) ?? 0) + Number(row.amount));
     }
     const budgetSuggestions = suggestBudgets({
       history: [...historyByMonthCategory.entries()].map(([key, amount]) => {

@@ -21,7 +21,7 @@ describe("command palette", () => {
     expect(source).toContain("ArrowUp");
     expect(source).toContain("Enter");
     // Accessible dialog semantics
-    expect(source).toContain('role="dialog"');
+    expect(source).toContain("<dialog");
     expect(source).toContain("aria-label");
   });
 

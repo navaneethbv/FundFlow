@@ -2,12 +2,12 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/service";
 import { logError } from "@/lib/log";
 
-export interface SnapshotPlaidAccount {
+export type SnapshotPlaidAccount = {
   id: string;
   current_balance: number | string | null;
   available_balance: number | string | null;
   iso_currency_code: string | null;
-}
+};
 
 export interface SnapshotManualAccount {
   id: string;

@@ -72,6 +72,12 @@ function RowMenu({
   }, [open]);
 
   async function saveSortOrder() {
+    // An empty field parses to 0, which would silently overwrite a real order
+    // with zero; treat it as an invalid edit and revert to the stored value.
+    if (sortOrder.trim() === "") {
+      setSortOrder(String(line.sortOrder));
+      return;
+    }
     const value = Number(sortOrder);
     if (!Number.isInteger(value) || value < 0) {
       setSortOrder(String(line.sortOrder));
@@ -138,7 +144,7 @@ function RowMenu({
                 onUpdate(line, { rolloverEnabled: event.target.checked })
               }
             />
-            Rollover unused budget
+            {" "}Rollover unused budget
           </label>
           <label className="block text-xs font-semibold text-muted">
             Sort order

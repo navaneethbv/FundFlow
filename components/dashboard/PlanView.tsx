@@ -73,7 +73,12 @@ export default function PlanView({
   data: DashboardData;
   goals: Goal[];
   billsGrouping?: BillGrouping;
-  billsLinkParams?: { month?: string; accountId?: string; itemId?: string };
+  billsLinkParams?: {
+    month?: string;
+    accountId?: string;
+    itemId?: string;
+    scope?: string;
+  };
   prefs?: { hideBillCalendar?: boolean; hideWhatIf?: boolean; hideDebt?: boolean };
 }>) {
   const setupItems = getPlanSetupItems(data, goals);
@@ -263,7 +268,7 @@ export default function PlanView({
                   {debt.plan.debts.map((d) => (
                     <li key={d.name}>
                       {d.name}: cleared month {d.payoffMonth} ·{" "}
-                      <span className="money">{formatCurrency(d.interestPaid)}</span> interest
+                      <span className="money">{formatCurrency(d.interestPaid)}</span>{" "}interest
                     </li>
                   ))}
                 </ul>
@@ -344,7 +349,7 @@ export default function PlanView({
                 Reserve{" "}
                 <span className="metric-value">
                   {formatCurrency(sinking.totalMonthlySetAside)}
-                </span>
+                </span>{" "}
                 /mo for what&apos;s coming.
               </p>
               <ul className="space-y-1.5 text-sm">

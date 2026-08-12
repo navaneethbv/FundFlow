@@ -66,14 +66,22 @@ export function queryStub(result: QueryResult = {}): QueryStub {
  */
 export function clientStub(seeds: Record<string, QueryResult> = {}) {
   const tables: Record<string, QueryStub> = {};
+  const rpcs: Record<string, QueryStub> = {};
   const client = {
     from: vi.fn((table: string) => {
       tables[table] ??= queryStub(seeds[table] ?? { data: null });
       return tables[table];
     }),
+    rpc: vi.fn((fn: string) => {
+      rpcs[fn] ??= queryStub(seeds[fn] ?? { data: null });
+      return rpcs[fn];
+    }),
     tables,
+    rpcs,
     /** Every call recorded against `table`, or [] if it was never touched. */
     callsOn: (table: string) => tables[table]?.calls ?? [],
+    /** Every call recorded against RPC `fn`, or [] if it was never touched. */
+    callsOnRpc: (fn: string) => rpcs[fn]?.calls ?? [],
     /** Was `table` filtered by this user id? */
     scopedToUser: (table: string, userId: string) =>
       (tables[table]?.calls ?? []).some(

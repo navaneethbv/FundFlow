@@ -35,7 +35,7 @@ export default function CustomizeDrawer({
 }: Readonly<{ initialPrefs: DashboardWidgetPrefs }>) {
   const router = useRouter();
   const supabase = createClient();
-  const dialogRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
   const [prefs, setPrefs] = useState<DashboardWidgetPrefs>(initialPrefs);
   const [error, setError] = useState<string | null>(null);
@@ -79,7 +79,7 @@ export default function CustomizeDrawer({
     setOpen(false);
   }
 
-  function handleDialogKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+  function handleDialogKeyDown(event: React.KeyboardEvent<HTMLDialogElement>) {
     if (event.key === "Escape") {
       event.preventDefault();
       close();
@@ -157,13 +157,13 @@ export default function CustomizeDrawer({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div
+      <dialog
+        open
         ref={dialogRef}
-        role="dialog"
         aria-modal="true"
         aria-labelledby="customize-widgets-title"
         onKeyDown={handleDialogKeyDown}
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-card border border-panel-border bg-panel p-5 shadow-float sm:p-6"
+        className="relative m-0 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-card border border-panel-border bg-panel p-5 shadow-float sm:p-6"
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 id="customize-widgets-title" className="text-xl font-bold">
@@ -186,6 +186,7 @@ export default function CustomizeDrawer({
                 <label className="flex min-w-0 flex-1 items-start gap-2 text-sm">
                   <input
                     type="checkbox"
+                    aria-label={definition.label}
                     className="mt-1"
                     checked={!hidden}
                     onChange={() => toggle(key)}
@@ -234,7 +235,7 @@ export default function CustomizeDrawer({
             {busy ? "Saving…" : "Save layout"}
           </Button>
         </div>
-      </div>
+      </dialog>
     </div>
   );
 }

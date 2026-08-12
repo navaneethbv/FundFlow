@@ -100,4 +100,33 @@ describe("/accounts page", () => {
       supabase.scopedToUser("account_balance_snapshots", "user-1"),
     ).toBe(false);
   });
+
+  it("resolves institution metadata via the household-safe RPC, not owner-scoped plaid_items", async () => {
+    supabase = makeClient({
+      households: { data: [{ id: "household-1" }] },
+      accounts: { data: [] },
+      manual_accounts: { data: [] },
+      account_balance_snapshots: { data: [] },
+      plaid_items: { data: [] },
+      visible_institutions: {
+        data: [
+          {
+            id: "item-1",
+            institution_name: "First Bank",
+            institution_logo: null,
+            institution_brand_color: null,
+          },
+        ],
+      },
+      profiles: { data: { dashboard_prefs: {} } },
+    });
+
+    await AccountsPage({
+      searchParams: Promise.resolve({ scope: "household-1" }),
+    });
+
+    expect(supabase.rpc).toHaveBeenCalledWith("visible_institutions");
+    // The page must not read plaid_items owner-scoped for shared accounts.
+    expect(supabase.callsOn("plaid_items")).toEqual([]);
+  });
 });

@@ -161,8 +161,8 @@ export function buildCashFlowSankeyData(
   if (totalIncome <= 0 && totalExpenses <= 0) return { nodes: [], links: [] };
 
   const net = round2(totalIncome - totalExpenses);
-  const shortfall = net < 0 ? Math.abs(net) : 0;
-  const surplus = net > 0 ? net : 0;
+  const shortfall = Math.max(0, -net);
+  const surplus = Math.max(0, net);
   const hubValue = round2(totalIncome + shortfall);
 
   const nodes: SankeyNode[] = [];

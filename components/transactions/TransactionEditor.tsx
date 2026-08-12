@@ -18,6 +18,13 @@ interface TransactionEditorProps {
   tags: string[];
   splits: EditorSplit[];
   categories: string[];
+  /**
+   * Distinguishes the mobile and desktop copies of the same row. The ledger
+   * renders both for responsive layout, so without a prefix the two copies
+   * emit identical `note-<id>`/`tags-<id>`/`cats-<id>` ids and a label can
+   * bind to the hidden copy.
+   */
+  idPrefix?: string;
 }
 
 interface SplitRow {
@@ -45,8 +52,10 @@ export default function TransactionEditor({
   tags: initialTags,
   splits: initialSplits,
   categories,
+  idPrefix = "",
 }: Readonly<TransactionEditorProps>) {
   const target = round2(Math.abs(transaction.amount));
+  const inputId = (suffix: string) => `${idPrefix}${suffix}-${transaction.id}`;
 
   const [saved, setSaved] = useState({
     note: initialNote ?? "",
@@ -152,24 +161,25 @@ export default function TransactionEditor({
             className="absolute inset-0 h-full w-full cursor-default bg-black/50"
             onClick={() => setOpen(false)}
           />
-          <div
-            role="dialog"
+          <dialog
+            open
             aria-modal="true"
-            className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-[0.75rem] border border-panel-border bg-panel p-5 shadow-float sm:rounded-[0.75rem]"
+            aria-labelledby={`${idPrefix}title-${transaction.id}`}
+            className="relative m-0 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-[0.75rem] border border-panel-border bg-panel p-5 shadow-float sm:rounded-[0.75rem]"
           >
             <div className="mb-4">
               <p className="text-xs uppercase tracking-wider text-muted">
                 {transaction.amount < 0 ? "Money in" : "Money out"} ·{" "}
                 {formatCurrency(target, transaction.currency)}
               </p>
-              <h2 className="text-lg font-semibold">{transaction.merchant}</h2>
+              <h2 id={`${idPrefix}title-${transaction.id}`} className="text-lg font-semibold">{transaction.merchant}</h2>
             </div>
 
-            <label className="mb-1 block text-sm font-medium" htmlFor={`note-${transaction.id}`}>
+            <label className="mb-1 block text-sm font-medium" htmlFor={inputId("note")}>
               Note
             </label>
             <textarea
-              id={`note-${transaction.id}`}
+              id={inputId("note")}
               value={note}
               onChange={(e) => setNote(e.target.value)}
               maxLength={500}
@@ -178,11 +188,11 @@ export default function TransactionEditor({
               className={cn(fieldClasses, "mb-4 resize-y")}
             />
 
-            <label className="mb-1 block text-sm font-medium" htmlFor={`tags-${transaction.id}`}>
+            <label className="mb-1 block text-sm font-medium" htmlFor={inputId("tags")}>
               Tags <span className="font-normal text-muted">(comma separated)</span>
             </label>
             <Input
-              id={`tags-${transaction.id}`}
+              id={inputId("tags")}
               value={tagText}
               onChange={(e) => setTagText(e.target.value)}
               placeholder="reimbursable, vacation"
@@ -209,7 +219,7 @@ export default function TransactionEditor({
                 </span>
               )}
             </div>
-            <datalist id={`cats-${transaction.id}`}>
+            <datalist id={inputId("cats")}>
               {categories.map((c) => (
                 <option key={c} value={c}>
                   {titleCase(c)}
@@ -220,7 +230,7 @@ export default function TransactionEditor({
               {rows.map((row) => (
                 <div key={row.id} className="flex gap-2">
                   <input
-                    list={`cats-${transaction.id}`}
+                    list={inputId("cats")}
                     value={row.category}
                     onChange={(e) => updateRow(row.id, { category: e.target.value })}
                     placeholder="Category"
@@ -279,7 +289,7 @@ export default function TransactionEditor({
                 Save
               </Button>
             </div>
-          </div>
+          </dialog>
         </div>
       )}
     </>

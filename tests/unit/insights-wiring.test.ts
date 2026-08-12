@@ -30,6 +30,19 @@ describe("insights wiring", () => {
     expect(monitorView).toContain("data.insights");
   });
 
+  it("monitor view keeps category-spike (info) anomalies out of the danger bucket", () => {
+    // The category-spike branch in lib/planning.ts emits severity "info".
+    // The attention rail only has warning/danger tones, so "info" must map to
+    // warning instead of falling through to danger.
+    expect(monitorView).toContain('severity === "info" ? "warning" : "danger"');
+  });
+
+  it("monitor view derives the net-worth tile delta from the net-worth series", () => {
+    expect(monitorView).toContain("netWorthHistory");
+    expect(monitorView).toContain("netWorthDelta");
+    expect(monitorView).toContain('label="Net worth"');
+  });
+
   it("settings computes budget suggestions and the budgets section offers them", () => {
     const settings = readFileSync("app/settings/page.tsx", "utf8");
     const budgetsSection = readFileSync(
@@ -37,7 +50,10 @@ describe("insights wiring", () => {
       "utf8",
     );
     expect(settings).toContain("suggestBudgets");
-    expect(settings).toContain("EXCLUDED_PFC");
+    // Spend history is aggregated by (month, category) in SQL so the read is
+    // bounded and complete, instead of pulling raw transactions the server
+    // then folds.
+    expect(settings).toContain("budget_suggestion_history");
     expect(budgetsSection).toContain("Suggested budgets");
     expect(budgetsSection).toContain("suggestions");
   });

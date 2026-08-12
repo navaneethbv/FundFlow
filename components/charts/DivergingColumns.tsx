@@ -134,7 +134,13 @@ export default function DivergingColumns({
           />
         )}
 
-        {labels.map((l, i) => (
+        {labels.map((l, i) => {
+          const lineDetail = line
+            ? ` · ${line.name}: ${valueFormatter(line.values[i] ?? 0)}`
+            : "";
+          const summary = `${l} · ${upName}: ${valueFormatter(up[i] ?? 0)} · ${downName}: ${valueFormatter(down[i] ?? 0)} · Net: ${valueFormatter((up[i] ?? 0) - (down[i] ?? 0))}${lineDetail}`;
+          const ariaLabel = `View ${summary}`;
+          return (
           <g key={l}>
             <path d={column(i, up[i] ?? 0, "up")} fill="var(--viz-pos)" />
             <path d={column(i, down[i] ?? 0, "down")} fill="var(--viz-neg)" />
@@ -144,24 +150,25 @@ export default function DivergingColumns({
             {links?.[i] ? (
               <a
                 href={links[i]}
-                aria-label={`View ${l}, ${upName} ${valueFormatter(up[i] ?? 0)}, ${downName} ${valueFormatter(down[i] ?? 0)}${line ? `, ${line.name} ${valueFormatter(line.values[i] ?? 0)}` : ""}`}
+                aria-label={ariaLabel}
                 className="focus-visible:outline-2"
               >
                 <rect x={PAD.left + band * i} y={PAD.top} width={band} height={plotH} fill="transparent">
                   <title>
-                    {`${l} · ${upName}: ${valueFormatter(up[i] ?? 0)} · ${downName}: ${valueFormatter(down[i] ?? 0)} · Net: ${valueFormatter((up[i] ?? 0) - (down[i] ?? 0))}${line ? ` · ${line.name}: ${valueFormatter(line.values[i] ?? 0)}` : ""}`}
+                    {summary}
                   </title>
                 </rect>
               </a>
             ) : (
               <rect x={PAD.left + band * i} y={PAD.top} width={band} height={plotH} fill="transparent">
                 <title>
-                  {`${l} · ${upName}: ${valueFormatter(up[i] ?? 0)} · ${downName}: ${valueFormatter(down[i] ?? 0)} · Net: ${valueFormatter((up[i] ?? 0) - (down[i] ?? 0))}${line ? ` · ${line.name}: ${valueFormatter(line.values[i] ?? 0)}` : ""}`}
+                  {summary}
                 </title>
               </rect>
             )}
           </g>
-        ))}
+          );
+        })}
       </svg>
 
       <details className="mt-1">

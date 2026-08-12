@@ -309,6 +309,58 @@ describe("buildAccountsPageData", () => {
     expect(data.groups.cash.changes).toEqual([]);
   });
 
+  // A liability row's change and its group total deliberately carry opposite
+  // signs. AccountRow prints the row change uncoloured next to the displayed
+  // balance and the sparkline, so it has to agree with them. AccountGroup
+  // colours the group total success/danger, so that one follows the signed
+  // net-worth convention instead.
+  it("keeps a credit row's month change in the same space as its displayed balance", () => {
+    const data = buildAccountsPageData(
+      [
+        account({ id: "card-1", name: "Visa", type: "credit", currentBalance: -1500 }),
+      ],
+      [
+        snapshot("card-1", "2026-06-29", -2000),
+        snapshot("card-1", "2026-07-29", -1500),
+      ],
+      NOW,
+    );
+    const row = data.groups.credit.rows[0]!;
+    // Balance fell 2000 -> 1500, so the row must read -500, not +500.
+    expect(row.balance).toBe(1500);
+    expect(row.monthChange).toEqual({ amount: -500, pct: -25 });
+    expect(row.spark.at(-1)).toBe(1500);
+  });
+
+  it("reports paying credit debt down as a positive group change", () => {
+    const data = buildAccountsPageData(
+      [
+        account({ id: "card-1", name: "Visa", type: "credit", currentBalance: -1500 }),
+      ],
+      [
+        snapshot("card-1", "2026-06-29", -2000),
+        snapshot("card-1", "2026-07-29", -1500),
+      ],
+      NOW,
+    );
+    expect(data.groups.credit.changes).toEqual([{ currency: "USD", amount: 500 }]);
+  });
+
+  it("shows growing credit debt as a negative group change, not a green success", () => {
+    const data = buildAccountsPageData(
+      [
+        account({ id: "card-1", name: "Visa", type: "credit", currentBalance: -2200 }),
+      ],
+      [
+        snapshot("card-1", "2026-06-29", -2000),
+        snapshot("card-1", "2026-07-29", -2200),
+      ],
+      NOW,
+    );
+    expect(data.groups.credit.rows[0]!.monthChange).toEqual({ amount: 200, pct: 10 });
+    expect(data.groups.credit.changes).toEqual([{ currency: "USD", amount: -200 }]);
+  });
+
   it("uses null percent when the starting balance is zero", () => {
     const data = buildAccountsPageData(
       [

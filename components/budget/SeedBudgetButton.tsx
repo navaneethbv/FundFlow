@@ -11,6 +11,12 @@ import type {
 
 interface EditableProposal extends BudgetSeedProposal {
   included: boolean;
+  /**
+   * The amount as typed, kept as a string so a partial decimal (e.g. "12.")
+   * or a trailing zero ("0.50") survives the controlled edit instead of being
+   * coerced to a number and back on every keystroke.
+   */
+  suggested_amount_text: string;
 }
 
 export default function SeedBudgetButton({
@@ -23,7 +29,7 @@ export default function SeedBudgetButton({
   currency: string;
 }>) {
   const router = useRouter();
-  const dialogRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<EditableProposal[]>([]);
   const [loading, setLoading] = useState(false);
@@ -39,7 +45,13 @@ export default function SeedBudgetButton({
   }, [open]);
 
   function openPreview() {
-    setRows(proposals.map((proposal) => ({ ...proposal, included: true })));
+    setRows(
+      proposals.map((proposal) => ({
+        ...proposal,
+        included: true,
+        suggested_amount_text: String(proposal.suggested_amount),
+      })),
+    );
     setError(null);
     setOpen(true);
   }
@@ -52,7 +64,7 @@ export default function SeedBudgetButton({
     );
   }
 
-  function handleDialogKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+  function handleDialogKeyDown(event: React.KeyboardEvent<HTMLDialogElement>) {
     if (event.key === "Escape") {
       event.preventDefault();
       setOpen(false);
@@ -80,6 +92,14 @@ export default function SeedBudgetButton({
       setError("Select at least one proposal.");
       return;
     }
+    const invalidAmount = selected.some((row) => {
+      const value = Number(row.suggested_amount_text);
+      return !Number.isFinite(value) || value < 0;
+    });
+    if (invalidAmount) {
+      setError("Every selected monthly amount must be a valid non-negative number.");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -90,7 +110,9 @@ export default function SeedBudgetButton({
           month,
           items: selected.map((row) => ({
             category: row.category,
-            monthly_limit: row.suggested_amount,
+            // Parse the typed string now: an empty or non-numeric amount is
+            // an invalid edit, so stop instead of silently sending 0.
+            monthly_limit: Number(row.suggested_amount_text),
             group_name: row.group_name,
             rollover_enabled: row.rollover_enabled,
             sort_order: row.sort_order,
@@ -123,13 +145,13 @@ export default function SeedBudgetButton({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div
+      <dialog
+        open
         ref={dialogRef}
-        role="dialog"
         aria-modal="true"
         aria-labelledby="budget-proposal-title"
         onKeyDown={handleDialogKeyDown}
-        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-card border border-panel-border bg-panel p-5 shadow-float sm:p-6"
+        className="relative m-0 max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-card border border-panel-border bg-panel p-5 shadow-float sm:p-6"
       >
         <div className="flex items-start gap-3">
           <Sparkles aria-hidden className="mt-1 h-5 w-5 text-accent" />
@@ -161,25 +183,25 @@ export default function SeedBudgetButton({
                       update(index, { included: event.target.checked })
                     }
                   />
-                  Include
+                  {" "}Include
                 </label>
                 <label className="text-xs text-muted">
-                  Monthly amount
+                  Monthly amount{" "}
                   <input
                     type="number"
                     min="0"
                     step="0.01"
-                    value={row.suggested_amount}
+                    value={row.suggested_amount_text}
                     onChange={(event) =>
                       update(index, {
-                        suggested_amount: Number(event.target.value),
+                        suggested_amount_text: event.target.value,
                       })
                     }
                     className="mt-1 min-h-11 w-full rounded-field border border-panel-border bg-background px-3 text-foreground"
                   />
                 </label>
                 <label className="text-xs text-muted">
-                  Group
+                  Group{" "}
                   <select
                     value={row.group_name}
                     onChange={(event) =>
@@ -205,7 +227,7 @@ export default function SeedBudgetButton({
                       })
                     }
                   />
-                  Rollover
+                  {" "}Rollover
                 </label>
               </div>
               <p className="mt-2 text-xs text-muted">
@@ -238,7 +260,7 @@ export default function SeedBudgetButton({
             {loading ? "Saving..." : "Confirm proposals"}
           </button>
         </div>
-      </div>
+      </dialog>
     </div>
   );
 }

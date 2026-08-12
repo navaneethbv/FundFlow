@@ -133,13 +133,9 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
       return [account.id, `${account.name ?? "Account"}${mask}`];
     }),
   );
-  const linkParams = {
-    view: activeView,
-    month: selectedMonth,
-    accountId: selectedAccountId,
-    itemId: selectedItemId,
-  };
-  const extraParams = { itemId: selectedItemId, ...drillQuery };
+  const scopeParam = dashboardScope === "household" ? "household" : undefined;
+  const linkParams = { view: activeView, month: selectedMonth, accountId: selectedAccountId, itemId: selectedItemId, scope: scopeParam };
+  const extraParams = { itemId: selectedItemId, ...drillQuery, scope: scopeParam };
 
   return (
     <AppShell active={activeView} email={user?.email}>
@@ -239,6 +235,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
                 month: selectedMonth,
                 accountId: selectedAccountId,
                 itemId: selectedItemId,
+                scope: scopeParam,
               }}
               prefs={dashboardPrefs}
             />

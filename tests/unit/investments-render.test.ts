@@ -87,8 +87,8 @@ describe("TopMovers", () => {
     const html = renderToStaticMarkup(
       createElement(TopMovers, {
         movers: [
-          { name: "Up Co", ticker: "UP", changePct: 3.2 },
-          { name: "Down Co", ticker: "DN", changePct: -1.1 },
+          { id: "up", name: "Up Co", ticker: "UP", changePct: 3.2 },
+          { id: "dn", name: "Down Co", ticker: "DN", changePct: -1.1 },
         ],
       }),
     );
@@ -128,7 +128,7 @@ describe("AddManualHoldingForm — closed trigger and modal shell", () => {
   it("is the standard app modal recipe, not an inline expanding form", () => {
     const source = readFileSync("components/investments/AddManualHoldingForm.tsx", "utf8");
     expect(source).toContain("fixed inset-0 z-50");
-    expect(source).toContain('role="dialog"');
+    expect(source).toContain("<dialog");
     expect(source).toContain("bg-black/50");
   });
 });

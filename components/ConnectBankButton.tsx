@@ -25,6 +25,31 @@ export default function ConnectBankButton() {
   // the moment it is ready, and flipping it must not itself cause a render.
   const wantsOpenRef = useRef(false);
 
+  // The token is single-use: once Link has consumed it (success or exit) it
+  // must not be handed back to Plaid. Clearing state here is what stops the
+  // next "Connect a bank" click from reopening a completed session.
+  const discardFlow = useCallback(() => {
+    setLinkToken(null);
+    setResume(null);
+    setReceivedRedirectUri(null);
+    wantsOpenRef.current = false;
+  }, []);
+
+  // OAuth banks bounce back to the registered redirect_uri with oauth_state_id
+  // in the URL. Once the resume is consumed (success, exit, or an expired
+  // saved resume) the parameter is stale: leaving it behind makes the next
+  // reload re-read the resume lifecycle and can show "Bank connection expired"
+  // after a successful connection. Strip it so the URL reflects the finished
+  // flow, matching what the server remembers.
+  const cleanOAuthUrl = useCallback(() => {
+    if (typeof window === "undefined" || !window.location.search.includes("oauth_state_id")) {
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.delete("oauth_state_id");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }, []);
+
   // Only an OAuth bounce needs work on mount. A plain page view must never
   // touch Plaid: minting a link token here spends a Plaid API call and boots
   // Link's iframe (workflow/start + heartbeat) on every dashboard and accounts
@@ -46,13 +71,14 @@ export default function ConnectBankButton() {
         wantsOpenRef.current = true;
         setLinkToken(saved.token);
       } else {
+        cleanOAuthUrl();
         setError("Bank connection expired. Please start again.");
       }
     })();
     return () => {
       active = false;
     };
-  }, []);
+  }, [cleanOAuthUrl]);
 
   const onSuccess = useCallback(
     async (publicToken: string | null) => {
@@ -89,6 +115,11 @@ export default function ConnectBankButton() {
           throw new Error(json.error ?? "Failed to connect bank");
         }
         clearResume();
+        // The token is spent and the resume is consumed: drop both from client
+        // state and scrub the OAuth parameter so a reload does not replay the
+        // handshake or misreport it as expired.
+        discardFlow();
+        cleanOAuthUrl();
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error");
@@ -96,13 +127,23 @@ export default function ConnectBankButton() {
         setBusy(false);
       }
     },
-    [resume, router, linkToken],
+    [resume, router, linkToken, discardFlow, cleanOAuthUrl],
   );
+
+  const onExit = useCallback(() => {
+    // Link closed without completing (user cancel or a Plaid-side failure).
+    // The token it consumed is single-use, so it must not be reused either:
+    // clear it and the resume so the next click mints a fresh session.
+    clearResume();
+    discardFlow();
+    cleanOAuthUrl();
+  }, [discardFlow, cleanOAuthUrl]);
 
   const { open, ready } = usePlaidLink({
     token: linkToken,
     receivedRedirectUri: receivedRedirectUri ?? undefined,
     onSuccess: (public_token) => onSuccess(public_token),
+    onExit: () => onExit(),
   });
 
   // Mint the link token on click instead of on mount. Reusing an already-issued

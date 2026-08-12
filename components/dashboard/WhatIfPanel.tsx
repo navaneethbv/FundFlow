@@ -65,6 +65,7 @@ export default function WhatIfPanel({
           </span>
           <input
             id="whatif-income"
+            aria-label="Income change"
             type="range"
             min={-1000}
             max={2000}
@@ -82,6 +83,7 @@ export default function WhatIfPanel({
           </span>
           <input
             id="whatif-spend"
+            aria-label="Spending change"
             type="range"
             min={-2000}
             max={1000}
@@ -102,6 +104,7 @@ export default function WhatIfPanel({
             </span>
             <input
               id="whatif-debt"
+              aria-label="Extra toward debt"
               type="range"
               min={0}
               max={1000}

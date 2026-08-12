@@ -40,5 +40,12 @@ jobs:
 
       - name: Scan
         uses: SonarSource/sonarqube-scan-action@v8
+        with:
+          # sonar-scanner-cli 8.x tries to provision its own JRE from
+          # api.sonarcloud.io/analysis/jres when it judges the embedded JRE
+          # unsuitable, and that endpoint rejects the analysis token with a 403.
+          # The bundle ships a JRE (and the runner has none), so skip
+          # provisioning and let the scanner use the bundled JRE.
+          args: "-Dsonar.scanner.skipJreProvisioning=true"
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

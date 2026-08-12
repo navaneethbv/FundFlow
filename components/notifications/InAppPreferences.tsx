@@ -39,8 +39,10 @@ export default function InAppPreferences({
     initialThreshold !== null ? String(initialThreshold) : "",
   );
   const [status, setStatus] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   async function save() {
+    if (saving) return;
     setStatus(null);
     const { data } = await supabase.auth.getUser();
     if (!data.user) {
@@ -55,16 +57,21 @@ export default function InAppPreferences({
       setStatus("The large-transaction threshold must be a positive amount.");
       return;
     }
-    const { error } = await supabase.from("alert_preferences").upsert(
-      {
-        user_id: data.user.id,
-        broken_bank: true,
-        large_transaction_threshold: parsedThreshold,
-        ...preferences,
-      },
-      { onConflict: "user_id" },
-    );
-    setStatus(error?.message ?? "In-app preferences saved.");
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("alert_preferences").upsert(
+        {
+          user_id: data.user.id,
+          broken_bank: true,
+          large_transaction_threshold: parsedThreshold,
+          ...preferences,
+        },
+        { onConflict: "user_id" },
+      );
+      setStatus(error?.message ?? "In-app preferences saved.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -83,6 +90,7 @@ export default function InAppPreferences({
             </span>
             <input
               id={`inapp-${option.key}`}
+              aria-label={option.title}
               type="checkbox"
               className="mt-1 h-4 w-4 accent-accent"
               checked={preferences[option.key]}
@@ -112,7 +120,9 @@ export default function InAppPreferences({
           className="w-24 rounded-field border border-panel-border bg-panel px-2 py-1 text-sm"
         />
       </label>
-      <Button className="mt-5" type="button" onClick={save}>Save alert preferences</Button>
+      <Button className="mt-5" type="button" onClick={save} disabled={saving} loading={saving}>
+        {saving ? "Saving..." : "Save alert preferences"}
+      </Button>
       {status && <output className="mt-3 block text-sm text-muted">{status}</output>}
     </Panel>
   );

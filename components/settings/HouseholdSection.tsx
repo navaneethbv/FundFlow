@@ -16,32 +16,39 @@ export default function HouseholdSection({ initialHouseholds }: Readonly<{ initi
   const [households, setHouseholds] = useState(initialHouseholds);
   const [name, setName] = useState("");
   const [status, setStatus] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   async function createHousehold() {
+    if (busy) return;
     setStatus(null);
     const trimmed = name.trim();
     if (!trimmed) {
       setStatus("Enter a household name.");
       return;
     }
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData.user?.id;
-    if (!userId) {
-      setStatus("Sign in again to create a household.");
-      return;
+    setBusy(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+      if (!userId) {
+        setStatus("Sign in again to create a household.");
+        return;
+      }
+      const { data, error } = await supabase
+        .from("households")
+        .insert({ owner_user_id: userId, name: trimmed })
+        .select("id, name")
+        .single();
+      if (error) {
+        setStatus(error.message);
+        return;
+      }
+      setHouseholds((current) => [...current, data as HouseholdRow]);
+      setName("");
+      setStatus("Household created.");
+    } finally {
+      setBusy(false);
     }
-    const { data, error } = await supabase
-      .from("households")
-      .insert({ owner_user_id: userId, name: trimmed })
-      .select("id, name")
-      .single();
-    if (error) {
-      setStatus(error.message);
-      return;
-    }
-    setHouseholds((current) => [...current, data as HouseholdRow]);
-    setName("");
-    setStatus("Household created.");
   }
 
   return (
@@ -57,25 +64,31 @@ export default function HouseholdSection({ initialHouseholds }: Readonly<{ initi
                 className="mt-2 flex flex-wrap items-center gap-2"
                 onSubmit={async (e) => {
                   e.preventDefault();
+                  if (busy) return;
                   setStatus(null);
                   const form = e.currentTarget;
                   const input = form.elements.namedItem("email") as HTMLInputElement;
-                  const response = await fetch("/api/household/invite", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      householdId: household.id,
-                      email: input.value,
-                    }),
-                  });
-                  if (response.ok) {
-                    setStatus(`Invite sent to ${input.value}.`);
-                    input.value = "";
-                  } else {
-                    const data = (await response.json().catch(() => null)) as {
-                      error?: string;
-                    } | null;
-                    setStatus(data?.error ?? "Could not send the invite.");
+                  setBusy(true);
+                  try {
+                    const response = await fetch("/api/household/invite", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        householdId: household.id,
+                        email: input.value,
+                      }),
+                    });
+                    if (response.ok) {
+                      setStatus(`Invite sent to ${input.value}.`);
+                      input.value = "";
+                    } else {
+                      const data = (await response.json().catch(() => null)) as {
+                        error?: string;
+                      } | null;
+                      setStatus(data?.error ?? "Could not send the invite.");
+                    }
+                  } finally {
+                    setBusy(false);
                   }
                 }}
               >
@@ -86,7 +99,7 @@ export default function HouseholdSection({ initialHouseholds }: Readonly<{ initi
                   placeholder="partner@example.com"
                   className="w-56"
                 />
-                <Button type="submit" size="sm" variant="ghost">
+                <Button type="submit" size="sm" variant="ghost" disabled={busy}>
                   Invite
                 </Button>
               </form>
@@ -96,8 +109,8 @@ export default function HouseholdSection({ initialHouseholds }: Readonly<{ initi
       </div>
       <div className="mt-4 flex gap-2">
         <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Household name" />
-        <Button type="button" onClick={createHousehold}>
-          Create
+        <Button type="button" onClick={createHousehold} disabled={busy} loading={busy}>
+          {busy ? "Creating…" : "Create"}
         </Button>
       </div>
       {status && <p className="mt-3 text-sm text-muted">{status}</p>}

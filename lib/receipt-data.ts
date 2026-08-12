@@ -29,7 +29,7 @@ export interface ReceiptInboxRow {
   total: number | null;
   status: "unmatched" | "matched" | "ignored";
   created_at: string;
-  imageUrl: string;
+  imageUrl: string | null;
   candidates: ReceiptCandidate[];
 }
 
@@ -84,7 +84,7 @@ export async function loadReceiptCandidates(
 
 export function publicReceipt(
   receipt: ReceiptRow,
-  imageUrl: string,
+  imageUrl: string | null,
   candidates: ReceiptCandidate[],
 ): ReceiptInboxRow {
   return {
@@ -113,14 +113,23 @@ export async function loadReceiptInbox(
     .order("created_at", { ascending: false });
   if (error) throw error;
   const bucket = service.storage.from("receipts");
-  return Promise.all(((data ?? []) as ReceiptRow[]).map(async (receipt) => {
-    const [{ data: signed, error: signedError }, candidates] = await Promise.all([
-      bucket.createSignedUrl(receipt.storage_path, 3600),
-      receipt.status === "unmatched"
-        ? loadReceiptCandidates(supabase, userId, receipt)
-        : Promise.resolve([]),
-    ]);
-    if (signedError) throw signedError;
-    return publicReceipt(receipt, signed.signedUrl, candidates);
-  }));
+  // One unreadable object (a stale path, a transient storage failure) must not
+  // take the whole inbox down: sign each receipt independently and degrade a
+  // failing one to a row with no image rather than rejecting the page.
+  const rows = await Promise.all(
+    ((data ?? []) as ReceiptRow[]).map(async (receipt) => {
+      const candidates =
+        receipt.status === "unmatched"
+          ? await loadReceiptCandidates(supabase, userId, receipt)
+          : [];
+      const signed = await bucket
+        .createSignedUrl(receipt.storage_path, 3600)
+        .catch(() => ({ data: null, error: new Error("signed_url_failed") }));
+      if (signed.error || !signed.data) {
+        return publicReceipt(receipt, null, candidates);
+      }
+      return publicReceipt(receipt, signed.data.signedUrl, candidates);
+    }),
+  );
+  return rows;
 }

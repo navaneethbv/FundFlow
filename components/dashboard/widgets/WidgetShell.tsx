@@ -34,6 +34,12 @@ export default function WidgetShell({
   stale?: boolean;
   children?: React.ReactNode;
 }>) {
+  let body = children;
+  if (empty) body = <p className="py-4 text-sm text-muted">{empty}</p>;
+  if (error) {
+    body = <output className="block py-4 text-sm text-danger">{error}</output>;
+  }
+
   return (
     <Panel
       title={
@@ -50,15 +56,7 @@ export default function WidgetShell({
           Showing the last successful sync; figures may be out of date.
         </p>
       )}
-      {error ? (
-        <p role="status" className="py-4 text-sm text-danger">
-          {error}
-        </p>
-      ) : empty ? (
-        <p className="py-4 text-sm text-muted">{empty}</p>
-      ) : (
-        children
-      )}
+      {body}
     </Panel>
   );
 }

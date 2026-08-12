@@ -42,7 +42,8 @@ export default function GoalAllocationPanel({
       setError("Pick an account first.");
       return;
     }
-    if (mode === "fixed" && !(Number(amount) > 0)) {
+    const parsedAmount = Number(amount);
+    if (mode === "fixed" && (parsedAmount <= 0 || Number.isNaN(parsedAmount))) {
       setError("Enter an amount above zero.");
       return;
     }

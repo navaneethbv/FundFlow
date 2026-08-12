@@ -107,7 +107,7 @@ export async function DELETE(request: NextRequest) {
       .eq("id", body.id)
       .maybeSingle();
     if (findError) throw findError;
-    if (!holding || holding.source !== "manual") {
+    if (holding?.source !== "manual") {
       return NextResponse.json({ error: "Manual holding not found" }, { status: 404 });
     }
 

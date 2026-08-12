@@ -3,6 +3,7 @@ import type { DashboardData } from "@/lib/dashboard";
 import { foldTail } from "@/lib/chart-utils";
 import { medianOf } from "@/lib/insights";
 import { dashboardUrl, OTHER_CATEGORY_KEY } from "@/lib/drilldown";
+import { netWorthDeltaFromHistory } from "@/components/dashboard/metrics";
 import {
   formatCurrency,
   formatDay,
@@ -72,7 +73,10 @@ function getAttentionItems(data: DashboardData): AttentionItem[] {
       label: "Unusual activity",
       detail: data.spendingAnomalies[0]!.message,
       href: `/review?month=${data.selectedMonth}`,
-      tone: data.spendingAnomalies[0]!.severity === "warning" ? "warning" : "danger",
+      // `info` is the category-spike severity (lib/planning.ts): a mild
+      // signal, not an urgent one, so it reads as a warning rather than being
+      // collapsed into the danger bucket with the real flags.
+      tone: data.spendingAnomalies[0]!.severity === "info" ? "warning" : "danger",
     });
   }
 
@@ -123,6 +127,10 @@ export default function MonitorView({
   const previousMonth = monthLabels.at(-2) ?? "last month";
   const currentNet = data.currentMonthIncome - data.currentMonthExpenses;
   const previousNet = (incomeSeries.at(-2) ?? 0) - (spendSeries.at(-2) ?? 0);
+  // Net-worth delta comes from the net-worth history series (assets minus
+  // liabilities per month), not from this month's cash flow: those are
+  // different numbers and the tile must report the change in what it displays.
+  const netWorthDelta = netWorthDeltaFromHistory(netWorth, data.netWorthHistory);
   const maxMerchant = Math.max(1, ...data.merchantBreakdown.map((item) => item.amount));
   const merchantItems = data.merchantBreakdown.map((item) => ({
     label: item.merchant,
@@ -166,7 +174,7 @@ export default function MonitorView({
         <StatTile
           label="Net worth"
           value={netWorth}
-          delta={currentNet - previousNet}
+          delta={netWorthDelta}
           deltaVs={previousMonth}
           chart={<AreaSparkline values={cashFlowSeries} />}
         />

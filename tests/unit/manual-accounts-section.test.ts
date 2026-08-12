@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -28,5 +29,15 @@ describe("ManualAccountsSection", () => {
     expect(html).toContain('value="1250"');
     expect(html).toContain(">Save balance<");
     expect(html).toContain("Include in net worth");
+  });
+
+  it("disables an account toggle while its update is in flight", () => {
+    const source = readFileSync(
+      "components/settings/ManualAccountsSection.tsx",
+      "utf8",
+    );
+
+    expect(source).toContain("toggleBusyId");
+    expect(source).toContain("disabled={toggleBusyId === account.id}");
   });
 });

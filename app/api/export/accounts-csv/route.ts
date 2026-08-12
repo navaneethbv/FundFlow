@@ -9,7 +9,7 @@ import {
 } from "@/lib/financial-scope";
 import { errorResponse, requireUser } from "@/lib/http";
 
-interface PlaidCsvRow {
+type PlaidCsvRow = {
   id: string;
   user_id: string;
   name: string | null;
@@ -19,7 +19,7 @@ interface PlaidCsvRow {
   current_balance: number | string | null;
   iso_currency_code: string | null;
   updated_at: string;
-}
+};
 
 interface ManualCsvRow {
   id: string;

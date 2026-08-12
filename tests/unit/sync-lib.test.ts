@@ -136,6 +136,7 @@ describe("lib/sync", () => {
         "large_transaction",
         expect.objectContaining({ title: expect.stringContaining("Netflix") }),
         "txn-1",
+        "exact",
       );
       expect(mockCreateNotification).toHaveBeenCalledWith(
         "user-1",
@@ -321,12 +322,14 @@ describe("lib/sync", () => {
         "large_transaction",
         expect.objectContaining({ title: "Large transaction: POS MERCHANT" }),
         "txn-a",
+        "exact",
       );
       expect(mockCreateNotification).toHaveBeenCalledWith(
         "user-1",
         "large_transaction",
         expect.objectContaining({ title: "Large transaction: Unknown" }),
         "txn-c",
+        "exact",
       );
       expect(mockCreateNotification).not.toHaveBeenCalledWith(
         "user-1",

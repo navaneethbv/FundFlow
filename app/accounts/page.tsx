@@ -47,7 +47,9 @@ interface PageProps {
   }>;
 }
 
-interface PlaidAccountRow {
+type AccountNumericValue = number | string | null;
+
+type PlaidAccountRow = {
   id: string;
   user_id: string;
   plaid_item_id: string;
@@ -55,28 +57,28 @@ interface PlaidAccountRow {
   mask: string | null;
   type: string | null;
   subtype: string | null;
-  current_balance: number | string | null;
-  available_balance: number | string | null;
+  current_balance: AccountNumericValue;
+  available_balance: AccountNumericValue;
   iso_currency_code: string | null;
   updated_at: string;
-}
+};
 
-interface ManualAccountRow {
+type ManualAccountRow = {
   id: string;
   user_id: string;
   name: string;
   account_type: string;
-  balance: number | string | null;
+  balance: AccountNumericValue;
   include_in_net_worth: boolean;
   updated_at: string;
-}
+};
 
 interface SnapshotRow {
   account_id: string | null;
   manual_account_id: string | null;
   snapshot_date: string;
-  current_balance: number | string | null;
-  available_balance: number | string | null;
+  current_balance: AccountNumericValue;
+  available_balance: AccountNumericValue;
   iso_currency_code: string;
 }
 
@@ -84,7 +86,7 @@ function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function numeric(value: number | string | null): number | null {
+function numeric(value: AccountNumericValue): number | null {
   if (value === null) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
@@ -96,7 +98,9 @@ function numeric(value: number | string | null): number | null {
  * than an unbounded "all" — see the frugality invariants in CLAUDE.md.
  */
 function historyStart(range: string | undefined): string {
-  const days = range === "90" ? 90 : range === "365" ? 365 : 30;
+  let days = 30;
+  if (range === "90") days = 90;
+  if (range === "365") days = 365;
   const start = new Date();
   start.setUTCDate(start.getUTCDate() - days);
   return start.toISOString().slice(0, 10);
@@ -195,10 +199,7 @@ export default async function AccountsPage({
     accountsQuery,
     manualQuery,
     snapshotQuery,
-    supabase
-      .from("plaid_items")
-      .select("id,institution_name,institution_logo,institution_brand_color")
-      .eq("user_id", user.id),
+    supabase.rpc("visible_institutions"),
     supabase
       .from("profiles")
       .select("dashboard_prefs")
@@ -216,12 +217,17 @@ export default async function AccountsPage({
   }
 
   const institutionByItem = new Map(
-    (itemResult.data ?? []).map((item) => [
-      item.id as string,
+    ((itemResult.data ?? []) as Array<{
+      id: string;
+      institution_name: string | null;
+      institution_logo: string | null;
+      institution_brand_color: string | null;
+    }>).map((item) => [
+      item.id,
       {
-        name: item.institution_name as string | null,
-        logo: item.institution_logo as string | null,
-        brandColor: item.institution_brand_color as string | null,
+        name: item.institution_name,
+        logo: item.institution_logo,
+        brandColor: item.institution_brand_color,
       },
     ]),
   );

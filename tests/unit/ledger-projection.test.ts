@@ -4,6 +4,7 @@ import {
   filterProjectedLedgerRows,
   projectLedgerRows,
   sortLedgerRows,
+  toLedgerFacetRow,
   type LedgerProjectionSourceRow,
 } from "@/lib/ledger-projection";
 import type { MerchantRule } from "@/lib/planning";
@@ -276,6 +277,68 @@ describe("buildLedgerFilterOptions", () => {
     ]);
     expect(options.accounts).toEqual([
       { value: "a-checking", label: "Everyday Checking ••1234" },
+    ]);
+  });
+});
+
+describe("toLedgerFacetRow", () => {
+  it("maps the lightweight facet columns onto the facet row shape", () => {
+    expect(
+      toLedgerFacetRow({
+        pfc_primary: "FOOD_AND_DRINK",
+        pfc_detailed: "FOOD_AND_DRINK_COFFEE",
+        merchant_name: "Blue Bottle",
+        name: "SQ *BlueBottle",
+      }),
+    ).toEqual({
+      category: "FOOD_AND_DRINK",
+      pfc_detailed: "FOOD_AND_DRINK_COFFEE",
+      merchant: "Blue Bottle",
+    });
+  });
+
+  it("falls back to the raw description when there is no merchant name", () => {
+    expect(
+      toLedgerFacetRow({
+        pfc_primary: null,
+        pfc_detailed: null,
+        merchant_name: null,
+        name: "Cash withdrawal",
+      }),
+    ).toEqual({
+      category: null,
+      pfc_detailed: null,
+      merchant: "Cash withdrawal",
+    });
+  });
+
+  it("builds the same filter options a direct path facet query feeds", () => {
+    const options = buildLedgerFilterOptions(
+      [
+        toLedgerFacetRow({
+          pfc_primary: "FOOD_AND_DRINK",
+          pfc_detailed: "FOOD_AND_DRINK_COFFEE",
+          merchant_name: "SQ *BlueBottle Coffee",
+          name: "BlueBottle",
+        }),
+        toLedgerFacetRow({
+          pfc_primary: "FOOD_AND_DRINK",
+          pfc_detailed: "FOOD_AND_DRINK_GROCERIES",
+          merchant_name: "Safeway",
+          name: "SAFEWAY #1",
+        }),
+      ],
+      [{ value: "a-checking", label: "Everyday Checking ••1234" }],
+    );
+
+    expect(options.merchants).toEqual(["Safeway", "SQ *BlueBottle Coffee"]);
+    expect(options.categories).toContainEqual({
+      value: "FOOD_AND_DRINK",
+      label: "Food And Drink",
+    });
+    expect(options.subcategoriesByCategory.FOOD_AND_DRINK).toEqual([
+      { value: "FOOD_AND_DRINK_COFFEE", label: "Coffee" },
+      { value: "FOOD_AND_DRINK_GROCERIES", label: "Groceries" },
     ]);
   });
 });

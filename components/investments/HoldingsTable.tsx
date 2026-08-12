@@ -6,6 +6,17 @@ import { formatCurrency } from "@/lib/format";
 import type { InvestmentsPage } from "@/lib/investments";
 
 /** Every active holding grouped by asset class — the plan's fixed slot order. */
+function changeClass(periodChangePct: number | null): string {
+  if (periodChangePct == null) return "text-muted";
+  return periodChangePct >= 0 ? "text-success" : "text-danger";
+}
+
+function changeLabel(periodChangePct: number | null): string {
+  if (periodChangePct == null) return "—";
+  const sign = periodChangePct >= 0 ? "+" : "";
+  return `${sign}${periodChangePct.toFixed(1)}%`;
+}
+
 export default function HoldingsTable({
   page,
   currency,
@@ -65,16 +76,10 @@ export default function HoldingsTable({
                     data-money
                     className={cn(
                       "py-2 pr-0 text-right tabular-nums",
-                      h.periodChangePct == null
-                        ? "text-muted"
-                        : h.periodChangePct >= 0
-                          ? "text-success"
-                          : "text-danger",
+                      changeClass(h.periodChangePct),
                     )}
                   >
-                    {h.periodChangePct == null
-                      ? "—"
-                      : `${h.periodChangePct >= 0 ? "+" : ""}${h.periodChangePct.toFixed(1)}%`}
+                    {changeLabel(h.periodChangePct)}
                   </td>
                 </tr>
               ))}

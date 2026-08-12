@@ -45,6 +45,61 @@ function round2(value: number): number {
 /** Simulation cap: a plan that hasn't cleared in 50 years never will. */
 const MAX_MONTHS = 600;
 
+type DebtState = {
+  name: string;
+  balance: number;
+  monthlyRate: number;
+  minPayment: number;
+  interestPaid: number;
+  payoffMonth: number;
+};
+
+function applyInterest(state: DebtState[]): void {
+  for (const debt of state) {
+    if (debt.balance <= 0) continue;
+    const interest = round2(debt.balance * debt.monthlyRate);
+    debt.balance = round2(debt.balance + interest);
+    debt.interestPaid = round2(debt.interestPaid + interest);
+  }
+}
+
+function applyMinimumPayments(state: DebtState[], budget: number, month: number): number {
+  let available = budget;
+  for (const debt of state) {
+    if (debt.balance <= 0) continue;
+    const payment = Math.min(debt.minPayment, debt.balance, available);
+    debt.balance = round2(debt.balance - payment);
+    available = round2(available - payment);
+    if (debt.balance <= 0) debt.payoffMonth = month;
+  }
+  return available;
+}
+
+function applyExtraPayments(state: DebtState[], initialAvailable: number, month: number): void {
+  let available = initialAvailable;
+  for (const debt of state) {
+    if (available <= 0) break;
+    if (debt.balance <= 0) continue;
+    const payment = Math.min(debt.balance, available);
+    debt.balance = round2(debt.balance - payment);
+    available = round2(available - payment);
+    if (debt.balance <= 0) debt.payoffMonth = month;
+  }
+}
+
+function completedPlan(state: DebtState[], order: DebtInput[]): PayoffPlan {
+  return {
+    months: state.reduce((latest, debt) => Math.max(latest, debt.payoffMonth), 0),
+    totalInterest: round2(state.reduce((sum, debt) => sum + debt.interestPaid, 0)),
+    order: order.map((debt) => debt.name),
+    debts: state.map((debt) => ({
+      name: debt.name,
+      payoffMonth: debt.payoffMonth,
+      interestPaid: debt.interestPaid,
+    })),
+  };
+}
+
 /**
  * Simulates month-by-month payoff. The monthly budget is fixed at
  * (sum of minimum payments + extraMonthly); when a debt clears, its
@@ -59,7 +114,7 @@ export function buildPayoffPlan(input: PayoffPlanInput): PayoffPlan | null {
     input.strategy === "avalanche" ? b.apr - a.apr : a.balance - b.balance,
   );
 
-  const state = order.map((debt) => ({
+  const state: DebtState[] = order.map((debt) => ({
     name: debt.name,
     balance: round2(debt.balance),
     monthlyRate: debt.apr / 100 / 12,
@@ -80,45 +135,15 @@ export function buildPayoffPlan(input: PayoffPlanInput): PayoffPlan | null {
   if (budget <= firstMonthInterest) return null;
 
   for (let month = 1; month <= MAX_MONTHS; month++) {
-    for (const debt of state) {
-      if (debt.balance <= 0) continue;
-      const interest = round2(debt.balance * debt.monthlyRate);
-      debt.balance = round2(debt.balance + interest);
-      debt.interestPaid = round2(debt.interestPaid + interest);
-    }
+    applyInterest(state);
 
     // Minimum payments first, then everything left cascades to the focus
     // debt (state is already in focus order).
-    let available = budget;
-    for (const debt of state) {
-      if (debt.balance <= 0) continue;
-      const payment = Math.min(debt.minPayment, debt.balance, available);
-      debt.balance = round2(debt.balance - payment);
-      available = round2(available - payment);
-      if (debt.balance <= 0) debt.payoffMonth = month;
-    }
-    for (const debt of state) {
-      if (available <= 0) break;
-      if (debt.balance <= 0) continue;
-      const payment = Math.min(debt.balance, available);
-      debt.balance = round2(debt.balance - payment);
-      available = round2(available - payment);
-      if (debt.balance <= 0) debt.payoffMonth = month;
-    }
+    const available = applyMinimumPayments(state, budget, month);
+    applyExtraPayments(state, available, month);
 
     if (state.every((debt) => debt.balance <= 0)) {
-      return {
-        months: month,
-        totalInterest: round2(
-          state.reduce((sum, debt) => sum + debt.interestPaid, 0),
-        ),
-        order: order.map((debt) => debt.name),
-        debts: state.map((debt) => ({
-          name: debt.name,
-          payoffMonth: debt.payoffMonth,
-          interestPaid: debt.interestPaid,
-        })),
-      };
+      return { ...completedPlan(state, order), months: month };
     }
   }
 
