@@ -16,6 +16,32 @@ interface ManualAccount {
   include_in_net_worth: boolean;
 }
 
+type ManualAccountPatch = Pick<
+  ManualAccount,
+  "id" | "balance" | "include_in_net_worth"
+>;
+
+type ManualAccountPayload = {
+  account?: ManualAccount;
+  error?: string;
+};
+
+async function updateManualAccount(
+  account: ManualAccountPatch,
+): Promise<ManualAccountPayload & { ok: boolean }> {
+  const response = await fetch("/api/manual-accounts", {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      id: account.id,
+      balance: account.balance,
+      includeInNetWorth: account.include_in_net_worth,
+    }),
+  });
+  const payload = (await response.json().catch(() => ({}))) as ManualAccountPayload;
+  return { ok: response.ok, ...payload };
+}
+
 export default function ManualAccountsSection({
   initialAccounts,
 }: Readonly<{
@@ -84,26 +110,18 @@ export default function ManualAccountsSection({
     setToggleBusyId(account.id);
     const next = !account.include_in_net_worth;
     try {
-      const response = await fetch("/api/manual-accounts", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          id: account.id,
-          balance: account.balance,
-          includeInNetWorth: next,
-        }),
+      const result = await updateManualAccount({
+        id: account.id,
+        balance: account.balance,
+        include_in_net_worth: next,
       });
-      const payload = (await response.json().catch(() => ({}))) as {
-        account?: ManualAccount;
-        error?: string;
-      };
-      if (!response.ok || !payload.account) {
-        setError(payload.error ?? "Could not update the account.");
+      if (!result.ok || !result.account) {
+        setError(result.error ?? "Could not update the account.");
         return;
       }
       setAccounts((current) =>
         current.map((item) =>
-          item.id === account.id ? payload.account! : item,
+          item.id === account.id ? result.account! : item,
         ),
       );
     } catch {
@@ -121,26 +139,18 @@ export default function ManualAccountsSection({
       return;
     }
 
-    const response = await fetch("/api/manual-accounts", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        id: account.id,
-        balance: parsedBalance,
-        includeInNetWorth: account.include_in_net_worth,
-      }),
+    const result = await updateManualAccount({
+      id: account.id,
+      balance: parsedBalance,
+      include_in_net_worth: account.include_in_net_worth,
     });
-    const payload = (await response.json().catch(() => ({}))) as {
-      account?: ManualAccount;
-      error?: string;
-    };
-    if (!response.ok || !payload.account) {
-      setError(payload.error ?? "Could not update the account.");
+    if (!result.ok || !result.account) {
+      setError(result.error ?? "Could not update the account.");
       return;
     }
     setAccounts((current) =>
       current.map((item) =>
-        item.id === account.id ? payload.account! : item,
+        item.id === account.id ? result.account! : item,
       ),
     );
   }

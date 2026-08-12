@@ -66,6 +66,60 @@ function monthBounds(month: string): { start: string; end: string } | null {
   return { start: `${month}-01`, end: `${month}-${String(lastDay).padStart(2, "0")}` };
 }
 
+type LedgerChunkFilters = {
+  bounds: ReturnType<typeof monthBounds>;
+  ownerId: string;
+  accountId: string;
+  q: string;
+  flow: "" | "in" | "out";
+  accountType: "" | "depository" | "credit";
+  transactionsParityEnabled: boolean;
+  typedIds: string[];
+  missingAccountId: string;
+};
+
+type TransactionsSupabase = Awaited<ReturnType<typeof createClient>>;
+
+function buildLedgerChunkQuery(
+  supabase: TransactionsSupabase,
+  columns: string,
+  filters: LedgerChunkFilters,
+) {
+  let query = supabase
+    .from("transactions")
+    .select(columns)
+    .eq("user_id", filters.ownerId)
+    .order("date", { ascending: false })
+    .order("id", { ascending: true });
+  if (filters.bounds) {
+    query = query
+      .gte("date", filters.bounds.start)
+      .lte("date", filters.bounds.end);
+  }
+  if (filters.accountId) {
+    query = filters.transactionsParityEnabled
+      ? query.or(
+          `account_id.eq.${filters.accountId},manual_account_id.eq.${filters.accountId}`,
+        )
+      : query.eq("account_id", filters.accountId);
+  }
+  if (filters.q) {
+    const categorySearch = filters.q.replace(/\s+/g, "_");
+    query = query.or(
+      `merchant_name.ilike.%${filters.q}%,name.ilike.%${filters.q}%,pfc_primary.ilike.%${categorySearch}%,pfc_detailed.ilike.%${categorySearch}%`,
+    );
+  }
+  if (filters.flow === "in") query = query.lt("amount", 0);
+  if (filters.flow === "out") query = query.gt("amount", 0);
+  if (filters.accountType) {
+    query = query.in(
+      "account_id",
+      filters.typedIds.length ? filters.typedIds : [filters.missingAccountId],
+    );
+  }
+  return query;
+}
+
 export default async function TransactionsPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
   const state = parseLedgerQuery(params);
@@ -173,6 +227,17 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     ? accounts.filter((account) => account.type === accountType).map((account) => account.id as string)
     : [];
   const missingAccountId = "00000000-0000-0000-0000-000000000000";
+  const ledgerChunkFilters: LedgerChunkFilters = {
+    bounds,
+    ownerId,
+    accountId,
+    q,
+    flow,
+    accountType,
+    transactionsParityEnabled,
+    typedIds,
+    missingAccountId,
+  };
 
   // The complete projection drives the page itself only on the projected path
   // (merchant/category/account sorting, or a rules-applied category/merchant
@@ -188,29 +253,11 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   if (needsFullProjection) {
     try {
       const sourceRows = await collectLedgerChunks<LedgerProjectionSourceRow>(async (from, to) => {
-        let facetQuery = supabase
-          .from("transactions")
-          .select(columns)
-          .eq("user_id", ownerId)
-          .order("date", { ascending: false })
-          .order("id", { ascending: true });
-        if (bounds) facetQuery = facetQuery.gte("date", bounds.start).lte("date", bounds.end);
-        if (accountId) {
-          facetQuery = transactionsParityEnabled
-            ? facetQuery.or(`account_id.eq.${accountId},manual_account_id.eq.${accountId}`)
-            : facetQuery.eq("account_id", accountId);
-        }
-        if (q) {
-          const categorySearch = q.replace(/\s+/g, "_");
-          facetQuery = facetQuery.or(
-            `merchant_name.ilike.%${q}%,name.ilike.%${q}%,pfc_primary.ilike.%${categorySearch}%,pfc_detailed.ilike.%${categorySearch}%`,
-          );
-        }
-        if (flow === "in") facetQuery = facetQuery.lt("amount", 0);
-        if (flow === "out") facetQuery = facetQuery.gt("amount", 0);
-        if (accountType) facetQuery = facetQuery.in("account_id", typedIds.length ? typedIds : [missingAccountId]);
-
-        const result = await facetQuery.range(from, to);
+        const result = await buildLedgerChunkQuery(
+          supabase,
+          columns,
+          ledgerChunkFilters,
+        ).range(from, to);
         return {
           rows: (result.data ?? []) as unknown as LedgerProjectionSourceRow[],
           error: result.error,
@@ -290,29 +337,11 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     // query above, so degrade to empty facets and keep the page usable.
     try {
       const facetRows = await collectLedgerChunks<LedgerFacetSourceRow>(async (from, to) => {
-        let facetQuery = supabase
-          .from("transactions")
-          .select("pfc_primary, pfc_detailed, merchant_name, name")
-          .eq("user_id", ownerId)
-          .order("date", { ascending: false })
-          .order("id", { ascending: true });
-        if (bounds) facetQuery = facetQuery.gte("date", bounds.start).lte("date", bounds.end);
-        if (accountId) {
-          facetQuery = transactionsParityEnabled
-            ? facetQuery.or(`account_id.eq.${accountId},manual_account_id.eq.${accountId}`)
-            : facetQuery.eq("account_id", accountId);
-        }
-        if (q) {
-          const categorySearch = q.replace(/\s+/g, "_");
-          facetQuery = facetQuery.or(
-            `merchant_name.ilike.%${q}%,name.ilike.%${q}%,pfc_primary.ilike.%${categorySearch}%,pfc_detailed.ilike.%${categorySearch}%`,
-          );
-        }
-        if (flow === "in") facetQuery = facetQuery.lt("amount", 0);
-        if (flow === "out") facetQuery = facetQuery.gt("amount", 0);
-        if (accountType) facetQuery = facetQuery.in("account_id", typedIds.length ? typedIds : [missingAccountId]);
-
-        const result = await facetQuery.range(from, to);
+        const result = await buildLedgerChunkQuery(
+          supabase,
+          "pfc_primary, pfc_detailed, merchant_name, name",
+          ledgerChunkFilters,
+        ).range(from, to);
         return {
           rows: (result.data ?? []) as unknown as LedgerFacetSourceRow[],
           error: result.error,
