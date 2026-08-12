@@ -47,11 +47,11 @@ export default function InvestmentsWidget({
       {summary?.topMovers && summary.topMovers.length > 0 && (
         <div className="mt-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-            Top movers today
+            Top movers
           </p>
           <ul className="mt-2 space-y-2 text-sm">
             {summary.topMovers.map((mover) => (
-              <li key={`${mover.name}:${mover.ticker ?? ""}`} className="flex justify-between gap-3">
+              <li key={mover.id} className="flex justify-between gap-3">
                 <span className="truncate">
                   {mover.name}
                   {mover.ticker && <span className="ml-1 text-muted">{mover.ticker}</span>}

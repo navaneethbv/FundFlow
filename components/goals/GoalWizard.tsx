@@ -41,6 +41,12 @@ interface Draft {
   accountId: string;
   allocationMode: "none" | "fixed" | "entire";
   allocationAmount: string;
+  /**
+   * The goal row already created from this draft. Once the goal exists, a
+   * failed account link must not insert a second goal on retry; the retry
+   * reuses this id and only retries the allocation.
+   */
+  createdGoalId: string | null;
 }
 
 const EMPTY: Draft = {
@@ -55,6 +61,7 @@ const EMPTY: Draft = {
   accountId: "",
   allocationMode: "none",
   allocationAmount: "",
+  createdGoalId: null,
 };
 
 function isDirty(draft: Draft): boolean {
@@ -152,29 +159,36 @@ export default function GoalWizard({
     }
     setBusy(true);
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      const targetAmount = Math.round(Number(draft.targetAmount) * 100) / 100;
-      const { data: goal, error: insertError } = await supabase
-        .from("goals")
-        .insert({
-          user_id: userData.user?.id,
-          name: draft.name.trim(),
-          target_amount: targetAmount,
-          target_date: draft.targetDate || null,
-          goal_type: draft.goalType,
-          image_slug: draft.slug,
-          monthly_contribution:
-            draft.monthlyContribution === ""
-              ? null
-              : Math.round(Number(draft.monthlyContribution) * 100) / 100,
-          spending_reduces: draft.spendingReduces,
-          target_balance: draft.goalType === "save_up" ? targetAmount : 0,
-        })
-        .select("id")
-        .single();
-      if (insertError) {
-        setError(insertError.message);
-        return;
+      // A retry after a failed account link reuses the already-created goal
+      // instead of inserting a duplicate row from the same draft.
+      let goalId = draft.createdGoalId;
+      if (!goalId) {
+        const { data: userData } = await supabase.auth.getUser();
+        const targetAmount = Math.round(Number(draft.targetAmount) * 100) / 100;
+        const { data: goal, error: insertError } = await supabase
+          .from("goals")
+          .insert({
+            user_id: userData.user?.id,
+            name: draft.name.trim(),
+            target_amount: targetAmount,
+            target_date: draft.targetDate || null,
+            goal_type: draft.goalType,
+            image_slug: draft.slug,
+            monthly_contribution:
+              draft.monthlyContribution === ""
+                ? null
+                : Math.round(Number(draft.monthlyContribution) * 100) / 100,
+            spending_reduces: draft.spendingReduces,
+            target_balance: draft.goalType === "save_up" ? targetAmount : 0,
+          })
+          .select("id")
+          .single();
+        if (insertError) {
+          setError(insertError.message);
+          return;
+        }
+        goalId = goal.id;
+        patch({ createdGoalId: goal.id });
       }
 
       if (draft.allocationMode !== "none" && draft.accountId) {
@@ -184,7 +198,7 @@ export default function GoalWizard({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            goalId: goal.id,
+            goalId,
             accountId: draft.accountId,
             useEntireBalance: draft.allocationMode === "entire",
             allocatedAmount:
@@ -512,7 +526,13 @@ export default function GoalWizard({
             </Button>
           ) : (
             <Button type="button" disabled={busy} onClick={finish}>
-              {busy ? "Creating…" : "Create goal"}
+              {busy
+                ? draft.createdGoalId
+                  ? "Linking…"
+                  : "Creating…"
+                : draft.createdGoalId
+                  ? "Link account"
+                  : "Create goal"}
             </Button>
           )}
         </div>

@@ -40,6 +40,7 @@ describe("GET /api/export/accounts-csv", () => {
 
   it("exports exact columns, neutralizes formulas, and scopes Mine", async () => {
     const userClient = clientStub({
+      profiles: { data: { ai_export_enabled: true } },
       households: { data: [] },
       accounts: {
         data: [
@@ -91,6 +92,7 @@ describe("GET /api/export/accounts-csv", () => {
 
   it("uses RLS-visible rows without a user filter for household scope", async () => {
     const userClient = clientStub({
+      profiles: { data: { ai_export_enabled: true } },
       households: { data: [{ id: "household-1" }] },
       accounts: { data: [] },
       manual_accounts: { data: [] },
@@ -113,6 +115,7 @@ describe("GET /api/export/accounts-csv", () => {
 
   it("leaves a null balance cell empty", async () => {
     const userClient = clientStub({
+      profiles: { data: { ai_export_enabled: true } },
       households: { data: [] },
       accounts: {
         data: [
@@ -216,6 +219,7 @@ describe("GET /api/export/accounts-csv", () => {
 
   it("exports when the households query returns null rows", async () => {
     const userClient = clientStub({
+      profiles: { data: { ai_export_enabled: true } },
       households: { data: null },
       accounts: { data: [] },
       manual_accounts: { data: [] },
@@ -279,6 +283,7 @@ describe("GET /api/export/accounts-csv", () => {
 
   it("exports a blank account name with the mask as the fallback name", async () => {
     const userClient = clientStub({
+      profiles: { data: { ai_export_enabled: true } },
       households: { data: [] },
       accounts: {
         data: [
@@ -311,6 +316,7 @@ describe("GET /api/export/accounts-csv", () => {
 
   it("exports manual accounts without a hidden filter when prefs are missing", async () => {
     const userClient = clientStub({
+      profiles: { data: { ai_export_enabled: true } },
       households: { data: [] },
       accounts: { data: [] },
       manual_accounts: {

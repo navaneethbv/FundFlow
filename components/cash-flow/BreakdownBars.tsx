@@ -38,10 +38,10 @@ export default function BreakdownBars({
   return (
     <div>
       <ul className="space-y-3">
-        {chartRows.map((row) => {
+        {chartRows.map((row, index) => {
           const label = displayLabel(row.label);
           return (
-            <li key={row.label} data-breakdown-bar={label}>
+            <li key={`${index}-${row.label}`} data-breakdown-bar={label}>
               <div className="mb-1.5 flex justify-between gap-4 text-sm">
                 <span className="font-medium">{label}</span>
                 <span data-money className="tabular-nums font-semibold">

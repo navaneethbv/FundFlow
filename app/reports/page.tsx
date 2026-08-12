@@ -104,6 +104,7 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
   const page = parsePage(first(params.page));
 
   const exportParams = reportFiltersToSearchParams(filters);
+  if (selectedCurrency) exportParams.set("currency", selectedCurrency);
   const hrefForPage = (next: number): string => {
     const withPage = reportFiltersToSearchParams(filters);
     if (selectedCurrency) withPage.set("currency", selectedCurrency);
@@ -227,7 +228,7 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
                     prefetch={false}
                     className="inline-flex min-h-11 items-center rounded-field border border-panel-border bg-panel px-3 py-2 text-sm font-semibold hover:bg-panel-2 focus-visible:outline-2"
                   >
-                    Download PDF report
+                    Download weekly PDF report
                   </Link>
                   <Link
                     href="/wrapped"

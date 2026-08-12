@@ -165,14 +165,18 @@ export default function ReceiptInbox({
                   {receipt.purchase_date ?? "Date unknown"}
                   {receipt.total === null ? "" : ` · ${formatCurrency(receipt.total)}`}
                 </p>
-                <a
-                  href={receipt.imageUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-semibold text-accent hover:underline"
-                >
-                  Open image
-                </a>
+                {receipt.imageUrl ? (
+                  <a
+                    href={receipt.imageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold text-accent hover:underline"
+                  >
+                    Open image
+                  </a>
+                ) : (
+                  <span className="text-xs text-muted">Image unavailable</span>
+                )}
               </div>
 
               {receipt.status === "unmatched" && receipt.candidates.length > 0 && (

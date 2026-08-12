@@ -59,14 +59,16 @@ describe("GoalCardMenu", () => {
     expect(source).toContain("Add contribution");
   });
 
-  it("edits target_balance (not target_amount) for a pay-down goal", () => {
+  it("edits the payoff amount (target_amount) for a pay-down goal", () => {
     const source = readFileSync(
       "components/goals/GoalCardMenu.tsx",
       "utf8",
     );
     expect(source).toContain('goal.goal_type === "pay_down"');
-    expect(source).toContain("target_balance: Math.round(parsedTarget * 100) / 100");
     expect(source).toContain("target_amount: Math.round(parsedTarget * 100) / 100");
+    // The derived target_balance is mirrored from the payoff amount against the
+    // captured baseline, so goalTargetAmount and the column agree.
+    expect(source).toContain("goal.starting_balance !== null");
   });
 
   it("never exposes starting_balance for editing", () => {

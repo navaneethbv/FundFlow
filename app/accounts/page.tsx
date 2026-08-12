@@ -195,10 +195,7 @@ export default async function AccountsPage({
     accountsQuery,
     manualQuery,
     snapshotQuery,
-    supabase
-      .from("plaid_items")
-      .select("id,institution_name,institution_logo,institution_brand_color")
-      .eq("user_id", user.id),
+    supabase.rpc("visible_institutions"),
     supabase
       .from("profiles")
       .select("dashboard_prefs")
@@ -216,12 +213,17 @@ export default async function AccountsPage({
   }
 
   const institutionByItem = new Map(
-    (itemResult.data ?? []).map((item) => [
-      item.id as string,
+    ((itemResult.data ?? []) as Array<{
+      id: string;
+      institution_name: string | null;
+      institution_logo: string | null;
+      institution_brand_color: string | null;
+    }>).map((item) => [
+      item.id,
       {
-        name: item.institution_name as string | null,
-        logo: item.institution_logo as string | null,
-        brandColor: item.institution_brand_color as string | null,
+        name: item.institution_name,
+        logo: item.institution_logo,
+        brandColor: item.institution_brand_color,
       },
     ]),
   );

@@ -37,7 +37,12 @@ export interface InvestmentsPage {
   total: number;
   dayChange: { amount: number; pct: number } | null; // vs the prior snapshot day
   byClass: { label: string; holdings: HoldingRow[]; subtotal: number }[];
-  topMovers: { name: string; ticker: string | null; changePct: number }[] | null;
+  topMovers: {
+    id: string;
+    name: string;
+    ticker: string | null;
+    changePct: number;
+  }[] | null;
   balanceHistory: { date: string; value: number }[];
 }
 
@@ -262,6 +267,9 @@ export function buildInvestmentsPage(
     .sort((a, b) => Math.abs(b.periodChangePct as number) - Math.abs(a.periodChangePct as number))
     .slice(0, 5)
     .map((r) => ({
+      // The holding id is the stable key: the same security (name+ticker) can
+      // exist in several accounts, so name/ticker alone would collide.
+      id: r.id,
       name: r.securityName,
       ticker: r.ticker,
       changePct: r.periodChangePct as number,

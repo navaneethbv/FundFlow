@@ -11,6 +11,12 @@ import type {
 
 interface EditableProposal extends BudgetSeedProposal {
   included: boolean;
+  /**
+   * The amount as typed, kept as a string so a partial decimal (e.g. "12.")
+   * or a trailing zero ("0.50") survives the controlled edit instead of being
+   * coerced to a number and back on every keystroke.
+   */
+  suggested_amount_text: string;
 }
 
 export default function SeedBudgetButton({
@@ -39,7 +45,13 @@ export default function SeedBudgetButton({
   }, [open]);
 
   function openPreview() {
-    setRows(proposals.map((proposal) => ({ ...proposal, included: true })));
+    setRows(
+      proposals.map((proposal) => ({
+        ...proposal,
+        included: true,
+        suggested_amount_text: String(proposal.suggested_amount),
+      })),
+    );
     setError(null);
     setOpen(true);
   }
@@ -80,6 +92,14 @@ export default function SeedBudgetButton({
       setError("Select at least one proposal.");
       return;
     }
+    const invalidAmount = selected.some((row) => {
+      const value = Number(row.suggested_amount_text);
+      return !Number.isFinite(value) || value < 0;
+    });
+    if (invalidAmount) {
+      setError("Every selected monthly amount must be a valid non-negative number.");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -90,7 +110,9 @@ export default function SeedBudgetButton({
           month,
           items: selected.map((row) => ({
             category: row.category,
-            monthly_limit: row.suggested_amount,
+            // Parse the typed string now: an empty or non-numeric amount is
+            // an invalid edit, so stop instead of silently sending 0.
+            monthly_limit: Number(row.suggested_amount_text),
             group_name: row.group_name,
             rollover_enabled: row.rollover_enabled,
             sort_order: row.sort_order,
@@ -169,10 +191,10 @@ export default function SeedBudgetButton({
                     type="number"
                     min="0"
                     step="0.01"
-                    value={row.suggested_amount}
+                    value={row.suggested_amount_text}
                     onChange={(event) =>
                       update(index, {
-                        suggested_amount: Number(event.target.value),
+                        suggested_amount_text: event.target.value,
                       })
                     }
                     className="mt-1 min-h-11 w-full rounded-field border border-panel-border bg-background px-3 text-foreground"

@@ -12,7 +12,7 @@ describe("lib/export", () => {
   describe("isExportAllowed", () => {
     it("returns true when ai_export_enabled is true", async () => {
       const single = vi.fn().mockResolvedValue({ data: { ai_export_enabled: true } });
-      const eq = vi.fn().mockReturnValue({ single });
+      const eq = vi.fn().mockReturnValue({ maybeSingle: single });
       const select = vi.fn().mockReturnValue({ eq });
       mockSupabase = { from: vi.fn().mockReturnValue({ select }) };
 
@@ -22,7 +22,7 @@ describe("lib/export", () => {
 
     it("returns false when ai_export_enabled is false", async () => {
       const single = vi.fn().mockResolvedValue({ data: { ai_export_enabled: false } });
-      const eq = vi.fn().mockReturnValue({ single });
+      const eq = vi.fn().mockReturnValue({ maybeSingle: single });
       const select = vi.fn().mockReturnValue({ eq });
       mockSupabase = { from: vi.fn().mockReturnValue({ select }) };
 
@@ -30,14 +30,25 @@ describe("lib/export", () => {
       expect(allowed).toBe(false);
     });
 
-    it("returns true when profile is missing or null", async () => {
+    it("fails closed when the profile row is missing", async () => {
       const single = vi.fn().mockResolvedValue({ data: null });
-      const eq = vi.fn().mockReturnValue({ single });
+      const eq = vi.fn().mockReturnValue({ maybeSingle: single });
       const select = vi.fn().mockReturnValue({ eq });
       mockSupabase = { from: vi.fn().mockReturnValue({ select }) };
 
       const allowed = await isExportAllowed(mockSupabase as SupabaseClient, "user-1");
-      expect(allowed).toBe(true);
+      expect(allowed).toBe(false);
+    });
+
+    it("throws when the profile query errors", async () => {
+      const single = vi.fn().mockResolvedValue({ data: null, error: new Error("db down") });
+      const eq = vi.fn().mockReturnValue({ maybeSingle: single });
+      const select = vi.fn().mockReturnValue({ eq });
+      mockSupabase = { from: vi.fn().mockReturnValue({ select }) };
+
+      await expect(
+        isExportAllowed(mockSupabase as SupabaseClient, "user-1"),
+      ).rejects.toThrow("db down");
     });
   });
 
@@ -46,7 +57,7 @@ describe("lib/export", () => {
       const singleProfile = vi.fn().mockResolvedValue({
         data: { ai_export_enabled: false },
       });
-      const eqProfile = vi.fn().mockReturnValue({ single: singleProfile });
+      const eqProfile = vi.fn().mockReturnValue({ maybeSingle: singleProfile });
       const selectProfile = vi.fn().mockReturnValue({ eq: eqProfile });
 
       mockSupabase = {
@@ -67,7 +78,7 @@ describe("lib/export", () => {
       const singleProfile = vi.fn().mockResolvedValue({
         data: { ai_export_enabled: true },
       });
-      const eqProfile = vi.fn().mockReturnValue({ single: singleProfile });
+      const eqProfile = vi.fn().mockReturnValue({ maybeSingle: singleProfile });
       const selectProfile = vi.fn().mockReturnValue({ eq: eqProfile });
 
       const txnsData = [
@@ -128,7 +139,7 @@ describe("lib/export", () => {
       const singleProfile = vi.fn().mockResolvedValue({
         data: { ai_export_enabled: true },
       });
-      const eqProfile = vi.fn().mockReturnValue({ single: singleProfile });
+      const eqProfile = vi.fn().mockReturnValue({ maybeSingle: singleProfile });
       const selectProfile = vi.fn().mockReturnValue({ eq: eqProfile });
 
       const orderTxns = vi

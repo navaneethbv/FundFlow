@@ -63,6 +63,16 @@ export default function TagsSection({ initialTags }: Readonly<{ initialTags: Tag
         setError(payload.error ?? "Could not rename the tag.");
         return;
       }
+      // Renaming to an existing tag's name merges: the row becomes the target
+      // name if it is free, otherwise the row disappears into the other tag.
+      setTags((current) => {
+        const otherHasTarget = current.some(
+          (t) => t.id !== tag.id && t.name === target,
+        );
+        if (otherHasTarget) return current.filter((t) => t.id !== tag.id);
+        return current.map((t) => (t.id === tag.id ? { ...t, name: target } : t));
+      });
+      setRenaming((current) => ({ ...current, [tag.id]: "" }));
       router.refresh();
     } finally {
       setBusy(false);

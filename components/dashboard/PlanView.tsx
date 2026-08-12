@@ -73,7 +73,12 @@ export default function PlanView({
   data: DashboardData;
   goals: Goal[];
   billsGrouping?: BillGrouping;
-  billsLinkParams?: { month?: string; accountId?: string; itemId?: string };
+  billsLinkParams?: {
+    month?: string;
+    accountId?: string;
+    itemId?: string;
+    scope?: string;
+  };
   prefs?: { hideBillCalendar?: boolean; hideWhatIf?: boolean; hideDebt?: boolean };
 }>) {
   const setupItems = getPlanSetupItems(data, goals);

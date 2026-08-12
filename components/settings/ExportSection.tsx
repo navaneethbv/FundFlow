@@ -15,17 +15,28 @@ export default function ExportSection({
   const supabase = createClient();
   const [enabled, setEnabled] = useState(initialEnabled);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function toggle() {
     setSaving(true);
+    setError(null);
     const next = !enabled;
     const { data: userData } = await supabase.auth.getUser();
-    await supabase
+    if (!userData.user) {
+      setError("You must be signed in to change this setting.");
+      setSaving(false);
+      return;
+    }
+    const { error: updateError } = await supabase
       .from("profiles")
       .update({ ai_export_enabled: next })
-      .eq("id", userData.user?.id ?? "");
-    setEnabled(next);
+      .eq("id", userData.user.id);
     setSaving(false);
+    if (updateError) {
+      setError("Could not save the export setting. Please try again.");
+      return;
+    }
+    setEnabled(next);
   }
 
   let toggleLabel = "Enable exports";
@@ -50,6 +61,7 @@ export default function ExportSection({
         Allow exporting my transaction data
         <Badge tone={enabled ? "success" : "warning"}>{enabled ? "Enabled" : "Paused"}</Badge>
       </label>
+      {error && <p role="alert" className="mb-3 text-sm text-danger">{error}</p>}
 
       <div className="flex flex-wrap gap-2">
         <ButtonLink href="/api/export/csv" className={!enabled ? "pointer-events-none opacity-40" : ""}>

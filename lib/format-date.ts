@@ -87,3 +87,22 @@ export function formatDueAnnotation(daysFromToday: number): string {
   const overdue = Math.abs(daysFromToday);
   return overdue === 1 ? "1 day ago" : `${overdue} days ago`;
 }
+
+/**
+ * The current day as a `YYYY-MM-DD` key in LOCAL time. The app's date
+ * convention is calendar dates, so anchoring "today" or "this month" on
+ * `toISOString()` (UTC) can cross a local date boundary for users east of
+ * UTC near midnight. Deriving the key from local Y/M/D keeps the anchor in
+ * the user's own day.
+ */
+export function localDateKey(now = new Date()): string {
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/** `YYYY-MM` (first seven characters of {@link localDateKey}). */
+export function localMonthKey(now = new Date()): string {
+  return localDateKey(now).slice(0, 7);
+}

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock Supabase Service Client
 const mockSingle = vi.fn();
+const mockMaybeSingle = vi.fn();
 const mockGte = vi.fn();
 const mockEq = vi.fn();
 const mockSelect = vi.fn();
@@ -16,6 +17,7 @@ const mockQueryChain: {
   eq: typeof mockEq;
   gte: typeof mockGte;
   single: typeof mockSingle;
+  maybeSingle: typeof mockMaybeSingle;
   then?: (onfulfilled: (value: { data: unknown[]; error: null }) => unknown) => Promise<unknown>;
 } = {
   select: mockSelect,
@@ -24,6 +26,7 @@ const mockQueryChain: {
   eq: mockEq,
   gte: mockGte,
   single: mockSingle,
+  maybeSingle: mockMaybeSingle,
 };
 
 // Enable chaining by returning the same query chain
@@ -33,6 +36,7 @@ mockInsert.mockReturnValue(mockQueryChain);
 mockUpsert.mockReturnValue(mockQueryChain);
 mockEq.mockReturnValue(mockQueryChain);
 mockGte.mockReturnValue(mockQueryChain);
+mockMaybeSingle.mockReturnValue(mockQueryChain);
 
 const mockSupabaseClient = {
   from: mockFrom,
@@ -65,6 +69,7 @@ describe("notifications manager", () => {
     mockSelect.mockReturnValue(mockQueryChain);
     mockInsert.mockReturnValue(mockQueryChain);
     mockUpsert.mockReturnValue(mockQueryChain);
+    mockMaybeSingle.mockResolvedValue({ data: null, error: null }); // Default no row
     mockSingle.mockResolvedValue({ data: null, error: null }); // Default no preferences row
     
     // Support promise-like behavior on the query chain by default
@@ -267,11 +272,9 @@ describe("notifications manager", () => {
       error: null,
     });
 
-    // Mock existing notifications in window containing a subjectKey match
-    mockGte.mockResolvedValueOnce({
-      data: [
-        { title: "Target alert Chase credit", body: "Something happened" }
-      ],
+    // Mock an existing notification claiming the same subject key
+    mockMaybeSingle.mockResolvedValueOnce({
+      data: { id: "existing-notif", subject_key: "chase-credit" },
       error: null,
     });
 
@@ -279,10 +282,11 @@ describe("notifications manager", () => {
       "user-1",
       "low_cash_forecast",
       { title: "New alert", body: "chase credit balance low" },
-      "Chase credit" // subjectKey
+      "chase-credit" // subjectKey
     );
 
-    // Should be detected as a duplicate (case-insensitive substring match of "Chase credit" in title/body)
+    // Should be detected as a duplicate by the stored subject_key column,
+    // not by substring-matching rendered text.
     expect(result).toBeNull();
     expect(mockInsert).not.toHaveBeenCalled();
   });
@@ -366,8 +370,8 @@ describe("notifications manager", () => {
       data: { low_cash_forecast: true },
       error: null,
     });
-    mockGte.mockResolvedValueOnce({
-      data: [{ title: "Wells Fargo alert", body: "Balance low" }],
+    mockMaybeSingle.mockResolvedValueOnce({
+      data: null,
       error: null,
     });
     mockSingle.mockResolvedValueOnce({
@@ -379,14 +383,14 @@ describe("notifications manager", () => {
       "user-1",
       "low_cash_forecast",
       { title: "Chase alert", body: "Low cash" },
-      "Chase"
+      "chase"
     );
     expect(res).toEqual({ id: "notif-new" });
 
-    // DB query error handling
+    // DB query error handling on the subject-key dedupe
     mockSingle.mockResolvedValueOnce({ data: { low_cash_forecast: true }, error: null });
-    mockGte.mockResolvedValueOnce({ data: null, error: new Error("Dedupe Error") });
-    await expect(createNotification("user-1", "low_cash_forecast", { title: "t", body: "b" })).rejects.toThrow("Dedupe Error");
+    mockMaybeSingle.mockResolvedValueOnce({ data: null, error: new Error("Dedupe Error") });
+    await expect(createNotification("user-1", "low_cash_forecast", { title: "t", body: "b" }, "chase")).rejects.toThrow("Dedupe Error");
   });
 
   it("handles milestone processing errors gracefully", async () => {

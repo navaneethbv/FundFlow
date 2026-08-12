@@ -111,14 +111,15 @@ export default function AddTransactionModal({
             Credit (money in)
           </Button>
         </div>
-        <Field label="Amount">
-          <Input type="number" step="any" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} required />
+        <Field label="Amount" htmlFor="add-txn-amount">
+          <Input id="add-txn-amount" type="number" step="any" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} required />
         </Field>
-        <Field label="Merchant">
-          <Input value={merchant} onChange={(e) => setMerchant(e.target.value)} required maxLength={120} />
+        <Field label="Merchant" htmlFor="add-txn-merchant">
+          <Input id="add-txn-merchant" value={merchant} onChange={(e) => setMerchant(e.target.value)} required maxLength={120} />
         </Field>
-        <Field label="Date">
+        <Field label="Date" htmlFor="add-txn-date">
           <Input
+            id="add-txn-date"
             type="date"
             value={date}
             max={new Date().toISOString().slice(0, 10)}
@@ -126,8 +127,8 @@ export default function AddTransactionModal({
             required
           />
         </Field>
-        <Field label="Account">
-          <Select value={accountKey} onChange={(e) => setAccountKey(e.target.value)}>
+        <Field label="Account" htmlFor="add-txn-account">
+          <Select id="add-txn-account" value={accountKey} onChange={(e) => setAccountKey(e.target.value)}>
             {accounts.map((a) => (
               <option key={`${a.source}:${a.id}`} value={`${a.source}:${a.id}`}>
                 {a.name}
@@ -135,8 +136,9 @@ export default function AddTransactionModal({
             ))}
           </Select>
         </Field>
-        <Field label="Category (optional)">
+        <Field label="Category (optional)" htmlFor="add-txn-category">
           <Input
+            id="add-txn-category"
             list="add-transaction-categories"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
@@ -148,8 +150,8 @@ export default function AddTransactionModal({
           </datalist>
         </Field>
         {goals.length > 0 && (
-          <Field label="Link to a goal (optional)">
-            <Select value={goalId} onChange={(e) => setGoalId(e.target.value)}>
+          <Field label="Link to a goal (optional)" htmlFor="add-txn-goal">
+            <Select id="add-txn-goal" value={goalId} onChange={(e) => setGoalId(e.target.value)}>
               <option value="">None</option>
               {goals.map((g) => (
                 <option key={g.id} value={g.id}>
@@ -159,8 +161,8 @@ export default function AddTransactionModal({
             </Select>
           </Field>
         )}
-        <Field label="Notes (optional)">
-          <Input value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={500} />
+        <Field label="Notes (optional)" htmlFor="add-txn-notes">
+          <Input id="add-txn-notes" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={500} />
         </Field>
         {error && <p className="text-sm text-danger">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">

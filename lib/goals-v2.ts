@@ -89,11 +89,14 @@ function fundableBalance(balance: number | null): number {
 
 /**
  * How much progress the goal needs in total. A save-up goal counts up to
- * `target_amount`; a pay-down goal counts the balance it has to close, which is
- * the distance from its captured baseline to its target balance.
+ * `target_amount`; a pay-down goal honors the payoff amount the user entered
+ * (`target_amount`), or falls back to the balance it has to close
+ * (`starting_balance` minus `target_balance`) for pay-all-off goals and rows
+ * created before the entered amount was respected.
  */
 export function goalTargetAmount(goal: GoalV2Row): number {
   if (goal.goal_type === "pay_down") {
+    if (goal.target_amount > 0) return Math.max(0, round2(goal.target_amount));
     return Math.max(
       0,
       round2((goal.starting_balance ?? 0) - (goal.target_balance ?? 0)),
@@ -225,12 +228,17 @@ export function computeFundedGoals(
     if (goal.goal_type === "pay_down") {
       // With nothing linked there is no balance to measure against, so report
       // no progress rather than reading "baseline minus zero" as fully paid.
+      // The delta is capped at the target: when the user asked to pay off a
+      // specific amount, going past it is complete, not extra progress.
       fundedAmount =
         linkedCount === 0
           ? 0
-          : Math.max(
-              0,
-              round2((goal.starting_balance ?? 0) - linkedAccountBalance),
+          : Math.min(
+              target,
+              Math.max(
+                0,
+                round2((goal.starting_balance ?? 0) - linkedAccountBalance),
+              ),
             );
     } else {
       allocatedFromAccounts = allocationTotal(goalLinks, balances);

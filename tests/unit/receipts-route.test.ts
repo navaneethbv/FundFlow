@@ -215,6 +215,27 @@ describe("GET /api/receipts", () => {
     const response = await GET();
     expect(response.status).toBe(500);
   });
+
+  it("keeps the inbox usable when one receipt's signed URL fails", async () => {
+    const second = { ...RECEIPT, id: "receipt-2", storage_path: "broken/path" };
+    service = makeService();
+    service.createSignedUrl.mockImplementation(async (path: string) =>
+      path === "broken/path"
+        ? { data: null, error: new Error("Signed URL failed") }
+        : { data: { signedUrl: "https://signed.example/receipt" }, error: null },
+    );
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ receipts: { data: [RECEIPT, second] }, transactions: { data: [] } }),
+    });
+
+    const response = await GET();
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.receipts).toHaveLength(2);
+    expect(payload.receipts[0].imageUrl).toBe("https://signed.example/receipt");
+    expect(payload.receipts[1].imageUrl).toBeNull();
+  });
 });
 
 describe("PATCH /api/receipts/[id]", () => {

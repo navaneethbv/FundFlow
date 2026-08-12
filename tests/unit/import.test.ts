@@ -32,6 +32,14 @@ describe("parseCsv", () => {
       ["b", "c"],
     ]);
   });
+
+  it("strips a leading UTF-8 BOM so the first header cell stays clean", () => {
+    const withBom = `\uFEFFDate,Description,Amount\n2026-01-01,Coffee,4.50`;
+    expect(parseCsv(withBom)).toEqual([
+      ["Date", "Description", "Amount"],
+      ["2026-01-01", "Coffee", "4.50"],
+    ]);
+  });
 });
 
 describe("detectColumns", () => {

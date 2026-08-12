@@ -51,6 +51,38 @@ export interface LedgerFilterOptions {
   merchants: string[];
 }
 
+/**
+ * The row fields the filter facets read. Raw source rows satisfy this when
+ * there are no remap rules (rules-applied values equal the raw columns), which
+ * is what lets the direct sort path build facets from a lightweight query.
+ */
+export type LedgerFacetRow = Pick<
+  LedgerProjectedRow,
+  "category" | "pfc_detailed" | "merchant"
+>;
+
+/**
+ * The minimal source columns a facet query needs when no rule can remap a
+ * category or merchant name: the display category, its detailed subcategory,
+ * and the merchant name (the raw `merchant_name`/`name` fallback the
+ * projection applies).
+ */
+export interface LedgerFacetSourceRow {
+  pfc_primary: string | null;
+  pfc_detailed: string | null;
+  merchant_name: string | null;
+  name: string | null;
+}
+
+/** Project a lightweight facet row onto the facet-shape rows the builder reads. */
+export function toLedgerFacetRow(row: LedgerFacetSourceRow): LedgerFacetRow {
+  return {
+    category: row.pfc_primary,
+    pfc_detailed: row.pfc_detailed,
+    merchant: row.merchant_name ?? row.name ?? "",
+  };
+}
+
 export function resolvedLedgerAccountId(
   row: Pick<LedgerDisplaySourceRow, "account_id" | "manual_account_id">,
 ): string {
@@ -191,7 +223,7 @@ export function filterProjectedLedgerRows<
 }
 
 export function buildLedgerFilterOptions(
-  rows: LedgerProjectedRow[],
+  rows: LedgerFacetRow[],
   accounts: Array<{ value: string; label: string }>,
 ): LedgerFilterOptions {
   const categories = new Map<string, string>();

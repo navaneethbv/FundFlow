@@ -187,7 +187,7 @@ describe("loadDashboardInvestmentSummary", () => {
     expect(result.total).toBe(150);
     expect(result.dayChange).toEqual({ amount: 50, pct: 50 });
     expect(result.topMovers).toEqual([
-      { name: "Fund A", ticker: "FUNDA", changePct: 50 },
+      { id: "holding-1", name: "Fund A", ticker: "FUNDA", changePct: 50 },
     ]);
   });
 

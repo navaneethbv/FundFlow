@@ -10,6 +10,7 @@ import SegmentedControl from "@/components/ui/SegmentedControl";
 import ButtonLink from "@/components/ui/ButtonLink";
 import { ChevronLeft, ChevronRight } from "@/components/ui/icons";
 import { formatMonth } from "@/lib/format";
+import { localDateKey, localMonthKey } from "@/lib/format-date";
 import { loadRecurringData } from "@/lib/recurring-data";
 import { serializeFinancialScope } from "@/lib/financial-scope";
 import { isFeatureEnabled } from "@/lib/feature-flags";
@@ -59,8 +60,8 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
   } = await supabase.auth.getUser();
   if (!user) notFound();
 
-  const currentMonth = new Date().toISOString().slice(0, 7);
-  const today = new Date().toISOString().slice(0, 10);
+  const currentMonth = localMonthKey();
+  const today = localDateKey();
   const rawMonth = first(params.month);
   const month = rawMonth && MONTH_REGEX.test(rawMonth) ? rawMonth : currentMonth;
   const tab = parseTab(first(params.tab));

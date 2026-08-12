@@ -102,9 +102,19 @@ export default function ProfileSection({
           ) : null}
         </div>
         <div className="space-y-1">
-          <label className="inline-block cursor-pointer text-sm font-semibold text-accent hover:underline">
+          <label
+            className="inline-flex min-h-11 cursor-pointer items-center rounded-field border border-panel-border bg-panel px-3 text-sm font-semibold text-accent hover:bg-panel-2 focus-within:outline-2"
+            htmlFor="avatar-upload"
+          >
             Upload photo
-            <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={uploadAvatar} disabled={busy} />
+            <input
+              id="avatar-upload"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="sr-only"
+              onChange={uploadAvatar}
+              disabled={busy}
+            />
           </label>
           {avatarUrl && (
             <button type="button" onClick={removeAvatar} disabled={busy} className="block text-xs text-muted hover:underline">

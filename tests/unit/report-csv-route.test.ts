@@ -153,6 +153,42 @@ describe("report CSV export route", () => {
     );
   });
 
+  it("exports only the selected currency's rows when a currency is given", async () => {
+    vi.mocked(loadReportData).mockResolvedValue({
+      transactions: [
+        txn({ id: "usd", merchant: "Costco", accountId: "acct-usd" }),
+        txn({ id: "eur", merchant: "Lidl", accountId: "acct-eur" }),
+      ],
+      currencyByAccountId: new Map([
+        ["acct-usd", "USD"],
+        ["acct-eur", "EUR"],
+      ]),
+      truncated: false,
+    });
+    const body = await (
+      await GET(get("?start=2026-07-01&end=2026-07-31&currency=USD"))
+    ).text();
+    expect(body).toContain("Costco");
+    expect(body).not.toContain("Lidl");
+  });
+
+  it("exports every currency's rows when no currency filter is given", async () => {
+    vi.mocked(loadReportData).mockResolvedValue({
+      transactions: [
+        txn({ id: "usd", merchant: "Costco", accountId: "acct-usd" }),
+        txn({ id: "eur", merchant: "Lidl", accountId: "acct-eur" }),
+      ],
+      currencyByAccountId: new Map([
+        ["acct-usd", "USD"],
+        ["acct-eur", "EUR"],
+      ]),
+      truncated: false,
+    });
+    const body = await (await GET(get())).text();
+    expect(body).toContain("Costco");
+    expect(body).toContain("Lidl");
+  });
+
   it("falls back to the current month when the range is missing", async () => {
     await GET(get("?tab=spending"));
     const call = vi.mocked(loadReportData).mock.calls[0]![1];

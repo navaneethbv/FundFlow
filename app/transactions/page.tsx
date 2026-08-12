@@ -41,6 +41,9 @@ import {
 import {
   buildLedgerFilterOptions,
   projectLedgerRows,
+  toLedgerFacetRow,
+  type LedgerFacetSourceRow,
+  type LedgerFilterOptions,
   type LedgerProjectedRow,
   type LedgerProjectionSourceRow,
 } from "@/lib/ledger-projection";
@@ -171,45 +174,56 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     : [];
   const missingAccountId = "00000000-0000-0000-0000-000000000000";
 
-  let projectedScope: LedgerProjectedRow[] = [];
-  try {
-    const sourceRows = await collectLedgerChunks<LedgerProjectionSourceRow>(async (from, to) => {
-      let facetQuery = supabase
-        .from("transactions")
-        .select(columns)
-        .eq("user_id", ownerId)
-        .order("date", { ascending: false })
-        .order("id", { ascending: true });
-      if (bounds) facetQuery = facetQuery.gte("date", bounds.start).lte("date", bounds.end);
-      if (accountId) {
-        facetQuery = transactionsParityEnabled
-          ? facetQuery.or(`account_id.eq.${accountId},manual_account_id.eq.${accountId}`)
-          : facetQuery.eq("account_id", accountId);
-      }
-      if (q) {
-        const categorySearch = q.replace(/\s+/g, "_");
-        facetQuery = facetQuery.or(
-          `merchant_name.ilike.%${q}%,name.ilike.%${q}%,pfc_primary.ilike.%${categorySearch}%,pfc_detailed.ilike.%${categorySearch}%`,
-        );
-      }
-      if (flow === "in") facetQuery = facetQuery.lt("amount", 0);
-      if (flow === "out") facetQuery = facetQuery.gt("amount", 0);
-      if (accountType) facetQuery = facetQuery.in("account_id", typedIds.length ? typedIds : [missingAccountId]);
+  // The complete projection drives the page itself only on the projected path
+  // (merchant/category/account sorting, or a rules-applied category/merchant
+  // filter). On a direct date/amount path the projection is only used to build
+  // filter facets. When no rule can remap a category or merchant name, those
+  // facets equal the raw columns, so the page skips the full projection and
+  // loads them from a lightweight query that degrades to empty facets instead
+  // of failing the page when one chunk fails.
+  const projectedPath = needsProjectedLedgerPage(state.sort, ruleAwareFilter);
+  const needsFullProjection = projectedPath || hasRemapRules(rulesList);
 
-      const result = await facetQuery.range(from, to);
-      return {
-        rows: (result.data ?? []) as unknown as LedgerProjectionSourceRow[],
-        error: result.error,
-      };
-    });
-    projectedScope = projectLedgerRows(sourceRows, rulesList, accountNamesById, accountLabelsById);
-  } catch (error) {
-    const code = error instanceof Error ? error.message : "unknown";
-    console.error("Transaction projection query failed", code);
-    ledgerError = "We couldn't load your transactions. Try changing the filters or refresh the page.";
+  let projectedScope: LedgerProjectedRow[] = [];
+  if (needsFullProjection) {
+    try {
+      const sourceRows = await collectLedgerChunks<LedgerProjectionSourceRow>(async (from, to) => {
+        let facetQuery = supabase
+          .from("transactions")
+          .select(columns)
+          .eq("user_id", ownerId)
+          .order("date", { ascending: false })
+          .order("id", { ascending: true });
+        if (bounds) facetQuery = facetQuery.gte("date", bounds.start).lte("date", bounds.end);
+        if (accountId) {
+          facetQuery = transactionsParityEnabled
+            ? facetQuery.or(`account_id.eq.${accountId},manual_account_id.eq.${accountId}`)
+            : facetQuery.eq("account_id", accountId);
+        }
+        if (q) {
+          const categorySearch = q.replace(/\s+/g, "_");
+          facetQuery = facetQuery.or(
+            `merchant_name.ilike.%${q}%,name.ilike.%${q}%,pfc_primary.ilike.%${categorySearch}%,pfc_detailed.ilike.%${categorySearch}%`,
+          );
+        }
+        if (flow === "in") facetQuery = facetQuery.lt("amount", 0);
+        if (flow === "out") facetQuery = facetQuery.gt("amount", 0);
+        if (accountType) facetQuery = facetQuery.in("account_id", typedIds.length ? typedIds : [missingAccountId]);
+
+        const result = await facetQuery.range(from, to);
+        return {
+          rows: (result.data ?? []) as unknown as LedgerProjectionSourceRow[],
+          error: result.error,
+        };
+      });
+      projectedScope = projectLedgerRows(sourceRows, rulesList, accountNamesById, accountLabelsById);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "unknown";
+      console.error("Transaction projection query failed", code);
+      ledgerError = "We couldn't load your transactions. Try changing the filters or refresh the page.";
+    }
   }
 
-  const projectedPath = needsProjectedLedgerPage(state.sort, ruleAwareFilter);
   let rows: LedgerProjectedRow[] = [];
   let total = 0;
   if (!ledgerError && projectedPath) {
@@ -262,10 +276,58 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
       total = result.count ?? rows.length;
     }
   }
-  const filterOptions = buildLedgerFilterOptions(
-    projectedScope,
-    accountOptions.map((account) => ({ value: account.id, label: accountLabelsById.get(account.id) ?? account.name })),
-  );
+  const accountOptionsForFilters = accountOptions.map((account) => ({
+    value: account.id,
+    label: accountLabelsById.get(account.id) ?? account.name,
+  }));
+  let filterOptions: LedgerFilterOptions;
+  if (needsFullProjection) {
+    filterOptions = buildLedgerFilterOptions(projectedScope, accountOptionsForFilters);
+  } else {
+    // Direct date/amount path with no remap rules: facets equal the raw
+    // columns, so read only the facet columns. Best-effort: a facet failure
+    // must not take the whole ledger down — the rows come from the direct
+    // query above, so degrade to empty facets and keep the page usable.
+    try {
+      const facetRows = await collectLedgerChunks<LedgerFacetSourceRow>(async (from, to) => {
+        let facetQuery = supabase
+          .from("transactions")
+          .select("pfc_primary, pfc_detailed, merchant_name, name")
+          .eq("user_id", ownerId)
+          .order("date", { ascending: false })
+          .order("id", { ascending: true });
+        if (bounds) facetQuery = facetQuery.gte("date", bounds.start).lte("date", bounds.end);
+        if (accountId) {
+          facetQuery = transactionsParityEnabled
+            ? facetQuery.or(`account_id.eq.${accountId},manual_account_id.eq.${accountId}`)
+            : facetQuery.eq("account_id", accountId);
+        }
+        if (q) {
+          const categorySearch = q.replace(/\s+/g, "_");
+          facetQuery = facetQuery.or(
+            `merchant_name.ilike.%${q}%,name.ilike.%${q}%,pfc_primary.ilike.%${categorySearch}%,pfc_detailed.ilike.%${categorySearch}%`,
+          );
+        }
+        if (flow === "in") facetQuery = facetQuery.lt("amount", 0);
+        if (flow === "out") facetQuery = facetQuery.gt("amount", 0);
+        if (accountType) facetQuery = facetQuery.in("account_id", typedIds.length ? typedIds : [missingAccountId]);
+
+        const result = await facetQuery.range(from, to);
+        return {
+          rows: (result.data ?? []) as unknown as LedgerFacetSourceRow[],
+          error: result.error,
+        };
+      });
+      filterOptions = buildLedgerFilterOptions(
+        facetRows.map(toLedgerFacetRow),
+        accountOptionsForFilters,
+      );
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "unknown";
+      console.error("Transaction facet query failed", code);
+      filterOptions = buildLedgerFilterOptions([], accountOptionsForFilters);
+    }
+  }
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // User annotations (note/tags) and category splits for the visible rows.

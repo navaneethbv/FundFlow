@@ -65,6 +65,7 @@ export default function MobileLedgerList({ rows }: Readonly<{ rows: LedgerCardRo
               {formatCurrency(Math.abs(row.amount), row.currency)}
             </span>
             <TransactionEditor
+              idPrefix="mobile-"
               transaction={{
                 id: row.id,
                 merchant: row.merchant,

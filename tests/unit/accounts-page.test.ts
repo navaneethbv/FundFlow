@@ -309,6 +309,39 @@ describe("buildAccountsPageData", () => {
     expect(data.groups.cash.changes).toEqual([]);
   });
 
+  it("negates credit and loan month changes so paying debt down reads positive", () => {
+    const data = buildAccountsPageData(
+      [
+        account({ id: "card-1", name: "Visa", type: "credit", currentBalance: -1500 }),
+      ],
+      [
+        snapshot("card-1", "2026-06-29", -2000),
+        snapshot("card-1", "2026-07-29", -1500),
+      ],
+      NOW,
+    );
+    const row = data.groups.credit.rows[0]!;
+    // The balance displays absolute, but the change follows the signed
+    // net-worth convention: paying the card down is a +500 improvement.
+    expect(row.balance).toBe(1500);
+    expect(row.monthChange).toEqual({ amount: 500, pct: 25 });
+  });
+
+  it("shows growing credit debt as a negative change, not a green success", () => {
+    const data = buildAccountsPageData(
+      [
+        account({ id: "card-1", name: "Visa", type: "credit", currentBalance: -2200 }),
+      ],
+      [
+        snapshot("card-1", "2026-06-29", -2000),
+        snapshot("card-1", "2026-07-29", -2200),
+      ],
+      NOW,
+    );
+    const row = data.groups.credit.rows[0]!;
+    expect(row.monthChange).toEqual({ amount: -200, pct: -10 });
+  });
+
   it("uses null percent when the starting balance is zero", () => {
     const data = buildAccountsPageData(
       [

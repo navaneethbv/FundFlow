@@ -216,7 +216,7 @@ describe("goal allocation route", () => {
 
   it("captures the pay-down baseline on the first liability link", async () => {
     client = goalClient({
-      goals: { data: { id: GOAL_ID, goal_type: "pay_down", starting_balance: null } },
+      goals: { data: { id: GOAL_ID, goal_type: "pay_down", starting_balance: null, target_amount: 0 } },
       accounts: { data: { id: ACCOUNT_ID, type: "credit", current_balance: 4200 } },
     });
     authWith(client);
@@ -230,7 +230,33 @@ describe("goal allocation route", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ baselineCaptured: true });
-    expect(client.writtenTo("goals")).toEqual({ starting_balance: 4200 });
+    expect(client.writtenTo("goals")).toEqual({
+      starting_balance: 4200,
+      target_balance: 0,
+    });
+  });
+
+  it("mirrors an entered payoff amount into target_balance on baseline capture", async () => {
+    client = goalClient({
+      goals: { data: { id: GOAL_ID, goal_type: "pay_down", starting_balance: null, target_amount: 5000 } },
+      accounts: { data: { id: ACCOUNT_ID, type: "credit", current_balance: 12000 } },
+    });
+    authWith(client);
+    const response = await allocationPost(
+      jsonReq(ALLOCATION_URL, "POST", {
+        goalId: GOAL_ID,
+        accountId: ACCOUNT_ID,
+        useEntireBalance: true,
+      }),
+    );
+
+    await expect(response.json()).resolves.toMatchObject({ baselineCaptured: true });
+    // Paying off 5,000 of a 12,000 balance leaves 7,000 as the target balance,
+    // so the row's target_balance mirrors the amount the user entered.
+    expect(client.writtenTo("goals")).toEqual({
+      starting_balance: 12000,
+      target_balance: 7000,
+    });
   });
 
   it("never recomputes a baseline that is already set", async () => {

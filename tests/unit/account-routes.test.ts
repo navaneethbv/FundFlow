@@ -20,7 +20,13 @@ vi.mock("@/lib/plaid", () => ({
   getPlaidClient: () => ({ itemRemove: vi.fn().mockResolvedValue({ data: {} }) }),
 }));
 
-let serviceClient = clientStub();
+let serviceClient = clientStub({
+  // The account-delete route rate-limits via the rate_limit_hit RPC. The
+  // client stub resolves an unseeded RPC to `data: null`, which checkRateLimit
+  // reads as "not allowed"; seed it open like the pre-fixture behavior (an
+  // undefined rpc threw, was caught, and failed open).
+  rate_limit_hit: { data: true },
+});
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => serviceClient,
 }));
@@ -58,7 +64,9 @@ const unauthorized = () =>
 
 beforeEach(() => {
   vi.clearAllMocks();
-  serviceClient = clientStub();
+  serviceClient = clientStub({
+    rate_limit_hit: { data: true },
+  });
 });
 
 describe("POST /api/accounts/apr", () => {
@@ -459,7 +467,7 @@ describe("DELETE /api/account", () => {
       }),
     };
     serviceClient = Object.assign(
-      clientStub({ plaid_items: { data: [] } }),
+      clientStub({ plaid_items: { data: [] }, rate_limit_hit: { data: true } }),
       {
         auth: {
           admin: {

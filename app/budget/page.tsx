@@ -17,6 +17,7 @@ import {
 } from "@/lib/financial-scope";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { UNKNOWN_CURRENCY } from "@/lib/format";
+import { localMonthKey } from "@/lib/format-date";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -76,7 +77,7 @@ export default async function BudgetPage({
   } = await supabase.auth.getUser();
   if (!user) notFound();
 
-  const currentMonth = new Date().toISOString().slice(0, 7);
+  const currentMonth = localMonthKey();
   const month = parseBudgetMonth(first(params.month), currentMonth);
   const horizon = parseBudgetHorizon(first(params.horizon));
   const activeSummary = summaryTab(first(params.summary));
@@ -199,6 +200,10 @@ export default async function BudgetPage({
           </Panel>
         )}
         <BudgetPlanner
+          // Keying by the month, scope, and currency forces a remount when
+          // the user navigates between months, so the optimistic edit state
+          // always shows the month the PUT request is actually writing to.
+          key={`${month}-${scope ?? "mine"}-${currency}`}
           initialView={loaded.view}
           proposals={loaded.proposals}
           month={month}

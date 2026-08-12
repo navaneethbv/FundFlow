@@ -87,8 +87,8 @@ describe("TopMovers", () => {
     const html = renderToStaticMarkup(
       createElement(TopMovers, {
         movers: [
-          { name: "Up Co", ticker: "UP", changePct: 3.2 },
-          { name: "Down Co", ticker: "DN", changePct: -1.1 },
+          { id: "up", name: "Up Co", ticker: "UP", changePct: 3.2 },
+          { id: "dn", name: "Down Co", ticker: "DN", changePct: -1.1 },
         ],
       }),
     );

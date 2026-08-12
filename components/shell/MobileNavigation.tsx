@@ -93,6 +93,7 @@ export default function MobileNavigation({
   active,
 }: Readonly<{ items: MobileNavItem[]; active: AppShellActive }>) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const activeKey = resolvedActive(active);
   const quickItems = items.filter((item) => QUICK_KEYS.has(item.key));
@@ -103,6 +104,7 @@ export default function MobileNavigation({
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     closeButtonRef.current?.focus();
+    const trigger = triggerRef.current;
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") setOpen(false);
@@ -111,6 +113,8 @@ export default function MobileNavigation({
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
+      // Restore focus to the "More" trigger when the dialog closes.
+      trigger?.focus();
     };
   }, [open]);
 
@@ -140,6 +144,7 @@ export default function MobileNavigation({
           );
         })}
         <button
+          ref={triggerRef}
           type="button"
           aria-expanded={open}
           aria-haspopup="dialog"

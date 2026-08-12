@@ -20,8 +20,9 @@ type Mode = "menu" | "edit" | "contribute";
  * funded amount is the linked liability's balance delta alone
  * (`lib/goals-v2.ts`'s `computeFundedGoals`) — a manual event there would
  * either double-count or, since pay-down math never adds `eventTotal`,
- * silently do nothing. Editing exposes `target_balance` for pay-down goals
- * instead of `target_amount`, matching `goalTargetAmount`'s own math.
+ * silently do nothing. Editing always exposes the payoff amount
+ * (`target_amount`) for a pay-down goal, matching `goalTargetAmount`'s math;
+ * `target_balance` is derived from it against the captured `starting_balance`.
  * `starting_balance` is never editable here — it is a captured baseline the
  * `set_goal_allocation` database function sets once, by design.
  */
@@ -39,7 +40,7 @@ export default function GoalCardMenu({
   const [mode, setMode] = useState<Mode>("menu");
   const [name, setName] = useState(goal.name);
   const [targetAmount, setTargetAmount] = useState(
-    String(goal.goal_type === "pay_down" ? (goal.target_balance ?? 0) : goal.target_amount),
+    String(goal.target_amount),
   );
   const [targetDate, setTargetDate] = useState(goal.target_date ?? "");
   const [contribution, setContribution] = useState("");
@@ -70,11 +71,22 @@ export default function GoalCardMenu({
       return;
     }
     setBusy(true);
+    // Keep `target_balance` mirroring the payoff amount against the captured
+    // baseline, so any reader of that column stays consistent with
+    // `goalTargetAmount`. Without a baseline it stays untouched.
     const patch =
       goal.goal_type === "pay_down"
         ? {
             name: name.trim(),
-            target_balance: Math.round(parsedTarget * 100) / 100,
+            target_amount: Math.round(parsedTarget * 100) / 100,
+            target_balance:
+              goal.starting_balance !== null
+                ? Math.max(
+                    0,
+                    Math.round((goal.starting_balance - parsedTarget) * 100) /
+                      100,
+                  )
+                : goal.target_balance,
             target_date: targetDate || null,
           }
         : {
@@ -226,7 +238,7 @@ export default function GoalCardMenu({
                 />
               </label>
               <label className="block text-xs font-semibold text-muted">
-                {goal.goal_type === "pay_down" ? "Target balance" : "Target amount"}
+                {goal.goal_type === "pay_down" ? "Amount to pay down" : "Target amount"}
                 <input
                   type="number"
                   min="0"

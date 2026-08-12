@@ -6,6 +6,7 @@ import ForecastChart from "@/components/forecasting/ForecastChart";
 import Panel from "@/components/ui/Panel";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { formatCurrency } from "@/lib/format";
+import { localDateKey } from "@/lib/format-date";
 import { forecastNetWorth, parseForecastAssumptions } from "@/lib/forecasting";
 import { loadForecastPageData } from "@/lib/forecasting-data";
 import { createClient } from "@/lib/supabase/server";
@@ -25,7 +26,7 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
   } = await supabase.auth.getUser();
   if (!user) notFound();
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey();
   const [{ startingState, defaults }, params] = await Promise.all([
     loadForecastPageData(supabase, user.id, today),
     searchParams,

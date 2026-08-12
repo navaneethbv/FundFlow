@@ -77,6 +77,33 @@ export default function ManualAccountsSection({
     setBalance("");
   }
 
+  async function toggleInclusion(account: ManualAccount) {
+    setError(null);
+    const next = !account.include_in_net_worth;
+    const response = await fetch("/api/manual-accounts", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        id: account.id,
+        balance: account.balance,
+        includeInNetWorth: next,
+      }),
+    });
+    const payload = (await response.json().catch(() => ({}))) as {
+      account?: ManualAccount;
+      error?: string;
+    };
+    if (!response.ok || !payload.account) {
+      setError(payload.error ?? "Could not update the account.");
+      return;
+    }
+    setAccounts((current) =>
+      current.map((item) =>
+        item.id === account.id ? payload.account! : item,
+      ),
+    );
+  }
+
   async function saveAccount(account: ManualAccount) {
     setError(null);
     const parsedBalance = Number(balanceDrafts[account.id]);
@@ -165,18 +192,7 @@ export default function ManualAccountsSection({
                 <input
                   type="checkbox"
                   checked={account.include_in_net_worth}
-                  onChange={(event) =>
-                    setAccounts((current) =>
-                      current.map((item) =>
-                        item.id === account.id
-                          ? {
-                              ...item,
-                              include_in_net_worth: event.target.checked,
-                            }
-                          : item,
-                      ),
-                    )
-                  }
+                  onChange={() => toggleInclusion(account)}
                 />
                 Include in net worth
               </label>

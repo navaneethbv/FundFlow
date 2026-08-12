@@ -88,10 +88,30 @@ describe("goalTargetAmount", () => {
     expect(goalTargetAmount(goal({ target_amount: 7_500 }))).toBe(7_500);
   });
 
-  it("uses the balance the pay-down goal has to close", () => {
+  it("honors the payoff amount the user entered for a pay-down goal", () => {
+    // A user who asks to pay down 5,000 of a 12,000 loan gets a 5,000 target,
+    // not the whole captured balance.
     expect(
       goalTargetAmount(
-        goal({ goal_type: "pay_down", starting_balance: 4_000, target_balance: 0 }),
+        goal({
+          goal_type: "pay_down",
+          target_amount: 5_000,
+          starting_balance: 12_000,
+          target_balance: 0,
+        }),
+      ),
+    ).toBe(5_000);
+  });
+
+  it("uses the balance the pay-down goal has to close when no amount was entered", () => {
+    expect(
+      goalTargetAmount(
+        goal({
+          goal_type: "pay_down",
+          target_amount: 0,
+          starting_balance: 4_000,
+          target_balance: 0,
+        }),
       ),
     ).toBe(4_000);
   });
@@ -99,7 +119,12 @@ describe("goalTargetAmount", () => {
   it("respects a non-zero pay-down target balance", () => {
     expect(
       goalTargetAmount(
-        goal({ goal_type: "pay_down", starting_balance: 4_000, target_balance: 1_000 }),
+        goal({
+          goal_type: "pay_down",
+          target_amount: 0,
+          starting_balance: 4_000,
+          target_balance: 1_000,
+        }),
       ),
     ).toBe(3_000);
   });
@@ -107,15 +132,31 @@ describe("goalTargetAmount", () => {
   it("never returns a negative target", () => {
     expect(
       goalTargetAmount(
-        goal({ goal_type: "pay_down", starting_balance: 500, target_balance: 900 }),
+        goal({
+          goal_type: "pay_down",
+          target_amount: 0,
+          starting_balance: 500,
+          target_balance: 900,
+        }),
       ),
     ).toBe(0);
   });
 
-  it("treats a pay-down goal with no captured baseline as having nothing to close", () => {
+  it("treats a pay-down goal with no entered amount and no baseline as having nothing to close", () => {
     expect(
-      goalTargetAmount(goal({ goal_type: "pay_down", starting_balance: null })),
+      goalTargetAmount(
+        goal({ goal_type: "pay_down", target_amount: 0, starting_balance: null }),
+      ),
     ).toBe(0);
+  });
+
+  it("does not complete a pay-down goal that has a target but no linked baseline", () => {
+    const funded = only([
+      goal({ goal_type: "pay_down", target_amount: 5_000, starting_balance: null }),
+    ]);
+    expect(funded.target_amount).toBe(5_000);
+    expect(funded.remainingAmount).toBe(5_000);
+    expect(funded.badge).toBe("on-track");
   });
 });
 

@@ -297,9 +297,14 @@ export function buildAccountsPageData(
     const values = history.map((snapshot) =>
       displayBalance(group, snapshot.currentBalance)!,
     );
+    // Liability balances display absolute, but their change must follow the
+    // signed net-worth convention: growing debt is a negative change and
+    // paying debt down is a positive change, or "this month" would show
+    // debt growth as green success and payoff as red danger.
+    const isLiability = group === "credit" || group === "loan";
     const rowSeries = history.map((snapshot, index) => ({
       date: snapshot.snapshotDate,
-      value: values[index]!,
+      value: isLiability ? -values[index]! : values[index]!,
     }));
     const freshness = humanizeUpdatedAt(account.updatedAt, now);
     const mask = account.mask ? ` (...${account.mask})` : "";

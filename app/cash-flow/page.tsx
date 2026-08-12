@@ -26,6 +26,7 @@ import {
 } from "@/lib/financial-scope";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { UNKNOWN_CURRENCY } from "@/lib/format";
+import { localMonthKey } from "@/lib/format-date";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -86,7 +87,7 @@ export default async function CashFlowPage({
   const period = validPeriod(first(params.period));
   const rangeMonths = validRange(first(params.range));
   const dimension = validDimension(first(params.dimension));
-  const anchorMonth = new Date().toISOString().slice(0, 7);
+  const anchorMonth = localMonthKey();
 
   const supabase = await createClient();
   const {

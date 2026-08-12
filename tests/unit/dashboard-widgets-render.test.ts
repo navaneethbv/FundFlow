@@ -247,7 +247,7 @@ describe("InvestmentsWidget", () => {
           total: 10000,
           dayChange: { amount: 50, pct: 0.5 },
           topMovers: [
-            { name: "Fund A", ticker: "FUNDA", changePct: 2.5 },
+            { id: "holding-1", name: "Fund A", ticker: "FUNDA", changePct: 2.5 },
           ],
         },
       }),
