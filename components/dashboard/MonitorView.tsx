@@ -3,6 +3,7 @@ import type { DashboardData } from "@/lib/dashboard";
 import { foldTail } from "@/lib/chart-utils";
 import { medianOf } from "@/lib/insights";
 import { dashboardUrl, OTHER_CATEGORY_KEY } from "@/lib/drilldown";
+import { netWorthDeltaFromHistory } from "@/components/dashboard/metrics";
 import {
   formatCurrency,
   formatDay,
@@ -129,12 +130,7 @@ export default function MonitorView({
   // Net-worth delta comes from the net-worth history series (assets minus
   // liabilities per month), not from this month's cash flow: those are
   // different numbers and the tile must report the change in what it displays.
-  const previousNetWorth =
-    data.netWorthHistory.length > 0
-      ? data.netWorthHistory.at(-1)?.netWorth ?? null
-      : null;
-  const netWorthDelta =
-    previousNetWorth !== null ? netWorth - previousNetWorth : undefined;
+  const netWorthDelta = netWorthDeltaFromHistory(netWorth, data.netWorthHistory);
   const maxMerchant = Math.max(1, ...data.merchantBreakdown.map((item) => item.amount));
   const merchantItems = data.merchantBreakdown.map((item) => ({
     label: item.merchant,

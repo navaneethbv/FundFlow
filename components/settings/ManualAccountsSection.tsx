@@ -35,6 +35,7 @@ export default function ManualAccountsSection({
   const [accountType, setAccountType] = useState<ManualAccount["account_type"]>("asset");
   const [balance, setBalance] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [toggleBusyId, setToggleBusyId] = useState<string | null>(null);
 
   const includedTotal = accounts
     .filter((account) => account.include_in_net_worth)
@@ -78,30 +79,38 @@ export default function ManualAccountsSection({
   }
 
   async function toggleInclusion(account: ManualAccount) {
+    if (toggleBusyId === account.id) return;
     setError(null);
+    setToggleBusyId(account.id);
     const next = !account.include_in_net_worth;
-    const response = await fetch("/api/manual-accounts", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        id: account.id,
-        balance: account.balance,
-        includeInNetWorth: next,
-      }),
-    });
-    const payload = (await response.json().catch(() => ({}))) as {
-      account?: ManualAccount;
-      error?: string;
-    };
-    if (!response.ok || !payload.account) {
-      setError(payload.error ?? "Could not update the account.");
-      return;
+    try {
+      const response = await fetch("/api/manual-accounts", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: account.id,
+          balance: account.balance,
+          includeInNetWorth: next,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        account?: ManualAccount;
+        error?: string;
+      };
+      if (!response.ok || !payload.account) {
+        setError(payload.error ?? "Could not update the account.");
+        return;
+      }
+      setAccounts((current) =>
+        current.map((item) =>
+          item.id === account.id ? payload.account! : item,
+        ),
+      );
+    } catch {
+      setError("Could not reach the server. Check your connection.");
+    } finally {
+      setToggleBusyId(null);
     }
-    setAccounts((current) =>
-      current.map((item) =>
-        item.id === account.id ? payload.account! : item,
-      ),
-    );
   }
 
   async function saveAccount(account: ManualAccount) {
@@ -192,6 +201,7 @@ export default function ManualAccountsSection({
                 <input
                   type="checkbox"
                   checked={account.include_in_net_worth}
+                  disabled={toggleBusyId === account.id}
                   onChange={() => toggleInclusion(account)}
                 />
                 Include in net worth

@@ -41,6 +41,7 @@ describe("GoalWizard — full-screen overlay shell", () => {
 
   it("has a back arrow that steps back, and a separate close control", () => {
     expect(source).toContain("draft.step > 1 ? () => patch({ step: draft.step - 1 }) : cancel");
+    expect(source).toContain("disabled={busy || draft.createdGoalId !== null}");
     expect(source).toContain('aria-label="Close"');
     expect(source).toContain("onClick={cancel}");
   });

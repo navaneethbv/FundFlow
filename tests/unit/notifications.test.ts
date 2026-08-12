@@ -282,7 +282,8 @@ describe("notifications manager", () => {
       "user-1",
       "low_cash_forecast",
       { title: "New alert", body: "chase credit balance low" },
-      "chase-credit" // subjectKey
+      "chase-credit", // subjectKey
+      "exact",
     );
 
     // Should be detected as a duplicate by the stored subject_key column,
@@ -383,14 +384,51 @@ describe("notifications manager", () => {
       "user-1",
       "low_cash_forecast",
       { title: "Chase alert", body: "Low cash" },
-      "chase"
+      "chase",
+      "exact",
     );
     expect(res).toEqual({ id: "notif-new" });
 
     // DB query error handling on the subject-key dedupe
     mockSingle.mockResolvedValueOnce({ data: { low_cash_forecast: true }, error: null });
     mockMaybeSingle.mockResolvedValueOnce({ data: null, error: new Error("Dedupe Error") });
-    await expect(createNotification("user-1", "low_cash_forecast", { title: "t", body: "b" }, "chase")).rejects.toThrow("Dedupe Error");
+    await expect(
+      createNotification(
+        "user-1",
+        "low_cash_forecast",
+        { title: "t", body: "b" },
+        "chase",
+        "exact",
+      ),
+    ).rejects.toThrow("Dedupe Error");
+  });
+
+  it("keeps subject-key alerts on the legacy time window unless exact dedupe is requested", async () => {
+    mockSingle.mockResolvedValueOnce({
+      data: { cancellation_watch: true },
+      error: null,
+    });
+    mockGte.mockResolvedValueOnce({
+      data: [
+        {
+          id: "existing-notification",
+          title: "Charged after cancellation: Netflix",
+          body: "Netflix charged 20 on 2026-08-12 after you marked it cancelled.",
+        },
+      ],
+      error: null,
+    });
+
+    const result = await createNotification(
+      "user-1",
+      "cancellation_watch",
+      { title: "Charged after cancellation: Netflix", body: "Netflix charged 20" },
+      "Netflix",
+    );
+
+    expect(result).toBeNull();
+    expect(mockMaybeSingle).not.toHaveBeenCalled();
+    expect(mockInsert).not.toHaveBeenCalled();
   });
 
   it("handles milestone processing errors gracefully", async () => {

@@ -13,6 +13,14 @@ export function computeNetWorth(accounts: BalanceAccount[]): number {
   ) / 100;
 }
 
+export function netWorthDeltaFromHistory(
+  netWorth: number,
+  history: { month: string; netWorth: number }[],
+): number | undefined {
+  const previousSnapshot = history.length > 1 ? history.at(-2) : undefined;
+  return previousSnapshot ? netWorth - previousSnapshot.netWorth : undefined;
+}
+
 export function computeSavingsRate(income: number, spending: number): number {
   if (income <= 0) return 0;
   const savings = income - spending;

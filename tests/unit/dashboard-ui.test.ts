@@ -1,6 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { computeNetWorth, computeSavingsRate } from "@/components/dashboard/metrics";
+import {
+  computeNetWorth,
+  computeSavingsRate,
+  netWorthDeltaFromHistory,
+} from "@/components/dashboard/metrics";
 
 describe("dashboard UI overhaul", () => {
   it("computes dashboard-only net worth from fetched account balances", () => {
@@ -17,6 +21,18 @@ describe("dashboard UI overhaul", () => {
     expect(computeSavingsRate(8000, 5200)).toBe(35);
     expect(computeSavingsRate(0, 5200)).toBe(0);
     expect(computeSavingsRate(5000, 6200)).toBe(0);
+  });
+
+  it("compares live net worth with the previous snapshot, not the current one", () => {
+    expect(
+      netWorthDeltaFromHistory(175, [
+        { month: "2026-06", netWorth: 100 },
+        { month: "2026-07", netWorth: 150 },
+      ]),
+    ).toBe(75);
+    expect(netWorthDeltaFromHistory(175, [{ month: "2026-07", netWorth: 150 }])).toBe(
+      undefined,
+    );
   });
 
   it("extracts the dashboard into phase components", () => {

@@ -253,6 +253,7 @@ export default function GoalWizard({
           <button
             type="button"
             onClick={draft.step > 1 ? () => patch({ step: draft.step - 1 }) : cancel}
+            disabled={busy || draft.createdGoalId !== null}
             aria-label={draft.step > 1 ? "Back" : "Cancel"}
             className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"
           >

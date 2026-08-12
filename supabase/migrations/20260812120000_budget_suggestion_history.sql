@@ -33,6 +33,7 @@ as $$
     sum(t.amount) as amount
   from public.transactions t
   where t.user_id = p_user_id
+    and p_user_id = (select auth.uid())
     and t.date >= p_start::date
     and t.date < p_end::date
     and t.amount > 0

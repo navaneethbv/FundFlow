@@ -176,6 +176,7 @@ async function syncItemTransactionsInner(
             body: `A transaction of ${formatCurrency(row.amount)} was recorded at ${row.merchant_name || row.name || "Unknown"} on ${row.date}.`,
           },
           row.plaid_transaction_id,
+          "exact",
         ).catch((err) => logError("sync.large_txn_notification", err));
       }
     }

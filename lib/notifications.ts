@@ -24,21 +24,21 @@ function isUniqueViolation(error: unknown): boolean {
  * Creates and inserts a notification into the database if the user has opted in
  * and the event is not a duplicate.
  *
- * Dedupe contract: when `subjectKey` is given, the row stores it in the
- * `subject_key` column and is suppressed if `(user_id, type, subject_key)`
- * already exists. The partial unique index on those three columns is the
- * enforcement (the same pattern the milestones table uses), so concurrent
- * runs cannot double-insert and an inert substring match on rendered text
- * cannot let the event repeat. Callers encode the intended frequency in the
- * key: a goal id for a once-ever "goal reached", a `category:YYYY-MM` for a
- * monthly budget alert, a day-stamped key for daily alerts. Callers without a
- * stable subject keep the legacy window dedupe (no subject_key column set).
+ * Dedupe contract: the default `window` mode preserves the legacy day/month
+ * window and optional subject matching. `exact` mode stores `subjectKey` in the
+ * `subject_key` column and suppresses an existing `(user_id, type, subject_key)`
+ * row, with the partial unique index handling concurrent runs. Use exact mode
+ * only for events whose key represents the event identity, such as a goal id,
+ * a monthly category key, or a transaction id.
  */
+export type NotificationDedupe = "window" | "exact";
+
 export async function createNotification(
   userId: string,
   type: AlertType,
   details: { title: string; body: string },
   subjectKey?: string,
+  dedupe: NotificationDedupe = "window",
 ) {
   const supabase = createServiceClient();
 
@@ -62,7 +62,7 @@ export async function createNotification(
   }
 
   // 2. Deduplicate
-  if (subjectKey) {
+  if (subjectKey && dedupe === "exact") {
     const { data: existing, error } = await supabase
       .from("notifications")
       .select("id")
@@ -73,8 +73,8 @@ export async function createNotification(
     if (error) throw error;
     if (existing) return null;
   } else {
-    // No stable subject: fall back to the legacy window — any notification of
-    // this type since the window start counts as a duplicate.
+    // The legacy window allows distinct subject alerts of the same type in the
+    // same window, while suppressing a repeated subject.
     const now = new Date();
     const startRange =
       type === "budget_exceeded"
@@ -82,12 +82,21 @@ export async function createNotification(
         : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
     const { data: existing, error } = await supabase
       .from("notifications")
-      .select("id")
+      .select("id, title, body")
       .eq("user_id", userId)
       .eq("type", type)
       .gte("created_at", startRange);
     if (error) throw error;
-    if (existing && existing.length > 0) return null;
+    if (existing && existing.length > 0) {
+      if (!subjectKey) return null;
+      const lowerSubject = subjectKey.toLowerCase();
+      const isDuplicate = existing.some(
+        (notification) =>
+          notification.title.toLowerCase().includes(lowerSubject) ||
+          notification.body.toLowerCase().includes(lowerSubject),
+      );
+      if (isDuplicate) return null;
+    }
   }
 
   // 3. Create & insert notification
@@ -97,7 +106,7 @@ export async function createNotification(
     .insert({
       user_id: userId,
       ...shape,
-      subject_key: subjectKey ?? null,
+      subject_key: dedupe === "exact" ? subjectKey ?? null : null,
     })
     .select()
     .single();
@@ -105,7 +114,9 @@ export async function createNotification(
   // A concurrent run inserted the same subject between our check and this
   // insert; that is the same duplicate the unique index exists to stop.
   if (insertError) {
-    if (subjectKey && isUniqueViolation(insertError)) return null;
+    if (subjectKey && dedupe === "exact" && isUniqueViolation(insertError)) {
+      return null;
+    }
     throw insertError;
   }
 
@@ -132,7 +143,7 @@ export async function processNotificationsForUser(userId: string) {
     details: { title: string; body: string },
     subjectKey?: string,
   ) =>
-    createNotification(userId, type, details, subjectKey).catch((error) =>
+    createNotification(userId, type, details, subjectKey, "exact").catch((error) =>
       logError(`notifications.${type}`, error),
     );
 
