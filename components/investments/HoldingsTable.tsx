@@ -6,6 +6,17 @@ import { formatCurrency } from "@/lib/format";
 import type { InvestmentsPage } from "@/lib/investments";
 
 /** Every active holding grouped by asset class — the plan's fixed slot order. */
+function changeClass(periodChangePct: number | null): string {
+  if (periodChangePct == null) return "text-muted";
+  return periodChangePct >= 0 ? "text-success" : "text-danger";
+}
+
+function changeLabel(periodChangePct: number | null): string {
+  if (periodChangePct == null) return "—";
+  const sign = periodChangePct >= 0 ? "+" : "";
+  return `${sign}${periodChangePct.toFixed(1)}%`;
+}
+
 export default function HoldingsTable({
   page,
   currency,
@@ -17,17 +28,6 @@ export default function HoldingsTable({
         description="Connect a brokerage account, or add a manual holding for anything Plaid can't see."
       />
     );
-  }
-
-  function changeClass(periodChangePct: number | null): string {
-    if (periodChangePct == null) return "text-muted";
-    return periodChangePct >= 0 ? "text-success" : "text-danger";
-  }
-
-  function changeLabel(periodChangePct: number | null): string {
-    if (periodChangePct == null) return "—";
-    const sign = periodChangePct >= 0 ? "+" : "";
-    return `${sign}${periodChangePct.toFixed(1)}%`;
   }
 
   return (

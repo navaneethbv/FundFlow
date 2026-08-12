@@ -33,6 +33,128 @@ function isUniqueViolation(error: unknown): boolean {
  */
 export type NotificationDedupe = "window" | "exact";
 
+type NotificationDetails = { title: string; body: string };
+type TryNotify = (
+  type: AlertType,
+  details: NotificationDetails,
+  subjectKey?: string,
+) => Promise<unknown>;
+type NotificationDashboardData = Awaited<ReturnType<typeof getDashboardData>>;
+
+async function notifyLowCashForecast(
+  dashboardData: NotificationDashboardData,
+  today: string,
+  tryNotify: TryNotify,
+): Promise<void> {
+  const forecast = dashboardData.cashFlowForecast;
+  if (!forecast?.lowBalanceRisk) return;
+  await tryNotify(
+    "low_cash_forecast",
+    {
+      title: "Low cash forecast",
+      body: `Your projected balance is expected to drop to a low of ${formatCurrency(forecast.lowestBalance)} in the next 30 days.`,
+    },
+    `low_cash_forecast:${today}`,
+  );
+}
+
+async function notifyBudgetEnvelopes(
+  dashboardData: NotificationDashboardData,
+  currentMonth: string,
+  tryNotify: TryNotify,
+): Promise<void> {
+  for (const envelope of dashboardData.budgetEnvelopes ?? []) {
+    if (envelope.status !== "over") continue;
+    const exceeded = envelope.spent - envelope.monthlyLimit;
+    await tryNotify(
+      "budget_exceeded",
+      {
+        title: `Budget exceeded: ${envelope.category}`,
+        body: `You have exceeded your monthly budget for ${envelope.category} by ${formatCurrency(exceeded)}.`,
+      },
+      `budget_exceeded:${envelope.category}:${currentMonth}`,
+    );
+  }
+}
+
+async function notifyReachedGoals(
+  supabase: ReturnType<typeof createServiceClient>,
+  userId: string,
+  tryNotify: TryNotify,
+): Promise<void> {
+  const goals = await getGoals(supabase, userId);
+  for (const goal of goals) {
+    if (goal.saved_amount < goal.target_amount) continue;
+    await tryNotify(
+      "goal_reached",
+      {
+        title: `Goal reached: ${goal.name}`,
+        body: `Congratulations! You have reached your target of ${formatCurrency(goal.target_amount)} for ${goal.name}.`,
+      },
+      `goal_reached:${goal.id}`,
+    );
+  }
+}
+
+async function notifyNetWorthMilestones(
+  supabase: ReturnType<typeof createServiceClient>,
+  userId: string,
+  dashboardData: NotificationDashboardData,
+  tryNotify: TryNotify,
+): Promise<void> {
+  try {
+    const { data: achievedRows } = await supabase
+      .from("milestones")
+      .select("key")
+      .eq("user_id", userId);
+    const milestones = detectNetWorthMilestones({
+      history: dashboardData.netWorthHistory.map((row) => ({
+        month: row.month,
+        netWorth: row.netWorth,
+      })),
+      achieved: (achievedRows ?? []).map((row) => row.key as string),
+    });
+    for (const milestone of milestones) {
+      const { error: claimError } = await supabase.from("milestones").insert({
+        user_id: userId,
+        key: milestone.key,
+        title: milestone.title,
+      });
+      if (claimError) continue;
+      await tryNotify(
+        "milestone",
+        { title: milestone.title, body: milestone.body },
+        milestone.key,
+      );
+    }
+  } catch (milestoneError) {
+    logError("notifications.milestones", milestoneError);
+  }
+}
+
+async function notifyBrokenBanks(
+  supabase: ReturnType<typeof createServiceClient>,
+  userId: string,
+  tryNotify: TryNotify,
+): Promise<void> {
+  const { data: items } = await supabase
+    .from("plaid_items")
+    .select("id, institution_name, status, error_code")
+    .eq("user_id", userId);
+
+  for (const item of items ?? []) {
+    if (item.status !== "error") continue;
+    await tryNotify(
+      "broken_bank",
+      {
+        title: `Bank connection issue: ${item.institution_name || "Bank"}`,
+        body: `The connection to ${item.institution_name || "your bank"} needs to be updated (error: ${item.error_code || "unknown"}).`,
+      },
+      `broken_bank:${item.id}`,
+    );
+  }
+}
+
 export async function createNotification(
   userId: string,
   type: AlertType,
@@ -132,120 +254,26 @@ export async function createNotification(
  */
 export async function processNotificationsForUser(userId: string) {
   const supabase = createServiceClient();
-  const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const today = new Date().toISOString().slice(0, 10);
 
-  // A failure in one alert (a preferences read, a dedupe check, or an insert)
-  // must not abort the other alerts this run would emit. Each check is
-  // isolated so a database hiccup on one channel leaves the rest intact.
-  const tryNotify = (
-    type: AlertType,
-    details: { title: string; body: string },
-    subjectKey?: string,
-  ) =>
+  const tryNotify: TryNotify = (type, details, subjectKey) =>
     createNotification(userId, type, details, subjectKey, "exact").catch((error) =>
       logError(`notifications.${type}`, error),
     );
 
-  // 1. Run dashboard aggregation & planning forecast. This uses the service
-  // client (RLS bypassed), so userId MUST be passed to scope every query to
-  // this user — otherwise the aggregation would span all users' data.
-  const dashboardData = await getDashboardData(supabase, undefined, currentMonth, userId);
+  const dashboardData = await getDashboardData(
+    supabase,
+    undefined,
+    currentMonth,
+    userId,
+  );
 
-  // 2. Check low cash forecast
-  if (dashboardData.cashFlowForecast?.lowBalanceRisk) {
-    const lowest = dashboardData.cashFlowForecast.lowestBalance;
-    await tryNotify(
-      "low_cash_forecast",
-      {
-        title: "Low cash forecast",
-        body: `Your projected balance is expected to drop to a low of ${formatCurrency(lowest)} in the next 30 days.`,
-      },
-      `low_cash_forecast:${today}`,
-    );
-  }
-
-  // 3. Check budget envelopes
-  for (const envelope of dashboardData.budgetEnvelopes || []) {
-    if (envelope.status === "over") {
-      const exceeded = envelope.spent - envelope.monthlyLimit;
-      await tryNotify(
-        "budget_exceeded",
-        {
-          title: `Budget exceeded: ${envelope.category}`,
-          body: `You have exceeded your monthly budget for ${envelope.category} by ${formatCurrency(exceeded)}.`,
-        },
-        `budget_exceeded:${envelope.category}:${currentMonth}`,
-      );
-    }
-  }
-
-  // 4. Check goals reached. Service client (RLS bypassed) — pass userId so
-  // goals are scoped to this user, otherwise every user's goals leak in.
-  const goals = await getGoals(supabase, userId);
-  for (const goal of goals) {
-    if (goal.saved_amount >= goal.target_amount) {
-      await tryNotify(
-        "goal_reached",
-        {
-          title: `Goal reached: ${goal.name}`,
-          body: `Congratulations! You have reached your target of ${formatCurrency(goal.target_amount)} for ${goal.name}.`,
-        },
-        `goal_reached:${goal.id}`,
-      );
-    }
-  }
-
-  // 4b. Net-worth milestones (8.2). The unique (user_id, key) constraint is
-  // the dedupe: the insert claims the milestone, and only a successful
-  // claim notifies — so each key fires exactly once, ever. Best-effort.
-  try {
-    const { data: achievedRows } = await supabase
-      .from("milestones")
-      .select("key")
-      .eq("user_id", userId);
-    const milestones = detectNetWorthMilestones({
-      history: dashboardData.netWorthHistory.map((row) => ({
-        month: row.month,
-        netWorth: row.netWorth,
-      })),
-      achieved: (achievedRows ?? []).map((row) => row.key as string),
-    });
-    for (const milestone of milestones) {
-      const { error: claimError } = await supabase.from("milestones").insert({
-        user_id: userId,
-        key: milestone.key,
-        title: milestone.title,
-      });
-      if (claimError) continue; // already claimed (or table missing) — stay silent
-      await tryNotify(
-        "milestone",
-        { title: milestone.title, body: milestone.body },
-        milestone.key,
-      );
-    }
-  } catch (milestoneError) {
-    logError("notifications.milestones", milestoneError);
-  }
-
-  // 5. Check broken bank connections
-  const { data: items } = await supabase
-    .from("plaid_items")
-    .select("id, institution_name, status, error_code")
-    .eq("user_id", userId);
-
-  for (const item of items || []) {
-    if (item.status === "error") {
-      await tryNotify(
-        "broken_bank",
-        {
-          title: `Bank connection issue: ${item.institution_name || "Bank"}`,
-          body: `The connection to ${item.institution_name || "your bank"} needs to be updated (error: ${item.error_code || "unknown"}).`,
-        },
-        `broken_bank:${item.id}`,
-      );
-    }
-  }
+  await notifyLowCashForecast(dashboardData, today, tryNotify);
+  await notifyBudgetEnvelopes(dashboardData, currentMonth, tryNotify);
+  await notifyReachedGoals(supabase, userId, tryNotify);
+  await notifyNetWorthMilestones(supabase, userId, dashboardData, tryNotify);
+  await notifyBrokenBanks(supabase, userId, tryNotify);
 }
 
 /**

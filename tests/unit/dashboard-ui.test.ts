@@ -30,9 +30,9 @@ describe("dashboard UI overhaul", () => {
         { month: "2026-07", netWorth: 150 },
       ]),
     ).toBe(75);
-    expect(netWorthDeltaFromHistory(175, [{ month: "2026-07", netWorth: 150 }])).toBe(
-      undefined,
-    );
+    expect(
+      netWorthDeltaFromHistory(175, [{ month: "2026-07", netWorth: 150 }]),
+    ).toBeUndefined();
   });
 
   it("extracts the dashboard into phase components", () => {

@@ -55,7 +55,7 @@ function clampPercent(value: number): number {
 function accountLabel(value: string): string {
   return value
     .replace(/[•*x]+/gi, " ")
-    .replace(/\s+\d{4}\b/gi, "")
+    .replace(/ \d{4}(?!\d)/gi, "")
     .trim();
 }
 

@@ -47,6 +47,8 @@ interface PageProps {
   }>;
 }
 
+type AccountNumericValue = number | string | null;
+
 type PlaidAccountRow = {
   id: string;
   user_id: string;
@@ -55,28 +57,28 @@ type PlaidAccountRow = {
   mask: string | null;
   type: string | null;
   subtype: string | null;
-  current_balance: number | string | null;
-  available_balance: number | string | null;
+  current_balance: AccountNumericValue;
+  available_balance: AccountNumericValue;
   iso_currency_code: string | null;
   updated_at: string;
 };
 
-interface ManualAccountRow {
+type ManualAccountRow = {
   id: string;
   user_id: string;
   name: string;
   account_type: string;
-  balance: number | string | null;
+  balance: AccountNumericValue;
   include_in_net_worth: boolean;
   updated_at: string;
-}
+};
 
 interface SnapshotRow {
   account_id: string | null;
   manual_account_id: string | null;
   snapshot_date: string;
-  current_balance: number | string | null;
-  available_balance: number | string | null;
+  current_balance: AccountNumericValue;
+  available_balance: AccountNumericValue;
   iso_currency_code: string;
 }
 
@@ -84,7 +86,7 @@ function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function numeric(value: number | string | null): number | null {
+function numeric(value: AccountNumericValue): number | null {
   if (value === null) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;

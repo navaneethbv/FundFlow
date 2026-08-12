@@ -28,7 +28,7 @@ export function parseCsv(text: string): string[][] {
   // A UTF-8 BOM (EF BB BF) lands at the start of text files exported from
   // Excel/Google Sheets; without stripping it the first header cell carries
   // the invisible characters and column auto-detection fails.
-  const body = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+  const body = text.codePointAt(0) === 0xfeff ? text.slice(1) : text;
   const rows: string[][] = [];
   let field = "";
   let row: string[] = [];

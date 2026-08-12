@@ -31,11 +31,10 @@ function periodLabel(data: WeeklyReportData): string {
 }
 
 function safeAccountLabel(value: string): string {
-  return value
-    .replace(/\d{4}\s*$/i, "")
-    .replace(/[x•*-]+$/i, "")
-    .replace(/\s+$/i, "")
-    .trim() || "Credit card";
+  let label = value.trimEnd();
+  if (/\d{4}$/.test(label)) label = label.slice(0, -4).trimEnd();
+  label = label.replace(/[x•*-]+$/i, "").trimEnd();
+  return label || "Credit card";
 }
 
 function trendLabel(data: WeeklyReportData): string {
