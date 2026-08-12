@@ -64,7 +64,7 @@ export default function ApiTokensSection({
   return (
     <Panel title="API tokens" eyebrow="Your data, your scripts">
       <p className="mb-4 text-sm text-muted">
-        Read-only bearer tokens for the export endpoints (
+        Read-only bearer tokens for the export endpoints. Example:{" "}
         <code className="text-xs">Authorization: Bearer fft_…</code> against{" "}
         <code className="text-xs">/api/export/csv</code> or{" "}
         <code className="text-xs">/api/export/json</code>). Same privacy

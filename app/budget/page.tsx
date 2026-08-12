@@ -32,6 +32,12 @@ interface PageProps {
   }>;
 }
 
+const HORIZON_LABELS = {
+  monthly: "Month",
+  yearly: "Year",
+  decade: "Decade",
+} as const;
+
 function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -110,7 +116,7 @@ export default async function BudgetPage({
           <SegmentedControl
             ariaLabel="Horizon"
             items={(["monthly", "yearly", "decade"] as const).map((value) => ({
-              label: value === "monthly" ? "Month" : value === "yearly" ? "Year" : "Decade",
+              label: HORIZON_LABELS[value],
               href: budgetHref({ ...baseLink, horizon: value }),
               active: value === horizon,
             }))}

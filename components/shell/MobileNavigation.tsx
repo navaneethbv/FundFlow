@@ -170,11 +170,10 @@ export default function MobileNavigation({
             className="absolute inset-0 h-full w-full cursor-default bg-black/50"
             onClick={() => setOpen(false)}
           />
-          <div
-            role="dialog"
+          <dialog
+            open
             aria-label="All navigation"
-            aria-modal="true"
-            className="relative max-h-[85vh] w-full overflow-y-auto rounded-t-2xl border border-panel-border bg-panel p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-pop"
+            className="relative m-0 max-h-[85vh] w-full overflow-y-auto rounded-t-2xl border border-panel-border bg-panel p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-pop"
           >
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
@@ -270,7 +269,7 @@ export default function MobileNavigation({
                 </div>
               </section>
             </div>
-          </div>
+          </dialog>
         </div>
       )}
     </>

@@ -5,7 +5,7 @@ import { cn } from "@/lib/cn";
 import { formatCurrency } from "@/lib/format";
 import type { BudgetPageData, BudgetGroup, BudgetSummaryTab } from "@/lib/budget-page";
 
-const EXPENSE_GROUPS: BudgetGroup[] = ["fixed", "flexible", "non_monthly"];
+const EXPENSE_GROUPS = new Set<BudgetGroup>(["fixed", "flexible", "non_monthly"]);
 
 function GroupMiniSummary({
   label,
@@ -70,7 +70,7 @@ export default function BudgetRightRail({
 }>) {
   const negative = data.leftToBudget < 0;
   const expenseGroups = data.sections.filter((section) =>
-    EXPENSE_GROUPS.includes(section.key),
+    EXPENSE_GROUPS.has(section.key),
   );
 
   return (

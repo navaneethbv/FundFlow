@@ -1,7 +1,7 @@
 /** "overview" is the Phase 8 widget grid; the other three predate it. */
 export type DashboardView = "overview" | "monitor" | "plan" | "wealth";
 
-const VIEWS: readonly DashboardView[] = ["overview", "monitor", "plan", "wealth"];
+const VIEWS = new Set<DashboardView>(["overview", "monitor", "plan", "wealth"]);
 
 /**
  * `defaultView` stays "monitor" so existing callers and bookmarked URLs behave
@@ -19,7 +19,7 @@ export function resolveDashboardView(
   },
   defaultView: DashboardView = "monitor",
 ): DashboardView {
-  if (VIEWS.includes(view as DashboardView)) {
+  if (VIEWS.has(view as DashboardView)) {
     return view as DashboardView;
   }
   if (tab === "breakdowns" || tab === "cashflow") {

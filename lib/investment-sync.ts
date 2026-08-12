@@ -37,6 +37,11 @@ function plaidErrorCode(error: unknown): string | null {
   return typeof code === "string" ? code : null;
 }
 
+function plaidCancellationId(transaction: InvestmentTransaction): string | null {
+  const value = Reflect.get(transaction, "cancel_transaction_id");
+  return typeof value === "string" ? value : null;
+}
+
 /** Upsert every security in the response, keyed by plaid_security_id; returns plaid id -> db id. */
 async function upsertSecurities(
   supabase: ReturnType<typeof createServiceClient>,
@@ -295,7 +300,10 @@ export async function syncInvestmentTransactionsForItem(
         txn_type: t.type ?? null,
         txn_subtype: t.subtype ?? null,
         iso_currency_code: t.iso_currency_code ?? null,
-        cancel_plaid_id: t.cancel_transaction_id ?? null,
+        // Plaid still returns this legacy field for some institutions, but the
+        // current SDK marks direct property access deprecated. Keep the
+        // compatibility read isolated until Plaid removes the field entirely.
+        cancel_plaid_id: plaidCancellationId(t),
         is_active: true,
         last_seen_at: new Date().toISOString(),
       };

@@ -144,7 +144,7 @@ function RowMenu({
                 onUpdate(line, { rolloverEnabled: event.target.checked })
               }
             />
-            Rollover unused budget
+            {" "}Rollover unused budget
           </label>
           <label className="block text-xs font-semibold text-muted">
             Sort order

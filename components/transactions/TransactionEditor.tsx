@@ -161,11 +161,10 @@ export default function TransactionEditor({
             className="absolute inset-0 h-full w-full cursor-default bg-black/50"
             onClick={() => setOpen(false)}
           />
-          <div
-            role="dialog"
-            aria-modal="true"
+          <dialog
+            open
             aria-labelledby={`${idPrefix}title-${transaction.id}`}
-            className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-[0.75rem] border border-panel-border bg-panel p-5 shadow-float sm:rounded-[0.75rem]"
+            className="relative m-0 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-[0.75rem] border border-panel-border bg-panel p-5 shadow-float sm:rounded-[0.75rem]"
           >
             <div className="mb-4">
               <p className="text-xs uppercase tracking-wider text-muted">
@@ -289,7 +288,7 @@ export default function TransactionEditor({
                 Save
               </Button>
             </div>
-          </div>
+          </dialog>
         </div>
       )}
     </>

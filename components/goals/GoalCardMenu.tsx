@@ -213,7 +213,7 @@ export default function GoalCardMenu({
                     disabled={busy}
                     onChange={(event) => toggleHousehold(event.target.checked)}
                   />
-                  Visible to my household
+                  {" "}Visible to my household
                 </label>
               )}
               <button
@@ -238,7 +238,7 @@ export default function GoalCardMenu({
                 />
               </label>
               <label className="block text-xs font-semibold text-muted">
-                {goal.goal_type === "pay_down" ? "Amount to pay down" : "Target amount"}
+                {goal.goal_type === "pay_down" ? "Amount to pay down" : "Target amount"}{" "}
                 <input
                   type="number"
                   min="0"
@@ -249,7 +249,7 @@ export default function GoalCardMenu({
                 />
               </label>
               <label className="block text-xs font-semibold text-muted">
-                Target date
+                Target date{" "}
                 <input
                   type="date"
                   value={targetDate}
@@ -272,7 +272,7 @@ export default function GoalCardMenu({
           {mode === "contribute" && (
             <form onSubmit={submitContribution} className="space-y-3">
               <label className="block text-xs font-semibold text-muted">
-                Contribution amount
+                Contribution amount{" "}
                 <input
                   type="number"
                   min="0.01"

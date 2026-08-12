@@ -204,7 +204,7 @@ export default function ManualAccountsSection({
                   disabled={toggleBusyId === account.id}
                   onChange={() => toggleInclusion(account)}
                 />
-                Include in net worth
+                {" "}Include in net worth
               </label>
             </span>
             <span className="flex flex-wrap items-center gap-2 sm:justify-end">

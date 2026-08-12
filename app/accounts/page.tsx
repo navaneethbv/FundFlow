@@ -47,7 +47,7 @@ interface PageProps {
   }>;
 }
 
-interface PlaidAccountRow {
+type PlaidAccountRow = {
   id: string;
   user_id: string;
   plaid_item_id: string;
@@ -59,7 +59,7 @@ interface PlaidAccountRow {
   available_balance: number | string | null;
   iso_currency_code: string | null;
   updated_at: string;
-}
+};
 
 interface ManualAccountRow {
   id: string;
@@ -96,7 +96,9 @@ function numeric(value: number | string | null): number | null {
  * than an unbounded "all" — see the frugality invariants in CLAUDE.md.
  */
 function historyStart(range: string | undefined): string {
-  const days = range === "90" ? 90 : range === "365" ? 365 : 30;
+  let days = 30;
+  if (range === "90") days = 90;
+  if (range === "365") days = 365;
   const start = new Date();
   start.setUTCDate(start.getUTCDate() - days);
   return start.toISOString().slice(0, 10);

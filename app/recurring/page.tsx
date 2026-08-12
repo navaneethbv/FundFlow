@@ -27,7 +27,7 @@ interface PageProps {
 }
 
 const MONTH_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
-const RECURRING_TABS: RecurringTab[] = ["upcoming", "complete", "manage"];
+const RECURRING_TABS = new Set<RecurringTab>(["upcoming", "complete", "manage"]);
 
 function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -40,7 +40,7 @@ function shiftMonth(month: string, delta: number): string {
 }
 
 function parseTab(value: string | undefined): RecurringTab {
-  return RECURRING_TABS.includes(value as RecurringTab) ? (value as RecurringTab) : "upcoming";
+  return RECURRING_TABS.has(value as RecurringTab) ? (value as RecurringTab) : "upcoming";
 }
 
 function recurringHref(input: { month: string; scope?: string; tab?: RecurringTab }): string {

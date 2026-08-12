@@ -23,7 +23,7 @@ export default function AddManualHoldingForm({
   accounts,
 }: Readonly<{ accounts: AccountOption[] }>) {
   const router = useRouter();
-  const dialogRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
   const [securityName, setSecurityName] = useState("");
   const [accountKey, setAccountKey] = useState(accounts[0] ? `${accounts[0].source}:${accounts[0].id}` : "");
@@ -96,12 +96,11 @@ export default function AddManualHoldingForm({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div
+      <dialog
+        open
         ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
         aria-labelledby="add-holding-title"
-        className="w-full max-w-md rounded-card border border-panel-border bg-panel p-5 shadow-float sm:p-6"
+        className="m-0 w-full max-w-md rounded-card border border-panel-border bg-panel p-5 shadow-float sm:p-6"
       >
         <h2 id="add-holding-title" className="text-xl font-bold">
           Add Holding
@@ -160,7 +159,7 @@ export default function AddManualHoldingForm({
             </Button>
           </div>
         </form>
-      </div>
+      </dialog>
     </div>
   );
 }

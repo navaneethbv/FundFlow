@@ -17,7 +17,7 @@ import {
 
 const DEPENDENCY_LIMIT = 5_000;
 
-interface RecurringStreamRawRow {
+type RecurringStreamRawRow = {
   id: string;
   user_id: string;
   merchant_name: string | null;
@@ -36,7 +36,7 @@ interface RecurringStreamRawRow {
   predicted_next_date: string | null;
   account_id: string | null;
   category: string | null;
-}
+};
 
 export interface RecurringStreamRow {
   id: string;

@@ -97,11 +97,10 @@ export default function CommandPalette({ items }: Readonly<{ items: Command[] }>
         className="absolute inset-0 h-full w-full cursor-default bg-black/50"
         onClick={close}
       />
-      <div
-        role="dialog"
+      <dialog
+        open
         aria-label="Command palette"
-        aria-modal="true"
-        className="relative w-full max-w-lg rounded-card border border-panel-border bg-panel shadow-card"
+        className="relative m-0 w-full max-w-lg rounded-card border border-panel-border bg-panel shadow-card"
       >
         <div className="flex items-center gap-2 border-b border-panel-border px-4 py-3">
           <Search aria-hidden className="h-4 w-4 text-muted" />
@@ -153,7 +152,7 @@ export default function CommandPalette({ items }: Readonly<{ items: Command[] }>
             ))
           )}
         </ul>
-      </div>
+      </dialog>
     </div>
   );
 }

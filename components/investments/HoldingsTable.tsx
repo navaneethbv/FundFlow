@@ -19,6 +19,17 @@ export default function HoldingsTable({
     );
   }
 
+  function changeClass(periodChangePct: number | null): string {
+    if (periodChangePct == null) return "text-muted";
+    return periodChangePct >= 0 ? "text-success" : "text-danger";
+  }
+
+  function changeLabel(periodChangePct: number | null): string {
+    if (periodChangePct == null) return "—";
+    const sign = periodChangePct >= 0 ? "+" : "";
+    return `${sign}${periodChangePct.toFixed(1)}%`;
+  }
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[640px] border-collapse text-sm">
@@ -65,16 +76,10 @@ export default function HoldingsTable({
                     data-money
                     className={cn(
                       "py-2 pr-0 text-right tabular-nums",
-                      h.periodChangePct == null
-                        ? "text-muted"
-                        : h.periodChangePct >= 0
-                          ? "text-success"
-                          : "text-danger",
+                      changeClass(h.periodChangePct),
                     )}
                   >
-                    {h.periodChangePct == null
-                      ? "—"
-                      : `${h.periodChangePct >= 0 ? "+" : ""}${h.periodChangePct.toFixed(1)}%`}
+                    {changeLabel(h.periodChangePct)}
                   </td>
                 </tr>
               ))}

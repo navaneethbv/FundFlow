@@ -104,13 +104,13 @@ function OccurrenceRowMenu({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open]);
 
-  if (occurrence.source === "plaid" && (!stream || !stream.isOwn)) {
+  if (occurrence.source === "plaid" && stream?.isOwn !== true) {
     return <span className="text-xs text-muted">Shared · view only</span>;
   }
   if (occurrence.source === "manual" && !manualItem) return null;
 
   const needsReview =
-    stream != null && stream.status === "MATURE" && !stream.dismissedAt && !stream.reviewedAt;
+    stream?.status === "MATURE" && !stream.dismissedAt && !stream.reviewedAt;
 
   return (
     <div className="relative inline-block">
@@ -142,7 +142,7 @@ function OccurrenceRowMenu({
           {occurrence.source === "plaid" && stream && (
             <>
               <label className="block text-xs font-semibold text-muted">
-                Expected amount
+                Expected amount{" "}
                 <input
                   aria-label={`Expected amount for ${occurrence.merchant}`}
                   type="number"
@@ -210,7 +210,7 @@ function OccurrenceRowMenu({
                   disabled={pending}
                   onChange={(event) => onToggleManualEnabled(manualItem.id, event.target.checked)}
                 />
-                Enabled
+                {" "}Enabled
               </label>
               <button
                 type="button"

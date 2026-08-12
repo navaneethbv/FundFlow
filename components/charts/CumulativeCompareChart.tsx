@@ -68,7 +68,7 @@ export default function CumulativeCompareChart({
   const thisPoints = pointsFor((row) => row.thisMonth);
   const lastPoints = pointsFor((row) => row.lastMonth);
   const endpoint = thisPoints.at(-1);
-  const endpointValue = days.filter((row) => row.thisMonth !== null).at(-1);
+  const endpointValue = days.findLast((row) => row.thisMonth !== null);
 
   // The previous month's last real value, for the table's forward fill.
   const lastMonthFinal =
@@ -218,11 +218,9 @@ export default function CumulativeCompareChart({
                 <td data-money className="py-1 pr-2">
                   {/* Forward-filled: the previous month ended, so its total did
                       not change. Plotting it would imply a day that existed. */}
-                  {row.lastMonth === null
-                    ? lastMonthFinal === null
-                      ? "—"
-                      : valueFormatter(lastMonthFinal)
-                    : valueFormatter(row.lastMonth)}
+                  {row.lastMonth === null && lastMonthFinal === null
+                    ? "—"
+                    : valueFormatter(row.lastMonth ?? lastMonthFinal ?? 0)}
                 </td>
               </tr>
             ))}

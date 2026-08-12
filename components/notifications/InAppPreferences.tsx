@@ -90,6 +90,7 @@ export default function InAppPreferences({
             </span>
             <input
               id={`inapp-${option.key}`}
+              aria-label={option.title}
               type="checkbox"
               className="mt-1 h-4 w-4 accent-accent"
               checked={preferences[option.key]}

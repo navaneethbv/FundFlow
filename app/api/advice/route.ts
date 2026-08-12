@@ -35,7 +35,7 @@ export async function PATCH(request: NextRequest) {
         return badRequest("adviceId, taskId, and completed are required");
       }
       const item = ADVICE_LIBRARY.find((i) => i.id === adviceId);
-      if (!item || !item.tasks.some((t) => t.id === taskId)) {
+      if (item?.tasks.some((t) => t.id === taskId) !== true) {
         return badRequest("unknown adviceId or taskId");
       }
 

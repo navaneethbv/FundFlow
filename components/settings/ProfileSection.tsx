@@ -106,7 +106,7 @@ export default function ProfileSection({
             className="inline-flex min-h-11 cursor-pointer items-center rounded-field border border-panel-border bg-panel px-3 text-sm font-semibold text-accent hover:bg-panel-2 focus-within:outline-2"
             htmlFor="avatar-upload"
           >
-            Upload photo
+            Upload photo{" "}
             <input
               id="avatar-upload"
               type="file"

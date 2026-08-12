@@ -75,7 +75,7 @@ function slug(value: string): string {
   return (
     value
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/[^a-z0-9]/gi, "-")
       .replace(/^-+/, "")
       .replace(/-+$/, "") || "bill"
   );
@@ -83,6 +83,39 @@ function slug(value: string): string {
 
 function compactDate(date: string): string {
   return date.replaceAll("-", "");
+}
+
+function appendBillEvents(
+  lines: string[],
+  bill: CalendarBill,
+  asOf: string,
+  end: string,
+  dtstamp: string,
+  includeAmounts: boolean,
+): void {
+  let summary = escapeText(bill.name);
+  if (includeAmounts) {
+    const amount = formatCurrency(Math.abs(bill.amount));
+    const sign = bill.itemType === "income" ? "+" : "";
+    summary += escapeText(` (${sign}${amount})`);
+  }
+
+  let cursor = bill.nextDate;
+  for (let i = 0; i < 500 && cursor <= end; i++) {
+    if (cursor >= asOf) {
+      const day = compactDate(cursor);
+      const key = bill.id ? slug(bill.id) : slug(bill.name);
+      lines.push(
+        "BEGIN:VEVENT",
+        `UID:fundflow-${key}-${day}@fundflow`,
+        `DTSTAMP:${dtstamp}`,
+        `DTSTART;VALUE=DATE:${day}`,
+        `SUMMARY:${summary}`,
+        "END:VEVENT",
+      );
+    }
+    cursor = advance(cursor, bill.frequency);
+  }
 }
 
 export function buildBillsCalendar(input: {
@@ -102,30 +135,8 @@ export function buildBillsCalendar(input: {
   ];
 
   for (const bill of input.bills) {
-    let summary = escapeText(bill.name);
-    if (input.includeAmounts) {
-      const amount = formatCurrency(Math.abs(bill.amount));
-      const sign = bill.itemType === "income" ? "+" : "";
-      summary += escapeText(` (${sign}${amount})`);
-    }
-
-    let cursor = bill.nextDate;
     // Bounded: even a weekly bill over a year-long horizon stays tiny.
-    for (let i = 0; i < 500 && cursor <= end; i++) {
-      if (cursor >= input.asOf) {
-        const day = compactDate(cursor);
-        const key = bill.id ? slug(bill.id) : slug(bill.name);
-        lines.push(
-          "BEGIN:VEVENT",
-          `UID:fundflow-${key}-${day}@fundflow`,
-          `DTSTAMP:${dtstamp}`,
-          `DTSTART;VALUE=DATE:${day}`,
-          `SUMMARY:${summary}`,
-          "END:VEVENT",
-        );
-      }
-      cursor = advance(cursor, bill.frequency);
-    }
+    appendBillEvents(lines, bill, input.asOf, end, dtstamp, input.includeAmounts);
   }
 
   lines.push("END:VCALENDAR");

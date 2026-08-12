@@ -104,7 +104,7 @@ export async function DELETE(request: NextRequest) {
       .eq("id", body.id)
       .maybeSingle();
     if (findError) throw findError;
-    if (!txn || txn.source !== "manual") {
+    if (txn?.source !== "manual") {
       return NextResponse.json({ error: "Manual transaction not found" }, { status: 404 });
     }
 

@@ -21,6 +21,8 @@ export function parseLedgerColumns(input: {
 }): Set<LedgerColumn> {
   if (!input.colsSubmitted) return new Set(DEFAULT_LEDGER_COLUMNS);
   const known = new Set(LEDGER_COLUMNS);
-  const values = Array.isArray(input.col) ? input.col : input.col ? [input.col] : [];
+  const values: string[] = [];
+  if (Array.isArray(input.col)) values.push(...input.col);
+  else if (input.col) values.push(input.col);
   return new Set(values.filter((c): c is LedgerColumn => known.has(c as LedgerColumn)));
 }

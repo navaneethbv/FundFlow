@@ -89,6 +89,7 @@ export default function DashboardPrefsSection({
             </span>
             <input
               id={`dashpref-${option.key}`}
+              aria-label={option.label}
               type="checkbox"
               className="h-4 w-4 accent-accent"
               checked={!prefs[option.key]}

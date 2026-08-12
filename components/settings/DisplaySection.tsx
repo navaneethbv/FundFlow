@@ -93,7 +93,7 @@ export default function DisplaySection({ initialPrefs }: Readonly<{ initialPrefs
             disabled={busy}
             className="h-4 w-4 rounded border-panel-border"
           />
-          Blur amounts by default when a session starts
+          {" "}Blur amounts by default when a session starts
         </label>
         {status && <p className="text-xs text-success">{status}</p>}
       </div>

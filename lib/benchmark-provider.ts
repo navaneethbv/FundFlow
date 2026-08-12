@@ -56,7 +56,7 @@ export async function getCachedBenchmarkSeries(
 ): Promise<BenchmarkSeriesResult> {
   const key = cacheKey(input.benchmark, input.start, input.end);
   const cached = cache.get(key);
-  if (cached && cached.asOf === input.today) return cached;
+  if (cached?.asOf === input.today) return cached;
 
   const series = await provider.series(input);
   const result: BenchmarkSeriesResult = {

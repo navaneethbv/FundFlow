@@ -11,7 +11,7 @@
 /** The error_code column is `char_length(error_code) between 1 and 80`. */
 const ERROR_CODE_MAX = 80;
 
-const EMAIL_PATTERN = /[^\s<>()[\]:;,"]+@[^\s<>()[\]:;,"]+\.[a-z]{2,}/gi;
+const EMAIL_PATTERN = /\b[\w.%+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+\b/gi;
 
 /** Alert summaries are documented as error messages only, never PII. */
 export function redactEmails(text: string): string {
@@ -28,7 +28,7 @@ export function describeDeliveryError(error: unknown): string {
     const detail = redactEmails(
       error.message
         .replace(/^Message failed:\s*/i, "")
-        .replace(new RegExp(`^${responseCode}\\s*`), "")
+        .replace(new RegExp(String.raw`^${responseCode}\s*`), "")
         .trim(),
     );
     return `smtp_${responseCode}: ${detail}`.slice(0, ERROR_CODE_MAX);

@@ -106,8 +106,14 @@ export interface AdviceProfileAnswers {
   homeownership?: Homeownership;
 }
 
-const EMPLOYMENT_STATUSES: EmploymentStatus[] = ["employed", "self_employed", "unemployed", "retired", "student"];
-const HOMEOWNERSHIP_VALUES: Homeownership[] = ["own", "rent", "other"];
+const EMPLOYMENT_STATUSES = new Set<EmploymentStatus>([
+  "employed",
+  "self_employed",
+  "unemployed",
+  "retired",
+  "student",
+]);
+const HOMEOWNERSHIP_VALUES = new Set<Homeownership>(["own", "rent", "other"]);
 const ADVICE_PROFILE_KEYS = new Set(["hasDependents", "employmentStatus", "homeownership"]);
 
 export type AdviceProfileResult =
@@ -134,13 +140,13 @@ export function validateAdviceProfile(input: unknown): AdviceProfileResult {
   }
   if (
     record.employmentStatus !== undefined &&
-    !EMPLOYMENT_STATUSES.includes(record.employmentStatus as EmploymentStatus)
+    !EMPLOYMENT_STATUSES.has(record.employmentStatus as EmploymentStatus)
   ) {
     return { ok: false, error: "employmentStatus is not a recognized value" };
   }
   if (
     record.homeownership !== undefined &&
-    !HOMEOWNERSHIP_VALUES.includes(record.homeownership as Homeownership)
+    !HOMEOWNERSHIP_VALUES.has(record.homeownership as Homeownership)
   ) {
     return { ok: false, error: "homeownership is not a recognized value" };
   }

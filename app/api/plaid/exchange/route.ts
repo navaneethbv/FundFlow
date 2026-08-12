@@ -51,7 +51,8 @@ export async function POST(request: NextRequest) {
     try {
       const tokenInfo = await plaid.linkTokenGet({ link_token: linkToken });
       const mintedPublicTokens = (tokenInfo.data.link_sessions ?? [])
-        .map((session) => session.on_success?.public_token)
+        .flatMap((session) => session.results?.item_add_results ?? [])
+        .map((result) => result.public_token)
         .filter((token): token is string => typeof token === "string");
       if (
         mintedPublicTokens.length > 0 &&

@@ -35,8 +35,8 @@ describe("GoalWizard — full-screen overlay shell", () => {
 
   it("is a fixed full-viewport overlay, not an inline card", () => {
     expect(source).toContain("fixed inset-0 z-50");
-    expect(source).toContain('role="dialog"');
-    expect(source).toContain('aria-modal="true"');
+    expect(source).toContain("<dialog");
+    expect(source).toContain("open");
   });
 
   it("has a back arrow that steps back, and a separate close control", () => {

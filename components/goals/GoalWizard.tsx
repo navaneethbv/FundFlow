@@ -242,11 +242,10 @@ export default function GoalWizard({
   const selectedAccount = accounts.find((item) => item.id === draft.accountId);
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
+    <dialog
+      open
       aria-label="New goal"
-      className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-background"
+      className="fixed inset-0 z-50 m-0 flex flex-col overflow-y-auto border-0 bg-background p-0"
     >
       <div className="border-b border-panel-border">
         <div className="flex items-center justify-between gap-2 px-4 py-3 sm:px-6">
@@ -349,7 +348,7 @@ export default function GoalWizard({
               value={draft.name}
               onChange={(e) => patch({ name: e.target.value })}
               maxLength={120}
-            />
+            />{" "}
           </label>
           <label className="text-sm font-semibold">
             <span className="mb-1 block text-xs text-muted">Target amount</span>
@@ -538,6 +537,6 @@ export default function GoalWizard({
           )}
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

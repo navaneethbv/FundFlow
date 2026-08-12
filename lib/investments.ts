@@ -212,8 +212,8 @@ function periodChangePctFor(
     .filter((s) => s.holdingId === holdingId && s.price != null)
     .sort((a, b) => a.snapshotDate.localeCompare(b.snapshotDate));
   if (rows.length < 2) return null;
-  const first = rows[0].price as number;
-  const last = rows[rows.length - 1].price as number;
+  const first = rows.at(0)!.price as number;
+  const last = rows.at(-1)!.price as number;
   if (first === 0) return null;
   return round2(((last - first) / first) * 100);
 }
@@ -278,8 +278,8 @@ export function buildInvestmentsPage(
   const dates = totalsByDate(snapshots);
   let dayChange: InvestmentsPage["dayChange"] = null;
   if (dates.length >= 2) {
-    const latest = dates[dates.length - 1];
-    const prev = dates[dates.length - 2];
+    const latest = dates.at(-1)!;
+    const prev = dates.at(-2)!;
     if (prev.value !== 0) {
       dayChange = {
         amount: round2(latest.value - prev.value),

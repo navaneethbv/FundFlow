@@ -94,6 +94,7 @@ export default function EmailPreferences({
             </span>
             <input
               id={`email-${row.title.replaceAll(" ", "-")}`}
+              aria-label={row.title}
               type="checkbox"
               className="mt-1 h-4 w-4 accent-accent"
               checked={row.checked}

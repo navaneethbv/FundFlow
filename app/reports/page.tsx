@@ -59,6 +59,42 @@ const TAB_HEADINGS = {
   income: "Income breakdown",
 } as const;
 
+function ReportChart({
+  filters,
+  periods,
+  sankey,
+  rows,
+  currency,
+}: Readonly<{
+  filters: ReportFilters;
+  periods: ReturnType<typeof computePeriodCashFlow>;
+  sankey: ReturnType<typeof buildCashFlowSankeyData>;
+  rows: Parameters<typeof breakdownBy>[0];
+  currency: string;
+}>) {
+  if (filters.mode === "trends") {
+    return <PeriodBars periods={periods} currency={currency} />;
+  }
+  if (filters.tab === "cash_flow") {
+    return (
+      <SankeyChart
+        nodes={sankey.nodes}
+        links={sankey.links}
+        title={`Cash flow ${filters.start} to ${filters.end}`}
+        currency={currency}
+      />
+    );
+  }
+  return (
+    <BreakdownBars
+      title={filters.tab === "income" ? "Income" : "Expenses"}
+      rows={breakdownBy(rows, filters.dimension, filters.tab === "income" ? "income" : "expense")}
+      currency={currency}
+      dimension={filters.dimension}
+    />
+  );
+}
+
 export default async function ReportsPage({ searchParams }: Readonly<PageProps>) {
   if (!isFeatureEnabled("reportsPage")) notFound();
 
@@ -192,27 +228,13 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
             className="reports-chart-panel"
           >
             <div className="reports-chart-content">
-              {filters.mode === "trends" ? (
-                <PeriodBars periods={periods} currency={currencyLabel} />
-              ) : filters.tab === "cash_flow" ? (
-                <SankeyChart
-                  nodes={sankey.nodes}
-                  links={sankey.links}
-                  title={`Cash flow ${filters.start} to ${filters.end}`}
-                  currency={currencyLabel}
-                />
-              ) : (
-                <BreakdownBars
-                  title={filters.tab === "income" ? "Income" : "Expenses"}
-                  rows={breakdownBy(
-                    rows,
-                    filters.dimension,
-                    filters.tab === "income" ? "income" : "expense",
-                  )}
-                  currency={currencyLabel}
-                  dimension={filters.dimension}
-                />
-              )}
+              <ReportChart
+                filters={filters}
+                periods={periods}
+                sankey={sankey}
+                rows={rows}
+                currency={currencyLabel}
+              />
             </div>
           </Panel>
 

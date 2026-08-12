@@ -62,7 +62,7 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
             </div>
           </dl>
           <p className="mt-3 text-sm text-muted">
-            Net worth today: <span className="money font-semibold text-foreground">{formatCurrency(currentNetWorth)}</span>
+            Net worth today: {" "}<span className="money font-semibold text-foreground">{formatCurrency(currentNetWorth)}</span>
           </p>
         </Panel>
 

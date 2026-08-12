@@ -118,6 +118,51 @@ function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
+function proposalGroup(isIncome: boolean, fixedShare: number): BudgetGroup {
+  if (isIncome) return "income";
+  return fixedShare >= 0.5 ? "fixed" : "flexible";
+}
+
+function proposalConfidence(occurrences: number): "high" | "medium" | "low" {
+  if (occurrences >= 3) return "high";
+  if (occurrences >= 2) return "medium";
+  return "low";
+}
+
+function proposalReason(group: BudgetGroup, isIncome: boolean): string {
+  if (group === "fixed") return "Recurring charges make up most trailing spending";
+  return isIncome
+    ? "Based on three complete months of income"
+    : "Based on three complete months of spending";
+}
+
+type ProposalTotals = {
+  income: number;
+  expense: number;
+  recurringExpense: number;
+  sourceIds: Set<string>;
+};
+
+function historyProposal(
+  category: string,
+  total: ProposalTotals,
+  sortOrder: number,
+): BudgetSeedProposal {
+  const isIncome = total.income > total.expense;
+  const fixedShare = total.expense > 0 ? total.recurringExpense / total.expense : 0;
+  const group = proposalGroup(isIncome, fixedShare);
+  const amount = isIncome ? total.income : total.expense;
+  return {
+    category,
+    group_name: group,
+    suggested_amount: round2(amount / 3),
+    rollover_enabled: false,
+    sort_order: sortOrder,
+    confidence: proposalConfidence(total.sourceIds.size),
+    reason: proposalReason(group, isIncome),
+  };
+}
+
 export function parseBudgetHorizon(value: unknown): BudgetHorizon {
   if (value === "yearly" || value === "decade") return value;
   return "monthly";
@@ -490,15 +535,7 @@ export function proposeBudgetFromHistory(input: {
       category.toLowerCase(),
     ),
   );
-  const totals = new Map<
-    string,
-    {
-      income: number;
-      expense: number;
-      recurringExpense: number;
-      sourceIds: Set<string>;
-    }
-  >();
+  const totals = new Map<string, ProposalTotals>();
 
   for (const transaction of input.txnsLast3Months) {
     if (transaction.flow === "transfer") continue;
@@ -526,31 +563,7 @@ export function proposeBudgetFromHistory(input: {
 
   const proposals: BudgetSeedProposal[] = [];
   for (const [category, total] of totals) {
-    const isIncome = total.income > total.expense;
-    const fixedShare =
-      total.expense > 0 ? total.recurringExpense / total.expense : 0;
-    const group: BudgetGroup = isIncome
-      ? "income"
-      : fixedShare >= 0.5
-        ? "fixed"
-        : "flexible";
-    const amount = isIncome ? total.income : total.expense;
-    const occurrences = total.sourceIds.size;
-    proposals.push({
-      category,
-      group_name: group,
-      suggested_amount: round2(amount / 3),
-      rollover_enabled: false,
-      sort_order: proposals.length,
-      confidence:
-        occurrences >= 3 ? "high" : occurrences >= 2 ? "medium" : "low",
-      reason:
-        group === "fixed"
-          ? "Recurring charges make up most trailing spending"
-          : isIncome
-            ? "Based on three complete months of income"
-            : "Based on three complete months of spending",
-    });
+    proposals.push(historyProposal(category, total, proposals.length));
   }
 
   for (const fund of input.sinkingFunds ?? []) {

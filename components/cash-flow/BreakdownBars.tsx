@@ -48,22 +48,13 @@ export default function BreakdownBars({
                   {formatCurrency(row.amount, currency)} ({row.pct}%)
                 </span>
               </div>
-              <div
-                role="progressbar"
+              <progress
+                value={Math.max(0, Math.min(100, row.pct))}
+                max={100}
                 aria-label={`${label}, ${row.pct}% of ${title.toLowerCase()}`}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={row.pct}
-                className="h-2.5 overflow-hidden rounded-full bg-panel-hover"
-              >
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    background: color,
-                    width: `${Math.max(0, Math.min(100, row.pct))}%`,
-                  }}
-                />
-              </div>
+                className="h-2.5 w-full overflow-hidden rounded-full bg-panel-hover"
+                style={{ accentColor: color }}
+              />
             </li>
           );
         })}

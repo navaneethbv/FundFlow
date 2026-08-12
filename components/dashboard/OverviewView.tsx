@@ -50,18 +50,16 @@ export default async function OverviewView({
   });
 
   return (
-    <>
-      <DashboardWidgetGrid
-        prefs={prefs}
-        data={{ ...data, investments: loaded.investments }}
-        goals={goals}
-        cumulativeSpend={loaded.cumulativeSpend.days}
-        monthLabel={loaded.cumulativeSpend.monthLabel}
-        previousMonthLabel={loaded.cumulativeSpend.previousMonthLabel}
-        recentTransactions={recent}
-        accountNames={accountNames}
-        today={today}
-      />
-    </>
+    <DashboardWidgetGrid
+      prefs={prefs}
+      data={{ ...data, investments: loaded.investments }}
+      goals={goals}
+      cumulativeSpend={loaded.cumulativeSpend.days}
+      monthLabel={loaded.cumulativeSpend.monthLabel}
+      previousMonthLabel={loaded.cumulativeSpend.previousMonthLabel}
+      recentTransactions={recent}
+      accountNames={accountNames}
+      today={today}
+    />
   );
 }

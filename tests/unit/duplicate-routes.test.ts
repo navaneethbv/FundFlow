@@ -113,7 +113,7 @@ describe("GET /api/transactions/duplicates", () => {
     const payload = await response.json();
     expect(payload.pairs[0].first.merchant).toBe("Unknown");
     expect(payload.pairs[0].first.accountName).toBe("Account");
-    expect(payload.pairs[0].first.plaidItemId).toBe(null);
+    expect(payload.pairs[0].first.plaidItemId).toBeNull();
   });
 
   it("maps confirmed links even when one side is missing from the ledger", async () => {

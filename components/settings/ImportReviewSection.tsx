@@ -164,7 +164,7 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
     <>
       <option value="">{includeNone ? "None" : placeholder}</option>
       {(mapping?.headers ?? []).map((h, i) => (
-        <option key={i} value={i}>
+        <option key={`header-${h || "blank"}`} value={i}>
           {h || `Column ${i + 1}`}
         </option>
       ))}
@@ -192,7 +192,7 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
           />
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2">
-              Into account
+              Into account{" "}
               <Select value={accountId} onChange={(event) => setAccountId(event.target.value)}>
                 {accounts.map((account) => (
                   <option key={account.id} value={account.id}>
@@ -209,7 +209,7 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
                   checked={positiveIsIncome}
                   onChange={(event) => setPositiveIsIncome(event.target.checked)}
                 />
-                Positive amounts are deposits
+                {" "}Positive amounts are deposits
               </label>
             ) : (
               <p className="text-muted">OFX sign conventions are detected automatically.</p>
@@ -232,17 +232,17 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
                 <thead className="bg-panel text-muted">
                   <tr>
                     {mapping.headers.map((h, i) => (
-                      <th key={i} className="whitespace-nowrap p-2 font-semibold">
+                      <th key={`header-${h || "blank"}`} className="whitespace-nowrap p-2 font-semibold">
                         {h || `Column ${i + 1}`}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {mapping.sample.map((r, ri) => (
-                    <tr key={ri} className="border-t border-panel-border">
-                      {mapping.headers.map((_, ci) => (
-                        <td key={ci} className="whitespace-nowrap p-2 text-muted">
+                  {mapping.sample.map((r) => (
+                    <tr key={r.join("\u001f")} className="border-t border-panel-border">
+                      {mapping.headers.map((h, ci) => (
+                        <td key={`cell-${h || "blank"}-${r[ci] ?? ""}`} className="whitespace-nowrap p-2 text-muted">
                           {r[ci] ?? ""}
                         </td>
                       ))}

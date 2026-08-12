@@ -42,7 +42,13 @@ export default function PerformanceChart({
     return <p className="text-sm text-muted">Balance history builds up after a few days of syncing.</p>;
   }
 
-  const latest = values[values.length - 1];
+  const latest = values.at(-1)!;
+  let performanceClass = "";
+  let performanceLabel = formatCurrency(latest, currency);
+  if (sufficient) {
+    performanceClass = latest >= 0 ? "text-success" : "text-danger";
+    performanceLabel = `${latest >= 0 ? "+" : ""}${latest.toFixed(1)}%`;
+  }
 
   return (
     <div className="space-y-2">
@@ -51,9 +57,9 @@ export default function PerformanceChart({
           {sufficient ? "Portfolio performance" : "Balance"}
         </span>
         <span
-          className={`tabular-nums font-medium ${sufficient ? (latest >= 0 ? "text-success" : "text-danger") : ""}`}
+          className={`tabular-nums font-medium ${performanceClass}`}
         >
-          {sufficient ? `${latest >= 0 ? "+" : ""}${latest.toFixed(1)}%` : formatCurrency(latest, currency)}
+          {performanceLabel}
         </span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="h-24 w-full" aria-hidden="true">

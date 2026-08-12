@@ -765,28 +765,16 @@ describe("syncInvestmentTransactionsForItem", () => {
     expect(updateIn).toHaveBeenCalledWith("plaid_investment_transaction_id", ["t1"]);
   });
 
-  it("reports product_not_ready distinctly without throwing", async () => {
+  it.each([
+    ["PRODUCT_NOT_READY", "product_not_ready"],
+    ["ADDITIONAL_CONSENT_REQUIRED", "no_investment_product"],
+    ["RATE_LIMIT_EXCEEDED", "rate_limited"],
+  ] as const)("maps Plaid error %s to %s without throwing", async (errorCode, outcome) => {
     mockInvestmentsTransactionsGet.mockRejectedValueOnce({
-      response: { data: { error_code: "PRODUCT_NOT_READY" } },
+      response: { data: { error_code: errorCode } },
     });
     const result = await syncInvestmentTransactionsForItem(item, "2026-07-30");
-    expect(result).toEqual({ outcome: "product_not_ready", transactionsSynced: 0 });
-  });
-
-  it("reports a missing Investments product distinctly without throwing", async () => {
-    mockInvestmentsTransactionsGet.mockRejectedValueOnce({
-      response: { data: { error_code: "ADDITIONAL_CONSENT_REQUIRED" } },
-    });
-    const result = await syncInvestmentTransactionsForItem(item, "2026-07-30");
-    expect(result).toEqual({ outcome: "no_investment_product", transactionsSynced: 0 });
-  });
-
-  it("reports rate limiting as retriable without throwing", async () => {
-    mockInvestmentsTransactionsGet.mockRejectedValueOnce({
-      response: { data: { error_code: "RATE_LIMIT_EXCEEDED" } },
-    });
-    const result = await syncInvestmentTransactionsForItem(item, "2026-07-30");
-    expect(result).toEqual({ outcome: "rate_limited", transactionsSynced: 0 });
+    expect(result).toEqual({ outcome, transactionsSynced: 0 });
   });
 
   it("rethrows an unrecognized Plaid error during transaction sync", async () => {
