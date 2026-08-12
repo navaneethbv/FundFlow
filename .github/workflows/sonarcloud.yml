@@ -29,15 +29,6 @@ jobs:
           node-version: 22
           cache: npm
 
-      # sonar-scanner-cli 8.x provisions its own JRE unless one is on the
-      # runner, and the provisioning endpoint (api.sonarcloud.io/analysis/jres)
-      # rejects the analysis token with a 403. Installing a JDK makes the
-      # scanner use JAVA_HOME instead and never hit that endpoint.
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
       - name: Install dependencies
         run: npm ci
 
@@ -51,10 +42,10 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v8
         with:
           # sonar-scanner-cli 8.x tries to provision its own JRE from
-          # api.sonarcloud.io/analysis/jres when it decides the embedded JRE is
-          # unsuitable, and that endpoint now rejects the analysis token (403).
-          # The bundle ships a JRE and setup-java provides a JDK, so skip
-          # provisioning and let the scanner use one of those instead.
+          # api.sonarcloud.io/analysis/jres when it judges the embedded JRE
+          # unsuitable, and that endpoint rejects the analysis token with a 403.
+          # The bundle ships a JRE (and the runner has none), so skip
+          # provisioning and let the scanner use the bundled JRE.
           args: "-Dsonar.scanner.skipJreProvisioning=true"
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
