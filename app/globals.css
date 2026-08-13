@@ -384,6 +384,20 @@ select {
   outline-offset: 3px;
 }
 
+/* Native form controls paint themselves with the UA accent (Blink/WebKit ship a
+   blue) unless told otherwise, so every checkbox, radio, and slider in the app
+   rendered blue against an orange accent. One base rule instead of a prop on
+   ~20 call sites; `var(--accent)` means it re-themes with light/dark for free.
+   The browser picks the checkmark/tick color itself for contrast against this.
+   `progress` is deliberately excluded: BreakdownBars sets `appearance: none`
+   and paints its own fill per series, so `accent-color` would not apply there
+   anyway and naming it would only imply otherwise. */
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"] {
+  accent-color: var(--accent);
+}
+
 button,
 a {
   -webkit-tap-highlight-color: transparent;
