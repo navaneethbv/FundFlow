@@ -275,21 +275,25 @@ function buildAccountLookups(
   accountLabelsById: Map<string, string>;
   accountOptions: Array<{ id: string; name: string; source: "plaid" | "manual" }>;
 } {
+  const accountText = (value: unknown, fallback: string): string =>
+    typeof value === "string" ? value : fallback;
+
   return {
     accountNamesById: new Map([
-      ...accounts.map((a) => [a.id as string, (a.name ?? "") as string] as const),
-      ...manualAccounts.map((a) => [a.id as string, (a.name ?? "") as string] as const),
+      ...accounts.map((a) => [a.id as string, accountText(a.name, "")] as const),
+      ...manualAccounts.map((a) => [a.id as string, accountText(a.name, "")] as const),
     ]),
     accountLabelsById: new Map([
       ...accounts.map((a) => {
-        const mask = a.mask ? ` ••${a.mask}` : "";
-        return [a.id as string, `${a.name ?? "Account"}${mask}`] as const;
+        const mask = accountText(a.mask, "");
+        const maskLabel = mask ? ` ••${mask}` : "";
+        return [a.id as string, `${accountText(a.name, "Account")}${maskLabel}`] as const;
       }),
-      ...manualAccounts.map((a) => [a.id as string, `${a.name ?? "Account"} (manual)`] as const),
+      ...manualAccounts.map((a) => [a.id as string, `${accountText(a.name, "Account")} (manual)`] as const),
     ]),
     accountOptions: [
-      ...accounts.map((a) => ({ id: a.id as string, name: (a.name ?? "Account") as string, source: "plaid" as const })),
-      ...manualAccounts.map((a) => ({ id: a.id as string, name: (a.name ?? "Account") as string, source: "manual" as const })),
+      ...accounts.map((a) => ({ id: a.id as string, name: accountText(a.name, "Account"), source: "plaid" as const })),
+      ...manualAccounts.map((a) => ({ id: a.id as string, name: accountText(a.name, "Account"), source: "manual" as const })),
     ],
   };
 }
