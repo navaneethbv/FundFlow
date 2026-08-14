@@ -101,6 +101,7 @@ export default function InAppPreferences({
       </div>
       <label
         htmlFor="inapp-threshold"
+        aria-label="Large-transaction threshold"
         className="mt-4 flex items-center justify-between gap-4 rounded-field bg-panel-2 p-4"
       >
         <span>

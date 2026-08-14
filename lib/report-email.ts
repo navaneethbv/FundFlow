@@ -1,4 +1,5 @@
 import { formatCurrency, titleCase } from "@/lib/format";
+import { stripTrailingAccountMask } from "@/lib/account-label";
 import type { WeeklyReportData } from "@/lib/weekly-report";
 
 const COLORS = {
@@ -57,7 +58,7 @@ function clampPercent(value: number): number {
 // end: an unanchored `[•*x]+` pass also eats every literal x in a name, which
 // turned "Amex Platinum" into "Ame  Platinum".
 function accountLabel(value: string): string {
-  return value.replace(/\s*(?:[•*x]{1,4}\s*)?\d{4}\s*$/i, "").trim();
+  return stripTrailingAccountMask(value, "•*x");
 }
 
 function sectionHeading(title: string, eyebrow: string): string {

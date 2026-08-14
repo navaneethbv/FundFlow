@@ -56,7 +56,8 @@ function slug(value: string): string {
     value
       .toLowerCase()
       .replace(/[^a-z0-9]/gi, "-")
-      .replace(/^-|-$/g, "") || "bill"
+      .replace(/^-/, "")
+      .replace(/-$/, "") || "bill"
   );
 }
 

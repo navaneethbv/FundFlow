@@ -260,7 +260,7 @@ export default function PlanView({
                       {formatCurrency(
                         Math.max(0, debt.plan.totalInterest - debt.planWithExtra.totalInterest),
                       )}
-                    </span>{"."}
+                    </span>.
                   </p>
                 )}
                 <ul className="mt-3 space-y-1 text-xs text-muted">

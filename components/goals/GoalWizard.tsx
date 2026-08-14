@@ -220,8 +220,8 @@ function GoalWizardStepContent({
               checked={draft.spendingReduces}
               onChange={(e) => patch({ spendingReduces: e.target.checked })}
             />
-            <span>
-              <span>Spending against this goal reduces it</span>
+            <span className="block">
+              <span className="block">Spending against this goal reduces it</span>
               <span className="mt-1 block text-xs font-normal text-muted">
                 Link a transaction to this goal from the ledger and it will be
                 subtracted from the goal&apos;s progress.

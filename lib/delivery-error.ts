@@ -15,11 +15,52 @@ const ERROR_CODE_MAX = 80;
 // addresses contain characters like `'` and `!`, and a `[\w.%+-]+` local part
 // leaves those prefixes behind ("o'brien@example.com" -> "o'[redacted]"),
 // which still leaks PII into the admin inbox and the logs.
-const EMAIL_PATTERN = /[^\s@<>()[\]:;,"]+@[^\s@<>()[\]:;,"]+\.[a-z]{2,}/gi;
+function isEmailPartCharacter(value: string): boolean {
+  return !"<>()[]\\:;,\"@".includes(value) && value.trim() !== "";
+}
+
+function isAsciiLetter(value: string): boolean {
+  return (value >= "a" && value <= "z") || (value >= "A" && value <= "Z");
+}
+
+function redactEmailToken(token: string): string {
+  let output = "";
+  let cursor = 0;
+  let searchFrom = 0;
+
+  while (searchFrom < token.length) {
+    const at = token.indexOf("@", searchFrom);
+    if (at < 0) break;
+
+    let start = at - 1;
+    while (start >= 0 && isEmailPartCharacter(token[start]!)) start -= 1;
+    let end = at + 1;
+    while (end < token.length && isEmailPartCharacter(token[end]!)) end += 1;
+    while (end > at + 1 && token[end - 1] === ".") end -= 1;
+
+    const domain = token.slice(at + 1, end);
+    const dot = domain.lastIndexOf(".");
+    const tld = domain.slice(dot + 1);
+    const valid =
+      start < at - 1 &&
+      dot > 0 &&
+      tld.length >= 2 &&
+      [...tld].every(isAsciiLetter);
+    if (valid) {
+      output += token.slice(cursor, start + 1) + "[redacted]";
+      cursor = end;
+      searchFrom = end;
+    } else {
+      searchFrom = at + 1;
+    }
+  }
+
+  return output + token.slice(cursor);
+}
 
 /** Alert summaries are documented as error messages only, never PII. */
 export function redactEmails(text: string): string {
-  return text.replace(EMAIL_PATTERN, "[redacted]");
+  return text.replace(/\S+/g, redactEmailToken);
 }
 
 export function describeDeliveryError(error: unknown): string {
