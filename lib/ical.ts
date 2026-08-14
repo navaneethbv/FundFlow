@@ -52,19 +52,19 @@ function escapeText(value: string): string {
 }
 
 /**
- * UIDs are part of the feed's contract: a subscriber that already has an event
- * treats a changed UID as a new one. Every leading and trailing dash must go,
- * or a name with two or more leading/trailing non-alphanumerics ("**Netflix**")
- * keeps a stray dash and duplicates the event in every existing subscriber's
- * calendar.
+ * UIDs are part of the feed's contract: a subscriber that already holds an
+ * event treats a changed UID as a second event. So every leading and trailing
+ * dash has to go, not just one — a name with two or more leading or trailing
+ * non-alphanumerics ("**Netflix**") otherwise keeps a stray dash and duplicates
+ * the event in every existing subscriber's calendar.
  *
- * The trim is an index scan rather than `/^-+/` + `/-+$/`. `^-+` is anchored
- * and runs once, but `-+$` is not: the engine retries at every dash in the
- * string, so a name that is a long run of separators ("---...---x") costs
- * O(n^2). Merchant names reach this from Plaid, so the input is not ours.
+ * Trimmed by index rather than with `/^-+/` and `/-+$/`: the trailing pattern
+ * is unanchored at its start, so a long dash run retries at every position
+ * (Sonar S8786). Interior runs are deliberately left alone, since collapsing
+ * them would change existing UIDs too.
  */
 function slug(value: string): string {
-  const dashed = value.toLowerCase().replace(/[^a-z0-9]/g, "-");
+  const dashed = value.toLowerCase().replace(/[^a-z0-9]/gi, "-");
   let start = 0;
   let end = dashed.length;
   while (start < end && dashed[start] === "-") start += 1;
