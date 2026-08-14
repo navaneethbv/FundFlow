@@ -566,7 +566,7 @@ function buildStreamSummaries(
   const label = (s: StreamRow) =>
     s.merchant_name?.trim() || s.description?.trim() || "Unknown";
   const byAmountDesc = <T extends { amount: number }>(rows: T[]) =>
-    rows.sort((a, b) => b.amount - a.amount);
+    rows.toSorted((a, b) => b.amount - a.amount);
   return {
     subscriptions: byAmountDesc(
       filtered
