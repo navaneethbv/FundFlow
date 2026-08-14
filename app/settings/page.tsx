@@ -54,6 +54,103 @@ function monthStart(offset: number): string {
   return `${year}-${String(month).padStart(2, "0")}-01`;
 }
 
+type SettingsSupabase = Awaited<ReturnType<typeof createClient>>;
+
+/** Profile section: the stored fields plus a short-lived signed avatar URL. */
+async function renderProfileSection(
+  supabase: SettingsSupabase,
+  userId: string,
+): Promise<React.ReactNode> {
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name, display_name, birthday, avatar_path")
+    .eq("id", userId)
+    .maybeSingle();
+  let avatarUrl: string | null = null;
+  if (profile?.avatar_path) {
+    const { data: signed } = await supabase.storage
+      .from("avatars")
+      .createSignedUrl(profile.avatar_path as string, 3600);
+    avatarUrl = signed?.signedUrl ?? null;
+  }
+  return (
+    <ProfileSection
+      fullName={(profile?.full_name as string | null) ?? null}
+      displayName={(profile?.display_name as string | null) ?? null}
+      birthday={(profile?.birthday as string | null) ?? null}
+      avatarUrl={avatarUrl}
+    />
+  );
+}
+
+/**
+ * Household preferences: settle-up, which only means anything once the primary
+ * household has a second member. Member emails come from the service client
+ * (auth.users is not readable through RLS), looked up by id one at a time.
+ */
+async function renderHouseholdPreferences(
+  supabase: SettingsSupabase,
+  userId: string,
+): Promise<React.ReactNode> {
+  const [{ data: households }, { data: householdMembers }, { data: sharedExpenses }] = await Promise.all([
+    supabase.from("households").select("id, name").order("created_at", { ascending: false }),
+    supabase.from("household_members").select("household_id, user_id, role"),
+    supabase
+      .from("shared_expenses")
+      .select("id, household_id, paid_by, owed_user_id, description, amount, settled_at")
+      .order("created_at"),
+  ]);
+  const primaryHousehold = (households ?? [])[0] as { id: string; name: string } | undefined;
+  const memberRows = ((householdMembers ?? []) as Array<{ household_id: string; user_id: string }>).filter(
+    (row) => row.household_id === primaryHousehold?.id,
+  );
+  const memberIds = new Set<string>(memberRows.map((row) => row.user_id));
+  if (userId) memberIds.add(userId);
+
+  const settleUpMembers = await loadSettleUpMembers(memberIds, Boolean(primaryHousehold));
+  if (!primaryHousehold || settleUpMembers.length <= 1 || !userId) {
+    return (
+      <Panel title="Settle up" eyebrow="Household">
+        <p className="text-sm text-muted">
+          Settlement tracking appears once your household has more than one member.
+        </p>
+      </Panel>
+    );
+  }
+  return (
+    <SettleUpSection
+      householdId={primaryHousehold.id}
+      currentUserId={userId}
+      members={settleUpMembers}
+      initialExpenses={((sharedExpenses ?? []) as Array<{
+        id: string;
+        household_id: string;
+        paid_by: string;
+        owed_user_id: string;
+        description: string;
+        amount: number;
+        settled_at: string | null;
+      }>).filter((row) => row.household_id === primaryHousehold.id)}
+    />
+  );
+}
+
+/** Member id -> email for settle-up. Empty unless there is more than one. */
+async function loadSettleUpMembers(
+  memberIds: ReadonlySet<string>,
+  hasHousehold: boolean,
+): Promise<Array<{ userId: string; email: string }>> {
+  if (!hasHousehold || memberIds.size <= 1) return [];
+  const { createServiceClient } = await import("@/lib/supabase/service");
+  const service = createServiceClient();
+  const members: Array<{ userId: string; email: string }> = [];
+  for (const memberId of memberIds) {
+    const { data: memberUser } = await service.auth.admin.getUserById(memberId);
+    members.push({ userId: memberId, email: memberUser?.user?.email ?? "member" });
+  }
+  return members;
+}
+
 export default async function SettingsPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
   // Gated: Profile/Display/Tags are the only sections that read the new
@@ -76,26 +173,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
 
   switch (active) {
     case "profile": {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("full_name, display_name, birthday, avatar_path")
-      .eq("id", userId)
-      .maybeSingle();
-    let avatarUrl: string | null = null;
-    if (profile?.avatar_path) {
-      const { data: signed } = await supabase.storage
-        .from("avatars")
-        .createSignedUrl(profile.avatar_path as string, 3600);
-      avatarUrl = signed?.signedUrl ?? null;
-    }
-    content = (
-      <ProfileSection
-        fullName={(profile?.full_name as string | null) ?? null}
-        displayName={(profile?.display_name as string | null) ?? null}
-        birthday={(profile?.birthday as string | null) ?? null}
-        avatarUrl={avatarUrl}
-      />
-    );
+      content = await renderProfileSection(supabase, userId);
       break;
     }
     case "display": {
@@ -210,52 +288,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
       break;
     }
     case "household-preferences": {
-    const [{ data: households }, { data: householdMembers }, { data: sharedExpenses }] = await Promise.all([
-      supabase.from("households").select("id, name").order("created_at", { ascending: false }),
-      supabase.from("household_members").select("household_id, user_id, role"),
-      supabase
-        .from("shared_expenses")
-        .select("id, household_id, paid_by, owed_user_id, description, amount, settled_at")
-        .order("created_at"),
-    ]);
-    const primaryHousehold = (households ?? [])[0] as { id: string; name: string } | undefined;
-    const memberRows = ((householdMembers ?? []) as Array<{ household_id: string; user_id: string }>).filter(
-      (row) => row.household_id === primaryHousehold?.id,
-    );
-    const memberIds = new Set<string>(memberRows.map((row) => row.user_id));
-    if (userId) memberIds.add(userId);
-    const settleUpMembers: Array<{ userId: string; email: string }> = [];
-    if (primaryHousehold && memberIds.size > 1) {
-      const { createServiceClient } = await import("@/lib/supabase/service");
-      const service = createServiceClient();
-      for (const memberId of memberIds) {
-        const { data: memberUser } = await service.auth.admin.getUserById(memberId);
-        settleUpMembers.push({ userId: memberId, email: memberUser?.user?.email ?? "member" });
-      }
-    }
-    content =
-      primaryHousehold && settleUpMembers.length > 1 && userId ? (
-        <SettleUpSection
-          householdId={primaryHousehold.id}
-          currentUserId={userId}
-          members={settleUpMembers}
-          initialExpenses={((sharedExpenses ?? []) as Array<{
-            id: string;
-            household_id: string;
-            paid_by: string;
-            owed_user_id: string;
-            description: string;
-            amount: number;
-            settled_at: string | null;
-          }>).filter((row) => row.household_id === primaryHousehold.id)}
-        />
-      ) : (
-        <Panel title="Settle up" eyebrow="Household">
-          <p className="text-sm text-muted">
-            Settlement tracking appears once your household has more than one member.
-          </p>
-        </Panel>
-      );
+      content = await renderHouseholdPreferences(supabase, userId);
       break;
     }
     case "institutions": {

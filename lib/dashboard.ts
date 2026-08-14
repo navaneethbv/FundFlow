@@ -446,6 +446,150 @@ function buildDashboardSpendMetrics(input: DashboardSpendMetricsInput) {
   };
 }
 
+/**
+ * Latest date among `txns` whose merchant matches `name`, or null. Recurring
+ * streams carry no next-date column, so this anchors the expected date to the
+ * stream's most recent real charge.
+ */
+function latestMerchantMatchDate(
+  txns: ReadonlyArray<{ merchant: string; date: string }>,
+  name: string,
+): string | null {
+  const target = name.trim().toLowerCase();
+  let best: string | null = null;
+  for (const txn of txns) {
+    if (txn.merchant.trim().toLowerCase() !== target) continue;
+    if (!best || txn.date > best) best = txn.date;
+  }
+  return best;
+}
+
+/**
+ * Per-person attribution (4.3). Only meaningful in household scope, where the
+ * window can contain a partner's shared rows; null everywhere else, and null
+ * when nothing in the active month came from anyone but the caller.
+ */
+function computeSpendPerPerson(
+  spendTxns: readonly TxnLite[],
+  activeMonth: string,
+  userId: string | undefined,
+  scope: DashboardOptions["scope"],
+): { mine: number; household: number } | null {
+  if (scope !== "household" || !userId) return null;
+  let mine = 0;
+  let household = 0;
+  for (const t of spendTxns) {
+    if (monthKey(t.date) !== activeMonth || !isSpending(t)) continue;
+    if (t.user_id === userId) mine += t.amount;
+    else household += t.amount;
+  }
+  return household > 0 ? { mine: round2(mine), household: round2(household) } : null;
+}
+
+/**
+ * Debt payoff planner (1.10) over carried credit-card balances. Cards without
+ * a user-entered APR assume a typical rate and say so in the UI.
+ */
+function buildDebtSummary(allAccounts: readonly AccountSummary[]): DashboardData["insights"]["debt"] {
+  const ASSUMED_APR = 22;
+  const DEBT_EXTRA_MONTHLY = 200;
+  const debtAccounts = allAccounts.filter(
+    (a) => a.type === "credit" && Number(a.current_balance ?? 0) > 0,
+  );
+  if (debtAccounts.length === 0) return null;
+  const debtInputs = debtAccounts.map((a) => {
+    const mask = a.mask ? ` ••${a.mask}` : "";
+    return {
+      name: `${a.name ?? "Card"}${mask}`,
+      balance: Number(a.current_balance),
+      apr: a.apr ?? ASSUMED_APR,
+    };
+  });
+  return {
+    plan: buildPayoffPlan({ debts: debtInputs, extraMonthly: 0, strategy: "avalanche" }),
+    planWithExtra: buildPayoffPlan({
+      debts: debtInputs,
+      extraMonthly: DEBT_EXTRA_MONTHLY,
+      strategy: "avalanche",
+    }),
+    extraMonthly: DEBT_EXTRA_MONTHLY,
+    usesAssumedApr: debtAccounts.some((a) => a.apr === null || a.apr === undefined),
+  };
+}
+
+/**
+ * Per-merchant trailing medians from the prior window months. Two charges
+ * minimum: one prior charge doesn't establish what "usual" looks like.
+ */
+function computePriorMerchantMedians(
+  spendTxns: readonly TxnLite[],
+  activeMonth: string,
+): Array<{ merchant: string; amount: number }> {
+  const amountsByMerchant = new Map<string, { name: string; amounts: number[] }>();
+  for (const t of spendTxns) {
+    if (monthKey(t.date) === activeMonth || !isSpending(t)) continue;
+    const name = t.merchant_name ?? t.name ?? "Unknown";
+    const key = name.trim().toLowerCase();
+    const entry = amountsByMerchant.get(key) ?? { name, amounts: [] };
+    entry.amounts.push(t.amount);
+    amountsByMerchant.set(key, entry);
+  }
+  return [...amountsByMerchant.values()]
+    .filter((entry) => entry.amounts.length >= 2)
+    .map((entry) => ({ merchant: entry.name, amount: round2(medianOf(entry.amounts)) }));
+}
+
+interface StreamRow {
+  merchant_name: string | null;
+  description: string | null;
+  average_amount: number | null;
+  frequency: string | null;
+  category: string | null;
+  stream_type: string;
+  plaid_item_id: string;
+}
+
+/**
+ * Active recurring streams split into outflow (subscriptions) and inflow
+ * (income), scoped to the selected account's bank when one is selected.
+ */
+function buildStreamSummaries(
+  streamRows: readonly StreamRow[],
+  selectedItemDbId: string | undefined,
+): {
+  subscriptions: DashboardData["subscriptions"];
+  incomeStreams: DashboardData["incomeStreams"];
+} {
+  const filtered = selectedItemDbId
+    ? streamRows.filter((s) => s.plaid_item_id === selectedItemDbId)
+    : streamRows;
+  const label = (s: StreamRow) =>
+    s.merchant_name?.trim() || s.description?.trim() || "Unknown";
+  const byAmountDesc = <T extends { amount: number }>(rows: T[]) =>
+    rows.sort((a, b) => b.amount - a.amount);
+  return {
+    subscriptions: byAmountDesc(
+      filtered
+        .filter((s) => s.stream_type === "outflow")
+        .map((s) => ({
+          merchant: label(s),
+          amount: round2(Math.abs(s.average_amount ?? 0)),
+          frequency: s.frequency,
+          category: s.category,
+        })),
+    ),
+    incomeStreams: byAmountDesc(
+      filtered
+        .filter((s) => s.stream_type === "inflow")
+        .map((s) => ({
+          merchant: label(s),
+          amount: round2(Math.abs(s.average_amount ?? 0)),
+          frequency: s.frequency,
+        })),
+    ),
+  };
+}
+
 export interface DashboardOptions {
   itemId?: string;
   drill?: DrillParams;
@@ -759,38 +903,10 @@ export async function getDashboardData(
   const selectedAccountObj = allAccounts.find((a) => a.id === selectedAccountId);
   const selectedItemDbId = selectedAccountObj?.plaid_item_id;
 
-  const streamRows = (streams ?? []) as Array<{
-    merchant_name: string | null;
-    description: string | null;
-    average_amount: number | null;
-    frequency: string | null;
-    category: string | null;
-    stream_type: string;
-    plaid_item_id: string;
-  }>;
-
-  const filteredStreams = selectedItemDbId
-    ? streamRows.filter((s) => s.plaid_item_id === selectedItemDbId)
-    : streamRows;
-
-  const subscriptions = filteredStreams
-    .filter((s) => s.stream_type === "outflow")
-    .map((s) => ({
-      merchant: s.merchant_name?.trim() || s.description?.trim() || "Unknown",
-      amount: round2(Math.abs(s.average_amount ?? 0)),
-      frequency: s.frequency,
-      category: s.category,
-    }))
-    .sort((a, b) => b.amount - a.amount);
-
-  const incomeStreams = filteredStreams
-    .filter((s) => s.stream_type === "inflow")
-    .map((s) => ({
-      merchant: s.merchant_name?.trim() || s.description?.trim() || "Unknown",
-      amount: round2(Math.abs(s.average_amount ?? 0)),
-      frequency: s.frequency,
-    }))
-    .sort((a, b) => b.amount - a.amount);
+  const { subscriptions, incomeStreams } = buildStreamSummaries(
+    (streams ?? []) as StreamRow[],
+    selectedItemDbId,
+  );
 
   const activeDay =
     isCurrentMonth ? today.getDate() : new Date(activeYear, activeMonthIndex + 1, 0).getDate();
@@ -943,15 +1059,8 @@ export async function getDashboardData(
     merchant: t.merchant_name ?? t.name ?? "",
     amount: t.amount,
   }));
-  const latestMatchDate = (name: string): string | null => {
-    const target = name.trim().toLowerCase();
-    let best: string | null = null;
-    for (const txn of recurringTxns) {
-      if (txn.merchant.trim().toLowerCase() !== target) continue;
-      if (!best || txn.date > best) best = txn.date;
-    }
-    return best;
-  };
+  const latestMatchDate = (name: string): string | null =>
+    latestMerchantMatchDate(recurringTxns, name);
   const recurringStatuses = buildRecurringStatuses({
     asOf: monthDate(activeMonth, Math.min(activeDay, 28)),
     unusualAmountPct: 0.2,
@@ -976,21 +1085,7 @@ export async function getDashboardData(
       map.set(row.category, values);
       return map;
     }, new Map<string, number[]>());
-  // Per-person attribution (4.3): only meaningful in household scope, where
-  // the window can contain a partner's shared rows.
-  let spendPerPerson: { mine: number; household: number } | null = null;
-  if (options?.scope === "household" && userId) {
-    let mine = 0;
-    let household = 0;
-    for (const t of spendTxns) {
-      if (monthKey(t.date) !== activeMonth || !isSpending(t)) continue;
-      if (t.user_id === userId) mine += t.amount;
-      else household += t.amount;
-    }
-    if (household > 0) {
-      spendPerPerson = { mine: round2(mine), household: round2(household) };
-    }
-  }
+  const spendPerPerson = computeSpendPerPerson(spendTxns, activeMonth, userId, options?.scope);
 
   // Bill calendar (1.8): expand recurring occurrences over the horizon,
   // anchored to each stream's latest real transaction when one exists so
@@ -1016,52 +1111,8 @@ export async function getDashboardData(
     asOfMonth: activeMonth,
   });
 
-  // Debt payoff planner (1.10) over carried credit-card balances. Cards
-  // without a user-entered APR assume a typical rate and say so in the UI.
-  const ASSUMED_APR = 22;
-  const debtAccounts = allAccounts.filter(
-    (a) => a.type === "credit" && Number(a.current_balance ?? 0) > 0,
-  );
-  const debtInputs = debtAccounts.map((a) => {
-    const mask = a.mask ? ` ••${a.mask}` : "";
-    return {
-      name: `${a.name ?? "Card"}${mask}`,
-      balance: Number(a.current_balance),
-      apr: a.apr === null || a.apr === undefined ? ASSUMED_APR : Number(a.apr),
-    };
-  });
-  const DEBT_EXTRA_MONTHLY = 200;
-  const debt =
-    debtInputs.length > 0
-      ? {
-          plan: buildPayoffPlan({ debts: debtInputs, extraMonthly: 0, strategy: "avalanche" }),
-          planWithExtra: buildPayoffPlan({
-            debts: debtInputs,
-            extraMonthly: DEBT_EXTRA_MONTHLY,
-            strategy: "avalanche",
-          }),
-          extraMonthly: DEBT_EXTRA_MONTHLY,
-          usesAssumedApr: debtAccounts.some((a) => a.apr === null || a.apr === undefined),
-        }
-      : null;
-
-  // Per-merchant trailing medians from the prior window months. Two charges
-  // minimum: one prior charge doesn't establish what "usual" looks like.
-  const priorMerchantAmounts = new Map<string, { name: string; amounts: number[] }>();
-  for (const t of spendTxns) {
-    if (monthKey(t.date) === activeMonth || !isSpending(t)) continue;
-    const name = t.merchant_name ?? t.name ?? "Unknown";
-    const key = name.trim().toLowerCase();
-    const entry = priorMerchantAmounts.get(key) ?? { name, amounts: [] };
-    entry.amounts.push(t.amount);
-    priorMerchantAmounts.set(key, entry);
-  }
-  const priorMerchantMedians = [...priorMerchantAmounts.values()]
-    .filter((entry) => entry.amounts.length >= 2)
-    .map((entry) => ({
-      merchant: entry.name,
-      amount: round2(medianOf(entry.amounts)),
-    }));
+  const debt = buildDebtSummary(allAccounts);
+  const priorMerchantMedians = computePriorMerchantMedians(spendTxns, activeMonth);
   const spendingAnomalies = detectSpendingAnomalies({
     currentTransactions: filteredTxns
       .filter((t) => monthKey(t.date) === activeMonth && isSpending(t))

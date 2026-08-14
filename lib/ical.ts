@@ -53,19 +53,23 @@ function escapeText(value: string): string {
 
 /**
  * UIDs are part of the feed's contract: a subscriber that already has an event
- * treats a changed UID as a new one. The `-+` quantifiers must stay, or a name
- * with two or more leading/trailing non-alphanumerics ("**Netflix**") keeps a
- * stray dash and duplicates the event in every existing subscriber's calendar.
- * Both are anchored, so there is no backtracking to avoid here.
+ * treats a changed UID as a new one. Every leading and trailing dash must go,
+ * or a name with two or more leading/trailing non-alphanumerics ("**Netflix**")
+ * keeps a stray dash and duplicates the event in every existing subscriber's
+ * calendar.
+ *
+ * The trim is an index scan rather than `/^-+/` + `/-+$/`. `^-+` is anchored
+ * and runs once, but `-+$` is not: the engine retries at every dash in the
+ * string, so a name that is a long run of separators ("---...---x") costs
+ * O(n^2). Merchant names reach this from Plaid, so the input is not ours.
  */
 function slug(value: string): string {
-  return (
-    value
-      .toLowerCase()
-      .replace(/[^a-z0-9]/gi, "-")
-      .replace(/^-+/, "")
-      .replace(/-+$/, "") || "bill"
-  );
+  const dashed = value.toLowerCase().replace(/[^a-z0-9]/g, "-");
+  let start = 0;
+  let end = dashed.length;
+  while (start < end && dashed[start] === "-") start += 1;
+  while (end > start && dashed[end - 1] === "-") end -= 1;
+  return dashed.slice(start, end) || "bill";
 }
 
 function compactDate(date: string): string {
