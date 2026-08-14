@@ -37,15 +37,12 @@ import {
   resolveReportScope,
 } from "@/lib/reports-data";
 import { createClient } from "@/lib/supabase/server";
+import { firstSearchParam } from "@/lib/search-params";
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
-}
-
-function first(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
 }
 
 function parsePage(value: string | undefined): number {
@@ -126,7 +123,7 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
     loaded.currencyByAccountId,
   );
   const currencies = [...byCurrency.keys()];
-  const requestedCurrency = first(params.currency);
+  const requestedCurrency = firstSearchParam(params.currency);
   const selectedCurrency =
     requestedCurrency && byCurrency.has(requestedCurrency)
       ? requestedCurrency
@@ -137,7 +134,7 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
   const summary = summarizeTransactions(rows);
   const sankey = buildCashFlowSankeyData(rows);
   const periods = computePeriodCashFlow(rows, "monthly");
-  const page = parsePage(first(params.page));
+  const page = parsePage(firstSearchParam(params.page));
 
   const exportParams = reportFiltersToSearchParams(filters);
   if (selectedCurrency) exportParams.set("currency", selectedCurrency);

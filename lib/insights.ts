@@ -6,6 +6,7 @@
  * Everything here is pure math over data the dashboard already loads —
  * no I/O, no Plaid calls. Amount sign follows Plaid: positive = money out.
  */
+import { addDays, addMonths } from "@/lib/date-utils";
 
 /**
  * Primary personal-finance categories treated as essential spending.
@@ -145,27 +146,6 @@ export interface Paycheck {
   lastPaidDate: string | null;
   /** First cadence date on/after asOf, or null without a deposit anchor. */
   nextPayDate: string | null;
-}
-
-function parseDate(date: string): Date {
-  const [year, month, day] = date.split("-").map(Number);
-  return new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1));
-}
-
-function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function addDays(date: string, days: number): string {
-  const next = parseDate(date);
-  next.setUTCDate(next.getUTCDate() + days);
-  return isoDate(next);
-}
-
-function addMonths(date: string, months: number): string {
-  const next = parseDate(date);
-  next.setUTCMonth(next.getUTCMonth() + months);
-  return isoDate(next);
 }
 
 function advance(date: string, frequency: PayFrequency): string {

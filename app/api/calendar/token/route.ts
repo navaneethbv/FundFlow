@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
-import { requireUser, errorResponse, badRequest } from "@/lib/http";
+import { badRequest } from "@/lib/http";
 import { writeAudit, getClientIp } from "@/lib/audit";
+import { withUser } from "@/lib/authed-route";
 
 /**
  * Mint/revoke iCal feed capability tokens. Only the SHA-256 hash is stored;
@@ -11,11 +12,7 @@ import { writeAudit, getClientIp } from "@/lib/audit";
 const TOKEN_TTL_MS = 180 * 24 * 60 * 60 * 1000; // 180 days
 
 export async function POST(request: NextRequest) {
-  const auth = await requireUser();
-  if (auth instanceof NextResponse) return auth;
-  const { user, supabase } = auth;
-
-  try {
+  return withUser("calendar.token.create", async ({ user, supabase }) => {
     const body = (await request.json().catch(() => ({}))) as {
       includeAmounts?: boolean;
     };
@@ -42,17 +39,11 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ token, row: data });
-  } catch (error) {
-    return errorResponse("calendar.token.create", error);
-  }
+  });
 }
 
 export async function DELETE(request: NextRequest) {
-  const auth = await requireUser();
-  if (auth instanceof NextResponse) return auth;
-  const { user, supabase } = auth;
-
-  try {
+  return withUser("calendar.token.revoke", async ({ user, supabase }) => {
     const body = (await request.json().catch(() => ({}))) as { id?: string };
     if (!body.id) return badRequest("Missing token id.");
 
@@ -71,7 +62,5 @@ export async function DELETE(request: NextRequest) {
     });
 
     return NextResponse.json({ ok: true });
-  } catch (error) {
-    return errorResponse("calendar.token.revoke", error);
-  }
+  });
 }

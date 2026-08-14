@@ -1,22 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getClientIp, writeAudit } from "@/lib/audit";
-import { badRequest, errorResponse, requireUser } from "@/lib/http";
+import { badRequest } from "@/lib/http";
 import {
   parseSinkingFundMutation,
   SINKING_FUND_SELECT,
   sinkingFundWrite,
 } from "@/lib/sinking-funds";
 import { createServiceClient } from "@/lib/supabase/service";
+import { withUser } from "@/lib/authed-route";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
-  const auth = await requireUser();
-  if (auth instanceof NextResponse) return auth;
-
-  try {
+  return withUser("sinking-funds.update", async (auth) => {
     const { id } = await params;
     if (!id) return badRequest("id is required");
     const { data: visible, error: ownershipError } = await auth.supabase
@@ -52,16 +50,11 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       ip: getClientIp(request),
     });
     return NextResponse.json({ fund });
-  } catch (error) {
-    return errorResponse("sinking-funds.update", error);
-  }
+  });
 }
 
 export async function DELETE(request: NextRequest, { params }: RouteContext) {
-  const auth = await requireUser();
-  if (auth instanceof NextResponse) return auth;
-
-  try {
+  return withUser("sinking-funds.delete", async (auth) => {
     const { id } = await params;
     if (!id) return badRequest("id is required");
     const { data: visible, error: ownershipError } = await auth.supabase
@@ -89,7 +82,5 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
       ip: getClientIp(request),
     });
     return NextResponse.json({ success: true });
-  } catch (error) {
-    return errorResponse("sinking-funds.delete", error);
-  }
+  });
 }

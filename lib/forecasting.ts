@@ -2,6 +2,7 @@ import { buildPayoffPlan, type PayoffPlan } from "@/lib/debt";
 import { financeTotals, type CanonicalFinanceTransaction } from "@/lib/finance-domain";
 import { computeRunwayMonths, medianOf } from "@/lib/insights";
 import { groupKeyFor } from "@/lib/accounts-page";
+import { firstSearchParam } from "@/lib/search-params";
 
 /**
  * The dashboard's What-if sandbox math (Phase 0-era, previously inline in
@@ -231,10 +232,6 @@ export type ForecastSearchParams = Record<string, string | string[] | undefined>
 
 const VALID_HORIZONS = [12, 60, 120] as const;
 
-function first(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
-}
-
 function parseNumber(value: string | undefined, fallback: number): number {
   if (value === undefined) return fallback;
   const parsed = Number(value);
@@ -251,16 +248,16 @@ export function parseForecastAssumptions(
   params: ForecastSearchParams,
   defaults: ForecastDefaults,
 ): ForecastAssumptions {
-  const horizonRaw = Number(first(params.horizon));
+  const horizonRaw = Number(firstSearchParam(params.horizon));
   const horizonMonths = (VALID_HORIZONS as readonly number[]).includes(horizonRaw)
     ? (horizonRaw as ForecastAssumptions["horizonMonths"])
     : 12;
 
   return {
-    monthlySavings: parseNumber(first(params.monthlySavings), defaults.monthlySavings),
-    annualReturnPct: parseNumber(first(params.annualReturnPct), 5),
-    annualCashYieldPct: parseNumber(first(params.annualCashYieldPct), 0),
-    monthlyDebtPayment: parseNumber(first(params.monthlyDebtPayment), defaults.monthlyDebtPayment),
+    monthlySavings: parseNumber(firstSearchParam(params.monthlySavings), defaults.monthlySavings),
+    annualReturnPct: parseNumber(firstSearchParam(params.annualReturnPct), 5),
+    annualCashYieldPct: parseNumber(firstSearchParam(params.annualCashYieldPct), 0),
+    monthlyDebtPayment: parseNumber(firstSearchParam(params.monthlyDebtPayment), defaults.monthlyDebtPayment),
     horizonMonths,
   };
 }

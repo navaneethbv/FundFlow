@@ -27,6 +27,7 @@ import {
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { UNKNOWN_CURRENCY } from "@/lib/format";
 import { localMonthKey } from "@/lib/format-date";
+import { firstSearchParam } from "@/lib/search-params";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -40,10 +41,6 @@ interface PageProps {
     scope?: string | string[];
     currency?: string | string[];
   }>;
-}
-
-function first(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
 }
 
 function validPeriod(value: string | undefined): CashFlowPeriod {
@@ -84,9 +81,9 @@ export default async function CashFlowPage({
   if (!isFeatureEnabled("cashFlowPage")) notFound();
 
   const params = await searchParams;
-  const period = validPeriod(first(params.period));
-  const rangeMonths = validRange(first(params.range));
-  const dimension = validDimension(first(params.dimension));
+  const period = validPeriod(firstSearchParam(params.period));
+  const rangeMonths = validRange(firstSearchParam(params.range));
+  const dimension = validDimension(firstSearchParam(params.dimension));
   const anchorMonth = localMonthKey();
 
   const supabase = await createClient();
@@ -118,7 +115,7 @@ export default async function CashFlowPage({
     loaded.currencyByAccountId,
   );
   const currencies = [...byCurrency.keys()];
-  const requestedCurrency = first(params.currency);
+  const requestedCurrency = firstSearchParam(params.currency);
   const selectedCurrency =
     requestedCurrency && byCurrency.has(requestedCurrency)
       ? requestedCurrency
@@ -127,7 +124,7 @@ export default async function CashFlowPage({
     ? (byCurrency.get(selectedCurrency) ?? [])
     : [];
   const periods = computePeriodCashFlow(selectedCurrencyRows, period);
-  const requestedPeriod = first(params.selected);
+  const requestedPeriod = firstSearchParam(params.selected);
   const selectedPeriod =
     periods.find((row) => row.key === requestedPeriod) ??
     periods.at(-1) ??

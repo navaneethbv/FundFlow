@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { requireUser, errorResponse, badRequest } from "@/lib/http";
+import { badRequest } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { writeAudit, getClientIp } from "@/lib/audit";
 import { isIsoDate } from "@/lib/reports";
+import { withUser } from "@/lib/authed-route";
 
 /**
  * The goal contribution ledger (Phase 7).
@@ -22,11 +23,7 @@ const EVENT_TYPES = new Set(["manual_contribution", "manual_adjustment"]);
 const MAX_EVENT_AMOUNT = 1_000_000_000;
 
 export async function POST(request: NextRequest) {
-  const auth = await requireUser();
-  if (auth instanceof NextResponse) return auth;
-  const { user, supabase } = auth;
-
-  try {
+  return withUser("goals.events.post", async ({ user, supabase }) => {
     if (!(await checkRateLimit(`goal-event:${user.id}`, 60, 60))) {
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
@@ -96,17 +93,11 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ ok: true, id: data.id });
-  } catch (error) {
-    return errorResponse("goals.events.post", error);
-  }
+  });
 }
 
 export async function DELETE(request: NextRequest) {
-  const auth = await requireUser();
-  if (auth instanceof NextResponse) return auth;
-  const { user, supabase } = auth;
-
-  try {
+  return withUser("goals.events.delete", async ({ user, supabase }) => {
     const id = request.nextUrl.searchParams.get("id")?.trim();
     if (!id) return badRequest("id is required");
 
@@ -130,7 +121,5 @@ export async function DELETE(request: NextRequest) {
     });
 
     return NextResponse.json({ ok: true });
-  } catch (error) {
-    return errorResponse("goals.events.delete", error);
-  }
+  });
 }

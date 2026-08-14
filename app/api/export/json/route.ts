@@ -1,9 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { requireUser, errorResponse } from "@/lib/http";
-import { verifyApiToken } from "@/lib/api-tokens";
 import { fetchPrivacySafeRows } from "@/lib/export";
-import { createServiceClient } from "@/lib/supabase/service";
-import { writeAudit, getClientIp } from "@/lib/audit";
+import { exportError, recordExport, resolveExportContext } from "@/lib/export-route";
 
 /**
  * Privacy-safe JSON export — the same date/merchant/amount/category contract
@@ -11,24 +8,12 @@ import { writeAudit, getClientIp } from "@/lib/audit";
  * and audited like every export.
  */
 export async function GET(request: NextRequest) {
-  const auth = await requireUser();
-  let userId: string;
-  let supabase;
-  if (auth instanceof NextResponse) {
-    // API-token path (6.1) — service client + explicit scoping inside
-    // fetchPrivacySafeRows.
-    const tokenUserId = await verifyApiToken(request.headers.get("authorization"));
-    if (!tokenUserId) return auth;
-    userId = tokenUserId;
-    supabase = createServiceClient();
-  } else {
-    userId = auth.user.id;
-    supabase = auth.supabase;
-  }
-  const user = { id: userId };
+  const context = await resolveExportContext(request);
+  if (context instanceof NextResponse) return context;
+  const { userId, supabase } = context;
 
   try {
-    const result = await fetchPrivacySafeRows(supabase, user.id);
+    const result = await fetchPrivacySafeRows(supabase, userId);
     if (!result.allowed) {
       return NextResponse.json(
         { error: "Data export is disabled in your settings." },
@@ -36,18 +21,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const service = createServiceClient();
-    await service.from("data_exports").insert({
-      user_id: user.id,
-      format: "json",
-      row_count: result.rows.length,
-    });
-    await writeAudit({
-      userId: user.id,
-      action: "data_export",
-      metadata: { format: "json", row_count: result.rows.length },
-      ip: getClientIp(request),
-    });
+    await recordExport({ request, userId, format: "json", rowCount: result.rows.length });
 
     return new NextResponse(JSON.stringify(result.rows, null, 2), {
       status: 200,
@@ -58,6 +32,6 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    return errorResponse("export.json", error);
+    return exportError("export.json", error);
   }
 }

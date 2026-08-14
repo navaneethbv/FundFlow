@@ -3,6 +3,7 @@ import {
   parseLedgerColumns,
   type LedgerColumn,
 } from "@/lib/ledger-columns";
+import { firstSearchParamOrEmpty } from "@/lib/search-params";
 
 export const LEDGER_SORT_FIELDS = [
   "date",
@@ -71,10 +72,6 @@ const FILTER_KEYS = [
   "accountType",
 ] as const satisfies readonly (keyof LedgerFilters)[];
 
-function first(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
-}
-
 export function sanitizeLedgerSearch(value: string): string {
   return value
     .replace(/[%_,()."\\]/g, " ")
@@ -85,22 +82,22 @@ export function sanitizeLedgerSearch(value: string): string {
 export function parseLedgerQuery(
   raw: LedgerRawSearchParams,
 ): LedgerQueryState {
-  const sortValue = first(raw.sort);
-  const directionValue = first(raw.direction);
-  const monthValue = first(raw.month);
-  const accountValue = first(raw.accountId);
-  const categoryValue = first(raw.category);
-  const subValue = first(raw.sub);
-  const flowValue = first(raw.flow);
-  const accountTypeValue = first(raw.accountType);
+  const sortValue = firstSearchParamOrEmpty(raw.sort);
+  const directionValue = firstSearchParamOrEmpty(raw.direction);
+  const monthValue = firstSearchParamOrEmpty(raw.month);
+  const accountValue = firstSearchParamOrEmpty(raw.accountId);
+  const categoryValue = firstSearchParamOrEmpty(raw.category);
+  const subValue = firstSearchParamOrEmpty(raw.sub);
+  const flowValue = firstSearchParamOrEmpty(raw.flow);
+  const accountTypeValue = firstSearchParamOrEmpty(raw.accountType);
 
   return {
-    q: sanitizeLedgerSearch(first(raw.q)),
+    q: sanitizeLedgerSearch(firstSearchParamOrEmpty(raw.q)),
     month: MONTH_RE.test(monthValue) ? monthValue : "",
     accountId: UUID_RE.test(accountValue) ? accountValue : "",
     category: CATEGORY_RE.test(categoryValue) ? categoryValue : "",
     sub: CATEGORY_RE.test(subValue) ? subValue : "",
-    merchant: sanitizeLedgerSearch(first(raw.merchant)),
+    merchant: sanitizeLedgerSearch(firstSearchParamOrEmpty(raw.merchant)),
     flow: flowValue === "in" || flowValue === "out" ? flowValue : "",
     accountType:
       accountTypeValue === "depository" || accountTypeValue === "credit"
@@ -113,12 +110,12 @@ export function parseLedgerQuery(
       directionValue === "asc" || directionValue === "desc"
         ? directionValue
         : "desc",
-    page: Math.max(1, Number.parseInt(first(raw.page), 10) || 1),
+    page: Math.max(1, Number.parseInt(firstSearchParamOrEmpty(raw.page), 10) || 1),
     columns: parseLedgerColumns({
       col: raw.col,
       colsSubmitted: raw.colsSubmitted,
     }),
-    columnsSubmitted: Boolean(first(raw.colsSubmitted)),
+    columnsSubmitted: Boolean(firstSearchParamOrEmpty(raw.colsSubmitted)),
   };
 }
 

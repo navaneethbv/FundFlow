@@ -18,6 +18,7 @@ import {
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { UNKNOWN_CURRENCY } from "@/lib/format";
 import { localMonthKey } from "@/lib/format-date";
+import { firstSearchParam } from "@/lib/search-params";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -37,10 +38,6 @@ const HORIZON_LABELS = {
   yearly: "Year",
   decade: "Decade",
 } as const;
-
-function first(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
-}
 
 function shiftMonth(month: string, delta: number): string {
   const [year, oneBasedMonth] = month.split("-").map(Number);
@@ -84,9 +81,9 @@ export default async function BudgetPage({
   if (!user) notFound();
 
   const currentMonth = localMonthKey();
-  const month = parseBudgetMonth(first(params.month), currentMonth);
-  const horizon = parseBudgetHorizon(first(params.horizon));
-  const activeSummary = summaryTab(first(params.summary));
+  const month = parseBudgetMonth(firstSearchParam(params.month), currentMonth);
+  const horizon = parseBudgetHorizon(firstSearchParam(params.horizon));
+  const activeSummary = summaryTab(firstSearchParam(params.summary));
   const loaded = await loadBudgetData(supabase, {
     userId: user.id,
     anchorMonth: month,

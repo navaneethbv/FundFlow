@@ -1,4 +1,5 @@
 import { EXCLUDED_PFC } from "@/lib/dashboard";
+import { addDays, addMonths, parseDate } from "@/lib/date-utils";
 
 export type RecurringFrequency =
   | "WEEKLY"
@@ -55,27 +56,6 @@ const FREQUENCY_LABELS: Record<RecurringFrequency, string> = {
   ANNUALLY: "Every year",
   UNKNOWN: "Recurring",
 };
-
-function parseDate(date: string): Date {
-  const [year, month, day] = date.split("-").map(Number);
-  return new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1));
-}
-
-function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function addDays(date: string, days: number): string {
-  const next = parseDate(date);
-  next.setUTCDate(next.getUTCDate() + days);
-  return isoDate(next);
-}
-
-function addMonths(date: string, months: number): string {
-  const next = parseDate(date);
-  next.setUTCMonth(next.getUTCMonth() + months);
-  return isoDate(next);
-}
 
 function step(date: string, cadence: Cadence, direction: 1 | -1): string {
   if (cadence.unit === "days") return addDays(date, cadence.amount * direction);

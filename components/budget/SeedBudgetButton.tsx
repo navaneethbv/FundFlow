@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "@/components/ui/icons";
 import { formatCurrency, titleCase } from "@/lib/format";
@@ -8,6 +8,7 @@ import type {
   BudgetGroup,
   BudgetSeedProposal,
 } from "@/lib/budget-page";
+import { useDialogFocus } from "@/lib/use-dialog-focus";
 
 interface EditableProposal extends BudgetSeedProposal {
   included: boolean;
@@ -35,15 +36,6 @@ export default function SeedBudgetButton({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const dialog = dialogRef.current;
-    const firstControl = dialog?.querySelector<HTMLElement>(
-      "button, input, select",
-    );
-    firstControl?.focus();
-  }, [open]);
-
   function openPreview() {
     setRows(
       proposals.map((proposal) => ({
@@ -62,28 +54,6 @@ export default function SeedBudgetButton({
         rowIndex === index ? { ...row, ...patch } : row,
       ),
     );
-  }
-
-  function handleDialogKeyDown(event: React.KeyboardEvent<HTMLDialogElement>) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      setOpen(false);
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const controls = dialogRef.current?.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), input:not([disabled]), select:not([disabled])',
-    );
-    if (!controls || controls.length === 0) return;
-    const first = controls[0];
-    const last = controls[controls.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
   }
 
   async function confirm() {
@@ -128,6 +98,8 @@ export default function SeedBudgetButton({
       setLoading(false);
     }
   }
+
+  const handleDialogKeyDown = useDialogFocus(dialogRef, open, () => setOpen(false));
 
   if (!open) {
     return (

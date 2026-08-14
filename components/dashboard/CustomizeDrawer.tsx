@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import { createClient } from "@/lib/supabase/client";
+import { useDialogFocus } from "@/lib/use-dialog-focus";
 import {
   DEFAULT_WIDGET_ORDER,
   mergeWidgetPrefs,
@@ -41,14 +42,6 @@ export default function CustomizeDrawer({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (!open) return;
-    const firstControl = dialogRef.current?.querySelector<HTMLElement>(
-      "button, input, select",
-    );
-    firstControl?.focus();
-  }, [open]);
-
   function move(key: WidgetKey, delta: -1 | 1) {
     setPrefs((current) => {
       const order = [...current.order];
@@ -77,28 +70,6 @@ export default function CustomizeDrawer({
     setPrefs(initialPrefs);
     setError(null);
     setOpen(false);
-  }
-
-  function handleDialogKeyDown(event: React.KeyboardEvent<HTMLDialogElement>) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      close();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const controls = dialogRef.current?.querySelectorAll<HTMLElement>(
-      "button:not([disabled]), input:not([disabled]), select:not([disabled])",
-    );
-    if (!controls || controls.length === 0) return;
-    const first = controls[0];
-    const last = controls[controls.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
   }
 
   async function save() {
@@ -146,6 +117,8 @@ export default function CustomizeDrawer({
       setBusy(false);
     }
   }
+
+  const handleDialogKeyDown = useDialogFocus(dialogRef, open, close);
 
   if (!open) {
     return (

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { dashboardUrl, type MerchantDrilldownData } from "@/lib/drilldown";
 import { formatCurrency, formatMonth, titleCase } from "@/lib/format";
 import TrendChart from "@/components/charts/TrendChart";
+import DrilldownTransactionList from "@/components/dashboard/DrilldownTransactionList";
 import Panel from "@/components/ui/Panel";
 import type { DrillLinkParams } from "@/components/dashboard/CategoryDrilldownPanel";
 
@@ -74,20 +75,10 @@ export default function MerchantDrilldownPanel({
 
         <div>
           <h4 className="eyebrow mb-2">Transactions</h4>
-          <ul className="divide-y divide-panel-border text-sm">
-            {drill.transactions.map((t) => (
-              <li key={t.id} className="flex items-center justify-between gap-4 py-2">
-                <span>
-                  <span className="block font-medium">{t.merchant}</span>
-                  <span className="block text-xs text-muted">{t.date}</span>
-                </span>
-                <span className="tabular-nums font-semibold">{formatCurrency(t.amount)}</span>
-              </li>
-            ))}
-            {drill.transactions.length === 0 && (
-              <li className="py-3 text-sm text-muted">No transactions in the window.</li>
-            )}
-          </ul>
+          <DrilldownTransactionList
+            transactions={drill.transactions}
+            emptyLabel="No transactions in the window."
+          />
           <Link
             href={`/transactions?${ledger.toString()}`}
             className="mt-2 inline-block text-xs font-semibold text-accent hover:underline"

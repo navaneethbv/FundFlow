@@ -3,6 +3,7 @@ import type { BreakdownDimension } from "@/lib/cash-flow";
 import type { SankeyLink, SankeyNode } from "@/lib/sankey";
 import { subcategoryLabel } from "@/lib/drilldown";
 import { titleCase } from "@/lib/format";
+import { firstSearchParam } from "@/lib/search-params";
 
 /**
  * Report aggregation over the canonical Phase 0 projection. Pure: no Supabase,
@@ -476,10 +477,6 @@ export function reportFiltersToSearchParams(
   return params;
 }
 
-function firstValue(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
-}
-
 function listValue(value: string | string[] | undefined): string[] {
   if (value === undefined) return [];
   const values = Array.isArray(value) ? value : [value];
@@ -500,8 +497,8 @@ export function reportFiltersFromSearchParams(
   params: ReportSearchParams,
   fallback: ReportFilters,
 ): ReportFilters {
-  const start = firstValue(params.start);
-  const end = firstValue(params.end);
+  const start = firstSearchParam(params.start);
+  const end = firstSearchParam(params.end);
   const validStart = isIsoDate(start) ? start : fallback.start;
   const validEnd = isIsoDate(end) ? end : fallback.end;
 
@@ -510,16 +507,16 @@ export function reportFiltersFromSearchParams(
     // An inverted hand-typed range would show nothing at all; fall back.
     start: validStart <= validEnd ? validStart : fallback.start,
     end: validStart <= validEnd ? validEnd : fallback.end,
-    tab: oneOf(firstValue(params.tab), REPORT_TABS) ?? fallback.tab,
-    mode: oneOf(firstValue(params.mode), REPORT_MODES) ?? fallback.mode,
+    tab: oneOf(firstSearchParam(params.tab), REPORT_TABS) ?? fallback.tab,
+    mode: oneOf(firstSearchParam(params.mode), REPORT_MODES) ?? fallback.mode,
     dimension:
-      oneOf(firstValue(params.dimension), REPORT_DIMENSIONS) ??
+      oneOf(firstSearchParam(params.dimension), REPORT_DIMENSIONS) ??
       fallback.dimension,
     scope: fallback.scope,
     accounts: listValue(params.account),
     merchants: listValue(params.merchant),
     categories: listValue(params.category),
-    excludePending: firstValue(params.pending) === "exclude",
+    excludePending: firstSearchParam(params.pending) === "exclude",
   };
 }
 

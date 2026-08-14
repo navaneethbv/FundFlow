@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { formatCurrency } from "@/lib/format";
+import { addDays, addMonths, isoDate, parseDate } from "@/lib/date-utils";
 
 export type EnvelopeStatus = "over" | "at-risk" | "on-track";
 
@@ -159,27 +160,6 @@ const SAFE_AI_KEYS = new Set([
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
-}
-
-function parseDate(date: string): Date {
-  const [year, month, day] = date.split("-").map(Number);
-  return new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1));
-}
-
-function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function addDays(date: string, days: number): string {
-  const next = parseDate(date);
-  next.setUTCDate(next.getUTCDate() + days);
-  return isoDate(next);
-}
-
-function addMonths(date: string, months: number): string {
-  const next = parseDate(date);
-  next.setUTCMonth(next.getUTCMonth() + months);
-  return isoDate(next);
 }
 
 function nextOccurrence(date: string, frequency: RecurringFrequency): string {

@@ -5,6 +5,7 @@ import {
   scopeQueryUserId,
   type FinancialScope,
 } from "@/lib/financial-scope";
+import { firstSearchParam } from "@/lib/search-params";
 
 export type DebtStrategy = "avalanche" | "snowball";
 
@@ -37,10 +38,6 @@ const LIABILITY_TYPES = new Set(["credit", "loan", "liability", "debt"]);
 
 type QueryParamValue = string | readonly string[] | undefined;
 
-function first(value: QueryParamValue): string | undefined {
-  return typeof value === "string" ? value : value?.[0];
-}
-
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -48,13 +45,13 @@ function round2(value: number): number {
 export function parseDebtStrategy(
   value: QueryParamValue,
 ): DebtStrategy {
-  return first(value) === "snowball" ? "snowball" : "avalanche";
+  return firstSearchParam(value) === "snowball" ? "snowball" : "avalanche";
 }
 
 export function parseExtraMonthly(
   value: QueryParamValue,
 ): number {
-  const raw = first(value);
+  const raw = firstSearchParam(value);
   if (!raw || !/^\d+(?:\.\d{1,2})?$/.test(raw)) return 0;
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? round2(parsed) : 0;
