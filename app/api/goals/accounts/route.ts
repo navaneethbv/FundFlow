@@ -38,15 +38,17 @@ function parseId(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-type AllocationRequest =
-  | {
-      ok: true;
-      goalId: string;
-      accountId: string;
-      allocatedAmount: number | null;
-      useEntireBalance: boolean;
-    }
-  | { ok: false; response: NextResponse };
+type ValidAllocationRequest = {
+  ok: true;
+  goalId: string;
+  accountId: string;
+  allocatedAmount: number | null;
+  useEntireBalance: boolean;
+};
+
+type InvalidAllocationRequest = { ok: false; response: NextResponse };
+
+type AllocationRequest = ValidAllocationRequest | InvalidAllocationRequest;
 
 function parseAllocationRequest(body: Record<string, unknown> | null): AllocationRequest {
   const goalId = parseId(body?.goalId);

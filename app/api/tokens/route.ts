@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { badRequest } from "@/lib/http";
 import { API_TOKEN_PREFIX, hashApiToken } from "@/lib/api-tokens";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { writeRequestAudit } from "@/lib/request-audit";
+import { requestAudits } from "@/lib/request-audit";
 import { withUser } from "@/lib/authed-route";
 
 /** Mint/revoke personal read-only API tokens (6.1). Plaintext shown once. */
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
       .single();
     if (error) throw error;
 
-    await writeRequestAudit(request, user.id, "api_token_created", { name });
+    await requestAudits.apiTokenCreated(request, user.id, { name });
 
     return NextResponse.json({ token, row: data });
   });
@@ -44,7 +44,7 @@ export async function DELETE(request: NextRequest) {
       .eq("id", body.id);
     if (error) throw error;
 
-    await writeRequestAudit(request, user.id, "api_token_revoked", { id: body.id });
+    await requestAudits.apiTokenRevoked(request, user.id, { id: body.id });
 
     return NextResponse.json({ ok: true });
   });

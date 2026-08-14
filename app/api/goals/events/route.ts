@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { badRequest } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { writeRequestAudit } from "@/lib/request-audit";
+import { requestAudits } from "@/lib/request-audit";
 import { isIsoDate } from "@/lib/reports";
 import { withUser } from "@/lib/authed-route";
 
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     if (error) throw error;
 
     // Ids and the kind of event only — never the amount.
-    await writeRequestAudit(request, user.id, "goal_contribution_recorded", {
+    await requestAudits.goalContributionRecorded(request, user.id, {
       goal_id: goalId,
       event_type: eventType,
     });
@@ -111,7 +111,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
 
-    await writeRequestAudit(request, user.id, "goal_contribution_removed", { event_id: id });
+    await requestAudits.goalContributionRemoved(request, user.id, { event_id: id });
 
     return NextResponse.json({ ok: true });
   });
