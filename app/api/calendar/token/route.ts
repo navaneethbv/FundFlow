@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { badRequest } from "@/lib/http";
-import { writeAudit, getClientIp } from "@/lib/audit";
+import { writeRequestAudit } from "@/lib/request-audit";
 import { withUser } from "@/lib/authed-route";
 
 /**
@@ -31,11 +31,10 @@ export async function POST(request: NextRequest) {
       .single();
     if (error) throw error;
 
-    await writeAudit({
+    await writeRequestAudit(request, {
       userId: user.id,
       action: "calendar_token_created",
       metadata: { include_amounts: Boolean(body.includeAmounts) },
-      ip: getClientIp(request),
     });
 
     return NextResponse.json({ token, row: data });
@@ -54,11 +53,10 @@ export async function DELETE(request: NextRequest) {
       .eq("id", body.id);
     if (error) throw error;
 
-    await writeAudit({
+    await writeRequestAudit(request, {
       userId: user.id,
       action: "calendar_token_revoked",
       metadata: { id: body.id },
-      ip: getClientIp(request),
     });
 
     return NextResponse.json({ ok: true });

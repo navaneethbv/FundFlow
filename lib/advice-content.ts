@@ -102,6 +102,8 @@ const CFPB_MINIMUMS = {
   url: "https://www.consumerfinance.gov",
   reviewedAt: "2026-01-15",
 };
+const CFPB_WELLNESS = { ...CFPB_GOALS, reviewedAt: "2026-06-01" };
+const INVESTOR_SOURCE = { url: "https://www.investor.gov", reviewedAt: "2026-05-01" };
 
 export const ADVICE_LIBRARY: AdviceItem[] = [
   advice({
@@ -178,7 +180,7 @@ export const ADVICE_LIBRARY: AdviceItem[] = [
     title: "Understand the basics before you invest",
     body: "Investing carries risk of loss, and past performance is not a reliable indicator of future results. General education — what a diversified fund is, how fees compound over decades, what your own time horizon means for risk — is worth having before choosing a specific account or product. This is not investment advice and does not recommend any specific security.",
     tasks: [["learn-key-terms", "Learn the difference between a stock, a bond, and a fund"], ["check-employer-match", "Check whether an employer retirement plan offers a matching contribution"]],
-    source: { title: "Investor.gov — introduction to investing", url: "https://www.investor.gov", reviewedAt: "2026-05-01" },
+    source: { ...INVESTOR_SOURCE, title: "Investor.gov — introduction to investing" },
     relevantWhen: (ctx) => !ctx.hasInvestments,
   }),
   advice({
@@ -187,7 +189,7 @@ export const ADVICE_LIBRARY: AdviceItem[] = [
     title: "Learn why diversification matters",
     body: "Concentrating savings in a single stock or sector means a single bad outcome can be disproportionate. Diversification — spreading investments across many holdings — does not remove the possibility of loss, but it reduces the chance any one outcome dominates the result. This is general education, not a recommendation to buy or sell anything specific.",
     tasks: [["check-concentration", "Check what share of your investments sits in a single stock or sector"], ["learn-about-index-funds", "Learn what a broad-market index fund is"]],
-    source: { title: "Investor.gov — diversification", url: "https://www.investor.gov", reviewedAt: "2026-05-01" },
+    source: { ...INVESTOR_SOURCE, title: "Investor.gov — diversification" },
     relevantWhen: (ctx) => ctx.hasInvestments,
   }),
   advice({
@@ -196,7 +198,7 @@ export const ADVICE_LIBRARY: AdviceItem[] = [
     title: "Automate the parts that are easy to forget",
     body: "Decisions made once — an automatic transfer on payday, an automatic bill payment — tend to stick far better than decisions that have to be remade every month. Automating the boring, recurring parts of a financial routine frees attention for the choices that actually need a decision.",
     tasks: [["automate-savings-transfer", "Automate at least one recurring savings transfer"], ["automate-a-bill", "Automate at least one recurring bill payment"]],
-    source: { ...CFPB_GOALS, reviewedAt: "2026-06-01" },
+    source: CFPB_WELLNESS,
   }),
   advice({
     id: "talk-about-money",
@@ -204,6 +206,6 @@ export const ADVICE_LIBRARY: AdviceItem[] = [
     title: "Make money a regular conversation, not a once-a-year one",
     body: "Financial stress is often as much about uncertainty as about the numbers themselves. A short, regular check-in — with a partner, or just with yourself — tends to catch small problems before they become large ones, and makes shared decisions easier to reach.",
     tasks: [["schedule-a-money-checkin", "Schedule a recurring time to review finances"], ["share-one-goal", "Share one financial goal with someone you trust"]],
-    source: { ...CFPB_GOALS, reviewedAt: "2026-06-01" },
+    source: CFPB_WELLNESS,
   }),
 ];

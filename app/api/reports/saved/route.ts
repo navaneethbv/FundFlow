@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { badRequest } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { writeAudit, getClientIp } from "@/lib/audit";
+import { writeRequestAudit } from "@/lib/request-audit";
 import { parseReportFilters, REPORT_TABS, type ReportTab } from "@/lib/reports";
 import { withUser } from "@/lib/authed-route";
 
@@ -87,11 +87,10 @@ export async function POST(request: NextRequest) {
     }
     if (error) throw error;
 
-    await writeAudit({
+    await writeRequestAudit(request, {
       userId: user.id,
       action: "saved_report_created",
       metadata: { report_type: reportType },
-      ip: getClientIp(request),
     });
 
     return NextResponse.json({ ok: true, report: data });
@@ -146,11 +145,10 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Report not found" }, { status: 404 });
     }
 
-    await writeAudit({
+    await writeRequestAudit(request, {
       userId: user.id,
       action: "saved_report_updated",
       metadata: { renamed: patch.name !== undefined },
-      ip: getClientIp(request),
     });
 
     return NextResponse.json({ ok: true, report: data });
@@ -174,11 +172,10 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Report not found" }, { status: 404 });
     }
 
-    await writeAudit({
+    await writeRequestAudit(request, {
       userId: user.id,
       action: "saved_report_deleted",
       metadata: {},
-      ip: getClientIp(request),
     });
 
     return NextResponse.json({ ok: true });
