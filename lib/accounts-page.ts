@@ -266,18 +266,142 @@ function displayBalance(
     : balance;
 }
 
+function createAccountGroups(): AccountsPageData["groups"] {
+  const create = (key: AccountGroupKey) => ({
+    label: GROUP_LABELS[key],
+    totals: [] as CurrencyTotal[],
+    changes: [] as CurrencyTotal[],
+    rows: [] as AccountsPageRow[],
+  });
+  return {
+    credit: create("credit"),
+    cash: create("cash"),
+    investment: create("investment"),
+    loan: create("loan"),
+    other: create("other"),
+  };
+}
+
+function buildAccountRow(
+  account: UnifiedAccountSummary,
+  group: AccountGroupKey,
+  history: AccountBalanceSnapshot[],
+  now: Date,
+): AccountsPageRow {
+  const values = history.map((snapshot) => displayBalance(group, snapshot.currentBalance)!);
+  const rowSeries = history.map((snapshot, index) => ({
+    date: snapshot.snapshotDate,
+    value: values[index]!,
+  }));
+  const freshness = humanizeUpdatedAt(account.updatedAt, now);
+  const mask = account.mask ? ` (...${account.mask})` : "";
+  return {
+    id: account.id,
+    ownerUserId: account.ownerUserId,
+    source: account.source,
+    name: `${account.name}${mask}`,
+    type: account.type,
+    subtype: account.subtype,
+    balance: displayBalance(group, account.currentBalance),
+    currency: account.currency,
+    institution: account.institution,
+    institutionLogo: account.institutionLogo,
+    institutionBrandColor: account.institutionBrandColor,
+    updatedAgo: freshness.label,
+    stale: freshness.stale,
+    spark: values.slice(-30),
+    sparkLong: values,
+    monthChange: changeFromSeries(rowSeries),
+    includeInNetWorth: account.includeInNetWorth,
+  };
+}
+
+function populateGroupTotals(groups: AccountsPageData["groups"]): void {
+  for (const [groupKey, group] of Object.entries(groups) as [AccountGroupKey, AccountsPageData["groups"][AccountGroupKey]][]) {
+    group.rows.sort((a, b) => a.name.localeCompare(b.name));
+    const totals = new Map<string, number>();
+    const changes = new Map<string, number>();
+    const changeSign = groupKey === "credit" || groupKey === "loan" ? -1 : 1;
+    for (const row of group.rows) {
+      if (row.balance !== null) addAmount(totals, row.currency, row.balance);
+      if (row.monthChange) addAmount(changes, row.currency, changeSign * row.monthChange.amount);
+    }
+    group.totals = totalsFromMap(totals);
+    group.changes = totalsFromMap(changes);
+  }
+}
+
+function groupAmountsFromMap(
+  byGroupMap: Map<string, Map<AccountGroupKey, number>>,
+): Record<string, GroupAmount[]> {
+  const result: Record<string, GroupAmount[]> = {};
+  for (const [currency, byGroup] of byGroupMap) {
+    result[currency] = [...byGroup]
+      .map(([group, amount]) => ({ group, label: GROUP_LABELS[group], amount: round(amount) }))
+      .sort((a, b) => b.amount - a.amount);
+  }
+  return result;
+}
+
+function buildNetWorthTotals(accounts: UnifiedAccountSummary[]): {
+  assets: Map<string, number>;
+  liabilities: Map<string, number>;
+  assetsByGroup: Map<string, Map<AccountGroupKey, number>>;
+  liabilitiesByGroup: Map<string, Map<AccountGroupKey, number>>;
+} {
+  const assets = new Map<string, number>();
+  const liabilities = new Map<string, number>();
+  const assetsByGroup = new Map<string, Map<AccountGroupKey, number>>();
+  const liabilitiesByGroup = new Map<string, Map<AccountGroupKey, number>>();
+  for (const account of accounts) {
+    if (!account.includeInNetWorth || account.currentBalance === null) continue;
+    const group = groupKeyFor(account.type, account.subtype);
+    const balance = displayBalance(group, account.currentBalance)!;
+    const isLiability = group === "credit" || group === "loan";
+    addAmount(isLiability ? liabilities : assets, account.currency, balance);
+    const byGroupMap = isLiability ? liabilitiesByGroup : assetsByGroup;
+    const byGroup = byGroupMap.get(account.currency) ?? new Map<AccountGroupKey, number>();
+    byGroup.set(group, (byGroup.get(group) ?? 0) + balance);
+    byGroupMap.set(account.currency, byGroup);
+  }
+  return { assets, liabilities, assetsByGroup, liabilitiesByGroup };
+}
+
+function buildNetWorthSeries(
+  accounts: UnifiedAccountSummary[],
+  snapshots: AccountBalanceSnapshot[],
+): AccountsPageData["summary"]["netWorthSeries"] {
+  const accountById = new Map(accounts.map((account) => [account.id, account]));
+  const seriesMaps = new Map<string, Map<string, number>>();
+  for (const snapshot of snapshots) {
+    const id = sourceId(snapshot);
+    if (!id || snapshot.currentBalance === null) continue;
+    const account = accountById.get(id);
+    if (!account?.includeInNetWorth) continue;
+    const group = groupKeyFor(account.type, account.subtype);
+    const signed = group === "credit" || group === "loan"
+      ? -Math.abs(snapshot.currentBalance)
+      : snapshot.currentBalance;
+    const byDate = seriesMaps.get(account.currency) ?? new Map<string, number>();
+    addAmount(byDate, snapshot.snapshotDate, signed);
+    seriesMaps.set(account.currency, byDate);
+  }
+  return Object.fromEntries([...seriesMaps]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([currency, byDate]) => {
+      const series = [...byDate]
+        .map(([date, value]) => ({ date, value: round(value) }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+      return [currency, series];
+    })) as AccountsPageData["summary"]["netWorthSeries"];
+}
+
 export function buildAccountsPageData(
   accounts: UnifiedAccountSummary[],
   snapshots: AccountBalanceSnapshot[],
   now: Date,
 ): AccountsPageData {
-  const groups: AccountsPageData["groups"] = {
-    credit: { label: GROUP_LABELS.credit, totals: [], changes: [], rows: [] },
-    cash: { label: GROUP_LABELS.cash, totals: [], changes: [], rows: [] },
-    investment: { label: GROUP_LABELS.investment, totals: [], changes: [], rows: [] },
-    loan: { label: GROUP_LABELS.loan, totals: [], changes: [], rows: [] },
-    other: { label: GROUP_LABELS.other, totals: [], changes: [], rows: [] },
-  };
+  const groups = createAccountGroups();
 
   const snapshotsBySource = new Map<string, AccountBalanceSnapshot[]>();
   for (const snapshot of snapshots) {
@@ -293,87 +417,16 @@ export function buildAccountsPageData(
 
   for (const account of accounts) {
     const group = groupKeyFor(account.type, account.subtype);
-    const history = snapshotsBySource.get(account.id) ?? [];
-    const values = history.map((snapshot) =>
-      displayBalance(group, snapshot.currentBalance)!,
-    );
-    // Stays in the same space as the displayed balance and the sparkline: a
-    // card falling $5,200 -> $5,000 must read "-$200.00", not "+$200.00" next
-    // to a $5,000 balance and a declining spark. AccountRow prints this
-    // uncoloured, so it carries no tone to invert. The net-worth sign
-    // convention is applied where tone is actually derived: the group total.
-    const rowSeries = history.map((snapshot, index) => ({
-      date: snapshot.snapshotDate,
-      value: values[index]!,
-    }));
-    const freshness = humanizeUpdatedAt(account.updatedAt, now);
-    const mask = account.mask ? ` (...${account.mask})` : "";
-    groups[group].rows.push({
-      id: account.id,
-      ownerUserId: account.ownerUserId,
-      source: account.source,
-      name: `${account.name}${mask}`,
-      type: account.type,
-      subtype: account.subtype,
-      balance: displayBalance(group, account.currentBalance),
-      currency: account.currency,
-      institution: account.institution,
-      institutionLogo: account.institutionLogo,
-      institutionBrandColor: account.institutionBrandColor,
-      updatedAgo: freshness.label,
-      stale: freshness.stale,
-      spark: values.slice(-30),
-      sparkLong: values,
-      monthChange: changeFromSeries(rowSeries),
-      includeInNetWorth: account.includeInNetWorth,
-    });
+    groups[group].rows.push(buildAccountRow(
+      account,
+      group,
+      snapshotsBySource.get(account.id) ?? [],
+      now,
+    ));
   }
+  populateGroupTotals(groups);
 
-  for (const [groupKey, group] of Object.entries(groups)) {
-    group.rows.sort((a, b) => a.name.localeCompare(b.name));
-    const totals = new Map<string, number>();
-    const changes = new Map<string, number>();
-    // AccountGroup colours this total success/danger, so it follows the signed
-    // net-worth convention: growing debt is a negative change and paying debt
-    // down is a positive one, or debt growth would render as green success.
-    const changeSign = groupKey === "credit" || groupKey === "loan" ? -1 : 1;
-    for (const row of group.rows) {
-      if (row.balance !== null) addAmount(totals, row.currency, row.balance);
-      if (row.monthChange)
-        addAmount(changes, row.currency, changeSign * row.monthChange.amount);
-    }
-    group.totals = totalsFromMap(totals);
-    group.changes = totalsFromMap(changes);
-  }
-
-  const assets = new Map<string, number>();
-  const liabilities = new Map<string, number>();
-  const assetsByGroup = new Map<string, Map<AccountGroupKey, number>>();
-  const liabilitiesByGroup = new Map<string, Map<AccountGroupKey, number>>();
-  for (const account of accounts) {
-    if (!account.includeInNetWorth || account.currentBalance === null) continue;
-    const group = groupKeyFor(account.type, account.subtype);
-    const balance = displayBalance(group, account.currentBalance)!;
-    const isLiability = group === "credit" || group === "loan";
-    addAmount(isLiability ? liabilities : assets, account.currency, balance);
-
-    const byGroupMap = isLiability ? liabilitiesByGroup : assetsByGroup;
-    const byGroup = byGroupMap.get(account.currency) ?? new Map<AccountGroupKey, number>();
-    byGroup.set(group, (byGroup.get(group) ?? 0) + balance);
-    byGroupMap.set(account.currency, byGroup);
-  }
-
-  function groupAmountsFromMap(
-    byGroupMap: Map<string, Map<AccountGroupKey, number>>,
-  ): Record<string, GroupAmount[]> {
-    const result: Record<string, GroupAmount[]> = {};
-    for (const [currency, byGroup] of byGroupMap) {
-      result[currency] = [...byGroup]
-        .map(([group, amount]) => ({ group, label: GROUP_LABELS[group], amount: round(amount) }))
-        .sort((a, b) => b.amount - a.amount);
-    }
-    return result;
-  }
+  const { assets, liabilities, assetsByGroup, liabilitiesByGroup } = buildNetWorthTotals(accounts);
 
   const netWorth = new Map<string, number>();
   for (const [currency, amount] of assets) addAmount(netWorth, currency, amount);
@@ -381,37 +434,10 @@ export function buildAccountsPageData(
     addAmount(netWorth, currency, -amount);
   }
 
-  const accountById = new Map(accounts.map((account) => [account.id, account]));
-  const seriesMaps = new Map<string, Map<string, number>>();
-  for (const snapshot of snapshots) {
-    const id = sourceId(snapshot);
-    if (!id || snapshot.currentBalance === null) continue;
-    const account = accountById.get(id);
-    if (!account?.includeInNetWorth) continue;
-    const group = groupKeyFor(account.type, account.subtype);
-    const signed =
-      group === "credit" || group === "loan"
-        ? -Math.abs(snapshot.currentBalance)
-        : snapshot.currentBalance;
-    // Key the series off the account's current currency, not the snapshot's.
-    // A code that changed mid-history would otherwise split one account across
-    // two series while assets/liabilities above stay under a single currency.
-    const currency = account.currency;
-    const byDate = seriesMaps.get(currency) ?? new Map<string, number>();
-    addAmount(byDate, snapshot.snapshotDate, signed);
-    seriesMaps.set(currency, byDate);
-  }
-
-  const netWorthSeries: AccountsPageData["summary"]["netWorthSeries"] = {};
+  const netWorthSeries = buildNetWorthSeries(accounts, snapshots);
   const netWorthMonthChange: AccountsPageData["summary"]["netWorthMonthChange"] =
     {};
-  for (const [currency, byDate] of [...seriesMaps].sort(([a], [b]) =>
-    a.localeCompare(b),
-  )) {
-    const series = [...byDate]
-      .map(([date, value]) => ({ date, value: round(value) }))
-      .sort((a, b) => a.date.localeCompare(b.date));
-    netWorthSeries[currency] = series;
+  for (const [currency, series] of Object.entries(netWorthSeries)) {
     netWorthMonthChange[currency] = changeFromSeries(series);
   }
 

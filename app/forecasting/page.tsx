@@ -76,7 +76,7 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
           </h2>
           <p className="mb-4 text-sm text-muted">
             In {assumptions.horizonMonths} months, base case:{" "}
-            <span className="money font-semibold text-foreground">{formatCurrency(ending.base)}</span> (
+            <span className="money font-semibold text-foreground">{formatCurrency(ending.base)}</span>{" "}(
             <span className="money">{formatCurrency(ending.conservative)}</span> to{" "}
             <span className="money">{formatCurrency(ending.optimistic)}</span>)
           </p>

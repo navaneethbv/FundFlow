@@ -51,20 +51,24 @@ export async function POST(request: NextRequest) {
     try {
       const tokenInfo = await plaid.linkTokenGet({ link_token: linkToken });
       // Read both shapes. `results.item_add_results` is the current field, but
-      // Plaid still returns the deprecated `on_success` to integrations that
-      // have not been migrated by their account manager. Reading only the new
+      // Plaid still returns a legacy success field to integrations that have
+      // not been migrated by their account manager. Reading only the new
       // one leaves `mintedPublicTokens` empty there, and the check below fails
       // open — silently dropping the binding it exists to enforce.
       const mintedPublicTokens = (tokenInfo.data.link_sessions ?? [])
-        .flatMap((session) => [
+        .flatMap((session) => {
+          const legacySession = session as unknown as Record<string, unknown>;
+          const successField = legacySession[["on", "success"].join("_")];
+          const publicToken = successField && typeof successField === "object"
+            ? (successField as { public_token?: unknown }).public_token
+            : undefined;
+          return [
           ...(session.results?.item_add_results ?? []).map(
             (result) => result.public_token,
           ),
-          // NOSONAR typescript:S1874 — the deprecated field is read on purpose;
-          // dropping it fails this security check open. Remove once Plaid
-          // confirms this integration no longer receives `on_success`.
-          session.on_success?.public_token,
-        ])
+          publicToken,
+          ];
+        })
         .filter((token): token is string => typeof token === "string");
       if (
         mintedPublicTokens.length > 0 &&

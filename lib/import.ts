@@ -24,52 +24,68 @@ export interface ImportParseResult {
 }
 
 /** Minimal RFC-4180 parser: quoted fields, escaped quotes, CRLF/LF. */
+interface CsvParserState {
+  field: string;
+  row: string[];
+  rows: string[][];
+  inQuotes: boolean;
+}
+
+function consumeCsvCharacter(
+  body: string,
+  index: number,
+  state: CsvParserState,
+  pushField: () => void,
+  pushRow: () => void,
+): number {
+  const ch = body[index]!;
+  if (state.inQuotes) {
+    if (ch !== '"') {
+      state.field += ch;
+      return index + 1;
+    }
+    if (body[index + 1] === '"') {
+      state.field += '"';
+      return index + 2;
+    }
+    state.inQuotes = false;
+    return index + 1;
+  }
+  if (ch === '"') {
+    state.inQuotes = true;
+  } else if (ch === ',') {
+    pushField();
+  } else if (ch === '\n') {
+    pushRow();
+  } else if (ch !== '\r') {
+    state.field += ch;
+  }
+  return index + 1;
+}
+
 export function parseCsv(text: string): string[][] {
   // A UTF-8 BOM (EF BB BF) lands at the start of text files exported from
   // Excel/Google Sheets; without stripping it the first header cell carries
   // the invisible characters and column auto-detection fails.
   const body = text.codePointAt(0) === 0xfeff ? text.slice(1) : text;
-  const rows: string[][] = [];
-  let field = "";
-  let row: string[] = [];
-  let inQuotes = false;
+  const state: CsvParserState = { field: "", row: [], rows: [], inQuotes: false };
 
   const pushField = () => {
-    row.push(field);
-    field = "";
+    state.row.push(state.field);
+    state.field = "";
   };
   const pushRow = () => {
     pushField();
     // Ignore fully empty lines.
-    if (row.length > 1 || row[0]!.trim() !== "") rows.push(row);
-    row = [];
+    if (state.row.length > 1 || state.row[0]!.trim() !== "") state.rows.push(state.row);
+    state.row = [];
   };
 
-  for (let i = 0; i < body.length; i++) {
-    const ch = body[i]!;
-    if (inQuotes) {
-      if (ch === '"') {
-        if (body[i + 1] === '"') {
-          field += '"';
-          i++;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        field += ch;
-      }
-    } else if (ch === '"') {
-      inQuotes = true;
-    } else if (ch === ",") {
-      pushField();
-    } else if (ch === "\n") {
-      pushRow();
-    } else if (ch !== "\r") {
-      field += ch;
-    }
+  for (let i = 0; i < body.length;) {
+    i = consumeCsvCharacter(body, i, state, pushField, pushRow);
   }
-  if (field !== "" || row.length > 0) pushRow();
-  return rows;
+  if (state.field !== "" || state.row.length > 0) pushRow();
+  return state.rows;
 }
 
 export interface ColumnMap {
@@ -193,6 +209,43 @@ export function parseAmount(raw: string): number | null {
   return negative ? -value : value;
 }
 
+function parseImportLine(
+  line: string[],
+  lineNo: number,
+  columns: ColumnMap,
+  positiveIsIncome: boolean,
+): { row: ImportedRow } | { error: string } {
+  const date = normalizeDate(line[columns.date] ?? "");
+  if (!date) {
+    return { error: `Line ${lineNo}: unrecognized date "${line[columns.date] ?? ""}".` };
+  }
+  let amount: number | null = null;
+  if (columns.amount !== null) {
+    amount = parseAmount(line[columns.amount] ?? "");
+    if (amount !== null && positiveIsIncome) amount = -amount;
+  } else {
+    const debit = columns.debit !== null ? parseAmount(line[columns.debit] ?? "") : null;
+    const credit = columns.credit !== null ? parseAmount(line[columns.credit] ?? "") : null;
+    if (debit !== null && debit !== 0) amount = Math.abs(debit);
+    else if (credit !== null && credit !== 0) amount = -Math.abs(credit);
+    else if (debit !== null || credit !== null) amount = 0;
+  }
+  if (amount === null) return { error: `Line ${lineNo}: unrecognized amount.` };
+  const merchant = (line[columns.description] ?? "").trim();
+  if (!merchant) return { error: `Line ${lineNo}: empty description.` };
+  return {
+    row: {
+      date,
+      amount: Math.round(amount * 100) / 100,
+      merchant,
+      category:
+        columns.category !== null
+          ? (line[columns.category] ?? "").trim() || null
+          : null,
+    },
+  };
+}
+
 /**
  * Parse a full statement CSV into normalized rows. Bad lines are reported,
  * never silently dropped; a wholly unusable file returns rows: [] plus the
@@ -221,45 +274,9 @@ export function parseImportCsv(
   const errors: string[] = [];
 
   for (let i = 1; i < table.length; i++) {
-    const line = table[i]!;
-    const lineNo = i + 1;
-
-    const date = normalizeDate(line[columns.date] ?? "");
-    if (!date) {
-      errors.push(`Line ${lineNo}: unrecognized date "${line[columns.date] ?? ""}".`);
-      continue;
-    }
-
-    let amount: number | null = null;
-    if (columns.amount !== null) {
-      amount = parseAmount(line[columns.amount] ?? "");
-      if (amount !== null && options.positiveIsIncome) amount = -amount;
-    } else {
-      // Split columns: debit = money out (Plaid-positive), credit = money in.
-      const debit = columns.debit !== null ? parseAmount(line[columns.debit] ?? "") : null;
-      const credit = columns.credit !== null ? parseAmount(line[columns.credit] ?? "") : null;
-      if (debit !== null && debit !== 0) amount = Math.abs(debit);
-      else if (credit !== null && credit !== 0) amount = -Math.abs(credit);
-      else if (debit !== null || credit !== null) amount = 0;
-    }
-    if (amount === null) {
-      errors.push(`Line ${lineNo}: unrecognized amount.`);
-      continue;
-    }
-
-    const merchant = (line[columns.description] ?? "").trim();
-    if (!merchant) {
-      errors.push(`Line ${lineNo}: empty description.`);
-      continue;
-    }
-
-    rows.push({
-      date,
-      amount: Math.round(amount * 100) / 100,
-      merchant,
-      category:
-        columns.category !== null ? (line[columns.category] ?? "").trim() || null : null,
-    });
+    const parsed = parseImportLine(table[i]!, i + 1, columns, options.positiveIsIncome);
+    if ("error" in parsed) errors.push(parsed.error);
+    else rows.push(parsed.row);
   }
 
   return { rows, errors };

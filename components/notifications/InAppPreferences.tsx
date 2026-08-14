@@ -111,6 +111,7 @@ export default function InAppPreferences({
         </span>
         <input
           id="inapp-threshold"
+          aria-label="Large-transaction threshold"
           type="number"
           min="1"
           step="1"

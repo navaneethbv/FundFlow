@@ -160,6 +160,76 @@ async function notifyBrokenBanks(
   }
 }
 
+async function notificationExists(
+  supabase: ReturnType<typeof createServiceClient>,
+  userId: string,
+  type: AlertType,
+  subjectKey: string | undefined,
+  dedupe: NotificationDedupe,
+): Promise<boolean> {
+  if (subjectKey && dedupe === "exact") {
+    const { data, error } = await supabase
+      .from("notifications")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("type", type)
+      .eq("subject_key", subjectKey)
+      .maybeSingle();
+    if (error) throw error;
+    return Boolean(data);
+  }
+  const now = new Date();
+  const startRange =
+    type === "budget_exceeded"
+      ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
+      : new Date(
+          Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+        ).toISOString();
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("id, title, body")
+    .eq("user_id", userId)
+    .eq("type", type)
+    .gte("created_at", startRange);
+  if (error) throw error;
+  if (!data || data.length === 0) return false;
+  if (!subjectKey) return true;
+  const lowerSubject = subjectKey.toLowerCase();
+  return data.some(
+    (notification) =>
+      notification.title.toLowerCase().includes(lowerSubject) ||
+      notification.body.toLowerCase().includes(lowerSubject),
+  );
+}
+
+async function insertNotification(
+  supabase: ReturnType<typeof createServiceClient>,
+  userId: string,
+  type: AlertType,
+  details: { title: string; body: string },
+  subjectKey: string | undefined,
+  dedupe: NotificationDedupe,
+) {
+  const shape = buildNotification(type, details);
+  const { data: inserted, error: insertError } = await supabase
+    .from("notifications")
+    .insert({
+      user_id: userId,
+      ...shape,
+      subject_key: dedupe === "exact" ? subjectKey ?? null : null,
+    })
+    .select()
+    .single();
+  if (insertError) {
+    if (subjectKey && dedupe === "exact" && isUniqueViolation(insertError)) {
+      return null;
+    }
+    throw insertError;
+  }
+  void sendPushToUser(userId, { title: shape.title, body: shape.body });
+  return inserted;
+}
+
 export async function createNotification(
   userId: string,
   type: AlertType,
@@ -184,73 +254,11 @@ export async function createNotification(
     low_cash_forecast: true,
   };
 
-  if (type !== "broken_bank" && !shouldSendAlert(type, preferences)) {
+  if (type !== "broken_bank" && !shouldSendAlert(type, preferences)) return null;
+  if (await notificationExists(supabase, userId, type, subjectKey, dedupe)) {
     return null;
   }
-
-  // 2. Deduplicate
-  if (subjectKey && dedupe === "exact") {
-    const { data: existing, error } = await supabase
-      .from("notifications")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("type", type)
-      .eq("subject_key", subjectKey)
-      .maybeSingle();
-    if (error) throw error;
-    if (existing) return null;
-  } else {
-    // The legacy window allows distinct subject alerts of the same type in the
-    // same window, while suppressing a repeated subject.
-    const now = new Date();
-    const startRange =
-      type === "budget_exceeded"
-        ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
-        : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
-    const { data: existing, error } = await supabase
-      .from("notifications")
-      .select("id, title, body")
-      .eq("user_id", userId)
-      .eq("type", type)
-      .gte("created_at", startRange);
-    if (error) throw error;
-    if (existing && existing.length > 0) {
-      if (!subjectKey) return null;
-      const lowerSubject = subjectKey.toLowerCase();
-      const isDuplicate = existing.some(
-        (notification) =>
-          notification.title.toLowerCase().includes(lowerSubject) ||
-          notification.body.toLowerCase().includes(lowerSubject),
-      );
-      if (isDuplicate) return null;
-    }
-  }
-
-  // 3. Create & insert notification
-  const shape = buildNotification(type, details);
-  const { data: inserted, error: insertError } = await supabase
-    .from("notifications")
-    .insert({
-      user_id: userId,
-      ...shape,
-      subject_key: dedupe === "exact" ? subjectKey ?? null : null,
-    })
-    .select()
-    .single();
-
-  // A concurrent run inserted the same subject between our check and this
-  // insert; that is the same duplicate the unique index exists to stop.
-  if (insertError) {
-    if (subjectKey && dedupe === "exact" && isUniqueViolation(insertError)) {
-      return null;
-    }
-    throw insertError;
-  }
-
-  // Mirror to web push (fire-and-forget; no-op without VAPID keys).
-  void sendPushToUser(userId, { title: shape.title, body: shape.body });
-
-  return inserted;
+  return insertNotification(supabase, userId, type, details, subjectKey, dedupe);
 }
 
 /**

@@ -32,6 +32,7 @@ function transactionDate(value: string, day: number): string {
 }
 
 test.describe.serial("budget page", () => {
+  // Intentional skip: this live acceptance suite needs disposable Supabase credentials.
   test.skip(!RUN, "Supabase browser and service credentials are required");
   test.setTimeout(180_000);
 

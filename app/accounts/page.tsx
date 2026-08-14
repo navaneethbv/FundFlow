@@ -138,6 +138,14 @@ function accountPreferences(value: unknown): AccountsPagePreferences {
   };
 }
 
+function assertQueryResults(
+  results: Array<{ error: { message?: string } | null }>,
+): void {
+  for (const result of results) {
+    if (result.error) throw result.error;
+  }
+}
+
 export default async function AccountsPage({
   searchParams,
 }: Readonly<PageProps>) {
@@ -206,15 +214,13 @@ export default async function AccountsPage({
       .eq("id", user.id)
       .maybeSingle(),
   ]);
-  for (const result of [
+  assertQueryResults([
     accountsResult,
     manualResult,
     snapshotResult,
     itemResult,
     profileResult,
-  ]) {
-    if (result.error) throw result.error;
-  }
+  ]);
 
   const institutionByItem = new Map(
     ((itemResult.data ?? []) as Array<{

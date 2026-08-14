@@ -377,6 +377,61 @@ export interface MerchantPriceDrift {
   overallDriftPct: number | null;
 }
 
+type MerchantDriftBuckets = { name: string; recent: number[]; earlier: number[] };
+
+function collectMerchantDriftBuckets(
+  txns: { date: string; merchant: string; amount: number }[],
+  recentMonths: Set<string>,
+  earlierMonths: Set<string>,
+): Map<string, MerchantDriftBuckets> {
+  const byMerchant = new Map<string, MerchantDriftBuckets>();
+  for (const txn of txns) {
+    if (txn.amount <= 0) continue;
+    const month = txn.date.slice(0, 7);
+    const bucket = recentMonths.has(month)
+      ? "recent"
+      : earlierMonths.has(month)
+        ? "earlier"
+        : null;
+    if (!bucket) continue;
+    const key = normalizeName(txn.merchant);
+    const entry = byMerchant.get(key) ?? { name: txn.merchant, recent: [], earlier: [] };
+    entry[bucket].push(txn.amount);
+    byMerchant.set(key, entry);
+  }
+  return byMerchant;
+}
+
+function buildMerchantDriftItems(
+  buckets: Iterable<MerchantDriftBuckets>,
+  minCharges: number,
+): MerchantDriftItem[] {
+  const items: MerchantDriftItem[] = [];
+  for (const entry of buckets) {
+    if (entry.recent.length < minCharges || entry.earlier.length < minCharges) continue;
+    const recentAvg = round2(entry.recent.reduce((sum, value) => sum + value, 0) / entry.recent.length);
+    const earlierAvg = round2(entry.earlier.reduce((sum, value) => sum + value, 0) / entry.earlier.length);
+    if (earlierAvg <= 0) continue;
+    items.push({
+      merchant: entry.name,
+      earlierAvg,
+      recentAvg,
+      driftPct: Math.round(((recentAvg - earlierAvg) / earlierAvg) * 1000) / 10,
+    });
+  }
+  return items.sort((a, b) => Math.abs(b.driftPct) - Math.abs(a.driftPct));
+}
+
+function weightedDrift(items: MerchantDriftItem[]): number | null {
+  let weighted = 0;
+  let weightSum = 0;
+  for (const item of items) {
+    weighted += item.driftPct * item.recentAvg;
+    weightSum += item.recentAvg;
+  }
+  return weightSum > 0 ? Math.round((weighted / weightSum) * 10) / 10 : null;
+}
+
 /**
  * Personal price drift: for merchants charged in both windows, compares the
  * average charge over the recent 3 months vs the 3 months before that.
@@ -390,48 +445,9 @@ export function computeMerchantPriceDrift(input: {
   const minCharges = input.minCharges ?? 2;
   const recentMonths = new Set([0, -1, -2].map((d) => addYearMonths(input.asOfMonth, d)));
   const earlierMonths = new Set([-3, -4, -5].map((d) => addYearMonths(input.asOfMonth, d)));
-
-  const byMerchant = new Map<string, { name: string; recent: number[]; earlier: number[] }>();
-  for (const txn of input.txns) {
-    if (txn.amount <= 0) continue;
-    const month = txn.date.slice(0, 7);
-    let bucket: "recent" | "earlier" | null = null;
-    if (recentMonths.has(month)) bucket = "recent";
-    else if (earlierMonths.has(month)) bucket = "earlier";
-    if (!bucket) continue;
-    const key = normalizeName(txn.merchant);
-    const entry = byMerchant.get(key) ?? { name: txn.merchant, recent: [], earlier: [] };
-    entry[bucket].push(txn.amount);
-    byMerchant.set(key, entry);
-  }
-
-  const items: MerchantDriftItem[] = [];
-  for (const entry of byMerchant.values()) {
-    if (entry.recent.length < minCharges || entry.earlier.length < minCharges) continue;
-    const recentAvg = round2(entry.recent.reduce((s, v) => s + v, 0) / entry.recent.length);
-    const earlierAvg = round2(entry.earlier.reduce((s, v) => s + v, 0) / entry.earlier.length);
-    if (earlierAvg <= 0) continue;
-    items.push({
-      merchant: entry.name,
-      earlierAvg,
-      recentAvg,
-      driftPct: Math.round(((recentAvg - earlierAvg) / earlierAvg) * 1000) / 10,
-    });
-  }
-  items.sort((a, b) => Math.abs(b.driftPct) - Math.abs(a.driftPct));
-
-  let overallDriftPct: number | null = null;
-  if (items.length > 0) {
-    let weighted = 0;
-    let weightSum = 0;
-    for (const item of items) {
-      weighted += item.driftPct * item.recentAvg;
-      weightSum += item.recentAvg;
-    }
-    overallDriftPct = weightSum > 0 ? Math.round((weighted / weightSum) * 10) / 10 : null;
-  }
-
-  return { items, overallDriftPct };
+  const buckets = collectMerchantDriftBuckets(input.txns, recentMonths, earlierMonths);
+  const items = buildMerchantDriftItems(buckets.values(), minCharges);
+  return { items, overallDriftPct: items.length > 0 ? weightedDrift(items) : null };
 }
 
 export interface CategoryOverrideRow {

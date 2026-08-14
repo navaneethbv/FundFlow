@@ -20,6 +20,7 @@ const ownerEmail = `accounts-e2e-owner-${stamp}@example.com`;
 const memberEmail = `accounts-e2e-member-${stamp}@example.com`;
 
 test.describe.serial("accounts page", () => {
+  // Intentional skip: this live acceptance suite needs disposable Supabase credentials.
   test.skip(!RUN, "Supabase browser and service credentials are required");
 
   let admin: SupabaseClient;

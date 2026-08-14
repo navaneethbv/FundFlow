@@ -10,6 +10,78 @@ const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_ROWS = 20_000;
 const UPSERT_CHUNK = 500;
 
+function parseUploadedRows(
+  text: string,
+  positiveIsIncome: boolean,
+): { rows: ImportedRow[]; errors: string[] } {
+  if (looksLikeOfx(text)) {
+    return {
+      rows: parseOfx(text).map((transaction) => ({
+        date: transaction.date,
+        amount: transaction.amount,
+        merchant: transaction.description || "Imported",
+        category: null,
+      })),
+      errors: [],
+    };
+  }
+  return parseImportCsv(text, { positiveIsIncome });
+}
+
+function filterOverlappingRows(
+  rows: ImportedRow[],
+  boundary: string | null,
+): { importable: ImportedRow[]; skippedOverlap: number } {
+  const importable: ImportedRow[] = [];
+  let skippedOverlap = 0;
+  for (const row of rows) {
+    if (boundary && row.date >= boundary) skippedOverlap++;
+    else importable.push(row);
+  }
+  return { importable, skippedOverlap };
+}
+
+function buildDatabaseRows(
+  rows: ImportedRow[],
+  userId: string,
+  accountId: string,
+) {
+  const occurrences = new Map<string, number>();
+  return rows.map((row) => {
+    const key = `${row.date}|${row.amount}|${row.merchant}`;
+    const occurrence = occurrences.get(key) ?? 0;
+    occurrences.set(key, occurrence + 1);
+    return {
+      user_id: userId,
+      account_id: accountId,
+      plaid_transaction_id: makeImportId(accountId, row, occurrence),
+      amount: row.amount,
+      date: row.date,
+      name: row.merchant,
+      merchant_name: row.merchant,
+      pfc_primary: row.category
+        ? row.category.toUpperCase().replace(/\s+/g, "_")
+        : null,
+      pending: false,
+      source: "import",
+    };
+  });
+}
+
+async function upsertDatabaseRows(
+  service: ReturnType<typeof createServiceClient>,
+  rows: ReturnType<typeof buildDatabaseRows>,
+): Promise<void> {
+  for (let i = 0; i < rows.length; i += UPSERT_CHUNK) {
+    const { error } = await service
+      .from("transactions")
+      .upsert(rows.slice(i, i + UPSERT_CHUNK), {
+        onConflict: "plaid_transaction_id",
+      });
+    if (error) throw error;
+  }
+}
+
 /**
  * Import pre-Plaid history from a bank-statement CSV into an existing
  * account. Guarantees:
@@ -61,19 +133,7 @@ export async function POST(request: NextRequest) {
     }
 
     const text = await file.text();
-    // OFX/QFX statements (6.3) feed the same normalized pipeline as CSV —
-    // same sign convention, same deterministic ids, same overlap guard.
-    const { rows, errors } = looksLikeOfx(text)
-      ? {
-          rows: parseOfx(text).map((t) => ({
-            date: t.date,
-            amount: t.amount,
-            merchant: t.description || "Imported",
-            category: null,
-          })),
-          errors: [] as string[],
-        }
-      : parseImportCsv(text, { positiveIsIncome });
+    const { rows, errors } = parseUploadedRows(text, positiveIsIncome);
     if (rows.length === 0) {
       return badRequest(errors[0] ?? "No importable rows found");
     }
@@ -96,43 +156,9 @@ export async function POST(request: NextRequest) {
     if (boundaryError) throw boundaryError;
     const boundary = (earliestSynced?.date as string | undefined) ?? null;
 
-    const importable: ImportedRow[] = [];
-    let skippedOverlap = 0;
-    for (const row of rows) {
-      if (boundary && row.date >= boundary) skippedOverlap++;
-      else importable.push(row);
-    }
-
-    // Deterministic ids; occurrence counter disambiguates identical rows.
-    const occurrences = new Map<string, number>();
-    const dbRows = importable.map((row) => {
-      const key = `${row.date}|${row.amount}|${row.merchant}`;
-      const n = occurrences.get(key) ?? 0;
-      occurrences.set(key, n + 1);
-      return {
-        user_id: user.id,
-        account_id: accountId,
-        plaid_transaction_id: makeImportId(accountId, row, n),
-        amount: row.amount,
-        date: row.date,
-        name: row.merchant,
-        merchant_name: row.merchant,
-        pfc_primary: row.category
-          ? row.category.toUpperCase().replace(/\s+/g, "_")
-          : null,
-        pending: false,
-        source: "import",
-      };
-    });
-
-    for (let i = 0; i < dbRows.length; i += UPSERT_CHUNK) {
-      const { error } = await service
-        .from("transactions")
-        .upsert(dbRows.slice(i, i + UPSERT_CHUNK), {
-          onConflict: "plaid_transaction_id",
-        });
-      if (error) throw error;
-    }
+    const { importable, skippedOverlap } = filterOverlappingRows(rows, boundary);
+    const dbRows = buildDatabaseRows(importable, user.id, accountId);
+    await upsertDatabaseRows(service, dbRows);
 
     await writeAudit({
       userId: user.id,

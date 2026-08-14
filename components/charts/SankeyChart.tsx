@@ -135,6 +135,62 @@ function truncate(value: string): string {
     : value;
 }
 
+function assignBaseColours(
+  colours: Map<string, string>,
+  nodes: SankeyNode[],
+): void {
+  for (const node of nodes) {
+    if (node.column === SOURCE_COLUMN) {
+      colours.set(node.id, "var(--sankey-source)");
+    }
+    if (node.column === HUB_COLUMN) {
+      colours.set(node.id, "var(--sankey-hub)");
+    }
+  }
+  colours.set(NET_INCOME_ID, "var(--sankey-net)");
+  colours.set(UNFUNDED_ID, "var(--sankey-unfunded)");
+}
+
+function assignGroupColours(
+  colours: Map<string, string>,
+  groups: SankeyNode[],
+): void {
+  const takenSlots = new Set<number>();
+  const slotByGroupId = new Map<string, number>();
+  for (const group of groups) {
+    const slot = KNOWN_GROUP_SLOTS[group.label.trim().toLowerCase()];
+    if (slot !== undefined && !takenSlots.has(slot)) {
+      slotByGroupId.set(group.id, slot);
+      takenSlots.add(slot);
+    }
+  }
+  let nextCandidate = 1;
+  for (const group of groups) {
+    if (slotByGroupId.has(group.id)) continue;
+    while (takenSlots.has(nextCandidate)) nextCandidate += 1;
+    slotByGroupId.set(group.id, nextCandidate);
+    takenSlots.add(nextCandidate);
+  }
+  for (const group of groups) {
+    const slot = slotByGroupId.get(group.id);
+    colours.set(
+      group.id,
+      slot !== undefined ? (GROUP_COLOURS[slot - 1] ?? NEUTRAL) : NEUTRAL,
+    );
+  }
+}
+
+function inheritCategoryColours(
+  colours: Map<string, string>,
+  links: SankeyLink[],
+): void {
+  for (const link of links) {
+    if (colours.has(link.target)) continue;
+    const parent = colours.get(link.source);
+    if (parent) colours.set(link.target, parent);
+  }
+}
+
 /**
  * Node id → fill. Built once so the ribbons and the rectangles cannot disagree
  * about what colour a node is.
@@ -147,63 +203,12 @@ function buildColours(
   links: SankeyLink[],
 ): Map<string, string> {
   const colours = new Map<string, string>();
-
-  for (const node of nodes) {
-    if (node.column === SOURCE_COLUMN) {
-      colours.set(node.id, "var(--sankey-source)");
-    }
-    if (node.column === HUB_COLUMN) {
-      colours.set(node.id, "var(--sankey-hub)");
-    }
-  }
-  // Surplus and shortfall are outcomes, not categories, so they take the
-  // diverging poles the rest of the app already uses for the same meaning.
-  colours.set(NET_INCOME_ID, "var(--sankey-net)");
-  colours.set(UNFUNDED_ID, "var(--sankey-unfunded)");
-
   const groups = nodes
     .filter((node) => node.column === GROUP_COLUMN && node.id !== NET_INCOME_ID)
     .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
-
-  // Two passes: pin every group whose identity has a fixed slot first, then
-  // fill whatever slots remain, by size order, for groups this month has that
-  // the mapping above has never seen.
-  const takenSlots = new Set<number>();
-  const slotByGroupId = new Map<string, number>();
-  for (const group of groups) {
-    const slot = KNOWN_GROUP_SLOTS[group.label.trim().toLowerCase()];
-    if (slot !== undefined && !takenSlots.has(slot)) {
-      slotByGroupId.set(group.id, slot);
-      takenSlots.add(slot);
-    }
-  }
-  let nextCandidate = 1;
-  const claimNextFreeSlot = (): number => {
-    while (takenSlots.has(nextCandidate)) nextCandidate += 1;
-    return nextCandidate;
-  };
-  for (const group of groups) {
-    if (slotByGroupId.has(group.id)) continue;
-    const slot = claimNextFreeSlot();
-    slotByGroupId.set(group.id, slot);
-    takenSlots.add(slot);
-  }
-
-  for (const group of groups) {
-    const slot = slotByGroupId.get(group.id);
-    colours.set(
-      group.id,
-      slot !== undefined ? (GROUP_COLOURS[slot - 1] ?? NEUTRAL) : NEUTRAL,
-    );
-  }
-
-  // Categories inherit from whichever node feeds them.
-  for (const link of links) {
-    if (colours.has(link.target)) continue;
-    const parent = colours.get(link.source);
-    if (parent) colours.set(link.target, parent);
-  }
-
+  assignBaseColours(colours, nodes);
+  assignGroupColours(colours, groups);
+  inheritCategoryColours(colours, links);
   return colours;
 }
 

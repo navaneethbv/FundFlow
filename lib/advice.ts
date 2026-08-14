@@ -160,6 +160,45 @@ export interface AdviceLibraryViolation {
 
 const GUARANTEE_LANGUAGE = /\b(guarantee[ds]?|risk[- ]free|assured returns?|can't lose|will double|promise[ds]?)\b/i;
 
+function validateAdviceItem(
+  item: AdviceItem,
+  asOfMs: number,
+  maxReviewAgeDays: number,
+): AdviceLibraryViolation[] {
+  const violations: AdviceLibraryViolation[] = [];
+  if (item.sources.length === 0) {
+    violations.push({ itemId: item.id, reason: "missing sources" });
+  }
+  const taskIds = new Set<string>();
+  for (const task of item.tasks) {
+    if (taskIds.has(task.id)) {
+      violations.push({ itemId: item.id, reason: `duplicate task id: ${task.id}` });
+    }
+    taskIds.add(task.id);
+  }
+  if (GUARANTEE_LANGUAGE.test(item.title) || GUARANTEE_LANGUAGE.test(item.body)) {
+    violations.push({ itemId: item.id, reason: "prohibited guarantee language" });
+  }
+  for (const source of item.sources) {
+    const ageDays =
+      (asOfMs - new Date(`${source.reviewedAt}T00:00:00Z`).getTime()) /
+      86_400_000;
+    if (ageDays > maxReviewAgeDays) {
+      violations.push({ itemId: item.id, reason: `stale source review: ${source.url}` });
+    }
+    let host: string | null = null;
+    try {
+      host = new URL(source.url).hostname.replace(/^www\./, "");
+    } catch {
+      violations.push({ itemId: item.id, reason: `unparseable source URL: ${source.url}` });
+    }
+    if (host && !ALLOWED_SOURCE_HOSTS.includes(host)) {
+      violations.push({ itemId: item.id, reason: `unsupported external source: ${source.url}` });
+    }
+  }
+  return violations;
+}
+
 /**
  * Content-review guard, not a runtime check: run in a test so a future edit
  * to ADVICE_LIBRARY that adds a stale review date, a broken source, a
@@ -174,38 +213,9 @@ export function validateAdviceLibrary(
   const asOfMs = new Date(`${options.asOf}T00:00:00Z`).getTime();
 
   for (const item of library) {
-    if (item.sources.length === 0) {
-      violations.push({ itemId: item.id, reason: "missing sources" });
-    }
-
-    const taskIds = new Set<string>();
-    for (const task of item.tasks) {
-      if (taskIds.has(task.id)) {
-        violations.push({ itemId: item.id, reason: `duplicate task id: ${task.id}` });
-      }
-      taskIds.add(task.id);
-    }
-
-    if (GUARANTEE_LANGUAGE.test(item.title) || GUARANTEE_LANGUAGE.test(item.body)) {
-      violations.push({ itemId: item.id, reason: "prohibited guarantee language" });
-    }
-
-    for (const source of item.sources) {
-      const ageDays = (asOfMs - new Date(`${source.reviewedAt}T00:00:00Z`).getTime()) / 86_400_000;
-      if (ageDays > options.maxReviewAgeDays) {
-        violations.push({ itemId: item.id, reason: `stale source review: ${source.url}` });
-      }
-
-      let host: string | null = null;
-      try {
-        host = new URL(source.url).hostname.replace(/^www\./, "");
-      } catch {
-        violations.push({ itemId: item.id, reason: `unparseable source URL: ${source.url}` });
-      }
-      if (host && !ALLOWED_SOURCE_HOSTS.includes(host)) {
-        violations.push({ itemId: item.id, reason: `unsupported external source: ${source.url}` });
-      }
-    }
+    violations.push(
+      ...validateAdviceItem(item, asOfMs, options.maxReviewAgeDays),
+    );
   }
 
   return violations;

@@ -92,6 +92,69 @@ async function verifyPlaidWebhook(req: NextRequest, bodyText: string): Promise<b
   }
 }
 
+async function handleTransactionWebhook(body: {
+  webhook_type?: unknown;
+  webhook_code?: unknown;
+  item_id?: unknown;
+}): Promise<void> {
+  if (
+    body.webhook_type !== "TRANSACTIONS" ||
+    body.webhook_code !== "SYNC_UPDATES_AVAILABLE" ||
+    typeof body.item_id !== "string" ||
+    body.item_id.length === 0
+  ) return;
+  const item = await getItemByPlaidItemId(body.item_id);
+  if (item) await syncItemTransactions(item);
+}
+
+async function handleHoldingsWebhook(body: {
+  webhook_type?: unknown;
+  webhook_code?: unknown;
+  item_id?: unknown;
+}): Promise<void> {
+  if (
+    body.webhook_type !== "HOLDINGS" ||
+    (body.webhook_code !== "DEFAULT_UPDATE" &&
+      body.webhook_code !== "HISTORICAL_UPDATE") ||
+    typeof body.item_id !== "string" ||
+    !isFeatureEnabled("investmentsPage")
+  ) return;
+  const item = await getItemByPlaidItemId(body.item_id);
+  if (item) {
+    await syncInvestmentsForItem(item).catch((err) =>
+      logError("webhook.holdings", err),
+    );
+  }
+}
+
+async function handleItemWebhook(body: {
+  webhook_type?: unknown;
+  webhook_code?: unknown;
+  item_id?: unknown;
+  error?: { error_code?: unknown };
+}): Promise<void> {
+  if (
+    body.webhook_type !== "ITEM" ||
+    typeof body.item_id !== "string" ||
+    body.item_id.length === 0
+  ) return;
+  const item = await getItemByPlaidItemId(body.item_id);
+  if (!item) return;
+  if (body.webhook_code === "ERROR") {
+    const code =
+      typeof body.error?.error_code === "string"
+        ? body.error.error_code
+        : "ITEM_ERROR";
+    await setItemStatus(item.id, "error", code);
+  } else if (body.webhook_code === "PENDING_EXPIRATION") {
+    await setItemStatus(item.id, "active", "PENDING_EXPIRATION");
+  } else if (body.webhook_code === "LOGIN_REPAIRED") {
+    await setItemStatus(item.id, "active", null);
+  } else if (body.webhook_code === "USER_PERMISSION_REVOKED") {
+    await setItemStatus(item.id, "disconnected", "USER_PERMISSION_REVOKED");
+  }
+}
+
 /**
  * Handles incoming Plaid webhooks. Syncs transactions on demand when Plaid notifies
  * us that new sync updates are available.
@@ -104,60 +167,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
-    const body = JSON.parse(bodyText);
-    const { webhook_type, webhook_code, item_id } = body;
+    const body = JSON.parse(bodyText) as {
+      webhook_type?: unknown;
+      webhook_code?: unknown;
+      item_id?: unknown;
+      error?: { error_code?: unknown };
+    };
 
-    if (webhook_type === "TRANSACTIONS" && webhook_code === "SYNC_UPDATES_AVAILABLE") {
-      if (!item_id) {
+    if (body.webhook_type === "TRANSACTIONS" && body.webhook_code === "SYNC_UPDATES_AVAILABLE") {
+      if (!body.item_id) {
         return badRequest("Missing item_id in webhook body");
-      }
-
-      const item = await getItemByPlaidItemId(item_id);
-      if (item) {
-        // Incremental sync, awaited so failures surface in the response code
-        // (Plaid retries non-2xx deliveries).
-        await syncItemTransactions(item);
       }
     }
 
     // Holdings changed (or the initial historical pull finished): a bounded,
     // item-scoped refresh. Gated on investmentsPage — before its migration is
     // applied, `holdings` doesn't exist to write to.
-    if (
-      webhook_type === "HOLDINGS" &&
-      (webhook_code === "DEFAULT_UPDATE" || webhook_code === "HISTORICAL_UPDATE") &&
-      item_id &&
-      isFeatureEnabled("investmentsPage")
-    ) {
-      const item = await getItemByPlaidItemId(item_id);
-      if (item) {
-        await syncInvestmentsForItem(item).catch((err) => logError("webhook.holdings", err));
-      }
-    }
+    await handleTransactionWebhook(body);
+    await handleHoldingsWebhook(body);
 
     // ITEM lifecycle: mark broken connections so Settings can offer the
     // update-mode "Reconnect" flow, and clear the flag when Plaid says the
     // login was repaired on its own.
-    if (webhook_type === "ITEM" && item_id) {
-      const item = await getItemByPlaidItemId(item_id);
-      if (item) {
-        if (webhook_code === "ERROR") {
-          const code =
-            typeof body.error?.error_code === "string"
-              ? body.error.error_code
-              : "ITEM_ERROR";
-          await setItemStatus(item.id, "error", code);
-        } else if (webhook_code === "PENDING_EXPIRATION") {
-          // Still syncing, but consent expires soon: keep the item active and
-          // set the error code so the UI can prompt a proactive reconnect.
-          await setItemStatus(item.id, "active", "PENDING_EXPIRATION");
-        } else if (webhook_code === "LOGIN_REPAIRED") {
-          await setItemStatus(item.id, "active", null);
-        } else if (webhook_code === "USER_PERMISSION_REVOKED") {
-          await setItemStatus(item.id, "disconnected", "USER_PERMISSION_REVOKED");
-        }
-      }
-    }
+    await handleItemWebhook(body);
 
     return NextResponse.json({ success: true });
   } catch (err) {

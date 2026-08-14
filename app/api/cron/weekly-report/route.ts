@@ -37,6 +37,72 @@ type WeeklyRunResult = {
   first_error?: string;
 };
 
+type WeeklyDeliveryOutcome = {
+  status: "sent" | "skipped" | "failed";
+  error?: string;
+};
+
+async function runSingleWeeklyReport(
+  service: ReturnType<typeof createServiceClient>,
+  userId: string,
+  reference: Date,
+  timezone: string,
+): Promise<WeeklyDeliveryOutcome> {
+  const period = getWeeklyReportPeriod(reference, timezone);
+  let deliveryId: string | undefined;
+  try {
+    const claim = await claimWeeklyDelivery(service, userId, period, reference);
+    if (!claim.claimed || !claim.deliveryId) return { status: "skipped" };
+    deliveryId = claim.deliveryId;
+    const report = await getWeeklyReportData(service, userId, period);
+    if (!report) {
+      await markWeeklyDeliveryFailed(service, userId, deliveryId, "missing_account_email");
+      return { status: "failed", error: "missing_account_email" };
+    }
+    if (isUndeliverableRecipient(report.userEmail)) {
+      await markWeeklyDeliverySkipped(
+        service,
+        userId,
+        deliveryId,
+        UNDELIVERABLE_RECIPIENT_CODE,
+      );
+      return { status: "skipped" };
+    }
+    let pdf: Buffer;
+    try {
+      pdf = await generateWeeklyReportPdf(report);
+    } catch (pdfError) {
+      await markWeeklyDeliveryFailed(service, userId, deliveryId, "pdf_render_failed");
+      logError("cron.weekly-report.pdf", pdfError);
+      return { status: "failed", error: "pdf_render_failed" };
+    }
+    const info = await sendWeeklyReportEmail(
+      report,
+      pdf,
+      serverEnv.appUrl ?? "http://localhost:3000",
+    );
+    await markWeeklyDeliverySent(
+      service,
+      userId,
+      deliveryId,
+      info.messageId || null,
+      new Date(),
+    );
+    return { status: "sent" };
+  } catch (userError) {
+    const error = describeDeliveryError(userError);
+    logError("cron.weekly-report.user", userError);
+    if (deliveryId) {
+      try {
+        await markWeeklyDeliveryFailed(service, userId, deliveryId, error);
+      } catch (deliveryError) {
+        logError("cron.weekly-report.delivery", deliveryError);
+      }
+    }
+    return { status: "failed", error };
+  }
+}
+
 export async function runWeeklyReports(
   reference = new Date(),
   onlyUserIds?: string[],
@@ -65,86 +131,12 @@ export async function runWeeklyReports(
     const timezone = normalizeReportTimezone(profile.timezone as string | null);
     if (!isWeeklyReportDue(reference, timezone)) continue;
     result.due += 1;
-
-    const period = getWeeklyReportPeriod(reference, timezone);
-    let deliveryId: string | undefined;
-    try {
-      const claim = await claimWeeklyDelivery(service, userId, period, reference);
-      if (!claim.claimed || !claim.deliveryId) {
-        result.reports_skipped += 1;
-        continue;
-      }
-      deliveryId = claim.deliveryId;
-
-      const report = await getWeeklyReportData(service, userId, period);
-      if (!report) {
-        await markWeeklyDeliveryFailed(
-          service,
-          userId,
-          deliveryId,
-          "missing_account_email",
-        );
-        result.reports_failed += 1;
-        result.first_error ??= "missing_account_email";
-        continue;
-      }
-
-      if (isUndeliverableRecipient(report.userEmail)) {
-        await markWeeklyDeliverySkipped(
-          service,
-          userId,
-          deliveryId,
-          UNDELIVERABLE_RECIPIENT_CODE,
-        );
-        result.reports_skipped += 1;
-        continue;
-      }
-
-      let pdf: Buffer;
-      try {
-        pdf = await generateWeeklyReportPdf(report);
-      } catch (pdfError) {
-        await markWeeklyDeliveryFailed(
-          service,
-          userId,
-          deliveryId,
-          "pdf_render_failed",
-        );
-        result.reports_failed += 1;
-        result.first_error ??= "pdf_render_failed";
-        logError("cron.weekly-report.pdf", pdfError);
-        continue;
-      }
-
-      const info = await sendWeeklyReportEmail(
-        report,
-        pdf,
-        serverEnv.appUrl ?? "http://localhost:3000",
-      );
-      await markWeeklyDeliverySent(
-        service,
-        userId,
-        deliveryId,
-        info.messageId || null,
-        new Date(),
-      );
-      result.reports_sent += 1;
-    } catch (userError) {
+    const outcome = await runSingleWeeklyReport(service, userId, reference, timezone);
+    if (outcome.status === "sent") result.reports_sent += 1;
+    if (outcome.status === "skipped") result.reports_skipped += 1;
+    if (outcome.status === "failed") {
       result.reports_failed += 1;
-      result.first_error ??= describeDeliveryError(userError);
-      logError("cron.weekly-report.user", userError);
-      if (deliveryId) {
-        try {
-          await markWeeklyDeliveryFailed(
-            service,
-            userId,
-            deliveryId,
-            describeDeliveryError(userError),
-          );
-        } catch (deliveryError) {
-          logError("cron.weekly-report.delivery", deliveryError);
-        }
-      }
+      result.first_error ??= outcome.error;
     }
   }
 

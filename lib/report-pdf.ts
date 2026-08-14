@@ -35,7 +35,7 @@ function periodLabel(data: WeeklyReportData): string {
 // digits; stripping a trailing `[x•*-]+` on its own turned "Chase Freedom
 // Flex" into "Chase Freedom Fle".
 function safeAccountLabel(value: string): string {
-  return value.replace(/[\s*x•-]*\d{4}\s*$/i, "").trim() || "Credit card";
+  return value.replace(/\s*(?:[•*x-]{1,4}\s*)?\d{4}\s*$/i, "").trim() || "Credit card";
 }
 
 function trendLabel(data: WeeklyReportData): string {

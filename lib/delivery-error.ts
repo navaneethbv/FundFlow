@@ -15,7 +15,7 @@ const ERROR_CODE_MAX = 80;
 // addresses contain characters like `'` and `!`, and a `[\w.%+-]+` local part
 // leaves those prefixes behind ("o'brien@example.com" -> "o'[redacted]"),
 // which still leaks PII into the admin inbox and the logs.
-const EMAIL_PATTERN = /[^\s<>()[\]:;,"]+@[^\s<>()[\]:;,"]+\.[a-z]{2,}/gi;
+const EMAIL_PATTERN = /[^\s@<>()[\]:;,"]+@[^\s@<>()[\]:;,"]+\.[a-z]{2,}/gi;
 
 /** Alert summaries are documented as error messages only, never PII. */
 export function redactEmails(text: string): string {

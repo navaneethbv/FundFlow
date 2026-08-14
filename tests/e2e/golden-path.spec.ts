@@ -22,6 +22,7 @@ const PASSWORD = process.env.E2E_PASSWORD;
 const RUN_PLAID = process.env.E2E_PLAID === "1";
 
 test.describe.serial("authenticated golden path", () => {
+  // Intentional skip: this suite must not run against an account without explicit credentials.
   test.skip(!EMAIL || !PASSWORD, "set E2E_EMAIL/E2E_PASSWORD to run");
 
   let page: Page;

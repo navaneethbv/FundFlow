@@ -26,6 +26,7 @@ const email = `planner-ia-e2e-${stamp}@example.com`;
  * regardless of the signed-in user's data.
  */
 test.describe.serial("Phase 1: navigation and information architecture", () => {
+  // Intentional skip: this live acceptance suite needs disposable Supabase credentials.
   test.skip(!RUN, "Supabase browser and service credentials are required");
 
   let admin: SupabaseClient;

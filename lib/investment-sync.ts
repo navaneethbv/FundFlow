@@ -42,6 +42,37 @@ function plaidCancellationId(transaction: InvestmentTransaction): string | null 
   return typeof value === "string" ? value : null;
 }
 
+function investmentOutcome(
+  error: unknown,
+): InvestmentSyncOutcome | null {
+  const code = plaidErrorCode(error);
+  if (code === "PRODUCT_NOT_READY") return "product_not_ready";
+  if (code && NO_PRODUCT_CODES.has(code)) return "no_investment_product";
+  if (code && RATE_LIMIT_CODES.has(code)) return "rate_limited";
+  return null;
+}
+
+async function fetchInvestmentHoldings(
+  plaid: ReturnType<typeof getPlaidClient>,
+  accessToken: string,
+): Promise<
+  | { holdings: Holding[]; securities: Security[]; plaidAccounts: { account_id: string }[] }
+  | { outcome: InvestmentSyncOutcome; holdingsSynced: 0 }
+> {
+  try {
+    const response = await plaid.investmentsHoldingsGet({ access_token: accessToken });
+    return {
+      holdings: response.data.holdings,
+      securities: response.data.securities,
+      plaidAccounts: response.data.accounts,
+    };
+  } catch (error) {
+    const outcome = investmentOutcome(error);
+    if (outcome) return { outcome, holdingsSynced: 0 };
+    throw error;
+  }
+}
+
 /** Upsert every security in the response, keyed by plaid_security_id; returns plaid id -> db id. */
 async function upsertSecurities(
   supabase: ReturnType<typeof createServiceClient>,
@@ -89,21 +120,9 @@ export async function syncInvestmentsForItem(
   const plaid = getPlaidClient();
   const accessToken = await decryptItemTokenAndUpgrade(item);
 
-  let holdings: Holding[];
-  let securities: Security[];
-  let plaidAccounts: { account_id: string }[];
-  try {
-    const response = await plaid.investmentsHoldingsGet({ access_token: accessToken });
-    holdings = response.data.holdings;
-    securities = response.data.securities;
-    plaidAccounts = response.data.accounts;
-  } catch (error) {
-    const code = plaidErrorCode(error);
-    if (code === "PRODUCT_NOT_READY") return { outcome: "product_not_ready", holdingsSynced: 0 };
-    if (code && NO_PRODUCT_CODES.has(code)) return { outcome: "no_investment_product", holdingsSynced: 0 };
-    if (code && RATE_LIMIT_CODES.has(code)) return { outcome: "rate_limited", holdingsSynced: 0 };
-    throw error;
-  }
+  const fetched = await fetchInvestmentHoldings(plaid, accessToken);
+  if ("outcome" in fetched) return fetched;
+  const { holdings, securities, plaidAccounts } = fetched;
 
   const supabase = createServiceClient();
 
@@ -210,6 +229,40 @@ export async function syncInvestmentsForItem(
 /** Same lookback window used when a Link is first created (see link-token/route.ts). */
 const INVESTMENT_TRANSACTION_LOOKBACK_DAYS = 730;
 
+async function fetchInvestmentTransactions(
+  plaid: ReturnType<typeof getPlaidClient>,
+  accessToken: string,
+  startDate: string,
+  today: string,
+): Promise<
+  | { transactions: InvestmentTransaction[] }
+  | { outcome: InvestmentSyncOutcome; transactionsSynced: 0 }
+> {
+  const all: InvestmentTransaction[] = [];
+  try {
+    let offset = 0;
+    let total = Infinity;
+    while (all.length < total) {
+      const response = await plaid.investmentsTransactionsGet({
+        access_token: accessToken,
+        start_date: startDate,
+        end_date: today,
+        options: { offset, count: 500 },
+      });
+      const page = response.data.investment_transactions;
+      all.push(...page);
+      total = response.data.total_investment_transactions;
+      offset = all.length;
+      if (page.length === 0) break;
+    }
+  } catch (error) {
+    const outcome = investmentOutcome(error);
+    if (outcome) return { outcome, transactionsSynced: 0 };
+    throw error;
+  }
+  return { transactions: all };
+}
+
 function daysBefore(dateStr: string, days: number): string {
   const d = new Date(`${dateStr}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() - days);
@@ -235,30 +288,14 @@ export async function syncInvestmentTransactionsForItem(
   const accessToken = await decryptItemTokenAndUpgrade(item);
   const startDate = daysBefore(today, INVESTMENT_TRANSACTION_LOOKBACK_DAYS);
 
-  const all: InvestmentTransaction[] = [];
-  try {
-    let offset = 0;
-    let total = Infinity;
-    while (all.length < total) {
-      const response = await plaid.investmentsTransactionsGet({
-        access_token: accessToken,
-        start_date: startDate,
-        end_date: today,
-        options: { offset, count: 500 },
-      });
-      const page = response.data.investment_transactions;
-      all.push(...page);
-      total = response.data.total_investment_transactions;
-      offset = all.length;
-      if (page.length === 0) break;
-    }
-  } catch (error) {
-    const code = plaidErrorCode(error);
-    if (code === "PRODUCT_NOT_READY") return { outcome: "product_not_ready", transactionsSynced: 0 };
-    if (code && NO_PRODUCT_CODES.has(code)) return { outcome: "no_investment_product", transactionsSynced: 0 };
-    if (code && RATE_LIMIT_CODES.has(code)) return { outcome: "rate_limited", transactionsSynced: 0 };
-    throw error;
-  }
+  const fetched = await fetchInvestmentTransactions(
+    plaid,
+    accessToken,
+    startDate,
+    today,
+  );
+  if ("outcome" in fetched) return fetched;
+  const { transactions: all } = fetched;
 
   if (all.length === 0) return { outcome: "synced", transactionsSynced: 0 };
 

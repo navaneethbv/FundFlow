@@ -104,6 +104,57 @@ export async function syncItemTransactions(
   }
 }
 
+async function notifySyncedTransactions(
+  supabase: ReturnType<typeof createServiceClient>,
+  userId: string,
+  rows: ReturnType<typeof mapTransactionRow>[],
+): Promise<void> {
+  const { data: alertPref } = await supabase
+    .from("alert_preferences")
+    .select("large_transaction_threshold")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const largeThreshold = Number(alertPref?.large_transaction_threshold ?? 500);
+  for (const row of rows) {
+    if (row.amount >= largeThreshold) {
+      await createNotification(
+        userId,
+        "large_transaction",
+        {
+          title: `Large transaction: ${row.merchant_name || row.name || "Unknown"}`,
+          body: `A transaction of ${formatCurrency(row.amount)} was recorded at ${row.merchant_name || row.name || "Unknown"} on ${row.date}.`,
+        },
+        row.plaid_transaction_id,
+        "exact",
+      ).catch((err) => logError("sync.large_txn_notification", err));
+    }
+  }
+  try {
+    const { data: cancelledRows } = await supabase
+      .from("cancelled_subscriptions")
+      .select("merchant")
+      .eq("user_id", userId);
+    const cancelled = new Set(
+      (cancelledRows ?? []).map((row) => (row.merchant as string).trim().toLowerCase()),
+    );
+    for (const row of rows) {
+      const merchant = (row.merchant_name || row.name || "").trim();
+      if (!merchant || row.amount <= 0 || !cancelled.has(merchant.toLowerCase())) continue;
+      await createNotification(
+        userId,
+        "cancellation_watch",
+        {
+          title: `Charged after cancellation: ${merchant}`,
+          body: `${merchant} charged ${formatCurrency(row.amount)} on ${row.date} after you marked it cancelled. Dispute or re-cancel.`,
+        },
+        merchant,
+      ).catch((err) => logError("sync.cancellation_watch", err));
+    }
+  } catch (watchError) {
+    logError("sync.cancellation_watch", watchError);
+  }
+}
+
 async function syncItemTransactionsInner(
   item: PlaidItemRow,
   supabase: ReturnType<typeof createServiceClient>,
@@ -157,59 +208,7 @@ async function syncItemTransactionsInner(
       .upsert(upsertRows, { onConflict: "plaid_transaction_id" });
     if (error) throw error;
 
-    // Instant large-transaction alerts (7.3): user-configurable threshold,
-    // defaulting to $500 when unset. Service-client read — user_id filter
-    // is load-bearing.
-    const { data: alertPref } = await supabase
-      .from("alert_preferences")
-      .select("large_transaction_threshold")
-      .eq("user_id", item.user_id)
-      .maybeSingle();
-    const largeThreshold = Number(alertPref?.large_transaction_threshold ?? 500);
-    for (const row of upsertRows) {
-      if (row.amount >= largeThreshold) {
-        await createNotification(
-          item.user_id,
-          "large_transaction",
-          {
-            title: `Large transaction: ${row.merchant_name || row.name || "Unknown"}`,
-            body: `A transaction of ${formatCurrency(row.amount)} was recorded at ${row.merchant_name || row.name || "Unknown"} on ${row.date}.`,
-          },
-          row.plaid_transaction_id,
-          "exact",
-        ).catch((err) => logError("sync.large_txn_notification", err));
-      }
-    }
-
-    // Cancellation watch (Bucket 2): if a merchant the user marked as
-    // cancelled charges again, raise a danger alert. Best-effort.
-    try {
-      const { data: cancelledRows } = await supabase
-        .from("cancelled_subscriptions")
-        .select("merchant")
-        .eq("user_id", item.user_id);
-      if (cancelledRows && cancelledRows.length > 0) {
-        const cancelled = new Set(
-          cancelledRows.map((row) => (row.merchant as string).trim().toLowerCase()),
-        );
-        for (const row of upsertRows) {
-          const merchant = (row.merchant_name || row.name || "").trim();
-          if (!merchant || row.amount <= 0) continue;
-          if (!cancelled.has(merchant.toLowerCase())) continue;
-          await createNotification(
-            item.user_id,
-            "cancellation_watch",
-            {
-              title: `Charged after cancellation: ${merchant}`,
-              body: `${merchant} charged ${formatCurrency(row.amount)} on ${row.date} after you marked it cancelled. Dispute or re-cancel.`,
-            },
-            merchant,
-          ).catch((err) => logError("sync.cancellation_watch", err));
-        }
-      }
-    } catch (watchError) {
-      logError("sync.cancellation_watch", watchError);
-    }
+    await notifySyncedTransactions(supabase, item.user_id, upsertRows);
   }
 
   if (removed.length > 0) {

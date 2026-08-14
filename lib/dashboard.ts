@@ -221,6 +221,183 @@ function monthDate(month: string, day: number): string {
   return `${month}-${String(Math.min(day, daysInMonth)).padStart(2, "0")}`;
 }
 
+interface DashboardTransactionAggregates {
+  monthlySpending: { month: string; amount: number }[];
+  monthlyIncome: { month: string; amount: number }[];
+  monthlyCashFlow: { month: string; deposits: number; withdrawals: number }[];
+  merchantMap: Map<string, number>;
+  categoryHistoryMap: Map<string, number>;
+  currentMonthExpenses: number;
+  currentMonthIncome: number;
+  activeMonthSpend: TxnLite[];
+  windowSpendTxns: DrillTxn[];
+  windowSpendMerchants: Set<string>;
+}
+
+function aggregateDashboardTransactions(
+  spendTxns: TxnLite[],
+  allTxnsRaw: TxnLite[],
+  allAccounts: AccountSummary[],
+  activeMonth: string,
+): DashboardTransactionAggregates {
+  const accountTypeById = new Map(allAccounts.map((account) => [account.id, account.type]));
+  const monthMap = new Map<string, number>();
+  const incomeMap = new Map<string, number>();
+  for (const txn of spendTxns) {
+    const key = monthKey(txn.date);
+    if (isSpending(txn)) monthMap.set(key, (monthMap.get(key) ?? 0) + txn.amount);
+    else if (isIncome(txn)) incomeMap.set(key, (incomeMap.get(key) ?? 0) + Math.abs(txn.amount));
+  }
+  const depositsMap = new Map<string, number>();
+  const withdrawalsMap = new Map<string, number>();
+  for (const txn of allTxnsRaw) {
+    if (accountTypeById.get(txn.account_id) !== "depository") continue;
+    const key = monthKey(txn.date);
+    const target = txn.amount < 0 ? depositsMap : withdrawalsMap;
+    const amount = txn.amount < 0 ? Math.abs(txn.amount) : txn.amount;
+    target.set(key, (target.get(key) ?? 0) + amount);
+  }
+  const [activeYear, activeMonthIndex] = activeMonth.split("-").map(Number);
+  const monthlySpending = [] as DashboardTransactionAggregates["monthlySpending"];
+  const monthlyIncome = [] as DashboardTransactionAggregates["monthlyIncome"];
+  const monthlyCashFlow = [] as DashboardTransactionAggregates["monthlyCashFlow"];
+  for (let index = 5; index >= 0; index--) {
+    const date = new Date(activeYear!, activeMonthIndex! - index, 15);
+    const key = monthKey(date.toISOString().slice(0, 10));
+    monthlySpending.push({ month: key, amount: round2(monthMap.get(key) ?? 0) });
+    monthlyIncome.push({ month: key, amount: round2(incomeMap.get(key) ?? 0) });
+    monthlyCashFlow.push({
+      month: key,
+      deposits: round2(depositsMap.get(key) ?? 0),
+      withdrawals: round2(withdrawalsMap.get(key) ?? 0),
+    });
+  }
+  const merchantMap = new Map<string, number>();
+  const categoryHistoryMap = new Map<string, number>();
+  const activeMonthSpend: TxnLite[] = [];
+  let currentMonthExpenses = 0;
+  let currentMonthIncome = 0;
+  for (const txn of spendTxns) {
+    if (isSpending(txn)) {
+      const key = `${monthKey(txn.date)}|${txn.pfc_primary ?? "UNCATEGORIZED"}`;
+      categoryHistoryMap.set(key, (categoryHistoryMap.get(key) ?? 0) + txn.amount);
+    }
+    if (monthKey(txn.date) !== activeMonth) continue;
+    if (isSpending(txn)) {
+      currentMonthExpenses += txn.amount;
+      activeMonthSpend.push(txn);
+      const merchant = txn.merchant_name ?? txn.name ?? "Unknown";
+      merchantMap.set(merchant, (merchantMap.get(merchant) ?? 0) + txn.amount);
+    } else if (isIncome(txn)) currentMonthIncome += Math.abs(txn.amount);
+  }
+  const windowSpendTxns = spendTxns.filter(isSpending).map((txn) => ({
+    id: txn.id,
+    date: txn.date,
+    amount: txn.amount,
+    merchant: txn.merchant_name ?? txn.name ?? "Unknown",
+    category: txn.pfc_primary,
+    subcategory: txn.pfc_detailed,
+  }));
+  const windowSpendMerchants = new Set(
+    windowSpendTxns.map((txn) => txn.merchant.trim().toLowerCase()),
+  );
+  return {
+    monthlySpending,
+    monthlyIncome,
+    monthlyCashFlow,
+    merchantMap,
+    categoryHistoryMap,
+    currentMonthExpenses,
+    currentMonthIncome,
+    activeMonthSpend,
+    windowSpendTxns,
+    windowSpendMerchants,
+  };
+}
+
+function buildDashboardDrilldown(
+  drill: DrillParams | undefined,
+  windowSpendTxns: DrillTxn[],
+  splits: { transactionId: string; category: string; amount: number }[],
+  monthlySpending: { month: string; amount: number }[],
+  activeMonth: string,
+  windowSpendMerchants: Set<string>,
+): DrilldownData | undefined {
+  if (!drill || (!drill.category && !drill.merchant)) return undefined;
+  const knownCategories = new Set(windowSpendTxns.map((txn) => txn.category ?? "UNCATEGORIZED"));
+  const knownSubcategories = new Set(windowSpendTxns.map((txn) => txn.subcategory ?? "UNCATEGORIZED"));
+  for (const split of splits) knownCategories.add(split.category);
+  const normalized = normalizeDrillParams(drill, {
+    categories: knownCategories,
+    subcategories: knownSubcategories,
+    merchants: windowSpendMerchants,
+  });
+  const months = monthlySpending.map((month) => month.month);
+  if (normalized.category && normalized.category !== OTHER_CATEGORY_KEY) {
+    return buildCategoryDrilldown({
+      txns: windowSpendTxns,
+      splits,
+      category: normalized.category,
+      sub: normalized.sub ?? null,
+      months,
+      activeMonth,
+    });
+  }
+  if (normalized.merchant) {
+    return buildMerchantDrilldown({ txns: windowSpendTxns, merchant: normalized.merchant, months });
+  }
+  return undefined;
+}
+
+function buildDashboardSpendMetrics(
+  spendTxns: TxnLite[],
+  allTxnsRaw: TxnLite[],
+  allAccounts: AccountSummary[],
+  allItems: Array<{ id: string; institution_name: string | null }>,
+  activeMonth: string,
+  lastMonthTargetDay: number,
+  activeYear: number,
+  activeMonthIndex: number,
+) {
+  const lastMonth = monthKey(new Date(activeYear, activeMonthIndex - 1, 15).toISOString().slice(0, 10));
+  let lastMonthProratedSpent = 0;
+  const cardSpendMap = new Map<string, number>();
+  const bankSpendMap = new Map<string, number>();
+  let cashFlowDeposits = 0;
+  let cashFlowWithdrawals = 0;
+  const accountById = new Map(allAccounts.map((account) => [account.id, account]));
+  for (const txn of spendTxns) {
+    if (monthKey(txn.date) === lastMonth && Number(txn.date.slice(8, 10)) <= lastMonthTargetDay && isSpending(txn)) {
+      lastMonthProratedSpent += txn.amount;
+    }
+    if (monthKey(txn.date) !== activeMonth || !isSpending(txn)) continue;
+    cardSpendMap.set(txn.account_id, (cardSpendMap.get(txn.account_id) ?? 0) + txn.amount);
+    const itemId = accountById.get(txn.account_id)?.plaid_item_id ?? "";
+    bankSpendMap.set(itemId, (bankSpendMap.get(itemId) ?? 0) + txn.amount);
+  }
+  for (const txn of allTxnsRaw) {
+    if (monthKey(txn.date) !== activeMonth || accountById.get(txn.account_id)?.type !== "depository") continue;
+    if (txn.amount < 0) cashFlowDeposits += Math.abs(txn.amount);
+    else cashFlowWithdrawals += txn.amount;
+  }
+  const spendPerCard = [...cardSpendMap].map(([accountId, amount]) => {
+    const account = accountById.get(accountId);
+    const mask = account?.mask ? ` ••${account.mask}` : "";
+    return { name: account ? `${account.name ?? "Account"}${mask}` : "Unknown Account", amount: round2(amount), accountId };
+  }).sort((a, b) => b.amount - a.amount);
+  const spendPerBank = [...bankSpendMap].map(([itemId, amount]) => ({
+    name: itemId ? allItems.find((item) => item.id === itemId)?.institution_name ?? "Other Bank" : "Unknown Bank",
+    amount: round2(amount),
+    itemId: itemId || null,
+  })).sort((a, b) => b.amount - a.amount);
+  return {
+    lastMonthProratedSpent,
+    spendPerCard,
+    spendPerBank,
+    cashFlow: { deposits: round2(cashFlowDeposits), withdrawals: round2(cashFlowWithdrawals), net: round2(cashFlowDeposits - cashFlowWithdrawals) },
+  };
+}
+
 export interface DashboardOptions {
   itemId?: string;
   drill?: DrillParams;
@@ -459,82 +636,21 @@ export async function getDashboardData(
   // depository money movement) and the ledger list still show them.
   const spendTxns = filteredTxns;
 
-  // Per-month aggregates (spending, income, depository cash flow) for the
-  // 6-month window ending at activeMonth. One account-type lookup map keeps
-  // the cash-flow pass linear.
-  const accountTypeById = new Map<string, string | null>();
-  for (const a of allAccounts) accountTypeById.set(a.id, a.type);
-
-  const monthMap = new Map<string, number>();
-  const incomeMap = new Map<string, number>();
-  for (const t of spendTxns) {
-    const key = monthKey(t.date);
-    if (isSpending(t)) {
-      monthMap.set(key, (monthMap.get(key) ?? 0) + t.amount);
-    } else if (isIncome(t)) {
-      incomeMap.set(key, (incomeMap.get(key) ?? 0) + Math.abs(t.amount));
-    }
-  }
-
-  const depositsMap = new Map<string, number>();
-  const withdrawalsMap = new Map<string, number>();
-  for (const t of allTxnsRaw) {
-    if (accountTypeById.get(t.account_id) !== "depository") continue;
-    const key = monthKey(t.date);
-    if (t.amount < 0) {
-      depositsMap.set(key, (depositsMap.get(key) ?? 0) + Math.abs(t.amount));
-    } else {
-      withdrawalsMap.set(key, (withdrawalsMap.get(key) ?? 0) + t.amount);
-    }
-  }
-
-  // Generate last 6 months relative to activeMonth to render in the charts
   const activeYear = Number(activeMonth.split("-")[0]);
   const activeMonthIndex = Number(activeMonth.split("-")[1]) - 1;
-  const monthlySpending: { month: string; amount: number }[] = [];
-  const monthlyIncome: { month: string; amount: number }[] = [];
-  const monthlyCashFlow: { month: string; deposits: number; withdrawals: number }[] = [];
-
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(activeYear, activeMonthIndex - i, 15);
-    const key = monthKey(d.toISOString().slice(0, 10));
-    monthlySpending.push({
-      month: key,
-      amount: round2(monthMap.get(key) ?? 0),
-    });
-    monthlyIncome.push({
-      month: key,
-      amount: round2(incomeMap.get(key) ?? 0),
-    });
-    monthlyCashFlow.push({
-      month: key,
-      deposits: round2(depositsMap.get(key) ?? 0),
-      withdrawals: round2(withdrawalsMap.get(key) ?? 0),
-    });
-  }
-
-  // Active-month breakdowns and income/expense totals
-  const merchantMap = new Map<string, number>();
-  const categoryHistoryMap = new Map<string, number>();
-  let currentMonthExpenses = 0;
-  let currentMonthIncome = 0;
-  const activeMonthSpend: TxnLite[] = [];
-
-  for (const t of spendTxns) {
-    if (isSpending(t)) {
-      const historyKey = `${monthKey(t.date)}|${t.pfc_primary ?? "UNCATEGORIZED"}`;
-      categoryHistoryMap.set(historyKey, (categoryHistoryMap.get(historyKey) ?? 0) + t.amount);
-    }
-    if (monthKey(t.date) !== activeMonth) continue;
-    if (isSpending(t)) {
-      currentMonthExpenses += t.amount;
-      activeMonthSpend.push(t);
-      const merch = t.merchant_name ?? t.name ?? "Unknown";
-      merchantMap.set(merch, (merchantMap.get(merch) ?? 0) + t.amount);
-    } else if (isIncome(t)) {
-      currentMonthIncome += Math.abs(t.amount);
-    }
-  }
+  const aggregates = aggregateDashboardTransactions(spendTxns, allTxnsRaw, allAccounts, activeMonth);
+  const {
+    monthlySpending,
+    monthlyIncome,
+    monthlyCashFlow,
+    merchantMap,
+    categoryHistoryMap,
+    currentMonthExpenses,
+    currentMonthIncome,
+    activeMonthSpend,
+    windowSpendTxns,
+    windowSpendMerchants,
+  } = aggregates;
 
   // Split-aware category totals: when a transaction has splits that sum to its
   // amount, its spend is distributed across the split categories instead of its
@@ -559,61 +675,14 @@ export async function getDashboardData(
     splits,
   );
 
-  // Window spend transactions (rules-applied) shared by the drill aggregation
-  // and the drillable-merchant set below.
-  const windowSpendTxns: DrillTxn[] = spendTxns.filter(isSpending).map((t) => ({
-    id: t.id,
-    date: t.date,
-    amount: t.amount,
-    merchant: t.merchant_name ?? t.name ?? "Unknown",
-    category: t.pfc_primary,
-    subcategory: t.pfc_detailed,
-  }));
-  const windowSpendMerchants = new Set<string>();
-  for (const t of windowSpendTxns) {
-    windowSpendMerchants.add(t.merchant.trim().toLowerCase());
-  }
-
-  // Drill-down: pure aggregation over the same window txns the donut uses.
-  // Params are validated against values present in the data - unknown values
-  // simply render the un-drilled dashboard.
-  let drilldown: DrilldownData | undefined;
-  if (options?.drill && (options.drill.category || options.drill.merchant)) {
-    const knownCategories = new Set<string>();
-    const knownSubcategories = new Set<string>();
-    for (const t of windowSpendTxns) {
-      knownCategories.add(t.category ?? "UNCATEGORIZED");
-      knownSubcategories.add(t.subcategory ?? "UNCATEGORIZED");
-    }
-    const knownMerchants = windowSpendMerchants;
-    for (const s of splits) knownCategories.add(s.category);
-    const drill = normalizeDrillParams(options.drill, {
-      categories: knownCategories,
-      subcategories: knownSubcategories,
-      merchants: knownMerchants,
-    });
-    const windowMonths = monthlySpending.map((m) => m.month);
-    if (drill.category && drill.category !== OTHER_CATEGORY_KEY) {
-      drilldown = buildCategoryDrilldown({
-        txns: windowSpendTxns,
-        splits: splits.map((s) => ({
-          transactionId: s.transactionId,
-          category: s.category,
-          amount: s.amount,
-        })),
-        category: drill.category,
-        sub: drill.sub ?? null,
-        months: windowMonths,
-        activeMonth,
-      });
-    } else if (drill.merchant) {
-      drilldown = buildMerchantDrilldown({
-        txns: windowSpendTxns,
-        merchant: drill.merchant,
-        months: windowMonths,
-      });
-    }
-  }
+  const drilldown = buildDashboardDrilldown(
+    options?.drill,
+    windowSpendTxns,
+    splits,
+    monthlySpending,
+    activeMonth,
+    windowSpendMerchants,
+  );
 
   const merchantBreakdown = [...merchantMap.entries()]
     .map(([merchant, amount]) => ({ merchant, amount: round2(amount) }))
@@ -623,77 +692,19 @@ export async function getDashboardData(
   // 1. Total Budget Limit calculation
   const totalBudget = allBudgets.reduce((acc, b) => acc + b.monthly_limit, 0);
 
-  // 2. Pro-rated last month spending calculation
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === activeYear && today.getMonth() === activeMonthIndex;
-  const targetDay = isCurrentMonth ? today.getDate() : new Date(activeYear, activeMonthIndex + 1, 0).getDate();
-
-  const lastMonthDate = new Date(activeYear, activeMonthIndex - 1, 15);
-  const lastMonthKey = monthKey(lastMonthDate.toISOString().slice(0, 10));
-
-  let lastMonthProratedSpent = 0;
-  for (const t of spendTxns) {
-    if (monthKey(t.date) !== lastMonthKey) continue;
-    const tDay = Number(t.date.split("-")[2]);
-    if (tDay <= targetDay && isSpending(t)) {
-      lastMonthProratedSpent += t.amount;
-    }
-  }
-
-  const cardSpendMap = new Map<string, number>();
-  for (const t of spendTxns) {
-    if (monthKey(t.date) !== activeMonth || !isSpending(t)) continue;
-    cardSpendMap.set(t.account_id, (cardSpendMap.get(t.account_id) ?? 0) + t.amount);
-  }
-  const spendPerCard = [...cardSpendMap.entries()]
-    .map(([acctId, amount]) => {
-      const acct = allAccounts.find((a) => a.id === acctId);
-      let displayName = "Unknown Account";
-      if (acct) {
-        const mask = acct.mask ? ` ••${acct.mask}` : "";
-        displayName = `${acct.name ?? "Account"}${mask}`;
-      }
-      return { name: displayName, amount: round2(amount), accountId: acctId };
-    })
-    .sort((a, b) => b.amount - a.amount);
-
-  // 4. Spend Per Bank calculation for the active month
-  const bankSpendMap = new Map<string, number>();
-  for (const t of spendTxns) {
-    if (monthKey(t.date) !== activeMonth || !isSpending(t)) continue;
-    const acct = allAccounts.find((a) => a.id === t.account_id);
-    const bankItemId = acct?.plaid_item_id ?? null;
-    bankSpendMap.set(bankItemId ?? "", (bankSpendMap.get(bankItemId ?? "") ?? 0) + t.amount);
-  }
-  const spendPerBank = [...bankSpendMap.entries()]
-    .map(([itemKey, amount]) => ({
-      name: itemKey
-        ? (allItems.find((i) => i.id === itemKey)?.institution_name ?? "Other Bank")
-        : "Unknown Bank",
-      amount: round2(amount),
-      itemId: itemKey || null,
-    }))
-    .sort((a, b) => b.amount - a.amount);
-
-  // 5. Checking account cash flow aggregates for the active month
-  let cashFlowDeposits = 0;
-  let cashFlowWithdrawals = 0;
-  for (const t of allTxnsRaw) {
-    if (monthKey(t.date) !== activeMonth) continue;
-    const acct = allAccounts.find((a) => a.id === t.account_id);
-    if (acct?.type === "depository") {
-      if (t.amount < 0) {
-        cashFlowDeposits += Math.abs(t.amount);
-      } else {
-        cashFlowWithdrawals += t.amount;
-      }
-    }
-  }
-  const cashFlow = {
-    deposits: round2(cashFlowDeposits),
-    withdrawals: round2(cashFlowWithdrawals),
-    net: round2(cashFlowDeposits - cashFlowWithdrawals),
-  };
+  const spendMetrics = buildDashboardSpendMetrics(
+    spendTxns,
+    allTxnsRaw,
+    allAccounts,
+    allItems,
+    activeMonth,
+    isCurrentMonth ? today.getDate() : new Date(activeYear, activeMonthIndex + 1, 0).getDate(),
+    activeYear,
+    activeMonthIndex,
+  );
+  const { lastMonthProratedSpent, spendPerCard, spendPerBank, cashFlow } = spendMetrics;
 
   // Filter streams by selected account's plaid item if specified
   const selectedAccountObj = allAccounts.find((a) => a.id === selectedAccountId);

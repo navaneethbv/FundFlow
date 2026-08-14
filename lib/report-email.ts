@@ -57,7 +57,7 @@ function clampPercent(value: number): number {
 // end: an unanchored `[•*x]+` pass also eats every literal x in a name, which
 // turned "Amex Platinum" into "Ame  Platinum".
 function accountLabel(value: string): string {
-  return value.replace(/\s+(?:[•*x]{2,}\s*)?\d{4}$/i, "").trim();
+  return value.replace(/\s*(?:[•*x]{1,4}\s*)?\d{4}\s*$/i, "").trim();
 }
 
 function sectionHeading(title: string, eyebrow: string): string {
