@@ -21,14 +21,27 @@ function isEmailPartCharacter(value: string): boolean {
   return !EMAIL_PART_SEPARATORS.includes(value) && value.trim() !== "";
 }
 
-function hasAsciiLetters(value: string): boolean {
-  if (value.length < 2) return false;
-  for (const character of value) {
-    if (!((character >= "a" && character <= "z") || (character >= "A" && character <= "Z"))) {
-      return false;
-    }
+function isAsciiLetter(value: string): boolean {
+  return (value >= "a" && value <= "z") || (value >= "A" && value <= "Z");
+}
+
+/**
+ * End of the last `.tld` in the domain, where a TLD is two or more ASCII
+ * letters, or -1 when there is none. The address has to end at the TLD rather
+ * than wherever the token does: trailing punctuation is not part of the domain,
+ * and stopping the whole scan on it ("user@example.com!") leaves the address in
+ * the string unredacted.
+ */
+function domainEnd(token: string, domainStart: number, limit: number): number {
+  let result = -1;
+  // From domainStart + 1: a domain cannot begin with the dot ("user@.com").
+  for (let index = domainStart + 1; index < limit; index += 1) {
+    if (token[index] !== ".") continue;
+    let afterTld = index + 1;
+    while (afterTld < limit && isAsciiLetter(token[afterTld]!)) afterTld += 1;
+    if (afterTld - index > 2) result = afterTld;
   }
-  return true;
+  return result;
 }
 
 function findEmailSpan(token: string, searchFrom: number): { start: number; end: number } | null {
@@ -38,13 +51,11 @@ function findEmailSpan(token: string, searchFrom: number): { start: number; end:
 
     let start = at - 1;
     while (start >= 0 && isEmailPartCharacter(token[start]!)) start -= 1;
-    let end = at + 1;
-    while (end < token.length && isEmailPartCharacter(token[end]!)) end += 1;
-    while (end > at + 1 && token[end - 1] === ".") end -= 1;
+    let limit = at + 1;
+    while (limit < token.length && isEmailPartCharacter(token[limit]!)) limit += 1;
 
-    const domain = token.slice(at + 1, end);
-    const dot = domain.lastIndexOf(".");
-    if (start < at - 1 && dot > 0 && hasAsciiLetters(domain.slice(dot + 1))) {
+    const end = domainEnd(token, at + 1, limit);
+    if (start < at - 1 && end > 0) {
       return { start: start + 1, end };
     }
     searchFrom = at + 1;

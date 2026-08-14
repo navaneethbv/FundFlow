@@ -10,6 +10,14 @@ import { writeAudit, getClientIp } from "@/lib/audit";
 import { logError } from "@/lib/log";
 import { fetchInstitutionBranding } from "@/lib/plaid-institution";
 
+/**
+ * `on_success` is deprecated in the Plaid SDK types but still populated for
+ * integrations an account manager has not migrated. Declared locally so the
+ * read stays typed and greppable: reaching it through a computed key hides a
+ * field this route depends on from both the compiler and static analysis.
+ */
+type LegacyLinkSession = { on_success?: { public_token?: string } };
+
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -56,19 +64,12 @@ export async function POST(request: NextRequest) {
       // one leaves `mintedPublicTokens` empty there, and the check below fails
       // open — silently dropping the binding it exists to enforce.
       const mintedPublicTokens = (tokenInfo.data.link_sessions ?? [])
-        .flatMap((session) => {
-          const legacySession = session as unknown as Record<string, unknown>;
-          const successField = legacySession[["on", "success"].join("_")];
-          const publicToken = successField && typeof successField === "object"
-            ? (successField as { public_token?: unknown }).public_token
-            : undefined;
-          return [
+        .flatMap((session) => [
           ...(session.results?.item_add_results ?? []).map(
             (result) => result.public_token,
           ),
-          publicToken,
-          ];
-        })
+          (session as LegacyLinkSession).on_success?.public_token,
+        ])
         .filter((token): token is string => typeof token === "string");
       if (
         mintedPublicTokens.length > 0 &&

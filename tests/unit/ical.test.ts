@@ -171,6 +171,36 @@ describe("buildBillsCalendar", () => {
     expect(other).toContain("UID:fundflow-stream-7-20260715@fundflow");
   });
 
+  // A UID is the feed's identity for an event: a subscriber that already holds
+  // one treats a changed UID as a second event. Trimming only a single leading
+  // or trailing dash leaves a stray one on any name that starts or ends with
+  // two or more non-alphanumerics.
+  it("trims every leading and trailing dash from a name-derived UID", () => {
+    const ics = buildBillsCalendar({
+      bills: [{ ...netflix, name: "**Netflix**" }],
+      asOf: "2026-07-01",
+      horizonDays: 20,
+      includeAmounts: false,
+    });
+    expect(ics).toContain("UID:fundflow-netflix-20260715@fundflow");
+
+    const gym = buildBillsCalendar({
+      bills: [{ ...netflix, name: "Gym!!" }],
+      asOf: "2026-07-01",
+      horizonDays: 20,
+      includeAmounts: false,
+    });
+    expect(gym).toContain("UID:fundflow-gym-20260715@fundflow");
+
+    const unnamed = buildBillsCalendar({
+      bills: [{ ...netflix, name: "!!!" }],
+      asOf: "2026-07-01",
+      horizonDays: 20,
+      includeAmounts: false,
+    });
+    expect(unnamed).toContain("UID:fundflow-bill-20260715@fundflow");
+  });
+
   it("emits deterministic UIDs and DTSTAMP so output is pure", () => {
     const build = () =>
       buildBillsCalendar({

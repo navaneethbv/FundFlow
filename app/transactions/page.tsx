@@ -80,7 +80,12 @@ type LedgerChunkFilters = {
 
 type TransactionsSupabase = Awaited<ReturnType<typeof createClient>>;
 
-function buildLedgerChunkQuery(
+/**
+ * Filters only, deliberately unordered. postgrest-js appends `order()` calls in
+ * the order they are made, so an ordering baked in here would win over the sort
+ * the caller asks for afterwards and the ledger would ignore `?sort=`.
+ */
+function buildLedgerFilterQuery(
   supabase: TransactionsSupabase,
   columns: string,
   filters: LedgerChunkFilters,
@@ -89,9 +94,7 @@ function buildLedgerChunkQuery(
   let query = supabase
     .from("transactions")
     .select(columns, count ? { count: "exact" } : undefined)
-    .eq("user_id", filters.ownerId)
-    .order("date", { ascending: false })
-    .order("id", { ascending: true });
+    .eq("user_id", filters.ownerId);
   if (filters.bounds) {
     query = query
       .gte("date", filters.bounds.start)
@@ -119,6 +122,21 @@ function buildLedgerChunkQuery(
     );
   }
   return query;
+}
+
+/**
+ * A chunked scan pages with `range()`, so it needs a total order or the windows
+ * can overlap and drop rows. Scans feed projection and facets, never the
+ * user-visible row order, so this order is fixed rather than sort-driven.
+ */
+function buildLedgerScanQuery(
+  supabase: TransactionsSupabase,
+  columns: string,
+  filters: LedgerChunkFilters,
+) {
+  return buildLedgerFilterQuery(supabase, columns, filters)
+    .order("date", { ascending: false })
+    .order("id", { ascending: true });
 }
 
 type LedgerRules = Array<{
@@ -155,7 +173,7 @@ async function loadLedgerRows(input: {
   if (needsFullProjection) {
     try {
       const sourceRows = await collectLedgerChunks<LedgerProjectionSourceRow>(async (from, to) => {
-        const result = await buildLedgerChunkQuery(supabase, columns, filters).range(from, to);
+        const result = await buildLedgerScanQuery(supabase, columns, filters).range(from, to);
         return { rows: (result.data ?? []) as unknown as LedgerProjectionSourceRow[], error: result.error };
       });
       projectedScope = projectLedgerRows(sourceRows, rules, accountNamesById, accountLabelsById);
@@ -203,7 +221,7 @@ async function loadDirectLedgerRows(input: {
   projectedPath: boolean;
 }): Promise<{ rows: LedgerProjectedRow[]; total: number; error: string | null }> {
   const { supabase, state, filters, columns, rules, accountNamesById, accountLabelsById } = input;
-  let query = buildLedgerChunkQuery(supabase, columns, filters, true);
+  let query = buildLedgerFilterQuery(supabase, columns, filters, true);
   if (state.category) {
     query = state.category === "UNCATEGORIZED"
       ? query.or("pfc_primary.is.null,pfc_primary.eq.UNCATEGORIZED")
@@ -231,7 +249,7 @@ async function loadLedgerFilterOptions(input: {
   if (input.needsFullProjection) return buildLedgerFilterOptions(input.projectedScope, input.accountOptionsForFilters);
   try {
     const facetRows = await collectLedgerChunks<LedgerFacetSourceRow>(async (from, to) => {
-      const result = await buildLedgerChunkQuery(input.supabase, "pfc_primary, pfc_detailed, merchant_name, name", input.filters).range(from, to);
+      const result = await buildLedgerScanQuery(input.supabase, "pfc_primary, pfc_detailed, merchant_name, name", input.filters).range(from, to);
       return { rows: (result.data ?? []) as unknown as LedgerFacetSourceRow[], error: result.error };
     });
     return buildLedgerFilterOptions(facetRows.map(toLedgerFacetRow), input.accountOptionsForFilters);

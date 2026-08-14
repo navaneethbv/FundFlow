@@ -31,10 +31,7 @@ function periodLabel(data: WeeklyReportData): string {
     : `${startMonth} ${start.getUTCDate()} - ${endMonth} ${end.getUTCDate()}, ${year}`;
 }
 
-// Strips a trailing card mask ("Chase Checking *1234" -> "Chase Checking").
-// The mask characters are only stripped when they actually precede the four
-// digits; stripping a trailing `[x•*-]+` on its own turned "Chase Freedom
-// Flex" into "Chase Freedom Fle".
+// Card names only, and the mask rules live in the shared helper.
 function safeAccountLabel(value: string): string {
   return stripTrailingAccountMask(value, "•*x-") || "Credit card";
 }

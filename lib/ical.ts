@@ -51,13 +51,20 @@ function escapeText(value: string): string {
     .replaceAll(",", String.raw`\,`);
 }
 
+/**
+ * UIDs are part of the feed's contract: a subscriber that already has an event
+ * treats a changed UID as a new one. The `-+` quantifiers must stay, or a name
+ * with two or more leading/trailing non-alphanumerics ("**Netflix**") keeps a
+ * stray dash and duplicates the event in every existing subscriber's calendar.
+ * Both are anchored, so there is no backtracking to avoid here.
+ */
 function slug(value: string): string {
   return (
     value
       .toLowerCase()
       .replace(/[^a-z0-9]/gi, "-")
-      .replace(/^-/, "")
-      .replace(/-$/, "") || "bill"
+      .replace(/^-+/, "")
+      .replace(/-+$/, "") || "bill"
   );
 }
 

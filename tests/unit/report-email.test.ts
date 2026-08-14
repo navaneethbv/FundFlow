@@ -53,6 +53,7 @@ describe("weekly report email", () => {
         cards: [
           { name: "Amex Platinum ••••1234", amount: 40 },
           { name: "Chase Freedom Flex", amount: 25 },
+          { name: "Amex 5678", amount: 10 },
         ],
       }),
       "https://fundflow.example/dashboard",
@@ -60,8 +61,12 @@ describe("weekly report email", () => {
 
     expect(rendered.text).toContain("Amex Platinum");
     expect(rendered.text).toContain("Chase Freedom Flex");
+    // "Amex 5678" must not lose the x to the mask stripper.
+    expect(rendered.text).toContain("Amex:");
+    expect(rendered.text).not.toContain("Ame:");
     expect(rendered.text).not.toContain("1234");
     expect(rendered.html).not.toContain("1234");
+    expect(rendered.text).not.toContain("5678");
   });
 
   it("escapes daily digest notification content", () => {

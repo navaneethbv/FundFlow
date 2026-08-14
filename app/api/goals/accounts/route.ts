@@ -75,12 +75,23 @@ function parseAllocationRequest(body: Record<string, unknown> | null): Allocatio
   return { ok: true, goalId, accountId, allocatedAmount, useEntireBalance };
 }
 
+/** Postgres `numeric` columns arrive as strings through supabase-js. */
+type NumericColumn = number | string | null;
+
+type GoalBaselineRow = {
+  goal_type: string;
+  starting_balance: NumericColumn;
+  target_amount: NumericColumn;
+};
+
+type AccountBaselineRow = { type: string | null; current_balance: NumericColumn };
+
 async function captureBaseline(
   supabase: SupabaseClient,
   userId: string,
   goalId: string,
-  goal: { goal_type: string; starting_balance: number | string | null; target_amount: number | string | null },
-  account: { type: string | null; current_balance: number | string | null },
+  goal: GoalBaselineRow,
+  account: AccountBaselineRow,
 ): Promise<boolean> {
   if (
     goal.goal_type !== "pay_down" ||
@@ -168,8 +179,8 @@ export async function POST(request: NextRequest) {
       supabase,
       user.id,
       goalId,
-      goal as { goal_type: string; starting_balance: number | string | null; target_amount: number | string | null },
-      account as { type: string | null; current_balance: number | string | null },
+      goal as GoalBaselineRow,
+      account as AccountBaselineRow,
     );
 
     await writeAudit({

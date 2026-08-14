@@ -1,8 +1,28 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-08-10. Read this first to resume.
+Last updated: 2026-08-14. Read this first to resume.
 
-## Latest delivery: security hardening (PR #110)
+## In flight: PR #114, Sonar refactor plus its review fixes
+
+`fix/form-control-accent-color` is an open PR that refactors the reported Sonar cognitive-complexity findings across 85 files.
+Every check on it was green, Sonar's quality gate included, before the review below ran.
+The last Sonar finding (S4323 on `app/api/goals/accounts/route.ts`) is fixed by extracting `NumericColumn`, `GoalBaselineRow`, and `AccountBaselineRow`.
+
+A review of the diff against `main` found four behavior regressions the refactor introduced and the full suite did not catch.
+Each one now has a test that was confirmed to fail without its fix.
+
+**postgrest-js appends `order()` calls rather than replacing them.** Hoisting a shared query builder that baked in `.order("date")`/`.order("id")` made the ledger ignore `?sort=` entirely, because the requested sort landed behind the default. The builder is now split: `buildLedgerFilterQuery` is deliberately unordered, and `buildLedgerScanQuery` adds the fixed total order that `range()` chunking needs.
+
+**`x` is a card-mask character and also a letter.** Unifying the two report mask strippers into `lib/account-label.ts` turned "Amex 1234" into "Ame". The helper now gives back letters borrowed from the end of a word, which also fixes `lib/report-pdf.ts`, broken this way before the refactor.
+
+**A hand-written scanner replacing an email regex leaked PII.** `redactEmails` treated trailing punctuation as part of the domain, so `user@example.com!` failed the TLD check and passed through whole into the admin alert inbox and the logs. The span now ends at the last real `.tld`.
+
+**Unanchored-looking trim quantifiers are part of the iCal feed's contract.** Narrowing `/^-+/` to `/^-/` in `lib/ical.ts` changes VEVENT UIDs for names with two or more leading or trailing non-alphanumerics, and a subscriber reads a changed UID as a second event. Both quantifiers are anchored, so there was never any backtracking to fix.
+
+One more worth carrying forward: reading a deprecated SDK field through a computed key (`legacySession[["on","success"].join("_")]`) silences the deprecation rule by hiding the field from the compiler, grep, and static analysis at once.
+A locally declared type expresses the same intent and keeps the read checked.
+
+## Previous delivery: security hardening (PR #110)
 
 A full-repository security review (`docs/CODE_REVIEW.md`, `docs/Security-Review.md`) and the fixes for every finding it raised: H1-H5, M1-M15, L1-L12, plus the Next.js 16.3.0 upgrade for the `sharp`/libvips CVEs.
 

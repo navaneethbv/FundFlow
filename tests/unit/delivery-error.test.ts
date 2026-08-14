@@ -82,6 +82,29 @@ describe("redactEmails", () => {
       "bounced for [redacted]",
     );
   });
+
+  // The address ends at the TLD, not wherever the whitespace-delimited token
+  // ends. Treating trailing punctuation as part of the domain fails the TLD
+  // check and leaves the entire address in the alert inbox.
+  it("redacts an address followed by punctuation", () => {
+    expect(redactEmails("rejected: user@example.com!")).toBe(
+      "rejected: [redacted]!",
+    );
+    expect(redactEmails("is user@example.com? unknown")).toBe(
+      "is [redacted]? unknown",
+    );
+    expect(redactEmails("bounce for user@example.co.uk-1 today")).toBe(
+      "bounce for [redacted]-1 today",
+    );
+    expect(redactEmails("relay refused <user@example.com>: no such user")).toBe(
+      "relay refused <[redacted]>: no such user",
+    );
+  });
+
+  it("leaves a bare @ token that is not an address alone", () => {
+    expect(redactEmails("user@localhost refused")).toBe("user@localhost refused");
+    expect(redactEmails("queued @ 12:00")).toBe("queued @ 12:00");
+  });
 });
 
 describe("isPermanentDeliveryError", () => {
