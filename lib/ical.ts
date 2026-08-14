@@ -52,20 +52,24 @@ function escapeText(value: string): string {
 }
 
 /**
- * UIDs are part of the feed's contract: a subscriber that already has an event
- * treats a changed UID as a new one. The `-+` quantifiers must stay, or a name
- * with two or more leading/trailing non-alphanumerics ("**Netflix**") keeps a
- * stray dash and duplicates the event in every existing subscriber's calendar.
- * Both are anchored, so there is no backtracking to avoid here.
+ * UIDs are part of the feed's contract: a subscriber that already holds an
+ * event treats a changed UID as a second event. So every leading and trailing
+ * dash has to go, not just one — a name with two or more leading or trailing
+ * non-alphanumerics ("**Netflix**") otherwise keeps a stray dash and duplicates
+ * the event in every existing subscriber's calendar.
+ *
+ * Trimmed by index rather than with `/^-+/` and `/-+$/`: the trailing pattern
+ * is unanchored at its start, so a long dash run retries at every position
+ * (Sonar S8786). Interior runs are deliberately left alone, since collapsing
+ * them would change existing UIDs too.
  */
 function slug(value: string): string {
-  return (
-    value
-      .toLowerCase()
-      .replace(/[^a-z0-9]/gi, "-")
-      .replace(/^-+/, "")
-      .replace(/-+$/, "") || "bill"
-  );
+  const dashed = value.toLowerCase().replace(/[^a-z0-9]/gi, "-");
+  let start = 0;
+  let end = dashed.length;
+  while (start < end && dashed[start] === "-") start += 1;
+  while (end > start && dashed[end - 1] === "-") end -= 1;
+  return dashed.slice(start, end) || "bill";
 }
 
 function compactDate(date: string): string {

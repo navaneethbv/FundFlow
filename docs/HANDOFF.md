@@ -17,7 +17,7 @@ Each one now has a test that was confirmed to fail without its fix.
 
 **A hand-written scanner replacing an email regex leaked PII.** `redactEmails` treated trailing punctuation as part of the domain, so `user@example.com!` failed the TLD check and passed through whole into the admin alert inbox and the logs. The span now ends at the last real `.tld`.
 
-**Unanchored-looking trim quantifiers are part of the iCal feed's contract.** Narrowing `/^-+/` to `/^-/` in `lib/ical.ts` changes VEVENT UIDs for names with two or more leading or trailing non-alphanumerics, and a subscriber reads a changed UID as a second event. Both quantifiers are anchored, so there was never any backtracking to fix.
+**A regex finding and a behavior contract can both be real.** Narrowing `/^-+/` to `/^-/` in `lib/ical.ts` silenced S8786 but changed VEVENT UIDs for names with two or more leading or trailing non-alphanumerics, and a subscriber reads a changed UID as a second event. The finding was legitimate: `/-+$/` is unanchored at its start, so a long dash run retries at every position. Restoring the quantifiers would have reopened it, so the trim is now done by index instead, which keeps the UIDs and clears the rule. Reach for a non-regex form when a pattern is both flagged and load-bearing, rather than picking one of the two to sacrifice.
 
 One more worth carrying forward: reading a deprecated SDK field through a computed key (`legacySession[["on","success"].join("_")]`) silences the deprecation rule by hiding the field from the compiler, grep, and static analysis at once.
 A locally declared type expresses the same intent and keeps the read checked.
