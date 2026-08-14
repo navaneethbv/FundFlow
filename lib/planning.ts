@@ -68,10 +68,13 @@ export interface CashFlowForecast {
 }
 
 export interface MerchantRule {
-  matchType: "merchant" | "keyword" | "account";
+  matchType: "merchant" | "keyword" | "account" | "regex";
   pattern: string;
   displayName?: string | null;
   category?: string | null;
+  minAmount?: number | null;
+  maxAmount?: number | null;
+  tags?: string[] | null;
   enabled: boolean;
 }
 
@@ -79,6 +82,8 @@ export interface CleanupTransaction {
   id: string;
   merchant: string;
   category: string | null;
+  amount?: number;
+  tags?: string[] | null;
   accountName?: string | null;
 }
 
@@ -366,6 +371,23 @@ export function groupRecurringByPeriod(
 
 function matchesRule(transaction: CleanupTransaction, rule: MerchantRule): boolean {
   if (!rule.enabled) return false;
+
+  // Amount range filters (if specified)
+  if (typeof transaction.amount === "number") {
+    const absAmount = Math.abs(transaction.amount);
+    if (typeof rule.minAmount === "number" && absAmount < rule.minAmount) return false;
+    if (typeof rule.maxAmount === "number" && absAmount > rule.maxAmount) return false;
+  }
+
+  if (rule.matchType === "regex") {
+    try {
+      const re = new RegExp(rule.pattern.trim(), "i");
+      return re.test(transaction.merchant) || Boolean(transaction.accountName && re.test(transaction.accountName));
+    } catch {
+      return false;
+    }
+  }
+
   const pattern = normalize(rule.pattern);
   if (!pattern) return false;
   if (rule.matchType === "account") return normalize(transaction.accountName ?? "").includes(pattern);
@@ -380,10 +402,14 @@ export function applyMerchantRules(
   return transactions.map((transaction) => {
     const rule = rules.find((candidate) => matchesRule(transaction, candidate));
     if (!rule) return { ...transaction };
+    const mergedTags = rule.tags && rule.tags.length > 0
+      ? Array.from(new Set([...(transaction.tags ?? []), ...rule.tags]))
+      : transaction.tags;
     return {
       ...transaction,
       merchant: rule.displayName?.trim() || transaction.merchant,
       category: rule.category?.trim() || transaction.category,
+      tags: mergedTags,
     };
   });
 }

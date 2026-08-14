@@ -125,6 +125,7 @@ export function projectFinanceTransactions(
       id: row.id,
       merchant: displayMerchant(row),
       category: row.pfcPrimary,
+      amount: row.amount,
       accountName: (row.accountId && accountNames.get(row.accountId)) || "",
     })),
     merchantRules,

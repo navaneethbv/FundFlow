@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   computeForecastDefaults,
+  computeForecastMilestones,
   computeForecastStartingState,
   computeWhatIfProjection,
   forecastNetWorth,
@@ -330,3 +331,51 @@ describe("parseForecastAssumptions", () => {
     expect(assumptions.monthlySavings).toBe(100);
   });
 });
+
+describe("computeForecastMilestones", () => {
+  const starting = { cash: 10000, investments: 20000, liabilities: 5000 };
+  const assumptions = {
+    monthlySavings: 1000,
+    annualReturnPct: 6,
+    annualCashYieldPct: 2,
+    monthlyDebtPayment: 1000,
+    horizonMonths: 60 as const,
+  };
+
+  it("calculates debt payoff month when liabilities exist", () => {
+    const milestones = computeForecastMilestones(starting, assumptions, 2000);
+    const debtMilestone = milestones.find((m) => m.id === "debt-free");
+    expect(debtMilestone).toBeDefined();
+    expect(debtMilestone?.type).toBe("debt");
+    // $5000 paid at $1000/mo -> 5 months
+    expect(debtMilestone?.reachedMonth).toBe(5);
+  });
+
+  it("computes emergency fund milestones based on monthly expenses", () => {
+    const milestones = computeForecastMilestones(starting, assumptions, 2000);
+    const ef3 = milestones.find((m) => m.id === "ef-3mo");
+    const ef6 = milestones.find((m) => m.id === "ef-6mo");
+
+    expect(ef3).toBeDefined();
+    expect(ef6).toBeDefined();
+    expect(ef3?.targetAmount).toBe(6000);
+    expect(ef6?.targetAmount).toBe(12000);
+
+    // Starting cash is 10,000 >= 6,000, so ef3 was already achieved
+    expect(ef3?.reachedMonth).toBe(0);
+    // ef6 (12,000) reached within first few months
+    expect(ef6?.reachedMonth).toBe(2);
+  });
+
+  it("computes net worth milestones as wealth compounds", () => {
+    const milestones = computeForecastMilestones(starting, assumptions, 2000);
+    const nw50k = milestones.find((m) => m.id === "nw-50000");
+    const nw100k = milestones.find((m) => m.id === "nw-100000");
+
+    expect(nw50k).toBeDefined();
+    expect(nw100k).toBeDefined();
+    expect(nw50k?.reachedMonth).toBeGreaterThan(0);
+    expect(nw100k?.reachedMonth).toBeGreaterThan(nw50k!.reachedMonth!);
+  });
+});
+

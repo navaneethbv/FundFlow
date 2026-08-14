@@ -24,7 +24,7 @@ export async function resolveExportContext(
 export async function recordExport(input: {
   request: NextRequest;
   userId: string;
-  format: "json" | "csv";
+  format: "json" | "csv" | "qif" | "pdf";
   rowCount: number;
 }): Promise<void> {
   const { request, userId, format, rowCount } = input;

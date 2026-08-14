@@ -261,3 +261,120 @@ export function parseForecastAssumptions(
     horizonMonths,
   };
 }
+
+export interface ForecastMilestone {
+  id: string;
+  name: string;
+  targetAmount: number;
+  type: "debt" | "emergency" | "networth" | "fire";
+  reachedMonth: number | null;
+  reachedAmount: number | null;
+  description: string;
+}
+
+/**
+ * Evaluates key financial independence and wealth milestones over the projection horizon.
+ */
+export function computeForecastMilestones(
+  startingState: ForecastStartingState,
+  assumptions: ForecastAssumptions,
+  monthlyExpenses = 3000,
+): ForecastMilestone[] {
+  const milestones: ForecastMilestone[] = [];
+  const safeMonthlyExpenses = Math.max(100, monthlyExpenses);
+
+  // 1. Debt-Free milestone (if starting with liabilities)
+  if (startingState.liabilities > 0) {
+    milestones.push({
+      id: "debt-free",
+      name: "Debt Free (Zero Liabilities)",
+      targetAmount: 0,
+      type: "debt",
+      reachedMonth: null,
+      reachedAmount: null,
+      description: "Pay off all credit card and loan liabilities in full.",
+    });
+  }
+
+  // 2. 3-Month Emergency Fund
+  const ef3Target = round2(safeMonthlyExpenses * 3);
+  milestones.push({
+    id: "ef-3mo",
+    name: "3-Month Emergency Fund",
+    targetAmount: ef3Target,
+    type: "emergency",
+    reachedMonth: startingState.cash >= ef3Target ? 0 : null,
+    reachedAmount: startingState.cash >= ef3Target ? startingState.cash : null,
+    description: `Accumulate 3 months of basic living expenses ($${ef3Target.toLocaleString()}) in liquid cash.`,
+  });
+
+  // 3. 6-Month Emergency Fund
+  const ef6Target = round2(safeMonthlyExpenses * 6);
+  milestones.push({
+    id: "ef-6mo",
+    name: "6-Month Emergency Fund",
+    targetAmount: ef6Target,
+    type: "emergency",
+    reachedMonth: startingState.cash >= ef6Target ? 0 : null,
+    reachedAmount: startingState.cash >= ef6Target ? startingState.cash : null,
+    description: `Accumulate 6 months of basic living expenses ($${ef6Target.toLocaleString()}) in liquid cash.`,
+  });
+
+  // 4. Net Worth Milestones
+  const netWorthTargets = [50000, 100000, 250000, 500000, 1000000];
+  const startingNetWorth = startingState.cash + startingState.investments - startingState.liabilities;
+
+  for (const target of netWorthTargets) {
+    if (startingNetWorth < target) {
+      milestones.push({
+        id: `nw-${target}`,
+        name: `$${target >= 1000000 ? `${target / 1000000}M` : `${target / 1000}k`} Net Worth`,
+        targetAmount: target,
+        type: "networth",
+        reachedMonth: null,
+        reachedAmount: null,
+        description: `Total assets minus liabilities reach $${target.toLocaleString()}.`,
+      });
+    }
+  }
+
+  // 5. Financial Independence (FIRE - 4% Safe Withdrawal Rule = 25x Annual Expenses)
+  const fireTarget = round2(safeMonthlyExpenses * 12 * 25);
+  if (startingNetWorth < fireTarget) {
+    milestones.push({
+      id: "fire",
+      name: "Financial Independence (FIRE)",
+      targetAmount: fireTarget,
+      type: "fire",
+      reachedMonth: null,
+      reachedAmount: null,
+      description: `25x annual expenses ($${fireTarget.toLocaleString()}) allowing a sustainable 4% withdrawal rate.`,
+    });
+  }
+
+  // Step through months to compute when each milestone is reached
+  let state: ForecastState = { ...startingState };
+
+  for (let month = 1; month <= assumptions.horizonMonths; month++) {
+    state = stepMonth(state, assumptions, assumptions.annualReturnPct);
+    const currentNW = netWorthOf(state);
+
+    for (const m of milestones) {
+      if (m.reachedMonth !== null) continue;
+
+      if (m.type === "debt" && state.liabilities <= 0) {
+        m.reachedMonth = month;
+        m.reachedAmount = 0;
+      } else if (m.type === "emergency" && state.cash >= m.targetAmount) {
+        m.reachedMonth = month;
+        m.reachedAmount = round2(state.cash);
+      } else if ((m.type === "networth" || m.type === "fire") && currentNW >= m.targetAmount) {
+        m.reachedMonth = month;
+        m.reachedAmount = currentNW;
+      }
+    }
+  }
+
+  return milestones;
+}
+

@@ -3,11 +3,12 @@ import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
 import AssumptionsPanel from "@/components/forecasting/AssumptionsPanel";
 import ForecastChart from "@/components/forecasting/ForecastChart";
+import MilestonesPanel from "@/components/forecasting/MilestonesPanel";
 import Panel from "@/components/ui/Panel";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { formatCurrency } from "@/lib/format";
 import { localDateKey } from "@/lib/format-date";
-import { forecastNetWorth, parseForecastAssumptions } from "@/lib/forecasting";
+import { computeForecastMilestones, forecastNetWorth, parseForecastAssumptions } from "@/lib/forecasting";
 import { loadForecastPageData } from "@/lib/forecasting-data";
 import { createClient } from "@/lib/supabase/server";
 
@@ -34,6 +35,7 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
   const assumptions = parseForecastAssumptions(params, defaults);
   const currentNetWorth = startingState.cash + startingState.investments - startingState.liabilities;
   const points = forecastNetWorth(startingState, assumptions);
+  const milestones = computeForecastMilestones(startingState, assumptions);
   const ending = points.at(-1)!;
 
   return (
@@ -84,6 +86,10 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
             {")"}
           </p>
           <ForecastChart points={points} currentNetWorth={currentNetWorth} />
+        </Panel>
+
+        <Panel padding="lg">
+          <MilestonesPanel milestones={milestones} horizonMonths={assumptions.horizonMonths} />
         </Panel>
       </div>
     </AppShell>

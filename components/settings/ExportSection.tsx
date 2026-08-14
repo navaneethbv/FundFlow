@@ -70,6 +70,9 @@ export default function ExportSection({
         <ButtonLink href="/api/export/json" className={!enabled ? "pointer-events-none opacity-40" : ""}>
           Export as JSON
         </ButtonLink>
+        <ButtonLink href="/api/export/qif" className={!enabled ? "pointer-events-none opacity-40" : ""}>
+          Export as QIF
+        </ButtonLink>
         <ButtonLink href="/api/export/report">Export PDF report</ButtonLink>
         <ButtonLink
           href="/api/export/csv?scope=tax"
