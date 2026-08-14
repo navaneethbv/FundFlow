@@ -234,55 +234,77 @@ interface DashboardTransactionAggregates {
   windowSpendMerchants: Set<string>;
 }
 
-function aggregateDashboardTransactions(
-  spendTxns: TxnLite[],
-  allTxnsRaw: TxnLite[],
-  allAccounts: AccountSummary[],
-  activeMonth: string,
-): DashboardTransactionAggregates {
-  const accountTypeById = new Map(allAccounts.map((account) => [account.id, account.type]));
-  const monthMap = new Map<string, number>();
-  const incomeMap = new Map<string, number>();
+function aggregateMonthlyMaps(spendTxns: TxnLite[]): {
+  spending: Map<string, number>;
+  income: Map<string, number>;
+} {
+  const spending = new Map<string, number>();
+  const income = new Map<string, number>();
   for (const txn of spendTxns) {
     const key = monthKey(txn.date);
-    if (isSpending(txn)) monthMap.set(key, (monthMap.get(key) ?? 0) + txn.amount);
-    else if (isIncome(txn)) incomeMap.set(key, (incomeMap.get(key) ?? 0) + Math.abs(txn.amount));
+    if (isSpending(txn)) spending.set(key, (spending.get(key) ?? 0) + txn.amount);
+    else if (isIncome(txn)) income.set(key, (income.get(key) ?? 0) + Math.abs(txn.amount));
   }
-  const depositsMap = new Map<string, number>();
-  const withdrawalsMap = new Map<string, number>();
+  return { spending, income };
+}
+
+function aggregateCashFlowMaps(
+  allTxnsRaw: TxnLite[],
+  accountTypeById: Map<string, string | null>,
+): { deposits: Map<string, number>; withdrawals: Map<string, number> } {
+  const deposits = new Map<string, number>();
+  const withdrawals = new Map<string, number>();
   for (const txn of allTxnsRaw) {
     if (accountTypeById.get(txn.account_id) !== "depository") continue;
     const key = monthKey(txn.date);
-    const target = txn.amount < 0 ? depositsMap : withdrawalsMap;
-    const amount = txn.amount < 0 ? Math.abs(txn.amount) : txn.amount;
+    const target = txn.amount < 0 ? deposits : withdrawals;
+    const amount = Math.abs(txn.amount);
     target.set(key, (target.get(key) ?? 0) + amount);
   }
+  return { deposits, withdrawals };
+}
+
+function buildMonthlyAggregates(
+  activeMonth: string,
+  spending: Map<string, number>,
+  income: Map<string, number>,
+  deposits: Map<string, number>,
+  withdrawals: Map<string, number>,
+): Pick<DashboardTransactionAggregates, "monthlySpending" | "monthlyIncome" | "monthlyCashFlow"> {
   const [activeYear, activeMonthIndex] = activeMonth.split("-").map(Number);
-  const monthlySpending = [] as DashboardTransactionAggregates["monthlySpending"];
-  const monthlyIncome = [] as DashboardTransactionAggregates["monthlyIncome"];
-  const monthlyCashFlow = [] as DashboardTransactionAggregates["monthlyCashFlow"];
+  const monthlySpending: DashboardTransactionAggregates["monthlySpending"] = [];
+  const monthlyIncome: DashboardTransactionAggregates["monthlyIncome"] = [];
+  const monthlyCashFlow: DashboardTransactionAggregates["monthlyCashFlow"] = [];
   for (let index = 5; index >= 0; index--) {
     const date = new Date(activeYear!, activeMonthIndex! - index, 15);
     const key = monthKey(date.toISOString().slice(0, 10));
-    monthlySpending.push({ month: key, amount: round2(monthMap.get(key) ?? 0) });
-    monthlyIncome.push({ month: key, amount: round2(incomeMap.get(key) ?? 0) });
+    monthlySpending.push({ month: key, amount: round2(spending.get(key) ?? 0) });
+    monthlyIncome.push({ month: key, amount: round2(income.get(key) ?? 0) });
     monthlyCashFlow.push({
       month: key,
-      deposits: round2(depositsMap.get(key) ?? 0),
-      withdrawals: round2(withdrawalsMap.get(key) ?? 0),
+      deposits: round2(deposits.get(key) ?? 0),
+      withdrawals: round2(withdrawals.get(key) ?? 0),
     });
   }
+  return { monthlySpending, monthlyIncome, monthlyCashFlow };
+}
+
+function aggregateActiveMonth(
+  spendTxns: TxnLite[],
+  activeMonth: string,
+): Pick<DashboardTransactionAggregates, "merchantMap" | "categoryHistoryMap" | "currentMonthExpenses" | "currentMonthIncome" | "activeMonthSpend"> {
   const merchantMap = new Map<string, number>();
   const categoryHistoryMap = new Map<string, number>();
   const activeMonthSpend: TxnLite[] = [];
   let currentMonthExpenses = 0;
   let currentMonthIncome = 0;
   for (const txn of spendTxns) {
+    const month = monthKey(txn.date);
     if (isSpending(txn)) {
-      const key = `${monthKey(txn.date)}|${txn.pfc_primary ?? "UNCATEGORIZED"}`;
+      const key = `${month}|${txn.pfc_primary ?? "UNCATEGORIZED"}`;
       categoryHistoryMap.set(key, (categoryHistoryMap.get(key) ?? 0) + txn.amount);
     }
-    if (monthKey(txn.date) !== activeMonth) continue;
+    if (month !== activeMonth) continue;
     if (isSpending(txn)) {
       currentMonthExpenses += txn.amount;
       activeMonthSpend.push(txn);
@@ -290,6 +312,26 @@ function aggregateDashboardTransactions(
       merchantMap.set(merchant, (merchantMap.get(merchant) ?? 0) + txn.amount);
     } else if (isIncome(txn)) currentMonthIncome += Math.abs(txn.amount);
   }
+  return { merchantMap, categoryHistoryMap, currentMonthExpenses, currentMonthIncome, activeMonthSpend };
+}
+
+function aggregateDashboardTransactions(
+  spendTxns: TxnLite[],
+  allTxnsRaw: TxnLite[],
+  allAccounts: AccountSummary[],
+  activeMonth: string,
+): DashboardTransactionAggregates {
+  const accountTypeById = new Map(allAccounts.map((account) => [account.id, account.type]));
+  const monthlyMaps = aggregateMonthlyMaps(spendTxns);
+  const cashFlowMaps = aggregateCashFlowMaps(allTxnsRaw, accountTypeById);
+  const monthly = buildMonthlyAggregates(
+    activeMonth,
+    monthlyMaps.spending,
+    monthlyMaps.income,
+    cashFlowMaps.deposits,
+    cashFlowMaps.withdrawals,
+  );
+  const active = aggregateActiveMonth(spendTxns, activeMonth);
   const windowSpendTxns = spendTxns.filter(isSpending).map((txn) => ({
     id: txn.id,
     date: txn.date,
@@ -302,14 +344,8 @@ function aggregateDashboardTransactions(
     windowSpendTxns.map((txn) => txn.merchant.trim().toLowerCase()),
   );
   return {
-    monthlySpending,
-    monthlyIncome,
-    monthlyCashFlow,
-    merchantMap,
-    categoryHistoryMap,
-    currentMonthExpenses,
-    currentMonthIncome,
-    activeMonthSpend,
+    ...monthly,
+    ...active,
     windowSpendTxns,
     windowSpendMerchants,
   };
@@ -349,16 +385,28 @@ function buildDashboardDrilldown(
   return undefined;
 }
 
-function buildDashboardSpendMetrics(
-  spendTxns: TxnLite[],
-  allTxnsRaw: TxnLite[],
-  allAccounts: AccountSummary[],
-  allItems: Array<{ id: string; institution_name: string | null }>,
-  activeMonth: string,
-  lastMonthTargetDay: number,
-  activeYear: number,
-  activeMonthIndex: number,
-) {
+interface DashboardSpendMetricsInput {
+  spendTxns: TxnLite[];
+  allTxnsRaw: TxnLite[];
+  allAccounts: AccountSummary[];
+  allItems: Array<{ id: string; institution_name: string | null }>;
+  activeMonth: string;
+  lastMonthTargetDay: number;
+  activeYear: number;
+  activeMonthIndex: number;
+}
+
+function buildDashboardSpendMetrics(input: DashboardSpendMetricsInput) {
+  const {
+    spendTxns,
+    allTxnsRaw,
+    allAccounts,
+    allItems,
+    activeMonth,
+    lastMonthTargetDay,
+    activeYear,
+    activeMonthIndex,
+  } = input;
   const lastMonth = monthKey(new Date(activeYear, activeMonthIndex - 1, 15).toISOString().slice(0, 10));
   let lastMonthProratedSpent = 0;
   const cardSpendMap = new Map<string, number>();
@@ -694,16 +742,17 @@ export async function getDashboardData(
 
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === activeYear && today.getMonth() === activeMonthIndex;
-  const spendMetrics = buildDashboardSpendMetrics(
+  const spendMetrics = buildDashboardSpendMetrics({
     spendTxns,
     allTxnsRaw,
     allAccounts,
     allItems,
     activeMonth,
-    isCurrentMonth ? today.getDate() : new Date(activeYear, activeMonthIndex + 1, 0).getDate(),
+    lastMonthTargetDay:
+      isCurrentMonth ? today.getDate() : new Date(activeYear, activeMonthIndex + 1, 0).getDate(),
     activeYear,
     activeMonthIndex,
-  );
+  });
   const { lastMonthProratedSpent, spendPerCard, spendPerBank, cashFlow } = spendMetrics;
 
   // Filter streams by selected account's plaid item if specified

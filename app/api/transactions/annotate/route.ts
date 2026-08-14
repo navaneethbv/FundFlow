@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { badRequest, errorResponse, requireUser } from "@/lib/http";
+import { badRequest, errorResponse, requireUser, type AuthedContext } from "@/lib/http";
 import { validateSplits } from "@/lib/transaction-quality";
 import { writeAudit, getClientIp } from "@/lib/audit";
 
@@ -9,13 +9,10 @@ interface SplitInput {
 }
 
 type LinkedGoal = { id: string; spending_reduces: boolean };
+type UserSupabase = AuthedContext["supabase"];
 
 async function resolveGoal(
-  supabase: Awaited<ReturnType<typeof requireUser>> extends infer Auth
-    ? Auth extends { supabase: infer Client }
-      ? Client
-      : never
-    : never,
+  supabase: UserSupabase,
   userId: string,
   body: Record<string, unknown>,
 ): Promise<
@@ -39,11 +36,7 @@ async function resolveGoal(
 }
 
 async function saveAnnotation(
-  supabase: Awaited<ReturnType<typeof requireUser>> extends infer Auth
-    ? Auth extends { supabase: infer Client }
-      ? Client
-      : never
-    : never,
+  supabase: UserSupabase,
   userId: string,
   transactionId: string,
   body: Record<string, unknown>,
@@ -89,11 +82,7 @@ async function saveAnnotation(
 }
 
 async function saveSplits(
-  supabase: Awaited<ReturnType<typeof requireUser>> extends infer Auth
-    ? Auth extends { supabase: infer Client }
-      ? Client
-      : never
-    : never,
+  supabase: UserSupabase,
   userId: string,
   transactionId: string,
   absAmount: number,
@@ -154,20 +143,26 @@ async function saveSplits(
   return null;
 }
 
-async function saveGoalProgress(
-  supabase: Awaited<ReturnType<typeof requireUser>> extends infer Auth
-    ? Auth extends { supabase: infer Client }
-      ? Client
-      : never
-    : never,
-  userId: string,
-  transactionId: string,
-  transaction: { amount: number | string; date: string },
-  goalProvided: boolean,
-  goalId: string | null,
-  linkedGoal: LinkedGoal | null,
-  request: NextRequest,
-): Promise<void> {
+async function saveGoalProgress(input: {
+  supabase: UserSupabase;
+  userId: string;
+  transactionId: string;
+  transaction: { amount: number | string; date: string };
+  goalProvided: boolean;
+  goalId: string | null;
+  linkedGoal: LinkedGoal | null;
+  request: NextRequest;
+}): Promise<void> {
+  const {
+    supabase,
+    userId,
+    transactionId,
+    transaction,
+    goalProvided,
+    goalId,
+    linkedGoal,
+    request,
+  } = input;
   if (!goalProvided) return;
   let stale = supabase
     .from("goal_progress_events")
@@ -265,16 +260,16 @@ export async function POST(request: NextRequest) {
     // --- Goal progress event (Phase 7) ---
     // Only a `spending_reduces` goal turns a transaction into progress, and it
     // does so negatively: money spent against a save-up goal sets it back.
-    await saveGoalProgress(
+    await saveGoalProgress({
       supabase,
-      user.id,
+      userId: user.id,
       transactionId,
-      txn as { amount: number | string; date: string },
+      transaction: txn as { amount: number | string; date: string },
       goalProvided,
       goalId,
       linkedGoal,
       request,
-    );
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

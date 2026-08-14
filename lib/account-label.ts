@@ -6,12 +6,20 @@ function isWhitespace(value: string): boolean {
   return value.trim() === "";
 }
 
+function hasFourDigits(value: string): boolean {
+  if (value.length !== 4) return false;
+  for (const character of value) {
+    if (!isDigit(character)) return false;
+  }
+  return true;
+}
+
 export function stripTrailingAccountMask(value: string, maskCharacters: string): string {
   const trimmed = value.trim();
   const digitsStart = trimmed.length - 4;
   if (
     digitsStart < 0 ||
-    [...trimmed.slice(digitsStart)].some((character) => !isDigit(character))
+    !hasFourDigits(trimmed.slice(digitsStart))
   ) {
     return trimmed;
   }

@@ -207,13 +207,16 @@ function addPlannedTotals(
   isCreditAccount: boolean,
   isComplete: boolean,
 ): void {
-  const bucket = isIncome
-    ? totals.income
-    : isCreditAccount
-      ? totals.creditCards
-      : totals.expenses;
+  let bucket = totals.expenses;
+  if (isIncome) bucket = totals.income;
+  else if (isCreditAccount) bucket = totals.creditCards;
   if (isComplete) addPaid(bucket, amount);
   else addRemaining(bucket, amount);
+}
+
+function occurrenceStatus(dueDate: string, today: string, isComplete: boolean): RecurringOccurrence["status"] {
+  if (isComplete) return "complete";
+  return dueDate < today ? "overdue" : "upcoming";
 }
 
 function appendPlaidStream(
@@ -249,7 +252,7 @@ function appendPlaidStream(
       account: stream.accountName,
       category: stream.category,
       amount,
-      status: isComplete ? "complete" : dueDate < today ? "overdue" : "upcoming",
+      status: occurrenceStatus(dueDate, today, isComplete),
       matchedTransactionId: match?.id ?? null,
       isIncome,
     });

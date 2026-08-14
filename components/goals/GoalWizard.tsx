@@ -213,7 +213,10 @@ function GoalWizardStepContent({
               Shows up as a planned contribution on the Budget page.
             </span>
           </label>
-          <label className="flex items-start gap-2 text-sm font-semibold">
+          <label
+            aria-label="Spending against this goal reduces it"
+            className="flex items-start gap-2 text-sm font-semibold"
+          >
             <input
               type="checkbox"
               className="mt-1"

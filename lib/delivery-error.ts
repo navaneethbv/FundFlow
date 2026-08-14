@@ -15,22 +15,26 @@ const ERROR_CODE_MAX = 80;
 // addresses contain characters like `'` and `!`, and a `[\w.%+-]+` local part
 // leaves those prefixes behind ("o'brien@example.com" -> "o'[redacted]"),
 // which still leaks PII into the admin inbox and the logs.
+const EMAIL_PART_SEPARATORS = String.raw`<>()[]\:;,"@`;
+
 function isEmailPartCharacter(value: string): boolean {
-  return !"<>()[]\\:;,\"@".includes(value) && value.trim() !== "";
+  return !EMAIL_PART_SEPARATORS.includes(value) && value.trim() !== "";
 }
 
-function isAsciiLetter(value: string): boolean {
-  return (value >= "a" && value <= "z") || (value >= "A" && value <= "Z");
+function hasAsciiLetters(value: string): boolean {
+  if (value.length < 2) return false;
+  for (const character of value) {
+    if (!((character >= "a" && character <= "z") || (character >= "A" && character <= "Z"))) {
+      return false;
+    }
+  }
+  return true;
 }
 
-function redactEmailToken(token: string): string {
-  let output = "";
-  let cursor = 0;
-  let searchFrom = 0;
-
+function findEmailSpan(token: string, searchFrom: number): { start: number; end: number } | null {
   while (searchFrom < token.length) {
     const at = token.indexOf("@", searchFrom);
-    if (at < 0) break;
+    if (at < 0) return null;
 
     let start = at - 1;
     while (start >= 0 && isEmailPartCharacter(token[start]!)) start -= 1;
@@ -40,19 +44,24 @@ function redactEmailToken(token: string): string {
 
     const domain = token.slice(at + 1, end);
     const dot = domain.lastIndexOf(".");
-    const tld = domain.slice(dot + 1);
-    const valid =
-      start < at - 1 &&
-      dot > 0 &&
-      tld.length >= 2 &&
-      [...tld].every(isAsciiLetter);
-    if (valid) {
-      output += token.slice(cursor, start + 1) + "[redacted]";
-      cursor = end;
-      searchFrom = end;
-    } else {
-      searchFrom = at + 1;
+    if (start < at - 1 && dot > 0 && hasAsciiLetters(domain.slice(dot + 1))) {
+      return { start: start + 1, end };
     }
+    searchFrom = at + 1;
+  }
+  return null;
+}
+
+function redactEmailToken(token: string): string {
+  let output = "";
+  let cursor = 0;
+  let searchFrom = 0;
+  let span = findEmailSpan(token, searchFrom);
+  while (span) {
+    output += token.slice(cursor, span.start) + "[redacted]";
+    cursor = span.end;
+    searchFrom = span.end;
+    span = findEmailSpan(token, searchFrom);
   }
 
   return output + token.slice(cursor);

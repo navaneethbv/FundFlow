@@ -209,6 +209,22 @@ export function parseAmount(raw: string): number | null {
   return negative ? -value : value;
 }
 
+function parseImportAmount(
+  line: string[],
+  columns: ColumnMap,
+  positiveIsIncome: boolean,
+): number | null {
+  if (columns.amount !== null) {
+    const amount = parseAmount(line[columns.amount] ?? "");
+    return amount !== null && positiveIsIncome ? -amount : amount;
+  }
+  const debit = columns.debit !== null ? parseAmount(line[columns.debit] ?? "") : null;
+  const credit = columns.credit !== null ? parseAmount(line[columns.credit] ?? "") : null;
+  if (debit !== null && debit !== 0) return Math.abs(debit);
+  if (credit !== null && credit !== 0) return -Math.abs(credit);
+  return debit !== null || credit !== null ? 0 : null;
+}
+
 function parseImportLine(
   line: string[],
   lineNo: number,
@@ -219,17 +235,7 @@ function parseImportLine(
   if (!date) {
     return { error: `Line ${lineNo}: unrecognized date "${line[columns.date] ?? ""}".` };
   }
-  let amount: number | null = null;
-  if (columns.amount !== null) {
-    amount = parseAmount(line[columns.amount] ?? "");
-    if (amount !== null && positiveIsIncome) amount = -amount;
-  } else {
-    const debit = columns.debit !== null ? parseAmount(line[columns.debit] ?? "") : null;
-    const credit = columns.credit !== null ? parseAmount(line[columns.credit] ?? "") : null;
-    if (debit !== null && debit !== 0) amount = Math.abs(debit);
-    else if (credit !== null && credit !== 0) amount = -Math.abs(credit);
-    else if (debit !== null || credit !== null) amount = 0;
-  }
+  const amount = parseImportAmount(line, columns, positiveIsIncome);
   if (amount === null) return { error: `Line ${lineNo}: unrecognized amount.` };
   const merchant = (line[columns.description] ?? "").trim();
   if (!merchant) return { error: `Line ${lineNo}: empty description.` };

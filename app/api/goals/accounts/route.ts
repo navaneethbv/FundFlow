@@ -38,7 +38,7 @@ function parseId(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function parseAllocationRequest(body: Record<string, unknown> | null):
+type AllocationRequest =
   | {
       ok: true;
       goalId: string;
@@ -46,7 +46,9 @@ function parseAllocationRequest(body: Record<string, unknown> | null):
       allocatedAmount: number | null;
       useEntireBalance: boolean;
     }
-  | { ok: false; response: NextResponse } {
+  | { ok: false; response: NextResponse };
+
+function parseAllocationRequest(body: Record<string, unknown> | null): AllocationRequest {
   const goalId = parseId(body?.goalId);
   const accountId = parseId(body?.accountId);
   if (!goalId) return { ok: false, response: badRequest("goalId is required") };

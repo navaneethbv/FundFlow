@@ -133,6 +133,22 @@ interface Contribution {
   subKey: string;
 }
 
+function contributionsForTransaction(
+  txn: DrillTxn,
+  splitRows: DrillSplit[] | undefined,
+  category: string,
+  activeMonth: string,
+): Contribution[] {
+  const splitTotal = splitRows?.reduce((sum, row) => sum + row.amount, 0) ?? 0;
+  if (txn.date.slice(0, 7) === activeMonth && splitRows && Math.abs(Math.abs(txn.amount) - splitTotal) < 0.01) {
+    return splitRows
+      .filter((row) => row.category === category)
+      .map((row) => ({ txn, amount: row.amount, subKey: MANUAL_SPLIT_KEY }));
+  }
+  if ((txn.category ?? "UNCATEGORIZED") !== category) return [];
+  return [{ txn, amount: txn.amount, subKey: txn.subcategory ?? "UNCATEGORIZED" }];
+}
+
 function categoryContributions(
   txns: DrillTxn[],
   splits: DrillSplit[],
@@ -147,24 +163,9 @@ function categoryContributions(
   }
   const contributions: Contribution[] = [];
   for (const txn of txns) {
-    const month = txn.date.slice(0, 7);
-    const rows = month === activeMonth ? splitsByTxn.get(txn.id) : undefined;
-    const splitTotal = rows?.reduce((sum, row) => sum + row.amount, 0) ?? 0;
-    if (rows && Math.abs(Math.abs(txn.amount) - splitTotal) < 0.01) {
-      for (const row of rows) {
-        if (row.category === category) {
-          contributions.push({ txn, amount: row.amount, subKey: MANUAL_SPLIT_KEY });
-        }
-      }
-      continue;
-    }
-    if ((txn.category ?? "UNCATEGORIZED") === category) {
-      contributions.push({
-        txn,
-        amount: txn.amount,
-        subKey: txn.subcategory ?? "UNCATEGORIZED",
-      });
-    }
+    contributions.push(
+      ...contributionsForTransaction(txn, splitsByTxn.get(txn.id), category, activeMonth),
+    );
   }
   return contributions;
 }

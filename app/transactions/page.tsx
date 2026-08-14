@@ -84,10 +84,11 @@ function buildLedgerChunkQuery(
   supabase: TransactionsSupabase,
   columns: string,
   filters: LedgerChunkFilters,
+  count = false,
 ) {
   let query = supabase
     .from("transactions")
-    .select(columns)
+    .select(columns, count ? { count: "exact" } : undefined)
     .eq("user_id", filters.ownerId)
     .order("date", { ascending: false })
     .order("id", { ascending: true });
@@ -202,17 +203,7 @@ async function loadDirectLedgerRows(input: {
   projectedPath: boolean;
 }): Promise<{ rows: LedgerProjectedRow[]; total: number; error: string | null }> {
   const { supabase, state, filters, columns, rules, accountNamesById, accountLabelsById } = input;
-  let query = supabase.from("transactions").select(columns, { count: "exact" }).eq("user_id", filters.ownerId);
-  if (filters.bounds) query = query.gte("date", filters.bounds.start).lte("date", filters.bounds.end);
-  if (filters.accountId) {
-    query = filters.transactionsParityEnabled
-      ? query.or(`account_id.eq.${filters.accountId},manual_account_id.eq.${filters.accountId}`)
-      : query.eq("account_id", filters.accountId);
-  }
-  if (filters.q) {
-    const categorySearch = filters.q.replace(/\s+/g, "_");
-    query = query.or(`merchant_name.ilike.%${filters.q}%,name.ilike.%${filters.q}%,pfc_primary.ilike.%${categorySearch}%,pfc_detailed.ilike.%${categorySearch}%`);
-  }
+  let query = buildLedgerChunkQuery(supabase, columns, filters, true);
   if (state.category) {
     query = state.category === "UNCATEGORIZED"
       ? query.or("pfc_primary.is.null,pfc_primary.eq.UNCATEGORIZED")
@@ -220,9 +211,6 @@ async function loadDirectLedgerRows(input: {
   }
   if (state.sub) query = query.eq("pfc_detailed", state.sub);
   if (state.merchant) query = query.or(`merchant_name.ilike.${state.merchant},name.ilike.${state.merchant}`);
-  if (filters.flow === "in") query = query.lt("amount", 0);
-  if (filters.flow === "out") query = query.gt("amount", 0);
-  if (filters.accountType) query = query.in("account_id", filters.typedIds.length ? filters.typedIds : [filters.missingAccountId]);
   for (const order of ledgerDatabaseOrder(state.sort === "amount" ? "amount" : "date", state.direction)) {
     query = query.order(order.column, { ascending: order.ascending });
   }
