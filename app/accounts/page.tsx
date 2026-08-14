@@ -31,6 +31,7 @@ import {
   scopeQueryUserId,
 } from "@/lib/financial-scope";
 import { isFeatureEnabled } from "@/lib/feature-flags";
+import { firstSearchParam } from "@/lib/search-params";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -80,10 +81,6 @@ interface SnapshotRow {
   current_balance: AccountNumericValue;
   available_balance: AccountNumericValue;
   iso_currency_code: string;
-}
-
-function first(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
 }
 
 function numeric(value: AccountNumericValue): number | null {
@@ -136,6 +133,14 @@ function accountPreferences(value: unknown): AccountsPagePreferences {
       ? candidate.order.filter((id): id is string => typeof id === "string")
       : [],
   };
+}
+
+function assertQueryResults(
+  results: Array<{ error: { message?: string } | null }>,
+): void {
+  for (const result of results) {
+    if (result.error) throw result.error;
+  }
 }
 
 export default async function AccountsPage({
@@ -206,15 +211,13 @@ export default async function AccountsPage({
       .eq("id", user.id)
       .maybeSingle(),
   ]);
-  for (const result of [
+  assertQueryResults([
     accountsResult,
     manualResult,
     snapshotResult,
     itemResult,
     profileResult,
-  ]) {
-    if (result.error) throw result.error;
-  }
+  ]);
 
   const institutionByItem = new Map(
     ((itemResult.data ?? []) as Array<{
@@ -311,7 +314,7 @@ export default async function AccountsPage({
     label: ownerId === user.id ? "You" : "Household member",
   }));
   const filterValues: AccountsFilterValues = {
-    scope: first(params.scope),
+    scope: firstSearchParam(params.scope),
     institution: params.institution,
     type: validGroup(params.type),
     visibility: validVisibility(params.visibility),
@@ -322,7 +325,9 @@ export default async function AccountsPage({
   };
   const allRows = Object.values(built.groups).flatMap((group) => group.rows);
   const exportHref = `/api/export/accounts-csv${
-    first(params.scope) ? `?scope=${encodeURIComponent(first(params.scope)!)}` : ""
+    firstSearchParam(params.scope)
+      ? `?scope=${encodeURIComponent(firstSearchParam(params.scope)!)}`
+      : ""
   }`;
 
   return (

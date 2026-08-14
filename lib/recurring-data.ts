@@ -161,6 +161,44 @@ function isStale(lastSuccessfulSyncAt: string | null, now: Date): boolean {
 const KNOWN_FREQUENCIES = new Set(["WEEKLY", "BIWEEKLY", "SEMI_MONTHLY", "MONTHLY", "ANNUALLY"]);
 const KNOWN_STATUSES = new Set(["MATURE", "EARLY_DETECTION", "TOMBSTONED"]);
 
+async function loadJoinRows(
+  supabase: SupabaseClient,
+  streamIds: string[],
+  userId: string | undefined,
+): Promise<JoinRow[]> {
+  const rows: JoinRow[] = [];
+  for (let i = 0; i < streamIds.length; i += 500) {
+    const chunk = streamIds.slice(i, i + 500);
+    let query = supabase
+      .from("recurring_stream_transactions")
+      .select("recurring_stream_id,transaction_id")
+      .in("recurring_stream_id", chunk)
+      .limit(DEPENDENCY_LIMIT);
+    if (userId) query = query.eq("user_id", userId);
+    const result = await query;
+    assertRecurringQuery("recurring_stream_transactions", result);
+    rows.push(...((result.data ?? []) as JoinRow[]));
+  }
+  return rows;
+}
+
+async function loadTransactionDates(
+  supabase: SupabaseClient,
+  transactionIds: string[],
+  userId: string | undefined,
+): Promise<Map<string, string>> {
+  const dates = new Map<string, string>();
+  for (let i = 0; i < transactionIds.length; i += 500) {
+    const chunk = transactionIds.slice(i, i + 500);
+    let query = supabase.from("transactions").select("id,date").in("id", chunk).limit(500);
+    if (userId) query = query.eq("user_id", userId);
+    const result = await query;
+    assertRecurringQuery("transactions", result);
+    for (const row of (result.data ?? []) as TransactionDateRow[]) dates.set(row.id, row.date);
+  }
+  return dates;
+}
+
 export async function loadRecurringData(
   supabase: SupabaseClient,
   input: {
@@ -223,34 +261,10 @@ export async function loadRecurringData(
   const streamRows = (streamsResult.data ?? []) as RecurringStreamRawRow[];
   const streamIds = streamRows.map((row) => row.id);
 
-  let joinRows: JoinRow[] = [];
-  for (let i = 0; i < streamIds.length; i += 500) {
-    const chunk = streamIds.slice(i, i + 500);
-    if (chunk.length === 0) continue;
-    let joinQuery = supabase
-      .from("recurring_stream_transactions")
-      .select("recurring_stream_id,transaction_id")
-      .in("recurring_stream_id", chunk)
-      .limit(DEPENDENCY_LIMIT);
-    if (userId) joinQuery = joinQuery.eq("user_id", userId);
-    const joinResult = await joinQuery;
-    assertRecurringQuery("recurring_stream_transactions", joinResult);
-    joinRows = joinRows.concat((joinResult.data ?? []) as JoinRow[]);
-  }
+  const joinRows = await loadJoinRows(supabase, streamIds, userId);
 
   const transactionIds = [...new Set(joinRows.map((row) => row.transaction_id))];
-  const transactionDatesById = new Map<string, string>();
-  for (let i = 0; i < transactionIds.length; i += 500) {
-    const chunk = transactionIds.slice(i, i + 500);
-    if (chunk.length === 0) continue;
-    let txnQuery = supabase.from("transactions").select("id,date").in("id", chunk).limit(500);
-    if (userId) txnQuery = txnQuery.eq("user_id", userId);
-    const txnResult = await txnQuery;
-    assertRecurringQuery("transactions", txnResult);
-    for (const row of (txnResult.data ?? []) as TransactionDateRow[]) {
-      transactionDatesById.set(row.id, row.date);
-    }
-  }
+  const transactionDatesById = await loadTransactionDates(supabase, transactionIds, userId);
 
   const matchedByStreamId = new Map<string, { id: string; date: string }[]>();
   for (const row of joinRows) {

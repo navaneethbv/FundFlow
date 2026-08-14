@@ -19,6 +19,67 @@ const AVATAR_TYPES: Record<string, string> = {
   "image/webp": "webp",
 };
 
+async function patchProfile(
+  supabase: Awaited<ReturnType<typeof requireUser>> extends infer Auth
+    ? Auth extends { supabase: infer Client }
+      ? Client
+      : never
+    : never,
+  userId: string,
+  body: { kind?: unknown },
+  request: NextRequest,
+) {
+  const today = new Date().toISOString().slice(0, 10);
+  const result = validateProfilePatch(body, today);
+  if (!result.ok) return badRequest(result.error);
+  const update: Record<string, string | null> = {};
+  if (result.value.fullName !== undefined) update.full_name = result.value.fullName;
+  if (result.value.displayName !== undefined) update.display_name = result.value.displayName;
+  if (result.value.birthday !== undefined) update.birthday = result.value.birthday;
+  const { error } = await supabase.from("profiles").update(update).eq("id", userId);
+  if (error) throw error;
+  await writeAudit({
+    userId,
+    action: "profile_updated",
+    metadata: { fields: Object.keys(update) },
+    ip: getClientIp(request),
+  });
+  return NextResponse.json({ ok: true });
+}
+
+async function patchDisplay(
+  supabase: Awaited<ReturnType<typeof requireUser>> extends infer Auth
+    ? Auth extends { supabase: infer Client }
+      ? Client
+      : never
+    : never,
+  userId: string,
+  value: unknown,
+  request: NextRequest,
+) {
+  const result = validateDisplayPrefsPatch(value);
+  if (!result.ok) return badRequest(result.error);
+  const { data: existing, error: readError } = await supabase
+    .from("profiles")
+    .select("display_prefs")
+    .eq("id", userId)
+    .maybeSingle();
+  if (readError) throw readError;
+  const merged = { ...parseDisplayPrefs(existing?.display_prefs), ...result.value };
+  const { error } = await supabase
+    .from("profiles")
+    .update({ display_prefs: merged })
+    .eq("id", userId);
+  if (error) throw error;
+  await writeAudit({
+    userId,
+    action: "display_prefs_updated",
+    metadata: { fields: Object.keys(result.value) },
+    ip: getClientIp(request),
+  });
+  return NextResponse.json({ ok: true, prefs: merged });
+}
+
 /**
  * Two write shapes behind one PATCH: `{kind:"profile", ...}` for name/
  * birthday, `{kind:"display", ...}` for display_prefs. Both are a
@@ -36,53 +97,15 @@ export async function PATCH(request: NextRequest) {
   try {
     const body = (await request.json().catch(() => null)) as { kind?: unknown } | null;
 
-    if (body?.kind === "profile") {
-      const today = new Date().toISOString().slice(0, 10);
-      const result = validateProfilePatch(body, today);
-      if (!result.ok) return badRequest(result.error);
-
-      const update: Record<string, string | null> = {};
-      if (result.value.fullName !== undefined) update.full_name = result.value.fullName;
-      if (result.value.displayName !== undefined) update.display_name = result.value.displayName;
-      if (result.value.birthday !== undefined) update.birthday = result.value.birthday;
-
-      const { error } = await supabase.from("profiles").update(update).eq("id", user.id);
-      if (error) throw error;
-
-      await writeAudit({
-        userId: user.id,
-        action: "profile_updated",
-        metadata: { fields: Object.keys(update) },
-        ip: getClientIp(request),
-      });
-      return NextResponse.json({ ok: true });
-    }
+    if (body?.kind === "profile") return await patchProfile(supabase, user.id, body, request);
 
     if (body?.kind === "display") {
-      const result = validateDisplayPrefsPatch((body as { prefs?: unknown }).prefs);
-      if (!result.ok) return badRequest(result.error);
-
-      const { data: existing, error: readError } = await supabase
-        .from("profiles")
-        .select("display_prefs")
-        .eq("id", user.id)
-        .maybeSingle();
-      if (readError) throw readError;
-
-      const merged = { ...parseDisplayPrefs(existing?.display_prefs), ...result.value };
-      const { error } = await supabase
-        .from("profiles")
-        .update({ display_prefs: merged })
-        .eq("id", user.id);
-      if (error) throw error;
-
-      await writeAudit({
-        userId: user.id,
-        action: "display_prefs_updated",
-        metadata: { fields: Object.keys(result.value) },
-        ip: getClientIp(request),
-      });
-      return NextResponse.json({ ok: true, prefs: merged });
+      return await patchDisplay(
+        supabase,
+        user.id,
+        (body as { prefs?: unknown }).prefs,
+        request,
+      );
     }
 
     return badRequest("kind must be 'profile' or 'display'");

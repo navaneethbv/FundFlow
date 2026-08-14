@@ -133,6 +133,108 @@ interface Contribution {
   subKey: string;
 }
 
+function contributionsForTransaction(
+  txn: DrillTxn,
+  splitRows: DrillSplit[] | undefined,
+  category: string,
+  activeMonth: string,
+): Contribution[] {
+  const splitTotal = splitRows?.reduce((sum, row) => sum + row.amount, 0) ?? 0;
+  if (txn.date.slice(0, 7) === activeMonth && splitRows && Math.abs(Math.abs(txn.amount) - splitTotal) < 0.01) {
+    return splitRows
+      .filter((row) => row.category === category)
+      .map((row) => ({ txn, amount: row.amount, subKey: MANUAL_SPLIT_KEY }));
+  }
+  if ((txn.category ?? "UNCATEGORIZED") !== category) return [];
+  return [{ txn, amount: txn.amount, subKey: txn.subcategory ?? "UNCATEGORIZED" }];
+}
+
+function categoryContributions(
+  txns: DrillTxn[],
+  splits: DrillSplit[],
+  category: string,
+  activeMonth: string,
+): Contribution[] {
+  const splitsByTxn = new Map<string, DrillSplit[]>();
+  for (const split of splits) {
+    const rows = splitsByTxn.get(split.transactionId) ?? [];
+    rows.push(split);
+    splitsByTxn.set(split.transactionId, rows);
+  }
+  const contributions: Contribution[] = [];
+  for (const txn of txns) {
+    contributions.push(
+      ...contributionsForTransaction(txn, splitsByTxn.get(txn.id), category, activeMonth),
+    );
+  }
+  return contributions;
+}
+
+function categorySummary(
+  scoped: Contribution[],
+  months: string[],
+  activeMonth: string,
+  category: string,
+) {
+  const trendMap = new Map<string, number>();
+  for (const contribution of scoped) {
+    const month = contribution.txn.date.slice(0, 7);
+    trendMap.set(month, (trendMap.get(month) ?? 0) + contribution.amount);
+  }
+  const trend = months.map((month) => ({
+    month,
+    amount: round2(trendMap.get(month) ?? 0),
+  }));
+  const activeScoped = scoped.filter(
+    (contribution) => contribution.txn.date.slice(0, 7) === activeMonth,
+  );
+  const total = round2(activeScoped.reduce((sum, c) => sum + c.amount, 0));
+  const activeIndex = months.indexOf(activeMonth);
+  const prevAmount = activeIndex > 0 ? (trend[activeIndex - 1]?.amount ?? 0) : 0;
+  const momDelta = round2(total - prevAmount);
+  const subMap = new Map<string, number>();
+  const merchantMap = new Map<string, number>();
+  for (const contribution of activeScoped) {
+    subMap.set(
+      contribution.subKey,
+      (subMap.get(contribution.subKey) ?? 0) + contribution.amount,
+    );
+    merchantMap.set(
+      contribution.txn.merchant,
+      (merchantMap.get(contribution.txn.merchant) ?? 0) + contribution.amount,
+    );
+  }
+  const subcategories = [...subMap.entries()]
+    .map(([key, amount]) => ({
+      key,
+      label: subcategoryLabel(category, key),
+      amount: round2(amount),
+    }))
+    .sort((a, b) => b.amount - a.amount || a.key.localeCompare(b.key));
+  const merchants = [...merchantMap.entries()]
+    .map(([merchant, amount]) => ({ merchant, amount: round2(amount) }))
+    .sort((a, b) => b.amount - a.amount || a.merchant.localeCompare(b.merchant))
+    .slice(0, MERCHANT_CAP);
+  const byId = new Map<string, DrillTxn>();
+  for (const contribution of activeScoped) {
+    const existing = byId.get(contribution.txn.id);
+    byId.set(
+      contribution.txn.id,
+      existing
+        ? { ...existing, amount: round2(existing.amount + contribution.amount) }
+        : { ...contribution.txn, amount: round2(contribution.amount) },
+    );
+  }
+  const transactions = [...byId.values()]
+    .sort((a, b) => {
+      if (a.date < b.date) return 1;
+      if (a.date > b.date) return -1;
+      return a.id.localeCompare(b.id);
+    })
+    .slice(0, TXN_CAP);
+  return { total, momDelta, subcategories, merchants, trend, transactions };
+}
+
 export function buildCategoryDrilldown(input: {
   txns: DrillTxn[];
   splits: DrillSplit[];
@@ -144,86 +246,10 @@ export function buildCategoryDrilldown(input: {
 }): CategoryDrilldownData {
   const { txns, splits, category, sub, months, activeMonth } = input;
 
-  const splitsByTxn = new Map<string, DrillSplit[]>();
-  for (const split of splits) {
-    const rows = splitsByTxn.get(split.transactionId) ?? [];
-    rows.push(split);
-    splitsByTxn.set(split.transactionId, rows);
-  }
-
-  // Membership: split-aware for the active month (splits are only fetched for
-  // it), whole-transaction category elsewhere - matching how the donut totals
-  // are computed so drill totals always reconcile.
-  const contributions: Contribution[] = [];
-  for (const txn of txns) {
-    const month = txn.date.slice(0, 7);
-    if (month === activeMonth) {
-      const rows = splitsByTxn.get(txn.id);
-      const splitTotal = rows?.reduce((sum, row) => sum + row.amount, 0) ?? 0;
-      if (rows && Math.abs(Math.abs(txn.amount) - splitTotal) < 0.01) {
-        for (const row of rows) {
-          if (row.category !== category) continue;
-          contributions.push({ txn, amount: row.amount, subKey: MANUAL_SPLIT_KEY });
-        }
-        continue;
-      }
-    }
-    if ((txn.category ?? "UNCATEGORIZED") !== category) continue;
-    contributions.push({
-      txn,
-      amount: txn.amount,
-      subKey: txn.subcategory ?? "UNCATEGORIZED",
-    });
-  }
-
+  const contributions = categoryContributions(txns, splits, category, activeMonth);
   const scoped = sub ? contributions.filter((c) => c.subKey === sub) : contributions;
-
-  const trendMap = new Map<string, number>();
-  for (const c of scoped) {
-    const month = c.txn.date.slice(0, 7);
-    trendMap.set(month, (trendMap.get(month) ?? 0) + c.amount);
-  }
-  const trend = months.map((month) => ({ month, amount: round2(trendMap.get(month) ?? 0) }));
-
-  const activeScoped = scoped.filter((c) => c.txn.date.slice(0, 7) === activeMonth);
-  const total = round2(activeScoped.reduce((sum, c) => sum + c.amount, 0));
-  const activeIndex = months.indexOf(activeMonth);
-  const prevAmount = activeIndex > 0 ? (trend[activeIndex - 1]?.amount ?? 0) : 0;
-  const momDelta = round2(total - prevAmount);
-
-  const subMap = new Map<string, number>();
-  const merchantMap = new Map<string, number>();
-  for (const c of activeScoped) {
-    subMap.set(c.subKey, (subMap.get(c.subKey) ?? 0) + c.amount);
-    merchantMap.set(c.txn.merchant, (merchantMap.get(c.txn.merchant) ?? 0) + c.amount);
-  }
-  const subcategories = [...subMap.entries()]
-    .map(([key, amount]) => ({ key, label: subcategoryLabel(category, key), amount: round2(amount) }))
-    .sort((a, b) => b.amount - a.amount || a.key.localeCompare(b.key));
-  const merchants = [...merchantMap.entries()]
-    .map(([merchant, amount]) => ({ merchant, amount: round2(amount) }))
-    .sort((a, b) => b.amount - a.amount || a.merchant.localeCompare(b.merchant))
-    .slice(0, MERCHANT_CAP);
-
-  // One row per transaction (a multi-split txn contributes once, with the
-  // summed attributed amount), newest first.
-  const byId = new Map<string, DrillTxn>();
-  for (const c of activeScoped) {
-    const existing = byId.get(c.txn.id);
-    byId.set(
-      c.txn.id,
-      existing
-      ? { ...existing, amount: round2(existing.amount + c.amount) }
-      : { ...c.txn, amount: round2(c.amount) },
-    );
-  }
-  const transactions = [...byId.values()]
-    .sort((a, b) => {
-      if (a.date < b.date) return 1;
-      if (a.date > b.date) return -1;
-      return a.id.localeCompare(b.id);
-    })
-    .slice(0, TXN_CAP);
+  const { total, momDelta, subcategories, merchants, trend, transactions } =
+    categorySummary(scoped, months, activeMonth, category);
 
   return { kind: "category", category, sub, total, momDelta, subcategories, merchants, trend, transactions };
 }

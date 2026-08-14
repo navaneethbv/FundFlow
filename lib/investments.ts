@@ -102,6 +102,22 @@ const KNOWN_SECURITY_TYPES = new Set([
   "other",
 ]);
 
+function parseHoldingIdentity(
+  body: Record<string, unknown>,
+): { ok: true; accountSource: "plaid" | "manual"; accountId: string; securityName: string } | { ok: false; error: string } {
+  const accountSource = body.accountSource;
+  if (accountSource !== "plaid" && accountSource !== "manual") {
+    return { ok: false, error: "accountSource must be 'plaid' or 'manual'" };
+  }
+  const accountId = typeof body.accountId === "string" ? body.accountId : "";
+  if (!accountId) return { ok: false, error: "accountId is required" };
+  const securityName = typeof body.securityName === "string" ? body.securityName.trim() : "";
+  if (!securityName || securityName.length > 160) {
+    return { ok: false, error: "securityName must be between 1 and 160 characters" };
+  }
+  return { ok: true, accountSource, accountId, securityName };
+}
+
 /**
  * Validates a manually-entered holding. A manual value must never claim
  * market freshness it doesn't have, so quantity, price, and as-of date are
@@ -113,17 +129,9 @@ export function normalizeManualHolding(
 ): ManualHoldingResult {
   const b = (body ?? {}) as Record<string, unknown>;
 
-  const accountSource = b.accountSource;
-  if (accountSource !== "plaid" && accountSource !== "manual") {
-    return { ok: false, error: "accountSource must be 'plaid' or 'manual'" };
-  }
-  const accountId = typeof b.accountId === "string" ? b.accountId : "";
-  if (!accountId) return { ok: false, error: "accountId is required" };
-
-  const securityName = typeof b.securityName === "string" ? b.securityName.trim() : "";
-  if (!securityName || securityName.length > 160) {
-    return { ok: false, error: "securityName must be between 1 and 160 characters" };
-  }
+  const identity = parseHoldingIdentity(b);
+  if (!identity.ok) return identity;
+  const { accountSource, accountId, securityName } = identity;
 
   const ticker =
     typeof b.ticker === "string" && b.ticker.trim().length > 0

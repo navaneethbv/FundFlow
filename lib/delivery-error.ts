@@ -15,11 +15,72 @@ const ERROR_CODE_MAX = 80;
 // addresses contain characters like `'` and `!`, and a `[\w.%+-]+` local part
 // leaves those prefixes behind ("o'brien@example.com" -> "o'[redacted]"),
 // which still leaks PII into the admin inbox and the logs.
-const EMAIL_PATTERN = /[^\s<>()[\]:;,"]+@[^\s<>()[\]:;,"]+\.[a-z]{2,}/gi;
+const EMAIL_PART_SEPARATORS = String.raw`<>()[]\:;,"@`;
+
+function isEmailPartCharacter(value: string): boolean {
+  return !EMAIL_PART_SEPARATORS.includes(value) && value.trim() !== "";
+}
+
+function isAsciiLetter(value: string): boolean {
+  return (value >= "a" && value <= "z") || (value >= "A" && value <= "Z");
+}
+
+/**
+ * End of the last `.tld` in the domain, where a TLD is two or more ASCII
+ * letters, or -1 when there is none. The address has to end at the TLD rather
+ * than wherever the token does: trailing punctuation is not part of the domain,
+ * and stopping the whole scan on it ("user@example.com!") leaves the address in
+ * the string unredacted.
+ */
+function domainEnd(token: string, domainStart: number, limit: number): number {
+  let result = -1;
+  // From domainStart + 1: a domain cannot begin with the dot ("user@.com").
+  for (let index = domainStart + 1; index < limit; index += 1) {
+    if (token[index] !== ".") continue;
+    let afterTld = index + 1;
+    while (afterTld < limit && isAsciiLetter(token[afterTld]!)) afterTld += 1;
+    if (afterTld - index > 2) result = afterTld;
+  }
+  return result;
+}
+
+function findEmailSpan(token: string, searchFrom: number): { start: number; end: number } | null {
+  while (searchFrom < token.length) {
+    const at = token.indexOf("@", searchFrom);
+    if (at < 0) return null;
+
+    let start = at - 1;
+    while (start >= 0 && isEmailPartCharacter(token[start]!)) start -= 1;
+    let limit = at + 1;
+    while (limit < token.length && isEmailPartCharacter(token[limit]!)) limit += 1;
+
+    const end = domainEnd(token, at + 1, limit);
+    if (start < at - 1 && end > 0) {
+      return { start: start + 1, end };
+    }
+    searchFrom = at + 1;
+  }
+  return null;
+}
+
+function redactEmailToken(token: string): string {
+  let output = "";
+  let cursor = 0;
+  let searchFrom = 0;
+  let span = findEmailSpan(token, searchFrom);
+  while (span) {
+    output += token.slice(cursor, span.start) + "[redacted]";
+    cursor = span.end;
+    searchFrom = span.end;
+    span = findEmailSpan(token, searchFrom);
+  }
+
+  return output + token.slice(cursor);
+}
 
 /** Alert summaries are documented as error messages only, never PII. */
 export function redactEmails(text: string): string {
-  return text.replace(EMAIL_PATTERN, "[redacted]");
+  return text.replace(/\S+/g, redactEmailToken);
 }
 
 export function describeDeliveryError(error: unknown): string {

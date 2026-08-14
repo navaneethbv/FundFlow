@@ -1,4 +1,5 @@
 import { formatCurrency, titleCase } from "@/lib/format";
+import { stripTrailingAccountMask } from "@/lib/account-label";
 import type { WeeklyReportData } from "@/lib/weekly-report";
 
 const COLORS = {
@@ -52,12 +53,10 @@ function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value * 100)));
 }
 
-// Strips a trailing card mask ("Amex Platinum ••••1234" -> "Amex Platinum").
-// The mask characters must stay bound to the four digits and anchored to the
-// end: an unanchored `[•*x]+` pass also eats every literal x in a name, which
-// turned "Amex Platinum" into "Ame  Platinum".
+// Card names only, and the mask rules live in the shared helper. The fallback
+// matches the PDF twin: a name that is nothing but a mask must not render blank.
 function accountLabel(value: string): string {
-  return value.replace(/\s+(?:[•*x]{2,}\s*)?\d{4}$/i, "").trim();
+  return stripTrailingAccountMask(value, "•*x") || "Credit card";
 }
 
 function sectionHeading(title: string, eyebrow: string): string {

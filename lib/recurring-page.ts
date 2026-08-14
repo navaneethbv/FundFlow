@@ -1,4 +1,5 @@
 import { EXCLUDED_PFC } from "@/lib/dashboard";
+import { addDays, addMonths, parseDate } from "@/lib/date-utils";
 
 export type RecurringFrequency =
   | "WEEKLY"
@@ -55,27 +56,6 @@ const FREQUENCY_LABELS: Record<RecurringFrequency, string> = {
   ANNUALLY: "Every year",
   UNKNOWN: "Recurring",
 };
-
-function parseDate(date: string): Date {
-  const [year, month, day] = date.split("-").map(Number);
-  return new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1));
-}
-
-function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function addDays(date: string, days: number): string {
-  const next = parseDate(date);
-  next.setUTCDate(next.getUTCDate() + days);
-  return isoDate(next);
-}
-
-function addMonths(date: string, months: number): string {
-  const next = parseDate(date);
-  next.setUTCMonth(next.getUTCMonth() + months);
-  return isoDate(next);
-}
 
 function step(date: string, cadence: Cadence, direction: 1 | -1): string {
   if (cadence.unit === "days") return addDays(date, cadence.amount * direction);
@@ -206,9 +186,116 @@ interface Bucket {
   remaining: number;
 }
 
-function addToBucket(bucket: Bucket, amount: number, complete: boolean): void {
-  if (complete) bucket.paid = round2(bucket.paid + amount);
-  else bucket.remaining = round2(bucket.remaining + amount);
+type RecurringTotals = {
+  income: Bucket;
+  expenses: Bucket;
+  creditCards: Bucket;
+};
+
+function addPaid(bucket: Bucket, amount: number): void {
+  bucket.paid = round2(bucket.paid + amount);
+}
+
+function addRemaining(bucket: Bucket, amount: number): void {
+  bucket.remaining = round2(bucket.remaining + amount);
+}
+
+function addPlannedTotals(
+  totals: RecurringTotals,
+  amount: number,
+  isIncome: boolean,
+  isCreditAccount: boolean,
+  isComplete: boolean,
+): void {
+  let bucket = totals.expenses;
+  if (isIncome) bucket = totals.income;
+  else if (isCreditAccount) bucket = totals.creditCards;
+  if (isComplete) addPaid(bucket, amount);
+  else addRemaining(bucket, amount);
+}
+
+function occurrenceStatus(dueDate: string, today: string, isComplete: boolean): RecurringOccurrence["status"] {
+  if (isComplete) return "complete";
+  return dueDate < today ? "overdue" : "upcoming";
+}
+
+function appendPlaidStream(
+  occurrences: RecurringOccurrence[],
+  totals: RecurringTotals,
+  stream: RecurringStreamInput,
+  windowStart: string,
+  windowEndExclusive: string,
+  today: string,
+): void {
+  if (stream.dismissedAt || stream.status === "TOMBSTONED" || !stream.isActive) return;
+  const anchor = stream.predictedNextDate ?? stream.lastDate ?? stream.firstDate;
+  if (!anchor) return;
+  const cadence = PLAID_CADENCE[stream.frequency];
+  const tolerance = toleranceDays(stream.frequency);
+  const dueDates = occurrenceDatesInWindow(anchor, cadence, windowStart, windowEndExclusive);
+  const amount = Math.abs(stream.userAmount ?? stream.averageAmount ?? stream.lastAmount ?? 0);
+  const isIncome = stream.streamType === "inflow";
+  const availableMatches = [...stream.matchedTransactions];
+  for (const dueDate of dueDates) {
+    const match = nearestMatch(dueDate, availableMatches, tolerance);
+    if (match) {
+      const consumedIndex = availableMatches.findIndex((candidate) => candidate.id === match.id);
+      if (consumedIndex !== -1) availableMatches.splice(consumedIndex, 1);
+    }
+    const isComplete = match !== null;
+    occurrences.push({
+      source: "plaid",
+      sourceId: stream.id,
+      merchant: stream.merchantName ?? stream.description ?? "Unknown",
+      frequency: FREQUENCY_LABELS[stream.frequency],
+      dueDate,
+      account: stream.accountName,
+      category: stream.category,
+      amount,
+      status: occurrenceStatus(dueDate, today, isComplete),
+      matchedTransactionId: match?.id ?? null,
+      isIncome,
+    });
+    if (!EXCLUDED_PFC.has(stream.category ?? "")) {
+      addPlannedTotals(totals, amount, isIncome, stream.isCreditAccount, isComplete);
+    }
+  }
+}
+
+function appendManualItem(
+  occurrences: RecurringOccurrence[],
+  totals: RecurringTotals,
+  item: ManualRecurringItemInput,
+  windowStart: string,
+  windowEndExclusive: string,
+  today: string,
+): void {
+  if (!item.enabled) return;
+  const dueDates = occurrenceDatesInWindow(
+    item.nextDate,
+    MANUAL_CADENCE[item.frequency],
+    windowStart,
+    windowEndExclusive,
+  );
+  const amount = Math.abs(item.amount);
+  const isIncome = item.itemType === "income";
+  for (const dueDate of dueDates) {
+    occurrences.push({
+      source: "manual",
+      sourceId: item.id,
+      merchant: item.name,
+      frequency: MANUAL_FREQUENCY_LABELS[item.frequency],
+      dueDate,
+      account: null,
+      category: item.category,
+      amount,
+      status: dueDate < today ? "overdue" : "upcoming",
+      matchedTransactionId: null,
+      isIncome,
+    });
+    if (isIncome) addRemaining(totals.income, amount);
+    else addRemaining(totals.expenses, amount);
+  }
 }
 
 export function expandStreamsForMonth(
@@ -227,85 +314,10 @@ export function expandStreamsForMonth(
   };
 
   for (const stream of streams) {
-    if (stream.dismissedAt || stream.status === "TOMBSTONED" || !stream.isActive) continue;
-    const anchor = stream.predictedNextDate ?? stream.lastDate ?? stream.firstDate;
-    if (!anchor) continue;
-
-    const cadence = PLAID_CADENCE[stream.frequency];
-    const tolerance = toleranceDays(stream.frequency);
-    const dueDates = occurrenceDatesInWindow(anchor, cadence, windowStart, windowEndExclusive);
-    const amount = Math.abs(stream.userAmount ?? stream.averageAmount ?? stream.lastAmount ?? 0);
-    const isIncome = stream.streamType === "inflow";
-    // A working pool consumed as due dates match, so one transaction can
-    // complete at most one occurrence per stream. Without this, adjacent due
-    // dates whose tolerance windows overlap (WEEKLY: 2*5 > 7; SEMI_MONTHLY:
-    // 2*10 > 15) would double-count the same transaction.
-    const availableMatches = [...stream.matchedTransactions];
-
-    for (const dueDate of dueDates) {
-      const match = nearestMatch(dueDate, availableMatches, tolerance);
-      if (match) {
-        const consumedIndex = availableMatches.findIndex((candidate) => candidate.id === match.id);
-        if (consumedIndex !== -1) availableMatches.splice(consumedIndex, 1);
-      }
-      const complete = match !== null;
-      occurrences.push({
-        source: "plaid",
-        sourceId: stream.id,
-        merchant: stream.merchantName ?? stream.description ?? "Unknown",
-        frequency: FREQUENCY_LABELS[stream.frequency],
-        dueDate,
-        account: stream.accountName,
-        category: stream.category,
-        amount,
-        status: complete ? "complete" : dueDate < today ? "overdue" : "upcoming",
-        matchedTransactionId: match?.id ?? null,
-        isIncome,
-      });
-      // Transfers and loan payments (EXCLUDED_PFC) still show as an
-      // occurrence line item -- users should still see their scheduled
-      // savings transfer or checking->card autopay -- but must not add to
-      // any totals bucket, matching this codebase's dashboard-wide rule
-      // that every spend total apply EXCLUDED_PFC or credit-card payments
-      // get double-counted (once as the card's own bill, once again as the
-      // transfer that pays it).
-      if (!EXCLUDED_PFC.has(stream.category ?? "")) {
-        // isIncome is checked first intentionally: a credit-card
-        // refund/payment modeled as an inflow should count as income, not
-        // reduce the credit-card bucket, even when isCreditAccount is also
-        // true.
-        if (isIncome) addToBucket(totals.income, amount, complete);
-        else if (stream.isCreditAccount) addToBucket(totals.creditCards, amount, complete);
-        else addToBucket(totals.expenses, amount, complete);
-      }
-    }
+    appendPlaidStream(occurrences, totals, stream, windowStart, windowEndExclusive, today);
   }
-
   for (const item of manualItems) {
-    if (!item.enabled) continue;
-    const cadence = MANUAL_CADENCE[item.frequency];
-    const dueDates = occurrenceDatesInWindow(item.nextDate, cadence, windowStart, windowEndExclusive);
-    const amount = Math.abs(item.amount);
-    const isIncome = item.itemType === "income";
-
-    for (const dueDate of dueDates) {
-      const complete = false; // Manual items have no linked transaction to confirm against.
-      occurrences.push({
-        source: "manual",
-        sourceId: item.id,
-        merchant: item.name,
-        frequency: MANUAL_FREQUENCY_LABELS[item.frequency],
-        dueDate,
-        account: null,
-        category: item.category,
-        amount,
-        status: dueDate < today ? "overdue" : "upcoming",
-        matchedTransactionId: null,
-        isIncome,
-      });
-      if (isIncome) addToBucket(totals.income, amount, complete);
-      else addToBucket(totals.expenses, amount, complete);
-    }
+    appendManualItem(occurrences, totals, item, windowStart, windowEndExclusive, today);
   }
 
   occurrences.sort(

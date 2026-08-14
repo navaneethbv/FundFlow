@@ -8,6 +8,7 @@
  * biweekly +14d, monthly +1 calendar month, quarterly +3mo, yearly +12mo.
  */
 import { formatCurrency } from "@/lib/format";
+import { addDays, addMonths } from "@/lib/date-utils";
 
 export interface CalendarBill {
   /** Stable stream id, when available — makes VEVENT UIDs collision-free. */
@@ -20,27 +21,6 @@ export interface CalendarBill {
 }
 
 const CRLF = "\r\n";
-
-function parseDate(date: string): Date {
-  const [year, month, day] = date.split("-").map(Number);
-  return new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1));
-}
-
-function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function addDays(date: string, days: number): string {
-  const next = parseDate(date);
-  next.setUTCDate(next.getUTCDate() + days);
-  return isoDate(next);
-}
-
-function addMonths(date: string, months: number): string {
-  const next = parseDate(date);
-  next.setUTCMonth(next.getUTCMonth() + months);
-  return isoDate(next);
-}
 
 function advance(date: string, frequency: CalendarBill["frequency"]): string {
   if (frequency === "weekly") return addDays(date, 7);
@@ -71,6 +51,13 @@ function escapeText(value: string): string {
     .replaceAll(",", String.raw`\,`);
 }
 
+/**
+ * UIDs are part of the feed's contract: a subscriber that already has an event
+ * treats a changed UID as a new one. The `-+` quantifiers must stay, or a name
+ * with two or more leading/trailing non-alphanumerics ("**Netflix**") keeps a
+ * stray dash and duplicates the event in every existing subscriber's calendar.
+ * Both are anchored, so there is no backtracking to avoid here.
+ */
 function slug(value: string): string {
   return (
     value

@@ -1,22 +1,19 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
-import { requireUser, errorResponse, badRequest } from "@/lib/http";
+import { badRequest } from "@/lib/http";
 import { API_TOKEN_PREFIX, hashApiToken } from "@/lib/api-tokens";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { writeAudit, getClientIp } from "@/lib/audit";
+import { requestAudits } from "@/lib/request-audit";
+import { withUser } from "@/lib/authed-route";
 
 /** Mint/revoke personal read-only API tokens (6.1). Plaintext shown once. */
 export async function POST(request: NextRequest) {
-  const auth = await requireUser();
-  if (auth instanceof NextResponse) return auth;
-  const { user, supabase } = auth;
+  return withUser("tokens.create", async ({ user, supabase }) => {
+    const allowed = await checkRateLimit(`api-token-mint:${user.id}`, 5, 24 * 3600);
+    if (!allowed) {
+      return NextResponse.json({ error: "Too many tokens created today." }, { status: 429 });
+    }
 
-  const allowed = await checkRateLimit(`api-token-mint:${user.id}`, 5, 24 * 3600);
-  if (!allowed) {
-    return NextResponse.json({ error: "Too many tokens created today." }, { status: 429 });
-  }
-
-  try {
     const body = (await request.json().catch(() => ({}))) as { name?: string };
     const name = body.name?.trim();
     if (!name || name.length > 80) return badRequest("A token name (≤80 chars) is required");
@@ -29,25 +26,14 @@ export async function POST(request: NextRequest) {
       .single();
     if (error) throw error;
 
-    await writeAudit({
-      userId: user.id,
-      action: "api_token_created",
-      metadata: { name },
-      ip: getClientIp(request),
-    });
+    await requestAudits.apiTokenCreated(request, user.id, { name });
 
     return NextResponse.json({ token, row: data });
-  } catch (error) {
-    return errorResponse("tokens.create", error);
-  }
+  });
 }
 
 export async function DELETE(request: NextRequest) {
-  const auth = await requireUser();
-  if (auth instanceof NextResponse) return auth;
-  const { user, supabase } = auth;
-
-  try {
+  return withUser("tokens.revoke", async ({ user, supabase }) => {
     const body = (await request.json().catch(() => ({}))) as { id?: string };
     if (!body.id) return badRequest("Missing token id");
 
@@ -58,15 +44,8 @@ export async function DELETE(request: NextRequest) {
       .eq("id", body.id);
     if (error) throw error;
 
-    await writeAudit({
-      userId: user.id,
-      action: "api_token_revoked",
-      metadata: { id: body.id },
-      ip: getClientIp(request),
-    });
+    await requestAudits.apiTokenRevoked(request, user.id, { id: body.id });
 
     return NextResponse.json({ ok: true });
-  } catch (error) {
-    return errorResponse("tokens.revoke", error);
-  }
+  });
 }

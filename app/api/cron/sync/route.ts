@@ -29,6 +29,102 @@ function safeSyncError(err: unknown): string {
   return err instanceof Error ? err.name : "unknown_error";
 }
 
+async function runOptionalSync(
+  label: string,
+  action: () => Promise<unknown>,
+): Promise<void> {
+  try {
+    await action();
+  } catch (error) {
+    logError(label, error);
+  }
+}
+
+async function sendDailyDigest(
+  service: ReturnType<typeof createServiceClient>,
+  userId: string,
+): Promise<void> {
+  try {
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+    const [{ data: profile, error: profileError }, { data: todayNotifications, error: notificationError }] =
+      await Promise.all([
+        service
+          .from("profiles")
+          .select("daily_digest_email_enabled")
+          .eq("id", userId)
+          .maybeSingle(),
+        service
+          .from("notifications")
+          .select("type, title, body")
+          .eq("user_id", userId)
+          .gte("created_at", todayStart.toISOString()),
+      ]);
+    if (profileError) throw profileError;
+    if (notificationError) throw notificationError;
+    const digestNotifications =
+      profile?.daily_digest_email_enabled === false
+        ? (todayNotifications ?? []).filter((notification) => notification.type === "broken_bank")
+        : (todayNotifications ?? []);
+    if (digestNotifications.length === 0) return;
+    const { data: userData } = await service.auth.admin.getUserById(userId);
+    const email = userData?.user?.email;
+    if (!email) return;
+    await sendDailyDigestEmail(
+      email,
+      digestNotifications,
+      new Date().toISOString().slice(0, 10),
+      `${serverEnv.appUrl ?? "http://localhost:3000"}/notifications`,
+    );
+  } catch (error) {
+    logError("cron.sync.digest", error);
+    if (error instanceof Error && error.message.includes("SMTP is not configured")) {
+      await service.from("notifications").insert({
+        user_id: userId,
+        type: "broken_bank",
+        severity: "danger",
+        title: "Daily digest email skipped",
+        body: "We could not send your daily digest email because SMTP is not configured in production settings.",
+      });
+    }
+  }
+}
+
+async function syncUser(
+  service: ReturnType<typeof createServiceClient>,
+  userId: string,
+): Promise<void> {
+  await syncAllForUser(userId);
+  await runOptionalSync("cron.sync.token-rotation", () => rotateStaleItemTokens(userId));
+  if (isFeatureEnabled("investmentsPage")) {
+    await runOptionalSync("cron.sync.investments", () => syncInvestmentsForUser(userId));
+  }
+  await writeDailyAccountSnapshots(userId);
+  await refreshRecurringForUser(userId);
+  await writeNetWorthSnapshot(userId);
+  await runOptionalSync("cron.sync.aprs", () => syncCardAprsForUser(userId));
+  await processNotificationsForUser(userId);
+  await sendDailyDigest(service, userId);
+}
+
+async function syncUsers(
+  service: ReturnType<typeof createServiceClient>,
+  userIds: string[],
+): Promise<{ synced: number; failures: string[] }> {
+  let synced = 0;
+  const failures: string[] = [];
+  for (const userId of userIds) {
+    try {
+      await syncUser(service, userId);
+      synced += 1;
+    } catch (error) {
+      logError("cron.sync.user", error);
+      failures.push(safeSyncError(error));
+    }
+  }
+  return { synced, failures };
+}
+
 /**
  * Scheduled daily sync for every user with active bank connections.
  * Protected by CRON_SECRET: Vercel Cron sends "Authorization: Bearer <secret>"
@@ -48,99 +144,7 @@ export async function GET(request: NextRequest) {
 
     const userIds = [...new Set((data ?? []).map((r) => r.user_id as string))];
 
-    let synced = 0;
-    const failures: string[] = [];
-    for (const userId of userIds) {
-      try {
-        await syncAllForUser(userId);
-        // Periodic access-token rotation: any item not rotated in the last 30
-        // days gets a fresh token (old one invalidated immediately). Isolated
-        // so a rotation failure never fails the user's sync.
-        try {
-          await rotateStaleItemTokens(userId);
-        } catch (rotateError) {
-          logError("cron.sync.token-rotation", rotateError);
-        }
-        // Gated on investmentsPage (not just isolated in a try/catch): before
-        // 20260730210000_investments.sql is applied, `holdings` and
-        // `holding_snapshots` don't exist, and running this unconditionally
-        // would mean a Plaid Investments call plus a guaranteed write failure
-        // for every user, every day, for a feature nobody can reach yet.
-        if (isFeatureEnabled("investmentsPage")) {
-          try {
-            // Isolated from the transaction sync above: a broken or
-            // rate-limited Investments item must never make transaction sync,
-            // recurring, or net-worth look like they failed for this user.
-            await syncInvestmentsForUser(userId);
-          } catch (investmentsError) {
-            logError("cron.sync.investments", investmentsError);
-          }
-        }
-        await writeDailyAccountSnapshots(userId);
-        await refreshRecurringForUser(userId);
-        await writeNetWorthSnapshot(userId);
-        try {
-          await syncCardAprsForUser(userId); // no-op unless PLAID_LIABILITIES_ENABLED=1
-        } catch (aprError) {
-          logError("cron.sync.aprs", aprError);
-        }
-        await processNotificationsForUser(userId);
-
-        // Daily Digest Email Trigger
-        try {
-          const todayStart = new Date();
-          todayStart.setUTCHours(0, 0, 0, 0);
-          const [{ data: profile, error: profileError }, { data: todayNotifications, error: notificationError }] = await Promise.all([
-            service
-              .from("profiles")
-              .select("daily_digest_email_enabled")
-              .eq("id", userId)
-              .maybeSingle(),
-            service
-            .from("notifications")
-            .select("type, title, body")
-            .eq("user_id", userId)
-            .gte("created_at", todayStart.toISOString()),
-          ]);
-          if (profileError) throw profileError;
-          if (notificationError) throw notificationError;
-
-          const digestNotifications = profile?.daily_digest_email_enabled === false
-            ? (todayNotifications ?? []).filter((notification) => notification.type === "broken_bank")
-            : (todayNotifications ?? []);
-
-          if (digestNotifications.length > 0) {
-            const { data: userData } = await service.auth.admin.getUserById(userId);
-            const email = userData?.user?.email;
-            if (email) {
-              const dateStr = new Date().toISOString().slice(0, 10);
-              await sendDailyDigestEmail(
-                email,
-                digestNotifications,
-                dateStr,
-                `${serverEnv.appUrl ?? "http://localhost:3000"}/notifications`,
-              );
-            }
-          }
-        } catch (digestErr) {
-          logError("cron.sync.digest", digestErr);
-          if (digestErr instanceof Error && digestErr.message.includes("SMTP is not configured")) {
-            await service.from("notifications").insert({
-              user_id: userId,
-              type: "broken_bank",
-              severity: "danger",
-              title: "Daily digest email skipped",
-              body: "We could not send your daily digest email because SMTP is not configured in production settings.",
-            });
-          }
-        }
-
-        synced += 1;
-      } catch (err) {
-        logError("cron.sync.user", err);
-        failures.push(safeSyncError(err));
-      }
-    }
+    const { synced, failures } = await syncUsers(service, userIds);
 
     // Data-integrity pass (2.3, best-effort): stuck jobs, orphaned
     // transactions, duplicate Plaid ids. Bounded queries per user; findings

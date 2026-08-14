@@ -28,6 +28,7 @@ import {
   computeSinkingFunds,
   type SinkingFundInput,
 } from "@/lib/insights";
+import { firstSearchParam } from "@/lib/search-params";
 
 const DEPENDENCY_LIMIT = 5_000;
 const MONTH_REGEX = /^(\d{4})-(0[1-9]|1[0-2])$/;
@@ -92,10 +93,6 @@ export interface BudgetLoadResult {
   proposals: BudgetSeedProposal[];
   truncated: boolean;
   stale: boolean;
-}
-
-function first(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
 }
 
 function shiftMonth(month: string, delta: number): string {
@@ -298,7 +295,7 @@ export async function loadBudgetData(
     projection.currencyByAccountId,
   );
   const currencies = [...byCurrency.keys()];
-  const requestedCurrency = first(input.requestedCurrency)
+  const requestedCurrency = firstSearchParam(input.requestedCurrency)
     ?.trim()
     .toUpperCase();
   const selectedCurrency =

@@ -58,6 +58,29 @@ export interface FinanceFetchResult {
   truncated: boolean;
 }
 
+async function fetchFinancePage(
+  supabase: SupabaseClient,
+  userId: string | undefined,
+  options: FetchFinanceOptions,
+  offset: number,
+  pageSize: number,
+): Promise<TransactionRow[]> {
+  let query = supabase.from("transactions").select(FINANCE_TRANSACTION_COLUMNS);
+  if (userId) query = query.eq("user_id", userId);
+  if (options.excludePending) query = query.eq("pending", false);
+  if (options.window) {
+    query = query
+      .gte("date", options.window.start)
+      .lt("date", options.window.endExclusive);
+  }
+  const { data, error } = await query
+    .order("date", { ascending: true })
+    .order("id", { ascending: true })
+    .range(offset, offset + pageSize - 1);
+  if (error) throw error;
+  return (data ?? []) as unknown as TransactionRow[];
+}
+
 export async function fetchFinanceTransactions(
   supabase: SupabaseClient,
   options: FetchFinanceOptions,
@@ -70,20 +93,7 @@ export async function fetchFinanceTransactions(
   let offset = 0;
 
   for (;;) {
-    let query = supabase.from("transactions").select(FINANCE_TRANSACTION_COLUMNS);
-    if (userId) query = query.eq("user_id", userId);
-    if (options.excludePending) query = query.eq("pending", false);
-    if (options.window) {
-      query = query.gte("date", options.window.start).lt("date", options.window.endExclusive);
-    }
-
-    const { data, error } = await query
-      .order("date", { ascending: true })
-      .order("id", { ascending: true })
-      .range(offset, offset + pageSize - 1);
-
-    if (error) throw error;
-    const page = (data ?? []) as unknown as TransactionRow[];
+    const page = await fetchFinancePage(supabase, userId, options, offset, pageSize);
     for (const row of page) rows.push(fromTransactionRow(row));
 
     if (page.length < pageSize) return { rows, truncated: false };

@@ -40,6 +40,60 @@ interface ProposalItem {
   sort_order: number;
 }
 
+function parseProposalItem(
+  candidate: unknown,
+  categories: Set<string>,
+): { ok: true; value: ProposalItem } | { ok: false; message: string } {
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+    return { ok: false, message: "Invalid proposal item" };
+  }
+  const item = candidate as Record<string, unknown>;
+  const category = typeof item.category === "string" ? item.category.trim() : "";
+  const normalizedCategory = category.toLowerCase();
+  if (
+    category.length < 1 ||
+    category.length > 120 ||
+    categories.has(normalizedCategory)
+  ) {
+    return { ok: false, message: "Invalid proposal category" };
+  }
+  if (
+    typeof item.monthly_limit !== "number" ||
+    !Number.isFinite(item.monthly_limit) ||
+    item.monthly_limit < 0 ||
+    !hasAtMostTwoDecimals(item.monthly_limit)
+  ) {
+    return { ok: false, message: "Invalid proposal amount" };
+  }
+  if (
+    typeof item.group_name !== "string" ||
+    !BUDGET_GROUPS.includes(item.group_name as BudgetGroup)
+  ) {
+    return { ok: false, message: "Invalid proposal group" };
+  }
+  if (typeof item.rollover_enabled !== "boolean") {
+    return { ok: false, message: "Invalid proposal rollover" };
+  }
+  if (
+    typeof item.sort_order !== "number" ||
+    !Number.isInteger(item.sort_order) ||
+    item.sort_order < 0
+  ) {
+    return { ok: false, message: "Invalid proposal sort order" };
+  }
+  categories.add(normalizedCategory);
+  return {
+    ok: true,
+    value: {
+      category,
+      monthly_limit: item.monthly_limit,
+      group_name: item.group_name as BudgetGroup,
+      rollover_enabled: item.rollover_enabled,
+      sort_order: item.sort_order,
+    },
+  };
+}
+
 function hasAtMostTwoDecimals(value: number): boolean {
   return Math.abs(value * 100 - Math.round(value * 100)) < Number.EPSILON * 100;
 }
@@ -125,52 +179,9 @@ function parseProposalBody(value: unknown):
   const categories = new Set<string>();
   const items: ProposalItem[] = [];
   for (const candidate of body.items) {
-    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
-      return { ok: false, message: "Invalid proposal item" };
-    }
-    const item = candidate as Record<string, unknown>;
-    const category =
-      typeof item.category === "string" ? item.category.trim() : "";
-    const normalizedCategory = category.toLowerCase();
-    if (
-      category.length < 1 ||
-      category.length > 120 ||
-      categories.has(normalizedCategory)
-    ) {
-      return { ok: false, message: "Invalid proposal category" };
-    }
-    if (
-      typeof item.monthly_limit !== "number" ||
-      !Number.isFinite(item.monthly_limit) ||
-      item.monthly_limit < 0 ||
-      !hasAtMostTwoDecimals(item.monthly_limit)
-    ) {
-      return { ok: false, message: "Invalid proposal amount" };
-    }
-    if (
-      typeof item.group_name !== "string" ||
-      !BUDGET_GROUPS.includes(item.group_name as BudgetGroup)
-    ) {
-      return { ok: false, message: "Invalid proposal group" };
-    }
-    if (typeof item.rollover_enabled !== "boolean") {
-      return { ok: false, message: "Invalid proposal rollover" };
-    }
-    if (
-      typeof item.sort_order !== "number" ||
-      !Number.isInteger(item.sort_order) ||
-      item.sort_order < 0
-    ) {
-      return { ok: false, message: "Invalid proposal sort order" };
-    }
-    categories.add(normalizedCategory);
-    items.push({
-      category,
-      monthly_limit: item.monthly_limit,
-      group_name: item.group_name as BudgetGroup,
-      rollover_enabled: item.rollover_enabled,
-      sort_order: item.sort_order,
-    });
+    const parsed = parseProposalItem(candidate, categories);
+    if (!parsed.ok) return parsed;
+    items.push(parsed.value);
   }
   return { ok: true, month: body.month, items };
 }

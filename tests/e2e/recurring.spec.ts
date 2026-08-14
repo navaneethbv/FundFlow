@@ -43,6 +43,7 @@ const month = today.slice(0, 7);
  * tests/integration/recurring-stream-rls.test.ts.
  */
 test.describe.serial("Phase 5: recurring page", () => {
+  // Intentional skip: this live acceptance suite needs disposable Supabase credentials.
   test.skip(!RUN, "Supabase browser and service credentials are required");
   test.setTimeout(120_000);
 

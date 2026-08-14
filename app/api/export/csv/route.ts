@@ -1,10 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { requireUser, errorResponse } from "@/lib/http";
-import { verifyApiToken } from "@/lib/api-tokens";
 import { toCsv } from "@/lib/csv";
 import { fetchPrivacySafeRows } from "@/lib/export";
-import { createServiceClient } from "@/lib/supabase/service";
-import { writeAudit, getClientIp } from "@/lib/audit";
+import { exportError, recordExport, resolveExportContext } from "@/lib/export-route";
 
 /**
  * Download a privacy-safe CSV report: merchant, amount, date, category only.
@@ -13,26 +10,12 @@ import { writeAudit, getClientIp } from "@/lib/audit";
  * contract lives in lib/export.ts, shared with the JSON export).
  */
 export async function GET(request: NextRequest) {
-  const auth = await requireUser();
-  let userId: string;
-  let supabase;
-  if (auth instanceof NextResponse) {
-    // Personal read-only API tokens (6.1): scripts may call the export
-    // endpoints with "Authorization: Bearer fft_...". The service client is
-    // used because there is no session — fetchPrivacySafeRows scopes every
-    // query by userId explicitly.
-    const tokenUserId = await verifyApiToken(request.headers.get("authorization"));
-    if (!tokenUserId) return auth;
-    userId = tokenUserId;
-    supabase = createServiceClient();
-  } else {
-    userId = auth.user.id;
-    supabase = auth.supabase;
-  }
-  const user = { id: userId };
+  const context = await resolveExportContext(request);
+  if (context instanceof NextResponse) return context;
+  const { userId, supabase } = context;
 
   try {
-    const result = await fetchPrivacySafeRows(supabase, user.id);
+    const result = await fetchPrivacySafeRows(supabase, userId);
     if (!result.allowed) {
       return NextResponse.json(
         { error: "Data export is disabled in your settings." },
@@ -50,14 +33,14 @@ export async function GET(request: NextRequest) {
       const { data: tagged } = await supabase
         .from("transaction_annotations")
         .select("transaction_id")
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .contains("tags", ["tax"]);
       const ids = (tagged ?? []).map((r) => r.transaction_id as string);
       const { data: taxTxns } = ids.length
         ? await supabase
             .from("transactions")
             .select("date, amount, merchant_name, name, pfc_primary")
-            .eq("user_id", user.id)
+            .eq("user_id", userId)
             .in("id", ids)
             .order("date")
         : { data: [] as never[] };
@@ -72,19 +55,7 @@ export async function GET(request: NextRequest) {
     const rows = exportRows.map((r) => [r.date, r.merchant, r.amount, r.category]);
     const csv = toCsv(["date", "merchant", "amount", "category"], rows);
 
-    // Audit + record the export using the service client.
-    const service = createServiceClient();
-    await service.from("data_exports").insert({
-      user_id: user.id,
-      format: "csv",
-      row_count: rows.length,
-    });
-    await writeAudit({
-      userId: user.id,
-      action: "data_export",
-      metadata: { format: "csv", row_count: rows.length },
-      ip: getClientIp(request),
-    });
+    await recordExport({ request, userId, format: "csv", rowCount: rows.length });
 
     return new NextResponse(csv, {
       status: 200,
@@ -95,6 +66,6 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    return errorResponse("export.csv", error);
+    return exportError("export.csv", error);
   }
 }

@@ -15,16 +15,13 @@ import { isFeatureEnabled } from "@/lib/feature-flags";
 import { loadGoalsPageData } from "@/lib/goals-data";
 import { isLiabilityAccount, type GoalType } from "@/lib/goals-v2";
 import { formatCurrency } from "@/lib/format";
+import { firstSearchParam } from "@/lib/search-params";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
   searchParams: Promise<{ tab?: string | string[] }>;
-}
-
-function first(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
 }
 
 const TABS: Array<{ key: GoalType; label: string }> = [
@@ -35,7 +32,7 @@ const TABS: Array<{ key: GoalType; label: string }> = [
 export default async function GoalsPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
   const goalsV2Enabled = isFeatureEnabled("goalsV2");
-  const tab: GoalType = first(params.tab) === "pay_down" ? "pay_down" : "save_up";
+  const tab: GoalType = firstSearchParam(params.tab) === "pay_down" ? "pay_down" : "save_up";
 
   const supabase = await createClient();
   const {

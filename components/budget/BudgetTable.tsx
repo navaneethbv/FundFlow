@@ -147,7 +147,7 @@ function RowMenu({
             {" "}Rollover unused budget
           </label>
           <label className="block text-xs font-semibold text-muted">
-            Sort order
+            <span className="block">Sort order</span>
             <input
               aria-label={`Sort order for ${line.label}`}
               type="number"

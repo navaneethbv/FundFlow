@@ -7,6 +7,7 @@ import {
   isLiabilityAccount,
   type AllocationError,
 } from "@/lib/goals-v2";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * Goal account allocations (Phase 7).
@@ -37,6 +38,86 @@ function parseId(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+type ValidAllocationRequest = {
+  ok: true;
+  goalId: string;
+  accountId: string;
+  allocatedAmount: number | null;
+  useEntireBalance: boolean;
+};
+
+type InvalidAllocationRequest = { ok: false; response: NextResponse };
+
+type AllocationRequest = ValidAllocationRequest | InvalidAllocationRequest;
+
+function parseAllocationRequest(body: Record<string, unknown> | null): AllocationRequest {
+  const goalId = parseId(body?.goalId);
+  const accountId = parseId(body?.accountId);
+  if (!goalId) return { ok: false, response: badRequest("goalId is required") };
+  if (!accountId) return { ok: false, response: badRequest("accountId is required") };
+  const useEntireBalance = body?.useEntireBalance === true;
+  let allocatedAmount: number | null = null;
+  if (!useEntireBalance) {
+    const raw = body?.allocatedAmount;
+    if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0) {
+      return {
+        ok: false,
+        response: badRequest(ALLOCATION_ERROR_MESSAGES.allocation_amount_required),
+      };
+    }
+    allocatedAmount = Math.round(raw * 100) / 100;
+  } else if (body?.allocatedAmount !== undefined && body.allocatedAmount !== null) {
+    return {
+      ok: false,
+      response: badRequest(ALLOCATION_ERROR_MESSAGES.allocation_mode_conflict),
+    };
+  }
+  return { ok: true, goalId, accountId, allocatedAmount, useEntireBalance };
+}
+
+/** Postgres `numeric` columns arrive as strings through supabase-js. */
+type NumericColumn = number | string | null;
+
+type GoalBaselineRow = {
+  goal_type: string;
+  starting_balance: NumericColumn;
+  target_amount: NumericColumn;
+};
+
+type AccountBaselineRow = { type: string | null; current_balance: NumericColumn };
+
+async function captureBaseline(
+  supabase: SupabaseClient,
+  userId: string,
+  goalId: string,
+  goal: GoalBaselineRow,
+  account: AccountBaselineRow,
+): Promise<boolean> {
+  if (
+    goal.goal_type !== "pay_down" ||
+    goal.starting_balance !== null ||
+    !isLiabilityAccount(account.type)
+  ) {
+    return false;
+  }
+  const startingBalance = Number(account.current_balance ?? 0);
+  const targetBalance = Math.max(
+    0,
+    Math.round((startingBalance - Number(goal.target_amount ?? 0)) * 100) / 100,
+  );
+  const { error } = await supabase
+    .from("goals")
+    .update({
+      starting_balance: startingBalance,
+      target_balance: goal.target_amount ? targetBalance : 0,
+    })
+    .eq("id", goalId)
+    .eq("user_id", userId)
+    .is("starting_balance", null);
+  if (error) throw error;
+  return true;
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -47,31 +128,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
 
-    const body = (await request.json().catch(() => null)) as {
-      goalId?: unknown;
-      accountId?: unknown;
-      allocatedAmount?: unknown;
-      useEntireBalance?: unknown;
-    } | null;
-
-    const goalId = parseId(body?.goalId);
-    const accountId = parseId(body?.accountId);
-    if (!goalId) return badRequest("goalId is required");
-    if (!accountId) return badRequest("accountId is required");
-
-    const useEntireBalance = body?.useEntireBalance === true;
-    let allocatedAmount: number | null = null;
-    if (!useEntireBalance) {
-      const raw = body?.allocatedAmount;
-      if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0) {
-        return badRequest(ALLOCATION_ERROR_MESSAGES.allocation_amount_required);
-      }
-      // Money is stored to the cent; rounding here keeps the value the user is
-      // shown identical to the value the check ran against.
-      allocatedAmount = Math.round(raw * 100) / 100;
-    } else if (body?.allocatedAmount !== undefined && body.allocatedAmount !== null) {
-      return badRequest(ALLOCATION_ERROR_MESSAGES.allocation_mode_conflict);
-    }
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const parsed = parseAllocationRequest(body);
+    if (!parsed.ok) return parsed.response;
+    const { goalId, accountId, allocatedAmount, useEntireBalance } = parsed;
 
     // Ownership, not visibility: RLS also exposes a household member's shared
     // goals and accounts, and neither is writable by them. The database
@@ -115,32 +175,13 @@ export async function POST(request: NextRequest) {
     // Capture the pay-down baseline exactly once, on the first liability link.
     // Recomputing it on a later sync would move the starting line and make
     // progress the user already earned disappear.
-    let baselineCaptured = false;
-    if (
-      goal.goal_type === "pay_down" &&
-      goal.starting_balance === null &&
-      isLiabilityAccount(account.type as string | null)
-    ) {
-      const startingBalance = account.current_balance ?? 0;
-      // `target_balance` mirrors the entered payoff amount so a reader of the
-      // column (the edit menu, say) does not see a hardcoded zero. When no
-      // amount was entered it stays 0, meaning "pay it all off".
-      const targetBalance = Math.max(
-        0,
-        Math.round((startingBalance - (goal.target_amount ?? 0)) * 100) / 100,
-      );
-      const { error: baselineError } = await supabase
-        .from("goals")
-        .update({
-          starting_balance: startingBalance,
-          target_balance: goal.target_amount ? targetBalance : 0,
-        })
-        .eq("id", goalId)
-        .eq("user_id", user.id)
-        .is("starting_balance", null);
-      if (baselineError) throw baselineError;
-      baselineCaptured = true;
-    }
+    const baselineCaptured = await captureBaseline(
+      supabase,
+      user.id,
+      goalId,
+      goal as GoalBaselineRow,
+      account as AccountBaselineRow,
+    );
 
     await writeAudit({
       userId: user.id,

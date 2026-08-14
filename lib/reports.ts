@@ -3,6 +3,7 @@ import type { BreakdownDimension } from "@/lib/cash-flow";
 import type { SankeyLink, SankeyNode } from "@/lib/sankey";
 import { subcategoryLabel } from "@/lib/drilldown";
 import { titleCase } from "@/lib/format";
+import { firstSearchParam } from "@/lib/search-params";
 
 /**
  * Report aggregation over the canonical Phase 0 projection. Pure: no Supabase,
@@ -104,6 +105,114 @@ function ranked(totals: LabeledTotals): RankedEntry[] {
     .sort((a, b) => b.amount - a.amount || a.display.localeCompare(b.display));
 }
 
+function collectSankeyTotals(txns: CanonicalFinanceTransaction[]): {
+  incomeByCategory: LabeledTotals;
+  expenseByGroup: LabeledTotals;
+  expenseByGroupCategory: Map<string, LabeledTotals>;
+} {
+  const incomeByCategory: LabeledTotals = new Map();
+  const expenseByGroup: LabeledTotals = new Map();
+  const expenseByGroupCategory = new Map<string, LabeledTotals>();
+  for (const row of txns) {
+    const amount = Math.abs(row.signedAmount);
+    if (amount <= 0) continue;
+    const groupKey = normalizeKey(row.groupKey);
+    const categoryKey = normalizeKey(row.categoryKey);
+    if (row.flow === "income") {
+      addTo(incomeByCategory, categoryKey, categoryDisplay(groupKey, categoryKey), amount);
+      continue;
+    }
+    if (row.flow !== "expense") continue;
+    addTo(expenseByGroup, groupKey, groupDisplay(groupKey), amount);
+    const categories = expenseByGroupCategory.get(groupKey) ?? new Map();
+    addTo(categories, categoryKey, categoryDisplay(groupKey, categoryKey), amount);
+    expenseByGroupCategory.set(groupKey, categories);
+  }
+  return { incomeByCategory, expenseByGroup, expenseByGroupCategory };
+}
+
+function buildSankeyNodes(
+  incomeRows: RankedEntry[],
+  groupRows: RankedEntry[],
+  expenseByGroupCategory: Map<string, LabeledTotals>,
+  shortfall: number,
+  surplus: number,
+  hubValue: number,
+): SankeyNode[] {
+  const nodes: SankeyNode[] = incomeRows.map((entry) => ({
+    id: `src:${entry.key}`,
+    label: entry.display,
+    value: round2(entry.amount),
+    column: SOURCE_COLUMN,
+  }));
+  if (shortfall > 0) nodes.push({
+    id: UNFUNDED_ID,
+    label: "Unfunded Spending",
+    value: shortfall,
+    column: SOURCE_COLUMN,
+  });
+  nodes.push({
+    id: HUB_ID,
+    label: shortfall > 0 ? "Available Funds" : "Income",
+    value: hubValue,
+    column: HUB_COLUMN,
+  });
+  if (surplus > 0) nodes.push({
+    id: NET_INCOME_ID,
+    label: "Net Income",
+    value: surplus,
+    column: GROUP_COLUMN,
+  });
+  for (const entry of groupRows) nodes.push({
+    id: `grp:${entry.key}`,
+    label: entry.display,
+    value: round2(entry.amount),
+    column: GROUP_COLUMN,
+  });
+  for (const group of groupRows) {
+    const categories = expenseByGroupCategory.get(group.key);
+    if (!categories) continue;
+    for (const entry of ranked(categories)) nodes.push({
+      id: `cat:${group.key}::${entry.key}`,
+      label: entry.display,
+      value: round2(entry.amount),
+      column: CATEGORY_COLUMN,
+    });
+  }
+  return nodes;
+}
+
+function buildSankeyLinks(
+  incomeRows: RankedEntry[],
+  groupRows: RankedEntry[],
+  expenseByGroupCategory: Map<string, LabeledTotals>,
+  shortfall: number,
+  surplus: number,
+): SankeyLink[] {
+  const links: SankeyLink[] = incomeRows.map((entry) => ({
+    source: `src:${entry.key}`,
+    target: HUB_ID,
+    value: round2(entry.amount),
+  }));
+  if (shortfall > 0) links.push({ source: UNFUNDED_ID, target: HUB_ID, value: shortfall });
+  if (surplus > 0) links.push({ source: HUB_ID, target: NET_INCOME_ID, value: surplus });
+  for (const entry of groupRows) links.push({
+    source: HUB_ID,
+    target: `grp:${entry.key}`,
+    value: round2(entry.amount),
+  });
+  for (const group of groupRows) {
+    const categories = expenseByGroupCategory.get(group.key);
+    if (!categories) continue;
+    for (const entry of ranked(categories)) links.push({
+      source: `grp:${group.key}`,
+      target: `cat:${group.key}::${entry.key}`,
+      value: round2(entry.amount),
+    });
+  }
+  return links;
+}
+
 /**
  * Cash-flow Sankey: income categories → hub → expense groups → categories.
  *
@@ -117,38 +226,7 @@ function ranked(totals: LabeledTotals): RankedEntry[] {
 export function buildCashFlowSankeyData(
   txns: CanonicalFinanceTransaction[],
 ): { nodes: SankeyNode[]; links: SankeyLink[] } {
-  const incomeByCategory: LabeledTotals = new Map();
-  const expenseByGroup: LabeledTotals = new Map();
-  const expenseByGroupCategory = new Map<string, LabeledTotals>();
-
-  for (const row of txns) {
-    const amount = Math.abs(row.signedAmount);
-    if (amount <= 0) continue;
-
-    const groupKey = normalizeKey(row.groupKey);
-    const categoryKey = normalizeKey(row.categoryKey);
-
-    if (row.flow === "income") {
-      addTo(
-        incomeByCategory,
-        categoryKey,
-        categoryDisplay(groupKey, categoryKey),
-        amount,
-      );
-      continue;
-    }
-    if (row.flow !== "expense") continue;
-
-    addTo(expenseByGroup, groupKey, groupDisplay(groupKey), amount);
-    const categories = expenseByGroupCategory.get(groupKey) ?? new Map();
-    addTo(
-      categories,
-      categoryKey,
-      categoryDisplay(groupKey, categoryKey),
-      amount,
-    );
-    expenseByGroupCategory.set(groupKey, categories);
-  }
+  const { incomeByCategory, expenseByGroup, expenseByGroupCategory } = collectSankeyTotals(txns);
 
   const incomeRows = ranked(incomeByCategory);
   const groupRows = ranked(expenseByGroup);
@@ -165,108 +243,10 @@ export function buildCashFlowSankeyData(
   const surplus = Math.max(0, net);
   const hubValue = round2(totalIncome + shortfall);
 
-  const nodes: SankeyNode[] = [];
-  const links: SankeyLink[] = [];
-
-  // Column 0 — income sources, with the shortfall last so it reads as the
-  // remainder that had to come from somewhere else.
-  for (const entry of incomeRows) {
-    nodes.push({
-      id: `src:${entry.key}`,
-      label: entry.display,
-      value: round2(entry.amount),
-      column: SOURCE_COLUMN,
-    });
-  }
-  if (shortfall > 0) {
-    nodes.push({
-      id: UNFUNDED_ID,
-      label: "Unfunded Spending",
-      value: shortfall,
-      column: SOURCE_COLUMN,
-    });
-  }
-
-  nodes.push({
-    id: HUB_ID,
-    label: shortfall > 0 ? "Available Funds" : "Income",
-    value: hubValue,
-    column: HUB_COLUMN,
-  });
-
-  // Column 2 — the surplus first, then expense groups. Net Income is an
-  // outcome, not a spending group ranked by size: it sits at the top of the
-  // column regardless of whether it out-values the largest group, matching
-  // the reference design's fixed ordering rather than a value sort that would
-  // move it around from month to month.
-  if (surplus > 0) {
-    nodes.push({
-      id: NET_INCOME_ID,
-      label: "Net Income",
-      value: surplus,
-      column: GROUP_COLUMN,
-    });
-  }
-  for (const entry of groupRows) {
-    nodes.push({
-      id: `grp:${entry.key}`,
-      label: entry.display,
-      value: round2(entry.amount),
-      column: GROUP_COLUMN,
-    });
-  }
-
-  // Column 3 — categories, emitted in their parent group's order so ribbons
-  // stack without crossing (layoutSankey stacks a column in array order).
-  for (const group of groupRows) {
-    const categories = expenseByGroupCategory.get(group.key);
-    if (!categories) continue;
-    for (const entry of ranked(categories)) {
-      nodes.push({
-        id: `cat:${group.key}::${entry.key}`,
-        label: entry.display,
-        value: round2(entry.amount),
-        column: CATEGORY_COLUMN,
-      });
-    }
-  }
-
-  // Links follow the same order as the nodes above, for the same reason.
-  for (const entry of incomeRows) {
-    links.push({
-      source: `src:${entry.key}`,
-      target: HUB_ID,
-      value: round2(entry.amount),
-    });
-  }
-  if (shortfall > 0) {
-    links.push({ source: UNFUNDED_ID, target: HUB_ID, value: shortfall });
-  }
-  // Same order as the nodes above, so the ribbons leave the hub top-to-bottom
-  // in the order their targets are stacked and never cross.
-  if (surplus > 0) {
-    links.push({ source: HUB_ID, target: NET_INCOME_ID, value: surplus });
-  }
-  for (const entry of groupRows) {
-    links.push({
-      source: HUB_ID,
-      target: `grp:${entry.key}`,
-      value: round2(entry.amount),
-    });
-  }
-  for (const group of groupRows) {
-    const categories = expenseByGroupCategory.get(group.key);
-    if (!categories) continue;
-    for (const entry of ranked(categories)) {
-      links.push({
-        source: `grp:${group.key}`,
-        target: `cat:${group.key}::${entry.key}`,
-        value: round2(entry.amount),
-      });
-    }
-  }
-
-  return { nodes, links };
+  return {
+    nodes: buildSankeyNodes(incomeRows, groupRows, expenseByGroupCategory, shortfall, surplus, hubValue),
+    links: buildSankeyLinks(incomeRows, groupRows, expenseByGroupCategory, shortfall, surplus),
+  };
 }
 
 export interface ReportSummary {
@@ -497,10 +477,6 @@ export function reportFiltersToSearchParams(
   return params;
 }
 
-function firstValue(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
-}
-
 function listValue(value: string | string[] | undefined): string[] {
   if (value === undefined) return [];
   const values = Array.isArray(value) ? value : [value];
@@ -521,8 +497,8 @@ export function reportFiltersFromSearchParams(
   params: ReportSearchParams,
   fallback: ReportFilters,
 ): ReportFilters {
-  const start = firstValue(params.start);
-  const end = firstValue(params.end);
+  const start = firstSearchParam(params.start);
+  const end = firstSearchParam(params.end);
   const validStart = isIsoDate(start) ? start : fallback.start;
   const validEnd = isIsoDate(end) ? end : fallback.end;
 
@@ -531,16 +507,16 @@ export function reportFiltersFromSearchParams(
     // An inverted hand-typed range would show nothing at all; fall back.
     start: validStart <= validEnd ? validStart : fallback.start,
     end: validStart <= validEnd ? validEnd : fallback.end,
-    tab: oneOf(firstValue(params.tab), REPORT_TABS) ?? fallback.tab,
-    mode: oneOf(firstValue(params.mode), REPORT_MODES) ?? fallback.mode,
+    tab: oneOf(firstSearchParam(params.tab), REPORT_TABS) ?? fallback.tab,
+    mode: oneOf(firstSearchParam(params.mode), REPORT_MODES) ?? fallback.mode,
     dimension:
-      oneOf(firstValue(params.dimension), REPORT_DIMENSIONS) ??
+      oneOf(firstSearchParam(params.dimension), REPORT_DIMENSIONS) ??
       fallback.dimension,
     scope: fallback.scope,
     accounts: listValue(params.account),
     merchants: listValue(params.merchant),
     categories: listValue(params.category),
-    excludePending: firstValue(params.pending) === "exclude",
+    excludePending: firstSearchParam(params.pending) === "exclude",
   };
 }
 

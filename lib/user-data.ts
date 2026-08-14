@@ -29,210 +29,48 @@ interface UserDataTableSpec {
   gated?: boolean;
 }
 
+function table(
+  key: string,
+  select: string,
+  scope: TableScope = "user",
+  gated = false,
+): UserDataTableSpec {
+  return { key, table: key, select, scope, ...(gated ? { gated: true } : {}) };
+}
+
 const USER_DATA_TABLES: UserDataTableSpec[] = [
-  {
-    key: "accounts",
-    table: "accounts",
-    select:
-      "name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code",
-    scope: "user",
-  },
-  {
-    key: "transactions",
-    table: "transactions",
-    select:
-      "date, amount, iso_currency_code, name, merchant_name, pfc_primary, pfc_detailed, pending",
-    scope: "user",
-  },
-  {
-    key: "budgets",
-    table: "budgets",
-    select: "category, monthly_limit, rollover_enabled",
-    scope: "user",
-  },
-  {
-    key: "goals",
-    table: "goals",
-    select: "name, target_amount, saved_amount, target_date, goal_type",
-    scope: "user",
-  },
-  {
-    key: "merchant_rules",
-    table: "merchant_rules",
-    select: "match_type, pattern, display_name, category, enabled",
-    scope: "user",
-  },
-  {
-    key: "manual_accounts",
-    table: "manual_accounts",
-    select: "name, account_type, balance, include_in_net_worth",
-    scope: "user",
-  },
-  {
-    key: "account_balance_snapshots",
-    table: "account_balance_snapshots",
-    select:
-      "account_id, manual_account_id, snapshot_date, current_balance, available_balance, iso_currency_code",
-    scope: "user",
-  },
-  {
-    key: "alert_preferences",
-    table: "alert_preferences",
-    select: "broken_bank, budget_exceeded, goal_reached, large_transaction, low_cash_forecast",
-    scope: "user",
-  },
-  {
-    key: "ai_settings",
-    table: "ai_settings",
-    select: "enabled",
-    scope: "user",
-  },
-  {
-    key: "budget_periods",
-    table: "budget_periods",
-    select: "budget_id, month, planned",
-    scope: "user",
-  },
-  {
-    key: "saved_reports",
-    table: "saved_reports",
-    select: "name, report_type, filters, created_at, updated_at",
-    scope: "user",
-  },
-  {
-    key: "holdings",
-    table: "holdings",
-    select:
-      "account_id, manual_account_id, quantity, cost_basis, institution_price, institution_value, as_of, source, is_active",
-    scope: "user",
-    gated: true,
-  },
-  {
-    key: "holding_snapshots",
-    table: "holding_snapshots",
-    select: "holding_id, snapshot_date, quantity, price, value",
-    scope: "user",
-    gated: true,
-  },
-  {
-    key: "securities",
-    table: "securities",
-    select:
-      "name, ticker, security_type, security_subtype, close_price, close_price_as_of, iso_currency_code",
-    scope: "user",
-    gated: true,
-  },
-  {
-    key: "investment_transactions",
-    table: "investment_transactions",
-    select:
-      "date, name, amount, quantity, price, fees, txn_type, txn_subtype, iso_currency_code",
-    scope: "user",
-    gated: true,
-  },
-  {
-    key: "transaction_splits",
-    table: "transaction_splits",
-    select: "transaction_id, category, amount, created_at",
-    scope: "user",
-  },
-  {
-    key: "transaction_annotations",
-    table: "transaction_annotations",
-    select: "transaction_id, note, tags, created_at, updated_at",
-    scope: "user",
-  },
-  {
-    key: "linked_refunds",
-    table: "linked_refunds",
-    select: "charge_transaction_id, refund_transaction_id, amount, created_at",
-    scope: "user",
-  },
-  {
-    key: "linked_duplicates",
-    table: "linked_duplicates",
-    select: "subject_id, kept_transaction_id, excluded_transaction_id, created_at",
-    scope: "user",
-  },
-  {
-    key: "receipts",
-    table: "receipts",
-    select: "transaction_id, storage_path, merchant, purchase_date, total, status, created_at",
-    scope: "user",
-  },
-  {
-    key: "user_tags",
-    table: "user_tags",
-    select: "name, color_slot, created_at",
-    scope: "user",
-  },
-  {
-    key: "sinking_funds",
-    table: "sinking_funds",
-    select: "name, target_amount, due_date, created_at",
-    scope: "user",
-  },
-  {
-    key: "recurring_streams",
-    table: "recurring_streams",
-    select:
-      "stream_type, description, merchant_name, average_amount, last_amount, frequency, status, category, is_active, first_date, last_date, predicted_next_date, user_amount, created_at",
-    scope: "user",
-  },
-  {
-    key: "recurring_stream_transactions",
-    table: "recurring_stream_transactions",
-    select: "recurring_stream_id, transaction_id, created_at",
-    scope: "user",
-  },
-  {
-    key: "milestones",
-    table: "milestones",
-    select: "key, title, created_at",
-    scope: "user",
-  },
-  {
-    key: "goal_accounts",
-    table: "goal_accounts",
-    select: "goal_id, account_id, allocated_amount, use_entire_balance, created_at",
-    scope: "user",
-  },
-  {
-    key: "goal_progress_events",
-    table: "goal_progress_events",
-    select: "goal_id, event_date, amount, event_type, created_at",
-    scope: "user",
-  },
-  {
-    key: "advice_progress",
-    table: "advice_progress",
-    select: "advice_id, task_id, content_version, completed_at",
-    scope: "user",
-  },
-  {
-    key: "category_overrides",
-    table: "category_overrides",
-    select: "source_category, display_category, created_at",
-    scope: "user",
-  },
-  {
-    key: "shared_expenses",
-    table: "shared_expenses",
-    select: "description, amount, paid_by, owed_user_id, settled_at, created_at",
-    scope: "shared",
-  },
-  {
-    key: "net_worth_snapshots",
-    table: "net_worth_snapshots",
-    select: "snapshot_month, assets, liabilities, created_at",
-    scope: "user",
-  },
-  {
-    key: "households",
-    table: "households",
-    select: "name, created_at, updated_at",
-    scope: "owner",
-  },
+  table("accounts", "name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code"),
+  table("transactions", "date, amount, iso_currency_code, name, merchant_name, pfc_primary, pfc_detailed, pending"),
+  table("budgets", "category, monthly_limit, rollover_enabled"),
+  table("goals", "name, target_amount, saved_amount, target_date, goal_type"),
+  table("merchant_rules", "match_type, pattern, display_name, category, enabled"),
+  table("manual_accounts", "name, account_type, balance, include_in_net_worth"),
+  table("account_balance_snapshots", "account_id, manual_account_id, snapshot_date, current_balance, available_balance, iso_currency_code"),
+  table("alert_preferences", "broken_bank, budget_exceeded, goal_reached, large_transaction, low_cash_forecast"),
+  table("ai_settings", "enabled"),
+  table("budget_periods", "budget_id, month, planned"),
+  table("saved_reports", "name, report_type, filters, created_at, updated_at"),
+  table("holdings", "account_id, manual_account_id, quantity, cost_basis, institution_price, institution_value, as_of, source, is_active", "user", true),
+  table("holding_snapshots", "holding_id, snapshot_date, quantity, price, value", "user", true),
+  table("securities", "name, ticker, security_type, security_subtype, close_price, close_price_as_of, iso_currency_code", "user", true),
+  table("investment_transactions", "date, name, amount, quantity, price, fees, txn_type, txn_subtype, iso_currency_code", "user", true),
+  table("transaction_splits", "transaction_id, category, amount, created_at"),
+  table("transaction_annotations", "transaction_id, note, tags, created_at, updated_at"),
+  table("linked_refunds", "charge_transaction_id, refund_transaction_id, amount, created_at"),
+  table("linked_duplicates", "subject_id, kept_transaction_id, excluded_transaction_id, created_at"),
+  table("receipts", "transaction_id, storage_path, merchant, purchase_date, total, status, created_at"),
+  table("user_tags", "name, color_slot, created_at"),
+  table("sinking_funds", "name, target_amount, due_date, created_at"),
+  table("recurring_streams", "stream_type, description, merchant_name, average_amount, last_amount, frequency, status, category, is_active, first_date, last_date, predicted_next_date, user_amount, created_at"),
+  table("recurring_stream_transactions", "recurring_stream_id, transaction_id, created_at"),
+  table("milestones", "key, title, created_at"),
+  table("goal_accounts", "goal_id, account_id, allocated_amount, use_entire_balance, created_at"),
+  table("goal_progress_events", "goal_id, event_date, amount, event_type, created_at"),
+  table("advice_progress", "advice_id, task_id, content_version, completed_at"),
+  table("category_overrides", "source_category, display_category, created_at"),
+  table("shared_expenses", "description, amount, paid_by, owed_user_id, settled_at, created_at", "shared"),
+  table("net_worth_snapshots", "snapshot_month, assets, liabilities, created_at"),
+  table("households", "name, created_at, updated_at", "owner"),
 ];
 
 /**

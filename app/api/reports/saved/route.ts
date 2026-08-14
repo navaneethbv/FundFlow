@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { requireUser, errorResponse, badRequest } from "@/lib/http";
+import { badRequest } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { writeAudit, getClientIp } from "@/lib/audit";
+import { requestAudits } from "@/lib/request-audit";
 import { parseReportFilters, REPORT_TABS, type ReportTab } from "@/lib/reports";
+import { withUser } from "@/lib/authed-route";
 
 /**
  * Saved report definitions (Phase 6). Writes go through the cookie-bound
@@ -37,11 +38,7 @@ function isDuplicateName(error: { code?: string } | null): boolean {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireUser();
-  if (auth instanceof NextResponse) return auth;
-  const { user, supabase } = auth;
-
-  try {
+  return withUser("reports.saved.post", async ({ user, supabase }) => {
     if (!(await checkRateLimit(`saved-report:${user.id}`, 30, 60))) {
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
@@ -90,25 +87,14 @@ export async function POST(request: NextRequest) {
     }
     if (error) throw error;
 
-    await writeAudit({
-      userId: user.id,
-      action: "saved_report_created",
-      metadata: { report_type: reportType },
-      ip: getClientIp(request),
-    });
+    await requestAudits.savedReportCreated(request, user.id, { report_type: reportType });
 
     return NextResponse.json({ ok: true, report: data });
-  } catch (error) {
-    return errorResponse("reports.saved.post", error);
-  }
+  });
 }
 
 export async function PATCH(request: NextRequest) {
-  const auth = await requireUser();
-  if (auth instanceof NextResponse) return auth;
-  const { user, supabase } = auth;
-
-  try {
+  return withUser("reports.saved.patch", async ({ user, supabase }) => {
     if (!(await checkRateLimit(`saved-report:${user.id}`, 30, 60))) {
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
@@ -155,25 +141,16 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Report not found" }, { status: 404 });
     }
 
-    await writeAudit({
-      userId: user.id,
-      action: "saved_report_updated",
-      metadata: { renamed: patch.name !== undefined },
-      ip: getClientIp(request),
+    await requestAudits.savedReportUpdated(request, user.id, {
+      renamed: patch.name !== undefined,
     });
 
     return NextResponse.json({ ok: true, report: data });
-  } catch (error) {
-    return errorResponse("reports.saved.patch", error);
-  }
+  });
 }
 
 export async function DELETE(request: NextRequest) {
-  const auth = await requireUser();
-  if (auth instanceof NextResponse) return auth;
-  const { user, supabase } = auth;
-
-  try {
+  return withUser("reports.saved.delete", async ({ user, supabase }) => {
     const id = request.nextUrl.searchParams.get("id")?.trim();
     if (!id) return badRequest("id is required");
 
@@ -189,15 +166,8 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Report not found" }, { status: 404 });
     }
 
-    await writeAudit({
-      userId: user.id,
-      action: "saved_report_deleted",
-      metadata: {},
-      ip: getClientIp(request),
-    });
+    await requestAudits.savedReportDeleted(request, user.id, {});
 
     return NextResponse.json({ ok: true });
-  } catch (error) {
-    return errorResponse("reports.saved.delete", error);
-  }
+  });
 }

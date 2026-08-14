@@ -234,7 +234,7 @@ export default function GoalCardMenu({
           {mode === "edit" && (
             <form onSubmit={saveEdit} className="space-y-3">
               <label className="block text-xs font-semibold text-muted">
-                Name
+                <span className="block">Name</span>
                 <input
                   value={name}
                   onChange={(event) => setName(event.target.value)}
@@ -242,7 +242,7 @@ export default function GoalCardMenu({
                 />
               </label>
               <label className="block text-xs font-semibold text-muted">
-                {goal.goal_type === "pay_down" ? "Amount to pay down" : "Target amount"}{" "}
+                <span className="block">{goal.goal_type === "pay_down" ? "Amount to pay down" : "Target amount"}</span>
                 <input
                   type="number"
                   min="0"

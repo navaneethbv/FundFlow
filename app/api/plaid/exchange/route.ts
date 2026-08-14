@@ -10,6 +10,14 @@ import { writeAudit, getClientIp } from "@/lib/audit";
 import { logError } from "@/lib/log";
 import { fetchInstitutionBranding } from "@/lib/plaid-institution";
 
+/**
+ * `on_success` is deprecated in the Plaid SDK types but still populated for
+ * integrations an account manager has not migrated. Declared locally so the
+ * read stays typed and greppable: reaching it through a computed key hides a
+ * field this route depends on from both the compiler and static analysis.
+ */
+type LegacyLinkSession = { on_success?: { public_token?: string } };
+
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -51,8 +59,8 @@ export async function POST(request: NextRequest) {
     try {
       const tokenInfo = await plaid.linkTokenGet({ link_token: linkToken });
       // Read both shapes. `results.item_add_results` is the current field, but
-      // Plaid still returns the deprecated `on_success` to integrations that
-      // have not been migrated by their account manager. Reading only the new
+      // Plaid still returns a legacy success field to integrations that have
+      // not been migrated by their account manager. Reading only the new
       // one leaves `mintedPublicTokens` empty there, and the check below fails
       // open — silently dropping the binding it exists to enforce.
       const mintedPublicTokens = (tokenInfo.data.link_sessions ?? [])
@@ -60,10 +68,7 @@ export async function POST(request: NextRequest) {
           ...(session.results?.item_add_results ?? []).map(
             (result) => result.public_token,
           ),
-          // NOSONAR typescript:S1874 — the deprecated field is read on purpose;
-          // dropping it fails this security check open. Remove once Plaid
-          // confirms this integration no longer receives `on_success`.
-          session.on_success?.public_token,
+          (session as LegacyLinkSession).on_success?.public_token,
         ])
         .filter((token): token is string => typeof token === "string");
       if (

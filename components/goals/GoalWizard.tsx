@@ -213,15 +213,18 @@ function GoalWizardStepContent({
               Shows up as a planned contribution on the Budget page.
             </span>
           </label>
-          <label className="flex items-start gap-2 text-sm font-semibold">
+          <label
+            aria-label="Spending against this goal reduces it"
+            className="flex items-start gap-2 text-sm font-semibold"
+          >
             <input
               type="checkbox"
               className="mt-1"
               checked={draft.spendingReduces}
               onChange={(e) => patch({ spendingReduces: e.target.checked })}
             />
-            <span>
-              Spending against this goal reduces it
+            <span className="block">
+              <span className="block">Spending against this goal reduces it</span>
               <span className="mt-1 block text-xs font-normal text-muted">
                 Link a transaction to this goal from the ledger and it will be
                 subtracted from the goal&apos;s progress.

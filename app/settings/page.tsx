@@ -74,7 +74,8 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
 
   let content: React.ReactNode;
 
-  if (active === "profile") {
+  switch (active) {
+    case "profile": {
     const { data: profile } = await supabase
       .from("profiles")
       .select("full_name, display_name, birthday, avatar_path")
@@ -95,7 +96,9 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
         avatarUrl={avatarUrl}
       />
     );
-  } else if (active === "display") {
+      break;
+    }
+    case "display": {
     const { data: profile } = await supabase
       .from("profiles")
       .select("display_prefs, dashboard_prefs")
@@ -112,7 +115,9 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
         />
       </>
     );
-  } else if (active === "notifications") {
+      break;
+    }
+    case "notifications": {
     content = (
       <>
         <Panel title="Notifications" eyebrow="Alerts and delivery">
@@ -124,7 +129,9 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
         <ReportsSection />
       </>
     );
-  } else if (active === "security") {
+      break;
+    }
+    case "security": {
     const activeSessionId = await currentSessionId(supabase);
     const [{ data: auditLogs }, { data: sessionRows }] = await Promise.all([
       supabase
@@ -165,7 +172,9 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
         <AuditLogSection initialRows={auditPage.rows} />
       </div>
     );
-  } else if (active === "integrations") {
+      break;
+    }
+    case "integrations": {
     const [{ data: aiSettings }, { data: calendarTokens }, { data: apiTokens }] = await Promise.all([
       supabase.from("ai_settings").select("enabled").eq("user_id", userId).maybeSingle(),
       supabase
@@ -191,12 +200,16 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
         <AskAiSection enabled={aiSettings?.enabled ?? false} />
       </div>
     );
-  } else if (active === "household-general") {
+      break;
+    }
+    case "household-general": {
     const { data: households } = await supabase.from("households").select("id, name").order("created_at", { ascending: false });
     content = (
       <HouseholdSection initialHouseholds={(households ?? []) as Array<{ id: string; name: string }>} />
     );
-  } else if (active === "household-preferences") {
+      break;
+    }
+    case "household-preferences": {
     const [{ data: households }, { data: householdMembers }, { data: sharedExpenses }] = await Promise.all([
       supabase.from("households").select("id, name").order("created_at", { ascending: false }),
       supabase.from("household_members").select("household_id, user_id, role"),
@@ -243,7 +256,9 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
           </p>
         </Panel>
       );
-  } else if (active === "institutions") {
+      break;
+    }
+    case "institutions": {
     const [{ data: items }, { data: manualAccounts }, { data: accounts }, { data: households }] = await Promise.all([
       supabase
         .from("plaid_items")
@@ -270,7 +285,9 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
         />
       </>
     );
-  } else if (active === "categories") {
+      break;
+    }
+    case "categories": {
     const [{ data: budgets }, { data: categoryOverrides }, { data: spendHistoryRows }, { data: sinkingFunds }] =
       await Promise.all([
         supabase.from("budgets").select("id, category, monthly_limit, rollover_enabled, household_id").order("category"),
@@ -330,23 +347,31 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
         />
       </>
     );
-  } else if (active === "merchants") {
+      break;
+    }
+    case "merchants": {
     const { data: cancelledSubs } = await supabase.from("cancelled_subscriptions").select("merchant").order("merchant");
     content = (
       <CancelledSubscriptionsSection
         initialMerchants={((cancelledSubs ?? []) as Array<{ merchant: string }>).map((row) => row.merchant)}
       />
     );
-  } else if (active === "rules") {
+      break;
+    }
+    case "rules": {
     const { data: merchantRules } = await supabase
       .from("merchant_rules")
       .select("id, match_type, pattern, display_name, category, enabled")
       .order("created_at");
     content = <MerchantRulesSection initialRules={merchantRules ?? []} />;
-  } else if (active === "tags") {
+      break;
+    }
+    case "tags": {
     const { data: tagRows } = await supabase.from("user_tags").select("id, name").eq("user_id", userId).order("name");
     content = <TagsSection initialTags={(tagRows ?? []) as Array<{ id: string; name: string }>} />;
-  } else {
+      break;
+    }
+    default: {
     // data
     const [{ data: profile }, { data: accounts }, { data: aiSettings }, { data: items }] = await Promise.all([
       supabase.from("profiles").select("ai_export_enabled").eq("id", userId).maybeSingle(),
@@ -368,6 +393,8 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
         <DangerZone />
       </>
     );
+      break;
+    }
   }
 
   return (

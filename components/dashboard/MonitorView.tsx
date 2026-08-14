@@ -99,6 +99,77 @@ function getAttentionItems(data: DashboardData): AttentionItem[] {
   return items;
 }
 
+// Recent activity is the primary monitoring section and stays ahead of detail panels.
+function BreakdownPanel({
+  data,
+  linkParams,
+  showAllCategories,
+  donutItems,
+  maxCategory,
+}: Readonly<{
+  data: DashboardData;
+  linkParams: DrillLinkParams;
+  showAllCategories: boolean;
+  donutItems: Array<{ label: string; amount: number; href: string }>;
+  maxCategory: number;
+}>) {
+  if (data.drilldown?.kind === "category") {
+    return (
+      <div className="xl:col-span-7">
+        <CategoryDrilldownPanel
+          drill={data.drilldown}
+          linkParams={linkParams}
+          month={data.selectedMonth}
+        />
+      </div>
+    );
+  }
+  if (data.drilldown?.kind === "merchant") {
+    return (
+      <div className="xl:col-span-7">
+        <MerchantDrilldownPanel
+          drill={data.drilldown}
+          linkParams={linkParams}
+          month={data.selectedMonth}
+        />
+      </div>
+    );
+  }
+  if (showAllCategories) {
+    return (
+      <Panel
+        title="All categories"
+        className="xl:col-span-7"
+        action={
+          <Link
+            href={dashboardUrl(linkParams)}
+            className="text-xs font-semibold text-accent hover:underline"
+          >
+            Back to top 6
+          </Link>
+        }
+      >
+        <BarList
+          items={data.categoryBreakdown.map((category) => ({
+            label: titleCase(category.category),
+            amount: category.amount,
+            href: dashboardUrl({ ...linkParams, category: category.category }),
+          }))}
+          max={maxCategory}
+        />
+      </Panel>
+    );
+  }
+  if (donutItems.length > 0) {
+    return (
+      <Panel title="Spending by category" className="xl:col-span-7">
+        <DonutChart items={donutItems} centerLabel="spent" />
+      </Panel>
+    );
+  }
+  return null;
+}
+
 export default function MonitorView({
   data,
   netWorth,
@@ -336,52 +407,13 @@ export default function MonitorView({
 
       {!prefs?.hideBreakdowns && (donutItems.length > 0 || data.subscriptions.length > 0) && (
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-12">
-          {data.drilldown?.kind === "category" ? (
-            <div className="xl:col-span-7">
-              <CategoryDrilldownPanel
-                drill={data.drilldown}
-                linkParams={linkParams}
-                month={data.selectedMonth}
-              />
-            </div>
-          ) : data.drilldown?.kind === "merchant" ? (
-            <div className="xl:col-span-7">
-              <MerchantDrilldownPanel
-                drill={data.drilldown}
-                linkParams={linkParams}
-                month={data.selectedMonth}
-              />
-            </div>
-          ) : showAllCategories ? (
-            <Panel
-              title="All categories"
-              className="xl:col-span-7"
-              action={
-                <Link
-                  href={dashboardUrl(linkParams)}
-                  className="text-xs font-semibold text-accent hover:underline"
-                >
-                  Back to top 6
-                </Link>
-              }
-            >
-              <BarList
-                items={data.categoryBreakdown.map((category) => ({
-                  label: titleCase(category.category),
-                  amount: category.amount,
-                  href: dashboardUrl({
-                    ...linkParams,
-                    category: category.category,
-                  }),
-                }))}
-                max={maxCategory}
-              />
-            </Panel>
-          ) : donutItems.length > 0 ? (
-            <Panel title="Spending by category" className="xl:col-span-7">
-              <DonutChart items={donutItems} centerLabel="spent" />
-            </Panel>
-          ) : null}
+          <BreakdownPanel
+            data={data}
+            linkParams={linkParams}
+            showAllCategories={showAllCategories}
+            donutItems={donutItems}
+            maxCategory={maxCategory}
+          />
           {data.subscriptions.length > 0 && (
             <Panel title="Recurring streams" className="xl:col-span-5">
               <div className="divide-y divide-panel-border">

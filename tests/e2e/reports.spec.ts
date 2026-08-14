@@ -36,6 +36,7 @@ const activeMonth = new Date().toISOString().slice(0, 7);
  * export links, Sankey, and table twin against a real non-empty report.
  */
 test.describe.serial("Phase 6: reports and Sankey", () => {
+  // Intentional skip: this live acceptance suite needs live credentials and the released feature flag.
   test.skip(
     !RUN,
     "Supabase credentials and FUNDFLOW_FEATURE_FLAGS=reportsPage are required",

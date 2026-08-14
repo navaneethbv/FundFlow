@@ -32,6 +32,7 @@ export default function DivergingColumns({
   };
   valueFormatter?: (v: number) => string;
 }>) {
+  const ariaLabel = line ? `${upName} vs ${downName} with ${line.name}` : `${upName} vs ${downName}`;
   const W = 560;
   const H = 260;
   const PAD = { top: 16, right: 16, bottom: 26, left: 46 };
@@ -100,7 +101,7 @@ export default function DivergingColumns({
         viewBox={`0 0 ${W} ${H}`}
         className="w-full h-auto"
         role="img"
-        aria-label={`${upName} vs ${downName}${line ? ` with ${line.name}` : ""}`}
+        aria-label={ariaLabel}
       >
         {gridLevels.map((t) => (
           <g key={t}>

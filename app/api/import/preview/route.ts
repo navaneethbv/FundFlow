@@ -9,6 +9,71 @@ import { checkRateLimit } from "@/lib/rate-limit";
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_ROWS = 20_000;
 
+function parsePreviewInput(
+  text: string,
+  positiveIsIncome: boolean,
+  columnMapRaw: FormDataEntryValue | null,
+): { rows: Array<{ date: string; merchant: string; amount: number; category: string | null }>; errors: string[]; isOfx: boolean; columns?: ColumnMap; mappingError?: string } {
+  const isOfx = looksLikeOfx(text);
+  let columns: ColumnMap | undefined;
+  if (!isOfx && typeof columnMapRaw === "string" && columnMapRaw.length > 0) {
+    const header = getCsvColumns(text);
+    let parsed: ColumnMap | null = null;
+    try {
+      parsed = header
+        ? normalizeColumnMap(JSON.parse(columnMapRaw), header.headers.length)
+        : null;
+    } catch {
+      parsed = null;
+    }
+    if (!parsed) {
+      return {
+        rows: [],
+        errors: [],
+        isOfx,
+        mappingError:
+        "Invalid column mapping. Map at least a date, description, and amount (or debit/credit).",
+      };
+    }
+    columns = parsed;
+  }
+  const parsed = isOfx
+    ? {
+        rows: parseOfx(text).map((row) => ({
+          date: row.date,
+          merchant: row.description,
+          amount: row.amount,
+          category: null,
+        })),
+        errors: [] as string[],
+      }
+    : parseImportCsv(text, { positiveIsIncome, columns });
+  return { ...parsed, isOfx, columns };
+}
+
+function emptyPreviewResponse(
+  text: string,
+  isOfx: boolean,
+  columns: ColumnMap | undefined,
+  errors: string[],
+): NextResponse {
+  if (!isOfx && !columns) {
+    const header = getCsvColumns(text);
+    if (header && header.headers.length > 0) {
+      return NextResponse.json({
+        needs_mapping: true,
+        headers: header.headers,
+        sample: header.sample,
+        parse_errors: errors.slice(0, 20),
+      });
+    }
+  }
+  return badRequest(
+    errors[0] ??
+      (isOfx ? "No importable OFX rows found" : "No importable rows found"),
+  );
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -34,52 +99,13 @@ export async function POST(request: NextRequest) {
     }
 
     const text = await file.text();
-    const isOfx = looksLikeOfx(text);
-
-    // An explicit column map (from the manual-mapping UI) overrides detection.
-    const columnMapRaw = form.get("column_map");
-    let columns: ColumnMap | undefined;
-    if (!isOfx && typeof columnMapRaw === "string" && columnMapRaw.length > 0) {
-      const header = getCsvColumns(text);
-      const parsed = header ? normalizeColumnMap(JSON.parse(columnMapRaw), header.headers.length) : null;
-      if (!parsed) return badRequest("Invalid column mapping. Map at least a date, description, and amount (or debit/credit).");
-      columns = parsed;
-    }
-
-    const parsed = isOfx
-      ? {
-          rows: parseOfx(text).map((row) => ({
-            date: row.date,
-            merchant: row.description,
-            amount: row.amount,
-            category: null,
-          })),
-          errors: [] as string[],
-        }
-      : parseImportCsv(text, { positiveIsIncome, columns });
-    const { rows, errors } = parsed;
+    const parsed = parsePreviewInput(text, positiveIsIncome, form.get("column_map"));
+    const { rows, errors, isOfx, columns } = parsed;
+    if (parsed.mappingError) return badRequest(parsed.mappingError);
     if (rows.length > MAX_ROWS) {
       return badRequest(`Too many rows (${MAX_ROWS} max per file)`);
     }
-    if (rows.length === 0) {
-      // With no explicit map, auto-detection couldn't produce rows — hand the
-      // headers back so the UI can offer manual column mapping instead of a
-      // dead-end error.
-      if (!isOfx && !columns) {
-        const header = getCsvColumns(text);
-        if (header && header.headers.length > 0) {
-          return NextResponse.json({
-            needs_mapping: true,
-            headers: header.headers,
-            sample: header.sample,
-            parse_errors: errors.slice(0, 20),
-          });
-        }
-      }
-      return badRequest(
-        errors[0] ?? (isOfx ? "No importable OFX rows found" : "No importable rows found"),
-      );
-    }
+    if (rows.length === 0) return emptyPreviewResponse(text, isOfx, columns, errors);
 
     const { data: existing } = await supabase
       .from("transactions")

@@ -4,6 +4,89 @@ import { validateAdvicePriorities, validateAdviceProfile } from "@/lib/advice";
 import { getClientIp, writeAudit } from "@/lib/audit";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { createServiceClient } from "@/lib/supabase/service";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+type AdviceService = SupabaseClient;
+
+async function toggleTask(
+  service: AdviceService,
+  userId: string,
+  adviceId: string,
+  taskId: string,
+  completed: boolean,
+  request: NextRequest,
+) {
+  const item = ADVICE_LIBRARY.find((candidate) => candidate.id === adviceId);
+  if (item?.tasks.some((task) => task.id === taskId) !== true) {
+    return badRequest("unknown adviceId or taskId");
+  }
+  if (completed) {
+    const { error } = await service.from("advice_progress").upsert(
+      { user_id: userId, advice_id: adviceId, task_id: taskId, content_version: item.version },
+      { onConflict: "user_id,advice_id,task_id" },
+    );
+    if (error) throw error;
+  } else {
+    const { error } = await service
+      .from("advice_progress")
+      .delete()
+      .eq("user_id", userId)
+      .eq("advice_id", adviceId)
+      .eq("task_id", taskId);
+    if (error) throw error;
+  }
+  await writeAudit({
+    userId,
+    action: "advice_task_toggled",
+    metadata: { advice_id: adviceId },
+    ip: getClientIp(request),
+  });
+  return NextResponse.json({ ok: true });
+}
+
+async function setPriorities(
+  service: AdviceService,
+  userId: string,
+  value: unknown,
+  request: NextRequest,
+) {
+  const result = validateAdvicePriorities(value, ADVICE_LIBRARY);
+  if (!result.ok) return badRequest(result.error);
+  const { error } = await service
+    .from("profiles")
+    .update({ advice_priorities: result.value })
+    .eq("id", userId);
+  if (error) throw error;
+  await writeAudit({
+    userId,
+    action: "advice_priorities_updated",
+    metadata: { count: result.value.length },
+    ip: getClientIp(request),
+  });
+  return NextResponse.json({ ok: true, priorities: result.value });
+}
+
+async function updateProfile(
+  service: AdviceService,
+  userId: string,
+  value: unknown,
+  request: NextRequest,
+) {
+  const result = validateAdviceProfile(value);
+  if (!result.ok) return badRequest(result.error);
+  const { error } = await service
+    .from("profiles")
+    .update({ advice_profile: result.value })
+    .eq("id", userId);
+  if (error) throw error;
+  await writeAudit({
+    userId,
+    action: "advice_profile_updated",
+    metadata: {},
+    ip: getClientIp(request),
+  });
+  return NextResponse.json({ ok: true });
+}
 
 /**
  * Three idempotent operations behind one route, matching the plan's
@@ -34,77 +117,25 @@ export async function PATCH(request: NextRequest) {
       if (typeof adviceId !== "string" || typeof taskId !== "string" || typeof completed !== "boolean") {
         return badRequest("adviceId, taskId, and completed are required");
       }
-      const item = ADVICE_LIBRARY.find((i) => i.id === adviceId);
-      if (item?.tasks.some((t) => t.id === taskId) !== true) {
-        return badRequest("unknown adviceId or taskId");
-      }
-
-      if (completed) {
-        const { error } = await service.from("advice_progress").upsert(
-          {
-            user_id: user.id,
-            advice_id: adviceId,
-            task_id: taskId,
-            content_version: item.version,
-          },
-          { onConflict: "user_id,advice_id,task_id" },
-        );
-        if (error) throw error;
-      } else {
-        const { error } = await service
-          .from("advice_progress")
-          .delete()
-          .eq("user_id", user.id)
-          .eq("advice_id", adviceId)
-          .eq("task_id", taskId);
-        if (error) throw error;
-      }
-
-      await writeAudit({
-        userId: user.id,
-        action: "advice_task_toggled",
-        metadata: { advice_id: adviceId },
-        ip: getClientIp(request),
-      });
-      return NextResponse.json({ ok: true });
+      return toggleTask(service, user.id, adviceId, taskId, completed, request);
     }
 
     if (body.kind === "set_priorities") {
-      const result = validateAdvicePriorities((body as { priorities?: unknown }).priorities, ADVICE_LIBRARY);
-      if (!result.ok) return badRequest(result.error);
-
-      const { error } = await service
-        .from("profiles")
-        .update({ advice_priorities: result.value })
-        .eq("id", user.id);
-      if (error) throw error;
-
-      await writeAudit({
-        userId: user.id,
-        action: "advice_priorities_updated",
-        metadata: { count: result.value.length },
-        ip: getClientIp(request),
-      });
-      return NextResponse.json({ ok: true, priorities: result.value });
+      return setPriorities(
+        service,
+        user.id,
+        (body as { priorities?: unknown }).priorities,
+        request,
+      );
     }
 
     if (body.kind === "update_profile") {
-      const result = validateAdviceProfile((body as { profile?: unknown }).profile);
-      if (!result.ok) return badRequest(result.error);
-
-      const { error } = await service
-        .from("profiles")
-        .update({ advice_profile: result.value })
-        .eq("id", user.id);
-      if (error) throw error;
-
-      await writeAudit({
-        userId: user.id,
-        action: "advice_profile_updated",
-        metadata: {},
-        ip: getClientIp(request),
-      });
-      return NextResponse.json({ ok: true });
+      return updateProfile(
+        service,
+        user.id,
+        (body as { profile?: unknown }).profile,
+        request,
+      );
     }
 
     return badRequest("unknown kind");

@@ -28,6 +28,16 @@ interface MappingState {
   sample: string[][];
 }
 
+function uniqueKeys(values: readonly unknown[], prefix: string): string[] {
+  const counts = new Map<string, number>();
+  return values.map((value) => {
+    const base = String(value);
+    const count = counts.get(base) ?? 0;
+    counts.set(base, count + 1);
+    return `${prefix}-${base}-${count}`;
+  });
+}
+
 /**
  * Two-step CSV import: preview parsed rows with duplicate flags, then commit
  * only the rows the user keeps. Flagged (possible/file duplicate) rows are
@@ -160,16 +170,26 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
   }
 
   const selectableCount = rows.filter((row) => selected.has(row.id)).length;
+  const headerKeys = uniqueKeys(mapping?.headers ?? [], "header");
+  const sampleKeys = uniqueKeys(
+    (mapping?.sample ?? []).map((row) => row.join("\u001f")),
+    "sample",
+  );
+  const headerColumns = (mapping?.headers ?? []).map((value, index) => ({
+    key: headerKeys[index]!,
+    index,
+    value,
+  }));
+  const sampleRows = (mapping?.sample ?? []).map((value, index) => ({
+    key: sampleKeys[index]!,
+    value,
+  }));
   const columnOptions = (placeholder: string, includeNone = false) => (
     <>
       <option value="">{includeNone ? "None" : placeholder}</option>
-      {/* Keyed by index on purpose: CSV headers are arbitrary user input and
-          are routinely duplicated or blank, so a value-derived key collides.
-          The list is a fixed-order projection of one parsed file, never
-          reordered or spliced, which is exactly when an index key is correct. */}
-      {(mapping?.headers ?? []).map((h, i) => (
-        <option key={i} value={i}>
-          {h || `Column ${i + 1}`}
+      {headerColumns.map((column) => (
+        <option key={column.key} value={column.index}>
+          {column.value || `Column ${column.index + 1}`}
         </option>
       ))}
     </>
@@ -235,22 +255,19 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
               <table className="w-full text-left text-xs">
                 <thead className="bg-panel text-muted">
                   <tr>
-                    {/* Index keys throughout this table: duplicate and blank
-                        CSV headers are normal, and two preview rows can be
-                        byte-identical, so a value-derived key collides. */}
-                    {mapping.headers.map((h, i) => (
-                      <th key={i} className="whitespace-nowrap p-2 font-semibold">
-                        {h || `Column ${i + 1}`}
+                    {headerColumns.map((column) => (
+                      <th key={column.key} className="whitespace-nowrap p-2 font-semibold">
+                        {column.value || `Column ${column.index + 1}`}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {mapping.sample.map((r, ri) => (
-                    <tr key={ri} className="border-t border-panel-border">
-                      {mapping.headers.map((h, ci) => (
-                        <td key={ci} className="whitespace-nowrap p-2 text-muted">
-                          {r[ci] ?? ""}
+                  {sampleRows.map((sample) => (
+                    <tr key={sample.key} className="border-t border-panel-border">
+                      {headerColumns.map((column) => (
+                        <td key={column.key} className="whitespace-nowrap p-2 text-muted">
+                          {sample.value[column.index] ?? ""}
                         </td>
                       ))}
                     </tr>

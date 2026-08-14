@@ -10,6 +10,26 @@ import Input from "@/components/ui/Input";
 
 type StepUpMethod = "totp" | "password" | null;
 
+async function deleteAccountRequest(
+  method: Exclude<StepUpMethod, null>,
+  code: string,
+  supabase: ReturnType<typeof createClient>,
+  router: ReturnType<typeof useRouter>,
+): Promise<void> {
+  const res = await fetch("/api/account", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ method, code }),
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(json.error ?? "Deletion failed");
+  }
+  await supabase.auth.signOut();
+  router.push("/signup");
+  router.refresh();
+}
+
 export default function DangerZone() {
   const router = useRouter();
   const supabase = createClient();
@@ -57,18 +77,7 @@ export default function DangerZone() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/account", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ method: stepUpMethod, code }),
-      });
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error(json.error ?? "Deletion failed");
-      }
-      await supabase.auth.signOut();
-      router.push("/signup");
-      router.refresh();
+      await deleteAccountRequest(stepUpMethod, code, supabase, router);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error");
       setBusy(false);

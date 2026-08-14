@@ -32,6 +32,7 @@ const monthLabel = new Date(
 const quarterLabel = `Q${Math.ceil(monthNumber! / 3)} ${year}`;
 
 test.describe.serial("cash flow page", () => {
+  // Intentional skip: this live acceptance suite needs disposable Supabase credentials.
   test.skip(!RUN, "Supabase browser and service credentials are required");
   test.setTimeout(120_000);
 

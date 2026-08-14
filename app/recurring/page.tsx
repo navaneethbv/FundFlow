@@ -14,6 +14,7 @@ import { localDateKey, localMonthKey } from "@/lib/format-date";
 import { loadRecurringData } from "@/lib/recurring-data";
 import { serializeFinancialScope } from "@/lib/financial-scope";
 import { isFeatureEnabled } from "@/lib/feature-flags";
+import { firstSearchParam } from "@/lib/search-params";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -28,10 +29,6 @@ interface PageProps {
 
 const MONTH_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
 const RECURRING_TABS = new Set<RecurringTab>(["upcoming", "complete", "manage"]);
-
-function first(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
-}
 
 function shiftMonth(month: string, delta: number): string {
   const [year, oneBasedMonth] = month.split("-").map(Number);
@@ -62,9 +59,9 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
 
   const currentMonth = localMonthKey();
   const today = localDateKey();
-  const rawMonth = first(params.month);
+  const rawMonth = firstSearchParam(params.month);
   const month = rawMonth && MONTH_REGEX.test(rawMonth) ? rawMonth : currentMonth;
-  const tab = parseTab(first(params.tab));
+  const tab = parseTab(firstSearchParam(params.tab));
 
   const loaded = await loadRecurringData(supabase, {
     userId: user.id,

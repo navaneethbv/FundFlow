@@ -9,6 +9,7 @@ import { buildAdviceView, type AdviceCategory, type AdviceItemProgress } from "@
 import { ADVICE_LIBRARY } from "@/lib/advice-content";
 import { loadAdvicePageData } from "@/lib/advice-data";
 import { isFeatureEnabled } from "@/lib/feature-flags";
+import { firstSearchParam } from "@/lib/search-params";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -27,10 +28,6 @@ const CATEGORY_LABELS: Record<AdviceCategory, string> = {
 };
 
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as AdviceCategory[];
-
-function first(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
-}
 
 function isCategory(value: string | undefined): value is AdviceCategory {
   return CATEGORIES.includes(value as AdviceCategory);
@@ -55,7 +52,9 @@ export default async function AdvicePage({ searchParams }: Readonly<PageProps>) 
   if (!isFeatureEnabled("advicePage")) notFound();
 
   const params = await searchParams;
-  const selectedCategory = isCategory(first(params.category)) ? (first(params.category) as AdviceCategory) : undefined;
+  const selectedCategory = isCategory(firstSearchParam(params.category))
+    ? (firstSearchParam(params.category) as AdviceCategory)
+    : undefined;
 
   const supabase = await createClient();
   const {
