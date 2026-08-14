@@ -31,10 +31,8 @@ export async function POST(request: NextRequest) {
       .single();
     if (error) throw error;
 
-    await writeRequestAudit(request, {
-      userId: user.id,
-      action: "calendar_token_created",
-      metadata: { include_amounts: Boolean(body.includeAmounts) },
+    await writeRequestAudit(request, user.id, "calendar_token_created", {
+      include_amounts: Boolean(body.includeAmounts),
     });
 
     return NextResponse.json({ token, row: data });
@@ -53,11 +51,7 @@ export async function DELETE(request: NextRequest) {
       .eq("id", body.id);
     if (error) throw error;
 
-    await writeRequestAudit(request, {
-      userId: user.id,
-      action: "calendar_token_revoked",
-      metadata: { id: body.id },
-    });
+    await writeRequestAudit(request, user.id, "calendar_token_revoked", { id: body.id });
 
     return NextResponse.json({ ok: true });
   });

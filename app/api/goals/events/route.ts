@@ -84,11 +84,10 @@ export async function POST(request: NextRequest) {
       .single();
     if (error) throw error;
 
-    await writeRequestAudit(request, {
-      userId: user.id,
-      action: "goal_contribution_recorded",
-      // Ids and the kind of event only — never the amount.
-      metadata: { goal_id: goalId, event_type: eventType },
+    // Ids and the kind of event only — never the amount.
+    await writeRequestAudit(request, user.id, "goal_contribution_recorded", {
+      goal_id: goalId,
+      event_type: eventType,
     });
 
     return NextResponse.json({ ok: true, id: data.id });
@@ -112,11 +111,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
 
-    await writeRequestAudit(request, {
-      userId: user.id,
-      action: "goal_contribution_removed",
-      metadata: { event_id: id },
-    });
+    await writeRequestAudit(request, user.id, "goal_contribution_removed", { event_id: id });
 
     return NextResponse.json({ ok: true });
   });

@@ -87,11 +87,7 @@ export async function POST(request: NextRequest) {
     }
     if (error) throw error;
 
-    await writeRequestAudit(request, {
-      userId: user.id,
-      action: "saved_report_created",
-      metadata: { report_type: reportType },
-    });
+    await writeRequestAudit(request, user.id, "saved_report_created", { report_type: reportType });
 
     return NextResponse.json({ ok: true, report: data });
   });
@@ -145,10 +141,8 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Report not found" }, { status: 404 });
     }
 
-    await writeRequestAudit(request, {
-      userId: user.id,
-      action: "saved_report_updated",
-      metadata: { renamed: patch.name !== undefined },
+    await writeRequestAudit(request, user.id, "saved_report_updated", {
+      renamed: patch.name !== undefined,
     });
 
     return NextResponse.json({ ok: true, report: data });
@@ -172,11 +166,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Report not found" }, { status: 404 });
     }
 
-    await writeRequestAudit(request, {
-      userId: user.id,
-      action: "saved_report_deleted",
-      metadata: {},
-    });
+    await writeRequestAudit(request, user.id, "saved_report_deleted", {});
 
     return NextResponse.json({ ok: true });
   });

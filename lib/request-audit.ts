@@ -4,14 +4,14 @@ import { getClientIp, writeAudit, type AuditAction } from "@/lib/audit";
 
 export function writeRequestAudit(
   request: NextRequest,
-  input: {
-    userId: string;
-    action: AuditAction;
-    metadata: Record<string, unknown>;
-  },
+  userId: string,
+  action: AuditAction,
+  metadata: Record<string, unknown>,
 ): Promise<void> {
   return writeAudit({
-    ...input,
+    userId,
+    action,
+    metadata,
     ip: getClientIp(request),
   });
 }
