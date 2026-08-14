@@ -30,6 +30,47 @@ async function deleteAccountRequest(
   router.refresh();
 }
 
+/** Everything about the confirm field that differs between the two methods. */
+interface StepUpFieldConfig {
+  label: string;
+  type: "text" | "password";
+  autoComplete: string;
+  inputMode?: "numeric";
+  pattern?: string;
+  maxLength?: number;
+  placeholder: string;
+}
+
+const TOTP_FIELD: StepUpFieldConfig = {
+  label: "Confirm with your authenticator code",
+  type: "text",
+  autoComplete: "one-time-code",
+  inputMode: "numeric",
+  pattern: "[0-9]*",
+  maxLength: 6,
+  placeholder: "6-digit code",
+};
+
+const PASSWORD_FIELD: StepUpFieldConfig = {
+  label: "Confirm with your password",
+  type: "password",
+  autoComplete: "current-password",
+  placeholder: "Password",
+};
+
+/**
+ * Users with a verified TOTP factor confirm with a fresh code; everyone else
+ * re-enters their password.
+ */
+async function resolveStepUpMethod(
+  supabase: ReturnType<typeof createClient>,
+): Promise<Exclude<StepUpMethod, null>> {
+  const { data } = await supabase.auth.mfa.listFactors();
+  return (data?.totp ?? []).some((factor) => factor.status === "verified")
+    ? "totp"
+    : "password";
+}
+
 export default function DangerZone() {
   const router = useRouter();
   const supabase = createClient();
@@ -39,20 +80,13 @@ export default function DangerZone() {
   const [stepUpMethod, setStepUpMethod] = useState<StepUpMethod>(null);
   const [code, setCode] = useState("");
 
-  // Decide the re-authentication method up front: users with a verified TOTP
-  // factor confirm with a fresh code; everyone else re-enters their password.
+  // Decide the re-authentication method up front so the confirm field is
+  // already the right one when the user opens it.
   useEffect(() => {
     let active = true;
-    (async () => {
-      const { data } = await supabase.auth.mfa.listFactors();
-      if (active) {
-        setStepUpMethod(
-          (data?.totp ?? []).some((factor) => factor.status === "verified")
-            ? "totp"
-            : "password",
-        );
-      }
-    })();
+    void resolveStepUpMethod(supabase).then((method) => {
+      if (active) setStepUpMethod(method);
+    });
     return () => {
       active = false;
     };
@@ -84,6 +118,8 @@ export default function DangerZone() {
     }
   }
 
+  const stepUpField = stepUpMethod === "totp" ? TOTP_FIELD : PASSWORD_FIELD;
+
   return (
     <Panel title="Danger zone" tone="danger">
       <p className="mb-4 text-sm text-muted">
@@ -101,25 +137,16 @@ export default function DangerZone() {
         </Button>
       ) : (
         <form onSubmit={deleteAccount} className="space-y-3">
-          <Field
-            label={
-              stepUpMethod === "totp"
-                ? "Confirm with your authenticator code"
-                : "Confirm with your password"
-            }
-            htmlFor="danger-zone-step-up"
-          >
+          <Field label={stepUpField.label} htmlFor="danger-zone-step-up">
             <Input
               id="danger-zone-step-up"
-              type={stepUpMethod === "totp" ? "text" : "password"}
+              type={stepUpField.type}
               required
-              autoComplete={
-                stepUpMethod === "totp" ? "one-time-code" : "current-password"
-              }
-              inputMode={stepUpMethod === "totp" ? "numeric" : undefined}
-              pattern={stepUpMethod === "totp" ? "[0-9]*" : undefined}
-              maxLength={stepUpMethod === "totp" ? 6 : undefined}
-              placeholder={stepUpMethod === "totp" ? "6-digit code" : "Password"}
+              autoComplete={stepUpField.autoComplete}
+              inputMode={stepUpField.inputMode}
+              pattern={stepUpField.pattern}
+              maxLength={stepUpField.maxLength}
+              placeholder={stepUpField.placeholder}
               value={code}
               onChange={(e) => setCode(e.target.value)}
             />

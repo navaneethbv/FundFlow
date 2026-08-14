@@ -117,6 +117,80 @@ function assertProjectionQuery(
   throw new Error(`finance_projection_query_failed:${table}${suffix}`);
 }
 
+interface SplitRow {
+  transaction_id: string;
+  category: string;
+  amount: number | string;
+}
+
+type SplitChunkResult = { data: SplitRow[] | null; error: { code?: string } | null };
+
+/** `:CODE` suffix for the thrown error message, or "" when there is none. */
+function errorCodeSuffix(error: unknown): string {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof error.code === "string"
+  ) {
+    return `:${error.code}`;
+  }
+  return "";
+}
+
+/**
+ * `transaction_splits` reads chunked by 500 transaction ids: PostgREST builds
+ * an `in.(...)` list into the URL, and the whole page's ids at once overruns
+ * the request line.
+ */
+function buildSplitChunkQueries(
+  supabase: SupabaseClient,
+  txnIds: readonly string[],
+  userId: string | null | undefined,
+): Array<PromiseLike<SplitChunkResult>> {
+  const queries: Array<PromiseLike<SplitChunkResult>> = [];
+  for (let i = 0; i < txnIds.length; i += 500) {
+    let splitsQuery = supabase
+      .from("transaction_splits")
+      .select("transaction_id,category,amount")
+      .in("transaction_id", txnIds.slice(i, i + 500))
+      .limit(2000);
+    if (userId) splitsQuery = splitsQuery.eq("user_id", userId);
+    queries.push(splitsQuery);
+  }
+  return queries;
+}
+
+/** Flattens the per-chunk split rows into the projection's split input. */
+function collectSplits(
+  chunks: readonly SplitChunkResult[],
+): Array<{ transactionId: string; category: string; amount: number }> {
+  const splits: Array<{ transactionId: string; category: string; amount: number }> = [];
+  for (const chunk of chunks) {
+    for (const s of chunk.data ?? []) {
+      splits.push({
+        transactionId: s.transaction_id,
+        category: s.category,
+        amount: Number(s.amount),
+      });
+    }
+  }
+  return splits;
+}
+
+/** Account currency and (where set) display name, keyed by account id. */
+function buildAccountMaps(
+  accounts: ReadonlyArray<{ id: string; name?: string | null; iso_currency_code?: string | null }>,
+): { currencyByAccountId: Map<string, string>; accountNames: Map<string, string> } {
+  const currencyByAccountId = new Map<string, string>();
+  const accountNames = new Map<string, string>();
+  for (const acc of accounts) {
+    currencyByAccountId.set(acc.id, String(acc.iso_currency_code ?? "").trim().toUpperCase());
+    if (acc.name) accountNames.set(acc.id, acc.name);
+  }
+  return { currencyByAccountId, accountNames };
+}
+
 export async function loadCanonicalProjection(
   supabase: SupabaseClient,
   options: FetchFinanceOptions,
@@ -126,14 +200,7 @@ export async function loadCanonicalProjection(
   try {
     fetchResult = await fetchFinanceTransactions(supabase, options);
   } catch (error) {
-    const code =
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      typeof error.code === "string"
-        ? `:${error.code}`
-        : "";
-    throw new Error(`finance_projection_query_failed:transactions${code}`);
+    throw new Error(`finance_projection_query_failed:transactions${errorCodeSuffix(error)}`);
   }
   const txnIds = fetchResult.rows.map((r) => r.id);
 
@@ -170,26 +237,7 @@ export async function loadCanonicalProjection(
     duplicatesQuery = duplicatesQuery.eq("user_id", userId);
   }
 
-  interface SplitRow {
-    transaction_id: string;
-    category: string;
-    amount: number | string;
-  }
-
-  // Chunk transaction_splits by 500 transaction IDs
-  const splitChunksPromises: Array<PromiseLike<{ data: SplitRow[] | null; error: { code?: string } | null }>> = [];
-  if (txnIds.length > 0) {
-    for (let i = 0; i < txnIds.length; i += 500) {
-      const chunk = txnIds.slice(i, i + 500);
-      let splitsQuery = supabase
-        .from("transaction_splits")
-        .select("transaction_id,category,amount")
-        .in("transaction_id", chunk)
-        .limit(2000);
-      if (userId) splitsQuery = splitsQuery.eq("user_id", userId);
-      splitChunksPromises.push(splitsQuery);
-    }
-  }
+  const splitChunksPromises = buildSplitChunkQueries(supabase, txnIds, userId);
 
   const [accountsRes, rulesRes, overridesRes, refundsRes, duplicatesRes, ...splitResChunks] =
     await Promise.all([
@@ -210,16 +258,7 @@ export async function loadCanonicalProjection(
     assertProjectionQuery("transaction_splits", sRes);
   }
 
-  const currencyByAccountId = new Map<string, string>();
-  const accountNames = new Map<string, string>();
-
-  for (const acc of accountsRes.data || []) {
-    currencyByAccountId.set(
-      acc.id,
-      String(acc.iso_currency_code ?? "").trim().toUpperCase(),
-    );
-    if (acc.name) accountNames.set(acc.id, acc.name);
-  }
+  const { currencyByAccountId, accountNames } = buildAccountMaps(accountsRes.data ?? []);
 
   const merchantRules = ((rulesRes.data || []) as Array<{
     match_type: "merchant" | "keyword" | "account";
@@ -251,21 +290,7 @@ export async function loadCanonicalProjection(
     refundTransactionId: rf.refund_transaction_id,
   }));
 
-  const splits: Array<{
-    transactionId: string;
-    category: string;
-    amount: number;
-  }> = [];
-
-  for (const sRes of splitResChunks) {
-    for (const s of sRes.data || []) {
-      splits.push({
-        transactionId: s.transaction_id,
-        category: s.category,
-        amount: Number(s.amount),
-      });
-    }
-  }
+  const splits = collectSplits(splitResChunks);
 
   const { projectFinanceTransactions } = await import("@/lib/finance-domain");
 
