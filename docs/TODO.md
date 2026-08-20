@@ -63,32 +63,29 @@ The app currently assumes a flat 22% APR (`lib/liabilities.ts` is behind
 ### 4. VAPID keys (web push)
 
 Web push is fully coded (`lib/push.ts`, `components/notifications/PushSection.tsx`)
-but silently no-ops without VAPID keys. A fresh key pair was generated during
-the 2026-08-20 pass; paste these into env vars (Vercel project env vars, and
-`.env.local` for local testing):
+but silently no-ops without VAPID keys. The pair generated during the
+2026-08-20 pass was exposed in the PR description and must not be used.
+Generate a fresh pair directly in the deployment environment, then set these env vars
+(Vercel project env vars, and `.env.local` for local testing):
 
 - `VAPID_PUBLIC_KEY` (server)
 - `VAPID_PRIVATE_KEY` (server, keep secret — never commit)
 - `NEXT_PUBLIC_VAPID_PUBLIC_KEY` (same value as `VAPID_PUBLIC_KEY`, client-side)
 - Optional `VAPID_SUBJECT` (defaults to `mailto:admin@fundflow.local`)
 
-The public and private key values are reported in the production-readiness PR
-description (`feat/production-readiness-2026-08`). After pasting, redeploy and
-the Push section in Settings becomes functional.
+The exposed values were removed from the production-readiness PR description.
+After setting a newly generated pair, redeploy and the Push section in Settings becomes functional.
 
-### Not applied (pending owner action)
+### Applied migrations
 
-- `supabase/migrations/20260814100000_performance_composite_indexes.sql` is
-  **not yet applied** to the live Supabase project (verified 2026-08-20 via
-  `supabase migration list`; the `20260812*` migrations are applied). The
-  performance indexes it creates are referenced by the shipped dashboard/ledger
-  code, so apply it to the live project before those queries rely on the indexes.
+- `supabase/migrations/20260814100000_performance_composite_indexes.sql` was
+  corrected to index `transactions.pfc_primary` and applied to the linked live
+  project on 2026-08-20. Direct catalog verification confirms all six indexes exist.
 - `supabase/migrations/20260820000000_revoke_rls_auto_enable_grants.sql`
-  (new) revokes `PUBLIC`/`anon`/`authenticated` execute on the
-  platform-managed `public.rls_auto_enable()`; apply to the live project and
-  re-run `scripts/check-rls.sql` to confirm the security advisor finding is
-  cleared. It is a no-op where the function doesn't exist (self-hosted / fresh
-  dev).
+  revokes `PUBLIC`/`anon`/`authenticated` execute on the platform-managed
+  `public.rls_auto_enable()`. It was applied on 2026-08-20; direct privilege
+  checks and `scripts/check-rls.sql` pass, and the advisor finding is cleared.
+  It remains a no-op where the function does not exist (self-hosted / fresh dev).
 
 ## Active program: financial-planner parity (started 2026-07-29)
 

@@ -14,27 +14,26 @@ path behind all three introduction routes (`@tailwindcss/postcss`, `next`,
 `vitest`). `npm audit` is now clean and the full unit suite passes. No
 `overrides` entry was needed.
 
-**VAPID keys.** A key pair was generated with `npx web-push generate-vapid-keys`
-and is reported in the PR description for the human to paste into Vercel env
-vars / `.env.local`. The private key was **not** committed. Placeholder entries
-(`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`,
-optional `VAPID_SUBJECT`) were added to `.env.example`.
+**VAPID keys.** The key pair generated during the original pass was exposed in
+the PR description, removed on 2026-08-20, and must be treated as burned.
+Generate a new pair directly in the deployment environment before enabling push notifications.
+Placeholder entries (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+`NEXT_PUBLIC_VAPID_PUBLIC_KEY`, optional `VAPID_SUBJECT`) remain in `.env.example`.
 
 **`rls_auto_enable()` grants.** New migration
 `20260820000000_revoke_rls_auto_enable_grants.sql` revokes `PUBLIC`/`anon`/
 `authenticated` execute on the platform-managed function, guarded on its
 existence (safe no-op in self-hosted / fresh dev where the function does not
 exist). Replacement grant is `service_role` only, matching the
-`20260810170000` trigger-function precedent. **Not applied to the live
-project** — left for the human; re-run `scripts/check-rls.sql` after applying.
+`20260810170000` trigger-function precedent. Applied to the linked live project
+on 2026-08-20 and verified with direct privilege checks and `scripts/check-rls.sql`.
 
 **Migration status on the linked live project (`zrxbmmtqqhlwtrinocww`).**
-Verified via `supabase migration list`: `20260812100000`,
-`20260812110000`, and `20260812120000` are applied, but
-`20260814100000_performance_composite_indexes.sql` is **pending** (not yet
-applied). It should be applied before the shipped dashboard/ledger code relies
-on those indexes. No migration was applied by this pass (no authorization to
-write to live production; treated as a hard-to-reverse shared action).
+Verified via `supabase migration list`: `20260814100000` and `20260820000000`
+were applied on 2026-08-20 after correcting the transaction category index to
+use the real `pfc_primary` column. A post-apply dry run reports the linked
+database is up to date, and direct catalog queries confirm all six intended
+indexes exist.
 
 **Phase 1 review.** Reviewed the 14-phase parity program + last two weeks of
 commits (multi-currency conversion, forecasting milestones, multi-format
@@ -55,7 +54,7 @@ commit. Nothing to merge.
 
 **Phase 3 checklist.** Added to `docs/TODO.md` ("Added 2026-08-20"): exact
 steps for the custom domain, E2E CI secrets (`gh secret set` commands),
-Plaid Liabilities, VAPID keys, and the two pending migrations.
+Plaid Liabilities, VAPID keys, and the migration deployment status.
 
 ## In flight: PR #114, Sonar refactor plus its review fixes
 
