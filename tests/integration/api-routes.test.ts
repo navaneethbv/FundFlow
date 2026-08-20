@@ -44,6 +44,7 @@ vi.mock("@/lib/plaid", () => ({
 
 let mockDeleteUserError: Error | null = null;
 let mockSupabaseFromError: Error | null = null;
+let mockCronActiveUserIds: string[] | null = null;
 vi.mock("@/lib/supabase/service", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/supabase/service")>();
   return {
@@ -61,6 +62,17 @@ vi.mock("@/lib/supabase/service", async (importOriginal) => {
 
       const originalFrom = client.from.bind(client);
       client.from = (table: string) => {
+        if (table === "plaid_items" && mockCronActiveUserIds !== null) {
+          const builder = {
+            select: () => builder,
+            eq: () => Promise.resolve({
+              data: mockCronActiveUserIds!.map((user_id) => ({ user_id })),
+              error: null,
+            }),
+          };
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          return builder as any;
+        }
         if (mockSupabaseFromError) {
           const builder = {
             select: () => builder,
@@ -187,6 +199,7 @@ suite("API routes integration", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCronActiveUserIds = null;
     mockSyncInvestmentsForUser.mockResolvedValue({
       outcome: "synced",
       holdingsSynced: 0,
@@ -250,17 +263,7 @@ suite("API routes integration", () => {
 
     it("proceeds successfully even if one user's sync throws an error", async () => {
       mockSyncAllForUser.mockRejectedValue(new Error("Per-user sync failure"));
-
-      // Seed an active item
-      const enc = encryptSecret("dummy-cron-token-fail");
-      const { data: item } = await admin.from("plaid_items").insert({
-        user_id: tempUserId,
-        plaid_item_id: `cron-item-fail-${stamp}`,
-        access_token_ciphertext: enc.ciphertext,
-        access_token_iv: enc.iv,
-        access_token_tag: enc.tag,
-        status: "active",
-      }).select("id").single();
+      mockCronActiveUserIds = [tempUserId];
 
       const req = new NextRequest("http://localhost/api/cron/sync", {
         headers: { authorization: `Bearer ${process.env.CRON_SECRET}` },
@@ -270,10 +273,8 @@ suite("API routes integration", () => {
 
       const json = await resp.json();
       expect(json.ok).toBe(true);
-      expect(json.users).toBeGreaterThanOrEqual(1);
+      expect(json.users).toBe(1);
       expect(json.synced).toBe(0); // sync failed for this user
-
-      await admin.from("plaid_items").delete().eq("id", item!.id);
     }, 30000);
 
     it("returns 500 when Supabase query for active items fails", async () => {

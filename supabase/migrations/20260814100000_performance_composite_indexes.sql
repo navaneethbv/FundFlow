@@ -3,7 +3,7 @@
 
 -- Speed up transaction ledger pagination, date filtering, and month-scoped scans
 create index if not exists idx_transactions_user_date on public.transactions (user_id, date desc, id desc);
-create index if not exists idx_transactions_user_category on public.transactions (user_id, category);
+create index if not exists idx_transactions_user_pfc_primary on public.transactions (user_id, pfc_primary);
 create index if not exists idx_transactions_user_account_date on public.transactions (user_id, account_id, date desc);
 
 -- Speed up security audit log queries

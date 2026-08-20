@@ -9,6 +9,84 @@ NordVPN Threat Protection served a malware block page for the domain during the 
 Neither was an app defect, but both will keep recurring and will reach real users on any security suite.
 A custom domain is the durable fix; `NEXT_PUBLIC_APP_URL` and `.env.example`'s `your-domain` placeholder both need updating when it lands.
 
+## Added 2026-08-20: owner decisions for production readiness (Phase 3)
+
+These are the items a human must act on; each has exact steps so no research is
+required. None of them can be done by an agent (they need a purchased domain,
+a live test user + repo secrets, a Plaid dashboard toggle, or Vercel env vars).
+
+### 1. Custom domain
+
+1. Buy/own a domain (e.g. from a registrar of your choice) that you can point
+   DNS at Vercel.
+2. In the Vercel project (`fund-flow-swart`), go to **Settings → Domains** and
+   add the domain. Vercel shows the exact DNS records (an `A` record and/or
+   `CNAME` + the `_vercel` TXT) to create at your registrar.
+3. Wait for Vercel to issue the SSL certificate and mark the domain ready.
+4. Update `NEXT_PUBLIC_APP_URL` in the Vercel project env vars to
+   `https://<your-domain>` and redeploy.
+5. Update the placeholder in `.env.example` (`NEXT_PUBLIC_APP_URL=http://localhost:3000`)
+   with a comment noting the production value is `https://<your-domain>`.
+6. This is the durable fix for the phishing/malware-filter false positives
+   documented above (2026-08-10) and in `docs/HANDOFF.md`.
+
+### 2. E2E CI secrets (authenticated golden path)
+
+The Playwright golden path (`tests/e2e/golden-path.spec.ts`) skips cleanly
+without these, but to actually run in CI you need three GitHub repo secrets and
+a disposable test user. The test user must be a **real account against the live
+Supabase project** (this repo's Supabase signup rejects `@example.com`), so
+create it first (e.g. via the Supabase Auth UI or the signup page), then:
+
+```bash
+gh secret set E2E_EMAIL --repo <owner>/<repo>     # paste the test user's email
+gh secret set E2E_PASSWORD --repo <owner>/<repo>  # paste the test user's password
+gh secret set E2E_PLAID --repo <owner>/<repo>     # paste "1" to enable the sandbox connect step
+```
+
+- `E2E_EMAIL` / `E2E_PASSWORD`: a disposable, dedicated test user on the live
+  project (not a real personal account; the golden path creates/uses throwaway
+  finance data).
+- `E2E_PLAID=1`: only needed if you want the sandbox bank-connect step to run;
+  leave unset to skip it.
+
+### 3. Plaid Liabilities (real card APRs)
+
+The app currently assumes a flat 22% APR (`lib/liabilities.ts` is behind
+`PLAID_LIABILITIES_ENABLED=1`, which is unset). To get real card APRs:
+
+1. In the Plaid dashboard, enable the **Liabilities** product on the app (this
+   is an account-level action an agent cannot do).
+2. Once enabled, set `PLAID_LIABILITIES_ENABLED=1` in the Vercel project env
+   vars (and optionally `.env.local` for local testing) and redeploy.
+
+### 4. VAPID keys (web push)
+
+Web push is fully coded (`lib/push.ts`, `components/notifications/PushSection.tsx`)
+but silently no-ops without VAPID keys. The pair generated during the
+2026-08-20 pass was exposed in the PR description and must not be used.
+Generate a fresh pair directly in the deployment environment, then set these env vars
+(Vercel project env vars, and `.env.local` for local testing):
+
+- `VAPID_PUBLIC_KEY` (server)
+- `VAPID_PRIVATE_KEY` (server, keep secret — never commit)
+- `NEXT_PUBLIC_VAPID_PUBLIC_KEY` (same value as `VAPID_PUBLIC_KEY`, client-side)
+- Optional `VAPID_SUBJECT` (defaults to `mailto:admin@fundflow.local`)
+
+The exposed values were removed from the production-readiness PR description.
+After setting a newly generated pair, redeploy and the Push section in Settings becomes functional.
+
+### Applied migrations
+
+- `supabase/migrations/20260814100000_performance_composite_indexes.sql` was
+  corrected to index `transactions.pfc_primary` and applied to the linked live
+  project on 2026-08-20. Direct catalog verification confirms all six indexes exist.
+- `supabase/migrations/20260820000000_revoke_rls_auto_enable_grants.sql`
+  revokes `PUBLIC`/`anon`/`authenticated` execute on the platform-managed
+  `public.rls_auto_enable()`. It was applied on 2026-08-20; direct privilege
+  checks and `scripts/check-rls.sql` pass, and the advisor finding is cleared.
+  It remains a no-op where the function does not exist (self-hosted / fresh dev).
+
 ## Active program: financial-planner parity (started 2026-07-29)
 
 Plan: `docs/superpowers/plans/2026-07-29-monarch-parity.md`.

@@ -348,7 +348,7 @@ export function computeForecastMilestones(
       type: "fire",
       reachedMonth: null,
       reachedAmount: null,
-      description: `25x annual expenses ($${fireTarget.toLocaleString()}) allowing a sustainable 4% withdrawal rate.`,
+      description: `25x annual expenses ($${fireTarget.toLocaleString()}), using a 4% withdrawal rate as a rough planning assumption.`,
     });
   }
 

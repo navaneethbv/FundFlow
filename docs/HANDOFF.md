@@ -1,6 +1,60 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-08-14. Read this first to resume.
+Last updated: 2026-08-20. Read this first to resume.
+
+## 2026-08-20: production-readiness pass (branch `feat/production-readiness-2026-08`)
+
+Phase 0 (mechanical), Phase 1 (fresh security/money review), Phase 2
+(dependabot sweep), and Phase 3 (owner-decision checklist). See
+`docs/Security-Review-2026-08-20.md` for the full Phase 1 findings.
+
+**nanoid CVE (GHSA-2v37-7h3g-55p8, alert #18).** `npm audit fix` bumped nanoid
+3.3.17 → 3.3.18 via the single deduped `postcss@8.5.25`, which is the common
+path behind all three introduction routes (`@tailwindcss/postcss`, `next`,
+`vitest`). `npm audit` is now clean and the full unit suite passes. No
+`overrides` entry was needed.
+
+**VAPID keys.** The key pair generated during the original pass was exposed in
+the PR description, removed on 2026-08-20, and must be treated as burned.
+Generate a new pair directly in the deployment environment before enabling push notifications.
+Placeholder entries (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+`NEXT_PUBLIC_VAPID_PUBLIC_KEY`, optional `VAPID_SUBJECT`) remain in `.env.example`.
+
+**`rls_auto_enable()` grants.** New migration
+`20260820000000_revoke_rls_auto_enable_grants.sql` revokes `PUBLIC`/`anon`/
+`authenticated` execute on the platform-managed function, guarded on its
+existence (safe no-op in self-hosted / fresh dev where the function does not
+exist). Replacement grant is `service_role` only, matching the
+`20260810170000` trigger-function precedent. Applied to the linked live project
+on 2026-08-20 and verified with direct privilege checks and `scripts/check-rls.sql`.
+
+**Migration status on the linked live project (`zrxbmmtqqhlwtrinocww`).**
+Verified via `supabase migration list`: `20260814100000` and `20260820000000`
+were applied on 2026-08-20 after correcting the transaction category index to
+use the real `pfc_primary` column. A post-apply dry run reports the linked
+database is up to date, and direct catalog queries confirm all six intended
+indexes exist.
+
+**Phase 1 review.** Reviewed the 14-phase parity program + last two weeks of
+commits (multi-currency conversion, forecasting milestones, multi-format
+exports, advanced merchant rules, performance indexes) plus the three
+`20260812*` migrations. No cross-user leak or money-correctness regression
+found. All new SECURITY DEFINER RPCs are correctly hardened and scoped. The
+key findings: (a) `lib/currency.ts` multi-currency engine is shipped but
+unwired (dead code — not imported anywhere); (b) FIRE milestone wording
+implying a guarantee was **fixed inline** with a regression test;
+(c) `toLedgerCli`/`toTaxCsv` are unwired dead exports; (d) regex merchant rules
+are self-only ReDoS surface; (e) export routes are unrate-limited (consistent
+with existing exports). See the findings doc for (a), (c)-(e) and the
+owner-decision items.
+
+**Phase 2 sweep.** `gh pr list --state open` returns zero open PRs, and the
+only open dependabot alert (#18, nanoid) is fixed by this branch's Phase 0.1
+commit. Nothing to merge.
+
+**Phase 3 checklist.** Added to `docs/TODO.md` ("Added 2026-08-20"): exact
+steps for the custom domain, E2E CI secrets (`gh secret set` commands),
+Plaid Liabilities, VAPID keys, and the migration deployment status.
 
 ## In flight: PR #114, Sonar refactor plus its review fixes
 
