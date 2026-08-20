@@ -377,5 +377,13 @@ describe("computeForecastMilestones", () => {
     expect(nw50k?.reachedMonth).toBeGreaterThan(0);
     expect(nw100k?.reachedMonth).toBeGreaterThan(nw50k!.reachedMonth!);
   });
+
+  it("frames the FIRE milestone as a planning assumption, not a guarantee", () => {
+    const milestones = computeForecastMilestones(starting, assumptions, 2000);
+    const fire = milestones.find((m) => m.id === "fire");
+    expect(fire).toBeDefined();
+    expect(fire!.description).not.toMatch(/sustainable/i);
+    expect(fire!.description.toLowerCase()).toContain("planning assumption");
+  });
 });
 
