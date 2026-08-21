@@ -1,8 +1,5 @@
 import { createHash } from "node:crypto";
 import { looksLikeOfx } from "./import-ofx";
-import { looksLikeMintCsv } from "./import-mint";
-import { looksLikeMonarchCsv } from "./import-monarch";
-import { looksLikeYnabCsv } from "./import-ynab";
 
 /**
  * Bank-statement CSV import: parsing, column auto-detection, and row
@@ -435,4 +432,92 @@ export function parseCsvFormat(text: string, spec: CsvFormatSpec): ImportParseRe
   }
 
   return { rows, errors };
+}
+
+/** Mint format spec and parser */
+export const MINT_FORMAT_SPEC: CsvFormatSpec = {
+  label: "Mint",
+  merchantLabel: "description",
+  required: {
+    date: "date",
+    merchant: "description",
+    amount: "amount",
+    type: "transaction type",
+  },
+  optional: {
+    category: "category",
+  },
+  amount: (line, cols) => {
+    const type = (line[cols.type] ?? "").trim().toLowerCase();
+    if (type !== "debit" && type !== "credit") return null;
+    const magnitude = parseAmount(line[cols.amount] ?? "");
+    if (magnitude === null) return null;
+    return type === "debit" ? Math.abs(magnitude) : -Math.abs(magnitude);
+  },
+};
+
+export function looksLikeMintCsv(headerRow: string[]): boolean {
+  return headerHasAll(headerRow, ["transaction type", "original description"]);
+}
+
+export function parseMintCsv(text: string): ImportParseResult {
+  return parseCsvFormat(text, MINT_FORMAT_SPEC);
+}
+
+/** Monarch format spec and parser */
+export const MONARCH_FORMAT_SPEC: CsvFormatSpec = {
+  label: "Monarch",
+  merchantLabel: "merchant",
+  required: {
+    date: "date",
+    merchant: "merchant",
+    amount: "amount",
+  },
+  optional: {
+    category: "category",
+  },
+  amount: (line, cols) => {
+    const raw = parseAmount(line[cols.amount] ?? "");
+    return raw === null ? null : -raw;
+  },
+};
+
+export function looksLikeMonarchCsv(headerRow: string[]): boolean {
+  return headerHasAll(headerRow, ["merchant", "original statement"]);
+}
+
+export function parseMonarchCsv(text: string): ImportParseResult {
+  return parseCsvFormat(text, MONARCH_FORMAT_SPEC);
+}
+
+/** YNAB format spec and parser */
+export const YNAB_FORMAT_SPEC: CsvFormatSpec = {
+  label: "YNAB",
+  merchantLabel: "payee",
+  required: {
+    date: "date",
+    merchant: "payee",
+    outflow: "outflow",
+    inflow: "inflow",
+  },
+  optional: {
+    combined: "category group/category",
+    category: "category",
+  },
+  amount: (line, cols) => twoColumnToSignedAmount(line[cols.outflow], line[cols.inflow]),
+  category: (line, cols) => {
+    const combinedIdx = cols.combined;
+    const combined = combinedIdx !== undefined ? (line[combinedIdx] ?? "").trim() : "";
+    if (combined) return combined;
+    const bareIdx = cols.category;
+    return bareIdx !== undefined ? (line[bareIdx] ?? "").trim() || null : null;
+  },
+};
+
+export function looksLikeYnabCsv(headerRow: string[]): boolean {
+  return headerHasAll(headerRow, ["payee", "outflow", "inflow"]);
+}
+
+export function parseYnabCsv(text: string): ImportParseResult {
+  return parseCsvFormat(text, YNAB_FORMAT_SPEC);
 }
