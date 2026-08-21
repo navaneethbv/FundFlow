@@ -302,4 +302,27 @@ describe("buildInvestmentsPage", () => {
       { date: "2026-07-29", value: 150 },
     ]);
   });
+
+  it("handles null body, long security name, first price 0, and null snapshot values", () => {
+    // null body
+    expect(normalizeManualHolding(null, "2026-08-01").ok).toBe(false);
+
+    // securityName > 160 characters
+    expect(
+      normalizeManualHolding(
+        { accountSource: "plaid", accountId: "acc-1", securityName: "a".repeat(165) },
+        "2026-08-01",
+      ).ok,
+    ).toBe(false);
+
+    // first price is 0 in periodChangePctFor, and null snapshot value in totalsByDate
+    const snapshots: HoldingSnapshotRow[] = [
+      { holdingId: "a", snapshotDate: "2026-07-28", quantity: 1, price: 0, value: 0 },
+      { holdingId: "a", snapshotDate: "2026-07-29", quantity: 1, price: 50, value: 50 },
+      { holdingId: "b", snapshotDate: "2026-07-29", quantity: 1, price: 50, value: null as never },
+    ];
+    const page = buildInvestmentsPage([holding({ id: "a" })], snapshots);
+    expect(page.topMovers).toBeNull();
+    expect(page.balanceHistory).toHaveLength(2);
+  });
 });

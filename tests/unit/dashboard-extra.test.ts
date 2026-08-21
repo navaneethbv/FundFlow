@@ -123,6 +123,90 @@ describe("getDashboardData", () => {
             user_id: "user-1",
             plaid_transaction_id: "p2",
           },
+          {
+            id: "t3",
+            date: "2026-07-10",
+            amount: 45.0,
+            merchant_name: null,
+            name: "Local Cafe",
+            pfc_primary: "FOOD_AND_DRINK",
+            pfc_detailed: "COFFEE",
+            account_id: "acc-1",
+            user_id: "user-1",
+            plaid_transaction_id: "p3",
+          },
+          {
+            id: "t4",
+            date: "2026-07-11",
+            amount: 550.0,
+            merchant_name: null,
+            name: null,
+            pfc_primary: "GENERAL_MERCHANDISE",
+            pfc_detailed: "OTHER",
+            account_id: "acc-1",
+            user_id: "user-1",
+            plaid_transaction_id: "p4",
+          },
+          {
+            id: "t5",
+            date: "2026-06-10",
+            amount: 45.0,
+            merchant_name: null,
+            name: "Local Cafe",
+            pfc_primary: "FOOD_AND_DRINK",
+            pfc_detailed: "COFFEE",
+            account_id: "acc-1",
+            user_id: "user-1",
+            plaid_transaction_id: "p5",
+          },
+          {
+            id: "t6",
+            date: "2026-05-10",
+            amount: 45.0,
+            merchant_name: null,
+            name: "Local Cafe",
+            pfc_primary: "FOOD_AND_DRINK",
+            pfc_detailed: "COFFEE",
+            account_id: "acc-1",
+            user_id: "user-1",
+            plaid_transaction_id: "p6",
+          },
+          {
+            id: "t7",
+            date: "2026-06-15",
+            amount: 20.0,
+            merchant_name: null,
+            name: null,
+            pfc_primary: "GENERAL_SERVICES",
+            pfc_detailed: "OTHER",
+            account_id: "acc-1",
+            user_id: "user-1",
+            plaid_transaction_id: "p7",
+          },
+          {
+            id: "t8",
+            date: "2026-05-15",
+            amount: 20.0,
+            merchant_name: null,
+            name: null,
+            pfc_primary: "GENERAL_SERVICES",
+            pfc_detailed: "OTHER",
+            account_id: "acc-1",
+            user_id: "user-1",
+            plaid_transaction_id: "p8",
+          },
+          {
+            id: "t9",
+            date: "2026-07-20",
+            amount: 20.0,
+            merchant_name: "OnlyMerchant",
+            name: null,
+            pfc_primary: "GENERAL_SERVICES",
+            pfc_detailed: "OTHER",
+            account_id: "acc-1",
+            user_id: "user-1",
+            plaid_transaction_id: "p9",
+          },
         ];
       }
 
@@ -1065,5 +1149,35 @@ describe("shiftMonthKey", () => {
 
   it("shifts by a full year", () => {
     expect(shiftMonthKey("2025-03", 12)).toBe("2026-03");
+  });
+
+  it("handles null merchant_name and null name fallback across income and spending streams", async () => {
+    const supabase = makeSupabase({
+      accounts: [
+        { id: "a1", name: "Checking", type: "depository", current_balance: 1000, iso_currency_code: "USD" },
+      ],
+      transactions: [
+        // Income with name but no merchant_name
+        { id: "t1", date: "2026-08-05", amount: -3000, name: "Payroll Direct", merchant_name: null, pfc_primary: "INCOME" },
+        // Income with neither name nor merchant_name
+        { id: "t2", date: "2026-08-10", amount: -500, name: null, merchant_name: null, pfc_primary: "INCOME" },
+        // Spending with name but no merchant_name
+        { id: "t3", date: "2026-08-12", amount: 150, name: "Coffee Shop", merchant_name: null, pfc_primary: "FOOD_AND_DRINK" },
+        // Spending with neither name nor merchant_name
+        { id: "t4", date: "2026-08-14", amount: 80, name: null, merchant_name: null, pfc_primary: "GENERAL_MERCHANDISE" },
+        // Spending with merchant_name but no name (tests t.name ?? t.merchant_name ?? "txn")
+        { id: "t5", date: "2026-08-15", amount: 600, name: null, merchant_name: "Hardware Store", pfc_primary: "HOME_IMPROVEMENT" },
+        // Prior month spending with name only
+        { id: "t6", date: "2026-07-10", amount: 140, name: "Coffee Shop", merchant_name: null, pfc_primary: "FOOD_AND_DRINK" },
+        // Prior month spending with neither
+        { id: "t7", date: "2026-07-15", amount: 75, name: null, merchant_name: null, pfc_primary: "GENERAL_MERCHANDISE" },
+      ],
+    });
+
+    const data = await getDashboardData(supabase as never, undefined, "2026-08", "u-1");
+    expect(data.accounts).toHaveLength(1);
+    expect(data.currentMonthIncome).toBe(3500);
+    expect(data.currentMonthExpenses).toBe(830);
+    expect(data.spendingAnomalies).toBeDefined();
   });
 });

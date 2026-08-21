@@ -294,4 +294,54 @@ describe("proposeBudgetFromHistory", () => {
     );
     expect(proposals.some((p) => p.category === "paycheck")).toBe(false);
   });
+
+  it("handles duplicate sinking fund proposals, empty categoryKey, and decade horizon periods", () => {
+    // Duplicate sinking fund name
+    const proposals = proposeBudgetFromHistory({
+      txnsLast3Months: [],
+      sinkingFunds: [
+        {
+          name: "Annual Insurance",
+          targetAmount: 600,
+          dueDate: "2027-01-01",
+          monthsLeft: 6,
+          monthlySetAside: 100,
+          dueSoon: false,
+        },
+        {
+          name: "Annual Insurance",
+          targetAmount: 1200,
+          dueDate: "2027-06-01",
+          monthsLeft: 12,
+          monthlySetAside: 100,
+          dueSoon: false,
+        },
+      ],
+    });
+    expect(proposals).toHaveLength(1);
+
+    // Empty categoryKey in buildBudgetView
+    const emptyCatTxn = transaction("uncat-1", "2026-07-05", 50, "");
+    const view = buildBudgetView({
+      month: "2026-07",
+      horizon: "monthly",
+      budgets,
+      txns: [emptyCatTxn],
+    });
+    expect(view).toBeDefined();
+
+    // Decade horizon with periods inside and outside range
+    const decadeView = buildBudgetView({
+      month: "2026-07",
+      horizon: "decade",
+      budgets,
+      txns: [transaction("dec-1", "2026-07-01", 50, "GROCERIES")],
+      periods: [
+        { budget_id: "b-groceries", month: "2026-01", planned: 500 }, // inside range
+        { budget_id: "b-groceries", month: "2015-01", planned: 500 }, // before range (< startYear)
+        { budget_id: "b-groceries", month: "2040-01", planned: 500 }, // after range (>= endYear)
+      ],
+    });
+    expect(decadeView.horizon).toBe("decade");
+  });
 });

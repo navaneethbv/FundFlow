@@ -41,6 +41,23 @@ describe("findReceiptCandidates", () => {
   it("returns no candidates for zero totals or invalid dates", () => {
     expect(findReceiptCandidates({ merchant: "Cafe", total: 0, purchaseDate: "2026-08-09" }, transactions)).toEqual([]);
     expect(findReceiptCandidates({ merchant: "Cafe", total: 50, purchaseDate: "unknown" }, transactions)).toEqual([]);
+    expect(findReceiptCandidates({ merchant: "Cafe", total: 50, purchaseDate: "2026-02-31" }, transactions)).toEqual([]);
+  });
+
+  it("handles empty merchant tokens, null names, and invalid transaction dates/amounts", () => {
+    const edgeTransactions = [
+      { id: "tx-fallback-name", date: "2026-08-09", amount: 50, merchantName: null, name: "Fallback Name" },
+      { id: "tx-fallback-unknown", date: "2026-08-09", amount: 50, merchantName: null, name: null },
+      { id: "tx-invalid-date", date: "2026-02-31", amount: 50, merchantName: "Store", name: "Store" },
+      { id: "tx-bad-amount", date: "2026-08-09", amount: NaN, merchantName: "Store", name: "Store" },
+    ];
+
+    const res = findReceiptCandidates(
+      { merchant: "!!!", total: 50, purchaseDate: "2026-08-09" },
+      edgeTransactions,
+    );
+    expect(res).toHaveLength(2);
+    expect(res.map((r) => r.merchant)).toEqual(["Fallback Name", "Unknown"]);
   });
 });
 

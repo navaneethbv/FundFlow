@@ -177,7 +177,7 @@ export function buildWeeklyReportModel(
 
   const merchantTotals = new Map<string, number>();
   for (const transaction of currentSpend) {
-    const merchant = transaction.merchantName ?? transaction.name ?? "Unknown merchant";
+    const merchant = transaction.merchantName || "Unknown merchant";
     merchantTotals.set(
       merchant,
       (merchantTotals.get(merchant) ?? 0) + transaction.amount,
@@ -202,7 +202,7 @@ export function buildWeeklyReportModel(
       const account = accountById.get(transaction.accountId);
       return formatCardLabel(
         account?.name,
-        account ? institutionById.get(account.plaidItemId) : null,
+        account ? (institutionById.get(account.plaidItemId) ?? null) : null,
       );
     },
   );

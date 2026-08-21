@@ -152,4 +152,42 @@ describe("palette validator", () => {
     const exitCode = await paletteValidator.runCli("package.json");
     expect(exitCode).toBe(1);
   });
+
+  it("returns exit code 1 and logs failures when CSS has palette failures", async () => {
+    const fs = await import("node:fs/promises");
+    const badCss = `
+      :root {
+        --viz-1: #ffffff;
+        --viz-2: #ffffff;
+        --viz-3: #ffffff;
+        --viz-4: #ffffff;
+        --viz-5: #ffffff;
+        --viz-6: #ffffff;
+        --viz-7: #ffffff;
+      }
+      :root[data-theme="dark"] {
+        --viz-1: #000000;
+        --viz-2: #000000;
+        --viz-3: #000000;
+        --viz-4: #000000;
+        --viz-5: #000000;
+        --viz-6: #000000;
+        --viz-7: #000000;
+      }
+    `;
+    const tempFile = "coverage/temp-bad-palette.css";
+    await fs.writeFile(tempFile, badCss, "utf8");
+    try {
+      const exitCode = await paletteValidator.runCli(tempFile);
+      expect(exitCode).toBe(1);
+    } finally {
+      await fs.unlink(tempFile).catch(() => {});
+    }
+  });
+
+  it("handles unknown theme in validatePalette", () => {
+    const res = validatePalette("custom", LIGHT);
+    expect(res).toBeDefined();
+    expect(res.valid).toBe(true);
+  });
 });

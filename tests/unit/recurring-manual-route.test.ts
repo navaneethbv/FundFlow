@@ -91,6 +91,7 @@ describe("manual recurring items route", () => {
   });
 
   it("rejects POST with invalid name, next_date, item_type, or category", async () => {
+    expect((await POST(req("POST", { ...validCreate, category: undefined }))).status).toBe(200);
     expect((await POST(req("POST", { ...validCreate, name: "" }))).status).toBe(400);
     expect((await POST(req("POST", { ...validCreate, next_date: "08-05-2026" }))).status).toBe(400);
     expect((await POST(req("POST", { ...validCreate, item_type: "other" }))).status).toBe(400);
@@ -101,6 +102,7 @@ describe("manual recurring items route", () => {
   it("rejects PATCH with invalid id, amount, frequency, next_date, item_type, category, or enabled", async () => {
     expect((await PATCH(req("PATCH", { id: "invalid-uuid" }))).status).toBe(400);
     expect((await PATCH(req("PATCH", { id: ITEM_ID, name: "" }))).status).toBe(400);
+    expect((await PATCH(req("PATCH", { id: ITEM_ID, name: 123 }))).status).toBe(400);
     expect((await PATCH(req("PATCH", { id: ITEM_ID, amount: -50 }))).status).toBe(400);
     expect((await PATCH(req("PATCH", { id: ITEM_ID, frequency: "yearly-plus" }))).status).toBe(400);
     expect((await PATCH(req("PATCH", { id: ITEM_ID, next_date: "invalid" }))).status).toBe(400);

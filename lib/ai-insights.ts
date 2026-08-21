@@ -14,19 +14,22 @@ export function generateAiInsightSummaries(input: {
 }) {
   if (!input.enabled) return [];
 
-  const rows = input.rows.filter((row) => typeof row.amount === "number");
+  const rows = input.rows.filter(
+    (row): row is AiInsightRow & { amount: number } =>
+      typeof row.amount === "number" && !Number.isNaN(row.amount),
+  );
   const month = rows.find((row) => row.month)?.month ?? null;
   const spending = rows
-    .filter((row) => (row.amount ?? 0) > 0)
-    .reduce((sum, row) => sum + (row.amount ?? 0), 0);
+    .filter((row) => row.amount > 0)
+    .reduce((sum, row) => sum + row.amount, 0);
   const income = rows
-    .filter((row) => (row.amount ?? 0) < 0)
-    .reduce((sum, row) => sum + Math.abs(row.amount ?? 0), 0);
+    .filter((row) => row.amount < 0)
+    .reduce((sum, row) => sum + Math.abs(row.amount), 0);
   const topCategory = rows
-    .filter((row) => (row.amount ?? 0) > 0)
+    .filter((row) => row.amount > 0)
     .reduce((map, row) => {
       const category = row.category ?? "UNCATEGORIZED";
-      map.set(category, (map.get(category) ?? 0) + (row.amount ?? 0));
+      map.set(category, (map.get(category) ?? 0) + row.amount);
       return map;
     }, new Map<string, number>());
   const top = [...topCategory.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "spending";

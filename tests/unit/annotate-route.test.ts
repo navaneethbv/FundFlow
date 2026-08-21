@@ -18,6 +18,7 @@ function makeClient(txn: { id: string; amount: number } | null) {
         return chain;
       },
       delete: () => chain,
+      neq: () => chain,
       maybeSingle: () => Promise.resolve({ data: txn }),
       upsert: () => Promise.resolve({ error: null }),
       insert: (rows: unknown) => {
@@ -137,6 +138,39 @@ describe("POST /api/transactions/annotate", () => {
     expect(res.status).toBe(200);
   });
 
+  it("handles goal linking with spending_reduces=true and spending_reduces=false", async () => {
+    const { client } = makeClient({ id: "t1", amount: 60 });
+    const originalFrom = (client as Record<string, (t: string) => Record<string, unknown>>).from;
+    (client as Record<string, unknown>).from = (table: string) => {
+      const chain = originalFrom(table);
+      if (table === "goals") {
+        chain.maybeSingle = () =>
+          Promise.resolve({
+            data: { id: "g1", spending_reduces: true },
+          });
+      }
+      return chain;
+    };
+
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: client });
+    const resLinked = await post({ transaction_id: "t1", goal_id: "g1" });
+    expect(resLinked.status).toBe(200);
+
+    // Goal without spending_reduces
+    (client as Record<string, unknown>).from = (table: string) => {
+      const chain = originalFrom(table);
+      if (table === "goals") {
+        chain.maybeSingle = () =>
+          Promise.resolve({
+            data: { id: "g1", spending_reduces: false },
+          });
+      }
+      return chain;
+    };
+    const resNotReduced = await post({ transaction_id: "t1", goal_id: "g1" });
+    expect(resNotReduced.status).toBe(200);
+  });
+
   it("returns 500 when database call throws an error", async () => {
     const client = {
       from: () => {
@@ -148,3 +182,4 @@ describe("POST /api/transactions/annotate", () => {
     expect(res.status).toBe(500);
   });
 });
+
