@@ -64,7 +64,7 @@ describe("reporting hostConfigured branches", () => {
   });
 
   it("weekly report in development without SMTP config logs a preview", async () => {
-    process.env.NODE_ENV = "development";
+    vi.stubEnv("NODE_ENV", "development");
     delete process.env.SMTP_HOST;
     delete process.env.SMTP_USER;
     delete process.env.SMTP_PASS;
@@ -104,7 +104,7 @@ describe("reporting hostConfigured branches", () => {
   });
 
   it("backup, login-alert, and household-invite emails in development log a preview", async () => {
-    process.env.NODE_ENV = "development";
+    vi.stubEnv("NODE_ENV", "development");
     delete process.env.SMTP_HOST;
     delete process.env.SMTP_USER;
     delete process.env.SMTP_PASS;

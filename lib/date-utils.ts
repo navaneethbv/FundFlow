@@ -1,6 +1,8 @@
 export function parseDate(value: string): Date {
   const [year, month, day] = value.split("-").map(Number);
-  return new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1));
+  // c8 ignore next -- value.split("-") always yields at least one element
+  const resolvedYear = year ?? 1970;
+  return new Date(Date.UTC(resolvedYear, (month ?? 1) - 1, day ?? 1));
 }
 
 export function isoDate(value: Date): string {

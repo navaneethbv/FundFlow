@@ -25,6 +25,7 @@ export function validateInstitutionLogo(value: unknown): string | null {
     }
     return decoded.toString("base64") === value ? value : null;
   } catch {
+    // c8 ignore next -- Buffer.from(value, "base64") never throws
     return null;
   }
 }

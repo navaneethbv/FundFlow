@@ -249,7 +249,7 @@ describe("coverage-boost export routes (n3)", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       const byId = Object.fromEntries(
-        (body.sessions as { id: string; current: boolean }[]).map((s) => [s.id, s]),
+        (body.sessions as { id: string; current: boolean; label?: string }[]).map((s) => [s.id, s]),
       );
       expect(byId["s1"]?.current).toBe(true);
       expect(byId["s2"]?.current).toBe(false);

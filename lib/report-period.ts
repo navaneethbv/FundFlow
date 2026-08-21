@@ -53,7 +53,9 @@ function localDateTime(reference: Date, timezone: string): LocalDateTime {
   );
   return {
     date: `${values.get("year")}-${values.get("month")}-${values.get("day")}`,
+    // c8 ignore next -- Intl.DateTimeFormat always emits a weekday part
     weekday: values.get("weekday") ?? "Sun",
+    // c8 ignore next -- Intl.DateTimeFormat always emits an hour part
     hour: Number(values.get("hour") ?? "0"),
   };
 }
@@ -69,6 +71,7 @@ export function getWeeklyReportPeriod(
   timezone: string,
 ): WeeklyReportPeriod {
   const local = localDateTime(reference, timezone);
+  // c8 ignore next -- WEEKDAY_INDEX covers every weekday Intl can emit
   const weekdayIndex = WEEKDAY_INDEX[local.weekday] ?? 0;
   const daysSinceMonday = (weekdayIndex + 6) % 7;
   const end = addDays(local.date, -(daysSinceMonday + 1));

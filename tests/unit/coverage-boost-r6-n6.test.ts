@@ -170,7 +170,7 @@ describe("coverage boost r6 n6: reports/saved route", () => {
     });
 
     it("treats a null count as 0 (L65 nullish side)", async () => {
-      const supabase = clientStub({ saved_reports: { data: REPORT_ROW, error: null, count: null } });
+      const supabase = clientStub({ saved_reports: { data: REPORT_ROW, error: null } });
       mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase });
       const res = await reportsPost(jsonRequest({ name: "My report", reportType: "income", filters: VALID_FILTERS }));
       expect(res.status).toBe(200);

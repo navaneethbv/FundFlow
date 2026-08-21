@@ -58,7 +58,7 @@ describe("coverage-boost-r5-n1 recurring/route.ts", () => {
     client = clientStub({
       recurring_streams: { data: { id: ITEM_ID }, error: null },
     });
-    mockServiceFrom.mockImplementation((table: string) => client.from(table));
+    mockServiceFrom.mockImplementation((table: unknown) => client.from(table as string));
   });
 
   it("returns the auth response when unauthenticated", async () => {
@@ -197,7 +197,7 @@ describe("coverage-boost-r5-n1 recurring/route.ts", () => {
     client = clientStub({
       recurring_streams: { data: null, error: { message: "db" } },
     });
-    mockServiceFrom.mockImplementation((table: string) => client.from(table));
+    mockServiceFrom.mockImplementation((table: unknown) => client.from(table as string));
     const res = await PATCH(req({ stream_id: ITEM_ID, action: "review" }));
     expect(res.status).toBe(500);
     expect(mockErrorResponse).toHaveBeenCalledWith("recurring.update", {
@@ -209,7 +209,7 @@ describe("coverage-boost-r5-n1 recurring/route.ts", () => {
     client = clientStub({
       recurring_streams: { data: null, error: null },
     });
-    mockServiceFrom.mockImplementation((table: string) => client.from(table));
+    mockServiceFrom.mockImplementation((table: unknown) => client.from(table as string));
     const res = await PATCH(req({ stream_id: ITEM_ID, action: "review" }));
     expect(res.status).toBe(404);
     await expect(res.json()).resolves.toEqual({

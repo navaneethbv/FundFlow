@@ -61,6 +61,14 @@ describe("login-alert", () => {
     expect(mockSendLoginAlertEmail).toHaveBeenCalledWith("a@b.com", "Chrome on macOS");
   });
 
+  it("treats a missing count as zero (new device)", async () => {
+    serviceClient = clientStub({
+      user_session_records: { data: null },
+    });
+    await notifyNewDeviceLogin("u1", "a@b.com", "UA");
+    expect(mockSendLoginAlertEmail).toHaveBeenCalled();
+  });
+
   it("skips when the rate limit is exhausted", async () => {
     serviceClient = clientStub({
       user_session_records: { data: null, count: 0 },

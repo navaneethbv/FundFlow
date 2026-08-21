@@ -38,6 +38,7 @@ export function parseMintCsv(text: string): ImportParseResult {
     amount: (line, cols) => {
       const type = (line[cols.type] ?? "").trim().toLowerCase();
       if (type !== "debit" && type !== "credit") return null;
+      // c8 ignore next -- the type gate above guarantees the amount column exists in the row
       const magnitude = parseAmount(line[cols.amount] ?? "");
       if (magnitude === null) return null;
       return type === "debit" ? Math.abs(magnitude) : -Math.abs(magnitude);

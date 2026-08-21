@@ -376,6 +376,64 @@ describe("GET /api/cron/sync", () => {
     expect(mockAlertCronFailure).not.toHaveBeenCalled();
   });
 
+  it("runs the integrity pass over seeded jobs, transactions, and accounts", async () => {
+    mockSafeEqual.mockReturnValue(true);
+    const request = new NextRequest("http://localhost/api/cron/sync", {
+      headers: { authorization: "Bearer test-secret" },
+    });
+
+    mockServiceClient.from.mockImplementation((table) => {
+      let data: unknown[] = [];
+      if (table === "plaid_items") {
+        data = [{ user_id: "u1" }];
+      } else if (table === "profiles") {
+        const q = {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn(),
+        };
+        q.maybeSingle.mockResolvedValue({
+          data: { daily_digest_email_enabled: true },
+          error: null,
+        });
+        return q;
+      } else if (table === "sync_jobs") {
+        data = [{ status: "running", updated_at: new Date().toISOString() }];
+      } else if (table === "transactions") {
+        data = [
+          {
+            id: "t1",
+            account_id: "a1",
+            plaid_transaction_id: "p1",
+            pending: true,
+            date: "2026-07-01",
+          },
+        ];
+      } else if (table === "accounts") {
+        data = [{ id: "a1" }];
+      }
+
+      const query = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
+        lt: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockResolvedValue({ error: null }),
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown[]; error: unknown }) => unknown) => unknown,
+      };
+      query.then = (onfulfilled) =>
+        Promise.resolve({ data, error: null }).then(onfulfilled);
+      return query;
+    });
+
+    mockSyncAllForUser.mockResolvedValue(undefined);
+
+    const res = await GET(request);
+    expect(res.status).toBe(200);
+    expect(mockAlertCronFailure).toHaveBeenCalled();
+  });
+
   it("filters notifications for daily_digest_email_enabled: false", async () => {
     mockSafeEqual.mockReturnValue(true);
     const request = new NextRequest("http://localhost/api/cron/sync", {

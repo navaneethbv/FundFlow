@@ -249,9 +249,11 @@ describe("coverage-boost-plaid-n3", () => {
 
   describe("POST /api/plaid/disconnect", () => {
     const ownedClient = (deleteError: unknown) => {
-      const chain = { then: (r: (v: unknown) => unknown) => r({ error: deleteError }) };
-      chain.delete = () => chain;
-      chain.eq = () => chain;
+      const chain = {
+        then: (r: (v: unknown) => unknown) => r({ error: deleteError }),
+        delete: () => chain,
+        eq: () => chain,
+      };
       return { from: vi.fn().mockReturnValue(chain) };
     };
 
@@ -403,8 +405,13 @@ describe("coverage-boost-plaid-n3", () => {
 
     it("returns errorResponse when the service update fails", async () => {
       mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: shareSupabase({ data: { id: "i1" } }, { data: { id: "h1" } }) });
-      serviceClient = { from: vi.fn().mockReturnValue({ update: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis() }) };
-      serviceClient.from().update().eq.mockReturnValue(Promise.resolve({ error: { message: "down" } }));
+      (serviceClient as {
+        from: () => {
+          update: () => {
+            eq: ((...a: unknown[]) => unknown) & { mockReturnValue: (v: unknown) => unknown };
+          };
+        };
+      }).from().update().eq.mockReturnValue(Promise.resolve({ error: { message: "down" } }));
       const req = new NextRequest("http://localhost/api/plaid/share", {
         method: "POST",
         body: JSON.stringify({ itemId: "i1", share: true, householdId: "h1" }),

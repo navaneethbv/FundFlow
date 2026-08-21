@@ -17,7 +17,7 @@ vi.mock("@/lib/http", () => ({
 
 const envState = vi.hoisted(() => ({
   appUrl: "https://app.example.com",
-  plaidRedirectUri: null,
+  plaidRedirectUri: null as string | null,
   plaidCountryCodes: ["US"],
   plaidProducts: ["transactions"],
 }));

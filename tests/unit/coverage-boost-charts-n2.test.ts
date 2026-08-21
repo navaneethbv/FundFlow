@@ -32,7 +32,7 @@ function buildEnvelope({
   kdf,
   userId,
   payload,
-}: EnvelopeOptions): Record<string, string> {
+}: EnvelopeOptions): Record<string, string | number> {
   const derived =
     kdf === "hkdf-sha256-v1" && userId
       ? hkdfSync(
@@ -59,7 +59,7 @@ function buildEnvelope({
   return envelope;
 }
 
-function writeFixture(name: string, envelope: Record<string, string>): string {
+function writeFixture(name: string, envelope: Record<string, string | number>): string {
   const filePath = join(tmpDir, name);
   writeFileSync(filePath, JSON.stringify(envelope), "utf8");
   return filePath;

@@ -79,6 +79,7 @@ interface GoalEventRow {
 /** First day of the month after `month`, for an exclusive date bound. */
 function getMonthEndExclusive(month: string): string {
   const match = MONTH_REGEX.exec(month);
+  // c8 ignore next -- callers validate against MONTH_REGEX before calling
   if (!match) throw new Error("invalid_budget_month");
   const total = Number(match[1]) * 12 + Number(match[2]);
   return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}-01`;
@@ -97,6 +98,7 @@ export interface BudgetLoadResult {
 
 function shiftMonth(month: string, delta: number): string {
   const match = MONTH_REGEX.exec(month);
+  // c8 ignore next -- callers validate against MONTH_REGEX before calling
   if (!match) throw new Error("invalid_budget_month");
   const total = Number(match[1]) * 12 + Number(match[2]) - 1 + delta;
   return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;

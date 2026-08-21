@@ -14,7 +14,7 @@ const mockErrorResponse = vi.fn((_context: string, error: unknown) =>
 vi.mock("@/lib/http", () => ({
   requireUser: () => mockRequireUser(),
   badRequest: (...a: unknown[]) => mockBadRequest(...(a as [string])),
-  errorResponse: (...a: unknown[]) => mockErrorResponse(...a),
+  errorResponse: (context: string, error: unknown) => mockErrorResponse(context, error),
 }));
 
 const mockWriteAudit = vi.fn();
@@ -37,10 +37,10 @@ const mockDuplicateSubjectId = vi.fn(
 );
 const mockFilterReviewDecisions = vi.fn((anomalies: unknown[]) => anomalies);
 vi.mock("@/lib/transaction-quality", () => ({
-  validateSplits: (...a: unknown[]) => mockValidateSplits(...a),
-  detectDuplicatePairs: (...a: unknown[]) => mockDetectDuplicatePairs(...a),
-  duplicateSubjectId: (...a: unknown[]) => mockDuplicateSubjectId(...a),
-  filterReviewDecisions: (...a: unknown[]) => mockFilterReviewDecisions(...a),
+  validateSplits: () => mockValidateSplits(),
+  detectDuplicatePairs: () => mockDetectDuplicatePairs(),
+  duplicateSubjectId: (a: unknown, b: unknown) => mockDuplicateSubjectId(String(a), String(b)),
+  filterReviewDecisions: (anomalies: unknown) => mockFilterReviewDecisions(anomalies as unknown[]),
 }));
 
 const mockNormalizeManualTxn = vi.fn();
@@ -55,7 +55,7 @@ vi.mock("@/lib/feature-flags", () => ({
 
 const mockMakeImportId = vi.fn(() => "import-id");
 vi.mock("@/lib/import", () => ({
-  makeImportId: (...a: unknown[]) => mockMakeImportId(...a),
+  makeImportId: () => mockMakeImportId(),
 }));
 
 let serviceClient = { from: vi.fn() };
@@ -229,7 +229,7 @@ describe("POST /api/transactions/annotate", () => {
       user: USER,
       supabase: supabase(
         handlers({
-          transaction_splits: (kind, i) =>
+          transaction_splits: (kind) =>
             kind === "delete" ? { error: new Error("delete before insert") } : { error: null },
         }),
       ),
@@ -245,7 +245,7 @@ describe("POST /api/transactions/annotate", () => {
       user: USER,
       supabase: supabase(
         handlers({
-          transaction_splits: (kind, i) =>
+          transaction_splits: (kind) =>
             kind === "delete" ? { error: null } : { error: new Error("insert fail") },
         }),
       ),
@@ -262,7 +262,7 @@ describe("POST /api/transactions/annotate", () => {
       supabase: supabase(
         handlers({
           goals: () => ({ data: { id: "g1", spending_reduces: false }, error: null }),
-          goal_progress_events: (kind, i) =>
+          goal_progress_events: (kind) =>
             kind === "delete" ? { error: new Error("stale fail") } : { error: null },
         }),
       ),
@@ -279,7 +279,7 @@ describe("POST /api/transactions/annotate", () => {
       supabase: supabase(
         handlers({
           goals: () => ({ data: { id: "g1", spending_reduces: true }, error: null }),
-          goal_progress_events: (kind, i) =>
+          goal_progress_events: (kind) =>
             kind === "delete"
               ? { error: null }
               : { error: new Error("upsert fail") },

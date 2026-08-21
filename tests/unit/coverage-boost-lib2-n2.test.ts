@@ -132,8 +132,8 @@ describe("ledger-data", () => {
 
   it("selectProjectedLedgerPage filters, sorts, and slices a page", () => {
     const rows = [
-      { id: "1", date: "2026-07-01", amount: 10, iso_currency_code: null, pfc_detailed: null, pending: false, merchant: "A", category: "FOOD", accountLabel: "Checking", displayedAmount: 10 },
-      { id: "2", date: "2026-07-02", amount: 20, iso_currency_code: null, pfc_detailed: null, pending: false, merchant: "B", category: "TRANSPORT", accountLabel: "Savings", displayedAmount: 20 },
+      { id: "1", date: "2026-07-01", amount: 10, iso_currency_code: null, pfc_detailed: null, pending: false, merchant: "A", category: "FOOD", accountLabel: "Checking", displayedAmount: 10, merchant_name: "A", name: "A", pfc_primary: "FOOD", account_id: "a1", manual_account_id: null },
+      { id: "2", date: "2026-07-02", amount: 20, iso_currency_code: null, pfc_detailed: null, pending: false, merchant: "B", category: "TRANSPORT", accountLabel: "Savings", displayedAmount: 20, merchant_name: "B", name: "B", pfc_primary: "TRANSPORT", account_id: "a2", manual_account_id: null },
     ];
     const res = selectProjectedLedgerPage(rows, { category: "", sub: "", merchant: "", sort: "date", direction: "asc", page: 1, pageSize: 1 });
     expect(res.total).toBe(2);
@@ -184,9 +184,9 @@ describe("ledger-projection", () => {
 
   it("sortLedgerRows keeps missing labels last in both directions", () => {
     const rows = [
-      { id: "a", date: "2026-07-01", amount: 1, iso_currency_code: null, pfc_detailed: null, pending: false, merchant: "", category: "", accountLabel: "Z", displayedAmount: 1 },
-      { id: "b", date: "2026-07-02", amount: 2, iso_currency_code: null, pfc_detailed: null, pending: false, merchant: "Mid", category: "C", accountLabel: "A", displayedAmount: 2 },
-      { id: "c", date: "2026-07-03", amount: 3, iso_currency_code: null, pfc_detailed: null, pending: false, merchant: "", category: "", accountLabel: "", displayedAmount: 3 },
+      { id: "a", date: "2026-07-01", amount: 1, iso_currency_code: null, pfc_detailed: null, pending: false, merchant: "", category: "", accountLabel: "Z", displayedAmount: 1, merchant_name: "", name: "", pfc_primary: null, account_id: "a1", manual_account_id: null },
+      { id: "b", date: "2026-07-02", amount: 2, iso_currency_code: null, pfc_detailed: null, pending: false, merchant: "Mid", category: "C", accountLabel: "A", displayedAmount: 2, merchant_name: "Mid", name: "Mid", pfc_primary: "C", account_id: "a2", manual_account_id: null },
+      { id: "c", date: "2026-07-03", amount: 3, iso_currency_code: null, pfc_detailed: null, pending: false, merchant: "", category: "", accountLabel: "", displayedAmount: 3, merchant_name: "", name: "", pfc_primary: null, account_id: "a3", manual_account_id: null },
     ];
     const asc = sortLedgerRows(rows, "merchant", "asc");
     const desc = sortLedgerRows(rows, "merchant", "desc");
@@ -200,8 +200,8 @@ describe("ledger-projection", () => {
 
   it("filterProjectedLedgerRows matches committed category, sub, and merchant", () => {
     const rows = [
-      { id: "1", merchant: "Blue Bottle", category: "FOOD_AND_DRINK", pfc_detailed: "COFFEE" },
-      { id: "2", merchant: "Uber", category: "TRANSPORT", pfc_detailed: null },
+      { id: "1", merchant: "Blue Bottle", category: "FOOD_AND_DRINK", pfc_detailed: "COFFEE", accountLabel: "Checking" },
+      { id: "2", merchant: "Uber", category: "TRANSPORT", pfc_detailed: null, accountLabel: "Checking" },
     ];
     expect(filterProjectedLedgerRows(rows, { category: "FOOD_AND_DRINK", sub: "COFFEE", merchant: "blue bottle" })).toEqual([rows[0]]);
     expect(filterProjectedLedgerRows(rows, { category: "FOOD_AND_DRINK", sub: "WRONG", merchant: "" })).toEqual([]);

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { NextResponse } from "next/server";
 
 const mockRequireUser = vi.fn<(...args: unknown[]) => unknown>();
@@ -50,10 +50,10 @@ function authFor(supabase: unknown) {
 }
 
 function rejectChain(...builders: string[]) {
-  const chain: Record<string, vi.Mock> = { then: vi.fn() };
+  const chain: Record<string, Mock> = { then: vi.fn() };
   for (const b of builders) chain[b] = vi.fn(() => chain);
-  chain.then = (_resolve: (v: unknown) => unknown, reject: (e: Error) => unknown) =>
-    reject(new Error("boom"));
+  chain.then = ((_resolve: (v: unknown) => unknown, reject: (e: Error) => unknown) =>
+    reject(new Error("boom"))) as unknown as Mock;
   return chain;
 }
 

@@ -2,6 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
 import { clientStub } from "@/tests/fixtures/supabase-query";
 
+type StubWithStorage = ReturnType<typeof clientStub> & {
+  storage: {
+    from: (...args: unknown[]) => unknown;
+  };
+};
+
 const mockRequireUser = vi.fn<(...args: unknown[]) => unknown>();
 const mockErrorResponse = vi.fn<(...args: unknown[]) => unknown>(
   (_context: unknown, error: unknown) => NextResponse.json({ error: String(error) }, { status: 500 }),
@@ -30,7 +36,7 @@ vi.mock("@/lib/feature-flags", () => ({
 import { PATCH as profilePatch, POST as profilePost, DELETE as profileDelete } from "@/app/api/settings/profile/route";
 
 function supabaseWith(profilesSeed: unknown, storageResolvers: { upload?: unknown; remove?: unknown } = {}) {
-  const supabase = clientStub({ profiles: profilesSeed });
+  const supabase = clientStub({ profiles: profilesSeed as never }) as StubWithStorage;
   supabase.storage = {
     from: vi.fn().mockReturnValue({
       upload: storageResolvers.upload ?? vi.fn().mockResolvedValue({ error: null }),
@@ -154,7 +160,7 @@ describe("coverage boost r6 n1: settings/profile route", () => {
       const readChain = {
         select: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) }),
       };
-      const supabase = clientStub({});
+      const supabase = clientStub({}) as StubWithStorage;
       supabase.from = vi.fn().mockImplementation((table: string) => {
         if (table === "profiles") return readChain;
         return { update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: new Error("write boom") }) }) };
@@ -244,7 +250,7 @@ describe("coverage boost r6 n1: settings/profile route", () => {
     it("returns 500 when the profile update throws (L143 true)", async () => {
       const upload = vi.fn().mockResolvedValue({ error: null });
       const update = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: new Error("update boom") }) });
-      const supabase = clientStub({});
+      const supabase = clientStub({}) as StubWithStorage;
       supabase.storage = { from: vi.fn().mockReturnValue({ upload }) };
       supabase.from = vi.fn().mockReturnValue({ update });
       mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase });
@@ -301,7 +307,7 @@ describe("coverage boost r6 n1: settings/profile route", () => {
 
     it("returns 500 when clearing avatar_path throws (L177 true)", async () => {
       const update = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: new Error("update boom") }) });
-      const supabase = clientStub({});
+      const supabase = clientStub({}) as StubWithStorage;
       supabase.storage = { from: vi.fn().mockReturnValue({ remove: vi.fn().mockResolvedValue({ error: null }) }) };
       supabase.from = vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: { avatar_path: "u1/avatar.jpg" }, error: null }) }),

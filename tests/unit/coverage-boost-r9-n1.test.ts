@@ -193,7 +193,7 @@ describe("coverage boost r9: validate_palette", () => {
         --viz-4: #299525;
       }
     `;
-    const palettes = palettesFromCss(css);
+    const palettes: { light?: string[]; dark?: string[] } = palettesFromCss(css);
     expect(palettes).toEqual({
       light: LIGHT.map((c) => c.toLowerCase()),
     });
@@ -201,7 +201,7 @@ describe("coverage boost r9: validate_palette", () => {
   });
 
   it("parses an explicit dark theme block into its own palette (B@214 explicit)", () => {
-    const palettes = palettesFromCss(APPROVED_CSS);
+    const palettes: { light?: string[]; dark?: string[] } = palettesFromCss(APPROVED_CSS);
     expect(palettes.light).toHaveLength(7);
     expect(palettes.dark).toEqual(DARK.map((c) => c.toLowerCase()));
   });

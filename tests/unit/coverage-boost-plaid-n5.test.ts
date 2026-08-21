@@ -317,9 +317,11 @@ describe("coverage-boost-plaid-n5", () => {
 
   describe("DELETE /api/push/subscribe", () => {
     const delChain = (error: unknown) => {
-      const chain = { then: (r: (v: unknown) => unknown) => r({ error }) };
-      chain.delete = () => chain;
-      chain.eq = () => chain;
+      const chain = {
+        then: (r: (v: unknown) => unknown) => r({ error }),
+        delete: () => chain,
+        eq: () => chain,
+      };
       return chain;
     };
 

@@ -176,6 +176,7 @@ describe("palette validator", () => {
       }
     `;
     const tempFile = "coverage/temp-bad-palette.css";
+    await fs.mkdir("coverage", { recursive: true });
     await fs.writeFile(tempFile, badCss, "utf8");
     try {
       const exitCode = await paletteValidator.runCli(tempFile);

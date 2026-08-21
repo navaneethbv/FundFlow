@@ -61,8 +61,8 @@ function jsonReq(url: string, method: string, payload: unknown) {
 
 /** A client whose successive `from()` calls resolve differently, for routes
  *  that query one table twice (the cap count, then the write). */
-function sequencedClient(results: QueryResult[]) {
-  const stubs = results.map((result) => queryStub(result));
+function sequencedClient(results: Array<{ data?: unknown; error?: unknown; count?: number | null }>) {
+  const stubs = results.map((result) => queryStub(result as QueryResult));
   let index = 0;
   return {
     from: vi.fn(() => stubs[Math.min(index++, stubs.length - 1)]!),

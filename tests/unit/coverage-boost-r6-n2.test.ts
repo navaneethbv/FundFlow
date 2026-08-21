@@ -156,7 +156,7 @@ describe("coverage boost r6 n2: settings/tags route", () => {
 
     it("throws when the RPC fails (L67 true)", async () => {
       const supabase = clientStub({ user_tags: { data: [{ name: "Groceries" }], error: null } });
-      supabase.rpc = vi.fn(() => ({ then: (resolve: (v: unknown) => unknown) => resolve({ error: new Error("rpc boom") }) }));
+      supabase.rpc = vi.fn(() => ({ then: (resolve: (v: unknown) => unknown) => resolve({ error: new Error("rpc boom") }) })) as unknown as typeof supabase.rpc;
       mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase });
       const res = await tagsPatch(jsonRequest({ oldName: "Groceries", newName: "Shopping" }));
       expect(res.status).toBe(500);

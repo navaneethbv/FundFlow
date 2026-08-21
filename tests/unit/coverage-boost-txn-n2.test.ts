@@ -14,14 +14,14 @@ const mockErrorResponse = vi.fn((_context: string, error: unknown) =>
 vi.mock("@/lib/http", () => ({
   requireUser: () => mockRequireUser(),
   badRequest: (...a: unknown[]) => mockBadRequest(...(a as [string])),
-  errorResponse: (...a: unknown[]) => mockErrorResponse(...a),
+  errorResponse: (context: string, error: unknown) => mockErrorResponse(context, error),
 }));
 
 const mockWriteAudit = vi.fn();
 const mockGetClientIp = vi.fn(() => "127.0.0.1");
 vi.mock("@/lib/audit", () => ({
   writeAudit: (...args: unknown[]) => mockWriteAudit(...args),
-  getClientIp: (...args: unknown[]) => mockGetClientIp(...args),
+  getClientIp: () => mockGetClientIp(),
 }));
 
 const mockCheckRateLimit = vi.fn<(...args: unknown[]) => Promise<boolean>>(
@@ -87,7 +87,7 @@ function supabase(handlers: Record<string, () => unknown> = {}) {
 function jsonRequest(body: unknown) {
   return {
     json: () => Promise.resolve(body),
-  } as unknown as Request;
+  } as unknown as NextRequest;
 }
 
 beforeEach(() => {
@@ -399,13 +399,6 @@ describe("DELETE /api/recurring/manual", () => {
 describe("GET /api/household/accept", () => {
   const TOKEN = "abcdefghijklmnopqrst"; // >= 20 chars
   const futureExpiry = new Date(Date.now() + 100000).toISOString();
-
-  function inviteHandlers(invite: unknown, memberError: unknown) {
-    return {
-      household_invites: () => ({ data: invite, error: null }),
-      household_members: () => ({ error: memberError }),
-    };
-  }
 
   it("redirects to login when not signed in (line 16-18)", async () => {
     mockRequireUser.mockResolvedValue(new NextResponse("x", { status: 401 }));
