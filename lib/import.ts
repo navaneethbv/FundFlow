@@ -209,6 +209,23 @@ export function parseAmount(raw: string): number | null {
   return negative ? -value : value;
 }
 
+/**
+ * Shared two-column (debit/credit or outflow/inflow) to signed amount rule: a
+ * nonzero debit/outflow column is positive (money out), a nonzero
+ * credit/inflow column is negative (money in). Used by the generic bank-CSV
+ * parser and the YNAB normalizer, which share the identical column shape.
+ */
+export function twoColumnToSignedAmount(
+  debitRaw: string | undefined,
+  creditRaw: string | undefined,
+): number | null {
+  const debit = parseAmount(debitRaw ?? "");
+  const credit = parseAmount(creditRaw ?? "");
+  if (debit !== null && debit !== 0) return Math.abs(debit);
+  if (credit !== null && credit !== 0) return -Math.abs(credit);
+  return debit !== null || credit !== null ? 0 : null;
+}
+
 function parseImportAmount(
   line: string[],
   columns: ColumnMap,
@@ -218,11 +235,9 @@ function parseImportAmount(
     const amount = parseAmount(line[columns.amount] ?? "");
     return amount !== null && positiveIsIncome ? -amount : amount;
   }
-  const debit = columns.debit !== null ? parseAmount(line[columns.debit] ?? "") : null;
-  const credit = columns.credit !== null ? parseAmount(line[columns.credit] ?? "") : null;
-  if (debit !== null && debit !== 0) return Math.abs(debit);
-  if (credit !== null && credit !== 0) return -Math.abs(credit);
-  return debit !== null || credit !== null ? 0 : null;
+  const debitRaw = columns.debit !== null ? line[columns.debit] : undefined;
+  const creditRaw = columns.credit !== null ? line[columns.credit] : undefined;
+  return twoColumnToSignedAmount(debitRaw, creditRaw);
 }
 
 function parseImportLine(
