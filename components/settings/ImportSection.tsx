@@ -36,7 +36,7 @@ export default function ImportSection({ accounts }: Readonly<{ accounts: Account
     const fileInput = e.currentTarget.elements.namedItem("file") as HTMLInputElement;
     const file = fileInput.files?.[0];
     if (!file || !accountId) {
-      setError("Choose a CSV file and a target account.");
+      setError("Choose a file and a target account.");
       return;
     }
 
@@ -65,12 +65,16 @@ export default function ImportSection({ accounts }: Readonly<{ accounts: Account
   }
 
   return (
-    <Panel title="Import data" eyebrow="CSV backfill">
+    <Panel title="Import data" eyebrow="Statement backfill">
       <p className="mb-4 text-sm text-muted">
         Backfill history older than Plaid provides (max 24 months) from a bank-statement
-        CSV. Needs date, description, and amount (or debit/credit) columns. Rows that
-        overlap the account&apos;s Plaid-synced history are skipped automatically, and
-        re-importing the same file never duplicates.
+        CSV, an OFX/QFX file, or a Mint, Monarch, or YNAB export. Rows that overlap the
+        account&apos;s Plaid-synced history are skipped automatically, and re-importing the
+        same file never duplicates.
+      </p>
+      <p className="mb-4 text-sm text-muted">
+        Only transactions import — budgets, goals, and rules from the source app are not
+        carried over.
       </p>
 
       {accounts.length === 0 ? (
@@ -78,9 +82,9 @@ export default function ImportSection({ accounts }: Readonly<{ accounts: Account
       ) : (
         <form onSubmit={onSubmit} className="space-y-3 text-sm">
           <label className="flex min-h-32 flex-col items-center justify-center rounded-card border border-dashed border-panel-border bg-panel-2 px-4 py-8 text-center text-sm text-muted">
-            <span className="font-semibold text-foreground">Drag and drop your CSV file here</span>
-            <span className="mt-1">or choose a file</span>
-            <Input type="file" name="file" accept=".csv,.ofx,.qfx,text/csv" required className="mt-4 max-w-xs" />
+            <span className="font-semibold text-foreground">Drag and drop your CSV, OFX, or QFX file here</span>
+            <span className="mt-1">or choose a file (Mint, Monarch, and YNAB exports work too)</span>
+            <Input type="file" name="file" accept=".csv,.ofx,.qfx,text/csv,application/x-ofx" required className="mt-4 max-w-xs" />
           </label>
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2">
@@ -110,7 +114,7 @@ export default function ImportSection({ accounts }: Readonly<{ accounts: Account
             type="submit"
             loading={busy}
           >
-            {busy ? "Importing..." : "Import CSV"}
+            {busy ? "Importing..." : "Import file"}
           </Button>
         </form>
       )}

@@ -103,7 +103,7 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
     const fileInput = event.currentTarget.elements.namedItem("file") as HTMLInputElement;
     const file = fileInput.files?.[0];
     if (!file || !accountId) {
-      setError("Choose a CSV, OFX, or QFX file and a target account.");
+      setError("Choose a CSV, OFX/QFX, Mint, Monarch, or YNAB file and a target account.");
       return;
     }
     setPendingFile(file);
@@ -198,8 +198,13 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
   return (
     <Panel title="Import with review" eyebrow="Statement backfill">
       <p className="mb-4 text-sm text-muted">
-        Preview a bank-statement CSV, OFX, or QFX file before importing. Rows that look like duplicates of
-        existing transactions are flagged and left unchecked; you decide what lands.
+        Preview a bank-statement CSV, an OFX/QFX file, or a Mint, Monarch, or YNAB export
+        before importing. Rows that look like duplicates of existing transactions are
+        flagged and left unchecked; you decide what lands.
+      </p>
+      <p className="mb-4 text-sm text-muted">
+        Only transactions import — budgets, goals, and rules from the source app are not
+        carried over.
       </p>
 
       {accounts.length === 0 ? (
