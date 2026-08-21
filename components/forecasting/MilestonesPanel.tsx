@@ -1,6 +1,26 @@
 import type { ForecastMilestone } from "@/lib/forecasting";
 import { formatCurrency } from "@/lib/format";
 
+const BADGE_COLOR_MAP: Record<string, string> = {
+  fire: "bg-amber-500/10 text-amber-500",
+  debt: "bg-rose-500/10 text-rose-500",
+  emergency: "bg-emerald-500/10 text-emerald-500",
+};
+
+function getBadgeColor(type: string): string {
+  return BADGE_COLOR_MAP[type] ?? "bg-accent-strong/10 text-accent-strong";
+}
+
+function getMilestoneCardClass(isReachedNow: boolean, isReachedFuture: boolean): string {
+  if (isReachedNow) {
+    return "border-accent-strong/40 bg-accent-strong/5";
+  }
+  if (isReachedFuture) {
+    return "border-panel-border bg-panel";
+  }
+  return "border-panel-border/60 bg-panel/50 opacity-80";
+}
+
 export default function MilestonesPanel({
   milestones,
   horizonMonths,
@@ -30,26 +50,12 @@ export default function MilestonesPanel({
           return (
             <div
               key={m.id}
-              className={`flex flex-col justify-between rounded-field border p-4 transition-colors ${
-                isReachedNow
-                  ? "border-accent-strong/40 bg-accent-strong/5"
-                  : isReachedFuture
-                    ? "border-panel-border bg-panel"
-                    : "border-panel-border/60 bg-panel/50 opacity-80"
-              }`}
+              className={`flex flex-col justify-between rounded-field border p-4 transition-colors ${getMilestoneCardClass(isReachedNow, isReachedFuture)}`}
             >
               <div>
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <span
-                    className={`inline-block rounded px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${
-                      m.type === "fire"
-                        ? "bg-amber-500/10 text-amber-500"
-                        : m.type === "debt"
-                          ? "bg-rose-500/10 text-rose-500"
-                          : m.type === "emergency"
-                            ? "bg-emerald-500/10 text-emerald-500"
-                            : "bg-accent-strong/10 text-accent-strong"
-                    }`}
+                    className={`inline-block rounded px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${getBadgeColor(m.type)}`}
                   >
                     {m.type}
                   </span>
