@@ -1,6 +1,49 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-08-20. Read this first to resume.
+Last updated: 2026-08-21. Read this first to resume.
+
+## 2026-08-21: migration import from Mint, Monarch, and YNAB
+
+Branch `feat/production-readiness-2026-08`. Plan:
+`docs/superpowers/plans/2026-08-21-migration-import.md`.
+
+**What shipped.** Three pure sniffer+normalizer pairs feed the existing
+import pipeline: `lib/import-mint.ts`, `lib/import-monarch.ts`,
+`lib/import-ynab.ts`, each emitting the existing `ImportedRow` shape with
+Plaid sign convention (positive = money out).
+Mint's sign comes from `Transaction Type` (`debit`/`credit`), never from the
+raw `Amount` magnitude. Monarch's signed `Amount` is negated at the
+normalizer boundary. YNAB reuses the shared `twoColumnToSignedAmount` rule
+extracted from the generic debit/credit branch in `lib/import.ts`, preferring
+`Category Group/Category` over the bare `Category` column.
+
+`lib/import.ts::detectSourceFormat` now dispatches OFX → Mint → Monarch →
+YNAB → plain CSV in one place, and both `/api/import/preview` and
+`/api/import/csv` dispatch through it, replacing each route's duplicated
+inline OFX-vs-CSV branch.
+
+**Category gap closed.** `import_review_rows` gained a nullable `category`
+column (migration `20260821155029_import_review_row_category.sql`, applied to
+the linked live project on 2026-08-21) so a staged row's category survives
+preview and the commit route threads it into `pfc_primary` instead of
+hardcoding `null`. Mint/Monarch/YNAB rows carry real categories; this was the
+one correctness gap the plan's research surfaced.
+
+**Verification.** `npm run lint`, `npm run test:unit` (2552 tests), and
+`npm run build` are all green. New unit coverage: `import-mint.test.ts`,
+`import-monarch.test.ts`, `import-ynab.test.ts`, plus `detectSourceFormat`
+cases and route-level tests for no-manual-mapping preview, the
+deterministic-id upsert path, and commit-time category threading.
+
+**Not verified end to end.** The three acceptance criteria from `features.md`
+§6 (preview+commit each format through the review queue without manual
+mapping; re-import idempotency; second-import remembering nothing new) are
+covered at the unit level but were not exercised against the live dev server
+with real files. The plan's literal "re-import reports imported: 0" does not
+match the csv route's response semantics (`imported` counts rows in the
+file, not rows newly inserted); idempotency is guaranteed by the
+deterministic `import-<hash>` ids, which the unit tests prove collide on
+re-import.
 
 ## 2026-08-20: production-readiness pass (branch `feat/production-readiness-2026-08`)
 

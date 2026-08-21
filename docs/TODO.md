@@ -2,6 +2,21 @@
 
 Nice-to-have features and enhancements, deferred out of the initial build.
 
+## Added 2026-08-21: migration import (Mint, Monarch, YNAB) — shipped
+
+Done on 2026-08-21 (`feat/production-readiness-2026-08`, plan
+`docs/superpowers/plans/2026-08-21-migration-import.md`): Mint, Monarch, and
+YNAB CSVs normalize into the existing `ImportedRow` pipeline via
+`lib/import-mint.ts` / `lib/import-monarch.ts` / `lib/import-ynab.ts` and the
+new `lib/import.ts::detectSourceFormat` dispatcher. `import_review_rows`
+gained a nullable `category` column (migration
+`20260821155029_import_review_row_category.sql`) so the commit route threads
+the parsed category into `pfc_primary`. Remaining: a manual dev-server pass
+(preview + commit each format with no mapping UI, re-import idempotency) and,
+if a safe (non-user-data) Supabase project is ever available, an RLS/integration
+test proving user B cannot read user A's staged review rows and that
+re-importing the same file of each format does not duplicate.
+
 ## Added 2026-08-10: put production on a custom domain
 
 `fund-flow-swart.vercel.app` is shared free-hosting, and the app's shape (a credential-collecting login form, Google OAuth, and bank linking) matches a phishing heuristic closely enough that filtering software flags it.
