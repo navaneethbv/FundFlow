@@ -1,27 +1,27 @@
 # Graph Report - FundFlow  (2026-08-21)
 
 ## Corpus Check
-- 890 files · ~1,705,182 words
+- 891 files · ~1,707,766 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 5041 nodes · 11990 edges · 294 communities (264 shown, 30 thin omitted)
+- 5048 nodes · 12005 edges · 288 communities (258 shown, 30 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 68 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `4dcafc2e`
+- Built from commit: `8caf6e70`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - errorResponse
 - import.ts
-- http.ts
-- charts-render.test.ts
-- audit.ts
+- tokens/route.ts
+- chart-utils.ts
+- coverage-boost-export-n1.test.ts
 - support.js
-- createClient
+- goals/page.tsx
 - goals-v2.ts
 - settings/page.tsx
 - formatCurrency
@@ -30,22 +30,22 @@
 - authenticated.ts
 - dependencies
 - reports/page.tsx
-- weekly-report/route.ts
-- finance-query.ts
-- api-routes.test.ts
+- delivery-error.ts
+- budget-data.ts
+- checkRateLimit
 - createClient
-- cash-flow.ts
+- cash-flow/page.tsx
 - finance-domain.ts
-- PlanView.tsx
+- PushSection.tsx
 - dashboard.ts
 - Panel.tsx
-- plaid-service.ts
+- createServiceClient
 - coverage-boost-txn-n1.test.ts
-- recurring/route.ts
+- SummaryPanel.tsx
 - coverage-boost-export-n3.test.ts
 - Financial Planner Parity Implementation Plan
-- coverage-boost-domain-libs.test.ts
-- goals.ts
+- debt-data.ts
+- PlanView.tsx
 - Frontend Review: Full Repository and Analysis Method
 - insights.ts
 - clientStub
@@ -54,18 +54,18 @@
 - badRequest
 - FundFlow — Missing Must-Have Features
 - planning.ts
-- supabase-query.ts
+- accounts-csv/route.ts
 - recurring/manual/route.ts
-- coverage-boost-lib2-n4.test.ts
-- format.ts
+- receipts/route.ts
+- currency.ts
 - ledger-query.ts
 - api-routes-unit.test.ts
-- DashboardWidgetGrid.tsx
+- accounts/page.tsx
 - logError
 - transactions/page.tsx
 - CardCarousel.tsx
 - compilerOptions
-- cash-flow/page.tsx
+- createClient
 - icons.tsx
 - Security
 - 5. Per-page target specs
@@ -73,11 +73,11 @@
 - proxy.ts
 - investment-sync.ts
 - ledger-projection.ts
-- dashboard-widgets.ts
+- DashboardWidgetGrid.tsx
 - webhook/route.ts
-- dashboard-widgets-data.ts
+- dashboard/page.tsx
 - recurring.ts
-- invite/route.ts
+- coverage-boost-lib2-n2.test.ts
 - coverage-boost-simple-routes.test.ts
 - RecurringList.tsx
 - devDependencies
@@ -87,51 +87,51 @@
 - FundFlow handoff archive (2026-07-05 through 2026-08-09)
 - Architecture
 - coverage-boost-plaid-n4.test.ts
-- PasskeysSection.tsx
+- LoginForm.tsx
 - Transaction sorting and filter controls
 - lib/weekly-report.ts
 - api-plaid-direct-routes.test.ts
-- receipt/route.ts
+- annotate/route.ts
 - FundFlow Dashboard Command Center Design
-- accounts/page.tsx
+- accounts-page.ts
 - investments/page.tsx
 - ai-provider-lib.test.ts
 - drilldown.ts
-- isFeatureEnabled
+- feature-flags.ts
 - Modifications and improvements
 - Phase 5: Recurring Page Implementation Plan
-- coverage-boost-lib2-n2.test.ts
+- roadmap-completion.test.ts
 - coverage-boost-plaid-n3.test.ts
 - Session 2 — Phases 2–8 + Phase-1 remainder
 - Dashboard drill-down design
 - transaction-quality.ts
-- advice/page.tsx
+- advice.ts
 - coverage-boost-txn-n2.test.ts
 - report-pdf.ts
 - File Map
 - Phases V3–V10 — Page verticals (independent, any order)
-- account-history.ts
-- budget-data.ts
+- coverage-boost-domain-libs.test.ts
+- investments.ts
 - http.test.ts
 - FundFlow Deferred Features Completion Design
 - report-email.ts
-- ai-routes-and-push.test.ts
+- GoalCard.tsx
 - coverage-boost-plaid-n5.test.ts
 - coverage-boost-r3-n3.test.ts
 - settings-nav.ts
 - New-Changes — local change log
 - Remaining Must-Haves: Revocation Enforcement, Cron Alerts, Mobile Polish
-- coverage-boost-lib1-n1.test.ts
-- coverage-boost-export-n2.test.ts
-- coverage-boost-r6-n6.test.ts
+- advice-data.ts
+- saved/route.ts
+- reconnect/route.ts
 - plaid-reconnect-route.test.ts
 - FundFlow Todos Roadmap Implementation Plan
 - URL contract (used by every task)
 - File Map
 - reporting.ts
 - CLAUDE.md
-- import-routes.test.ts
-- cash-flow-render.test.ts
+- advice-content.ts
+- charts-render.test.ts
 - SinkingFundsSection
 - File Structure
 - File Structure
@@ -139,7 +139,7 @@
 - File Structure
 - scripts
 - coverage-boost-plaid-n1.test.ts
-- coverage-boost-r6-n1.test.ts
+- profile/route.ts
 - cron-sync-route.test.ts
 - coverage-boost-lib2-n5.test.ts
 - ConnectBankButton.tsx
@@ -148,12 +148,12 @@
 - Recurring sinking funds
 - benchmark-provider.ts
 - ical.ts
-- cron-weekly-report-route.test.ts
-- AuthShell.tsx
-- crypto.ts
-- computeCumulativeSpendByDay
-- ImportReviewSection
-- ManualAccountsSection.tsx
+- export-route.ts
+- AdviceCard.tsx
+- toCsv
+- cash-flow-data.ts
+- ImportReviewSection.tsx
+- ManualAccountsSection
 - TransactionEditor
 - FundFlow QA Runbook
 - Global Constraints
@@ -163,20 +163,20 @@
 - FundFlow — Future Todos
 - dashboard-cache.ts
 - coverage-boost-r7-n1.test.ts
-- receipts-route.test.ts
+- investments-render.test.ts
 - DangerZone.tsx
 - TransactionQueryControls
 - FundFlow — Session Handoff
 - Findings
 - Global Constraints
 - Global Constraints
-- report-period.ts
-- roadmap-completion.test.ts
+- weekly-report/route.ts
+- forecasting-data.ts
 - demo-data.ts
 - coverage-boost-charts-n2.test.ts
-- coverage-boost-plaid-n2.test.ts
-- coverage-boost-r2-n1.test.ts
-- coverage-boost-r2-n4.test.ts
+- export-routes.test.ts
+- accounts/route.ts
+- advice/page.tsx
 - coverage-boost-r2-n6.test.ts
 - coverage-boost-r2-n7.test.ts
 - http-session-revocation.test.ts
@@ -187,14 +187,14 @@
 - Global Constraints
 - Global Constraints
 - FundFlow Passkeys and MFA Recovery Design
-- backup/route.ts
+- backup.ts
 - FundFlow
-- api-plaid-sync.test.ts
-- coverage-boost-r2-n2.test.ts
+- debt.ts
+- ledger-filter.ts
 - coverage-boost-r3-n2.test.ts
-- coverage-boost-r5-n2.test.ts
-- coverage-boost-r6-n2.test.ts
-- coverage-boost-r6-n4.test.ts
+- GoalCardMenu
+- sync-lib-extra.test.ts
+- MilestonesPanel.tsx
 - Global Constraints
 - Global Constraints
 - Global Constraints
@@ -202,43 +202,38 @@
 - FundFlow Synced Transaction Duplicate Review Design
 - FundFlow Quality and Verification Completion Design
 - annual.ts
-- manual-transaction.ts
+- DashboardPrefsSection.tsx
 - budget.spec.ts
-- coverage-boost-r2-n3.test.ts
-- coverage-boost-r5-n1.test.ts
+- DuplicateReview
+- TransactionSortMenu
 - GoalsManager
-- demo-backup-routes.test.ts
+- api-tokens.ts
 - Categorical chart palette
 - Setup
 - FundFlow E2E suite
-- cron-alert.test.ts
+- profile.ts
 - investments-export.test.ts
-- profile-route.test.ts
+- AssumptionsPanel.tsx
 - export-csv-tax-scope.test.ts
-- SavedReportsSection
+- WhatIfPanel.tsx
 - BudgetsSection
-- coverage-boost-r6-n3.test.ts
+- admin-stats-route.test.ts
 - TableToolbar.tsx
 - FundFlow architecture
 - Added 2026-08-20: owner decisions for production readiness (Phase 3)
 - package.json
 - reports.spec.ts
 - transactions.spec.ts
-- ai-insights-route.test.ts
+- web-push
 - mfa/route.ts
 - api-settings-passkeys.test.ts
-- manual-transaction-route.test.ts
-- plaid-item-route.test.ts
 - layout.tsx
-- DebtPlannerView.tsx
 - AutoRefresh
-- preview/route.ts
-- coverage-boost-r2-n5.test.ts
+- import/csv/route.ts
 - account-snapshot-rls.test.ts
 - budget-period-rls.test.ts
 - recurring-stream-rls.test.ts
 - refund-netting.test.ts
-- coverage-boost-r6-n5.test.ts
 - ReceiptInbox
 - Phase 7 Goals is implemented (flag-gated)
 - planner-ia.spec.ts
@@ -268,7 +263,6 @@
 - account-snapshot-schema.test.ts
 - service-worker.test.ts
 - weekly-report-schema.test.ts
-- nodemailer
 
 ## God Nodes (most connected - your core abstractions)
 1. `formatCurrency()` - 159 edges
@@ -283,61 +277,61 @@
 10. `cn()` - 67 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `loadLedgerFilterOptions()` --indirect_call--> `toLedgerFacetRow()`  [INFERRED]
-  app/transactions/page.tsx → lib/ledger-projection.ts
+- `authWith()` --indirect_call--> `requireUser()`  [INFERRED]
+  tests/unit/goals-routes.test.ts → lib/http.ts
+- `authWith()` --indirect_call--> `requireUser()`  [INFERRED]
+  tests/unit/reports-saved-route.test.ts → lib/http.ts
+- `AccountsPage()` --indirect_call--> `compareTextAscending()`  [INFERRED]
+  app/accounts/page.tsx → lib/accounts-page.ts
 - `LoginForm()` --indirect_call--> `createClient()`  [INFERRED]
   components/LoginForm.tsx → lib/supabase/client.ts
 - `HistoryChart()` --calls--> `linePath()`  [EXTRACTED]
   components/accounts/NetWorthHero.tsx → lib/chart-utils.ts
-- `AssetsBar()` --calls--> `formatCurrency()`  [EXTRACTED]
-  components/accounts/SummaryPanel.tsx → lib/format.ts
-- `LiabilitiesBar()` --calls--> `formatCurrency()`  [EXTRACTED]
-  components/accounts/SummaryPanel.tsx → lib/format.ts
 
 ## Import Cycles
 - None detected.
 
-## Communities (294 total, 30 thin omitted)
+## Communities (288 total, 30 thin omitted)
 
 ### Community 0 - "errorResponse"
-Cohesion: 0.09
-Nodes (44): POST(), GET(), GET(), normalizeFrequency(), DELETE(), POST(), GET(), dynamic (+36 more)
+Cohesion: 0.11
+Nodes (50): POST(), GET(), POST(), IMAGE_TYPES, POST(), RECEIPT_SCHEMA, GET(), normalizeFrequency() (+42 more)
 
 ### Community 1 - "import.ts"
-Cohesion: 0.07
-Nodes (53): parseUploadedRows(), parseByFormat(), toggle(), AMOUNT_HEADERS, CATEGORY_HEADERS, ColumnMap, consumeCsvCharacter(), CREDIT_HEADERS (+45 more)
+Cohesion: 0.05
+Nodes (75): parseByFormat(), parsePreviewInput(), resolveColumnMap(), AMOUNT_HEADERS, CATEGORY_HEADERS, ColumnMap, consumeCsvCharacter(), CREDIT_HEADERS (+67 more)
 
-### Community 2 - "http.ts"
-Cohesion: 0.06
-Nodes (52): DELETE(), POST(), AccountBaselineRow, ALLOCATION_ERRORS, allocationErrorFrom(), AllocationRequest, captureBaseline(), DELETE() (+44 more)
+### Community 2 - "tokens/route.ts"
+Cohesion: 0.05
+Nodes (47): DELETE(), POST(), DELETE(), EVENT_TYPES, POST(), DELETE(), POST(), DELETE() (+39 more)
 
-### Community 3 - "charts-render.test.ts"
-Cohesion: 0.13
-Nodes (27): AccountRow(), formatChange(), AreaSparkline(), CumulativeCompareChart(), Point, DivergingColumns(), DonutChart(), DonutItem (+19 more)
+### Community 3 - "chart-utils.ts"
+Cohesion: 0.21
+Nodes (17): AreaSparkline(), CumulativeCompareChart(), Point, DivergingColumns(), TrendChart(), TrendSeries, ForecastChart(), SERIES (+9 more)
 
-### Community 4 - "audit.ts"
-Cohesion: 0.04
-Nodes (65): displayBalance(), GET(), hiddenAccountIds(), ManualCsvRow, numeric(), PlaidCsvRow, GET(), GET() (+57 more)
+### Community 4 - "coverage-boost-export-n1.test.ts"
+Cohesion: 0.12
+Nodes (15): mockBuildInvestmentsPage, mockErrorResponse, mockFetchPrivacySafeRows, mockGenerateWeeklyReportPdf, mockGetClientIp, mockGetWeeklyReportData, mockIsExportAllowed, mockLoadHoldings (+7 more)
 
 ### Community 5 - "support.js"
 Cohesion: 0.07
 Nodes (66): boot(), collectProps(), compileAttr(), compileTemplate(), contentKey(), createComponentFactory(), getDC(), Dispatcher() (+58 more)
 
-### Community 6 - "createClient"
-Cohesion: 0.13
-Nodes (16): AdminObservabilityPage(), CountResult, countValue(), dynamic, jobStatusTone(), Home(), dynamic, ReceiptsPage() (+8 more)
+### Community 6 - "goals/page.tsx"
+Cohesion: 0.12
+Nodes (18): dynamic, PageProps, TABS, GoalAllocationPanel(), EMPTY, GoalWizard(), cancel(), discard() (+10 more)
 
 ### Community 7 - "goals-v2.ts"
-Cohesion: 0.05
-Nodes (58): BADGE_COPY, BAR_TONE, GoalCard(), GoalCardMenu(), close(), onKeyDown(), remove(), saveEdit() (+50 more)
+Cohesion: 0.11
+Nodes (30): captureBaseline(), GoalsPage(), assertGoalsQuery(), GoalsPageData, loadGoalsPageData(), AccountBalanceRow, AllocationCheckInput, AllocationError (+22 more)
 
 ### Community 8 - "settings/page.tsx"
-Cohesion: 0.05
-Nodes (27): dynamic, loadSettleUpMembers(), monthStart(), PageProps, renderHouseholdPreferences(), renderProfileSection(), SettingsPage(), SettingsSupabase (+19 more)
+Cohesion: 0.03
+Nodes (33): dynamic, loadSettleUpMembers(), monthStart(), PageProps, renderHouseholdPreferences(), renderProfileSection(), SettingsPage(), SettingsSupabase (+25 more)
 
 ### Community 9 - "formatCurrency"
-Cohesion: 0.07
-Nodes (52): DashboardPage(), dynamic, PageProps, PlaidItem, dynamic, MonthlyReviewPage(), PageProps, LedgerTableRow() (+44 more)
+Cohesion: 0.12
+Nodes (37): dynamic, MonthlyReviewPage(), PageProps, LedgerTableRow(), dynamic, PageProps, WrappedPage(), AccountGroup() (+29 more)
 
 ### Community 10 - "budget-page.ts"
 Cohesion: 0.14
@@ -345,7 +339,7 @@ Nodes (28): actualsForMonth(), addMonths(), addUnbudgetedLines(), appendSinkingF
 
 ### Community 11 - "cn"
 Cohesion: 0.07
-Nodes (40): BudgetPlanner(), updateLine(), DecadeTable(), recalculate(), round2(), TotalsRow(), BudgetRightRail(), EXPENSE_GROUPS (+32 more)
+Nodes (38): BudgetPlanner(), updateLine(), DecadeTable(), recalculate(), round2(), TotalsRow(), BudgetRightRail(), EXPENSE_GROUPS (+30 more)
 
 ### Community 12 - "authenticated.ts"
 Cohesion: 0.06
@@ -353,159 +347,159 @@ Nodes (31): RUN, stamp, month, monthLabel, RUN, stamp, today, [year, monthNumber
 
 ### Community 13 - "dependencies"
 Cohesion: 0.08
-Nodes (25): @anthropic-ai/sdk, lucide-react, next, dependencies, @anthropic-ai/sdk, lucide-react, next, plaid (+17 more)
+Nodes (25): @anthropic-ai/sdk, lucide-react, next, nodemailer, dependencies, @anthropic-ai/sdk, lucide-react, next (+17 more)
 
 ### Community 14 - "reports/page.tsx"
-Cohesion: 0.07
-Nodes (53): dynamic, PageProps, parsePage(), ReportsPage(), TAB_HEADINGS, DIMENSION_LABELS, MODE_LABELS, ReportControls() (+45 more)
-
-### Community 15 - "weekly-report/route.ts"
-Cohesion: 0.11
-Nodes (24): dynamic, GET(), maxDuration, runWeeklyReports(), WeeklyDeliveryOutcome, WeeklyRunResult, RFC-2606, RFC-5321 (+16 more)
-
-### Community 16 - "finance-query.ts"
 Cohesion: 0.06
-Nodes (50): AccountRow, assertQuery(), CashFlowLoadOptions, CashFlowLoadResult, CategoryOverrideDbRow, chunks(), isStale(), loadCashFlowData() (+42 more)
+Nodes (60): GET(), dynamic, PageProps, parsePage(), ReportsPage(), TAB_HEADINGS, DIMENSION_LABELS, MODE_LABELS (+52 more)
 
-### Community 17 - "api-routes.test.ts"
-Cohesion: 0.11
-Nodes (26): DELETE(), verifyStepUp(), POST(), LegacyLinkSession, POST(), POST(), serverEnv, getPlaidClient() (+18 more)
+### Community 15 - "delivery-error.ts"
+Cohesion: 0.18
+Nodes (15): RFC-2606, RFC-5321, RFC-6761, describeDeliveryError(), domainEnd(), EMAIL_PART_SEPARATORS, findEmailSpan(), isAsciiLetter() (+7 more)
+
+### Community 16 - "budget-data.ts"
+Cohesion: 0.07
+Nodes (45): assertBudgetQuery(), BudgetLoadResult, BudgetPeriodRow, BudgetRow, getMonthEndExclusive(), GoalContributionSource, GoalEventRow, isStale() (+37 more)
+
+### Community 17 - "checkRateLimit"
+Cohesion: 0.07
+Nodes (36): DELETE(), verifyStepUp(), POST(), POST(), POST(), getPlaidClient(), OwnedItemResult, requireOwnedItem() (+28 more)
 
 ### Community 18 - "createClient"
 Cohesion: 0.06
-Nodes (21): Mode, GoogleSignInButton(), CALLBACK_ERRORS, LogoutButton(), AlertKey, InAppPreferences(), OPTIONS, Preferences (+13 more)
+Nodes (31): deliveryStatusTone(), dynamic, NotificationsPage(), Mode, GoalDraft, LogoutButton(), EmailPreferences(), TIMEZONES (+23 more)
 
-### Community 19 - "cash-flow.ts"
-Cohesion: 0.16
-Nodes (16): ReportChart(), BREAKDOWN_FIELD, breakdownBy(), BreakdownDirection, breakdownLabel(), CashFlowPeriod, cashFlowPeriodKey(), computePeriodCashFlow() (+8 more)
+### Community 19 - "cash-flow/page.tsx"
+Cohesion: 0.08
+Nodes (39): CashFlowPage(), dynamic, PageProps, periodLink(), validDimension(), validPeriod(), validRange(), ReportChart() (+31 more)
 
 ### Community 20 - "finance-domain.ts"
 Cohesion: 0.07
 Nodes (39): displayMerchant(), FinanceSource, financeTotals, flowFor(), fromTransactionRow(), ProjectFinanceInput, projectFinanceTransactions(), round2() (+31 more)
 
-### Community 21 - "PlanView.tsx"
-Cohesion: 0.08
-Nodes (26): deliveryStatusTone(), dynamic, NotificationsPage(), monthsUntil(), PlanningDepth(), PlanData, PlanSetupItem, EmailPreferences() (+18 more)
+### Community 21 - "PushSection.tsx"
+Cohesion: 0.50
+Nodes (3): base64ToUint8Array(), PushSection(), enable()
 
 ### Community 22 - "dashboard.ts"
-Cohesion: 0.12
-Nodes (36): addMonths(), aggregateActiveMonth(), aggregateCashFlowMaps(), aggregateDashboardTransactions(), aggregateMonthlyMaps(), buildDashboardSpendMetrics(), buildDebtSummary(), buildMonthlyAggregates() (+28 more)
+Cohesion: 0.13
+Nodes (35): addMonths(), aggregateActiveMonth(), aggregateCashFlowMaps(), aggregateDashboardTransactions(), aggregateMonthlyMaps(), buildDashboardSpendMetrics(), buildDebtSummary(), buildMonthlyAggregates() (+27 more)
 
 ### Community 23 - "Panel.tsx"
 Cohesion: 0.08
-Nodes (40): GoalDraft, SavedReport, Insight, TokenRow, AuditRow, Budget, BudgetSuggestionItem, CreditAccount (+32 more)
+Nodes (43): SavedReport, Insight, TokenRow, AuditRow, Budget, BudgetSuggestionItem, TokenRow, CreditAccount (+35 more)
 
-### Community 24 - "plaid-service.ts"
-Cohesion: 0.08
-Nodes (35): consumeLinkToken(), getAccountIdMap(), hashLinkToken(), storeItem(), storeLinkToken(), TOKEN_ROTATION_DAYS, updateItemCursor(), upsertAccounts() (+27 more)
+### Community 24 - "createServiceClient"
+Cohesion: 0.11
+Nodes (42): LegacyLinkSession, POST(), encryptSecret(), consumeLinkToken(), decryptItemTokenAndUpgrade(), getAccountIdMap(), getItem(), hashLinkToken() (+34 more)
 
 ### Community 25 - "coverage-boost-txn-n1.test.ts"
-Cohesion: 0.06
-Nodes (33): LinkedGoal, POST(), resolveGoal(), saveAnnotation(), saveGoalProgress(), saveSplits(), SplitInput, UserSupabase (+25 more)
+Cohesion: 0.08
+Nodes (27): GET(), isoDaysAgo(), POST(), filterReviewDecisions(), authSupabase(), mockBadRequest, mockCheckRateLimit, mockDetectDuplicatePairs (+19 more)
 
-### Community 26 - "recurring/route.ts"
-Cohesion: 0.13
-Nodes (14): POST(), ACTIONS, AUDIT_ACTION_FOR, hasAtMostTwoDecimals(), parseBody(), PATCH(), PatchBody, patchFor() (+6 more)
+### Community 26 - "SummaryPanel.tsx"
+Cohesion: 0.11
+Nodes (18): AccountPreferences(), HistoryChart(), NetWorthHero(), Summary, totalFor(), ASSET_GROUP_COLOR, AssetsBar(), formatSignedPercent() (+10 more)
 
 ### Community 27 - "coverage-boost-export-n3.test.ts"
-Cohesion: 0.09
-Nodes (23): GET(), DELETE(), GET(), currentSessionId(), mockBadRequest, mockCurrentSessionId, mockErrorResponse, mockRequireUser (+15 more)
+Cohesion: 0.06
+Nodes (35): GET(), GET(), DELETE(), GET(), currentSessionId(), buildAuditLogPage(), buildDataTakeout(), buildSessionList() (+27 more)
 
 ### Community 28 - "Financial Planner Parity Implementation Plan"
 Cohesion: 0.05
 Nodes (42): Explicit exclusions (decisions, flagged for review), Financial Planner Parity Implementation Plan, Global Constraints, Migration `supabase/migrations/<ts>_account_snapshots.sql`, Migration `<ts>_advice.sql`, Migration `<ts>_budget_groups.sql`, Migration `<ts>_goals_v2.sql`, Migration `<ts>_investment_transactions.sql` (+34 more)
 
-### Community 29 - "coverage-boost-domain-libs.test.ts"
-Cohesion: 0.13
-Nodes (27): DebtPage(), dynamic, PageProps, scopeHref(), applyExtraPayments(), applyInterest(), applyMinimumPayments(), buildPayoffPlan() (+19 more)
+### Community 29 - "debt-data.ts"
+Cohesion: 0.17
+Nodes (19): DebtPage(), dynamic, PageProps, scopeHref(), DebtPlannerView(), plannerHref(), buildDebtPlannerData(), DebtPlannerAccount (+11 more)
 
-### Community 30 - "goals.ts"
-Cohesion: 0.12
-Nodes (17): GoalsSummary(), formatTargetDate(), GoalRow(), Goal, goalMonthlyPace(), goalProgressPct(), goalRemainingAmount(), goalStatus (+9 more)
+### Community 30 - "PlanView.tsx"
+Cohesion: 0.08
+Nodes (30): GoalsSummary(), monthsUntil(), PlanningDepth(), budgetTone(), getPlanSetupItems(), PlanData, PlanSetupItem, PlanView() (+22 more)
 
 ### Community 31 - "Frontend Review: Full Repository and Analysis Method"
 Cohesion: 0.05
 Nodes (38): 10. Credit and loan month changes use the wrong sign and color, 11. Household account institution metadata can be lost, 12. Goal-reached notifications re-insert on every run, 1. Establish the product and route map, 1. Export privacy checks fail open on profile-query errors, 2. Build a source inventory and dependency map, 2. GoalWizard can create a duplicate goal after allocation failure, 3. Pay-down goals discard the entered target, and complete instantly without a linked account (+30 more)
 
 ### Community 32 - "insights.ts"
-Cohesion: 0.09
-Nodes (35): addYearMonths(), anchoredMonthDate(), BudgetSuggestion, buildMerchantDriftItems(), CategorizedSpendRow, collectMerchantDriftBuckets(), computeMerchantPriceDrift(), computeSafeToSpend() (+27 more)
+Cohesion: 0.08
+Nodes (41): SinkingFundRow, addYearMonths(), anchoredMonthDate(), BudgetSuggestion, buildMerchantDriftItems(), CategorizedSpendRow, collectMerchantDriftBuckets(), computeMerchantPriceDrift() (+33 more)
 
 ### Community 33 - "clientStub"
-Cohesion: 0.07
-Nodes (26): clientStub(), makeClient(), supabase, makeClient(), transactions, projectionClient(), mockBadRequest, mockErrorResponse (+18 more)
+Cohesion: 0.03
+Nodes (74): BUILDER_METHODS, clientStub(), QueryCall, QueryResult, makeClient(), supabase, consentingUser(), mockCheckRateLimit (+66 more)
 
 ### Community 34 - "FundFlow Feature Todos"
 Cohesion: 0.05
 Nodes (38): 10. Envelope Rollover And Budget History UI, 11. Recurring Statuses And Links, 12. Forecast Upgrades, 13. Debt Payoff Planner, 14. Sinking Funds, 15. Passkeys And MFA Backup Codes, 16. Active Session Management, 17. User-Facing Audit Log Viewer (+30 more)
 
 ### Community 35 - "forecasting.ts"
-Cohesion: 0.08
-Nodes (43): dynamic, ForecastingPage(), PageProps, WhatIfDebt, WhatIfPanel(), AssumptionsPanel(), buildPresetUrl(), HORIZONS (+35 more)
+Cohesion: 0.16
+Nodes (21): dynamic, ForecastingPage(), PageProps, buildEmergencyMilestones(), checkMilestoneReached(), computeForecastMilestones(), ForecastAccountRow, ForecastManualAccountRow (+13 more)
 
 ### Community 36 - "badRequest"
-Cohesion: 0.08
-Nodes (48): AdviceService, PATCH(), setPriorities(), toggleTask(), updateProfile(), BUDGET_GROUPS, BudgetGroup, hasAtMostTwoDecimals() (+40 more)
+Cohesion: 0.06
+Nodes (39): AdviceService, PATCH(), setPriorities(), toggleTask(), updateProfile(), BUDGET_GROUPS, BudgetGroup, hasAtMostTwoDecimals() (+31 more)
 
 ### Community 37 - "FundFlow — Missing Must-Have Features"
 Cohesion: 0.05
 Nodes (36): 1. One-off scheduled (future-dated) transactions, 2. Account reconciliation, 3. Transfer detection and linking between own accounts, 4. Budget templates and month-to-month copy, 5. Backup restore path, 6. Migration import from other personal finance apps, 7. Tax-ready categorization and export, 8. Merchant logos and brand enrichment (+28 more)
 
 ### Community 38 - "planning.ts"
-Cohesion: 0.11
-Nodes (34): addDays(), addMonths(), isoDate(), parseDate(), advance(), writeNetWorthSnapshot(), ALERT_SEVERITY, AlertPreferences (+26 more)
+Cohesion: 0.10
+Nodes (36): addDays(), addMonths(), isoDate(), parseDate(), advance(), writeNetWorthSnapshot(), ALERT_SEVERITY, AlertPreferences (+28 more)
 
-### Community 39 - "supabase-query.ts"
-Cohesion: 0.08
-Nodes (16): BUILDER_METHODS, QueryCall, mockErrorResponse, mockRequireUser, mockWriteAudit, baseSeed, mockRequireUser, mockWriteAudit (+8 more)
+### Community 39 - "accounts-csv/route.ts"
+Cohesion: 0.18
+Nodes (13): displayBalance(), GET(), hiddenAccountIds(), ManualCsvRow, numeric(), PlaidCsvRow, ExportFetchResult, ExportRow (+5 more)
 
 ### Community 40 - "recurring/manual/route.ts"
-Cohesion: 0.11
-Nodes (18): ACCOUNT_TYPES, DELETE(), PATCH(), POST(), validBalance(), validInclusion(), CreateBody, DELETE() (+10 more)
+Cohesion: 0.08
+Nodes (12): CreateBody, FREQUENCIES, ITEM_TYPES, parseCreate(), parseManualPatch(), PATCH_PARSERS, PatchFieldResult, mockBadRequest (+4 more)
 
-### Community 41 - "coverage-boost-lib2-n4.test.ts"
-Cohesion: 0.14
-Nodes (21): loadReceiptCandidates(), loadReceiptInbox(), publicReceipt(), RECEIPT_SELECT, ReceiptInboxRow, ReceiptRow, MAX_RECEIPT_IMAGE_BYTES, MIME_FORMATS (+13 more)
+### Community 41 - "receipts/route.ts"
+Cohesion: 0.09
+Nodes (33): GET(), isIsoDate(), ParsedReceiptForm, parseReceiptUploadForm(), POST(), loadReceiptCandidates(), loadReceiptInbox(), publicReceipt() (+25 more)
 
-### Community 42 - "format.ts"
-Cohesion: 0.15
-Nodes (20): BillCalendar(), periodLabel(), buildBudgetSignal(), buildPrioritySignals(), PriorityInput, PriorityRail(), PrioritySignal, PriorityTone (+12 more)
+### Community 42 - "currency.ts"
+Cohesion: 0.25
+Nodes (8): CardStyle, detectCardDesign(), detectNetwork(), convertCurrency(), DEFAULT_EXCHANGE_RATES, formatMoneyWithFx(), getCurrencySymbol(), SUPPORTED_CURRENCIES
 
 ### Community 43 - "ledger-query.ts"
-Cohesion: 0.10
-Nodes (25): ColumnsMenu(), LABELS, directionLabel(), FIELD_LABELS, TransactionSortMenu(), apply(), DEFAULT_LEDGER_COLUMNS, LEDGER_COLUMNS (+17 more)
+Cohesion: 0.13
+Nodes (21): ColumnsMenu(), LABELS, apply(), DEFAULT_LEDGER_COLUMNS, LEDGER_COLUMNS, LedgerColumn, parseLedgerColumns(), FILTER_KEYS (+13 more)
 
 ### Community 44 - "api-routes-unit.test.ts"
-Cohesion: 0.19
-Nodes (14): GET(), DELETE(), notFoundIfSettingsIaOff(), PATCH(), POST(), planTagRename(), TagNameResult, TagRenamePlan (+6 more)
+Cohesion: 0.13
+Nodes (19): DELETE(), notFoundIfSettingsIaOff(), PATCH(), POST(), planTagRename(), TagNameResult, TagRenamePlan, TagRenameResult (+11 more)
 
-### Community 45 - "DashboardWidgetGrid.tsx"
-Cohesion: 0.15
-Nodes (22): DashboardWidgetGridData, BudgetWidget(), STATUS_TONE, GoalsWidget(), InvestmentsWidget(), NetWorthPoint, NetWorthWidget(), RecurringWidget() (+14 more)
+### Community 45 - "accounts/page.tsx"
+Cohesion: 0.13
+Nodes (21): AccountNumericValue, accountPreferences(), AccountsPage(), assertQueryResults(), dynamic, historyStart(), ManualAccountRow, numeric() (+13 more)
 
 ### Community 46 - "logError"
-Cohesion: 0.12
-Nodes (27): dynamic, GET(), maxDuration, runOptionalSync(), safeSyncError(), sendDailyDigest(), syncUser(), syncUsers() (+19 more)
+Cohesion: 0.07
+Nodes (40): dynamic, GET(), maxDuration, dynamic, GET(), maxDuration, runOptionalSync(), safeSyncError() (+32 more)
 
 ### Community 47 - "transactions/page.tsx"
-Cohesion: 0.11
-Nodes (28): buildAccountLookups(), buildDayTotals(), buildLedgerFilterQuery(), buildLedgerScanQuery(), dynamic, LedgerChunkFilters, LedgerRules, loadDirectLedgerRows() (+20 more)
+Cohesion: 0.14
+Nodes (14): buildAccountLookups(), buildDayTotals(), dynamic, LedgerChunkFilters, LedgerRules, loadLedgerRowDetails(), monthBounds(), PageProps (+6 more)
 
 ### Community 48 - "CardCarousel.tsx"
-Cohesion: 0.13
-Nodes (20): CardCarousel(), cardUrl(), withExtraParams(), CardNetworkLogo(), DASHBOARD_VIEW_TABS, dashboardHref(), DashboardView, resolveDashboardView() (+12 more)
+Cohesion: 0.11
+Nodes (25): CardCarousel(), cardUrl(), withExtraParams(), CardNetworkLogo(), DASHBOARD_VIEW_TABS, dashboardHref(), DashboardView, resolveDashboardView() (+17 more)
 
 ### Community 49 - "compilerOptions"
 Cohesion: 0.06
 Nodes (32): dom, dom.iterable, esnext, **/*.mts, new_changes, .next/dev/types/**/*.ts, next-env.d.ts, .next/types/**/*.ts (+24 more)
 
-### Community 50 - "cash-flow/page.tsx"
+### Community 50 - "createClient"
 Cohesion: 0.07
-Nodes (46): budgetHref(), BudgetPage(), dynamic, HORIZON_LABELS, PageProps, shiftMonth(), summaryTab(), CashFlowPage() (+38 more)
+Nodes (37): AdminObservabilityPage(), CountResult, countValue(), dynamic, jobStatusTone(), GET(), budgetHref(), BudgetPage() (+29 more)
 
 ### Community 51 - "icons.tsx"
-Cohesion: 0.09
-Nodes (22): Command, CommandPalette(), applyPrivacy(), PrivacyToggle(), OPEN_COMMAND_PALETTE_EVENT, CATEGORY_LABELS, ICONS, MobileNavigation() (+14 more)
+Cohesion: 0.24
+Nodes (8): applyPrivacy(), PrivacyToggle(), UserMenu(), applyTheme(), systemTheme(), Theme, ThemeToggle(), ThemeToggleVariant
 
 ### Community 52 - "Security"
 Cohesion: 0.06
@@ -516,8 +510,8 @@ Cohesion: 0.06
 Nodes (31): 1. Goal and scope, 2.1 Theme identity: cool blue vs warm cream + orange, 2.2 Shell architecture: top bar vs full-height sidebar, 2.3 List/table anatomy: text rows vs identity-rich rows, 2. The three root divergences, 3. Internal UI inconsistencies (exist regardless of Monarch), 4.1 Tokens (`app/globals.css`), 4.2 Primitives (+23 more)
 
 ### Community 54 - "notifications.ts"
-Cohesion: 0.08
-Nodes (30): detectNetWorthMilestones(), createNotification(), insertNotification(), isUniqueViolation(), NotificationDashboardData, NotificationDedupe, NotificationDetails, notificationExists() (+22 more)
+Cohesion: 0.10
+Nodes (28): detectNetWorthMilestones(), createNotification(), insertNotification(), isUniqueViolation(), NotificationDashboardData, NotificationDedupe, NotificationDetails, notificationExists() (+20 more)
 
 ### Community 55 - "proxy.ts"
 Cohesion: 0.11
@@ -525,39 +519,39 @@ Nodes (15): publicEnv, needsMfaStepUp(), isCrossOrigin(), isSessionRevoked(), de
 
 ### Community 56 - "investment-sync.ts"
 Cohesion: 0.12
-Nodes (23): daysBefore(), fetchInvestmentHoldings(), fetchInvestmentTransactions(), investmentOutcome(), InvestmentSyncOutcome, InvestmentSyncResult, InvestmentTransactionSyncResult, NO_PRODUCT_CODES (+15 more)
+Nodes (22): daysBefore(), fetchInvestmentHoldings(), fetchInvestmentTransactions(), investmentOutcome(), InvestmentSyncOutcome, InvestmentSyncResult, InvestmentTransactionSyncResult, NO_PRODUCT_CODES (+14 more)
 
 ### Community 57 - "ledger-projection.ts"
-Cohesion: 0.12
-Nodes (23): LedgerTableRowProps, filterRowsWithRules(), RuleFilterRow, buildLedgerFilterOptions(), compareOptionalLabels(), comparePrimary(), filterProjectedLedgerRows(), labelCollator (+15 more)
+Cohesion: 0.23
+Nodes (11): LedgerTableRowProps, compareOptionalLabels(), comparePrimary(), labelCollator, LedgerDisplayRow, LedgerDisplaySourceRow, LedgerFacetRow, LedgerFacetSourceRow (+3 more)
 
-### Community 58 - "dashboard-widgets.ts"
-Cohesion: 0.12
-Nodes (21): CustomizeDrawer(), save(), DashboardHeaderActions(), DashboardWidgetGrid(), OverviewView(), DashboardWidgetPrefs, DEFAULT_WIDGET_ORDER, isRecord() (+13 more)
+### Community 58 - "DashboardWidgetGrid.tsx"
+Cohesion: 0.06
+Nodes (56): CustomizeDrawer(), save(), DashboardHeaderActions(), DashboardWidgetGrid(), DashboardWidgetGridData, OverviewView(), RecentActivity(), BudgetWidget() (+48 more)
 
 ### Community 59 - "webhook/route.ts"
-Cohesion: 0.12
-Nodes (21): dynamic, getWebhookVerificationKey(), handleHoldingsWebhook(), handleItemWebhook(), handleTransactionWebhook(), POST(), verifyPlaidWebhook(), webhookKeyCache (+13 more)
+Cohesion: 0.09
+Nodes (29): dynamic, getWebhookVerificationKey(), handleHoldingsWebhook(), handleItemWebhook(), handleTransactionWebhook(), POST(), verifyPlaidWebhook(), webhookKeyCache (+21 more)
 
-### Community 60 - "dashboard-widgets-data.ts"
-Cohesion: 0.18
-Nodes (16): CumulativeSpendDay, buildDashboardBudgetGroups(), DashboardBudgetGroupKey, expenseGroup(), GROUPS, round2(), worseStatus(), CumulativeSpendView (+8 more)
+### Community 60 - "dashboard/page.tsx"
+Cohesion: 0.15
+Nodes (14): DashboardPage(), dynamic, PageProps, PlaidItem, FreshnessBanner(), BalanceAccount, computeNetWorth(), computeSavingsRate() (+6 more)
 
 ### Community 61 - "recurring.ts"
 Cohesion: 0.07
-Nodes (34): diffRecurringStreams(), RecurringDiff, deactivateStaleStreams(), mapStreamRow(), notifyRecurringChanges(), refreshRecurringForItem(), replaceStreamTransactionJoins(), resolveLocalTransactionIds() (+26 more)
+Nodes (33): deactivateStaleStreams(), mapStreamRow(), notifyRecurringChanges(), refreshRecurringForItem(), refreshRecurringForUser(), replaceStreamTransactionJoins(), resolveLocalTransactionIds(), AccountRow (+25 more)
 
-### Community 62 - "invite/route.ts"
-Cohesion: 0.15
-Nodes (12): POST(), DELETE(), POST(), isAllowedPushEndpoint(), mockBadRequest, mockErrorResponse, mockRequireUser, mockCheckRateLimit (+4 more)
+### Community 62 - "coverage-boost-lib2-n2.test.ts"
+Cohesion: 0.19
+Nodes (18): buildLedgerFilterQuery(), buildLedgerScanQuery(), loadDirectLedgerRows(), loadLedgerFilterOptions(), loadLedgerRows(), collectLedgerChunks(), LedgerChunkResult, ledgerDatabaseOrder() (+10 more)
 
 ### Community 63 - "coverage-boost-simple-routes.test.ts"
 Cohesion: 0.13
-Nodes (18): DELETE(), PATCH(), RouteContext, POST(), CADENCES, isIsoDate(), parseSinkingFundMutation(), SINKING_FUND_SELECT (+10 more)
+Nodes (17): PATCH(), RouteContext, POST(), CADENCES, isIsoDate(), parseSinkingFundMutation(), SINKING_FUND_SELECT, sinkingFundWrite() (+9 more)
 
 ### Community 64 - "RecurringList.tsx"
 Cohesion: 0.07
-Nodes (32): AddManualItemForm(), ManageRow(), MANUAL_FREQUENCY_OPTIONS, ManualFrequency, manualFrequencyLabel(), manualItemCreatePayload(), ManualItemRow(), OccurrenceRowMenu() (+24 more)
+Nodes (39): RecurringWidget(), STATUS_LABEL, STATUS_TONE, withinNextSevenDays(), changeClass(), changeLabel(), HoldingsTable(), AddManualItemForm() (+31 more)
 
 ### Community 65 - "devDependencies"
 Cohesion: 0.07
@@ -572,8 +566,8 @@ Cohesion: 0.06
 Nodes (54): RecurringList(), handle(), handleManualAdd(), handleManualDelete(), handleManualToggle(), mutateManualItem(), patchStream(), ReviewBanner() (+46 more)
 
 ### Community 68 - "SankeyChart.tsx"
-Cohesion: 0.13
-Nodes (24): assignBaseColours(), assignGroupColours(), buildColours(), COLUMN_X_FRACTIONS, gradientId(), GROUP_COLOURS, inheritCategoryColours(), KNOWN_GROUP_SLOTS (+16 more)
+Cohesion: 0.12
+Nodes (26): assignBaseColours(), assignGroupColours(), buildColours(), COLUMN_X_FRACTIONS, gradientId(), GROUP_COLOURS, inheritCategoryColours(), KNOWN_GROUP_SLOTS (+18 more)
 
 ### Community 69 - "FundFlow handoff archive (2026-07-05 through 2026-08-09)"
 Cohesion: 0.08
@@ -587,37 +581,37 @@ Nodes (24): Aggregation Accuracy, Architecture, Data Model, Email Delivery, Emai
 Cohesion: 0.08
 Nodes (24): envState, mockAccountsGet, mockBadRequest, mockCheckRateLimit, mockConsumeLinkToken, mockDecryptItemToken, mockErrorResponse, mockFetchInstitutionBranding (+16 more)
 
-### Community 72 - "PasskeysSection.tsx"
-Cohesion: 0.16
-Nodes (15): LoginForm(), completeIfMfaRequired(), handlePasskeySignIn(), handlePasswordSubmit(), formatPasskeyTime(), PasskeysSection(), register(), remove() (+7 more)
+### Community 72 - "LoginForm.tsx"
+Cohesion: 0.08
+Nodes (22): dynamic, dynamic, GoogleSignInButton(), CALLBACK_ERRORS, LoginForm(), completeIfMfaRequired(), handlePasskeySignIn(), handlePasswordSubmit() (+14 more)
 
 ### Community 73 - "Transaction sorting and filter controls"
 Cohesion: 0.08
 Nodes (23): Browser acceptance, Component tests, Components and interaction, Decisions, Delivery structure, Direct database path, Display-projection path, Explicit filter application (+15 more)
 
 ### Community 74 - "lib/weekly-report.ts"
-Cohesion: 0.18
-Nodes (17): WeeklyReportPeriod, buildWeeklyReportModel(), getWeeklyReportData(), throwIfError(), formatCardLabel(), isSpend(), round2(), round4() (+9 more)
+Cohesion: 0.20
+Nodes (17): MerchantRule, WeeklyReportPeriod, buildWeeklyReportModel(), getWeeklyReportData(), throwIfError(), formatCardLabel(), isSpend(), round2() (+9 more)
 
 ### Community 75 - "api-plaid-direct-routes.test.ts"
 Cohesion: 0.08
 Nodes (23): mockAccountsGet, mockCheckRateLimit, mockConsumeLinkToken, mockDecryptItemToken, mockFetchInstitutionBranding, mockGetItem, mockInstitutionsGetById, mockItemGet (+15 more)
 
-### Community 76 - "receipt/route.ts"
-Cohesion: 0.12
-Nodes (16): POST(), POST(), IMAGE_TYPES, POST(), RECEIPT_SCHEMA, AggregateRow, buildInsightPayload(), generateInsightsWithProvider() (+8 more)
+### Community 76 - "annotate/route.ts"
+Cohesion: 0.13
+Nodes (17): LinkedGoal, POST(), resolveGoal(), saveAnnotation(), saveGoalProgress(), saveSplits(), SplitInput, UserSupabase (+9 more)
 
 ### Community 77 - "FundFlow Dashboard Command Center Design"
 Cohesion: 0.09
 Nodes (21): Acceptance Criteria, Accessibility and Responsive Requirements, Components and Boundaries, Core light tokens, Empty, Healthy, and Error States, FundFlow Dashboard Command Center Design, Information Architecture, Layout (+13 more)
 
-### Community 78 - "accounts/page.tsx"
-Cohesion: 0.05
-Nodes (65): AccountNumericValue, accountPreferences(), AccountsPage(), assertQueryResults(), dynamic, historyStart(), ManualAccountRow, numeric() (+57 more)
+### Community 78 - "accounts-page.ts"
+Cohesion: 0.14
+Nodes (26): AccountBalanceSnapshot, AccountsPageRow, accountsViewIsFiltered(), addAmount(), applyAccountsPageView(), BalanceChange, buildAccountRow(), buildAccountsPageData() (+18 more)
 
 ### Community 79 - "investments/page.tsx"
-Cohesion: 0.07
-Nodes (44): dynamic, InvestmentsPage(), AddManualHoldingForm(), AllocationView(), SLOT_COLORS, changeClass(), changeLabel(), HoldingsTable() (+36 more)
+Cohesion: 0.20
+Nodes (16): dynamic, InvestmentsPage(), PerformanceChart(), sparkPath(), computeTimeWeightedReturn(), ExternalFlow, hasSufficientPerformanceData(), ReturnPoint (+8 more)
 
 ### Community 80 - "ai-provider-lib.test.ts"
 Cohesion: 0.11
@@ -625,11 +619,11 @@ Nodes (18): BROWSER_PATTERNS, matchLabel(), notifyNewDeviceLogin(), OS_PATTERNS,
 
 ### Community 81 - "drilldown.ts"
 Cohesion: 0.14
-Nodes (20): buildDashboardDrilldown(), DashboardTransactionAggregates, buildCategoryDrilldown(), buildMerchantDrilldown(), categoryContributions(), CategoryDrilldownData, categorySummary(), Contribution (+12 more)
+Nodes (21): buildDashboardDrilldown(), DashboardTransactionAggregates, buildCategoryDrilldown(), buildMerchantDrilldown(), categoryContributions(), CategoryDrilldownData, categorySummary(), Contribution (+13 more)
 
-### Community 82 - "isFeatureEnabled"
-Cohesion: 0.16
-Nodes (19): AppShell(), EXTRA_COMMANDS, AppSidebar(), NavLink(), AppShellActive, getEnabledNavItems(), NAV_ITEMS, NavItemDefinition (+11 more)
+### Community 82 - "feature-flags.ts"
+Cohesion: 0.07
+Nodes (31): Command, CommandPalette(), EXTRA_COMMANDS, AppSidebar(), NavLink(), AskAiLowerRailLink(), OPEN_COMMAND_PALETTE_EVENT, CATEGORY_LABELS (+23 more)
 
 ### Community 83 - "Modifications and improvements"
 Cohesion: 0.10
@@ -639,9 +633,9 @@ Nodes (20): B1. DangerZone: step-up form can soft-lock with no feedback (medium,
 Cohesion: 0.10
 Nodes (20): File Structure, Global Constraints, Phase 5: Recurring Page Implementation Plan, Self-Review Notes, Task 10: `app/api/recurring/manual/route.ts` — manual item CRUD, Task 11: `components/recurring/MonthSummary.tsx` and `ReviewBanner.tsx`, Task 12: `components/recurring/RecurringList.tsx` — interactive occurrence and manage list, Task 13: `app/recurring/page.tsx` — page wiring (+12 more)
 
-### Community 85 - "coverage-boost-lib2-n2.test.ts"
-Cohesion: 0.19
-Nodes (16): buildPlanningDepthView(), buildRecurringStatuses(), daysBetween(), DebtAccount, LIABILITY_TYPES, normalize(), planDebtPayoff(), PlanningDepthAccount (+8 more)
+### Community 85 - "roadmap-completion.test.ts"
+Cohesion: 0.28
+Nodes (12): buildPlanningDepthView(), buildRecurringStatuses(), daysBetween(), DebtAccount, LIABILITY_TYPES, normalize(), planDebtPayoff(), PlanningDepthAccount (+4 more)
 
 ### Community 86 - "coverage-boost-plaid-n3.test.ts"
 Cohesion: 0.10
@@ -656,20 +650,20 @@ Cohesion: 0.10
 Nodes (19): Caching, CategoryDrilldown panel (new component), Chart component changes (rendering only, geometry stays in chart-utils), Core mechanism: URL-driven, server-rendered drill-down, Dashboard drill-down design, Data layer, Goals, lib/dashboard.ts (+11 more)
 
 ### Community 89 - "transaction-quality.ts"
-Cohesion: 0.14
-Nodes (19): ConfirmedDuplicate, DuplicateReview(), aggregateSpendWithSplits(), detectDuplicatePairs(), detectRefundPairs(), DuplicatePair, DuplicateTransaction, evaluateDuplicateCandidate() (+11 more)
+Cohesion: 0.16
+Nodes (21): DuplicateDecisionBody, GET(), isoDaysAgo(), parseDecisionBody(), ConfirmedDuplicate, aggregateSpendWithSplits(), detectDuplicatePairs(), detectRefundPairs() (+13 more)
 
-### Community 90 - "advice/page.tsx"
-Cohesion: 0.05
-Nodes (52): adviceHref(), AdvicePage(), CATEGORIES, CATEGORY_LABELS, dynamic, isCategory(), PageProps, splitCompleted() (+44 more)
+### Community 90 - "advice.ts"
+Cohesion: 0.13
+Nodes (14): ADVICE_PROFILE_KEYS, AdviceItemProgress, AdviceLibraryViolation, AdvicePrioritiesResult, AdviceProfileResult, AdviceProgressRow, AdviceCategory, EMPLOYMENT_STATUSES (+6 more)
 
 ### Community 91 - "coverage-boost-txn-n2.test.ts"
-Cohesion: 0.13
-Nodes (14): chainable(), delSupabase(), inviteSupabase(), mockBadRequest, mockCheckRateLimit, mockErrorResponse, mockGetClientIp, mockRequireUser (+6 more)
+Cohesion: 0.06
+Nodes (31): ACTIONS, AUDIT_ACTION_FOR, hasAtMostTwoDecimals(), parseBody(), PATCH(), PatchBody, patchFor(), RecurringAction (+23 more)
 
 ### Community 92 - "report-pdf.ts"
-Cohesion: 0.21
-Nodes (12): hasFourDigits(), isDigit(), isLetter(), isWhitespace(), stripTrailingAccountMask(), COLORS, generateWeeklyReportPdf(), PAGE (+4 more)
+Cohesion: 0.16
+Nodes (15): hasFourDigits(), isDigit(), isLetter(), isWhitespace(), stripTrailingAccountMask(), COLORS, generateWeeklyReportPdf(), PAGE (+7 more)
 
 ### Community 93 - "File Map"
 Cohesion: 0.12
@@ -679,13 +673,13 @@ Nodes (16): File Map, Global Constraints, Later Phase Rule, PR 72 Phase 4 Budget
 Cohesion: 0.12
 Nodes (16): How to run this plan, Monarch Visual Parity — Implementation Plan, Phase V0 — Token retheme (the 60% phase), Phase V11 — Sweep, dark QA, stretch, Phase V1 — Shell restructure, Phase V2 — Shared component kit, Phases V3–V10 — Page verticals (independent, any order), Risk register (+8 more)
 
-### Community 95 - "account-history.ts"
-Cohesion: 0.29
-Nodes (9): AccountBalanceSnapshotInsert, assertDate(), currencyCode(), numberOrNull(), shapeDailyAccountSnapshots(), SnapshotManualAccount, SnapshotPlaidAccount, writeDailyAccountSnapshots() (+1 more)
+### Community 95 - "coverage-boost-domain-libs.test.ts"
+Cohesion: 0.09
+Nodes (27): POST(), AccountBalanceSnapshotInsert, assertDate(), currencyCode(), numberOrNull(), shapeDailyAccountSnapshots(), SnapshotManualAccount, SnapshotPlaidAccount (+19 more)
 
-### Community 96 - "budget-data.ts"
-Cohesion: 0.12
-Nodes (21): EditableProposal, assertBudgetQuery(), BudgetLoadResult, BudgetPeriodRow, BudgetRow, getMonthEndExclusive(), GoalContributionSource, GoalEventRow (+13 more)
+### Community 96 - "investments.ts"
+Cohesion: 0.16
+Nodes (18): ASSET_CLASS_ORDER, buildInvestmentsPage(), classifySecurityType(), effectiveValue(), EXTERNAL_FLOW_SUBTYPES, HoldingJoinRow, HoldingRow, HoldingSnapshotRow (+10 more)
 
 ### Community 97 - "http.test.ts"
 Cohesion: 0.22
@@ -699,9 +693,9 @@ Nodes (15): API contract, Budget Dashboard widget, Capture and refresh, FundFlow
 Cohesion: 0.28
 Nodes (14): accountLabel(), barRows(), clampPercent(), COLORS, DigestNotification, emptyRow(), escapeEmailHtml(), formatPeriodDate() (+6 more)
 
-### Community 100 - "ai-routes-and-push.test.ts"
-Cohesion: 0.12
-Nodes (15): isPushConfigured(), PUSH_SERVICE_HOSTS, sendPushToUser(), consentingUser(), mockCheckRateLimit, mockFetchRows, mockIsConfigured, mockLogError (+7 more)
+### Community 100 - "GoalCard.tsx"
+Cohesion: 0.18
+Nodes (14): BADGE_COPY, BAR_TONE, GoalCard(), Draft, ProgressBarTone, BY_SLUG, GOAL_TEMPLATES, goalImageAlt() (+6 more)
 
 ### Community 101 - "coverage-boost-plaid-n5.test.ts"
 Cohesion: 0.12
@@ -713,7 +707,7 @@ Nodes (12): jwk, mockBadRequest, mockErrorResponse, mockGetItemByPlaidItemId, mo
 
 ### Community 103 - "settings-nav.ts"
 Cohesion: 0.13
-Nodes (18): DEFAULT_DISPLAY_PREFS, DENSITIES, DensityPreference, DisplayPrefs, DisplayPrefsPatch, DisplayPrefsPatchResult, MOTIONS, ReducedMotionPreference (+10 more)
+Nodes (20): DEFAULT_DISPLAY_PREFS, DENSITIES, DensityPreference, DisplayPrefs, DisplayPrefsPatch, DisplayPrefsPatchResult, MOTIONS, parseDisplayPrefs() (+12 more)
 
 ### Community 104 - "New-Changes — local change log"
 Cohesion: 0.13
@@ -723,17 +717,17 @@ Nodes (14): Deliberately not changed, New-Changes — local change log, Security
 Cohesion: 0.13
 Nodes (14): 1. Session revocation enforcement on pages, 2. Cron-failure alert email to the admin, 3. Mobile responsive polish (scroll-strip nav retained), Design, Design, Design, Problem, Problem (+6 more)
 
-### Community 106 - "coverage-boost-lib1-n1.test.ts"
-Cohesion: 0.40
-Nodes (4): baseSeed, { env }, mockMessagesCreate, serviceClient
+### Community 106 - "advice-data.ts"
+Cohesion: 0.19
+Nodes (12): AdviceProfileAnswers, AdviceContext, AdvicePageData, dayAfter(), loadAdvicePageData(), monthsBack(), ESSENTIAL_PFC_PRIMARY, baseSeed (+4 more)
 
-### Community 107 - "coverage-boost-export-n2.test.ts"
-Cohesion: 0.10
-Nodes (17): queryStub, filters, mockBadRequest, mockCheckRateLimit, mockErrorResponse, mockGetDefaultClient(), mockRequireUser, mockWriteAudit (+9 more)
+### Community 107 - "saved/route.ts"
+Cohesion: 0.04
+Nodes (48): dynamic, GET(), DELETE(), isDuplicateName(), MAX_SAVED_REPORTS, parseName(), parseReportType(), PATCH() (+40 more)
 
-### Community 108 - "coverage-boost-r6-n6.test.ts"
-Cohesion: 0.13
-Nodes (10): mockBadRequest, mockCheckRateLimit, mockErrorResponse, mockParseReportFilters, mockRequireUser, mockSavedReportCreated, mockSavedReportDeleted, mockSavedReportUpdated (+2 more)
+### Community 108 - "reconnect/route.ts"
+Cohesion: 0.18
+Nodes (11): POST(), fetchInstitutionBranding(), InstitutionBranding, normalizeBrandColor(), PNG_SIGNATURE, validateInstitutionLogo(), byInstitution, countryCodes (+3 more)
 
 ### Community 109 - "plaid-reconnect-route.test.ts"
 Cohesion: 0.13
@@ -759,13 +753,13 @@ Nodes (11): createMailTransport(), CronAlertSummary, logDevelopmentPreview(), se
 Cohesion: 0.15
 Nodes (11): Charts, Commands, Conventions, Data access, graphify, Money and correctness, Plaid frugality, Rules that must not be broken (+3 more)
 
-### Community 115 - "import-routes.test.ts"
-Cohesion: 0.11
-Nodes (18): mockBadRequest, mockBuildImportReview, mockCheckRateLimit, mockDetectSourceFormat, mockErrorResponse, mockGetClientIp, mockGetCsvColumns, mockLooksLikeOfx (+10 more)
+### Community 115 - "advice-content.ts"
+Cohesion: 0.14
+Nodes (13): ADVICE_DEFINITIONS, ADVICE_LIBRARY, AdviceDefinition, AdviceSource, AdviceTaskInput, ALLOWED_SOURCE_HOSTS, CFPB_DEBT, CFPB_EARLY (+5 more)
 
-### Community 116 - "cash-flow-render.test.ts"
-Cohesion: 0.24
-Nodes (11): BreakdownBars(), CashFlowSummary(), formatPercent(), savingsRateTone(), compactCurrency(), PeriodBars(), periodSavings(), BreakdownRow (+3 more)
+### Community 116 - "charts-render.test.ts"
+Cohesion: 0.23
+Nodes (8): DonutChart(), DonutItem, RadialGauge(), Sparkline(), StatTile(), income, labels, spend
 
 ### Community 117 - "SinkingFundsSection"
 Cohesion: 0.32
@@ -795,21 +789,21 @@ Nodes (13): scripts, backfill:institution-logos, build, dev, lint, start, test, 
 Cohesion: 0.15
 Nodes (12): baseUser, mockBadRequest, mockCheckRateLimit, mockDecryptItemToken, mockErrorResponse, mockItemRemove, mockListActiveItems, mockLogError (+4 more)
 
-### Community 124 - "coverage-boost-r6-n1.test.ts"
-Cohesion: 0.15
-Nodes (9): mockBadRequest, mockErrorResponse, mockGetClientIp, mockIsFeatureEnabled, mockRequireUser, mockWriteAudit, png, StubWithStorage (+1 more)
+### Community 124 - "profile/route.ts"
+Cohesion: 0.10
+Nodes (20): AVATAR_TYPES, DELETE(), notFoundIfSettingsIaOff(), PATCH(), patchDisplay(), patchProfile(), POST(), mockBadRequest (+12 more)
 
 ### Community 125 - "cron-sync-route.test.ts"
 Cohesion: 0.15
 Nodes (12): mockAlertCronFailure, mockErrorResponse, mockLogError, mockProcessNotificationsForUser, mockRefreshRecurringForUser, mockSafeEqual, mockSendDailyDigestEmail, mockServiceClient (+4 more)
 
 ### Community 126 - "coverage-boost-lib2-n5.test.ts"
-Cohesion: 0.35
-Nodes (8): runSingleWeeklyReport(), isPermanentDeliveryError(), claimWeeklyDelivery(), classifyDeliveryClaim(), DeliveryClaim, markWeeklyDeliveryFailed(), markWeeklyDeliverySent(), markWeeklyDeliverySkipped()
+Cohesion: 0.15
+Nodes (17): runSingleWeeklyReport(), claimWeeklyDelivery(), classifyDeliveryClaim(), DeliveryClaim, markWeeklyDeliveryFailed(), markWeeklyDeliverySent(), markWeeklyDeliverySkipped(), mockAlertCronFailure (+9 more)
 
 ### Community 127 - "ConnectBankButton.tsx"
-Cohesion: 0.22
-Nodes (10): ConnectBankButton(), BanksSection(), Item, needsReconnect(), ReconnectBankButton(), clearResume(), loadResume(), PlaidResume (+2 more)
+Cohesion: 0.38
+Nodes (7): ConnectBankButton(), ReconnectBankButton(), clearResume(), loadResume(), PlaidResume, saveResume(), { fetchMock, refreshMock, usePlaidLinkMock, stateSetters }
 
 ### Community 128 - "FundFlow completed work archive"
 Cohesion: 0.17
@@ -831,29 +825,29 @@ Nodes (9): BenchmarkClose, BenchmarkKey, BenchmarkProvider, BenchmarkSeriesResul
 Cohesion: 0.30
 Nodes (10): advance(), appendBillEvents(), buildBillsCalendar(), CalendarBill, compactDate(), escapeText(), slug(), RFC-5545 (+2 more)
 
-### Community 133 - "cron-weekly-report-route.test.ts"
-Cohesion: 0.18
-Nodes (10): mockAlertCronFailure, mockErrorResponse, mockGetEligibleWeeklyReportUsers, mockGetWeeklyReportData, mockGetWeeklyReportPeriod, mockLogError, mockRenderWeeklyReportPdf, mockSafeEqual (+2 more)
+### Community 133 - "export-route.ts"
+Cohesion: 0.41
+Nodes (10): GET(), GET(), dynamic, GET(), fetchPrivacySafeRows(), toQif(), ExportContext, exportError() (+2 more)
 
-### Community 134 - "AuthShell.tsx"
-Cohesion: 0.27
-Nodes (3): dynamic, dynamic, AuthShell()
+### Community 134 - "AdviceCard.tsx"
+Cohesion: 0.21
+Nodes (8): AdviceCard(), CATEGORY_ICON, CATEGORY_LABELS, statusMeta(), TaskChecklist(), AdviceView, AdviceItem, AdviceTask
 
-### Community 135 - "crypto.ts"
-Cohesion: 0.40
-Nodes (8): decodeKey(), DecryptedSecret, decryptSecret(), decryptSecretDetailed(), EncryptedPayload, encryptSecret(), getDecryptionKeys(), getKey()
-
-### Community 136 - "computeCumulativeSpendByDay"
-Cohesion: 0.27
-Nodes (3): computeCumulativeSpendByDay(), daysInMonth(), shiftMonthKey()
-
-### Community 137 - "ImportReviewSection"
-Cohesion: 0.38
-Nodes (5): ImportReviewSection(), onApplyMapping(), onPreview(), runPreview(), uniqueKeys()
-
-### Community 138 - "ManualAccountsSection.tsx"
+### Community 135 - "toCsv"
 Cohesion: 0.24
-Nodes (7): ManualAccount, ManualAccountPatch, ManualAccountPayload, ManualAccountsSection(), saveAccount(), toggleInclusion(), updateManualAccount()
+Nodes (9): escapeField(), neutralizeFormula(), toCsv(), RFC-4180, toLedgerCli(), toTaxCsv(), mockFetchPrivacySafeRows, mockRecordExport (+1 more)
+
+### Community 136 - "cash-flow-data.ts"
+Cohesion: 0.08
+Nodes (24): AccountRow, assertQuery(), CashFlowLoadOptions, CashFlowLoadResult, CategoryOverrideDbRow, chunks(), isStale(), loadCashFlowData() (+16 more)
+
+### Community 137 - "ImportReviewSection.tsx"
+Cohesion: 0.24
+Nodes (8): AccountOption, ImportReviewSection(), onApplyMapping(), onPreview(), runPreview(), MappingState, ReviewRow, uniqueKeys()
+
+### Community 138 - "ManualAccountsSection"
+Cohesion: 0.33
+Nodes (4): ManualAccountsSection(), saveAccount(), toggleInclusion(), updateManualAccount()
 
 ### Community 139 - "TransactionEditor"
 Cohesion: 0.38
@@ -884,16 +878,16 @@ Cohesion: 0.18
 Nodes (11): Active program: financial-planner parity (started 2026-07-29), Added 2026-07-05 (charts / ledger / exports session), Added 2026-07-11 (drill-down & ledger filters), Added 2026-07-23 (four-session roadmap drop), Added 2026-08-10: put production on a custom domain, Added 2026-08-21: migration import (Mint, Monarch, YNAB) — shipped, Completed work, FundFlow — Future Todos (+3 more)
 
 ### Community 146 - "dashboard-cache.ts"
-Cohesion: 0.22
-Nodes (10): CacheRecord, createDashboardCache(), dashboardCache, dashboardScopeKey(), getCachedDashboardData(), invalidateDashboardCache(), DashboardOptions, DrillParams (+2 more)
+Cohesion: 0.23
+Nodes (9): CacheRecord, createDashboardCache(), dashboardCache, dashboardScopeKey(), getCachedDashboardData(), DashboardOptions, DrillParams, { mockGetDashboardData } (+1 more)
 
 ### Community 147 - "coverage-boost-r7-n1.test.ts"
 Cohesion: 0.18
 Nodes (7): mockBadRequest, mockErrorResponse, mockGetClientIp, mockRequireUser, mockWriteAudit, TableErrors, TXN
 
-### Community 148 - "receipts-route.test.ts"
-Cohesion: 0.18
-Nodes (8): context, makeService(), mockCheckRateLimit, mockNormalize, mockRequireUser, mockWriteAudit, RECEIPT, service
+### Community 148 - "investments-render.test.ts"
+Cohesion: 0.21
+Nodes (7): AddManualHoldingForm(), AllocationView(), SLOT_COLORS, TopMovers(), InvestmentsPage, holding(), page()
 
 ### Community 149 - "DangerZone.tsx"
 Cohesion: 0.24
@@ -919,13 +913,13 @@ Nodes (9): Global Constraints, Quality and Verification Completion Implementatio
 Cohesion: 0.20
 Nodes (9): Global Constraints, One-Off Scheduled Transactions Implementation Plan, Task 1: Add the scheduled_transactions schema, Task 2: Implement promotion as a pure function plus its deterministic id, Task 3: Wire promotion into the daily cron, Task 4: Implement the CRUD route, Task 5: Feed scheduled entries into the cash-flow forecast and Bill calendar, Task 6: Build the create/list UI (+1 more)
 
-### Community 155 - "report-period.ts"
-Cohesion: 0.38
-Nodes (7): addDays(), DEFAULT_REPORT_TIMEZONE, getWeeklyReportPeriod(), isWeeklyReportDue(), LocalDateTime, normalizeReportTimezone(), WEEKDAY_INDEX
+### Community 155 - "weekly-report/route.ts"
+Cohesion: 0.20
+Nodes (14): dynamic, GET(), maxDuration, runWeeklyReports(), WeeklyDeliveryOutcome, WeeklyRunResult, UNDELIVERABLE_RECIPIENT_CODE, addDays() (+6 more)
 
-### Community 156 - "roadmap-completion.test.ts"
-Cohesion: 0.36
-Nodes (6): AiInsightRow, generateAiInsightSummaries(), buildAuditLogPage(), buildDataTakeout(), buildSessionList(), redactTakeoutSecrets()
+### Community 156 - "forecasting-data.ts"
+Cohesion: 0.29
+Nodes (8): computeForecastDefaults(), computeForecastStartingState(), dayAfter(), ForecastPageData, loadForecastPageData(), trailingMonths(), ForecastDefaults, ForecastStartingState
 
 ### Community 157 - "demo-data.ts"
 Cohesion: 0.31
@@ -935,21 +929,21 @@ Nodes (6): buildDemoAccountSnapshots(), buildDemoDataset(), DemoDataset, MERCHAN
 Cohesion: 0.29
 Nodes (4): restoreBackup(), runCli(), EnvelopeOptions, tmpDir
 
-### Community 159 - "coverage-boost-plaid-n2.test.ts"
-Cohesion: 0.20
-Nodes (9): mockBadRequest, mockBuildBillsCalendar, mockCalendarTokenCreated, mockCalendarTokenRevoked, mockCheckRateLimit, mockErrorResponse, mockRequireUser, mockWriteAudit (+1 more)
+### Community 159 - "export-routes.test.ts"
+Cohesion: 0.17
+Nodes (10): mockBuildDataTakeout, mockErrorResponse, mockFetchPrivacySafeRows, mockGenerateWeeklyReportPdf, mockGetClientIp, mockGetWeeklyReportData, mockIsExportAllowed, mockRequireUser (+2 more)
 
-### Community 160 - "coverage-boost-r2-n1.test.ts"
-Cohesion: 0.20
-Nodes (7): AUTH, mockBadRequest, mockCheckRateLimit, mockErrorResponse, mockGetClientIp, mockRequireUser, mockWriteAudit
+### Community 160 - "accounts/route.ts"
+Cohesion: 0.09
+Nodes (23): AccountBaselineRow, ALLOCATION_ERRORS, allocationErrorFrom(), AllocationRequest, DELETE(), GoalBaselineRow, InvalidAllocationRequest, NumericColumn (+15 more)
 
-### Community 161 - "coverage-boost-r2-n4.test.ts"
-Cohesion: 0.20
-Nodes (8): envState, mockBadRequest, mockCheckRateLimit, mockErrorResponse, mockGetClientIp, mockRequireUser, mockSendHouseholdInviteEmail, mockWriteAudit
+### Community 161 - "advice/page.tsx"
+Cohesion: 0.25
+Nodes (10): adviceHref(), AdvicePage(), CATEGORIES, CATEGORY_LABELS, dynamic, isCategory(), PageProps, splitCompleted() (+2 more)
 
 ### Community 162 - "coverage-boost-r2-n6.test.ts"
-Cohesion: 0.20
-Nodes (7): mockBadRequest, mockErrorResponse, mockGetClientIp, mockRequireUser, mockWriteAudit, svc, VALID_PLAID
+Cohesion: 0.12
+Nodes (12): ManualTxnAccountRef, ManualTxnInput, ManualTxnResult, normalizeManualTxn(), validAccount(), mockBadRequest, mockErrorResponse, mockGetClientIp (+4 more)
 
 ### Community 163 - "coverage-boost-r2-n7.test.ts"
 Cohesion: 0.20
@@ -987,37 +981,37 @@ Nodes (8): Global Constraints, Task 1: Decide the link table's uniqueness model,
 Cohesion: 0.22
 Nodes (8): API behavior, FundFlow Passkeys and MFA Recovery Design, Passkey management, Passkey sign-in, Security model, Supabase configuration, TOTP recovery factors, Verification
 
-### Community 172 - "backup/route.ts"
-Cohesion: 0.11
-Nodes (23): dynamic, GET(), maxDuration, BackupEnvelope, buildBackupArchive(), deriveKey(), parseKey(), readBackupArchive() (+15 more)
+### Community 172 - "backup.ts"
+Cohesion: 0.42
+Nodes (7): BackupEnvelope, buildBackupArchive(), deriveKey(), parseKey(), readBackupArchive(), KEY, OTHER_KEY
 
 ### Community 173 - "FundFlow"
 Cohesion: 0.22
 Nodes (9): Architecture, Deploy (Vercel), FundFlow, Known Notes / Future Todos, Project structure, Security, Stack, Testing (+1 more)
 
-### Community 174 - "api-plaid-sync.test.ts"
-Cohesion: 0.22
-Nodes (8): mockCheckRateLimit, mockErrorResponse, mockGetClientIp, mockRefreshRecurringForUser, mockRequireUser, mockSyncAllForUser, mockWriteAudit, mockWriteDailyAccountSnapshots
+### Community 174 - "debt.ts"
+Cohesion: 0.35
+Nodes (10): applyExtraPayments(), applyInterest(), applyMinimumPayments(), buildPayoffPlan(), completedPlan(), DebtInput, DebtPayoff, DebtState (+2 more)
 
-### Community 175 - "coverage-boost-r2-n2.test.ts"
-Cohesion: 0.22
-Nodes (6): mockBadRequest, mockCheckRateLimit, mockErrorResponse, mockGoalContributionRecorded, mockGoalContributionRemoved, mockRequireUser
+### Community 175 - "ledger-filter.ts"
+Cohesion: 0.31
+Nodes (6): filterRowsWithRules(), hasRemapRules(), RuleFilterRow, projectLedgerDisplayRows(), resolvedLedgerAccountId(), accountNames
 
 ### Community 176 - "coverage-boost-r3-n2.test.ts"
 Cohesion: 0.22
 Nodes (7): mockCheckRateLimit, mockErrorResponse, mockRefreshRecurringForUser, mockRequireUser, mockSyncAllForUser, mockTryWriteDailyAccountSnapshots, mockWriteAudit
 
-### Community 177 - "coverage-boost-r5-n2.test.ts"
-Cohesion: 0.22
-Nodes (5): mockBadRequest, mockErrorResponse, mockRequireUser, mockWriteAudit, validCreate
+### Community 177 - "GoalCardMenu"
+Cohesion: 0.48
+Nodes (6): GoalCardMenu(), close(), onKeyDown(), remove(), saveEdit(), submitContribution()
 
-### Community 178 - "coverage-boost-r6-n2.test.ts"
-Cohesion: 0.22
-Nodes (6): mockBadRequest, mockErrorResponse, mockGetClientIp, mockIsFeatureEnabled, mockRequireUser, mockWriteAudit
+### Community 178 - "sync-lib-extra.test.ts"
+Cohesion: 0.29
+Nodes (6): mockCreateNotification, mockInvalidateDashboardCache, mockListActiveItems, mockLogError, mockServiceClient, mockSetItemStatus
 
-### Community 179 - "coverage-boost-r6-n4.test.ts"
-Cohesion: 0.22
-Nodes (6): mockApiTokenCreated, mockApiTokenRevoked, mockBadRequest, mockCheckRateLimit, mockErrorResponse, mockRequireUser
+### Community 179 - "MilestonesPanel.tsx"
+Cohesion: 0.47
+Nodes (5): BADGE_COLOR_MAP, getBadgeColor(), getMilestoneCardClass(), MilestonesPanel(), ForecastMilestone
 
 ### Community 180 - "Global Constraints"
 Cohesion: 0.25
@@ -1047,29 +1041,29 @@ Nodes (7): Browser verification, Dark categorical palette, End-to-end coverage, 
 Cohesion: 0.36
 Nodes (5): AnnualTxn, computeYearInMoney(), round2(), YearInMoney, TRANSFER_GROUPS
 
-### Community 187 - "manual-transaction.ts"
-Cohesion: 0.32
-Nodes (5): ManualTxnAccountRef, ManualTxnInput, ManualTxnResult, normalizeManualTxn(), validAccount()
+### Community 187 - "DashboardPrefsSection.tsx"
+Cohesion: 0.40
+Nodes (3): DashboardPrefs, DashboardPrefsSection(), OPTIONS
 
 ### Community 188 - "budget.spec.ts"
 Cohesion: 0.25
 Nodes (4): month, RUN, stamp, year
 
-### Community 189 - "coverage-boost-r2-n3.test.ts"
-Cohesion: 0.25
-Nodes (6): mockErrorResponse, mockGetClientIp, mockRequireUser, mockServiceClient, mockWriteAudit, TOKEN
+### Community 189 - "DuplicateReview"
+Cohesion: 0.33
+Nodes (3): DuplicateReview(), first, second
 
-### Community 190 - "coverage-boost-r5-n1.test.ts"
-Cohesion: 0.25
-Nodes (5): mockBadRequest, mockErrorResponse, mockRequireUser, mockServiceFrom, mockWriteAudit
+### Community 190 - "TransactionSortMenu"
+Cohesion: 0.33
+Nodes (3): directionLabel(), TransactionSortMenu(), toggle()
 
 ### Community 191 - "GoalsManager"
 Cohesion: 0.43
 Nodes (5): GoalsManager(), contribute(), remove(), restoreGoals(), updateGoal()
 
-### Community 192 - "demo-backup-routes.test.ts"
-Cohesion: 0.20
-Nodes (8): buildServiceClient(), { env }, mockAlertCronFailure, mockBuildBackupArchive, mockInvalidate, mockRequireUser, mockSendBackupEmail, mockWriteAudit
+### Community 192 - "api-tokens.ts"
+Cohesion: 0.60
+Nodes (4): API_TOKEN_PREFIX, hashApiToken(), verifyApiToken(), serviceClient
 
 ### Community 193 - "Categorical chart palette"
 Cohesion: 0.29
@@ -1083,33 +1077,33 @@ Nodes (7): 1. Prerequisites, 2. Environment, 3. Database, 4. Supabase Auth setti
 Cohesion: 0.29
 Nodes (6): Accounts page: `accounts.spec.ts`, Authenticated golden path — `golden-path.spec.ts`, FundFlow E2E suite, Running, TODO — destructive/lifecycle specs (need a throwaway user), What's covered today (smoke, no auth required)
 
-### Community 196 - "cron-alert.test.ts"
-Cohesion: 0.29
-Nodes (6): mockCheckRateLimit, mockGetUserById, mockLogError, mockSendCronAlertEmail, mockServiceClient, profilesChain
+### Community 196 - "profile.ts"
+Cohesion: 0.47
+Nodes (4): ProfileFieldsPatch, ProfilePatchResult, validateOptionalText(), validateProfilePatch()
 
 ### Community 197 - "investments-export.test.ts"
 Cohesion: 0.29
 Nodes (4): mockLoadHoldings, mockLoadHoldingSnapshots, mockRequireUser, mockWriteAudit
 
-### Community 198 - "profile-route.test.ts"
-Cohesion: 0.15
-Nodes (8): QueryResult, mockErrorResponse, mockRequireUser, mockWriteAudit, supabaseWith(), mockRequireUser, mockWriteAudit, supabaseWith()
+### Community 198 - "AssumptionsPanel.tsx"
+Cohesion: 0.50
+Nodes (4): AssumptionsPanel(), buildPresetUrl(), HORIZONS, ForecastAssumptions
 
 ### Community 199 - "export-csv-tax-scope.test.ts"
 Cohesion: 0.20
 Nodes (8): mockFetchPrivacySafeRows, mockRequireUser, mockServiceClient, mockVerifyApiToken, QueryCall, QueryStub, seeds, tables
 
-### Community 200 - "SavedReportsSection"
-Cohesion: 0.53
-Nodes (6): hrefFor(), SavedReportsSection(), remove(), rename(), save(), send()
+### Community 200 - "WhatIfPanel.tsx"
+Cohesion: 0.67
+Nodes (3): WhatIfDebt, WhatIfPanel(), computeWhatIfProjection()
 
 ### Community 201 - "BudgetsSection"
 Cohesion: 0.40
 Nodes (3): BudgetsSection(), add(), insertBudget()
 
-### Community 202 - "coverage-boost-r6-n3.test.ts"
-Cohesion: 0.22
-Nodes (6): mockBadRequest, mockBuildSessionList, mockCurrentSessionId, mockErrorResponse, mockRequireUser, mockServiceClient
+### Community 202 - "admin-stats-route.test.ts"
+Cohesion: 0.50
+Nodes (3): mockErrorResponse, mockRequireAdmin, mockServiceClient
 
 ### Community 203 - "TableToolbar.tsx"
 Cohesion: 0.40
@@ -1135,53 +1129,29 @@ Nodes (4): activeMonth, FLAG_ON, RUN, stamp
 Cohesion: 0.33
 Nodes (3): activeMonth, RUN, stamp
 
-### Community 209 - "ai-insights-route.test.ts"
-Cohesion: 0.33
-Nodes (5): mockErrorResponse, mockFetchPrivacySafeRows, mockGenerateAiInsightSummaries, mockRequireUser, mockServiceClient
-
 ### Community 210 - "mfa/route.ts"
-Cohesion: 0.16
-Nodes (16): getVerifiedFactors(), handleMfaEnroll(), handleMfaUnenroll(), handleMfaVerify(), listVerifiedFactors(), MfaAction, MfaFactor, POST() (+8 more)
+Cohesion: 0.13
+Nodes (18): getVerifiedFactors(), handleMfaEnroll(), handleMfaUnenroll(), handleMfaVerify(), listVerifiedFactors(), MfaAction, MfaFactor, POST() (+10 more)
 
 ### Community 211 - "api-settings-passkeys.test.ts"
 Cohesion: 0.33
 Nodes (5): mockDeletePasskey, mockErrorResponse, mockListPasskeys, mockRequireUser, mockWriteAudit
 
-### Community 212 - "manual-transaction-route.test.ts"
-Cohesion: 0.33
-Nodes (4): mockAnnotatePost, mockRequireUser, mockWriteAudit, serviceClient
-
-### Community 213 - "plaid-item-route.test.ts"
-Cohesion: 0.33
-Nodes (4): mockBadRequest, mockCheckRateLimit, mockGetItem, mockRequireUser
-
 ### Community 214 - "layout.tsx"
 Cohesion: 0.40
 Nodes (3): geistMono, geistSans, metadata
-
-### Community 215 - "DebtPlannerView.tsx"
-Cohesion: 0.43
-Nodes (4): DebtPlannerView(), plannerHref(), CardAprSection(), buttonVariants()
 
 ### Community 216 - "AutoRefresh"
 Cohesion: 0.50
 Nodes (3): AutoRefresh(), maybeAutoSync(), onVisible()
 
-### Community 217 - "preview/route.ts"
-Cohesion: 0.60
-Nodes (5): emptyPreviewResponse(), parsePreviewInput(), POST(), resolveColumnMap(), normalizeColumnMap()
-
-### Community 218 - "coverage-boost-r2-n5.test.ts"
-Cohesion: 0.33
-Nodes (4): mockBadRequest, mockErrorResponse, mockRequireUser, serviceState
+### Community 218 - "import/csv/route.ts"
+Cohesion: 0.16
+Nodes (15): ImportTarget, MappingInput, parseMappingInput(), POST(), targetKey(), buildDatabaseRows(), filterOverlappingRows(), parseUploadedRows() (+7 more)
 
 ### Community 222 - "refund-netting.test.ts"
 Cohesion: 0.40
 Nodes (3): ACCOUNTS, Row, TRANSACTIONS
-
-### Community 223 - "coverage-boost-r6-n5.test.ts"
-Cohesion: 0.33
-Nodes (3): mockBadRequest, mockErrorResponse, mockRequireUser
 
 ### Community 225 - "Phase 7 Goals is implemented (flag-gated)"
 Cohesion: 0.50
@@ -1196,24 +1166,24 @@ Cohesion: 0.67
 Nodes (3): SinkingFundRow, SinkingFundCadence, SinkingFundMutation
 
 ## Knowledge Gaps
-- **2039 isolated node(s):** `supabase`, `dynamic`, `PageProps`, `AccountNumericValue`, `PlaidAccountRow` (+2034 more)
+- **2041 isolated node(s):** `supabase`, `dynamic`, `PageProps`, `AccountNumericValue`, `PlaidAccountRow` (+2036 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **30 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `formatCurrency()` connect `formatCurrency` to `charts-render.test.ts`, `ical.ts`, `goals-v2.ts`, `settings/page.tsx`, `ManualAccountsSection.tsx`, `cn`, `TransactionEditor`, `reports/page.tsx`, `createClient`, `PlanView.tsx`, `Panel.tsx`, `plaid-service.ts`, `goals.ts`, `forecasting.ts`, `planning.ts`, `format.ts`, `DashboardWidgetGrid.tsx`, `transactions/page.tsx`, `CardCarousel.tsx`, `cash-flow/page.tsx`, `notifications.ts`, `recurring.ts`, `RecurringList.tsx`, `SankeyChart.tsx`, `BudgetsSection`, `accounts/page.tsx`, `investments/page.tsx`, `DebtPlannerView.tsx`, `transaction-quality.ts`, `report-pdf.ts`, `ReceiptInbox`, `report-email.ts`, `cash-flow-render.test.ts`, `SinkingFundsSection`?**
-  _High betweenness centrality (0.058) - this node is a cross-community bridge._
-- **Why does `clientStub()` connect `clientStub` to `errorResponse`, `import.ts`, `http.ts`, `audit.ts`, `goals-v2.ts`, `formatCurrency`, `reports/page.tsx`, `weekly-report/route.ts`, `finance-query.ts`, `receipts-route.test.ts`, `recurring/route.ts`, `coverage-boost-export-n3.test.ts`, `coverage-boost-domain-libs.test.ts`, `goals.ts`, `coverage-boost-plaid-n2.test.ts`, `coverage-boost-r2-n1.test.ts`, `coverage-boost-r2-n4.test.ts`, `coverage-boost-r2-n6.test.ts`, `forecasting.ts`, `badRequest`, `coverage-boost-r2-n7.test.ts`, `supabase-query.ts`, `recurring/manual/route.ts`, `coverage-boost-lib2-n4.test.ts`, `format.ts`, `api-routes-unit.test.ts`, `backup/route.ts`, `coverage-boost-r2-n2.test.ts`, `CardCarousel.tsx`, `coverage-boost-r5-n2.test.ts`, `coverage-boost-r6-n2.test.ts`, `coverage-boost-r6-n4.test.ts`, `dashboard-widgets-data.ts`, `coverage-boost-r2-n3.test.ts`, `coverage-boost-r5-n1.test.ts`, `coverage-boost-simple-routes.test.ts`, `demo-backup-routes.test.ts`, `invite/route.ts`, `recurring-page.ts`, `profile-route.test.ts`, `lib/weekly-report.ts`, `api-plaid-direct-routes.test.ts`, `receipt/route.ts`, `coverage-boost-r6-n3.test.ts`, `accounts/page.tsx`, `investments/page.tsx`, `ai-provider-lib.test.ts`, `manual-transaction-route.test.ts`, `coverage-boost-lib2-n2.test.ts`, `coverage-boost-r2-n5.test.ts`, `account-history.ts`, `budget-data.ts`, `coverage-boost-r6-n5.test.ts`, `ai-routes-and-push.test.ts`, `coverage-boost-lib1-n1.test.ts`, `coverage-boost-export-n2.test.ts`, `coverage-boost-r6-n6.test.ts`, `coverage-boost-plaid-n1.test.ts`, `coverage-boost-r6-n1.test.ts`, `coverage-boost-lib2-n5.test.ts`?**
-  _High betweenness centrality (0.039) - this node is a cross-community bridge._
-- **Why does `createClient()` connect `createClient` to `errorResponse`, `http.ts`, `forecasting.ts`, `dashboard-widgets.ts`, `settings/page.tsx`, `formatCurrency`, `logError`, `accounts/page.tsx`, `investments/page.tsx`, `reports/page.tsx`, `cash-flow/page.tsx`, `transactions/page.tsx`, `isFeatureEnabled`, `PlanView.tsx`, `icons.tsx`, `advice/page.tsx`, `coverage-boost-domain-libs.test.ts`, `goals.ts`?**
-  _High betweenness centrality (0.033) - this node is a cross-community bridge._
+- **Why does `clientStub()` connect `clientStub` to `errorResponse`, `import.ts`, `tokens/route.ts`, `coverage-boost-export-n1.test.ts`, `goals-v2.ts`, `cash-flow-data.ts`, `formatCurrency`, `reports/page.tsx`, `budget-data.ts`, `coverage-boost-export-n3.test.ts`, `weekly-report/route.ts`, `debt-data.ts`, `PlanView.tsx`, `forecasting-data.ts`, `accounts/route.ts`, `coverage-boost-r2-n6.test.ts`, `coverage-boost-r2-n7.test.ts`, `badRequest`, `planning.ts`, `accounts-csv/route.ts`, `recurring/manual/route.ts`, `receipts/route.ts`, `currency.ts`, `api-routes-unit.test.ts`, `logError`, `DashboardWidgetGrid.tsx`, `dashboard/page.tsx`, `coverage-boost-lib2-n2.test.ts`, `coverage-boost-simple-routes.test.ts`, `api-tokens.ts`, `recurring-page.ts`, `lib/weekly-report.ts`, `api-plaid-direct-routes.test.ts`, `accounts-page.ts`, `investments/page.tsx`, `ai-provider-lib.test.ts`, `mfa/route.ts`, `import/csv/route.ts`, `coverage-boost-txn-n2.test.ts`, `coverage-boost-domain-libs.test.ts`, `advice-data.ts`, `saved/route.ts`, `coverage-boost-plaid-n1.test.ts`, `profile/route.ts`, `coverage-boost-lib2-n5.test.ts`?**
+  _High betweenness centrality (0.048) - this node is a cross-community bridge._
+- **Why does `formatCurrency()` connect `formatCurrency` to `chart-utils.ts`, `ical.ts`, `goals/page.tsx`, `goals-v2.ts`, `settings/page.tsx`, `ManualAccountsSection`, `cn`, `TransactionEditor`, `reports/page.tsx`, `createClient`, `cash-flow/page.tsx`, `investments-render.test.ts`, `Panel.tsx`, `createServiceClient`, `SummaryPanel.tsx`, `debt-data.ts`, `PlanView.tsx`, `forecasting.ts`, `planning.ts`, `currency.ts`, `transactions/page.tsx`, `CardCarousel.tsx`, `MilestonesPanel.tsx`, `notifications.ts`, `DashboardWidgetGrid.tsx`, `DuplicateReview`, `recurring.ts`, `RecurringList.tsx`, `SankeyChart.tsx`, `WhatIfPanel.tsx`, `BudgetsSection`, `investments/page.tsx`, `report-pdf.ts`, `ReceiptInbox`, `report-email.ts`, `GoalCard.tsx`, `charts-render.test.ts`, `SinkingFundsSection`?**
+  _High betweenness centrality (0.044) - this node is a cross-community bridge._
+- **Why does `requireUser()` connect `errorResponse` to `import.ts`, `tokens/route.ts`, `export-route.ts`, `reports/page.tsx`, `checkRateLimit`, `createServiceClient`, `coverage-boost-txn-n1.test.ts`, `coverage-boost-export-n3.test.ts`, `accounts/route.ts`, `badRequest`, `http-session-revocation.test.ts`, `accounts-csv/route.ts`, `recurring/manual/route.ts`, `receipts/route.ts`, `api-routes-unit.test.ts`, `logError`, `createClient`, `proxy.ts`, `coverage-boost-simple-routes.test.ts`, `annotate/route.ts`, `ai-provider-lib.test.ts`, `mfa/route.ts`, `transaction-quality.ts`, `import/csv/route.ts`, `coverage-boost-txn-n2.test.ts`, `coverage-boost-domain-libs.test.ts`, `http.test.ts`, `saved/route.ts`, `profile/route.ts`?**
+  _High betweenness centrality (0.031) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `requireUser()` (e.g. with `authWith()` and `authWith()`) actually correct?**
   _`requireUser()` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `supabase`, `dynamic`, `PageProps` to the rest of the system?**
-  _2039 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _2041 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `errorResponse` be split into smaller, more focused modules?**
-  _Cohesion score 0.09358178053830228 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.10989010989010989 - nodes in this community are weakly interconnected._
 - **Should `import.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.07412587412587412 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05118601747815231 - nodes in this community are weakly interconnected._
