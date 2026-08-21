@@ -344,3 +344,95 @@ export function detectSourceFormat(text: string): ImportSourceFormat {
   }
   return "csv";
 }
+
+/**
+ * Shared walker for the migration-format CSVs (Mint, Monarch, YNAB). Each
+ * format is a thin spec over this helper: a set of required/optional column
+ * names plus a per-line amount (and optional category) resolver. Everything
+ * else — table parsing, header matching, per-line date/merchant validation,
+ * and 1-based error accumulation — lives here once so the format parsers
+ * cannot drift apart.
+ */
+export interface CsvFormatSpec {
+  /** Logical column name → header name. Every required column must exist. */
+  required: Record<string, string>;
+  /** Logical column name → header name. Absent columns are simply unused. */
+  optional?: Record<string, string>;
+  /** Label used in "Could not detect <label> columns." messages. */
+  label: string;
+  /** Field name used in "empty <merchantLabel>." messages. */
+  merchantLabel: string;
+  /** Plaid-signed amount for this line (positive = money out), or null when unrecognized. */
+  amount: (line: string[], cols: Record<string, number>) => number | null;
+  /** Category for this line; defaults to the `category` column when present. */
+  category?: (line: string[], cols: Record<string, number>) => string | null;
+}
+
+/** True when every given header (trimmed, case-insensitive) is present. */
+export function headerHasAll(headerRow: string[], headers: string[]): boolean {
+  const lower = headerRow.map((h) => h.trim().toLowerCase());
+  return headers.every((h) => lower.includes(h));
+}
+
+export function parseCsvFormat(text: string, spec: CsvFormatSpec): ImportParseResult {
+  const table = parseCsv(text);
+  if (table.length < 2) {
+    return { rows: [], errors: ["File has no data rows."] };
+  }
+  const header = table[0]!.map((h) => h.trim().toLowerCase());
+  const cols: Record<string, number> = {};
+  for (const [logical, headerName] of Object.entries(spec.required)) {
+    const idx = header.indexOf(headerName.trim().toLowerCase());
+    if (idx === -1) {
+      return { rows: [], errors: [`Could not detect ${spec.label} columns.`] };
+    }
+    cols[logical] = idx;
+  }
+  if (spec.optional) {
+    for (const [logical, headerName] of Object.entries(spec.optional)) {
+      const idx = header.indexOf(headerName.trim().toLowerCase());
+      if (idx !== -1) cols[logical] = idx;
+    }
+  }
+
+  const rows: ImportedRow[] = [];
+  const errors: string[] = [];
+
+  for (let i = 1; i < table.length; i++) {
+    const line = table[i]!;
+    const lineNo = i + 1;
+
+    const date = normalizeDate(line[cols.date] ?? "");
+    if (!date) {
+      errors.push(`Line ${lineNo}: unrecognized date "${line[cols.date] ?? ""}".`);
+      continue;
+    }
+
+    const amount = spec.amount(line, cols);
+    if (amount === null) {
+      errors.push(`Line ${lineNo}: unrecognized amount.`);
+      continue;
+    }
+
+    const merchant = (line[cols.merchant] ?? "").trim();
+    if (!merchant) {
+      errors.push(`Line ${lineNo}: empty ${spec.merchantLabel}.`);
+      continue;
+    }
+
+    const category = spec.category
+      ? spec.category(line, cols)
+      : cols.category !== undefined
+        ? (line[cols.category] ?? "").trim() || null
+        : null;
+
+    rows.push({
+      date,
+      amount: Math.round(amount * 100) / 100,
+      merchant,
+      category,
+    });
+  }
+
+  return { rows, errors };
+}
