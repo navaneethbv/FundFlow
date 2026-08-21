@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
 
     let query = supabase
       .from("import_review_rows")
-      .select("id, date, description, amount, status")
+      .select("id, date, description, amount, category, status")
       .eq("batch_id", batchId)
       .eq("status", "pending");
     if (approvedIds) query = query.in("id", approvedIds);
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
         date: row.date as string,
         amount: Number(row.amount),
         merchant: row.description as string,
-        category: null,
+        category: (row.category as string | null) ?? null,
       };
       const key = `${imported.date}|${imported.amount}|${imported.merchant}`;
       const n = occurrences.get(key) ?? 0;
@@ -54,6 +54,9 @@ export async function POST(request: NextRequest) {
         date: imported.date,
         name: imported.merchant,
         merchant_name: imported.merchant,
+        pfc_primary: imported.category
+          ? imported.category.toUpperCase().replace(/\s+/g, "_")
+          : null,
         pending: false,
         // The `import-` prefix (see makeImportId) is what lib/finance-domain.ts
         // actually reads for provenance; this column exists so SQL can filter

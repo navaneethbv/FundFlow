@@ -1,4 +1,8 @@
 import { createHash } from "node:crypto";
+import { looksLikeOfx } from "./import-ofx";
+import { looksLikeMintCsv } from "./import-mint";
+import { looksLikeMonarchCsv } from "./import-monarch";
+import { looksLikeYnabCsv } from "./import-ynab";
 
 /**
  * Bank-statement CSV import: parsing, column auto-detection, and row
@@ -320,4 +324,23 @@ export function makeImportId(
     .digest("hex")
     .slice(0, 40);
   return `import-${hash}`;
+}
+
+/**
+ * Which parser handles an uploaded import file. OFX/QFX is detected by content
+ * sniffing; the migration formats (Mint, Monarch, YNAB) by their distinctive
+ * header rows. Falls back to the generic bank CSV parser, which also drives
+ * the manual column-mapping UI.
+ */
+export type ImportSourceFormat = "mint" | "monarch" | "ynab" | "csv" | "ofx";
+
+export function detectSourceFormat(text: string): ImportSourceFormat {
+  if (looksLikeOfx(text)) return "ofx";
+  const header = getCsvColumns(text);
+  if (header) {
+    if (looksLikeMintCsv(header.headers)) return "mint";
+    if (looksLikeMonarchCsv(header.headers)) return "monarch";
+    if (looksLikeYnabCsv(header.headers)) return "ynab";
+  }
+  return "csv";
 }

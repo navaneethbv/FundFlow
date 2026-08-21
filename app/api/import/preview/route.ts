@@ -1,7 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { buildImportReview } from "@/lib/planning";
-import { getCsvColumns, normalizeColumnMap, parseImportCsv, type ColumnMap } from "@/lib/import";
-import { looksLikeOfx, parseOfx } from "@/lib/import-ofx";
+import {
+  getCsvColumns,
+  normalizeColumnMap,
+  parseImportCsv,
+  detectSourceFormat,
+  type ColumnMap,
+  type ImportSourceFormat,
+} from "@/lib/import";
+import { parseOfx } from "@/lib/import-ofx";
+import { parseMintCsv } from "@/lib/import-mint";
+import { parseMonarchCsv } from "@/lib/import-monarch";
+import { parseYnabCsv } from "@/lib/import-ynab";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -13,10 +23,10 @@ function parsePreviewInput(
   text: string,
   positiveIsIncome: boolean,
   columnMapRaw: FormDataEntryValue | null,
-): { rows: Array<{ date: string; merchant: string; amount: number; category: string | null }>; errors: string[]; isOfx: boolean; columns?: ColumnMap; mappingError?: string } {
-  const isOfx = looksLikeOfx(text);
+): { rows: Array<{ date: string; merchant: string; amount: number; category: string | null }>; errors: string[]; format: ImportSourceFormat; columns?: ColumnMap; mappingError?: string } {
+  const format = detectSourceFormat(text);
   let columns: ColumnMap | undefined;
-  if (!isOfx && typeof columnMapRaw === "string" && columnMapRaw.length > 0) {
+  if (format === "csv" && typeof columnMapRaw === "string" && columnMapRaw.length > 0) {
     const header = getCsvColumns(text);
     let parsed: ColumnMap | null = null;
     try {
@@ -30,34 +40,41 @@ function parsePreviewInput(
       return {
         rows: [],
         errors: [],
-        isOfx,
+        format,
         mappingError:
         "Invalid column mapping. Map at least a date, description, and amount (or debit/credit).",
       };
     }
     columns = parsed;
   }
-  const parsed = isOfx
-    ? {
-        rows: parseOfx(text).map((row) => ({
-          date: row.date,
-          merchant: row.description,
-          amount: row.amount,
-          category: null,
-        })),
-        errors: [] as string[],
-      }
-    : parseImportCsv(text, { positiveIsIncome, columns });
-  return { ...parsed, isOfx, columns };
+  const parsed =
+    format === "ofx"
+      ? {
+          rows: parseOfx(text).map((row) => ({
+            date: row.date,
+            merchant: row.description,
+            amount: row.amount,
+            category: null,
+          })),
+          errors: [] as string[],
+        }
+      : format === "mint"
+        ? parseMintCsv(text)
+        : format === "monarch"
+          ? parseMonarchCsv(text)
+          : format === "ynab"
+            ? parseYnabCsv(text)
+            : parseImportCsv(text, { positiveIsIncome, columns });
+  return { ...parsed, format, columns };
 }
 
 function emptyPreviewResponse(
   text: string,
-  isOfx: boolean,
+  format: ImportSourceFormat,
   columns: ColumnMap | undefined,
   errors: string[],
 ): NextResponse {
-  if (!isOfx && !columns) {
+  if (format === "csv" && !columns) {
     const header = getCsvColumns(text);
     if (header && header.headers.length > 0) {
       return NextResponse.json({
@@ -70,7 +87,7 @@ function emptyPreviewResponse(
   }
   return badRequest(
     errors[0] ??
-      (isOfx ? "No importable OFX rows found" : "No importable rows found"),
+      (format === "ofx" ? "No importable OFX rows found" : "No importable rows found"),
   );
 }
 
@@ -100,12 +117,12 @@ export async function POST(request: NextRequest) {
 
     const text = await file.text();
     const parsed = parsePreviewInput(text, positiveIsIncome, form.get("column_map"));
-    const { rows, errors, isOfx, columns } = parsed;
+    const { rows, errors, format, columns } = parsed;
     if (parsed.mappingError) return badRequest(parsed.mappingError);
     if (rows.length > MAX_ROWS) {
       return badRequest(`Too many rows (${MAX_ROWS} max per file)`);
     }
-    if (rows.length === 0) return emptyPreviewResponse(text, isOfx, columns, errors);
+    if (rows.length === 0) return emptyPreviewResponse(text, format, columns, errors);
 
     const { data: existing } = await supabase
       .from("transactions")
@@ -141,6 +158,7 @@ export async function POST(request: NextRequest) {
           date: row.row.date,
           description: row.row.merchant,
           amount: row.row.amount,
+          category: row.row.category,
           status: row.flags.length > 0 ? "rejected" : "pending",
         })),
       )

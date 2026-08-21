@@ -1,7 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
-import { parseImportCsv, makeImportId, type ImportedRow } from "@/lib/import";
-import { looksLikeOfx, parseOfx } from "@/lib/import-ofx";
+import {
+  parseImportCsv,
+  makeImportId,
+  detectSourceFormat,
+  type ImportedRow,
+} from "@/lib/import";
+import { parseOfx } from "@/lib/import-ofx";
+import { parseMintCsv } from "@/lib/import-mint";
+import { parseMonarchCsv } from "@/lib/import-monarch";
+import { parseYnabCsv } from "@/lib/import-ynab";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { createServiceClient } from "@/lib/supabase/service";
 import { writeAudit, getClientIp } from "@/lib/audit";
@@ -14,18 +22,26 @@ function parseUploadedRows(
   text: string,
   positiveIsIncome: boolean,
 ): { rows: ImportedRow[]; errors: string[] } {
-  if (looksLikeOfx(text)) {
-    return {
-      rows: parseOfx(text).map((transaction) => ({
-        date: transaction.date,
-        amount: transaction.amount,
-        merchant: transaction.description || "Imported",
-        category: null,
-      })),
-      errors: [],
-    };
+  switch (detectSourceFormat(text)) {
+    case "ofx":
+      return {
+        rows: parseOfx(text).map((transaction) => ({
+          date: transaction.date,
+          amount: transaction.amount,
+          merchant: transaction.description || "Imported",
+          category: null,
+        })),
+        errors: [],
+      };
+    case "mint":
+      return parseMintCsv(text);
+    case "monarch":
+      return parseMonarchCsv(text);
+    case "ynab":
+      return parseYnabCsv(text);
+    default:
+      return parseImportCsv(text, { positiveIsIncome });
   }
-  return parseImportCsv(text, { positiveIsIncome });
 }
 
 function filterOverlappingRows(

@@ -24,11 +24,28 @@ const mockMakeImportId = vi.fn<(...args: unknown[]) => unknown>(
 );
 const mockGetCsvColumns = vi.fn<(...args: unknown[]) => unknown>();
 const mockNormalizeColumnMap = vi.fn<(...args: unknown[]) => unknown>();
+const mockDetectSourceFormat = vi.fn<(...args: unknown[]) => unknown>(() => "csv");
 vi.mock("@/lib/import", () => ({
   parseImportCsv: (...args: unknown[]) => mockParseImportCsv(...args),
   makeImportId: (...args: unknown[]) => mockMakeImportId(...args),
   getCsvColumns: (...args: unknown[]) => mockGetCsvColumns(...args),
   normalizeColumnMap: (...args: unknown[]) => mockNormalizeColumnMap(...args),
+  detectSourceFormat: (...args: unknown[]) => mockDetectSourceFormat(...args),
+}));
+
+const mockParseMintCsv = vi.fn<(...args: unknown[]) => unknown>();
+vi.mock("@/lib/import-mint", () => ({
+  parseMintCsv: (...args: unknown[]) => mockParseMintCsv(...args),
+}));
+
+const mockParseMonarchCsv = vi.fn<(...args: unknown[]) => unknown>();
+vi.mock("@/lib/import-monarch", () => ({
+  parseMonarchCsv: (...args: unknown[]) => mockParseMonarchCsv(...args),
+}));
+
+const mockParseYnabCsv = vi.fn<(...args: unknown[]) => unknown>();
+vi.mock("@/lib/import-ynab", () => ({
+  parseYnabCsv: (...args: unknown[]) => mockParseYnabCsv(...args),
 }));
 
 const mockLooksLikeOfx = vi.fn<(...args: unknown[]) => boolean>();
@@ -65,6 +82,7 @@ import { NextRequest, NextResponse } from "next/server";
 describe("Import API Routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockDetectSourceFormat.mockReturnValue("csv");
     mockLooksLikeOfx.mockReturnValue(false);
     mockCheckRateLimit.mockResolvedValue(true);
   });
@@ -231,7 +249,7 @@ describe("Import API Routes", () => {
         formData: () => Promise.resolve(formData),
       } as unknown as NextRequest;
 
-      mockLooksLikeOfx.mockReturnValue(true);
+      mockDetectSourceFormat.mockReturnValue("ofx");
       mockParseOfx.mockReturnValue([
         {
           date: "2026-07-01",
@@ -303,6 +321,87 @@ describe("Import API Routes", () => {
         batch_id: "batch-ofx",
         rows: [{ id: "row-ofx", description: "Coffee shop" }],
       });
+    });
+
+    it("previews a Mint file without the manual column-mapping UI", async () => {
+      const mockSupabase = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue({ data: [] }),
+          }),
+        }),
+      };
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: mockSupabase,
+      });
+      const file = new File(
+        [
+          [
+            `"Date","Description","Original Description","Amount","Transaction Type","Category","Account Name","Labels","Notes"`,
+            `"07/01/2026","Starbucks","STARBUCKS 123","5.50","debit","Coffee","Checking","",""`,
+          ].join("\n"),
+        ],
+        "mint.csv",
+        { type: "text/csv" },
+      );
+      const formData = new FormData();
+      formData.set("file", file);
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockDetectSourceFormat.mockReturnValue("mint");
+      mockParseMintCsv.mockReturnValue({
+        rows: [{ date: "2026-07-01", merchant: "Starbucks", amount: 5.5, category: "Coffee" }],
+        errors: [],
+      });
+      mockBuildImportReview.mockReturnValue({
+        rows: [
+          {
+            rowHash: "h1",
+            row: { date: "2026-07-01", merchant: "Starbucks", amount: 5.5 },
+            flags: [],
+          },
+        ],
+      });
+      mockServiceClient.from.mockImplementation((table) => {
+        if (table === "import_review_batches") {
+          return {
+            insert: vi.fn().mockReturnThis(),
+            select: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({
+              data: { id: "batch-mint" },
+              error: null,
+            }),
+          };
+        }
+        return {
+          insert: vi.fn().mockReturnThis(),
+          select: vi.fn().mockResolvedValue({
+            data: [
+              {
+                id: "row-mint",
+                date: "2026-07-01",
+                description: "Starbucks",
+                amount: 5.5,
+                status: "pending",
+              },
+            ],
+            error: null,
+          }),
+        };
+      });
+
+      const res = await previewPost(request);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.needs_mapping).toBeUndefined();
+      expect(body.rows).toHaveLength(1);
+      expect(mockParseImportCsv).not.toHaveBeenCalled();
+      expect(mockGetCsvColumns).not.toHaveBeenCalled();
+      expect(mockNormalizeColumnMap).not.toHaveBeenCalled();
+      expect(mockParseMintCsv).toHaveBeenCalledTimes(1);
     });
 
     it("returns bad request when column map is invalid", async () => {
@@ -457,7 +556,7 @@ describe("Import API Routes", () => {
         formData: () => Promise.resolve(formData),
       } as unknown as NextRequest;
 
-      mockLooksLikeOfx.mockReturnValue(true);
+      mockDetectSourceFormat.mockReturnValue("ofx");
       mockParseOfx.mockReturnValue([]);
 
       const res = await previewPost(request);
@@ -859,6 +958,71 @@ describe("Import API Routes", () => {
       const body = await res.json();
       expect(body).toEqual({ ok: true, imported: 1 });
     });
+
+    it("threads a staged row's category through into pfc_primary", async () => {
+      const mockSupabase = {
+        from: vi.fn().mockImplementation((table) => {
+          if (table === "accounts") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
+            };
+          }
+          if (table === "import_review_rows") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              in: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    id: "row-1",
+                    date: "2026-07-01",
+                    description: "Coffee Bar",
+                    amount: 5.5,
+                    category: "Dining",
+                    status: "pending",
+                  },
+                ],
+              }),
+            };
+          }
+          return null as never;
+        }),
+      };
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: mockSupabase,
+      });
+      const request = {
+        json: () =>
+          Promise.resolve({ batch_id: "b1", account_id: "a1", approved_row_ids: ["row-1"] }),
+      } as unknown as NextRequest;
+
+      const upsertMock = vi.fn().mockResolvedValue({ error: null });
+      const updateMock = vi.fn().mockResolvedValue({ error: null });
+      mockServiceClient.from.mockReturnValue({
+        upsert: upsertMock,
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            in: updateMock,
+            eq: updateMock,
+          }),
+        }),
+      });
+
+      const res = await commitPost(request);
+      expect(res.status).toBe(200);
+      expect(upsertMock).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            pfc_primary: "DINING",
+            name: "Coffee Bar",
+          }),
+        ]),
+        expect.objectContaining({ onConflict: "plaid_transaction_id" }),
+      );
+    });
   });
 
   describe("POST /api/import/csv", () => {
@@ -1058,7 +1222,7 @@ describe("Import API Routes", () => {
         formData: () => Promise.resolve(formData),
       } as unknown as NextRequest;
 
-      mockLooksLikeOfx.mockReturnValue(true);
+      mockDetectSourceFormat.mockReturnValue("ofx");
       mockParseOfx.mockReturnValue([
         { date: "2026-06-15", description: "", amount: 100, fitid: "fit-1" },
         { date: "2026-07-15", description: "Salary", amount: -200, fitid: "fit-2" },
@@ -1100,6 +1264,81 @@ describe("Import API Routes", () => {
       expect(upsert).toHaveBeenCalledWith(
         expect.arrayContaining([
           expect.objectContaining({ name: "Imported" }),
+        ]),
+        expect.objectContaining({ onConflict: "plaid_transaction_id" }),
+      );
+    });
+
+    it("feeds Mint rows through the deterministic-id upsert so re-uploads collide", async () => {
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: {
+          from: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
+          }),
+        },
+      });
+      const file = new File(
+        [
+          [
+            `"Date","Description","Original Description","Amount","Transaction Type","Category","Account Name","Labels","Notes"`,
+            `"07/01/2026","Starbucks","STARBUCKS 123","5.50","debit","Coffee","Checking","",""`,
+          ].join("\n"),
+        ],
+        "mint.csv",
+        { type: "text/csv" },
+      );
+      const formData = new FormData();
+      formData.set("file", file);
+      formData.set("account_id", "a1");
+      const request = {
+        formData: () => Promise.resolve(formData),
+      } as unknown as NextRequest;
+
+      mockDetectSourceFormat.mockReturnValue("mint");
+      mockParseMintCsv.mockReturnValue({
+        rows: [{ date: "2026-07-01", merchant: "Starbucks", amount: 5.5, category: "Coffee" }],
+        errors: [],
+      });
+      const boundary = {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              not: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({
+                      data: null,
+                      error: null,
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      };
+      const upsert = vi.fn().mockResolvedValue({ error: null });
+      mockServiceClient.from.mockImplementation((table: string) => {
+        if (table === "transactions") {
+          return { select: boundary.select, upsert };
+        }
+        return null as never;
+      });
+
+      const res = await csvPost(request);
+      expect(res.status).toBe(200);
+      expect(mockParseImportCsv).not.toHaveBeenCalled();
+      expect(mockMakeImportId).toHaveBeenCalledWith(
+        "a1",
+        { date: "2026-07-01", merchant: "Starbucks", amount: 5.5, category: "Coffee" },
+        0,
+      );
+      expect(upsert).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ pfc_primary: "COFFEE" }),
         ]),
         expect.objectContaining({ onConflict: "plaid_transaction_id" }),
       );
