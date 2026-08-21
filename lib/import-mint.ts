@@ -31,6 +31,8 @@ export function parseMintCsv(text: string): ImportParseResult {
       merchant: "description",
       amount: "amount",
       type: "transaction type",
+    },
+    optional: {
       category: "category",
     },
     amount: (line, cols) => {

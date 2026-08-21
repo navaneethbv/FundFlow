@@ -30,6 +30,8 @@ export function parseMonarchCsv(text: string): ImportParseResult {
       date: "date",
       merchant: "merchant",
       amount: "amount",
+    },
+    optional: {
       category: "category",
     },
     amount: (line, cols) => {
