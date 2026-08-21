@@ -545,13 +545,13 @@ export function toAiInsightPayload(input: {
 }
 
 export function buildImportReview(
-  rows: { date: string; amount: number; merchant: string; category: string | null }[],
+  rows: { date: string; amount: number; merchant: string; category: string | null; sourceAccount?: string | null }[],
   existingFingerprints: Set<string>,
 ) {
   const seen = new Set<string>();
   const reviewRows: Array<{
     rowHash: string;
-    row: { date: string; amount: number; merchant: string; category: string | null };
+    row: { date: string; amount: number; merchant: string; category: string | null; sourceAccount?: string | null };
     flags: string[];
     status: "pending" | "approved" | "rejected" | "committed";
   }> = rows.map((row) => {

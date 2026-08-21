@@ -41,9 +41,9 @@ describe("parseYnabCsv", () => {
       '"Checking","","2026-07-01","Starbucks","Restaurants","Restaurants","Starbucks","","5.50","","Cleared"',
       '"Checking","","2026-07-02","ACME Corp","Income","Income","Salary","","","1,000.00","Cleared"',
     ].join("\n");
-    const { rows, errors } = parseYnabCsv(csv);
+    const { rows, errors } = parseYnabCsv(csv, { dateOrder: "mdy" });
     expect(errors).toEqual([]);
-    expect(rows[0]).toEqual({ date: "2026-07-01", amount: 5.5, merchant: "Starbucks", category: "Restaurants" });
+    expect(rows[0]).toEqual({ date: "2026-07-01", amount: 5.5, merchant: "Starbucks", category: "Restaurants", sourceAccount: "Checking" });
     expect(rows[1]!.amount).toBe(-1000);
   });
 
@@ -52,7 +52,7 @@ describe("parseYnabCsv", () => {
       headerLine,
       '"Checking","","2026-07-01","Coffee Bar","Dining","Dining","Coffee","","-4.50","","Cleared"',
     ].join("\n");
-    const combined = parseYnabCsv(withCombined);
+    const combined = parseYnabCsv(withCombined, { dateOrder: "mdy" });
     expect(combined.rows[0]!.category).toBe("Dining");
 
     // A header without the combined column falls back to bare Category.
@@ -63,7 +63,7 @@ describe("parseYnabCsv", () => {
       headerNoCombined.map((h) => `"${h}"`).join(","),
       '"Checking","","2026-07-01","Coffee Bar","Coffee","","4.50","","Cleared"',
     ].join("\n");
-    const noCombined = parseYnabCsv(noCombinedCsv);
+    const noCombined = parseYnabCsv(noCombinedCsv, { dateOrder: "mdy" });
     expect(noCombined.rows[0]!.category).toBe("Coffee");
   });
 
@@ -72,7 +72,7 @@ describe("parseYnabCsv", () => {
       headerLine,
       '"Checking","","2026-07-01","Rent","Housing","Housing","Rent","","1,234.56","","Cleared"',
     ].join("\n");
-    const { rows, errors } = parseYnabCsv(csv);
+    const { rows, errors } = parseYnabCsv(csv, { dateOrder: "mdy" });
     expect(errors).toEqual([]);
     expect(rows[0]!.amount).toBe(1234.56);
   });
@@ -83,10 +83,42 @@ describe("parseYnabCsv", () => {
       '"Checking","","not-a-date","Store","","","","","5.00","","Cleared"',
       '"Checking","","2026-07-02","Store2","","","","","N/A","","Cleared"',
     ].join("\n");
-    const { rows, errors } = parseYnabCsv(csv);
+    const { rows, errors } = parseYnabCsv(csv, { dateOrder: "mdy" });
     expect(rows).toHaveLength(0);
     expect(errors).toHaveLength(2);
     expect(errors[0]).toContain("Line 2");
     expect(errors[1]).toContain("Line 3");
+  });
+
+  it("requires an explicit date order when slash dates are ambiguous", () => {
+    const csv = [
+      headerLine,
+      '"Checking","","08/09/2026","Rent","Housing","Housing","Rent","","1000","","Cleared"',
+    ].join("\n");
+    const parsed = parseYnabCsv(csv);
+    expect(parsed.rows).toEqual([]);
+    expect(parsed.requiresDateOrder).toBe(true);
+    expect(parsed.errors[0]).toContain("ambiguous date format");
+  });
+
+  it("parses day-first dates when the user selects that format", () => {
+    const csv = [
+      headerLine,
+      '"Checking","","13/09/2026","Rent","Housing","Housing","Rent","","1000","","Cleared"',
+    ].join("\n");
+    const parsed = parseYnabCsv(csv, { dateOrder: "dmy" });
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.rows[0]!.date).toBe("2026-09-13");
+  });
+
+  it("does not guess when an export mixes ISO and slash-formatted dates", () => {
+    const csv = [
+      headerLine,
+      '"Checking","","2026-09-13","Rent","Housing","Housing","Rent","","1000","","Cleared"',
+      '"Checking","","08/09/2026","Rent","Housing","Housing","Rent","","1000","","Cleared"',
+    ].join("\n");
+    const parsed = parseYnabCsv(csv);
+    expect(parsed.rows).toEqual([]);
+    expect(parsed.requiresDateOrder).toBe(true);
   });
 });

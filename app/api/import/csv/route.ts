@@ -4,6 +4,7 @@ import {
   parseImportCsv,
   makeImportId,
   detectSourceFormat,
+  type DateOrder,
   type ImportedRow,
 } from "@/lib/import";
 import { parseOfx } from "@/lib/import-ofx";
@@ -21,7 +22,8 @@ const UPSERT_CHUNK = 500;
 function parseUploadedRows(
   text: string,
   positiveIsIncome: boolean,
-): { rows: ImportedRow[]; errors: string[] } {
+  dateOrder?: DateOrder,
+): { rows: ImportedRow[]; errors: string[]; requiresDateOrder?: boolean } {
   switch (detectSourceFormat(text)) {
     case "ofx":
       return {
@@ -38,7 +40,7 @@ function parseUploadedRows(
     case "monarch":
       return parseMonarchCsv(text);
     case "ynab":
-      return parseYnabCsv(text);
+      return parseYnabCsv(text, { dateOrder, requireDateOrder: !dateOrder });
     default:
       return parseImportCsv(text, { positiveIsIncome });
   }
@@ -60,8 +62,9 @@ function filterOverlappingRows(
 function buildDatabaseRows(
   rows: ImportedRow[],
   userId: string,
-  accountId: string,
+  target: { accountId?: string; manualAccountId?: string },
 ) {
+  const targetKey = target.accountId ?? `manual-${target.manualAccountId}`;
   const occurrences = new Map<string, number>();
   return rows.map((row) => {
     const key = `${row.date}|${row.amount}|${row.merchant}`;
@@ -69,8 +72,9 @@ function buildDatabaseRows(
     occurrences.set(key, occurrence + 1);
     return {
       user_id: userId,
-      account_id: accountId,
-      plaid_transaction_id: makeImportId(accountId, row, occurrence),
+      account_id: target.accountId ?? null,
+      manual_account_id: target.manualAccountId ?? null,
+      plaid_transaction_id: makeImportId(targetKey, row, occurrence),
       amount: row.amount,
       date: row.date,
       name: row.merchant,
@@ -128,10 +132,13 @@ export async function POST(request: NextRequest) {
 
     const file = form.get("file");
     const accountId = form.get("account_id");
+    const manualAccountId = form.get("manual_account_id");
     const positiveIsIncome = form.get("positive_is_income") === "true";
+    const dateOrderRaw = form.get("date_order");
+    const dateOrder = dateOrderRaw === "mdy" || dateOrderRaw === "dmy" || dateOrderRaw === "ymd" ? dateOrderRaw : undefined;
 
     if (!(file instanceof File)) return badRequest("file is required");
-    if (typeof accountId !== "string" || accountId.length === 0) {
+    if ((typeof accountId !== "string" || accountId.length === 0) && (typeof manualAccountId !== "string" || manualAccountId.length === 0)) {
       return badRequest("account_id is required");
     }
     if (file.size > MAX_FILE_BYTES) {
@@ -139,17 +146,27 @@ export async function POST(request: NextRequest) {
     }
 
     // Ownership check runs as the user — RLS hides other users' accounts.
-    const { data: account } = await supabase
-      .from("accounts")
-      .select("id")
-      .eq("id", accountId)
-      .maybeSingle();
-    if (!account) {
-      return NextResponse.json({ error: "Account not found" }, { status: 404 });
+    if (typeof accountId === "string" && accountId.length > 0) {
+      const { data: account } = await supabase
+        .from("accounts")
+        .select("id")
+        .eq("id", accountId)
+        .maybeSingle();
+      if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
+    } else {
+      const { data: account } = await supabase
+        .from("manual_accounts")
+        .select("id")
+        .eq("id", manualAccountId)
+        .maybeSingle();
+      if (!account) return NextResponse.json({ error: "Manual account not found" }, { status: 404 });
     }
 
     const text = await file.text();
-    const { rows, errors } = parseUploadedRows(text, positiveIsIncome);
+    const { rows, errors, requiresDateOrder } = parseUploadedRows(text, positiveIsIncome, dateOrder);
+    if (requiresDateOrder) {
+      return badRequest("YNAB dates are ambiguous. Choose a date format and upload again.");
+    }
     if (rows.length === 0) {
       return badRequest(errors[0] ?? "No importable rows found");
     }
@@ -160,11 +177,14 @@ export async function POST(request: NextRequest) {
     // Pre-Plaid boundary: earliest transaction on this account that did NOT
     // come from an import.
     const service = createServiceClient();
-    const { data: earliestSynced, error: boundaryError } = await service
+    let boundaryQuery = service
       .from("transactions")
       .select("date")
-      .eq("user_id", user.id)
-      .eq("account_id", accountId)
+      .eq("user_id", user.id);
+    boundaryQuery = typeof accountId === "string" && accountId.length > 0
+      ? boundaryQuery.eq("account_id", accountId)
+      : boundaryQuery.eq("manual_account_id", manualAccountId);
+    const { data: earliestSynced, error: boundaryError } = await boundaryQuery
       .not("plaid_transaction_id", "like", "import-%")
       .order("date", { ascending: true })
       .limit(1)
@@ -172,8 +192,15 @@ export async function POST(request: NextRequest) {
     if (boundaryError) throw boundaryError;
     const boundary = (earliestSynced?.date as string | undefined) ?? null;
 
+    const sourceAccounts = [...new Set(rows.map((row) => row.sourceAccount).filter((value): value is string => Boolean(value)))];
+    if (sourceAccounts.length > 1) {
+      return badRequest("This export contains multiple source accounts. Use Import with review to map each source account.");
+    }
+    const target = typeof accountId === "string" && accountId.length > 0
+      ? { accountId }
+      : { manualAccountId: manualAccountId as string };
     const { importable, skippedOverlap } = filterOverlappingRows(rows, boundary);
-    const dbRows = buildDatabaseRows(importable, user.id, accountId);
+    const dbRows = buildDatabaseRows(importable, user.id, target);
     await upsertDatabaseRows(service, dbRows);
 
     await writeAudit({

@@ -16,6 +16,7 @@ export interface ImportedRow {
   amount: number; // Plaid sign: positive = money out
   merchant: string;
   category: string | null;
+  sourceAccount?: string | null;
 }
 
 export interface ImportParseResult {
@@ -186,6 +187,47 @@ export function normalizeDate(raw: string): string | null {
     return toIsoDate(year, Number(m[1]), Number(m[2]));
   }
   return null;
+}
+
+export type DateOrder = "mdy" | "dmy" | "ymd";
+
+export function normalizeDateWithOrder(raw: string, order: DateOrder): string | null {
+  const s = raw.trim();
+  let match = /^(\d{4})[-/]([0-9]{1,2})[-/]([0-9]{1,2})$/.exec(s);
+  if (match) {
+    return toIsoDate(Number(match[1]), Number(match[2]), Number(match[3]));
+  }
+  match = /^([0-9]{1,2})\/([0-9]{1,2})\/(\d{2,4})$/.exec(s);
+  if (!match) return null;
+  let year = Number(match[3]);
+  if (year < 100) year += year >= 70 ? 1900 : 2000;
+  const first = Number(match[1]);
+  const second = Number(match[2]);
+  return order === "dmy"
+    ? toIsoDate(year, second, first)
+    : toIsoDate(year, first, second);
+}
+
+export function inferDateOrder(values: string[]): DateOrder | null {
+  let inferred: DateOrder | null = null;
+  for (const raw of values) {
+    const value = raw.trim();
+    if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(value)) {
+      if (inferred && inferred !== "ymd") return null;
+      inferred = "ymd";
+      continue;
+    }
+    const match = /^(\d{1,2})\/(\d{1,2})\/\d{2,4}$/.exec(value);
+    if (inferred === "ymd" && match) return null;
+    if (!match) continue;
+    const first = Number(match[1]);
+    const second = Number(match[2]);
+    const candidate = first > 12 && second <= 12 ? "dmy" : second > 12 && first <= 12 ? "mdy" : null;
+    if (!candidate) continue;
+    if (inferred && inferred !== candidate) return null;
+    inferred = candidate;
+  }
+  return inferred;
 }
 
 function toIsoDate(year: number, month: number, day: number): string | null {
@@ -363,6 +405,8 @@ export interface CsvFormatSpec {
   amount: (line: string[], cols: Record<string, number>) => number | null;
   /** Category for this line; defaults to the `category` column when present. */
   category?: (line: string[], cols: Record<string, number>) => string | null;
+  /** Optional source account name carried by migration exports. */
+  sourceAccount?: (line: string[], cols: Record<string, number>) => string | null;
 }
 
 /** True when every given header (trimmed, case-insensitive) is present. */
@@ -411,8 +455,11 @@ function parseSpecRow(
   lineNo: number,
   cols: Record<string, number>,
   spec: CsvFormatSpec,
+  dateOrder?: DateOrder,
 ): { row?: ImportedRow; error?: string } {
-  const date = normalizeDate(line[cols.date] ?? "");
+  const date = dateOrder
+    ? normalizeDateWithOrder(line[cols.date] ?? "", dateOrder)
+    : normalizeDate(line[cols.date] ?? "");
   if (!date) {
     return { error: `Line ${lineNo}: unrecognized date "${line[cols.date] ?? ""}".` };
   }
@@ -426,6 +473,7 @@ function parseSpecRow(
   if (!merchant) {
     return { error: `Line ${lineNo}: empty ${spec.merchantLabel}.` };
   }
+  const sourceAccount = spec.sourceAccount?.(line, cols) ?? null;
 
   return {
     row: {
@@ -433,11 +481,16 @@ function parseSpecRow(
       amount: Math.round(amount * 100) / 100,
       merchant,
       category: resolveSpecCategory(line, cols, spec),
+      ...(sourceAccount ? { sourceAccount } : {}),
     },
   };
 }
 
-export function parseCsvFormat(text: string, spec: CsvFormatSpec): ImportParseResult {
+export function parseCsvFormat(
+  text: string,
+  spec: CsvFormatSpec,
+  options: { dateOrder?: DateOrder; requireDateOrder?: boolean } = {},
+): ImportParseResult & { requiresDateOrder?: boolean } {
   const table = parseCsv(text);
   if (table.length < 2) {
     return { rows: [], errors: ["File has no data rows."] };
@@ -450,9 +503,13 @@ export function parseCsvFormat(text: string, spec: CsvFormatSpec): ImportParseRe
 
   const rows: ImportedRow[] = [];
   const errors: string[] = [];
+  const dateOrder = options.dateOrder ?? (options.requireDateOrder ? inferDateOrder(table.slice(1).map((line) => line[cols.date] ?? "")) ?? undefined : undefined);
+  const requiresDateOrder = options.requireDateOrder && !dateOrder;
 
   for (let i = 1; i < table.length; i++) {
-    const result = parseSpecRow(table[i]!, i + 1, cols, spec);
+    const result = requiresDateOrder
+      ? { error: `Line ${i + 1}: ambiguous date format; choose month/day/year or day/month/year.` }
+      : parseSpecRow(table[i]!, i + 1, cols, spec, dateOrder);
     if (result.error) {
       errors.push(result.error);
     } else if (result.row) {
@@ -460,7 +517,7 @@ export function parseCsvFormat(text: string, spec: CsvFormatSpec): ImportParseRe
     }
   }
 
-  return { rows, errors };
+  return { rows, errors, ...(requiresDateOrder ? { requiresDateOrder: true } : {}) };
 }
 
 /** Mint format spec and parser */
@@ -475,6 +532,7 @@ export const MINT_FORMAT_SPEC: CsvFormatSpec = {
   },
   optional: {
     category: "category",
+    account: "account name",
   },
   amount: (line, cols) => {
     const type = (line[cols.type] ?? "").trim().toLowerCase();
@@ -483,6 +541,7 @@ export const MINT_FORMAT_SPEC: CsvFormatSpec = {
     if (magnitude === null) return null;
     return type === "debit" ? Math.abs(magnitude) : -Math.abs(magnitude);
   },
+  sourceAccount: (line, cols) => (line[cols.account] ?? "").trim() || null,
 };
 
 export function looksLikeMintCsv(headerRow: string[]): boolean {
@@ -504,11 +563,13 @@ export const MONARCH_FORMAT_SPEC: CsvFormatSpec = {
   },
   optional: {
     category: "category",
+    account: "account",
   },
   amount: (line, cols) => {
     const raw = parseAmount(line[cols.amount] ?? "");
     return raw === null ? null : -raw;
   },
+  sourceAccount: (line, cols) => (line[cols.account] ?? "").trim() || null,
 };
 
 export function looksLikeMonarchCsv(headerRow: string[]): boolean {
@@ -532,6 +593,7 @@ export const YNAB_FORMAT_SPEC: CsvFormatSpec = {
   optional: {
     combined: "category group/category",
     category: "category",
+    account: "account",
   },
   amount: (line, cols) => twoColumnToSignedAmount(line[cols.outflow], line[cols.inflow]),
   category: (line, cols) => {
@@ -541,12 +603,16 @@ export const YNAB_FORMAT_SPEC: CsvFormatSpec = {
     const bareIdx = cols.category;
     return bareIdx !== undefined ? (line[bareIdx] ?? "").trim() || null : null;
   },
+  sourceAccount: (line, cols) => (line[cols.account] ?? "").trim() || null,
 };
 
 export function looksLikeYnabCsv(headerRow: string[]): boolean {
   return headerHasAll(headerRow, ["payee", "outflow", "inflow"]);
 }
 
-export function parseYnabCsv(text: string): ImportParseResult {
-  return parseCsvFormat(text, YNAB_FORMAT_SPEC);
+export function parseYnabCsv(
+  text: string,
+  options: { dateOrder?: DateOrder; requireDateOrder?: boolean } = {},
+): ImportParseResult & { requiresDateOrder?: boolean } {
+  return parseCsvFormat(text, YNAB_FORMAT_SPEC, { ...options, requireDateOrder: options.requireDateOrder ?? true });
 }

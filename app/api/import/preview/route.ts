@@ -5,6 +5,8 @@ import {
   normalizeColumnMap,
   parseImportCsv,
   detectSourceFormat,
+  type DateOrder,
+  type ImportedRow,
   type ColumnMap,
   type ImportSourceFormat,
 } from "@/lib/import";
@@ -42,8 +44,8 @@ function resolveColumnMap(
 function parseByFormat(
   text: string,
   format: ImportSourceFormat,
-  options: { positiveIsIncome: boolean; columns?: ColumnMap },
-): { rows: Array<{ date: string; merchant: string; amount: number; category: string | null }>; errors: string[] } {
+  options: { positiveIsIncome: boolean; columns?: ColumnMap; dateOrder?: DateOrder },
+): { rows: ImportedRow[]; errors: string[]; requiresDateOrder?: boolean } {
   switch (format) {
     case "ofx":
       return {
@@ -60,7 +62,7 @@ function parseByFormat(
     case "monarch":
       return parseMonarchCsv(text);
     case "ynab":
-      return parseYnabCsv(text);
+      return parseYnabCsv(text, { dateOrder: options.dateOrder, requireDateOrder: !options.dateOrder });
     case "csv":
     default:
       return parseImportCsv(text, options);
@@ -71,7 +73,8 @@ function parsePreviewInput(
   text: string,
   positiveIsIncome: boolean,
   columnMapRaw: FormDataEntryValue | null,
-): { rows: Array<{ date: string; merchant: string; amount: number; category: string | null }>; errors: string[]; format: ImportSourceFormat; columns?: ColumnMap; mappingError?: string } {
+  dateOrder?: DateOrder,
+): { rows: ImportedRow[]; errors: string[]; format: ImportSourceFormat; columns?: ColumnMap; mappingError?: string; requiresDateOrder?: boolean } {
   const format = detectSourceFormat(text);
   let columns: ColumnMap | undefined;
   if (format === "csv") {
@@ -81,7 +84,7 @@ function parsePreviewInput(
     }
     columns = mapping.columns;
   }
-  const parsed = parseByFormat(text, format, { positiveIsIncome, columns });
+  const parsed = parseByFormat(text, format, { positiveIsIncome, columns, dateOrder });
   return { ...parsed, format, columns };
 }
 
@@ -90,7 +93,14 @@ function emptyPreviewResponse(
   format: ImportSourceFormat,
   columns: ColumnMap | undefined,
   errors: string[],
+  requiresDateOrder = false,
 ): NextResponse {
+  if (requiresDateOrder) {
+    return NextResponse.json({
+      needs_date_format: true,
+      parse_errors: errors.slice(0, 20),
+    });
+  }
   if (format === "csv" && !columns) {
     const header = getCsvColumns(text);
     if (header && header.headers.length > 0) {
@@ -127,19 +137,21 @@ export async function POST(request: NextRequest) {
 
     const file = form.get("file");
     const positiveIsIncome = form.get("positive_is_income") !== "false";
+    const dateOrderRaw = form.get("date_order");
+    const dateOrder = dateOrderRaw === "mdy" || dateOrderRaw === "dmy" || dateOrderRaw === "ymd" ? dateOrderRaw : undefined;
     if (!(file instanceof File)) return badRequest("file is required");
     if (file.size > MAX_FILE_BYTES) {
       return badRequest("File too large (2 MB max)");
     }
 
     const text = await file.text();
-    const parsed = parsePreviewInput(text, positiveIsIncome, form.get("column_map"));
+    const parsed = parsePreviewInput(text, positiveIsIncome, form.get("column_map"), dateOrder);
     const { rows, errors, format, columns } = parsed;
     if (parsed.mappingError) return badRequest(parsed.mappingError);
     if (rows.length > MAX_ROWS) {
       return badRequest(`Too many rows (${MAX_ROWS} max per file)`);
     }
-    if (rows.length === 0) return emptyPreviewResponse(text, format, columns, errors);
+    if (rows.length === 0) return emptyPreviewResponse(text, format, columns, errors, parsed.requiresDateOrder);
 
     const { data: existing } = await supabase
       .from("transactions")
@@ -149,6 +161,22 @@ export async function POST(request: NextRequest) {
       (existing ?? []).map((row) => `${row.date}|${Number(row.amount).toFixed(2)}|${row.merchant_name ?? row.name ?? ""}`),
     );
     const review = buildImportReview(rows, existingFingerprints);
+
+    const sourceAccounts = [...new Set(rows.map((row) => row.sourceAccount).filter((value): value is string => Boolean(value)))];
+    let sourceAccountMappings: Record<string, { account_id?: string; manual_account_id?: string }> = {};
+    if (sourceAccounts.length > 0) {
+      const { data: mappings, error: mappingError } = await supabase
+        .from("import_source_account_mappings")
+        .select("source_account, account_id, manual_account_id")
+        .in("source_account", sourceAccounts);
+      if (mappingError) throw mappingError;
+      sourceAccountMappings = Object.fromEntries(
+        (mappings ?? []).map((mapping) => [mapping.source_account as string, {
+          ...(mapping.account_id ? { account_id: mapping.account_id as string } : {}),
+          ...(mapping.manual_account_id ? { manual_account_id: mapping.manual_account_id as string } : {}),
+        }]),
+      );
+    }
 
     const service = createServiceClient();
     const { data: batch, error: batchError } = await service
@@ -168,7 +196,7 @@ export async function POST(request: NextRequest) {
     const { data: insertedRows, error: rowsError } = await service
       .from("import_review_rows")
       .insert(
-        review.rows.map((row) => ({
+        review.rows.map((row, index) => ({
           user_id: user.id,
           batch_id: batchId,
           row_hash: row.rowHash,
@@ -176,25 +204,30 @@ export async function POST(request: NextRequest) {
           description: row.row.merchant,
           amount: row.row.amount,
           category: row.row.category,
+          source_account: row.row.sourceAccount ?? null,
+          row_index: index,
           status: row.flags.length > 0 ? "rejected" : "pending",
         })),
       )
-      .select("id, date, description, amount, status");
+      .select("id, date, description, amount, source_account, row_index, status");
     if (rowsError) throw rowsError;
 
-    // PostgREST returns inserted rows in input order, so flags align by index.
-    const rowsOut = (insertedRows ?? []).map((row, index) => ({
+    const rowsOut = [...(insertedRows ?? [])]
+      .sort((a, b) => Number(a.row_index ?? 0) - Number(b.row_index ?? 0))
+      .map((row, index) => ({
       id: row.id as string,
       date: row.date as string,
       description: row.description as string,
       amount: Number(row.amount),
+      ...(row.source_account ? { source_account: row.source_account as string } : {}),
       status: row.status as string,
       flags: review.rows[index]?.flags ?? [],
-    }));
+      }));
 
     return NextResponse.json({
       batch_id: batchId,
       rows: rowsOut,
+      ...(sourceAccounts.length > 0 ? { source_accounts: sourceAccounts, source_account_mappings: sourceAccountMappings } : {}),
       parse_errors: errors.slice(0, 20),
     });
   } catch (error) {

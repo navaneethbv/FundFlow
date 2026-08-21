@@ -222,9 +222,9 @@
     "semantic_hash": ""
   },
   "app/api/import/preview/route.ts": {
-    "mtime": 1787327406.6714976,
-    "seen": 1787351028.364141,
-    "ast_hash": "7e73f789fcd5e8ac384e619e5241a780",
+    "mtime": 1787351423.431021,
+    "seen": 1787352058.324459,
+    "ast_hash": "f3d78f572d8f7c1e886ebea44a253c70",
     "semantic_hash": ""
   },
   "app/api/investments/manual/route.ts": {
@@ -1020,9 +1020,9 @@
     "semantic_hash": ""
   },
   "components/forecasting/MilestonesPanel.tsx": {
-    "mtime": 1786735355.0726511,
-    "seen": 1787351028.364234,
-    "ast_hash": "3b22fd73c674cb342003032ec46c20e4",
+    "mtime": 1787351611.6932888,
+    "seen": 1787352058.327466,
+    "ast_hash": "9b508717198780e5a1ba133450f72e8b",
     "semantic_hash": ""
   },
   "components/goals/GoalAllocationPanel.tsx": {
@@ -1884,9 +1884,9 @@
     "semantic_hash": ""
   },
   "lib/export-formats.ts": {
-    "mtime": 1786736054.7124603,
-    "seen": 1787351028.364343,
-    "ast_hash": "80877ef17501d76c7abb883c3b38879b",
+    "mtime": 1787351618.3912246,
+    "seen": 1787352058.330567,
+    "ast_hash": "267c7a1aaa5544f06dd3048ca44a5d75",
     "semantic_hash": ""
   },
   "lib/export-route.ts": {
@@ -1932,9 +1932,9 @@
     "semantic_hash": ""
   },
   "lib/forecasting.ts": {
-    "mtime": 1787257877.0758536,
-    "seen": 1787351028.364348,
-    "ast_hash": "fe2ef5a6ad54a72028a19176ad7a0550",
+    "mtime": 1787351628.8382752,
+    "seen": 1787352058.330703,
+    "ast_hash": "421ff6b500d7b379cdec7bd50b4f4826",
     "semantic_hash": ""
   },
   "lib/format-date.ts": {
@@ -1992,15 +1992,15 @@
     "semantic_hash": ""
   },
   "lib/import-mint.ts": {
-    "mtime": 1787347790.9733896,
-    "seen": 1787351028.3643541,
-    "ast_hash": "3dc6446518d36156e1bc132d059a9658",
+    "mtime": 1787351065.245937,
+    "seen": 1787352058.3308768,
+    "ast_hash": "00f63662943fde9c69b34ea118150b13",
     "semantic_hash": ""
   },
   "lib/import-monarch.ts": {
-    "mtime": 1787338642.2656076,
-    "seen": 1787351028.364355,
-    "ast_hash": "f0e708cadcf7df647a24c53e46387698",
+    "mtime": 1787351071.1363697,
+    "seen": 1787352058.330878,
+    "ast_hash": "3e125f71dd0cb435c5f83bb44a8860cb",
     "semantic_hash": ""
   },
   "lib/import-ofx.ts": {
@@ -2010,15 +2010,15 @@
     "semantic_hash": ""
   },
   "lib/import-ynab.ts": {
-    "mtime": 1787338533.12374,
-    "seen": 1787351028.364356,
-    "ast_hash": "91182b5d73386c1a348744155bf5d49e",
+    "mtime": 1787351077.331555,
+    "seen": 1787352058.330899,
+    "ast_hash": "1c67bf581f7c0f2738cc7d8faa974ae7",
     "semantic_hash": ""
   },
   "lib/import.ts": {
-    "mtime": 1787338519.8730848,
-    "seen": 1787351028.3643572,
-    "ast_hash": "b005af4b3c168b2dca4685b1a6e5d92f",
+    "mtime": 1787351430.80836,
+    "seen": 1787352058.3309,
+    "ast_hash": "68fd30c52a673eac468a766f026f996a",
     "semantic_hash": ""
   },
   "lib/insights.ts": {
@@ -3144,9 +3144,9 @@
     "semantic_hash": ""
   },
   "tests/unit/coverage-boost-domain-libs.test.ts": {
-    "mtime": 1787336066.9035788,
-    "seen": 1787351028.364477,
-    "ast_hash": "039a12d0d71d2d60ebaf6acb5743aa47",
+    "mtime": 1787351435.4396138,
+    "seen": 1787352058.334762,
+    "ast_hash": "478dce06f5125cd8fe297e64e0f67a9e",
     "semantic_hash": ""
   },
   "tests/unit/coverage-boost-export-n1.test.ts": {
@@ -3264,9 +3264,9 @@
     "semantic_hash": ""
   },
   "tests/unit/coverage-boost-parsers.test.ts": {
-    "mtime": 1787335822.7500138,
-    "seen": 1787351028.36449,
-    "ast_hash": "8afbbf1df1e6702351433705cc7216bc",
+    "mtime": 1787351439.5504293,
+    "seen": 1787352058.335167,
+    "ast_hash": "8782a1e8be38ccba2ba4465afcab9575",
     "semantic_hash": ""
   },
   "tests/unit/coverage-boost-plaid-n1.test.ts": {
@@ -3294,9 +3294,9 @@
     "semantic_hash": ""
   },
   "tests/unit/coverage-boost-plaid-n5.test.ts": {
-    "mtime": 1787346537.1554573,
-    "seen": 1787351028.3644931,
-    "ast_hash": "6782426a58fc1b9348305bd3102273a1",
+    "mtime": 1787351443.6228976,
+    "seen": 1787352058.335254,
+    "ast_hash": "fcd7a05924c926f93c23ca56bc2b74b1",
     "semantic_hash": ""
   },
   "tests/unit/coverage-boost-r2-n1.test.ts": {
@@ -3354,9 +3354,9 @@
     "semantic_hash": ""
   },
   "tests/unit/coverage-boost-r3-n3.test.ts": {
-    "mtime": 1787341937.9147985,
-    "seen": 1787351028.3644989,
-    "ast_hash": "c07ee9dddcbffb8fbdf6669e9f766207",
+    "mtime": 1787351450.2797828,
+    "seen": 1787352058.335445,
+    "ast_hash": "eebf2cf44ea45724d368b4f2b90aaf66",
     "semantic_hash": ""
   },
   "tests/unit/coverage-boost-r3-n4.test.ts": {

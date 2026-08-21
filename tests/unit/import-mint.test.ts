@@ -47,7 +47,7 @@ describe("parseMintCsv", () => {
     ].join("\n");
     const { rows, errors } = parseMintCsv(csv);
     expect(errors).toEqual([]);
-    expect(rows[0]).toEqual({ date: "2026-07-01", amount: 5.5, merchant: "Starbucks", category: "Coffee" });
+    expect(rows[0]).toEqual({ date: "2026-07-01", amount: 5.5, merchant: "Starbucks", category: "Coffee", sourceAccount: "Checking" });
     expect(rows[1]!.amount).toBe(-1000);
     // A debit whose raw Amount is negative is still money-out (positive in Plaid).
     expect(rows[2]!.amount).toBe(12);
@@ -60,7 +60,7 @@ describe("parseMintCsv", () => {
     ].join("\n");
     const { rows, errors } = parseMintCsv(csv);
     expect(errors).toEqual([]);
-    expect(rows[0]).toEqual({ date: "2026-07-01", amount: 4.5, merchant: "Coffee Bar", category: "Dining" });
+    expect(rows[0]).toEqual({ date: "2026-07-01", amount: 4.5, merchant: "Coffee Bar", category: "Dining", sourceAccount: "Checking" });
   });
 
   it("reports malformed rows with a 1-based line number, never silently dropping them", () => {

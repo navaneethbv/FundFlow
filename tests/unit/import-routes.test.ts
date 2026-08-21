@@ -926,6 +926,12 @@ describe("Import API Routes", () => {
               }),
             };
           }
+          if (table === "import_source_account_mappings") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              in: vi.fn().mockResolvedValue({ data: [] }),
+            };
+          }
           return null as never;
         }),
       };
@@ -981,10 +987,17 @@ describe("Import API Routes", () => {
                     description: "Coffee Bar",
                     amount: 5.5,
                     category: "Dining",
+                    source_account: "Checking",
                     status: "pending",
                   },
                 ],
               }),
+            };
+          }
+          if (table === "import_source_account_mappings") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              in: vi.fn().mockResolvedValue({ data: [] }),
             };
           }
           return null as never;
@@ -1021,6 +1034,82 @@ describe("Import API Routes", () => {
           }),
         ]),
         expect.objectContaining({ onConflict: "plaid_transaction_id" }),
+      );
+    });
+
+    it("routes staged rows to their selected source-account targets", async () => {
+      const mockSupabase = {
+        from: vi.fn().mockImplementation((table) => {
+          if (table === "accounts") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              in: vi.fn().mockResolvedValue({ data: [{ id: "a2" }] }),
+              maybeSingle: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
+            };
+          }
+          if (table === "import_review_rows") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              in: vi.fn().mockResolvedValue({
+                data: [
+                  { id: "row-1", date: "2026-07-01", description: "Coffee", amount: 5, source_account: "Checking", row_index: 0, status: "pending" },
+                  { id: "row-2", date: "2026-07-02", description: "Rent", amount: 100, source_account: "Savings", row_index: 1, status: "pending" },
+                ],
+              }),
+            };
+          }
+          if (table === "import_source_account_mappings") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              in: vi.fn().mockResolvedValue({ data: [] }),
+            };
+          }
+          return null as never;
+        }),
+      };
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: mockSupabase });
+      const request = {
+        json: () => Promise.resolve({
+          batch_id: "b1",
+          account_id: "a1",
+          account_mappings: {
+            Checking: { account_id: "a1" },
+            Savings: { account_id: "a2" },
+          },
+          approved_row_ids: ["row-1", "row-2"],
+        }),
+      } as unknown as NextRequest;
+
+      const mappingUpsert = vi.fn().mockResolvedValue({ error: null });
+      const transactionUpsert = vi.fn().mockResolvedValue({ error: null });
+      const updateMock = vi.fn().mockResolvedValue({ error: null });
+      mockServiceClient.from.mockImplementation((table: string) => {
+        if (table === "import_source_account_mappings") return { upsert: mappingUpsert };
+        if (table === "transactions") return { upsert: transactionUpsert };
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({ in: updateMock, eq: updateMock }),
+          }),
+        };
+      });
+
+      const res = await commitPost(request);
+      expect(res.status).toBe(200);
+      expect(transactionUpsert).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ account_id: "a1", manual_account_id: null, name: "Coffee" }),
+          expect.objectContaining({ account_id: "a2", manual_account_id: null, name: "Rent" }),
+        ]),
+        expect.objectContaining({ onConflict: "plaid_transaction_id" }),
+      );
+      expect(mappingUpsert).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ source_account: "Checking", account_id: "a1" }),
+          expect.objectContaining({ source_account: "Savings", account_id: "a2" }),
+        ]),
+        expect.objectContaining({ onConflict: "user_id,source_account" }),
       );
     });
   });
@@ -1342,6 +1431,50 @@ describe("Import API Routes", () => {
         ]),
         expect.objectContaining({ onConflict: "plaid_transaction_id" }),
       );
+    });
+
+    it("requires review when a direct export contains multiple source accounts", async () => {
+      const accountLookup = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
+      };
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: { from: vi.fn().mockReturnValue(accountLookup) },
+      });
+      mockDetectSourceFormat.mockReturnValue("mint");
+      mockParseMintCsv.mockReturnValue({
+        rows: [
+          { date: "2026-07-01", merchant: "Coffee", amount: 5, sourceAccount: "Checking" },
+          { date: "2026-07-02", merchant: "Rent", amount: 100, sourceAccount: "Savings" },
+        ],
+        errors: [],
+      });
+      const formData = new FormData();
+      formData.set("file", new File(["mint"], "mint.csv", { type: "text/csv" }));
+      formData.set("account_id", "a1");
+      const request = { formData: () => Promise.resolve(formData) } as unknown as NextRequest;
+
+      const boundary = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        not: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      };
+      const upsert = vi.fn().mockResolvedValue({ error: null });
+      mockServiceClient.from.mockImplementation((table: string) =>
+        table === "transactions" ? { ...boundary, upsert } : null as never,
+      );
+
+      const res = await csvPost(request);
+      expect(res.status).toBe(400);
+      expect(mockBadRequest).toHaveBeenCalledWith(
+        "This export contains multiple source accounts. Use Import with review to map each source account.",
+      );
+      expect(upsert).not.toHaveBeenCalled();
     });
 
     it("imports every row when the boundary query finds no synced row", async () => {
