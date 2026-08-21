@@ -173,7 +173,7 @@ describe("coverage-boost-plaid-n5", () => {
       );
       const res = await webhookPost(req);
       expect(res.status).toBe(200);
-      expect(mockWebhookVerificationKeyGet.mock.calls.length).toBe(callsBefore);
+      expect(mockWebhookVerificationKeyGet.mock.calls).toHaveLength(callsBefore);
     });
 
     it("returns 400 when a TRANSACTIONS webhook has no item_id", async () => {

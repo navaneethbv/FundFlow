@@ -19,6 +19,54 @@ import { checkRateLimit } from "@/lib/rate-limit";
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_ROWS = 20_000;
 
+const INVALID_MAPPING_ERROR =
+  "Invalid column mapping. Map at least a date, description, and amount (or debit/credit).";
+
+function resolveColumnMap(
+  text: string,
+  columnMapRaw: FormDataEntryValue | null,
+): { columns?: ColumnMap; error?: string } {
+  if (typeof columnMapRaw !== "string" || columnMapRaw.length === 0) {
+    return {};
+  }
+  const header = getCsvColumns(text);
+  if (!header) return { error: INVALID_MAPPING_ERROR };
+  try {
+    const parsed = normalizeColumnMap(JSON.parse(columnMapRaw), header.headers.length);
+    return parsed ? { columns: parsed } : { error: INVALID_MAPPING_ERROR };
+  } catch {
+    return { error: INVALID_MAPPING_ERROR };
+  }
+}
+
+function parseByFormat(
+  text: string,
+  format: ImportSourceFormat,
+  options: { positiveIsIncome: boolean; columns?: ColumnMap },
+): { rows: Array<{ date: string; merchant: string; amount: number; category: string | null }>; errors: string[] } {
+  switch (format) {
+    case "ofx":
+      return {
+        rows: parseOfx(text).map((row) => ({
+          date: row.date,
+          merchant: row.description,
+          amount: row.amount,
+          category: null,
+        })),
+        errors: [],
+      };
+    case "mint":
+      return parseMintCsv(text);
+    case "monarch":
+      return parseMonarchCsv(text);
+    case "ynab":
+      return parseYnabCsv(text);
+    case "csv":
+    default:
+      return parseImportCsv(text, options);
+  }
+}
+
 function parsePreviewInput(
   text: string,
   positiveIsIncome: boolean,
@@ -26,45 +74,14 @@ function parsePreviewInput(
 ): { rows: Array<{ date: string; merchant: string; amount: number; category: string | null }>; errors: string[]; format: ImportSourceFormat; columns?: ColumnMap; mappingError?: string } {
   const format = detectSourceFormat(text);
   let columns: ColumnMap | undefined;
-  if (format === "csv" && typeof columnMapRaw === "string" && columnMapRaw.length > 0) {
-    const header = getCsvColumns(text);
-    let parsed: ColumnMap | null = null;
-    try {
-      parsed = header
-        ? normalizeColumnMap(JSON.parse(columnMapRaw), header.headers.length)
-        : null;
-    } catch {
-      parsed = null;
+  if (format === "csv") {
+    const mapping = resolveColumnMap(text, columnMapRaw);
+    if (mapping.error) {
+      return { rows: [], errors: [], format, mappingError: mapping.error };
     }
-    if (!parsed) {
-      return {
-        rows: [],
-        errors: [],
-        format,
-        mappingError:
-        "Invalid column mapping. Map at least a date, description, and amount (or debit/credit).",
-      };
-    }
-    columns = parsed;
+    columns = mapping.columns;
   }
-  const parsed =
-    format === "ofx"
-      ? {
-          rows: parseOfx(text).map((row) => ({
-            date: row.date,
-            merchant: row.description,
-            amount: row.amount,
-            category: null,
-          })),
-          errors: [] as string[],
-        }
-      : format === "mint"
-        ? parseMintCsv(text)
-        : format === "monarch"
-          ? parseMonarchCsv(text)
-          : format === "ynab"
-            ? parseYnabCsv(text)
-            : parseImportCsv(text, { positiveIsIncome, columns });
+  const parsed = parseByFormat(text, format, { positiveIsIncome, columns });
   return { ...parsed, format, columns };
 }
 

@@ -457,34 +457,18 @@ describe("POST /api/plaid/webhook (r3-n3)", () => {
       expect(mockSetItemStatus).toHaveBeenCalledWith("db-item", "error", "ITEM_LOGIN_REQUIRED");
     });
 
-    it("falls back to ITEM_ERROR when no error code is present", async () => {
+    it.each([
+      ["falls back to ITEM_ERROR when no error code is present", "ERROR", "error", "ITEM_ERROR"],
+      ["handles PENDING_EXPIRATION", "PENDING_EXPIRATION", "active", "PENDING_EXPIRATION"],
+      ["handles LOGIN_REPAIRED", "LOGIN_REPAIRED", "active", null],
+    ])("%s", async (_label, webhookCode, expectedStatus, expectedConsent) => {
       vi.stubEnv("PLAID_ENV", "sandbox");
       mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item" });
       const res = await webhookPost(
-        plainWebhook({ webhook_type: "ITEM", webhook_code: "ERROR", item_id: "i1" }),
+        plainWebhook({ webhook_type: "ITEM", webhook_code: webhookCode, item_id: "i1" }),
       );
       expect(res.status).toBe(200);
-      expect(mockSetItemStatus).toHaveBeenCalledWith("db-item", "error", "ITEM_ERROR");
-    });
-
-    it("handles PENDING_EXPIRATION", async () => {
-      vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item" });
-      const res = await webhookPost(
-        plainWebhook({ webhook_type: "ITEM", webhook_code: "PENDING_EXPIRATION", item_id: "i1" }),
-      );
-      expect(res.status).toBe(200);
-      expect(mockSetItemStatus).toHaveBeenCalledWith("db-item", "active", "PENDING_EXPIRATION");
-    });
-
-    it("handles LOGIN_REPAIRED", async () => {
-      vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item" });
-      const res = await webhookPost(
-        plainWebhook({ webhook_type: "ITEM", webhook_code: "LOGIN_REPAIRED", item_id: "i1" }),
-      );
-      expect(res.status).toBe(200);
-      expect(mockSetItemStatus).toHaveBeenCalledWith("db-item", "active", null);
+      expect(mockSetItemStatus).toHaveBeenCalledWith("db-item", expectedStatus, expectedConsent);
     });
 
     it("handles USER_PERMISSION_REVOKED", async () => {

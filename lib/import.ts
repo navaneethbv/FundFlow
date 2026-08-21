@@ -367,21 +367,19 @@ export interface CsvFormatSpec {
 
 /** True when every given header (trimmed, case-insensitive) is present. */
 export function headerHasAll(headerRow: string[], headers: string[]): boolean {
-  const lower = headerRow.map((h) => h.trim().toLowerCase());
-  return headers.every((h) => lower.includes(h));
+  const lower = new Set(headerRow.map((h) => h.trim().toLowerCase()));
+  return headers.every((h) => lower.has(h));
 }
 
-export function parseCsvFormat(text: string, spec: CsvFormatSpec): ImportParseResult {
-  const table = parseCsv(text);
-  if (table.length < 2) {
-    return { rows: [], errors: ["File has no data rows."] };
-  }
-  const header = table[0]!.map((h) => h.trim().toLowerCase());
+function resolveSpecColumns(
+  header: string[],
+  spec: CsvFormatSpec,
+): { cols?: Record<string, number>; error?: string } {
   const cols: Record<string, number> = {};
   for (const [logical, headerName] of Object.entries(spec.required)) {
     const idx = header.indexOf(headerName.trim().toLowerCase());
     if (idx === -1) {
-      return { rows: [], errors: [`Could not detect ${spec.label} columns.`] };
+      return { error: `Could not detect ${spec.label} columns.` };
     }
     cols[logical] = idx;
   }
@@ -391,44 +389,75 @@ export function parseCsvFormat(text: string, spec: CsvFormatSpec): ImportParseRe
       if (idx !== -1) cols[logical] = idx;
     }
   }
+  return { cols };
+}
+
+function resolveSpecCategory(
+  line: string[],
+  cols: Record<string, number>,
+  spec: CsvFormatSpec,
+): string | null {
+  if (spec.category) {
+    return spec.category(line, cols);
+  }
+  if (cols.category !== undefined) {
+    return (line[cols.category] ?? "").trim() || null;
+  }
+  return null;
+}
+
+function parseSpecRow(
+  line: string[],
+  lineNo: number,
+  cols: Record<string, number>,
+  spec: CsvFormatSpec,
+): { row?: ImportedRow; error?: string } {
+  const date = normalizeDate(line[cols.date] ?? "");
+  if (!date) {
+    return { error: `Line ${lineNo}: unrecognized date "${line[cols.date] ?? ""}".` };
+  }
+
+  const amount = spec.amount(line, cols);
+  if (amount === null) {
+    return { error: `Line ${lineNo}: unrecognized amount.` };
+  }
+
+  const merchant = (line[cols.merchant] ?? "").trim();
+  if (!merchant) {
+    return { error: `Line ${lineNo}: empty ${spec.merchantLabel}.` };
+  }
+
+  return {
+    row: {
+      date,
+      amount: Math.round(amount * 100) / 100,
+      merchant,
+      category: resolveSpecCategory(line, cols, spec),
+    },
+  };
+}
+
+export function parseCsvFormat(text: string, spec: CsvFormatSpec): ImportParseResult {
+  const table = parseCsv(text);
+  if (table.length < 2) {
+    return { rows: [], errors: ["File has no data rows."] };
+  }
+  const header = table[0]!.map((h) => h.trim().toLowerCase());
+  const { cols, error } = resolveSpecColumns(header, spec);
+  if (error || !cols) {
+    return { rows: [], errors: [error ?? `Could not detect ${spec.label} columns.`] };
+  }
 
   const rows: ImportedRow[] = [];
   const errors: string[] = [];
 
   for (let i = 1; i < table.length; i++) {
-    const line = table[i]!;
-    const lineNo = i + 1;
-
-    const date = normalizeDate(line[cols.date] ?? "");
-    if (!date) {
-      errors.push(`Line ${lineNo}: unrecognized date "${line[cols.date] ?? ""}".`);
-      continue;
+    const result = parseSpecRow(table[i]!, i + 1, cols, spec);
+    if (result.error) {
+      errors.push(result.error);
+    } else if (result.row) {
+      rows.push(result.row);
     }
-
-    const amount = spec.amount(line, cols);
-    if (amount === null) {
-      errors.push(`Line ${lineNo}: unrecognized amount.`);
-      continue;
-    }
-
-    const merchant = (line[cols.merchant] ?? "").trim();
-    if (!merchant) {
-      errors.push(`Line ${lineNo}: empty ${spec.merchantLabel}.`);
-      continue;
-    }
-
-    const category = spec.category
-      ? spec.category(line, cols)
-      : cols.category !== undefined
-        ? (line[cols.category] ?? "").trim() || null
-        : null;
-
-    rows.push({
-      date,
-      amount: Math.round(amount * 100) / 100,
-      merchant,
-      category,
-    });
   }
 
   return { rows, errors };

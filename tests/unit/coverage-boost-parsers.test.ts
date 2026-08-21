@@ -347,7 +347,7 @@ describe("Generic CSV Parser and Utility Edge Cases", () => {
     ].join("\n");
     const genericRes = parseImportCsv(genericDebitCredit, { positiveIsIncome: false });
     expect(genericRes.rows).toHaveLength(2);
-    expect(genericRes.errors.length).toBe(1);
+    expect(genericRes.errors).toHaveLength(1);
   });
 });
 

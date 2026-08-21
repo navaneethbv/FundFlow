@@ -380,7 +380,7 @@ describe("validate_palette Script Branches", () => {
   it("handles CLI with missing/invalid css and valid css", async () => {
     const cssWithMissingTheme = ":root { --viz-1: #112233; }";
     const palettes = paletteValidator.palettesFromCss(cssWithMissingTheme);
-    expect(Object.keys(palettes).length).toBe(0);
+    expect(Object.keys(palettes)).toHaveLength(0);
 
     const code = await paletteValidator.runCli("app/globals.css");
     expect(code).toBe(0);
