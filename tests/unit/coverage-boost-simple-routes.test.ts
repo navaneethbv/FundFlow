@@ -10,9 +10,9 @@ vi.mock("@/lib/http", () => ({
     NextResponse.json({ error: String(error) }, { status: 500 }),
 }));
 
-const mockWriteAudit = vi.fn(async () => undefined);
+const mockWriteAudit = vi.fn<(...args: unknown[]) => Promise<undefined>>(async () => undefined);
 vi.mock("@/lib/audit", () => ({
-  writeAudit: (...args: unknown[]) => mockWriteAudit(...args),
+  writeAudit: (...args: unknown[]) => mockWriteAudit(...(args as [unknown])),
   getClientIp: () => "127.0.0.1",
 }));
 
@@ -21,9 +21,9 @@ vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => mockServiceClient,
 }));
 
-const mockTrySnapshot = vi.fn(async () => undefined);
+const mockTrySnapshot = vi.fn<(...args: unknown[]) => Promise<undefined>>(async () => undefined);
 vi.mock("@/lib/account-history", () => ({
-  tryWriteDailyAccountSnapshots: (...args: unknown[]) => mockTrySnapshot(...args),
+  tryWriteDailyAccountSnapshots: (...args: unknown[]) => mockTrySnapshot(...(args as [unknown])),
 }));
 
 import { POST as calTokenPost, DELETE as calTokenDelete } from "@/app/api/calendar/token/route";

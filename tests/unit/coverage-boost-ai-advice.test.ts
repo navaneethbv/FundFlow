@@ -1,20 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
-import { clientStub, queryStub } from "../fixtures/supabase-query";
+import { clientStub } from "../fixtures/supabase-query";
 
 const mocks = vi.hoisted(() => ({
   mockMessagesCreate: vi.fn(),
   mockIsAiProviderConfigured: vi.fn(),
   mockGenerateInsightsWithProvider: vi.fn(),
   mockFetchPrivacySafeRows: vi.fn(),
-  mockCheckRateLimit: vi.fn(async () => true),
+  mockCheckRateLimit: vi.fn<(...args: unknown[]) => Promise<boolean>>(async () => true),
   mockLogError: vi.fn(),
 }));
 
 vi.mock("@anthropic-ai/sdk", () => ({
   default: class {
     messages = { create: (...args: unknown[]) => mocks.mockMessagesCreate(...args) };
-    constructor(_opts: unknown) {}
+    constructor() {}
   },
 }));
 
@@ -32,7 +32,7 @@ vi.mock("@/lib/export", () => ({
 }));
 
 vi.mock("@/lib/rate-limit", () => ({
-  checkRateLimit: (...args: unknown[]) => mocks.mockCheckRateLimit(...args),
+  checkRateLimit: (...args: unknown[]) => mocks.mockCheckRateLimit(...(args as [string, number, number])),
 }));
 
 vi.mock("@/lib/log", () => ({
@@ -51,9 +51,9 @@ vi.mock("@/lib/http", () => ({
     NextResponse.json({ error: String(error) }, { status: 500 }),
 }));
 
-const mockWriteAudit = vi.fn(async () => undefined);
+const mockWriteAudit = vi.fn<(...args: unknown[]) => Promise<undefined>>(async () => undefined);
 vi.mock("@/lib/audit", () => ({
-  writeAudit: (...args: unknown[]) => mockWriteAudit(...args),
+  writeAudit: (...args: unknown[]) => mockWriteAudit(...(args as [unknown])),
   getClientIp: () => "127.0.0.1",
 }));
 
@@ -103,8 +103,6 @@ beforeEach(() => {
 });
 
 describe("advice route", () => {
-  const UPSERT_CHAIN = { upsert: vi.fn(), delete: vi.fn(), update: vi.fn() };
-
   it("returns the auth response when unauthenticated", async () => {
     mockRequireUser.mockResolvedValue(new NextResponse("x", { status: 401 }));
     const res = await advicePatch({} as NextRequest);

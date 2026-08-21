@@ -8,6 +8,21 @@ import * as rateLimit from "@/lib/rate-limit";
 import * as plaidLib from "@/lib/plaid";
 import * as plaidService from "@/lib/plaid-service";
 
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => ({
+    from: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      insert: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: null, error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    }),
+    rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
+  }),
+}));
+
 describe("Plaid Exchange Route Branch Boost", () => {
   beforeEach(() => {
     vi.clearAllMocks();
