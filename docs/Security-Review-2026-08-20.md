@@ -6,7 +6,7 @@ Scope: Fresh review of everything shipped since the last full security review
 remaining 14-phase financial-planner parity program plus the last two weeks of
 commits (multi-currency conversion engine, forecasting milestones, multi-format
 exports, advanced merchant rules, performance indexes). Read alongside
-`docs/Security-Review.md` and `docs/CODE_REVIEW.md`, which remain accurate for
+`docs/archive/Security-Review-2026-08-10.md` and `docs/archive/CODE_REVIEW-2026-08-10.md`, which remain accurate for
 the earlier window and whose findings are not re-reported here.
 Method: Manual review of the two most recent feature commits
 (`29260a4` forecasting-milestones/exports/merchant-rules/perf-indexes and

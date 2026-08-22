@@ -343,7 +343,7 @@ last, on top of `feat/dashboard-widgets` (Phase 8):
 `feat/investments` (914525b) → `feat/investment-performance` (5c4f230) →
 `feat/forecasting` (77eb98d) → `feat/advice` (c0ee5f6) →
 `feat/transactions-parity` (1c6f469) → `feat/settings-ia` (bdd4380). **No
-phases remain** — `docs/superpowers/plans/2026-07-29-monarch-parity.md` has
+phases remain** — `docs/superpowers/archive/plans/2026-07-29-monarch-parity.md` has
 every checkbox ticked and an implementation-notes subsection per phase.
 
 Gates on the full stack: `npm run build` PASS, `npm run lint` PASS,
@@ -658,7 +658,7 @@ The final local gate, all real command output, all green:
 - `npm run test:e2e -- tests/e2e/recurring.spec.ts`: pass, 1/1, credentialed against the live FundFlow Supabase project, stable across three consecutive runs.
 - `git diff --check`: pass.
 
-Next: Phase 6, 9A, or 11 (independent of each other) per the master plan's dependency graph (`docs/superpowers/plans/2026-07-29-monarch-parity.md`'s Part 1).
+Next: Phase 6, 9A, or 11 (independent of each other) per the master plan's dependency graph (`docs/superpowers/archive/plans/2026-07-29-monarch-parity.md`'s Part 1).
 Phase 6 (Reports/Sankey) depends on Phase 3 (Cash Flow), already done.
 Phase 9A (Investment holdings/allocation) and Phase 11 (Advice) depend only on Phase 1, also done.
 All three are unblocked; none has a dependency on Phase 5.
@@ -693,7 +693,7 @@ The final local gate, all real command output, all green:
 - `npm run test:e2e -- tests/e2e/planner-ia.spec.ts`: pass, 6/6, credentialed against the live FundFlow Supabase project.
 - `git diff --check`: pass.
 
-Next: Phase 5, 6, or 9A (independent of each other) per the master plan's dependency graph (`docs/superpowers/plans/2026-07-29-monarch-parity.md`): all three depend only on Phase 1, which is now done, and Phase 6's other prerequisite (Phase 3, Cash Flow) already shipped on `main`.
+Next: Phase 5, 6, or 9A (independent of each other) per the master plan's dependency graph (`docs/superpowers/archive/plans/2026-07-29-monarch-parity.md`): all three depend only on Phase 1, which is now done, and Phase 6's other prerequisite (Phase 3, Cash Flow) already shipped on `main`.
 
 ## Phase 4 Budget is implemented
 
@@ -770,7 +770,7 @@ The final local gate is:
   The installed patched backports are `brace-expansion` 1.1.17 and 5.0.8.
   Do not force an incidental ESLint 10 major upgrade inside Phase 4.
 
-Next, expand only Phase 5 from `docs/superpowers/plans/2026-07-29-monarch-parity.md` into its own test-first plan.
+Next, expand only Phase 5 from `docs/superpowers/archive/plans/2026-07-29-monarch-parity.md` into its own test-first plan.
 Phase 5 is the Recurring page and its reviewed occurrence ledger.
 
 ## Phase 3 Cash Flow is implemented
@@ -824,7 +824,7 @@ The current full code gate is:
   Do not use the suggested forced ESLint 10 major upgrade as an incidental Phase 3 change.
 
 Phase 1 remains deferred until more production pages exist.
-Next, expand and build Phase 4 (Budget) test-first from `docs/superpowers/plans/2026-07-29-monarch-parity.md`.
+Next, expand and build Phase 4 (Budget) test-first from `docs/superpowers/archive/plans/2026-07-29-monarch-parity.md`.
 Continue carrying the Phase 0 canonical projection, real splits, bounded query, parsed scope, and feature-flag invariants into that page.
 
 ## Phase 2 Accounts is implemented
@@ -896,7 +896,7 @@ Phase 2 is the right next move because its daily `account_balance_snapshots` tab
 
 Sequence for the next session:
 
-1. Read Phase 2 in `docs/superpowers/plans/2026-07-29-monarch-parity.md`, plus the "Phase 0 implementation notes" in the same file (four interface decisions that differ from the plan's original sketch).
+1. Read Phase 2 in `docs/superpowers/archive/plans/2026-07-29-monarch-parity.md`, plus the "Phase 0 implementation notes" in the same file (four interface decisions that differ from the plan's original sketch).
 2. Expand Phase 2 into its own dated plan file with `superpowers:writing-plans`, breaking each checkbox into red-green-refactor-commit steps.
 3. Branch `feat/accounts-page`, then build it test-first.
 
@@ -914,7 +914,7 @@ Carry these forward into every later phase — they are already true on main:
 ## Session of 2026-07-29 (branch `feat/finance-domain-foundation`, merged as PR #69)
 
 Started the financial-planner parity program.
-The reviewed master plan is `docs/superpowers/plans/2026-07-29-monarch-parity.md`: 14 phases, each its own branch and PR, each expanded into TDD steps before implementation.
+The reviewed master plan is `docs/superpowers/archive/plans/2026-07-29-monarch-parity.md`: 14 phases, each its own branch and PR, each expanded into TDD steps before implementation.
 
 **Phase 0 (canonical finance semantics) is complete and committed.**
 It exists because the draft plan had four separate phases re-deriving transaction meaning, which would have produced pages that disagree about the same month's totals.
@@ -942,7 +942,7 @@ Next: Phase 1 (navigation and information architecture), which adds nav entries 
 
 Merged the four-session roadmap drop (previously staged in a `new_changes/`
 folder) into the repo at its real paths.
-The full per-feature record lives in `docs/CHANGES-roadmap-2026-07-23.md` —
+The full per-feature record lives in `docs/archive/CHANGES-roadmap-2026-07-23.md` —
 read that for what shipped; this note only covers what a resuming session
 needs to act on.
 
@@ -958,7 +958,7 @@ Gates run after the merge, all green: `npm run lint` PASS, `npm run typecheck`
 PASS, `npm run test:unit` PASS (87 files / 517 tests), `npm run build` PASS.
 
 **Before deploying, work the checklist at the top of
-`docs/CHANGES-roadmap-2026-07-23.md`.** The short version:
+`docs/archive/CHANGES-roadmap-2026-07-23.md`.** The short version:
 
 1. Apply all three new migrations in filename order —
    `20260723100000_phase_features.sql`,

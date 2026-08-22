@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js 16 App Router (server components), TypeScript, Tailwind 4, Supabase (user-scoped RLS client only), Vitest.
 
-**Spec:** `docs/superpowers/specs/2026-07-11-dashboard-drilldown-design.md`
+**Spec:** `docs/superpowers/archive/specs/2026-07-11-dashboard-drilldown-design.md`
 
 ## Global Constraints
 

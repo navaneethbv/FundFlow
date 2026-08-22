@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the feature roadmap from `todos.md` in one PR with milestone commits and a working app at every checkpoint.
+**Goal:** Build the feature roadmap from `docs/archive/todos-2026-07.md` in one PR with milestone commits and a working app at every checkpoint.
 
 **Architecture:** Keep personal finance calculations in small `lib/` modules with deterministic unit tests. Use Supabase-backed tables for user-owned persistent data, explicit grants plus RLS for browser-accessed tables, server-rendered pages for dashboard/review/observability surfaces, and focused client components only for forms and local interactions.
 
@@ -44,7 +44,7 @@
 - `components/dashboard/*`: new cards for budgets, forecast, recurring calendar, anomalies, notifications, net worth, and monthly review CTA.
 - `components/settings/*`: alert, AI, merchant rule, manual account, and household controls where appropriate.
 - `docs/browser-smoke.md`: browser E2E checklist for Plaid Sandbox and local UI smokes.
-- `todos.md`: update checklist as items are completed.
+- `docs/archive/todos-2026-07.md`: update checklist as items are completed.
 - `tests/unit/*.test.ts`: deterministic math and UI source tests.
 - `tests/integration/*.test.ts`: Supabase RLS and CRUD tests for new browser-written tables.
 
@@ -211,7 +211,7 @@
 - Create: `app/observability/page.tsx`
 - Create: `components/observability/ObservabilityDashboard.tsx`
 - Create: `docs/browser-smoke.md`
-- Modify: `todos.md`
+- Modify: `docs/archive/todos-2026-07.md`
 - Create: `tests/unit/observability.test.ts`
 - Create: `tests/unit/browser-smoke-doc.test.ts`
 
@@ -222,7 +222,7 @@
 - [ ] Implement observability helpers.
 - [ ] Add admin-only page with `requireAdmin` pattern.
 - [ ] Add browser smoke checklist for Plaid Sandbox, mobile QA, theme, settings, transactions, and goals.
-- [ ] Update `todos.md` checklist items completed by the PR.
+- [ ] Update `docs/archive/todos-2026-07.md` checklist items completed by the PR.
 - [ ] Run focused tests and commit: `feat: add observability and smoke docs`.
 
 ## Task 9: Final Verification And PR
@@ -241,6 +241,6 @@
 
 ## Self Review
 
-- Spec coverage: all `todos.md` sections have an implementation task or smoke documentation task.
+- Spec coverage: all `docs/archive/todos-2026-07.md` sections have an implementation task or smoke documentation task.
 - Placeholder scan: no placeholder markers; any browser-only Plaid action is represented as `docs/browser-smoke.md` because real credentials are outside the codebase.
 - Type consistency: helper names in later tasks match the produced interfaces above.

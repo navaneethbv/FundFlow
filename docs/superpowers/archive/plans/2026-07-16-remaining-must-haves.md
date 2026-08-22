@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js 16 App Router (TypeScript), Supabase (`@supabase/ssr`, service client), nodemailer, Tailwind 4, Vitest.
 
-Spec: `docs/superpowers/specs/2026-07-16-remaining-must-haves-design.md`.
+Spec: `docs/superpowers/archive/specs/2026-07-16-remaining-must-haves-design.md`.
 
 ## Global Constraints
 

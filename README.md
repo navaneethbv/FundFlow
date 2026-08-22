@@ -9,10 +9,11 @@ library, CSP-safe). A filterable **transactions ledger** (`/transactions`)
 covers search, month, and account views. Built for **1-2 users** (personal
 use), deployed on **Vercel + Supabase**.
 
-Instead of sending your data to an LLM, FundFlow lets you **export privacy-safe
-CSV or JSON** (merchant, amount, date, category only) that you can feed to any
-AI tool you choose — plus an on-demand **PDF summary report**, all from
-Settings.
+The default path for AI is **export, not upload**.
+FundFlow gives you a **privacy-safe CSV or JSON** (merchant, amount, date, category only) to feed to any AI tool you choose, plus an on-demand **PDF summary report**, all from Settings.
+Nothing leaves the app on that path.
+
+There is also an **opt-in in-app AI surface**, dark by default and described under [AI](#ai) below.
 
 FundFlow can also deliver a visual weekly report for the previous Monday through Sunday to the user's signup email. The Monday report includes categorized spending, week-over-week change, top merchants, budget pace, cash flow, and bank and credit card breakdowns, with an expanded PDF attached. It excludes balances, account numbers or masks, and transaction-level detail.
 
@@ -65,11 +66,38 @@ flowchart TB
 - **Live updates, rate-limit-aware** — open pages re-render every 2 minutes (DB reads only — new webhook-delivered transactions appear as they happen) and auto-pull from Plaid at most **once per 30 minutes**, enforced server-side per user so extra tabs/devices can't multiply API calls; a consumed window degrades to the render-only layer and the manual Refresh button. An "Updated Xm ago" chip shows freshness.
 - **Plaid-frugal by design** — sync is cursor-based (each pull fetches only the delta since the stored cursor; history renders from Postgres with zero Plaid calls), auto-pulls skip the slow-moving recurring-streams call (manual Refresh + daily cron cover it), and webhook verification keys are cached by `kid`.
 - **History** — new links request Plaid's maximum **730 days** of transactions (`days_requested`); institutions may provide less. From connection onward, FundFlow retains everything in your own database indefinitely, so history only grows.
-- **CSV import for pre-Plaid history** (Settings → Import) — backfill older years from bank-statement CSVs. Auto-detects date/description/amount (or debit/credit) columns, normalizes to the Plaid sign convention, skips rows overlapping the account's Plaid-synced range, and uses deterministic ids so re-importing never duplicates.
+- **CSV and migration import** (Settings → Import): backfill older years from bank-statement CSVs, or bring a full history over from **Mint, Monarch, or YNAB** with source-account mapping. Auto-detects date/description/amount (or debit/credit) columns, normalizes to the Plaid sign convention, skips rows overlapping the account's Plaid-synced range, and uses deterministic ids so re-importing never duplicates.
 - **Notification control** — `/notifications` controls optional weekly reports, daily digests, planning alerts, and delivery timezone. Bank or sync failures and Auth security messages remain enabled.
 - **Least privilege** — the browser uses the publishable key (RLS-bound); the secret key is used only in trusted server routes.
 - **Offline cache holds no personal data**: the service worker (`public/sw.js`) caches only content-addressed static assets (styles, scripts, fonts, images), and only on a successful response. HTML documents are never cached, because they render per-user financial data and Cache Storage outlives sign-out; navigations are network-only. Nothing is precached, so a cached document can never survive a deploy and reference asset chunks that no longer exist.
 - **Dependency scanning** — Dependabot + `npm audit` in CI.
+
+## AI
+
+In-app AI is **off unless you turn it on twice**: the deployment must set
+`ANTHROPIC_API_KEY`, and each account must enable it in Settings. Miss either
+and `/api/ai/ask` and `/api/ai/receipt` return 503 while `/api/ai/insights`
+serves built-in, rule-based summaries computed locally. The feature degrades;
+it never breaks.
+
+What crosses the wire is bounded by the same contract as the CSV export:
+
+- **Aggregates only.** Month/category totals and top merchants, capped at 6
+  months and 25 merchants (`lib/ai-provider.ts`). Never balances, account
+  names, masks, emails, or transaction-level rows.
+- **Per-user daily caps** so a retry loop cannot run up a bill: 4 insight
+  generations, 10 questions, 10 receipt scans.
+- **Provider failures fall back** to the local summaries rather than erroring.
+
+Three routes use it. `/api/ai/insights` writes short "what changed" and
+"subscriptions to review" notes. `/api/ai/ask` answers one grounded question
+about your own spending, with no chat history or memory. `/api/ai/receipt` is
+the one path that uploads content you supply: a receipt photo goes to the
+vision model for merchant/amount/date extraction, is matched against a ledger
+transaction, and is **never stored**.
+
+If you would rather run with no model access at all, leave `ANTHROPIC_API_KEY`
+unset. Everything else in the app works unchanged.
 
 ## Setup
 
@@ -158,12 +186,18 @@ The report delivery row is claimed before rendering and has a unique user and pe
 ```
 app/
   api/plaid/{link-token,exchange,sync,disconnect,reconnect,webhook}/  Plaid routes
-  api/export/{csv,json,report}/                     in-app data exports
-  api/{account,cron/*,admin/stats}/                 delete, cron, admin
-  {login,signup,dashboard,transactions,settings}/   pages
+  api/import/{csv,preview,commit}/                  CSV + Mint/Monarch/YNAB import
+  api/export/{csv,json,qif,report}/                 in-app data exports
+  api/ai/{insights,ask,receipt}/                    opt-in AI (see "AI" above)
+  api/{account,cron/*,admin/*,health,tokens}/       delete, cron, admin, ops
+  api/{accounts,budget,goals,recurring,reports,transactions,...}/    page data
+  dashboard/ transactions/ accounts/ cash-flow/ budget/ recurring/
+  reports/ goals/ investments/ forecasting/ advice/ debt/ review/
+  wrapped/ calendar-ish views, plus login/ signup/ settings/ notifications/ admin/
   auth/callback/                                    email-confirm/OAuth exchange
-components/                                         UI (Plaid Link, settings, auth)
-components/charts/                                  server-rendered SVG charts
+components/
+  charts/                                           server-rendered SVG charts
+  ui/ shell/ dashboard/ settings/ transactions/ ... feature UI
 lib/
   crypto.ts        AES-256-GCM token encryption
   plaid.ts         Plaid client
@@ -171,12 +205,24 @@ lib/
   sync.ts          idempotent /transactions/sync
   recurring.ts     recurring streams
   dashboard.ts     aggregations (RLS-scoped)
+  finance-domain.ts canonical category/sign semantics
+  import*.ts       CSV, OFX, Mint, Monarch, YNAB parsers
+  ai-provider.ts   server-only Anthropic client + payload capping
+  ai-insights.ts   local rule-based summaries (the no-key fallback)
+  export.ts        the privacy-safe row contract both exports and AI use
   supabase/        browser / server / service clients
   audit.ts log.ts rate-limit.ts http.ts env*.ts
 supabase/migrations/                                schema + RLS + rate limiter
+scripts/          validate_palette.js, check-rls.sql, restore-backup.mjs
+tests/            unit/ integration/ e2e/ fixtures/ stubs/
 public/sw.js                                        static-asset cache + web push
 proxy.ts                                            session refresh + CSP + route guard
 ```
+
+A generated knowledge graph of the codebase lives in `graphify-out/` (gitignored).
+Regenerate it with `graphify update .`, then query it with
+`graphify query "<question>"` instead of grepping. See `AGENTS.md` for the
+agent-facing rules.
 
 ## Troubleshooting
 
@@ -197,7 +243,13 @@ Routing it through the page-auth guard redirects it to `/login`, and the browser
 - **`npm audit`** flags moderate PostCSS entries pinned transitively *inside Next.js itself*; the advisory affects untrusted CSS stringification (not our path). It resolves when Next bumps its internal PostCSS; we don't downgrade Next.
 - **Weekly PDF email report** is implemented at `/api/cron/weekly-report`. It needs the `SMTP_*` vars set in production; without them the delivery is recorded as failed and never sent through a test inbox.
 - **Plaid webhooks** are implemented (`/api/plaid/webhook`) with ES256 signature verification in non-sandbox environments (key fetched via `/webhook_verification_key/get`, body-hash + freshness checks). Set the webhook URL in the Plaid dashboard to enable real-time sync alongside the daily cron.
-- **Optional in-app AI insights** endpoint reusing the export data contract — planned.
 
-See [`docs/TODO.md`](docs/TODO.md) for the deferred feature list and
-[`docs/HANDOFF.md`](docs/HANDOFF.md) for the latest session handoff notes.
+## Docs
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - request path, every `lib/` module, subsystem invariants in full.
+- [`docs/TODO.md`](docs/TODO.md) - deferred work and the current program status.
+- [`docs/HANDOFF.md`](docs/HANDOFF.md) - session-resume notes.
+- [`docs/QA.md`](docs/QA.md) - runbook for flows needing live credentials or screenshots.
+- [`docs/PALETTE.md`](docs/PALETTE.md) - the measurements behind the chart palette rules.
+- [`docs/archive/`](docs/archive/) - closed reviews and superseded changelogs, kept for provenance. Not current truth.
+- [`CLAUDE.md`](CLAUDE.md) and [`AGENTS.md`](AGENTS.md) - how to work in this repo, for humans and agents alike.

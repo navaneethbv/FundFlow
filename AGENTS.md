@@ -20,3 +20,4 @@ Rules:
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- **Never commit `graphify-out/` or `lib/graphify-out/`.** Both are gitignored generated output, together roughly 14 MB; they once landed in a PR and had to be stripped. Regenerate instead of committing.

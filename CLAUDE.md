@@ -27,8 +27,11 @@ real Supabase project, so never point them at a database with real user data.
 
 A personal-finance app for 1-2 users: Next.js 16 App Router (TypeScript,
 Tailwind 4) on Vercel, Supabase for auth + Postgres, Plaid for bank data.
-There is deliberately **no in-app AI**: the user exports a privacy-safe CSV and
-feeds it to a tool of their choice.
+
+The default path for AI is still **export, not upload**.
+The user downloads a privacy-safe CSV and feeds it to a tool of their choice, and that path needs no key, no consent flag, and no network call to a model.
+On top of it sits an **opt-in in-app AI surface** (`app/api/ai/*`), dark unless the deployment sets `ANTHROPIC_API_KEY` *and* the user turns it on.
+Treat "no in-app AI" as retired wording: the constraint that survived it is the privacy contract in "In-app AI" below.
 
 ## Rules that must not be broken
 
@@ -69,6 +72,28 @@ feeds it to a tool of their choice.
   must stay plain string literals, because Next statically analyzes them at
   build time and silently ignores anything else - `String.raw` (Sonar S7780)
   would disable the matcher entirely.
+
+### In-app AI
+
+The surface is `app/api/ai/{insights,ask,receipt}`, and `lib/ai-provider.ts` is
+the only place an Anthropic client may be constructed. It is `server-only`.
+
+- **Aggregates leave, rows never do.** `buildInsightPayload()` reduces the
+  export rows to month/category totals plus top merchants, capped at 6 months
+  and 25 merchants. Balances, account names, masks, emails, and
+  transaction-level rows must never reach the payload. Widening what is sent
+  is a privacy change, not a prompt tweak.
+- **Consent is checked per request, server-side.** `ai_settings.enabled` plus
+  the `ai_export_enabled` flag behind `fetchPrivacySafeRows()`. A client-side
+  toggle is not a gate.
+- **Unconfigured means degraded, never broken.** No key: `ask` and `receipt`
+  return 503, and `insights` falls back to the rule-based summaries in
+  `lib/ai-insights.ts`. A provider error falls back the same way, never a 500.
+- **Every route is capped per user per day** (`insights` 4, `ask` 10,
+  `receipt` 10) so a stuck retry loop cannot run up a bill.
+- **Receipt scanning is the one path that uploads user content.** The image
+  goes to the vision model and is never stored. Do not make it automatic, and
+  do not reuse it as a general upload channel.
 
 ### Money and correctness
 
@@ -115,6 +140,9 @@ feeds it to a tool of their choice.
 - `docs/HANDOFF.md` - session-resume note. `docs/TODO.md` - deferred work.
   Update both when finishing significant work.
 - `docs/QA.md` - runbook for flows needing live credentials or screenshots.
+- `docs/archive/` - closed reviews and superseded changelogs, kept for
+  provenance. `docs/superpowers/archive/` - plans and specs whose work has
+  shipped. Neither is a source of current truth; do not act on them.
 
 ## graphify
 
@@ -122,6 +150,8 @@ This project has a knowledge graph at graphify-out/ with god nodes, community st
 
 Rules:
 - For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- **Never commit `graphify-out/` or `lib/graphify-out/`.** Both are gitignored generated output, together roughly 14 MB; they once landed in a PR and had to be stripped. Regenerate instead of committing.

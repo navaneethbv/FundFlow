@@ -2,6 +2,38 @@
 
 Last updated: 2026-08-21. Read this first to resume.
 
+## 2026-08-21: documentation refresh and archive
+
+Branch `docs/refresh-and-archive-2026-08-21`. Docs only, no runtime code touched.
+
+**The "no in-app AI" rule was false and had been for a while.** `CLAUDE.md`
+stated it as a hard product constraint while `app/api/ai/{insights,ask,receipt}`
+had been calling the Anthropic SDK; `README.md` still said "instead of sending
+your data to an LLM" and listed AI insights as *planned*. All three now
+describe what the code does: export stays the default path, and the in-app
+surface is documented as opt-in twice (deployment key plus per-account
+consent), aggregate-only, per-user rate capped, and degrading to the local
+rule-based summaries rather than erroring. The privacy contract, not the
+absence of AI, is the thing to protect. `docs/ARCHITECTURE.md` gained an
+"In-app AI" section with the invariants, and `.env.example` finally documents
+`ANTHROPIC_API_KEY` (it never did, so the feature was undiscoverable).
+
+**Two findings came out of writing that up**, both recorded at the top of
+`docs/TODO.md` and both deliberately left unfixed here: the default model id
+`claude-opus-4-8` is not a real model (and `insights` masks the failure by
+falling back to local summaries), and `/api/ai/receipt` is gated on
+`ai_settings.enabled` only, despite a docstring claiming the same double
+consent as insights. Each is an owner call, not a wording fix.
+
+**Archived, not deleted.** Closed reviews and superseded changelogs moved to
+`docs/archive/` (with a new `docs/archive/README.md` index saying what each
+was and what replaced it); the eleven July plans and six July specs, whose
+phases are all marked Done in `docs/TODO.md`, moved to
+`docs/superpowers/archive/`. `docs/` is now six live files. Every inbound
+link was repaired, which is worth knowing before writing a new one: these
+docs cite each other constantly by backticked repo-root path, so a move is
+never just a move.
+
 ## 2026-08-21: migration import from Mint, Monarch, and YNAB
 
 Branch `feat/production-readiness-2026-08`. Plan:
@@ -121,7 +153,7 @@ A locally declared type expresses the same intent and keeps the read checked.
 
 ## Previous delivery: security hardening (PR #110)
 
-A full-repository security review (`docs/CODE_REVIEW.md`, `docs/Security-Review.md`) and the fixes for every finding it raised: H1-H5, M1-M15, L1-L12, plus the Next.js 16.3.0 upgrade for the `sharp`/libvips CVEs.
+A full-repository security review (`docs/archive/CODE_REVIEW-2026-08-10.md`, `docs/archive/Security-Review-2026-08-10.md`) and the fixes for every finding it raised: H1-H5, M1-M15, L1-L12, plus the Next.js 16.3.0 upgrade for the `sharp`/libvips CVEs.
 
 All nine `supabase/migrations/20260810*` files are applied to the linked live Supabase project `zrxbmmtqqhlwtrinocww`.
 The final migration, `20260810180000_recurring_streams_drop_client_write.sql`, was applied on 2026-08-10 before merge.

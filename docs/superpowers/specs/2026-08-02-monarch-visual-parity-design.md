@@ -8,7 +8,7 @@ Recurring ×2, Goals + 5-step wizard ×6, Investments, Advice, Settings dark).
 
 ## 1. Goal and scope
 
-The 14-phase Monarch **feature**-parity program is complete (`docs/superpowers/plans/2026-07-29-monarch-parity.md`) — every page exists and works. This design covers the remaining gap: **visual parity**. Target: a screenshot of any FundFlow page should read ≥99% like the corresponding Monarch screenshot in layout, spacing, color, typography, and component anatomy — minus the features this repo deliberately excludes (§8).
+The 14-phase Monarch **feature**-parity program is complete (`docs/superpowers/archive/plans/2026-07-29-monarch-parity.md`) — every page exists and works. This design covers the remaining gap: **visual parity**. Target: a screenshot of any FundFlow page should read ≥99% like the corresponding Monarch screenshot in layout, spacing, color, typography, and component anatomy — minus the features this repo deliberately excludes (§8).
 
 Out of scope: any data-layer change beyond what a visual needs (only two are proposed: institution logo storage and goal photos), any new financial computation, any change to the security invariants in CLAUDE.md.
 

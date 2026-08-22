@@ -90,5 +90,5 @@
 
 - [ ] Run `npm run lint`, `npm run test:unit`, and `npm run build`; fix anything this feature introduced.
 - [ ] Manually verify the three acceptance criteria from `features.md` §5 against a real backup archive produced by `/api/cron/backup` (or `scripts/restore-backup.mjs`'s test fixture): a freshly-created backup restores to a byte-equivalent dataset, with the validation step explicitly reporting any ids that were necessarily regenerated; a tampered archive (flip one byte) is rejected; a wrong-user archive (decrypted with a different user's derived key) is rejected; the restore is audit-logged and the UI required explicit confirmation before anything destructive happened.
-- [ ] Update `docs/CHANGES-roadmap-2026-07-23.md`'s restore runbook section (it currently documents the manual decrypt-then-reimport process) to point at the new in-app flow, keeping the CLI script documented as the offline/emergency fallback.
+- [ ] Update `docs/archive/CHANGES-roadmap-2026-07-23.md`'s restore runbook section (it currently documents the manual decrypt-then-reimport process) to point at the new in-app flow, keeping the CLI script documented as the offline/emergency fallback.
 - [ ] Update `docs/HANDOFF.md` and `docs/TODO.md`.
