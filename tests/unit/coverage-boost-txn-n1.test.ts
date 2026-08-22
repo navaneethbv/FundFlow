@@ -771,7 +771,7 @@ describe("POST /api/import/commit", () => {
       import_review_rows: (kind) =>
         kind === "update" ? { error: new Error("rows update fail") } : { data: null, error: null },
     });
-    mockRequireUser.mockResolvedValue({ user: USER, supabase: authSupabase([{ id: "r1" }]) });
+    mockRequireUser.mockResolvedValue({ user: USER, supabase: authSupabase([{ id: "r1", status: "pending" }]) });
     const res = await commitPost(jsonRequest({ batch_id: "b", account_id: "a" }));
     expect(res.status).toBe(500);
   });
@@ -781,7 +781,7 @@ describe("POST /api/import/commit", () => {
       import_review_batches: (kind) =>
         kind === "update" ? { error: new Error("batch update fail") } : { data: null, error: null },
     });
-    mockRequireUser.mockResolvedValue({ user: USER, supabase: authSupabase([{ id: "r1" }]) });
+    mockRequireUser.mockResolvedValue({ user: USER, supabase: authSupabase([{ id: "r1", status: "pending" }]) });
     const res = await commitPost(jsonRequest({ batch_id: "b", account_id: "a" }));
     expect(res.status).toBe(500);
   });

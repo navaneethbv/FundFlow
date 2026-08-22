@@ -44,25 +44,38 @@ async function validateDefaultTarget(
 }
 
 /**
- * Staged rows for this batch, excluding whatever's already been committed
- * (a retried/duplicated request must not re-import the same rows). When the
- * caller approves specific ids, rows the preview flagged as "rejected" are
- * still eligible, so the user can override that default.
+ * Every row staged for this batch, in file order — including rows already
+ * committed and rows the preview rejected. The full set is what makes the
+ * import id stable: `makeImportId` disambiguates byte-identical rows by their
+ * occurrence number, so that number has to be counted over the whole file. A
+ * partial commit that counted only its own slice would restart at zero and
+ * hand the second half ids the first half already used, silently upserting
+ * one transaction over the other.
  */
-async function fetchStagedRows(
-  supabase: SupabaseClient,
-  batchId: string,
-  approvedIds: string[] | null,
-) {
-  let query = supabase
+async function fetchBatchRows(supabase: SupabaseClient, batchId: string) {
+  const { data: rows, error } = await supabase
     .from("import_review_rows")
     .select("id, date, description, amount, category, source_account, row_index, status")
-    .eq("batch_id", batchId)
-    .neq("status", "committed");
-  query = approvedIds ? query.in("id", approvedIds) : query.eq("status", "pending");
-  const { data: rows, error } = await query;
+    .eq("batch_id", batchId);
   if (error) throw error;
   return [...(rows ?? [])].sort((a, b) => Number(a.row_index ?? 0) - Number(b.row_index ?? 0));
+}
+
+/**
+ * Which of the batch's rows this request actually commits. Already-committed
+ * rows are never re-imported (a retried or duplicated request must be a
+ * no-op). When the caller approves specific ids, rows the preview flagged as
+ * "rejected" are still eligible, so the user can override that default.
+ */
+function selectCommittableRows(
+  batchRows: Awaited<ReturnType<typeof fetchBatchRows>>,
+  approvedIds: string[] | null,
+) {
+  const approved = approvedIds ? new Set(approvedIds) : null;
+  return batchRows.filter((row) =>
+    row.status !== "committed" &&
+    (approved ? approved.has(row.id as string) : row.status === "pending"),
+  );
 }
 
 async function resolveMappings(
@@ -121,14 +134,21 @@ async function validateMappedTargets(
   return null;
 }
 
+/**
+ * Numbers every row in the batch, then keeps only the ones being committed.
+ * The occurrence counter has to advance across skipped and already-committed
+ * rows too, or a second partial commit reuses the first one's import ids.
+ */
 function buildCommitRows(
-  orderedRows: Awaited<ReturnType<typeof fetchStagedRows>>,
+  batchRows: Awaited<ReturnType<typeof fetchBatchRows>>,
+  committableIds: Set<string>,
   mappingBySource: Map<string, ImportTarget>,
   defaultTarget: ImportTarget,
   userId: string,
 ) {
   const occurrences = new Map<string, number>();
-  return orderedRows.map((row) => {
+  const dbRows = [];
+  for (const row of batchRows) {
     const imported = {
       date: row.date as string,
       amount: Number(row.amount),
@@ -140,8 +160,9 @@ function buildCommitRows(
     const key = `${targetKey(target)}|${imported.date}|${imported.amount}|${imported.merchant}`;
     const n = occurrences.get(key) ?? 0;
     occurrences.set(key, n + 1);
+    if (!committableIds.has(row.id as string)) continue;
     const category = normalizeImportCategory(imported.category);
-    return {
+    dbRows.push({
       user_id: userId,
       account_id: target.accountId ?? null,
       manual_account_id: target.manualAccountId ?? null,
@@ -157,8 +178,9 @@ function buildCommitRows(
       // actually reads for provenance; this column exists so SQL can filter
       // by source directly (e.g. the ledger's ColumnsMenu) without parsing it.
       source: "import",
-    };
-  });
+    });
+  }
+  return dbRows;
 }
 
 async function persistCommit(
@@ -236,8 +258,11 @@ export async function POST(request: NextRequest) {
     const targetError = await validateDefaultTarget(supabase, defaultTarget);
     if (targetError) return targetError;
 
-    const orderedRows = await fetchStagedRows(supabase, batchId, approvedIds);
-    const sourceAccounts = [...new Set(orderedRows.map((row) => row.source_account).filter((value): value is string => Boolean(value)))];
+    const batchRows = await fetchBatchRows(supabase, batchId);
+    const committableRows = selectCommittableRows(batchRows, approvedIds);
+    // Every source account the file mentions needs a target, not just the ones
+    // in this slice: occurrence numbering resolves a target for every row.
+    const sourceAccounts = [...new Set(batchRows.map((row) => row.source_account).filter((value): value is string => Boolean(value)))];
 
     const mappingResult = await resolveMappings(supabase, sourceAccounts, requestedMappings, defaultTarget);
     if ("error" in mappingResult) return mappingResult.error;
@@ -246,14 +271,15 @@ export async function POST(request: NextRequest) {
     const mappingError = await validateMappedTargets(supabase, mappingBySource, defaultTarget);
     if (mappingError) return mappingError;
 
-    const dbRows = buildCommitRows(orderedRows, mappingBySource, defaultTarget, user.id);
+    const committableIds = new Set(committableRows.map((row) => row.id as string));
+    const dbRows = buildCommitRows(batchRows, committableIds, mappingBySource, defaultTarget, user.id);
 
     const service = createServiceClient();
     await persistCommit(service, {
       sourceAccounts,
       mappingBySource,
       dbRows,
-      rowIds: orderedRows.map((row) => row.id as string),
+      rowIds: [...committableIds],
       batchId,
       userId: user.id,
     });

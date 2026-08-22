@@ -163,6 +163,7 @@ suite("roadmap feature RLS", () => {
       user_id: idA,
       batch_id: batch!.id,
       row_hash: `row-${stamp}`,
+      row_index: 0,
       date: "2026-07-01",
       description: "Coffee",
       amount: 4.5,

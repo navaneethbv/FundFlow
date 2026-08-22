@@ -70,22 +70,18 @@ describe("Coverage Boost More Tests", () => {
           if (table === "import_review_rows") {
             return {
               select: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  neq: vi.fn().mockReturnValue({
-                    in: vi.fn().mockResolvedValue({
-                      data: [
-                        {
-                          id: "row-1",
-                          date: "2026-08-01",
-                          description: "Starbucks",
-                          amount: 5.5,
-                          category: "Coffee & Dining",
-                          status: "pending",
-                        },
-                      ],
-                      error: null,
-                    }),
-                  }),
+                eq: vi.fn().mockResolvedValue({
+                  data: [
+                    {
+                      id: "row-1",
+                      date: "2026-08-01",
+                      description: "Starbucks",
+                      amount: 5.5,
+                      category: "Coffee & Dining",
+                      status: "pending",
+                    },
+                  ],
+                  error: null,
                 }),
               }),
             };

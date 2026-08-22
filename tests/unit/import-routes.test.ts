@@ -912,9 +912,7 @@ describe("Import API Routes", () => {
           if (table === "import_review_rows") {
             return {
               select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              neq: vi.fn().mockReturnThis(),
-              in: vi.fn().mockResolvedValue({
+              eq: vi.fn().mockResolvedValue({
                 data: [
                   {
                     id: "row-1",
@@ -979,9 +977,7 @@ describe("Import API Routes", () => {
           if (table === "import_review_rows") {
             return {
               select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              neq: vi.fn().mockReturnThis(),
-              in: vi.fn().mockResolvedValue({
+              eq: vi.fn().mockResolvedValue({
                 data: [
                   {
                     id: "row-1",
@@ -1039,6 +1035,64 @@ describe("Import API Routes", () => {
       );
     });
 
+    it("keeps import ids stable when identical rows commit in separate batches", async () => {
+      const identicalRows = [
+        { id: "row-1", date: "2026-07-01", description: "Coffee", amount: 5, category: null, source_account: null, row_index: 0, status: "pending" },
+        { id: "row-2", date: "2026-07-01", description: "Coffee", amount: 5, category: null, source_account: null, row_index: 1, status: "pending" },
+      ];
+
+      async function commit(rows: typeof identicalRows, approvedRowIds: string[]) {
+        const mockSupabase = {
+          from: vi.fn().mockImplementation((table) => {
+            if (table === "accounts") {
+              return {
+                select: vi.fn().mockReturnThis(),
+                eq: vi.fn().mockReturnThis(),
+                maybeSingle: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
+              };
+            }
+            if (table === "import_review_rows") {
+              return {
+                select: vi.fn().mockReturnThis(),
+                eq: vi.fn().mockResolvedValue({ data: rows }),
+              };
+            }
+            return null as never;
+          }),
+        };
+        mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: mockSupabase });
+        const upsertMock = vi.fn().mockResolvedValue({ error: null });
+        const updateMock = vi.fn().mockResolvedValue({ error: null });
+        mockServiceClient.from.mockReturnValue({
+          upsert: upsertMock,
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({ in: updateMock, eq: updateMock }),
+          }),
+        });
+        const request = {
+          json: () => Promise.resolve({ batch_id: "b1", account_id: "a1", approved_row_ids: approvedRowIds }),
+        } as unknown as NextRequest;
+        const res = await commitPost(request);
+        expect(res.status).toBe(200);
+        return (upsertMock.mock.calls[0]?.[0] ?? []) as Array<{ plaid_transaction_id: string }>;
+      }
+
+      // Both rows in one commit: the second identical row takes occurrence 1.
+      const bothAtOnce = await commit(identicalRows, ["row-1", "row-2"]);
+      expect(bothAtOnce).toHaveLength(2);
+      expect(bothAtOnce[0]!.plaid_transaction_id).not.toBe(bothAtOnce[1]!.plaid_transaction_id);
+
+      // Same batch, second row committed on its own after the first already
+      // landed. Occurrence numbering must still count the committed row, or
+      // this upsert reuses the first row's id and overwrites it.
+      const secondAlone = await commit(
+        [{ ...identicalRows[0]!, status: "committed" }, identicalRows[1]!],
+        ["row-2"],
+      );
+      expect(secondAlone).toHaveLength(1);
+      expect(secondAlone[0]!.plaid_transaction_id).toBe(bothAtOnce[1]!.plaid_transaction_id);
+    });
+
     it("routes staged rows to their selected source-account targets", async () => {
       const mockSupabase = {
         from: vi.fn().mockImplementation((table) => {
@@ -1053,9 +1107,7 @@ describe("Import API Routes", () => {
           if (table === "import_review_rows") {
             return {
               select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              neq: vi.fn().mockReturnThis(),
-              in: vi.fn().mockResolvedValue({
+              eq: vi.fn().mockResolvedValue({
                 data: [
                   { id: "row-1", date: "2026-07-01", description: "Coffee", amount: 5, source_account: "Checking", row_index: 0, status: "pending" },
                   { id: "row-2", date: "2026-07-02", description: "Rent", amount: 100, source_account: "Savings", row_index: 1, status: "pending" },

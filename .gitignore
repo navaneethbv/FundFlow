@@ -44,3 +44,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 node_modules
+
+# graphify (generated knowledge-graph output; regenerate with `graphify update .`)
+graphify-out/
+lib/graphify-out/
