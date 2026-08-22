@@ -491,4 +491,33 @@ describe("getWeeklyReportData", () => {
     expect(data).not.toBeNull();
     expect(data?.totalSpend).toBe(0);
   });
+
+  it("handles null merchant names and unmapped card accounts in buildWeeklyReportModel", () => {
+    const edgeModel = buildWeeklyReportModel({
+      userId: "u-1",
+      userEmail: "u1@test.com",
+      period,
+      accounts: [], // no accounts known
+      transactions: [
+        {
+          id: "t-null-merchant",
+          date: "2026-07-08",
+          amount: 50,
+          merchantName: null,
+          name: null, // tests "Unknown merchant"
+          category: "GENERAL",
+          accountId: "unknown-account",
+        },
+      ],
+      institutions: [],
+      budgets: [],
+      merchantRules: [],
+      splits: [],
+      linkedRefundTransactionIds: new Set(),
+      duplicateTransactionIds: new Set(),
+    });
+    expect(edgeModel.totalSpend).toBe(50);
+    expect(edgeModel.merchants[0]?.merchant).toBe("Unknown merchant");
+    expect(edgeModel.banks[0]?.name).toBe("Other bank");
+  });
 });

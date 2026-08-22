@@ -345,6 +345,62 @@ describe("POST /api/ai/receipt", () => {
 
     await expect(receiptPost(receiptRequest(image()))).rejects.toThrow("AI API Error");
   });
+
+  it("handles unauthorized, missing text block, and null candidates list", async () => {
+    // Unauthorized
+    mockRequireUser.mockResolvedValue(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
+    expect((await receiptPost(receiptRequest(image()))).status).toBe(401);
+
+    // Missing text block
+    scanningUser();
+    mockMessagesCreate.mockResolvedValue({ stop_reason: "end_turn", content: [] });
+    await expect(receiptPost(receiptRequest(image()))).rejects.toThrow("receipt: empty response");
+
+    // Null candidates list from supabase query
+    const clientNullCandidates = {
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === "ai_settings") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: { enabled: true } }),
+              }),
+            }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnValue({
+            gte: vi.fn().mockReturnValue({
+              lte: vi.fn().mockReturnValue({
+                or: vi.fn().mockReturnValue({
+                  order: vi.fn().mockReturnValue({
+                    limit: vi.fn().mockResolvedValue({ data: null }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        };
+      }),
+    };
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER, email: "u1@test.com" },
+      supabase: clientNullCandidates,
+    });
+    mockMessagesCreate.mockResolvedValue(
+      textResponse(
+        JSON.stringify({
+          merchant: "Store",
+          amount: 50,
+          date: "2026-07-02",
+          line_items: [],
+        }),
+      ),
+    );
+    const res = await receiptPost(receiptRequest(image()));
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ matchedTransactionId: null });
+  });
 });
 
 describe("lib/push", () => {

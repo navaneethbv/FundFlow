@@ -288,6 +288,13 @@ function buildMonthlyAggregates(
   return { monthlySpending, monthlyIncome, monthlyCashFlow };
 }
 
+function extractMerchantName(
+  txn: { merchant_name?: string | null; name?: string | null },
+  fallback = "Unknown",
+): string {
+  return txn.merchant_name ?? txn.name ?? fallback;
+}
+
 function aggregateActiveMonth(
   spendTxns: TxnLite[],
   activeMonth: string,
@@ -307,7 +314,7 @@ function aggregateActiveMonth(
     if (isSpending(txn)) {
       currentMonthExpenses += txn.amount;
       activeMonthSpend.push(txn);
-      const merchant = txn.merchant_name ?? txn.name ?? "Unknown";
+      const merchant = extractMerchantName(txn);
       merchantMap.set(merchant, (merchantMap.get(merchant) ?? 0) + txn.amount);
     } else if (isIncome(txn)) currentMonthIncome += Math.abs(txn.amount);
   }
@@ -335,7 +342,7 @@ function aggregateDashboardTransactions(
     id: txn.id,
     date: txn.date,
     amount: txn.amount,
-    merchant: txn.merchant_name ?? txn.name ?? "Unknown",
+    merchant: extractMerchantName(txn),
     category: txn.pfc_primary,
     subcategory: txn.pfc_detailed,
   }));
@@ -527,7 +534,7 @@ function computePriorMerchantMedians(
   const amountsByMerchant = new Map<string, { name: string; amounts: number[] }>();
   for (const t of spendTxns) {
     if (monthKey(t.date) === activeMonth || !isSpending(t)) continue;
-    const name = t.merchant_name ?? t.name ?? "Unknown";
+    const name = extractMerchantName(t);
     const key = name.trim().toLowerCase();
     const entry = amountsByMerchant.get(key) ?? { name, amounts: [] };
     entry.amounts.push(t.amount);
@@ -998,7 +1005,7 @@ export async function getDashboardData(
     })),
     incomeTransactions: filteredTxns.filter(isIncome).map((t) => ({
       date: t.date,
-      merchant: t.merchant_name ?? t.name ?? "",
+      merchant: extractMerchantName(t, ""),
       amount: t.amount,
     })),
     asOf: insightsAsOf,
@@ -1055,7 +1062,7 @@ export async function getDashboardData(
   const recurringTxns = filteredTxns.map((t) => ({
     id: t.id,
     date: t.date,
-    merchant: t.merchant_name ?? t.name ?? "",
+    merchant: extractMerchantName(t, ""),
     amount: t.amount,
   }));
   const latestMatchDate = (name: string): string | null =>
@@ -1104,7 +1111,7 @@ export async function getDashboardData(
   const priceDrift = computeMerchantPriceDrift({
     txns: spendTxns.filter(isSpending).map((t) => ({
       date: t.date,
-      merchant: t.merchant_name ?? t.name ?? "Unknown",
+      merchant: extractMerchantName(t),
       amount: t.amount,
     })),
     asOfMonth: activeMonth,
@@ -1116,9 +1123,9 @@ export async function getDashboardData(
     currentTransactions: filteredTxns
       .filter((t) => monthKey(t.date) === activeMonth && isSpending(t))
       .map((t) => ({
-        id: `${t.date}-${t.account_id}-${t.name ?? t.merchant_name ?? "txn"}-${t.amount}`,
+        id: `${t.date}-${t.account_id}-${extractMerchantName(t, "txn")}-${t.amount}`,
         date: t.date,
-        merchant: t.merchant_name ?? t.name ?? "Unknown",
+        merchant: extractMerchantName(t),
         category: t.pfc_primary ?? "UNCATEGORIZED",
         amount: t.amount,
       })),

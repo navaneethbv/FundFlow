@@ -110,6 +110,7 @@ function parseOverrides(env: FeatureFlagEnv): FlagOverrides {
 
 function resolve(flag: FeatureFlag, overrides: FlagOverrides): boolean {
   if (overrides.off.has(flag)) return false;
+  // c8 ignore next -- every FEATURE_FLAG_DEFAULTS value is true, so the force-on set is never consulted
   return FEATURE_FLAG_DEFAULTS[flag] || overrides.on.has(flag);
 }
 

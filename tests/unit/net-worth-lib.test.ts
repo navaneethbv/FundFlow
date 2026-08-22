@@ -22,6 +22,7 @@ describe("writeNetWorthSnapshot", () => {
         data: [
           { name: "Checking", type: "depository", current_balance: 1000 },
           { name: "Credit Card", type: "credit", current_balance: 200 },
+          { name: "NullPlaidBalance", type: "depository", current_balance: null },
         ],
       }),
     };

@@ -406,20 +406,30 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
     }
     default: {
     // data
-    const [{ data: profile }, { data: accounts }, { data: aiSettings }, { data: items }] = await Promise.all([
+    const [{ data: profile }, { data: accounts }, { data: manualAccounts }, { data: aiSettings }, { data: items }] = await Promise.all([
       supabase.from("profiles").select("ai_export_enabled").eq("id", userId).maybeSingle(),
       supabase.from("accounts").select("id, name, mask, type, apr").eq("user_id", userId).order("name"),
+      supabase.from("manual_accounts").select("id, name, account_type").eq("user_id", userId).order("name"),
       supabase.from("ai_settings").select("enabled").eq("user_id", userId).maybeSingle(),
       supabase.from("plaid_items").select("id").eq("user_id", userId).limit(1),
     ]);
+    const importAccounts = [
+      ...(accounts ?? []).map((account) => ({ ...account, kind: "account" as const })),
+      ...(manualAccounts ?? []).map((account) => ({
+        id: account.id,
+        name: account.name,
+        mask: null,
+        kind: "manual" as const,
+      })),
+    ];
     content = (
       <>
         <div className="grid gap-6 xl:grid-cols-2">
           <ExportSection initialEnabled={profile?.ai_export_enabled ?? true} />
-          <ImportSection accounts={accounts ?? []} />
+          <ImportSection accounts={importAccounts} />
         </div>
         <div className="grid gap-6 xl:grid-cols-2">
-          <ImportReviewSection accounts={accounts ?? []} />
+          <ImportReviewSection accounts={importAccounts} />
           <ReceiptScanSection enabled={aiSettings?.enabled ?? false} />
         </div>
         <DemoDataSection hasBanks={(items ?? []).length > 0} />

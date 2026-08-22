@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { looksLikeOfx } from "./import-ofx";
 
 /**
  * Bank-statement CSV import: parsing, column auto-detection, and row
@@ -15,6 +16,7 @@ export interface ImportedRow {
   amount: number; // Plaid sign: positive = money out
   merchant: string;
   category: string | null;
+  sourceAccount?: string | null;
 }
 
 export interface ImportParseResult {
@@ -187,6 +189,63 @@ export function normalizeDate(raw: string): string | null {
   return null;
 }
 
+export type DateOrder = "mdy" | "dmy" | "ymd";
+
+export function normalizeDateWithOrder(raw: string, order: DateOrder): string | null {
+  const s = raw.trim();
+  let match = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(s);
+  if (match) {
+    return toIsoDate(Number(match[1]), Number(match[2]), Number(match[3]));
+  }
+  match = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(s);
+  if (!match) return null;
+  let year = Number(match[3]);
+  if (year < 100) year += year >= 70 ? 1900 : 2000;
+  const first = Number(match[1]);
+  const second = Number(match[2]);
+  return order === "dmy"
+    ? toIsoDate(year, second, first)
+    : toIsoDate(year, first, second);
+}
+
+type DateShape = DateOrder | "ambiguous" | "none";
+
+/** Classifies one date-column value by its literal shape, without regard to what's inferred so far. */
+function classifyDateShape(raw: string): DateShape {
+  const value = raw.trim();
+  if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(value)) return "ymd";
+  const match = /^(\d{1,2})\/(\d{1,2})\/\d{2,4}$/.exec(value);
+  if (!match) return "none";
+  const first = Number(match[1]);
+  const second = Number(match[2]);
+  if (first > 12 && second <= 12) return "dmy";
+  if (second > 12 && first <= 12) return "mdy";
+  return "ambiguous";
+}
+
+/**
+ * Folds one value's shape into the order inferred so far. Returns "conflict"
+ * when the value rules out every order consistent with prior values (e.g. an
+ * ISO date mixed with a slash date, or a day > 12 after a month > 12).
+ */
+function combineDateShape(inferred: DateOrder | null, shape: DateShape): DateOrder | null | "conflict" {
+  if (shape === "none") return inferred;
+  if (inferred === "ymd" && shape !== "ymd") return "conflict";
+  if (shape === "ambiguous") return inferred;
+  if (shape === "ymd") return inferred && inferred !== "ymd" ? "conflict" : "ymd";
+  return inferred && inferred !== shape ? "conflict" : shape;
+}
+
+export function inferDateOrder(values: string[]): DateOrder | null {
+  let inferred: DateOrder | null = null;
+  for (const raw of values) {
+    const next = combineDateShape(inferred, classifyDateShape(raw));
+    if (next === "conflict") return null;
+    inferred = next;
+  }
+  return inferred;
+}
+
 function toIsoDate(year: number, month: number, day: number): string | null {
   if (month < 1 || month > 12 || day < 1 || day > 31) return null;
   const d = new Date(Date.UTC(year, month - 1, day));
@@ -209,6 +268,23 @@ export function parseAmount(raw: string): number | null {
   return negative ? -value : value;
 }
 
+/**
+ * Shared two-column (debit/credit or outflow/inflow) to signed amount rule: a
+ * nonzero debit/outflow column is positive (money out), a nonzero
+ * credit/inflow column is negative (money in). Used by the generic bank-CSV
+ * parser and the YNAB normalizer, which share the identical column shape.
+ */
+export function twoColumnToSignedAmount(
+  debitRaw: string | undefined,
+  creditRaw: string | undefined,
+): number | null {
+  const debit = parseAmount(debitRaw ?? "");
+  const credit = parseAmount(creditRaw ?? "");
+  if (debit !== null && debit !== 0) return Math.abs(debit);
+  if (credit !== null && credit !== 0) return -Math.abs(credit);
+  return debit !== null || credit !== null ? 0 : null;
+}
+
 function parseImportAmount(
   line: string[],
   columns: ColumnMap,
@@ -218,11 +294,9 @@ function parseImportAmount(
     const amount = parseAmount(line[columns.amount] ?? "");
     return amount !== null && positiveIsIncome ? -amount : amount;
   }
-  const debit = columns.debit !== null ? parseAmount(line[columns.debit] ?? "") : null;
-  const credit = columns.credit !== null ? parseAmount(line[columns.credit] ?? "") : null;
-  if (debit !== null && debit !== 0) return Math.abs(debit);
-  if (credit !== null && credit !== 0) return -Math.abs(credit);
-  return debit !== null || credit !== null ? 0 : null;
+  const debitRaw = columns.debit !== null ? line[columns.debit] : undefined;
+  const creditRaw = columns.credit !== null ? line[columns.credit] : undefined;
+  return twoColumnToSignedAmount(debitRaw, creditRaw);
 }
 
 function parseImportLine(
@@ -305,4 +379,262 @@ export function makeImportId(
     .digest("hex")
     .slice(0, 40);
   return `import-${hash}`;
+}
+
+/**
+ * Which parser handles an uploaded import file. OFX/QFX is detected by content
+ * sniffing; the migration formats (Mint, Monarch, YNAB) by their distinctive
+ * header rows. Falls back to the generic bank CSV parser, which also drives
+ * the manual column-mapping UI.
+ */
+export type ImportSourceFormat = "mint" | "monarch" | "ynab" | "csv" | "ofx";
+
+export function detectSourceFormat(text: string): ImportSourceFormat {
+  if (looksLikeOfx(text)) return "ofx";
+  const header = getCsvColumns(text);
+  if (header) {
+    if (looksLikeMintCsv(header.headers)) return "mint";
+    if (looksLikeMonarchCsv(header.headers)) return "monarch";
+    if (looksLikeYnabCsv(header.headers)) return "ynab";
+  }
+  return "csv";
+}
+
+/**
+ * Shared walker for the migration-format CSVs (Mint, Monarch, YNAB). Each
+ * format is a thin spec over this helper: a set of required/optional column
+ * names plus a per-line amount (and optional category) resolver. Everything
+ * else — table parsing, header matching, per-line date/merchant validation,
+ * and 1-based error accumulation — lives here once so the format parsers
+ * cannot drift apart.
+ */
+export interface CsvFormatSpec {
+  /** Logical column name → header name. Every required column must exist. */
+  required: Record<string, string>;
+  /** Logical column name → header name. Absent columns are simply unused. */
+  optional?: Record<string, string>;
+  /** Label used in "Could not detect <label> columns." messages. */
+  label: string;
+  /** Field name used in "empty <merchantLabel>." messages. */
+  merchantLabel: string;
+  /** Plaid-signed amount for this line (positive = money out), or null when unrecognized. */
+  amount: (line: string[], cols: Record<string, number>) => number | null;
+  /** Category for this line; defaults to the `category` column when present. */
+  category?: (line: string[], cols: Record<string, number>) => string | null;
+  /** Optional source account name carried by migration exports. */
+  sourceAccount?: (line: string[], cols: Record<string, number>) => string | null;
+}
+
+/** True when every given header (trimmed, case-insensitive) is present. */
+export function headerHasAll(headerRow: string[], headers: string[]): boolean {
+  const lower = new Set(headerRow.map((h) => h.trim().toLowerCase()));
+  return headers.every((h) => lower.has(h));
+}
+
+function resolveSpecColumns(
+  header: string[],
+  spec: CsvFormatSpec,
+): { cols?: Record<string, number>; error?: string } {
+  const cols: Record<string, number> = {};
+  for (const [logical, headerName] of Object.entries(spec.required)) {
+    const idx = header.indexOf(headerName.trim().toLowerCase());
+    if (idx === -1) {
+      return { error: `Could not detect ${spec.label} columns.` };
+    }
+    cols[logical] = idx;
+  }
+  if (spec.optional) {
+    for (const [logical, headerName] of Object.entries(spec.optional)) {
+      const idx = header.indexOf(headerName.trim().toLowerCase());
+      if (idx !== -1) cols[logical] = idx;
+    }
+  }
+  return { cols };
+}
+
+function resolveSpecCategory(
+  line: string[],
+  cols: Record<string, number>,
+  spec: CsvFormatSpec,
+): string | null {
+  if (spec.category) {
+    return spec.category(line, cols);
+  }
+  if (cols.category !== undefined) {
+    return (line[cols.category] ?? "").trim() || null;
+  }
+  return null;
+}
+
+function parseSpecRow(
+  line: string[],
+  lineNo: number,
+  cols: Record<string, number>,
+  spec: CsvFormatSpec,
+  dateOrder?: DateOrder,
+): { row?: ImportedRow; error?: string } {
+  const date = dateOrder
+    ? normalizeDateWithOrder(line[cols.date] ?? "", dateOrder)
+    : normalizeDate(line[cols.date] ?? "");
+  if (!date) {
+    return { error: `Line ${lineNo}: unrecognized date "${line[cols.date] ?? ""}".` };
+  }
+
+  const amount = spec.amount(line, cols);
+  if (amount === null) {
+    return { error: `Line ${lineNo}: unrecognized amount.` };
+  }
+
+  const merchant = (line[cols.merchant] ?? "").trim();
+  if (!merchant) {
+    return { error: `Line ${lineNo}: empty ${spec.merchantLabel}.` };
+  }
+  const sourceAccount = spec.sourceAccount?.(line, cols) ?? null;
+
+  return {
+    row: {
+      date,
+      amount: Math.round(amount * 100) / 100,
+      merchant,
+      category: resolveSpecCategory(line, cols, spec),
+      ...(sourceAccount ? { sourceAccount } : {}),
+    },
+  };
+}
+
+export function parseCsvFormat(
+  text: string,
+  spec: CsvFormatSpec,
+  options: { dateOrder?: DateOrder; requireDateOrder?: boolean } = {},
+): ImportParseResult & { requiresDateOrder?: boolean } {
+  const table = parseCsv(text);
+  if (table.length < 2) {
+    return { rows: [], errors: ["File has no data rows."] };
+  }
+  const header = table[0]!.map((h) => h.trim().toLowerCase());
+  const { cols, error } = resolveSpecColumns(header, spec);
+  if (error || !cols) {
+    return { rows: [], errors: [error ?? `Could not detect ${spec.label} columns.`] };
+  }
+
+  const rows: ImportedRow[] = [];
+  const errors: string[] = [];
+  const dateOrder = options.dateOrder ?? (options.requireDateOrder ? inferDateOrder(table.slice(1).map((line) => line[cols.date] ?? "")) ?? undefined : undefined);
+  const requiresDateOrder = options.requireDateOrder && !dateOrder;
+
+  for (let i = 1; i < table.length; i++) {
+    const result = requiresDateOrder
+      ? { error: `Line ${i + 1}: ambiguous date format; choose month/day/year or day/month/year.` }
+      : parseSpecRow(table[i]!, i + 1, cols, spec, dateOrder);
+    if (result.error) {
+      errors.push(result.error);
+    } else if (result.row) {
+      rows.push(result.row);
+    }
+  }
+
+  return { rows, errors, ...(requiresDateOrder ? { requiresDateOrder: true } : {}) };
+}
+
+/** Mint format spec and parser */
+export const MINT_FORMAT_SPEC: CsvFormatSpec = {
+  label: "Mint",
+  merchantLabel: "description",
+  required: {
+    date: "date",
+    merchant: "description",
+    amount: "amount",
+    type: "transaction type",
+  },
+  optional: {
+    category: "category",
+    account: "account name",
+  },
+  amount: (line, cols) => {
+    const type = (line[cols.type] ?? "").trim().toLowerCase();
+    if (type !== "debit" && type !== "credit") return null;
+    const magnitude = parseAmount(line[cols.amount] ?? "");
+    if (magnitude === null) return null;
+    return type === "debit" ? Math.abs(magnitude) : -Math.abs(magnitude);
+  },
+  sourceAccount: (line, cols) => (line[cols.account] ?? "").trim() || null,
+};
+
+export function looksLikeMintCsv(headerRow: string[]): boolean {
+  return headerHasAll(headerRow, ["transaction type", "original description"]);
+}
+
+export function parseMintCsv(
+  text: string,
+  options: { dateOrder?: DateOrder; requireDateOrder?: boolean } = {},
+): ImportParseResult & { requiresDateOrder?: boolean } {
+  return parseCsvFormat(text, MINT_FORMAT_SPEC, options);
+}
+
+/** Monarch format spec and parser */
+export const MONARCH_FORMAT_SPEC: CsvFormatSpec = {
+  label: "Monarch",
+  merchantLabel: "merchant",
+  required: {
+    date: "date",
+    merchant: "merchant",
+    amount: "amount",
+  },
+  optional: {
+    category: "category",
+    account: "account",
+  },
+  amount: (line, cols) => {
+    const raw = parseAmount(line[cols.amount] ?? "");
+    return raw === null ? null : -raw;
+  },
+  sourceAccount: (line, cols) => (line[cols.account] ?? "").trim() || null,
+};
+
+export function looksLikeMonarchCsv(headerRow: string[]): boolean {
+  return headerHasAll(headerRow, ["merchant", "original statement"]);
+}
+
+export function parseMonarchCsv(
+  text: string,
+  options: { dateOrder?: DateOrder; requireDateOrder?: boolean } = {},
+): ImportParseResult & { requiresDateOrder?: boolean } {
+  return parseCsvFormat(text, MONARCH_FORMAT_SPEC, options);
+}
+
+/** YNAB format spec and parser */
+export const YNAB_FORMAT_SPEC: CsvFormatSpec = {
+  label: "YNAB",
+  merchantLabel: "payee",
+  required: {
+    date: "date",
+    merchant: "payee",
+    outflow: "outflow",
+    inflow: "inflow",
+  },
+  optional: {
+    combined: "category group/category",
+    category: "category",
+    account: "account",
+  },
+  amount: (line, cols) => twoColumnToSignedAmount(line[cols.outflow], line[cols.inflow]),
+  category: (line, cols) => {
+    const combinedIdx = cols.combined;
+    const combined = combinedIdx !== undefined ? (line[combinedIdx] ?? "").trim() : "";
+    if (combined) return combined;
+    const bareIdx = cols.category;
+    return bareIdx !== undefined ? (line[bareIdx] ?? "").trim() || null : null;
+  },
+  sourceAccount: (line, cols) => (line[cols.account] ?? "").trim() || null,
+};
+
+export function looksLikeYnabCsv(headerRow: string[]): boolean {
+  return headerHasAll(headerRow, ["payee", "outflow", "inflow"]);
+}
+
+export function parseYnabCsv(
+  text: string,
+  options: { dateOrder?: DateOrder; requireDateOrder?: boolean } = {},
+): ImportParseResult & { requiresDateOrder?: boolean } {
+  return parseCsvFormat(text, YNAB_FORMAT_SPEC, { ...options, requireDateOrder: options.requireDateOrder ?? true });
 }

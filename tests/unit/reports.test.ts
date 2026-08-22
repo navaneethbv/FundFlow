@@ -713,5 +713,39 @@ describe("applyReportFilters extra branches", () => {
     );
     expect(filtered).toHaveLength(1);
     expect(filtered[0].id).toBe("t-match");
+
+    // Filter matching on manualAccountId
+    const manualAccTxn: CanonicalFinanceTransaction = {
+      ...match,
+      id: "t-manual-acc",
+      accountId: null as never,
+      manualAccountId: "acct-1",
+    };
+    expect(applyReportFilters([manualAccTxn], filters)).toHaveLength(1);
+
+    // parseReportFilters with whitespace-only scope
+    expect(
+      parseReportFilters({
+        version: REPORT_FILTERS_VERSION,
+        start: "2026-07-01",
+        end: "2026-07-31",
+        tab: "spending",
+        mode: "total",
+        dimension: "category",
+        scope: "   ",
+        accounts: [],
+        merchants: [],
+        categories: [],
+        excludePending: false,
+      }),
+    ).toBeNull();
+
+    // buildCashFlowSankeyData with 0 amount transaction
+    const zeroSankey = buildCashFlowSankeyData([
+      txn({ signedAmount: 0 }),
+      income(1000, "PAYCHECK"),
+      expense(500, "FOOD", "RESTAURANT"),
+    ]);
+    expect(zeroSankey.nodes.length).toBeGreaterThan(0);
   });
 });

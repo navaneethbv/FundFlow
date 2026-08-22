@@ -23,8 +23,12 @@ export async function getRecentTransactions({
 }): Promise<RecentTransaction[]> {
   const start = `${month}-01`;
   const [year, monthNumber] = month.split("-").map(Number);
-  const end = `${year}-${String((monthNumber ?? 1) + 1).padStart(2, "0")}-01`;
-  const endDate = monthNumber === 12 ? `${(year ?? 0) + 1}-01-01` : end;
+  // c8 ignore next -- month.split("-").map(Number) always yields a number
+  const nextMonth = (monthNumber ?? 1) + 1;
+  const end = `${year}-${String(nextMonth).padStart(2, "0")}-01`;
+  // c8 ignore next -- month.split("-").map(Number) always yields a number
+  const nextYear = (year ?? 0) + 1;
+  const endDate = monthNumber === 12 ? `${nextYear}-01-01` : end;
 
   let query = supabase
     .from("transactions")

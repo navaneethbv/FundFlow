@@ -272,6 +272,47 @@ export interface ForecastMilestone {
   description: string;
 }
 
+function formatNetWorthMilestoneName(target: number): string {
+  const formatted = target >= 1000000 ? `${target / 1000000}M` : `${target / 1000}k`;
+  return `$${formatted} Net Worth`;
+}
+
+function buildEmergencyMilestones(
+  cash: number,
+  monthlyExpenses: number,
+): ForecastMilestone[] {
+  return [3, 6].map((months) => {
+    const target = round2(monthlyExpenses * months);
+    const achieved = cash >= target;
+    return {
+      id: `ef-${months}mo`,
+      name: `${months}-Month Emergency Fund`,
+      targetAmount: target,
+      type: "emergency" as const,
+      reachedMonth: achieved ? 0 : null,
+      reachedAmount: achieved ? cash : null,
+      description: `Accumulate ${months} months of basic living expenses ($${target.toLocaleString()}) in liquid cash.`,
+    };
+  });
+}
+
+function checkMilestoneReached(
+  m: ForecastMilestone,
+  state: ForecastState,
+  currentNW: number,
+): { reached: boolean; amount: number } {
+  if (m.type === "debt" && state.liabilities <= 0) {
+    return { reached: true, amount: 0 };
+  }
+  if (m.type === "emergency" && state.cash >= m.targetAmount) {
+    return { reached: true, amount: round2(state.cash) };
+  }
+  if ((m.type === "networth" || m.type === "fire") && currentNW >= m.targetAmount) {
+    return { reached: true, amount: currentNW };
+  }
+  return { reached: false, amount: 0 };
+}
+
 /**
  * Evaluates key financial independence and wealth milestones over the projection horizon.
  */
@@ -296,29 +337,8 @@ export function computeForecastMilestones(
     });
   }
 
-  // 2. 3-Month Emergency Fund
-  const ef3Target = round2(safeMonthlyExpenses * 3);
-  milestones.push({
-    id: "ef-3mo",
-    name: "3-Month Emergency Fund",
-    targetAmount: ef3Target,
-    type: "emergency",
-    reachedMonth: startingState.cash >= ef3Target ? 0 : null,
-    reachedAmount: startingState.cash >= ef3Target ? startingState.cash : null,
-    description: `Accumulate 3 months of basic living expenses ($${ef3Target.toLocaleString()}) in liquid cash.`,
-  });
-
-  // 3. 6-Month Emergency Fund
-  const ef6Target = round2(safeMonthlyExpenses * 6);
-  milestones.push({
-    id: "ef-6mo",
-    name: "6-Month Emergency Fund",
-    targetAmount: ef6Target,
-    type: "emergency",
-    reachedMonth: startingState.cash >= ef6Target ? 0 : null,
-    reachedAmount: startingState.cash >= ef6Target ? startingState.cash : null,
-    description: `Accumulate 6 months of basic living expenses ($${ef6Target.toLocaleString()}) in liquid cash.`,
-  });
+  // 2 & 3. Emergency Funds (3mo & 6mo)
+  milestones.push(...buildEmergencyMilestones(startingState.cash, safeMonthlyExpenses));
 
   // 4. Net Worth Milestones
   const netWorthTargets = [50000, 100000, 250000, 500000, 1000000];
@@ -328,7 +348,7 @@ export function computeForecastMilestones(
     if (startingNetWorth < target) {
       milestones.push({
         id: `nw-${target}`,
-        name: `$${target >= 1000000 ? `${target / 1000000}M` : `${target / 1000}k`} Net Worth`,
+        name: formatNetWorthMilestoneName(target),
         targetAmount: target,
         type: "networth",
         reachedMonth: null,
@@ -361,16 +381,10 @@ export function computeForecastMilestones(
 
     for (const m of milestones) {
       if (m.reachedMonth !== null) continue;
-
-      if (m.type === "debt" && state.liabilities <= 0) {
+      const status = checkMilestoneReached(m, state, currentNW);
+      if (status.reached) {
         m.reachedMonth = month;
-        m.reachedAmount = 0;
-      } else if (m.type === "emergency" && state.cash >= m.targetAmount) {
-        m.reachedMonth = month;
-        m.reachedAmount = round2(state.cash);
-      } else if ((m.type === "networth" || m.type === "fire") && currentNW >= m.targetAmount) {
-        m.reachedMonth = month;
-        m.reachedAmount = currentNW;
+        m.reachedAmount = status.amount;
       }
     }
   }

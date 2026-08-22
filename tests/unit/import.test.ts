@@ -8,6 +8,7 @@ import {
   parseAmount,
   parseImportCsv,
   makeImportId,
+  detectSourceFormat,
 } from "@/lib/import";
 
 describe("parseCsv", () => {
@@ -196,6 +197,29 @@ describe("parseImportCsv", () => {
     const { rows, errors } = parseImportCsv(splitZero, { positiveIsIncome: false });
     expect(rows[0]!.amount).toBe(0);
     expect(errors).toContain('Line 3: empty description.');
+  });
+});
+
+describe("detectSourceFormat", () => {
+  it("detects OFX before any CSV sniffing", () => {
+    const ofx = "OFXHEADER:100\nDATA:OFXSGML\n<OFX>\n<STMTTRN>...</STMTTRN>\n</OFX>";
+    expect(detectSourceFormat(ofx)).toBe("ofx");
+  });
+
+  it("detects Mint, Monarch, and YNAB by their header rows", () => {
+    const mint = '"Date","Description","Original Description","Amount","Transaction Type","Category","Account Name","Labels","Notes"\n"07/01/2026","Starbucks","STARBUCKS","5.50","debit","Coffee","Checking","",""';
+    expect(detectSourceFormat(mint)).toBe("mint");
+
+    const monarch = '"Date","Merchant","Category","Account","Original Statement","Notes","Amount","Tags"\n"2026-07-01","Starbucks","Coffee","Checking","STARBUCKS","","-5.50",""';
+    expect(detectSourceFormat(monarch)).toBe("monarch");
+
+    const ynab = '"Account","Flag","Date","Payee","Category Group/Category","Category Group","Category","Memo","Outflow","Inflow","Cleared"\n"Checking","","2026-07-01","Starbucks","Restaurants","Restaurants","","","5.50","","Cleared"';
+    expect(detectSourceFormat(ynab)).toBe("ynab");
+  });
+
+  it("falls back to plain csv when nothing matches", () => {
+    expect(detectSourceFormat("Date,Description,Amount\n2026-07-01,Coffee,4.50")).toBe("csv");
+    expect(detectSourceFormat("")).toBe("csv");
   });
 });
 

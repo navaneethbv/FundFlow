@@ -30,6 +30,24 @@ export const TRANSFER_GROUPS = new Set([
 
 export const UNCATEGORIZED = "UNCATEGORIZED";
 
+/**
+ * Normalizes a free-text import category into a `pfc_primary` code, refusing
+ * to let it collide with a reserved transfer/loan code: a user category
+ * literally named "Transfer Out" would otherwise get silently excluded from
+ * every spend total via TRANSFER_GROUPS. Colliding categories are demoted to
+ * `pfc_detailed` instead, so the transaction stays a normal expense/income
+ * while flowFor's groupKey check no longer misreads it as a transfer.
+ */
+export function normalizeImportCategory(
+  category: string | null,
+): { pfcPrimary: string | null; pfcDetailed: string | null } {
+  if (!category) return { pfcPrimary: null, pfcDetailed: null };
+  const normalized = category.toUpperCase().replace(/\s+/g, "_");
+  return TRANSFER_GROUPS.has(normalized)
+    ? { pfcPrimary: null, pfcDetailed: normalized }
+    : { pfcPrimary: normalized, pfcDetailed: null };
+}
+
 export type FinanceSource = "plaid" | "import" | "manual";
 
 /**

@@ -202,7 +202,7 @@ export function buildWeeklyReportModel(
       const account = accountById.get(transaction.accountId);
       return formatCardLabel(
         account?.name,
-        account ? institutionById.get(account.plaidItemId) : null,
+        account ? (institutionById.get(account.plaidItemId) ?? null) : null,
       );
     },
   );

@@ -12,6 +12,7 @@ interface AccountOption {
   id: string;
   name: string | null;
   mask: string | null;
+  kind: "account" | "manual";
 }
 
 interface ReviewRow {
@@ -21,6 +22,7 @@ interface ReviewRow {
   amount: number;
   status: string;
   flags: string[];
+  source_account?: string | null;
 }
 
 interface MappingState {
@@ -48,6 +50,10 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
   const router = useRouter();
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const [positiveIsIncome, setPositiveIsIncome] = useState(true);
+  const [dateOrder, setDateOrder] = useState<"auto" | "mdy" | "dmy" | "ymd">("auto");
+  const [dateFormatRequired, setDateFormatRequired] = useState(false);
+  const [sourceAccounts, setSourceAccounts] = useState<string[]>([]);
+  const [sourceAccountTargets, setSourceAccountTargets] = useState<Record<string, string>>({});
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [mapping, setMapping] = useState<MappingState | null>(null);
   const [batchId, setBatchId] = useState<string | null>(null);
@@ -73,10 +79,18 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
       const form = new FormData();
       form.set("file", file);
       form.set("positive_is_income", String(positiveIsIncome));
+      if (dateOrder !== "auto") form.set("date_order", dateOrder);
       if (columnMap) form.set("column_map", JSON.stringify(columnMap));
       const res = await fetch("/api/import/preview", { method: "POST", body: form });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error ?? "Preview failed");
+      if (json.needs_date_format) {
+        setDateFormatRequired(true);
+        setRows([]);
+        setBatchId(null);
+        return;
+      }
+      setDateFormatRequired(false);
       if (json.needs_mapping) {
         setMapping({ headers: json.headers ?? [], sample: json.sample ?? [] });
         setRows([]);
@@ -87,6 +101,13 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
       const previewRows = (json.rows ?? []) as ReviewRow[];
       setBatchId(json.batch_id ?? null);
       setRows(previewRows);
+      const importedSourceAccounts = (json.source_accounts ?? []) as string[];
+      const persistedMappings = (json.source_account_mappings ?? {}) as Record<string, { account_id?: string; manual_account_id?: string }>;
+      setSourceAccounts(importedSourceAccounts);
+      setSourceAccountTargets(Object.fromEntries(importedSourceAccounts.map((sourceAccount) => [
+        sourceAccount,
+        persistedMappings[sourceAccount]?.account_id ?? persistedMappings[sourceAccount]?.manual_account_id ?? (importedSourceAccounts.length === 1 ? accountId : ""),
+      ])));
       // Clean rows (no duplicate flags) start selected.
       setSelected(new Set(previewRows.filter((row) => row.flags.length === 0).map((row) => row.id)));
     } catch (err) {
@@ -100,10 +121,11 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
     event.preventDefault();
     setCommitted(null);
     setMapping(null);
+    setDateFormatRequired(false);
     const fileInput = event.currentTarget.elements.namedItem("file") as HTMLInputElement;
     const file = fileInput.files?.[0];
     if (!file || !accountId) {
-      setError("Choose a CSV, OFX, or QFX file and a target account.");
+      setError("Choose a CSV, OFX/QFX, Mint, Monarch, or YNAB file and a target account.");
       return;
     }
     setPendingFile(file);
@@ -143,6 +165,19 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
 
   async function onCommit() {
     if (!batchId) return;
+    const selectedAccount = accounts.find((account) => account.id === accountId);
+    if (!selectedAccount) return;
+    const sourceMappings: Record<string, { account_id?: string; manual_account_id?: string }> = {};
+    for (const sourceAccount of sourceAccounts) {
+      const target = accounts.find((account) => account.id === sourceAccountTargets[sourceAccount]);
+      if (!target) {
+        setError(`Choose a FundFlow account for source account "${sourceAccount}"`);
+        return;
+      }
+      sourceMappings[sourceAccount] = target.kind === "manual"
+        ? { manual_account_id: target.id }
+        : { account_id: target.id };
+    }
     setError(null);
     setBusy(true);
     try {
@@ -151,7 +186,8 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           batch_id: batchId,
-          account_id: accountId,
+          ...(selectedAccount.kind === "manual" ? { manual_account_id: selectedAccount.id } : { account_id: selectedAccount.id }),
+          account_mappings: sourceMappings,
           approved_row_ids: [...selected],
         }),
       });
@@ -161,6 +197,8 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
       setRows([]);
       setBatchId(null);
       setSelected(new Set());
+      setSourceAccounts([]);
+      setSourceAccountTargets({});
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed");
@@ -198,12 +236,17 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
   return (
     <Panel title="Import with review" eyebrow="Statement backfill">
       <p className="mb-4 text-sm text-muted">
-        Preview a bank-statement CSV, OFX, or QFX file before importing. Rows that look like duplicates of
-        existing transactions are flagged and left unchecked; you decide what lands.
+        Preview a bank-statement CSV, an OFX/QFX file, or a Mint, Monarch, or YNAB export
+        before importing. Rows that look like duplicates of existing transactions are
+        flagged and left unchecked; you decide what lands.
+      </p>
+      <p className="mb-4 text-sm text-muted">
+        Only transactions import — budgets, goals, and rules from the source app are not
+        carried over.
       </p>
 
       {accounts.length === 0 ? (
-        <p className="text-sm text-muted">Connect a bank first. Imports attach to an account.</p>
+        <p className="text-sm text-muted">Create or connect an account first. Imports attach to an account.</p>
       ) : (
         <form onSubmit={onPreview} className="space-y-3 text-sm">
           <Input
@@ -220,7 +263,7 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
               <Select value={accountId} onChange={(event) => setAccountId(event.target.value)}>
                 {accounts.map((account) => (
                   <option key={account.id} value={account.id}>
-                    {account.name ?? "Account"}
+                    {account.name ?? "Account"}{account.kind === "manual" ? " (manual)" : ""}
                     {account.mask ? ` **${account.mask}` : ""}
                   </option>
                 ))}
@@ -238,11 +281,52 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
             ) : (
               <p className="text-muted">OFX sign conventions are detected automatically.</p>
             )}
+            <label className="flex items-center gap-2">
+              Date format{" "}
+              <select
+                value={dateOrder}
+                onChange={(event) => setDateOrder(event.target.value as typeof dateOrder)}
+                className="rounded border border-panel-border bg-panel px-2 py-1"
+              >
+                <option value="auto">Auto-detect</option>
+                <option value="mdy">Month / day / year</option>
+                <option value="dmy">Day / month / year</option>
+                <option value="ymd">Year / month / day</option>
+              </select>
+            </label>
           </div>
+          {dateFormatRequired && (
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              The file contains ambiguous dates. Choose the source date format, then preview again.
+            </p>
+          )}
           <Button type="submit" loading={busy} variant="secondary">
             Preview file
           </Button>
         </form>
+      )}
+
+      {sourceAccounts.length > 0 && (
+        <div className="mt-4 space-y-3 rounded-field border border-panel-border bg-panel-2 p-3 text-sm">
+          <p className="font-semibold text-foreground">Map source accounts</p>
+          <p className="text-muted">Each source account is remembered for future imports.</p>
+          {sourceAccounts.map((sourceAccount) => (
+            <label key={sourceAccount} className="flex flex-wrap items-center justify-between gap-2">
+              <span>{sourceAccount}</span>
+              <Select
+                value={sourceAccountTargets[sourceAccount] ?? ""}
+                onChange={(event) => setSourceAccountTargets((current) => ({ ...current, [sourceAccount]: event.target.value }))}
+              >
+                <option value="">Choose account</option>
+                {accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name ?? "Account"}{account.kind === "manual" ? " (manual)" : ""}{account.mask ? ` **${account.mask}` : ""}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          ))}
+        </div>
       )}
 
       {mapping && (

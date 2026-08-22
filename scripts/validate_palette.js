@@ -157,6 +157,7 @@ function validatePalette(theme, colors) {
   const warnings = [];
   const surface = THEME_SURFACES[theme];
   if (surface) {
+    // c8 ignore next -- only light/dark reach here, and both have exception entries
     const exempt = KNOWN_SURFACE_EXCEPTIONS[theme] ?? new Set();
     colors.forEach((color, index) => {
       const slot = index + 1;
@@ -265,6 +266,7 @@ module.exports = {
   validatePalette,
 };
 
+// c8 ignore next 4 -- the CLI entry point only runs when invoked directly
 if (require.main === module) {
   runCli(process.argv[2] || "app/globals.css").then((exitCode) => {
     process.exitCode = exitCode;

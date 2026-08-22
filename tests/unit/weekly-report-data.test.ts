@@ -136,4 +136,50 @@ describe("getWeeklyReportData", () => {
       "weekly report user: User lookup failed",
     );
   });
+
+  it("handles error without message and null table data", async () => {
+    const supabaseErr = {
+      auth: {
+        admin: {
+          getUserById: async () => ({
+            data: null,
+            error: {}, // No message property
+          }),
+        },
+      },
+    };
+
+    await expect(getWeeklyReportData(supabaseErr as never, "user-1", period)).rejects.toThrow(
+      "weekly report user: query failed",
+    );
+
+    // Empty / null table results
+    const dbStub = clientStub({
+      accounts: { data: null },
+      plaid_items: { data: null },
+      budgets: { data: null },
+      merchant_rules: { data: null },
+      linked_refunds: { data: null },
+      linked_duplicates: { data: null },
+      transactions: { data: null },
+      transaction_splits: { data: null },
+    });
+
+    const supabase = {
+      ...dbStub,
+      auth: {
+        admin: {
+          getUserById: async () => ({
+            data: { user: { email: "user@example.com" } },
+            error: null,
+          }),
+        },
+      },
+    };
+
+    const data = await getWeeklyReportData(supabase as never, "user-1", period);
+    expect(data).toBeDefined();
+    expect(data?.totalSpend).toBe(0);
+    expect(data?.categories).toEqual([]);
+  });
 });

@@ -11,6 +11,7 @@ interface AccountOption {
   id: string;
   name: string | null;
   mask: string | null;
+  kind: "account" | "manual";
 }
 
 interface ImportResult {
@@ -24,6 +25,7 @@ export default function ImportSection({ accounts }: Readonly<{ accounts: Account
   const router = useRouter();
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const [positiveIsIncome, setPositiveIsIncome] = useState(true);
+  const [dateOrder, setDateOrder] = useState<"auto" | "mdy" | "dmy" | "ymd">("auto");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,8 +37,9 @@ export default function ImportSection({ accounts }: Readonly<{ accounts: Account
 
     const fileInput = e.currentTarget.elements.namedItem("file") as HTMLInputElement;
     const file = fileInput.files?.[0];
-    if (!file || !accountId) {
-      setError("Choose a CSV file and a target account.");
+    const selectedAccount = accounts.find((account) => account.id === accountId);
+    if (!file || !selectedAccount) {
+      setError("Choose a file and a target account.");
       return;
     }
 
@@ -44,8 +47,10 @@ export default function ImportSection({ accounts }: Readonly<{ accounts: Account
     try {
       const form = new FormData();
       form.set("file", file);
-      form.set("account_id", accountId);
+      if (selectedAccount.kind === "manual") form.set("manual_account_id", accountId);
+      else form.set("account_id", accountId);
       form.set("positive_is_income", String(positiveIsIncome));
+      if (dateOrder !== "auto") form.set("date_order", dateOrder);
 
       const res = await fetch("/api/import/csv", { method: "POST", body: form });
       const json = await res.json().catch(() => ({}));
@@ -65,22 +70,26 @@ export default function ImportSection({ accounts }: Readonly<{ accounts: Account
   }
 
   return (
-    <Panel title="Import data" eyebrow="CSV backfill">
+    <Panel title="Import data" eyebrow="Statement backfill">
       <p className="mb-4 text-sm text-muted">
         Backfill history older than Plaid provides (max 24 months) from a bank-statement
-        CSV. Needs date, description, and amount (or debit/credit) columns. Rows that
-        overlap the account&apos;s Plaid-synced history are skipped automatically, and
-        re-importing the same file never duplicates.
+        CSV, an OFX/QFX file, or a Mint, Monarch, or YNAB export. Rows that overlap the
+        account&apos;s Plaid-synced history are skipped automatically, and re-importing the
+        same file never duplicates.
+      </p>
+      <p className="mb-4 text-sm text-muted">
+        Only transactions import — budgets, goals, and rules from the source app are not
+        carried over.
       </p>
 
       {accounts.length === 0 ? (
-        <p className="text-sm text-muted">Connect a bank first. Imports attach to an account.</p>
+        <p className="text-sm text-muted">Create or connect an account first. Imports attach to an account.</p>
       ) : (
         <form onSubmit={onSubmit} className="space-y-3 text-sm">
           <label className="flex min-h-32 flex-col items-center justify-center rounded-card border border-dashed border-panel-border bg-panel-2 px-4 py-8 text-center text-sm text-muted">
-            <span className="font-semibold text-foreground">Drag and drop your CSV file here</span>
-            <span className="mt-1">or choose a file</span>
-            <Input type="file" name="file" accept=".csv,.ofx,.qfx,text/csv" required className="mt-4 max-w-xs" />
+            <span className="font-semibold text-foreground">Drag and drop your CSV, OFX, or QFX file here</span>
+            <span className="mt-1">or choose a file (Mint, Monarch, and YNAB exports work too)</span>
+            <Input type="file" name="file" accept=".csv,.ofx,.qfx,text/csv,application/x-ofx" required className="mt-4 max-w-xs" />
           </label>
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2">
@@ -91,7 +100,7 @@ export default function ImportSection({ accounts }: Readonly<{ accounts: Account
               >
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name ?? "Account"}
+                    {a.name ?? "Account"}{a.kind === "manual" ? " (manual)" : ""}
                     {a.mask ? ` **${a.mask}` : ""}
                   </option>
                 ))}
@@ -105,12 +114,25 @@ export default function ImportSection({ accounts }: Readonly<{ accounts: Account
               />
               <span>Positive amounts are deposits (most bank CSVs)</span>
             </label>
+            <label className="flex items-center gap-2">
+              Date format{" "}
+              <select
+                value={dateOrder}
+                onChange={(event) => setDateOrder(event.target.value as typeof dateOrder)}
+                className="rounded border border-panel-border bg-panel px-2 py-1"
+              >
+                <option value="auto">Auto-detect</option>
+                <option value="mdy">Month / day / year</option>
+                <option value="dmy">Day / month / year</option>
+                <option value="ymd">Year / month / day</option>
+              </select>
+            </label>
           </div>
           <Button
             type="submit"
             loading={busy}
           >
-            {busy ? "Importing..." : "Import CSV"}
+            {busy ? "Importing..." : "Import file"}
           </Button>
         </form>
       )}

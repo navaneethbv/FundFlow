@@ -126,6 +126,30 @@ describe("POST /api/sinking-funds", () => {
 });
 
 describe("PATCH /api/sinking-funds/[id]", () => {
+  it("returns 400 when id param is empty", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ sinking_funds: { data: null } }),
+    });
+    const response = await PATCH(
+      request("PATCH", { name: "X", targetAmount: 1, dueDate: "2027-01-01", cadence: "one_time" }),
+      context(""),
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 500 when ownership query throws", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ sinking_funds: { data: null, error: { message: "DB down" } } }),
+    });
+    const response = await PATCH(
+      request("PATCH", { name: "X", targetAmount: 1, dueDate: "2027-01-01", cadence: "one_time" }),
+      context(FUND.id),
+    );
+    expect(response.status).toBe(500);
+  });
+
   it("rejects invalid input body with 400", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: USER_ID },
@@ -233,6 +257,24 @@ describe("PATCH /api/sinking-funds/[id]", () => {
 });
 
 describe("DELETE /api/sinking-funds/[id]", () => {
+  it("returns 400 when id param is empty", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ sinking_funds: { data: null } }),
+    });
+    const response = await DELETE(request("DELETE"), context(""));
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 500 when ownership query throws", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ sinking_funds: { data: null, error: { message: "DB down" } } }),
+    });
+    const response = await DELETE(request("DELETE"), context(FUND.id));
+    expect(response.status).toBe(500);
+  });
+
   it("404s when the fund is not found", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: USER_ID },

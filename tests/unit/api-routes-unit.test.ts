@@ -49,6 +49,7 @@ import {
   DELETE as tagsDelete,
 } from "@/app/api/settings/tags/route";
 import { POST as annotatePost } from "@/app/api/transactions/annotate/route";
+import { POST as budgetPost, PUT as budgetPut } from "@/app/api/budget/route";
 
 describe("API Route Handlers Unit Tests", () => {
   beforeEach(() => {
@@ -407,6 +408,136 @@ describe("API Route Handlers Unit Tests", () => {
       });
       const res = await annotatePost(req);
       expect(res.status).toBe(200);
+
+      // Deleting annotation and splits (empty note, empty tags, empty splits)
+      const reqEmpty = new NextRequest("http://localhost/api/transactions/annotate", {
+        method: "POST",
+        body: JSON.stringify({ transaction_id: "t1", note: "", tags: [], splits: [] }),
+      });
+      expect((await annotatePost(reqEmpty)).status).toBe(200);
+
+      // Goal link with spending_reduces goal and valid splits
+      const dbWithGoal = clientStub({
+        transactions: { data: { id: "t1", amount: 50, date: "2026-07-01" } },
+        goals: { data: { id: "g1", spending_reduces: true } },
+        transaction_annotations: { data: {} },
+        transaction_splits: { data: {} },
+        goal_progress_events: { data: {} },
+      });
+      mockRequireUser.mockResolvedValue({
+        user: { id: "user-1" },
+        supabase: dbWithGoal,
+      });
+
+      const reqGoalSplits = new NextRequest("http://localhost/api/transactions/annotate", {
+        method: "POST",
+        body: JSON.stringify({
+          transaction_id: "t1",
+          note: "With Goal",
+          goal_id: "g1",
+          splits: [
+            { category: "Food", amount: 30 },
+            { category: "Drinks", amount: 20 },
+          ],
+        }),
+      });
+      expect((await annotatePost(reqGoalSplits)).status).toBe(200);
+
+      // Invalid splits that don't match transaction amount
+      const reqBadSplits = new NextRequest("http://localhost/api/transactions/annotate", {
+        method: "POST",
+        body: JSON.stringify({
+          transaction_id: "t1",
+          splits: [
+            { category: "Food", amount: 30 },
+          ],
+        }),
+      });
+      expect((await annotatePost(reqBadSplits)).status).toBe(400);
+
+      // Unauthorized
+      mockRequireUser.mockResolvedValue(
+        NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      );
+      expect((await annotatePost(new NextRequest("http://localhost/api/transactions/annotate", { method: "POST" }))).status).toBe(401);
+
+      // Database error on annotation upsert
+      const dbErr = clientStub({
+        transactions: { data: { id: "t1", amount: 50, date: "2026-07-01" } },
+        transaction_annotations: { error: new Error("Upsert annotation failed") },
+      });
+      mockRequireUser.mockResolvedValue({
+        user: { id: "user-1" },
+        supabase: dbErr,
+      });
+      const reqErr = new NextRequest("http://localhost/api/transactions/annotate", {
+        method: "POST",
+        body: JSON.stringify({ transaction_id: "t1", note: "Should fail" }),
+      });
+      expect((await annotatePost(reqErr)).status).toBe(500);
+    });
+  });
+
+  describe("Budget Route Deep Unit Tests", () => {
+    it("handles budget proposals validation and creation error branches", async () => {
+      mockRequireUser.mockResolvedValue({
+        user: { id: "user-1" },
+        supabase: clientStub({
+          budgets: { data: [{ id: "b1", category: "Food" }] },
+        }),
+      });
+
+      // Bad body
+      expect((await budgetPost(new NextRequest("http://localhost/api/budget", { method: "POST", body: JSON.stringify({}) }))).status).toBe(400);
+      expect((await budgetPost(new NextRequest("http://localhost/api/budget", { method: "POST", body: JSON.stringify({ month: "2026-08", items: "invalid" }) }))).status).toBe(400);
+      expect((await budgetPost(new NextRequest("http://localhost/api/budget", { method: "POST", body: JSON.stringify({ month: "2026-08", items: [null] }) }))).status).toBe(400);
+      expect((await budgetPost(new NextRequest("http://localhost/api/budget", { method: "POST", body: JSON.stringify({ month: "2026-08", items: [{ category: 123 }] }) }))).status).toBe(400);
+
+      // Existing categories skipped + valid insertion
+      const validReq = new NextRequest("http://localhost/api/budget", {
+        method: "POST",
+        body: JSON.stringify({
+          month: "2026-08",
+          items: [
+            { category: "Food", monthly_limit: 100, group_name: "fixed", rollover_enabled: false, sort_order: 0 },
+            { category: "Travel", monthly_limit: 200, group_name: "flexible", rollover_enabled: false, sort_order: 1 },
+          ],
+        }),
+      });
+      const res = await budgetPost(validReq);
+      expect(res.status).toBe(200);
+    });
+
+    it("handles budget PUT errors and P0002 not found code", async () => {
+      const dbNotFound = {
+        rpc: vi.fn().mockResolvedValue({ data: null, error: { code: "P0002" } }),
+      };
+      mockRequireUser.mockResolvedValue({
+        user: { id: "user-1" },
+        supabase: dbNotFound,
+      });
+
+      const putReq = new NextRequest("http://localhost/api/budget", {
+        method: "PUT",
+        body: JSON.stringify({
+          budget_id: "123e4567-e89b-12d3-a456-426614174000",
+          month: "2026-08",
+          planned: 500,
+        }),
+      });
+      expect((await budgetPut(putReq)).status).toBe(404);
+
+      // Invalid rollover
+      const badRolloverReq = new NextRequest("http://localhost/api/budget", {
+        method: "PUT",
+        body: JSON.stringify({
+          budget_id: "123e4567-e89b-12d3-a456-426614174000",
+          month: "2026-08",
+          planned: 500,
+          rollover_enabled: "yes",
+        }),
+      });
+      expect((await budgetPut(badRolloverReq)).status).toBe(400);
     });
   });
 });

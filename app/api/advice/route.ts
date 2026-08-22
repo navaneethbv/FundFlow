@@ -117,11 +117,11 @@ export async function PATCH(request: NextRequest) {
       if (typeof adviceId !== "string" || typeof taskId !== "string" || typeof completed !== "boolean") {
         return badRequest("adviceId, taskId, and completed are required");
       }
-      return toggleTask(service, user.id, adviceId, taskId, completed, request);
+      return await toggleTask(service, user.id, adviceId, taskId, completed, request);
     }
 
     if (body.kind === "set_priorities") {
-      return setPriorities(
+      return await setPriorities(
         service,
         user.id,
         (body as { priorities?: unknown }).priorities,
@@ -130,7 +130,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (body.kind === "update_profile") {
-      return updateProfile(
+      return await updateProfile(
         service,
         user.id,
         (body as { profile?: unknown }).profile,

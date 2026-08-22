@@ -9,16 +9,14 @@ export function toQif(rows: ExportRow[], accountType: "Bank" | "CCard" = "Bank")
   const lines: string[] = [`!Type:${accountType}`];
 
   for (const row of rows) {
-    lines.push(`D${row.date}`);
-    // In Plaid positive = expense (money out), negative = income (money in).
-    // In QIF, expense is negative amount, income is positive amount.
     const qifAmount = (-row.amount).toFixed(2);
-    lines.push(`T${qifAmount}`);
-    lines.push(`P${row.merchant}`);
-    if (row.category) {
-      lines.push(`L${row.category}`);
-    }
-    lines.push("^");
+    lines.push(
+      `D${row.date}`,
+      `T${qifAmount}`,
+      `P${row.merchant}`,
+      ...(row.category ? [`L${row.category}`] : []),
+      "^",
+    );
   }
 
   return lines.join("\n");
@@ -35,7 +33,7 @@ export function toLedgerCli(
 
   for (const row of rows) {
     const categoryAccount = row.category
-      ? `Expenses:${row.category.replace(/[^a-zA-Z0-9_]/g, ":")}`
+      ? `Expenses:${row.category.replace(/\W/g, ":")}`
       : "Expenses:Uncategorized";
 
     const amountFormatted = `$${Math.abs(row.amount).toFixed(2)}`;

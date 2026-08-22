@@ -589,4 +589,50 @@ describe("notifications manager", () => {
     await processNotificationsForUser("user-1");
     expect(bodies.some((b) => b.includes("your bank") && b.includes("unknown"))).toBe(true);
   });
+
+  it("handles exact dedupe unique collision and body matching in hasRecentNotification", async () => {
+    // Unique violation on insert
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({ data: null, error: null }),
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+          }),
+        }),
+      }),
+      insert: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({ data: null, error: { code: "23505" } }),
+        }),
+      }),
+    });
+
+    const notif = await createNotification("user-1", "large_transaction", {
+      title: "Large charge",
+      body: "Over 500 dollars",
+    }, "tx-123");
+    expect(notif).toBeNull();
+
+    // Body matching in recent notification
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({ data: null, error: null }),
+          eq: vi.fn().mockReturnValue({
+            gte: vi.fn().mockResolvedValue({
+              data: [{ id: "n1", title: "Generic Title", body: "Matched Keyword inside body" }],
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    });
+
+    const notifBudget = await createNotification("user-1", "budget_exceeded", {
+      title: "Budget exceeded",
+      body: "Over limit",
+    }, "Keyword");
+    expect(notifBudget).toBeNull();
+  });
 });

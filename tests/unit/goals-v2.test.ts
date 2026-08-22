@@ -781,4 +781,45 @@ describe("goalsV2 rollout flag", () => {
       isFeatureEnabled("goalsV2", { FUNDFLOW_FEATURE_FLAGS: "reportsPage" }),
     ).toBe(true);
   });
+
+  it("sorts goals with target_date after goals without target_date", () => {
+    const goalsList = [
+      goal({ id: "g-nodate", name: "No Date Goal", target_date: null }),
+      goal({ id: "g-withdate", name: "With Date Goal", target_date: "2026-12-31" }),
+    ];
+    const sorted = computeFundedGoals(
+      goalsList,
+      [],
+      [],
+      [],
+      TODAY,
+    );
+    expect(sorted[0]!.id).toBe("g-withdate");
+    expect(sorted[1]!.id).toBe("g-nodate");
+  });
+
+  it("handles null allocated_amount in existing allocations and debt starting_balance null", () => {
+    const err = validateAllocation({
+      existing: [
+        { goal_id: "other", account_id: "acct-1", allocated_amount: null, use_entire_balance: false },
+      ],
+      accountBalance: 1000,
+      allocatedAmount: 200,
+      useEntireBalance: false,
+    });
+    expect(err).toBeNull();
+
+    // Debt goal with starting_balance: null and linked account
+    const debtGoalNoStart = goal({
+      id: "g-debt-null-start",
+      goal_type: "pay_down",
+      starting_balance: null,
+      target_balance: 0,
+      target_amount: 5000,
+    });
+    const debtLink = link({ goal_id: "g-debt-null-start", account_id: "acct-debt" });
+    const debtAcct = account({ id: "acct-debt", current_balance: 1000, type: "credit" });
+    const fundedDebt = computeFundedGoals([debtGoalNoStart], [debtLink], [debtAcct], [], TODAY);
+    expect(fundedDebt[0]!.funded_amount).toBe(0);
+  });
 });
