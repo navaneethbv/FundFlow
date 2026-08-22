@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-These apply to every task below (carried from `docs/superpowers/plans/2026-07-29-monarch-parity.md`'s Global Constraints section and this repo's `CLAUDE.md`):
+These apply to every task below (carried from `docs/superpowers/archive/plans/2026-07-29-monarch-parity.md`'s Global Constraints section and this repo's `CLAUDE.md`):
 
 - Preserve every security invariant in `CLAUDE.md`: RLS on all user tables, service-client queries always filter `user_id` explicitly, nonce-based CSP (no new external script/img hosts), MFA enforcement untouched.
 - Amount sign follows Plaid: positive = money out, negative = money in. `RecurringOccurrence.amount` in this phase is always a non-negative display magnitude; `isIncome` carries the direction instead, matching how `BillCalendar`/`RecurringItem` already work in `lib/planning.ts`.

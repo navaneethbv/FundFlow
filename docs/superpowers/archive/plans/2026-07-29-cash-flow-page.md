@@ -876,7 +876,7 @@ git add \
   tests/e2e/cash-flow.spec.ts \
   docs/HANDOFF.md \
   docs/TODO.md \
-  docs/superpowers/plans/2026-07-29-cash-flow-page.md
+  docs/superpowers/archive/plans/2026-07-29-cash-flow-page.md
 
 git commit -m "feat(cash-flow): add reconciled cash flow analysis"
 ```

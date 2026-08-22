@@ -584,7 +584,7 @@ git commit -m "feat: deliver weekly reports idempotently"
 - Modify: `README.md`
 - Modify: `docs/QA.md`
 - Modify: `docs/HANDOFF.md`
-- Modify: `todos.md`
+- Modify: `docs/archive/todos-2026-07.md`
 - Create: `scripts/render-weekly-report-fixture.test.ts`
 - Create: `tests/unit/weekly-report-docs.test.ts`
 

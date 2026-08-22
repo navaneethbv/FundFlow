@@ -11,7 +11,7 @@
 
 ## Global Constraints
 
-(Carried forward from `docs/superpowers/plans/2026-07-29-monarch-parity.md`'s "Global Constraints", trimmed to what this phase touches.)
+(Carried forward from `docs/superpowers/archive/plans/2026-07-29-monarch-parity.md`'s "Global Constraints", trimmed to what this phase touches.)
 
 - Preserve every security invariant in `CLAUDE.md`: RLS on all user tables, service-client queries always filter `user_id`, nonce-based CSP (no new external script/img hosts), MFA enforcement untouched.
 - Use original FundFlow copy, icons, illustrations — no Monarch branding or assets.
@@ -1413,7 +1413,7 @@ Expected: all pass.
 
 - [ ] **Step 4: Update `docs/HANDOFF.md` with the final Phase 1 status**
 
-Record: branch name, test totals, the Year-in-Money deferral to Phase 6, the sm-breakpoint scope decision for top-bar utility icons, and "Next: Phase 5, 6, or 9A (independent of each other) per the master plan's dependency graph" (Phase 1 unblocks all of them per `docs/superpowers/plans/2026-07-29-monarch-parity.md`'s ordering diagram).
+Record: branch name, test totals, the Year-in-Money deferral to Phase 6, the sm-breakpoint scope decision for top-bar utility icons, and "Next: Phase 5, 6, or 9A (independent of each other) per the master plan's dependency graph" (Phase 1 unblocks all of them per `docs/superpowers/archive/plans/2026-07-29-monarch-parity.md`'s ordering diagram).
 
 - [ ] **Step 5: Commit**
 
@@ -1448,7 +1448,7 @@ Note: this branch starts from `main` (Phase 4 / PR #72 already merged), per the 
 
 ## Self-Review Checklist
 
-- [ ] Every Phase 1 bullet in `docs/superpowers/plans/2026-07-29-monarch-parity.md` maps to a task above, or its deferral is explicitly recorded (Year in Money / Reports).
+- [ ] Every Phase 1 bullet in `docs/superpowers/archive/plans/2026-07-29-monarch-parity.md` maps to a task above, or its deferral is explicitly recorded (Year in Money / Reports).
 - [ ] No placeholder route or "coming soon" page is added.
 - [ ] `NAV_ITEMS`/`UTILITY_ITEMS` types used in later tasks match Task 1's definitions exactly (`hint`, `getEnabledNavItems`).
 - [ ] `proxy.ts` is not modified, only tested (Task 3).

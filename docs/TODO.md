@@ -2,6 +2,27 @@
 
 Nice-to-have features and enhancements, deferred out of the initial build.
 
+## Added 2026-08-21: two AI-surface findings (from the docs pass)
+
+Found while documenting `app/api/ai/*` for `docs/ARCHITECTURE.md`.
+Neither was fixed in that docs-only PR, because both are owner calls rather than wording.
+
+### 1. The default model id is not a real model
+
+All three AI routes default to `process.env.AI_INSIGHTS_MODEL ?? "claude-opus-4-8"`.
+`claude-opus-4-8` is not a valid Anthropic model id, so any deployment that sets `ANTHROPIC_API_KEY` without also setting `AI_INSIGHTS_MODEL` gets an API error on every call.
+`/api/ai/insights` hides this: the provider exception is caught and it silently serves the local rule-based summaries, so the feature looks like it works while never reaching a model.
+`/api/ai/ask` and `/api/ai/receipt` surface it as a 500.
+Pick a current id (the Claude 5 family, e.g. `claude-opus-5` or `claude-sonnet-5`) and decide whether the default should exist at all, or whether an unset `AI_INSIGHTS_MODEL` should be a startup error.
+Files: `app/api/ai/insights/route.ts`, `app/api/ai/ask/route.ts`, `app/api/ai/receipt/route.ts`.
+
+### 2. Receipt scanning is gated once, not twice
+
+The docstring in `app/api/ai/receipt/route.ts` says it sits behind "the same double consent as AI insights", but the route checks only `ai_settings.enabled`.
+`insights` and `ask` also pass through `fetchPrivacySafeRows()`, which enforces `ai_export_enabled`; `receipt` never calls it, because its payload is the uploaded image rather than ledger rows.
+There is no cross-user exposure: the candidate lookup uses the RLS-bound client and is correctly scoped.
+The question is intent, so it needs a decision, not a patch: either add the `ai_export_enabled` check so an image upload honors the same opt-out as every other AI path, or keep one gate and correct the comment.
+
 ## Added 2026-08-21: migration import (Mint, Monarch, YNAB) — shipped
 
 Done on 2026-08-21 (`feat/production-readiness-2026-08`, plan
@@ -104,7 +125,7 @@ After setting a newly generated pair, redeploy and the Push section in Settings 
 
 ## Active program: financial-planner parity (started 2026-07-29)
 
-Plan: `docs/superpowers/plans/2026-07-29-monarch-parity.md`.
+Plan: `docs/superpowers/archive/plans/2026-07-29-monarch-parity.md`.
 Fourteen phases bringing FundFlow to parity with the reference planner screenshots: Accounts, Cash Flow, Budget, Recurring, Reports, Goals, Investments, Forecasting, Advice, Settings IA, and a customizable dashboard.
 
 - **Phase 0 — canonical finance semantics.** Done (2026-07-29), branch `feat/finance-domain-foundation`.
@@ -265,7 +286,7 @@ and Settings read `profiles.weekly_report_enabled`.
 ## Added 2026-07-23 (four-session roadmap drop)
 
 Shipped in one merge; the per-feature record is
-`docs/CHANGES-roadmap-2026-07-23.md`.
+`docs/archive/CHANGES-roadmap-2026-07-23.md`.
 This closed out most of the list below, plus phases 2-8 of the roadmap.
 
 - ~~**Optional in-app AI insights**~~ Done: `lib/ai-provider.ts` (official

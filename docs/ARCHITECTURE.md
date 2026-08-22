@@ -219,6 +219,40 @@ flowchart TB
 `lib/env.ts` holds the `NEXT_PUBLIC_*` values. Never import server env into
 client components.
 
+## In-app AI
+
+Three routes, one client. `lib/ai-provider.ts` is `server-only` and is the
+**only** place an Anthropic client may be constructed.
+
+| Route | Purpose | Daily cap |
+| --- | --- | --- |
+| `/api/ai/insights` | Short "what changed" / "subscriptions to review" notes, persisted to `ai_insights` | 4 |
+| `/api/ai/ask` | One grounded question about the user's own spending, no history, no memory | 10 |
+| `/api/ai/receipt` | Receipt photo to merchant/amount/date extraction, matched against the ledger | 10 |
+
+Invariants:
+
+- **The payload is aggregates, not rows.** `buildInsightPayload()` reduces the
+  privacy-safe export rows to month/category totals plus top merchants, capped
+  at 6 months and 25 merchants. Balances, account names, masks, emails, and
+  transaction-level rows never enter it. Widening what is sent is a privacy
+  change and needs the same scrutiny as changing the CSV export.
+- **The data contract is shared with the export.** Both go through
+  `fetchPrivacySafeRows()` in `lib/export.ts`, so the `ai_export_enabled`
+  gate covers both. Do not add a second path that reads transactions directly.
+- **Consent is checked per request, server-side**, on top of that flag:
+  `ai_settings.enabled` for the calling user. A client-side toggle is not a
+  gate.
+- **Degrade, never break.** With no `ANTHROPIC_API_KEY`, `ask` and `receipt`
+  return 503 and `insights` serves `generateAiInsightSummaries()` from
+  `lib/ai-insights.ts`, a pure local computation over the same rows. A
+  provider exception takes the same fallback and is logged via
+  `logError("ai.insights.provider", ...)`, never surfaced as a 500.
+- **Receipt scanning is the one upload path.** The image leaves the app for
+  the vision model and is never stored; the extraction returns to the client,
+  which decides whether to attach it as a note through the existing annotate
+  route. Keep it explicit and user-initiated.
+
 ## Subsystem invariants in full
 
 - **MFA is enforced server-side.** `lib/mfa.ts` (`needsMfaStepUp`) is checked
