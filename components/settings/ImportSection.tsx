@@ -115,7 +115,7 @@ export default function ImportSection({ accounts }: Readonly<{ accounts: Account
               <span>Positive amounts are deposits (most bank CSVs)</span>
             </label>
             <label className="flex items-center gap-2">
-              Date format
+              Date format{" "}
               <select
                 value={dateOrder}
                 onChange={(event) => setDateOrder(event.target.value as typeof dateOrder)}

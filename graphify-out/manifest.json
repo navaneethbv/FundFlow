@@ -210,21 +210,21 @@
     "semantic_hash": ""
   },
   "app/api/import/commit/route.ts": {
-    "mtime": 1787355003.786175,
-    "seen": 1787355098.5235,
-    "ast_hash": "ecfe2d6de994fe1777e933dcd05c2448",
+    "mtime": 1787357321.1974728,
+    "seen": 1787357607.0293381,
+    "ast_hash": "84e6a103bc01a169bfbcad1ef52fa963",
     "semantic_hash": ""
   },
   "app/api/import/csv/route.ts": {
-    "mtime": 1787354537.4390986,
-    "seen": 1787355098.523502,
-    "ast_hash": "8eaa4a616de4b99a4a959db510fc65ab",
+    "mtime": 1787357289.1149585,
+    "seen": 1787357607.0293388,
+    "ast_hash": "78b0d228c5a0d91aa700914c8f4768de",
     "semantic_hash": ""
   },
   "app/api/import/preview/route.ts": {
-    "mtime": 1787354900.3492138,
-    "seen": 1787355098.523503,
-    "ast_hash": "98b1ae13d26a49d749d9420d434cc77f",
+    "mtime": 1787357362.2340653,
+    "seen": 1787357607.0293398,
+    "ast_hash": "a8f3f1573a27e2c03e8f0691da0f175a",
     "semantic_hash": ""
   },
   "app/api/investments/manual/route.ts": {
@@ -1254,15 +1254,15 @@
     "semantic_hash": ""
   },
   "components/settings/ImportReviewSection.tsx": {
-    "mtime": 1787354399.6861978,
-    "seen": 1787355098.527276,
-    "ast_hash": "c298777799876f9ad059573fc83ecec3",
+    "mtime": 1787357409.855084,
+    "seen": 1787357607.033258,
+    "ast_hash": "0ab913ca14d9390c5f8f2cd6b1d1a7b3",
     "semantic_hash": ""
   },
   "components/settings/ImportSection.tsx": {
-    "mtime": 1787354782.7226615,
-    "seen": 1787355098.527277,
-    "ast_hash": "0bc1513fcd356fb629b4012f5e5af3ef",
+    "mtime": 1787357406.1114666,
+    "seen": 1787357607.033259,
+    "ast_hash": "36325bfb634447d2257638d364414926",
     "semantic_hash": ""
   },
   "components/settings/ManualAccountsSection.tsx": {
@@ -1908,9 +1908,9 @@
     "semantic_hash": ""
   },
   "lib/finance-domain.ts": {
-    "mtime": 1786735424.3319454,
-    "seen": 1787351028.364345,
-    "ast_hash": "639a000e5ddab5d669e2d7c9e5232b7b",
+    "mtime": 1787357202.502711,
+    "seen": 1787357607.035543,
+    "ast_hash": "5f1ddccc8594aa9b3559b3c90a85330b",
     "semantic_hash": ""
   },
   "lib/finance-query.ts": {
@@ -2016,9 +2016,9 @@
     "semantic_hash": ""
   },
   "lib/import.ts": {
-    "mtime": 1787354996.7544377,
-    "seen": 1787355098.529779,
-    "ast_hash": "653c28c740a370d179d74c91a6a5a478",
+    "mtime": 1787357234.5447426,
+    "seen": 1787357607.035882,
+    "ast_hash": "669d230fe7b19405ee7d929a84ffc809",
     "semantic_hash": ""
   },
   "lib/insights.ts": {
@@ -2388,9 +2388,9 @@
     "semantic_hash": ""
   },
   "lib/weekly-report.ts": {
-    "mtime": 1787335110.1297557,
-    "seen": 1787351028.364397,
-    "ast_hash": "466db716fa14c86cd5b7229cd4a91c25",
+    "mtime": 1787357366.049191,
+    "seen": 1787357607.03715,
+    "ast_hash": "ab4f01a8bd5785a4528e8cb40a646778",
     "semantic_hash": ""
   },
   "next.config.ts": {
@@ -3258,9 +3258,9 @@
     "semantic_hash": ""
   },
   "tests/unit/coverage-boost-more.test.ts": {
-    "mtime": 1787331707.3376563,
-    "seen": 1787351028.364489,
-    "ast_hash": "faf93bff856a7a0aa8e8a338348d2aad",
+    "mtime": 1787357524.8917515,
+    "seen": 1787357607.040311,
+    "ast_hash": "a16da35174a451f9f1edc5fd8d741a0f",
     "semantic_hash": ""
   },
   "tests/unit/coverage-boost-parsers.test.ts": {
@@ -3846,9 +3846,9 @@
     "semantic_hash": ""
   },
   "tests/unit/import-routes.test.ts": {
-    "mtime": 1787354842.3009324,
-    "seen": 1787355098.536423,
-    "ast_hash": "941032673fc2bdef56caf57df40c01ef",
+    "mtime": 1787357341.3824317,
+    "seen": 1787357607.0424068,
+    "ast_hash": "7a1affca86f28557af5e709a7ac22ec8",
     "semantic_hash": ""
   },
   "tests/unit/import-ynab.test.ts": {

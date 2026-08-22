@@ -282,7 +282,7 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
               <p className="text-muted">OFX sign conventions are detected automatically.</p>
             )}
             <label className="flex items-center gap-2">
-              Date format
+              Date format{" "}
               <select
                 value={dateOrder}
                 onChange={(event) => setDateOrder(event.target.value as typeof dateOrder)}

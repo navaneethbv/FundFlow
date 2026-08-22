@@ -193,11 +193,11 @@ export type DateOrder = "mdy" | "dmy" | "ymd";
 
 export function normalizeDateWithOrder(raw: string, order: DateOrder): string | null {
   const s = raw.trim();
-  let match = /^(\d{4})[-/]([0-9]{1,2})[-/]([0-9]{1,2})$/.exec(s);
+  let match = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(s);
   if (match) {
     return toIsoDate(Number(match[1]), Number(match[2]), Number(match[3]));
   }
-  match = /^([0-9]{1,2})\/([0-9]{1,2})\/(\d{2,4})$/.exec(s);
+  match = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(s);
   if (!match) return null;
   let year = Number(match[3]);
   if (year < 100) year += year >= 70 ? 1900 : 2000;
@@ -208,24 +208,40 @@ export function normalizeDateWithOrder(raw: string, order: DateOrder): string | 
     : toIsoDate(year, first, second);
 }
 
+type DateShape = DateOrder | "ambiguous" | "none";
+
+/** Classifies one date-column value by its literal shape, without regard to what's inferred so far. */
+function classifyDateShape(raw: string): DateShape {
+  const value = raw.trim();
+  if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(value)) return "ymd";
+  const match = /^(\d{1,2})\/(\d{1,2})\/\d{2,4}$/.exec(value);
+  if (!match) return "none";
+  const first = Number(match[1]);
+  const second = Number(match[2]);
+  if (first > 12 && second <= 12) return "dmy";
+  if (second > 12 && first <= 12) return "mdy";
+  return "ambiguous";
+}
+
+/**
+ * Folds one value's shape into the order inferred so far. Returns "conflict"
+ * when the value rules out every order consistent with prior values (e.g. an
+ * ISO date mixed with a slash date, or a day > 12 after a month > 12).
+ */
+function combineDateShape(inferred: DateOrder | null, shape: DateShape): DateOrder | null | "conflict" {
+  if (shape === "none") return inferred;
+  if (inferred === "ymd" && shape !== "ymd") return "conflict";
+  if (shape === "ambiguous") return inferred;
+  if (shape === "ymd") return inferred && inferred !== "ymd" ? "conflict" : "ymd";
+  return inferred && inferred !== shape ? "conflict" : shape;
+}
+
 export function inferDateOrder(values: string[]): DateOrder | null {
   let inferred: DateOrder | null = null;
   for (const raw of values) {
-    const value = raw.trim();
-    if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(value)) {
-      if (inferred && inferred !== "ymd") return null;
-      inferred = "ymd";
-      continue;
-    }
-    const match = /^(\d{1,2})\/(\d{1,2})\/\d{2,4}$/.exec(value);
-    if (inferred === "ymd" && match) return null;
-    if (!match) continue;
-    const first = Number(match[1]);
-    const second = Number(match[2]);
-    const candidate = first > 12 && second <= 12 ? "dmy" : second > 12 && first <= 12 ? "mdy" : null;
-    if (!candidate) continue;
-    if (inferred && inferred !== candidate) return null;
-    inferred = candidate;
+    const next = combineDateShape(inferred, classifyDateShape(raw));
+    if (next === "conflict") return null;
+    inferred = next;
   }
   return inferred;
 }
@@ -548,8 +564,11 @@ export function looksLikeMintCsv(headerRow: string[]): boolean {
   return headerHasAll(headerRow, ["transaction type", "original description"]);
 }
 
-export function parseMintCsv(text: string): ImportParseResult {
-  return parseCsvFormat(text, MINT_FORMAT_SPEC);
+export function parseMintCsv(
+  text: string,
+  options: { dateOrder?: DateOrder; requireDateOrder?: boolean } = {},
+): ImportParseResult & { requiresDateOrder?: boolean } {
+  return parseCsvFormat(text, MINT_FORMAT_SPEC, options);
 }
 
 /** Monarch format spec and parser */
@@ -576,8 +595,11 @@ export function looksLikeMonarchCsv(headerRow: string[]): boolean {
   return headerHasAll(headerRow, ["merchant", "original statement"]);
 }
 
-export function parseMonarchCsv(text: string): ImportParseResult {
-  return parseCsvFormat(text, MONARCH_FORMAT_SPEC);
+export function parseMonarchCsv(
+  text: string,
+  options: { dateOrder?: DateOrder; requireDateOrder?: boolean } = {},
+): ImportParseResult & { requiresDateOrder?: boolean } {
+  return parseCsvFormat(text, MONARCH_FORMAT_SPEC, options);
 }
 
 /** YNAB format spec and parser */

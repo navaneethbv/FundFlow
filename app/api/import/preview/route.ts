@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildImportReview } from "@/lib/planning";
 import {
   getCsvColumns,
@@ -58,9 +59,9 @@ function parseByFormat(
         errors: [],
       };
     case "mint":
-      return parseMintCsv(text);
+      return parseMintCsv(text, { dateOrder: options.dateOrder, requireDateOrder: !options.dateOrder });
     case "monarch":
-      return parseMonarchCsv(text);
+      return parseMonarchCsv(text, { dateOrder: options.dateOrder, requireDateOrder: !options.dateOrder });
     case "ynab":
       return parseYnabCsv(text, { dateOrder: options.dateOrder, requireDateOrder: !options.dateOrder });
     case "csv":
@@ -118,6 +119,24 @@ function emptyPreviewResponse(
   );
 }
 
+async function resolveSourceAccountMappings(
+  supabase: SupabaseClient,
+  sourceAccounts: string[],
+): Promise<Record<string, { account_id?: string; manual_account_id?: string }>> {
+  if (sourceAccounts.length === 0) return {};
+  const { data: mappings, error } = await supabase
+    .from("import_source_account_mappings")
+    .select("source_account, account_id, manual_account_id")
+    .in("source_account", sourceAccounts);
+  if (error) throw error;
+  return Object.fromEntries(
+    (mappings ?? []).map((mapping) => [mapping.source_account as string, {
+      ...(mapping.account_id ? { account_id: mapping.account_id as string } : {}),
+      ...(mapping.manual_account_id ? { manual_account_id: mapping.manual_account_id as string } : {}),
+    }]),
+  );
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -163,20 +182,7 @@ export async function POST(request: NextRequest) {
     const review = buildImportReview(rows, existingFingerprints);
 
     const sourceAccounts = [...new Set(rows.map((row) => row.sourceAccount).filter((value): value is string => Boolean(value)))];
-    let sourceAccountMappings: Record<string, { account_id?: string; manual_account_id?: string }> = {};
-    if (sourceAccounts.length > 0) {
-      const { data: mappings, error: mappingError } = await supabase
-        .from("import_source_account_mappings")
-        .select("source_account, account_id, manual_account_id")
-        .in("source_account", sourceAccounts);
-      if (mappingError) throw mappingError;
-      sourceAccountMappings = Object.fromEntries(
-        (mappings ?? []).map((mapping) => [mapping.source_account as string, {
-          ...(mapping.account_id ? { account_id: mapping.account_id as string } : {}),
-          ...(mapping.manual_account_id ? { manual_account_id: mapping.manual_account_id as string } : {}),
-        }]),
-      );
-    }
+    const sourceAccountMappings = await resolveSourceAccountMappings(supabase, sourceAccounts);
 
     const service = createServiceClient();
     const { data: batch, error: batchError } = await service

@@ -177,7 +177,7 @@ export function buildWeeklyReportModel(
 
   const merchantTotals = new Map<string, number>();
   for (const transaction of currentSpend) {
-    const merchant = transaction.merchantName || "Unknown merchant";
+    const merchant = transaction.merchantName ?? transaction.name ?? "Unknown merchant";
     merchantTotals.set(
       merchant,
       (merchantTotals.get(merchant) ?? 0) + transaction.amount,

@@ -913,6 +913,7 @@ describe("Import API Routes", () => {
             return {
               select: vi.fn().mockReturnThis(),
               eq: vi.fn().mockReturnThis(),
+              neq: vi.fn().mockReturnThis(),
               in: vi.fn().mockResolvedValue({
                 data: [
                   {
@@ -979,6 +980,7 @@ describe("Import API Routes", () => {
             return {
               select: vi.fn().mockReturnThis(),
               eq: vi.fn().mockReturnThis(),
+              neq: vi.fn().mockReturnThis(),
               in: vi.fn().mockResolvedValue({
                 data: [
                   {
@@ -1052,6 +1054,7 @@ describe("Import API Routes", () => {
             return {
               select: vi.fn().mockReturnThis(),
               eq: vi.fn().mockReturnThis(),
+              neq: vi.fn().mockReturnThis(),
               in: vi.fn().mockResolvedValue({
                 data: [
                   { id: "row-1", date: "2026-07-01", description: "Coffee", amount: 5, source_account: "Checking", row_index: 0, status: "pending" },

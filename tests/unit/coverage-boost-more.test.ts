@@ -71,7 +71,7 @@ describe("Coverage Boost More Tests", () => {
             return {
               select: vi.fn().mockReturnValue({
                 eq: vi.fn().mockReturnValue({
-                  eq: vi.fn().mockReturnValue({
+                  neq: vi.fn().mockReturnValue({
                     in: vi.fn().mockResolvedValue({
                       data: [
                         {
