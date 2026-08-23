@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/navaneethbv/.local/bin/graphify hook-guard search"
+            "command": "sh \"$CLAUDE_PROJECT_DIR/scripts/graphify-hook.sh\" search"
           }
         ]
       },
@@ -15,7 +15,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/navaneethbv/.local/bin/graphify hook-guard read"
+            "command": "sh \"$CLAUDE_PROJECT_DIR/scripts/graphify-hook.sh\" read"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"$CLAUDE_PROJECT_DIR/scripts/graphify-session-start.sh\""
           }
         ]
       }

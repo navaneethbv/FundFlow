@@ -8,6 +8,18 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
+## Knowledge graph rules that survive reinstalls
+
+`graphify <agent> install` rewrites the `## graphify` section below, so these
+live up here instead.
+
+- **Never commit `graphify-out/` or `lib/graphify-out/`.** Gitignored generated
+  output, roughly 14 MB; it once landed in a PR and had to be stripped.
+- Dirty `graphify-out/` files are expected after hooks or incremental updates
+  and are not a reason to skip graphify.
+- Agent hook configs call `scripts/graphify-hook.sh`, never the graphify binary
+  directly, so no committed config carries a machine-specific path.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
