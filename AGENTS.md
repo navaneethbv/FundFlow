@@ -8,6 +8,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
+## Dependency freshness
+
+Run `npx npm-check-updates` before starting a new task to check for newer dependency versions.
+Update what is safe; skip a major bump if it breaks the toolchain (lint, typecheck, build, or tests) rather than forcing it through, and record why in the PR description.
+
 ## Knowledge graph rules that survive reinstalls
 
 `graphify <agent> install` rewrites the `## graphify` section below, so these

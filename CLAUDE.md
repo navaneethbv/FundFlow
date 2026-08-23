@@ -5,6 +5,11 @@ How to work in this repository. What the repository *contains* is documented in
 
 @AGENTS.md
 
+## Dependency freshness
+
+Run `npx npm-check-updates` before starting a new task to check for newer dependency versions.
+Update what is safe; skip a major bump if it breaks the toolchain rather than forcing it through, and record why in the PR description.
+
 ## Commands
 
 ```bash
