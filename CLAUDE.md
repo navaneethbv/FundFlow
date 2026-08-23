@@ -162,6 +162,16 @@ it will not survive the next install.
   Playwright load no browser extensions, so a green run there rules out the
   server and proves nothing about the reporter's browser.
 
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked as GitHub issues on `navaneethbv/FundFlow` via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context layout: `CONTEXT.md` + `docs/adr/` at the repo root (created lazily by `/domain-modeling` as terms/decisions resolve). See `docs/agents/domain.md`.
+
 ## Where to read more
 
 - `docs/ARCHITECTURE.md` - request path, every `lib/` module, subsystem
