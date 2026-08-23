@@ -95,6 +95,36 @@ the only place an Anthropic client may be constructed. It is `server-only`.
   goes to the vision model and is never stored. Do not make it automatic, and
   do not reuse it as a general upload channel.
 
+### Knowledge graph (graphify)
+
+Kept here, above the `## graphify` block at the bottom, on purpose: that block
+is rewritten by `graphify <agent> install`, which is how the two rules below
+were silently dropped once already (commit `a3a2283`). Anything you add inside
+it will not survive the next install.
+
+- **Never commit `graphify-out/` or `lib/graphify-out/`.** Both are gitignored
+  generated output, together roughly 14 MB. They once landed in a PR and had
+  to be stripped. Regenerate with `graphify update .` instead of committing.
+- **Dirty `graphify-out/` files are expected** after hooks or incremental
+  updates, and are not a reason to skip graphify. Only skip it when the task
+  is about stale or wrong graph output, or the user says not to use it.
+- `scripts/graphify-hook.sh` is the shim every agent's hook config calls
+  (Claude Code `PreToolUse`, Gemini `BeforeTool`, Codex `PreToolUse`). It
+  resolves the graphify binary at call time, so no config hardcodes a machine
+  path, and it exits 0 on every failure. A hook must never block a tool call.
+- `scripts/graphify-session-start.sh` runs on Claude Code `SessionStart`. With
+  no graph present it starts an AST-only rebuild in the background and says so,
+  rather than blocking startup on the ~10s build.
+- Both scripts are committed, so a clone alone is enough. A user-level copy in
+  `~/.graphify-agent/` covers every other project and defers to these when they
+  exist, so nothing fires twice.
+- `GRAPHIFY_BIN` overrides binary resolution when graphify lives somewhere odd.
+- **After running `graphify <agent> install`, run
+  `sh scripts/graphify-fix-hooks.sh`.** The installer rewrites the three hook
+  configs every time and hardcodes an absolute path to its own binary. The fix
+  script re-points them at the shim and restores the `SessionStart` entry the
+  installer does not know about. It is idempotent.
+
 ### Money and correctness
 
 - Amount sign follows Plaid: **positive = money out**, negative = money in.
