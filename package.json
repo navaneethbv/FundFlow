@@ -17,17 +17,17 @@
     "backfill:institution-logos": "node --env-file=.env.local --experimental-strip-types scripts/backfill-institution-logos.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.117.1",
+    "@anthropic-ai/sdk": "^0.120.0",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.3",
     "@types/nodemailer": "^8.0.1",
     "@types/pdfkit": "^0.17.6",
     "@vercel/analytics": "^2.0.1",
     "clsx": "^2.1.1",
-    "lucide-react": "^1.30.0",
+    "lucide-react": "^1.33.0",
     "next": "16.3.2",
     "nodemailer": "^9.0.5",
-    "pdfkit": "^0.19.1",
+    "pdfkit": "^0.20.1",
     "plaid": "^43.0.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -44,13 +44,13 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/web-push": "^3.6.4",
-    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/coverage-v8": "^4.1.11",
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.2",
     "tailwindcss": "^4.3.3",
     "typescript": "^6",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "overrides": {
     "postcss": "^8.5.23"
