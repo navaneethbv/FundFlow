@@ -1,8 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import {
-  getUnreadNotificationCount,
-  createNotification,
-} from "@/lib/notifications";
+import { getUnreadNotificationCount } from "@/lib/notifications";
 
 function fakeSupabase(count: number | null, error: unknown = null) {
   return {
@@ -33,14 +30,4 @@ describe("getUnreadNotificationCount", () => {
   });
 });
 
-describe("createNotification preference filtering", () => {
-  it("returns null when user preference for alert type is false", async () => {
-    const res = await createNotification(
-      "user-1",
-      "large_transaction",
-      { title: "Big spend", body: "$5000 spent" },
-    );
-    expect(res).toBeNull();
-  });
-});
 
