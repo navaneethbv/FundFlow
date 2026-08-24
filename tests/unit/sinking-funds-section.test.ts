@@ -26,4 +26,22 @@ describe("SinkingFundsSection", () => {
     expect(html).toContain("Edit");
     expect(html).toContain("Remove");
   });
+
+  it("sets the due date in the mono face and wraps the target amount in the privacy-blur hook", () => {
+    const html = renderToStaticMarkup(
+      createElement(SinkingFundsSection, {
+        initialFunds: [{
+          id: "fund-1",
+          name: "Insurance",
+          target_amount: 1200,
+          due_date: "2025-01-31",
+          cadence: "annual",
+          custom_interval_months: null,
+          cycle_anchor_date: "2025-01-31",
+        }],
+      }),
+    );
+    expect(html).toContain('<span class="font-mono">');
+    expect(html).toContain("data-money");
+  });
 });
