@@ -126,7 +126,7 @@ describe("TopMovers", () => {
 });
 
 describe("PerformanceChart", () => {
-  it("colors a positive time-weighted return green", () => {
+  it("colors a positive time-weighted return with the positive diverging token", () => {
     const html = renderToStaticMarkup(
       createElement(PerformanceChart, {
         balanceHistory: [
@@ -140,7 +140,25 @@ describe("PerformanceChart", () => {
         currency: "USD",
       }),
     );
-    expect(html).toContain("text-success");
+    expect(html).toContain("var(--viz-pos)");
+    expect(html).not.toContain("text-success");
+  });
+
+  it("carries the performance figure inside the privacy-blur hook", () => {
+    const html = renderToStaticMarkup(
+      createElement(PerformanceChart, {
+        balanceHistory: [
+          { date: "2026-06-01", value: 1000 },
+          { date: "2026-07-01", value: 1100 },
+        ],
+        returns: [
+          { date: "2026-06-01", pct: 0 },
+          { date: "2026-07-01", pct: 5 },
+        ],
+        currency: "USD",
+      }),
+    );
+    expect(html).toContain("data-money");
   });
 });
 
