@@ -209,6 +209,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
               goals={goals}
               recent={recentTransactions}
               accountNames={accountNames}
+              accounts={data.accounts}
               userId={user?.id ?? ""}
               household={dashboardScope === "household"}
               month={data.selectedMonth}

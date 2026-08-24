@@ -206,6 +206,7 @@ describe("loadOverviewWidgetData", () => {
     today: "2026-07-15",
     userId: "user-1",
     household: false,
+    accounts: [] as never[],
   };
 
   it("does not issue spend or investment queries when both widgets are hidden", async () => {
