@@ -39,6 +39,10 @@ describe("pickAnchorAccount", () => {
     expect(pickAnchorAccount(accounts)?.id).toBe("checking-1");
   });
 
+  it("returns null for empty array", () => {
+    expect(pickAnchorAccount([])).toBeNull();
+  });
+
   it("returns null when no depository account exists", () => {
     const accounts = [account({ type: "credit" }), account({ type: "loan" })];
     expect(pickAnchorAccount(accounts)).toBeNull();
@@ -56,6 +60,12 @@ describe("pickAnchorAccount", () => {
 describe("buildLedgerStripTicks", () => {
   it("returns an empty array for no transactions", () => {
     expect(buildLedgerStripTicks([], 100)).toEqual([]);
+  });
+
+  it("handles zero amount transaction (delta = 0) as minor tick", () => {
+    const ticks = buildLedgerStripTicks([transaction({ amount: 0 })], 100);
+    expect(ticks[0]!.amount).toBe(-0);
+    expect(ticks[0]!.major).toBe(false);
   });
 
   it("ends on the current balance", () => {

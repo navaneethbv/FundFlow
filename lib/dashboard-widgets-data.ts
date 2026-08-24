@@ -177,7 +177,7 @@ export async function loadOverviewWidgetData(
           accountId: anchorAccount.id,
           month: options.month,
           today: options.today,
-          currentBalance: anchorAccount.current_balance ?? 0,
+          currentBalance: anchorAccount.current_balance!,
         })
       : Promise.resolve([]),
   ]);

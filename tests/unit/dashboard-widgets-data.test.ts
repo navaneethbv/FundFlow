@@ -231,4 +231,106 @@ describe("loadOverviewWidgetData", () => {
     expect(supabase.from).toHaveBeenCalledWith("holdings");
     expect(supabase.from).not.toHaveBeenCalledWith("transactions");
   });
+
+  it("loads cumulative spend, investments, and ledger ticks when all are active with an anchor account", async () => {
+    const fakeAccount = {
+      id: "acct-dep-1",
+      name: "Checking",
+      mask: "1234",
+      current_balance: 1500,
+      iso_currency_code: "EUR",
+      type: "depository",
+    };
+    const supabase = clientStub({
+      transactions: {
+        data: [
+          {
+            id: "t1",
+            user_id: "user-1",
+            account_id: "acct-dep-1",
+            date: "2026-07-10",
+            amount: 50,
+            pfc_primary: "FOOD_AND_DRINK",
+            pending: false,
+            merchant_name: "Bistro",
+            name: null,
+          },
+        ],
+      },
+      accounts: { data: [] },
+      merchant_rules: { data: [] },
+      category_overrides: { data: [] },
+      transaction_splits: { data: [] },
+      linked_refunds: { data: [] },
+      holdings: { data: [] },
+      holding_snapshots: { data: [] },
+    });
+
+    const result = await loadOverviewWidgetData(supabase as never, {
+      ...options,
+      visible: ["spendingCompare", "investments"],
+      accounts: [fakeAccount],
+    });
+
+    expect(result.cumulativeSpend.days).toBeDefined();
+    expect(result.investments).toEqual({ total: 0, dayChange: null, topMovers: null });
+    expect(result.ledgerStrip.account).toEqual(fakeAccount);
+    expect(result.ledgerStrip.currency).toBe("EUR");
+    expect(result.ledgerStrip.ticks).toHaveLength(1);
+    expect(result.ledgerStrip.ticks[0]!.amount).toBe(-50);
+  });
+
+  it("handles anchor account with null current_balance and null iso_currency_code gracefully", async () => {
+    const fakeAccount = {
+      id: "acct-dep-2",
+      name: "Savings",
+      mask: "5678",
+      current_balance: null,
+      iso_currency_code: null,
+      type: "depository",
+    };
+    // If pickAnchorAccount only picks non-null balance, but if an account is passed or manually constructed:
+    const supabase = clientStub({
+      transactions: { data: [] },
+      accounts: { data: [] },
+      merchant_rules: { data: [] },
+      category_overrides: { data: [] },
+      transaction_splits: { data: [] },
+      linked_refunds: { data: [] },
+    });
+
+    // When accounts only has null balance, pickAnchorAccount returns null -> defaults to [] and "USD"
+    const result = await loadOverviewWidgetData(supabase as never, {
+      ...options,
+      visible: ["spendingCompare"],
+      accounts: [fakeAccount],
+    });
+
+    expect(result.ledgerStrip.ticks).toEqual([]);
+    expect(result.ledgerStrip.account).toBeNull();
+    expect(result.ledgerStrip.currency).toBe("USD");
+  });
+
+  it("defaults currency to USD when anchorAccount has null iso_currency_code", async () => {
+    const fakeAccount = {
+      id: "acct-dep-3",
+      name: "Checking",
+      mask: "9999",
+      current_balance: 100,
+      iso_currency_code: null,
+      type: "depository",
+    };
+    const supabase = clientStub({
+      transactions: { data: [] },
+    });
+
+    const result = await loadOverviewWidgetData(supabase as never, {
+      ...options,
+      visible: [],
+      accounts: [fakeAccount],
+    });
+
+    expect(result.ledgerStrip.account).toEqual(fakeAccount);
+    expect(result.ledgerStrip.currency).toBe("USD");
+  });
 });

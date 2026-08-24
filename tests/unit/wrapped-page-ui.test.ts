@@ -11,14 +11,14 @@ describe("wrapped page UI", () => {
 
   it("sets the highlight-card month and date labels in the mono face", () => {
     const monoMonthSpans = wrapped.match(/className="mt-1 block font-semibold font-mono"/g) ?? [];
-    expect(monoMonthSpans.length).toBe(2); // biggestMonth, quietestMonth
+    expect(monoMonthSpans).toHaveLength(2); // biggestMonth, quietestMonth
     expect(wrapped).toContain('className="mt-1 block truncate font-semibold"');
     expect(wrapped).toContain('className="block text-xs text-muted font-mono"');
   });
 
   it("carries the highlight-card money figures inside the privacy-blur hook", () => {
     const dataMoneyMetricValue = wrapped.match(/data-money className="metric-value text-sm"/g) ?? [];
-    expect(dataMoneyMetricValue.length).toBe(3); // biggestMonth, quietestMonth, largestPurchase
+    expect(dataMoneyMetricValue).toHaveLength(3); // biggestMonth, quietestMonth, largestPurchase
   });
 
   it("leaves StatTile's period-over-period delta untouched, since it is a trend indicator, not a money direction", () => {
