@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import AccountRow from "@/components/accounts/AccountRow";
+import AccountGroup from "@/components/accounts/AccountGroup";
+import NetWorthHero from "@/components/accounts/NetWorthHero";
 import type { AccountsPageRow } from "@/lib/accounts-page";
 
 function row(partial: Partial<AccountsPageRow> = {}): AccountsPageRow {
@@ -52,5 +54,63 @@ describe("AccountRow", () => {
   it("shows the fallback message, uncolored, when there is no month change on record", () => {
     const html = renderToStaticMarkup(createElement(AccountRow, { row: row({ monthChange: null }) }));
     expect(html).toContain("Not enough history");
+  });
+});
+
+describe("AccountGroup & NetWorthHero symmetric colors", () => {
+  it("colors positive and negative aggregate changes with viz tokens in AccountGroup", () => {
+    const posHtml = renderToStaticMarkup(
+      createElement(AccountGroup, {
+        groupKey: "cash",
+        group: {
+          label: "Cash",
+          rows: [row()],
+          totals: [{ currency: "USD", amount: 1000 }],
+          changes: [{ currency: "USD", amount: 50 }],
+        },
+      }),
+    );
+    expect(posHtml).toContain("var(--viz-pos)");
+
+    const negHtml = renderToStaticMarkup(
+      createElement(AccountGroup, {
+        groupKey: "cash",
+        group: {
+          label: "Cash",
+          rows: [row()],
+          totals: [{ currency: "USD", amount: 1000 }],
+          changes: [{ currency: "USD", amount: -50 }],
+        },
+      }),
+    );
+    expect(negHtml).toContain("var(--viz-neg)");
+  });
+
+  it("colors positive and negative monthly change with viz tokens in NetWorthHero", () => {
+    const posHtml = renderToStaticMarkup(
+      createElement(NetWorthHero, {
+        summary: {
+          currencies: ["USD"],
+          netWorth: [{ currency: "USD", amount: 50000 }],
+          netWorthMonthChange: { USD: { amount: 1200, pct: 2.4 } },
+          netWorthSeries: { USD: [{ date: "2026-08-01", value: 48800 }, { date: "2026-08-24", value: 50000 }] },
+        } as any,
+        historyStartsOn: "2026-01-01",
+      }),
+    );
+    expect(posHtml).toContain("var(--viz-pos)");
+
+    const negHtml = renderToStaticMarkup(
+      createElement(NetWorthHero, {
+        summary: {
+          currencies: ["USD"],
+          netWorth: [{ currency: "USD", amount: 50000 }],
+          netWorthMonthChange: { USD: { amount: -1200, pct: -2.4 } },
+          netWorthSeries: { USD: [{ date: "2026-08-01", value: 51200 }, { date: "2026-08-24", value: 50000 }] },
+        } as any,
+        historyStartsOn: "2026-01-01",
+      }),
+    );
+    expect(negHtml).toContain("var(--viz-neg)");
   });
 });

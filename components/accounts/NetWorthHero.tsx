@@ -92,7 +92,7 @@ export default function NetWorthHero({
         <p className="mt-1.5 text-sm font-semibold">
           <span
             data-money
-            className={monthChange.amount >= 0 ? "text-success" : "text-danger"}
+            className={monthChange.amount >= 0 ? "text-[var(--viz-pos)]" : "text-[var(--viz-neg)]"}
           >
             {monthChange.amount >= 0 ? "↑" : "↓"}{" "}
             {formatCurrency(Math.abs(monthChange.amount), primaryCurrency)}

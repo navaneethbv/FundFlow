@@ -47,7 +47,7 @@ export default function AccountGroup({
                     data-money
                     className={cn(
                       "mt-1 block text-xs font-semibold tabular-nums",
-                      change.amount >= 0 ? "text-success" : "text-danger",
+                      change.amount >= 0 ? "text-[var(--viz-pos)]" : "text-[var(--viz-neg)]",
                     )}
                   >
                     {change.amount >= 0 ? "+" : ""}
