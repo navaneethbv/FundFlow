@@ -94,7 +94,7 @@ describe("BudgetTable", () => {
     expect(html).not.toContain(">Save<");
   });
 
-  it("shows the remaining amount as a danger badge only when over budget", () => {
+  it("colors the remaining amount with the money-direction tokens in both the over- and under-budget cases", () => {
     const over = renderToStaticMarkup(
       createElement(BudgetTable, {
         section: section({
@@ -106,6 +106,7 @@ describe("BudgetTable", () => {
       }),
     );
     expect(over).toContain("-$100.00");
+    expect(over).toContain("var(--viz-neg)");
 
     const under = renderToStaticMarkup(
       createElement(BudgetTable, {
@@ -116,6 +117,35 @@ describe("BudgetTable", () => {
       }),
     );
     expect(under).toContain("$100.00");
+    expect(under).toContain("var(--viz-pos)");
+  });
+
+  it("carries every remaining/actual/planned figure inside the privacy-blur hook", () => {
+    const html = renderToStaticMarkup(
+      createElement(BudgetTable, {
+        section: section(),
+        currency: "USD",
+        disabled: false,
+        onUpdate: vi.fn(),
+      }),
+    );
+    // Section header: planned, actual, remaining (3). Row: remaining (1). 4 total.
+    const occurrences = html.match(/data-money/g) ?? [];
+    expect(occurrences.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("colors the section-header remaining figure symmetrically, not just the over-budget case", () => {
+    const surplus = renderToStaticMarkup(
+      createElement(BudgetTable, {
+        section: section({ remaining: 50 }),
+        currency: "USD",
+        disabled: false,
+        onUpdate: vi.fn(),
+      }),
+    );
+    expect(surplus).toContain("var(--viz-pos)");
+    expect(surplus).not.toContain("text-danger");
+    expect(surplus).not.toContain('text-foreground"');
   });
 
   it("hides an unbudgeted line by default behind a Show N unbudgeted toggle", () => {
