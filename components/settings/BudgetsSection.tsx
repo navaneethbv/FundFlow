@@ -137,7 +137,7 @@ export default function BudgetsSection({
               <span className="min-w-0 flex-1">
                 <span className="mb-1 flex justify-between gap-3 font-semibold">
                   <span>{b.category}</span>
-                  <span>{formatCurrency(b.monthly_limit)}</span>
+                  <span data-money>{formatCurrency(b.monthly_limit)}</span>
                 </span>
                 <span className="block h-2 rounded-full bg-panel-hover">
                   <span className="block h-2 w-3/4 rounded-full bg-accent" />
@@ -225,7 +225,7 @@ export default function BudgetsSection({
                   variant="ghost"
                   size="sm"
                 >
-                  Add {formatCurrency(suggestion.suggestedLimit)}
+                  Add <span data-money>{formatCurrency(suggestion.suggestedLimit)}</span>
                 </Button>
               </li>
             ))}
