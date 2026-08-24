@@ -12,6 +12,12 @@ import {
   loadHoldingSnapshots,
 } from "@/lib/investments-data";
 import type { WidgetKey } from "@/lib/dashboard-widgets";
+import {
+  loadLedgerStripTicks,
+  pickAnchorAccount,
+  type LedgerStripAccount,
+  type LedgerTick,
+} from "@/lib/ledger-strip";
 
 export { buildDashboardBudgetGroups } from "@/lib/dashboard-budget-groups";
 
@@ -137,6 +143,12 @@ export async function loadDashboardInvestmentSummary(
   };
 }
 
+export interface OverviewLedgerStrip {
+  ticks: LedgerTick[];
+  account: LedgerStripAccount | null;
+  currency: string;
+}
+
 export async function loadOverviewWidgetData(
   supabase: SupabaseClient,
   options: Readonly<{
@@ -145,18 +157,37 @@ export async function loadOverviewWidgetData(
     userId: string;
     household: boolean;
     visible: readonly WidgetKey[];
+    accounts: readonly LedgerStripAccount[];
   }>,
 ): Promise<{
   cumulativeSpend: CumulativeSpendView;
   investments: DashboardInvestmentSummary | null;
+  ledgerStrip: OverviewLedgerStrip;
 }> {
-  const [cumulativeSpend, investments] = await Promise.all([
+  const anchorAccount = pickAnchorAccount(options.accounts);
+  const [cumulativeSpend, investments, ledgerTicks] = await Promise.all([
     options.visible.includes("spendingCompare")
       ? loadCumulativeSpend(supabase, options)
       : Promise.resolve(EMPTY_CUMULATIVE_SPEND),
     options.visible.includes("investments")
       ? loadDashboardInvestmentSummary(supabase)
       : Promise.resolve(null),
+    anchorAccount
+      ? loadLedgerStripTicks(supabase, {
+          accountId: anchorAccount.id,
+          month: options.month,
+          today: options.today,
+          currentBalance: anchorAccount.current_balance ?? 0,
+        })
+      : Promise.resolve([]),
   ]);
-  return { cumulativeSpend, investments };
+  return {
+    cumulativeSpend,
+    investments,
+    ledgerStrip: {
+      ticks: ledgerTicks,
+      account: anchorAccount,
+      currency: anchorAccount?.iso_currency_code ?? "USD",
+    },
+  };
 }

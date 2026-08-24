@@ -1,3 +1,5 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 export interface LedgerStripAccount {
   id: string;
   name: string | null;
@@ -82,4 +84,32 @@ export function buildLedgerStripTicks(
       major: delta > 0 || Math.abs(delta) >= majorThreshold,
     };
   });
+}
+
+export async function loadLedgerStripTicks(
+  supabase: SupabaseClient,
+  options: Readonly<{
+    accountId: string;
+    month: string;
+    today: string;
+    currentBalance: number;
+  }>,
+): Promise<LedgerTick[]> {
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("id, date, amount, merchant_name, name")
+    .eq("account_id", options.accountId)
+    .gte("date", `${options.month}-01`)
+    .lte("date", options.today)
+    .order("date", { ascending: true })
+    .order("id", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return buildLedgerStripTicks(
+    (data ?? []) as LedgerStripTransaction[],
+    options.currentBalance,
+  );
 }
