@@ -28,11 +28,16 @@ export default function RecentActivity({
 
   return (
     <ul className="space-y-3">
-      {transactions.map((transaction) => {
+      {transactions.map((transaction, index) => {
         const merchant = transaction.merchant_name ?? transaction.name ?? "Unknown";
         const income = transaction.amount < 0;
         return (
-          <li key={transaction.id} className="flex items-center gap-3 rounded-field p-2 hover:bg-panel-hover">
+          <li
+            key={transaction.id}
+            className={`flex items-center gap-3 rounded-field p-2 hover:bg-panel-hover${
+              index % 2 === 1 ? " bg-panel-2" : ""
+            }`}
+          >
             <MerchantAvatar name={merchant} size={36} className="shrink-0" />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-semibold">{merchant}</span>
@@ -53,7 +58,7 @@ export default function RecentActivity({
                 {income ? "+" : ""}
                 {formatCurrency(Math.abs(transaction.amount), transaction.iso_currency_code ?? "USD")}
               </span>
-              <span className="block text-xs text-muted">{formatDate(transaction.date)}</span>
+              <span className="block text-xs text-muted font-mono">{formatDate(transaction.date)}</span>
             </span>
             <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-muted" />
           </li>
