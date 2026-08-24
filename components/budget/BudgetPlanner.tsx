@@ -148,7 +148,8 @@ function TotalsRow({
         <span data-money className="text-right sm:w-20">{formatCurrency(actual, currency)}</span>
         <span
           data-money
-          className={cn("text-right sm:w-24", remaining < 0 ? "text-danger" : "text-foreground")}
+          className="text-right sm:w-24"
+          style={{ color: remaining >= 0 ? "var(--viz-pos)" : "var(--viz-neg)" }}
         >
           {formatCurrency(remaining, currency)}
         </span>
@@ -169,7 +170,7 @@ function YearTable({
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] text-sm">
           <thead className="text-xs text-muted">
-            <tr>
+            <tr className="font-mono">
               <th scope="col" className="py-3 text-left">Month</th>
               <th scope="col" className="py-3 text-right">Planned</th>
               <th scope="col" className="py-3 text-right">Actual</th>
@@ -179,7 +180,7 @@ function YearTable({
           <tbody>
             {view.months.map((month) => (
               <tr key={month.month} className="border-t border-panel-border">
-                <th scope="row" className="py-3 text-left font-semibold">
+                <th scope="row" className="py-3 text-left font-semibold font-mono">
                   {formatMonth(month.month)}
                 </th>
                 <td className="py-3 text-right">
@@ -188,7 +189,11 @@ function YearTable({
                 <td className="py-3 text-right">
                   {formatCurrency(month.totalExpenses.actual, currency)}
                 </td>
-                <td className="py-3 text-right">
+                <td
+                  data-money
+                  className="py-3 text-right"
+                  style={{ color: month.totalExpenses.remaining >= 0 ? "var(--viz-pos)" : "var(--viz-neg)" }}
+                >
                   {formatCurrency(month.totalExpenses.remaining, currency)}
                 </td>
               </tr>
@@ -220,7 +225,7 @@ function DecadeTable({
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] text-sm">
             <thead className="text-xs text-muted">
-              <tr>
+              <tr className="font-mono">
                 <th scope="col" className="py-3 text-left">Year</th>
                 <th scope="col" className="py-3 text-right">Planned</th>
                 <th scope="col" className="py-3 text-right">Actual</th>
@@ -230,7 +235,7 @@ function DecadeTable({
             <tbody>
               {view.years.map((year) => (
                 <tr key={year.year} className="border-t border-panel-border">
-                  <th scope="row" className="py-3 text-left font-semibold">
+                  <th scope="row" className="py-3 text-left font-semibold font-mono">
                     {year.year}
                   </th>
                   <td className="py-3 text-right">
@@ -239,7 +244,11 @@ function DecadeTable({
                   <td className="py-3 text-right">
                     {formatCurrency(year.actual, currency)}
                   </td>
-                  <td className="py-3 text-right">
+                  <td
+                    data-money
+                    className="py-3 text-right"
+                    style={{ color: year.remaining >= 0 ? "var(--viz-pos)" : "var(--viz-neg)" }}
+                  >
                     {formatCurrency(year.remaining, currency)}
                   </td>
                 </tr>

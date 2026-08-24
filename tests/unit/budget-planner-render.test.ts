@@ -305,4 +305,23 @@ describe("BudgetPlanner", () => {
     );
     expect(html).toContain("bg-danger");
   });
+
+  it("colors the TotalsRow remaining figure with the money-direction tokens", () => {
+    const html = renderToStaticMarkup(
+      createElement(BudgetPlanner, {
+        initialView: { horizon: "monthly" as const, month: pageData({ totalExpenses: { planned: 2400, actual: 2500, remaining: -100 } }) },
+        proposals: [],
+        month: "2026-07",
+        currency: "USD",
+        summaryTab: "summary" as const,
+        summaryLinks: {
+          summary: "/budget",
+          income: "/budget?summary=income",
+          expenses: "/budget?summary=expenses",
+        },
+      }),
+    );
+    expect(html).toContain("var(--viz-neg)");
+    expect(html).not.toContain("text-danger");
+  });
 });
