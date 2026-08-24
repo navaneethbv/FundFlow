@@ -206,7 +206,6 @@ describe("weekly report model", () => {
     expect(report.categories).toEqual([]);
   });
 });
-
 describe("formatCardLabel", () => {
   it("title-cases a name Plaid returns in all caps", () => {
     // The real failure: Chase reports this account as "CREDIT CARD", which read
@@ -568,4 +567,3 @@ describe("getWeeklyReportData", () => {
     expect(cardModel.cards[0]?.name).toBe("Custom Card");
   });
 });
-

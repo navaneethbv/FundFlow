@@ -102,4 +102,3 @@ describe("ReceiptInbox", () => {
     expect(inboxSource).toContain('setError("Invalid receipt ID.")');
   });
 });
-

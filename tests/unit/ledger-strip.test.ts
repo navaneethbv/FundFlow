@@ -56,7 +56,6 @@ describe("pickAnchorAccount", () => {
     expect(pickAnchorAccount(accounts)?.id).toBe("checking-2");
   });
 });
-
 describe("buildLedgerStripTicks", () => {
   it("returns an empty array for no transactions", () => {
     expect(buildLedgerStripTicks([], 100)).toEqual([]);
@@ -153,6 +152,50 @@ describe("buildLedgerStripTicks", () => {
 });
 
 describe("loadLedgerStripTicks", () => {
+  it("paginates past Supabase's 1000-row response cap before calculating balances", async () => {
+    const firstPage = Array.from({ length: 1000 }, (_, index) => ({
+      id: `june-${index}`,
+      date: "2026-06-15",
+      amount: index === 0 ? 50 : 0,
+      merchant_name: index === 0 ? "June Shop" : "Older June transaction",
+      name: null,
+    }));
+    const secondPage = [
+      { id: "july-1", date: "2026-07-10", amount: 20, merchant_name: "July Coffee", name: null },
+    ];
+    const mockSupabase = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            gte: () => ({
+              lte: () => ({
+                order: () => ({
+                  order: () => ({
+                    range: (from: number) =>
+                      Promise.resolve({
+                        data: from === 0 ? firstPage : secondPage,
+                        error: null,
+                      }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    } as never;
+
+    const ticks = await loadLedgerStripTicks(mockSupabase, {
+      accountId: "acct-1",
+      month: "2026-06",
+      today: "2026-07-20",
+      currentBalance: 500,
+    });
+
+    expect(ticks).toHaveLength(1000);
+    expect(ticks[0]!.runningBalance).toBe(520);
+  });
+
   it("filters returned ticks to only the requested month while calculating running balances across all loaded transactions", async () => {
     const fakeTransactions = [
       { id: "1", date: "2026-06-15", amount: 50, merchant_name: "June Shop", name: null },
@@ -165,7 +208,9 @@ describe("loadLedgerStripTicks", () => {
             gte: () => ({
               lte: () => ({
                 order: () => ({
-                  order: () => Promise.resolve({ data: fakeTransactions, error: null }),
+                  order: () => ({
+                    range: () => Promise.resolve({ data: fakeTransactions, error: null }),
+                  }),
                 }),
               }),
             }),
@@ -196,7 +241,9 @@ describe("loadLedgerStripTicks", () => {
             gte: () => ({
               lte: () => ({
                 order: () => ({
-                  order: () => Promise.resolve({ data: null, error: null }),
+                  order: () => ({
+                    range: () => Promise.resolve({ data: null, error: null }),
+                  }),
                 }),
               }),
             }),
@@ -223,7 +270,9 @@ describe("loadLedgerStripTicks", () => {
             gte: () => ({
               lte: () => ({
                 order: () => ({
-                  order: () => Promise.resolve({ data: null, error: new Error("DB error") }),
+                  order: () => ({
+                    range: () => Promise.resolve({ data: null, error: new Error("DB error") }),
+                  }),
                 }),
               }),
             }),
@@ -242,4 +291,3 @@ describe("loadLedgerStripTicks", () => {
     ).rejects.toThrow("DB error");
   });
 });
-

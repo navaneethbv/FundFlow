@@ -7,8 +7,8 @@ export interface LedgerStripAccount {
   current_balance: number | null;
   iso_currency_code: string | null;
   type: string | null;
+  user_id?: string | null;
 }
-
 export interface LedgerStripTransaction {
   id: string;
   date: string;
@@ -41,10 +41,14 @@ function round2(value: number): number {
 
 export function pickAnchorAccount(
   accounts: readonly LedgerStripAccount[],
+  ownerUserId?: string,
 ): LedgerStripAccount | null {
   return (
     accounts.find(
-      (account) => account.type === "depository" && account.current_balance !== null,
+      (account) =>
+        account.type === "depository" &&
+        account.current_balance !== null &&
+        (!ownerUserId || account.user_id === ownerUserId),
     ) ?? null
   );
 }
@@ -95,24 +99,35 @@ export async function loadLedgerStripTicks(
     currentBalance: number;
   }>,
 ): Promise<LedgerTick[]> {
-  const { data, error } = await supabase
-    .from("transactions")
-    .select("id, date, amount, merchant_name, name")
-    .eq("account_id", options.accountId)
-    .gte("date", `${options.month}-01`)
-    .lte("date", options.today)
-    .order("date", { ascending: true })
-    .order("id", { ascending: true });
+  const pageSize = 1000;
+  const transactions: LedgerStripTransaction[] = [];
 
-  if (error) {
-    throw error;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("id, date, amount, merchant_name, name")
+      .eq("account_id", options.accountId)
+      .gte("date", `${options.month}-01`)
+      .lte("date", options.today)
+      .order("date", { ascending: true })
+      .order("id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) {
+      throw error;
+    }
+
+    const page = (data ?? []) as LedgerStripTransaction[];
+    transactions.push(...page);
+    if (page.length < pageSize) {
+      break;
+    }
   }
 
   const allTicks = buildLedgerStripTicks(
-    (data ?? []) as LedgerStripTransaction[],
+    transactions,
     options.currentBalance,
   );
 
   return allTicks.filter((tick) => tick.date.startsWith(options.month));
 }
-

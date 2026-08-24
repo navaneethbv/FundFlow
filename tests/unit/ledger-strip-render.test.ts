@@ -104,4 +104,3 @@ describe("LedgerStrip", () => {
     expect(html).not.toContain("Today");
   });
 });
-

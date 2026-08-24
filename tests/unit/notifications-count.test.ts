@@ -29,5 +29,3 @@ describe("getUnreadNotificationCount", () => {
     expect(await getUnreadNotificationCount(supabase, "user-1")).toBe(0);
   });
 });
-
-

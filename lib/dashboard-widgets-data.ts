@@ -164,7 +164,7 @@ export async function loadOverviewWidgetData(
   investments: DashboardInvestmentSummary | null;
   ledgerStrip: OverviewLedgerStrip;
 }> {
-  const anchorAccount = pickAnchorAccount(options.accounts);
+  const anchorAccount = pickAnchorAccount(options.accounts, options.userId);
   const [cumulativeSpend, investments, ledgerTicks] = await Promise.all([
     options.visible.includes("spendingCompare")
       ? loadCumulativeSpend(supabase, options)
