@@ -94,7 +94,7 @@ describe("HoldingsTable", () => {
 });
 
 describe("TopMovers", () => {
-  it("colors gains green and losses red via semantic classes", () => {
+  it("colors gains with the positive diverging token and losses with the negative one", () => {
     const html = renderToStaticMarkup(
       createElement(TopMovers, {
         movers: [
@@ -103,8 +103,25 @@ describe("TopMovers", () => {
         ],
       }),
     );
-    expect(html).toContain("text-success");
-    expect(html).toContain("text-danger");
+    expect(html).toContain("var(--viz-pos)");
+    expect(html).toContain("var(--viz-neg)");
+    expect(html).not.toContain("text-success");
+    expect(html).not.toContain("text-danger");
+  });
+
+  it("zebra-stripes odd-indexed rows and not even-indexed ones", () => {
+    const html = renderToStaticMarkup(
+      createElement(TopMovers, {
+        movers: [
+          { id: "a", name: "A Co", ticker: "A", changePct: 1 },
+          { id: "b", name: "B Co", ticker: "B", changePct: -1 },
+        ],
+      }),
+    );
+    const rows = html.split("<li").slice(1);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).not.toContain("bg-panel-2");
+    expect(rows[1]).toContain("bg-panel-2");
   });
 });
 
