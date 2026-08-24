@@ -45,7 +45,7 @@ export default function BudgetWidget({
             <li key={group.key}>
               <div className="flex justify-between gap-3 text-sm">
                 <span className="truncate">{group.label}</span>
-                <span className="tabular-nums text-muted">
+                <span className="tabular-nums text-muted" data-money>
                   {formatCurrency(group.spent, currency)} /{" "}
                   {formatCurrency(group.monthlyLimit, currency)}
                 </span>
