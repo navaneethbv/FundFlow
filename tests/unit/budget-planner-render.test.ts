@@ -234,7 +234,7 @@ describe("BudgetRightRail", () => {
     expect(html).not.toMatch(/<span class="font-semibold">Income<\/span>/);
   });
 
-  it("tints the hero red for a deficit", () => {
+  it("colors the hero figure with the money-direction tokens for a deficit", () => {
     const html = renderToStaticMarkup(
       createElement(BudgetRightRail, {
         data: pageData({ leftToBudget: -400 }),
@@ -243,8 +243,24 @@ describe("BudgetRightRail", () => {
         links,
       }),
     );
-    expect(html).toContain("text-danger");
+    expect(html).toContain("var(--viz-neg)");
+    expect(html).not.toContain("text-danger");
     expect(html).toContain("-$400.00");
+  });
+
+  it("colors the expense-remaining figure symmetrically on the expenses tab", () => {
+    const html = renderToStaticMarkup(
+      createElement(BudgetRightRail, {
+        data: pageData({ totalExpenses: { planned: 2400, actual: 2300, remaining: 100 } }),
+        currency: "USD",
+        tab: "expenses" as const,
+        links,
+      }),
+    );
+    expect(html).toContain("var(--viz-pos)");
+    // The figure itself no longer wears text-foreground; the Tabs nav's
+    // active-tab link legitimately does, so target the figure's class only.
+    expect(html).not.toContain('font-semibold text-foreground"');
   });
 
   it("shows income-specific figures only on the income tab", () => {

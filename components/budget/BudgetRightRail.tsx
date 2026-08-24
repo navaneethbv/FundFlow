@@ -1,7 +1,6 @@
 import Panel from "@/components/ui/Panel";
 import ProgressBar from "@/components/ui/ProgressBar";
 import Tabs from "@/components/ui/Tabs";
-import { cn } from "@/lib/cn";
 import { formatCurrency } from "@/lib/format";
 import type { BudgetPageData, BudgetGroup, BudgetSummaryTab } from "@/lib/budget-page";
 
@@ -40,7 +39,7 @@ function GroupMiniSummary({
       />
       <p className="mt-1.5 text-xs text-muted">
         <span data-money>{formatCurrency(actual, currency)} spent</span> ·{" "}
-        <span data-money className={over ? "text-danger" : undefined}>
+        <span data-money style={{ color: over ? "var(--viz-neg)" : "var(--viz-pos)" }}>
           {formatCurrency(remaining, currency)} remaining
         </span>
       </p>
@@ -78,7 +77,8 @@ export default function BudgetRightRail({
       <Panel tone={negative ? "danger" : "success"} className="text-center">
         <p
           data-money
-          className={cn("metric-value text-3xl", negative ? "text-danger" : "text-success")}
+          className="metric-value text-3xl"
+          style={{ color: negative ? "var(--viz-neg)" : "var(--viz-pos)" }}
         >
           {formatCurrency(data.leftToBudget, currency)}
         </p>
@@ -136,10 +136,8 @@ export default function BudgetRightRail({
                 <span className="text-muted">Expense remaining</span>
                 <span
                   data-money
-                  className={cn(
-                    "font-semibold",
-                    data.totalExpenses.remaining < 0 ? "text-danger" : "text-foreground",
-                  )}
+                  className="font-semibold"
+                  style={{ color: data.totalExpenses.remaining >= 0 ? "var(--viz-pos)" : "var(--viz-neg)" }}
                 >
                   {formatCurrency(data.totalExpenses.remaining, currency)}
                 </span>
