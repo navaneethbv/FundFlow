@@ -27,8 +27,11 @@ export interface LedgerCardRow {
 export default function MobileLedgerList({ rows }: Readonly<{ rows: LedgerCardRow[] }>) {
   return (
     <ul className="divide-y divide-panel-border">
-      {rows.map((row) => (
-        <li key={row.id} className="flex items-start gap-3 px-4 py-3">
+      {rows.map((row, index) => (
+        <li
+          key={row.id}
+          className={`flex items-start gap-3 px-4 py-3${index % 2 === 1 ? " bg-panel-2" : ""}`}
+        >
           <MerchantAvatar name={row.merchant} size={32} className="mt-0.5 shrink-0" />
           <div className="min-w-0 flex-1">
             <p className="flex flex-wrap items-center gap-2">
@@ -37,8 +40,8 @@ export default function MobileLedgerList({ rows }: Readonly<{ rows: LedgerCardRo
               {row.excludedDuplicate && <Badge tone="warning">Excluded duplicate</Badge>}
             </p>
             <p className="mt-0.5 text-xs text-muted">
-              {formatDate(row.date)} · {titleCase(row.category) || "Uncategorized"} ·{" "}
-              {row.accountLabel}
+              <span className="font-mono">{formatDate(row.date)}</span>{" · "}
+              {titleCase(row.category) || "Uncategorized"} · {row.accountLabel}
             </p>
             {(row.note || row.tags.length > 0 || row.splits.length > 0) && (
               <p className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -55,11 +58,8 @@ export default function MobileLedgerList({ rows }: Readonly<{ rows: LedgerCardRo
           <div className="flex shrink-0 flex-col items-end gap-1">
             <span
               data-money
-              className={
-                row.amount < 0
-                  ? "whitespace-nowrap font-semibold tabular-nums text-success"
-                  : "whitespace-nowrap font-semibold tabular-nums text-foreground"
-              }
+              className="whitespace-nowrap font-semibold tabular-nums"
+              style={{ color: row.amount < 0 ? "var(--viz-pos)" : "var(--viz-neg)" }}
             >
               {row.amount < 0 ? "+" : "-"}
               {formatCurrency(Math.abs(row.amount), row.currency)}
