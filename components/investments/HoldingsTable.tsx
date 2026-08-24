@@ -6,9 +6,13 @@ import { formatCurrency } from "@/lib/format";
 import type { InvestmentsPage } from "@/lib/investments";
 
 /** Every active holding grouped by asset class — the plan's fixed slot order. */
-function changeClass(periodChangePct: number | null): string {
-  if (periodChangePct == null) return "text-muted";
-  return periodChangePct >= 0 ? "text-success" : "text-danger";
+function changeClassName(periodChangePct: number | null): string {
+  return periodChangePct == null ? "text-muted" : "";
+}
+
+function changeColor(periodChangePct: number | null): string | undefined {
+  if (periodChangePct == null) return undefined;
+  return periodChangePct >= 0 ? "var(--viz-pos)" : "var(--viz-neg)";
 }
 
 function changeLabel(periodChangePct: number | null): string {
@@ -48,7 +52,11 @@ export default function HoldingsTable({
           {page.byClass.map((group) => (
             <Fragment key={group.label}>
               <tr className="border-b border-panel-border/60 bg-panel-2">
-                <td colSpan={7} className="py-1.5 pr-3 text-xs font-semibold uppercase tracking-wide text-muted">
+                <td
+                  data-money
+                  colSpan={7}
+                  className="py-1.5 pr-3 text-xs font-semibold uppercase tracking-wide text-muted"
+                >
                   {group.label} · {formatCurrency(group.subtotal, currency)}
                 </td>
               </tr>
@@ -76,8 +84,9 @@ export default function HoldingsTable({
                     data-money
                     className={cn(
                       "py-2 pr-0 text-right tabular-nums",
-                      changeClass(h.periodChangePct),
+                      changeClassName(h.periodChangePct),
                     )}
+                    style={{ color: changeColor(h.periodChangePct) }}
                   >
                     {changeLabel(h.periodChangePct)}
                   </td>

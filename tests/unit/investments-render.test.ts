@@ -55,14 +55,14 @@ describe("HoldingsTable", () => {
     expect(html).toContain("$2,500.00");
   });
 
-  it("colors a positive change green and a negative one red, never a raw hex", () => {
+  it("colors a positive change with the positive diverging token, a negative one with the negative token", () => {
     const positive = renderToStaticMarkup(
       createElement(HoldingsTable, {
         page: page({ byClass: [{ label: "Funds", holdings: [holding({ periodChangePct: 2 })], subtotal: 2500 }] }),
         currency: "USD",
       }),
     );
-    expect(positive).toContain("text-success");
+    expect(positive).toContain("var(--viz-pos)");
 
     const negative = renderToStaticMarkup(
       createElement(HoldingsTable, {
@@ -70,8 +70,19 @@ describe("HoldingsTable", () => {
         currency: "USD",
       }),
     );
-    expect(negative).toContain("text-danger");
-    expect(negative).not.toMatch(/color:\s*#[0-9a-f]{3,6}/i);
+    expect(negative).toContain("var(--viz-neg)");
+    expect(negative).not.toContain("text-success");
+    expect(negative).not.toContain("text-danger");
+  });
+
+  it("marks the group subtotal row with the privacy-blur hook, alongside the per-holding value", () => {
+    // The per-holding value/change cells and the Total row already carry
+    // data-money; the group-subtotal row does not (the gap this task closes).
+    // With one holding in one group the fix brings the count to 4.
+    const html = renderToStaticMarkup(
+      createElement(HoldingsTable, { page: page(), currency: "USD" }),
+    );
+    expect(html.match(/data-money/g)?.length).toBeGreaterThanOrEqual(4);
   });
 
   it("has an empty state when there are no holdings", () => {
