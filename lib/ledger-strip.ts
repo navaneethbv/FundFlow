@@ -108,8 +108,11 @@ export async function loadLedgerStripTicks(
     throw error;
   }
 
-  return buildLedgerStripTicks(
+  const allTicks = buildLedgerStripTicks(
     (data ?? []) as LedgerStripTransaction[],
     options.currentBalance,
   );
+
+  return allTicks.filter((tick) => tick.date.startsWith(options.month));
 }
+

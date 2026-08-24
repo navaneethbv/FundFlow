@@ -85,4 +85,23 @@ describe("LedgerStrip", () => {
     const html = renderToStaticMarkup(createElement(LedgerStrip, baseProps));
     expect(html).toContain("var(--viz-neg)");
   });
+
+  it("displays 'Today' when monthLabel is the current calendar month", () => {
+    const now = new Date();
+    const currentMonthLabel = now.toLocaleString("en-US", { month: "long", year: "numeric" });
+    const html = renderToStaticMarkup(
+      createElement(LedgerStrip, { ...baseProps, monthLabel: currentMonthLabel }),
+    );
+    expect(html).toContain("Today");
+    expect(html).not.toContain("Month end");
+  });
+
+  it("displays 'Month end' when monthLabel is a historical month", () => {
+    const html = renderToStaticMarkup(
+      createElement(LedgerStrip, { ...baseProps, monthLabel: "January 2020" }),
+    );
+    expect(html).toContain("Month end");
+    expect(html).not.toContain("Today");
+  });
 });
+

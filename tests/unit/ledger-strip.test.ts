@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   pickAnchorAccount,
   buildLedgerStripTicks,
+  loadLedgerStripTicks,
   type LedgerStripAccount,
   type LedgerStripTransaction,
 } from "@/lib/ledger-strip";
@@ -112,3 +113,68 @@ describe("buildLedgerStripTicks", () => {
     expect(ticks[0]!.label).toBe("ACME PAYROLL DEP");
   });
 });
+
+describe("loadLedgerStripTicks", () => {
+  it("filters returned ticks to only the requested month while calculating running balances across all loaded transactions", async () => {
+    const fakeTransactions = [
+      { id: "1", date: "2026-06-15", amount: 50, merchant_name: "June Shop", name: null },
+      { id: "2", date: "2026-07-10", amount: 20, merchant_name: "July Coffee", name: null },
+    ];
+    const mockSupabase = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            gte: () => ({
+              lte: () => ({
+                order: () => ({
+                  order: () => Promise.resolve({ data: fakeTransactions, error: null }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    } as any;
+
+    const ticks = await loadLedgerStripTicks(mockSupabase, {
+      accountId: "acct-1",
+      month: "2026-06",
+      today: "2026-07-20",
+      currentBalance: 500,
+    });
+
+    // Only June tick is returned, but running balance accounts for all transactions
+    expect(ticks).toHaveLength(1);
+    expect(ticks[0]!.id).toBe("1");
+    expect(ticks[0]!.date).toBe("2026-06-15");
+    expect(ticks[0]!.runningBalance).toBe(520); // 500 - (-50 + -20) + (-50) = 570 - 50 = 520
+  });
+
+  it("throws when supabase query errors", async () => {
+    const mockSupabase = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            gte: () => ({
+              lte: () => ({
+                order: () => ({
+                  order: () => Promise.resolve({ data: null, error: new Error("DB error") }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    } as any;
+
+    await expect(
+      loadLedgerStripTicks(mockSupabase, {
+        accountId: "acct-1",
+        month: "2026-06",
+        today: "2026-07-20",
+        currentBalance: 500,
+      }),
+    ).rejects.toThrow("DB error");
+  });
+});
+

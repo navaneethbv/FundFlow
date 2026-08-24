@@ -1,8 +1,15 @@
 import Panel from "@/components/ui/Panel";
 import Money from "@/components/ui/Money";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatMonth } from "@/lib/format";
 import { formatDate } from "@/lib/format-date";
 import type { LedgerTick } from "@/lib/ledger-strip";
+
+function isCurrentMonthLabel(label: string): boolean {
+  const now = new Date();
+  const currentShort = formatMonth(now.toISOString().slice(0, 7));
+  const currentLong = now.toLocaleString("en-US", { month: "long", year: "numeric" });
+  return label === currentShort || label === currentLong;
+}
 
 export default function LedgerStrip({
   ticks,
@@ -22,8 +29,12 @@ export default function LedgerStrip({
   }
 
   const maxAbsAmount = Math.max(...ticks.map((tick) => Math.abs(tick.amount)), 1);
-  const lastTick = ticks[ticks.length - 1]!;
+  const lastTick = ticks[ticks.length - 1];
+  if (!lastTick) {
+    return null;
+  }
   const accountLabel = accountMask ? `${accountName} •${accountMask}` : accountName;
+
 
   return (
     <Panel
@@ -92,7 +103,9 @@ export default function LedgerStrip({
             );
           })}
           <div className="absolute inset-y-0 right-0 flex w-28 flex-col justify-center border-l border-dashed border-panel-border pl-4 text-right">
-            <span className="eyebrow font-mono">Today</span>
+            <span className="eyebrow font-mono">
+              {isCurrentMonthLabel(monthLabel) ? "Today" : "Month end"}
+            </span>
             <Money
               amount={lastTick.runningBalance}
               currency={currency}
