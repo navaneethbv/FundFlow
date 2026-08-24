@@ -94,7 +94,7 @@ describe("AccountGroup & NetWorthHero symmetric colors", () => {
           netWorth: [{ currency: "USD", amount: 50000 }],
           netWorthMonthChange: { USD: { amount: 1200, pct: 2.4 } },
           netWorthSeries: { USD: [{ date: "2026-08-01", value: 48800 }, { date: "2026-08-24", value: 50000 }] },
-        } as any,
+        } as never,
         historyStartsOn: "2026-01-01",
       }),
     );
@@ -107,7 +107,7 @@ describe("AccountGroup & NetWorthHero symmetric colors", () => {
           netWorth: [{ currency: "USD", amount: 50000 }],
           netWorthMonthChange: { USD: { amount: -1200, pct: -2.4 } },
           netWorthSeries: { USD: [{ date: "2026-08-01", value: 51200 }, { date: "2026-08-24", value: 50000 }] },
-        } as any,
+        } as never,
         historyStartsOn: "2026-01-01",
       }),
     );

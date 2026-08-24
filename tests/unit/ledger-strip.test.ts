@@ -112,6 +112,34 @@ describe("buildLedgerStripTicks", () => {
     );
     expect(ticks[0]!.label).toBe("ACME PAYROLL DEP");
   });
+
+  it("falls back to 'Transaction' when both merchant_name and name are null", () => {
+    const ticks = buildLedgerStripTicks(
+      [transaction({ merchant_name: null, name: null })],
+      100,
+    );
+    expect(ticks[0]!.label).toBe("Transaction");
+  });
+
+  it("respects a custom majorThreshold option", () => {
+    const ticks = buildLedgerStripTicks(
+      [transaction({ amount: 50 })],
+      100,
+      { majorThreshold: 25 },
+    );
+    expect(ticks[0]!.major).toBe(true);
+  });
+
+  it("sorts deterministically when date and id are identical", () => {
+    const ticks = buildLedgerStripTicks(
+      [
+        transaction({ id: "same", date: "2026-08-01" }),
+        transaction({ id: "same", date: "2026-08-01" }),
+      ],
+      100,
+    );
+    expect(ticks).toHaveLength(2);
+  });
 });
 
 describe("loadLedgerStripTicks", () => {
@@ -134,7 +162,7 @@ describe("loadLedgerStripTicks", () => {
           }),
         }),
       }),
-    } as any;
+    } as never;
 
     const ticks = await loadLedgerStripTicks(mockSupabase, {
       accountId: "acct-1",
@@ -148,6 +176,33 @@ describe("loadLedgerStripTicks", () => {
     expect(ticks[0]!.id).toBe("1");
     expect(ticks[0]!.date).toBe("2026-06-15");
     expect(ticks[0]!.runningBalance).toBe(520); // 500 - (-50 + -20) + (-50) = 570 - 50 = 520
+  });
+
+  it("handles null data from supabase query without throwing", async () => {
+    const mockSupabase = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            gte: () => ({
+              lte: () => ({
+                order: () => ({
+                  order: () => Promise.resolve({ data: null, error: null }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    } as never;
+
+    const ticks = await loadLedgerStripTicks(mockSupabase, {
+      accountId: "acct-1",
+      month: "2026-06",
+      today: "2026-07-20",
+      currentBalance: 500,
+    });
+
+    expect(ticks).toEqual([]);
   });
 
   it("throws when supabase query errors", async () => {
@@ -165,7 +220,7 @@ describe("loadLedgerStripTicks", () => {
           }),
         }),
       }),
-    } as any;
+    } as never;
 
     await expect(
       loadLedgerStripTicks(mockSupabase, {

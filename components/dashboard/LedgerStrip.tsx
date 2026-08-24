@@ -29,10 +29,7 @@ export default function LedgerStrip({
   }
 
   const maxAbsAmount = Math.max(...ticks.map((tick) => Math.abs(tick.amount)), 1);
-  const lastTick = ticks[ticks.length - 1];
-  if (!lastTick) {
-    return null;
-  }
+  const lastTick = ticks[ticks.length - 1]!;
   const accountLabel = accountMask ? `${accountName} •${accountMask}` : accountName;
 
 
