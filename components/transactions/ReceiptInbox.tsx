@@ -72,10 +72,10 @@ export default function ReceiptInbox({
     setError(null);
     setBusyId(receiptId);
     try {
-      const response = await fetch(`/api/receipts/${encodeURIComponent(receiptId)}`, {
+      const response = await fetch("/api/receipts", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action, transactionId }),
+        body: JSON.stringify({ id: receiptId, action, transactionId }),
       });
       const result = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) {
@@ -108,7 +108,11 @@ export default function ReceiptInbox({
     setError(null);
     setBusyId(receiptId);
     try {
-      const response = await fetch(`/api/receipts/${encodeURIComponent(receiptId)}`, { method: "DELETE" });
+      const response = await fetch("/api/receipts", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: receiptId }),
+      });
       const result = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) {
         setError(result?.error ?? "Could not delete the receipt.");
