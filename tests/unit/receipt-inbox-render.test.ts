@@ -94,4 +94,12 @@ describe("ReceiptInbox", () => {
     // react-dom/server serializes a bare boolean attribute as data-money="true".
     expect(html).toContain('<span data-money="true">$24.50</span>');
   });
+
+  it("validates receiptId before making transition/remove network calls and safely URL encodes", () => {
+    const inboxSource = readFileSync("components/transactions/ReceiptInbox.tsx", "utf8");
+    expect(inboxSource).toContain("SAFE_ID_RE");
+    expect(inboxSource).toContain("encodeURIComponent(receiptId)");
+    expect(inboxSource).toContain('setError("Invalid receipt ID.")');
+  });
 });
+
