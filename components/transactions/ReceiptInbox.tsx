@@ -17,13 +17,6 @@ const STATUS_ORDER: Record<ReceiptInboxRow["status"], number> = {
 
 const SAFE_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
-function getReceiptEndpoint(id: string): string | null {
-  if (!SAFE_ID_RE.test(id)) {
-    return null;
-  }
-  return `/api/receipts/${encodeURIComponent(id)}`;
-}
-
 export default function ReceiptInbox({
   initialReceipts,
 }: Readonly<{
@@ -72,15 +65,14 @@ export default function ReceiptInbox({
     action: "attach" | "ignore" | "restore",
     transactionId?: string,
   ) {
-    const endpoint = getReceiptEndpoint(receiptId);
-    if (!endpoint) {
+    if (!SAFE_ID_RE.test(receiptId)) {
       setError("Invalid receipt ID.");
       return;
     }
     setError(null);
     setBusyId(receiptId);
     try {
-      const response = await fetch(endpoint, {
+      const response = await fetch(`/api/receipts/${encodeURIComponent(receiptId)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action, transactionId }),
@@ -109,15 +101,14 @@ export default function ReceiptInbox({
   }
 
   async function remove(receiptId: string) {
-    const endpoint = getReceiptEndpoint(receiptId);
-    if (!endpoint) {
+    if (!SAFE_ID_RE.test(receiptId)) {
       setError("Invalid receipt ID.");
       return;
     }
     setError(null);
     setBusyId(receiptId);
     try {
-      const response = await fetch(endpoint, { method: "DELETE" });
+      const response = await fetch(`/api/receipts/${encodeURIComponent(receiptId)}`, { method: "DELETE" });
       const result = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) {
         setError(result?.error ?? "Could not delete the receipt.");
