@@ -15,6 +15,15 @@ const STATUS_ORDER: Record<ReceiptInboxRow["status"], number> = {
   ignored: 2,
 };
 
+const SAFE_ID_RE = /^[a-zA-Z0-9_-]+$/;
+
+function getReceiptEndpoint(id: string): string | null {
+  if (!SAFE_ID_RE.test(id)) {
+    return null;
+  }
+  return `/api/receipts/${encodeURIComponent(id)}`;
+}
+
 export default function ReceiptInbox({
   initialReceipts,
 }: Readonly<{
@@ -48,7 +57,8 @@ export default function ReceiptInbox({
         setError(result?.error ?? "Could not upload the receipt.");
         return;
       }
-      setReceipts((rows) => [result.receipt!, ...rows]);
+      const newReceipt = result.receipt;
+      setReceipts((rows) => [newReceipt, ...rows]);
       formElement.reset();
     } catch {
       setError("Could not upload the receipt.");
@@ -57,21 +67,20 @@ export default function ReceiptInbox({
     }
   }
 
-const SAFE_ID_RE = /^[a-zA-Z0-9_-]+$/;
-
   async function transition(
     receiptId: string,
     action: "attach" | "ignore" | "restore",
     transactionId?: string,
   ) {
-    if (!SAFE_ID_RE.test(receiptId)) {
+    const endpoint = getReceiptEndpoint(receiptId);
+    if (!endpoint) {
       setError("Invalid receipt ID.");
       return;
     }
     setError(null);
     setBusyId(receiptId);
     try {
-      const response = await fetch(`/api/receipts/${encodeURIComponent(receiptId)}`, {
+      const response = await fetch(endpoint, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action, transactionId }),
@@ -100,14 +109,15 @@ const SAFE_ID_RE = /^[a-zA-Z0-9_-]+$/;
   }
 
   async function remove(receiptId: string) {
-    if (!SAFE_ID_RE.test(receiptId)) {
+    const endpoint = getReceiptEndpoint(receiptId);
+    if (!endpoint) {
       setError("Invalid receipt ID.");
       return;
     }
     setError(null);
     setBusyId(receiptId);
     try {
-      const response = await fetch(`/api/receipts/${encodeURIComponent(receiptId)}`, { method: "DELETE" });
+      const response = await fetch(endpoint, { method: "DELETE" });
       const result = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) {
         setError(result?.error ?? "Could not delete the receipt.");
