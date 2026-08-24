@@ -295,6 +295,37 @@ describe("RecurringList — Manage tab", () => {
     expect(html).toContain("Piano lessons");
     expect(html).toContain('aria-label="Manual item name"');
   });
+
+  it("marks a manual expense item's amount with the privacy-blur hook and the negative diverging token", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecurringList, {
+        occurrences: [],
+        streams: [],
+        manualItems: [manualItem({ itemType: "expense", amount: 80 })],
+        currency: "USD",
+        today: "2026-07-10",
+        tab: "manage",
+        links: LINKS,
+      }),
+    );
+    expect(html).toContain("data-money");
+    expect(html).toContain("var(--viz-neg)");
+  });
+
+  it("colors a manual income item's amount with the positive diverging token", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecurringList, {
+        occurrences: [],
+        streams: [],
+        manualItems: [manualItem({ itemType: "income", amount: 500, name: "Freelance" })],
+        currency: "USD",
+        today: "2026-07-10",
+        tab: "manage",
+        links: LINKS,
+      }),
+    );
+    expect(html).toContain("var(--viz-pos)");
+  });
 });
 
 describe("ReviewBanner", () => {

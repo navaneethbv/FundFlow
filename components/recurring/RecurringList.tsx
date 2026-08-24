@@ -530,9 +530,15 @@ function ManualItemRow({
       <span className="min-w-0">
         <span className="block truncate text-sm font-semibold">{item.name}</span>
         <span className="text-xs text-muted">
-          {formatDay(item.nextDate)} · {manualFrequencyLabel(item.frequency)} ·{" "}
-          {item.itemType === "income" ? "+" : ""}
-          {formatCurrency(item.amount, currency)}
+          <span className="font-mono">{formatDay(item.nextDate)}</span> ·{" "}
+          {manualFrequencyLabel(item.frequency)} ·{" "}
+          <span
+            data-money
+            style={{ color: item.itemType === "income" ? "var(--viz-pos)" : "var(--viz-neg)" }}
+          >
+            {item.itemType === "income" ? "+" : ""}
+            {formatCurrency(item.amount, currency)}
+          </span>
         </span>
       </span>
       <span className="flex items-center gap-3">
