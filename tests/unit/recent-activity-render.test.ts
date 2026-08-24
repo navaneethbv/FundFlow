@@ -27,7 +27,7 @@ describe("RecentActivity", () => {
     expect(html).toContain("No recent activity yet.");
   });
 
-  it("zebra-stripes every other row", () => {
+  it("zebra-stripes every other row via RegisterRow", () => {
     const html = renderToStaticMarkup(
       createElement(RecentActivity, {
         transactions: [
@@ -45,13 +45,37 @@ describe("RecentActivity", () => {
     expect(rows[2]).not.toContain("bg-panel-2");
   });
 
-  it("sets the date in the mono face", () => {
+  it("converts the Plaid-signed amount to RegisterRow's display sign convention", () => {
+    // amount: 64.18 (Plaid: money out) must render as an outflow, "-$64.18".
     const html = renderToStaticMarkup(
       createElement(RecentActivity, {
-        transactions: [transaction()],
+        transactions: [transaction({ amount: 64.18 })],
         accountNames: new Map(),
       }),
     );
-    expect(html).toContain('class="block text-xs text-muted font-mono"');
+    expect(html).toContain("-$64.18");
+    expect(html).toContain("var(--viz-neg)");
+  });
+
+  it("renders a Plaid negative amount (money in) as an inflow", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecentActivity, {
+        transactions: [transaction({ amount: -2450, merchant_name: "Acme Payroll" })],
+        accountNames: new Map(),
+      }),
+    );
+    expect(html).toContain("+$2,450.00");
+    expect(html).toContain("var(--viz-pos)");
+  });
+
+  it("includes the category and account name in the meta line", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecentActivity, {
+        transactions: [transaction({ account_id: "acct-1" })],
+        accountNames: new Map([["acct-1", "Demo Checking **0001"]]),
+      }),
+    );
+    expect(html).toContain("Food And Drink");
+    expect(html).toContain("Demo Checking");
   });
 });
