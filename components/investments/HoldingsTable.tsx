@@ -53,11 +53,10 @@ export default function HoldingsTable({
             <Fragment key={group.label}>
               <tr className="border-b border-panel-border/60 bg-panel-2">
                 <td
-                  data-money
                   colSpan={7}
                   className="py-1.5 pr-3 text-xs font-semibold uppercase tracking-wide text-muted"
                 >
-                  {group.label} · {formatCurrency(group.subtotal, currency)}
+                  {group.label} · <span data-money>{formatCurrency(group.subtotal, currency)}</span>
                 </td>
               </tr>
               {group.holdings.map((h) => (

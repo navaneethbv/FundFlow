@@ -88,7 +88,13 @@ export default function ReportTransactions({
               <td
                 data-money
                 className="py-2 pr-3 text-right"
-                style={{ color: row.flow === "income" ? "var(--viz-pos)" : "var(--viz-neg)" }}
+                style={
+                  row.flow === "income"
+                    ? { color: "var(--viz-pos)" }
+                    : row.flow === "expense"
+                      ? { color: "var(--viz-neg)" }
+                      : undefined
+                }
               >
                 {formatCurrency(Math.abs(row.signedAmount), currency)}
               </td>

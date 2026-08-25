@@ -281,7 +281,7 @@ describe("loadOverviewWidgetData", () => {
     expect(result.ledgerStrip.ticks[0]!.amount).toBe(-50);
   });
 
-  it("anchors household ledger history to the current user's account", async () => {
+  it("anchors personal ledger history to the current user's account", async () => {
     const sharedAccount = {
       id: "acct-shared",
       name: "Shared Checking",
@@ -304,12 +304,43 @@ describe("loadOverviewWidgetData", () => {
 
     const result = await loadOverviewWidgetData(supabase as never, {
       ...options,
-      household: true,
+      household: false,
       visible: [],
       accounts: [sharedAccount, ownAccount],
     });
 
     expect(result.ledgerStrip.account?.id).toBe("acct-own");
+  });
+
+  it("anchors to selectedAccountId when provided", async () => {
+    const checking = {
+      id: "acct-checking",
+      name: "Checking",
+      mask: "1111",
+      current_balance: 900,
+      iso_currency_code: "USD",
+      type: "depository",
+      user_id: "user-1",
+    };
+    const savings = {
+      id: "acct-savings",
+      name: "Savings",
+      mask: "2222",
+      current_balance: 5000,
+      iso_currency_code: "USD",
+      type: "depository",
+      user_id: "user-1",
+    };
+    const supabase = clientStub({ transactions: { data: [] } });
+
+    const result = await loadOverviewWidgetData(supabase as never, {
+      ...options,
+      selectedAccountId: "acct-savings",
+      visible: [],
+      accounts: [checking, savings],
+    });
+
+    expect(result.ledgerStrip.account?.id).toBe("acct-savings");
   });
 
   it("handles anchor account with null current_balance and null iso_currency_code gracefully", async () => {

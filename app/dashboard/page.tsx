@@ -213,6 +213,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
               userId={user?.id ?? ""}
               household={dashboardScope === "household"}
               month={data.selectedMonth}
+              selectedAccountId={selectedAccountId}
             />
           )}
           {activeView === "monitor" && (

@@ -77,14 +77,15 @@ describe("ReportTransactions", () => {
     expect(html).toContain("var(--viz-neg)");
   });
 
-  it("colors a transfer row with the negative diverging token, same as before (non-income stayed uncolored, now stays non-positive)", () => {
+  it("leaves a transfer row neutral (no diverging color token applied)", () => {
     const html = renderToStaticMarkup(
       createElement(ReportTransactions, {
         ...baseProps,
         transactions: [row({ flow: "transfer", signedAmount: 100 })],
       }),
     );
-    expect(html).toContain("var(--viz-neg)");
+    expect(html).not.toContain("var(--viz-pos)");
+    expect(html).not.toContain("var(--viz-neg)");
     expect(html).toContain(">Transfer<");
   });
 

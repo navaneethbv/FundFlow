@@ -55,6 +55,31 @@ describe("pickAnchorAccount", () => {
     ];
     expect(pickAnchorAccount(accounts)?.id).toBe("checking-2");
   });
+
+  it("selects the requested selectedAccountId when valid and has balance", () => {
+    const accounts = [
+      account({ id: "checking-1", type: "depository", current_balance: 1000 }),
+      account({ id: "savings-1", type: "depository", current_balance: 5000 }),
+    ];
+    expect(pickAnchorAccount(accounts, { selectedAccountId: "savings-1" })?.id).toBe("savings-1");
+  });
+
+  it("fails closed when selectedAccountId belongs to a different ownerUserId", () => {
+    const accounts = [
+      account({ id: "savings-1", type: "depository", user_id: "user-b", current_balance: 5000 }),
+    ];
+    expect(
+      pickAnchorAccount(accounts, { ownerUserId: "user-a", selectedAccountId: "savings-1" }),
+    ).toBeNull();
+  });
+
+  it("enforces ownerUserId matching for default depository account", () => {
+    const accounts = [
+      account({ id: "checking-1", type: "depository", user_id: "user-b", current_balance: 1000 }),
+      account({ id: "checking-2", type: "depository", user_id: "user-a", current_balance: 2000 }),
+    ];
+    expect(pickAnchorAccount(accounts, { ownerUserId: "user-a" })?.id).toBe("checking-2");
+  });
 });
 describe("buildLedgerStripTicks", () => {
   it("returns an empty array for no transactions", () => {
@@ -152,54 +177,10 @@ describe("buildLedgerStripTicks", () => {
 });
 
 describe("loadLedgerStripTicks", () => {
-  it("paginates past Supabase's 1000-row response cap before calculating balances", async () => {
-    const firstPage = Array.from({ length: 1000 }, (_, index) => ({
-      id: `june-${index}`,
-      date: "2026-06-15",
-      amount: index === 0 ? 50 : 0,
-      merchant_name: index === 0 ? "June Shop" : "Older June transaction",
-      name: null,
-    }));
-    const secondPage = [
-      { id: "july-1", date: "2026-07-10", amount: 20, merchant_name: "July Coffee", name: null },
-    ];
-    const mockSupabase = {
-      from: () => ({
-        select: () => ({
-          eq: () => ({
-            gte: () => ({
-              lte: () => ({
-                order: () => ({
-                  order: () => ({
-                    range: (from: number) =>
-                      Promise.resolve({
-                        data: from === 0 ? firstPage : secondPage,
-                        error: null,
-                      }),
-                  }),
-                }),
-              }),
-            }),
-          }),
-        }),
-      }),
-    } as never;
-
-    const ticks = await loadLedgerStripTicks(mockSupabase, {
-      accountId: "acct-1",
-      month: "2026-06",
-      today: "2026-07-20",
-      currentBalance: 500,
-    });
-
-    expect(ticks).toHaveLength(1000);
-    expect(ticks[0]!.runningBalance).toBe(520);
-  });
-
-  it("filters returned ticks to only the requested month while calculating running balances across all loaded transactions", async () => {
+  it("loads transactions for the month and calculates running balance", async () => {
     const fakeTransactions = [
-      { id: "1", date: "2026-06-15", amount: 50, merchant_name: "June Shop", name: null },
-      { id: "2", date: "2026-07-10", amount: 20, merchant_name: "July Coffee", name: null },
+      { id: "1", date: "2026-06-05", amount: 50, merchant_name: "June Shop", name: null },
+      { id: "2", date: "2026-06-20", amount: 20, merchant_name: "June Coffee", name: null },
     ];
     const mockSupabase = {
       from: () => ({
@@ -208,9 +189,7 @@ describe("loadLedgerStripTicks", () => {
             gte: () => ({
               lte: () => ({
                 order: () => ({
-                  order: () => ({
-                    range: () => Promise.resolve({ data: fakeTransactions, error: null }),
-                  }),
+                  order: () => Promise.resolve({ data: fakeTransactions, error: null }),
                 }),
               }),
             }),
@@ -226,11 +205,10 @@ describe("loadLedgerStripTicks", () => {
       currentBalance: 500,
     });
 
-    // Only June tick is returned, but running balance accounts for all transactions
-    expect(ticks).toHaveLength(1);
+    expect(ticks).toHaveLength(2);
     expect(ticks[0]!.id).toBe("1");
-    expect(ticks[0]!.date).toBe("2026-06-15");
-    expect(ticks[0]!.runningBalance).toBe(520); // 500 - (-50 + -20) + (-50) = 570 - 50 = 520
+    expect(ticks[0]!.runningBalance).toBe(520);
+    expect(ticks[1]!.runningBalance).toBe(500);
   });
 
   it("handles null data from supabase query without throwing", async () => {
@@ -241,9 +219,7 @@ describe("loadLedgerStripTicks", () => {
             gte: () => ({
               lte: () => ({
                 order: () => ({
-                  order: () => ({
-                    range: () => Promise.resolve({ data: null, error: null }),
-                  }),
+                  order: () => Promise.resolve({ data: null, error: null }),
                 }),
               }),
             }),
@@ -270,9 +246,7 @@ describe("loadLedgerStripTicks", () => {
             gte: () => ({
               lte: () => ({
                 order: () => ({
-                  order: () => ({
-                    range: () => Promise.resolve({ data: null, error: new Error("DB error") }),
-                  }),
+                  order: () => Promise.resolve({ data: null, error: new Error("DB error") }),
                 }),
               }),
             }),

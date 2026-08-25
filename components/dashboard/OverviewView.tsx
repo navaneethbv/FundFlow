@@ -32,6 +32,7 @@ export default async function OverviewView({
   userId,
   household,
   month,
+  selectedAccountId,
 }: Readonly<{
   prefsRaw: unknown;
   data: Omit<DashboardWidgetGridData, "investments">;
@@ -42,6 +43,7 @@ export default async function OverviewView({
   userId: string;
   household: boolean;
   month: string;
+  selectedAccountId?: string;
 }>) {
   const today = new Date().toISOString().slice(0, 10);
   const supabase = await createClient();
@@ -54,6 +56,7 @@ export default async function OverviewView({
     household,
     visible: visibleWidgets(prefs),
     accounts,
+    selectedAccountId,
   });
 
   return (

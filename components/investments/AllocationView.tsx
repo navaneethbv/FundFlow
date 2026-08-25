@@ -48,8 +48,8 @@ export default function AllocationView({
               />
               {group.label}
             </span>
-            <span data-money className="tabular-nums text-muted">
-              {formatCurrency(group.subtotal, currency)} · {((group.subtotal / page.total) * 100).toFixed(1)}%
+            <span className="tabular-nums text-muted">
+              <span data-money>{formatCurrency(group.subtotal, currency)}</span> · {((group.subtotal / page.total) * 100).toFixed(1)}%
             </span>
           </li>
         ))}

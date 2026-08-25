@@ -41,15 +41,31 @@ function round2(value: number): number {
 
 export function pickAnchorAccount(
   accounts: readonly LedgerStripAccount[],
-  ownerUserId?: string,
+  options?: {
+    ownerUserId?: string;
+    selectedAccountId?: string;
+  },
 ): LedgerStripAccount | null {
+  if (options?.selectedAccountId) {
+    const selected = accounts.find((account) => account.id === options.selectedAccountId);
+    if (selected && selected.current_balance !== null) {
+      if (options.ownerUserId && selected.user_id && selected.user_id !== options.ownerUserId) {
+        return null;
+      }
+      return selected;
+    }
+  }
+
   return (
-    accounts.find(
-      (account) =>
-        account.type === "depository" &&
-        account.current_balance !== null &&
-        (!ownerUserId || account.user_id === ownerUserId),
-    ) ?? null
+    accounts.find((account) => {
+      if (account.type !== "depository" || account.current_balance === null) {
+        return false;
+      }
+      if (options?.ownerUserId) {
+        return account.user_id === options.ownerUserId;
+      }
+      return true;
+    }) ?? null
   );
 }
 
@@ -90,6 +106,17 @@ export function buildLedgerStripTicks(
   });
 }
 
+function getMonthEndDate(month: string, today: string): string {
+  if (today.startsWith(month)) {
+    return today;
+  }
+  const [yearStr, monthStr] = month.split("-");
+  const year = Number(yearStr);
+  const monthNum = Number(monthStr);
+  const lastDay = new Date(Date.UTC(year, monthNum, 0)).getUTCDate();
+  return `${month}-${String(lastDay).padStart(2, "0")}`;
+}
+
 export async function loadLedgerStripTicks(
   supabase: SupabaseClient,
   options: Readonly<{
@@ -99,33 +126,22 @@ export async function loadLedgerStripTicks(
     currentBalance: number;
   }>,
 ): Promise<LedgerTick[]> {
-  const pageSize = 1000;
-  const transactions: LedgerStripTransaction[] = [];
+  const endDate = getMonthEndDate(options.month, options.today);
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("id, date, amount, merchant_name, name")
+    .eq("account_id", options.accountId)
+    .gte("date", `${options.month}-01`)
+    .lte("date", endDate)
+    .order("date", { ascending: true })
+    .order("id", { ascending: true });
 
-  for (let offset = 0; ; offset += pageSize) {
-    const { data, error } = await supabase
-      .from("transactions")
-      .select("id, date, amount, merchant_name, name")
-      .eq("account_id", options.accountId)
-      .gte("date", `${options.month}-01`)
-      .lte("date", options.today)
-      .order("date", { ascending: true })
-      .order("id", { ascending: true })
-      .range(offset, offset + pageSize - 1);
-
-    if (error) {
-      throw error;
-    }
-
-    const page = (data ?? []) as LedgerStripTransaction[];
-    transactions.push(...page);
-    if (page.length < pageSize) {
-      break;
-    }
+  if (error) {
+    throw error;
   }
 
   const allTicks = buildLedgerStripTicks(
-    transactions,
+    (data ?? []) as LedgerStripTransaction[],
     options.currentBalance,
   );
 

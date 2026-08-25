@@ -158,13 +158,17 @@ export async function loadOverviewWidgetData(
     household: boolean;
     visible: readonly WidgetKey[];
     accounts: readonly LedgerStripAccount[];
+    selectedAccountId?: string;
   }>,
 ): Promise<{
   cumulativeSpend: CumulativeSpendView;
   investments: DashboardInvestmentSummary | null;
   ledgerStrip: OverviewLedgerStrip;
 }> {
-  const anchorAccount = pickAnchorAccount(options.accounts, options.userId);
+  const anchorAccount = pickAnchorAccount(options.accounts, {
+    ownerUserId: options.household ? undefined : options.userId,
+    selectedAccountId: options.selectedAccountId,
+  });
   const [cumulativeSpend, investments, ledgerTicks] = await Promise.all([
     options.visible.includes("spendingCompare")
       ? loadCumulativeSpend(supabase, options)
