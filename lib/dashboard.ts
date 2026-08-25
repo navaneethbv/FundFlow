@@ -68,7 +68,6 @@ export { TRANSFER_GROUPS as EXCLUDED_PFC } from "@/lib/finance-domain";
 
 export interface AccountSummary {
   id: string;
-  user_id?: string | null;
   name: string | null;
   official_name: string | null;
   mask: string | null;
@@ -652,7 +651,7 @@ export async function getDashboardData(
       supabase
         .from("accounts")
         .select(
-          "id, user_id, name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code, plaid_item_id, apr",
+          "id, name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code, plaid_item_id, apr",
         )
         .order("name"),
     ),

@@ -203,7 +203,7 @@ export default function SeedBudgetButton({
                 </label>
               </div>
               <p className="mt-2 text-xs text-muted">
-                <span data-money>{formatCurrency(row.suggested_amount, currency)}</span> per month.{" "}
+                {formatCurrency(row.suggested_amount, currency)} per month.{" "}
                 {row.reason}
               </p>
             </fieldset>

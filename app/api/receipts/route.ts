@@ -124,11 +124,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-import {
-  executeReceiptPatch,
-  executeReceiptDelete,
-} from "./[id]/route";
-
 export async function GET() {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -139,35 +134,5 @@ export async function GET() {
     return NextResponse.json({ receipts });
   } catch (error) {
     return errorResponse("receipts.list", error);
-  }
-}
-
-export async function PATCH(request: NextRequest) {
-  const auth = await requireUser();
-  if (auth instanceof NextResponse) return auth;
-
-  try {
-    const body = (await request.json().catch(() => null)) as {
-      id?: unknown;
-      action?: unknown;
-      transactionId?: unknown;
-    } | null;
-    const id = typeof body?.id === "string" ? body.id : "";
-    return await executeReceiptPatch(auth, id, body, getClientIp(request));
-  } catch (error) {
-    return errorResponse("receipts.update", error);
-  }
-}
-
-export async function DELETE(request: NextRequest) {
-  const auth = await requireUser();
-  if (auth instanceof NextResponse) return auth;
-
-  try {
-    const body = (await request.json().catch(() => null)) as { id?: unknown } | null;
-    const id = typeof body?.id === "string" ? body.id : "";
-    return await executeReceiptDelete(auth, id, getClientIp(request));
-  } catch (error) {
-    return errorResponse("receipts.delete", error);
   }
 }

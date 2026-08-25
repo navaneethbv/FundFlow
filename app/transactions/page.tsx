@@ -372,8 +372,6 @@ function buildDayTotals(
 
 interface LedgerTableRowProps {
   row: LedgerProjectedRow;
-  /** Position in the flat row list; drives the zebra stripe. */
-  index: number;
   /** Render the day-group header above this row. */
   isNewDay: boolean;
   /** Signed net for the row's date, shown in that header. */
@@ -393,7 +391,6 @@ interface LedgerTableRowProps {
  */
 function LedgerTableRow({
   row,
-  index,
   isNewDay,
   dayTotal,
   visibleColumns,
@@ -416,12 +413,8 @@ function LedgerTableRow({
         <tr className="border-b border-panel-border bg-panel/60">
           <td colSpan={columnCount} className="px-4 py-1.5">
             <div className="flex items-center justify-between gap-3 text-xs font-semibold text-muted">
-              <span className="font-mono">{formatDate(row.date)}</span>
-              <span
-                data-money
-                className="font-normal"
-                style={{ color: dayTotal < 0 ? "var(--viz-pos)" : "var(--viz-neg)" }}
-              >
+              <span>{formatDate(row.date)}</span>
+              <span data-money className="font-normal">
                 {dayTotal < 0 ? "+" : "-"}
                 {formatCurrency(Math.abs(dayTotal))} net
               </span>
@@ -429,12 +422,8 @@ function LedgerTableRow({
           </td>
         </tr>
       )}
-      <tr
-        className={`border-b border-panel-border last:border-0 hover:bg-panel-hover${
-          index % 2 === 1 ? " bg-panel-2" : ""
-        }`}
-      >
-        <td className="whitespace-nowrap px-4 py-3 align-top text-muted font-mono">
+      <tr className="border-b border-panel-border last:border-0 hover:bg-panel-hover">
+        <td className="whitespace-nowrap px-4 py-3 align-top text-muted">
           {formatDate(row.date)}
         </td>
         <td className="px-4 py-3 align-top">
@@ -481,8 +470,11 @@ function LedgerTableRow({
         )}
         <td
           data-money
-          className="whitespace-nowrap px-4 py-3 text-right align-top font-semibold"
-          style={{ color: isMoneyIn ? "var(--viz-pos)" : "var(--viz-neg)" }}
+          className={
+            isMoneyIn
+              ? "whitespace-nowrap px-4 py-3 text-right align-top font-semibold text-success"
+              : "whitespace-nowrap px-4 py-3 text-right align-top font-semibold text-foreground"
+          }
         >
           {isMoneyIn ? "+" : "-"}
           {formatCurrency(Math.abs(row.amount), currency)}
@@ -754,7 +746,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
             <div className="hidden overflow-x-auto sm:block">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 z-10 bg-panel-2">
-                  <tr className="border-b border-panel-border text-left text-xs uppercase tracking-wider text-muted font-mono">
+                  <tr className="border-b border-panel-border text-left text-xs uppercase tracking-wider text-muted">
                     <th className="px-4 py-3 font-semibold">Date</th>
                     <th className="px-4 py-3 font-semibold">Merchant</th>
                     {visibleColumns.has("category") && (
@@ -774,7 +766,6 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                     <LedgerTableRow
                       key={t.id}
                       row={t}
-                      index={index}
                       isNewDay={showDayGroups && (index === 0 || rows[index - 1]!.date !== t.date)}
                       dayTotal={dayTotals.get(t.date) ?? 0}
                       visibleColumns={visibleColumns}

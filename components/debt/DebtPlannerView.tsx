@@ -109,23 +109,23 @@ export default function DebtPlannerView({
 
       <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Panel padding="md">
-          <dt className="text-xs font-semibold uppercase tracking-wide text-muted font-mono">
+          <dt className="text-xs font-semibold uppercase tracking-wide text-muted">
             Total balance
           </dt>
-          <dd data-money className="metric-value mt-1 text-2xl font-bold" style={{ color: "var(--viz-neg)" }}>
+          <dd className="metric-value mt-1 text-2xl font-bold">
             {formatCurrency(data.totalBalance)}
           </dd>
         </Panel>
         <Panel padding="md">
-          <dt className="text-xs font-semibold uppercase tracking-wide text-muted font-mono">
+          <dt className="text-xs font-semibold uppercase tracking-wide text-muted">
             Monthly budget
           </dt>
-          <dd data-money className="metric-value mt-1 text-2xl font-bold" style={{ color: "var(--viz-neg)" }}>
+          <dd className="metric-value mt-1 text-2xl font-bold">
             {formatCurrency(data.totalMonthlyBudget)}
           </dd>
         </Panel>
         <Panel padding="md">
-          <dt className="text-xs font-semibold uppercase tracking-wide text-muted font-mono">
+          <dt className="text-xs font-semibold uppercase tracking-wide text-muted">
             Debt-free projection
           </dt>
           <dd className="metric-value mt-1 text-2xl font-bold">
@@ -133,10 +133,10 @@ export default function DebtPlannerView({
           </dd>
         </Panel>
         <Panel padding="md">
-          <dt className="text-xs font-semibold uppercase tracking-wide text-muted font-mono">
+          <dt className="text-xs font-semibold uppercase tracking-wide text-muted">
             Total projected interest
           </dt>
-          <dd data-money className="metric-value mt-1 text-2xl font-bold" style={{ color: "var(--viz-neg)" }}>
+          <dd className="metric-value mt-1 text-2xl font-bold">
             {selectedPlan ? formatCurrency(selectedPlan.totalInterest) : "Not reached"}
           </dd>
         </Panel>
@@ -156,7 +156,7 @@ export default function DebtPlannerView({
         >
           <div className="overflow-x-auto">
             <table className="w-full min-w-[40rem] text-left text-sm">
-              <thead className="border-b border-panel-border text-xs uppercase tracking-wide text-muted font-mono">
+              <thead className="border-b border-panel-border text-xs uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-3 py-3">Priority</th>
                   <th className="px-3 py-3">Debt</th>
@@ -184,14 +184,10 @@ export default function DebtPlannerView({
                           </span>
                         )}
                       </td>
-                      <td data-money className="px-3 py-3 text-right" style={{ color: "var(--viz-neg)" }}>
-                        {formatCurrency(debt.balance)}
-                      </td>
+                      <td className="money px-3 py-3 text-right">{formatCurrency(debt.balance)}</td>
                       <td className="money px-3 py-3 text-right">{debt.apr.toFixed(2)}%</td>
                       <td className="px-3 py-3 text-right">Month {result.payoffMonth}</td>
-                      <td data-money className="px-3 py-3 text-right" style={{ color: "var(--viz-neg)" }}>
-                        {formatCurrency(result.interestPaid)}
-                      </td>
+                      <td className="money px-3 py-3 text-right">{formatCurrency(result.interestPaid)}</td>
                     </tr>
                   );
                 })}

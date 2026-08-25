@@ -12,12 +12,12 @@ describe("transactions UI restyle", () => {
     expect(source).toContain("sticky top-0");
   });
 
-  it("colors inflows and outflows with the diverging tokens (debits included)", () => {
+  it("colors credits green but leaves debits plain foreground (Monarch does not color debits red)", () => {
     const source = readFileSync("app/transactions/page.tsx", "utf8");
 
-    expect(source).toContain("var(--viz-pos)");
-    expect(source).toContain("var(--viz-neg)");
-    expect(source).not.toContain("text-success");
+    expect(source).toContain("text-success");
+    expect(source).toContain("text-foreground");
+    expect(source).not.toContain("var(--danger)");
   });
 
   it("collapses Edit multiple/Columns behind TableToolbar instead of two always-open bars", () => {

@@ -92,7 +92,7 @@ export default function NetWorthHero({
         <p className="mt-1.5 text-sm font-semibold">
           <span
             data-money
-            className={monthChange.amount >= 0 ? "text-[var(--viz-pos)]" : "text-[var(--viz-neg)]"}
+            className={monthChange.amount >= 0 ? "text-success" : "text-danger"}
           >
             {monthChange.amount >= 0 ? "↑" : "↓"}{" "}
             {formatCurrency(Math.abs(monthChange.amount), primaryCurrency)}
@@ -110,7 +110,7 @@ export default function NetWorthHero({
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-panel-border text-muted font-mono">
+              <tr className="border-b border-panel-border text-muted">
                 <th className="px-2 py-2 font-semibold">Date</th>
                 <th className="px-2 py-2 font-semibold">Currency</th>
                 <th className="px-2 py-2 text-right font-semibold">Net worth</th>
@@ -120,9 +120,9 @@ export default function NetWorthHero({
               {Object.entries(summary.netWorthSeries).flatMap(([currency, series]) =>
                 series.map((point) => (
                   <tr key={`${currency}-${point.date}`} className="border-b border-panel-border/70">
-                    <td className="px-2 py-2 font-mono">{point.date}</td>
-                    <td className="px-2 py-2 font-mono">{currency}</td>
-                    <td data-money className="px-2 py-2 text-right tabular-nums">
+                    <td className="px-2 py-2">{point.date}</td>
+                    <td className="px-2 py-2">{currency}</td>
+                    <td data-money className="px-2 py-2 text-right font-mono tabular-nums">
                       {formatCurrency(point.value, currency)}
                     </td>
                   </tr>

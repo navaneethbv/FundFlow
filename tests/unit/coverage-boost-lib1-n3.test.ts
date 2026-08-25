@@ -57,7 +57,6 @@ describe("loadOverviewWidgetData spendingCompare branch", () => {
       userId: "user-1",
       household: false,
       visible: ["spendingCompare"],
-      accounts: [],
     });
 
     expect(result.cumulativeSpend.days).toBeDefined();

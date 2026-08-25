@@ -10,9 +10,9 @@ function formatPercent(value: number | null): string {
   }).format(value)}%`;
 }
 
-function savingsRateColor(value: number | null): string | undefined {
-  if (value === null) return undefined;
-  return value >= 0 ? "var(--viz-pos)" : "var(--viz-neg)";
+function savingsRateTone(value: number | null): string {
+  if (value === null) return "text-foreground";
+  return value >= 0 ? "text-success" : "text-danger";
 }
 
 export default function CashFlowSummary({
@@ -36,22 +36,22 @@ export default function CashFlowSummary({
     {
       label: "Income",
       value: formatCurrency(period.income, currency),
-      color: "var(--viz-pos)",
+      tone: "text-success",
     },
     {
       label: "Expenses",
       value: formatCurrency(period.expenses, currency),
-      color: "var(--viz-neg)",
+      tone: "text-foreground",
     },
     {
       label: "Savings",
       value: formatCurrency(period.savings, currency),
-      color: period.savings >= 0 ? "var(--viz-pos)" : "var(--viz-neg)",
+      tone: period.savings >= 0 ? "text-success" : "text-danger",
     },
     {
       label: "Savings rate",
       value: formatPercent(period.savingsRate),
-      color: savingsRateColor(period.savingsRate),
+      tone: savingsRateTone(period.savingsRate),
     },
   ];
 
@@ -64,11 +64,7 @@ export default function CashFlowSummary({
         {metrics.map((metric) => (
           <Panel key={metric.label} className="min-w-0">
             <p className="eyebrow">{metric.label}</p>
-            <p
-              data-money
-              className="metric-value mt-3 truncate text-2xl sm:text-3xl"
-              style={{ color: metric.color }}
-            >
+            <p data-money className={`metric-value mt-3 truncate text-2xl sm:text-3xl ${metric.tone}`}>
               {metric.value}
             </p>
           </Panel>

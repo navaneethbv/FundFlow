@@ -38,8 +38,8 @@
   --viz-5: #4a3aa7; /* violet */
   --viz-6: #e34948; /* red */
   --viz-7: #c2379a; /* magenta */
-  --viz-pos: #1b5eaa; /* diverging pole: inflow, AA-safe for text and marks */
-  --viz-neg: #b42318; /* diverging pole: outflow, AA-safe for text and marks */
+  --viz-pos: #2a78d6; /* diverging pole: inflow */
+  --viz-neg: #e34948; /* diverging pole: outflow */
   --viz-ink: #0b0b0b;
   --viz-ink-2: #52514e;
   --viz-muted: #898781;
@@ -97,8 +97,8 @@
   --viz-5: #4a3aa7;
   --viz-6: #e34948;
   --viz-7: #c2379a;
-  --viz-pos: #1b5eaa;
-  --viz-neg: #b42318;
+  --viz-pos: #2a78d6;
+  --viz-neg: #e34948;
   --viz-ink: #0b0b0b;
   --viz-ink-2: #52514e;
   --viz-muted: #898781;
@@ -187,8 +187,8 @@
   --viz-5: #755efd;
   --viz-6: #d57c75;
   --viz-7: #d33ea7;
-  --viz-pos: #75b0f5;
-  --viz-neg: #f08a87;
+  --viz-pos: #3987e5;
+  --viz-neg: #e66767;
   --viz-ink: #ffffff;
   --viz-ink-2: #c3c2b7;
   --viz-muted: #898781;
@@ -245,8 +245,8 @@
     --viz-5: #755efd;
     --viz-6: #d57c75;
     --viz-7: #d33ea7;
-    --viz-pos: #75b0f5;
-    --viz-neg: #f08a87;
+    --viz-pos: #3987e5;
+    --viz-neg: #e66767;
     --viz-ink: #ffffff;
     --viz-ink-2: #c3c2b7;
     --viz-muted: #898781;
