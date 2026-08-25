@@ -18,6 +18,18 @@ function flowLabel(row: CanonicalFinanceTransaction): string {
   return row.flow === "income" ? "In" : "Out";
 }
 
+function flowAmountStyle(
+  flow: CanonicalFinanceTransaction["flow"],
+): { color: string } | undefined {
+  if (flow === "income") {
+    return { color: "var(--viz-pos)" };
+  }
+  if (flow === "expense") {
+    return { color: "var(--viz-neg)" };
+  }
+  return undefined;
+}
+
 export default function ReportTransactions({
   transactions,
   currency,
@@ -88,13 +100,7 @@ export default function ReportTransactions({
               <td
                 data-money
                 className="py-2 pr-3 text-right"
-                style={
-                  row.flow === "income"
-                    ? { color: "var(--viz-pos)" }
-                    : row.flow === "expense"
-                      ? { color: "var(--viz-neg)" }
-                      : undefined
-                }
+                style={flowAmountStyle(row.flow)}
               >
                 {formatCurrency(Math.abs(row.signedAmount), currency)}
               </td>
