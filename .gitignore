@@ -48,3 +48,15 @@ node_modules
 # graphify (generated knowledge-graph output; regenerate with `graphify update .`)
 graphify-out/
 lib/graphify-out/
+
+# ecc (generic multi-language agent scaffolding installed by the ECC tool;
+# identical across every local repo, not FundFlow-specific - regenerate via
+# the ecc installer rather than committing). The graphify.md files under
+# .agents/rules/ and .agents/workflows/ are FundFlow's own and stay tracked.
+.agents/agents/
+.agents/skills/
+.agents/ecc-install-state.json
+.agents/rules/*
+!.agents/rules/graphify.md
+.agents/workflows/*
+!.agents/workflows/graphify.md
