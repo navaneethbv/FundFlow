@@ -197,17 +197,34 @@ describe("CashFlowSummary", () => {
     expect(html).not.toContain("$1,000.00");
   });
 
-  it("uses semantic color tokens, never a raw viz-good/viz-bad inline style", () => {
+  it("uses the diverging money-direction tokens, never the status-semantic classes", () => {
     const html = renderToStaticMarkup(
       createElement(CashFlowSummary, {
         period: periods[1]!,
         currency: "USD",
       }),
     );
-    expect(html).toContain("text-success");
-    expect(html).toContain("text-danger");
-    expect(html).not.toContain("var(--viz-good)");
-    expect(html).not.toContain("var(--viz-bad)");
+    expect(html).toContain("var(--viz-pos)");
+    expect(html).toContain("var(--viz-neg)");
+    expect(html).not.toContain("text-success");
+    expect(html).not.toContain("text-danger");
+  });
+
+  it("leaves the savings-rate figure uncolored when there is no income to compute a rate from", () => {
+    const html = renderToStaticMarkup(
+      createElement(CashFlowSummary, {
+        period: {
+          key: "2026-08",
+          label: "Aug 2026",
+          income: 0,
+          expenses: 100,
+          savings: -100,
+          savingsRate: null,
+        },
+        currency: "USD",
+      }),
+    );
+    expect(html).toContain("No income");
   });
 });
 

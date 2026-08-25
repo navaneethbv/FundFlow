@@ -206,7 +206,6 @@ describe("weekly report model", () => {
     expect(report.categories).toEqual([]);
   });
 });
-
 describe("formatCardLabel", () => {
   it("title-cases a name Plaid returns in all caps", () => {
     // The real failure: Chase reports this account as "CREDIT CARD", which read
@@ -519,5 +518,52 @@ describe("getWeeklyReportData", () => {
     expect(edgeModel.totalSpend).toBe(50);
     expect(edgeModel.merchants[0]?.merchant).toBe("Unknown merchant");
     expect(edgeModel.banks[0]?.name).toBe("Other bank");
+  });
+
+  it("handles zero total spend with empty categories and credit cards with missing institution", () => {
+    const zeroModel = buildWeeklyReportModel({
+      userId: "u-1",
+      userEmail: "u1@test.com",
+      period,
+      accounts: [
+        { id: "c-1", name: null, type: "credit", plaidItemId: "missing-item" },
+      ],
+      transactions: [],
+      institutions: [],
+      budgets: [],
+      merchantRules: [],
+      splits: [],
+      linkedRefundTransactionIds: new Set(),
+      duplicateTransactionIds: new Set(),
+    });
+    expect(zeroModel.totalSpend).toBe(0);
+    expect(zeroModel.categories).toHaveLength(0);
+
+    const cardModel = buildWeeklyReportModel({
+      userId: "u-1",
+      userEmail: "u1@test.com",
+      period,
+      accounts: [
+        { id: "c-1", name: "Custom Card", type: "credit", plaidItemId: "missing-item" },
+      ],
+      transactions: [
+        {
+          id: "t-card",
+          date: "2026-07-08",
+          amount: 25,
+          merchantName: "Shop",
+          name: "Shop",
+          category: "GENERAL",
+          accountId: "c-1",
+        },
+      ],
+      institutions: [],
+      budgets: [],
+      merchantRules: [],
+      splits: [],
+      linkedRefundTransactionIds: new Set(),
+      duplicateTransactionIds: new Set(),
+    });
+    expect(cardModel.cards[0]?.name).toBe("Custom Card");
   });
 });

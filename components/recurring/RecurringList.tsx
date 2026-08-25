@@ -233,6 +233,7 @@ function OccurrenceRowMenu({
 
 function OccurrenceTableRow({
   occurrence,
+  index,
   currency,
   today,
   stream,
@@ -246,6 +247,7 @@ function OccurrenceTableRow({
   onDeleteManualItem,
 }: Readonly<{
   occurrence: RecurringOccurrence;
+  index: number;
   currency: string;
   today: string;
   stream: RecurringStreamRow | undefined;
@@ -259,7 +261,7 @@ function OccurrenceTableRow({
   onDeleteManualItem: (id: string) => void;
 }>) {
   return (
-    <tr className="border-t border-panel-border">
+    <tr className={`border-t border-panel-border${index % 2 === 1 ? " bg-panel-2" : ""}`}>
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
           <MerchantAvatar name={occurrence.merchant} size={32} className="shrink-0" />
@@ -269,7 +271,7 @@ function OccurrenceTableRow({
           </span>
         </div>
       </td>
-      <td className="px-4 py-3 text-sm whitespace-nowrap">
+      <td className="px-4 py-3 text-sm whitespace-nowrap font-mono">
         {formatDay(occurrence.dueDate)}
         {occurrence.status === "overdue" && (
           <span className="ml-1.5 text-xs font-semibold text-accent">
@@ -299,7 +301,11 @@ function OccurrenceTableRow({
           {occurrence.status === "complete" && (
             <CheckCircle2 aria-hidden className="h-4 w-4 text-success" />
           )}
-          <span data-money className={`metric-value text-sm ${occurrence.isIncome ? "text-success" : ""}`}>
+          <span
+            data-money
+            className="metric-value text-sm"
+            style={{ color: occurrence.isIncome ? "var(--viz-pos)" : "var(--viz-neg)" }}
+          >
             {occurrence.isIncome ? "+" : ""}
             {formatCurrency(occurrence.amount, currency)}
           </span>
@@ -374,7 +380,7 @@ function OccurrenceTable({
     // horizontal scroll while the table itself scrolled correctly.
     <div className="relative overflow-x-auto">
       <table className="w-full min-w-[720px] text-sm">
-        <thead className="bg-panel-2 text-xs text-muted">
+        <thead className="bg-panel-2 text-xs text-muted font-mono">
           <tr>
             <th scope="col" className="px-4 py-3 text-left">Merchant</th>
             <th scope="col" className="px-4 py-3 text-left">Date</th>
@@ -391,6 +397,7 @@ function OccurrenceTable({
             <OccurrenceTableRow
               key={`${occurrence.sourceId}-${occurrence.dueDate}-${index}`}
               occurrence={occurrence}
+              index={index}
               currency={currency}
               today={today}
               stream={occurrence.source === "plaid" ? streamById.get(occurrence.sourceId) : undefined}
@@ -523,9 +530,15 @@ function ManualItemRow({
       <span className="min-w-0">
         <span className="block truncate text-sm font-semibold">{item.name}</span>
         <span className="text-xs text-muted">
-          {formatDay(item.nextDate)} · {manualFrequencyLabel(item.frequency)} ·{" "}
-          {item.itemType === "income" ? "+" : ""}
-          {formatCurrency(item.amount, currency)}
+          <span className="font-mono">{formatDay(item.nextDate)}</span> ·{" "}
+          {manualFrequencyLabel(item.frequency)} ·{" "}
+          <span
+            data-money
+            style={{ color: item.itemType === "income" ? "var(--viz-pos)" : "var(--viz-neg)" }}
+          >
+            {item.itemType === "income" ? "+" : ""}
+            {formatCurrency(item.amount, currency)}
+          </span>
         </span>
       </span>
       <span className="flex items-center gap-3">

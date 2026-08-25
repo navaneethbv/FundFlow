@@ -94,6 +94,24 @@ describe("WidgetShell states", () => {
 });
 
 describe("BudgetWidget", () => {
+  it("wraps the spent/limit figure in the privacy-blur hook", () => {
+    const html = renderToStaticMarkup(
+      createElement(BudgetWidget, {
+        currency: "USD",
+        groups: [
+          budgetGroup({
+            key: "flexible",
+            label: "Dining Out",
+            spent: 128,
+            monthlyLimit: 100,
+            status: "over",
+          }),
+        ],
+      }),
+    );
+    expect(html).toContain("data-money");
+  });
+
   it("renders fixed, flexible, and non-monthly groups in planning order", () => {
     const html = renderToStaticMarkup(
       createElement(BudgetWidget, {

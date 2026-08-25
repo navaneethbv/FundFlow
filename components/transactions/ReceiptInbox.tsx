@@ -15,6 +15,8 @@ const STATUS_ORDER: Record<ReceiptInboxRow["status"], number> = {
   ignored: 2,
 };
 
+const SAFE_ID_RE = /^[a-zA-Z0-9_-]+$/;
+
 export default function ReceiptInbox({
   initialReceipts,
 }: Readonly<{
@@ -48,7 +50,8 @@ export default function ReceiptInbox({
         setError(result?.error ?? "Could not upload the receipt.");
         return;
       }
-      setReceipts((rows) => [result.receipt!, ...rows]);
+      const newReceipt = result.receipt;
+      setReceipts((rows) => [newReceipt, ...rows]);
       formElement.reset();
     } catch {
       setError("Could not upload the receipt.");
@@ -62,13 +65,17 @@ export default function ReceiptInbox({
     action: "attach" | "ignore" | "restore",
     transactionId?: string,
   ) {
+    if (!SAFE_ID_RE.test(receiptId)) {
+      setError("Invalid receipt ID.");
+      return;
+    }
     setError(null);
     setBusyId(receiptId);
     try {
-      const response = await fetch(`/api/receipts/${receiptId}`, {
+      const response = await fetch("/api/receipts", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action, transactionId }),
+        body: JSON.stringify({ id: receiptId, action, transactionId }),
       });
       const result = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) {
@@ -94,10 +101,18 @@ export default function ReceiptInbox({
   }
 
   async function remove(receiptId: string) {
+    if (!SAFE_ID_RE.test(receiptId)) {
+      setError("Invalid receipt ID.");
+      return;
+    }
     setError(null);
     setBusyId(receiptId);
     try {
-      const response = await fetch(`/api/receipts/${receiptId}`, { method: "DELETE" });
+      const response = await fetch("/api/receipts", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: receiptId }),
+      });
       const result = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) {
         setError(result?.error ?? "Could not delete the receipt.");
@@ -162,8 +177,13 @@ export default function ReceiptInbox({
             >
               <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
                 <p className="text-muted">
-                  {receipt.purchase_date ?? "Date unknown"}
-                  {receipt.total === null ? "" : ` · ${formatCurrency(receipt.total)}`}
+                  <span className="font-mono">{receipt.purchase_date ?? "Date unknown"}</span>
+                  {receipt.total !== null && (
+                    <>
+                      {" · "}
+                      <span data-money>{formatCurrency(receipt.total)}</span>
+                    </>
+                  )}
                 </p>
                 {receipt.imageUrl ? (
                   <a
@@ -190,7 +210,8 @@ export default function ReceiptInbox({
                       className="flex items-center justify-between gap-3 rounded-field border border-panel-border bg-panel-2 p-3 text-sm"
                     >
                       <span className="min-w-0 truncate">
-                        {candidate.merchant} · {candidate.date} · {formatCurrency(Math.abs(candidate.amount))}
+                        {candidate.merchant} · <span className="font-mono">{candidate.date}</span> ·{" "}
+                        <span data-money>{formatCurrency(Math.abs(candidate.amount))}</span>
                       </span>
                       <Button
                         size="sm"

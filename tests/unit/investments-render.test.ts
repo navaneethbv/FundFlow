@@ -55,14 +55,14 @@ describe("HoldingsTable", () => {
     expect(html).toContain("$2,500.00");
   });
 
-  it("colors a positive change green and a negative one red, never a raw hex", () => {
+  it("colors a positive change with the positive diverging token, a negative one with the negative token", () => {
     const positive = renderToStaticMarkup(
       createElement(HoldingsTable, {
         page: page({ byClass: [{ label: "Funds", holdings: [holding({ periodChangePct: 2 })], subtotal: 2500 }] }),
         currency: "USD",
       }),
     );
-    expect(positive).toContain("text-success");
+    expect(positive).toContain("var(--viz-pos)");
 
     const negative = renderToStaticMarkup(
       createElement(HoldingsTable, {
@@ -70,8 +70,19 @@ describe("HoldingsTable", () => {
         currency: "USD",
       }),
     );
-    expect(negative).toContain("text-danger");
-    expect(negative).not.toMatch(/color:\s*#[0-9a-f]{3,6}/i);
+    expect(negative).toContain("var(--viz-neg)");
+    expect(negative).not.toContain("text-success");
+    expect(negative).not.toContain("text-danger");
+  });
+
+  it("marks the group subtotal row with the privacy-blur hook, alongside the per-holding value", () => {
+    // The per-holding value/change cells and the Total row already carry
+    // data-money; the group-subtotal row does not (the gap this task closes).
+    // With one holding in one group the fix brings the count to 4.
+    const html = renderToStaticMarkup(
+      createElement(HoldingsTable, { page: page(), currency: "USD" }),
+    );
+    expect(html.match(/data-money/g)?.length).toBeGreaterThanOrEqual(4);
   });
 
   it("has an empty state when there are no holdings", () => {
@@ -83,7 +94,7 @@ describe("HoldingsTable", () => {
 });
 
 describe("TopMovers", () => {
-  it("colors gains green and losses red via semantic classes", () => {
+  it("colors gains with the positive diverging token and losses with the negative one", () => {
     const html = renderToStaticMarkup(
       createElement(TopMovers, {
         movers: [
@@ -92,13 +103,30 @@ describe("TopMovers", () => {
         ],
       }),
     );
-    expect(html).toContain("text-success");
-    expect(html).toContain("text-danger");
+    expect(html).toContain("var(--viz-pos)");
+    expect(html).toContain("var(--viz-neg)");
+    expect(html).not.toContain("text-success");
+    expect(html).not.toContain("text-danger");
+  });
+
+  it("zebra-stripes odd-indexed rows and not even-indexed ones", () => {
+    const html = renderToStaticMarkup(
+      createElement(TopMovers, {
+        movers: [
+          { id: "a", name: "A Co", ticker: "A", changePct: 1 },
+          { id: "b", name: "B Co", ticker: "B", changePct: -1 },
+        ],
+      }),
+    );
+    const rows = html.split("<li").slice(1);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).not.toContain("bg-panel-2");
+    expect(rows[1]).toContain("bg-panel-2");
   });
 });
 
 describe("PerformanceChart", () => {
-  it("colors a positive time-weighted return green", () => {
+  it("colors a positive time-weighted return with the positive diverging token", () => {
     const html = renderToStaticMarkup(
       createElement(PerformanceChart, {
         balanceHistory: [
@@ -112,7 +140,25 @@ describe("PerformanceChart", () => {
         currency: "USD",
       }),
     );
-    expect(html).toContain("text-success");
+    expect(html).toContain("var(--viz-pos)");
+    expect(html).not.toContain("text-success");
+  });
+
+  it("carries the performance figure inside the privacy-blur hook", () => {
+    const html = renderToStaticMarkup(
+      createElement(PerformanceChart, {
+        balanceHistory: [
+          { date: "2026-06-01", value: 1000 },
+          { date: "2026-07-01", value: 1100 },
+        ],
+        returns: [
+          { date: "2026-06-01", pct: 0 },
+          { date: "2026-07-01", pct: 5 },
+        ],
+        currency: "USD",
+      }),
+    );
+    expect(html).toContain("data-money");
   });
 });
 

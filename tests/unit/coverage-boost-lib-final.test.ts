@@ -119,3 +119,23 @@ describe("import-ynab category fallback with a short row", () => {
     expect(res.rows[0]!.amount).toBe(10);
   });
 });
+
+describe("import barrel re-exports", () => {
+  it("re-exports Mint, Monarch, and YNAB specifications and helper functions", async () => {
+    const mint = await import("@/lib/import-mint");
+    const monarch = await import("@/lib/import-monarch");
+    const ynab = await import("@/lib/import-ynab");
+
+    expect(typeof mint.looksLikeMintCsv).toBe("function");
+    expect(typeof mint.parseMintCsv).toBe("function");
+    expect(mint.MINT_FORMAT_SPEC).toBeDefined();
+
+    expect(typeof monarch.looksLikeMonarchCsv).toBe("function");
+    expect(typeof monarch.parseMonarchCsv).toBe("function");
+    expect(monarch.MONARCH_FORMAT_SPEC).toBeDefined();
+
+    expect(typeof ynab.looksLikeYnabCsv).toBe("function");
+    expect(typeof ynab.parseYnabCsv).toBe("function");
+    expect(ynab.YNAB_FORMAT_SPEC).toBeDefined();
+  });
+});

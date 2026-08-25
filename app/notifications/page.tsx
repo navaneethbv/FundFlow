@@ -83,11 +83,18 @@ export default async function NotificationsPage() {
           <PushSection />
           <Panel title="Weekly delivery history" eyebrow="Last 6 reports">
             <div className="space-y-3 text-sm">
-              {(deliveries ?? []).map((delivery) => (
-                <div key={`${delivery.period_start}-${delivery.attempted_at}`} className="flex items-center justify-between gap-3 rounded-field bg-panel-2 p-3">
+              {(deliveries ?? []).map((delivery, index) => (
+                <div
+                  key={`${delivery.period_start}-${delivery.attempted_at}`}
+                  className={`flex items-center justify-between gap-3 rounded-field p-3${index % 2 === 1 ? " bg-panel-2" : ""}`}
+                >
                   <span>
-                    <span className="block font-semibold">{formatDate(delivery.period_start)} to {formatDate(delivery.period_end)}</span>
-                    <span className="block text-xs text-muted">{delivery.sent_at ? `Sent ${formatDate(delivery.sent_at)}` : "Delivery attempted"}</span>
+                    <span className="block font-semibold font-mono">
+                      {formatDate(delivery.period_start)} to {formatDate(delivery.period_end)}
+                    </span>
+                    <span className="block text-xs text-muted font-mono">
+                      {delivery.sent_at ? `Sent ${formatDate(delivery.sent_at)}` : "Delivery attempted"}
+                    </span>
                   </span>
                   <Badge tone={deliveryStatusTone(delivery.status)}>{delivery.status}</Badge>
                 </div>
