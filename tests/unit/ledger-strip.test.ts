@@ -31,21 +31,25 @@ function transaction(partial: Partial<LedgerStripTransaction> = {}): LedgerStrip
 }
 
 describe("pickAnchorAccount", () => {
+  // Household scope is the one that deliberately spans owners, so it is what
+  // these selection-logic cases use to isolate themselves from ownership.
+  const anyOwner = { household: true } as const;
+
   it("returns the first depository account with a balance", () => {
     const accounts = [
       account({ id: "credit-1", type: "credit", current_balance: -500 }),
       account({ id: "checking-1", type: "depository", current_balance: 1000 }),
     ];
-    expect(pickAnchorAccount(accounts)?.id).toBe("checking-1");
+    expect(pickAnchorAccount(accounts, anyOwner)?.id).toBe("checking-1");
   });
 
   it("returns null for empty array", () => {
-    expect(pickAnchorAccount([])).toBeNull();
+    expect(pickAnchorAccount([], anyOwner)).toBeNull();
   });
 
   it("returns null when no depository account exists", () => {
     const accounts = [account({ type: "credit" }), account({ type: "loan" })];
-    expect(pickAnchorAccount(accounts)).toBeNull();
+    expect(pickAnchorAccount(accounts, anyOwner)).toBeNull();
   });
 
   it("skips a depository account with no balance on record", () => {
@@ -53,7 +57,7 @@ describe("pickAnchorAccount", () => {
       account({ id: "checking-1", type: "depository", current_balance: null }),
       account({ id: "checking-2", type: "depository", current_balance: 250 }),
     ];
-    expect(pickAnchorAccount(accounts)?.id).toBe("checking-2");
+    expect(pickAnchorAccount(accounts, anyOwner)?.id).toBe("checking-2");
   });
 
   it("selects the requested selectedAccountId when valid and has balance", () => {
@@ -61,7 +65,9 @@ describe("pickAnchorAccount", () => {
       account({ id: "checking-1", type: "depository", current_balance: 1000 }),
       account({ id: "savings-1", type: "depository", current_balance: 5000 }),
     ];
-    expect(pickAnchorAccount(accounts, { selectedAccountId: "savings-1" })?.id).toBe("savings-1");
+    expect(pickAnchorAccount(accounts, { ...anyOwner, selectedAccountId: "savings-1" })?.id).toBe(
+      "savings-1",
+    );
   });
 
   it("fails closed when selectedAccountId belongs to a different ownerUserId", () => {
@@ -79,6 +85,45 @@ describe("pickAnchorAccount", () => {
       account({ id: "checking-2", type: "depository", user_id: "user-a", current_balance: 2000 }),
     ];
     expect(pickAnchorAccount(accounts, { ownerUserId: "user-a" })?.id).toBe("checking-2");
+  });
+
+  it("fails closed in personal scope when no ownerUserId is known", () => {
+    const accounts = [
+      account({ id: "checking-1", type: "depository", user_id: "user-b", current_balance: 1000 }),
+    ];
+    // `userId={user?.id ?? ""}` upstream means an empty string is reachable.
+    expect(pickAnchorAccount(accounts, { ownerUserId: "" })).toBeNull();
+    expect(pickAnchorAccount(accounts)).toBeNull();
+  });
+
+  it("fails closed when an unowned account is selected by id in personal scope", () => {
+    const accounts = [
+      account({ id: "savings-1", type: "depository", user_id: null, current_balance: 5000 }),
+    ];
+    expect(
+      pickAnchorAccount(accounts, { ownerUserId: "user-a", selectedAccountId: "savings-1" }),
+    ).toBeNull();
+  });
+
+  it("returns null when the selected account is not a depository", () => {
+    const accounts = [
+      account({ id: "card-1", type: "credit", user_id: "user-a", current_balance: -500 }),
+      account({ id: "checking-1", type: "depository", user_id: "user-a", current_balance: 1000 }),
+    ];
+    // Anchoring a credit line would read inverted, and silently falling back to
+    // a different account would be worse, so the widget gets nothing.
+    expect(
+      pickAnchorAccount(accounts, { ownerUserId: "user-a", selectedAccountId: "card-1" }),
+    ).toBeNull();
+  });
+
+  it("spans owners only when household scope is passed", () => {
+    const accounts = [
+      account({ id: "checking-1", type: "depository", user_id: "user-b", current_balance: 1000 }),
+    ];
+    expect(pickAnchorAccount(accounts, { ownerUserId: "user-a", household: true })?.id).toBe(
+      "checking-1",
+    );
   });
 });
 describe("buildLedgerStripTicks", () => {
@@ -177,28 +222,83 @@ describe("buildLedgerStripTicks", () => {
 });
 
 describe("loadLedgerStripTicks", () => {
-  it("loads transactions for the month and calculates running balance", async () => {
-    const fakeTransactions = [
-      { id: "1", date: "2026-06-05", amount: 50, merchant_name: "June Shop", name: null },
-      { id: "2", date: "2026-06-20", amount: 20, merchant_name: "June Coffee", name: null },
-    ];
-    const mockSupabase = {
-      from: () => ({
-        select: () => ({
-          eq: () => ({
-            gte: () => ({
-              lte: () => ({
-                order: () => ({
-                  order: () => Promise.resolve({ data: fakeTransactions, error: null }),
-                }),
-              }),
-            }),
-          }),
-        }),
-      }),
-    } as never;
+  type Row = Record<string, unknown>;
+  interface QueryBuilder {
+    eq: (column: string, value: string) => QueryBuilder;
+    gte: (column: string, value: string) => QueryBuilder;
+    gt: (column: string, value: string) => QueryBuilder;
+    lte: (column: string, value: string) => QueryBuilder;
+    order: (column: string, options?: { ascending: boolean }) => QueryBuilder;
+    range: (from: number, to: number) => Promise<{ data: Row[] | null; error: Error | null }>;
+  }
 
-    const ticks = await loadLedgerStripTicks(mockSupabase, {
+  interface Captured {
+    monthWindow: [string, string] | null;
+    tailWindow: [string, string] | null;
+  }
+
+  /**
+   * Minimal PostgREST double. The two reads are told apart by their column
+   * list: the month read selects the full tick shape, the balance-tail read
+   * selects only `amount`. `.range()` slices, so pagination is exercised for
+   * real rather than assumed.
+   */
+  function mockSupabase(
+    spec: Readonly<{ month?: Row[]; tail?: Row[]; nullData?: boolean; error?: Error }>,
+  ): { client: never; captured: Captured } {
+    const captured: Captured = { monthWindow: null, tailWindow: null };
+
+    const build = (rows: Row[], isTail: boolean): QueryBuilder => {
+      let lower = "";
+      const builder: QueryBuilder = {
+        eq: () => builder,
+        gte: (_column, value) => {
+          lower = value;
+          return builder;
+        },
+        gt: (_column, value) => {
+          lower = value;
+          return builder;
+        },
+        lte: (_column, value) => {
+          if (isTail) {
+            captured.tailWindow = [lower, value];
+          } else {
+            captured.monthWindow = [lower, value];
+          }
+          return builder;
+        },
+        order: () => builder,
+        range: (from, to) =>
+          Promise.resolve(
+            spec.error
+              ? { data: null, error: spec.error }
+              : { data: spec.nullData ? null : rows.slice(from, to + 1), error: null },
+          ),
+      };
+      return builder;
+    };
+
+    const client = {
+      from: () => ({
+        select: (columns: string) => {
+          const isTail = columns === "amount";
+          return build(isTail ? (spec.tail ?? []) : (spec.month ?? []), isTail);
+        },
+      }),
+    };
+    return { client: client as never, captured };
+  }
+
+  it("loads transactions for the month and calculates running balance", async () => {
+    const { client } = mockSupabase({
+      month: [
+        { id: "1", date: "2026-06-05", amount: 50, merchant_name: "June Shop", name: null },
+        { id: "2", date: "2026-06-20", amount: 20, merchant_name: "June Coffee", name: null },
+      ],
+    });
+
+    const ticks = await loadLedgerStripTicks(client, {
       accountId: "acct-1",
       month: "2026-06",
       today: "2026-07-20",
@@ -211,24 +311,68 @@ describe("loadLedgerStripTicks", () => {
     expect(ticks[1]!.runningBalance).toBe(500);
   });
 
-  it("handles null data from supabase query without throwing", async () => {
-    const mockSupabase = {
-      from: () => ({
-        select: () => ({
-          eq: () => ({
-            gte: () => ({
-              lte: () => ({
-                order: () => ({
-                  order: () => Promise.resolve({ data: null, error: null }),
-                }),
-              }),
-            }),
-          }),
-        }),
-      }),
-    } as never;
+  it("anchors a closed month to its month-end balance, not today's", async () => {
+    // July closed with one $50 outflow; $300 has gone out since. Today's
+    // balance is 500, so July must close at 800 rather than 500.
+    const { client, captured } = mockSupabase({
+      month: [{ id: "j1", date: "2026-07-15", amount: 50, merchant_name: "July Shop", name: null }],
+      tail: [{ amount: 300 }],
+    });
 
-    const ticks = await loadLedgerStripTicks(mockSupabase, {
+    const ticks = await loadLedgerStripTicks(client, {
+      accountId: "acct-1",
+      month: "2026-07",
+      today: "2026-08-24",
+      currentBalance: 500,
+    });
+
+    expect(captured.monthWindow).toEqual(["2026-07-01", "2026-07-31"]);
+    expect(captured.tailWindow).toEqual(["2026-07-31", "2026-08-24"]);
+    expect(ticks.at(-1)!.runningBalance).toBe(800);
+  });
+
+  it("skips the balance-tail read for the current month", async () => {
+    const { client, captured } = mockSupabase({
+      month: [{ id: "a1", date: "2026-08-10", amount: 40, merchant_name: "Aug Shop", name: null }],
+    });
+
+    const ticks = await loadLedgerStripTicks(client, {
+      accountId: "acct-1",
+      month: "2026-08",
+      today: "2026-08-24",
+      currentBalance: 500,
+    });
+
+    expect(captured.monthWindow).toEqual(["2026-08-01", "2026-08-24"]);
+    expect(captured.tailWindow).toBeNull();
+    expect(ticks.at(-1)!.runningBalance).toBe(500);
+  });
+
+  it("pages past PostgREST's 1000-row response cap before calculating balances", async () => {
+    const month: Row[] = Array.from({ length: 1001 }, (_, index) => ({
+      id: `june-${String(index).padStart(4, "0")}`,
+      date: "2026-06-15",
+      amount: index === 1000 ? 50 : 0,
+      merchant_name: "June Shop",
+      name: null,
+    }));
+    const { client } = mockSupabase({ month });
+
+    const ticks = await loadLedgerStripTicks(client, {
+      accountId: "acct-1",
+      month: "2026-06",
+      today: "2026-06-30",
+      currentBalance: 500,
+    });
+
+    expect(ticks).toHaveLength(1001);
+    expect(ticks.at(-1)!.runningBalance).toBe(500);
+  });
+
+  it("handles null data from supabase query without throwing", async () => {
+    const { client } = mockSupabase({ nullData: true });
+
+    const ticks = await loadLedgerStripTicks(client, {
       accountId: "acct-1",
       month: "2026-06",
       today: "2026-07-20",
@@ -239,24 +383,10 @@ describe("loadLedgerStripTicks", () => {
   });
 
   it("throws when supabase query errors", async () => {
-    const mockSupabase = {
-      from: () => ({
-        select: () => ({
-          eq: () => ({
-            gte: () => ({
-              lte: () => ({
-                order: () => ({
-                  order: () => Promise.resolve({ data: null, error: new Error("DB error") }),
-                }),
-              }),
-            }),
-          }),
-        }),
-      }),
-    } as never;
+    const { client } = mockSupabase({ error: new Error("DB error") });
 
     await expect(
-      loadLedgerStripTicks(mockSupabase, {
+      loadLedgerStripTicks(client, {
         accountId: "acct-1",
         month: "2026-06",
         today: "2026-07-20",

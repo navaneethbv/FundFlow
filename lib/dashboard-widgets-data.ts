@@ -166,7 +166,8 @@ export async function loadOverviewWidgetData(
   ledgerStrip: OverviewLedgerStrip;
 }> {
   const anchorAccount = pickAnchorAccount(options.accounts, {
-    ownerUserId: options.household ? undefined : options.userId,
+    ownerUserId: options.userId,
+    household: options.household,
     selectedAccountId: options.selectedAccountId,
   });
   const [cumulativeSpend, investments, ledgerTicks] = await Promise.all([
