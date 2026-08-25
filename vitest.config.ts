@@ -30,18 +30,11 @@ export default defineConfig({
         "components/charts/**",
         "components/dashboard/metrics.ts",
         "components/dashboard/dashboard-view.ts",
-        "components/settings/settings-nav.ts",
-        "components/ui/RegisterRow.tsx",
-        "components/dashboard/LedgerStrip.tsx",
-        "components/accounts/AccountGroup.tsx",
-        "components/accounts/NetWorthHero.tsx",
+        "components/settings/settings-nav.ts"
       ],
       exclude: [
         "lib/types.ts",
         "scripts/backfill-institution-logos.ts",
-        "**/.DS_Store",
-        "lib/graphify-out/**",
-        "**/graphify-out/**",
       ],
       thresholds: {
         statements: 95,

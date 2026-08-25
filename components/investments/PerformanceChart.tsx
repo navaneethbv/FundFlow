@@ -1,6 +1,5 @@
 import { areaPath, linePath } from "@/lib/chart-utils";
 import { formatCurrency } from "@/lib/format";
-import { formatDate } from "@/lib/format-date";
 import { hasSufficientPerformanceData, type ReturnPoint } from "@/lib/investment-performance";
 import type { InvestmentsPage } from "@/lib/investments";
 
@@ -44,10 +43,10 @@ export default function PerformanceChart({
   }
 
   const latest = values.at(-1)!;
-  let performanceColor: string | undefined;
+  let performanceClass = "";
   let performanceLabel = formatCurrency(latest, currency);
   if (sufficient) {
-    performanceColor = latest >= 0 ? "var(--viz-pos)" : "var(--viz-neg)";
+    performanceClass = latest >= 0 ? "text-success" : "text-danger";
     performanceLabel = `${latest >= 0 ? "+" : ""}${latest.toFixed(1)}%`;
   }
 
@@ -57,7 +56,9 @@ export default function PerformanceChart({
         <span className="text-xs font-semibold uppercase tracking-wide text-muted">
           {sufficient ? "Portfolio performance" : "Balance"}
         </span>
-        <span data-money className="tabular-nums font-medium" style={{ color: performanceColor }}>
+        <span
+          className={`tabular-nums font-medium ${performanceClass}`}
+        >
           {performanceLabel}
         </span>
       </div>
@@ -83,13 +84,13 @@ export default function PerformanceChart({
           {sufficient
             ? returns!.map((p) => (
                 <tr key={p.date}>
-                  <td>{formatDate(p.date)}</td>
+                  <td>{p.date}</td>
                   <td>{p.pct.toFixed(1)}%</td>
                 </tr>
               ))
             : balanceHistory.map((p) => (
                 <tr key={p.date}>
-                  <td>{formatDate(p.date)}</td>
+                  <td>{p.date}</td>
                   <td>{formatCurrency(p.value, currency)}</td>
                 </tr>
               ))}

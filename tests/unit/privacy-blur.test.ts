@@ -60,7 +60,7 @@ describe("privacy blur mode", () => {
     for (const file of [
       "app/transactions/page.tsx",
       "components/transactions/MobileLedgerList.tsx",
-      "components/ui/RegisterRow.tsx",
+      "components/dashboard/RecentActivity.tsx",
       "components/dashboard/BarList.tsx",
       "components/accounts/AccountRow.tsx",
     ]) {

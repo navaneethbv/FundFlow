@@ -57,8 +57,7 @@ export default async function InvestmentsPage() {
                 {page.dayChange && (
                   <span
                     data-money
-                    className="ml-2"
-                    style={{ color: page.dayChange.amount >= 0 ? "var(--viz-pos)" : "var(--viz-neg)" }}
+                    className={page.dayChange.amount >= 0 ? "ml-2 text-success" : "ml-2 text-danger"}
                   >
                     {page.dayChange.amount >= 0 ? "+" : ""}
                     {formatCurrency(page.dayChange.amount, currency)} ({page.dayChange.pct.toFixed(1)}%) today

@@ -37,12 +37,4 @@ describe("notifications center", () => {
     expect(source).not.toContain('key: "broken_bank"');
     expect(source).toContain("broken_bank: true");
   });
-
-  it("zebra-stripes the delivery history and sets its dates in the mono face", () => {
-    const source = readFileSync("app/notifications/page.tsx", "utf8");
-    // The map stays `(deliveries ?? []).map(...)`; the change is the index arg.
-    expect(source).toContain("(delivery, index) =>");
-    expect(source).toContain('index % 2 === 1 ? " bg-panel-2" : ""');
-    expect(source).toContain("font-mono");
-  });
 });

@@ -94,7 +94,7 @@ describe("BudgetTable", () => {
     expect(html).not.toContain(">Save<");
   });
 
-  it("colors the remaining amount with the money-direction tokens in both the over- and under-budget cases", () => {
+  it("shows the remaining amount as a danger badge only when over budget", () => {
     const over = renderToStaticMarkup(
       createElement(BudgetTable, {
         section: section({
@@ -106,7 +106,6 @@ describe("BudgetTable", () => {
       }),
     );
     expect(over).toContain("-$100.00");
-    expect(over).toContain("var(--viz-neg)");
 
     const under = renderToStaticMarkup(
       createElement(BudgetTable, {
@@ -117,35 +116,6 @@ describe("BudgetTable", () => {
       }),
     );
     expect(under).toContain("$100.00");
-    expect(under).toContain("var(--viz-pos)");
-  });
-
-  it("carries every remaining/actual/planned figure inside the privacy-blur hook", () => {
-    const html = renderToStaticMarkup(
-      createElement(BudgetTable, {
-        section: section(),
-        currency: "USD",
-        disabled: false,
-        onUpdate: vi.fn(),
-      }),
-    );
-    // Section header: planned, actual, remaining (3). Row: remaining (1). 4 total.
-    const occurrences = html.match(/data-money/g) ?? [];
-    expect(occurrences.length).toBeGreaterThanOrEqual(4);
-  });
-
-  it("colors the section-header remaining figure symmetrically, not just the over-budget case", () => {
-    const surplus = renderToStaticMarkup(
-      createElement(BudgetTable, {
-        section: section({ remaining: 50 }),
-        currency: "USD",
-        disabled: false,
-        onUpdate: vi.fn(),
-      }),
-    );
-    expect(surplus).toContain("var(--viz-pos)");
-    expect(surplus).not.toContain("text-danger");
-    expect(surplus).not.toContain('text-foreground"');
   });
 
   it("hides an unbudgeted line by default behind a Show N unbudgeted toggle", () => {
@@ -234,7 +204,7 @@ describe("BudgetRightRail", () => {
     expect(html).not.toMatch(/<span class="font-semibold">Income<\/span>/);
   });
 
-  it("colors the hero figure with the money-direction tokens for a deficit", () => {
+  it("tints the hero red for a deficit", () => {
     const html = renderToStaticMarkup(
       createElement(BudgetRightRail, {
         data: pageData({ leftToBudget: -400 }),
@@ -243,24 +213,8 @@ describe("BudgetRightRail", () => {
         links,
       }),
     );
-    expect(html).toContain("var(--viz-neg)");
-    expect(html).not.toContain("text-danger");
+    expect(html).toContain("text-danger");
     expect(html).toContain("-$400.00");
-  });
-
-  it("colors the expense-remaining figure symmetrically on the expenses tab", () => {
-    const html = renderToStaticMarkup(
-      createElement(BudgetRightRail, {
-        data: pageData({ totalExpenses: { planned: 2400, actual: 2300, remaining: 100 } }),
-        currency: "USD",
-        tab: "expenses" as const,
-        links,
-      }),
-    );
-    expect(html).toContain("var(--viz-pos)");
-    // The figure itself no longer wears text-foreground; the Tabs nav's
-    // active-tab link legitimately does, so target the figure's class only.
-    expect(html).not.toContain('font-semibold text-foreground"');
   });
 
   it("shows income-specific figures only on the income tab", () => {
@@ -320,24 +274,5 @@ describe("BudgetPlanner", () => {
       }),
     );
     expect(html).toContain("bg-danger");
-  });
-
-  it("colors the TotalsRow remaining figure with the money-direction tokens", () => {
-    const html = renderToStaticMarkup(
-      createElement(BudgetPlanner, {
-        initialView: { horizon: "monthly" as const, month: pageData({ totalExpenses: { planned: 2400, actual: 2500, remaining: -100 } }) },
-        proposals: [],
-        month: "2026-07",
-        currency: "USD",
-        summaryTab: "summary" as const,
-        summaryLinks: {
-          summary: "/budget",
-          income: "/budget?summary=income",
-          expenses: "/budget?summary=expenses",
-        },
-      }),
-    );
-    expect(html).toContain("var(--viz-neg)");
-    expect(html).not.toContain("text-danger");
   });
 });

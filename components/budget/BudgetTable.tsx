@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Badge from "@/components/ui/Badge";
 import CategoryChip from "@/components/ui/CategoryChip";
 import ProgressBar from "@/components/ui/ProgressBar";
+import { cn } from "@/lib/cn";
 import { Eye, EyeOff } from "@/components/ui/icons";
 import { formatCurrency } from "@/lib/format";
 import type {
@@ -191,9 +192,7 @@ function BudgetRow({
           {formatCurrency(line.actual, currency)}
         </td>
         <td className="px-4 py-3 text-right">
-          <Badge tone="danger" data-money style={{ color: "var(--viz-neg)" }}>
-            {formatCurrency(line.remaining, currency)}
-          </Badge>
+          <Badge tone="danger">{formatCurrency(line.remaining, currency)}</Badge>
         </td>
         <td className="px-4 py-3 text-xs text-muted">Create a budget to edit</td>
       </tr>
@@ -251,13 +250,9 @@ function BudgetRow({
       </td>
       <td className="px-4 py-3 text-right align-top">
         {over ? (
-          <Badge tone="danger" data-money style={{ color: "var(--viz-neg)" }}>
-            {formatCurrency(line.remaining, currency)}
-          </Badge>
+          <Badge tone="danger">{formatCurrency(line.remaining, currency)}</Badge>
         ) : (
-          <span data-money className="font-semibold" style={{ color: "var(--viz-pos)" }}>
-            {formatCurrency(line.remaining, currency)}
-          </span>
+          <span className="font-semibold">{formatCurrency(line.remaining, currency)}</span>
         )}
       </td>
       <td className="px-2 py-3 text-right align-top">
@@ -292,8 +287,7 @@ export default function BudgetTable({
           <span data-money>{formatCurrency(section.actual, currency)} actual</span>
           <span
             data-money
-            className="text-sm font-bold"
-            style={{ color: section.remaining >= 0 ? "var(--viz-pos)" : "var(--viz-neg)" }}
+            className={cn("text-sm font-bold", section.remaining < 0 ? "text-danger" : "text-foreground")}
           >
             {formatCurrency(section.remaining, currency)} remaining
           </span>

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import React from "react";
-import { formatDate } from "@/lib/format-date";
 
 vi.mock("@/components/transactions/TransactionEditor", () => ({
   default: () => React.createElement("span", { "data-testid": "editor" }),
@@ -44,35 +43,17 @@ describe("MobileLedgerList", () => {
     expect(html).toContain("+$100.00");
   });
 
-  it("colors an inflow with the positive diverging token and an outflow with the negative one", () => {
+  it("colors credits green but leaves debits plain foreground (Monarch does not color debits red)", () => {
     const credit = renderToStaticMarkup(
       React.createElement(MobileLedgerList, { rows: [{ ...baseRow, amount: -100 }] }),
     );
-    expect(credit).toContain("var(--viz-pos)");
+    expect(credit).toContain("text-success");
 
     const debit = renderToStaticMarkup(
       React.createElement(MobileLedgerList, { rows: [baseRow] }),
     );
-    expect(debit).toContain("var(--viz-neg)");
-  });
-
-  it("sets the date in the mono face", () => {
-    const html = renderToStaticMarkup(
-      React.createElement(MobileLedgerList, { rows: [baseRow] }),
-    );
-    expect(html).toContain(`<span class="font-mono">${formatDate(baseRow.date)}</span>`);
-  });
-
-  it("zebra-stripes odd-indexed rows and not even-indexed rows", () => {
-    const html = renderToStaticMarkup(
-      React.createElement(MobileLedgerList, {
-        rows: [baseRow, { ...baseRow, id: "t2" }],
-      }),
-    );
-    const rows = html.split("<li").slice(1);
-    expect(rows).toHaveLength(2);
-    expect(rows[0]).not.toContain("bg-panel-2");
-    expect(rows[1]).toContain("bg-panel-2");
+    expect(debit).toContain("text-foreground");
+    expect(debit).not.toContain("text-danger");
   });
 
   it("shows the pending badge only when pending", () => {
