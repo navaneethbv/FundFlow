@@ -65,55 +65,95 @@ async function prepareReceiptPatch(
   return { update: { transaction_id: null, status: "unmatched" }, auditAction: "receipt_restored" };
 }
 
+export async function executeReceiptPatch(
+  auth: { user: { id: string }; supabase: SupabaseClient },
+  id: string,
+  body: { action?: unknown; transactionId?: unknown } | null,
+  ip: string | null,
+): Promise<NextResponse> {
+  if (!id) return badRequest("id is required");
+  const receipt = await loadOwnedReceipt(auth.supabase, auth.user.id, id);
+  if (!receipt) {
+    return NextResponse.json({ error: "Receipt not found" }, { status: 404 });
+  }
+
+  if (!body || !["attach", "ignore", "restore"].includes(String(body.action))) {
+    return badRequest("action is not supported");
+  }
+
+  const patchPrep = await prepareReceiptPatch(
+    auth.supabase,
+    auth.user.id,
+    String(body.action),
+    body.transactionId,
+  );
+  if (patchPrep.response) return patchPrep.response;
+  const { update, auditAction } = patchPrep;
+
+  const service = createServiceClient();
+  const { data: updated, error } = await service
+    .from("receipts")
+    .update(update)
+    .eq("id", id)
+    .eq("user_id", auth.user.id)
+    .select("id,transaction_id,merchant,purchase_date,total,status,created_at")
+    .single();
+  if (error) throw error;
+  if (!updated) throw new Error("Receipt update returned no row");
+  await writeAudit({
+    userId: auth.user.id,
+    action: auditAction,
+    metadata: {
+      receipt_id: id,
+      ...(body.action === "attach" ? { transaction_id: body.transactionId } : {}),
+    },
+    ip,
+  });
+  return NextResponse.json({ receipt: updated });
+}
+
+export async function executeReceiptDelete(
+  auth: { user: { id: string }; supabase: SupabaseClient },
+  id: string,
+  ip: string | null,
+): Promise<NextResponse> {
+  if (!id) return badRequest("id is required");
+  const receipt = await loadOwnedReceipt(auth.supabase, auth.user.id, id);
+  if (!receipt) {
+    return NextResponse.json({ error: "Receipt not found" }, { status: 404 });
+  }
+
+  const service = createServiceClient();
+  const { error: storageError } = await service.storage
+    .from("receipts")
+    .remove([receipt.storage_path]);
+  if (storageError) throw storageError;
+  const { error } = await service
+    .from("receipts")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", auth.user.id);
+  if (error) throw error;
+  await writeAudit({
+    userId: auth.user.id,
+    action: "receipt_deleted",
+    metadata: { receipt_id: id },
+    ip,
+  });
+  return NextResponse.json({ success: true });
+}
+
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
 
   try {
     const { id } = await params;
-    if (!id) return badRequest("id is required");
-    const receipt = await loadOwnedReceipt(auth.supabase, auth.user.id, id);
-    if (!receipt) {
-      return NextResponse.json({ error: "Receipt not found" }, { status: 404 });
-    }
-
-    const body = await request.json().catch(() => null) as {
+    const body = (await request.json().catch(() => null)) as {
       action?: unknown;
       transactionId?: unknown;
     } | null;
-    if (!body || !["attach", "ignore", "restore"].includes(String(body.action))) {
-      return badRequest("action is not supported");
-    }
-
-    const patchPrep = await prepareReceiptPatch(
-      auth.supabase,
-      auth.user.id,
-      String(body.action),
-      body.transactionId,
-    );
-    if (patchPrep.response) return patchPrep.response;
-    const { update, auditAction } = patchPrep;
-
-    const service = createServiceClient();
-    const { data: updated, error } = await service
-      .from("receipts")
-      .update(update)
-      .eq("id", id)
-      .eq("user_id", auth.user.id)
-      .select("id,transaction_id,merchant,purchase_date,total,status,created_at")
-      .single();
-    if (error) throw error;
-    if (!updated) throw new Error("Receipt update returned no row");
-    await writeAudit({
-      userId: auth.user.id,
-      action: auditAction,
-      metadata: {
-        receipt_id: id,
-        ...(body.action === "attach" ? { transaction_id: body.transactionId } : {}),
-      },
-      ip: getClientIp(request),
-    });
-    return NextResponse.json({ receipt: updated });
+    return await executeReceiptPatch(auth, id, body, getClientIp(request));
   } catch (error) {
     return errorResponse("receipts.update", error);
   }
@@ -125,30 +165,7 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
 
   try {
     const { id } = await params;
-    if (!id) return badRequest("id is required");
-    const receipt = await loadOwnedReceipt(auth.supabase, auth.user.id, id);
-    if (!receipt) {
-      return NextResponse.json({ error: "Receipt not found" }, { status: 404 });
-    }
-
-    const service = createServiceClient();
-    const { error: storageError } = await service.storage
-      .from("receipts")
-      .remove([receipt.storage_path]);
-    if (storageError) throw storageError;
-    const { error } = await service
-      .from("receipts")
-      .delete()
-      .eq("id", id)
-      .eq("user_id", auth.user.id);
-    if (error) throw error;
-    await writeAudit({
-      userId: auth.user.id,
-      action: "receipt_deleted",
-      metadata: { receipt_id: id },
-      ip: getClientIp(request),
-    });
-    return NextResponse.json({ success: true });
+    return await executeReceiptDelete(auth, id, getClientIp(request));
   } catch (error) {
     return errorResponse("receipts.delete", error);
   }

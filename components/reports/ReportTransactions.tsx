@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { formatCurrency } from "@/lib/format";
+import { formatDate } from "@/lib/format-date";
 import type { CanonicalFinanceTransaction } from "@/lib/finance-domain";
 
 /**
@@ -15,6 +16,18 @@ export const REPORT_PAGE_SIZE = 50;
 function flowLabel(row: CanonicalFinanceTransaction): string {
   if (row.flow === "transfer") return "Transfer";
   return row.flow === "income" ? "In" : "Out";
+}
+
+function flowAmountStyle(
+  flow: CanonicalFinanceTransaction["flow"],
+): { color: string } | undefined {
+  if (flow === "income") {
+    return { color: "var(--viz-pos)" };
+  }
+  if (flow === "expense") {
+    return { color: "var(--viz-neg)" };
+  }
+  return undefined;
 }
 
 export default function ReportTransactions({
@@ -52,7 +65,7 @@ export default function ReportTransactions({
           Transactions matching the current report filters.
         </caption>
         <thead>
-          <tr className="text-left opacity-60">
+          <tr className="text-left opacity-60 font-mono">
             <th scope="col" className="py-2 pr-3 font-medium">Date</th>
             <th scope="col" className="py-2 pr-3 font-medium">Merchant</th>
             <th scope="col" className="py-2 pr-3 font-medium">Category</th>
@@ -61,12 +74,15 @@ export default function ReportTransactions({
           </tr>
         </thead>
         <tbody className="tabular-nums">
-          {rows.map((row) => (
+          {rows.map((row, index) => (
             <tr
               key={row.id}
-              className="border-t border-black/5 dark:border-white/10"
+              className={cn(
+                "border-t border-black/5 dark:border-white/10",
+                index % 2 === 1 && "bg-panel-2",
+              )}
             >
-              <td className="py-2 pr-3 whitespace-nowrap">{row.date}</td>
+              <td className="py-2 pr-3 whitespace-nowrap font-mono">{formatDate(row.date)}</td>
               <td className="py-2 pr-3">
                 <span className="block max-w-[16rem] truncate">
                   {row.merchant || "Unknown"}
@@ -83,10 +99,8 @@ export default function ReportTransactions({
               <td className="py-2 pr-3">{flowLabel(row)}</td>
               <td
                 data-money
-                className={cn(
-                  "py-2 pr-3 text-right",
-                  row.flow === "income" ? "text-success" : "text-foreground",
-                )}
+                className="py-2 pr-3 text-right"
+                style={flowAmountStyle(row.flow)}
               >
                 {formatCurrency(Math.abs(row.signedAmount), currency)}
               </td>

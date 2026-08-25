@@ -38,7 +38,7 @@ export default function AccountGroup({
               <span key={`${groupKey}-${total.currency}`} className="text-right">
                 <span
                   data-money
-                  className="block rounded-full bg-panel-2 px-2.5 py-1 font-mono text-xs font-bold tabular-nums"
+                  className="block rounded-full bg-panel-2 px-2.5 py-1 text-xs font-bold tabular-nums"
                 >
                   {formatCurrency(total.amount, total.currency)}
                 </span>
@@ -47,7 +47,7 @@ export default function AccountGroup({
                     data-money
                     className={cn(
                       "mt-1 block text-xs font-semibold tabular-nums",
-                      change.amount >= 0 ? "text-success" : "text-danger",
+                      change.amount >= 0 ? "text-[var(--viz-pos)]" : "text-[var(--viz-neg)]",
                     )}
                   >
                     {change.amount >= 0 ? "+" : ""}

@@ -191,6 +191,70 @@ describe("RecurringList — Upcoming/Complete tables", () => {
     );
     expect(html).toContain("More options for Piano lessons");
   });
+
+  it("zebra-stripes odd-indexed rows and not even-indexed ones", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecurringList, {
+        occurrences: [
+          occurrence({ sourceId: "stream-1" }),
+          occurrence({ sourceId: "stream-2", merchant: "Spotify" }),
+        ],
+        streams: [stream(), stream({ id: "stream-2", merchantName: "Spotify" })],
+        manualItems: [],
+        currency: "USD",
+        today: "2026-07-10",
+        tab: "upcoming",
+        links: LINKS,
+      }),
+    );
+    const rows = html.split("<tr").slice(1); // rows[0] is the <thead> row
+    expect(rows[1]).not.toContain("bg-panel-2");
+    expect(rows[2]).toContain("bg-panel-2");
+  });
+
+  it("colors an expense with the negative diverging token and an income with the positive one", () => {
+    const expenseHtml = renderToStaticMarkup(
+      createElement(RecurringList, {
+        occurrences: [occurrence({ isIncome: false })],
+        streams: [stream()],
+        manualItems: [],
+        currency: "USD",
+        today: "2026-07-10",
+        tab: "upcoming",
+        links: LINKS,
+      }),
+    );
+    expect(expenseHtml).toContain("var(--viz-neg)");
+
+    const incomeHtml = renderToStaticMarkup(
+      createElement(RecurringList, {
+        occurrences: [occurrence({ isIncome: true })],
+        streams: [stream()],
+        manualItems: [],
+        currency: "USD",
+        today: "2026-07-10",
+        tab: "upcoming",
+        links: LINKS,
+      }),
+    );
+    expect(incomeHtml).toContain("var(--viz-pos)");
+    expect(incomeHtml).not.toContain("text-success");
+  });
+
+  it("mono-izes the column header row", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecurringList, {
+        occurrences: [occurrence()],
+        streams: [stream()],
+        manualItems: [],
+        currency: "USD",
+        today: "2026-07-10",
+        tab: "upcoming",
+        links: LINKS,
+      }),
+    );
+    expect(html).toContain('class="bg-panel-2 text-xs text-muted font-mono"');
+  });
 });
 
 describe("RecurringList — tabs are URL-driven, not client state", () => {
@@ -230,6 +294,37 @@ describe("RecurringList — Manage tab", () => {
     expect(html).toContain("Manual items");
     expect(html).toContain("Piano lessons");
     expect(html).toContain('aria-label="Manual item name"');
+  });
+
+  it("marks a manual expense item's amount with the privacy-blur hook and the negative diverging token", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecurringList, {
+        occurrences: [],
+        streams: [],
+        manualItems: [manualItem({ itemType: "expense", amount: 80 })],
+        currency: "USD",
+        today: "2026-07-10",
+        tab: "manage",
+        links: LINKS,
+      }),
+    );
+    expect(html).toContain("data-money");
+    expect(html).toContain("var(--viz-neg)");
+  });
+
+  it("colors a manual income item's amount with the positive diverging token", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecurringList, {
+        occurrences: [],
+        streams: [],
+        manualItems: [manualItem({ itemType: "income", amount: 500, name: "Freelance" })],
+        currency: "USD",
+        today: "2026-07-10",
+        tab: "manage",
+        links: LINKS,
+      }),
+    );
+    expect(html).toContain("var(--viz-pos)");
   });
 });
 

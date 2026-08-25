@@ -55,7 +55,7 @@ export default function AccountRow({
         <AreaSparkline values={row.sparkLong} />
       </div>
       <div className="text-left sm:text-right">
-        <p data-money className="font-mono text-sm font-bold tabular-nums">
+        <p data-money className="metric-value text-sm">
           {row.balance === null
             ? "Unavailable"
             : formatCurrency(row.balance, row.currency)}
@@ -69,8 +69,17 @@ export default function AccountRow({
         >
           {row.stale ? `Stale, updated ${row.updatedAgo}` : row.updatedAgo}
         </p>
-        <p className="mt-1 text-xs text-muted tabular-nums">
-          {change ?? "Not enough history"}
+        <p className="mt-1 text-xs tabular-nums">
+          {change ? (
+            <span
+              data-money
+              style={{ color: row.monthChange!.amount >= 0 ? "var(--viz-pos)" : "var(--viz-neg)" }}
+            >
+              {change}
+            </span>
+          ) : (
+            "Not enough history"
+          )}
         </p>
       </div>
     </li>
