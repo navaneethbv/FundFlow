@@ -59,15 +59,20 @@ const TIER_VISIBILITY: Record<LedgerLabelTier, string> = {
 
 type DotKind = "in" | "out" | "mixed";
 
-const DOT_COLORS: Record<DotKind, string> = {
-  in: "var(--viz-pos)",
-  out: "var(--viz-neg)",
-  mixed: "var(--muted)",
-};
-
 function dotKind(day: LedgerDayColumn): DotKind {
   if (day.grossIn > 0 && day.grossOut > 0) return "mixed";
   return day.grossIn > 0 ? "in" : "out";
+}
+
+function dotColor(kind: DotKind): string {
+  switch (kind) {
+    case "in":
+      return "var(--viz-pos)";
+    case "out":
+      return "var(--viz-neg)";
+    case "mixed":
+      return "var(--muted)";
+  }
 }
 
 function stemHeight(value: number, maxGross: number): number {
@@ -212,7 +217,7 @@ export default function LedgerStrip({
               // A day carrying both directions gets a neutral dot, because
               // picking either colour would claim a direction it does not have.
               const dot = dotKind(day);
-              const dotColor = DOT_COLORS[dot];
+              const color = dotColor(dot);
 
               return (
                 <div
@@ -239,7 +244,7 @@ export default function LedgerStrip({
                   <span
                     data-dot={dot}
                     className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-panel"
-                    style={{ top: AXIS_OFFSET, background: dotColor }}
+                    style={{ top: AXIS_OFFSET, background: color }}
                   />
                   {outHeight > 0 && (
                     <span

@@ -83,6 +83,21 @@ type LedgerChunkFilters = {
 
 type TransactionsSupabase = Awaited<ReturnType<typeof createClient>>;
 
+function transactionSetupError(
+  results: ReadonlyArray<{ error: { code?: string } | null }>,
+): string {
+  const errors = results.map((result) => result.error).filter(Boolean);
+  if (errors.length === 0) return "";
+  console.error("Transaction setup query failed", errors.map((error) => error?.code ?? "unknown"));
+  return "We couldn't load your transaction controls. Try again.";
+}
+
+function transactionDetailsError(currentError: string, failed: boolean): string {
+  return failed
+    ? "We couldn't load transaction details. Refresh the page to try again."
+    : currentError;
+}
+
 /**
  * Filters only, deliberately unordered. postgrest-js appends `order()` calls in
  * the order they are made, so an ordering baked in here would win over the sort
@@ -247,14 +262,10 @@ async function loadDirectLedgerRows(input: {
   incompleteDates: Set<string>;
 }> {
   const { supabase, state, filters, columns, rules, accountNamesById, accountLabelsById } = input;
-  let query = buildLedgerFilterQuery(supabase, columns, filters, true);
-  if (state.category) {
-    query = state.category === "UNCATEGORIZED"
-      ? query.or("pfc_primary.is.null,pfc_primary.eq.UNCATEGORIZED")
-      : query.eq("pfc_primary", state.category);
-  }
-  if (state.sub) query = query.eq("pfc_detailed", state.sub);
-  if (state.merchant) query = query.or(`merchant_name.ilike.${state.merchant},name.ilike.${state.merchant}`);
+  let query = applyDirectLedgerFilters(
+    buildLedgerFilterQuery(supabase, columns, filters, true),
+    state,
+  );
   for (const order of ledgerDatabaseOrder(state.sort === "amount" ? "amount" : "date", state.direction)) {
     query = query.order(order.column, { ascending: order.ascending });
   }
@@ -279,21 +290,45 @@ async function loadDirectLedgerRows(input: {
   );
   const visibleStart = offset - windowStart;
   const rows = windowRows.slice(visibleStart, visibleStart + PAGE_SIZE);
-  const incompleteDates = new Set<string>();
-  if (inspectNeighbors && rows.length > 0) {
-    const previous = windowRows[visibleStart - 1];
-    const next = windowRows[visibleStart + rows.length];
-    const first = rows[0]!;
-    const last = rows.at(-1)!;
-    if (previous?.date === first.date) incompleteDates.add(first.date);
-    if (next?.date === last.date) incompleteDates.add(last.date);
-  }
+  const incompleteDates = findIncompleteLedgerDates(windowRows, rows, visibleStart, inspectNeighbors);
   return {
     rows,
     total: result.count ?? rows.length,
     error: null,
     incompleteDates,
   };
+}
+
+function applyDirectLedgerFilters(
+  initialQuery: ReturnType<typeof buildLedgerFilterQuery>,
+  state: ReturnType<typeof parseLedgerQuery>,
+) {
+  let query = initialQuery;
+  if (state.category) {
+    query = state.category === "UNCATEGORIZED"
+      ? query.or("pfc_primary.is.null,pfc_primary.eq.UNCATEGORIZED")
+      : query.eq("pfc_primary", state.category);
+  }
+  if (state.sub) query = query.eq("pfc_detailed", state.sub);
+  if (state.merchant) query = query.or(`merchant_name.ilike.${state.merchant},name.ilike.${state.merchant}`);
+  return query;
+}
+
+function findIncompleteLedgerDates(
+  windowRows: readonly LedgerProjectedRow[],
+  rows: readonly LedgerProjectedRow[],
+  visibleStart: number,
+  inspectNeighbors: boolean,
+): Set<string> {
+  const incompleteDates = new Set<string>();
+  if (!inspectNeighbors || rows.length === 0) return incompleteDates;
+  const previous = windowRows[visibleStart - 1];
+  const next = windowRows[visibleStart + rows.length];
+  const first = rows[0]!;
+  const last = rows.at(-1)!;
+  if (previous?.date === first.date) incompleteDates.add(first.date);
+  if (next?.date === last.date) incompleteDates.add(last.date);
+  return incompleteDates;
 }
 
 async function loadLedgerFilterOptions(input: {
@@ -599,18 +634,14 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   const manualAccounts = manualAccountsResult.data ?? [];
   const merchantRules = merchantRulesResult.data ?? [];
   const goalRows = goalRowsResult.data ?? [];
-  const setupErrors = [
+  const setupResults = [
     savedViewsResult.error,
     accountsResult.error,
     manualAccountsResult.error,
     merchantRulesResult.error,
     goalRowsResult.error,
-  ].filter(Boolean);
-  let ledgerError = "";
-  if (setupErrors.length > 0) {
-    console.error("Transaction setup query failed", setupErrors.map((error) => error?.code ?? "unknown"));
-    ledgerError = "We couldn't load your transaction controls. Try again.";
-  }
+  ].map((error) => ({ error }));
+  let ledgerError = transactionSetupError(setupResults);
 
   const rulesList = (merchantRules ?? []).map((r) => ({
     matchType: r.match_type as "merchant" | "keyword" | "account",
@@ -677,9 +708,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   // caller's own so their categories are never rewritten by someone else's.
   const rowDetails = await loadLedgerRowDetails(supabase, ownerId, rows.map((row) => row.id));
   const { annById, splitsById, excludedDuplicateIds } = rowDetails;
-  if (rowDetails.failed) {
-    ledgerError = "We couldn't load transaction details. Refresh the page to try again.";
-  }
+  ledgerError = transactionDetailsError(ledgerError, rowDetails.failed);
 
   // Category suggestions for the split editor: categories seen on this page
   // plus any already used in splits.
