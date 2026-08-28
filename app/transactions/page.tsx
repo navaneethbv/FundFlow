@@ -33,13 +33,16 @@ import {
 } from "@/lib/ledger-query";
 import {
   collectLedgerChunks,
+  ledgerZebraBands,
   ledgerDatabaseOrder,
   needsProjectedLedgerPage,
   selectProjectedLedgerPage,
+  buildLedgerDayGroups,
   shouldShowLedgerDayGroups,
 } from "@/lib/ledger-data";
 import {
   buildLedgerFilterOptions,
+  filterProjectedLedgerRows,
   projectLedgerRows,
   toLedgerFacetRow,
   type LedgerFacetSourceRow,
@@ -161,6 +164,8 @@ async function loadLedgerRows(input: {
   rows: LedgerProjectedRow[];
   total: number;
   projectedScope: LedgerProjectedRow[];
+  allRowsForGrouping: LedgerProjectedRow[] | null;
+  incompleteDates: Set<string>;
   filterOptions: LedgerFilterOptions;
   ledgerError: string;
 }> {
@@ -170,6 +175,8 @@ async function loadLedgerRows(input: {
   const projectedPath = needsProjectedLedgerPage(state.sort, ruleAwareFilter);
   const needsFullProjection = projectedPath || hasRemapRules(rules);
   let projectedScope: LedgerProjectedRow[] = [];
+  let allRowsForGrouping: LedgerProjectedRow[] | null = null;
+  let incompleteDates = new Set<string>();
   if (needsFullProjection) {
     try {
       const sourceRows = await collectLedgerChunks<LedgerProjectionSourceRow>(async (from, to) => {
@@ -188,6 +195,11 @@ async function loadLedgerRows(input: {
     const selected = selectProjectedLedgerPage(projectedScope, { ...state, pageSize: PAGE_SIZE });
     rows = selected.rows;
     total = selected.total;
+    allRowsForGrouping = filterProjectedLedgerRows(projectedScope, {
+      category: state.category,
+      sub: state.sub,
+      merchant: state.merchant,
+    });
   } else if (!ledgerError) {
     const result = await loadDirectLedgerRows({ ...input, projectedPath });
     if (result.error) {
@@ -196,6 +208,7 @@ async function loadLedgerRows(input: {
     } else {
       rows = result.rows;
       total = result.total;
+      incompleteDates = result.incompleteDates;
     }
   }
   const filterOptions = await loadLedgerFilterOptions({
@@ -205,7 +218,15 @@ async function loadLedgerRows(input: {
     needsFullProjection,
     accountOptionsForFilters,
   });
-  return { rows, total, projectedScope, filterOptions, ledgerError };
+  return {
+    rows,
+    total,
+    projectedScope,
+    allRowsForGrouping,
+    incompleteDates,
+    filterOptions,
+    ledgerError,
+  };
 }
 
 async function loadDirectLedgerRows(input: {
@@ -219,7 +240,12 @@ async function loadDirectLedgerRows(input: {
   accountOptionsForFilters: { value: string; label: string }[];
   ledgerError: string;
   projectedPath: boolean;
-}): Promise<{ rows: LedgerProjectedRow[]; total: number; error: string | null }> {
+}): Promise<{
+  rows: LedgerProjectedRow[];
+  total: number;
+  error: string | null;
+  incompleteDates: Set<string>;
+}> {
   const { supabase, state, filters, columns, rules, accountNamesById, accountLabelsById } = input;
   let query = buildLedgerFilterQuery(supabase, columns, filters, true);
   if (state.category) {
@@ -233,10 +259,41 @@ async function loadDirectLedgerRows(input: {
     query = query.order(order.column, { ascending: order.ascending });
   }
   const offset = (state.page - 1) * PAGE_SIZE;
-  const result = await query.range(offset, offset + PAGE_SIZE - 1);
-  if (result.error) return { rows: [], total: 0, error: result.error.code ?? "unknown" };
-  const rows = projectLedgerRows((result.data ?? []) as unknown as LedgerProjectionSourceRow[], rules, accountNamesById, accountLabelsById);
-  return { rows, total: result.count ?? rows.length, error: null };
+  const inspectNeighbors = state.sort === "date";
+  const windowStart = inspectNeighbors ? Math.max(0, offset - 1) : offset;
+  const windowEnd = inspectNeighbors ? offset + PAGE_SIZE : offset + PAGE_SIZE - 1;
+  const result = await query.range(windowStart, windowEnd);
+  if (result.error) {
+    return {
+      rows: [],
+      total: 0,
+      error: result.error.code ?? "unknown",
+      incompleteDates: new Set<string>(),
+    };
+  }
+  const windowRows = projectLedgerRows(
+    (result.data ?? []) as unknown as LedgerProjectionSourceRow[],
+    rules,
+    accountNamesById,
+    accountLabelsById,
+  );
+  const visibleStart = offset - windowStart;
+  const rows = windowRows.slice(visibleStart, visibleStart + PAGE_SIZE);
+  const incompleteDates = new Set<string>();
+  if (inspectNeighbors && rows.length > 0) {
+    const previous = windowRows[visibleStart - 1];
+    const next = windowRows[visibleStart + rows.length];
+    const first = rows[0]!;
+    const last = rows.at(-1)!;
+    if (previous?.date === first.date) incompleteDates.add(first.date);
+    if (next?.date === last.date) incompleteDates.add(last.date);
+  }
+  return {
+    rows,
+    total: result.count ?? rows.length,
+    error: null,
+    incompleteDates,
+  };
 }
 
 async function loadLedgerFilterOptions(input: {
@@ -354,30 +411,14 @@ async function loadLedgerRowDetails(
   return { annById, splitsById, excludedDuplicateIds, failed: errorCodes.length > 0 };
 }
 
-/**
- * Signed net per date for the day-group headers. Rows the user excluded as
- * duplicates are left out, matching what the ledger totals show.
- */
-function buildDayTotals(
-  rows: readonly LedgerProjectedRow[],
-  excludedDuplicateIds: ReadonlySet<string>,
-): Map<string, number> {
-  const dayTotals = new Map<string, number>();
-  for (const row of rows) {
-    if (excludedDuplicateIds.has(row.id)) continue;
-    dayTotals.set(row.date, (dayTotals.get(row.date) ?? 0) + row.amount);
-  }
-  return dayTotals;
-}
-
 interface LedgerTableRowProps {
   row: LedgerProjectedRow;
-  /** Position in the flat row list; drives the zebra stripe. */
-  index: number;
+  /** Position within its date group when day grouping is active. */
+  zebraBand: number;
   /** Render the day-group header above this row. */
   isNewDay: boolean;
-  /** Signed net for the row's date, shown in that header. */
-  dayTotal: number;
+  grouped: boolean;
+  dayGroup: import("@/lib/ledger-data").LedgerDayGroup | undefined;
   visibleColumns: ReadonlySet<string>;
   excludedDuplicate: boolean;
   note: string | null;
@@ -393,9 +434,10 @@ interface LedgerTableRowProps {
  */
 function LedgerTableRow({
   row,
-  index,
+  zebraBand,
   isNewDay,
-  dayTotal,
+  grouped,
+  dayGroup,
   visibleColumns,
   excludedDuplicate,
   note,
@@ -414,28 +456,36 @@ function LedgerTableRow({
     <Fragment>
       {isNewDay && (
         <tr className="border-b border-panel-border bg-panel/60">
-          <td colSpan={columnCount} className="px-4 py-1.5">
-            <div className="flex items-center justify-between gap-3 text-xs font-semibold text-muted">
-              <span className="font-mono">{formatDate(row.date)}</span>
+          <th
+            scope="row"
+            colSpan={columnCount - 2}
+            className="px-4 py-1.5 text-left font-mono text-xs font-semibold text-muted"
+          >
+            {formatDate(row.date)}
+          </th>
+          <td className="px-4 py-1.5 text-right text-xs font-normal text-muted">
+            {dayGroup?.showNet && (
               <span
                 data-money
-                className="font-normal"
-                style={{ color: dayTotal < 0 ? "var(--viz-pos)" : "var(--viz-neg)" }}
+                style={dayGroup.net < 0 ? { color: "var(--viz-pos)" } : undefined}
               >
-                {dayTotal < 0 ? "+" : "-"}
-                {formatCurrency(Math.abs(dayTotal))} net
+                {dayGroup.net < 0 ? "+" : "-"}
+                {formatCurrency(Math.abs(dayGroup.net))} net
               </span>
-            </div>
+            )}
           </td>
+          <td />
         </tr>
       )}
       <tr
         className={`border-b border-panel-border last:border-0 hover:bg-panel-hover${
-          index % 2 === 1 ? " bg-panel-2" : ""
+          zebraBand % 2 === 1 ? " bg-panel-2" : ""
         }`}
       >
         <td className="whitespace-nowrap px-4 py-3 align-top text-muted font-mono">
-          {formatDate(row.date)}
+          <span className={grouped && !isNewDay ? "sr-only" : undefined}>
+            {formatDate(row.date)}
+          </span>
         </td>
         <td className="px-4 py-3 align-top">
           <div className="flex items-start gap-2.5">
@@ -482,7 +532,7 @@ function LedgerTableRow({
         <td
           data-money
           className="whitespace-nowrap px-4 py-3 text-right align-top font-semibold"
-          style={{ color: isMoneyIn ? "var(--viz-pos)" : "var(--viz-neg)" }}
+          style={isMoneyIn ? { color: "var(--viz-pos)" } : undefined}
         >
           {isMoneyIn ? "+" : "-"}
           {formatCurrency(Math.abs(row.amount), currency)}
@@ -642,8 +692,13 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
 
   // Day-group headers: rows arrive sorted by date desc, so a signed total per
   // date is all a header needs.
-  const dayTotals = buildDayTotals(rows, excludedDuplicateIds);
   const showDayGroups = shouldShowLedgerDayGroups(state.sort);
+  const dayGroups = buildLedgerDayGroups(rows, {
+    allRows: ledgerRows.allRowsForGrouping ?? undefined,
+    incompleteDates: ledgerRows.incompleteDates,
+    excludedIds: excludedDuplicateIds,
+  });
+  const zebraBands = ledgerZebraBands(rows, showDayGroups);
 
   const cardRows: LedgerCardRow[] = rows.map((t) => {
     const ann = annById.get(t.id);
@@ -749,7 +804,10 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
               }
             />
             <div className="sm:hidden">
-              <MobileLedgerList rows={cardRows} />
+              <MobileLedgerList
+                rows={cardRows}
+                dayGroups={showDayGroups ? dayGroups : null}
+              />
             </div>
             <div className="hidden overflow-x-auto sm:block">
               <table className="w-full text-sm">
@@ -774,9 +832,10 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                     <LedgerTableRow
                       key={t.id}
                       row={t}
-                      index={index}
+                      zebraBand={zebraBands[index]!}
                       isNewDay={showDayGroups && (index === 0 || rows[index - 1]!.date !== t.date)}
-                      dayTotal={dayTotals.get(t.date) ?? 0}
+                      grouped={showDayGroups}
+                      dayGroup={dayGroups.get(t.date)}
                       visibleColumns={visibleColumns}
                       excludedDuplicate={excludedDuplicateIds.has(t.id)}
                       note={annById.get(t.id)?.note ?? null}

@@ -16,7 +16,7 @@ function HistoryChart({ summary }: Readonly<{ summary: Summary }>) {
   const allPoints = Object.values(summary.netWorthSeries).flat();
   if (allPoints.length < 2) {
     return (
-      <p className="py-8 text-sm text-muted">
+      <p className="py-3 text-sm text-muted">
         More daily snapshots are needed before a trend can be drawn.
       </p>
     );

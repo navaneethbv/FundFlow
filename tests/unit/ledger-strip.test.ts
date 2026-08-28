@@ -2,10 +2,41 @@ import { describe, it, expect } from "vitest";
 import {
   pickAnchorAccount,
   buildLedgerStripTicks,
+  buildLedgerStripDays,
+  ledgerLabelMinDayGap,
   loadLedgerStripTicks,
+  LEDGER_LABEL_SLOT_BUDGETS,
+  type LedgerDayColumn,
   type LedgerStripAccount,
   type LedgerStripTransaction,
+  type LedgerTick,
 } from "@/lib/ledger-strip";
+
+function stripTick(partial: Partial<LedgerTick> = {}): LedgerTick {
+  return {
+    id: "tick-1",
+    date: "2026-08-01",
+    label: "Corner Grocer",
+    amount: -50,
+    runningBalance: 1000,
+    major: false,
+    ...partial,
+  };
+}
+
+/** Every label slot across both sides of the axis, flattened. */
+function labelSlots(columns: readonly LedgerDayColumn[]) {
+  return columns.flatMap((column) =>
+    [
+      column.inflowLabel
+        ? { ...column.inflowLabel, side: "in" as const, day: column.dayOfMonth }
+        : null,
+      column.outflowLabel
+        ? { ...column.outflowLabel, side: "out" as const, day: column.dayOfMonth }
+        : null,
+    ].filter((slot) => slot !== null),
+  );
+}
 
 function account(partial: Partial<LedgerStripAccount> = {}): LedgerStripAccount {
   return {
@@ -393,5 +424,177 @@ describe("loadLedgerStripTicks", () => {
         currentBalance: 500,
       }),
     ).rejects.toThrow("DB error");
+  });
+});
+
+describe("buildLedgerStripDays", () => {
+  it("groups ticks by date and returns days in ascending order", () => {
+    const days = buildLedgerStripDays(
+      [
+        stripTick({ id: "c", date: "2026-08-20", amount: -30 }),
+        stripTick({ id: "a", date: "2026-08-03", amount: -10 }),
+        stripTick({ id: "b", date: "2026-08-03", amount: -20 }),
+      ],
+      "2026-08",
+    );
+
+    expect(days.map((day) => day.date)).toEqual(["2026-08-03", "2026-08-20"]);
+    expect(days[0]!.dayOfMonth).toBe(3);
+    expect(days[0]!.transactionCount).toBe(2);
+  });
+
+  it("collapses ten same-day ticks into one column", () => {
+    const ticks = Array.from({ length: 10 }, (_, index) =>
+      stripTick({ id: `t${index}`, date: "2026-08-15", amount: -(index + 1) }),
+    );
+
+    const days = buildLedgerStripDays(ticks, "2026-08");
+
+    expect(days).toHaveLength(1);
+    expect(days[0]!.transactionCount).toBe(10);
+  });
+
+  it("keeps gross inflow and gross outflow separate on a mixed day", () => {
+    const days = buildLedgerStripDays(
+      [
+        stripTick({ id: "in", date: "2026-08-05", amount: 2450, label: "Acme Payroll" }),
+        stripTick({ id: "out", date: "2026-08-05", amount: -2400, label: "Maple St" }),
+      ],
+      "2026-08",
+    );
+
+    // Netting these to $50 would hide both the paycheck and the rent.
+    expect(days[0]!.grossIn).toBe(2450);
+    expect(days[0]!.grossOut).toBe(2400);
+    expect(days[0]!.net).toBe(50);
+  });
+
+  it("takes end-of-day balance from the last tick by date then id", () => {
+    const days = buildLedgerStripDays(
+      [
+        stripTick({ id: "b", date: "2026-08-04", amount: -10, runningBalance: 900 }),
+        stripTick({ id: "a", date: "2026-08-04", amount: -10, runningBalance: 910 }),
+      ],
+      "2026-08",
+    );
+
+    expect(days[0]!.endOfDayBalance).toBe(900);
+  });
+
+  it("returns an empty array when the month has no ticks", () => {
+    expect(buildLedgerStripDays([], "2026-08")).toEqual([]);
+  });
+
+  it("excludes ticks that fall outside the requested month", () => {
+    const days = buildLedgerStripDays(
+      [
+        stripTick({ id: "in", date: "2026-08-10" }),
+        stripTick({ id: "before", date: "2026-07-31" }),
+        stripTick({ id: "after", date: "2026-09-01" }),
+      ],
+      "2026-08",
+    );
+
+    expect(days.map((day) => day.date)).toEqual(["2026-08-10"]);
+  });
+
+  it("throws a documented RangeError for a month that is not a calendar month", () => {
+    for (const month of ["2026-13", "2026-00", "not-a-month", "2026-8"]) {
+      expect(() => buildLedgerStripDays([], month)).toThrow(RangeError);
+      expect(() => buildLedgerStripDays([], month)).toThrow("ledger_strip_invalid_month");
+    }
+  });
+
+  it("gives the month's largest inflow and largest outflow a tier 1 label", () => {
+    const ticks = [
+      stripTick({ id: "pay", date: "2026-08-05", amount: 2450, label: "Acme Payroll" }),
+      stripTick({ id: "small-in", date: "2026-08-09", amount: 40, label: "Refund" }),
+      stripTick({ id: "rent", date: "2026-08-01", amount: -1650, label: "Maple St" }),
+      stripTick({ id: "coffee", date: "2026-08-17", amount: -6, label: "Blue Bottle" }),
+    ];
+
+    const days = buildLedgerStripDays(ticks, "2026-08");
+    const byDate = new Map(days.map((day) => [day.date, day]));
+
+    expect(byDate.get("2026-08-05")!.inflowLabel).toMatchObject({
+      merchant: "Acme Payroll",
+      tier: 1,
+    });
+    expect(byDate.get("2026-08-01")!.outflowLabel).toMatchObject({
+      merchant: "Maple St",
+      tier: 1,
+    });
+  });
+
+  it("treats 4, 8, and 12 as cumulative label-slot maxima across both sides", () => {
+    // One outflow and one inflow on each of 28 days: far more candidates than
+    // any breakpoint can show, so the budget is what has to bind.
+    const ticks = Array.from({ length: 28 }, (_, index) => index + 1).flatMap((day) => [
+      stripTick({
+        id: `out-${day}`,
+        date: `2026-08-${String(day).padStart(2, "0")}`,
+        amount: -(1000 + day),
+        label: `Out ${day}`,
+      }),
+      stripTick({
+        id: `in-${day}`,
+        date: `2026-08-${String(day).padStart(2, "0")}`,
+        amount: 1000 + day,
+        label: `In ${day}`,
+      }),
+    ]);
+
+    const slots = labelSlots(buildLedgerStripDays(ticks, "2026-08"));
+    const upTo = (tier: number) => slots.filter((slot) => slot.tier <= tier).length;
+
+    expect(upTo(1)).toBeLessThanOrEqual(LEDGER_LABEL_SLOT_BUDGETS[1]);
+    expect(upTo(2)).toBeLessThanOrEqual(LEDGER_LABEL_SLOT_BUDGETS[2]);
+    expect(upTo(3)).toBeLessThanOrEqual(LEDGER_LABEL_SLOT_BUDGETS[3]);
+    expect(slots.length).toBeLessThanOrEqual(LEDGER_LABEL_SLOT_BUDGETS[3]);
+  });
+
+  it("separates same-side labels sharing a band by the tier's minimum day gap", () => {
+    const ticks = Array.from({ length: 28 }, (_, index) => index + 1).map((day) =>
+      stripTick({
+        id: `out-${day}`,
+        date: `2026-08-${String(day).padStart(2, "0")}`,
+        amount: -(1000 + day),
+        label: `Out ${day}`,
+      }),
+    );
+
+    const slots = labelSlots(buildLedgerStripDays(ticks, "2026-08"));
+
+    for (const tier of [1, 2, 3] as const) {
+      const gap = ledgerLabelMinDayGap(tier, 31);
+      const visible = slots.filter((slot) => slot.tier <= tier);
+      for (const band of [0, 1] as const) {
+        const days = visible
+          .filter((slot) => slot.side === "out" && slot.band === band)
+          .map((slot) => slot.day)
+          .sort((a, b) => a - b);
+        for (let i = 1; i < days.length; i++) {
+          expect(
+            days[i]! - days[i - 1]!,
+            `tier ${tier} band ${band} days ${days.join(",")}`,
+          ).toBeGreaterThanOrEqual(gap);
+        }
+      }
+    }
+  });
+
+  it("is deterministic when amounts tie", () => {
+    const ticks = Array.from({ length: 12 }, (_, index) => index + 1).map((day) =>
+      stripTick({
+        id: `out-${day}`,
+        date: `2026-08-${String(day).padStart(2, "0")}`,
+        amount: -100,
+        label: `Merchant ${day}`,
+      }),
+    );
+
+    expect(buildLedgerStripDays(ticks, "2026-08")).toEqual(
+      buildLedgerStripDays([...ticks].reverse(), "2026-08"),
+    );
   });
 });

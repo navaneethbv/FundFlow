@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Button from "@/components/ui/Button";
 import Field from "@/components/ui/Field";
 import Input from "@/components/ui/Input";
@@ -30,6 +30,11 @@ export default function ProfileSection({
   const [fullNameValue, setFullNameValue] = useState(fullName ?? "");
   const [displayNameValue, setDisplayNameValue] = useState(displayName ?? "");
   const [birthdayValue, setBirthdayValue] = useState(birthday ?? "");
+  const today = useSyncExternalStore(
+    () => () => undefined,
+    () => new Date().toISOString().slice(0, 10),
+    () => undefined,
+  );
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -135,7 +140,7 @@ export default function ProfileSection({
           <Input
             type="date"
             value={birthdayValue}
-            max={new Date().toISOString().slice(0, 10)}
+            max={today}
             onChange={(e) => setBirthdayValue(e.target.value)}
           />
         </Field>

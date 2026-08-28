@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import ReportTransactions from "@/components/reports/ReportTransactions";
+import ReportTransactions, { REPORT_PAGE_SIZE } from "@/components/reports/ReportTransactions";
 import { formatDate } from "@/lib/format-date";
 import type { CanonicalFinanceTransaction } from "@/lib/finance-domain";
 
@@ -29,88 +29,122 @@ const baseProps = {
   hrefForPage: (page: number) => `/reports?page=${page}`,
 };
 
+function render(transactions: CanonicalFinanceTransaction[], page = 1): string {
+  return renderToStaticMarkup(
+    createElement(ReportTransactions, { ...baseProps, page, transactions }),
+  );
+}
+
 describe("ReportTransactions", () => {
   it("formats the date through the app's date formatter, in the mono face", () => {
-    const html = renderToStaticMarkup(
-      createElement(ReportTransactions, {
-        ...baseProps,
-        transactions: [row({ date: "2026-08-23" })],
-      }),
-    );
-    expect(html).toContain(
-      `<td class="py-2 pr-3 whitespace-nowrap font-mono">${formatDate("2026-08-23")}</td>`,
-    );
-    expect(html).not.toContain(">2026-08-23<");
+    const html = render([row({ date: "2026-08-23" })]);
+    expect(html).toContain(formatDate("2026-08-23"));
+    expect(html).toContain("font-mono");
   });
 
-  it("zebra-stripes odd-indexed data rows and not even-indexed ones", () => {
-    const html = renderToStaticMarkup(
-      createElement(ReportTransactions, {
-        ...baseProps,
-        transactions: [row({ id: "1" }), row({ id: "2" })],
-      }),
-    );
-    // rows[0] is the <thead> row; data rows follow.
-    const rows = html.split("<tr").slice(1);
-    expect(rows).toHaveLength(3);
-    expect(rows[1]).not.toContain("bg-panel-2");
-    expect(rows[2]).toContain("bg-panel-2");
+  it("humanizes the category instead of printing the raw enum", () => {
+    const html = render([row({ categoryKey: "RENT_AND_UTILITIES" })]);
+    expect(html).toContain("Rent And Utilities");
+    expect(html).not.toContain("RENT_AND_UTILITIES");
+  });
+
+  it("falls back to Unknown for an empty category", () => {
+    expect(render([row({ categoryKey: "" })])).toContain("Unknown");
   });
 
   it("colors an income row with the positive diverging token", () => {
-    const html = renderToStaticMarkup(
-      createElement(ReportTransactions, {
-        ...baseProps,
-        transactions: [row({ flow: "income", signedAmount: -2450 })],
-      }),
-    );
-    expect(html).toContain("var(--viz-pos)");
+    expect(render([row({ flow: "income", signedAmount: -2450 })])).toContain("var(--viz-pos)");
   });
 
-  it("colors an expense row with the negative diverging token", () => {
-    const html = renderToStaticMarkup(
-      createElement(ReportTransactions, {
-        ...baseProps,
-        transactions: [row({ flow: "expense", signedAmount: 64.18 })],
-      }),
-    );
-    expect(html).toContain("var(--viz-neg)");
+  it("leaves an ordinary expense on the default color", () => {
+    // Nearly every report row is an expense, so colouring them all made the
+    // amount column a uniform block that carried no information.
+    expect(render([row({ flow: "expense" })])).not.toContain("var(--viz-neg)");
   });
 
-  it("leaves a transfer row neutral (no diverging color token applied)", () => {
-    const html = renderToStaticMarkup(
-      createElement(ReportTransactions, {
-        ...baseProps,
-        transactions: [row({ flow: "transfer", signedAmount: 100 })],
-      }),
-    );
+  it("leaves a transfer row neutral", () => {
+    const html = render([row({ flow: "transfer" })]);
     expect(html).not.toContain("var(--viz-pos)");
     expect(html).not.toContain("var(--viz-neg)");
-    expect(html).toContain(">Transfer<");
   });
 
-  it("still shows the absolute amount with no sign prefix; direction stays conveyed by the Direction column", () => {
-    const html = renderToStaticMarkup(
-      createElement(ReportTransactions, {
-        ...baseProps,
-        transactions: [row({ flow: "income", signedAmount: -2450 })],
-      }),
-    );
-    expect(html).toContain("$2,450.00");
-    expect(html).toContain(">In<");
+  it("signs the amount and keeps direction available to assistive technology", () => {
+    const outgoing = render([row({ flow: "expense", signedAmount: 64.18 })]);
+    expect(outgoing).toContain("-$64.18");
+    // Sign alone must not be the only cue.
+    expect(outgoing).toContain("sr-only");
+    expect(outgoing).toContain("Out");
+
+    const incoming = render([row({ flow: "income", signedAmount: -2450 })]);
+    expect(incoming).toContain("+$2,450.00");
+    expect(incoming).toContain("In");
+  });
+
+  it("drops the standalone Direction column", () => {
+    expect(render([row()])).not.toContain(">Direction<");
+  });
+
+  it("anchors the visually-hidden direction text to its own cell", () => {
+    // `sr-only` is absolutely positioned. Without a positioned ancestor it
+    // resolves against the initial containing block, and in this wide table
+    // that static position lands past the viewport edge and makes the whole
+    // page scroll sideways on a phone.
+    const html = render([row()]);
+    const amountCell = html.slice(html.indexOf("data-money"));
+    expect(amountCell).toContain("relative");
   });
 
   it("keeps the amount inside the privacy-blur hook", () => {
-    const html = renderToStaticMarkup(
-      createElement(ReportTransactions, { ...baseProps, transactions: [row()] }),
-    );
-    expect(html).toContain("data-money");
+    expect(render([row()])).toContain("data-money");
   });
 
-  it("mono-izes the column header row", () => {
-    const html = renderToStaticMarkup(
-      createElement(ReportTransactions, { ...baseProps, transactions: [row()] }),
-    );
-    expect(html).toContain('<tr class="text-left opacity-60 font-mono">');
+  describe("day grouping", () => {
+    const sameDay = [
+      row({ id: "a", date: "2026-08-23", signedAmount: 10 }),
+      row({ id: "b", date: "2026-08-23", signedAmount: 20 }),
+      row({ id: "c", date: "2026-08-22", signedAmount: 45 }),
+    ];
+
+    it("emits one date header per day", () => {
+      const html = render(sameDay);
+      expect(html).toContain('data-ledger-day-header="2026-08-23"');
+      expect(html).toContain('data-ledger-day-header="2026-08-22"');
+      expect([...html.matchAll(/data-ledger-day-header=/g)]).toHaveLength(2);
+    });
+
+    it("prints the net for a multi-row day", () => {
+      expect(render(sameDay)).toContain("-$30.00 net");
+    });
+
+    it("withholds the net for a single-row day", () => {
+      // 2026-08-22 holds one row, so a net there would restate the amount
+      // directly below it.
+      expect(render(sameDay)).not.toContain("-$45.00 net");
+    });
+
+    it("restarts zebra striping inside each day group", () => {
+      const html = render(sameDay);
+      const dataRows = html.split("<tr").filter((chunk) => chunk.includes("Corner Grocer"));
+      expect(dataRows).toHaveLength(3);
+      expect(dataRows[0]).not.toContain("bg-panel-2");
+      expect(dataRows[1]).toContain("bg-panel-2");
+      expect(dataRows[2]).not.toContain("bg-panel-2");
+    });
+
+    it("withholds the net when a day is split across the report page boundary", () => {
+      const filler = Array.from({ length: REPORT_PAGE_SIZE - 1 }, (_, i) =>
+        row({ id: `f${i}`, date: "2026-08-30", signedAmount: 1 }),
+      );
+      const straddling = [
+        row({ id: "s1", date: "2026-08-10", signedAmount: 100 }),
+        row({ id: "s2", date: "2026-08-10", signedAmount: 200 }),
+      ];
+      const html = render([...filler, ...straddling]);
+
+      // s1 ends page one and s2 begins page two, so a page-local sum labelled
+      // as the daily total would be wrong.
+      expect(html).toContain('data-ledger-day-header="2026-08-10"');
+      expect(html).not.toContain("-$100.00 net");
+    });
   });
 });

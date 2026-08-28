@@ -66,6 +66,7 @@ export default async function OverviewView({
           ticks={loaded.ledgerStrip.ticks}
           accountName={loaded.ledgerStrip.account.name ?? "Account"}
           accountMask={loaded.ledgerStrip.account.mask}
+          month={month}
           monthLabel={monthLabel}
           currency={loaded.ledgerStrip.currency}
         />

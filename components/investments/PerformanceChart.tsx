@@ -1,6 +1,5 @@
 import { areaPath, linePath } from "@/lib/chart-utils";
 import { formatCurrency } from "@/lib/format";
-import { formatDate } from "@/lib/format-date";
 import { hasSufficientPerformanceData, type ReturnPoint } from "@/lib/investment-performance";
 import type { InvestmentsPage } from "@/lib/investments";
 
@@ -83,13 +82,17 @@ export default function PerformanceChart({
           {sufficient
             ? returns!.map((p) => (
                 <tr key={p.date}>
-                  <td>{formatDate(p.date)}</td>
+                  <td>
+                    <time dateTime={p.date}>{p.date}</time>
+                  </td>
                   <td>{p.pct.toFixed(1)}%</td>
                 </tr>
               ))
             : balanceHistory.map((p) => (
                 <tr key={p.date}>
-                  <td>{formatDate(p.date)}</td>
+                  <td>
+                    <time dateTime={p.date}>{p.date}</time>
+                  </td>
                   <td>{formatCurrency(p.value, currency)}</td>
                 </tr>
               ))}

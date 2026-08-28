@@ -160,6 +160,23 @@ describe("PerformanceChart", () => {
     );
     expect(html).toContain("data-money");
   });
+
+  it("exposes stable ISO dates in the accessible history table", () => {
+    const html = renderToStaticMarkup(
+      createElement(PerformanceChart, {
+        balanceHistory: [
+          { date: "2026-08-08", value: 1000 },
+          { date: "2026-08-09", value: 1042 },
+        ],
+        returns: [
+          { date: "2026-08-08", pct: 0 },
+          { date: "2026-08-09", pct: 4.2 },
+        ],
+        currency: "USD",
+      }),
+    );
+    expect(html).toContain('<time dateTime="2026-08-09">2026-08-09</time>');
+  });
 });
 
 describe("AddManualHoldingForm — closed trigger and modal shell", () => {
