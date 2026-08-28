@@ -43,6 +43,7 @@ function amountColor(
 }
 
 function signedAmount(signed: number, currency: string): string {
+  if (signed === 0) return formatCurrency(0, currency);
   return `${signed < 0 ? "+" : "-"}${formatCurrency(Math.abs(signed), currency)}`;
 }
 

@@ -85,6 +85,7 @@ function isCurrentMonth(month: string): boolean {
 }
 
 function signedAmount(amount: number, currency: string): string {
+  if (amount === 0) return formatCurrency(0, currency);
   return `${amount > 0 ? "+" : "-"}${formatCurrency(Math.abs(amount), currency)}`;
 }
 

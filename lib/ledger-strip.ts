@@ -27,9 +27,11 @@ export interface LedgerTick {
 }
 
 /**
- * A tick earns a permanent label if it's an inflow, or an outflow of at
- * least this much. Deliberately separate from
- * `SpendingAnomalyInput.largeTransactionThreshold` in lib/planning.ts —
+ * A tick is *eligible* for a permanent label only if it's an inflow, or an
+ * outflow of at least this much; eligibility still competes for the scarce
+ * slots in `LEDGER_LABEL_SLOT_BUDGETS`. This keeps a small everyday outflow
+ * from consuming a slot a larger move should have had. Deliberately separate
+ * from `SpendingAnomalyInput.largeTransactionThreshold` in lib/planning.ts —
  * "worth a permanent label on a register" and "anomalous spending" are
  * different questions with no reason to share a threshold.
  */
@@ -146,10 +148,11 @@ export interface LedgerDayColumn {
  * axis. These are budgets, not targets: a tightly clustered month may expose
  * fewer once the separation rule is applied.
  *
- * A budget is what `MAJOR_TICK_THRESHOLD` could never be. Collision is a
- * function of how many labels share a fixed pixel width, and a dollar
- * threshold has no relationship to available width, so rising transaction
- * volume admitted *more* labels into the same rail rather than fewer.
+ * This is the second of two independent gates. `MAJOR_TICK_THRESHOLD` first
+ * decides which ticks are even worth labelling; this budget then bounds how
+ * many of those survive into the rail. The threshold alone could not: a
+ * dollar figure has no relationship to available width, so on a busy month
+ * it would admit *more* labels into the same fixed-width rail, not fewer.
  */
 export const LEDGER_LABEL_SLOT_BUDGETS: Record<LedgerLabelTier, number> = {
   1: 4,
@@ -314,13 +317,20 @@ export function buildLedgerStripDays(
       largestOut: null,
     };
     const inflow = tick.amount > 0;
-    const candidate: LabelCandidate = {
-      side: inflow ? "in" : "out",
-      dayOfMonth: Number(tick.date.slice(8, 10)),
-      date: tick.date,
-      merchant: tick.label,
-      amount: tick.amount,
-    };
+    // Only major ticks are label candidates, per `MAJOR_TICK_THRESHOLD`: an
+    // inflow of any size, or an outflow at or above the threshold. A month
+    // whose only outflow is a $3 coffee therefore carries no permanent
+    // outflow label rather than wasting a scarce slot on it. Gross columns,
+    // counts, and the running balance still include every tick.
+    const candidate: LabelCandidate | null = tick.major
+      ? {
+          side: inflow ? "in" : "out",
+          dayOfMonth: Number(tick.date.slice(8, 10)),
+          date: tick.date,
+          merchant: tick.label,
+          amount: tick.amount,
+        }
+      : null;
     const beatsLargest = (current: LabelCandidate | null): boolean =>
       current === null || Math.abs(tick.amount) > Math.abs(current.amount);
 
@@ -331,8 +341,14 @@ export function buildLedgerStripDays(
       transactionCount: previous.transactionCount + 1,
       // `inMonth` is sorted, so the last write for a date is that date's close.
       endOfDayBalance: tick.runningBalance,
-      largestIn: inflow && beatsLargest(previous.largestIn) ? candidate : previous.largestIn,
-      largestOut: !inflow && beatsLargest(previous.largestOut) ? candidate : previous.largestOut,
+      largestIn:
+        candidate !== null && inflow && beatsLargest(previous.largestIn)
+          ? candidate
+          : previous.largestIn,
+      largestOut:
+        candidate !== null && !inflow && beatsLargest(previous.largestOut)
+          ? candidate
+          : previous.largestOut,
     });
   }
 
@@ -423,31 +439,37 @@ export async function loadLedgerStripTicks(
   }>,
 ): Promise<LedgerTick[]> {
   const endDate = getMonthEndDate(options.month, options.today);
+  // `endDate < today` means the month has closed, so the anchor needs the
+  // net of everything booked after it. Fetched alongside the month itself
+  // rather than after it: the tail only depends on the month end and today,
+  // so waiting on the month read first just adds a serial round-trip.
+  const tailNeeded = endDate < options.today;
 
-  const transactions = await fetchAllRows<LedgerStripTransaction>((from, to) =>
-    supabase
-      .from("transactions")
-      .select("id, date, amount, merchant_name, name")
-      .eq("account_id", options.accountId)
-      .gte("date", `${options.month}-01`)
-      .lte("date", endDate)
-      .order("date", { ascending: true })
-      .order("id", { ascending: true })
-      .range(from, to),
-  );
+  const [transactions, tailSum] = await Promise.all([
+    fetchAllRows<LedgerStripTransaction>((from, to) =>
+      supabase
+        .from("transactions")
+        .select("id, date, amount, merchant_name, name")
+        .eq("account_id", options.accountId)
+        .gte("date", `${options.month}-01`)
+        .lte("date", endDate)
+        .order("date", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
+    tailNeeded
+      ? sumAmountsAfter(supabase, options.accountId, endDate, options.today)
+      : Promise.resolve(0),
+  ]);
 
   // `currentBalance` is today's balance, and `buildLedgerStripTicks` walks
   // backwards from it. For a month that has already closed, that walk has to
   // start from the balance as of month end, or every figure in the strip is
   // off by the net of everything booked since. balance(end) =
   // balance(today) + sum(amount after end), because positive amount = money out.
-  const anchorBalance =
-    endDate < options.today
-      ? round2(
-          options.currentBalance +
-            (await sumAmountsAfter(supabase, options.accountId, endDate, options.today)),
-        )
-      : options.currentBalance;
+  const anchorBalance = tailNeeded
+    ? round2(options.currentBalance + tailSum)
+    : options.currentBalance;
 
   return buildLedgerStripTicks(transactions, anchorBalance);
 }

@@ -36,6 +36,15 @@ describe("RegisterRow", () => {
     expect(html).toContain("var(--viz-pos)");
   });
 
+  it("renders a zero amount flat — no sign and no direction color", () => {
+    const html = renderRow({ amount: 0 });
+    expect(html).toContain("$0.00");
+    expect(html).not.toContain("+$0.00");
+    expect(html).not.toContain("-$0.00");
+    expect(html).not.toContain("var(--viz-pos)");
+    expect(html).not.toContain("var(--viz-neg)");
+  });
+
   it("zebra-stripes odd-indexed rows and not even-indexed rows", () => {
     expect(renderRow({ index: 1 })).toContain("bg-panel-2");
     expect(renderRow({ index: 0 })).not.toContain("bg-panel-2");

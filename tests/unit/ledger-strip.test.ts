@@ -507,10 +507,12 @@ describe("buildLedgerStripDays", () => {
 
   it("gives the month's largest inflow and largest outflow a tier 1 label", () => {
     const ticks = [
-      stripTick({ id: "pay", date: "2026-08-05", amount: 2450, label: "Acme Payroll" }),
-      stripTick({ id: "small-in", date: "2026-08-09", amount: 40, label: "Refund" }),
-      stripTick({ id: "rent", date: "2026-08-01", amount: -1650, label: "Maple St" }),
-      stripTick({ id: "coffee", date: "2026-08-17", amount: -6, label: "Blue Bottle" }),
+      stripTick({ id: "pay", date: "2026-08-05", amount: 2450, label: "Acme Payroll", major: true }),
+      stripTick({ id: "small-in", date: "2026-08-09", amount: 40, label: "Refund", major: true }),
+      stripTick({ id: "rent", date: "2026-08-01", amount: -1650, label: "Maple St", major: true }),
+      // The month's only tiny outflow stays below the threshold, so it is not
+      // a candidate and must not consume a label slot.
+      stripTick({ id: "coffee", date: "2026-08-17", amount: -6, label: "Blue Bottle", major: false }),
     ];
 
     const days = buildLedgerStripDays(ticks, "2026-08");
@@ -524,6 +526,23 @@ describe("buildLedgerStripDays", () => {
       merchant: "Maple St",
       tier: 1,
     });
+    // Coffee is excluded by the major threshold, not merely unlucky in the
+    // slot budget, so it can never earn a label.
+    expect(byDate.get("2026-08-17")!.outflowLabel).toBeNull();
+  });
+
+  it("skips a day whose only outflow is below the major threshold", () => {
+    const days = buildLedgerStripDays(
+      [
+        stripTick({ id: "in", date: "2026-08-05", amount: 2450, label: "Acme Payroll", major: true }),
+        stripTick({ id: "tip", date: "2026-08-03", amount: -4, label: "Barista", major: false }),
+      ],
+      "2026-08",
+    );
+    const byDate = new Map(days.map((day) => [day.date, day]));
+    expect(byDate.get("2026-08-03")!.outflowLabel).toBeNull();
+    // The inflow still labels, so the month's shape survives.
+    expect(byDate.get("2026-08-05")!.inflowLabel).not.toBeNull();
   });
 
   it("treats 4, 8, and 12 as cumulative label-slot maxima across both sides", () => {
@@ -535,12 +554,14 @@ describe("buildLedgerStripDays", () => {
         date: `2026-08-${String(day).padStart(2, "0")}`,
         amount: -(1000 + day),
         label: `Out ${day}`,
+        major: true,
       }),
       stripTick({
         id: `in-${day}`,
         date: `2026-08-${String(day).padStart(2, "0")}`,
         amount: 1000 + day,
         label: `In ${day}`,
+        major: true,
       }),
     ]);
 
@@ -560,6 +581,7 @@ describe("buildLedgerStripDays", () => {
         date: `2026-08-${String(day).padStart(2, "0")}`,
         amount: -(1000 + day),
         label: `Out ${day}`,
+        major: true,
       }),
     );
 
@@ -590,6 +612,7 @@ describe("buildLedgerStripDays", () => {
         date: `2026-08-${String(day).padStart(2, "0")}`,
         amount: -100,
         label: `Merchant ${day}`,
+        major: true,
       }),
     );
 

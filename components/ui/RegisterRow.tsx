@@ -32,9 +32,10 @@ export default function RegisterRow({
   trailing?: ReactNode;
 }>) {
   const inflow = amount > 0;
+  const outflow = amount < 0;
   return (
     <li
-      className={`flex items-center gap-3 rounded-field p-2 hover:bg-panel-hover${
+      className={`flex items-center gap-3 p-2 hover:bg-panel-hover${
         index % 2 === 1 ? " bg-panel-2" : ""
       }`}
     >
@@ -49,9 +50,11 @@ export default function RegisterRow({
         <span
           data-money
           className="block text-sm font-bold"
-          style={{ color: inflow ? "var(--viz-pos)" : "var(--viz-neg)" }}
+          style={
+            inflow || outflow ? { color: inflow ? "var(--viz-pos)" : "var(--viz-neg)" } : undefined
+          }
         >
-          {inflow ? "+" : "-"}
+          {inflow ? "+" : outflow ? "-" : ""}
           {formatCurrency(Math.abs(amount), currency)}
         </span>
         <span className="block text-xs text-muted font-mono">{formatDate(date)}</span>

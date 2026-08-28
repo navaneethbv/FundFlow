@@ -26,7 +26,7 @@ export default function RecentActivity({
   }
 
   return (
-    <ul className="space-y-3">
+    <ul className="divide-y divide-panel-border">
       {transactions.map((transaction, index) => (
         <RegisterRow
           key={transaction.id}

@@ -504,7 +504,7 @@ function LedgerTableRow({
                 data-money
                 style={dayGroup.net < 0 ? { color: "var(--viz-pos)" } : undefined}
               >
-                {dayGroup.net < 0 ? "+" : "-"}
+                {dayGroup.net < 0 ? "+" : dayGroup.net > 0 ? "-" : ""}
                 {formatCurrency(Math.abs(dayGroup.net))} net
               </span>
             )}
