@@ -206,6 +206,16 @@ interface LabelCandidate {
   amount: number;
 }
 
+interface DayAccumulator {
+  date: string;
+  grossIn: number;
+  grossOut: number;
+  transactionCount: number;
+  endOfDayBalance: number;
+  largestIn: LabelCandidate | null;
+  largestOut: LabelCandidate | null;
+}
+
 /** Deterministic order: biggest first, then date, side, and merchant to break ties. */
 function compareCandidates(a: LabelCandidate, b: LabelCandidate): number {
   return (
@@ -214,6 +224,50 @@ function compareCandidates(a: LabelCandidate, b: LabelCandidate): number {
     a.side.localeCompare(b.side) ||
     a.merchant.localeCompare(b.merchant)
   );
+}
+
+function candidateForTick(tick: LedgerTick, inflow: boolean): LabelCandidate | null {
+  if (!tick.major) return null;
+  return {
+    side: inflow ? "in" : "out",
+    dayOfMonth: Number(tick.date.slice(8, 10)),
+    date: tick.date,
+    merchant: tick.label,
+    amount: tick.amount,
+  };
+}
+
+function beatsLargest(
+  candidate: LabelCandidate,
+  current: LabelCandidate | null,
+): boolean {
+  return current === null || Math.abs(candidate.amount) > Math.abs(current.amount);
+}
+
+function updateDayAccumulator(
+  previous: DayAccumulator,
+  tick: LedgerTick,
+): DayAccumulator {
+  const inflow = tick.amount > 0;
+  const candidate = candidateForTick(tick, inflow);
+  const largestIn =
+    candidate?.side === "in" && beatsLargest(candidate, previous.largestIn)
+      ? candidate
+      : previous.largestIn;
+  const largestOut =
+    candidate?.side === "out" && beatsLargest(candidate, previous.largestOut)
+      ? candidate
+      : previous.largestOut;
+
+  return {
+    ...previous,
+    grossIn: inflow ? round2(previous.grossIn + tick.amount) : previous.grossIn,
+    grossOut: inflow ? previous.grossOut : round2(previous.grossOut - tick.amount),
+    transactionCount: previous.transactionCount + 1,
+    endOfDayBalance: tick.runningBalance,
+    largestIn,
+    largestOut,
+  };
 }
 
 const candidateKey = (candidate: LabelCandidate) => `${candidate.side}:${candidate.date}`;
@@ -295,19 +349,9 @@ export function buildLedgerStripDays(
     .filter((tick) => tick.date.slice(0, 7) === month)
     .toSorted((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
 
-  interface DayAccumulator {
-    date: string;
-    grossIn: number;
-    grossOut: number;
-    transactionCount: number;
-    endOfDayBalance: number;
-    largestIn: LabelCandidate | null;
-    largestOut: LabelCandidate | null;
-  }
-
   const byDate = new Map<string, DayAccumulator>();
   for (const tick of inMonth) {
-    const previous: DayAccumulator = byDate.get(tick.date) ?? {
+    const previous = byDate.get(tick.date) ?? {
       date: tick.date,
       grossIn: 0,
       grossOut: 0,
@@ -316,40 +360,8 @@ export function buildLedgerStripDays(
       largestIn: null,
       largestOut: null,
     };
-    const inflow = tick.amount > 0;
-    // Only major ticks are label candidates, per `MAJOR_TICK_THRESHOLD`: an
-    // inflow of any size, or an outflow at or above the threshold. A month
-    // whose only outflow is a $3 coffee therefore carries no permanent
-    // outflow label rather than wasting a scarce slot on it. Gross columns,
-    // counts, and the running balance still include every tick.
-    const candidate: LabelCandidate | null = tick.major
-      ? {
-          side: inflow ? "in" : "out",
-          dayOfMonth: Number(tick.date.slice(8, 10)),
-          date: tick.date,
-          merchant: tick.label,
-          amount: tick.amount,
-        }
-      : null;
-    const beatsLargest = (current: LabelCandidate | null): boolean =>
-      current === null || Math.abs(tick.amount) > Math.abs(current.amount);
-
-    byDate.set(tick.date, {
-      ...previous,
-      grossIn: inflow ? round2(previous.grossIn + tick.amount) : previous.grossIn,
-      grossOut: inflow ? previous.grossOut : round2(previous.grossOut - tick.amount),
-      transactionCount: previous.transactionCount + 1,
-      // `inMonth` is sorted, so the last write for a date is that date's close.
-      endOfDayBalance: tick.runningBalance,
-      largestIn:
-        candidate !== null && inflow && beatsLargest(previous.largestIn)
-          ? candidate
-          : previous.largestIn,
-      largestOut:
-        candidate !== null && !inflow && beatsLargest(previous.largestOut)
-          ? candidate
-          : previous.largestOut,
-    });
+    // `inMonth` is sorted, so the last write for a date is that date's close.
+    byDate.set(tick.date, updateDayAccumulator(previous, tick));
   }
 
   const days = [...byDate.values()].toSorted((a, b) => a.date.localeCompare(b.date));

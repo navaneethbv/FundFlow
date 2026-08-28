@@ -98,6 +98,12 @@ function transactionDetailsError(currentError: string, failed: boolean): string 
     : currentError;
 }
 
+function ledgerNetPrefix(net: number): string {
+  if (net < 0) return "+";
+  if (net > 0) return "-";
+  return "";
+}
+
 /**
  * Filters only, deliberately unordered. postgrest-js appends `order()` calls in
  * the order they are made, so an ordering baked in here would win over the sort
@@ -504,7 +510,7 @@ function LedgerTableRow({
                 data-money
                 style={dayGroup.net < 0 ? { color: "var(--viz-pos)" } : undefined}
               >
-                {dayGroup.net < 0 ? "+" : dayGroup.net > 0 ? "-" : ""}
+                {ledgerNetPrefix(dayGroup.net)}
                 {formatCurrency(Math.abs(dayGroup.net))} net
               </span>
             )}

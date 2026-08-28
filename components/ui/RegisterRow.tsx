@@ -3,6 +3,12 @@ import { formatCurrency } from "@/lib/format";
 import { formatDate } from "@/lib/format-date";
 import type { ReactNode } from "react";
 
+function amountPrefix(amount: number): string {
+  if (amount > 0) return "+";
+  if (amount < 0) return "-";
+  return "";
+}
+
 /**
  * One row in a chronological money list — the shared shape behind Recent
  * Transactions and (as later phases adopt it) the transactions page's
@@ -54,7 +60,7 @@ export default function RegisterRow({
             inflow || outflow ? { color: inflow ? "var(--viz-pos)" : "var(--viz-neg)" } : undefined
           }
         >
-          {inflow ? "+" : outflow ? "-" : ""}
+          {amountPrefix(amount)}
           {formatCurrency(Math.abs(amount), currency)}
         </span>
         <span className="block text-xs text-muted font-mono">{formatDate(date)}</span>
