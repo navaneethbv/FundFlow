@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-(Same as `docs/superpowers/plans/2026-08-24-dashboard-ledger-strip.md`'s Global Constraints section — repeated here since this roadmap is a separate entry point.)
+(These match the constraints the dashboard phase was built under; restated here since this roadmap is a separate entry point.)
 
 - Amount sign follows Plaid: positive = money out, negative = money in. Any conversion to a display/ledger sign uses `delta = -transaction.amount`.
 - Every money figure must carry `.money` (via `<Money>`), `.metric-value`, or sit inside a `data-money` container, or it silently escapes the privacy-blur toggle.
@@ -201,7 +201,7 @@ git commit -m "feat: add shared RegisterRow list-row primitive"
 
 **Interfaces:**
 - Consumes: `RegisterRow` from Task A.
-- Note: this task **supersedes** Task 5 of `docs/superpowers/plans/2026-08-24-dashboard-ledger-strip.md` ("Restyle `RecentActivity` as a register"). If that task was already executed, redo `RecentActivity.tsx` per this task's Step 3 instead of layering on top of it — the inline zebra/mono-date logic Task 5 added gets replaced by composing `RegisterRow`, and the inflow color changes from `text-success` to `var(--viz-pos)` per the spec's color-system decision. If Task 5 was not yet executed, just implement this task directly; there's nothing to undo.
+- Note: this task **supersedes** the dashboard phase's own "restyle `RecentActivity` as a register" step. If `RecentActivity.tsx` already carries inline zebra/mono-date logic, redo it per this task's Step 3 instead of layering on top — that inline logic gets replaced by composing `RegisterRow`, and the inflow color changes from `text-success` to `var(--viz-pos)` per the spec's color-system decision.
 
 - [ ] **Step 1: Write the failing tests**
 

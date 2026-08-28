@@ -82,11 +82,11 @@ it does not guess at code it hasn't seen.
 
 ## Phase 6 (Accounts) sign-off
 
-Before `docs/superpowers/plans/2026-08-24-accounts-register.md` was written, research
-produced an exact before/after (every money figure that would move from `font-mono`
-to proportional sans, and the one table where date/currency columns would move the
-other way, into mono) and presented it to the user directly, since it changes the
-look of an already-shipped page rather than closing a gap.
+Before the Accounts change was made, research produced an exact before/after
+(every money figure that would move from `font-mono` to proportional sans, and
+the one table where date/currency columns would move the other way, into mono)
+and presented it to the user directly, since it changes the look of an
+already-shipped page rather than closing a gap.
 The user confirmed the **full remap** over the narrower "money only, skip the
 table's date/currency mono" option and over skipping the phase.
 `AccountGroup`'s and `NetWorthHero`'s existing `text-success`/`text-danger`
@@ -147,7 +147,7 @@ restraint principle.
 
 | Page | Verdict | Why |
 |---|---|---|
-| Dashboard | Done | Already fully spec'd and planned (`2026-08-24-dashboard-ledger-strip*.md`); its `RecentActivity` piece is superseded by Phase 0 below. |
+| Dashboard | Done | Already spec'd (`2026-08-24-dashboard-ledger-strip-design.md`) and implemented; its `RecentActivity` piece is superseded by Phase 0 below. |
 | Transactions | **Full** | 808 lines, the largest ledger UI outside the dashboard: day-grouped `LedgerTableRow`, signed amounts, a "positive = money out" caption already present. Highest-leverage page for this rollout. |
 | Reports | **Full** | `ReportTransactions` is a bespoke transaction list; `BreakdownBars` already uses `--viz-pos`/`--viz-neg`, just not at row level. |
 | Investments | **Full** | `HoldingsTable` is a row list; day-change is already colored `text-success`/`text-danger` (rule 2 fix applies). |

@@ -2,11 +2,10 @@
 
 Concept mockup: published as a Claude Artifact ("Ledger Strip"), approved by
 the user on 2026-08-24.
-This document is the spec the implementation plan
-(`docs/superpowers/plans/2026-08-24-dashboard-ledger-strip.md`) argues from —
-it captures the design decisions and, critically, where the real
+This document captures the design decisions and, critically, where the real
 implementation deviates from the mockup once it met the app's actual data and
-components.
+components. (The task-by-task implementation plan it was paired with has been
+removed now that the work is in code; recover it from git history if needed.)
 
 ## What this is
 
