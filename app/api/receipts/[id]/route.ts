@@ -65,7 +65,7 @@ async function prepareReceiptPatch(
   return { update: { transaction_id: null, status: "unmatched" }, auditAction: "receipt_restored" };
 }
 
-export async function executeReceiptPatch(
+async function executeReceiptPatch(
   auth: { user: { id: string }; supabase: SupabaseClient },
   id: string,
   body: { action?: unknown; transactionId?: unknown } | null,
@@ -112,7 +112,7 @@ export async function executeReceiptPatch(
   return NextResponse.json({ receipt: updated });
 }
 
-export async function executeReceiptDelete(
+async function executeReceiptDelete(
   auth: { user: { id: string }; supabase: SupabaseClient },
   id: string,
   ip: string | null,

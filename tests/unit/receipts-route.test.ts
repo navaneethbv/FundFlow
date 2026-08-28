@@ -31,7 +31,7 @@ vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => service,
 }));
 
-import { GET, POST, PATCH as ROOT_PATCH, DELETE as ROOT_DELETE } from "@/app/api/receipts/route";
+import { GET, POST } from "@/app/api/receipts/route";
 import { DELETE, PATCH } from "@/app/api/receipts/[id]/route";
 
 const USER_ID = "user-1";
@@ -345,31 +345,5 @@ describe("DELETE /api/receipts/[id]", () => {
     expect(response.status).toBe(500);
 
     expect(service.callsOn("receipts")).toEqual([]);
-  });
-});
-
-describe("ROOT /api/receipts PATCH & DELETE", () => {
-  it("supports PATCH /api/receipts with id in body", async () => {
-    mockRequireUser.mockResolvedValue({
-      user: { id: USER_ID },
-      supabase: clientStub({ receipts: { data: RECEIPT } }),
-    });
-    service = makeService({ receipts: { data: { ...RECEIPT, status: "ignored" } } });
-
-    const response = await ROOT_PATCH(jsonRequest("PATCH", { id: "receipt-1", action: "ignore" }));
-    expect(response.status).toBe(200);
-    expect(service.writtenTo("receipts")).toEqual({ transaction_id: null, status: "ignored" });
-  });
-
-  it("supports DELETE /api/receipts with id in body", async () => {
-    mockRequireUser.mockResolvedValue({
-      user: { id: USER_ID },
-      supabase: clientStub({ receipts: { data: RECEIPT } }),
-    });
-    service = makeService({ receipts: { error: null } });
-
-    const response = await ROOT_DELETE(jsonRequest("DELETE", { id: "receipt-1" }));
-    expect(response.status).toBe(200);
-    expect(service.remove).toHaveBeenCalledWith([RECEIPT.storage_path]);
   });
 });

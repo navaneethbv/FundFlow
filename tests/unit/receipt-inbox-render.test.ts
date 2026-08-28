@@ -95,10 +95,8 @@ describe("ReceiptInbox", () => {
     expect(html).toContain('<span data-money="true">$24.50</span>');
   });
 
-  it("validates receiptId before making transition/remove network calls with static API endpoint", () => {
+  it("routes receipt transitions and deletes to the per-id endpoint", () => {
     const inboxSource = readFileSync("components/transactions/ReceiptInbox.tsx", "utf8");
-    expect(inboxSource).toContain("SAFE_ID_RE");
-    expect(inboxSource).toContain('fetch("/api/receipts"');
-    expect(inboxSource).toContain('setError("Invalid receipt ID.")');
+    expect(inboxSource).toContain("fetch(`/api/receipts/${receiptId}`");
   });
 });
