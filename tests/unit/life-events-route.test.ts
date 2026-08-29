@@ -30,7 +30,7 @@ describe("life-events route", () => {
 
   it("returns 401 when unauthenticated", async () => {
     mockRequireUser.mockResolvedValueOnce(new NextResponse("Unauthorized", { status: 401 }));
-    expect((await GET(jsonRequest({}))).status).toBe(401);
+    expect((await GET()).status).toBe(401);
   });
 
   it("lists the caller's events only", async () => {
@@ -42,7 +42,7 @@ describe("life-events route", () => {
       },
     });
     mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase });
-    const res = await GET(jsonRequest({}));
+    const res = await GET();
     const body = await res.json();
     expect(body.events[0]).toMatchObject({ type: "child", startMonth: 3, amount: 1000 });
     expect(supabase.scopedToUser("life_events", "user-1")).toBe(true);
@@ -99,7 +99,7 @@ describe("life-events route error paths", () => {
   it("surfaces database errors through errorResponse", async () => {
     const supabase = clientStub({ life_events: { data: null, error: new Error("db down") } });
     mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase });
-    const res = await GET(jsonRequest({}));
+    const res = await GET();
     expect(res.status).toBe(500);
     await expect(res.json()).resolves.toMatchObject({ error: "db down" });
   });
