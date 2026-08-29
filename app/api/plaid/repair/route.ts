@@ -9,6 +9,16 @@ import { syncItemTransactions } from "@/lib/sync";
 import { createServiceClient } from "@/lib/supabase/service";
 import type { PlaidItemRow } from "@/lib/types";
 
+function extractPlaidErrorCode(error: unknown): string {
+  if (typeof error === "object" && error !== null && "response" in error) {
+    const data = (error as { response?: { data?: { error_code?: unknown } } }).response?.data;
+    if (data && typeof data.error_code === "string") {
+      return data.error_code;
+    }
+  }
+  return "ITEM_LOGIN_REQUIRED";
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -59,7 +69,7 @@ export async function POST(request: NextRequest) {
       itemDetails = resp.data.item;
     } catch (err: unknown) {
       logError("plaid.repair.itemGet", err);
-      const code = (err as { response?: { data?: { error_code?: string } } })?.response?.data?.error_code ?? "ITEM_LOGIN_REQUIRED";
+      const code = extractPlaidErrorCode(err);
       await setItemStatus(typedItem.id, "error", code);
       return NextResponse.json({
         ok: false,
