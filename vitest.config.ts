@@ -39,6 +39,9 @@ export default defineConfig({
       exclude: [
         "lib/types.ts",
         "scripts/backfill-institution-logos.ts",
+        // Operational one-off QA harness (drives a browser against a live
+        // Supabase project); exercised by hand, not by the unit suite.
+        "scripts/qa-large-data.mjs",
         "**/.DS_Store",
         "lib/graphify-out/**",
         "**/graphify-out/**",

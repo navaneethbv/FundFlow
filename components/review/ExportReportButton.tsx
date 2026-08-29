@@ -21,10 +21,10 @@ export default function ExportReportButton({
   const [error, setError] = useState<string | null>(null);
 
   function filenameFrom(response: Response): string {
-    const match = /filename="([^"]+)"/.exec(
+    const fromHeader = /filename="([^"]+)"/.exec(
       response.headers.get("content-disposition") ?? "",
-    );
-    if (match) return match[1]!;
+    )?.[1];
+    if (fromHeader) return fromHeader;
     return `fundflow-report-${month ?? new Date().toISOString().slice(0, 10)}.pdf`;
   }
 

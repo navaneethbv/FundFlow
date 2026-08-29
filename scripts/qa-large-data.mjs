@@ -11,6 +11,7 @@
  * Run with the dev server up:  node scripts/qa-large-data.mjs
  * It loads .env.local itself; no extra env is required.
  */
+import { randomInt } from "node:crypto";
 import { chromium } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import envPkg from "@next/env";
@@ -56,7 +57,7 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function main() {
   const password = "LargeQA-Password-123!";
-  const stamp = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  const stamp = `${Date.now()}-${randomInt(1000)}`;
   const email = `large-qa-${stamp}@example.com`;
   let userId = "";
 
@@ -358,8 +359,10 @@ async function main() {
       throw new Error(`F1 count mismatch: UI=${displayedCount} DB=${truthCount}`);
     }
     const moneyAfter = (label) => {
-      const m = new RegExp(`${label}[^0-9-$]*([$\\d.,-]+)`, "i").exec(wrappedText);
-      return m ? m[1] : "";
+      const start = wrappedText.indexOf(label);
+      if (start === -1) return "";
+      const m = /-?\$?\d[\d.,]*/.exec(wrappedText.slice(start + label.length));
+      return m ? m[0] : "";
     };
     const spendText = moneyAfter("Total spent");
     const incomeText = moneyAfter("Total income");

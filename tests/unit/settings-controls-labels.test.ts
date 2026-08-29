@@ -19,15 +19,24 @@ import ReceiptScanSection from "@/components/settings/ReceiptScanSection";
 
 /** Assert the visible label's htmlFor targets exactly the rendered control id. */
 function expectLinkedControl(html: string, labelText: string, controlId: string): void {
-  const labelMatch = html.match(
-    new RegExp(
-      `<label[^>]*for="${controlId}"[^>]*>[\\s\\S]*?${labelText}`,
-      "i",
-    ),
+  expect(html, `control with id ${controlId} should render`).toContain(
+    `id="${controlId}"`,
   );
-  expect(labelMatch, `label "${labelText}" should carry htmlFor=${controlId}`).not.toBeNull();
-  const control = new RegExp(`id="${controlId}"[^>]*`).exec(html);
-  expect(control, `control with id ${controlId} should render`).not.toBeNull();
+
+  // `for="..."` only appears on <label> in server-rendered React markup, so a
+  // match plus the visible text before its `</label>` is the full linkage.
+  const forAttr = `for="${controlId}"`;
+  const forIndex = html.indexOf(forAttr);
+  expect(forIndex, `a label should carry ${forAttr}`).toBeGreaterThan(-1);
+
+  const labelEnd = html.indexOf("</label>", forIndex);
+  const labelSlice = html.slice(
+    forIndex,
+    labelEnd === -1 ? undefined : labelEnd,
+  );
+  expect(labelSlice, `label ${forAttr} should contain "${labelText}"`).toContain(
+    labelText,
+  );
 }
 
 describe("Settings control labels", () => {
