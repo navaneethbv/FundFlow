@@ -21,8 +21,7 @@ Preserve FundFlow-specific strengths and do not copy Monarch branding or visual 
 
 - Read `AGENTS.md`, `docs/HANDOFF.md`, and the two alignment documents completely before changing code.
 - If `graphify-out/graph.json` exists, query graphify before broad source exploration.
-- Read the relevant Next.js version documentation under `node_modules/next/dist/docs/` before changing Next.js APIs or conventions.
-- Run `npx npm-check-updates` before implementation and record intentionally deferred upgrades.
+- Refer to the official Next.js documentation (https://nextjs.org/docs) before changing Next.js APIs or conventions.
 - Begin each bug fix by reproducing the user-visible behavior in an E2E setting as closely as possible.
 - Use test-driven development for confirmed defects: add a failing regression test, implement the smallest robust fix, then prove the test passes.
 - Use actual authenticated Production data only for read-only acceptance when the user explicitly authorizes it.
