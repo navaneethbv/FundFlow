@@ -31,8 +31,11 @@ describe("buildMonthGrid", () => {
     expect(grid).toHaveLength(6);
     expect(grid[0]).toHaveLength(7);
     expect(grid.flat().map((cell) => cell.day)).toContain(15);
-    // Every cell is a real date (no null padding days).
-    expect(grid.flat().every((cell) => cell.date.startsWith("2026-08-"))).toBe(true);
+    // In-month cells are real August dates; the few padding cells belong to
+    // adjacent months and are flagged inMonth=false.
+    const inMonth = grid.flat().filter((cell) => cell.inMonth);
+    expect(inMonth.every((cell) => cell.date.startsWith("2026-08-"))).toBe(true);
+    expect(inMonth.length).toBe(31);
   });
 });
 

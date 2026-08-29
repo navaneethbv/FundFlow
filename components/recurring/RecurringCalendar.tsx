@@ -1,0 +1,199 @@
+"use client";
+
+import { useRef } from "react";
+import { formatCurrency, titleCase } from "@/lib/format";
+import type { RecurringOccurrence } from "@/lib/recurring-page";
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+export interface CalendarCell {
+  day: number;
+  date: string;
+  inMonth: boolean;
+}
+
+function dateKey(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/** Sunday-first month grid; every cell is a real date in `month`. */
+export function buildMonthGrid(month: string): CalendarCell[][] {
+  const [year, monthIndex] = month.split("-").map(Number);
+  const first = new Date(Date.UTC(year!, monthIndex! - 1, 1));
+  const daysInMonth = new Date(Date.UTC(year!, monthIndex!, 0)).getUTCDate();
+  const startOffset = first.getUTCDay();
+  const grid: CalendarCell[][] = [];
+  let cursor = new Date(Date.UTC(year!, monthIndex! - 1, 1 - startOffset));
+  for (let week = 0; week < 6; week += 1) {
+    const row: CalendarCell[] = [];
+    for (let day = 0; day < 7; day += 1) {
+      row.push({
+        day: cursor.getUTCDate(),
+        date: dateKey(cursor),
+        inMonth: cursor.getUTCMonth() === monthIndex! - 1,
+      });
+      cursor = new Date(cursor.getTime() + 86_400_000);
+    }
+    grid.push(row);
+    if (cursor.getUTCMonth() !== monthIndex! - 1) break;
+  }
+  return grid;
+}
+
+/**
+ * Roving-tabindex day navigation: ArrowLeft/Right move a day; ArrowUp/Down
+ * move a week (7 days). Values clamp to the month's first/last day.
+ */
+export function moveDayFocus(
+  day: number,
+  key: "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown",
+  firstOfMonth: Date,
+  lastOfMonth: Date,
+): number {
+  const delta =
+    key === "ArrowLeft" ? -1 : key === "ArrowRight" ? 1 : key === "ArrowUp" ? -7 : 7;
+  const next = day + delta;
+  return Math.max(firstOfMonth.getUTCDate(), Math.min(lastOfMonth.getUTCDate(), next));
+}
+
+function occurrenceTone(occurrence: RecurringOccurrence): string {
+  if (occurrence.status === "complete") return "text-success";
+  if (occurrence.status === "overdue") return "text-danger";
+  if (occurrence.isIncome) return "text-muted";
+  return "text-foreground";
+}
+
+/**
+ * Calendar twin of the Recurring list. Occurrences reuse the month's expanded
+ * rows; the view is purely presentational. The grid is keyboard navigable with
+ * arrow keys (roving tabindex) and a table lists the same occurrences for
+ * screen readers and narrow screens.
+ */
+export default function RecurringCalendar({
+  month,
+  today,
+  currency,
+  occurrences,
+}: Readonly<{
+  month: string;
+  today: string;
+  currency: string;
+  occurrences: RecurringOccurrence[];
+}>) {
+  const grid = buildMonthGrid(month);
+  const byDate = new Map<string, RecurringOccurrence[]>();
+  for (const occurrence of occurrences) {
+    const list = byDate.get(occurrence.dueDate) ?? [];
+    list.push(occurrence);
+    byDate.set(occurrence.dueDate, list);
+  }
+  const focusDay = today.startsWith(month) ? Number(today.slice(8)) : 1;
+  const firstOfMonth = new Date(`${month}-01T00:00:00Z`);
+  const lastOfMonth = new Date(`${month}-${grid.flat().at(-1)?.day ?? 28}T00:00:00Z`);
+  const cellRefs = useRef(new Map<number, HTMLButtonElement>());
+
+  function handleKeyDown(
+    day: number,
+    event: React.KeyboardEvent<HTMLButtonElement>,
+  ) {
+    const key = event.key as "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown";
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(key)) return;
+    event.preventDefault();
+    const next = moveDayFocus(day, key, firstOfMonth, lastOfMonth);
+    cellRefs.current.get(next)?.focus();
+  }
+
+  const sorted = [...occurrences].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+
+  return (
+    <div>
+      <div className="overflow-x-auto" role="grid" aria-label={`Recurring calendar for ${month}`}>
+        <div className="min-w-[640px]">
+          <div className="grid grid-cols-7 gap-px bg-panel-border">
+            {WEEKDAYS.map((weekday) => (
+              <div key={weekday} className="bg-panel px-2 py-2 text-center text-xs font-semibold text-muted">
+                {weekday}
+              </div>
+            ))}
+          </div>
+          {grid.map((week, weekIndex) => (
+            <div key={weekIndex} className="grid grid-cols-7 gap-px bg-panel-border">
+              {week.map((cell) => {
+                const dayOccurrences = byDate.get(cell.date) ?? [];
+                const isToday = cell.date === today;
+                const isFocus = cell.day === focusDay;
+                return (
+                  <div
+                    key={cell.date}
+                    role="gridcell"
+                    className={`min-h-24 bg-panel p-1.5 ${cell.inMonth ? "" : "opacity-40"}`}
+                  >
+                    <button
+                      ref={(node) => {
+                        if (node) cellRefs.current.set(cell.day, node);
+                      }}
+                      type="button"
+                      tabIndex={isFocus ? 0 : -1}
+                      onKeyDown={(event) => handleKeyDown(cell.day, event)}
+                      aria-label={`${cell.date}, ${dayOccurrences.length} occurrence${dayOccurrences.length === 1 ? "" : "s"}`}
+                      className={`block w-full rounded-field px-1 text-left text-xs font-semibold outline-none focus-visible:outline-2 ${
+                        isToday ? "bg-accent/15 text-accent" : "text-muted"
+                      }`}
+                    >
+                      {cell.day}
+                    </button>
+                    <ul className="mt-1 space-y-1">
+                      {dayOccurrences.slice(0, 3).map((occurrence) => (
+                        <li
+                          key={`${occurrence.source}-${occurrence.sourceId}`}
+                          className="truncate rounded border border-panel-border bg-panel-2 px-1 py-0.5 text-xs"
+                          title={`${occurrence.merchant} · ${occurrence.status}`}
+                        >
+                          <span className={occurrenceTone(occurrence)}>
+                            {occurrence.isIncome ? "+" : "−"}
+                            {formatCurrency(Math.abs(occurrence.amount), currency)}
+                          </span>
+                          <span className="block truncate text-muted">{occurrence.merchant}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <h3 className="mt-6 text-sm font-semibold" id="recurring-calendar-list">
+        Occurrences this month
+      </h3>
+      <div className="mt-2 overflow-x-auto">
+        <table aria-labelledby="recurring-calendar-list" className="w-full text-left text-sm">
+          <thead className="text-xs text-muted">
+            <tr className="border-b border-panel-border">
+              <th scope="col" className="px-3 py-2 font-semibold">Date</th>
+              <th scope="col" className="px-3 py-2 font-semibold">Merchant</th>
+              <th scope="col" className="px-3 py-2 font-semibold">Type</th>
+              <th scope="col" className="px-3 py-2 text-right font-semibold">Amount</th>
+              <th scope="col" className="px-3 py-2 font-semibold">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((occurrence) => (
+              <tr key={`${occurrence.source}-${occurrence.sourceId}`} className="border-b border-panel-border last:border-b-0">
+                <td className="px-3 py-2 tabular-nums">{occurrence.dueDate}</td>
+                <td className="px-3 py-2">{occurrence.merchant}</td>
+                <td className="px-3 py-2">{occurrence.isIncome ? "Income" : "Expense"}</td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {occurrence.isIncome ? "+" : "−"}{formatCurrency(Math.abs(occurrence.amount), currency)}
+                </td>
+                <td className="px-3 py-2">{titleCase(occurrence.status)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
