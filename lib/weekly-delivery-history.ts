@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   getWeeklyReportPeriod,
   isWeeklyReportDue,
@@ -110,4 +111,49 @@ export function buildWeeklyDeliveryHistory(
   }
 
   return items;
+}
+
+export interface LatestWeeklyDelivery {
+  status: "processing" | "sent" | "failed" | "skipped";
+  periodStart: string;
+  periodEnd: string;
+  attemptedAt: string | null;
+  sentAt: string | null;
+}
+
+/**
+ * The newest weekly report delivery for the caller, or null when none has been
+ * recorded. Scoped to the authenticated user; read-only by design (only
+ * trusted server code writes delivery rows).
+ */
+export async function loadLatestWeeklyDelivery(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<LatestWeeklyDelivery | null> {
+  const { data, error } = await supabase
+    .from("weekly_report_deliveries")
+    .select("period_start, period_end, status, attempted_at, sent_at")
+    .eq("user_id", userId)
+    .order("attempted_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  const row = data as
+    | {
+        period_start: string;
+        period_end: string;
+        status: string;
+        attempted_at: string | null;
+        sent_at: string | null;
+      }
+    | null;
+  if (!row) return null;
+  const status = row.status as LatestWeeklyDelivery["status"];
+  return {
+    status,
+    periodStart: row.period_start,
+    periodEnd: row.period_end,
+    attemptedAt: row.attempted_at,
+    sentAt: row.sent_at,
+  };
 }

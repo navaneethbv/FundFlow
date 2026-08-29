@@ -22,6 +22,7 @@ import { getCachedDashboardData } from "@/lib/dashboard-cache";
 import { dashboardUrl } from "@/lib/drilldown";
 import { getGoals } from "@/lib/goals";
 import { loadGoalsPageData } from "@/lib/goals-data";
+import { loadLatestWeeklyDelivery } from "@/lib/weekly-delivery-history";
 import { toGoalSummaryItem, toLegacyGoalSummaryItem } from "@/lib/goal-summary";
 import { resolveDisplayName, greetingWord } from "@/lib/greeting";
 import ScopeChips from "@/components/dashboard/ScopeChips";
@@ -71,13 +72,14 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
         .then((res) => res.goals.map(toGoalSummaryItem))
     : getGoals(supabase).then((plain) => plain.map((g) => toLegacyGoalSummaryItem(g)));
 
-  const [data, { data: items }, goals, { data: householdRows }] = await Promise.all([
+  const [data, { data: items }, goals, { data: householdRows }, weeklyReport] = await Promise.all([
     user
       ? getCachedDashboardData(supabase, user.id, selectedAccountId, selectedMonth, drillOptions)
       : getDashboardData(supabase, selectedAccountId, selectedMonth, undefined, drillOptions),
     supabase.from("plaid_items").select("id, institution_name, status").order("created_at"),
     goalsPromise,
     supabase.from("households").select("id").limit(1),
+    user ? loadLatestWeeklyDelivery(supabase, user.id) : Promise.resolve(null),
   ]);
   const hasHousehold = (householdRows ?? []).length > 0;
   const { data: profileRow } = await supabase
@@ -205,6 +207,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
             <PlanView
               data={data}
               goals={goals}
+              weeklyReport={weeklyReport}
               billsGrouping={params.bills === "monthly" ? "monthly" : "weekly"}
               billsLinkParams={{ month: selectedMonth, accountId: selectedAccountId, itemId: selectedItemId, scope: scopeParam }}
               prefs={dashboardPrefs}

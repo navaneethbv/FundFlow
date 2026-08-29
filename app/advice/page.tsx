@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
 import AdviceCard from "@/components/advice/AdviceCard";
+import AdvicePriorities from "@/components/advice/AdvicePriorities";
 import Panel from "@/components/ui/Panel";
 import { cn } from "@/lib/cn";
 import { buildAdviceView, type AdviceCategory, type AdviceItemProgress } from "@/lib/advice";
@@ -204,6 +205,10 @@ export default async function AdvicePage({ searchParams }: Readonly<PageProps>) 
               </Link>
             ))}
           </nav>
+          <AdvicePriorities
+            topics={ADVICE_LIBRARY.map((item) => ({ id: item.id, title: item.title }))}
+            initialPriorities={priorities ?? []}
+          />
         </div>
       </div>
     </AppShell>
