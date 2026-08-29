@@ -5,6 +5,10 @@ import {
   type FinancialScope,
 } from "@/lib/financial-scope";
 import {
+  buildCreditCardBucket,
+  type CreditCardBill,
+} from "@/lib/recurring-credit-bill";
+import {
   countUnreviewedStreams,
   expandStreamsForMonth,
   type ManualRecurringFrequency,
@@ -238,24 +242,31 @@ export async function loadRecurringData(
     .eq("job_type", "transactions")
     .order("updated_at", { ascending: false })
     .limit(1);
+  let billsQuery = supabase
+    .from("credit_card_bills")
+    .select("account_id, statement_balance, minimum_payment, due_date")
+    .limit(DEPENDENCY_LIMIT);
 
   if (userId) {
     streamsQuery = streamsQuery.eq("user_id", userId);
     manualQuery = manualQuery.eq("user_id", userId);
     accountsQuery = accountsQuery.eq("user_id", userId);
     syncQuery = syncQuery.eq("user_id", userId);
+    billsQuery = billsQuery.eq("user_id", userId);
   }
 
-  const [streamsResult, manualResult, accountsResult, syncResult] = await Promise.all([
+  const [streamsResult, manualResult, accountsResult, syncResult, billsResult] = await Promise.all([
     streamsQuery,
     manualQuery,
     accountsQuery,
     syncQuery.maybeSingle(),
+    billsQuery,
   ]);
   assertRecurringQuery("recurring_streams", streamsResult);
   assertRecurringQuery("manual_recurring_items", manualResult);
   assertRecurringQuery("accounts", accountsResult);
   assertRecurringQuery("sync_jobs", syncResult);
+  assertRecurringQuery("credit_card_bills", billsResult);
 
   const streamRows = (streamsResult.data ?? []) as RecurringStreamRawRow[];
   const streamIds = streamRows.map((row) => row.id);
@@ -336,6 +347,21 @@ export async function loadRecurringData(
   );
   const ownerScopedInputs = streamInputs.filter((streamInput) => ownerStreamIds.has(streamInput.id));
 
+  // Real credit-card bills populate the credit-card bucket; without bill
+  // data the bucket stays empty (card purchases remain Expenses).
+  const creditBills: CreditCardBill[] = ((billsResult.data ?? []) as Array<{
+    account_id: string;
+    statement_balance: number | string | null;
+    minimum_payment: number | string | null;
+    due_date: string | null;
+  }>).map((bill) => ({
+    accountId: bill.account_id,
+    statementBalance: bill.statement_balance === null ? null : Number(bill.statement_balance),
+    minimumPayment: bill.minimum_payment === null ? null : Number(bill.minimum_payment),
+    dueDate: bill.due_date,
+  }));
+  const creditCardBucket = buildCreditCardBucket(creditBills, input.anchorMonth);
+
   return {
     view: {
       ...expandStreamsForMonth(
@@ -344,6 +370,15 @@ export async function loadRecurringData(
         input.anchorMonth,
         (input.now ?? new Date()).toISOString().slice(0, 10),
       ),
+      totals: {
+        ...expandStreamsForMonth(
+          streamInputs,
+          manualInputs,
+          input.anchorMonth,
+          (input.now ?? new Date()).toISOString().slice(0, 10),
+        ).totals,
+        creditCards: creditCardBucket,
+      },
       reviewCount: countUnreviewedStreams(ownerScopedInputs),
     },
     scope,

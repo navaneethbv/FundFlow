@@ -3,6 +3,7 @@ import { serverEnv } from "@/lib/env.server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { syncAllForUser } from "@/lib/sync";
 import { syncInvestmentsForUser } from "@/lib/investment-sync";
+import { syncCreditCardLiabilitiesForUser } from "@/lib/liabilities-sync";
 import { rotateStaleItemTokens } from "@/lib/plaid-service";
 import { refreshRecurringForUser } from "@/lib/recurring";
 import { errorResponse, requireCronAuth } from "@/lib/http";
@@ -99,6 +100,7 @@ async function syncUser(
   if (isFeatureEnabled("investmentsPage")) {
     await runOptionalSync("cron.sync.investments", () => syncInvestmentsForUser(userId));
   }
+  await runOptionalSync("cron.sync.liabilities", () => syncCreditCardLiabilitiesForUser(userId));
   await writeDailyAccountSnapshots(userId);
   await refreshRecurringForUser(userId);
   await writeNetWorthSnapshot(userId);

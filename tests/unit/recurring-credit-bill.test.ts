@@ -13,13 +13,18 @@ describe("credit-card bill bucket", () => {
       accountId: "acc-2",
       statementBalance: 400,
       minimumPayment: 15,
-      dueDate: "2026-09-05",
+      dueDate: "2026-08-30",
     },
   ];
 
   it("populates the recurring credit-card bucket only from real bill data", () => {
     const bucket = buildCreditCardBucket(bills, "2026-08");
     expect(bucket).toEqual({ paid: 0, remaining: 1600 });
+  });
+
+  it("only counts bills due in the selected month", () => {
+    const bucket = buildCreditCardBucket(bills, "2026-09");
+    expect(bucket).toEqual({ paid: 0, remaining: 0 });
   });
 
   it("keeps the bucket empty when no real bill data exists", () => {

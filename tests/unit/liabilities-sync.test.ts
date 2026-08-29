@@ -89,7 +89,7 @@ describe("syncCreditCardLiabilities", () => {
     });
     expect(payload[0].due_date).toBeNull();
     expect(payload[0].sync_timestamp).toBeTruthy();
-    expect(select.mock.calls[0]?.[1]).toBe("id, plaid_account_id");
+    expect(select.mock.calls[0]?.[0]).toBe("id, plaid_account_id");
   });
 
   it("maps the due date and treats a missing credit product distinctly", async () => {

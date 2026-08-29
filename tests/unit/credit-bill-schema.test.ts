@@ -10,11 +10,11 @@ const migrationSql = readdirSync("supabase/migrations")
 describe("credit card bill schema", () => {
   it("models statement balance, minimum payment, due date, and payment account", () => {
     expect(migrationSql).toContain("create table public.credit_card_bills");
-    expect(migrationSql).toContain("statement_balance numeric(14, 2)");
-    expect(migrationSql).toContain("minimum_payment numeric(14, 2)");
-    expect(migrationSql).toContain("due_date date");
+    expect(migrationSql).toMatch(/statement_balance\s+numeric\(14, 2\)/);
+    expect(migrationSql).toMatch(/minimum_payment\s+numeric\(14, 2\)/);
+    expect(migrationSql).toMatch(/due_date\s+date/);
     expect(migrationSql).toContain("payment_account_id");
-    expect(migrationSql).toContain("sync_timestamp timestamptz");
+    expect(migrationSql).toMatch(/sync_timestamp\s+timestamptz/);
     expect(migrationSql).toContain("unique (user_id, account_id)");
   });
 
