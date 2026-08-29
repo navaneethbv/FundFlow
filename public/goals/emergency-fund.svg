@@ -1,9 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-hidden="true">
-  <rect width="320" height="200" fill="#fdeceb"/>
-  <circle cx="262" cy="44" r="46" fill="#f7cfce"/>
-  <path d="M160 34 L214 56 V104 c0 34-24 54-54 66-30-12-54-32-54-66V56Z" fill="#e34948"/>
-  <path d="M160 52 L198 68 V104 c0 24-16 39-38 48-22-9-38-24-38-48V68Z" fill="#fdeceb"/>
-  <path d="M146 104 l11 12 22-26" fill="none" stroke="#e34948" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="42" y="150" width="236" height="10" rx="5" fill="#f0b4b3"/>
-  <rect x="42" y="150" width="128" height="10" rx="5" fill="#e34948"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 320 200"><rect width="320" height="200" fill="#fdeceb"/><circle cx="262" cy="44" r="46" fill="#f7cfce"/><path fill="#e34948" d="M160 34 L214 56 V104 c0 34-24 54-54 66-30-12-54-32-54-66V56Z"/><path fill="#fdeceb" d="M160 52 L198 68 V104 c0 24-16 39-38 48-22-9-38-24-38-48V68Z"/><path fill="none" stroke="#e34948" stroke-linecap="round" stroke-linejoin="round" stroke-width="9" d="M146 104 l11 12 22-26"/><rect width="236" height="10" x="42" y="150" fill="#f0b4b3" rx="5"/><rect width="128" height="10" x="42" y="150" fill="#e34948" rx="5"/></svg>
