@@ -6,8 +6,9 @@
 
 **Evidence:** `docs/Monarch-Production-Comparison-2026-08-29.md` and the gitignored live-data evidence under `qa-shots/production-2026-08-29/`.
 
-**Implementation status:** This plan PR contains documentation only.
-The Production reproduction evidence is complete, but no implementation should be considered delivered by this PR.
+**Implementation status:** Phase 0 has a local implementation and focused regression coverage on this branch.
+Phases 1 through 6 remain delivery work, not completed product behavior.
+Do not treat a checked box below as Production evidence until the associated migration, UI flow, source path, and acceptance test have been independently verified.
 
 ## Product rules
 
@@ -109,12 +110,12 @@ export interface ProductSyncHealth {
 
 **Steps:**
 
-- [x] Add deterministic state tests for each health state.
-- [x] Load the newest transaction and investment sync job per item with explicit user scoping.
-- [x] Load the oldest and newest transaction date per item without unbounded row reads.
-- [x] Store only safe provider error codes and never raw access tokens or payloads.
-- [x] Render product-specific status and recovery copy under Institutions.
-- [x] Add an accessible stale-data warning that links Cash Flow and Investments to the affected institution.
+- [ ] Add deterministic state tests for each health state.
+- [ ] Load the newest transaction and investment sync job per item with explicit user scoping.
+- [ ] Load the oldest and newest transaction date per item without unbounded row reads.
+- [ ] Store only safe provider error codes and never raw access tokens or payloads.
+- [ ] Render product-specific status and recovery copy under Institutions.
+- [ ] Add an accessible stale-data warning that links Cash Flow and Investments to the affected institution.
 
 **Acceptance:** A user can identify which institution and which Plaid product caused missing data.
 
@@ -128,10 +129,10 @@ export interface ProductSyncHealth {
 
 **Steps:**
 
-- [x] Show account balance, calculated ledger balance, difference, transaction coverage window, and freshness.
-- [x] Explain that provider balances and transaction history can have different coverage.
-- [x] Keep reconciliation read-only in this phase.
-- [x] Add table semantics and a mobile card twin.
+- [ ] Show account balance, calculated ledger balance, difference, transaction coverage window, and freshness.
+- [ ] Explain that provider balances and transaction history can have different coverage.
+- [ ] Keep reconciliation read-only in this phase.
+- [ ] Add table semantics and a mobile card twin.
 
 **Acceptance:** The missing-paycheck case is visible as a coverage or reconciliation problem without comparing against another product.
 
@@ -147,10 +148,10 @@ export interface ProductSyncHealth {
 
 **Steps:**
 
-- [x] Record the cursor used for each item without logging secrets.
-- [x] Record whether the last sync completed every page.
-- [x] Make retries idempotent against transaction identifiers.
-- [x] Detect a cursor reset or incomplete initial history.
+- [ ] Record the cursor used for each item without logging secrets.
+- [ ] Record whether the last sync completed every page.
+- [ ] Make retries idempotent against transaction identifiers.
+- [ ] Detect a cursor reset or incomplete initial history.
 
 ### Task 2.2: Implement an authenticated repair action
 
@@ -162,12 +163,12 @@ export interface ProductSyncHealth {
 
 **Steps:**
 
-- [x] Require the authenticated owner and scope the target item to that user.
-- [x] Rate-limit repair attempts.
-- [x] Request the supported provider refresh or update flow.
-- [x] Run a bounded historical reconciliation after the provider reports readiness.
-- [x] Surface `product_not_ready`, consent-required, and institution-login-required states distinctly.
-- [x] Never delete local rows merely because one partial provider response omits them.
+- [ ] Require the authenticated owner and scope the target item to that user.
+- [ ] Rate-limit repair attempts.
+- [ ] Request the supported provider refresh or update flow.
+- [ ] Run a bounded historical reconciliation after the provider reports readiness.
+- [ ] Surface `product_not_ready`, consent-required, and institution-login-required states distinctly.
+- [ ] Never delete local rows merely because one partial provider response omits them.
 
 **Acceptance:** The user can recover a stale checking connection and safely backfill missing history without duplicates.
 
@@ -183,11 +184,11 @@ export interface ProductSyncHealth {
 
 **Steps:**
 
-- [x] Preserve `pfc_primary` and `pfc_detailed` as immutable provider facts.
-- [x] Add a user display category and an explicit cash-flow classification override.
-- [x] Require a deliberate confirmation before treating a provider transfer as spending or income.
-- [x] Apply the override once in `projectFinanceTransactions()`.
-- [x] Prove Dashboard, Cash Flow, Reports, Budget actuals, Review, Year in Money, and exports reconcile.
+- [ ] Preserve `pfc_primary` and `pfc_detailed` as immutable provider facts.
+- [ ] Add a user display category and an explicit cash-flow classification override.
+- [ ] Require a deliberate confirmation before treating a provider transfer as spending or income.
+- [ ] Apply the override once in `projectFinanceTransactions()`.
+- [ ] Prove Dashboard, Cash Flow, Reports, Budget actuals, Review, Year in Money, and exports reconcile.
 
 **Acceptance:** A purchase misclassified as `TRANSFER_OUT` can be corrected once and appears as spending everywhere.
 
@@ -201,11 +202,11 @@ export interface ProductSyncHealth {
 
 **Steps:**
 
-- [x] Detect Monarch display category, merchant, notes, tags, and account name fields.
-- [x] Preview conflicts between Plaid and Monarch classifications.
-- [x] Map source accounts through the existing remembered source-account mapping.
-- [x] Make re-import idempotent.
-- [x] Never overwrite a newer FundFlow edit without an explicit conflict choice.
+- [ ] Detect Monarch display category, merchant, notes, tags, and account name fields.
+- [ ] Preview conflicts between Plaid and Monarch classifications.
+- [ ] Map source accounts through the existing remembered source-account mapping.
+- [ ] Make re-import idempotent.
+- [ ] Never overwrite a newer FundFlow edit without an explicit conflict choice.
 
 ## Phase 4: Migrate budgets and goals
 
@@ -213,20 +214,20 @@ export interface ProductSyncHealth {
 
 **Steps:**
 
-- [x] Define a versioned, provider-neutral budget import model.
-- [x] Map Monarch groups to Fixed, Flexible, Non-Monthly, Income, or a preserved custom group.
-- [x] Preview monthly amounts, unbudgeted categories, and conflicts.
-- [x] Offer merge, replace-month, and cancel choices.
-- [x] Audit every created or changed budget identifier.
+- [ ] Define a versioned, provider-neutral budget import model.
+- [ ] Map Monarch groups to Fixed, Flexible, Non-Monthly, Income, or a preserved custom group.
+- [ ] Preview monthly amounts, unbudgeted categories, and conflicts.
+- [ ] Offer merge, replace-month, and cancel choices.
+- [ ] Audit every created or changed budget identifier.
 
 ### Task 4.2: Import goals safely
 
 **Steps:**
 
-- [x] Preview name, type, target amount, target date, linked account, and allocation.
-- [x] Match existing goals by stable imported identifier when available, never by name alone.
-- [x] Offer create, merge, skip, and replace choices.
-- [x] Preserve FundFlow contribution events and allocation caps.
+- [ ] Preview name, type, target amount, target date, linked account, and allocation.
+- [ ] Match existing goals by stable imported identifier when available, never by name alone.
+- [ ] Offer create, merge, skip, and replace choices.
+- [ ] Preserve FundFlow contribution events and allocation caps.
 
 **Acceptance:** A user can reproduce Monarch planning configuration without manual re-entry or silent overwrite.
 
@@ -242,40 +243,40 @@ export interface ProductSyncHealth {
 
 **Steps:**
 
-- [x] Confirm whether the two retirement items have the Investments product enabled.
-- [x] Trigger the supported update or consent flow when the product is not ready.
-- [x] Verify holdings, securities, quantities, prices, values, and snapshots after success.
-- [x] Keep the account-balance fallback when holdings remain unavailable.
+- [ ] Confirm whether the two retirement items have the Investments product enabled.
+- [ ] Trigger the supported update or consent flow when the product is not ready.
+- [ ] Verify holdings, securities, quantities, prices, values, and snapshots after success.
+- [ ] Keep the account-balance fallback when holdings remain unavailable.
 
 ### Task 5.2: Implement actual credit-card bill synchronization
 
 **Steps:**
 
-- [x] Evaluate Plaid Liabilities or another approved marketplace integration before choosing a provider.
-- [x] Model statement balance, minimum payment, due date, payment account, and sync timestamp separately from purchase streams.
-- [x] Populate the Recurring credit-card bucket only from this model.
-- [x] Do not double count the bill payment as spending when the underlying purchases are already expenses.
+- [ ] Evaluate Plaid Liabilities or another approved marketplace integration before choosing a provider.
+- [ ] Model statement balance, minimum payment, due date, payment account, and sync timestamp separately from purchase streams.
+- [ ] Populate the Recurring credit-card bucket only from this model.
+- [ ] Do not double count the bill payment as spending when the underlying purchases are already expenses.
 
 ## Phase 6: Close selected experience gaps
 
 ### Task 6.1: Add a recurring calendar view
 
-- [x] Reuse the existing occurrence expansion and URL-backed month state.
-- [x] Render income, expense, overdue, upcoming, and complete occurrences accessibly.
-- [x] Provide a table twin for the calendar.
-- [x] Add mobile and keyboard acceptance.
+- [ ] Reuse the existing occurrence expansion and URL-backed month state.
+- [ ] Render income, expense, overdue, upcoming, and complete occurrences accessibly.
+- [ ] Provide a table twin for the calendar.
+- [ ] Add mobile and keyboard acceptance.
 
 ### Task 6.2: Add life-event forecasting
 
-- [x] Define typed events for home purchase, child, income, expense, and retirement.
-- [x] Keep assumptions explicit and editable.
-- [x] Recalculate through the existing projection engine.
-- [x] Preserve the current table twin and non-guarantee disclosure.
+- [ ] Define typed events for home purchase, child, income, expense, and retirement.
+- [ ] Keep assumptions explicit and editable.
+- [ ] Recalculate through the existing projection engine.
+- [ ] Preserve the current table twin and non-guarantee disclosure.
 
 ### Task 6.3: Improve recap and advice discoverability
 
-- [x] Add a Dashboard entry point for the latest weekly report with delivery status.
-- [x] Let users reorder or pin advice topics without changing the educational content contract.
+- [ ] Add a Dashboard entry point for the latest weekly report with delivery status.
+- [ ] Let users reorder or pin advice topics without changing the educational content contract.
 
 ### Explicit deferment: credit score
 
@@ -283,15 +284,15 @@ export interface ProductSyncHealth {
 
 ## Verification gates
 
-- [x] Run focused recurring and Dashboard tests during Phase 0.
-- [x] Run `npm run lint`.
-- [x] Run `npm run typecheck`.
-- [x] Run the full unit suite.
-- [x] Run the complete mixed unit and integration suite.
-- [x] Build the production application (`npm run build`).
-- [x] Validate contrast tokens (`npm run validate:palette`).
-- [x] Rebuild the knowledge graph (`graphify update .`).
-- [x] Check for git diff hygiene (`git diff --check`).
+- [ ] Run focused recurring and Dashboard tests during Phase 0.
+- [ ] Run `npm run lint`.
+- [ ] Run `npm run typecheck`.
+- [ ] Run the full unit suite.
+- [ ] Run the complete mixed unit and integration suite.
+- [ ] Build the production application (`npm run build`).
+- [ ] Validate contrast tokens (`npm run validate:palette`).
+- [ ] Rebuild the knowledge graph (`graphify update .`).
+- [ ] Check for git diff hygiene (`git diff --check`).
 - [ ] Confirm the Production deployment commit.
 - [ ] Repeat the authenticated browser comparison read-only.
 - [ ] Record which numeric differences remain because Monarch and FundFlow still contain different source or configuration data.
