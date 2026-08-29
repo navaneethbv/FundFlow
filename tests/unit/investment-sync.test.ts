@@ -1013,3 +1013,31 @@ describe("syncInvestmentTransactionsForItem", () => {
     await expect(syncInvestmentTransactionsForItem(item, "2026-07-30")).rejects.toThrow("Cancel error");
   });
 });
+
+describe("investment sync empty-portfolio scenario", () => {
+  it("reports a successful empty portfolio without inventing holdings", async () => {
+    mockInvestmentsHoldingsGet.mockResolvedValueOnce({
+      data: { holdings: [], securities: [], accounts: [{ account_id: "plaid-inv-1" }] },
+    });
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (table === "accounts") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockResolvedValue({ data: [{ id: "db-inv-1", plaid_account_id: "plaid-inv-1" }] }),
+        };
+      }
+      if (table === "holdings") {
+        return {
+          upsert: vi.fn().mockResolvedValue({ data: [], error: null }),
+          select: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          update: vi.fn().mockResolvedValue({ error: null }),
+        };
+      }
+      throw new Error(`Unexpected table ${table}`);
+    });
+    const result = await syncInvestmentsForItem(item);
+    expect(result).toEqual({ outcome: "synced", holdingsSynced: 0 });
+  });
+});

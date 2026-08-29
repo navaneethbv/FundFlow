@@ -226,3 +226,66 @@ export async function loadInvestmentAccounts(
     a.name.localeCompare(b.name),
   );
 }
+
+export interface InvestmentItemStatus {
+  plaidItemId: string;
+  institutionName: string;
+  lastAttemptAt: string | null;
+  lastSuccessAt: string | null;
+  /** Last recorded investments outcome (synced / product_not_ready / ...). */
+  outcome: string | null;
+  stale: boolean;
+}
+
+const INVESTMENT_STALE_AFTER_MS = 48 * 60 * 60 * 1000;
+
+/**
+ * Per-item investment sync status for the Investments page. Loads the most
+ * recent investment sync_jobs row per Plaid item, scoped to the caller, so the
+ * page can explain a missing portfolio without inventing holdings.
+ */
+export async function loadInvestmentSyncStatus(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<InvestmentItemStatus[]> {
+  const [{ data: items }, { data: jobs }] = await Promise.all([
+    supabase
+      .from("plaid_items")
+      .select("id, institution_name")
+      .eq("user_id", userId)
+      .order("created_at"),
+    supabase
+      .from("sync_jobs")
+      .select("plaid_item_id, updated_at, status, last_error")
+      .eq("user_id", userId)
+      .eq("job_type", "investments")
+      .order("updated_at", { ascending: false })
+      .limit(2000),
+  ]);
+  const jobsByItem = new Map<string, { updated_at: string; status: string; last_error: string | null }>();
+  for (const job of jobs ?? []) {
+    const itemId = job.plaid_item_id as string;
+    if (!jobsByItem.has(itemId)) {
+      jobsByItem.set(itemId, {
+        updated_at: job.updated_at as string,
+        status: job.status as string,
+        last_error: (job.last_error as string | null) ?? null,
+      });
+    }
+  }
+  const now = Date.now();
+  return (items ?? []).map((item) => {
+    const job = jobsByItem.get(item.id as string);
+    const lastSuccessAt =
+      job?.status === "done" && !job.last_error ? job.updated_at : null;
+    const successTimestamp = lastSuccessAt ? Date.parse(lastSuccessAt) : NaN;
+    return {
+      plaidItemId: item.id as string,
+      institutionName: (item.institution_name as string | null) ?? "Bank",
+      lastAttemptAt: job?.updated_at ?? null,
+      lastSuccessAt,
+      outcome: job?.last_error ?? null,
+      stale: Number.isFinite(successTimestamp) && now - successTimestamp > INVESTMENT_STALE_AFTER_MS,
+    };
+  });
+}
