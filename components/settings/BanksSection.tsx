@@ -165,11 +165,11 @@ export default function BanksSection({
                       Transaction coverage: {health.oldestTransactionDate ?? "not available"} to {health.newestTransactionDate ?? "not available"}.
                     </p>
                     {needsAttention && (
-                      <span role="status" className="mt-2 block rounded-field border border-warning/30 bg-warning/10 p-2 text-xs text-foreground">
+                      <output className="mt-2 block rounded-field border border-warning/30 bg-warning/10 p-2 text-xs text-foreground">
                         {health.institutionName} may have incomplete data.
                         {" "}<Link className="font-semibold underline" href="/cash-flow">Review Cash Flow</Link>
                         {" "}or{" "}<Link className="font-semibold underline" href="/investments">Investments</Link>.
-                      </span>
+                      </output>
                     )}
                   </>
                 )}

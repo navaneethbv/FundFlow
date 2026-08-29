@@ -277,70 +277,98 @@ async function loadAccounts(
   }
 }
 
+async function loadSnapshotAnchor(
+  supabase: SupabaseClient,
+  userId: string,
+  accountId: string,
+): Promise<SnapshotAnchor | null> {
+  const { data, error } = await supabase
+    .from("account_balance_snapshots")
+    .select("snapshot_date, current_balance")
+    .eq("user_id", userId)
+    .eq("account_id", accountId)
+    .order("snapshot_date", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  const row = data as
+    | { snapshot_date: string; current_balance: number | string | null }
+    | null;
+  if (row?.current_balance == null) return null;
+  const currentBalance = Number(row.current_balance);
+  return Number.isFinite(currentBalance)
+    ? { snapshotDate: row.snapshot_date, currentBalance }
+    : null;
+}
+
+async function loadPostAnchorTransactions(
+  supabase: SupabaseClient,
+  userId: string,
+  accountId: string,
+  anchorDate: string,
+): Promise<{
+  transactions: ReconciliationTransaction[];
+  historyComplete: boolean;
+}> {
+  const transactions: ReconciliationTransaction[] = [];
+  for (let page = 0; page < MAX_TRANSACTION_PAGES; page += 1) {
+    const from = page * PAGE_SIZE;
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("date, amount")
+      .eq("user_id", userId)
+      .eq("account_id", accountId)
+      .gt("date", anchorDate)
+      .order("date", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    const batch = (data ?? []) as Array<{ date: string; amount: number | string }>;
+    transactions.push(
+      ...batch.map((row) => ({ date: row.date, amount: Number(row.amount) })),
+    );
+    if (batch.length < PAGE_SIZE) {
+      return { transactions, historyComplete: true };
+    }
+  }
+  return { transactions, historyComplete: false };
+}
+
+function toReconciliationAccount(account: AccountRow): ReconciliationAccount {
+  const parsedBalance =
+    account.current_balance == null ? null : Number(account.current_balance);
+  return {
+    id: account.id,
+    plaidItemId: account.plaid_item_id,
+    name: account.name ?? "Account",
+    mask: account.mask,
+    type: account.type,
+    subtype: account.subtype,
+    currentBalance:
+      parsedBalance !== null && Number.isFinite(parsedBalance) ? parsedBalance : null,
+    updatedAt: account.updated_at,
+  };
+}
+
 async function loadReconciliation(
   supabase: SupabaseClient,
   userId: string,
   account: AccountRow,
 ): Promise<AccountReconciliation> {
-  const { data: anchorRow, error: anchorError } = await supabase
-    .from("account_balance_snapshots")
-    .select("snapshot_date, current_balance")
-    .eq("user_id", userId)
-    .eq("account_id", account.id)
-    .order("snapshot_date", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (anchorError) throw anchorError;
-  const rawAnchor = anchorRow as
-    | { snapshot_date: string; current_balance: number | string | null }
-    | null;
-  const anchorBalance = rawAnchor?.current_balance == null ? null : Number(rawAnchor.current_balance);
-  const anchor =
-    rawAnchor && anchorBalance !== null && Number.isFinite(anchorBalance)
-      ? { snapshotDate: rawAnchor.snapshot_date, currentBalance: anchorBalance }
-      : null;
-
-  const transactions: ReconciliationTransaction[] = [];
-  let historyComplete = true;
-  if (anchor) {
-    for (let page = 0; page < MAX_TRANSACTION_PAGES; page += 1) {
-      const from = page * PAGE_SIZE;
-      const { data, error } = await supabase
-        .from("transactions")
-        .select("date, amount")
-        .eq("user_id", userId)
-        .eq("account_id", account.id)
-        .gt("date", anchor.snapshotDate)
-        .order("date", { ascending: true })
-        .order("id", { ascending: true })
-        .range(from, from + PAGE_SIZE - 1);
-      if (error) throw error;
-      const batch = (data ?? []) as Array<{ date: string; amount: number | string }>;
-      transactions.push(
-        ...batch.map((row) => ({ date: row.date, amount: Number(row.amount) })),
-      );
-      if (batch.length < PAGE_SIZE) break;
-      if (page === MAX_TRANSACTION_PAGES - 1) historyComplete = false;
-    }
-  }
-
-  const currentBalance =
-    account.current_balance == null ? null : Number(account.current_balance);
+  const anchor = await loadSnapshotAnchor(supabase, userId, account.id);
+  const history = anchor
+    ? await loadPostAnchorTransactions(
+        supabase,
+        userId,
+        account.id,
+        anchor.snapshotDate,
+      )
+    : { transactions: [], historyComplete: true };
   return buildAccountReconciliation({
-    account: {
-      id: account.id,
-      plaidItemId: account.plaid_item_id,
-      name: account.name ?? "Account",
-      mask: account.mask,
-      type: account.type,
-      subtype: account.subtype,
-      currentBalance:
-        currentBalance !== null && Number.isFinite(currentBalance) ? currentBalance : null,
-      updatedAt: account.updated_at,
-    },
+    account: toReconciliationAccount(account),
     anchor,
-    transactions,
-    historyComplete,
+    transactions: history.transactions,
+    historyComplete: history.historyComplete,
   });
 }
 
@@ -377,7 +405,7 @@ export async function loadInstitutionObservability(
       const updatedTimestamps = itemAccounts
         .map((account) => account.updated_at)
         .filter((value): value is string => validTimestamp(value) !== null)
-        .sort();
+        .sort((left, right) => left.localeCompare(right));
       return {
         plaidItemId: item.id,
         institutionName: item.institution_name ?? "Bank",
