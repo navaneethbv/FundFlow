@@ -163,17 +163,18 @@ Acceptance:
 
 ### Implementation update on PR #137
 
-Phase 1 now adds read-only per-institution transaction and investment health, bounded transaction coverage, recovery guidance, and snapshot-anchored account reconciliation.
-The reconciliation panel explicitly reports unavailable states instead of deriving an opening balance from transaction totals.
-Authenticated repair and historical backfill remain Phase 2 work and are not implied by this update.
+Phase 1 adds read-only per-institution transaction and investment health, bounded transaction coverage, recovery guidance, and snapshot-anchored account reconciliation.
+Phase 2 adds authenticated, rate-limited repair with a bounded historical backfill, item-scoped cursor health, and settings repair controls that explain provider-conditional states.
+Phase 3 adds transaction-level classification overrides (a provider TRANSFER_OUT can be deliberately corrected to spending across every canonical surface) and a Monarch import that previews Plaid-vs-Monarch classification conflicts, stages notes/tags, reuses source-account mappings, and never overwrites a newer edit without approval.
+Phase 4 adds versioned budget and goal configuration import with previewable plans, merge/replace-month/skip and create/merge/skip/replace choices, and imported-identifier goal matching.
+Phase 5 surfaces per-item investment sync status and syncs real credit-card bills from the approved Plaid Liabilities integration into the Recurring credit-card bucket.
+Phase 6 adds a recurring calendar with a table twin, editable life-event forecasting through the existing projection engine, a Dashboard weekly-report entry point, and advice pin/reorder.
+Production deployment claims and the authenticated read-only browser comparison remain pending verification.
 
 ### High value
 
-- FundFlow does not expose a recurring calendar view comparable to Monarch's List and Calendar modes.
-- FundFlow does not synchronize actual credit-card statement bills, due dates, or bill-payment accounts.
-- FundFlow does not currently show synchronized security-level holdings for this Production account.
-- FundFlow does not offer a Monarch configuration import for budgets, goals, category overrides, merchant rules, or tags.
-- FundFlow now exposes per-institution product health and read-only reconciliation on PR #137, while authenticated repair and cursor recovery remain pending.
+- FundFlow now exposes a recurring calendar view with a table twin, real credit-card bill synchronization (statement balance and due date) via the approved Plaid Liabilities path, per-item investment sync status, Monarch configuration import for budgets and goals, and a weekly-recap Dashboard entry point.
+- Synchronized security-level holdings for this Production account, the authenticated read-only browser comparison, and the Production deployment commit remain pending verification against the deployment system.
 
 ### Medium value
 
