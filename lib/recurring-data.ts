@@ -1,5 +1,4 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { groupKeyFor } from "@/lib/accounts-page";
 import {
   parseFinancialScope,
   scopeQueryUserId,
@@ -299,7 +298,6 @@ export async function loadRecurringData(
       status,
       isActive: row.is_active,
       accountName: account?.name ?? null,
-      isCreditAccount: account ? groupKeyFor(account.type, account.subtype) === "credit" : false,
       firstDate: row.first_date,
       lastDate: row.last_date,
       predictedNextDate: row.predicted_next_date,

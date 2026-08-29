@@ -48,11 +48,11 @@ flowchart LR
 **Steps:**
 
 - [x] Reproduce the defect in Production with an ordinary card-funded recurring expense.
-- [ ] Add a regression test proving that an outflow stream on a credit account contributes to `totals.expenses`.
-- [ ] Remove account-type routing from recurring expense totals.
-- [ ] Keep excluded transfer and loan-payment categories out of all cash-flow buckets.
-- [ ] Leave `creditCards` at zero until real bill data exists.
-- [ ] Hide the credit-card summary when there is no actual bill data.
+- [x] Add a regression test proving that an outflow stream on a credit account contributes to `totals.expenses`.
+- [x] Remove account-type routing from recurring expense totals.
+- [x] Keep excluded transfer and loan-payment categories out of all cash-flow buckets.
+- [x] Leave `creditCards` at zero until real bill data exists.
+- [x] Hide the credit-card summary when there is no actual bill data.
 
 **Acceptance:** The Recurring page places subscriptions and other card-funded purchases under Expenses.
 
@@ -67,11 +67,11 @@ flowchart LR
 **Steps:**
 
 - [x] Reproduce the Dashboard and Recurring-page disagreement in Production.
-- [ ] Select `predicted_next_date` with the active recurring stream query.
-- [ ] Thread it through `buildStreamSummaries()` and the Dashboard recurring item model.
-- [ ] Prefer the predicted date over the most recent matched transaction and the middle-of-month fallback.
-- [ ] Keep deterministic fallback behavior when the predicted date is absent.
-- [ ] Add a regression test for an item due tomorrow.
+- [x] Select `predicted_next_date` with the active recurring stream query.
+- [x] Thread it through `buildStreamSummaries()` and the Dashboard recurring item model.
+- [x] Prefer the predicted date over the most recent matched transaction and the middle-of-month fallback.
+- [x] Keep deterministic fallback behavior when the predicted date is absent.
+- [x] Add a regression test for an item due tomorrow.
 
 **Acceptance:** The Dashboard and Recurring page agree about what is due in the next seven days.
 

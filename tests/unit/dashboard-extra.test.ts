@@ -5,6 +5,7 @@ import {
   shiftMonthKey,
 } from "@/lib/dashboard";
 import type { CanonicalFinanceTransaction } from "@/lib/finance-domain";
+import { withinNextSevenDays } from "@/components/dashboard/widgets/RecurringWidget";
 
 function makeSupabase(seeds: Record<string, unknown> = {}) {
   const mockFrom = vi.fn((table: string) => {
@@ -269,6 +270,72 @@ describe("getDashboardData", () => {
     expect(data.insights.priceDrift.items).toEqual([]);
     expect(data.billPeriods.weekly).toEqual([]);
     expect(data.billPeriods.monthly).toEqual([]);
+  });
+
+  it("uses Plaid's predicted next date for a stream due tomorrow in the recurring widget", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-29T12:00:00.000Z"));
+    try {
+      const supabase = makeSupabase({
+        accounts: [
+          {
+            id: "acc-1",
+            name: "Checking",
+            official_name: null,
+            mask: null,
+            type: "depository",
+            subtype: "checking",
+            current_balance: 1000,
+            available_balance: 1000,
+            credit_limit: null,
+            iso_currency_code: "USD",
+            plaid_item_id: "item-1",
+            apr: null,
+          },
+        ],
+        recurring_streams: [
+          {
+            merchant_name: "Electric Co",
+            description: "Electric Co",
+            average_amount: 90,
+            frequency: "MONTHLY",
+            category: "UTILITIES",
+            stream_type: "outflow",
+            is_active: true,
+            plaid_item_id: "item-1",
+            predicted_next_date: "2026-08-30",
+          },
+        ],
+        transactions: [
+          {
+            id: "previous-electric-charge",
+            date: "2026-07-30",
+            amount: 90,
+            merchant_name: "Electric Co",
+            name: "Electric Co",
+            pfc_primary: "UTILITIES",
+            pfc_detailed: null,
+            account_id: "acc-1",
+            user_id: "user-1",
+          },
+        ],
+      });
+
+      const data = await getDashboardData(supabase as never, undefined, "2026-08", "user-1");
+
+      expect(data.recurringStatuses).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: "Electric Co", nextDate: "2026-08-30" }),
+        ]),
+      );
+      expect(withinNextSevenDays(data.recurringStatuses, "2026-08-29")).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: "Electric Co", nextDate: "2026-08-30" }),
+        ]),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("aggregates household-scope spend per person with stream and merchant fallbacks", async () => {

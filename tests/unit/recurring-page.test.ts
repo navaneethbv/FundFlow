@@ -93,7 +93,6 @@ function stream(overrides: Partial<RecurringStreamInput> = {}): RecurringStreamI
     status: "MATURE",
     isActive: true,
     accountName: "Checking",
-    isCreditAccount: false,
     firstDate: "2026-01-15",
     lastDate: "2026-06-15",
     predictedNextDate: "2026-07-15",
@@ -154,11 +153,11 @@ describe("expandStreamsForMonth", () => {
     expect(month.occurrences).toHaveLength(0);
   });
 
-  it("buckets income, expenses, and credit-card occurrences separately", () => {
+  it("keeps credit-card purchases in expenses until actual card-bill data is available", () => {
     const month = expandStreamsForMonth(
       [
         stream({ id: "paycheck", streamType: "inflow", averageAmount: 3000 }),
-        stream({ id: "card-bill", isCreditAccount: true, averageAmount: 200 }),
+        stream({ id: "card-purchase", averageAmount: 200 }),
         stream({ id: "rent", averageAmount: 1500, matchedTransactions: [{ id: "t", date: "2026-07-15" }] }),
       ],
       [],
@@ -166,8 +165,9 @@ describe("expandStreamsForMonth", () => {
       "2026-07-20",
     );
     expect(month.totals.income.remaining).toBe(3000);
-    expect(month.totals.creditCards.remaining).toBe(200);
+    expect(month.totals.expenses.remaining).toBe(200);
     expect(month.totals.expenses.paid).toBe(1500);
+    expect(month.totals.creditCards).toEqual({ paid: 0, remaining: 0 });
   });
 
   it("expands enabled manual items and skips disabled ones", () => {
@@ -218,7 +218,6 @@ describe("expandStreamsForMonth", () => {
         stream({
           id: "card-autopay",
           category: "LOAN_PAYMENTS",
-          isCreditAccount: false,
           averageAmount: 400,
         }),
       ],

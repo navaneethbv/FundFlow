@@ -93,7 +93,7 @@ describe("loadRecurringData", () => {
     expect(result.stale).toBe(true);
   });
 
-  it("marks a stream's occurrences against a credit account in the creditCards bucket", async () => {
+  it("keeps a purchase stream on a credit account in the expenses bucket", async () => {
     const client = makeClient({
       accounts: { data: [{ id: "account-1", name: "Card", type: "credit", subtype: "credit card" }] },
     });
@@ -101,7 +101,8 @@ describe("loadRecurringData", () => {
       userId: "user-1",
       anchorMonth: "2026-07",
     });
-    expect(result.view.totals.creditCards.remaining).toBeGreaterThan(0);
+    expect(result.view.totals.expenses.remaining).toBeGreaterThan(0);
+    expect(result.view.totals.creditCards.remaining).toBe(0);
   });
 
   it("passes category through to the stream input, excluding EXCLUDED_PFC streams from totals (Fix 4)", async () => {
