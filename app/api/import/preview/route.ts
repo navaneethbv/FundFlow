@@ -174,12 +174,20 @@ export async function POST(request: NextRequest) {
 
     const { data: existing } = await supabase
       .from("transactions")
-      .select("date, amount, merchant_name, name")
+      .select("date, amount, merchant_name, name, pfc_primary")
       .limit(20_000);
     const existingFingerprints = new Set(
       (existing ?? []).map((row) => `${row.date}|${Number(row.amount).toFixed(2)}|${row.merchant_name ?? row.name ?? ""}`),
     );
-    const review = buildImportReview(rows, existingFingerprints);
+    // Plaid-vs-Monarch classification conflicts: keyed by the same fingerprint
+    // so a matching existing transaction surfaces a category-conflict flag.
+    const existingCategoryByFingerprint = new Map<string, string>(
+      (existing ?? []).map((row) => [
+        `${row.date}|${Number(row.amount).toFixed(2)}|${row.merchant_name ?? row.name ?? ""}`,
+        (row.pfc_primary as string | null) ?? "",
+      ]),
+    );
+    const review = buildImportReview(rows, existingFingerprints, existingCategoryByFingerprint);
 
     const sourceAccounts = [...new Set(rows.map((row) => row.sourceAccount).filter((value): value is string => Boolean(value)))];
     const sourceAccountMappings = await resolveSourceAccountMappings(supabase, sourceAccounts);
@@ -211,6 +219,8 @@ export async function POST(request: NextRequest) {
           amount: row.row.amount,
           category: row.row.category,
           source_account: row.row.sourceAccount ?? null,
+          notes: row.row.notes ?? null,
+          tags: row.row.tags ?? [],
           row_index: index,
           status: row.flags.length > 0 ? "rejected" : "pending",
         })),

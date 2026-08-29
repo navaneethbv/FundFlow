@@ -396,6 +396,14 @@ describe("More API Routes Boost Suite", () => {
       });
 
       const service = await import("@/lib/supabase/service");
+      const chainableSelect = {
+        select: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { created_at: "2026-08-01T00:00:00Z" }, error: null }),
+        then: (resolve: (v: { data: unknown[] }) => unknown) => resolve({ data: [] }),
+      };
       vi.spyOn(service, "createServiceClient").mockReturnValue({
         from: vi.fn().mockReturnValue({
           upsert: vi.fn().mockResolvedValue({ error: null }),
@@ -405,6 +413,12 @@ describe("More API Routes Boost Suite", () => {
               eq: vi.fn().mockResolvedValue({ error: null }),
             }),
           }),
+          select: chainableSelect.select,
+          in: chainableSelect.in,
+          eq: chainableSelect.eq,
+          limit: chainableSelect.limit,
+          maybeSingle: chainableSelect.maybeSingle,
+          then: chainableSelect.then,
         }),
       } as never);
 

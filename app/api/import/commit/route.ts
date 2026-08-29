@@ -55,7 +55,7 @@ async function validateDefaultTarget(
 async function fetchBatchRows(supabase: SupabaseClient, batchId: string) {
   const { data: rows, error } = await supabase
     .from("import_review_rows")
-    .select("id, date, description, amount, category, source_account, row_index, status")
+    .select("id, date, description, amount, category, source_account, notes, tags, row_index, status")
     .eq("batch_id", batchId);
   if (error) throw error;
   return [...(rows ?? [])].sort((a, b) => Number(a.row_index ?? 0) - Number(b.row_index ?? 0));
@@ -163,6 +163,7 @@ function buildCommitRows(
     if (!committableIds.has(row.id as string)) continue;
     const category = normalizeImportCategory(imported.category);
     dbRows.push({
+      rowId: row.id as string,
       user_id: userId,
       account_id: target.accountId ?? null,
       manual_account_id: target.manualAccountId ?? null,
@@ -178,9 +179,63 @@ function buildCommitRows(
       // actually reads for provenance; this column exists so SQL can filter
       // by source directly (e.g. the ledger's ColumnsMenu) without parsing it.
       source: "import",
+      // Monarch notes/tags, persisted as annotations after the row lands.
+      note: (row.notes as string | null) ?? null,
+      tags: (row.tags as string[] | null) ?? [],
     });
   }
   return dbRows;
+}
+
+/**
+ * Refuse to overwrite a newer FundFlow edit. When a committed row carries
+ * notes/tags and the matching transaction already has an annotation edited
+ * after the batch was created, the caller must explicitly approve that row;
+ * otherwise the commit returns the conflicting rows and nothing is written.
+ */
+async function newerEditConflicts(input: {
+  service: ReturnType<typeof createServiceClient>;
+  userId: string;
+  dbRows: ReturnType<typeof buildCommitRows>;
+  batchCreatedAt: string;
+  approvedIds: Set<string> | null;
+}): Promise<{ rowIds: string[] }> {
+  const { service, userId, dbRows, batchCreatedAt, approvedIds } = input;
+  const notesRows = dbRows.filter((row) => row.note || row.tags.length > 0);
+  if (notesRows.length === 0) return { rowIds: [] };
+  const importIds = notesRows.map((row) => row.plaid_transaction_id);
+  const { data: existingTxns } = await service
+    .from("transactions")
+    .select("id, plaid_transaction_id")
+    .in("plaid_transaction_id", importIds)
+    .eq("user_id", userId);
+  const txnIdByImportId = new Map<string, string>(
+    (existingTxns ?? []).map((row) => [row.plaid_transaction_id as string, row.id as string]),
+  );
+  const existingTxnIds = [...txnIdByImportId.values()];
+  const { data: annotations } = existingTxnIds.length > 0
+    ? await service
+        .from("transaction_annotations")
+        .select("transaction_id, updated_at")
+        .in("transaction_id", existingTxnIds)
+        .eq("user_id", userId)
+    : { data: [] };
+  const batchTime = Date.parse(batchCreatedAt);
+  const conflictRowIds = notesRows
+    .filter((row) => {
+      const txnId = txnIdByImportId.get(row.plaid_transaction_id);
+      const annotation = (annotations ?? []).find(
+        (item) => item.transaction_id === txnId,
+      ) as { transaction_id?: string; updated_at?: string } | undefined;
+      return annotation?.updated_at
+        ? Date.parse(annotation.updated_at) > batchTime
+        : false;
+    })
+    .map((row) => row.rowId);
+  // Approved rows are explicitly opted into overwriting.
+  return {
+    rowIds: conflictRowIds.filter((id) => !approvedIds?.has(String(id))),
+  };
 }
 
 async function persistCommit(
@@ -217,6 +272,35 @@ async function persistCommit(
       .from("transactions")
       .upsert(dbRows.slice(i, i + UPSERT_CHUNK), { onConflict: "plaid_transaction_id" });
     if (error) throw error;
+  }
+
+  // Persist Monarch notes/tags as annotations, scoped to the owner. Only the
+  // note/tags columns are written, so an existing display_category or
+  // cash_flow_classification override is never touched by a re-import.
+  const notesRows = dbRows.filter((row) => row.note || row.tags.length > 0);
+  if (notesRows.length > 0) {
+    const { data: committedTxns } = await service
+      .from("transactions")
+      .select("id, plaid_transaction_id")
+      .in("plaid_transaction_id", notesRows.map((row) => row.plaid_transaction_id))
+      .eq("user_id", userId);
+    const txnIdByImportId = new Map<string, string>(
+      (committedTxns ?? []).map((row) => [row.plaid_transaction_id as string, row.id as string]),
+    );
+    const annotationRows = notesRows
+      .map((row) => ({
+        user_id: userId,
+        transaction_id: txnIdByImportId.get(row.plaid_transaction_id) ?? "",
+        note: row.note,
+        tags: row.tags,
+      }))
+      .filter((row) => row.transaction_id);
+    if (annotationRows.length > 0) {
+      const { error } = await service
+        .from("transaction_annotations")
+        .upsert(annotationRows, { onConflict: "user_id,transaction_id" });
+      if (error) throw error;
+    }
   }
 
   if (rowIds.length > 0) {
@@ -275,6 +359,32 @@ export async function POST(request: NextRequest) {
     const dbRows = buildCommitRows(batchRows, committableIds, mappingBySource, defaultTarget, user.id);
 
     const service = createServiceClient();
+
+    // Never overwrite a newer FundFlow edit: rows whose annotations were
+    // edited after the batch was created need explicit approval first.
+    const { data: batchMeta } = await service
+      .from("import_review_batches")
+      .select("created_at")
+      .eq("id", batchId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const { rowIds: blockedRowIds } = await newerEditConflicts({
+      service,
+      userId: user.id,
+      dbRows,
+      batchCreatedAt: (batchMeta as { created_at?: string } | null)?.created_at ?? new Date(0).toISOString(),
+      approvedIds: approvedIds ? new Set(approvedIds) : null,
+    });
+    if (blockedRowIds.length > 0) {
+      return NextResponse.json(
+        {
+          error: "Some rows were edited in FundFlow after this import started.",
+          conflicts: blockedRowIds,
+        },
+        { status: 409 },
+      );
+    }
+
     await persistCommit(service, {
       sourceAccounts,
       mappingBySource,

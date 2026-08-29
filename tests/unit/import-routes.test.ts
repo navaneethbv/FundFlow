@@ -316,6 +316,7 @@ describe("Import API Routes", () => {
           },
         ],
         new Set(),
+        expect.any(Map),
       );
       await expect(res.json()).resolves.toMatchObject({
         batch_id: "batch-ofx",
@@ -655,6 +656,7 @@ describe("Import API Routes", () => {
       expect(mockBuildImportReview).toHaveBeenCalledWith(
         expect.any(Array),
         new Set(["2026-07-01|10.00|Store", "2026-07-02|11.00|PayPal", "2026-07-03|12.00|"]),
+        expect.any(Map),
       );
     });
 
@@ -866,6 +868,55 @@ describe("Import API Routes", () => {
     });
   });
 
+function serviceStub() {
+  const builder = {
+    select: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+    then: (resolve: (v: { data: unknown[] }) => unknown) => resolve({ data: [] }),
+  };
+  return {
+    upsert: vi.fn().mockResolvedValue({ error: null }),
+    update: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        in: vi.fn().mockResolvedValue({ error: null }),
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    }),
+    select: builder.select,
+    in: builder.in,
+    eq: builder.eq,
+    limit: builder.limit,
+    maybeSingle: builder.maybeSingle,
+    then: builder.then,
+  };
+}
+
+function serviceStubWith(
+  upsert: ReturnType<typeof vi.fn>,
+  update: ReturnType<typeof vi.fn>,
+) {
+  const builder = {
+    select: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+    then: (resolve: (v: { data: unknown[] }) => unknown) => resolve({ data: [] }),
+  };
+  return {
+    upsert,
+    update,
+    select: builder.select,
+    in: builder.in,
+    eq: builder.eq,
+    limit: builder.limit,
+    maybeSingle: builder.maybeSingle,
+    then: builder.then,
+  };
+}
   describe("POST /api/import/commit", () => {
     it("returns bad request if params are invalid", async () => {
       mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
@@ -947,16 +998,7 @@ describe("Import API Routes", () => {
           }),
       } as unknown as NextRequest;
 
-      const updateMock = vi.fn().mockResolvedValue({ error: null });
-      mockServiceClient.from.mockReturnValue({
-        upsert: vi.fn().mockResolvedValue({ error: null }),
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            in: updateMock,
-            eq: updateMock,
-          }),
-        }),
-      });
+      mockServiceClient.from.mockReturnValue(serviceStub());
 
       const res = await commitPost(request);
       expect(res.status).toBe(200);
@@ -1011,16 +1053,13 @@ describe("Import API Routes", () => {
       } as unknown as NextRequest;
 
       const upsertMock = vi.fn().mockResolvedValue({ error: null });
-      const updateMock = vi.fn().mockResolvedValue({ error: null });
-      mockServiceClient.from.mockReturnValue({
-        upsert: upsertMock,
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            in: updateMock,
-            eq: updateMock,
-          }),
+      const updateMock = vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          in: vi.fn().mockResolvedValue({ error: null }),
+          eq: vi.fn().mockResolvedValue({ error: null }),
         }),
       });
+      mockServiceClient.from.mockReturnValue(serviceStubWith(upsertMock, updateMock));
 
       const res = await commitPost(request);
       expect(res.status).toBe(200);
@@ -1063,12 +1102,10 @@ describe("Import API Routes", () => {
         mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: mockSupabase });
         const upsertMock = vi.fn().mockResolvedValue({ error: null });
         const updateMock = vi.fn().mockResolvedValue({ error: null });
-        mockServiceClient.from.mockReturnValue({
-          upsert: upsertMock,
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({ in: updateMock, eq: updateMock }),
-          }),
+        const updateStub = vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({ in: updateMock, eq: updateMock }),
         });
+        mockServiceClient.from.mockReturnValue(serviceStubWith(upsertMock, updateStub));
         const request = {
           json: () => Promise.resolve({ batch_id: "b1", account_id: "a1", approved_row_ids: approvedRowIds }),
         } as unknown as NextRequest;
@@ -1147,6 +1184,12 @@ describe("Import API Routes", () => {
           update: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({ in: updateMock, eq: updateMock }),
           }),
+          select: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          then: (resolve: (v: { data: unknown[] }) => unknown) => resolve({ data: [] }),
         };
       });
 

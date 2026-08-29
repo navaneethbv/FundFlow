@@ -41,6 +41,13 @@ vi.mock("@/lib/supabase/service", () => ({
             serviceState.batchUpdatePayload = payload;
             return { eq: () => ({ eq: serviceState.batchUpdate }) };
           },
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                maybeSingle: () => Promise.resolve({ data: { created_at: "2026-08-01T00:00:00Z" }, error: null }),
+              }),
+            }),
+          }),
         };
       }
       throw new Error(`unexpected table ${table}`);

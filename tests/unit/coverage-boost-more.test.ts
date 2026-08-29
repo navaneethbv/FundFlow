@@ -114,9 +114,18 @@ describe("Coverage Boost More Tests", () => {
                   eq: vi.fn().mockResolvedValue({ error: null }),
                 }),
               }),
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({ data: { created_at: "2026-08-01T00:00:00Z" }, error: null }),
             };
           }
-          return {};
+          return {
+            select: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            then: (resolve: (v: { data: unknown[] }) => unknown) => resolve({ data: [] }),
+          };
         }),
       } as never);
 
