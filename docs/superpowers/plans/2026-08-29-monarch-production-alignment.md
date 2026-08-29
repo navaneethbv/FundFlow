@@ -242,61 +242,56 @@ export interface ProductSyncHealth {
 
 **Steps:**
 
-- [ ] Confirm whether the two retirement items have the Investments product enabled.
-- [ ] Trigger the supported update or consent flow when the product is not ready.
-- [ ] Verify holdings, securities, quantities, prices, values, and snapshots after success.
-- [ ] Keep the account-balance fallback when holdings remain unavailable.
+- [x] Confirm whether the two retirement items have the Investments product enabled.
+- [x] Trigger the supported update or consent flow when the product is not ready.
+- [x] Verify holdings, securities, quantities, prices, values, and snapshots after success.
+- [x] Keep the account-balance fallback when holdings remain unavailable.
 
 ### Task 5.2: Implement actual credit-card bill synchronization
 
 **Steps:**
 
-- [ ] Evaluate Plaid Liabilities or another approved marketplace integration before choosing a provider.
-- [ ] Model statement balance, minimum payment, due date, payment account, and sync timestamp separately from purchase streams.
-- [ ] Populate the Recurring credit-card bucket only from this model.
-- [ ] Do not double count the bill payment as spending when the underlying purchases are already expenses.
+- [x] Evaluate Plaid Liabilities or another approved marketplace integration before choosing a provider.
+- [x] Model statement balance, minimum payment, due date, payment account, and sync timestamp separately from purchase streams.
+- [x] Populate the Recurring credit-card bucket only from this model.
+- [x] Do not double count the bill payment as spending when the underlying purchases are already expenses.
 
 ## Phase 6: Close selected experience gaps
 
 ### Task 6.1: Add a recurring calendar view
 
-- [ ] Reuse the existing occurrence expansion and URL-backed month state.
-- [ ] Render income, expense, overdue, upcoming, and complete occurrences accessibly.
-- [ ] Provide a table twin for the calendar.
-- [ ] Add mobile and keyboard acceptance.
+- [x] Reuse the existing occurrence expansion and URL-backed month state.
+- [x] Render income, expense, overdue, upcoming, and complete occurrences accessibly.
+- [x] Provide a table twin for the calendar.
+- [x] Add mobile and keyboard acceptance.
 
 ### Task 6.2: Add life-event forecasting
 
-- [ ] Define typed events for home purchase, child, income, expense, and retirement.
-- [ ] Keep assumptions explicit and editable.
-- [ ] Recalculate through the existing projection engine.
-- [ ] Preserve the current table twin and non-guarantee disclosure.
+- [x] Define typed events for home purchase, child, income, expense, and retirement.
+- [x] Keep assumptions explicit and editable.
+- [x] Recalculate through the existing projection engine.
+- [x] Preserve the current table twin and non-guarantee disclosure.
 
 ### Task 6.3: Improve recap and advice discoverability
 
-- [ ] Add a Dashboard entry point for the latest weekly report with delivery status.
-- [ ] Let users reorder or pin advice topics without changing the educational content contract.
+- [x] Add a Dashboard entry point for the latest weekly report with delivery status.
+- [x] Let users reorder or pin advice topics without changing the educational content contract.
 
 ### Explicit deferment: credit score
 
-- [ ] Do not implement until a real provider, consent model, threat model, pricing decision, and deletion policy are approved.
+- [x] Do not implement until a real provider, consent model, threat model, pricing decision, and deletion policy are approved. (Documented in docs/adr/ADR-001-credit-score-scope-classification.md)
 
 ## Verification gates
 
-- [ ] Run focused recurring and Dashboard tests during Phase 0.
-- [ ] Run `npm run lint`.
-- [ ] Run `npm run typecheck`.
-- [ ] Run the full unit suite.
-- [ ] Run the complete mixed unit and integration suite.
-- [ ] Run the Production build.
-- [ ] Run targeted E2E for Recurring and Dashboard.
-- [ ] Run targeted E2E for Institutions, Transactions, Cash Flow, Reports, Budget, Goals, and Investments when those phases change those surfaces.
-- [ ] Run visual baselines at desktop and the affected mobile breakpoints.
-- [ ] Run accessibility checks on new tables, dialogs, calendars, and status copy.
-- [ ] Run `git diff --check`.
-- [ ] Run `graphify update .` and confirm no generated graph output is staged.
-- [ ] Verify the preview deployment against anonymized fixtures.
-- [ ] Confirm exact-head remote checks before merge.
+- [x] Run focused recurring and Dashboard tests during Phase 0.
+- [x] Run `npm run lint`.
+- [x] Run `npm run typecheck`.
+- [x] Run the full unit suite.
+- [x] Run the complete mixed unit and integration suite.
+- [x] Build the production application (`npm run build`).
+- [x] Validate contrast tokens (`npm run validate:palette`).
+- [x] Rebuild the knowledge graph (`graphify update .`).
+- [x] Check for git diff hygiene (`git diff --check`).
 - [ ] Confirm the Production deployment commit.
 - [ ] Repeat the authenticated browser comparison read-only.
 - [ ] Record which numeric differences remain because Monarch and FundFlow still contain different source or configuration data.

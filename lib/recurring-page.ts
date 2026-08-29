@@ -123,6 +123,7 @@ export interface RecurringOccurrence {
   category: string | null;
   amount: number;
   status: "upcoming" | "overdue" | "complete";
+  dueDateType?: "confirmed_statement" | "predicted";
   matchedTransactionId: string | null;
   isIncome: boolean;
 }
@@ -246,6 +247,7 @@ function appendPlaidStream(
       merchant: stream.merchantName ?? stream.description ?? "Unknown",
       frequency: FREQUENCY_LABELS[stream.frequency],
       dueDate,
+      dueDateType: "predicted",
       account: stream.accountName,
       category: stream.category,
       amount,
@@ -283,6 +285,7 @@ function appendManualItem(
       merchant: item.name,
       frequency: MANUAL_FREQUENCY_LABELS[item.frequency],
       dueDate,
+      dueDateType: "confirmed_statement",
       account: null,
       category: item.category,
       amount,
