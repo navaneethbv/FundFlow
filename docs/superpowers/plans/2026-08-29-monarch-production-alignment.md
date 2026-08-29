@@ -287,9 +287,9 @@ export interface ProductSyncHealth {
 - [x] Run focused recurring and Dashboard tests during Phase 0.
 - [x] Run `npm run lint`.
 - [x] Run `npm run typecheck`.
-- [ ] Run the full unit suite.
-- [ ] Run the complete mixed unit and integration suite.
-- [ ] Build the production application (`npm run build`).
+- [x] Run the full unit suite.
+- [x] Run the complete mixed unit and integration suite.
+- [x] Build the production application (`npm run build`).
 - [x] Validate contrast tokens (`npm run validate:palette`).
 - [x] Rebuild the knowledge graph (`graphify update .`).
 - [x] Check for git diff hygiene (`git diff --check`).
