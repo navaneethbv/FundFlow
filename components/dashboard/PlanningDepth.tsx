@@ -1,21 +1,13 @@
 import type { DashboardData } from "@/lib/dashboard";
-import type { Goal } from "@/lib/goals";
+import type { GoalSummaryItem } from "@/lib/goal-summary";
 import { buildPlanningDepthView } from "@/lib/planning-depth";
 import { formatCurrency } from "@/lib/format";
 import Panel from "@/components/ui/Panel";
 
-/** Whole months from today until a YYYY-MM-DD target date (at least 1). */
-function monthsUntil(date: string | null): number {
-  if (!date) return 12;
-  const [year, month] = date.split("-").map(Number);
-  const now = new Date();
-  const months =
-    ((year ?? now.getFullYear()) - now.getFullYear()) * 12 +
-    ((month ?? 1) - 1 - now.getMonth());
-  return Math.max(1, months);
-}
-
-export default function PlanningDepth({ data, goals }: Readonly<{ data: DashboardData; goals: Goal[] }>) {
+export default function PlanningDepth({
+  data,
+  goals,
+}: Readonly<{ data: DashboardData; goals: GoalSummaryItem[] }>) {
   const view = buildPlanningDepthView({
     accounts: data.accounts.map((account) => ({
       name: account.name,
@@ -27,9 +19,12 @@ export default function PlanningDepth({ data, goals }: Readonly<{ data: Dashboar
     goals: goals.map((goal) => ({
       id: goal.id,
       name: goal.name,
-      targetAmount: goal.target_amount,
-      currentAmount: goal.saved_amount,
-      monthsRemaining: monthsUntil(goal.target_date),
+      targetAmount: goal.targetAmount,
+      currentAmount: goal.fundedAmount,
+      monthsRemaining:
+        goal.monthlyPace && goal.remainingAmount > 0
+          ? Math.ceil(goal.remainingAmount / goal.monthlyPace)
+          : 12,
     })),
   });
   const goalName = new Map(goals.map((goal) => [goal.id, goal.name]));

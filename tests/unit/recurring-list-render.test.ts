@@ -12,6 +12,7 @@ import RecurringList from "@/components/recurring/RecurringList";
 import ReviewBanner from "@/components/recurring/ReviewBanner";
 
 const LINKS = {
+  overdue: "/recurring?month=2026-07&tab=overdue",
   upcoming: "/recurring?month=2026-07",
   complete: "/recurring?month=2026-07&tab=complete",
   manage: "/recurring?month=2026-07&tab=manage",
@@ -95,7 +96,7 @@ describe("RecurringList — Upcoming/Complete tables", () => {
         manualItems: [],
         currency: "USD",
         today: "2026-07-10",
-        tab: "upcoming",
+        tab: "overdue",
         links: LINKS,
       }),
     );
@@ -258,7 +259,7 @@ describe("RecurringList — Upcoming/Complete tables", () => {
 });
 
 describe("RecurringList — tabs are URL-driven, not client state", () => {
-  it("renders three Tabs links pointing at the links prop, with counts", () => {
+  it("renders Tabs links pointing at the links prop, with counts", () => {
     const html = renderToStaticMarkup(
       createElement(RecurringList, {
         occurrences: [occurrence()],
@@ -270,9 +271,11 @@ describe("RecurringList — tabs are URL-driven, not client state", () => {
         links: LINKS,
       }),
     );
+    expect(html).toContain(`href="${LINKS.overdue.replaceAll("&", "&amp;")}"`);
     expect(html).toContain(`href="${LINKS.upcoming}"`);
     expect(html).toContain(`href="${LINKS.complete.replaceAll("&", "&amp;")}"`);
     expect(html).toContain(`href="${LINKS.manage.replaceAll("&", "&amp;")}"`);
+    expect(html).toContain("Overdue (0)");
     expect(html).toContain("Upcoming (1)");
     expect(html).toContain("Manage (1)");
   });

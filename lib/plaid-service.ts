@@ -137,6 +137,8 @@ export async function getItem(
   return (data as PlaidItemRow) ?? null;
 }
 
+import { normalizeExternalDisplayText } from "@/lib/external-display-text";
+
 /** Upsert accounts for an item. Balances refresh on every sync. */
 export async function upsertAccounts(
   userId: string,
@@ -150,8 +152,8 @@ export async function upsertAccounts(
     user_id: userId,
     plaid_item_id: itemDbId,
     plaid_account_id: a.account_id,
-    name: a.name ?? null,
-    official_name: a.official_name ?? null,
+    name: normalizeExternalDisplayText(a.name) ?? a.name ?? null,
+    official_name: normalizeExternalDisplayText(a.official_name) ?? a.official_name ?? null,
     mask: a.mask ?? null, // masked number only
     type: a.type ?? null,
     subtype: a.subtype ?? null,

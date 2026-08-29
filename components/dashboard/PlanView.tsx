@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { DashboardData } from "@/lib/dashboard";
 import type { BillGrouping } from "@/lib/planning";
-import type { Goal } from "@/lib/goals";
+import type { GoalSummaryItem } from "@/lib/goal-summary";
 import { dashboardUrl } from "@/lib/drilldown";
 import { formatCurrency, titleCase } from "@/lib/format";
 import Badge from "@/components/ui/Badge";
@@ -24,7 +24,7 @@ export type PlanSetupItem = {
 
 export function getPlanSetupItems(
   data: PlanData,
-  goals: Goal[],
+  goals: GoalSummaryItem[],
 ): PlanSetupItem[] {
   const items: PlanSetupItem[] = [];
   if (data.budgetEnvelopes.length === 0) {
@@ -71,7 +71,7 @@ export default function PlanView({
   prefs,
 }: Readonly<{
   data: DashboardData;
-  goals: Goal[];
+  goals: GoalSummaryItem[];
   billsGrouping?: BillGrouping;
   billsLinkParams?: {
     month?: string;

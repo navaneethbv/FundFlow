@@ -28,7 +28,12 @@ interface PageProps {
 }
 
 const MONTH_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
-const RECURRING_TABS = new Set<RecurringTab>(["upcoming", "complete", "manage"]);
+const RECURRING_TABS = new Set<RecurringTab>([
+  "overdue",
+  "upcoming",
+  "complete",
+  "manage",
+]);
 
 function shiftMonth(month: string, delta: number): string {
   const [year, oneBasedMonth] = month.split("-").map(Number);
@@ -37,17 +42,25 @@ function shiftMonth(month: string, delta: number): string {
 }
 
 function parseTab(value: string | undefined): RecurringTab {
-  return RECURRING_TABS.has(value as RecurringTab) ? (value as RecurringTab) : "upcoming";
+  return RECURRING_TABS.has(value as RecurringTab)
+    ? (value as RecurringTab)
+    : "upcoming";
 }
 
-function recurringHref(input: { month: string; scope?: string; tab?: RecurringTab }): string {
+function recurringHref(input: {
+  month: string;
+  scope?: string;
+  tab?: RecurringTab;
+}): string {
   const params = new URLSearchParams({ month: input.month });
   if (input.scope) params.set("scope", input.scope);
   if (input.tab && input.tab !== "upcoming") params.set("tab", input.tab);
   return `/recurring?${params.toString()}`;
 }
 
-export default async function RecurringPage({ searchParams }: Readonly<PageProps>) {
+export default async function RecurringPage({
+  searchParams,
+}: Readonly<PageProps>) {
   if (!isFeatureEnabled("recurringPage")) notFound();
 
   const params = await searchParams;
@@ -60,7 +73,8 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
   const currentMonth = localMonthKey();
   const today = localDateKey();
   const rawMonth = firstSearchParam(params.month);
-  const month = rawMonth && MONTH_REGEX.test(rawMonth) ? rawMonth : currentMonth;
+  const month =
+    rawMonth && MONTH_REGEX.test(rawMonth) ? rawMonth : currentMonth;
   const tab = parseTab(firstSearchParam(params.tab));
 
   const loaded = await loadRecurringData(supabase, {
@@ -71,6 +85,7 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
   const scope = serializeFinancialScope(loaded.scope);
   const baseLink = { month, scope };
   const links: Record<RecurringTab, string> = {
+    overdue: recurringHref({ ...baseLink, tab: "overdue" }),
     upcoming: recurringHref({ ...baseLink, tab: "upcoming" }),
     complete: recurringHref({ ...baseLink, tab: "complete" }),
     manage: recurringHref({ ...baseLink, tab: "manage" }),

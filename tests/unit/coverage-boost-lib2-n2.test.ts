@@ -378,8 +378,8 @@ describe("dashboard metrics", () => {
   });
 
   it("computeSavingsRate handles non-positive income and savings", () => {
-    expect(computeSavingsRate(0, 10)).toBe(0);
-    expect(computeSavingsRate(100, 150)).toBe(0);
+    expect(computeSavingsRate(0, 10)).toBeNull();
+    expect(computeSavingsRate(100, 150)).toBe(-50);
     expect(computeSavingsRate(100, 70)).toBe(30);
   });
 });

@@ -97,19 +97,30 @@ export function aggregateSpendWithSplits(
 
 export function detectRefundPairs(transactions: LedgerTransaction[], windowDays: number) {
   const pairs: { chargeId: string; refundId: string; amount: number }[] = [];
-  const charges = transactions.filter((txn) => txn.amount > 0);
+  const charges = transactions
+    .filter((txn) => txn.amount > 0)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
   const refunds = transactions.filter((txn) => txn.amount < 0);
   const usedRefunds = new Set<string>();
 
   for (const charge of charges) {
     const chargeDate = parseDate(charge.date);
-    const refund = refunds.find((candidate) => {
-      if (usedRefunds.has(candidate.id)) return false;
-      if (normalize(candidate.merchant) !== normalize(charge.merchant)) return false;
-      if (round2(Math.abs(candidate.amount)) !== round2(charge.amount)) return false;
-      const days = Math.abs(parseDate(candidate.date) - chargeDate) / 86_400_000;
-      return days <= windowDays;
-    });
+    const eligibleRefunds = refunds
+      .filter((candidate) => {
+        if (usedRefunds.has(candidate.id)) return false;
+        if (normalize(candidate.merchant) !== normalize(charge.merchant)) return false;
+        if (round2(Math.abs(candidate.amount)) !== round2(charge.amount)) return false;
+        const candidateDate = parseDate(candidate.date);
+        const dayDiff = (candidateDate - chargeDate) / 86_400_000;
+        return dayDiff >= 0 && dayDiff <= windowDays;
+      })
+      .sort((a, b) => {
+        const diffA = (parseDate(a.date) - chargeDate) / 86_400_000;
+        const diffB = (parseDate(b.date) - chargeDate) / 86_400_000;
+        return diffA - diffB || a.date.localeCompare(b.date) || a.id.localeCompare(b.id);
+      });
+
+    const refund = eligibleRefunds[0];
     if (!refund) continue;
     usedRefunds.add(refund.id);
     pairs.push({ chargeId: charge.id, refundId: refund.id, amount: round2(charge.amount) });

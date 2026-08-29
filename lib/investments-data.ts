@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   HoldingJoinRow,
   HoldingSnapshotRow,
+  InvestmentAccountSummary,
   InvestmentTransactionRow,
 } from "@/lib/investments";
 
@@ -160,4 +161,68 @@ export async function loadHoldingAccountOptions(
       source: "manual" as const,
     })),
   ];
+}
+
+/** Loads connected investment/brokerage accounts for coverage accounting. */
+export async function loadInvestmentAccounts(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<InvestmentAccountSummary[]> {
+  const [plaidResult, manualResult] = await Promise.all([
+    supabase
+      .from("accounts")
+      .select("id, name, type, subtype, current_balance, iso_currency_code")
+      .eq("user_id", userId),
+    supabase
+      .from("manual_accounts")
+      .select("id, name, type, subtype, current_balance, currency")
+      .eq("user_id", userId),
+  ]);
+  if (plaidResult.error) throw plaidResult.error;
+  if (manualResult.error) throw manualResult.error;
+
+  const isInvestment = (type: string | null, subtype: string | null) => {
+    const t = type?.toLowerCase() ?? "";
+    const s = subtype?.toLowerCase() ?? "";
+    return (
+      t === "investment" ||
+      t === "brokerage" ||
+      s.includes("401k") ||
+      s.includes("401(k)") ||
+      s.includes("ira") ||
+      s.includes("roth") ||
+      s.includes("brokerage") ||
+      s.includes("retirement") ||
+      s.includes("pension") ||
+      s.includes("mutual fund")
+    );
+  };
+
+  const plaidAccounts = (plaidResult.data ?? [])
+    .filter((a) => isInvestment(a.type as string | null, a.subtype as string | null))
+    .map((a) => ({
+      id: a.id as string,
+      name: (a.name as string | null) ?? "Investment Account",
+      source: "plaid" as const,
+      type: (a.type as string | null) ?? null,
+      subtype: (a.subtype as string | null) ?? null,
+      balance: a.current_balance !== null ? Number(a.current_balance) : null,
+      currency: (a.iso_currency_code as string | null) ?? "USD",
+    }));
+
+  const manualAccounts = (manualResult.data ?? [])
+    .filter((a) => isInvestment(a.type as string | null, a.subtype as string | null))
+    .map((a) => ({
+      id: a.id as string,
+      name: a.name as string,
+      source: "manual" as const,
+      type: (a.type as string | null) ?? null,
+      subtype: (a.subtype as string | null) ?? null,
+      balance: a.current_balance !== null ? Number(a.current_balance) : null,
+      currency: (a.currency as string | null) ?? "USD",
+    }));
+
+  return [...plaidAccounts, ...manualAccounts].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
 }

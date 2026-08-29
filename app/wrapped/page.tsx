@@ -111,7 +111,9 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
             <StatTile label="Total income" value={recap.totalIncome} />
             <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
               <h3 className="eyebrow">Savings rate</h3>
-              <p className="metric-value mt-3 text-3xl">{recap.savingsRate}%</p>
+              <p className="metric-value mt-3 text-3xl">
+                {recap.savingsRate !== null ? `${recap.savingsRate}%` : "N/A"}
+              </p>
               <p className="mt-2 text-xs font-medium text-muted">
                 Across the whole year
               </p>

@@ -21,6 +21,8 @@ import { getDashboardData } from "@/lib/dashboard";
 import { getCachedDashboardData } from "@/lib/dashboard-cache";
 import { dashboardUrl } from "@/lib/drilldown";
 import { getGoals } from "@/lib/goals";
+import { loadGoalsPageData } from "@/lib/goals-data";
+import { toGoalSummaryItem, toLegacyGoalSummaryItem } from "@/lib/goal-summary";
 import { resolveDisplayName, greetingWord } from "@/lib/greeting";
 import ScopeChips from "@/components/dashboard/ScopeChips";
 import type { DashboardPrefs } from "@/components/settings/DashboardPrefsSection";
@@ -54,49 +56,28 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
   const selectedAccountId = params.accountId;
   const selectedMonth = params.month;
   const selectedItemId = params.itemId;
-  // The grid is the landing view only when the flag is on; existing bookmarks
-  // to ?view=monitor|plan|wealth keep resolving exactly as before.
   const widgetsEnabled = isFeatureEnabled("dashboardWidgets");
   const activeView = resolveDashboardView(params, widgetsEnabled ? "overview" : "monitor");
-  const drillQuery = {
-    category: params.category,
-    sub: params.sub,
-    merchant: params.merchant,
-  };
-  const dashboardScope: "mine" | "household" =
-    params.scope === "household" ? "household" : "mine";
-  const drillOptions = {
-    itemId: selectedItemId,
-    drill: drillQuery,
-    scope: dashboardScope,
-  };
+  const drillQuery = { category: params.category, sub: params.sub, merchant: params.merchant };
+  const dashboardScope: "mine" | "household" = params.scope === "household" ? "household" : "mine";
+  const drillOptions = { itemId: selectedItemId, drill: drillQuery, scope: dashboardScope };
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const goalsV2 = isFeatureEnabled("goalsV2");
+  const goalsPromise = goalsV2 && user
+    ? loadGoalsPageData(supabase, user.id)
+        .then((res) => res.goals.map(toGoalSummaryItem))
+        .catch(async () => (await getGoals(supabase)).map((g) => toLegacyGoalSummaryItem(g)))
+    : getGoals(supabase).then((plain) => plain.map((g) => toLegacyGoalSummaryItem(g)));
 
   const [data, { data: items }, goals, { data: householdRows }] = await Promise.all([
     user
-      ? getCachedDashboardData(
-          supabase,
-          user.id,
-          selectedAccountId,
-          selectedMonth,
-          drillOptions,
-        )
-      : getDashboardData(
-          supabase,
-          selectedAccountId,
-          selectedMonth,
-          undefined,
-          drillOptions,
-        ),
-    supabase
-      .from("plaid_items")
-      .select("id, institution_name, status")
-      .order("created_at"),
-    getGoals(supabase),
+      ? getCachedDashboardData(supabase, user.id, selectedAccountId, selectedMonth, drillOptions)
+      : getDashboardData(supabase, selectedAccountId, selectedMonth, undefined, drillOptions),
+    supabase.from("plaid_items").select("id, institution_name, status").order("created_at"),
+    goalsPromise,
     supabase.from("households").select("id").limit(1),
   ]);
   const hasHousehold = (householdRows ?? []).length > 0;
@@ -171,14 +152,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
           <DashboardViewTabs
             activeView={activeView}
             withOverview={widgetsEnabled}
-            hrefFor={(view) =>
-              dashboardUrl({
-                view,
-                accountId: selectedAccountId,
-                month: selectedMonth,
-                ...extraParams,
-              })
-            }
+            hrefFor={(view) => dashboardUrl({ view, accountId: selectedAccountId, month: selectedMonth, ...extraParams })}
           />
 
           {hasHousehold && (
@@ -233,12 +207,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
               data={data}
               goals={goals}
               billsGrouping={params.bills === "monthly" ? "monthly" : "weekly"}
-              billsLinkParams={{
-                month: selectedMonth,
-                accountId: selectedAccountId,
-                itemId: selectedItemId,
-                scope: scopeParam,
-              }}
+              billsLinkParams={{ month: selectedMonth, accountId: selectedAccountId, itemId: selectedItemId, scope: scopeParam }}
               prefs={dashboardPrefs}
             />
           )}

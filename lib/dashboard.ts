@@ -264,6 +264,16 @@ function aggregateCashFlowMaps(
   return { deposits, withdrawals };
 }
 
+export function shiftMonthKey(month: string, deltaMonths: number): string {
+  const [yearStr, monthStr] = month.split("-");
+  const year = Number(yearStr);
+  const monthNum = Number(monthStr);
+  const totalMonths = year * 12 + (monthNum - 1) + deltaMonths;
+  const newYear = Math.floor(totalMonths / 12);
+  const newMonth = (totalMonths % 12) + 1;
+  return `${newYear}-${String(newMonth).padStart(2, "0")}`;
+}
+
 function buildMonthlyAggregates(
   activeMonth: string,
   spending: Map<string, number>,
@@ -271,13 +281,11 @@ function buildMonthlyAggregates(
   deposits: Map<string, number>,
   withdrawals: Map<string, number>,
 ): Pick<DashboardTransactionAggregates, "monthlySpending" | "monthlyIncome" | "monthlyCashFlow"> {
-  const [activeYear, activeMonthIndex] = activeMonth.split("-").map(Number);
   const monthlySpending: DashboardTransactionAggregates["monthlySpending"] = [];
   const monthlyIncome: DashboardTransactionAggregates["monthlyIncome"] = [];
   const monthlyCashFlow: DashboardTransactionAggregates["monthlyCashFlow"] = [];
   for (let index = 5; index >= 0; index--) {
-    const date = new Date(activeYear!, activeMonthIndex! - index, 15);
-    const key = monthKey(date.toISOString().slice(0, 10));
+    const key = shiftMonthKey(activeMonth, -index);
     monthlySpending.push({ month: key, amount: round2(spending.get(key) ?? 0) });
     monthlyIncome.push({ month: key, amount: round2(income.get(key) ?? 0) });
     monthlyCashFlow.push({
@@ -411,10 +419,8 @@ function buildDashboardSpendMetrics(input: DashboardSpendMetricsInput) {
     allItems,
     activeMonth,
     lastMonthTargetDay,
-    activeYear,
-    activeMonthIndex,
   } = input;
-  const lastMonth = monthKey(new Date(activeYear, activeMonthIndex - 1, 15).toISOString().slice(0, 10));
+  const lastMonth = shiftMonthKey(activeMonth, -1);
   let lastMonthProratedSpent = 0;
   const cardSpendMap = new Map<string, number>();
   const bankSpendMap = new Map<string, number>();
@@ -1211,6 +1217,5 @@ export async function getDashboardData(
 export {
   type CumulativeSpendDay,
   daysInMonth,
-  shiftMonthKey,
   computeCumulativeSpendByDay,
 } from "@/lib/cumulative-spend";

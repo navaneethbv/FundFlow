@@ -1,3 +1,8 @@
+import {
+  classifyBalanceSheetAmount,
+  netWorthContribution,
+} from "@/lib/account-balance";
+
 export type AccountGroupKey =
   | "credit"
   | "cash"
@@ -261,9 +266,7 @@ function displayBalance(
   balance: number | null,
 ): number | null {
   if (balance === null) return null;
-  return group === "credit" || group === "loan"
-    ? Math.abs(balance)
-    : balance;
+  return group === "credit" || group === "loan" ? Math.abs(balance) : balance;
 }
 
 function createAccountGroups(): AccountsPageData["groups"] {
@@ -282,24 +285,29 @@ function createAccountGroups(): AccountsPageData["groups"] {
   };
 }
 
+import { normalizeExternalDisplayText } from "@/lib/external-display-text";
+
 function buildAccountRow(
   account: UnifiedAccountSummary,
   group: AccountGroupKey,
   history: AccountBalanceSnapshot[],
   now: Date,
 ): AccountsPageRow {
-  const values = history.map((snapshot) => displayBalance(group, snapshot.currentBalance)!);
+  const values = history.map(
+    (snapshot) => displayBalance(group, snapshot.currentBalance) ?? 0,
+  );
   const rowSeries = history.map((snapshot, index) => ({
     date: snapshot.snapshotDate,
     value: values[index]!,
   }));
   const freshness = humanizeUpdatedAt(account.updatedAt, now);
   const mask = account.mask ? ` (...${account.mask})` : "";
+  const cleanName = normalizeExternalDisplayText(account.name) ?? account.name;
   return {
     id: account.id,
     ownerUserId: account.ownerUserId,
     source: account.source,
-    name: `${account.name}${mask}`,
+    name: `${cleanName}${mask}`,
     type: account.type,
     subtype: account.subtype,
     balance: displayBalance(group, account.currentBalance),
@@ -317,14 +325,18 @@ function buildAccountRow(
 }
 
 function populateGroupTotals(groups: AccountsPageData["groups"]): void {
-  for (const [groupKey, group] of Object.entries(groups) as [AccountGroupKey, AccountsPageData["groups"][AccountGroupKey]][]) {
+  for (const [groupKey, group] of Object.entries(groups) as [
+    AccountGroupKey,
+    AccountsPageData["groups"][AccountGroupKey],
+  ][]) {
     group.rows.sort((a, b) => a.name.localeCompare(b.name));
     const totals = new Map<string, number>();
     const changes = new Map<string, number>();
     const changeSign = groupKey === "credit" || groupKey === "loan" ? -1 : 1;
     for (const row of group.rows) {
       if (row.balance !== null) addAmount(totals, row.currency, row.balance);
-      if (row.monthChange) addAmount(changes, row.currency, changeSign * row.monthChange.amount);
+      if (row.monthChange)
+        addAmount(changes, row.currency, row.monthChange.amount * changeSign);
     }
     group.totals = totalsFromMap(totals);
     group.changes = totalsFromMap(changes);
@@ -356,12 +368,16 @@ function buildNetWorthTotals(accounts: UnifiedAccountSummary[]): {
   for (const account of accounts) {
     if (!account.includeInNetWorth || account.currentBalance === null) continue;
     const group = groupKeyFor(account.type, account.subtype);
-    const balance = displayBalance(group, account.currentBalance)!;
-    const isLiability = group === "credit" || group === "loan";
-    addAmount(isLiability ? liabilities : assets, account.currency, balance);
+    const classification = classifyBalanceSheetAmount(
+      account.currentBalance,
+      account.type,
+      account.subtype,
+    );
+    const isLiability = classification.kind === "liability";
+    addAmount(isLiability ? liabilities : assets, account.currency, classification.amount);
     const byGroupMap = isLiability ? liabilitiesByGroup : assetsByGroup;
     const byGroup = byGroupMap.get(account.currency) ?? new Map<AccountGroupKey, number>();
-    byGroup.set(group, (byGroup.get(group) ?? 0) + balance);
+    byGroup.set(group, (byGroup.get(group) ?? 0) + classification.amount);
     byGroupMap.set(account.currency, byGroup);
   }
   return { assets, liabilities, assetsByGroup, liabilitiesByGroup };
@@ -378,10 +394,11 @@ function buildNetWorthSeries(
     if (!id || snapshot.currentBalance === null) continue;
     const account = accountById.get(id);
     if (!account?.includeInNetWorth) continue;
-    const group = groupKeyFor(account.type, account.subtype);
-    const signed = group === "credit" || group === "loan"
-      ? -Math.abs(snapshot.currentBalance)
-      : snapshot.currentBalance;
+    const signed = netWorthContribution(
+      snapshot.currentBalance,
+      account.type,
+      account.subtype,
+    );
     const byDate = seriesMaps.get(account.currency) ?? new Map<string, number>();
     addAmount(byDate, snapshot.snapshotDate, signed);
     seriesMaps.set(account.currency, byDate);
