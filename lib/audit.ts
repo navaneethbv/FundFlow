@@ -18,6 +18,7 @@ export type AuditAction =
   | "plaid_token_exchange"
   | "plaid_disconnect"
   | "plaid_reconnect"
+  | "plaid_repair"
   | "data_refresh"
   | "data_export"
   | "data_import"

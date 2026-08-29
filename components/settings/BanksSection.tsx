@@ -118,6 +118,27 @@ export default function BanksSection({
     }
   }
 
+  async function triggerRepair(id: string, action: "resync" | "reset_cursor") {
+    setBusyId(id);
+    setError(null);
+    try {
+      const res = await fetch("/api/plaid/repair", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: id, action }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message ?? data.error ?? "Repair failed");
+      }
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Repair failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <Panel title="Connected institutions" eyebrow="Banks">
       {items.length === 0 ? (
@@ -148,6 +169,14 @@ export default function BanksSection({
                       {i.status === "active" ? "Connected" : i.status}
                     </Badge>
                     {needsReconnect(i) && <ReconnectBankButton itemId={i.id} />}
+                    <Button
+                      onClick={() => triggerRepair(i.id, "reset_cursor")}
+                      disabled={busyId === i.id}
+                      variant="secondary"
+                      size="sm"
+                    >
+                      {busyId === i.id ? "Syncing..." : "Backfill"}
+                    </Button>
                     <Button
                       onClick={() => disconnect(i.id)}
                       disabled={busyId === i.id}

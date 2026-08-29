@@ -147,10 +147,10 @@ export interface ProductSyncHealth {
 
 **Steps:**
 
-- [ ] Record the cursor used for each item without logging secrets.
-- [ ] Record whether the last sync completed every page.
-- [ ] Make retries idempotent against transaction identifiers.
-- [ ] Detect a cursor reset or incomplete initial history.
+- [x] Record the cursor used for each item without logging secrets.
+- [x] Record whether the last sync completed every page.
+- [x] Make retries idempotent against transaction identifiers.
+- [x] Detect a cursor reset or incomplete initial history.
 
 ### Task 2.2: Implement an authenticated repair action
 
@@ -162,12 +162,12 @@ export interface ProductSyncHealth {
 
 **Steps:**
 
-- [ ] Require the authenticated owner and scope the target item to that user.
-- [ ] Rate-limit repair attempts.
-- [ ] Request the supported provider refresh or update flow.
-- [ ] Run a bounded historical reconciliation after the provider reports readiness.
-- [ ] Surface `product_not_ready`, consent-required, and institution-login-required states distinctly.
-- [ ] Never delete local rows merely because one partial provider response omits them.
+- [x] Require the authenticated owner and scope the target item to that user.
+- [x] Rate-limit repair attempts.
+- [x] Request the supported provider refresh or update flow.
+- [x] Run a bounded historical reconciliation after the provider reports readiness.
+- [x] Surface `product_not_ready`, consent-required, and institution-login-required states distinctly.
+- [x] Never delete local rows merely because one partial provider response omits them.
 
 **Acceptance:** The user can recover a stale checking connection and safely backfill missing history without duplicates.
 
