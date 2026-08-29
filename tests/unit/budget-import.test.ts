@@ -67,3 +67,24 @@ describe("buildBudgetImportPlan", () => {
     expect(plan.rows).toHaveLength(5);
   });
 });
+describe("budget import edge coverage", () => {
+  it("reports a group with no usable categories and a non-array input", () => {
+    const noCategories = parseMonarchBudgets(
+      JSON.stringify({ groups: [{ name: "Needs", type: "fixed", categories: "oops" }] }),
+    );
+    expect(noCategories.rows).toEqual([]);
+
+    const noGroups = parseMonarchBudgets(JSON.stringify({ foo: 1 }));
+    expect(noGroups.rows).toEqual([]);
+    expect(noGroups.errors.length).toBeGreaterThan(0);
+  });
+
+  it("keeps a category with no matching existing budget out of unbudgeted", () => {
+    const plan = buildBudgetImportPlan(
+      parseMonarchBudgets(MONARCH_JSON).rows,
+      [{ category: "Rent", monthly_limit: 2000, group_name: "fixed" }],
+    );
+    expect(plan.unbudgetedCategories).toEqual([]);
+    expect(plan.conflicts).toEqual([]);
+  });
+});

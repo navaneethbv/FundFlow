@@ -84,6 +84,9 @@ export type AuditAction =
   | "transaction_override_created"
   | "transaction_override_updated"
   | "transaction_override_deleted"
+  | "life_event_created"
+  | "life_event_updated"
+  | "life_event_deleted"
   | "profile_updated"
   | "avatar_updated"
   | "display_prefs_updated";

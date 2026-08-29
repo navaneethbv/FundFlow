@@ -97,3 +97,19 @@ describe("buildGoalImportPlan", () => {
     expect(buildGoalImportPlan([], []).version).toBe(GOAL_IMPORT_VERSION);
   });
 });
+describe("goal import edge coverage", () => {
+  it("skips a goal with no usable name and reports malformed amounts", () => {
+    const result = parseMonarchGoals(
+      JSON.stringify({ goals: [{ id: "g", name: "", type: "save_up" }] }),
+    );
+    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.rows).toEqual([]);
+  });
+
+  it("parses a bare array and defaults unknown types to save_up", () => {
+    const result = parseMonarchGoals(
+      JSON.stringify([{ id: "g2", name: "Trip", target_amount: 5000 }]),
+    );
+    expect(result.rows[0]).toMatchObject({ goalType: "save_up", targetAmount: 5000, importedId: "g2" });
+  });
+});

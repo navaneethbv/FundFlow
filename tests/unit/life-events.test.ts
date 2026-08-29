@@ -48,12 +48,12 @@ describe("applyLifeEvents", () => {
     expect(result[2].base).toBe(10000 + 500 - 50000);
   });
 
-  it("applies a child expense for its duration only", () => {
+  it("applies a child expense for its duration only (cumulative per month)", () => {
     const events: LifeEvent[] = [{ type: "child", startMonth: 1, amount: 1000, durationMonths: 2 }];
     const result = applyLifeEvents(basePoints(4), events, 500);
     expect(result[0].base).toBe(10000 - 1000);
-    expect(result[1].base).toBe(10000 + 250 - 1000);
-    expect(result[2].base).toBe(10000 + 500); // duration over
+    expect(result[1].base).toBe(10000 + 250 - 2000);
+    expect(result[2].base).toBe(10000 + 500 - 2000); // duration over, cumulative stays
   });
 
   it("applies an income change permanently from its start month", () => {
@@ -65,7 +65,7 @@ describe("applyLifeEvents", () => {
 
   it("applies an expense change and stops retirement savings contributions", () => {
     const expense: LifeEvent[] = [{ type: "expense_change", startMonth: 1, amount: 300, durationMonths: null }];
-    expect(applyLifeEvents(basePoints(2), expense, 500)[1].base).toBe(10000 + 250 - 300);
+    expect(applyLifeEvents(basePoints(2), expense, 500)[1].base).toBe(10000 + 250 - 600);
 
     const retirement: LifeEvent[] = [{ type: "retirement", startMonth: 2, amount: 0, durationMonths: null }];
     expect(applyLifeEvents(basePoints(3), retirement, 500)[1].base).toBe(10000 + 250 - 500);
@@ -77,6 +77,6 @@ describe("applyLifeEvents", () => {
       { type: "expense_change", startMonth: 1, amount: 400, durationMonths: null },
     ];
     const result = applyLifeEvents(basePoints(2), events, 500);
-    expect(result[1].base).toBe(10000 + 250 + 600);
+    expect(result[1].base).toBe(10000 + 250 + 1200);
   });
 });
