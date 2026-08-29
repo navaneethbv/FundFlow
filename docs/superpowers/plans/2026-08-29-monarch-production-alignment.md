@@ -213,20 +213,20 @@ export interface ProductSyncHealth {
 
 **Steps:**
 
-- [ ] Define a versioned, provider-neutral budget import model.
-- [ ] Map Monarch groups to Fixed, Flexible, Non-Monthly, Income, or a preserved custom group.
-- [ ] Preview monthly amounts, unbudgeted categories, and conflicts.
-- [ ] Offer merge, replace-month, and cancel choices.
-- [ ] Audit every created or changed budget identifier.
+- [x] Define a versioned, provider-neutral budget import model.
+- [x] Map Monarch groups to Fixed, Flexible, Non-Monthly, Income, or a preserved custom group.
+- [x] Preview monthly amounts, unbudgeted categories, and conflicts.
+- [x] Offer merge, replace-month, and cancel choices.
+- [x] Audit every created or changed budget identifier.
 
 ### Task 4.2: Import goals safely
 
 **Steps:**
 
-- [ ] Preview name, type, target amount, target date, linked account, and allocation.
-- [ ] Match existing goals by stable imported identifier when available, never by name alone.
-- [ ] Offer create, merge, skip, and replace choices.
-- [ ] Preserve FundFlow contribution events and allocation caps.
+- [x] Preview name, type, target amount, target date, linked account, and allocation.
+- [x] Match existing goals by stable imported identifier when available, never by name alone.
+- [x] Offer create, merge, skip, and replace choices.
+- [x] Preserve FundFlow contribution events and allocation caps.
 
 **Acceptance:** A user can reproduce Monarch planning configuration without manual re-entry or silent overwrite.
 
