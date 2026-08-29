@@ -109,12 +109,12 @@ export interface ProductSyncHealth {
 
 **Steps:**
 
-- [ ] Add deterministic state tests for each health state.
-- [ ] Load the newest transaction and investment sync job per item with explicit user scoping.
-- [ ] Load the oldest and newest transaction date per item without unbounded row reads.
-- [ ] Store only safe provider error codes and never raw access tokens or payloads.
-- [ ] Render product-specific status and recovery copy under Institutions.
-- [ ] Add an accessible stale-data warning that links Cash Flow and Investments to the affected institution.
+- [x] Add deterministic state tests for each health state.
+- [x] Load the newest transaction and investment sync job per item with explicit user scoping.
+- [x] Load the oldest and newest transaction date per item without unbounded row reads.
+- [x] Store only safe provider error codes and never raw access tokens or payloads.
+- [x] Render product-specific status and recovery copy under Institutions.
+- [x] Add an accessible stale-data warning that links Cash Flow and Investments to the affected institution.
 
 **Acceptance:** A user can identify which institution and which Plaid product caused missing data.
 
@@ -128,10 +128,10 @@ export interface ProductSyncHealth {
 
 **Steps:**
 
-- [ ] Show account balance, calculated ledger balance, difference, transaction coverage window, and freshness.
-- [ ] Explain that provider balances and transaction history can have different coverage.
-- [ ] Keep reconciliation read-only in this phase.
-- [ ] Add table semantics and a mobile card twin.
+- [x] Show account balance, calculated ledger balance, difference, transaction coverage window, and freshness.
+- [x] Explain that provider balances and transaction history can have different coverage.
+- [x] Keep reconciliation read-only in this phase.
+- [x] Add table semantics and a mobile card twin.
 
 **Acceptance:** The missing-paycheck case is visible as a coverage or reconciliation problem without comparing against another product.
 

@@ -14,6 +14,7 @@ export type SettingsSection =
   | "household-general"
   | "household-preferences"
   | "institutions"
+  | "reconciliation"
   | "categories"
   | "merchants"
   | "rules"
@@ -35,6 +36,7 @@ export const SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
   { key: "household-general", label: "Household", hint: "Members and sharing" },
   { key: "household-preferences", label: "Settle up", hint: "Shared expense settlement" },
   { key: "institutions", label: "Institutions", hint: "Banks and manual accounts" },
+  { key: "reconciliation", label: "Reconciliation", hint: "Balance & coverage health" },
   { key: "categories", label: "Categories", hint: "Overrides, budgets, sinking funds" },
   { key: "merchants", label: "Merchants", hint: "Cleanup and cancelled subscriptions" },
   { key: "rules", label: "Rules", hint: "Merchant recategorization rules" },
