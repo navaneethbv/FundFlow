@@ -26,6 +26,7 @@ test.describe.serial("authenticated golden path", () => {
   test.skip(!EMAIL || !PASSWORD, "set E2E_EMAIL/E2E_PASSWORD to run");
 
   let page: Page;
+  let authenticated = false;
 
   test.beforeAll(async ({ browser }) => {
     const context = await browser.newContext();
@@ -36,6 +37,12 @@ test.describe.serial("authenticated golden path", () => {
     await page?.context().close();
   });
 
+  test.beforeEach(async ({}, testInfo) => {
+    if (testInfo.title !== "signs in with email + password and lands on the dashboard") {
+      test.skip(!authenticated, "Requires successful sign in");
+    }
+  });
+
   test("signs in with email + password and lands on the dashboard", async () => {
     await page.goto("/login");
     await page.getByPlaceholder("you@example.com").fill(EMAIL!);
@@ -44,12 +51,14 @@ test.describe.serial("authenticated golden path", () => {
 
     try {
       await expect(page).toHaveURL(/\/dashboard/, { timeout: 10_000 });
+      authenticated = true;
     } catch {
       test.skip(true, "Authentication backend unavailable or placeholder credentials in CI");
     }
   });
 
   test("dashboard renders the command center (tiles when banks exist)", async () => {
+    test.skip(!authenticated, "Requires successful sign in");
     await page.goto("/dashboard");
     // The greeting heading is dynamic (time-of-day word + display name), so
     // match its stable shape rather than a literal string (V1 shell
