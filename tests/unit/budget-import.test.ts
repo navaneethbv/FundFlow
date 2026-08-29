@@ -49,12 +49,16 @@ describe("buildBudgetImportPlan", () => {
   it("surfaces conflicts and unbudgeted categories", () => {
     const plan = buildBudgetImportPlan(
       parseMonarchBudgets(MONARCH_JSON).rows,
-      [{ category: "Rent", monthly_limit: 1500, group_name: "fixed" }],
+      [
+        { category: "Rent", monthly_limit: 1500, group_name: "fixed" },
+        { category: "Streaming", monthly_limit: 20, group_name: "flexible" },
+      ],
     );
     expect(plan.conflicts).toEqual([
       { category: "Rent", existingAmount: 1500, incomingAmount: 2000 },
     ]);
-    expect(plan.unbudgetedCategories).toEqual(["Rent"]);
+    // Streaming exists in FundFlow but not in the Monarch export.
+    expect(plan.unbudgetedCategories).toEqual(["Streaming"]);
   });
 
   it("is deterministic and versioned", () => {

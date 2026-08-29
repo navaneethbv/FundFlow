@@ -10,6 +10,7 @@ import ExportSection from "@/components/settings/ExportSection";
 import ReportsSection from "@/components/settings/ReportsSection";
 import ImportSection from "@/components/settings/ImportSection";
 import ImportReviewSection from "@/components/settings/ImportReviewSection";
+import MonarchConfigImportSection from "@/components/settings/MonarchConfigImportSection";
 import AiInsightsSection from "@/components/settings/AiInsightsSection";
 import BudgetsSection from "@/components/settings/BudgetsSection";
 import BanksSection from "@/components/settings/BanksSection";
@@ -396,6 +397,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
             cycle_anchor_date: string;
           }>}
         />
+        <MonarchConfigImportSection />
       </>
     );
       break;
