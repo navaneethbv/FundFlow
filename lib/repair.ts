@@ -63,3 +63,124 @@ export function repairMessage(kind: RepairFailureKind): string {
       return "The repair could not be completed. Try again.";
   }
 }
+
+export interface RepairResponse {
+  ok: boolean;
+  status: string;
+  message?: string;
+  pagesCompleted?: number;
+  maxPages?: number;
+  completed?: boolean;
+  added?: number;
+  modified?: number;
+  removed?: number;
+}
+
+export interface RepairUiState {
+  kind:
+    | "success"
+    | "backfill_incomplete"
+    | "info"
+    | "needs_consent"
+    | "needs_login"
+    | "rate_limited"
+    | "error";
+  message: string;
+  /** Show a retry action. */
+  retry: boolean;
+  /** Show a reconnect (Link update) action. */
+  reconnect: boolean;
+  result?: { added: number; modified: number; removed: number };
+}
+
+/**
+ * Turn a repair route response into the UI state a settings row must render.
+ * Provider-conditional outcomes become reconnect or retry actions; success and
+ * bounded backfill report concrete progress.
+ */
+export function repairResponseToUiState(
+  response: RepairResponse | null,
+): RepairUiState {
+  if (!response || !response.ok) {
+    const status = response?.status;
+    if (status === "product_not_ready") {
+      return {
+        kind: "info",
+        message: response?.message ?? repairMessage("product_not_ready"),
+        retry: true,
+        reconnect: false,
+      };
+    }
+    if (status === "consent_required") {
+      return {
+        kind: "needs_consent",
+        message: response?.message ?? repairMessage("consent_required"),
+        retry: false,
+        reconnect: true,
+      };
+    }
+    if (status === "institution_login_required") {
+      return {
+        kind: "needs_login",
+        message: response?.message ?? repairMessage("institution_login_required"),
+        retry: false,
+        reconnect: true,
+      };
+    }
+    if (status === "rate_limited") {
+      return {
+        kind: "rate_limited",
+        message: response?.message ?? repairMessage("rate_limited"),
+        retry: true,
+        reconnect: false,
+      };
+    }
+    return {
+      kind: "error",
+      message:
+        response?.message ?? "The repair could not be completed. Try again.",
+      retry: true,
+      reconnect: false,
+    };
+  }
+
+  const result = {
+    added: response.added ?? 0,
+    modified: response.modified ?? 0,
+    removed: response.removed ?? 0,
+  };
+  if (response.status === "backfill_incomplete") {
+    return {
+      kind: "backfill_incomplete",
+      message: `History backfill reached ${response.pagesCompleted ?? 0} of ${response.maxPages ?? 0} pages. Run again to continue; retries never duplicate transactions.`,
+      retry: true,
+      reconnect: false,
+      result,
+    };
+  }
+  return {
+    kind: "success",
+    message: `Repaired. ${result.added} added, ${result.modified} modified, ${result.removed} removed.`,
+    retry: false,
+    reconnect: false,
+    result,
+  };
+}
+
+/**
+ * Run the authenticated repair for one owned item and return the UI state.
+ * Network failures collapse to a retryable error state.
+ */
+export async function runItemRepair(itemId: string): Promise<RepairUiState> {
+  try {
+    const res = await fetch("/api/plaid/repair", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itemId }),
+    });
+    const json = (await res.json().catch(() => null)) as RepairResponse | null;
+    return repairResponseToUiState(json);
+  } catch {
+    return repairResponseToUiState(null);
+  }
+}

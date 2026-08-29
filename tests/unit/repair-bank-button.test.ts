@@ -1,46 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { runItemRepair } from "@/lib/repair";
 
-const { fetchMock, refreshMock, stateSetters, renderResult } = vi.hoisted(() => ({
-  fetchMock: vi.fn(),
-  refreshMock: vi.fn(),
-  stateSetters: [] as Array<ReturnType<typeof vi.fn>>,
-  renderResult: { current: null as unknown },
-}));
+const { fetchMock } = vi.hoisted(() => ({ fetchMock: vi.fn() }));
 
-vi.mock("react", () => ({
-  useState: (value: unknown) => {
-    const setter = vi.fn();
-    stateSetters.push(setter);
-    return [value, setter];
-  },
-}));
-
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: refreshMock }),
-}));
-
-vi.mock("@/components/ui/Button", () => ({
-  default: ({ children }: { children: unknown }) => children,
-}));
-
-vi.mock("@/components/settings/ReconnectBankButton", () => ({
-  default: () => null,
-}));
-
-const { default: RepairBankButton } = await import(
-  "@/components/settings/RepairBankButton"
-);
-
-function phaseSetter(): ReturnType<typeof vi.fn> {
-  // [phase, setPhase], [state, setState] -> phase setter is index 1
-  return stateSetters[1];
+function jsonResponse(body: unknown, ok = true) {
+  return { ok, json: () => Promise.resolve(body) };
 }
 
-describe("RepairBankButton", () => {
+describe("runItemRepair", () => {
   beforeEach(() => {
-    stateSetters.length = 0;
     fetchMock.mockReset();
-    refreshMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
   });
 
@@ -48,24 +17,9 @@ describe("RepairBankButton", () => {
     vi.unstubAllGlobals();
   });
 
-  it("posts to the repair route with the item id and shows a running state", async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          ok: true,
-          status: "repaired",
-          pagesCompleted: 2,
-          maxPages: 8,
-          completed: true,
-          added: 4,
-          modified: 1,
-          removed: 0,
-        }),
-    });
-
-    renderResult.current = RepairBankButton({ itemId: "item-1" });
-
+  it("posts to the repair route with the item id", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true, status: "repaired", added: 4, modified: 1, removed: 0 }));
+    const state = await runItemRepair("item-1");
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/plaid/repair",
       expect.objectContaining({
@@ -74,54 +28,46 @@ describe("RepairBankButton", () => {
         body: JSON.stringify({ itemId: "item-1" }),
       }),
     );
-    // Running state was set before the fetch resolved.
-    expect(phaseSetter()).toHaveBeenCalledWith("running");
+    expect(state.kind).toBe("success");
+    expect(state.message).toContain("4 added");
   });
 
-  it("shows a retry-able bounded backfill message", async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          ok: true,
-          status: "backfill_incomplete",
-          pagesCompleted: 5,
-          maxPages: 8,
-          completed: false,
-          added: 40,
-          modified: 0,
-          removed: 0,
-        }),
-    });
-
-    renderResult.current = RepairBankButton({ itemId: "item-1" });
-    // Await the async handler.
-    await Promise.resolve();
-    await Promise.resolve();
-
-    const [messageSetter] = stateSetters;
-    expect(messageSetter).toHaveBeenCalled();
-    const setPhase = stateSetters[1];
-    expect(setPhase).toHaveBeenCalledWith("bounded");
+  it("maps a bounded backfill to a retry-able state with progress", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        ok: true,
+        status: "backfill_incomplete",
+        pagesCompleted: 5,
+        maxPages: 8,
+        completed: false,
+        added: 40,
+        modified: 0,
+        removed: 0,
+      }),
+    );
+    const state = await runItemRepair("item-1");
+    expect(state.kind).toBe("backfill_incomplete");
+    expect(state.retry).toBe(true);
+    expect(state.message).toContain("5 of 8");
   });
 
   it("surfaces a provider-conditional reconnect message", async () => {
-    fetchMock.mockResolvedValue({
-      ok: false,
-      status: 200,
-      json: () =>
-        Promise.resolve({
-          ok: false,
-          status: "institution_login_required",
-          message: "Log in again.",
-        }),
-    });
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        { ok: false, status: "institution_login_required", message: "Your bank requires you to log in again." },
+        false,
+      ),
+    );
+    const state = await runItemRepair("item-1");
+    expect(state.kind).toBe("needs_login");
+    expect(state.reconnect).toBe(true);
+    expect(state.message).toContain("log in again");
+  });
 
-    renderResult.current = RepairBankButton({ itemId: "item-1" });
-    await Promise.resolve();
-    await Promise.resolve();
-
-    const [messageSetter] = stateSetters;
-    expect(messageSetter).toHaveBeenCalledWith(expect.stringContaining("log in again"));
+  it("collapses network failures to a retryable error state", async () => {
+    fetchMock.mockRejectedValue(new Error("network down"));
+    const state = await runItemRepair("item-1");
+    expect(state.kind).toBe("error");
+    expect(state.retry).toBe(true);
   });
 });

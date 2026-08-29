@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ReconnectBankButton from "@/components/settings/ReconnectBankButton";
+import RepairBankButton from "@/components/settings/RepairBankButton";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Panel from "@/components/ui/Panel";
@@ -189,6 +190,7 @@ export default function BanksSection({
                   {i.status === "active" ? "Connected" : i.status}
                 </Badge>
                 {needsReconnect(i) && <ReconnectBankButton itemId={i.id} />}
+                <RepairBankButton itemId={i.id} />
                 <Button
                   onClick={() => disconnect(i.id)}
                   disabled={busyId === i.id}

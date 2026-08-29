@@ -100,6 +100,12 @@ describe("POST /api/plaid/repair", () => {
     expect(mockBadRequest).toHaveBeenCalled();
   });
 
+  it("returns 400 for a non-string itemId", async () => {
+    const res = await POST(jsonRequest({ itemId: 42 }));
+    expect(res.status).toBe(400);
+    expect(mockBadRequest).toHaveBeenCalledWith("Missing itemId");
+  });
+
   it("returns 404 when the item does not belong to the caller", async () => {
     mockGetItem.mockResolvedValue(null);
     const res = await POST(jsonRequest({ itemId: "item-1" }));
@@ -147,6 +153,20 @@ describe("POST /api/plaid/repair", () => {
     const res = await POST(jsonRequest({ itemId: "item-1" }));
     const body = await res.json();
     expect(body.status).toBe("institution_login_required");
+  });
+
+  it("never persists an unsafe provider payload as the item error code", async () => {
+    mockGetItem.mockResolvedValue(item);
+    mockItemGet.mockRejectedValue({
+      response: { data: { error_code: "token=secret customer@example.com" } },
+    });
+    const res = await POST(jsonRequest({ itemId: "item-1" }));
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      ok: false,
+      status: "institution_login_required",
+    });
+    expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-1", "error", null);
   });
 
   it("reports rate_limited with a 429", async () => {
