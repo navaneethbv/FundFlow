@@ -152,8 +152,8 @@ describe("DebtPlannerView", () => {
     // Every dt inside the dl is followed by its dd in the same div group.
     expect(dlBody).toContain("<dt ");
     expect(dlBody).toContain("<dd ");
-    expect((dlBody.match(/<dt /g) ?? []).length).toBe(4);
-    expect((dlBody.match(/<dd /g) ?? []).length).toBe(4);
+    expect(dlBody.match(/<dt /g) ?? []).toHaveLength(4);
+    expect(dlBody.match(/<dd /g) ?? []).toHaveLength(4);
   });
 
   it("sets the table header and stat-grid labels in the mono face", () => {

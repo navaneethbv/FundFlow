@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   formatCurrency,
+  gainLossColor,
+  inflowMarker,
   roundsToZero,
   titleCase,
   formatFrequency,
@@ -82,6 +84,22 @@ describe("roundsToZero / neutral display zeros", () => {
     expect(roundsToZero(-1)).toBe(false);
     expect(roundsToZero(0.01)).toBe(false);
     expect(roundsToZero(-0.01)).toBe(false);
+  });
+});
+
+describe("inflowMarker / gainLossColor", () => {
+  it("marks only a real gain", () => {
+    expect(inflowMarker(12.34)).toBe("+");
+    expect(inflowMarker(-12.34)).toBe("");
+    expect(inflowMarker(0)).toBe("");
+    expect(inflowMarker(-0.004)).toBe("");
+  });
+
+  it("colours a gain, a loss, and nothing for a display zero", () => {
+    expect(gainLossColor(1)).toBe("var(--viz-pos)");
+    expect(gainLossColor(-1)).toBe("var(--viz-neg)");
+    expect(gainLossColor(0)).toBeUndefined();
+    expect(gainLossColor(0.004)).toBeUndefined();
   });
 });
 

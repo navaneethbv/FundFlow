@@ -78,6 +78,7 @@ export default function DuplicateReview({
 
   const visiblePairs = pairs.slice(0, VISIBLE_PAIR_COUNT);
   const candidatesRemaining = pairs.length;
+  const candidateNoun = candidatesRemaining === 1 ? "candidate" : "candidates";
 
   async function decide(pair: DuplicatePair, decision: "confirmed" | "dismissed") {
     const keptId = keepBySubject[pair.subjectId];
@@ -157,7 +158,7 @@ export default function DuplicateReview({
           <p className="text-sm text-muted">
             {pairs.length === 0
               ? "No duplicate candidates to review."
-              : `${candidatesRemaining} duplicate candidate${candidatesRemaining === 1 ? "" : "s"} to review`}
+              : `${candidatesRemaining} duplicate ${candidateNoun} to review`}
           </p>
           <span
             data-duplicate-status

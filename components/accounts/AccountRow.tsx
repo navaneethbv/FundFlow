@@ -1,15 +1,12 @@
 import AreaSparkline from "@/components/charts/AreaSparkline";
 import { InstitutionAvatar } from "@/components/ui/Avatar";
-import { formatCurrency, roundsToZero } from "@/lib/format";
+import { formatCurrency, gainLossColor, inflowMarker } from "@/lib/format";
 import type { AccountsPageRow } from "@/lib/accounts-page";
 
 function formatChange(row: AccountsPageRow): string | null {
   if (!row.monthChange) return null;
   const amount = row.monthChange.amount;
-  const amountLabel = `${roundsToZero(amount) ? "" : amount >= 0 ? "+" : ""}${formatCurrency(
-    amount,
-    row.currency,
-  )}`;
+  const amountLabel = `${inflowMarker(amount)}${formatCurrency(amount, row.currency)}`;
   if (row.monthChange.pct === null) return amountLabel;
   return `${amountLabel} (${row.monthChange.pct >= 0 ? "+" : ""}${
     row.monthChange.pct
@@ -71,16 +68,7 @@ export default function AccountRow({
         </p>
         <p className="mt-1 text-xs tabular-nums">
           {change ? (
-            <span
-              data-money
-              style={{
-                color: roundsToZero(row.monthChange!.amount)
-                  ? undefined
-                  : row.monthChange!.amount >= 0
-                    ? "var(--viz-pos)"
-                    : "var(--viz-neg)",
-              }}
-            >
+            <span data-money style={{ color: gainLossColor(row.monthChange!.amount) }}>
               {change}
             </span>
           ) : (

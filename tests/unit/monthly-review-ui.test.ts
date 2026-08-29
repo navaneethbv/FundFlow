@@ -24,7 +24,10 @@ describe("monthly review UI", () => {
     const review = readFileSync("app/review/page.tsx", "utf8");
     expect(review).toContain('style={{ color: "var(--viz-pos)" }}');
     expect(review).toContain('style={{ color: "var(--viz-neg)" }}');
-    expect(review).toContain('net >= 0 ? "var(--viz-pos)" : "var(--viz-neg)"');
+    // The Net tile's direction colour comes from the shared money-direction
+    // helper (which resolves to the --viz-pos / --viz-neg tokens; see
+    // format.test.ts), never a status-semantic class.
+    expect(review).toContain("gainLossColor(net)");
     expect(review).not.toContain("text-success");
     expect(review).not.toContain("text-danger");
   });

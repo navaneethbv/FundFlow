@@ -57,9 +57,9 @@ describe("DuplicateReview", () => {
     }));
 
     // Only the first candidate's full form is in the DOM...
-    expect((html.match(/Choose the transaction to keep/g) ?? []).length).toBe(1);
-    expect((html.match(/Confirm duplicate/g) ?? []).length).toBe(1);
-    expect((html.match(/Dismiss/g) ?? []).length).toBe(1);
+    expect(html.match(/Choose the transaction to keep/g) ?? []).toHaveLength(1);
+    expect(html.match(/Confirm duplicate/g) ?? []).toHaveLength(1);
+    expect(html.match(/Dismiss/g) ?? []).toHaveLength(1);
     // ...while the summary still states the true candidate count.
     expect(html).toContain("50 duplicate candidates to review");
     // Every remaining candidate stays in the client state, not dropped to

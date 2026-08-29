@@ -285,7 +285,7 @@ const recorded: Recorded = { columns: [], eq: [], gte: [], lt: [], order: [], ra
       { scope: MINE, pageSize },
     );
     expect(recorded.order.slice(0, 2)).toEqual(["date", "id"]);
-    expect(recorded.ranges.length).toBe(3);
+    expect(recorded.ranges).toHaveLength(3);
     const ids = result.rows.map((row) => row.id);
     expect(new Set(ids).size).toBe(25);
     expect(ids).toEqual(rows.map((row) => row.id));

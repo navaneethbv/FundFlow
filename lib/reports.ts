@@ -400,6 +400,22 @@ function oneOf<T extends string>(
     : null;
 }
 
+/**
+ * v2 requires an explicit `sort` + `direction`; a v1 row (saved before sorting
+ * existed) migrates by defaulting them. Returns null only for a v2 payload
+ * that is missing them, so `parseReportFilters` stays a flat guard sequence.
+ */
+function parseSortFields(
+  raw: Record<string, unknown>,
+): { sort: ReportSort; direction: ReportDirection } | null {
+  const sort = oneOf(raw.sort, REPORT_SORTS);
+  const direction = oneOf(raw.direction, REPORT_DIRECTIONS);
+  if (raw.version === REPORT_FILTERS_VERSION && (!sort || !direction)) {
+    return null;
+  }
+  return { sort: sort ?? "date", direction: direction ?? "desc" };
+}
+
 export function parseReportFilters(input: unknown): ReportFilters | null {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
     return null;
@@ -431,11 +447,8 @@ export function parseReportFilters(input: unknown): ReportFilters | null {
   const categories = parseStringList(raw.categories);
   if (!accounts || !merchants || !categories) return null;
 
-  const sort = oneOf(raw.sort, REPORT_SORTS);
-  const direction = oneOf(raw.direction, REPORT_DIRECTIONS);
-  // The current schema requires both sort fields; a v1 row (pre-sorting)
-  // migrates by defaulting them so old saved reports keep loading.
-  if (raw.version === REPORT_FILTERS_VERSION && (!sort || !direction)) return null;
+  const sortFields = parseSortFields(raw);
+  if (!sortFields) return null;
 
   return {
     version: REPORT_FILTERS_VERSION,
@@ -449,8 +462,8 @@ export function parseReportFilters(input: unknown): ReportFilters | null {
     merchants,
     categories,
     excludePending: raw.excludePending,
-    sort: sort ?? "date",
-    direction: direction ?? "desc",
+    sort: sortFields.sort,
+    direction: sortFields.direction,
   };
 }
 

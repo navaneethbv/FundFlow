@@ -106,7 +106,7 @@ describe("getWeeklyReportData", () => {
   it("chunks split lookups so no in() call receives the whole set or overruns the request line", async () => {
     const { supabase, splitInArgs } = paginatedTransactionsClient(1001);
     await getWeeklyReportData(supabase as never, "user-1", period);
-    expect(splitInArgs.length).toBe(5);
+    expect(splitInArgs).toHaveLength(5);
     expect(splitInArgs.map((chunk) => chunk.length)).toEqual([250, 250, 250, 250, 1]);
     for (const chunk of splitInArgs) {
       expect(chunk.length).toBeLessThanOrEqual(250);

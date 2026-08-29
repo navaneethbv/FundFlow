@@ -494,6 +494,10 @@ function LedgerTableRow({
   const currency = row.iso_currency_code ?? "USD";
   const isMoneyIn = row.amount < 0 && !roundsToZero(row.amount);
   const showsAmount = !roundsToZero(row.amount);
+  const amountSign = isMoneyIn ? "+" : "-";
+  const amountDisplay = showsAmount
+    ? `${amountSign}${formatCurrency(Math.abs(row.amount), currency)}`
+    : formatCurrency(0, currency);
 
   return (
     <Fragment>
@@ -579,7 +583,7 @@ function LedgerTableRow({
           className="whitespace-nowrap px-4 py-3 text-right align-top font-semibold"
           style={isMoneyIn ? { color: "var(--viz-pos)" } : undefined}
         >
-          {showsAmount ? `${isMoneyIn ? "+" : "-"}${formatCurrency(Math.abs(row.amount), currency)}` : formatCurrency(0, currency)}
+          {amountDisplay}
         </td>
         <td className="px-2 py-3 text-right align-top">
           <TransactionEditor

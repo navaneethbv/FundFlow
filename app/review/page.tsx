@@ -5,7 +5,7 @@ import ExportReportButton from "@/components/review/ExportReportButton";
 import Panel from "@/components/ui/Panel";
 import { goalSummary, getGoals } from "@/lib/goals";
 import { getDashboardData } from "@/lib/dashboard";
-import { formatCurrency, formatMonth, roundsToZero, titleCase } from "@/lib/format";
+import { formatCurrency, formatMonth, gainLossColor, inflowMarker, titleCase } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -60,9 +60,9 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
           <p
             data-money
             className="display text-3xl"
-            style={{ color: roundsToZero(net) ? undefined : net >= 0 ? "var(--viz-pos)" : "var(--viz-neg)" }}
+            style={{ color: gainLossColor(net) }}
           >
-            {roundsToZero(net) ? "" : net >= 0 ? "+" : ""}
+            {inflowMarker(net)}
             {formatCurrency(net)}
           </p>
         </Panel>

@@ -23,6 +23,25 @@ export function roundsToZero(
   return Math.floor(Math.abs(number * scale) + 0.5) === 0;
 }
 
+/**
+ * Sign marker to place before a `formatCurrency` output for a net delta where
+ * money in is the positive direction (net-worth change, monthly savings):
+ * `"+"` for a gain, `""` for a loss (formatCurrency prints its own minus) or a
+ * display zero.
+ */
+export function inflowMarker(amount: number): "" | "+" {
+  return !roundsToZero(amount) && amount > 0 ? "+" : "";
+}
+
+/**
+ * Direction colour for a net delta where money in is the positive direction:
+ * the gain hue, the loss hue, or no colour at all for a display zero.
+ */
+export function gainLossColor(amount: number): string | undefined {
+  if (roundsToZero(amount)) return undefined;
+  return amount >= 0 ? "var(--viz-pos)" : "var(--viz-neg)";
+}
+
 export function formatCurrency(
   amount: number | null | undefined,
   currency = "USD",

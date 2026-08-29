@@ -51,7 +51,7 @@ describe("chart nested-interactive contract", () => {
     expect(html).not.toContain('role="img"');
     expect(html).toContain('aria-label="View Jan');
     // The drill-downs survive as real anchors with names.
-    expect((html.match(/<a href=/g) ?? []).length).toBe(labels.length);
+    expect(html.match(/<a href=/g) ?? []).toHaveLength(labels.length);
   });
 
   it("keeps a plain non-linked DonutChart as an accessible image", () => {
@@ -82,7 +82,7 @@ describe("chart nested-interactive contract", () => {
     expect(html).toContain('aria-label="Groceries: $100');
     // The two slice links render as real anchors inside the SVG.
     const svg = html.slice(html.indexOf("<svg"), html.indexOf("</svg>"));
-    expect((svg.match(/<a href=/g) ?? []).length).toBe(2);
+    expect(svg.match(/<a href=/g) ?? []).toHaveLength(2);
     expect(html).toContain('/transactions?category=GROC');
   });
 
@@ -99,7 +99,7 @@ describe("chart nested-interactive contract", () => {
     );
     expect(linked).not.toContain('role="img"');
     expect(linked).toContain('aria-label="View Jul');
-    expect((linked.match(/<a href=/g) ?? []).length).toBe(2);
+    expect(linked.match(/<a href=/g) ?? []).toHaveLength(2);
 
     const plain = renderToStaticMarkup(
       createElement(DivergingColumns, {
