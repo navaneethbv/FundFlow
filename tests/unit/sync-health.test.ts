@@ -84,6 +84,22 @@ describe("deriveProductSyncHealth", () => {
       }),
     ).toMatchObject({ state: "repair_required", safeErrorCode: null });
   });
+
+  it.each([
+    ["rate_limited", "rate_limited"],
+    ["no_investment_product", "product_unavailable"],
+    ["product_not_ready", "repair_required"],
+  ] as const)("honors the recorded non-error investment outcome %s", (code, state) => {
+    expect(
+      deriveProductSyncHealth({
+        itemStatus: "active",
+        itemErrorCode: null,
+        latestJob: job("done", "2026-08-29T11:00:00.000Z", code),
+        latestSuccessfulJob: job("done", "2026-08-29T11:00:00.000Z", code),
+        now: NOW,
+      }),
+    ).toMatchObject({ state, safeErrorCode: code });
+  });
 });
 
 describe("loadInstitutionObservability", () => {

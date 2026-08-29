@@ -150,10 +150,12 @@ export function deriveProductSyncHealth(input: Readonly<{
   let state: ProductSyncState;
   if (input.itemStatus !== "active") {
     state = "repair_required";
-  } else if (input.latestJob?.status === "failed") {
-    if (code && RATE_LIMIT_CODES.has(code)) state = "rate_limited";
-    else if (code && PRODUCT_UNAVAILABLE_CODES.has(code)) state = "product_unavailable";
-    else state = "repair_required";
+  } else if (code && RATE_LIMIT_CODES.has(code)) {
+    state = "rate_limited";
+  } else if (code && PRODUCT_UNAVAILABLE_CODES.has(code)) {
+    state = "product_unavailable";
+  } else if (input.latestJob?.status === "failed" || code) {
+    state = "repair_required";
   } else if (!lastSuccessAt) {
     state = "never_synced";
   } else {
