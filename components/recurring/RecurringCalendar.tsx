@@ -20,7 +20,6 @@ function dateKey(date: Date): string {
 export function buildMonthGrid(month: string): CalendarCell[][] {
   const [year, monthIndex] = month.split("-").map(Number);
   const first = new Date(Date.UTC(year!, monthIndex! - 1, 1));
-  const daysInMonth = new Date(Date.UTC(year!, monthIndex!, 0)).getUTCDate();
   const startOffset = first.getUTCDay();
   const grid: CalendarCell[][] = [];
   let cursor = new Date(Date.UTC(year!, monthIndex! - 1, 1 - startOffset));
