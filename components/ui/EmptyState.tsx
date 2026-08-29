@@ -4,12 +4,15 @@ export default function EmptyState({
   title,
   description,
   action,
+  headingLevel = 3,
 }: Readonly<{
   icon?: React.ReactNode;
   title: string;
   description?: string;
   action?: React.ReactNode;
+  headingLevel?: 2 | 3;
 }>) {
+  const Heading = headingLevel === 2 ? "h2" : "h3";
   return (
     <div className="rounded-card border border-dashed border-panel-border bg-panel px-4 py-14 text-center shadow-card">
       {icon && (
@@ -17,7 +20,7 @@ export default function EmptyState({
           {icon}
         </div>
       )}
-      <h3 className="text-xl font-bold tracking-tight">{title}</h3>
+      <Heading className="text-xl font-bold tracking-tight">{title}</Heading>
       {description && (
         <p className="mx-auto mb-5 mt-2 max-w-sm text-sm text-muted">
           {description}

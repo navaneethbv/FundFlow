@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import type { AccountBase } from "plaid";
 import { createServiceClient } from "@/lib/supabase/service";
 import { encryptSecret, decryptSecret, decryptSecretDetailed } from "@/lib/crypto";
+import { normalizeExternalDisplayText } from "@/lib/external-display-text";
 import { getPlaidClient } from "@/lib/plaid";
 import type { PlaidItemRow } from "@/lib/types";
 import { logError } from "@/lib/log";
@@ -137,8 +138,6 @@ export async function getItem(
   return (data as PlaidItemRow) ?? null;
 }
 
-import { normalizeExternalDisplayText } from "@/lib/external-display-text";
-
 /** Upsert accounts for an item. Balances refresh on every sync. */
 export async function upsertAccounts(
   userId: string,
@@ -152,8 +151,8 @@ export async function upsertAccounts(
     user_id: userId,
     plaid_item_id: itemDbId,
     plaid_account_id: a.account_id,
-    name: normalizeExternalDisplayText(a.name) ?? a.name ?? null,
-    official_name: normalizeExternalDisplayText(a.official_name) ?? a.official_name ?? null,
+    name: normalizeExternalDisplayText(a.name),
+    official_name: normalizeExternalDisplayText(a.official_name),
     mask: a.mask ?? null, // masked number only
     type: a.type ?? null,
     subtype: a.subtype ?? null,

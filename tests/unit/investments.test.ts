@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  buildInvestmentAccountCoverage,
   buildInvestmentsPage,
   classifySecurityType,
   externalFlowsFromTransactions,
@@ -40,6 +41,28 @@ describe("classifySecurityType", () => {
     expect(classifySecurityType("derivative")).toBe("Other");
     expect(classifySecurityType("something-new")).toBe("Other");
     expect(classifySecurityType(null)).toBe("Unclassified");
+  });
+});
+
+describe("buildInvestmentAccountCoverage", () => {
+  it("falls back to account balance when a holding has no usable value", () => {
+    const coverage = buildInvestmentAccountCoverage(
+      [
+        {
+          id: "acct-1",
+          name: "401k",
+          source: "plaid",
+          type: "investment",
+          subtype: "401k",
+          balance: 5000,
+          currency: "USD",
+        },
+      ],
+      [holding({ value: null, quantity: null, price: null })],
+    );
+
+    expect(coverage.total).toBe(5000);
+    expect(coverage.accounts[0]!.valueSource).toBe("account-balance");
   });
 });
 

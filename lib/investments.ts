@@ -65,11 +65,18 @@ export function buildInvestmentAccountCoverage(
   for (const holding of holdings) {
     if (!holding.isActive) continue;
     const acctId = holding.accountId ?? holding.manualAccountId;
-    if (acctId) {
-      accountsWithHoldings.add(acctId);
-      const val = holding.value ?? ((holding.quantity ?? 0) * (holding.price ?? 0));
-      holdingSumByAccount.set(acctId, (holdingSumByAccount.get(acctId) ?? 0) + val);
-    }
+    if (!acctId) continue;
+    const derivedValue =
+      holding.quantity !== null && holding.price !== null
+        ? holding.quantity * holding.price
+        : null;
+    const value = holding.value ?? derivedValue;
+    if (value === null || !Number.isFinite(value)) continue;
+    accountsWithHoldings.add(acctId);
+    holdingSumByAccount.set(
+      acctId,
+      (holdingSumByAccount.get(acctId) ?? 0) + value,
+    );
   }
 
   let total = 0;

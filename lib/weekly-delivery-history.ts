@@ -1,5 +1,6 @@
 import {
   getWeeklyReportPeriod,
+  isWeeklyReportDue,
   normalizeReportTimezone,
 } from "@/lib/report-period";
 
@@ -15,7 +16,13 @@ export interface StoredDeliveryRow {
 export interface WeeklyDeliveryHistoryItem {
   periodStart: string;
   periodEnd: string;
-  status: "processing" | "sent" | "failed" | "skipped" | "missing";
+  status:
+    | "processing"
+    | "sent"
+    | "failed"
+    | "skipped"
+    | "missing"
+    | "scheduled";
   reason: string | null;
   attemptedAt: string | null;
   sentAt: string | null;
@@ -40,10 +47,15 @@ function humanizeReason(
     case "smtp_error":
     case "email_delivery_failed":
       return "Email delivery service issue";
+    case "missing_account_email":
+      return "The report could not resolve its recipient";
+    case "recipient_undeliverable":
+      return "The recipient address cannot receive reports";
     case "pdf_generation_failed":
+    case "pdf_render_failed":
       return "Report summary generation issue";
     default:
-      return errorCode.replace(/_/g, " ");
+      return status === "skipped" ? "Report skipped" : "Delivery failed";
   }
 }
 
@@ -85,11 +97,12 @@ export function buildWeeklyDeliveryHistory(
         sentAt: stored.sent_at ?? null,
       });
     } else {
+      const scheduled = i === 0 && !isWeeklyReportDue(anchorDate, normTz);
       items.push({
         periodStart: start,
         periodEnd: end,
-        status: "missing",
-        reason: "No run recorded",
+        status: scheduled ? "scheduled" : "missing",
+        reason: scheduled ? "Scheduled for 8:00 AM" : "No run recorded",
         attemptedAt: null,
         sentAt: null,
       });

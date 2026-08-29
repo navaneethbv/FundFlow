@@ -2,6 +2,7 @@ import { buildPayoffPlan, type PayoffPlan } from "@/lib/debt";
 import { financeTotals, type CanonicalFinanceTransaction } from "@/lib/finance-domain";
 import { computeRunwayMonths, medianOf } from "@/lib/insights";
 import { groupKeyFor } from "@/lib/accounts-page";
+import { classifyBalanceSheetAmount } from "@/lib/account-balance";
 import { firstSearchParam } from "@/lib/search-params";
 
 /**
@@ -170,12 +171,20 @@ export function computeForecastStartingState(
   for (const a of accounts) {
     const group = groupKeyFor(a.type, a.subtype);
     if (group === "investment") investments += a.balance;
-    else if (group === "credit" || group === "loan") liabilities += Math.abs(a.balance);
+    else if (group === "credit" || group === "loan") {
+      const classified = classifyBalanceSheetAmount(a.balance, a.type, a.subtype);
+      if (classified.kind === "liability") liabilities += classified.amount;
+      else cash += classified.amount;
+    }
     else cash += a.balance;
   }
   for (const m of manualAccounts) {
     if (m.accountType === "investment") investments += m.balance;
-    else if (m.accountType === "liability" || m.accountType === "debt") liabilities += Math.abs(m.balance);
+    else if (m.accountType === "liability" || m.accountType === "debt") {
+      const classified = classifyBalanceSheetAmount(m.balance, m.accountType);
+      if (classified.kind === "liability") liabilities += classified.amount;
+      else cash += classified.amount;
+    }
     else cash += m.balance;
   }
 
@@ -391,4 +400,3 @@ export function computeForecastMilestones(
 
   return milestones;
 }
-

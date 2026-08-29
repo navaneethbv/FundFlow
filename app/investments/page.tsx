@@ -67,7 +67,7 @@ export default async function InvestmentsPage() {
 
   const totalDisplay = coverage.total;
   const hasAccounts = coverage.accounts.length > 0;
-  const hasHoldings = holdings.length > 0;
+  const hasHoldings = holdings.some((holding) => holding.isActive);
 
   return (
     <AppShell active="investments" email={user.email}>
@@ -104,6 +104,7 @@ export default async function InvestmentsPage() {
 
         {!hasAccounts ? (
           <EmptyState
+            headingLevel={2}
             title="No investment accounts yet"
             description="Connect a brokerage through Settings → Banks, or add a manual holding once you have an account to attach it to."
           />

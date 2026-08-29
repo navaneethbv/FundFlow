@@ -18,10 +18,11 @@ export interface GoalSummaryItem {
 }
 
 export function toGoalSummaryItem(goal: FundedGoal): GoalSummaryItem {
+  const targetAmount = goal.funded_amount + goal.remainingAmount;
   return {
     id: goal.id,
     name: goal.name,
-    targetAmount: goal.target_amount,
+    targetAmount,
     fundedAmount: goal.funded_amount,
     remainingAmount: goal.remainingAmount,
     progressPct: goal.progressPct,

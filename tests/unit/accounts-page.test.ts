@@ -98,7 +98,7 @@ describe("buildAccountsPageData", () => {
     });
   });
 
-  it("groups Plaid and manual rows and keeps liability balances positive", () => {
+  it("groups Plaid and manual rows while preserving signed balances", () => {
     const data = buildAccountsPageData(
       [
         account({
@@ -119,7 +119,7 @@ describe("buildAccountsPageData", () => {
           name: "Student loan",
           type: "debt",
           source: "manual",
-          currentBalance: -500,
+          currentBalance: 500,
         }),
       ],
       [],
@@ -137,6 +137,26 @@ describe("buildAccountsPageData", () => {
     ]);
     expect(data.groups.loan.totals).toEqual([
       { currency: "USD", amount: 500 },
+    ]);
+  });
+
+  it("renders an overpaid credit card as a signed credit", () => {
+    const data = buildAccountsPageData(
+      [
+        account({
+          id: "card-credit",
+          name: "Overpaid card",
+          type: "credit",
+          currentBalance: -2.11,
+        }),
+      ],
+      [],
+      NOW,
+    );
+
+    expect(data.groups.credit.rows[0]?.balance).toBe(-2.11);
+    expect(data.groups.credit.totals).toEqual([
+      { currency: "USD", amount: -2.11 },
     ]);
   });
 
@@ -317,11 +337,11 @@ describe("buildAccountsPageData", () => {
   it("keeps a credit row's month change in the same space as its displayed balance", () => {
     const data = buildAccountsPageData(
       [
-        account({ id: "card-1", name: "Visa", type: "credit", currentBalance: -1500 }),
+        account({ id: "card-1", name: "Visa", type: "credit", currentBalance: 1500 }),
       ],
       [
-        snapshot("card-1", "2026-06-29", -2000),
-        snapshot("card-1", "2026-07-29", -1500),
+        snapshot("card-1", "2026-06-29", 2000),
+        snapshot("card-1", "2026-07-29", 1500),
       ],
       NOW,
     );
@@ -335,11 +355,11 @@ describe("buildAccountsPageData", () => {
   it("reports paying credit debt down as a positive group change", () => {
     const data = buildAccountsPageData(
       [
-        account({ id: "card-1", name: "Visa", type: "credit", currentBalance: -1500 }),
+        account({ id: "card-1", name: "Visa", type: "credit", currentBalance: 1500 }),
       ],
       [
-        snapshot("card-1", "2026-06-29", -2000),
-        snapshot("card-1", "2026-07-29", -1500),
+        snapshot("card-1", "2026-06-29", 2000),
+        snapshot("card-1", "2026-07-29", 1500),
       ],
       NOW,
     );
@@ -349,11 +369,11 @@ describe("buildAccountsPageData", () => {
   it("shows growing credit debt as a negative group change, not a green success", () => {
     const data = buildAccountsPageData(
       [
-        account({ id: "card-1", name: "Visa", type: "credit", currentBalance: -2200 }),
+        account({ id: "card-1", name: "Visa", type: "credit", currentBalance: 2200 }),
       ],
       [
-        snapshot("card-1", "2026-06-29", -2000),
-        snapshot("card-1", "2026-07-29", -2200),
+        snapshot("card-1", "2026-06-29", 2000),
+        snapshot("card-1", "2026-07-29", 2200),
       ],
       NOW,
     );

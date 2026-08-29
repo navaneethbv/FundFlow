@@ -96,6 +96,7 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
 
       {!recap ? (
         <EmptyState
+          headingLevel={2}
           icon={<LineChart aria-hidden className="h-5 w-5" />}
           title={`Nothing tracked in ${year} yet`}
           description="Once transactions land in this year, your recap appears here — totals, top merchants, your biggest month, and where it all went."
@@ -104,13 +105,14 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
         <div className="space-y-5">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <StatTile
+              headingLevel={2}
               label="Total spent"
               value={recap.totalSpend}
               chart={<MiniBars values={recap.monthlySpendSeries} />}
             />
-            <StatTile label="Total income" value={recap.totalIncome} />
+            <StatTile headingLevel={2} label="Total income" value={recap.totalIncome} />
             <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
-              <h3 className="eyebrow">Savings rate</h3>
+              <h2 className="eyebrow">Savings rate</h2>
               <p className="metric-value mt-3 text-3xl">
                 {recap.savingsRate !== null ? `${recap.savingsRate}%` : "N/A"}
               </p>
@@ -119,7 +121,7 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
               </p>
             </section>
             <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
-              <h3 className="eyebrow">Transactions tracked</h3>
+              <h2 className="eyebrow">Transactions tracked</h2>
               <p className="metric-value mt-3 text-3xl">
                 {recap.transactionCount.toLocaleString("en-US")}
               </p>

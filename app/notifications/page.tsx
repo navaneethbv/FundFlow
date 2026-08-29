@@ -7,6 +7,7 @@ import NotificationFeed, { type NotificationRow } from "@/components/notificatio
 import Badge from "@/components/ui/Badge";
 import Panel from "@/components/ui/Panel";
 import { formatDate } from "@/lib/format-date";
+import { titleCase } from "@/lib/format";
 import { DEFAULT_REPORT_TIMEZONE } from "@/lib/report-period";
 import { createClient } from "@/lib/supabase/server";
 
@@ -129,7 +130,7 @@ export default async function NotificationsPage() {
                     </span>
                   </span>
                   <Badge tone={deliveryStatusTone(delivery.status)}>
-                    {delivery.status}
+                    {titleCase(delivery.status)}
                   </Badge>
                 </div>
               ))}

@@ -2,6 +2,7 @@ import {
   classifyBalanceSheetAmount,
   netWorthContribution,
 } from "@/lib/account-balance";
+import { normalizeExternalDisplayText } from "@/lib/external-display-text";
 
 export type AccountGroupKey =
   | "credit"
@@ -261,12 +262,8 @@ function addAmount(map: Map<string, number>, currency: string, amount: number) {
   map.set(currency, (map.get(currency) ?? 0) + amount);
 }
 
-function displayBalance(
-  group: AccountGroupKey,
-  balance: number | null,
-): number | null {
-  if (balance === null) return null;
-  return group === "credit" || group === "loan" ? Math.abs(balance) : balance;
+function displayBalance(balance: number | null): number | null {
+  return balance;
 }
 
 function createAccountGroups(): AccountsPageData["groups"] {
@@ -285,8 +282,6 @@ function createAccountGroups(): AccountsPageData["groups"] {
   };
 }
 
-import { normalizeExternalDisplayText } from "@/lib/external-display-text";
-
 function buildAccountRow(
   account: UnifiedAccountSummary,
   group: AccountGroupKey,
@@ -294,7 +289,7 @@ function buildAccountRow(
   now: Date,
 ): AccountsPageRow {
   const values = history.map(
-    (snapshot) => displayBalance(group, snapshot.currentBalance) ?? 0,
+    (snapshot) => displayBalance(snapshot.currentBalance) ?? 0,
   );
   const rowSeries = history.map((snapshot, index) => ({
     date: snapshot.snapshotDate,
@@ -310,7 +305,7 @@ function buildAccountRow(
     name: `${cleanName}${mask}`,
     type: account.type,
     subtype: account.subtype,
-    balance: displayBalance(group, account.currentBalance),
+    balance: displayBalance(account.currentBalance),
     currency: account.currency,
     institution: account.institution,
     institutionLogo: account.institutionLogo,

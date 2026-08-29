@@ -9,6 +9,9 @@ export default function ConnectedAccounts({
   coverage: InvestmentAccountCoverage;
   currency?: string;
 }>) {
+  const hasMixedCoverage =
+    coverage.accountsWithoutHoldings > 0 &&
+    coverage.accountsWithoutHoldings < coverage.accounts.length;
   return (
     <Panel
       title="Connected investment accounts"
@@ -18,12 +21,14 @@ export default function ConnectedAccounts({
       <div className="space-y-4">
         <div className="rounded-card border border-panel-border bg-panel-2 p-4 text-sm text-muted">
           <p className="font-semibold text-foreground">
-            Security holdings unavailable
+            {hasMixedCoverage
+              ? "Some security holdings unavailable"
+              : "Security holdings unavailable"}
           </p>
           <p className="mt-1">
-            These connected accounts report total balances directly from your
-            institution. Individual security holdings, allocations, and share
-            quantities have not been synchronized yet.
+            {hasMixedCoverage
+              ? "Accounts without synchronized holdings use their institution-reported balance."
+              : "These connected accounts report total balances directly from your institution. Individual security holdings, allocations, and share quantities have not been synchronized yet."}
           </p>
         </div>
 
@@ -42,9 +47,10 @@ export default function ConnectedAccounts({
               </div>
               <div className="text-right">
                 <p data-money className="metric-value text-sm">
-                  {acct.balance !== null
-                    ? formatCurrency(acct.balance, acct.currency || currency)
-                    : "—"}
+                  {formatCurrency(
+                    acct.displayValue,
+                    acct.currency || currency,
+                  )}
                 </p>
                 <span className="inline-block rounded bg-panel-2 px-1.5 py-0.5 text-[10px] font-medium text-muted">
                   {acct.valueSource === "holdings"

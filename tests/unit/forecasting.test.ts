@@ -196,12 +196,12 @@ describe("computeForecastStartingState", () => {
     expect(state).toEqual({ cash: 5000, investments: 20000, liabilities: 1500 });
   });
 
-  it("takes a liability balance as positive regardless of its stored sign", () => {
+  it("treats a negative liability balance as a credit asset", () => {
     const state = computeForecastStartingState(
       [{ type: "loan", subtype: "student", balance: -1000 }],
       [],
     );
-    expect(state.liabilities).toBe(1000);
+    expect(state).toEqual({ cash: 1000, investments: 0, liabilities: 0 });
   });
 
   it("includes manual accounts alongside Plaid ones", () => {
@@ -386,4 +386,3 @@ describe("computeForecastMilestones", () => {
     expect(fire!.description.toLowerCase()).toContain("planning assumption");
   });
 });
-

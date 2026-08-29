@@ -280,7 +280,7 @@ describe("planning-depth", () => {
     expect(view.sinkingFunds).toEqual([]);
 
     const withDebt = buildPlanningDepthView({
-      accounts: [{ name: "Card", type: "credit", balance: -200, apr: 20, minimumPayment: 25 }],
+      accounts: [{ name: "Card", type: "credit", balance: 200, apr: 20, minimumPayment: 25 }],
       monthlyIncome: 5000,
       monthlySpend: 4000,
       goals: [],

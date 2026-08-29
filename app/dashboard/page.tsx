@@ -69,7 +69,6 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
   const goalsPromise = goalsV2 && user
     ? loadGoalsPageData(supabase, user.id)
         .then((res) => res.goals.map(toGoalSummaryItem))
-        .catch(async () => (await getGoals(supabase)).map((g) => toLegacyGoalSummaryItem(g)))
     : getGoals(supabase).then((plain) => plain.map((g) => toLegacyGoalSummaryItem(g)));
 
   const [data, { data: items }, goals, { data: householdRows }] = await Promise.all([

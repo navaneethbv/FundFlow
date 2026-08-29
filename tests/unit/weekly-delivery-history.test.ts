@@ -88,4 +88,34 @@ describe("buildWeeklyDeliveryHistory", () => {
     expect(history[0]!.reason).toBe("Email delivery service issue");
     expect(history[1]!.reason).toBe("No transaction activity");
   });
+
+  it("does not call the latest period missing before Monday delivery time", () => {
+    const history = buildWeeklyDeliveryHistory(
+      [],
+      new Date("2026-08-31T14:30:00.000Z"),
+      "America/Los_Angeles",
+      1,
+    );
+    expect(history[0]).toMatchObject({
+      status: "scheduled",
+      reason: "Scheduled for 8:00 AM",
+    });
+  });
+
+  it("does not expose unknown internal error codes", () => {
+    const history = buildWeeklyDeliveryHistory(
+      [
+        {
+          period_start: "2026-08-17",
+          period_end: "2026-08-23",
+          status: "failed",
+          error_code: "provider_550_private_detail",
+        },
+      ],
+      anchorDate,
+      "America/Los_Angeles",
+      1,
+    );
+    expect(history[0]!.reason).toBe("Delivery failed");
+  });
 });

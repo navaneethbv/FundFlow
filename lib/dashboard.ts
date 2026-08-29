@@ -31,6 +31,7 @@ import {
   type SavingsRatePoint,
 } from "@/lib/insights";
 import { aggregateSpendWithSplits } from "@/lib/transaction-quality";
+import { normalizeExternalDisplayText } from "@/lib/external-display-text";
 import {
   fromTransactionRow,
   projectFinanceTransactions,
@@ -721,7 +722,11 @@ export async function getDashboardData(
     ),
   ]);
 
-  const allAccounts = (accounts ?? []) as AccountSummary[];
+  const allAccounts = ((accounts ?? []) as AccountSummary[]).map((account) => ({
+    ...account,
+    name: normalizeExternalDisplayText(account.name),
+    official_name: normalizeExternalDisplayText(account.official_name),
+  }));
   const lastSyncAt = (lastSyncJob?.updated_at as string | undefined) ?? null;
   const allItems = (items ?? []) as Array<{ id: string; institution_name: string | null }>;
   const allBudgets = (budgets ?? []) as Array<{

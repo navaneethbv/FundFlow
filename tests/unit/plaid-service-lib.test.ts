@@ -256,6 +256,26 @@ describe("lib/plaid-service", () => {
     expect(mockServiceClient.from).not.toHaveBeenCalled();
   });
 
+  it("stores null instead of preserving a replacement-only account name", async () => {
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    mockServiceClient.from.mockReturnValue({ upsert });
+    const accounts = [
+      {
+        account_id: "acc-corrupt",
+        name: "\uFFFD\uFFFD",
+        official_name: "\uFFFD",
+        balances: {},
+      },
+    ] as unknown as AccountBase[];
+
+    await upsertAccounts("user-1", "item-db-1", accounts);
+
+    expect(upsert).toHaveBeenCalledWith(
+      [expect.objectContaining({ name: null, official_name: null })],
+      { onConflict: "plaid_account_id" },
+    );
+  });
+
   it("updateItemCursor updates cursor on plaid_items", async () => {
     const eq = vi.fn().mockResolvedValue({ error: null });
     const update = vi.fn().mockReturnValue({ eq });

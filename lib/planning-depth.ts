@@ -149,7 +149,7 @@ export function buildPlanningDepthView(input: {
     .map((account, index) => ({
       id: `${index}`,
       name: account.name ?? "Debt",
-      balance: Math.abs(account.balance ?? 0),
+      balance: account.balance ?? 0,
       apr: account.apr ?? null,
       minimumPayment: account.minimumPayment ?? null,
     }))

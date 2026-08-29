@@ -175,7 +175,7 @@ export async function loadInvestmentAccounts(
       .eq("user_id", userId),
     supabase
       .from("manual_accounts")
-      .select("id, name, type, subtype, current_balance, currency")
+      .select("id, name, account_type, balance")
       .eq("user_id", userId),
   ]);
   if (plaidResult.error) throw plaidResult.error;
@@ -211,15 +211,15 @@ export async function loadInvestmentAccounts(
     }));
 
   const manualAccounts = (manualResult.data ?? [])
-    .filter((a) => isInvestment(a.type as string | null, a.subtype as string | null))
+    .filter((a) => isInvestment(a.account_type as string | null, null))
     .map((a) => ({
       id: a.id as string,
       name: a.name as string,
       source: "manual" as const,
-      type: (a.type as string | null) ?? null,
-      subtype: (a.subtype as string | null) ?? null,
-      balance: a.current_balance !== null ? Number(a.current_balance) : null,
-      currency: (a.currency as string | null) ?? "USD",
+      type: (a.account_type as string | null) ?? null,
+      subtype: null,
+      balance: a.balance !== null ? Number(a.balance) : null,
+      currency: "USD",
     }));
 
   return [...plaidAccounts, ...manualAccounts].sort((a, b) =>
