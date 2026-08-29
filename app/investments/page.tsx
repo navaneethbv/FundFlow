@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
@@ -68,6 +69,47 @@ export default async function InvestmentsPage() {
   const totalDisplay = coverage.total;
   const hasAccounts = coverage.accounts.length > 0;
   const hasHoldings = holdings.some((holding) => holding.isActive);
+  let investmentContent: ReactNode;
+
+  if (!hasAccounts) {
+    investmentContent = (
+      <EmptyState
+        headingLevel={2}
+        title="No investment accounts yet"
+        description="Connect a brokerage through Settings → Banks, or add a manual holding once you have an account to attach it to."
+      />
+    );
+  } else if (!hasHoldings) {
+    investmentContent = <ConnectedAccounts coverage={coverage} currency={currency} />;
+  } else {
+    investmentContent = (
+      <div className="space-y-6">
+        {coverage.accountsWithoutHoldings > 0 && (
+          <ConnectedAccounts coverage={coverage} currency={currency} />
+        )}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <Panel title="Holdings" className="lg:col-span-2" padding="lg">
+            <HoldingsTable page={page} currency={currency} />
+          </Panel>
+          <div className="space-y-6">
+            <Panel title="Allocation" padding="lg">
+              <AllocationView page={page} currency={currency} />
+            </Panel>
+            <Panel title="Performance" padding="lg">
+              <PerformanceChart
+                balanceHistory={page.balanceHistory}
+                returns={returns}
+                currency={currency}
+              />
+            </Panel>
+            <Panel title="Top movers" padding="lg">
+              <TopMovers movers={page.topMovers} />
+            </Panel>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AppShell active="investments" email={user.email}>
@@ -102,41 +144,7 @@ export default async function InvestmentsPage() {
           }
         />
 
-        {!hasAccounts ? (
-          <EmptyState
-            headingLevel={2}
-            title="No investment accounts yet"
-            description="Connect a brokerage through Settings → Banks, or add a manual holding once you have an account to attach it to."
-          />
-        ) : !hasHoldings ? (
-          <ConnectedAccounts coverage={coverage} currency={currency} />
-        ) : (
-          <div className="space-y-6">
-            {coverage.accountsWithoutHoldings > 0 && (
-              <ConnectedAccounts coverage={coverage} currency={currency} />
-            )}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-              <Panel title="Holdings" className="lg:col-span-2" padding="lg">
-                <HoldingsTable page={page} currency={currency} />
-              </Panel>
-              <div className="space-y-6">
-                <Panel title="Allocation" padding="lg">
-                  <AllocationView page={page} currency={currency} />
-                </Panel>
-                <Panel title="Performance" padding="lg">
-                  <PerformanceChart
-                    balanceHistory={page.balanceHistory}
-                    returns={returns}
-                    currency={currency}
-                  />
-                </Panel>
-                <Panel title="Top movers" padding="lg">
-                  <TopMovers movers={page.topMovers} />
-                </Panel>
-              </div>
-            </div>
-          </div>
-        )}
+        {investmentContent}
       </div>
     </AppShell>
   );

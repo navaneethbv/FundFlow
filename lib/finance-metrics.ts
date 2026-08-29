@@ -4,8 +4,8 @@
  * Negative savings rates (overspending) are preserved as signed numbers and NOT clamped to zero.
  */
 export function computeSavingsRate(
-  income: number | null | undefined,
-  spending: number | null | undefined,
+  income: number | null = 0,
+  spending: number | null = 0,
 ): number | null {
   const inc = income ?? 0;
   const spend = spending ?? 0;

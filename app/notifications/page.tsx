@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 import {
   buildWeeklyDeliveryHistory,
   type StoredDeliveryRow,
+  type WeeklyDeliveryHistoryItem,
 } from "@/lib/weekly-delivery-history";
 
 function deliveryStatusTone(
@@ -25,6 +26,13 @@ function deliveryStatusTone(
   if (status === "failed") return "danger";
   if (status === "missing" || status === "skipped") return "neutral";
   return "neutral";
+}
+
+function deliveryDescription(delivery: WeeklyDeliveryHistoryItem): string {
+  if (delivery.sentAt) return `Sent ${formatDate(delivery.sentAt)}`;
+  if (delivery.reason) return delivery.reason;
+  if (delivery.attemptedAt) return `Attempted ${formatDate(delivery.attemptedAt)}`;
+  return "Not delivered";
 }
 
 export default async function NotificationsPage() {
@@ -121,12 +129,7 @@ export default async function NotificationsPage() {
                       {formatDate(delivery.periodEnd)}
                     </span>
                     <span className="block text-xs text-muted font-mono">
-                      {delivery.sentAt
-                        ? `Sent ${formatDate(delivery.sentAt)}`
-                        : delivery.reason ??
-                          (delivery.attemptedAt
-                            ? `Attempted ${formatDate(delivery.attemptedAt)}`
-                            : "Not delivered")}
+                      {deliveryDescription(delivery)}
                     </span>
                   </span>
                   <Badge tone={deliveryStatusTone(delivery.status)}>
