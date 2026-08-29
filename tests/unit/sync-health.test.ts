@@ -7,6 +7,62 @@ import { clientStub } from "../fixtures/supabase-query";
 
 const NOW = new Date("2026-08-29T12:00:00.000Z");
 
+type FakeRow = Record<string, unknown>;
+
+function queryableSupabase(seed: Record<string, FakeRow[]>) {
+  return {
+    from(table: string) {
+      let rows = [...(seed[table] ?? [])];
+      let start = 0;
+      let end: number | null = null;
+      let rowLimit: number | null = null;
+      const builder = {
+        select() { return builder; },
+        eq(column: string, value: unknown) {
+          rows = rows.filter((row) => row[column] === value);
+          return builder;
+        },
+        in(column: string, values: unknown[]) {
+          rows = rows.filter((row) => values.includes(row[column]));
+          return builder;
+        },
+        gt(column: string, value: unknown) {
+          rows = rows.filter((row) => String(row[column]) > String(value));
+          return builder;
+        },
+        order(column: string, options?: { ascending?: boolean }) {
+          rows.sort((left, right) => {
+            const comparison = String(left[column]).localeCompare(String(right[column]));
+            return options?.ascending === false ? -comparison : comparison;
+          });
+          return builder;
+        },
+        limit(value: number) {
+          rowLimit = value;
+          return builder;
+        },
+        range(from: number, to: number) {
+          start = from;
+          end = to;
+          return builder;
+        },
+        maybeSingle() {
+          return Promise.resolve({ data: resultRows()[0] ?? null, error: null });
+        },
+        then(resolve: (value: { data: FakeRow[]; error: null }) => unknown) {
+          return Promise.resolve(resolve({ data: resultRows(), error: null }));
+        },
+      };
+      function resultRows() {
+        const last = end === null ? undefined : end + 1;
+        const ranged = rows.slice(start, last);
+        return rowLimit === null ? ranged : ranged.slice(0, rowLimit);
+      }
+      return builder;
+    },
+  };
+}
+
 function job(
   status: "pending" | "running" | "done" | "failed",
   updatedAt: string,
@@ -130,5 +186,76 @@ describe("loadInstitutionObservability", () => {
     });
     expect(supabase.scopedToUser("accounts", "user-1")).toBe(true);
     expect(supabase.scopedToUser("sync_jobs", "user-1")).toBe(true);
+  });
+
+  it("loads product health, bounded coverage, and snapshot-anchored reconciliation", async () => {
+    const supabase = queryableSupabase({
+      accounts: [
+        {
+          id: "account-1",
+          user_id: "user-1",
+          plaid_item_id: "item-1",
+          name: "Checking",
+          mask: "1234",
+          type: "depository",
+          subtype: "checking",
+          current_balance: 1325,
+          updated_at: "2026-08-29T10:00:00.000Z",
+        },
+      ],
+      sync_jobs: [
+        {
+          user_id: "user-1",
+          plaid_item_id: "item-1",
+          job_type: "transactions",
+          status: "done",
+          updated_at: "2026-08-29T11:00:00.000Z",
+          last_error: null,
+        },
+        {
+          user_id: "user-1",
+          plaid_item_id: "item-1",
+          job_type: "investments",
+          status: "done",
+          updated_at: "2026-08-29T11:30:00.000Z",
+          last_error: "no_investment_product",
+        },
+      ],
+      account_balance_snapshots: [
+        {
+          user_id: "user-1",
+          account_id: "account-1",
+          snapshot_date: "2026-08-01",
+          current_balance: 1000,
+        },
+      ],
+      transactions: [
+        { id: "txn-1", user_id: "user-1", account_id: "account-1", date: "2026-08-02", amount: -500 },
+        { id: "txn-2", user_id: "user-1", account_id: "account-1", date: "2026-08-03", amount: 175 },
+      ],
+    });
+
+    const result = await loadInstitutionObservability(
+      supabase as never,
+      "user-1",
+      [{ id: "item-1", institution_name: "Test Bank", status: "active", error_code: null }],
+      NOW,
+    );
+
+    expect(result.institutions[0]).toMatchObject({
+      transactions: { state: "healthy" },
+      investments: { state: "product_unavailable" },
+      accountsUpdatedAt: "2026-08-29T10:00:00.000Z",
+      oldestTransactionDate: "2026-08-02",
+      newestTransactionDate: "2026-08-03",
+    });
+    expect(result.reconciliations[0]).toMatchObject({
+      providerBalance: 1325,
+      ledgerBalance: 1325,
+      difference: 0,
+      state: "balanced",
+      oldestTransactionDate: "2026-08-02",
+      newestTransactionDate: "2026-08-03",
+    });
   });
 });
