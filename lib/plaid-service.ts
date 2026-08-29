@@ -171,7 +171,7 @@ export async function upsertAccounts(
 /** Update an item's stored sync cursor. */
 export async function updateItemCursor(
   itemDbId: string,
-  cursor: string | null,
+  cursor: string,
 ): Promise<void> {
   const supabase = createServiceClient();
   const { error } = await supabase

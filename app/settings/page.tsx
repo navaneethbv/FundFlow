@@ -31,12 +31,9 @@ import SettleUpSection from "@/components/settings/SettleUpSection";
 import CancelledSubscriptionsSection from "@/components/settings/CancelledSubscriptionsSection";
 import DashboardPrefsSection from "@/components/settings/DashboardPrefsSection";
 import DemoDataSection from "@/components/settings/DemoDataSection";
-import ReconciliationSection from "@/components/settings/ReconciliationSection";
 import { buildAuditLogPage, buildSessionList } from "@/lib/security-account";
 import { currentSessionId } from "@/lib/http";
 import { suggestBudgets } from "@/lib/insights";
-import { loadInstitutionsSyncHealth } from "@/lib/sync-health";
-import { loadAccountReconciliation } from "@/lib/reconcile-data";
 import ButtonLink from "@/components/ui/ButtonLink";
 import Panel from "@/components/ui/Panel";
 import { sectionFromParam, parseDisplayPrefs, type SettingsSection } from "@/components/settings/settings-nav";
@@ -295,7 +292,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
       break;
     }
     case "institutions": {
-    const [{ data: items }, { data: manualAccounts }, { data: accounts }, { data: households }, healthList] = await Promise.all([
+    const [{ data: items }, { data: manualAccounts }, { data: accounts }, { data: households }] = await Promise.all([
       supabase
         .from("plaid_items")
         .select("id, institution_name, status, error_code, shared_household_id")
@@ -303,17 +300,11 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
       supabase.from("manual_accounts").select("id, name, account_type, balance, include_in_net_worth").order("created_at"),
       supabase.from("accounts").select("id, name, mask, type, apr").eq("user_id", userId).order("name"),
       supabase.from("households").select("id").order("created_at", { ascending: false }).limit(1),
-      loadInstitutionsSyncHealth(supabase, userId),
     ]);
-    const healthById = new Map(healthList.map((h) => [h.plaidItemId, h]));
-    const itemsWithHealth = (items ?? []).map((item) => ({
-      ...item,
-      health: healthById.get(item.id) ?? null,
-    }));
     content = (
       <>
         <div className="grid gap-6 xl:grid-cols-2">
-          <BanksSection initialItems={itemsWithHealth} householdId={(households ?? [])[0]?.id ?? null} />
+          <BanksSection initialItems={items ?? []} householdId={(households ?? [])[0]?.id ?? null} />
           <ManualAccountsSection initialAccounts={manualAccounts ?? []} />
         </div>
         <CardAprSection
@@ -327,11 +318,6 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
         />
       </>
     );
-      break;
-    }
-    case "reconciliation": {
-      const rows = await loadAccountReconciliation(supabase, userId);
-      content = <ReconciliationSection rows={rows} />;
       break;
     }
     case "categories": {
