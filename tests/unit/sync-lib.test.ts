@@ -144,8 +144,8 @@ describe("lib/sync", () => {
         expect.objectContaining({ title: expect.stringContaining("Netflix") }),
         "Netflix",
       );
-      expect(mockUpdateItemCursor).toHaveBeenCalledWith("item-db-1", "cursor-next");
-      expect(mockSetItemStatus).toHaveBeenCalledWith("item-db-1", "active", null);
+      expect(mockUpdateItemCursor).toHaveBeenCalledWith("user-1", "item-db-1", "cursor-next");
+      expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", null);
     });
 
     it("skips the sync when another run already holds the item claim", async () => {
@@ -264,8 +264,8 @@ describe("lib/sync", () => {
       const res = await syncItemTransactions(dummyItem);
 
       expect(res).toEqual({ added: 1, modified: 0, removed: 0 });
-      expect(mockUpdateItemCursor).toHaveBeenCalledWith("item-db-1", "cursor-next");
-      expect(mockSetItemStatus).toHaveBeenCalledWith("item-db-1", "active", null);
+      expect(mockUpdateItemCursor).toHaveBeenCalledWith("user-1", "item-db-1", "cursor-next");
+      expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", null);
     });
 
     it("falls back to defaults for alert thresholds and merchant names", async () => {
@@ -612,7 +612,7 @@ describe("lib/sync", () => {
       const res = await syncAllForUser("user-1");
 
       expect(res).toEqual({ added: 0, modified: 0, removed: 0 });
-      expect(mockSetItemStatus).toHaveBeenCalledWith("item-db-1", "error", "ITEM_LOGIN_REQUIRED");
+      expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "error", "ITEM_LOGIN_REQUIRED");
       expect(mockCreateNotification).toHaveBeenCalledWith(
         "user-1",
         "broken_bank",

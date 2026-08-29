@@ -319,4 +319,88 @@ suite("sync transactions DB integration & mock Plaid", () => {
     // Clean up second item
     await admin.from("plaid_items").delete().eq("id", secondItemDbId);
   });
+
+  it("upserts by provider transaction id so a re-sync never duplicates rows", async () => {
+    const txnId = `txn-dup-${stamp}`;
+    mockTransactionsSync.mockResolvedValue({
+      data: {
+        added: [
+          {
+            transaction_id: txnId,
+            account_id: plaidAccountId,
+            amount: 9.99,
+            iso_currency_code: "USD",
+            date: "2026-06-03",
+            name: "Dup Merchant",
+            merchant_name: "Dup",
+            personal_finance_category: { primary: "SHOPS" },
+            payment_channel: "online",
+            pending: false,
+          },
+        ],
+        modified: [],
+        removed: [],
+        accounts: [{ account_id: plaidAccountId, name: "Checking", balances: {} }],
+        next_cursor: `cursor-dup-${stamp}`,
+        has_more: false,
+      },
+    });
+
+    const item = await getItem(userId, itemDbId);
+    await syncItemTransactions(item!);
+    // A second run returns the same transaction; the upsert must not create a
+    // second row.
+    await syncItemTransactions(item!);
+
+    const { data: rows } = await admin
+      .from("transactions")
+      .select("id")
+      .eq("plaid_transaction_id", txnId)
+      .eq("user_id", userId);
+    expect(rows).toHaveLength(1);
+  });
+
+  it("records item-scoped cursor health on success and on failure", async () => {
+    const attemptTxnId = `txn-health-${stamp}`;
+    mockTransactionsSync.mockResolvedValue({
+      data: {
+        added: [
+          {
+            transaction_id: attemptTxnId,
+            account_id: plaidAccountId,
+            amount: 5.0,
+            iso_currency_code: "USD",
+            date: "2026-06-04",
+            name: "Health Merchant",
+            payment_channel: "in store",
+            pending: false,
+          },
+        ],
+        modified: [],
+        removed: [],
+        accounts: [{ account_id: plaidAccountId, name: "Checking", balances: {} }],
+        next_cursor: `cursor-health-${stamp}`,
+        has_more: false,
+      },
+    });
+
+    const item = await getItem(userId, itemDbId);
+    const result = await syncItemTransactions(item!);
+    expect(result.added).toBe(1);
+
+    const after = await getItem(userId, itemDbId);
+    expect(after!.last_sync_attempt_at).toBeTruthy();
+    expect(after!.last_sync_success_at).toBeTruthy();
+    expect(after!.last_sync_completed_pages).toBe(true);
+    expect(after!.initial_history_incomplete).toBe(false);
+    expect(after!.cursor_reset_detected_at).toBeNull();
+
+    // A failed run must record completed_pages = false.
+    mockTransactionsSync.mockRejectedValueOnce({
+      response: { data: { error_code: "ITEM_LOGIN_REQUIRED" } },
+    });
+    await expect(syncItemTransactions(after!)).rejects.toThrow();
+    const afterFailure = await getItem(userId, itemDbId);
+    expect(afterFailure!.last_sync_completed_pages).toBe(false);
+  });
 });

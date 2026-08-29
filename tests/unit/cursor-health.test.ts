@@ -12,6 +12,7 @@ const NOW = new Date("2026-08-29T12:00:00.000Z");
 
 function input(overrides: Partial<CursorHealthInput> = {}): CursorHealthInput {
   return {
+    plaidItemId: "",
     itemStatus: "active",
     itemErrorCode: null,
     lastAttemptAt: null,

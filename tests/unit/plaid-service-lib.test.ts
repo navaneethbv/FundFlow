@@ -276,26 +276,31 @@ describe("lib/plaid-service", () => {
     );
   });
 
-  it("updateItemCursor updates cursor on plaid_items", async () => {
-    const eq = vi.fn().mockResolvedValue({ error: null });
-    const update = vi.fn().mockReturnValue({ eq });
+  it("updateItemCursor updates cursor on plaid_items, scoped to user", async () => {
+    const eqUser = vi.fn().mockResolvedValue({ error: null });
+    const eqId = vi.fn().mockReturnValue({ eq: eqUser });
+    const update = vi.fn().mockReturnValue({ eq: eqId });
     mockServiceClient.from.mockReturnValue({ update });
 
-    await updateItemCursor("item-db-1", "new-cursor");
+    await updateItemCursor("user-1", "item-db-1", "new-cursor");
     expect(update).toHaveBeenCalledWith({ sync_cursor: "new-cursor" });
-    expect(eq).toHaveBeenCalledWith("id", "item-db-1");
+    expect(eqId).toHaveBeenCalledWith("id", "item-db-1");
+    expect(eqUser).toHaveBeenCalledWith("user_id", "user-1");
   });
 
-  it("setItemStatus updates status and error_code", async () => {
-    const eq = vi.fn().mockResolvedValue({ error: null });
-    const update = vi.fn().mockReturnValue({ eq });
+  it("setItemStatus updates status and error_code, scoped to user", async () => {
+    const eqUser = vi.fn().mockResolvedValue({ error: null });
+    const eqId = vi.fn().mockReturnValue({ eq: eqUser });
+    const update = vi.fn().mockReturnValue({ eq: eqId });
     mockServiceClient.from.mockReturnValue({ update });
 
-    await setItemStatus("item-db-1", "error", "ITEM_LOGIN_REQUIRED");
+    await setItemStatus("user-1", "item-db-1", "error", "ITEM_LOGIN_REQUIRED");
     expect(update).toHaveBeenCalledWith({
       status: "error",
       error_code: "ITEM_LOGIN_REQUIRED",
     });
+    expect(eqId).toHaveBeenCalledWith("id", "item-db-1");
+    expect(eqUser).toHaveBeenCalledWith("user_id", "user-1");
   });
 
   it("updates institution branding with explicit owner scope", async () => {
@@ -409,7 +414,9 @@ describe("lib/plaid-service", () => {
     mockServiceClient.from.mockReturnValue({
       select: () => chain,
       upsert: () => Promise.resolve({ error: new Error("Upsert Error") }),
-      update: () => ({ eq: () => Promise.resolve({ error: new Error("Update Error") }) }),
+      update: () => ({
+        eq: () => ({ eq: () => Promise.resolve({ error: new Error("Update Error") }) }),
+      }),
     });
 
     await expect(getItemByPlaidItemId("p1")).rejects.toThrow("DB Error");
@@ -417,8 +424,8 @@ describe("lib/plaid-service", () => {
     await expect(getItem("u1", "i1")).rejects.toThrow("DB Error");
     await expect(getAccountIdMap("u1")).rejects.toThrow("DB List Error");
     await expect(upsertAccounts("u1", "i1", [{ account_id: "a1", balances: {} }] as never)).rejects.toThrow("Upsert Error");
-    await expect(updateItemCursor("i1", "c1")).rejects.toThrow("Update Error");
-    await expect(setItemStatus("i1", "error")).rejects.toThrow("Update Error");
+    await expect(updateItemCursor("u1", "i1", "c1")).rejects.toThrow("Update Error");
+    await expect(setItemStatus("u1", "i1", "error")).rejects.toThrow("Update Error");
   });
 
   it("decryptItemTokenAndUpgrade skips the DB write when the current key was used", async () => {

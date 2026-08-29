@@ -153,14 +153,14 @@ describe("coverage-boost-plaid-n5", () => {
     it("verifies a signed TRANSACTIONS webhook and syncs", async () => {
       vi.stubEnv("NODE_ENV", "production");
       vi.stubEnv("PLAID_ENV", "production");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
       const req = signedRequest(
         { webhook_type: "TRANSACTIONS", webhook_code: "SYNC_UPDATES_AVAILABLE", item_id: "item-123" },
         true,
       );
       const res = await webhookPost(req);
       expect(res.status).toBe(200);
-      expect(mockSyncItemTransactions).toHaveBeenCalledWith({ id: "db-item" });
+      expect(mockSyncItemTransactions).toHaveBeenCalledWith({ id: "db-item", user_id: "user-1" });
     });
 
     it("reuses the cached verification key for a second signed webhook", async () => {
@@ -189,14 +189,14 @@ describe("coverage-boost-plaid-n5", () => {
 
     it("syncs investments for a HOLDINGS webhook when the item exists", async () => {
       vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
       const req = new NextRequest("http://localhost/api/plaid/webhook", {
         method: "POST",
         body: JSON.stringify({ webhook_type: "HOLDINGS", webhook_code: "DEFAULT_UPDATE", item_id: "item-123" }),
       });
       const res = await webhookPost(req);
       expect(res.status).toBe(200);
-      expect(mockSyncInvestmentsForItem).toHaveBeenCalledWith({ id: "db-item" });
+      expect(mockSyncInvestmentsForItem).toHaveBeenCalledWith({ id: "db-item", user_id: "user-1" });
     });
 
     it("does nothing for a HOLDINGS webhook when the item is missing", async () => {
@@ -212,26 +212,26 @@ describe("coverage-boost-plaid-n5", () => {
 
     it("handles an ITEM PENDING_EXPIRATION webhook", async () => {
       vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
       const req = new NextRequest("http://localhost/api/plaid/webhook", {
         method: "POST",
         body: JSON.stringify({ webhook_type: "ITEM", webhook_code: "PENDING_EXPIRATION", item_id: "item-123" }),
       });
       const res = await webhookPost(req);
       expect(res.status).toBe(200);
-      expect(mockSetItemStatus).toHaveBeenCalledWith("db-item", "active", "PENDING_EXPIRATION");
+      expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "db-item", "active", "PENDING_EXPIRATION");
     });
 
     it("handles an ITEM LOGIN_REPAIRED webhook", async () => {
       vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
       const req = new NextRequest("http://localhost/api/plaid/webhook", {
         method: "POST",
         body: JSON.stringify({ webhook_type: "ITEM", webhook_code: "LOGIN_REPAIRED", item_id: "item-123" }),
       });
       const res = await webhookPost(req);
       expect(res.status).toBe(200);
-      expect(mockSetItemStatus).toHaveBeenCalledWith("db-item", "active", null);
+      expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "db-item", "active", null);
     });
 
     it("skips ITEM handling when the item is missing", async () => {

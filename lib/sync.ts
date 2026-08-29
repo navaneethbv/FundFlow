@@ -15,6 +15,11 @@ import { logError } from "@/lib/log";
 import { createNotification } from "@/lib/notifications";
 import { invalidateDashboardCache } from "@/lib/dashboard-cache";
 import { formatCurrency } from "@/lib/format";
+import {
+  recordCursorAttempt,
+  recordCursorSuccess,
+  recordCursorFailure,
+} from "@/lib/cursor-health";
 
 export interface SyncResult {
   added: number;
@@ -90,7 +95,31 @@ export async function syncItemTransactions(
   const holdsClaim = !claimError && claimed === true;
 
   try {
-    return await syncItemTransactionsInner(item, supabase);
+    // Record the attempt on the item row before touching Plaid, so a crashed
+    // run is visible even when no sync_jobs row completes. Best-effort: never
+    // let observability break the sync itself.
+    await recordCursorAttempt(supabase, {
+      userId: item.user_id,
+      itemDbId: item.id,
+      nowIso: new Date().toISOString(),
+    }).catch((error) => logError("sync.cursor-attempt", error));
+
+    const result = await syncItemTransactionsInner(item, supabase);
+    await recordCursorSuccess(supabase, {
+      userId: item.user_id,
+      itemDbId: item.id,
+      nowIso: new Date().toISOString(),
+    }).catch((error) => logError("sync.cursor-success", error));
+    return result;
+  } catch (error) {
+    await recordCursorFailure(supabase, {
+      userId: item.user_id,
+      itemDbId: item.id,
+      startedWithoutCursor: !item.sync_cursor,
+      priorSuccess: Boolean(item.last_sync_success_at),
+      nowIso: new Date().toISOString(),
+    }).catch((failureError) => logError("sync.cursor-failure", failureError));
+    throw error;
   } finally {
     // Only release a claim we actually took — releasing on a claim error could
     // clear a legitimate in-progress run's marker.
@@ -224,8 +253,8 @@ async function syncItemTransactionsInner(
   }
 
   // Persist cursor only after everything applied successfully.
-  if (cursor) await updateItemCursor(item.id, cursor);
-  await setItemStatus(item.id, "active", null);
+  if (cursor) await updateItemCursor(item.user_id, item.id, cursor);
+  await setItemStatus(item.user_id, item.id, "active", null);
 
   return { added: added.length, modified: modified.length, removed: removed.length };
 }
@@ -301,7 +330,7 @@ export async function syncAllForUser(userId: string): Promise<SyncResult> {
       // Keep the real Plaid code (e.g. ITEM_LOGIN_REQUIRED) so Settings can
       // offer the right fix (reconnect) instead of a generic failure.
       const code = plaidErrorCode(error) ?? "sync_failed";
-      await setItemStatus(item.id, "error", code).catch(() => {});
+      await setItemStatus(item.user_id, item.id, "error", code).catch(() => {});
       await recordJobEnd(jobId, "failed", code);
 
       // Emit broken bank/sync failure notification

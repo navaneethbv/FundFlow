@@ -125,7 +125,7 @@ describe("coverage-boost-plaid-n4", () => {
     mockRequireOwnedItem.mockResolvedValue({
       ok: true,
       user: { id: "user-1" },
-      item: { id: "item-1", institution_id: "inst-1", institution_name: "Chase" },
+      item: { id: "item-1", user_id: "user-1", institution_id: "inst-1", institution_name: "Chase" },
     });
     envState.appUrl = "https://app.example.com";
     envState.plaidRedirectUri = null;
@@ -348,7 +348,7 @@ describe("coverage-boost-plaid-n4", () => {
       });
       const res = await reconnectPost(req);
       expect(res.status).toBe(200);
-      expect(mockSetItemStatus).toHaveBeenCalledWith("item-1", "active", null);
+      expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-1", "active", null);
       expect(mockUpdateItemBranding).toHaveBeenCalled();
       expect(mockSyncItemTransactions).toHaveBeenCalled();
       expect(mockWriteAudit).toHaveBeenCalledWith(
