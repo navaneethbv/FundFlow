@@ -771,6 +771,28 @@ export async function getDashboardData(
       .lt("date", windowEndExclusive),
   );
 
+  // Per-transaction classification overrides for the rendered window, so the
+  // dashboard agrees with every other canonical surface about the same rows.
+  const txnIds = ((txns ?? []) as Array<{ id: string }>).map((row) => row.id);
+  const { data: overrideRows } = await scopeUser(
+    supabase
+      .from("transaction_annotations")
+      .select("transaction_id, display_category, cash_flow_classification")
+      .in("transaction_id", txnIds.length > 0 ? txnIds : [""]),
+  );
+  const transactionOverrides = ((overrideRows ?? []) as Array<{
+    transaction_id: string;
+    display_category: string | null;
+    cash_flow_classification: "expense" | "income" | null;
+  }>).map((row) => ({
+    transactionId: row.transaction_id,
+    displayCategory: row.display_category,
+    cashFlowClassification:
+      row.cash_flow_classification === "expense" || row.cash_flow_classification === "income"
+        ? row.cash_flow_classification
+        : null,
+  }));
+
   const accountNamesById = new Map<string, string>();
   for (const a of allAccounts) {
     accountNamesById.set(a.id, a.name || "");
@@ -812,6 +834,7 @@ export async function getDashboardData(
       chargeTransactionId: row.charge_transaction_id,
       refundTransactionId: row.refund_transaction_id,
     })),
+    transactionOverrides,
     excludedTransactionIds: new Set(
       ((linkedDuplicates ?? []) as Array<{ excluded_transaction_id: string }>)
         .map((row) => row.excluded_transaction_id),

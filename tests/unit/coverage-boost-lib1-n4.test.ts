@@ -60,10 +60,24 @@ describe("fetchPrivacySafeRows null merchant/category branches", () => {
     const singleProfile = vi.fn().mockResolvedValue({ data: { ai_export_enabled: true } });
     const order = vi.fn().mockResolvedValue({ data: txns, error: null });
     const select = vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ order }) });
+    const chainableEmpty = () => {
+      const builder = {
+        select: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        then: (resolve: (v: { data?: unknown[]; error?: unknown }) => unknown) =>
+          resolve({ data: [] }),
+      };
+      return builder;
+    };
     return {
       from: vi.fn((table: string) => {
         if (table === "profiles") return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle: singleProfile }) }) };
         if (table === "transactions") return { select };
+        if (table === "transaction_annotations") return { select: chainableEmpty };
+        if (table === "merchant_rules") return { select: chainableEmpty };
+        if (table === "category_overrides") return { select: chainableEmpty };
         throw new Error(`Unexpected table ${table}`);
       }),
     } as unknown as SupabaseClient;

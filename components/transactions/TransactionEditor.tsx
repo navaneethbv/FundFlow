@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Input, { fieldClasses } from "@/components/ui/Input";
+import TransactionOverrideControl, {
+  type TransactionOverride,
+} from "@/components/transactions/TransactionOverrideControl";
 import { cn } from "@/lib/cn";
 import { formatCurrency, titleCase } from "@/lib/format";
 
@@ -18,6 +21,10 @@ interface TransactionEditorProps {
   tags: string[];
   splits: EditorSplit[];
   categories: string[];
+  /** Raw provider primary category (immutable fact shown to the user). */
+  providerCategory?: string | null;
+  /** Current transaction-level classification override, when one exists. */
+  override?: TransactionOverride | null;
   /**
    * Distinguishes the mobile and desktop copies of the same row. The ledger
    * renders both for responsive layout, so without a prefix the two copies
@@ -52,6 +59,8 @@ export default function TransactionEditor({
   tags: initialTags,
   splits: initialSplits,
   categories,
+  providerCategory = null,
+  override = null,
   idPrefix = "",
 }: Readonly<TransactionEditorProps>) {
   const target = round2(Math.abs(transaction.amount));
@@ -278,6 +287,16 @@ export default function TransactionEditor({
                 </button>
               )}
             </div>
+
+            <TransactionOverrideControl
+              transactionId={transaction.id}
+              providerCategory={providerCategory}
+              initialOverride={{
+                displayCategory: override?.displayCategory ?? null,
+                cashFlowClassification: override?.cashFlowClassification ?? null,
+              }}
+              categories={categories}
+            />
 
             {error && <p className="mt-4 text-sm text-danger">{error}</p>}
 

@@ -251,6 +251,63 @@ function collectSplits(
   return splits;
 }
 
+interface OverrideRow {
+  transaction_id: string;
+  display_category: string | null;
+  cash_flow_classification: "expense" | "income" | null;
+}
+
+type OverrideChunkResult = { data: OverrideRow[] | null; error: { code?: string } | null };
+
+function buildOverrideChunkQueries(
+  supabase: SupabaseClient,
+  txnIds: readonly string[],
+  userId: string | null | undefined,
+): Array<() => PromiseLike<OverrideChunkResult>> {
+  const queries: Array<() => PromiseLike<OverrideChunkResult>> = [];
+  for (let i = 0; i < txnIds.length; i += SPLIT_CHUNK_SIZE) {
+    queries.push(() => {
+      let overrideQuery = supabase
+        .from("transaction_annotations")
+        .select("transaction_id, display_category, cash_flow_classification")
+        .in("transaction_id", txnIds.slice(i, i + SPLIT_CHUNK_SIZE))
+        .limit(2000);
+      if (userId) overrideQuery = overrideQuery.eq("user_id", userId);
+      return overrideQuery;
+    });
+  }
+  return queries;
+}
+
+/** Flattens the per-chunk override rows into the projection's input. */
+function collectOverrides(
+  chunks: readonly OverrideChunkResult[],
+): Array<{
+  transactionId: string;
+  displayCategory: string | null;
+  cashFlowClassification: "expense" | "income" | null;
+}> {
+  const overrides: Array<{
+    transactionId: string;
+    displayCategory: string | null;
+    cashFlowClassification: "expense" | "income" | null;
+  }> = [];
+  for (const chunk of chunks) {
+    for (const row of chunk.data ?? []) {
+      const classification = row.cash_flow_classification;
+      overrides.push({
+        transactionId: row.transaction_id,
+        displayCategory: row.display_category,
+        cashFlowClassification:
+          classification === "expense" || classification === "income"
+            ? classification
+            : null,
+      });
+    }
+  }
+  return overrides;
+}
+
 /** Account currency and (where set) display name, keyed by account id. */
 function buildAccountMaps(
   accounts: ReadonlyArray<{ id: string; name?: string | null; iso_currency_code?: string | null }>,
@@ -311,11 +368,12 @@ export async function loadCanonicalProjection(
   }
 
   const splitChunksPromises = buildSplitChunkQueries(supabase, txnIds, userId);
+  const overrideChunksPromises = buildOverrideChunkQueries(supabase, txnIds, userId);
 
-  // The split-chunk batch is one element of the Promise.all, not an awaited
-  // spread: awaiting it here would finish every chunk read before the five
-  // dependency queries even start.
-  const [accountsRes, rulesRes, overridesRes, refundsRes, duplicatesRes, splitResChunks] =
+  // The split/override chunk batches are elements of the Promise.all, not an
+  // awaited spread: awaiting them here would finish every chunk read before
+  // the five dependency queries even start.
+  const [accountsRes, rulesRes, overridesRes, refundsRes, duplicatesRes, splitResChunks, overrideResChunks] =
     await Promise.all([
       accountsQuery,
       rulesQuery,
@@ -323,6 +381,7 @@ export async function loadCanonicalProjection(
       refundsQuery,
       duplicatesQuery,
       runBatched(splitChunksPromises, DEPENDENCY_CONCURRENCY),
+      runBatched(overrideChunksPromises, DEPENDENCY_CONCURRENCY),
     ]);
 
   assertProjectionQuery("accounts", accountsRes);
@@ -332,6 +391,9 @@ export async function loadCanonicalProjection(
   assertProjectionQuery("linked_duplicates", duplicatesRes);
   for (const sRes of splitResChunks) {
     assertProjectionQuery("transaction_splits", sRes);
+  }
+  for (const oRes of overrideResChunks) {
+    assertProjectionQuery("transaction_annotations", oRes);
   }
 
   const { currencyByAccountId, accountNames } = buildAccountMaps(accountsRes.data ?? []);
@@ -367,6 +429,7 @@ export async function loadCanonicalProjection(
   }));
 
   const splits = collectSplits(splitResChunks);
+  const transactionOverrides = collectOverrides(overrideResChunks);
 
   const { projectFinanceTransactions } = await import("@/lib/finance-domain");
 
@@ -378,6 +441,7 @@ export async function loadCanonicalProjection(
       categoryOverrides,
       splits,
       linkedRefunds,
+      transactionOverrides,
       excludedTransactionIds: new Set(
         ((duplicatesRes.data ?? []) as Array<{ excluded_transaction_id: string }>)
           .map((row) => row.excluded_transaction_id),

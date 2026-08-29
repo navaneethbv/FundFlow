@@ -51,7 +51,7 @@ describe("transaction override consistency across canonical surfaces", () => {
   it("applies the override through loadCanonicalProjection (Reports, Budget, Year in Money, widgets)", async () => {
     const supabase = seededSupabase();
     const { transactions } = await loadCanonicalProjection(supabase as never, {
-      scope: { kind: "user", userId: "user-1" },
+      scope: { kind: "mine", ownerUserId: "user-1" },
     });
     expect(transactions[0]).toMatchObject({
       flow: "expense",
@@ -64,9 +64,9 @@ describe("transaction override consistency across canonical surfaces", () => {
   it("applies the override through the cash-flow data path", async () => {
     const supabase = seededSupabase();
     const { transactions } = await loadCashFlowData(supabase as never, {
-      scope: { kind: "user", userId: "user-1" },
+      scope: { kind: "mine", ownerUserId: "user-1" },
       anchorMonth: "2026-08",
-      rangeMonths: 2,
+      rangeMonths: 6,
     });
     expect(transactions[0]).toMatchObject({
       flow: "expense",
@@ -116,7 +116,7 @@ describe("transaction override consistency across canonical surfaces", () => {
       sync_jobs: { data: [] },
     });
     const { transactions } = await loadCanonicalProjection(supabase as never, {
-      scope: { kind: "user", userId: "user-1" },
+      scope: { kind: "mine", ownerUserId: "user-1" },
     });
     expect(transactions[0]).toMatchObject({ flow: "transfer", groupKey: "TRANSFER_OUT" });
   });

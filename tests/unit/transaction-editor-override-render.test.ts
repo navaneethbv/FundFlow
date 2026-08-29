@@ -34,7 +34,7 @@ describe("TransactionOverrideControl", () => {
     expect(html).toContain('selected');
   });
 
-  it("asks for deliberate confirmation when correcting a provider transfer", () => {
+  it("warns that a provider transfer is currently excluded from cash flow", () => {
     const html = renderToStaticMarkup(
       createElement(TransactionOverrideControl, {
         transactionId: "txn-1",
@@ -43,7 +43,6 @@ describe("TransactionOverrideControl", () => {
         categories: [],
       }),
     );
-    expect(html).toContain("transfer");
-    expect(html).toContain("confirm");
+    expect(html).toContain("excluded from cash flow as a transfer");
   });
 });

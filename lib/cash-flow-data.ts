@@ -164,6 +164,18 @@ export async function loadCashFlowData(
     if (userId) query = query.eq("user_id", userId);
     return query;
   });
+  const overrideTasks = chunks(
+    sourceTransactionIds,
+    SPLIT_CHUNK_SIZE,
+  ).map((transactionIds) => () => {
+    let query = supabase
+      .from("transaction_annotations")
+      .select("transaction_id, display_category, cash_flow_classification")
+      .in("transaction_id", transactionIds)
+      .limit(SPLIT_CHUNK_SIZE * 4);
+    if (userId) query = query.eq("user_id", userId);
+    return query;
+  });
 
   const [
     accountsResult,
@@ -173,6 +185,7 @@ export async function loadCashFlowData(
     duplicatesResult,
     syncResult,
     splitResults,
+    overrideResults,
   ] = await Promise.all([
     accountsQuery,
     rulesQuery,
@@ -181,6 +194,7 @@ export async function loadCashFlowData(
     duplicatesQuery,
     syncSingleQuery,
     runBatched(splitTasks, DEPENDENCY_CONCURRENCY),
+    runBatched(overrideTasks, DEPENDENCY_CONCURRENCY),
   ]);
 
   assertQuery("accounts", accountsResult);
@@ -191,6 +205,9 @@ export async function loadCashFlowData(
   assertQuery("sync_jobs", syncResult);
   splitResults.forEach((result) =>
     assertQuery("transaction_splits", result),
+  );
+  overrideResults.forEach((result) =>
+    assertQuery("transaction_annotations", result),
   );
 
   const accounts = (accountsResult.data ?? []) as AccountRow[];
@@ -214,6 +231,20 @@ export async function loadCashFlowData(
       transactionId: row.transaction_id,
       category: row.category,
       amount: Number(row.amount),
+    })),
+  );
+  const transactionOverrides = overrideResults.flatMap((result) =>
+    ((result.data ?? []) as Array<{
+      transaction_id: string;
+      display_category: string | null;
+      cash_flow_classification: "expense" | "income" | null;
+    }>).map((row) => ({
+      transactionId: row.transaction_id,
+      displayCategory: row.display_category,
+      cashFlowClassification:
+        row.cash_flow_classification === "expense" || row.cash_flow_classification === "income"
+          ? row.cash_flow_classification
+          : null,
     })),
   );
   const linkedRefunds: LinkedRefundPair[] = (
@@ -245,6 +276,7 @@ export async function loadCashFlowData(
       categoryOverrides,
       splits,
       linkedRefunds,
+      transactionOverrides,
       excludedTransactionIds: new Set(
         ((duplicatesResult.data ?? []) as Array<{ excluded_transaction_id: string }>)
           .map((row) => row.excluded_transaction_id),

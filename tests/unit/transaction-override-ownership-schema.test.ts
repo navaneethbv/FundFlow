@@ -9,14 +9,13 @@ const migrationSql = readdirSync("supabase/migrations")
 
 describe("transaction override ownership schema", () => {
   it("requires the referenced transaction to belong to the writer", () => {
-    const block = migrationSql.split("transaction_annotations").pop() ?? "";
     // The insert/update policies must verify the transaction is owned, not
     // just that the annotation's user_id matches (the M8 pattern).
-    expect(block).toMatch(
-      /transaction_annotations_insert_own[\s\S]*exists \(/,
+    expect(migrationSql).toMatch(
+      /"transaction_annotations_insert_own"[\s\S]{0,400}exists \(\s*select 1 from public\.transactions/,
     );
-    expect(block).toMatch(
-      /select 1 from public\.transactions t[\s\S]*t\.user_id = \(select auth\.uid\(\)\)/,
+    expect(migrationSql).toMatch(
+      /t\.id = transaction_annotations\.transaction_id\s+and t\.user_id = \(select auth\.uid\(\)\)/,
     );
   });
 });

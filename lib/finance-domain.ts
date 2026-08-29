@@ -96,6 +96,19 @@ export interface LinkedRefundPair {
   refundTransactionId: string;
 }
 
+/**
+ * Durable per-transaction classification override. `displayCategory` replaces
+ * the grouped category; `cashFlowClassification` forces spending or income for
+ * this row only (null = follow the provider category). It is applied exactly
+ * once in projectFinanceTransactions; every financial surface consumes the
+ * resulting canonical row.
+ */
+export interface TransactionOverride {
+  transactionId: string;
+  displayCategory: string | null;
+  cashFlowClassification: "expense" | "income" | null;
+}
+
 export interface ProjectFinanceInput {
   rows: RawFinanceTransaction[];
   merchantRules: MerchantRule[];
@@ -105,6 +118,8 @@ export interface ProjectFinanceInput {
   excludedTransactionIds?: Set<string>;
   /** Account id → name, only needed for merchant rules that match on account. */
   accountNames?: Map<string, string>;
+  /** Per-transaction classification overrides, keyed internally by row id. */
+  transactionOverrides?: TransactionOverride[];
 }
 
 function displayMerchant(row: RawFinanceTransaction): string {
@@ -167,12 +182,26 @@ export function projectFinanceTransactions(
     splitsByTransaction.set(split.transactionId, existing);
   }
 
+  // Per-transaction classification overrides, applied exactly once per row.
+  const overridesByTransaction = new Map<string, TransactionOverride>();
+  for (const override of input.transactionOverrides ?? []) {
+    overridesByTransaction.set(override.transactionId, override);
+  }
+
   const projected: CanonicalFinanceTransaction[] = [];
 
   rowsToProject.forEach((row, index) => {
     const clean = cleaned[index]!;
-    const groupKey = overrideCategory(overrides, clean.category) ?? UNCATEGORIZED;
-    const flow = nettedIds.has(row.id) ? "transfer" : flowFor(row.amount, groupKey);
+    const override = overridesByTransaction.get(row.id);
+    // The transfer/flow decision always comes from the provider classification
+    // (after merchant rules + global overrides). A display-category relabel
+    // changes how the row groups, but never silently turns a provider transfer
+    // into spending or income — only an explicit cash-flow classification can.
+    const flowGroupKey = overrideCategory(overrides, clean.category) ?? UNCATEGORIZED;
+    const groupKey = override?.displayCategory ?? flowGroupKey;
+    const flow = nettedIds.has(row.id)
+      ? "transfer"
+      : override?.cashFlowClassification ?? flowFor(row.amount, flowGroupKey);
 
     const base = {
       sourceTransactionId: row.id,
@@ -206,7 +235,7 @@ export function projectFinanceTransactions(
       ...base,
       id: row.id,
       signedAmount: row.amount,
-      categoryKey: row.pfcDetailed ?? groupKey,
+      categoryKey: override?.displayCategory ?? row.pfcDetailed ?? groupKey,
     });
   });
 

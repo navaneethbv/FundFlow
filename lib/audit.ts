@@ -79,6 +79,9 @@ export type AuditAction =
   | "tag_renamed"
   | "tag_merged"
   | "tag_deleted"
+  | "transaction_override_created"
+  | "transaction_override_updated"
+  | "transaction_override_deleted"
   | "profile_updated"
   | "avatar_updated"
   | "display_prefs_updated";

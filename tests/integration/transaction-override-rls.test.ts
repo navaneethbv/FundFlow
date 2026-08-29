@@ -117,7 +117,7 @@ suite("transaction classification override RLS", () => {
       .select("display_category")
       .eq("transaction_id", txnDbId)
       .single();
-    expect(data.display_category).toBe("SHOPPING");
+    expect((data as { display_category: string }).display_category).toBe("SHOPPING");
   });
 
   it("refuses user B from annotating user A's transaction", async () => {
@@ -133,17 +133,22 @@ suite("transaction classification override RLS", () => {
   });
 
   it("refuses user B from updating or deleting user A's annotation", async () => {
-    const updateError = await clientB
+    const updateResult = await clientB
       .from("transaction_annotations")
       .update({ display_category: "HACKED" })
-      .eq("transaction_id", txnDbId);
-    expect(updateError.error).not.toBeNull();
+      .eq("transaction_id", txnDbId)
+      .select("id");
+    expect(updateResult.error).toBeNull();
+    // RLS silently filters: the update matched no row the caller can own.
+    expect(updateResult.data).toHaveLength(0);
 
     const deleteResult = await clientB
       .from("transaction_annotations")
       .delete()
-      .eq("transaction_id", txnDbId);
-    expect(deleteResult.error).not.toBeNull();
+      .eq("transaction_id", txnDbId)
+      .select("id");
+    expect(deleteResult.error).toBeNull();
+    expect(deleteResult.data).toHaveLength(0);
 
     // User A's override is still intact.
     const { data } = await clientA
@@ -151,6 +156,6 @@ suite("transaction classification override RLS", () => {
       .select("display_category")
       .eq("transaction_id", txnDbId)
       .single();
-    expect(data.display_category).toBe("SHOPPING");
+    expect((data as { display_category: string }).display_category).toBe("SHOPPING");
   });
 });

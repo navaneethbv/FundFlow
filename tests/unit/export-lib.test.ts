@@ -103,11 +103,25 @@ describe("lib/export", () => {
       const orderTxns = vi.fn().mockResolvedValue({ data: txnsData, error: null });
       const eqTxns = vi.fn().mockReturnValue({ order: orderTxns });
       const selectTxns = vi.fn().mockReturnValue({ eq: eqTxns });
+      const chainableEmpty = () => {
+        const builder = {
+          select: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          then: (resolve: (v: { data?: unknown[]; error?: unknown }) => unknown) =>
+            resolve({ data: [] }),
+        };
+        return builder;
+      };
 
       mockSupabase = {
         from: vi.fn().mockImplementation((table: string) => {
           if (table === "profiles") return { select: selectProfile };
           if (table === "transactions") return { select: selectTxns };
+          if (table === "transaction_annotations") return { select: chainableEmpty };
+          if (table === "merchant_rules") return { select: chainableEmpty };
+          if (table === "category_overrides") return { select: chainableEmpty };
           throw new Error(`Unexpected table ${table}`);
         }),
       };

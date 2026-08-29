@@ -20,6 +20,8 @@ export interface LedgerCardRow {
   tags: string[];
   splits: { category: string; amount: number }[];
   categoryOptions: string[];
+  providerCategory?: string | null;
+  override?: { displayCategory: string | null; cashFlowClassification: "expense" | "income" | null } | null;
 }
 
 /**
@@ -137,6 +139,8 @@ export default function MobileLedgerList({
                   tags={row.tags}
                   splits={row.splits}
                   categories={row.categoryOptions}
+                  providerCategory={row.providerCategory}
+                  override={row.override}
                 />
               </div>
             </li>
