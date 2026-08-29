@@ -200,6 +200,7 @@ describe("expandStreamsForMonth", () => {
     );
     expect(month.occurrences).toHaveLength(1);
     expect(month.occurrences[0]).toMatchObject({ source: "manual", sourceId: "manual-1", category: "Education" });
+    expect(month.occurrences[0]).not.toHaveProperty("dueDateType");
   });
 
   it("computes reviewCount independently of the viewed month's occurrences", () => {
