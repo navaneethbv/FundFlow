@@ -3,12 +3,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockRequireUser = vi.fn<(...args: unknown[]) => unknown>();
 const mockBadRequest = vi.fn((msg: string) => new Response(msg, { status: 400 }));
 const mockErrorResponse = vi.fn(
-  (_context: string, _err: unknown) => new Response("error", { status: 500 }),
+  (context: string, err: unknown) => new Response(`error: ${context}: ${String((err as Error)?.message ?? err)}`, { status: 500 }),
 );
 vi.mock("@/lib/http", () => ({
   requireUser: (...args: unknown[]) => mockRequireUser(...args),
   badRequest: (msg: string) => mockBadRequest(msg),
-  errorResponse: (_context: string, err: unknown) => mockErrorResponse(_context, err),
+  errorResponse: (context: string, err: unknown) => mockErrorResponse(context, err),
 }));
 
 const mockCheckRateLimit = vi.fn<(...args: unknown[]) => unknown>(() => true);
@@ -48,7 +48,7 @@ vi.mock("@/lib/sync", () => ({
 }));
 
 import { POST } from "@/app/api/plaid/repair/route";
-import { NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
 const item = {
   id: "item-1",
@@ -75,6 +75,7 @@ describe("POST /api/plaid/repair", () => {
     vi.clearAllMocks();
     mockRequireUser.mockResolvedValue({ user: { id: "user-1" } });
     mockCheckRateLimit.mockResolvedValue(true);
+    mockSetItemStatus.mockResolvedValue(undefined);
     mockItemGet.mockResolvedValue({ data: { item: { item_id: "plaid-item-1" } } });
     mockBackfillItemTransactions.mockResolvedValue({
       pagesCompleted: 3,
@@ -87,7 +88,7 @@ describe("POST /api/plaid/repair", () => {
   });
 
   it("returns 401 when unauthenticated", async () => {
-    const unauthorized = new Response("Unauthorized", { status: 401 });
+    const unauthorized = new NextResponse("Unauthorized", { status: 401 });
     mockRequireUser.mockResolvedValue(unauthorized);
     const res = await POST(jsonRequest({ itemId: "item-1" }));
     expect(res.status).toBe(401);

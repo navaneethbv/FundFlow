@@ -169,3 +169,27 @@ export async function recordCursorFailure(
     .eq("user_id", input.userId);
   if (error) throw error;
 }
+
+/**
+ * Record a run that completed without error but stopped before has_more
+ * became false (a bounded repair backfill). The run made real progress, so
+ * `last_sync_success_at` is stamped, but the item must not be presented as
+ * fully synced until a later run drains the remaining pages.
+ */
+export async function recordCursorPartialSuccess(
+  supabase: SupabaseClient,
+  input: CursorFailureRecord,
+): Promise<void> {
+  const { error } = await supabase
+    .from("plaid_items")
+    .update({
+      last_sync_success_at: input.nowIso,
+      last_sync_completed_pages: false,
+      initial_history_incomplete: input.startedWithoutCursor,
+      cursor_reset_detected_at:
+        input.startedWithoutCursor && input.priorSuccess ? input.nowIso : null,
+    })
+    .eq("id", input.itemDbId)
+    .eq("user_id", input.userId);
+  if (error) throw error;
+}

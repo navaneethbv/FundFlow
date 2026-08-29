@@ -18,8 +18,10 @@ import { formatCurrency } from "@/lib/format";
 import {
   recordCursorAttempt,
   recordCursorSuccess,
+  recordCursorPartialSuccess,
   recordCursorFailure,
 } from "@/lib/cursor-health";
+import { REPAIR_MAX_PAGES } from "@/lib/repair";
 
 export interface SyncResult {
   added: number;
@@ -264,6 +266,133 @@ function plaidErrorCode(error: unknown): string | null {
   const code = (error as { response?: { data?: { error_code?: unknown } } })
     ?.response?.data?.error_code;
   return typeof code === "string" ? code : null;
+}
+
+export interface RepairBackfillOptions {
+  /** Hard cap on pages fetched in a single repair run. */
+  maxPages: number;
+}
+
+export interface RepairBackfillResult {
+  pagesCompleted: number;
+  maxPages: number;
+  /** True only when has_more became false inside the bound. */
+  completed: boolean;
+  added: number;
+  modified: number;
+  removed: number;
+}
+
+/**
+ * Bounded historical reconciliation for the authenticated repair action.
+ *
+ * Like syncItemTransactionsInner, but capped at `maxPages` so one repair
+ * cannot spin unboundedly against a long backlog. Progress is durable: the
+ * intermediate cursor is persisted each run and upserts are keyed by
+ * plaid_transaction_id, so retrying continues from where the last run stopped
+ * without ever duplicating a row.
+ *
+ * Explicit Plaid tombstones (the `removed` array) are applied even when the
+ * run is bounded — they are listed removals, not omissions. Transactions that
+ * merely fail to appear in a partial response are never deleted.
+ */
+export async function backfillItemTransactions(
+  item: PlaidItemRow,
+  options: RepairBackfillOptions = { maxPages: REPAIR_MAX_PAGES },
+): Promise<RepairBackfillResult> {
+  const supabase = createServiceClient();
+  const plaid = getPlaidClient();
+  const accessToken = await decryptItemTokenAndUpgrade(item);
+
+  await recordCursorAttempt(supabase, {
+    userId: item.user_id,
+    itemDbId: item.id,
+    nowIso: new Date().toISOString(),
+  }).catch((error) => logError("repair.cursor-attempt", error));
+
+  let cursor = item.sync_cursor ?? undefined;
+  const added: Transaction[] = [];
+  const modified: Transaction[] = [];
+  const removed: RemovedTransaction[] = [];
+  let latestAccounts: AccountBase[] = [];
+  let pagesCompleted = 0;
+  let hasMore = true;
+
+  while (hasMore && pagesCompleted < options.maxPages) {
+    const response = await plaid.transactionsSync({
+      access_token: accessToken,
+      cursor,
+    });
+    const data = response.data;
+    added.push(...data.added);
+    modified.push(...data.modified);
+    removed.push(...data.removed);
+    if (data.accounts.length > 0) latestAccounts = data.accounts;
+    cursor = data.next_cursor;
+    hasMore = data.has_more;
+    pagesCompleted += 1;
+  }
+  const completed = !hasMore;
+
+  await upsertAccounts(item.user_id, item.id, latestAccounts);
+  const accountMap = await getAccountIdMap(item.user_id);
+
+  const upsertRows = [...added, ...modified]
+    .map((txn) => {
+      const accountDbId = accountMap.get(txn.account_id);
+      return accountDbId
+        ? mapTransactionRow(item.user_id, accountDbId, txn)
+        : null;
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null);
+
+  if (upsertRows.length > 0) {
+    const { error } = await supabase
+      .from("transactions")
+      .upsert(upsertRows, { onConflict: "plaid_transaction_id" });
+    if (error) throw error;
+  }
+
+  if (removed.length > 0) {
+    const removedIds = removed
+      .map((r) => r.transaction_id)
+      .filter((id): id is string => Boolean(id));
+    const { error } = await supabase
+      .from("transactions")
+      .delete()
+      .eq("user_id", item.user_id)
+      .in("plaid_transaction_id", removedIds);
+    if (error) throw error;
+  }
+
+  if (cursor) await updateItemCursor(item.user_id, item.id, cursor);
+  await setItemStatus(item.user_id, item.id, "active", null);
+
+  const nowIso = new Date().toISOString();
+  if (completed) {
+    await recordCursorSuccess(supabase, {
+      userId: item.user_id,
+      itemDbId: item.id,
+      nowIso,
+    }).catch((error) => logError("repair.cursor-success", error));
+  } else {
+    await recordCursorPartialSuccess(supabase, {
+      userId: item.user_id,
+      itemDbId: item.id,
+      startedWithoutCursor: !item.sync_cursor,
+      priorSuccess: Boolean(item.last_sync_success_at),
+      nowIso,
+    }).catch((error) => logError("repair.cursor-partial", error));
+  }
+
+  return {
+    pagesCompleted,
+    maxPages: options.maxPages,
+    completed,
+    added: added.length,
+    modified: modified.length,
+    removed: removed.length,
+  };
 }
 
 /**

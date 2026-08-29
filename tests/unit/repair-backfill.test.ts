@@ -39,6 +39,7 @@ import type { PlaidItemRow } from "@/lib/types";
 describe("backfillItemTransactions (bounded repair backfill)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTransactionsSync.mockReset();
   });
 
   const dummyItem: PlaidItemRow = {
