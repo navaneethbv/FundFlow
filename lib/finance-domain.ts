@@ -103,6 +103,8 @@ export interface ProjectFinanceInput {
   splits: TransactionSplit[];
   linkedRefunds: LinkedRefundPair[];
   excludedTransactionIds?: Set<string>;
+  /** Transaction ID → per-transaction category and cash-flow override */
+  transactionOverrides?: Map<string, { category?: string | null; flow?: FinanceFlow | null }>;
   /** Account id → name, only needed for merchant rules that match on account. */
   accountNames?: Map<string, string>;
 }
@@ -131,7 +133,7 @@ function usableOverrides(rows: CategoryOverrideRow[]): CategoryOverrideRow[] {
 export function projectFinanceTransactions(
   input: ProjectFinanceInput,
 ): CanonicalFinanceTransaction[] {
-  const { rows, merchantRules, categoryOverrides, splits, linkedRefunds } = input;
+  const { rows, merchantRules, categoryOverrides, splits, linkedRefunds, transactionOverrides } = input;
   const rowsToProject = input.excludedTransactionIds
     ? rows.filter((row) => !input.excludedTransactionIds!.has(row.id))
     : rows;
@@ -171,8 +173,12 @@ export function projectFinanceTransactions(
 
   rowsToProject.forEach((row, index) => {
     const clean = cleaned[index]!;
-    const groupKey = overrideCategory(overrides, clean.category) ?? UNCATEGORIZED;
-    const flow = nettedIds.has(row.id) ? "transfer" : flowFor(row.amount, groupKey);
+    const txnOverride = transactionOverrides?.get(row.id);
+    const resolvedCategory = txnOverride?.category ?? clean.category;
+    const groupKey = (txnOverride?.category ? txnOverride.category : overrideCategory(overrides, resolvedCategory)) ?? UNCATEGORIZED;
+    const flow = nettedIds.has(row.id)
+      ? "transfer"
+      : (txnOverride?.flow ?? flowFor(row.amount, groupKey));
 
     const base = {
       sourceTransactionId: row.id,
