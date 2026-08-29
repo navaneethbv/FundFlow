@@ -346,6 +346,9 @@ test.describe.serial("Phase 5: recurring page", () => {
     const institutionRow = page.locator("li").filter({
       hasText: institutionName,
     });
+    await expect(institutionRow.getByText("Transactions", { exact: true })).toBeVisible();
+    await expect(institutionRow.getByText("Investments", { exact: true })).toBeVisible();
+    await expect(institutionRow.getByText("Repair required", { exact: true })).toBeVisible();
     const institutionNameBox = await institutionRow
       .locator(":scope > span")
       .first()
@@ -359,6 +362,12 @@ test.describe.serial("Phase 5: recurring page", () => {
     expect(institutionActionsBox!.y).toBeGreaterThanOrEqual(
       institutionNameBox!.y + institutionNameBox!.height,
     );
+
+    await expect(
+      page.getByRole("heading", { name: "Account reconciliation" }),
+    ).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Provider balance" })).toBeVisible();
+    await expect(page.getByText("E2E Checking")).toBeVisible();
 
     const sectionPicker = page.getByRole("combobox", {
       name: "Settings section",
