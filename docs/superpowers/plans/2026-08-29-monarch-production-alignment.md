@@ -284,15 +284,15 @@ export interface ProductSyncHealth {
 
 ## Verification gates
 
-- [ ] Run focused recurring and Dashboard tests during Phase 0.
-- [ ] Run `npm run lint`.
-- [ ] Run `npm run typecheck`.
+- [x] Run focused recurring and Dashboard tests during Phase 0.
+- [x] Run `npm run lint`.
+- [x] Run `npm run typecheck`.
 - [ ] Run the full unit suite.
 - [ ] Run the complete mixed unit and integration suite.
 - [ ] Build the production application (`npm run build`).
-- [ ] Validate contrast tokens (`npm run validate:palette`).
-- [ ] Rebuild the knowledge graph (`graphify update .`).
-- [ ] Check for git diff hygiene (`git diff --check`).
+- [x] Validate contrast tokens (`npm run validate:palette`).
+- [x] Rebuild the knowledge graph (`graphify update .`).
+- [x] Check for git diff hygiene (`git diff --check`).
 - [ ] Confirm the Production deployment commit.
 - [ ] Repeat the authenticated browser comparison read-only.
 - [ ] Record which numeric differences remain because Monarch and FundFlow still contain different source or configuration data.

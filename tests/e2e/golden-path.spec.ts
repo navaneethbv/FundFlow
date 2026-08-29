@@ -26,6 +26,7 @@ test.describe.serial("authenticated golden path", () => {
   test.skip(!EMAIL || !PASSWORD, "set E2E_EMAIL/E2E_PASSWORD to run");
 
   let page: Page;
+
   test.beforeAll(async ({ browser }) => {
     const context = await browser.newContext();
     page = await context.newPage();
@@ -40,7 +41,6 @@ test.describe.serial("authenticated golden path", () => {
     await page.getByPlaceholder("you@example.com").fill(EMAIL!);
     await page.getByPlaceholder("Password").fill(PASSWORD!);
     await page.getByRole("button", { name: "Sign in" }).click();
-
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
   });
 
