@@ -4,6 +4,7 @@ import {
   loadHoldingSnapshots,
   loadInvestmentTransactions,
   loadHoldingAccountOptions,
+  loadInvestmentAccounts,
 } from "@/lib/investments-data";
 import { clientStub } from "../fixtures/supabase-query";
 
@@ -188,6 +189,78 @@ describe("investments-data", () => {
       });
 
       await expect(loadHoldingAccountOptions(supabase as never, "user-1")).rejects.toThrow("Acc err");
+    });
+  });
+
+  describe("loadInvestmentAccounts", () => {
+    it("maps the real Plaid and manual account schemas", async () => {
+      const supabase = clientStub({
+        accounts: {
+          data: [
+            {
+              id: "acc-1",
+              name: "Workplace 401k",
+              type: "investment",
+              subtype: "401k",
+              current_balance: "30000.25",
+              iso_currency_code: "USD",
+            },
+            {
+              id: "acc-2",
+              name: "Checking",
+              type: "depository",
+              subtype: "checking",
+              current_balance: 500,
+              iso_currency_code: "USD",
+            },
+          ],
+        },
+        manual_accounts: {
+          data: [
+            {
+              id: "manual-1",
+              name: "Private investment",
+              account_type: "investment",
+              balance: "1200.50",
+            },
+            {
+              id: "manual-2",
+              name: "Manual cash",
+              account_type: "cash",
+              balance: 100,
+            },
+          ],
+        },
+      });
+
+      const accounts = await loadInvestmentAccounts(supabase as never, "user-1");
+
+      expect(accounts).toEqual([
+        {
+          id: "manual-1",
+          name: "Private investment",
+          source: "manual",
+          type: "investment",
+          subtype: null,
+          balance: 1200.5,
+          currency: "USD",
+        },
+        {
+          id: "acc-1",
+          name: "Workplace 401k",
+          source: "plaid",
+          type: "investment",
+          subtype: "401k",
+          balance: 30000.25,
+          currency: "USD",
+        },
+      ]);
+      expect(supabase.scopedToUser("accounts", "user-1")).toBe(true);
+      expect(supabase.scopedToUser("manual_accounts", "user-1")).toBe(true);
+      expect(supabase.callsOn("manual_accounts")).toContainEqual({
+        method: "select",
+        args: ["id, name, account_type, balance"],
+      });
     });
   });
 });

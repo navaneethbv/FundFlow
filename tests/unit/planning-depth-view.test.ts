@@ -52,6 +52,16 @@ describe("buildPlanningDepthView", () => {
     expect(view.debtPayoff).toBeNull();
   });
 
+  it("excludes an overpaid card from payoff planning", () => {
+    const view = buildPlanningDepthView({
+      accounts: [{ name: "Overpaid card", type: "credit", balance: -25 }],
+      monthlyIncome: 4000,
+      monthlySpend: 3000,
+      goals: [],
+    });
+    expect(view.debtPayoff).toBeNull();
+  });
+
   it("suggests sinking-fund contributions that never exceed the surplus", () => {
     const view = buildPlanningDepthView({
       accounts: [],
@@ -170,5 +180,4 @@ describe("buildPlanningDepthView", () => {
     expect(statuses[3]!.status).toBe("paid");
   });
 });
-
 

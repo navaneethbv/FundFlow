@@ -1179,5 +1179,16 @@ describe("shiftMonthKey", () => {
     expect(data.currentMonthIncome).toBe(3500);
     expect(data.currentMonthExpenses).toBe(830);
     expect(data.spendingAnomalies).toBeDefined();
+
+    // Verify 6-month window ends on active month (2026-08) and never includes next month (2026-09)
+    const monthKeys = data.monthlySpending.map((m) => m.month);
+    expect(monthKeys).toEqual([
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06",
+      "2026-07",
+      "2026-08",
+    ]);
   });
 });

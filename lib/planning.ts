@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { classifyBalanceSheetAmount } from "@/lib/account-balance";
 import { formatCurrency } from "@/lib/format";
 import { addDays, addMonths, isoDate, parseDate } from "@/lib/date-utils";
 
@@ -112,6 +113,7 @@ export interface SpendingAnomaly {
 export interface NetWorthAccount {
   name: string;
   type: string | null;
+  subtype?: string | null;
   balance: number | null;
   includeInNetWorth?: boolean;
 }
@@ -500,12 +502,13 @@ export function computeNetWorthSnapshot(accounts: NetWorthAccount[]) {
 
   for (const account of accounts) {
     if (account.includeInNetWorth === false) continue;
-    const balance = Math.abs(account.balance ?? 0);
-    if (["credit", "liability", "debt", "loan"].includes(account.type ?? "")) {
-      liabilities += balance;
-    } else {
-      assets += balance;
-    }
+    const classified = classifyBalanceSheetAmount(
+      account.balance,
+      account.type,
+      account.subtype,
+    );
+    if (classified.kind === "liability") liabilities += classified.amount;
+    else assets += classified.amount;
   }
 
   return {

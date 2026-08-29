@@ -1,5 +1,6 @@
 import { EXCLUDED_PFC } from "@/lib/dashboard";
 import type { CanonicalFinanceTransaction } from "@/lib/finance-domain";
+import { computeSavingsRate } from "@/lib/finance-metrics";
 
 /**
  * Year in Money (8.1): pure annual-recap aggregation for /wrapped.
@@ -19,8 +20,8 @@ export interface YearInMoney {
   year: string;
   totalSpend: number;
   totalIncome: number;
-  /** Whole-percent savings rate, floored at 0. */
-  savingsRate: number;
+  /** Signed savings rate (null when totalIncome <= 0). */
+  savingsRate: number | null;
   topMerchants: { merchant: string; amount: number }[];
   topCategories: { category: string; amount: number }[];
   /** Null when the year had income but no spending. */
@@ -102,10 +103,7 @@ export function computeYearInMoney(
     year,
     totalSpend,
     totalIncome,
-    savingsRate:
-      totalIncome <= 0
-        ? 0
-        : Math.max(0, Math.round(((totalIncome - totalSpend) / totalIncome) * 100)),
+    savingsRate: computeSavingsRate(totalIncome, totalSpend),
     topMerchants: top(byMerchant, "merchant"),
     topCategories: top(byCategory, "category"),
     biggestMonth,

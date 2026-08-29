@@ -1,5 +1,6 @@
 import type { CanonicalFinanceTransaction } from "@/lib/finance-domain";
 import { UNKNOWN_CURRENCY } from "@/lib/format";
+import { computeSavingsRate } from "@/lib/finance-metrics";
 
 export type CashFlowPeriod = "monthly" | "quarterly" | "yearly";
 export type BreakdownDimension = "category" | "group" | "merchant";
@@ -93,8 +94,7 @@ export function computePeriodCashFlow(
         income,
         expenses,
         savings,
-        savingsRate:
-          income === 0 ? null : round2((savings / income) * 100),
+        savingsRate: computeSavingsRate(income, expenses),
       };
     });
 }

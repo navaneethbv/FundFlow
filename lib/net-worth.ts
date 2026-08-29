@@ -12,7 +12,7 @@ export async function writeNetWorthSnapshot(userId: string) {
   // 1. Fetch Plaid accounts
   const { data: plaidAccounts } = await supabase
     .from("accounts")
-    .select("name, type, current_balance")
+    .select("name, type, subtype, current_balance")
     .eq("user_id", userId);
 
   // 2. Fetch manual accounts
@@ -26,6 +26,7 @@ export async function writeNetWorthSnapshot(userId: string) {
     ...(plaidAccounts ?? []).map((a) => ({
       name: a.name,
       type: a.type,
+      subtype: a.subtype,
       balance: a.current_balance !== null ? Number(a.current_balance) : null,
       includeInNetWorth: true,
     })),

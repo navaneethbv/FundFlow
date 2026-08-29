@@ -2,6 +2,7 @@ import { buildPayoffPlan, type PayoffPlan } from "@/lib/debt";
 import { financeTotals, type CanonicalFinanceTransaction } from "@/lib/finance-domain";
 import { computeRunwayMonths, medianOf } from "@/lib/insights";
 import { groupKeyFor } from "@/lib/accounts-page";
+import { classifyBalanceSheetAmount } from "@/lib/account-balance";
 import { firstSearchParam } from "@/lib/search-params";
 
 /**
@@ -151,6 +152,27 @@ export interface ForecastStartingState {
   liabilities: number;
 }
 
+function forecastAccountContribution(
+  balance: number,
+  group: string,
+  type: string | null,
+  subtype?: string | null,
+): ForecastStartingState {
+  if (group === "investment") {
+    return { cash: 0, investments: balance, liabilities: 0 };
+  }
+
+  const liabilityGroup = ["credit", "loan", "liability", "debt"].includes(group);
+  if (!liabilityGroup) {
+    return { cash: balance, investments: 0, liabilities: 0 };
+  }
+
+  const classified = classifyBalanceSheetAmount(balance, type, subtype);
+  return classified.kind === "liability"
+    ? { cash: 0, investments: 0, liabilities: classified.amount }
+    : { cash: classified.amount, investments: 0, liabilities: 0 };
+}
+
 /**
  * Splits every account into the three buckets the scenario compounds
  * separately. Reuses accounts-page's own credit/cash/investment/loan
@@ -168,15 +190,25 @@ export function computeForecastStartingState(
   let liabilities = 0;
 
   for (const a of accounts) {
-    const group = groupKeyFor(a.type, a.subtype);
-    if (group === "investment") investments += a.balance;
-    else if (group === "credit" || group === "loan") liabilities += Math.abs(a.balance);
-    else cash += a.balance;
+    const contribution = forecastAccountContribution(
+      a.balance,
+      groupKeyFor(a.type, a.subtype),
+      a.type,
+      a.subtype,
+    );
+    cash += contribution.cash;
+    investments += contribution.investments;
+    liabilities += contribution.liabilities;
   }
   for (const m of manualAccounts) {
-    if (m.accountType === "investment") investments += m.balance;
-    else if (m.accountType === "liability" || m.accountType === "debt") liabilities += Math.abs(m.balance);
-    else cash += m.balance;
+    const contribution = forecastAccountContribution(
+      m.balance,
+      m.accountType,
+      m.accountType,
+    );
+    cash += contribution.cash;
+    investments += contribution.investments;
+    liabilities += contribution.liabilities;
   }
 
   return { cash: round2(cash), investments: round2(investments), liabilities: round2(liabilities) };
@@ -391,4 +423,3 @@ export function computeForecastMilestones(
 
   return milestones;
 }
-
