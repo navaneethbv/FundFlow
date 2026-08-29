@@ -6,8 +6,8 @@
 
 **Evidence:** `docs/Monarch-Production-Comparison-2026-08-29.md` and the gitignored live-data evidence under `qa-shots/production-2026-08-29/`.
 
-**Implementation status:** Phase 0 has a local implementation and focused regression coverage on this branch.
-Phases 1 through 6 remain delivery work, not completed product behavior.
+**Implementation status:** Phases 0 and 1 have local implementations with focused unit and signed-in browser coverage on this branch.
+Phases 2 through 6 remain delivery work, not completed product behavior.
 Do not treat a checked box below as Production evidence until the associated migration, UI flow, source path, and acceptance test have been independently verified.
 
 ## Product rules
@@ -83,8 +83,8 @@ flowchart LR
 **Files:**
 
 - Create `lib/sync-health.ts`.
-- Modify `lib/plaid-service.ts`.
 - Modify `components/settings/BanksSection.tsx`.
+- Modify `app/settings/page.tsx`.
 - Modify the closest unit tests for institution settings and sync jobs.
 
 **Interface:**
@@ -110,12 +110,12 @@ export interface ProductSyncHealth {
 
 **Steps:**
 
-- [ ] Add deterministic state tests for each health state.
-- [ ] Load the newest transaction and investment sync job per item with explicit user scoping.
-- [ ] Load the oldest and newest transaction date per item without unbounded row reads.
-- [ ] Store only safe provider error codes and never raw access tokens or payloads.
-- [ ] Render product-specific status and recovery copy under Institutions.
-- [ ] Add an accessible stale-data warning that links Cash Flow and Investments to the affected institution.
+- [x] Add deterministic state tests for each health state.
+- [x] Load the newest transaction and investment sync job per item with explicit user scoping.
+- [x] Load the oldest and newest transaction date per item without unbounded row reads.
+- [x] Store only safe provider error codes and never raw access tokens or payloads.
+- [x] Render product-specific status and recovery copy under Institutions.
+- [x] Add an accessible stale-data warning that links Cash Flow and Investments to the affected institution.
 
 **Acceptance:** A user can identify which institution and which Plaid product caused missing data.
 
@@ -125,14 +125,14 @@ export interface ProductSyncHealth {
 
 - Create `components/settings/ReconciliationSection.tsx`.
 - Modify `components/settings/SettingsLayout.tsx` and the settings navigation model.
-- Reuse the account-reconciliation domain from `docs/superpowers/plans/2026-08-21-account-reconciliation.md` where it is still current.
+- Use a real daily balance snapshot as the ledger anchor, and show an unavailable state when no honest anchor exists.
 
 **Steps:**
 
-- [ ] Show account balance, calculated ledger balance, difference, transaction coverage window, and freshness.
-- [ ] Explain that provider balances and transaction history can have different coverage.
-- [ ] Keep reconciliation read-only in this phase.
-- [ ] Add table semantics and a mobile card twin.
+- [x] Show account balance, calculated ledger balance, difference, transaction coverage window, and freshness.
+- [x] Explain that provider balances and transaction history can have different coverage.
+- [x] Keep reconciliation read-only in this phase.
+- [x] Add table semantics and a mobile card twin.
 
 **Acceptance:** The missing-paycheck case is visible as a coverage or reconciliation problem without comparing against another product.
 

@@ -13,6 +13,7 @@ import ImportReviewSection from "@/components/settings/ImportReviewSection";
 import AiInsightsSection from "@/components/settings/AiInsightsSection";
 import BudgetsSection from "@/components/settings/BudgetsSection";
 import BanksSection from "@/components/settings/BanksSection";
+import ReconciliationSection from "@/components/settings/ReconciliationSection";
 import DangerZone from "@/components/settings/DangerZone";
 import ManualAccountsSection from "@/components/settings/ManualAccountsSection";
 import MerchantRulesSection from "@/components/settings/MerchantRulesSection";
@@ -38,6 +39,7 @@ import ButtonLink from "@/components/ui/ButtonLink";
 import Panel from "@/components/ui/Panel";
 import { sectionFromParam, parseDisplayPrefs, type SettingsSection } from "@/components/settings/settings-nav";
 import { isFeatureEnabled } from "@/lib/feature-flags";
+import { loadInstitutionObservability } from "@/lib/sync-health";
 
 export const dynamic = "force-dynamic";
 
@@ -301,12 +303,28 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
       supabase.from("accounts").select("id, name, mask, type, apr").eq("user_id", userId).order("name"),
       supabase.from("households").select("id").order("created_at", { ascending: false }).limit(1),
     ]);
+    const safeItems = (items ?? []) as Array<{
+      id: string;
+      institution_name: string | null;
+      status: string;
+      error_code: string | null;
+      shared_household_id?: string | null;
+    }>;
+    const observability = await loadInstitutionObservability(supabase, userId, safeItems);
+    const healthByItem = Object.fromEntries(
+      observability.institutions.map((health) => [health.plaidItemId, health]),
+    );
     content = (
       <>
         <div className="grid gap-6 xl:grid-cols-2">
-          <BanksSection initialItems={items ?? []} householdId={(households ?? [])[0]?.id ?? null} />
+          <BanksSection
+            initialItems={safeItems}
+            healthByItem={healthByItem}
+            householdId={(households ?? [])[0]?.id ?? null}
+          />
           <ManualAccountsSection initialAccounts={manualAccounts ?? []} />
         </div>
+        <ReconciliationSection rows={observability.reconciliations} />
         <CardAprSection
           initialAccounts={((accounts ?? []) as Array<{
             id: string;

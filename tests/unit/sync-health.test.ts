@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { deriveProductSyncHealth } from "@/lib/sync-health";
+import {
+  deriveProductSyncHealth,
+  loadInstitutionObservability,
+} from "@/lib/sync-health";
+import { clientStub } from "../fixtures/supabase-query";
 
 const NOW = new Date("2026-08-29T12:00:00.000Z");
 
@@ -54,6 +58,9 @@ describe("deriveProductSyncHealth", () => {
     ["RATE_LIMIT_EXCEEDED", "rate_limited"],
     ["PRODUCTS_NOT_SUPPORTED", "product_unavailable"],
     ["ITEM_LOGIN_REQUIRED", "repair_required"],
+    ["rate_limited", "rate_limited"],
+    ["no_investment_product", "product_unavailable"],
+    ["product_not_ready", "repair_required"],
   ] as const)("maps safe provider code %s to %s", (code, state) => {
     expect(
       deriveProductSyncHealth({
@@ -76,5 +83,36 @@ describe("deriveProductSyncHealth", () => {
         now: NOW,
       }),
     ).toMatchObject({ state: "repair_required", safeErrorCode: null });
+  });
+});
+
+describe("loadInstitutionObservability", () => {
+  it("scopes every source query to the authenticated user", async () => {
+    const supabase = clientStub({
+      accounts: { data: [] },
+      sync_jobs: { data: null },
+    });
+
+    const result = await loadInstitutionObservability(
+      supabase as never,
+      "user-1",
+      [
+        {
+          id: "item-1",
+          institution_name: "Test Bank",
+          status: "active",
+          error_code: null,
+        },
+      ],
+      NOW,
+    );
+
+    expect(result.institutions[0]).toMatchObject({
+      plaidItemId: "item-1",
+      transactions: { state: "never_synced" },
+      investments: { state: "never_synced" },
+    });
+    expect(supabase.scopedToUser("accounts", "user-1")).toBe(true);
+    expect(supabase.scopedToUser("sync_jobs", "user-1")).toBe(true);
   });
 });

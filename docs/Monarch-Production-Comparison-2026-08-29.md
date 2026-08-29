@@ -161,13 +161,19 @@ Acceptance:
 
 ## Missing or materially weaker capabilities
 
+### Implementation update on PR #137
+
+Phase 1 now adds read-only per-institution transaction and investment health, bounded transaction coverage, recovery guidance, and snapshot-anchored account reconciliation.
+The reconciliation panel explicitly reports unavailable states instead of deriving an opening balance from transaction totals.
+Authenticated repair and historical backfill remain Phase 2 work and are not implied by this update.
+
 ### High value
 
 - FundFlow does not expose a recurring calendar view comparable to Monarch's List and Calendar modes.
 - FundFlow does not synchronize actual credit-card statement bills, due dates, or bill-payment accounts.
 - FundFlow does not currently show synchronized security-level holdings for this Production account.
 - FundFlow does not offer a Monarch configuration import for budgets, goals, category overrides, merchant rules, or tags.
-- FundFlow does not expose a per-institution reconciliation and repair center with cursor and product health.
+- FundFlow now exposes per-institution product health and read-only reconciliation on PR #137, while authenticated repair and cursor recovery remain pending.
 
 ### Medium value
 
