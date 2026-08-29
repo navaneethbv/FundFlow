@@ -58,6 +58,6 @@ test.describe("repair", () => {
     await row.getByRole("button", { name: "Repair" }).click();
     await expect(row.getByText(/log in again/)).toBeVisible();
     // The repair state hands off to the Link update (reconnect) flow.
-    await expect(row.getByText(/Reconnect/)).toBeVisible();
+    await expect(row.getByRole("button", { name: "Reconnect" })).toBeVisible();
   });
 });

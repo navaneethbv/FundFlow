@@ -1,9 +1,7 @@
-import "server-only";
-
 /**
- * Authenticated repair classification. The repair route maps provider errors
- * to a small set of actionable states so Settings can explain what is needed
- * instead of showing a generic failure.
+ * Authenticated repair classification and bounded-backfill UI state. Shared by
+ * the repair route (server) and the settings repair control (client), so it
+ * must stay free of server-only APIs.
  */
 
 export type RepairFailureKind =
