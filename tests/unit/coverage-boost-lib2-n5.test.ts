@@ -54,7 +54,7 @@ function makeData(overrides: Partial<WeeklyReportData> = {}): WeeklyReportData {
     banks: [{ name: "Chase", amount: 70 }],
     cards: [{ name: "•••• 1234", amount: 30 }],
     budgets: [
-      { category: "Food and Drink", spent: 60, weeklyAllowance: 50, percentage: 1.2, status: "over" },
+      { category: "Food and Drink", spent: 60, allowance: 50, percentage: 1.2, status: "over" },
     ],
     cashFlow: { inflows: 500, outflows: 200, net: 300 },
     ...overrides,

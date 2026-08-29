@@ -1,4 +1,5 @@
 import { EXCLUDED_PFC } from "@/lib/dashboard";
+import type { CanonicalFinanceTransaction } from "@/lib/finance-domain";
 
 /**
  * Year in Money (8.1): pure annual-recap aggregation for /wrapped.
@@ -113,4 +114,32 @@ export function computeYearInMoney(
     monthlySpendSeries,
     transactionCount: rows.length,
   };
+}
+
+/**
+ * Annual aggregation over the canonical financial projection, so the recap
+ * agrees with every other finance view about merchant rules, category
+ * overrides, refund netting, duplicate exclusion, and split expansion.
+ *
+ * The projection already classifies each row as income, expense, or transfer;
+ * transfers (including both halves of a linked refund and every credit-card
+ * payment) are dropped here by `flow`, then the surviving rows are converted
+ * back into the raw sign convention `computeYearInMoney` expects.
+ */
+export function computeYearInMoneyFromProjection(
+  rows: CanonicalFinanceTransaction[],
+  year: string,
+): YearInMoney | null {
+  const txns: AnnualTxn[] = [];
+  for (const row of rows) {
+    if (!row.date.startsWith(`${year}-`)) continue;
+    if (row.flow === "transfer") continue;
+    txns.push({
+      date: row.date,
+      amount: row.flow === "income" ? -Math.abs(row.signedAmount) : row.signedAmount,
+      merchant: row.merchant,
+      category: row.groupKey,
+    });
+  }
+  return computeYearInMoney(txns, year);
 }

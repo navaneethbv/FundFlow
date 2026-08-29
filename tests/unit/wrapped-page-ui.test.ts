@@ -27,4 +27,18 @@ describe("wrapped page UI", () => {
     expect(wrapped).not.toContain("viz-pos");
     expect(wrapped).not.toContain("viz-neg");
   });
+
+  it("loads through the paginated canonical projection instead of an unpaginated select", () => {
+    expect(wrapped).toContain('from "@/lib/finance-query"');
+    expect(wrapped).toContain("loadCanonicalProjection");
+    expect(wrapped).toContain("computeYearInMoneyFromProjection");
+    expect(wrapped).not.toMatch(/from\("transactions"\)[\s\S]*?\.select\(/);
+  });
+
+  it("renders an accessible, test-addressable truncation warning above the recap", () => {
+    expect(wrapped).toContain('data-truncated="true"');
+    expect(wrapped).toContain('role="alert"');
+    expect(wrapped).toContain("this recap is incomplete");
+    expect(wrapped).toContain("reached its bounded row limit");
+  });
 });

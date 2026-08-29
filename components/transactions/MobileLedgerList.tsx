@@ -2,7 +2,7 @@ import { Fragment } from "react";
 import Badge from "@/components/ui/Badge";
 import TransactionEditor from "@/components/transactions/TransactionEditor";
 import { MerchantAvatar } from "@/components/ui/Avatar";
-import { formatCurrency, titleCase } from "@/lib/format";
+import { formatCurrency, roundsToZero, titleCase } from "@/lib/format";
 import { formatDate } from "@/lib/format-date";
 import { ledgerZebraBands, type LedgerDayGroup } from "@/lib/ledger-data";
 
@@ -26,13 +26,15 @@ export interface LedgerCardRow {
  * Money-in is the exception under the Plaid convention, so it is the only
  * direction that earns a colour. Painting every outflow red made the column a
  * uniform wall that carried no information; sign and alignment do that work.
+ * A display zero is direction-neutral and earns no colour at all.
  */
 function amountColor(amount: number): { color: string } | undefined {
+  if (roundsToZero(amount)) return undefined;
   return amount < 0 ? { color: "var(--viz-pos)" } : undefined;
 }
 
 function signedAmount(amount: number, currency: string): string {
-  if (amount === 0) return formatCurrency(0, currency);
+  if (roundsToZero(amount)) return formatCurrency(0, currency);
   return `${amount < 0 ? "+" : "-"}${formatCurrency(Math.abs(amount), currency)}`;
 }
 

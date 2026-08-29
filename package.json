@@ -19,14 +19,14 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
     "@supabase/ssr": "^0.12.4",
-    "@supabase/supabase-js": "^2.112.3",
+    "@supabase/supabase-js": "^2.112.4",
     "@types/nodemailer": "^8.0.1",
     "@types/pdfkit": "^0.17.6",
     "@vercel/analytics": "^2.0.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.33.0",
-    "next": "16.3.2",
-    "nodemailer": "^9.0.5",
+    "next": "^16.3.3",
+    "nodemailer": "^9.0.6",
     "pdfkit": "^0.20.1",
     "plaid": "^43.0.0",
     "react": "19.2.8",
@@ -38,6 +38,7 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26",
@@ -47,7 +48,7 @@
     "@vitest/coverage-v8": "^4.1.11",
     "dotenv": "^17.4.2",
     "eslint": "^9",
-    "eslint-config-next": "16.3.2",
+    "eslint-config-next": "^16.3.3",
     "tailwindcss": "^4.3.3",
     "typescript": "^6",
     "vitest": "^4.1.11"

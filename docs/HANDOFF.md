@@ -1,6 +1,36 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-08-21. Read this first to resume.
+Last updated: 2026-08-28. Read this first to resume.
+
+## 2026-08-28: PR #134 UI review remediation (F1–F12)
+
+Branch `feat/register-visual-rollout-v2`, work uncommitted in the working tree at `4d12f6b`.
+See `ui-review-remediation.md` for the full finding-by-finding table, QA evidence, and residual items.
+
+### Follow-up review fixes (post-remediation, still uncommitted)
+
+A second review of the uncommitted remediation caught a regression and a correctness bug in the F2 (Review PDF) work, plus a few smaller items.
+
+**`/api/export/report` now serves both cadences.** F2 made `month=YYYY-MM` mandatory, which 400'd the two existing no-parameter callers (`app/reports/page.tsx` and `components/settings/ExportSection.tsx`), replacing the app with raw JSON.
+The route now takes `month` as optional: given, it is a monthly review; omitted, it is the current week (from `profiles.timezone`), matching the Monday cron.
+`WeeklyReportPeriod` carries a `kind` (`"weekly" | "monthly"`, absent means weekly), and `buildWeeklyReportModel` measures budgets against the full `monthlyLimit` for a monthly period instead of the `* 12 / 52` weekly proration (which had marked every monthly budget ~4x over).
+`generateWeeklyReportPdf` resolves its "week"/"month" copy from `period.kind` via the exported `reportCadenceCopy` helper; the model field `weeklyAllowance` was renamed to `allowance`.
+
+**All three PDF download buttons now use `components/review/ExportReportButton`** (fetch + blob), so a 403/400/500 shows an in-app error instead of navigating the browser to a JSON error document.
+
+Smaller: `loadCanonicalProjection` no longer `await`s the split-chunk batch inside its `Promise.all` (it was serializing the five dependency queries behind every split read); the receipt-scan file picker shows the chosen filename again; two `app/globals.css` indentation slips fixed.
+
+The twelve review findings are addressed. The two high-severity correctness fixes changed shared loaders, so they are worth carrying forward as rules:
+
+**Supabase ranges are inclusive and PostgREST caps a single response at 1,000 rows, so every ranged read must carry an explicit date+id order and page deliberately.** The Year in Money page and the duplicate-review loader both silently read only 1,000 rows at volume; both now page through the canonical loader or an equivalent ordered range walk.
+
+**A 500-id `in()` list overflows Node's 16 KB header limit (`UND_ERR_HEADERS_OVERFLOW`).** The split-chunk size is now 250 in `lib/finance-query.ts`, `lib/cash-flow-data.ts`, and `lib/weekly-report-data.ts`, and split reads run with bounded concurrency (`runBatched`, cap 6) instead of firing every chunk at once.
+
+`fetchFinanceTransactions` now issues one exact count in parallel with page zero and fetches the remaining pages in bounded concurrent batches, which took Cash Flow from ~9–10 s to under 4 s warm at all three viewports.
+
+The F10 contrast fixes changed the light accent to a burnt orange (`--accent: #9a3412`), added `--accent-foreground` (white) and `--accent-strong-foreground` (dark) so both the dark and vivid orange fills pass AA, darkened muted/success/danger, and lightened the dark muted. `scripts/validate_palette.js` now gates these exact text pairs at 4.5:1. Re-step with the validator, never by eye.
+
+The axe verification required real signed-in scanning: unauthenticated probes against protected routes redirect to the login page and report login-only contrast nodes, and a theme flip needs a settle delay before axe samples colors.
 
 ## 2026-08-21: documentation refresh and archive
 

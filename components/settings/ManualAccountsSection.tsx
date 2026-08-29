@@ -235,11 +235,11 @@ export default function ManualAccountsSection({
       </div>
 
       <form onSubmit={addAccount} className="grid gap-3 sm:grid-cols-2">
-        <Field label="Name">
-          <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Brokerage" />
+        <Field label="Name" htmlFor="manual-account-name">
+          <Input id="manual-account-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Brokerage" />
         </Field>
-        <Field label="Type">
-          <Select value={accountType} onChange={(event) => setAccountType(event.target.value as ManualAccount["account_type"])}>
+        <Field label="Type" htmlFor="manual-account-type">
+          <Select id="manual-account-type" value={accountType} onChange={(event) => setAccountType(event.target.value as ManualAccount["account_type"])}>
             <option value="asset">Asset</option>
             <option value="cash">Cash</option>
             <option value="investment">Investment</option>
@@ -247,8 +247,8 @@ export default function ManualAccountsSection({
             <option value="debt">Debt</option>
           </Select>
         </Field>
-        <Field label="Balance">
-          <Input type="number" step="0.01" value={balance} onChange={(event) => setBalance(event.target.value)} placeholder="10000" />
+        <Field label="Balance" htmlFor="manual-account-balance">
+          <Input id="manual-account-balance" type="number" step="0.01" value={balance} onChange={(event) => setBalance(event.target.value)} placeholder="10000" />
         </Field>
         <Button type="submit">Add account</Button>
       </form>

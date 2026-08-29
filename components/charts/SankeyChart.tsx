@@ -230,7 +230,7 @@ export default function SankeyChart({
   maxNodesPerColumn = DEFAULT_MAX_NODES_PER_COLUMN,
 }: Readonly<SankeyChartProps>) {
   if (nodes.length === 0 || links.length === 0) {
-    return <p className="py-4 text-sm opacity-60">No data yet.</p>;
+    return <p className="py-4 text-sm text-muted">No data yet.</p>;
   }
 
   const money = (value: number): string => formatCurrency(value, currency);
@@ -445,7 +445,7 @@ function FlowTable({
         Every flow in the diagram, with its amount.
       </caption>
       <thead>
-        <tr className="text-left opacity-60">
+        <tr className="text-left text-muted">
           <th className="py-1 pr-2 font-medium">From</th>
           <th className="py-1 pr-2 font-medium">To</th>
           <th className="py-1 pr-2 text-right font-medium">Amount</th>

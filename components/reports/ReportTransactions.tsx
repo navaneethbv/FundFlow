@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
-import { formatCurrency, titleCase } from "@/lib/format";
+import { formatCurrency, roundsToZero, titleCase } from "@/lib/format";
 import { formatDate } from "@/lib/format-date";
 import {
   buildLedgerDayGroups,
@@ -27,23 +27,27 @@ export const REPORT_PAGE_SIZE = 50;
 const COLUMN_COUNT = 4;
 
 function directionLabel(row: CanonicalFinanceTransaction): string {
+  if (roundsToZero(row.signedAmount)) return "";
   if (row.flow === "transfer") return "Transfer";
   return row.flow === "income" ? "In" : "Out";
 }
 
 /**
  * Money-in is the exception here, so it is the only direction that earns a
- * colour. Transfers stay neutral, and ordinary expenses use the default
- * foreground rather than a red that repeats on nearly every row.
+ * colour. Transfers stay neutral, ordinary expenses use the default
+ * foreground rather than a red that repeats on nearly every row, and a
+ * display zero earns no direction colour at all.
  */
 function amountColor(
   flow: CanonicalFinanceTransaction["flow"],
+  signedAmount: number,
 ): { color: string } | undefined {
+  if (roundsToZero(signedAmount)) return undefined;
   return flow === "income" ? { color: "var(--viz-pos)" } : undefined;
 }
 
 function signedAmount(signed: number, currency: string): string {
-  if (signed === 0) return formatCurrency(0, currency);
+  if (roundsToZero(signed)) return formatCurrency(0, currency);
   return `${signed < 0 ? "+" : "-"}${formatCurrency(Math.abs(signed), currency)}`;
 }
 
@@ -67,7 +71,10 @@ function DayHeaderRow({
           the rows it totals. */}
       <td className="py-1.5 pr-3 text-right text-xs font-normal text-muted">
         {group.showNet && (
-          <span data-money style={amountColor(group.net < 0 ? "income" : "expense")}>
+          <span
+            data-money
+            style={amountColor(group.net < 0 ? "income" : "expense", group.net)}
+          >
             {signedAmount(group.net, currency)} net
           </span>
         )}
@@ -81,11 +88,18 @@ export default function ReportTransactions({
   currency,
   page,
   hrefForPage,
+  groupByDate = true,
 }: Readonly<{
   transactions: CanonicalFinanceTransaction[];
   currency: string;
   page: number;
   hrefForPage: (page: number) => string;
+  /**
+   * Date sorts keep day-group headers (a chronological order is the only one
+   * where a daily net is meaningful). Merchant and amount orders must not
+   * display a day header or a "day net" that implies chronology.
+   */
+  groupByDate?: boolean;
 }>) {
   const pageCount = Math.max(1, Math.ceil(transactions.length / REPORT_PAGE_SIZE));
   const safePage = Math.min(Math.max(1, page), pageCount);
@@ -101,21 +115,25 @@ export default function ReportTransactions({
     date: row.date,
     amount: row.signedAmount,
   });
-  const dayGroups = buildLedgerDayGroups(rows.map(toGroupable), {
-    allRows: transactions.map(toGroupable),
-  });
+  const dayGroups = groupByDate
+    ? buildLedgerDayGroups(rows.map(toGroupable), {
+        allRows: transactions.map(toGroupable),
+      })
+    : null;
 
-  const bands = ledgerZebraBands(rows, true);
+  const bands = ledgerZebraBands(rows, groupByDate);
 
   return (
     <div>
       <div className="overflow-x-auto">
         <table className="min-w-[42rem] w-full text-sm">
           <caption className="sr-only">
-            Transactions matching the current report filters, grouped by day.
+            {groupByDate
+              ? "Transactions matching the current report filters, grouped by day."
+              : "Transactions matching the current report filters."}
           </caption>
           <thead>
-            <tr className="text-left font-mono opacity-60">
+            <tr className="text-left font-mono text-muted">
               <th scope="col" className="py-2 pr-3 font-medium">Date</th>
               <th scope="col" className="py-2 pr-3 font-medium">Merchant</th>
               <th scope="col" className="py-2 pr-3 font-medium">Category</th>
@@ -124,9 +142,11 @@ export default function ReportTransactions({
           </thead>
           <tbody className="tabular-nums">
             {rows.map((row, index) => {
-              const startsDay = index === 0 || rows[index - 1]!.date !== row.date;
+              const startsDay =
+                groupByDate &&
+                (index === 0 || rows[index - 1]!.date !== row.date);
               const striped = bands[index]! % 2 === 1;
-              const group = dayGroups.get(row.date);
+              const group = dayGroups?.get(row.date);
 
               return (
                 <Fragment key={row.id}>
@@ -162,10 +182,12 @@ export default function ReportTransactions({
                     <td
                       data-money
                       className="relative py-2 pr-3 text-right"
-                      style={amountColor(row.flow)}
+                      style={amountColor(row.flow, row.signedAmount)}
                     >
                       {signedAmount(row.signedAmount, currency)}
-                      <span className="sr-only"> {directionLabel(row)}</span>
+                      {directionLabel(row) && (
+                        <span className="sr-only"> {directionLabel(row)}</span>
+                      )}
                     </td>
                   </tr>
                 </Fragment>

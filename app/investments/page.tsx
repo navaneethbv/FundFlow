@@ -9,7 +9,7 @@ import TopMovers from "@/components/investments/TopMovers";
 import EmptyState from "@/components/ui/EmptyState";
 import Panel from "@/components/ui/Panel";
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, roundsToZero } from "@/lib/format";
 import { computeTimeWeightedReturn, hasSufficientPerformanceData } from "@/lib/investment-performance";
 import { buildInvestmentsPage, externalFlowsFromTransactions } from "@/lib/investments";
 import {
@@ -58,9 +58,9 @@ export default async function InvestmentsPage() {
                   <span
                     data-money
                     className="ml-2"
-                    style={{ color: page.dayChange.amount >= 0 ? "var(--viz-pos)" : "var(--viz-neg)" }}
+                    style={{ color: roundsToZero(page.dayChange.amount) ? undefined : page.dayChange.amount >= 0 ? "var(--viz-pos)" : "var(--viz-neg)" }}
                   >
-                    {page.dayChange.amount >= 0 ? "+" : ""}
+                    {roundsToZero(page.dayChange.amount) ? "" : page.dayChange.amount >= 0 ? "+" : ""}
                     {formatCurrency(page.dayChange.amount, currency)} ({page.dayChange.pct.toFixed(1)}%) today
                   </span>
                 )}

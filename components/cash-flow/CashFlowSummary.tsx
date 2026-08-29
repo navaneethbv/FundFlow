@@ -66,7 +66,7 @@ export default function CashFlowSummary({
             <p className="eyebrow">{metric.label}</p>
             <p
               data-money
-              className="metric-value mt-3 truncate text-2xl sm:text-3xl"
+              className="metric-value mt-3 break-words tabular-nums text-[clamp(1.25rem,0.95rem+0.6vw,1.875rem)]"
               style={{ color: metric.color }}
             >
               {metric.value}

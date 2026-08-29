@@ -47,9 +47,10 @@ export default function DisplaySection({ initialPrefs }: Readonly<{ initialPrefs
   return (
     <Panel title="Display" eyebrow="Appearance">
       <div className="space-y-3">
-        <Field label="Theme">
+        <Field label="Theme" htmlFor="display-theme">
           <div className="flex items-center gap-3">
             <Select
+              id="display-theme"
               value={prefs.theme}
               onChange={(e) => update({ theme: e.target.value as DisplayPrefs["theme"] })}
               disabled={busy}
@@ -62,8 +63,9 @@ export default function DisplaySection({ initialPrefs }: Readonly<{ initialPrefs
             <ThemeToggle />
           </div>
         </Field>
-        <Field label="Density">
+        <Field label="Density" htmlFor="display-density">
           <Select
+            id="display-density"
             value={prefs.density}
             onChange={(e) => update({ density: e.target.value as DisplayPrefs["density"] })}
             disabled={busy}
@@ -73,8 +75,9 @@ export default function DisplaySection({ initialPrefs }: Readonly<{ initialPrefs
             <option value="compact">Compact</option>
           </Select>
         </Field>
-        <Field label="Reduced motion">
+        <Field label="Reduced motion" htmlFor="display-reduced-motion">
           <Select
+            id="display-reduced-motion"
             value={prefs.reducedMotion}
             onChange={(e) => update({ reducedMotion: e.target.value as DisplayPrefs["reducedMotion"] })}
             disabled={busy}

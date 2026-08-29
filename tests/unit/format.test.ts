@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   formatCurrency,
+  roundsToZero,
   titleCase,
   formatFrequency,
   formatDay,
@@ -39,6 +40,48 @@ describe("formatCurrency", () => {
     // If Intl throws, it should return a fallback format
     const formatted = formatCurrency(10.5, "INVALID_CURRENCY");
     expect(formatted).toBe("$10.50");
+  });
+});
+
+describe("roundsToZero / neutral display zeros", () => {
+  it.each([
+    ["USD", 0, "$0.00"],
+    ["USD", -0, "$0.00"],
+    ["USD", 0.004, "$0.00"],
+    ["USD", -0.004, "$0.00"],
+    ["USD", 0.0045, "$0.00"],
+    ["USD", -0.0045, "$0.00"],
+    ["EUR", -0, "€0.00"],
+    ["GBP", 0.0049, "£0.00"],
+  ] as const)("normalizes %s display zero %s to %s", (currency, value, expected) => {
+    expect(roundsToZero(value)).toBe(true);
+    expect(formatCurrency(value, currency)).toBe(expected);
+    expect(formatCurrency(value, currency)).not.toContain("-");
+    expect(formatCurrency(value, currency)).not.toContain("+");
+  });
+
+  it.each([
+    ["USD", 0.005, "$0.01"],
+    ["USD", -0.005, "-$0.01"],
+  ] as const)(
+    "keeps sign and direction for %s values that round to a non-zero cent",
+    (currency, value, expected) => {
+      expect(roundsToZero(value)).toBe(false);
+      expect(formatCurrency(value, currency)).toBe(expected);
+    },
+  );
+
+  it("treats null and undefined as display zeros", () => {
+    expect(roundsToZero(null)).toBe(true);
+    expect(roundsToZero(undefined)).toBe(true);
+    expect(formatCurrency(undefined)).toBe("$0.00");
+  });
+
+  it("does not treat large values as zeros", () => {
+    expect(roundsToZero(1)).toBe(false);
+    expect(roundsToZero(-1)).toBe(false);
+    expect(roundsToZero(0.01)).toBe(false);
+    expect(roundsToZero(-0.01)).toBe(false);
   });
 });
 

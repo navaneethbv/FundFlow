@@ -4,6 +4,7 @@ import {
   fetchFinanceTransactions,
   loadCanonicalProjection,
   monthWindow,
+  runBatched,
 } from "@/lib/finance-query";
 import type { FinancialScope } from "@/lib/financial-scope";
 import { clientStub } from "../fixtures/supabase-query";
@@ -37,39 +38,48 @@ function makeSupabase(total: number, pageSize: number) {
     pending: false,
   }));
 
-  let pendingRange: [number, number] = [0, pageSize - 1];
-  const chain: Record<string, unknown> = {};
-  Object.assign(chain, {
-    select: (columns: string) => {
-      recorded.columns.push(columns);
-      return chain;
-    },
-    eq: (column: string, value: unknown) => {
-      recorded.eq.push([column, value]);
-      return chain;
-    },
-    gte: (column: string, value: unknown) => {
-      recorded.gte.push([column, value]);
-      return chain;
-    },
-    lt: (column: string, value: unknown) => {
-      recorded.lt.push([column, value]);
-      return chain;
-    },
-    order: (column: string) => {
-      recorded.order.push(column);
-      return chain;
-    },
-    range: (from: number, to: number) => {
-      recorded.ranges.push([from, to]);
-      pendingRange = [from, to];
-      return chain;
-    },
-    then: (resolve: (value: { data: unknown[]; error: null }) => unknown) =>
-      resolve({ data: rows.slice(pendingRange[0], pendingRange[1] + 1), error: null }),
-  });
+  const chainFor = () => {
+    let pendingRange: [number, number] = [0, pageSize - 1];
+    let countMode = false;
+    const chain: Record<string, unknown> = {};
+    Object.assign(chain, {
+      select: (columns: string, opts?: { count?: "exact"; head?: boolean }) => {
+        recorded.columns.push(columns);
+        countMode = opts?.head === true;
+        return chain;
+      },
+      eq: (column: string, value: unknown) => {
+        recorded.eq.push([column, value]);
+        return chain;
+      },
+      gte: (column: string, value: unknown) => {
+        recorded.gte.push([column, value]);
+        return chain;
+      },
+      lt: (column: string, value: unknown) => {
+        recorded.lt.push([column, value]);
+        return chain;
+      },
+      order: (column: string) => {
+        recorded.order.push(column);
+        return chain;
+      },
+      range: (from: number, to: number) => {
+        recorded.ranges.push([from, to]);
+        pendingRange = [from, to];
+        return chain;
+      },
+      then: (resolve: (value: { data: unknown[]; count?: number; error: null }) => unknown) =>
+        resolve(
+          countMode
+            ? { data: [], count: total, error: null }
+            : { data: rows.slice(pendingRange[0], pendingRange[1] + 1), error: null },
+        ),
+    });
+    return chain;
+  };
 
-  return { supabase: { from: () => chain } as never, recorded };
+  return { supabase: { from: () => chainFor() } as never, recorded };
 }
 
 describe("monthWindow", () => {
@@ -87,10 +97,14 @@ describe("monthWindow", () => {
 });
 
 describe("fetchFinanceTransactions", () => {
-  it("selects only the projection's columns", async () => {
+  it("selects only the projection's columns and a head-only count", async () => {
     const { supabase, recorded } = makeSupabase(3, 1000);
     await fetchFinanceTransactions(supabase, { scope: MINE });
-    expect(recorded.columns).toEqual([FINANCE_TRANSACTION_COLUMNS]);
+    // Page reads use exactly the projection columns; the count read is a
+    // column-explicit head. Neither is `select("*")`.
+    expect(recorded.columns).toContain(FINANCE_TRANSACTION_COLUMNS);
+    expect(recorded.columns).toContain("id");
+    expect(recorded.columns.some((columns) => columns === "*")).toBe(false);
     expect(FINANCE_TRANSACTION_COLUMNS).not.toContain("*");
   });
 
@@ -164,6 +178,152 @@ describe("fetchFinanceTransactions", () => {
     const second = makeSupabase(1, 1000);
     await fetchFinanceTransactions(second.supabase, { scope: MINE });
     expect(second.recorded.eq.some(([column]) => column === "pending")).toBe(false);
+  });
+
+  it("requests and includes a second range once the first page is full", async () => {
+    const { supabase, recorded } = makeSupabase(1001, 1000);
+    const result = await fetchFinanceTransactions(supabase, {
+      scope: MINE,
+      pageSize: 1000,
+    });
+    expect(recorded.ranges).toEqual([
+      [0, 999],
+      [1000, 1999],
+    ]);
+    expect(result.rows).toHaveLength(1001);
+    expect(result.rows[1000]!.id).toBe("row-1000");
+    expect(result.truncated).toBe(false);
+  });
+
+  it("fetches independent pages across concurrent batches with no gaps or duplicates", async () => {
+    const { supabase, recorded } = makeSupabase(7001, 1000);
+    const result = await fetchFinanceTransactions(supabase, {
+      scope: MINE,
+      pageSize: 1000,
+    });
+    // 8 pages, fetched concurrently in bounded batches, in deterministic order.
+    expect(recorded.ranges).toEqual(
+      Array.from({ length: 8 }, (_, index) => [index * 1000, index * 1000 + 999]),
+    );
+    expect(result.rows).toHaveLength(7001);
+    expect(new Set(result.rows.map((row) => row.id)).size).toBe(7001);
+    expect(result.truncated).toBe(false);
+  });
+
+  it("reports truncation when a parallel read reaches the ceiling", async () => {
+    const { supabase } = makeSupabase(6000, 1000);
+    const result = await fetchFinanceTransactions(supabase, {
+      scope: MINE,
+      pageSize: 1000,
+      maxRows: 2000,
+    });
+    expect(result.rows).toHaveLength(2000);
+    expect(result.truncated).toBe(true);
+  });
+
+  it("skips page fetches entirely when the count is zero", async () => {
+    const { supabase, recorded } = makeSupabase(0, 1000);
+    const result = await fetchFinanceTransactions(supabase, { scope: MINE });
+    expect(result.rows).toHaveLength(0);
+    expect(result.truncated).toBe(false);
+    // One range request (page zero) runs alongside the count, then stops.
+    expect(recorded.ranges.length).toBeLessThanOrEqual(1);
+  });
+
+  it("orders pages by date then id so duplicate dates never duplicate or skip a row", async () => {
+    const pageSize = 10;
+    // Every row shares one date: only the id tie-breaker keeps the ranges from
+    // overlapping or dropping rows when the sort key is not unique.
+    const rows = Array.from({ length: 25 }, (_, index) => ({
+      id: `same-day-${index}`,
+      user_id: "user-1",
+      account_id: "acct-1",
+      plaid_transaction_id: `plaid-${index}`,
+      date: "2026-08-01",
+      amount: 1,
+      merchant_name: "Shop",
+      name: "SHOP",
+      pfc_primary: "GENERAL_MERCHANDISE",
+      pfc_detailed: "GENERAL_MERCHANDISE_OTHER",
+      pending: false,
+    }));
+const recorded: Recorded = { columns: [], eq: [], gte: [], lt: [], order: [], ranges: [] };
+    const chainFor = () => {
+      let pendingRange: [number, number] = [0, pageSize - 1];
+      let countMode = false;
+      const chain: Record<string, unknown> = {};
+      Object.assign(chain, {
+        select: (columns: string, opts?: { head?: boolean }) => {
+          recorded.columns.push(columns);
+          countMode = opts?.head === true;
+          return chain;
+        },
+        eq: () => chain,
+        gte: () => chain,
+        lt: () => chain,
+        order: (column: string) => {
+          recorded.order.push(column);
+          return chain;
+        },
+        range: (from: number, to: number) => {
+          recorded.ranges.push([from, to]);
+          pendingRange = [from, to];
+          return chain;
+        },
+        then: (resolve: (value: { data: unknown[]; count?: number; error: null }) => unknown) =>
+          resolve(
+            countMode
+              ? { data: [], count: rows.length, error: null }
+              : { data: rows.slice(pendingRange[0], pendingRange[1] + 1), error: null },
+          ),
+      });
+      return chain;
+    };
+
+    const result = await fetchFinanceTransactions(
+      { from: () => chainFor() } as never,
+      { scope: MINE, pageSize },
+    );
+    expect(recorded.order.slice(0, 2)).toEqual(["date", "id"]);
+    expect(recorded.ranges.length).toBe(3);
+    const ids = result.rows.map((row) => row.id);
+    expect(new Set(ids).size).toBe(25);
+    expect(ids).toEqual(rows.map((row) => row.id));
+  });
+});
+
+describe("runBatched", () => {
+  it("caps concurrent execution and returns results in input order", async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const tasks = Array.from({ length: 12 }, (_, index) => async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight -= 1;
+      return index;
+    });
+    const results = await runBatched(tasks, 4);
+    expect(results).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    expect(peak).toBeLessThanOrEqual(4);
+  });
+
+  it("returns [] for no tasks", async () => {
+    expect(await runBatched([], 4)).toEqual([]);
+  });
+
+  it("propagates a failing task", async () => {
+    await expect(
+      runBatched(
+        [
+          async () => "ok",
+          async () => {
+            throw new Error("split read failed");
+          },
+        ],
+        2,
+      ),
+    ).rejects.toThrow("split read failed");
   });
 });
 
@@ -306,7 +466,7 @@ describe("loadCanonicalProjection", () => {
     }
   });
 
-  it("chunks split dependency reads at 500 source transaction ids", async () => {
+  it("chunks split dependency reads so no in() call overruns the request line", async () => {
     const rows = Array.from({ length: 501 }, (_, index) => ({
       ...transactionRows[0],
       id: `expense-${index}`,
@@ -319,9 +479,10 @@ describe("loadCanonicalProjection", () => {
     const splitChunks = supabase
       .callsOn("transaction_splits")
       .filter(({ method }) => method === "in");
-    expect(splitChunks).toHaveLength(2);
-    expect(splitChunks[0]?.args[1]).toHaveLength(500);
-    expect(splitChunks[1]?.args[1]).toHaveLength(1);
+    expect(splitChunks).toHaveLength(3);
+    expect(splitChunks[0]?.args[1]).toHaveLength(250);
+    expect(splitChunks[1]?.args[1]).toHaveLength(250);
+    expect(splitChunks[2]?.args[1]).toHaveLength(1);
   });
 
   it("excludes only the confirmed duplicate id loaded in the active scope", async () => {

@@ -6,6 +6,7 @@ import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import ButtonLink from "@/components/ui/ButtonLink";
 import Panel from "@/components/ui/Panel";
+import ExportReportButton from "@/components/review/ExportReportButton";
 
 export default function ExportSection({
   initialEnabled,
@@ -73,7 +74,10 @@ export default function ExportSection({
         <ButtonLink href="/api/export/qif" className={!enabled ? "pointer-events-none opacity-40" : ""}>
           Export as QIF
         </ButtonLink>
-        <ButtonLink href="/api/export/report">Export PDF report</ButtonLink>
+        <ExportReportButton
+          label="Export PDF report"
+          className={!enabled ? "pointer-events-none opacity-40" : ""}
+        />
         <ButtonLink
           href="/api/export/csv?scope=tax"
           className={!enabled ? "pointer-events-none opacity-40" : ""}

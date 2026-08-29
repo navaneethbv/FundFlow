@@ -1,6 +1,20 @@
 export const DEFAULT_REPORT_TIMEZONE = "America/Los_Angeles";
 
+/**
+ * Which cadence a report period represents. The on-demand export serves both:
+ * the Review page asks for a `monthly` period, and the Monday cron plus the
+ * unparameterised download link use a `weekly` one. Consumers key budget
+ * proration and document copy off this so a month of data is never presented
+ * as a week.
+ */
+export type ReportCadence = "weekly" | "monthly";
+
 export interface WeeklyReportPeriod {
+  /**
+   * Absent is treated as `"weekly"` (the original cadence): only
+   * `getMonthlyReportPeriod` ever sets `"monthly"`.
+   */
+  kind?: ReportCadence;
   start: string;
   end: string;
   previousStart: string;
@@ -77,10 +91,49 @@ export function getWeeklyReportPeriod(
   const end = addDays(local.date, -(daysSinceMonday + 1));
   const start = addDays(end, -6);
   return {
+    kind: "weekly",
     start,
     end,
     previousStart: addDays(start, -7),
     previousEnd: addDays(start, -1),
+  };
+}
+
+const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+/** `"2026-08"` plus `delta` months, pure integer math (no timezone surprises). */
+function addMonths(month: string, delta: number): string {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const total = year! * 12 + (monthNumber! - 1) + delta;
+  const newYear = Math.floor(total / 12);
+  const newMonth = (total % 12) + 1;
+  return `${newYear}-${String(newMonth).padStart(2, "0")}`;
+}
+
+/** Last day of `month` ("YYYY-MM"), from integer parts so a zone cannot shift it. */
+function lastDayOfMonth(month: string): string {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(year!, monthNumber!, 0)).getUTCDate();
+  return `${month}-${String(lastDay).padStart(2, "0")}`;
+}
+
+/**
+ * A monthly review period for the on-demand PDF export: `month` itself is the
+ * report window and the previous month is the comparison baseline, so the
+ * "vs last period" figures in the document mean "vs last month".
+ *
+ * Returns null for anything that is not a calendar-valid `YYYY-MM`, so the
+ * export route can answer 400 instead of silently exporting a different month.
+ */
+export function getMonthlyReportPeriod(month: string): WeeklyReportPeriod | null {
+  if (!MONTH_PATTERN.test(month)) return null;
+  const previousMonth = addMonths(month, -1);
+  return {
+    kind: "monthly",
+    start: `${month}-01`,
+    end: lastDayOfMonth(month),
+    previousStart: `${previousMonth}-01`,
+    previousEnd: lastDayOfMonth(previousMonth),
   };
 }
 

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getClientIp, writeAudit } from "@/lib/audit";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -10,6 +11,11 @@ import {
 } from "@/lib/transaction-quality";
 
 const LOOKBACK_DAYS = 180;
+/** PostgREST caps a single response (1000), so the window pages with an exact
+ *  date + id order — an unordered range can drop the very duplicates the page
+ *  exists to show once a busy account crosses a thousand recent rows. */
+const PAGE_SIZE = 1000;
+const MAX_ROWS = 25_000;
 
 function isoDaysAgo(days: number): string {
   const date = new Date();
@@ -17,18 +23,36 @@ function isoDaysAgo(days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
+async function loadLookbackTransactions(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<Array<Record<string, unknown>>> {
+  const start = isoDaysAgo(LOOKBACK_DAYS);
+  const rows: Array<Record<string, unknown>> = [];
+  for (let offset = 0; offset < MAX_ROWS; offset += PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("id,date,merchant_name,name,amount,account_id")
+      .eq("user_id", userId)
+      .gte("date", start)
+      .order("date", { ascending: true })
+      .order("id", { ascending: true })
+      .range(offset, offset + PAGE_SIZE - 1);
+    if (error) throw error;
+    const page = (data ?? []) as Array<Record<string, unknown>>;
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
+  return rows;
+}
+
 export async function GET() {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
 
   try {
-    const [transactionsResult, accountsResult, decisionsResult, linksResult] = await Promise.all([
-      auth.supabase
-        .from("transactions")
-        .select("id,date,merchant_name,name,amount,account_id")
-        .eq("user_id", auth.user.id)
-        .gte("date", isoDaysAgo(LOOKBACK_DAYS))
-        .limit(5000),
+    const [lookbackTransactions, accountsResult, decisionsResult, linksResult] = await Promise.all([
+      loadLookbackTransactions(auth.supabase, auth.user.id),
       auth.supabase
         .from("accounts")
         .select("id,name,plaid_item_id")
@@ -47,7 +71,7 @@ export async function GET() {
         .order("created_at", { ascending: false })
         .limit(5000),
     ]);
-    for (const result of [transactionsResult, accountsResult, decisionsResult, linksResult]) {
+    for (const result of [accountsResult, decisionsResult, linksResult]) {
       if (result.error) throw result.error;
     }
     const accountById = new Map(
@@ -59,7 +83,7 @@ export async function GET() {
         },
       ]),
     );
-    const transactions: DuplicateTransaction[] = (transactionsResult.data ?? []).map((row) => {
+    const transactions: DuplicateTransaction[] = lookbackTransactions.map((row) => {
       const accountId = row.account_id as string;
       const account = accountById.get(accountId);
       return {

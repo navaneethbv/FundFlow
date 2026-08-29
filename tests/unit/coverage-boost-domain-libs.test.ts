@@ -62,6 +62,21 @@ describe("Weekly Report Data Extra Branches", () => {
   });
 
   it("handles empty transactions and splits", async () => {
+    const chainable = () => {
+      const chain: Record<string, unknown> = {};
+      Object.assign(chain, {
+        select: () => chain,
+        eq: () => chain,
+        order: () => chain,
+        gte: () => chain,
+        lte: () => chain,
+        in: () => chain,
+        range: () => chain,
+        then: (resolve: (value: { data: unknown[]; error: null }) => unknown) =>
+          resolve({ data: [], error: null }),
+      });
+      return chain;
+    };
     const mockSupabase = {
       auth: {
         admin: {
@@ -71,17 +86,7 @@ describe("Weekly Report Data Extra Branches", () => {
           }),
         },
       },
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            order: vi.fn().mockResolvedValue({ data: [], error: null }),
-            gte: vi.fn().mockReturnValue({
-              lte: vi.fn().mockResolvedValue({ data: [], error: null }),
-            }),
-            in: vi.fn().mockResolvedValue({ data: [], error: null }),
-          }),
-        }),
-      }),
+      from: vi.fn().mockReturnValue(chainable()),
     } as never;
 
     const period = {

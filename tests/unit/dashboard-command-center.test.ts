@@ -233,11 +233,14 @@ describe("dashboard command center", () => {
     for (const token of [
       "--background: #f6f5f3",
       "--foreground: #222220",
-      "--muted: #6b6b68",
-      "--accent: #ff6b2e",
-      "--success: #2aa36b",
+      // The 2026-08-28 accessibility sweep deepened the accent to a burnt
+      // orange and the muted/success/danger tokens so every text pair clears
+      // WCAG AA; these are the post-fix values.
+      "--muted: #5f5f5c",
+      "--accent: #9a3412",
+      "--success: #1e7a4f",
       "--warning: #b54708",
-      "--danger: #e14a4a",
+      "--danger: #c23b3b",
     ]) {
       expect(globals).toContain(token);
     }

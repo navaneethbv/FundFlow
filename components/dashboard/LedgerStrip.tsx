@@ -1,6 +1,6 @@
 import Panel from "@/components/ui/Panel";
 import Money from "@/components/ui/Money";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, roundsToZero } from "@/lib/format";
 import { formatDate } from "@/lib/format-date";
 import {
   buildLedgerStripDays,
@@ -85,7 +85,7 @@ function isCurrentMonth(month: string): boolean {
 }
 
 function signedAmount(amount: number, currency: string): string {
-  if (amount === 0) return formatCurrency(0, currency);
+  if (roundsToZero(amount)) return formatCurrency(0, currency);
   return `${amount > 0 ? "+" : "-"}${formatCurrency(Math.abs(amount), currency)}`;
 }
 

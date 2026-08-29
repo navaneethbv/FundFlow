@@ -207,6 +207,39 @@ test.describe.serial("Phase 6: reports and Sankey", () => {
     await expect(page).toHaveURL(/pending=exclude/);
   });
 
+  test("report rows sort by merchant and amount through the URL", async ({
+    page,
+  }) => {
+    // Direct URL navigation reproduces the selected order (shareable state).
+    await page.goto("/reports?sort=merchant&dir=asc");
+    await expect(page).toHaveURL(/sort=merchant/);
+    await expect(page).toHaveURL(/dir=asc/);
+    const rows = page
+      .getByRole("table")
+      .getByRole("row")
+      .filter({ hasText: "Reports E2E" });
+    await expect(rows.nth(0)).toContainText("Reports E2E Groceries");
+    await expect(rows.nth(1)).toContainText("Reports E2E Payroll");
+    await expect(rows.nth(2)).toContainText("Reports E2E Shopping");
+
+    // The control round-trips through the URL and is keyboard-reachable.
+    await page.getByRole("link", { name: "Amount" }).click();
+    await expect(page).toHaveURL(/sort=amount/);
+    // The direction toggle flips the order.
+    await page.getByRole("link", { name: "Ascending" }).click();
+    await expect(page).toHaveURL(/dir=asc/);
+  });
+
+  test("non-date sorts stop printing day-group headers", async ({ page }) => {
+    await page.goto("/reports?sort=amount&dir=desc");
+    await expect(page).toHaveURL(/sort=amount/);
+    // Amount order is not chronological, so no "… net" day total appears.
+    await expect(page.getByText(" net", { exact: false })).toHaveCount(0);
+    await expect(
+      page.getByText("Transactions matching the current report filters."),
+    ).toBeVisible();
+  });
+
   test("an empty range offers a way back rather than a dead end", async ({
     page,
   }) => {

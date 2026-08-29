@@ -22,6 +22,98 @@ const labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
 const spend = [820, 940, 760, 1100, 890, 1020];
 const income = [1500, 1500, 1480, 1600, 1500, 1550];
 
+describe("chart nested-interactive contract", () => {
+  it("keeps a plain non-linked TrendChart as a single accessible image", () => {
+    const html = renderToStaticMarkup(
+      createElement(TrendChart, {
+        labels,
+        series: [
+          { name: "Spending", slot: 6, values: spend },
+          { name: "Income", slot: 1, values: income },
+        ],
+      }),
+    );
+    expect(html).toContain('role="img"');
+    expect(html).toContain('aria-label="Trend chart"');
+  });
+
+  it("removes the atomic image role from a linked TrendChart so its links are focusable", () => {
+    const html = renderToStaticMarkup(
+      createElement(TrendChart, {
+        labels,
+        series: [
+          { name: "Spending", slot: 6, values: spend },
+          { name: "Income", slot: 1, values: income },
+        ],
+        links: labels.map((label) => `/transactions?month=${label}`),
+      }),
+    );
+    expect(html).not.toContain('role="img"');
+    expect(html).toContain('aria-label="View Jan');
+    // The drill-downs survive as real anchors with names.
+    expect((html.match(/<a href=/g) ?? []).length).toBe(labels.length);
+  });
+
+  it("keeps a plain non-linked DonutChart as an accessible image", () => {
+    const html = renderToStaticMarkup(
+      createElement(DonutChart, {
+        items: [
+          { label: "Groceries", amount: 100 },
+          { label: "Travel", amount: 60 },
+        ],
+        centerLabel: "spent",
+      }),
+    );
+    expect(html).toContain('role="img"');
+    expect(html).toContain('aria-label="spent breakdown"');
+  });
+
+  it("removes the atomic image role from a DonutChart with linked slices", () => {
+    const html = renderToStaticMarkup(
+      createElement(DonutChart, {
+        items: [
+          { label: "Groceries", amount: 100, href: "/transactions?category=GROC" },
+          { label: "Travel", amount: 60, href: "/transactions?category=TRAVEL" },
+        ],
+        centerLabel: "spent",
+      }),
+    );
+    expect(html).not.toContain('role="img"');
+    expect(html).toContain('aria-label="Groceries: $100');
+    // The two slice links render as real anchors inside the SVG.
+    const svg = html.slice(html.indexOf("<svg"), html.indexOf("</svg>"));
+    expect((svg.match(/<a href=/g) ?? []).length).toBe(2);
+    expect(html).toContain('/transactions?category=GROC');
+  });
+
+  it("removes the atomic image role from a linked DivergingColumns chart", () => {
+    const linked = renderToStaticMarkup(
+      createElement(DivergingColumns, {
+        labels: ["Jul", "Aug"],
+        up: [100, 120],
+        down: [80, 60],
+        upName: "Deposits",
+        downName: "Withdrawals",
+        links: ["/cash-flow?selected=Jul", "/cash-flow?selected=Aug"],
+      }),
+    );
+    expect(linked).not.toContain('role="img"');
+    expect(linked).toContain('aria-label="View Jul');
+    expect((linked.match(/<a href=/g) ?? []).length).toBe(2);
+
+    const plain = renderToStaticMarkup(
+      createElement(DivergingColumns, {
+        labels: ["Jul", "Aug"],
+        up: [100, 120],
+        down: [80, 60],
+        upName: "Deposits",
+        downName: "Withdrawals",
+      }),
+    );
+    expect(plain).toContain('role="img"');
+  });
+});
+
 describe("TrendChart", () => {
   const html = renderToStaticMarkup(
     createElement(TrendChart, {

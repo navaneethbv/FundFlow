@@ -86,15 +86,19 @@ export default function ImportSection({ accounts }: Readonly<{ accounts: Account
         <p className="text-sm text-muted">Create or connect an account first. Imports attach to an account.</p>
       ) : (
         <form onSubmit={onSubmit} className="space-y-3 text-sm">
-          <label className="flex min-h-32 flex-col items-center justify-center rounded-card border border-dashed border-panel-border bg-panel-2 px-4 py-8 text-center text-sm text-muted">
+          <label
+            htmlFor="import-file"
+            className="flex min-h-32 flex-col items-center justify-center rounded-card border border-dashed border-panel-border bg-panel-2 px-4 py-8 text-center text-sm text-muted"
+          >
             <span className="font-semibold text-foreground">Drag and drop your CSV, OFX, or QFX file here</span>
             <span className="mt-1">or choose a file (Mint, Monarch, and YNAB exports work too)</span>
-            <Input type="file" name="file" accept=".csv,.ofx,.qfx,text/csv,application/x-ofx" required className="mt-4 max-w-xs" />
+            <Input id="import-file" type="file" name="file" accept=".csv,.ofx,.qfx,text/csv,application/x-ofx" required className="mt-4 max-w-xs" />
           </label>
           <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2">
+            <label className="flex items-center gap-2" htmlFor="import-account">
               Into account
               <Select
+                id="import-account"
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value)}
               >
@@ -114,9 +118,10 @@ export default function ImportSection({ accounts }: Readonly<{ accounts: Account
               />
               <span>Positive amounts are deposits (most bank CSVs)</span>
             </label>
-            <label className="flex items-center gap-2">
+            <label className="flex items-center gap-2" htmlFor="import-date-order">
               Date format{" "}
               <select
+                id="import-date-order"
                 value={dateOrder}
                 onChange={(event) => setDateOrder(event.target.value as typeof dateOrder)}
                 className="rounded border border-panel-border bg-panel px-2 py-1"

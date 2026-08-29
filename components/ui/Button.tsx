@@ -8,11 +8,11 @@ const base =
 
 const variants: Record<ButtonVariant, string> = {
   primary:
-    "bg-accent-strong text-white shadow-sm hover:shadow-pop hover:brightness-110",
+    "bg-accent-strong text-accent-strong-foreground shadow-sm hover:shadow-pop hover:brightness-110",
   secondary:
     "border border-panel-border bg-panel text-foreground shadow-sm hover:border-accent/40 hover:bg-panel-2",
   ghost: "text-muted hover:bg-panel-hover hover:text-foreground",
-  danger: "bg-danger text-white shadow-sm hover:brightness-110",
+  danger: "bg-danger text-danger-foreground shadow-sm hover:brightness-110",
 };
 
 const sizes: Record<ButtonSize, string> = {

@@ -80,6 +80,44 @@ describe("ReportTransactions", () => {
     expect(incoming).toContain("In");
   });
 
+  it.each([
+    ["exact zero", 0],
+    ["negative zero", -0],
+    ["rounds to zero", 0.004],
+    ["negative rounds to zero", -0.004],
+  ] as const)("renders an income-row %s as neutral $0.00 with no direction label", (_name, amount) => {
+    // flow "income" is the worst case: before the fix it would have painted
+    // $0.00 In in positive green.
+    const html = render([row({ flow: "income", signedAmount: amount })]);
+    expect(html).toContain("$0.00");
+    expect(html).not.toContain("-$0.00");
+    expect(html).not.toContain("+$0.00");
+    expect(html).not.toContain("var(--viz-pos)");
+    // No hidden "In" / "Out" accessible cue for a zero.
+    const amountCell = html.slice(html.indexOf("data-money"));
+    expect(amountCell).not.toContain("> In<");
+    expect(amountCell).not.toContain("> Out<");
+    expect(amountCell).not.toContain("sr-only");
+  });
+
+  it.each([
+    ["0.005 stays a positive cent", 0.005, "-$0.01"],
+    ["-0.005 stays a negative cent", -0.005, "+$0.01"],
+  ] as const)("%s", (_name, amount, expected) => {
+    expect(render([row({ flow: "expense", signedAmount: amount })])).toContain(expected);
+  });
+
+  it("renders a zero day net neutrally", () => {
+    const html = render([
+      row({ id: "a", date: "2026-08-23", signedAmount: 5 }),
+      row({ id: "b", date: "2026-08-23", signedAmount: -5 }),
+    ]);
+    expect(html).toContain("$0.00 net");
+    expect(html).not.toContain("+$0.00 net");
+    expect(html).not.toContain("-$0.00 net");
+    expect(html).not.toContain("var(--viz-pos)");
+  });
+
   it("drops the standalone Direction column", () => {
     expect(render([row()])).not.toContain(">Direction<");
   });
@@ -145,6 +183,49 @@ describe("ReportTransactions", () => {
       // as the daily total would be wrong.
       expect(html).toContain('data-ledger-day-header="2026-08-10"');
       expect(html).not.toContain("-$100.00 net");
+    });
+  });
+
+  describe("non-date sort order", () => {
+    const rows = [
+      row({ id: "a", date: "2026-08-22", signedAmount: 10 }),
+      row({ id: "b", date: "2026-08-23", signedAmount: 20 }),
+      row({ id: "c", date: "2026-08-23", signedAmount: 30 }),
+    ];
+
+    function renderUngrouped(transactions: typeof rows): string {
+      return renderToStaticMarkup(
+        createElement(ReportTransactions, {
+          ...baseProps,
+          transactions,
+          groupByDate: false,
+        }),
+      );
+    }
+
+    it("renders no day headers for merchant or amount sorts", () => {
+      const html = renderUngrouped(rows);
+      expect(html).not.toContain('data-ledger-day-header=');
+      expect(html).not.toContain(" net");
+      expect(html).toContain("Transactions matching the current report filters.");
+      expect(html).not.toContain("grouped by day");
+    });
+
+    it("still zebra-stripes every row in a non-chronological order", () => {
+      const html = renderUngrouped(rows);
+      const dataRows = html.split("<tr").filter((chunk) => chunk.includes("Corner Grocer"));
+      expect(dataRows).toHaveLength(3);
+      expect(dataRows[1]).toContain("bg-panel-2");
+    });
+
+    it("keeps date grouping on by default for the date sort", () => {
+      const html = renderToStaticMarkup(
+        createElement(ReportTransactions, {
+          ...baseProps,
+          transactions: rows,
+        }),
+      );
+      expect(html).toContain('data-ledger-day-header=');
     });
   });
 });

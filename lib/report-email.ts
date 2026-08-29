@@ -166,7 +166,7 @@ export function renderWeeklyReportEmail(
                   <td align="right" style="font-size:13px;line-height:20px;color:${tone};font-weight:700;">${escapeEmailHtml(budget.status.replace("-", " "))}</td>
                 </tr>
                 <tr>
-                  <td colspan="2" style="padding-top:3px;color:${COLORS.muted};font-size:12px;line-height:18px;">${formatCurrency(budget.spent)} of ${formatCurrency(budget.weeklyAllowance)} weekly allowance</td>
+                  <td colspan="2" style="padding-top:3px;color:${COLORS.muted};font-size:12px;line-height:18px;">${formatCurrency(budget.spent)} of ${formatCurrency(budget.allowance)} weekly allowance</td>
                 </tr>
                 <tr><td colspan="2" style="padding-top:6px;"><div style="height:8px;border-radius:4px;background:${COLORS.line};overflow:hidden;"><div style="width:${clampPercent(budget.percentage)}%;height:8px;background:${tone};font-size:0;line-height:0;">&nbsp;</div></div></td></tr>
               </table>

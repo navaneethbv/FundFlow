@@ -81,6 +81,31 @@ async function fetchFinancePage(
   return (data ?? []) as unknown as TransactionRow[];
 }
 
+/** Row count for the same filters, so pages can be fetched in parallel. */
+async function fetchFinancePageCount(
+  supabase: SupabaseClient,
+  userId: string | undefined,
+  options: FetchFinanceOptions,
+): Promise<number> {
+  let query = supabase
+    .from("transactions")
+    .select("id", { count: "exact", head: true });
+  if (userId) query = query.eq("user_id", userId);
+  if (options.excludePending) query = query.eq("pending", false);
+  if (options.window) {
+    query = query
+      .gte("date", options.window.start)
+      .lt("date", options.window.endExclusive);
+  }
+  const { count, error } = await query;
+  if (error) throw error;
+  return count ?? 0;
+}
+
+/** Independent page windows may be fetched concurrently; cap the fan-out so a
+ *  huge range does not fire dozens of simultaneous requests. */
+const PAGE_CONCURRENCY = 6;
+
 export async function fetchFinanceTransactions(
   supabase: SupabaseClient,
   options: FetchFinanceOptions,
@@ -88,18 +113,35 @@ export async function fetchFinanceTransactions(
   const pageSize = options.pageSize ?? FINANCE_PAGE_SIZE;
   const maxRows = options.maxRows ?? FINANCE_MAX_ROWS;
   const userId = scopeQueryUserId(options.scope);
+  const maxPages = Math.ceil(maxRows / pageSize);
+
+  // The count is fetched in parallel with page zero, then every remaining page
+  // is read concurrently in bounded batches. The old serial walk cost ~30
+  // round-trips on a 30k-row range; this brings it down to a couple of batches
+  // while keeping the exact same deterministic date+id windows.
+  const [count, firstPage] = await Promise.all([
+    fetchFinancePageCount(supabase, userId, options),
+    fetchFinancePage(supabase, userId, options, 0, pageSize),
+  ]);
 
   const rows: RawFinanceTransaction[] = [];
-  let offset = 0;
+  for (const row of firstPage) rows.push(fromTransactionRow(row));
 
-  for (;;) {
-    const page = await fetchFinancePage(supabase, userId, options, offset, pageSize);
-    for (const row of page) rows.push(fromTransactionRow(row));
-
-    if (page.length < pageSize) return { rows, truncated: false };
-    if (rows.length >= maxRows) return { rows: rows.slice(0, maxRows), truncated: true };
-    offset += pageSize;
+  const totalPages = Math.min(maxPages, Math.max(1, Math.ceil(count / pageSize)));
+  for (let start = 1; start < totalPages; start += PAGE_CONCURRENCY) {
+    const end = Math.min(totalPages, start + PAGE_CONCURRENCY);
+    const pages = await Promise.all(
+      Array.from({ length: end - start }, (_, index) =>
+        fetchFinancePage(supabase, userId, options, (start + index) * pageSize, pageSize),
+      ),
+    );
+    for (const page of pages) {
+      for (const row of page) rows.push(fromTransactionRow(row));
+    }
   }
+
+  if (rows.length >= maxRows) return { rows: rows.slice(0, maxRows), truncated: true };
+  return { rows, truncated: false };
 }
 
 export interface CanonicalProjectionResult {
@@ -139,24 +181,55 @@ function errorCodeSuffix(error: unknown): string {
 }
 
 /**
- * `transaction_splits` reads chunked by 500 transaction ids: PostgREST builds
- * an `in.(...)` list into the URL, and the whole page's ids at once overruns
- * the request line.
+ * Runs a set of independent reads with a concurrency cap, so a wide range can
+ * fan out without firing dozens of simultaneous Supabase requests (which
+ * trips connection/rate limits and surfaces as a generic query error).
  */
+export async function runBatched<T>(
+  tasks: ReadonlyArray<() => PromiseLike<T>>,
+  concurrency: number,
+): Promise<T[]> {
+  const results: T[] = new Array(tasks.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(concurrency, tasks.length) }, async () => {
+    for (;;) {
+      const index = next;
+      next += 1;
+      if (index >= tasks.length) return;
+      results[index] = await tasks[index]();
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+/** Cap for split-chunk reads and other dependency fan-out. */
+export const DEPENDENCY_CONCURRENCY = 6;
+
+/**
+ * `transaction_splits` reads chunked transaction ids: PostgREST builds an
+ * `in.(...)` list into the URL, and the whole page's ids at once overruns the
+ * request line. The chunk is sized so a 36-char UUID list stays comfortably
+ * under Node's 16KB header limit (500 ids ≈ 18KB overflowed undici).
+ */
+const SPLIT_CHUNK_SIZE = 250;
+
 function buildSplitChunkQueries(
   supabase: SupabaseClient,
   txnIds: readonly string[],
   userId: string | null | undefined,
-): Array<PromiseLike<SplitChunkResult>> {
-  const queries: Array<PromiseLike<SplitChunkResult>> = [];
-  for (let i = 0; i < txnIds.length; i += 500) {
-    let splitsQuery = supabase
-      .from("transaction_splits")
-      .select("transaction_id,category,amount")
-      .in("transaction_id", txnIds.slice(i, i + 500))
-      .limit(2000);
-    if (userId) splitsQuery = splitsQuery.eq("user_id", userId);
-    queries.push(splitsQuery);
+): Array<() => PromiseLike<SplitChunkResult>> {
+  const queries: Array<() => PromiseLike<SplitChunkResult>> = [];
+  for (let i = 0; i < txnIds.length; i += SPLIT_CHUNK_SIZE) {
+    queries.push(() => {
+      let splitsQuery = supabase
+        .from("transaction_splits")
+        .select("transaction_id,category,amount")
+        .in("transaction_id", txnIds.slice(i, i + SPLIT_CHUNK_SIZE))
+        .limit(2000);
+      if (userId) splitsQuery = splitsQuery.eq("user_id", userId);
+      return splitsQuery;
+    });
   }
   return queries;
 }
@@ -239,14 +312,17 @@ export async function loadCanonicalProjection(
 
   const splitChunksPromises = buildSplitChunkQueries(supabase, txnIds, userId);
 
-  const [accountsRes, rulesRes, overridesRes, refundsRes, duplicatesRes, ...splitResChunks] =
+  // The split-chunk batch is one element of the Promise.all, not an awaited
+  // spread: awaiting it here would finish every chunk read before the five
+  // dependency queries even start.
+  const [accountsRes, rulesRes, overridesRes, refundsRes, duplicatesRes, splitResChunks] =
     await Promise.all([
       accountsQuery,
       rulesQuery,
       overridesQuery,
       refundsQuery,
       duplicatesQuery,
-      ...splitChunksPromises,
+      runBatched(splitChunksPromises, DEPENDENCY_CONCURRENCY),
     ]);
 
   assertProjectionQuery("accounts", accountsRes);

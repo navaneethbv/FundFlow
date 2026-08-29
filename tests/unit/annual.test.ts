@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { computeYearInMoney, type AnnualTxn } from "@/lib/annual";
+import {
+  computeYearInMoney,
+  computeYearInMoneyFromProjection,
+  type AnnualTxn,
+} from "@/lib/annual";
+import type { CanonicalFinanceTransaction } from "@/lib/finance-domain";
 
 const txn = (
   date: string,
@@ -7,6 +12,26 @@ const txn = (
   merchant: string,
   category: string | null = "GENERAL_MERCHANDISE",
 ): AnnualTxn => ({ date, amount, merchant, category });
+
+function projected(
+  partial: Partial<CanonicalFinanceTransaction> = {},
+): CanonicalFinanceTransaction {
+  return {
+    id: "txn-1",
+    sourceTransactionId: "txn-1",
+    date: "2026-03-05",
+    signedAmount: 100,
+    flow: "expense",
+    merchant: "Shop",
+    groupKey: "GENERAL_MERCHANDISE",
+    categoryKey: "GENERAL_MERCHANDISE",
+    accountId: "acct-1",
+    manualAccountId: null,
+    pending: false,
+    source: "plaid",
+    ...partial,
+  } as CanonicalFinanceTransaction;
+}
 
 describe("computeYearInMoney", () => {
   const year = [
@@ -129,5 +154,76 @@ describe("computeYearInMoney", () => {
     const result = computeYearInMoney(nullCat, "2026")!;
     expect(result.topCategories[0]!.category).toBe("UNCATEGORIZED");
     expect(result.totalSpend).toBe(50);
+  });
+});
+
+describe("computeYearInMoneyFromProjection", () => {
+  it("aggregates the full below-ceiling set without a 1,000-row cap", () => {
+    const rows: CanonicalFinanceTransaction[] = [];
+    for (let index = 0; index < 16_497; index += 1) {
+      const month = String((index % 12) + 1).padStart(2, "0");
+      rows.push(
+        projected({
+          id: `txn-${index}`,
+          sourceTransactionId: `txn-${index}`,
+          date: `2026-${month}-${String((index % 28) + 1).padStart(2, "0")}`,
+          signedAmount: index % 2 === 0 ? 50 : -1000,
+          flow: index % 2 === 0 ? "expense" : "income",
+          merchant: index % 2 === 0 ? "Shop" : "Payroll",
+          groupKey: index % 2 === 0 ? "GENERAL_MERCHANDISE" : "INCOME",
+        }),
+      );
+    }
+    const recap = computeYearInMoneyFromProjection(rows, "2026")!;
+    const spendCount = 8_249;
+    const incomeCount = 8_248;
+    expect(recap.transactionCount).toBe(16_497);
+    expect(recap.totalSpend).toBe(spendCount * 50);
+    expect(recap.totalIncome).toBe(incomeCount * 1000);
+    expect(recap.largestPurchase!.amount).toBe(50);
+  });
+
+  it("drops transfers and linked-refund halves by flow", () => {
+    const rows = [
+      projected({ signedAmount: 5000, flow: "transfer", merchant: "CC Payment" }),
+      projected({ signedAmount: -5000, flow: "transfer", merchant: "Refund" }),
+      projected({ signedAmount: 100, flow: "expense", merchant: "Shop" }),
+    ];
+    const recap = computeYearInMoneyFromProjection(rows, "2026")!;
+    expect(recap.transactionCount).toBe(1);
+    expect(recap.totalSpend).toBe(100);
+    expect(recap.totalIncome).toBe(0);
+  });
+
+  it("counts split parts as rows and totals them once", () => {
+    const rows = [
+      projected({ id: "parent::0", signedAmount: 40, categoryKey: "Groceries" }),
+      projected({ id: "parent::1", signedAmount: 60, categoryKey: "Dining" }),
+    ];
+    const recap = computeYearInMoneyFromProjection(rows, "2026")!;
+    expect(recap.transactionCount).toBe(2);
+    expect(recap.totalSpend).toBe(100);
+    expect(recap.topCategories[0]!.amount).toBe(100);
+  });
+
+  it("only counts the requested calendar year", () => {
+    const rows = [
+      projected({ date: "2025-12-31", signedAmount: 999, flow: "expense" }),
+      projected({ date: "2026-01-01", signedAmount: 100, flow: "expense" }),
+      projected({ date: "2027-01-01", signedAmount: 999, flow: "expense" }),
+    ];
+    const recap = computeYearInMoneyFromProjection(rows, "2026")!;
+    expect(recap.transactionCount).toBe(1);
+    expect(recap.totalSpend).toBe(100);
+  });
+
+  it("returns null when no meaningful rows remain", () => {
+    expect(
+      computeYearInMoneyFromProjection(
+        [projected({ flow: "transfer" })],
+        "2026",
+      ),
+    ).toBeNull();
+    expect(computeYearInMoneyFromProjection([], "2026")).toBeNull();
   });
 });

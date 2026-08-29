@@ -20,7 +20,7 @@ import TransactionQueryControls from "@/components/transactions/TransactionQuery
 import TransactionSortMenu from "@/components/transactions/TransactionSortMenu";
 import { MerchantAvatar } from "@/components/ui/Avatar";
 import CategoryChip from "@/components/ui/CategoryChip";
-import { formatCurrency, titleCase, formatMonth } from "@/lib/format";
+import { formatCurrency, roundsToZero, titleCase, formatMonth } from "@/lib/format";
 import { formatDate } from "@/lib/format-date";
 import { hasRemapRules } from "@/lib/ledger-filter";
 import {
@@ -99,6 +99,7 @@ function transactionDetailsError(currentError: string, failed: boolean): string 
 }
 
 function ledgerNetPrefix(net: number): string {
+  if (roundsToZero(net)) return "";
   if (net < 0) return "+";
   if (net > 0) return "-";
   return "";
@@ -491,7 +492,8 @@ function LedgerTableRow({
   const hasAnnotations = Boolean(note) || tags.length > 0 || splits.length > 0;
   const merchant = row.merchant || "Unknown";
   const currency = row.iso_currency_code ?? "USD";
-  const isMoneyIn = row.amount < 0;
+  const isMoneyIn = row.amount < 0 && !roundsToZero(row.amount);
+  const showsAmount = !roundsToZero(row.amount);
 
   return (
     <Fragment>
@@ -510,8 +512,10 @@ function LedgerTableRow({
                 data-money
                 style={dayGroup.net < 0 ? { color: "var(--viz-pos)" } : undefined}
               >
-                {ledgerNetPrefix(dayGroup.net)}
-                {formatCurrency(Math.abs(dayGroup.net))} net
+                {roundsToZero(dayGroup.net)
+                  ? formatCurrency(0)
+                  : `${ledgerNetPrefix(dayGroup.net)}${formatCurrency(Math.abs(dayGroup.net))}`}{" "}
+                net
               </span>
             )}
           </td>
@@ -575,8 +579,7 @@ function LedgerTableRow({
           className="whitespace-nowrap px-4 py-3 text-right align-top font-semibold"
           style={isMoneyIn ? { color: "var(--viz-pos)" } : undefined}
         >
-          {isMoneyIn ? "+" : "-"}
-          {formatCurrency(Math.abs(row.amount), currency)}
+          {showsAmount ? `${isMoneyIn ? "+" : "-"}${formatCurrency(Math.abs(row.amount), currency)}` : formatCurrency(0, currency)}
         </td>
         <td className="px-2 py-3 text-right align-top">
           <TransactionEditor

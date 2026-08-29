@@ -422,8 +422,8 @@ export default function BudgetPlanner({
 
           <div
             className={cn(
-              "flex items-center justify-between rounded-card px-5 py-4 text-base font-bold text-white",
-              monthlyData.leftToBudget < 0 ? "bg-danger" : "bg-success",
+              "flex items-center justify-between rounded-card px-5 py-4 text-base font-bold",
+              monthlyData.leftToBudget < 0 ? "bg-danger text-danger-foreground" : "bg-success text-success-foreground",
             )}
           >
             <span>Left to Budget</span>

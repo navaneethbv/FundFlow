@@ -8,6 +8,8 @@ import {
   fetchFinanceTransactions,
   FINANCE_MAX_ROWS,
   monthWindow,
+  runBatched,
+  DEPENDENCY_CONCURRENCY,
 } from "@/lib/finance-query";
 import {
   scopeQueryUserId,
@@ -19,7 +21,8 @@ import type { TransactionSplit } from "@/lib/transaction-quality";
 
 const DEPENDENCY_LIMIT = 5_000;
 const REFUND_LIMIT = FINANCE_MAX_ROWS;
-const SPLIT_CHUNK_SIZE = 500;
+/** Sized so the `in.(...)` URL stays under Node's 16KB header limit. */
+const SPLIT_CHUNK_SIZE = 250;
 
 export interface CashFlowLoadOptions {
   scope: FinancialScope;
@@ -149,10 +152,10 @@ export async function loadCashFlowData(
   const syncSingleQuery = syncQuery.maybeSingle();
 
   const sourceTransactionIds = financeResult.rows.map((row) => row.id);
-  const splitQueries = chunks(
+  const splitTasks = chunks(
     sourceTransactionIds,
     SPLIT_CHUNK_SIZE,
-  ).map((transactionIds) => {
+  ).map((transactionIds) => () => {
     let query = supabase
       .from("transaction_splits")
       .select("transaction_id,category,amount")
@@ -177,7 +180,7 @@ export async function loadCashFlowData(
     refundsQuery,
     duplicatesQuery,
     syncSingleQuery,
-    Promise.all(splitQueries),
+    runBatched(splitTasks, DEPENDENCY_CONCURRENCY),
   ]);
 
   assertQuery("accounts", accountsResult);

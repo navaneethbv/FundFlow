@@ -52,7 +52,12 @@ export interface WeeklyReportData {
   budgets: Array<{
     category: string;
     spent: number;
-    weeklyAllowance: number;
+    /**
+     * The spend ceiling for this report's period: the full monthly limit for a
+     * monthly review, the weekly proration (`monthlyLimit * 12 / 52`) for the
+     * weekly cadence. `percentage` and `status` are measured against it.
+     */
+    allowance: number;
     percentage: number;
     status: "on-track" | "at-risk" | "over";
   }>;
@@ -210,12 +215,18 @@ export function buildWeeklyReportModel(
   const categoryAmount = new Map(
     categories.map((category) => [category.category, category.amount]),
   );
+  // A monthly review measures spend against the whole monthly limit; the
+  // weekly cadence prorates it (`* 12 / 52`). Using the weekly number for a
+  // month of spend marked every ordinary budget as ~4x over.
+  const isMonthlyPeriod = input.period.kind === "monthly";
   const budgets = input.budgets
     .map((budget) => {
       const spent = round2(categoryAmount.get(budget.category) ?? 0);
-      const weeklyAllowance = round2((budget.monthlyLimit * 12) / 52);
+      const allowance = round2(
+        isMonthlyPeriod ? budget.monthlyLimit : (budget.monthlyLimit * 12) / 52,
+      );
       let percentage = 0;
-      if (weeklyAllowance > 0) percentage = round2(spent / weeklyAllowance);
+      if (allowance > 0) percentage = round2(spent / allowance);
       else if (spent > 0) percentage = 1;
       let status: "on-track" | "at-risk" | "over" = "on-track";
       if (percentage > 1) status = "over";
@@ -223,7 +234,7 @@ export function buildWeeklyReportModel(
       return {
         category: budget.category,
         spent,
-        weeklyAllowance,
+        allowance,
         percentage,
         status,
       };

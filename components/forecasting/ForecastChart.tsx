@@ -85,28 +85,37 @@ export default function ForecastChart({
           );
         })}
       </svg>
-      {/* Table twin */}
-      <table className="sr-only">
-        <caption>Net worth projection by month and scenario</caption>
-        <thead>
-          <tr>
-            <th>Month</th>
-            {!scenariosAreDegenerate && <th>Conservative</th>}
-            <th>Base</th>
-            {!scenariosAreDegenerate && <th>Optimistic</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {points.map((p) => (
-            <tr key={p.month}>
-              <td>{p.month}</td>
-              {!scenariosAreDegenerate && <td data-money>{formatCurrency(p.conservative)}</td>}
-              <td data-money>{formatCurrency(p.base)}</td>
-              {!scenariosAreDegenerate && <td data-money>{formatCurrency(p.optimistic)}</td>}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* Table twin. `sr-only` goes on a normal wrapper div, never directly on
+          the table: an absolutely-positioned table's column layout can still
+          widen the document, and Tailwind's sr-only clip does not always
+          contain it (the Optimistic column leaked a 399px document at 390px).
+          The wrapper clips it, and the inner overflow-x:auto constrains long
+          values inside the hidden representation. */}
+      <div className="sr-only">
+        <div className="overflow-x-auto">
+          <table className="min-w-full">
+            <caption>Net worth projection by month and scenario</caption>
+            <thead>
+              <tr>
+                <th>Month</th>
+                {!scenariosAreDegenerate && <th>Conservative</th>}
+                <th>Base</th>
+                {!scenariosAreDegenerate && <th>Optimistic</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {points.map((p) => (
+                <tr key={p.month}>
+                  <td>{p.month}</td>
+                  {!scenariosAreDegenerate && <td data-money>{formatCurrency(p.conservative)}</td>}
+                  <td data-money>{formatCurrency(p.base)}</td>
+                  {!scenariosAreDegenerate && <td data-money>{formatCurrency(p.optimistic)}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

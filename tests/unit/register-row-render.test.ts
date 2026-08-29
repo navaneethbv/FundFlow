@@ -45,6 +45,25 @@ describe("RegisterRow", () => {
     expect(html).not.toContain("var(--viz-neg)");
   });
 
+  it.each([
+    ["negative zero", -0],
+    ["rounds to zero", 0.004],
+    ["negative rounds to zero", -0.004],
+  ] as const)("renders %s as a neutral display zero", (_name, amount) => {
+    const html = renderRow({ amount });
+    expect(html).toContain("$0.00");
+    expect(html).not.toContain("+$0.00");
+    expect(html).not.toContain("-$0.00");
+    expect(html).not.toContain("var(--viz-pos)");
+    expect(html).not.toContain("var(--viz-neg)");
+  });
+
+  it("keeps a value that rounds to one cent signed and colored", () => {
+    const html = renderRow({ amount: 0.005 });
+    expect(html).toContain("+$0.01");
+    expect(html).toContain("var(--viz-pos)");
+  });
+
   it("zebra-stripes odd-indexed rows and not even-indexed rows", () => {
     expect(renderRow({ index: 1 })).toContain("bg-panel-2");
     expect(renderRow({ index: 0 })).not.toContain("bg-panel-2");

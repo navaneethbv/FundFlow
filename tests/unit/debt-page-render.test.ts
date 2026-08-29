@@ -128,6 +128,34 @@ describe("DebtPlannerView", () => {
     expect(html).not.toContain("text-danger");
   });
 
+  it("keeps dt/dd as valid direct dl children (no section between them)", () => {
+    const data = buildDebtPlannerData(
+      [{ id: "card", name: "Card", balance: 1000, apr: 20 }],
+      50,
+    );
+    const html = renderToStaticMarkup(
+      createElement(DebtPlannerView, {
+        data,
+        strategy: "avalanche",
+        extraMonthly: 50,
+      }),
+    );
+
+    // The dl's direct children are neutral divs, each pairing one dt with one
+    // dd — a Panel (section) between dl and dt/dd is invalid markup.
+    expect(html).toContain("<dl class=\"grid gap-3 sm:grid-cols-2 xl:grid-cols-4\">");
+    const dlStart = html.indexOf("<dl class=");
+    const dlEnd = html.indexOf("</dl>");
+    const dlBody = html.slice(dlStart, dlEnd);
+    expect(dlBody).not.toContain("<section");
+    expect(dlBody).toMatch(/<div class="min-w-0 rounded-card/);
+    // Every dt inside the dl is followed by its dd in the same div group.
+    expect(dlBody).toContain("<dt ");
+    expect(dlBody).toContain("<dd ");
+    expect((dlBody.match(/<dt /g) ?? []).length).toBe(4);
+    expect((dlBody.match(/<dd /g) ?? []).length).toBe(4);
+  });
+
   it("sets the table header and stat-grid labels in the mono face", () => {
     const data = buildDebtPlannerData(
       [{ id: "card", name: "Card", balance: 1000, apr: 20 }],

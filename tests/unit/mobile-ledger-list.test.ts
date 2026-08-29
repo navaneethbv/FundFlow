@@ -56,6 +56,46 @@ describe("MobileLedgerList", () => {
     expect(render([baseRow])).not.toContain("var(--viz-neg)");
   });
 
+  it.each([
+    ["exact zero", 0],
+    ["negative zero", -0],
+    ["rounds to zero", 0.004],
+    ["negative rounds to zero", -0.004],
+  ] as const)("renders %s as a neutral $0.00 with no direction cue", (_name, amount) => {
+    const html = render([{ ...baseRow, amount }]);
+    expect(html).toContain("$0.00");
+    expect(html).not.toContain("-$0.00");
+    expect(html).not.toContain("+$0.00");
+    expect(html).not.toContain("var(--viz-pos)");
+    expect(html).not.toContain("var(--viz-neg)");
+  });
+
+  it.each([
+    ["0.005 stays positive", 0.005, "-$0.01"],
+    ["-0.005 stays negative", -0.005, "+$0.01"],
+  ] as const)("%s", (_name, amount, expected) => {
+    // Plaid convention: positive = money out (`-` prefix), negative = in (`+`).
+    expect(render([{ ...baseRow, amount }])).toContain(expected);
+  });
+
+  it("renders a zero day net neutrally", () => {
+    const html = render(
+      [
+        { ...baseRow, id: "a", date: "2026-07-15", amount: 5 },
+        { ...baseRow, id: "b", date: "2026-07-15", amount: -5 },
+      ],
+      true,
+    );
+    expect(html).toContain("$0.00 net");
+    expect(html).not.toContain("+$0.00 net");
+    expect(html).not.toContain("-$0.00 net");
+    // The net span itself carries no style attribute (no direction colour);
+    // the +$5.00 row below it is a separate, correctly-signed figure.
+    const dayHeader = html.slice(html.indexOf("data-ledger-day-header"));
+    const netSpan = dayHeader.slice(dayHeader.indexOf("net"), dayHeader.indexOf("</li>"));
+    expect(netSpan).not.toContain("style=");
+  });
+
   it("sets the date in the mono face when day grouping is off", () => {
     const html = render([baseRow]);
     expect(html).toContain(`<span class="font-mono">${formatDate(baseRow.date)}</span>`);

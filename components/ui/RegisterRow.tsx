@@ -1,12 +1,12 @@
 import { MerchantAvatar } from "@/components/ui/Avatar";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, roundsToZero } from "@/lib/format";
 import { formatDate } from "@/lib/format-date";
 import type { ReactNode } from "react";
 
 function amountPrefix(amount: number): string {
+  if (roundsToZero(amount)) return "";
   if (amount > 0) return "+";
-  if (amount < 0) return "-";
-  return "";
+  return "-";
 }
 
 /**
@@ -37,8 +37,8 @@ export default function RegisterRow({
   currency?: string;
   trailing?: ReactNode;
 }>) {
-  const inflow = amount > 0;
-  const outflow = amount < 0;
+  const inflow = amount > 0 && !roundsToZero(amount);
+  const outflow = amount < 0 && !roundsToZero(amount);
   return (
     <li
       className={`flex items-center gap-3 p-2 hover:bg-panel-hover${

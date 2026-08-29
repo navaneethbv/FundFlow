@@ -177,12 +177,48 @@ describe("weekly report model", () => {
       {
         category: "DINING",
         spent: 90,
-        weeklyAllowance: 230.77,
+        allowance: 230.77,
         percentage: 0.39,
         status: "on-track",
       },
     ]);
     expect(report.cashFlow).toEqual({ inflows: 500, outflows: 360, net: 140 });
+  });
+
+  it("measures budgets against the full monthly limit for a monthly period", () => {
+    const input = {
+      userId: "user-1",
+      userEmail: "person@example.com",
+      transactions,
+      accounts,
+      institutions: [
+        { id: "chase-item", name: "Chase" },
+        { id: "amex-item", name: "American Express" },
+      ],
+      budgets: [{ category: "DINING", monthlyLimit: 1000 }],
+      merchantRules: [],
+      splits: [
+        { transactionId: "meal", category: "DINING", amount: 90 },
+        { transactionId: "meal", category: "GIFTS", amount: 30 },
+      ],
+      linkedRefundTransactionIds: new Set(["refunded-charge", "refund"]),
+      duplicateTransactionIds: new Set(["confirmed-duplicate"]),
+    };
+
+    const weekly = buildWeeklyReportModel({ ...input, period });
+    const monthly = buildWeeklyReportModel({
+      ...input,
+      period: { ...period, kind: "monthly" as const },
+    });
+
+    // Same spend, but the weekly proration (1000 * 12 / 52) would flag it and
+    // the true monthly limit does not.
+    expect(weekly.budgets[0]!.allowance).toBe(230.77);
+    expect(monthly.budgets[0]!.allowance).toBe(1000);
+    expect(monthly.budgets[0]!.spent).toBe(weekly.budgets[0]!.spent);
+    expect(monthly.budgets[0]!.percentage).toBeLessThan(
+      weekly.budgets[0]!.percentage,
+    );
   });
 
   it("uses null change percentage when the previous week has no spend", () => {

@@ -1,11 +1,11 @@
 import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
 import BarList from "@/components/dashboard/BarList";
-import ButtonLink from "@/components/ui/ButtonLink";
+import ExportReportButton from "@/components/review/ExportReportButton";
 import Panel from "@/components/ui/Panel";
 import { goalSummary, getGoals } from "@/lib/goals";
 import { getDashboardData } from "@/lib/dashboard";
-import { formatCurrency, formatMonth, titleCase } from "@/lib/format";
+import { formatCurrency, formatMonth, roundsToZero, titleCase } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -39,11 +39,7 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
     <AppShell active="reports" email={user?.email}>
       <PageHeader
         title={`${formatMonth(data.selectedMonth)} review`}
-        actions={
-          <ButtonLink href={`/api/export/report?month=${data.selectedMonth}`}>
-            Export PDF
-          </ButtonLink>
-        }
+        actions={<ExportReportButton month={data.selectedMonth} />}
       />
       <p className="max-w-2xl text-sm text-muted">
         A guided snapshot of income, spending, budgets, goals, and notable changes for the month.
@@ -64,9 +60,9 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
           <p
             data-money
             className="display text-3xl"
-            style={{ color: net >= 0 ? "var(--viz-pos)" : "var(--viz-neg)" }}
+            style={{ color: roundsToZero(net) ? undefined : net >= 0 ? "var(--viz-pos)" : "var(--viz-neg)" }}
           >
-            {net >= 0 ? "+" : ""}
+            {roundsToZero(net) ? "" : net >= 0 ? "+" : ""}
             {formatCurrency(net)}
           </p>
         </Panel>

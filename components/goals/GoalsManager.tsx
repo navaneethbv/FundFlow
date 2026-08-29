@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, roundsToZero } from "@/lib/format";
 import {
   goalMonthlyPace,
   goalProgressPct,
@@ -123,7 +123,7 @@ function GoalRow({
       </div>
 
       <p className="mt-2 text-xs text-muted">
-        This month: {monthlyNet >= 0 ? "+" : "-"}
+        This month: {roundsToZero(monthlyNet) ? "" : monthlyNet >= 0 ? "+" : "-"}
         {formatCurrency(Math.abs(monthlyNet))} saved.{" "}
         {remainingAmount > 0
           ? `${formatCurrency(remainingAmount)} remaining${paceSuffix}.`

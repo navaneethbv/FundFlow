@@ -1,12 +1,12 @@
 import AreaSparkline from "@/components/charts/AreaSparkline";
 import { InstitutionAvatar } from "@/components/ui/Avatar";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, roundsToZero } from "@/lib/format";
 import type { AccountsPageRow } from "@/lib/accounts-page";
 
 function formatChange(row: AccountsPageRow): string | null {
   if (!row.monthChange) return null;
   const amount = row.monthChange.amount;
-  const amountLabel = `${amount >= 0 ? "+" : ""}${formatCurrency(
+  const amountLabel = `${roundsToZero(amount) ? "" : amount >= 0 ? "+" : ""}${formatCurrency(
     amount,
     row.currency,
   )}`;
@@ -73,7 +73,13 @@ export default function AccountRow({
           {change ? (
             <span
               data-money
-              style={{ color: row.monthChange!.amount >= 0 ? "var(--viz-pos)" : "var(--viz-neg)" }}
+              style={{
+                color: roundsToZero(row.monthChange!.amount)
+                  ? undefined
+                  : row.monthChange!.amount >= 0
+                    ? "var(--viz-pos)"
+                    : "var(--viz-neg)",
+              }}
             >
               {change}
             </span>

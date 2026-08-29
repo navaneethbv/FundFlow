@@ -107,39 +107,42 @@ export default function DebtPlannerView({
         </form>
       </Panel>
 
+      {/* Each name-value pair lives in a neutral div that is a valid dl child,
+          rather than a Panel (a section): HTML requires dt/dd to be grouped
+          directly under a dl, and axe flags the section-only structure. */}
       <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Panel padding="md">
+        <div className="min-w-0 rounded-card border border-panel-border bg-panel p-5 shadow-card">
           <dt className="text-xs font-semibold uppercase tracking-wide text-muted font-mono">
             Total balance
           </dt>
           <dd data-money className="metric-value mt-1 text-2xl font-bold" style={{ color: "var(--viz-neg)" }}>
             {formatCurrency(data.totalBalance)}
           </dd>
-        </Panel>
-        <Panel padding="md">
+        </div>
+        <div className="min-w-0 rounded-card border border-panel-border bg-panel p-5 shadow-card">
           <dt className="text-xs font-semibold uppercase tracking-wide text-muted font-mono">
             Monthly budget
           </dt>
           <dd data-money className="metric-value mt-1 text-2xl font-bold" style={{ color: "var(--viz-neg)" }}>
             {formatCurrency(data.totalMonthlyBudget)}
           </dd>
-        </Panel>
-        <Panel padding="md">
+        </div>
+        <div className="min-w-0 rounded-card border border-panel-border bg-panel p-5 shadow-card">
           <dt className="text-xs font-semibold uppercase tracking-wide text-muted font-mono">
             Debt-free projection
           </dt>
           <dd className="metric-value mt-1 text-2xl font-bold">
             {selectedPlan ? `${selectedPlan.months} months` : "Not reached"}
           </dd>
-        </Panel>
-        <Panel padding="md">
+        </div>
+        <div className="min-w-0 rounded-card border border-panel-border bg-panel p-5 shadow-card">
           <dt className="text-xs font-semibold uppercase tracking-wide text-muted font-mono">
             Total projected interest
           </dt>
           <dd data-money className="metric-value mt-1 text-2xl font-bold" style={{ color: "var(--viz-neg)" }}>
             {selectedPlan ? formatCurrency(selectedPlan.totalInterest) : "Not reached"}
           </dd>
-        </Panel>
+        </div>
       </dl>
 
       {!selectedPlan ? (
