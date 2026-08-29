@@ -6,8 +6,8 @@
 
 **Evidence:** `docs/Monarch-Production-Comparison-2026-08-29.md` and the gitignored live-data evidence under `qa-shots/production-2026-08-29/`.
 
-**Implementation status:** Phases 0 and 1 have local implementations with focused unit and signed-in browser coverage on this branch.
-Phases 2 through 6 remain delivery work, not completed product behavior.
+**Implementation status:** Phases 0, 1, and 2 have local implementations with focused unit, integration, and signed-in browser coverage on this branch.
+Phases 3 through 6 remain delivery work, not completed product behavior.
 Do not treat a checked box below as Production evidence until the associated migration, UI flow, source path, and acceptance test have been independently verified.
 
 ## Product rules
@@ -148,10 +148,10 @@ export interface ProductSyncHealth {
 
 **Steps:**
 
-- [ ] Record the cursor used for each item without logging secrets.
-- [ ] Record whether the last sync completed every page.
-- [ ] Make retries idempotent against transaction identifiers.
-- [ ] Detect a cursor reset or incomplete initial history.
+- [x] Record the cursor used for each item without logging secrets.
+- [x] Record whether the last sync completed every page.
+- [x] Make retries idempotent against transaction identifiers.
+- [x] Detect a cursor reset or incomplete initial history.
 
 ### Task 2.2: Implement an authenticated repair action
 
@@ -163,12 +163,12 @@ export interface ProductSyncHealth {
 
 **Steps:**
 
-- [ ] Require the authenticated owner and scope the target item to that user.
-- [ ] Rate-limit repair attempts.
-- [ ] Request the supported provider refresh or update flow.
-- [ ] Run a bounded historical reconciliation after the provider reports readiness.
-- [ ] Surface `product_not_ready`, consent-required, and institution-login-required states distinctly.
-- [ ] Never delete local rows merely because one partial provider response omits them.
+- [x] Require the authenticated owner and scope the target item to that user.
+- [x] Rate-limit repair attempts.
+- [x] Request the supported provider refresh or update flow.
+- [x] Run a bounded historical reconciliation after the provider reports readiness.
+- [x] Surface `product_not_ready`, consent-required, and institution-login-required states distinctly.
+- [x] Never delete local rows merely because one partial provider response omits them.
 
 **Acceptance:** The user can recover a stale checking connection and safely backfill missing history without duplicates.
 
