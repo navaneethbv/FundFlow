@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { renderToStaticMarkup } from "react-dom/server";
 import ReconciliationSection from "@/components/settings/ReconciliationSection";
 import type { AccountReconciliationRow } from "@/lib/reconcile-data";
 
 describe("ReconciliationSection UI", () => {
   it("renders empty state when rows is empty", () => {
-    render(<ReconciliationSection rows={[]} />);
-    expect(screen.getByText("No accounts available to reconcile.")).toBeDefined();
+    const html = renderToStaticMarkup(<ReconciliationSection rows={[]} />);
+    expect(html).toContain("No accounts available to reconcile.");
   });
 
-  it("renders reconciliation rows for connected accounts in both desktop table and mobile view", () => {
+  it("renders reconciliation rows for connected accounts in desktop table and mobile cards", () => {
     const rows: AccountReconciliationRow[] = [
       {
         accountId: "acc-1",
@@ -21,12 +21,11 @@ describe("ReconciliationSection UI", () => {
         calculatedLedgerBalance: 4800,
         difference: 200,
         currency: "USD",
-        oldestTransactionDate: "2026-01-01",
-        newestTransactionDate: "2026-08-28",
         transactionCount: 42,
         isStale: false,
         coverageStart: "2026-01-01",
         coverageEnd: "2026-08-28",
+        lastSyncAt: "2026-08-29T10:00:00Z",
       },
       {
         accountId: "acc-2",
@@ -38,19 +37,18 @@ describe("ReconciliationSection UI", () => {
         calculatedLedgerBalance: 1200,
         difference: 0,
         currency: "USD",
-        oldestTransactionDate: null,
-        newestTransactionDate: null,
         transactionCount: 0,
         isStale: true,
         coverageStart: null,
         coverageEnd: null,
+        lastSyncAt: null,
       },
     ];
 
-    render(<ReconciliationSection rows={rows} />);
-    expect(screen.getAllByText("Checking Account").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Credit Card").length).toBeGreaterThan(0);
-    expect(screen.getByText("Stale (>48h)")).toBeDefined();
-    expect(screen.getByText("Fresh")).toBeDefined();
+    const html = renderToStaticMarkup(<ReconciliationSection rows={rows} />);
+    expect(html).toContain("Checking Account");
+    expect(html).toContain("Credit Card");
+    expect(html).toContain("Stale (&gt;48h)");
+    expect(html).toContain("Fresh");
   });
 });
