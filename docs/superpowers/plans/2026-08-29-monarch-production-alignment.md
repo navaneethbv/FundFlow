@@ -6,8 +6,8 @@
 
 **Evidence:** `docs/Monarch-Production-Comparison-2026-08-29.md` and the gitignored live-data evidence under `qa-shots/production-2026-08-29/`.
 
-**Implementation status:** Phases 0, 1, and 2 have local implementations with focused unit, integration, and signed-in browser coverage on this branch.
-Phases 3 through 6 remain delivery work, not completed product behavior.
+**Implementation status:** Phases 0 through 3 have local implementations with focused unit, integration, and signed-in browser coverage on this branch.
+Phases 4 through 6 remain delivery work, not completed product behavior.
 Do not treat a checked box below as Production evidence until the associated migration, UI flow, source path, and acceptance test have been independently verified.
 
 ## Product rules
@@ -184,11 +184,11 @@ export interface ProductSyncHealth {
 
 **Steps:**
 
-- [ ] Preserve `pfc_primary` and `pfc_detailed` as immutable provider facts.
-- [ ] Add a user display category and an explicit cash-flow classification override.
-- [ ] Require a deliberate confirmation before treating a provider transfer as spending or income.
-- [ ] Apply the override once in `projectFinanceTransactions()`.
-- [ ] Prove Dashboard, Cash Flow, Reports, Budget actuals, Review, Year in Money, and exports reconcile.
+- [x] Preserve `pfc_primary` and `pfc_detailed` as immutable provider facts.
+- [x] Add a user display category and an explicit cash-flow classification override.
+- [x] Require a deliberate confirmation before treating a provider transfer as spending or income.
+- [x] Apply the override once in `projectFinanceTransactions()`.
+- [x] Prove Dashboard, Cash Flow, Reports, Budget actuals, Review, Year in Money, and exports reconcile.
 
 **Acceptance:** A purchase misclassified as `TRANSFER_OUT` can be corrected once and appears as spending everywhere.
 
@@ -202,11 +202,11 @@ export interface ProductSyncHealth {
 
 **Steps:**
 
-- [ ] Detect Monarch display category, merchant, notes, tags, and account name fields.
-- [ ] Preview conflicts between Plaid and Monarch classifications.
-- [ ] Map source accounts through the existing remembered source-account mapping.
-- [ ] Make re-import idempotent.
-- [ ] Never overwrite a newer FundFlow edit without an explicit conflict choice.
+- [x] Detect Monarch display category, merchant, notes, tags, and account name fields.
+- [x] Preview conflicts between Plaid and Monarch classifications.
+- [x] Map source accounts through the existing remembered source-account mapping.
+- [x] Make re-import idempotent.
+- [x] Never overwrite a newer FundFlow edit without an explicit conflict choice.
 
 ## Phase 4: Migrate budgets and goals
 
