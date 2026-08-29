@@ -48,7 +48,8 @@ export default function ReceiptInbox({
         setError(result?.error ?? "Could not upload the receipt.");
         return;
       }
-      setReceipts((rows) => [result.receipt!, ...rows]);
+      const newReceipt = result.receipt;
+      setReceipts((rows) => [newReceipt, ...rows]);
       formElement.reset();
     } catch {
       setError("Could not upload the receipt.");
@@ -162,8 +163,13 @@ export default function ReceiptInbox({
             >
               <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
                 <p className="text-muted">
-                  {receipt.purchase_date ?? "Date unknown"}
-                  {receipt.total === null ? "" : ` · ${formatCurrency(receipt.total)}`}
+                  <span className="font-mono">{receipt.purchase_date ?? "Date unknown"}</span>
+                  {receipt.total !== null && (
+                    <>
+                      {" · "}
+                      <span data-money>{formatCurrency(receipt.total)}</span>
+                    </>
+                  )}
                 </p>
                 {receipt.imageUrl ? (
                   <a
@@ -190,7 +196,8 @@ export default function ReceiptInbox({
                       className="flex items-center justify-between gap-3 rounded-field border border-panel-border bg-panel-2 p-3 text-sm"
                     >
                       <span className="min-w-0 truncate">
-                        {candidate.merchant} · {candidate.date} · {formatCurrency(Math.abs(candidate.amount))}
+                        {candidate.merchant} · <span className="font-mono">{candidate.date}</span> ·{" "}
+                        <span data-money>{formatCurrency(Math.abs(candidate.amount))}</span>
                       </span>
                       <Button
                         size="sm"

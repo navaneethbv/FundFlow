@@ -30,18 +30,26 @@ export default function DonutChart({
   const segments = donutSegments(items, (i) => i.amount, C, C, 84, 56);
 
   if (segments.length === 0) {
-    return <p className="text-sm opacity-60 py-4">No data yet.</p>;
+    return <p className="py-4 text-sm text-muted">No data yet.</p>;
   }
 
   const slotOf = (item: DonutItem) => items.indexOf(item) + 1;
+
+  // Linked slices mean focusable anchors live inside the SVG, so the SVG must
+  // not carry an atomic image role (nested-interactive). Without it the slice
+  // links are exposed with accurate names, and the legend rows repeat the same
+  // drill-downs outside the SVG for pointer and keyboard alike.
+  const hasLinks = items.some((item) => Boolean(item.href));
+  const svgRole = hasLinks ? undefined : "img";
+  const svgLabel = hasLinks ? undefined : `${centerLabel} breakdown`;
 
   return (
     <div className="flex flex-col sm:flex-row items-center gap-5">
       <svg
         viewBox={`0 0 ${SIZE} ${SIZE}`}
         className="w-44 h-44 flex-shrink-0"
-        role="img"
-        aria-label={`${centerLabel} breakdown`}
+        role={svgRole}
+        aria-label={svgLabel}
       >
         {segments.map((s) => {
           const slice = (

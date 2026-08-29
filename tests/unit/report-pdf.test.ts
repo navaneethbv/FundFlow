@@ -1,6 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { generateWeeklyReportPdf } from "@/lib/report-pdf";
+import { generateWeeklyReportPdf, reportCadenceCopy } from "@/lib/report-pdf";
 import { weeklyReportFixture } from "@/tests/fixtures/weekly-report";
+
+describe("reportCadenceCopy", () => {
+  it("resolves month wording for a monthly period", () => {
+    expect(reportCadenceCopy("monthly")).toEqual({
+      adjective: "Monthly",
+      noun: "month",
+      vsLabel: "VS LAST MONTH",
+    });
+  });
+
+  it("defaults to week wording when the cadence is weekly or absent", () => {
+    const weekly = {
+      adjective: "Weekly",
+      noun: "week",
+      vsLabel: "VS LAST WEEK",
+    };
+    expect(reportCadenceCopy("weekly")).toEqual(weekly);
+    expect(reportCadenceCopy(undefined)).toEqual(weekly);
+  });
+});
 
 describe("weekly report PDF", () => {
   it("generates a non-trivial PDF document", async () => {
@@ -50,6 +70,22 @@ describe("weekly report PDF", () => {
       }),
     );
     expect(buffer.subarray(0, 4).toString()).toBe("%PDF");
+  });
+
+  it("renders a monthly-cadence report without throwing", async () => {
+    const buffer = await generateWeeklyReportPdf(
+      weeklyReportFixture({
+        period: {
+          kind: "monthly",
+          start: "2026-08-01",
+          end: "2026-08-31",
+          previousStart: "2026-07-01",
+          previousEnd: "2026-07-31",
+        },
+      }),
+    );
+    expect(buffer.subarray(0, 4).toString()).toBe("%PDF");
+    expect(buffer.length).toBeGreaterThan(5_000);
   });
 
   it("renders cross-month period, custom card numbers, and zero spend trend", async () => {

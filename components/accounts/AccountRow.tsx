@@ -1,15 +1,12 @@
 import AreaSparkline from "@/components/charts/AreaSparkline";
 import { InstitutionAvatar } from "@/components/ui/Avatar";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, gainLossColor, inflowMarker } from "@/lib/format";
 import type { AccountsPageRow } from "@/lib/accounts-page";
 
 function formatChange(row: AccountsPageRow): string | null {
   if (!row.monthChange) return null;
   const amount = row.monthChange.amount;
-  const amountLabel = `${amount >= 0 ? "+" : ""}${formatCurrency(
-    amount,
-    row.currency,
-  )}`;
+  const amountLabel = `${inflowMarker(amount)}${formatCurrency(amount, row.currency)}`;
   if (row.monthChange.pct === null) return amountLabel;
   return `${amountLabel} (${row.monthChange.pct >= 0 ? "+" : ""}${
     row.monthChange.pct
@@ -55,7 +52,7 @@ export default function AccountRow({
         <AreaSparkline values={row.sparkLong} />
       </div>
       <div className="text-left sm:text-right">
-        <p data-money className="font-mono text-sm font-bold tabular-nums">
+        <p data-money className="metric-value text-sm">
           {row.balance === null
             ? "Unavailable"
             : formatCurrency(row.balance, row.currency)}
@@ -69,8 +66,14 @@ export default function AccountRow({
         >
           {row.stale ? `Stale, updated ${row.updatedAgo}` : row.updatedAgo}
         </p>
-        <p className="mt-1 text-xs text-muted tabular-nums">
-          {change ?? "Not enough history"}
+        <p className="mt-1 text-xs tabular-nums">
+          {change ? (
+            <span data-money style={{ color: gainLossColor(row.monthChange!.amount) }}>
+              {change}
+            </span>
+          ) : (
+            "Not enough history"
+          )}
         </p>
       </div>
     </li>

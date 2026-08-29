@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import paletteValidator from "@/scripts/validate_palette.js";
 
 const {
@@ -6,6 +7,8 @@ const {
   hexToRgb,
   simulateCvd,
   validatePalette,
+  validateSemanticPairs,
+  tokensFromBlock,
 } = paletteValidator;
 
 const LIGHT = [
@@ -190,5 +193,64 @@ describe("palette validator", () => {
     const res = validatePalette("custom", LIGHT);
     expect(res).toBeDefined();
     expect(res.valid).toBe(true);
+  });
+
+  it("validates the shared semantic text pairs against the 4.5:1 floor", () => {
+    const css = readFileSync("app/globals.css", "utf8");
+    const lightFailures = validateSemanticPairs(
+      "light",
+      tokensFromBlock(css.match(/:root(?:\[data-theme="light"\])?\s*\{([^}]+)\}/)![1]!),
+    );
+    const darkFailures = validateSemanticPairs(
+      "dark",
+      tokensFromBlock(
+        css.match(/:root\[data-theme="dark"\]\s*\{([^}]+)\}/)![1]!,
+      ),
+    );
+    expect(lightFailures).toEqual([]);
+    expect(darkFailures).toEqual([]);
+  });
+
+  it("fails a semantic pair that drops below the 4.5:1 floor", () => {
+    const css = `
+      :root {
+        --foreground: #222220;
+        --panel: #ffffff;
+        --accent: #ff6b2e;
+        --accent-strong: #ff6b2e;
+        --accent-foreground: #ffffff;
+        --accent-soft: rgba(255, 107, 46, 0.1);
+        --muted: #6b6b68;
+        --success: #2aa36b;
+        --success-foreground: #ffffff;
+        --danger: #e14a4a;
+        --danger-foreground: #ffffff;
+        --warning: #b54708;
+        --viz-pos: #1b5eaa;
+        --viz-neg: #b42318;
+        --viz-muted: #898781;
+      }
+    `;
+    const failures = validateSemanticPairs(
+      "light",
+      tokensFromBlock(css),
+    );
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures).toContainEqual(
+      expect.objectContaining({
+        theme: "light",
+        mode: "semantic-text",
+        pair: ["--accent-foreground", "--accent"],
+        floor: 4.5,
+      }),
+    );
+    // The vivid-orange accent text on white is the regression this gate exists for.
+    expect(failures).toContainEqual(
+      expect.objectContaining({ pair: ["--accent", "--panel"] }),
+    );
+  });
+
+  it("ignores fixture CSS that carries no semantic tokens", () => {
+    expect(validateSemanticPairs("light", {})).toEqual([]);
   });
 });

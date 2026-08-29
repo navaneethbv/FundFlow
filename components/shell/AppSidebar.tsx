@@ -59,7 +59,7 @@ function NavLink({
       {!!badge && badge > 0 && (
         <span
           aria-hidden
-          className="ml-auto hidden h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[0.6rem] font-bold text-white lg:flex group-data-[collapsed=true]/sidebar:hidden"
+          className="ml-auto hidden h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[0.6rem] font-bold text-danger-foreground lg:flex group-data-[collapsed=true]/sidebar:hidden"
         >
           {badge > 9 ? "9+" : badge}
         </span>

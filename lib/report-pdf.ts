@@ -2,7 +2,28 @@ import "server-only";
 import PDFDocument from "pdfkit";
 import { stripTrailingAccountMask } from "@/lib/account-label";
 import { formatCurrency, titleCase } from "@/lib/format";
+import type { ReportCadence } from "@/lib/report-period";
 import type { WeeklyReportData } from "@/lib/weekly-report";
+
+interface CadenceCopy {
+  /** Header word and metadata noun: "Weekly" / "Monthly". */
+  adjective: string;
+  /** Lowercase noun for "this ___'s spending": "week" / "month". */
+  noun: string;
+  /** Comparison metric label. */
+  vsLabel: string;
+}
+
+/**
+ * The document is one layout serving two cadences (the Monday cron's week and
+ * the Review page's month). Every user-facing "week" string is resolved from
+ * the period's `kind` here so a month of data never reads as a week.
+ */
+export function reportCadenceCopy(kind: ReportCadence | undefined): CadenceCopy {
+  return kind === "monthly"
+    ? { adjective: "Monthly", noun: "month", vsLabel: "VS LAST MONTH" }
+    : { adjective: "Weekly", noun: "week", vsLabel: "VS LAST WEEK" };
+}
 
 const PAGE = { width: 612, height: 792, margin: 44 };
 const CONTENT_WIDTH = PAGE.width - PAGE.margin * 2;
@@ -44,6 +65,8 @@ function trendLabel(data: WeeklyReportData): string {
 }
 
 export function generateWeeklyReportPdf(data: WeeklyReportData): Promise<Buffer> {
+  const cadence = reportCadenceCopy(data.period.kind);
+  const cadenceWord = cadence.adjective.toLowerCase();
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: "LETTER",
@@ -55,9 +78,9 @@ export function generateWeeklyReportPdf(data: WeeklyReportData): Promise<Buffer>
       },
       bufferPages: true,
       info: {
-        Title: `FundFlow weekly insights, ${periodLabel(data)}`,
+        Title: `FundFlow ${cadenceWord} insights, ${periodLabel(data)}`,
         Author: "FundFlow",
-        Subject: "Aggregated weekly spending insights",
+        Subject: `Aggregated ${cadenceWord} spending insights`,
       },
     });
     const chunks: Buffer[] = [];
@@ -136,7 +159,7 @@ export function generateWeeklyReportPdf(data: WeeklyReportData): Promise<Buffer>
     doc.rect(0, 0, PAGE.width, 128).fill(COLORS.ink);
     doc.roundedRect(PAGE.margin, 35, 30, 30, 8).fill(COLORS.blue);
     doc.fillColor(COLORS.white).font("Helvetica-Bold").fontSize(14).text("F", PAGE.margin + 10, 42);
-    doc.fillColor(COLORS.white).font("Helvetica-Bold").fontSize(21).text("Weekly insights", PAGE.margin + 44, 35);
+    doc.fillColor(COLORS.white).font("Helvetica-Bold").fontSize(21).text(`${cadence.adjective} insights`, PAGE.margin + 44, 35);
     doc.fillColor("#CBD5E1").font("Helvetica").fontSize(9.5).text(periodLabel(data), PAGE.margin + 44, 63);
     doc.fillColor("#94A3B8").font("Helvetica").fontSize(8.5).text(
       "A private, aggregated view of where your money moved.",
@@ -148,7 +171,7 @@ export function generateWeeklyReportPdf(data: WeeklyReportData): Promise<Buffer>
     const cardWidth = (CONTENT_WIDTH - 20) / 3;
     const metrics = [
       { label: "SPENT", value: formatCurrency(data.totalSpend), color: COLORS.ink },
-      { label: "VS LAST WEEK", value: trendLabel(data), color: data.changeAmount <= 0 ? COLORS.green : COLORS.red },
+      { label: cadence.vsLabel, value: trendLabel(data), color: data.changeAmount <= 0 ? COLORS.green : COLORS.red },
       { label: "NET CASH FLOW", value: formatCurrency(data.cashFlow.net), color: data.cashFlow.net >= 0 ? COLORS.green : COLORS.red },
     ];
     metrics.forEach((metric, index) => {
@@ -165,14 +188,14 @@ export function generateWeeklyReportPdf(data: WeeklyReportData): Promise<Buffer>
     });
     doc.y = 242;
 
-    sectionTitle("Spending by category", "Share of this week's eligible spending after rules, splits, refunds, and duplicate cleanup.");
+    sectionTitle("Spending by category", `Share of this ${cadence.noun}'s eligible spending after rules, splits, refunds, and duplicate cleanup.`);
     barRows(
       data.categories.slice(0, 8).map((item) => ({
         label: titleCase(item.category),
         amount: item.amount,
         detail: `${Math.round(item.share * 100)}%`,
       })),
-      "No eligible spending was recorded for this week.",
+      `No eligible spending was recorded for this ${cadence.noun}.`,
     );
 
     sectionTitle("Bank and card breakdown", "Aggregated spend only; balances, account numbers, and transaction details are excluded. Each card's spend is already counted in its bank's total, so the two columns do not add up.");
@@ -239,7 +262,7 @@ export function generateWeeklyReportPdf(data: WeeklyReportData): Promise<Buffer>
           lineBreak: false,
         });
         doc.fillColor(COLORS.muted).font("Helvetica").fontSize(8.5).text(
-          `${formatCurrency(budget.spent)} of ${formatCurrency(budget.weeklyAllowance)}`,
+          `${formatCurrency(budget.spent)} of ${formatCurrency(budget.allowance)}`,
           PAGE.margin + 300,
           y,
           { width: 224, align: "right", lineBreak: false },
@@ -272,7 +295,7 @@ export function generateWeeklyReportPdf(data: WeeklyReportData): Promise<Buffer>
       doc.switchToPage(range.start + index);
       doc.strokeColor(COLORS.line).lineWidth(0.7).moveTo(PAGE.margin, 720).lineTo(PAGE.width - PAGE.margin, 720).stroke();
       doc.fillColor("#94A3B8").font("Helvetica").fontSize(7.5).text(
-        "FundFlow weekly insights. Aggregated for your personal use.",
+        `FundFlow ${cadenceWord} insights. Aggregated for your personal use.`,
         PAGE.margin,
         727,
         { width: CONTENT_WIDTH - 80, lineBreak: false },

@@ -13,6 +13,8 @@ const mockErrorResponse = vi.fn<(...args: unknown[]) => unknown>(
 vi.mock("@/lib/http", () => ({
   requireUser: () => mockRequireUser(),
   errorResponse: (...args: unknown[]) => mockErrorResponse(...args),
+  badRequest: (message: string) =>
+    NextResponse.json({ error: message }, { status: 400 }),
 }));
 
 const mockVerifyApiToken = vi.fn<(...args: unknown[]) => unknown>();
@@ -262,7 +264,7 @@ describe("coverage-boost export routes (n1)", () => {
       mockIsExportAllowed.mockResolvedValue(false);
       mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
       const res = await reportGet(
-        new NextRequest("http://localhost/api/export/report"),
+        new NextRequest("http://localhost/api/export/report?month=2026-08"),
       );
       expect(res.status).toBe(403);
       await expect(res.json()).resolves.toEqual({
@@ -278,14 +280,14 @@ describe("coverage-boost export routes (n1)", () => {
       });
       mockGetWeeklyReportData.mockResolvedValue({ some: "report" });
       const res = await reportGet(
-        new NextRequest("http://localhost/api/export/report"),
+        new NextRequest("http://localhost/api/export/report?month=2026-08"),
       );
       expect(res.status).toBe(200);
       expect(res.headers.get("Content-Type")).toBe("application/pdf");
       expect(mockGetWeeklyReportData).toHaveBeenCalledWith(
         serviceClient,
         "u1",
-        expect.objectContaining({ start: expect.any(String) }),
+        expect.objectContaining({ start: "2026-08-01", end: "2026-08-31" }),
       );
     });
   });

@@ -175,7 +175,7 @@ export default function SummaryPanel({
               className="rounded-field border border-panel-border bg-panel-2 p-4"
             >
               <p className="text-xs font-semibold text-muted">{currency}</p>
-              <p data-money className="mt-2 font-mono text-2xl font-bold tabular-nums">
+              <p data-money className="metric-value mt-2 text-2xl">
                 {mode === "percent"
                   ? percentLabel
                   : formatCurrency(netWorth, currency)}

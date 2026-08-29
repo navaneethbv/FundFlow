@@ -138,6 +138,23 @@ describe("Accounts page components", () => {
     expect(html).toContain("<table");
   });
 
+  it("keeps the no-history message compact when a chart cannot be drawn", () => {
+    const html = renderToStaticMarkup(
+      createElement(NetWorthHero, {
+        summary: {
+          ...data.summary,
+          netWorthSeries: { USD: [{ date: "2026-08-28", value: 1000 }] },
+          currencies: ["USD"],
+          netWorth: [{ currency: "USD", amount: 1000 }],
+        },
+        historyStartsOn: "2026-08-28",
+      }),
+    );
+
+    expect(html).toContain("py-3 text-sm text-muted");
+    expect(html).not.toContain("py-8 text-sm text-muted");
+  });
+
   it("does not report a fake zero-percent change without history", () => {
     const html = renderToStaticMarkup(
       createElement(SummaryPanel, {

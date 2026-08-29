@@ -10,6 +10,7 @@ import ReportRightRail from "@/components/reports/ReportRightRail";
 import ReportSummaryPanel from "@/components/reports/ReportSummaryPanel";
 import ReportTransactions from "@/components/reports/ReportTransactions";
 import SavedReportsSection from "@/components/reports/SavedReportsSection";
+import ExportReportButton from "@/components/review/ExportReportButton";
 import EmptyState from "@/components/ui/EmptyState";
 import Panel from "@/components/ui/Panel";
 import Tabs from "@/components/ui/Tabs";
@@ -23,6 +24,7 @@ import { isFeatureEnabled } from "@/lib/feature-flags";
 import { serializeFinancialScope } from "@/lib/financial-scope";
 import { UNKNOWN_CURRENCY } from "@/lib/format";
 import {
+  applyReportSort,
   buildCashFlowSankeyData,
   defaultReportFilters,
   reportFiltersFromSearchParams,
@@ -130,6 +132,12 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
       : currencies[0];
   const rows = selectedCurrency ? (byCurrency.get(selectedCurrency) ?? []) : [];
   const currencyLabel = selectedCurrency ?? UNKNOWN_CURRENCY;
+
+  // Row order is a view property, not a data one: the summary, sankey, and
+  // periods are computed from the filtered set and must not change when only
+  // the sort changes. Sorting happens here, after projection and filtering and
+  // before pagination, so the table's page boundaries never overlap.
+  const orderedRows = applyReportSort(rows, filters);
 
   const summary = summarizeTransactions(rows);
   const sankey = buildCashFlowSankeyData(rows);
@@ -242,13 +250,7 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
               className="min-w-0"
               action={
                 <div className="flex flex-wrap gap-2">
-                  <Link
-                    href="/api/export/report"
-                    prefetch={false}
-                    className="inline-flex min-h-11 items-center rounded-field border border-panel-border bg-panel px-3 py-2 text-sm font-semibold hover:bg-panel-2 focus-visible:outline-2"
-                  >
-                    Download weekly PDF report
-                  </Link>
+                  <ExportReportButton label="Download weekly PDF report" />
                   <Link
                     href="/wrapped"
                     className="inline-flex min-h-11 items-center rounded-field border border-panel-border bg-panel px-3 py-2 text-sm font-semibold hover:bg-panel-2 focus-visible:outline-2"
@@ -259,10 +261,11 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
               }
             >
               <ReportTransactions
-                transactions={rows}
+                transactions={orderedRows}
                 currency={currencyLabel}
                 page={page}
                 hrefForPage={hrefForPage}
+                groupByDate={filters.sort === "date"}
               />
             </Panel>
             <ReportRightRail

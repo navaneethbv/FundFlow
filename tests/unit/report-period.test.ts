@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_REPORT_TIMEZONE,
+  getMonthlyReportPeriod,
   getWeeklyReportPeriod,
   isWeeklyReportDue,
   normalizeReportTimezone,
@@ -14,6 +15,7 @@ describe("weekly report periods", () => {
         "America/Los_Angeles",
       ),
     ).toEqual({
+      kind: "weekly",
       start: "2026-07-06",
       end: "2026-07-12",
       previousStart: "2026-06-29",
@@ -28,6 +30,7 @@ describe("weekly report periods", () => {
         "America/Los_Angeles",
       ),
     ).toEqual({
+      kind: "weekly",
       start: "2026-07-06",
       end: "2026-07-12",
       previousStart: "2026-06-29",
@@ -91,6 +94,7 @@ describe("weekly report periods", () => {
         "America/Los_Angeles",
       ),
     ).toEqual({
+      kind: "weekly",
       start: "2026-03-02",
       end: "2026-03-08",
       previousStart: "2026-02-23",
@@ -127,5 +131,45 @@ describe("weekly report periods", () => {
       DEFAULT_REPORT_TIMEZONE,
     );
     expect(normalizeReportTimezone(null)).toBe(DEFAULT_REPORT_TIMEZONE);
+  });
+});
+
+describe("getMonthlyReportPeriod", () => {
+  it("covers the selected month with the prior month as baseline", () => {
+    expect(getMonthlyReportPeriod("2026-08")).toEqual({
+      kind: "monthly",
+      start: "2026-08-01",
+      end: "2026-08-31",
+      previousStart: "2026-07-01",
+      previousEnd: "2026-07-31",
+    });
+  });
+
+  it("handles a leap February", () => {
+    expect(getMonthlyReportPeriod("2024-02")).toEqual({
+      kind: "monthly",
+      start: "2024-02-01",
+      end: "2024-02-29",
+      previousStart: "2024-01-01",
+      previousEnd: "2024-01-31",
+    });
+  });
+
+  it("crosses a year boundary for the baseline month", () => {
+    expect(getMonthlyReportPeriod("2026-01")).toEqual({
+      kind: "monthly",
+      start: "2026-01-01",
+      end: "2026-01-31",
+      previousStart: "2025-12-01",
+      previousEnd: "2025-12-31",
+    });
+  });
+
+  it("rejects anything that is not a calendar-valid month", () => {
+    expect(getMonthlyReportPeriod("2026-13")).toBeNull();
+    expect(getMonthlyReportPeriod("2026-00")).toBeNull();
+    expect(getMonthlyReportPeriod("2026")).toBeNull();
+    expect(getMonthlyReportPeriod("")).toBeNull();
+    expect(getMonthlyReportPeriod("not-a-month")).toBeNull();
   });
 });

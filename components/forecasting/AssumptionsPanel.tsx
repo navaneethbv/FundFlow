@@ -74,7 +74,7 @@ export default function AssumptionsPanel({
               href={p.href}
               className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
                 p.isActive
-                  ? "bg-accent-strong text-white shadow-sm"
+                  ? "bg-accent-strong text-accent-strong-foreground shadow-sm"
                   : "border border-panel-border bg-panel text-muted hover:text-foreground hover:border-foreground/30"
               }`}
             >
@@ -144,7 +144,7 @@ export default function AssumptionsPanel({
         <div className="sm:col-span-2 lg:col-span-5">
           <button
             type="submit"
-            className="min-h-11 rounded-field bg-accent-strong px-4 text-sm font-semibold text-white shadow-sm hover:brightness-110"
+            className="min-h-11 rounded-field bg-accent-strong px-4 text-sm font-semibold text-accent-strong-foreground shadow-sm hover:brightness-110"
           >
             Update projection
           </button>

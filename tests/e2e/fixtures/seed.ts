@@ -198,4 +198,34 @@ export class FinanceSeed {
     ]);
     if (error) throw error;
   }
+
+  /** A second, distinct duplicate candidate pair for multi-candidate tests. */
+  async secondDuplicatePair(): Promise<void> {
+    const accounts = await this.linkedAccounts();
+    const { error } = await this.admin.from("transactions").insert([
+      {
+        user_id: this.userId,
+        account_id: accounts.checkingId,
+        plaid_transaction_id: `duplicate-c-${this.stamp}`,
+        date: "2026-08-07",
+        amount: 12.5,
+        name: "Blue Bottle",
+        merchant_name: "Blue Bottle",
+        pfc_primary: "FOOD_AND_DRINK",
+        pending: false,
+      },
+      {
+        user_id: this.userId,
+        account_id: accounts.creditId,
+        plaid_transaction_id: `duplicate-d-${this.stamp}`,
+        date: "2026-08-08",
+        amount: 12.5,
+        name: "BLUE BOTTLE",
+        merchant_name: "Blue Bottle",
+        pfc_primary: "FOOD_AND_DRINK",
+        pending: false,
+      },
+    ]);
+    if (error) throw error;
+  }
 }

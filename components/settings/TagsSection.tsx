@@ -106,7 +106,11 @@ export default function TagsSection({ initialTags }: Readonly<{ initialTags: Tag
       <ul className="space-y-2">
         {tags.map((tag) => (
           <li key={tag.id} className="flex items-center gap-2">
+            <label htmlFor={`tag-rename-${tag.id}`} className="sr-only">
+              Rename {tag.name}
+            </label>
             <Input
+              id={`tag-rename-${tag.id}`}
               value={renaming[tag.id] ?? tag.name}
               onChange={(e) => setRenaming((current) => ({ ...current, [tag.id]: e.target.value }))}
               maxLength={40}
@@ -120,10 +124,16 @@ export default function TagsSection({ initialTags }: Readonly<{ initialTags: Tag
             </Button>
           </li>
         ))}
-        {tags.length === 0 && <p className="text-sm text-muted">No tags yet.</p>}
       </ul>
+      {/* The empty message is list-adjacent copy, not a list item: a bare p
+          inside a ul is invalid markup that axe reports as a list violation. */}
+      {tags.length === 0 && <p className="text-sm text-muted">No tags yet.</p>}
       <form onSubmit={createTag} className="mt-4 flex gap-2">
+        <label htmlFor="new-tag-name" className="sr-only">
+          New tag name
+        </label>
         <Input
+          id="new-tag-name"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           placeholder="New tag name"

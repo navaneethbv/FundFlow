@@ -224,7 +224,7 @@ export default function MobileNavigation({
                               {item.label}
                             </span>
                             {!!item.badge && item.badge > 0 && (
-                              <span className="ml-auto flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-danger px-1 text-[0.6rem] font-bold text-white">
+                              <span className="ml-auto flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-danger px-1 text-[0.6rem] font-bold text-danger-foreground">
                                 {item.badge > 9 ? "9+" : item.badge}
                               </span>
                             )}

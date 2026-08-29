@@ -208,6 +208,99 @@ function validatePalette(theme, colors) {
   return { valid: failures.length === 0, failures, warnings };
 }
 
+/**
+ * WCAG 1.4.3 normal-text contrast for the app's shared semantic token pairs.
+ * Every pair here is a real foreground-on-background combination axe measures
+ * on the reviewed routes; a future token re-step that drops one below the
+ * floor fails the build instead of shipping a contrast regression.
+ *
+ * Backgrounds that use an alpha token (accent-soft) are resolved by blending
+ * over the theme's panel color.
+ */
+const SEMANTIC_TEXT_FLOOR = 4.5;
+
+const SEMANTIC_PAIRS = [
+  ["--foreground", "--panel"],
+  ["--muted", "--panel"],
+  ["--accent", "--panel"],
+  ["--accent", "--accent-soft"],
+  ["--accent-foreground", "--accent"],
+  ["--accent-strong-foreground", "--accent-strong"],
+  ["--success", "--panel"],
+  ["--success-foreground", "--success"],
+  ["--danger", "--panel"],
+  ["--danger-foreground", "--danger"],
+  ["--warning", "--panel"],
+  ["--warning-foreground", "--warning"],
+  ["--viz-pos", "--panel"],
+  ["--viz-neg", "--panel"],
+  ["--viz-muted", "--panel"],
+];
+
+const SEMANTIC_TOKEN = /^(#[0-9a-f]{6}|rgba\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*[\d.]+\))$/i;
+
+function tokenBlock(source, theme) {
+  const blocks = [...source.matchAll(/:root(?:\[data-theme="(light|dark)"\])?\s*\{([^}]+)\}/g)];
+  for (const [, explicitTheme, body] of blocks) {
+    if ((explicitTheme || "light") === theme) return body;
+  }
+  return "";
+}
+
+function tokensFromBlock(body) {
+  const tokens = {};
+  for (const match of body.matchAll(/(--[\w-]+):\s*([^;]+);/g)) {
+    tokens[match[1]] = match[2].trim();
+  }
+  return tokens;
+}
+
+/** Resolves a token reference to {r,g,b} 0-255, blending alpha over `base`. */
+function resolveTokenColor(tokens, name) {
+  const raw = tokens[name] ?? name;
+  if (/^#[0-9a-f]{6}$/i.test(raw)) return hexToRgb(raw);
+  const rgba = /^rgba\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*([\d.]+)\s*\)$/i.exec(raw);
+  if (!rgba) throw new Error("invalid_token_color");
+  const base = resolveTokenColor(tokens, tokens["--panel"] ?? "#ffffff");
+  const alpha = Number(rgba[4]);
+  return {
+    r: Math.round(base.r * (1 - alpha) + Number(rgba[1]) * alpha),
+    g: Math.round(base.g * (1 - alpha) + Number(rgba[2]) * alpha),
+    b: Math.round(base.b * (1 - alpha) + Number(rgba[3]) * alpha),
+  };
+}
+
+function hexFromRgb({ r, g, b }) {
+  return `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/**
+ * Validates the shared semantic text pairs for one theme. Returns failures in
+ * the same shape as `validatePalette` so the CLI can report them uniformly.
+ */
+function validateSemanticPairs(theme, tokens) {
+  const failures = [];
+  for (const [fgName, bgName] of SEMANTIC_PAIRS) {
+    if (!SEMANTIC_TOKEN.test(tokens[fgName] ?? "") || !SEMANTIC_TOKEN.test(tokens[bgName] ?? "")) {
+      continue; // fixture CSS without the semantic tokens is out of scope
+    }
+    const ratio = contrastRatio(
+      hexFromRgb(resolveTokenColor(tokens, fgName)),
+      hexFromRgb(resolveTokenColor(tokens, bgName)),
+    );
+    if (ratio < SEMANTIC_TEXT_FLOOR) {
+      failures.push({
+        theme,
+        mode: "semantic-text",
+        pair: [fgName, bgName],
+        distance: Number(ratio.toFixed(2)),
+        floor: SEMANTIC_TEXT_FLOOR,
+      });
+    }
+  }
+  return failures;
+}
+
 function palettesFromCss(source) {
   const blocks = [...source.matchAll(/:root(?:\[data-theme="(light|dark)"\])?\s*\{([^}]+)\}/g)];
   const palettes = {};
@@ -226,13 +319,17 @@ function palettesFromCss(source) {
 
 async function runCli(path) {
   const { readFileSync } = await import("node:fs");
-  const palettes = palettesFromCss(readFileSync(path, "utf8"));
+  const source = readFileSync(path, "utf8");
+  const palettes = palettesFromCss(source);
   if (Object.keys(palettes).length !== 2) {
     console.error("palette_validation_error: expected light and dark palettes");
     return 1;
   }
   const results = Object.entries(palettes).map(([theme, colors]) =>
     validatePalette(theme, colors),
+  );
+  const semanticFailures = ["light", "dark"].flatMap((theme) =>
+    validateSemanticPairs(theme, tokensFromBlock(tokenBlock(source, theme))),
   );
   const failures = results.flatMap((result) => result.failures);
   const warnings = results.flatMap((result) => result.warnings);
@@ -243,8 +340,15 @@ async function runCli(path) {
         : `${warning.theme} ${warning.mode} viz-${warning.pair[0]}/viz-${warning.pair[1]} distance=${warning.distance} target=${warning.floor}`,
     );
   }
-  if (failures.length > 0) {
-    for (const failure of failures) {
+  const allFailures = [...failures, ...semanticFailures];
+  if (allFailures.length > 0) {
+    for (const failure of allFailures) {
+      if (failure.mode === "semantic-text") {
+        console.error(
+          `${failure.theme} semantic-text ${failure.pair[0]} on ${failure.pair[1]} ratio=${failure.distance} floor=${failure.floor}`,
+        );
+        continue;
+      }
       console.error(
         failure.mode === "surface"
           ? `${failure.theme} surface-contrast viz-${failure.pair[0]} ratio=${failure.distance} floor=${failure.floor}`
@@ -264,6 +368,10 @@ module.exports = {
   runCli,
   simulateCvd,
   validatePalette,
+  validateSemanticPairs,
+  tokensFromBlock,
+  tokenBlock,
+  resolveTokenColor,
 };
 
 // c8 ignore next 4 -- the CLI entry point only runs when invoked directly

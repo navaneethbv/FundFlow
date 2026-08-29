@@ -33,6 +33,12 @@ export default function DivergingColumns({
   valueFormatter?: (v: number) => string;
 }>) {
   const ariaLabel = line ? `${upName} vs ${downName} with ${line.name}` : `${upName} vs ${downName}`;
+  // Linked bars make the SVG contain focusable anchors, so it must not be an
+  // atomic image (nested-interactive). The links keep accurate names and the
+  // summary stays available through the legend and table twin.
+  const hasLinks = (links ?? []).some(Boolean);
+  const svgRole = hasLinks ? undefined : "img";
+  const svgLabel = hasLinks ? undefined : ariaLabel;
   const W = 560;
   const H = 260;
   const PAD = { top: 16, right: 16, bottom: 26, left: 46 };
@@ -42,7 +48,7 @@ export default function DivergingColumns({
   const lineMagnitude = (line?.values ?? []).map((value) => Math.abs(value));
   const maxArm = Math.max(0, ...up, ...down, ...lineMagnitude);
   if (maxArm <= 0 || labels.length === 0) {
-    return <p className="text-sm opacity-60 py-4">No data yet.</p>;
+    return <p className="py-4 text-sm text-muted">No data yet.</p>;
   }
 
   const ticks = niceTicks(maxArm, 2);
@@ -100,8 +106,8 @@ export default function DivergingColumns({
       <svg
         viewBox={`0 0 ${W} ${H}`}
         className="w-full h-auto"
-        role="img"
-        aria-label={ariaLabel}
+        role={svgRole}
+        aria-label={svgLabel}
       >
         {gridLevels.map((t) => (
           <g key={t}>
@@ -178,7 +184,7 @@ export default function DivergingColumns({
         </summary>
         <table className="mt-2 text-xs w-full">
           <thead>
-            <tr className="text-left opacity-60">
+            <tr className="text-left text-muted">
               <th className="py-1 pr-2 font-medium">Period</th>
               <th className="py-1 pr-2 font-medium">{upName}</th>
               <th className="py-1 pr-2 font-medium">{downName}</th>

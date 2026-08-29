@@ -107,39 +107,42 @@ export default function DebtPlannerView({
         </form>
       </Panel>
 
+      {/* Each name-value pair lives in a neutral div that is a valid dl child,
+          rather than a Panel (a section): HTML requires dt/dd to be grouped
+          directly under a dl, and axe flags the section-only structure. */}
       <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Panel padding="md">
-          <dt className="text-xs font-semibold uppercase tracking-wide text-muted">
+        <div className="min-w-0 rounded-card border border-panel-border bg-panel p-5 shadow-card">
+          <dt className="text-xs font-semibold uppercase tracking-wide text-muted font-mono">
             Total balance
           </dt>
-          <dd className="metric-value mt-1 text-2xl font-bold">
+          <dd data-money className="metric-value mt-1 text-2xl font-bold" style={{ color: "var(--viz-neg)" }}>
             {formatCurrency(data.totalBalance)}
           </dd>
-        </Panel>
-        <Panel padding="md">
-          <dt className="text-xs font-semibold uppercase tracking-wide text-muted">
+        </div>
+        <div className="min-w-0 rounded-card border border-panel-border bg-panel p-5 shadow-card">
+          <dt className="text-xs font-semibold uppercase tracking-wide text-muted font-mono">
             Monthly budget
           </dt>
-          <dd className="metric-value mt-1 text-2xl font-bold">
+          <dd data-money className="metric-value mt-1 text-2xl font-bold" style={{ color: "var(--viz-neg)" }}>
             {formatCurrency(data.totalMonthlyBudget)}
           </dd>
-        </Panel>
-        <Panel padding="md">
-          <dt className="text-xs font-semibold uppercase tracking-wide text-muted">
+        </div>
+        <div className="min-w-0 rounded-card border border-panel-border bg-panel p-5 shadow-card">
+          <dt className="text-xs font-semibold uppercase tracking-wide text-muted font-mono">
             Debt-free projection
           </dt>
           <dd className="metric-value mt-1 text-2xl font-bold">
             {selectedPlan ? `${selectedPlan.months} months` : "Not reached"}
           </dd>
-        </Panel>
-        <Panel padding="md">
-          <dt className="text-xs font-semibold uppercase tracking-wide text-muted">
+        </div>
+        <div className="min-w-0 rounded-card border border-panel-border bg-panel p-5 shadow-card">
+          <dt className="text-xs font-semibold uppercase tracking-wide text-muted font-mono">
             Total projected interest
           </dt>
-          <dd className="metric-value mt-1 text-2xl font-bold">
+          <dd data-money className="metric-value mt-1 text-2xl font-bold" style={{ color: "var(--viz-neg)" }}>
             {selectedPlan ? formatCurrency(selectedPlan.totalInterest) : "Not reached"}
           </dd>
-        </Panel>
+        </div>
       </dl>
 
       {!selectedPlan ? (
@@ -156,7 +159,7 @@ export default function DebtPlannerView({
         >
           <div className="overflow-x-auto">
             <table className="w-full min-w-[40rem] text-left text-sm">
-              <thead className="border-b border-panel-border text-xs uppercase tracking-wide text-muted">
+              <thead className="border-b border-panel-border text-xs uppercase tracking-wide text-muted font-mono">
                 <tr>
                   <th className="px-3 py-3">Priority</th>
                   <th className="px-3 py-3">Debt</th>
@@ -184,10 +187,14 @@ export default function DebtPlannerView({
                           </span>
                         )}
                       </td>
-                      <td className="money px-3 py-3 text-right">{formatCurrency(debt.balance)}</td>
+                      <td data-money className="px-3 py-3 text-right" style={{ color: "var(--viz-neg)" }}>
+                        {formatCurrency(debt.balance)}
+                      </td>
                       <td className="money px-3 py-3 text-right">{debt.apr.toFixed(2)}%</td>
                       <td className="px-3 py-3 text-right">Month {result.payoffMonth}</td>
-                      <td className="money px-3 py-3 text-right">{formatCurrency(result.interestPaid)}</td>
+                      <td data-money className="px-3 py-3 text-right" style={{ color: "var(--viz-neg)" }}>
+                        {formatCurrency(result.interestPaid)}
+                      </td>
                     </tr>
                   );
                 })}

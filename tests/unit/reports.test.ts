@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { CanonicalFinanceTransaction } from "@/lib/finance-domain";
 import {
   applyReportFilters,
+  applyReportSort,
   buildCashFlowSankeyData,
   defaultReportFilters,
   endExclusiveFor,
@@ -372,6 +373,8 @@ describe("applyReportFilters", () => {
     merchants: [],
     categories: [],
     excludePending: false,
+    sort: "date",
+    direction: "desc",
   };
 
   const rows = [
@@ -424,9 +427,104 @@ describe("applyReportFilters", () => {
   });
 });
 
+describe("applyReportSort", () => {
+  const sorted = {
+    version: REPORT_FILTERS_VERSION,
+    start: "2026-07-01",
+    end: "2026-07-31",
+    tab: "cash_flow",
+    mode: "breakdown",
+    dimension: "category",
+    scope: null,
+    accounts: [],
+    merchants: [],
+    categories: [],
+    excludePending: false,
+  } as Omit<ReportFilters, "sort" | "direction">;
+
+  const rows = [
+    txn({ id: "b", date: "2026-07-10", merchant: "Costco", signedAmount: 120 }),
+    txn({ id: "a", date: "2026-07-10", merchant: "Amazon", signedAmount: -300 }),
+    txn({ id: "c", date: "2026-07-01", merchant: "Costco", signedAmount: 40 }),
+  ];
+
+  it("sorts by date then id in both directions with no gaps or duplicates", () => {
+    const desc = applyReportSort(rows, { ...sorted, sort: "date", direction: "desc" });
+    expect(desc.map((row) => row.id)).toEqual(["b", "a", "c"]); // date desc, id desc
+    expect(new Set(desc.map((row) => row.id)).size).toBe(3);
+
+    const asc = applyReportSort(rows, { ...sorted, sort: "date", direction: "asc" });
+    expect(asc.map((row) => row.id)).toEqual(["c", "a", "b"]);
+  });
+
+  it("sorts by the user-visible merchant with a stable tie-breaker", () => {
+    const asc = applyReportSort(rows, { ...sorted, sort: "merchant", direction: "asc" });
+    expect(asc.map((row) => row.merchant)).toEqual(["Amazon", "Costco", "Costco"]);
+    // Costco rows tie on merchant, so the date+id tie-breaker orders them.
+    expect(asc.map((row) => row.id)).toEqual(["a", "c", "b"]);
+
+    const desc = applyReportSort(rows, { ...sorted, sort: "merchant", direction: "desc" });
+    expect(desc.map((row) => row.merchant)).toEqual(["Costco", "Costco", "Amazon"]);
+  });
+
+  it("sorts by signed amount (positive = money out)", () => {
+    const desc = applyReportSort(rows, { ...sorted, sort: "amount", direction: "desc" });
+    expect(desc.map((row) => row.id)).toEqual(["b", "c", "a"]); // 120, 40, -300
+    const asc = applyReportSort(rows, { ...sorted, sort: "amount", direction: "asc" });
+    expect(asc.map((row) => row.id)).toEqual(["a", "c", "b"]);
+  });
+
+  it("does not mutate the caller's array", () => {
+    const before = rows.map((row) => row.id);
+    applyReportSort(rows, { ...sorted, sort: "merchant", direction: "asc" });
+    expect(rows.map((row) => row.id)).toEqual(before);
+  });
+});
+
+describe("reportFiltersFromSearchParams", () => {
+  const fallback = defaultReportFilters("2026-07");
+
+  it("round-trips the sort and direction through URL search params", () => {
+    const params = reportFiltersToSearchParams({
+      ...fallback,
+      sort: "amount",
+      direction: "asc",
+    });
+    expect(params.get("sort")).toBe("amount");
+    expect(params.get("dir")).toBe("asc");
+
+    const parsed = reportFiltersFromSearchParams(
+      Object.fromEntries(params.entries()),
+      fallback,
+    );
+    expect(parsed.sort).toBe("amount");
+    expect(parsed.direction).toBe("asc");
+  });
+
+  it("falls back to the default sort for invalid or missing values", () => {
+    expect(
+      reportFiltersFromSearchParams({ sort: "vibes", dir: "up" }, fallback).sort,
+    ).toBe("date");
+    expect(
+      reportFiltersFromSearchParams({}, fallback).direction,
+    ).toBe("desc");
+  });
+
+  it("omits sort params when a saved v1 filter has none", () => {
+    const legacy = { ...fallback };
+    const params = reportFiltersToSearchParams({
+      ...legacy,
+      sort: undefined as never,
+      direction: undefined as never,
+    });
+    expect(params.has("sort")).toBe(false);
+    expect(params.has("dir")).toBe(false);
+  });
+});
+
 describe("parseReportFilters", () => {
   const valid = {
-    version: 1,
+    version: REPORT_FILTERS_VERSION,
     start: "2026-07-01",
     end: "2026-07-31",
     tab: "spending",
@@ -437,6 +535,8 @@ describe("parseReportFilters", () => {
     merchants: ["m"],
     categories: ["c"],
     excludePending: true,
+    sort: "amount",
+    direction: "asc",
   };
 
   it("accepts a well-formed payload", () => {
@@ -450,8 +550,32 @@ describe("parseReportFilters", () => {
   });
 
   it("rejects an unknown schema version rather than guessing", () => {
-    expect(parseReportFilters({ ...valid, version: 2 })).toBeNull();
+    expect(parseReportFilters({ ...valid, version: 3 })).toBeNull();
     expect(parseReportFilters({ ...valid, version: "1" })).toBeNull();
+  });
+
+  it("migrates a v1 saved report by defaulting the sort fields", () => {
+    const legacy = { ...valid, version: 1, sort: undefined, direction: undefined };
+    delete legacy.sort;
+    delete legacy.direction;
+    expect(parseReportFilters(legacy)).toEqual({
+      ...valid,
+      version: REPORT_FILTERS_VERSION,
+      sort: "date",
+      direction: "desc",
+    });
+  });
+
+  it("rejects a current payload that omits the required sort fields", () => {
+    const omitted = { ...valid, sort: undefined, direction: undefined };
+    delete omitted.sort;
+    delete omitted.direction;
+    expect(parseReportFilters(omitted)).toBeNull();
+  });
+
+  it("rejects invalid sort and direction values", () => {
+    expect(parseReportFilters({ ...valid, sort: "vibes" })).toBeNull();
+    expect(parseReportFilters({ ...valid, direction: "sideways" })).toBeNull();
   });
 
   it("rejects malformed dates and inverted ranges", () => {

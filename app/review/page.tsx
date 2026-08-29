@@ -1,11 +1,11 @@
 import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
 import BarList from "@/components/dashboard/BarList";
-import ButtonLink from "@/components/ui/ButtonLink";
+import ExportReportButton from "@/components/review/ExportReportButton";
 import Panel from "@/components/ui/Panel";
 import { goalSummary, getGoals } from "@/lib/goals";
 import { getDashboardData } from "@/lib/dashboard";
-import { formatCurrency, formatMonth, titleCase } from "@/lib/format";
+import { formatCurrency, formatMonth, gainLossColor, inflowMarker, titleCase } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -39,11 +39,7 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
     <AppShell active="reports" email={user?.email}>
       <PageHeader
         title={`${formatMonth(data.selectedMonth)} review`}
-        actions={
-          <ButtonLink href={`/api/export/report?month=${data.selectedMonth}`}>
-            Export PDF
-          </ButtonLink>
-        }
+        actions={<ExportReportButton month={data.selectedMonth} />}
       />
       <p className="max-w-2xl text-sm text-muted">
         A guided snapshot of income, spending, budgets, goals, and notable changes for the month.
@@ -51,14 +47,22 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
 
       <div className="grid gap-4 md:grid-cols-3">
         <Panel title="Income">
-          <p className="money display text-3xl text-success">{formatCurrency(data.currentMonthIncome)}</p>
+          <p className="money display text-3xl" style={{ color: "var(--viz-pos)" }}>
+            {formatCurrency(data.currentMonthIncome)}
+          </p>
         </Panel>
         <Panel title="Spending">
-          <p className="money display text-3xl">{formatCurrency(data.currentMonthExpenses)}</p>
+          <p className="money display text-3xl" style={{ color: "var(--viz-neg)" }}>
+            {formatCurrency(data.currentMonthExpenses)}
+          </p>
         </Panel>
         <Panel title="Net">
-          <p data-money className={net >= 0 ? "display text-3xl text-success" : "display text-3xl text-danger"}>
-            {net >= 0 ? "+" : ""}
+          <p
+            data-money
+            className="display text-3xl"
+            style={{ color: gainLossColor(net) }}
+          >
+            {inflowMarker(net)}
             {formatCurrency(net)}
           </p>
         </Panel>
@@ -74,10 +78,18 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
               <div key={budget.category} className="rounded-field bg-panel-2 p-3">
                 <div className="flex justify-between gap-3 font-semibold">
                   <span>{titleCase(budget.category)}</span>
-                  <span>{formatCurrency(budget.projectedSpend)} projected</span>
+                  <span data-money style={{ color: "var(--viz-neg)" }}>
+                    {formatCurrency(budget.projectedSpend)} projected
+                  </span>
                 </div>
                 <p className="mt-1 text-xs text-muted">
-                  Limit {formatCurrency(budget.monthlyLimit)}, remaining {formatCurrency(budget.remaining)}
+                  Limit <span data-money>{formatCurrency(budget.monthlyLimit)}</span>, remaining{" "}
+                  <span
+                    data-money
+                    style={{ color: budget.remaining >= 0 ? "var(--viz-pos)" : "var(--viz-neg)" }}
+                  >
+                    {formatCurrency(budget.remaining)}
+                  </span>
                 </p>
               </div>
             ))}
@@ -97,7 +109,9 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
                   <span className="block font-semibold">{goal.goal.name}</span>
                   <span className="block text-xs text-muted">{goal.status}</span>
                 </span>
-                <span className="font-bold">{formatCurrency(goal.remainingAmount)} left</span>
+                <span data-money className="font-bold">
+                  {formatCurrency(goal.remainingAmount)} left
+                </span>
               </div>
             ))}
             {goalsSummary.length === 0 && <p className="py-4 text-sm text-muted">No active goals yet.</p>}

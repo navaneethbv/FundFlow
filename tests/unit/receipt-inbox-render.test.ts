@@ -64,4 +64,39 @@ describe("ReceiptInbox", () => {
     expect(scanner).toContain("Save to receipt inbox");
     expect(scanner).toContain('fetch("/api/receipts"');
   });
+
+  it("sets receipt dates in the mono face and wraps totals in the privacy-blur hook", () => {
+    const html = renderToStaticMarkup(createElement(ReceiptInbox, {
+      initialReceipts: [
+        {
+          id: "unmatched-1",
+          transaction_id: null,
+          merchant: "Cafe",
+          purchase_date: "2026-08-09",
+          total: 24.5,
+          status: "unmatched",
+          created_at: "2026-08-09T12:00:00Z",
+          imageUrl: "https://signed.example/new",
+          candidates: [{
+            transactionId: "transaction-1",
+            date: "2026-08-09",
+            amount: 24.5,
+            merchant: "Cafe",
+            amountDifferencePercent: 0,
+            dateDifferenceDays: 0,
+            merchantScore: 1,
+          }],
+        },
+      ],
+    }));
+
+    expect(html).toContain('<span class="font-mono">2026-08-09</span>');
+    // react-dom/server serializes a bare boolean attribute as data-money="true".
+    expect(html).toContain('<span data-money="true">$24.50</span>');
+  });
+
+  it("routes receipt transitions and deletes to the per-id endpoint", () => {
+    const inboxSource = readFileSync("components/transactions/ReceiptInbox.tsx", "utf8");
+    expect(inboxSource).toContain("fetch(`/api/receipts/${receiptId}`");
+  });
 });

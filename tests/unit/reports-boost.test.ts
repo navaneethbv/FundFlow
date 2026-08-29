@@ -34,7 +34,7 @@ describe("Reports Module Extra Branches", () => {
 
   it("applies report filters with manual accounts, merchants, categories, and pending", () => {
     const filters: ReportFilters = {
-      version: 1,
+      version: 2,
       start: "2026-08-01",
       end: "2026-08-31",
       tab: "cash_flow",
@@ -45,6 +45,8 @@ describe("Reports Module Extra Branches", () => {
       merchants: ["Costco"],
       categories: ["Food"],
       excludePending: true,
+      sort: "date",
+      direction: "desc",
     };
 
     const rows = [
@@ -99,7 +101,7 @@ describe("Reports Module Extra Branches", () => {
 
   it("converts report filters to URL search params with include pending and scope", () => {
     const filtersInclude: ReportFilters = {
-      version: 1,
+      version: 2,
       start: "2026-08-01",
       end: "2026-08-31",
       tab: "spending",
@@ -110,6 +112,8 @@ describe("Reports Module Extra Branches", () => {
       merchants: ["M1"],
       categories: ["C1"],
       excludePending: false,
+      sort: "date",
+      direction: "desc",
     };
     const params = reportFiltersToSearchParams(filtersInclude);
     expect(params.get("pending")).toBe("include");

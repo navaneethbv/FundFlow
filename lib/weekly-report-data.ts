@@ -13,6 +13,47 @@ function throwIfError(error: { message?: string } | null, context: string): void
   if (error) throw new Error(`${context}: ${error.message ?? "query failed"}`);
 }
 
+/** PostgREST caps a single response (1000 by default), so the transaction read
+ *  pages with an explicit date + id order — Supabase ranges are inclusive and
+ *  an unordered range can duplicate or omit rows across windows. */
+const PAGE_SIZE = 1000;
+
+/** Chunk size for the `transaction_splits` `.in()` list: PostgREST builds the
+ *  list into the request URL, and the whole period's ids at once overruns it
+ *  (500 ids ≈ 18KB overflows Node's 16KB header limit). */
+const SPLIT_CHUNK_SIZE = 250;
+
+function chunks<T>(values: T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    result.push(values.slice(index, index + size));
+  }
+  return result;
+}
+
+async function fetchAllTransactions(
+  supabase: SupabaseClient,
+  userId: string,
+  period: WeeklyReportPeriod,
+): Promise<Array<Record<string, unknown>>> {
+  const rows: Array<Record<string, unknown>> = [];
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("id, date, amount, merchant_name, name, pfc_primary, account_id")
+      .eq("user_id", userId)
+      .gte("date", period.previousStart)
+      .lte("date", period.end)
+      .order("date", { ascending: true })
+      .order("id", { ascending: true })
+      .range(offset, offset + PAGE_SIZE - 1);
+    throwIfError(error, "weekly report transactions");
+    const page = (data ?? []) as Array<Record<string, unknown>>;
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) return rows;
+  }
+}
+
 export async function getWeeklyReportData(
   supabase: SupabaseClient,
   userId: string,
@@ -31,7 +72,7 @@ export async function getWeeklyReportData(
     rulesResult,
     refundsResult,
     duplicatesResult,
-    transactionsResult,
+    transactions,
   ] = await Promise.all([
     supabase
       .from("accounts")
@@ -58,12 +99,7 @@ export async function getWeeklyReportData(
       .from("linked_duplicates")
       .select("excluded_transaction_id")
       .eq("user_id", userId),
-    supabase
-      .from("transactions")
-      .select("id, date, amount, merchant_name, name, pfc_primary, account_id")
-      .eq("user_id", userId)
-      .gte("date", period.previousStart)
-      .lte("date", period.end),
+    fetchAllTransactions(supabase, userId, period),
   ]);
 
   for (const [context, result] of [
@@ -73,22 +109,28 @@ export async function getWeeklyReportData(
     ["merchant rules", rulesResult],
     ["linked refunds", refundsResult],
     ["linked duplicates", duplicatesResult],
-    ["transactions", transactionsResult],
   ] as const) {
     throwIfError(result.error, `weekly report ${context}`);
   }
 
-  const transactionIds = (transactionsResult.data ?? []).map(
+  const transactionIds = transactions.map(
     (transaction) => transaction.id as string,
   );
-  const splitsResult = transactionIds.length
-    ? await supabase
+  const splitChunks = chunks(transactionIds, SPLIT_CHUNK_SIZE).map(
+    (transactionIdChunk) => {
+      const query = supabase
         .from("transaction_splits")
         .select("transaction_id, category, amount")
-        .eq("user_id", userId)
-        .in("transaction_id", transactionIds)
-    : { data: [], error: null };
-  throwIfError(splitsResult.error, "weekly report transaction splits");
+        .in("transaction_id", transactionIdChunk);
+      return query.eq("user_id", userId);
+    },
+  );
+  const splitsResults = transactionIds.length
+    ? await Promise.all(splitChunks)
+    : [];
+  for (const result of splitsResults) {
+    throwIfError(result.error, "weekly report transaction splits");
+  }
 
   const accounts: WeeklyReportAccount[] = (accountsResult.data ?? []).map(
     (account) => ({
@@ -98,17 +140,17 @@ export async function getWeeklyReportData(
       plaidItemId: account.plaid_item_id as string,
     }),
   );
-  const transactions: WeeklyReportTransaction[] = (
-    transactionsResult.data ?? []
-  ).map((transaction) => ({
-    id: transaction.id as string,
-    date: transaction.date as string,
-    amount: Number(transaction.amount),
-    merchantName: transaction.merchant_name as string | null,
-    name: transaction.name as string | null,
-    category: transaction.pfc_primary as string | null,
-    accountId: transaction.account_id as string,
-  }));
+  const transactionsResult: Array<WeeklyReportTransaction> = transactions.map(
+    (transaction) => ({
+      id: transaction.id as string,
+      date: transaction.date as string,
+      amount: Number(transaction.amount),
+      merchantName: transaction.merchant_name as string | null,
+      name: transaction.name as string | null,
+      category: transaction.pfc_primary as string | null,
+      accountId: transaction.account_id as string,
+    }),
+  );
   const merchantRules: MerchantRule[] = (rulesResult.data ?? []).map((rule) => ({
     matchType: rule.match_type as MerchantRule["matchType"],
     pattern: rule.pattern as string,
@@ -128,7 +170,7 @@ export async function getWeeklyReportData(
     userEmail,
     period,
     accounts,
-    transactions,
+    transactions: transactionsResult,
     institutions: (institutionsResult.data ?? []).map((institution) => ({
       id: institution.id as string,
       name: institution.institution_name as string | null,
@@ -138,11 +180,13 @@ export async function getWeeklyReportData(
       monthlyLimit: Number(budget.monthly_limit),
     })),
     merchantRules,
-    splits: (splitsResult.data ?? []).map((split) => ({
-      transactionId: split.transaction_id as string,
-      category: split.category as string,
-      amount: Number(split.amount),
-    })),
+    splits: splitsResults.flatMap((result) =>
+      (result.data ?? []).map((split) => ({
+        transactionId: split.transaction_id as string,
+        category: split.category as string,
+        amount: Number(split.amount),
+      })),
+    ),
     linkedRefundTransactionIds,
     duplicateTransactionIds: new Set(
       (duplicatesResult.data ?? []).map(

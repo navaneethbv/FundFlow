@@ -23,6 +23,7 @@ interface ScanResult {
 export default function ReceiptScanSection({ enabled }: Readonly<{ enabled: boolean }>) {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [sourceFile, setSourceFile] = useState<File | null>(null);
+  const [pickedName, setPickedName] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -96,7 +97,25 @@ export default function ReceiptScanSection({ enabled }: Readonly<{ enabled: bool
         <p className="mb-3 text-xs text-warning">Enable AI insights above to use this.</p>
       )}
       <form onSubmit={scan} className="flex flex-wrap items-center gap-2">
-        <Input type="file" name="file" accept="image/*" required disabled={!enabled || busy} className="max-w-xs" />
+        <label
+          htmlFor="receipt-scan-file"
+          className="inline-flex min-h-11 cursor-pointer items-center rounded-field border border-panel-border bg-panel px-3 text-sm font-semibold text-accent hover:bg-panel-2 focus-within:outline-2"
+        >
+          {pickedName ? "Change photo" : "Choose a receipt photo"}
+          <Input
+            id="receipt-scan-file"
+            type="file"
+            name="file"
+            accept="image/*"
+            required
+            disabled={!enabled || busy}
+            className="sr-only"
+            onChange={(event) => setPickedName(event.target.files?.[0]?.name ?? null)}
+          />
+        </label>
+        {pickedName && (
+          <span className="max-w-[16rem] truncate text-sm text-muted">{pickedName}</span>
+        )}
         <Button type="submit" size="md" disabled={!enabled || busy}>
           {busy ? "Reading…" : "Scan"}
         </Button>

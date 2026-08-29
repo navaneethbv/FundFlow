@@ -26,7 +26,7 @@ function SummaryColumn({
       <div className="flex items-baseline justify-between gap-2 text-sm">
         <span className="font-semibold">{label}</span>
         {total > 0 && (
-          <span className="text-muted">{formatCurrency(total, currency)} total</span>
+          <span data-money className="text-muted">{formatCurrency(total, currency)} total</span>
         )}
       </div>
       {total > 0 ? (

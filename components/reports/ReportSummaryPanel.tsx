@@ -56,7 +56,16 @@ export default function ReportSummaryPanel({
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {metrics.map((metric) => (
           <Panel key={metric.label} className="min-w-0">
-            <p data-money className={`metric-value truncate text-2xl sm:text-3xl ${metric.tone}`}>
+            {/*
+              Large totals must never be character-truncated: a clipped
+              financial figure hides real digits. The value scales with a
+              bounded clamp, wraps within its card when it must, and uses
+              tabular numerals so the digits stay stable and readable.
+            */}
+            <p
+              data-money
+              className={`metric-value text-[clamp(1.25rem,0.95rem+0.6vw,1.875rem)] break-words tabular-nums ${metric.tone}`}
+            >
               {metric.value}
             </p>
             <p className="eyebrow mt-3">{metric.label}</p>

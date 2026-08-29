@@ -177,12 +177,48 @@ describe("weekly report model", () => {
       {
         category: "DINING",
         spent: 90,
-        weeklyAllowance: 230.77,
+        allowance: 230.77,
         percentage: 0.39,
         status: "on-track",
       },
     ]);
     expect(report.cashFlow).toEqual({ inflows: 500, outflows: 360, net: 140 });
+  });
+
+  it("measures budgets against the full monthly limit for a monthly period", () => {
+    const input = {
+      userId: "user-1",
+      userEmail: "person@example.com",
+      transactions,
+      accounts,
+      institutions: [
+        { id: "chase-item", name: "Chase" },
+        { id: "amex-item", name: "American Express" },
+      ],
+      budgets: [{ category: "DINING", monthlyLimit: 1000 }],
+      merchantRules: [],
+      splits: [
+        { transactionId: "meal", category: "DINING", amount: 90 },
+        { transactionId: "meal", category: "GIFTS", amount: 30 },
+      ],
+      linkedRefundTransactionIds: new Set(["refunded-charge", "refund"]),
+      duplicateTransactionIds: new Set(["confirmed-duplicate"]),
+    };
+
+    const weekly = buildWeeklyReportModel({ ...input, period });
+    const monthly = buildWeeklyReportModel({
+      ...input,
+      period: { ...period, kind: "monthly" as const },
+    });
+
+    // Same spend, but the weekly proration (1000 * 12 / 52) would flag it and
+    // the true monthly limit does not.
+    expect(weekly.budgets[0]!.allowance).toBe(230.77);
+    expect(monthly.budgets[0]!.allowance).toBe(1000);
+    expect(monthly.budgets[0]!.spent).toBe(weekly.budgets[0]!.spent);
+    expect(monthly.budgets[0]!.percentage).toBeLessThan(
+      weekly.budgets[0]!.percentage,
+    );
   });
 
   it("uses null change percentage when the previous week has no spend", () => {
@@ -206,7 +242,6 @@ describe("weekly report model", () => {
     expect(report.categories).toEqual([]);
   });
 });
-
 describe("formatCardLabel", () => {
   it("title-cases a name Plaid returns in all caps", () => {
     // The real failure: Chase reports this account as "CREDIT CARD", which read
@@ -519,5 +554,52 @@ describe("getWeeklyReportData", () => {
     expect(edgeModel.totalSpend).toBe(50);
     expect(edgeModel.merchants[0]?.merchant).toBe("Unknown merchant");
     expect(edgeModel.banks[0]?.name).toBe("Other bank");
+  });
+
+  it("handles zero total spend with empty categories and credit cards with missing institution", () => {
+    const zeroModel = buildWeeklyReportModel({
+      userId: "u-1",
+      userEmail: "u1@test.com",
+      period,
+      accounts: [
+        { id: "c-1", name: null, type: "credit", plaidItemId: "missing-item" },
+      ],
+      transactions: [],
+      institutions: [],
+      budgets: [],
+      merchantRules: [],
+      splits: [],
+      linkedRefundTransactionIds: new Set(),
+      duplicateTransactionIds: new Set(),
+    });
+    expect(zeroModel.totalSpend).toBe(0);
+    expect(zeroModel.categories).toHaveLength(0);
+
+    const cardModel = buildWeeklyReportModel({
+      userId: "u-1",
+      userEmail: "u1@test.com",
+      period,
+      accounts: [
+        { id: "c-1", name: "Custom Card", type: "credit", plaidItemId: "missing-item" },
+      ],
+      transactions: [
+        {
+          id: "t-card",
+          date: "2026-07-08",
+          amount: 25,
+          merchantName: "Shop",
+          name: "Shop",
+          category: "GENERAL",
+          accountId: "c-1",
+        },
+      ],
+      institutions: [],
+      budgets: [],
+      merchantRules: [],
+      splits: [],
+      linkedRefundTransactionIds: new Set(),
+      duplicateTransactionIds: new Set(),
+    });
+    expect(cardModel.cards[0]?.name).toBe("Custom Card");
   });
 });

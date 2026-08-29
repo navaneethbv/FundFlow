@@ -28,6 +28,8 @@ const filters: ReportFilters = {
   merchants: [],
   categories: [],
   excludePending: false,
+  sort: "date",
+  direction: "desc",
 };
 
 function req(method: string, body: unknown, url = "http://localhost/api/reports/saved") {

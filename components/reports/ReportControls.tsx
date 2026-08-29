@@ -2,8 +2,10 @@ import Link from "next/link";
 import SegmentedControl from "@/components/ui/SegmentedControl";
 import {
   reportFiltersToSearchParams,
+  type ReportDirection,
   type ReportFilters,
   type ReportMode,
+  type ReportSort,
   type ReportTab,
 } from "@/lib/reports";
 import type { BreakdownDimension } from "@/lib/cash-flow";
@@ -12,7 +14,9 @@ import type { BreakdownDimension } from "@/lib/cash-flow";
  * Every control here is either a link or a plain GET form, so tab switches,
  * range changes, and scope changes are pure URL navigation with no client JS.
  * That keeps the whole Reports surface server-rendered (CSP-friendly) and makes
- * any report state shareable and back-button-correct.
+ * any report state shareable and back-button-correct. Sorting is links too, so
+ * the sort + direction live in the URL and a change intentionally drops the
+ * `page` param, which resets pagination to page one.
  */
 
 export const TAB_LABELS: Record<ReportTab, string> = {
@@ -30,6 +34,17 @@ const DIMENSION_LABELS: Record<BreakdownDimension, string> = {
   category: "Category",
   group: "Group",
   merchant: "Merchant",
+};
+
+const SORT_LABELS: Record<ReportSort, string> = {
+  date: "Date",
+  merchant: "Merchant",
+  amount: "Amount",
+};
+
+const DIRECTION_LABELS: Record<ReportDirection, string> = {
+  asc: "Ascending",
+  desc: "Descending",
 };
 
 export function reportHref(
@@ -115,6 +130,32 @@ export default function ReportControls({
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-panel-border pt-4">
+        <fieldset>
+          <legend className="eyebrow mb-1">Sort by</legend>
+          <SegmentedControl
+            ariaLabel="Sort report transactions by"
+            items={(Object.keys(SORT_LABELS) as ReportSort[]).map((sort) => ({
+              label: SORT_LABELS[sort],
+              href: reportHref(filters, { sort }),
+              active: filters.sort === sort,
+            }))}
+          />
+        </fieldset>
+
+        <fieldset>
+          <legend className="eyebrow mb-1">Direction</legend>
+          <SegmentedControl
+            ariaLabel="Sort direction"
+            items={(Object.keys(DIRECTION_LABELS) as ReportDirection[]).map(
+              (direction) => ({
+                label: DIRECTION_LABELS[direction],
+                href: reportHref(filters, { direction }),
+                active: filters.direction === direction,
+              }),
+            )}
+          />
+        </fieldset>
+
         <fieldset>
           <legend className="eyebrow mb-1">Break down by</legend>
           <SegmentedControl

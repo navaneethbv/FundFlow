@@ -96,21 +96,21 @@ export default function MerchantRulesSection({
       </div>
 
       <form onSubmit={addRule} className="grid gap-3 sm:grid-cols-2">
-        <Field label="Match">
-          <Select value={matchType} onChange={(event) => setMatchType(event.target.value as MerchantRule["match_type"])}>
+        <Field label="Match" htmlFor="rule-match-type">
+          <Select id="rule-match-type" value={matchType} onChange={(event) => setMatchType(event.target.value as MerchantRule["match_type"])}>
             <option value="keyword">Keyword</option>
             <option value="merchant">Exact merchant</option>
             <option value="account">Account</option>
           </Select>
         </Field>
-        <Field label="Pattern">
-          <Input value={pattern} onChange={(event) => setPattern(event.target.value)} placeholder="SQ *COFFEE" />
+        <Field label="Pattern" htmlFor="rule-pattern">
+          <Input id="rule-pattern" value={pattern} onChange={(event) => setPattern(event.target.value)} placeholder="SQ *COFFEE" />
         </Field>
-        <Field label="Display name">
-          <Input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Coffee Bar" />
+        <Field label="Display name" htmlFor="rule-display-name">
+          <Input id="rule-display-name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Coffee Bar" />
         </Field>
-        <Field label="Category">
-          <Input value={category} onChange={(event) => setCategory(event.target.value)} placeholder="FOOD_AND_DRINK" />
+        <Field label="Category" htmlFor="rule-category">
+          <Input id="rule-category" value={category} onChange={(event) => setCategory(event.target.value)} placeholder="FOOD_AND_DRINK" />
         </Field>
         <Button type="submit" className="sm:col-span-2">
           Add rule

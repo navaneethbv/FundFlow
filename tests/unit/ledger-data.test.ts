@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  buildLedgerDayGroups,
   collectLedgerChunks,
+  ledgerZebraBands,
   ledgerDatabaseOrder,
   needsProjectedLedgerPage,
   selectProjectedLedgerPage,
@@ -135,5 +137,112 @@ describe("selectProjectedLedgerPage", () => {
     expect(firstPage.rows).toHaveLength(50);
     expect(secondPage.rows).toHaveLength(5);
     expect(new Set([...firstPage.rows, ...secondPage.rows].map((row) => row.id)).size).toBe(55);
+  });
+});
+
+describe("buildLedgerDayGroups", () => {
+  const row = (id: string, date: string, amount: number) => ({ id, date, amount });
+
+  it("nets every row sharing a date", () => {
+    const groups = buildLedgerDayGroups([
+      row("a", "2026-08-03", 10),
+      row("b", "2026-08-03", 20),
+      row("c", "2026-08-04", 5),
+    ]);
+
+    expect(groups.get("2026-08-03")).toMatchObject({ net: 30, visibleCount: 2 });
+    expect(groups.get("2026-08-04")).toMatchObject({ net: 5, visibleCount: 1 });
+  });
+
+  it("withholds the net on a day holding a single transaction", () => {
+    const groups = buildLedgerDayGroups([row("a", "2026-08-03", 10)]);
+
+    // Restating the one amount directly below it is noise, not a total.
+    expect(groups.get("2026-08-03")!.showNet).toBe(false);
+  });
+
+  it("shows the net once a day holds more than one transaction", () => {
+    const groups = buildLedgerDayGroups([
+      row("a", "2026-08-03", 10),
+      row("b", "2026-08-03", 20),
+    ]);
+
+    expect(groups.get("2026-08-03")!.showNet).toBe(true);
+  });
+
+  it("excludes duplicate-marked rows from the net", () => {
+    const groups = buildLedgerDayGroups(
+      [row("a", "2026-08-03", 10), row("b", "2026-08-03", 20)],
+      { excludedIds: new Set(["b"]) },
+    );
+
+    expect(groups.get("2026-08-03")!.net).toBe(10);
+  });
+
+  it("marks a day split across a page boundary incomplete and withholds its net", () => {
+    const all = [
+      row("a", "2026-08-03", 10),
+      row("b", "2026-08-03", 20),
+      row("c", "2026-08-03", 30),
+    ];
+    // Only the first two rows landed on this page.
+    const groups = buildLedgerDayGroups(all.slice(0, 2), { allRows: all });
+
+    const group = groups.get("2026-08-03")!;
+    expect(group.complete).toBe(false);
+    // A partial page sum presented as a daily total would be wrong.
+    expect(group.showNet).toBe(false);
+  });
+
+  it("treats a day fully contained in the page as complete", () => {
+    const all = [row("a", "2026-08-03", 10), row("b", "2026-08-04", 20)];
+    const groups = buildLedgerDayGroups(all.slice(0, 1), { allRows: all });
+
+    expect(groups.get("2026-08-03")!.complete).toBe(true);
+  });
+
+  it("assumes completeness when no full row set is supplied", () => {
+    const groups = buildLedgerDayGroups([
+      row("a", "2026-08-03", 10),
+      row("b", "2026-08-03", 20),
+    ]);
+
+    expect(groups.get("2026-08-03")!.complete).toBe(true);
+  });
+
+  it("withholds a net for an explicitly incomplete direct-query boundary", () => {
+    const groups = buildLedgerDayGroups(
+      [row("a", "2026-08-03", 10), row("b", "2026-08-03", 20)],
+      { incompleteDates: new Set(["2026-08-03"]) },
+    );
+
+    expect(groups.get("2026-08-03")).toMatchObject({
+      complete: false,
+      showNet: false,
+    });
+  });
+});
+
+describe("ledgerZebraBands", () => {
+  const rows = [
+    { date: "2026-08-15" },
+    { date: "2026-08-15" },
+    { date: "2026-08-15" },
+    { date: "2026-08-14" },
+    { date: "2026-08-14" },
+  ];
+
+  it("restarts banding at each day when grouping is active", () => {
+    // Striping that ran straight through the headers did not line up with the
+    // groups it was meant to organise.
+    expect(ledgerZebraBands(rows, true)).toEqual([0, 1, 2, 0, 1]);
+  });
+
+  it("bands continuously when grouping is off", () => {
+    expect(ledgerZebraBands(rows, false)).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it("returns an empty array for no rows", () => {
+    expect(ledgerZebraBands([], true)).toEqual([]);
   });
 });

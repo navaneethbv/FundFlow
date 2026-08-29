@@ -20,7 +20,7 @@ import TransactionQueryControls from "@/components/transactions/TransactionQuery
 import TransactionSortMenu from "@/components/transactions/TransactionSortMenu";
 import { MerchantAvatar } from "@/components/ui/Avatar";
 import CategoryChip from "@/components/ui/CategoryChip";
-import { formatCurrency, titleCase, formatMonth } from "@/lib/format";
+import { formatCurrency, roundsToZero, titleCase, formatMonth } from "@/lib/format";
 import { formatDate } from "@/lib/format-date";
 import { hasRemapRules } from "@/lib/ledger-filter";
 import {
@@ -33,13 +33,16 @@ import {
 } from "@/lib/ledger-query";
 import {
   collectLedgerChunks,
+  ledgerZebraBands,
   ledgerDatabaseOrder,
   needsProjectedLedgerPage,
   selectProjectedLedgerPage,
+  buildLedgerDayGroups,
   shouldShowLedgerDayGroups,
 } from "@/lib/ledger-data";
 import {
   buildLedgerFilterOptions,
+  filterProjectedLedgerRows,
   projectLedgerRows,
   toLedgerFacetRow,
   type LedgerFacetSourceRow,
@@ -79,6 +82,28 @@ type LedgerChunkFilters = {
 };
 
 type TransactionsSupabase = Awaited<ReturnType<typeof createClient>>;
+
+function transactionSetupError(
+  results: ReadonlyArray<{ error: { code?: string } | null }>,
+): string {
+  const errors = results.map((result) => result.error).filter(Boolean);
+  if (errors.length === 0) return "";
+  console.error("Transaction setup query failed", errors.map((error) => error?.code ?? "unknown"));
+  return "We couldn't load your transaction controls. Try again.";
+}
+
+function transactionDetailsError(currentError: string, failed: boolean): string {
+  return failed
+    ? "We couldn't load transaction details. Refresh the page to try again."
+    : currentError;
+}
+
+function ledgerNetPrefix(net: number): string {
+  if (roundsToZero(net)) return "";
+  if (net < 0) return "+";
+  if (net > 0) return "-";
+  return "";
+}
 
 /**
  * Filters only, deliberately unordered. postgrest-js appends `order()` calls in
@@ -161,6 +186,8 @@ async function loadLedgerRows(input: {
   rows: LedgerProjectedRow[];
   total: number;
   projectedScope: LedgerProjectedRow[];
+  allRowsForGrouping: LedgerProjectedRow[] | null;
+  incompleteDates: Set<string>;
   filterOptions: LedgerFilterOptions;
   ledgerError: string;
 }> {
@@ -170,6 +197,8 @@ async function loadLedgerRows(input: {
   const projectedPath = needsProjectedLedgerPage(state.sort, ruleAwareFilter);
   const needsFullProjection = projectedPath || hasRemapRules(rules);
   let projectedScope: LedgerProjectedRow[] = [];
+  let allRowsForGrouping: LedgerProjectedRow[] | null = null;
+  let incompleteDates = new Set<string>();
   if (needsFullProjection) {
     try {
       const sourceRows = await collectLedgerChunks<LedgerProjectionSourceRow>(async (from, to) => {
@@ -188,6 +217,11 @@ async function loadLedgerRows(input: {
     const selected = selectProjectedLedgerPage(projectedScope, { ...state, pageSize: PAGE_SIZE });
     rows = selected.rows;
     total = selected.total;
+    allRowsForGrouping = filterProjectedLedgerRows(projectedScope, {
+      category: state.category,
+      sub: state.sub,
+      merchant: state.merchant,
+    });
   } else if (!ledgerError) {
     const result = await loadDirectLedgerRows({ ...input, projectedPath });
     if (result.error) {
@@ -196,6 +230,7 @@ async function loadLedgerRows(input: {
     } else {
       rows = result.rows;
       total = result.total;
+      incompleteDates = result.incompleteDates;
     }
   }
   const filterOptions = await loadLedgerFilterOptions({
@@ -205,7 +240,15 @@ async function loadLedgerRows(input: {
     needsFullProjection,
     accountOptionsForFilters,
   });
-  return { rows, total, projectedScope, filterOptions, ledgerError };
+  return {
+    rows,
+    total,
+    projectedScope,
+    allRowsForGrouping,
+    incompleteDates,
+    filterOptions,
+    ledgerError,
+  };
 }
 
 async function loadDirectLedgerRows(input: {
@@ -219,9 +262,55 @@ async function loadDirectLedgerRows(input: {
   accountOptionsForFilters: { value: string; label: string }[];
   ledgerError: string;
   projectedPath: boolean;
-}): Promise<{ rows: LedgerProjectedRow[]; total: number; error: string | null }> {
+}): Promise<{
+  rows: LedgerProjectedRow[];
+  total: number;
+  error: string | null;
+  incompleteDates: Set<string>;
+}> {
   const { supabase, state, filters, columns, rules, accountNamesById, accountLabelsById } = input;
-  let query = buildLedgerFilterQuery(supabase, columns, filters, true);
+  let query = applyDirectLedgerFilters(
+    buildLedgerFilterQuery(supabase, columns, filters, true),
+    state,
+  );
+  for (const order of ledgerDatabaseOrder(state.sort === "amount" ? "amount" : "date", state.direction)) {
+    query = query.order(order.column, { ascending: order.ascending });
+  }
+  const offset = (state.page - 1) * PAGE_SIZE;
+  const inspectNeighbors = state.sort === "date";
+  const windowStart = inspectNeighbors ? Math.max(0, offset - 1) : offset;
+  const windowEnd = inspectNeighbors ? offset + PAGE_SIZE : offset + PAGE_SIZE - 1;
+  const result = await query.range(windowStart, windowEnd);
+  if (result.error) {
+    return {
+      rows: [],
+      total: 0,
+      error: result.error.code ?? "unknown",
+      incompleteDates: new Set<string>(),
+    };
+  }
+  const windowRows = projectLedgerRows(
+    (result.data ?? []) as unknown as LedgerProjectionSourceRow[],
+    rules,
+    accountNamesById,
+    accountLabelsById,
+  );
+  const visibleStart = offset - windowStart;
+  const rows = windowRows.slice(visibleStart, visibleStart + PAGE_SIZE);
+  const incompleteDates = findIncompleteLedgerDates(windowRows, rows, visibleStart, inspectNeighbors);
+  return {
+    rows,
+    total: result.count ?? rows.length,
+    error: null,
+    incompleteDates,
+  };
+}
+
+function applyDirectLedgerFilters(
+  initialQuery: ReturnType<typeof buildLedgerFilterQuery>,
+  state: ReturnType<typeof parseLedgerQuery>,
+) {
+  let query = initialQuery;
   if (state.category) {
     query = state.category === "UNCATEGORIZED"
       ? query.or("pfc_primary.is.null,pfc_primary.eq.UNCATEGORIZED")
@@ -229,14 +318,24 @@ async function loadDirectLedgerRows(input: {
   }
   if (state.sub) query = query.eq("pfc_detailed", state.sub);
   if (state.merchant) query = query.or(`merchant_name.ilike.${state.merchant},name.ilike.${state.merchant}`);
-  for (const order of ledgerDatabaseOrder(state.sort === "amount" ? "amount" : "date", state.direction)) {
-    query = query.order(order.column, { ascending: order.ascending });
-  }
-  const offset = (state.page - 1) * PAGE_SIZE;
-  const result = await query.range(offset, offset + PAGE_SIZE - 1);
-  if (result.error) return { rows: [], total: 0, error: result.error.code ?? "unknown" };
-  const rows = projectLedgerRows((result.data ?? []) as unknown as LedgerProjectionSourceRow[], rules, accountNamesById, accountLabelsById);
-  return { rows, total: result.count ?? rows.length, error: null };
+  return query;
+}
+
+function findIncompleteLedgerDates(
+  windowRows: readonly LedgerProjectedRow[],
+  rows: readonly LedgerProjectedRow[],
+  visibleStart: number,
+  inspectNeighbors: boolean,
+): Set<string> {
+  const incompleteDates = new Set<string>();
+  if (!inspectNeighbors || rows.length === 0) return incompleteDates;
+  const previous = windowRows[visibleStart - 1];
+  const next = windowRows[visibleStart + rows.length];
+  const first = rows[0]!;
+  const last = rows.at(-1)!;
+  if (previous?.date === first.date) incompleteDates.add(first.date);
+  if (next?.date === last.date) incompleteDates.add(last.date);
+  return incompleteDates;
 }
 
 async function loadLedgerFilterOptions(input: {
@@ -354,28 +453,14 @@ async function loadLedgerRowDetails(
   return { annById, splitsById, excludedDuplicateIds, failed: errorCodes.length > 0 };
 }
 
-/**
- * Signed net per date for the day-group headers. Rows the user excluded as
- * duplicates are left out, matching what the ledger totals show.
- */
-function buildDayTotals(
-  rows: readonly LedgerProjectedRow[],
-  excludedDuplicateIds: ReadonlySet<string>,
-): Map<string, number> {
-  const dayTotals = new Map<string, number>();
-  for (const row of rows) {
-    if (excludedDuplicateIds.has(row.id)) continue;
-    dayTotals.set(row.date, (dayTotals.get(row.date) ?? 0) + row.amount);
-  }
-  return dayTotals;
-}
-
 interface LedgerTableRowProps {
   row: LedgerProjectedRow;
+  /** Position within its date group when day grouping is active. */
+  zebraBand: number;
   /** Render the day-group header above this row. */
   isNewDay: boolean;
-  /** Signed net for the row's date, shown in that header. */
-  dayTotal: number;
+  grouped: boolean;
+  dayGroup: import("@/lib/ledger-data").LedgerDayGroup | undefined;
   visibleColumns: ReadonlySet<string>;
   excludedDuplicate: boolean;
   note: string | null;
@@ -391,8 +476,10 @@ interface LedgerTableRowProps {
  */
 function LedgerTableRow({
   row,
+  zebraBand,
   isNewDay,
-  dayTotal,
+  grouped,
+  dayGroup,
   visibleColumns,
   excludedDuplicate,
   note,
@@ -405,26 +492,49 @@ function LedgerTableRow({
   const hasAnnotations = Boolean(note) || tags.length > 0 || splits.length > 0;
   const merchant = row.merchant || "Unknown";
   const currency = row.iso_currency_code ?? "USD";
-  const isMoneyIn = row.amount < 0;
+  const isMoneyIn = row.amount < 0 && !roundsToZero(row.amount);
+  const showsAmount = !roundsToZero(row.amount);
+  const amountSign = isMoneyIn ? "+" : "-";
+  const amountDisplay = showsAmount
+    ? `${amountSign}${formatCurrency(Math.abs(row.amount), currency)}`
+    : formatCurrency(0, currency);
 
   return (
     <Fragment>
       {isNewDay && (
         <tr className="border-b border-panel-border bg-panel/60">
-          <td colSpan={columnCount} className="px-4 py-1.5">
-            <div className="flex items-center justify-between gap-3 text-xs font-semibold text-muted">
-              <span>{formatDate(row.date)}</span>
-              <span data-money className="font-normal">
-                {dayTotal < 0 ? "+" : "-"}
-                {formatCurrency(Math.abs(dayTotal))} net
+          <th
+            scope="row"
+            colSpan={columnCount - 2}
+            className="px-4 py-1.5 text-left font-mono text-xs font-semibold text-muted"
+          >
+            {formatDate(row.date)}
+          </th>
+          <td className="px-4 py-1.5 text-right text-xs font-normal text-muted">
+            {dayGroup?.showNet && (
+              <span
+                data-money
+                style={dayGroup.net < 0 ? { color: "var(--viz-pos)" } : undefined}
+              >
+                {roundsToZero(dayGroup.net)
+                  ? formatCurrency(0)
+                  : `${ledgerNetPrefix(dayGroup.net)}${formatCurrency(Math.abs(dayGroup.net))}`}{" "}
+                net
               </span>
-            </div>
+            )}
           </td>
+          <td />
         </tr>
       )}
-      <tr className="border-b border-panel-border last:border-0 hover:bg-panel-hover">
-        <td className="whitespace-nowrap px-4 py-3 align-top text-muted">
-          {formatDate(row.date)}
+      <tr
+        className={`border-b border-panel-border last:border-0 hover:bg-panel-hover${
+          zebraBand % 2 === 1 ? " bg-panel-2" : ""
+        }`}
+      >
+        <td className="whitespace-nowrap px-4 py-3 align-top text-muted font-mono">
+          <span className={grouped && !isNewDay ? "sr-only" : undefined}>
+            {formatDate(row.date)}
+          </span>
         </td>
         <td className="px-4 py-3 align-top">
           <div className="flex items-start gap-2.5">
@@ -470,14 +580,10 @@ function LedgerTableRow({
         )}
         <td
           data-money
-          className={
-            isMoneyIn
-              ? "whitespace-nowrap px-4 py-3 text-right align-top font-semibold text-success"
-              : "whitespace-nowrap px-4 py-3 text-right align-top font-semibold text-foreground"
-          }
+          className="whitespace-nowrap px-4 py-3 text-right align-top font-semibold"
+          style={isMoneyIn ? { color: "var(--viz-pos)" } : undefined}
         >
-          {isMoneyIn ? "+" : "-"}
-          {formatCurrency(Math.abs(row.amount), currency)}
+          {amountDisplay}
         </td>
         <td className="px-2 py-3 text-right align-top">
           <TransactionEditor
@@ -541,18 +647,14 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   const manualAccounts = manualAccountsResult.data ?? [];
   const merchantRules = merchantRulesResult.data ?? [];
   const goalRows = goalRowsResult.data ?? [];
-  const setupErrors = [
+  const setupResults = [
     savedViewsResult.error,
     accountsResult.error,
     manualAccountsResult.error,
     merchantRulesResult.error,
     goalRowsResult.error,
-  ].filter(Boolean);
-  let ledgerError = "";
-  if (setupErrors.length > 0) {
-    console.error("Transaction setup query failed", setupErrors.map((error) => error?.code ?? "unknown"));
-    ledgerError = "We couldn't load your transaction controls. Try again.";
-  }
+  ].map((error) => ({ error }));
+  let ledgerError = transactionSetupError(setupResults);
 
   const rulesList = (merchantRules ?? []).map((r) => ({
     matchType: r.match_type as "merchant" | "keyword" | "account",
@@ -619,9 +721,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   // caller's own so their categories are never rewritten by someone else's.
   const rowDetails = await loadLedgerRowDetails(supabase, ownerId, rows.map((row) => row.id));
   const { annById, splitsById, excludedDuplicateIds } = rowDetails;
-  if (rowDetails.failed) {
-    ledgerError = "We couldn't load transaction details. Refresh the page to try again.";
-  }
+  ledgerError = transactionDetailsError(ledgerError, rowDetails.failed);
 
   // Category suggestions for the split editor: categories seen on this page
   // plus any already used in splits.
@@ -634,8 +734,13 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
 
   // Day-group headers: rows arrive sorted by date desc, so a signed total per
   // date is all a header needs.
-  const dayTotals = buildDayTotals(rows, excludedDuplicateIds);
   const showDayGroups = shouldShowLedgerDayGroups(state.sort);
+  const dayGroups = buildLedgerDayGroups(rows, {
+    allRows: ledgerRows.allRowsForGrouping ?? undefined,
+    incompleteDates: ledgerRows.incompleteDates,
+    excludedIds: excludedDuplicateIds,
+  });
+  const zebraBands = ledgerZebraBands(rows, showDayGroups);
 
   const cardRows: LedgerCardRow[] = rows.map((t) => {
     const ann = annById.get(t.id);
@@ -741,12 +846,15 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
               }
             />
             <div className="sm:hidden">
-              <MobileLedgerList rows={cardRows} />
+              <MobileLedgerList
+                rows={cardRows}
+                dayGroups={showDayGroups ? dayGroups : null}
+              />
             </div>
             <div className="hidden overflow-x-auto sm:block">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 z-10 bg-panel-2">
-                  <tr className="border-b border-panel-border text-left text-xs uppercase tracking-wider text-muted">
+                  <tr className="border-b border-panel-border text-left text-xs uppercase tracking-wider text-muted font-mono">
                     <th className="px-4 py-3 font-semibold">Date</th>
                     <th className="px-4 py-3 font-semibold">Merchant</th>
                     {visibleColumns.has("category") && (
@@ -766,8 +874,10 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                     <LedgerTableRow
                       key={t.id}
                       row={t}
+                      zebraBand={zebraBands[index]!}
                       isNewDay={showDayGroups && (index === 0 || rows[index - 1]!.date !== t.date)}
-                      dayTotal={dayTotals.get(t.date) ?? 0}
+                      grouped={showDayGroups}
+                      dayGroup={dayGroups.get(t.date)}
                       visibleColumns={visibleColumns}
                       excludedDuplicate={excludedDuplicateIds.has(t.id)}
                       note={annById.get(t.id)?.note ?? null}

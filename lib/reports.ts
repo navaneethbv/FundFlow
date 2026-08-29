@@ -312,11 +312,20 @@ export function summarizeTransactions(
  * payload from a future schema is rejected rather than partially understood,
  * because silently dropping a filter would show the user a different row set
  * than the one they saved under that name.
+ *
+ * v2 adds `sort` / `direction`. A v1 row (no sort fields) is still accepted
+ * and migrated to the date-defaults on read, so a report saved before sorting
+ * existed keeps loading with its original row order.
  */
-export const REPORT_FILTERS_VERSION = 1 as const;
+export const REPORT_FILTERS_VERSION = 2 as const;
 
 export type ReportTab = "cash_flow" | "spending" | "income";
 export type ReportMode = "breakdown" | "trends";
+export type ReportSort = "date" | "merchant" | "amount";
+export type ReportDirection = "asc" | "desc";
+
+const REPORT_SORTS: readonly ReportSort[] = ["date", "merchant", "amount"];
+const REPORT_DIRECTIONS: readonly ReportDirection[] = ["asc", "desc"];
 
 export interface ReportFilters {
   version: typeof REPORT_FILTERS_VERSION;
@@ -333,6 +342,15 @@ export interface ReportFilters {
   merchants: string[];
   categories: string[];
   excludePending: boolean;
+  /**
+   * The transaction table's row order. `date` is the only sort where day-group
+   * headers stay semantically correct; `merchant` and `amount` disable them.
+   * `amount` sorts by the signed amount (positive = money out), so descending
+   * means largest money out first and ascending means largest money in first.
+   */
+  sort: ReportSort;
+  /** "desc" is the default, matching the register's newest-first date order. */
+  direction: ReportDirection;
 }
 
 export const REPORT_TABS: readonly ReportTab[] = ["cash_flow", "spending", "income"];
@@ -382,12 +400,30 @@ function oneOf<T extends string>(
     : null;
 }
 
+/**
+ * v2 requires an explicit `sort` + `direction`; a v1 row (saved before sorting
+ * existed) migrates by defaulting them. Returns null only for a v2 payload
+ * that is missing them, so `parseReportFilters` stays a flat guard sequence.
+ */
+function parseSortFields(
+  raw: Record<string, unknown>,
+): { sort: ReportSort; direction: ReportDirection } | null {
+  const sort = oneOf(raw.sort, REPORT_SORTS);
+  const direction = oneOf(raw.direction, REPORT_DIRECTIONS);
+  if (raw.version === REPORT_FILTERS_VERSION && (!sort || !direction)) {
+    return null;
+  }
+  return { sort: sort ?? "date", direction: direction ?? "desc" };
+}
+
 export function parseReportFilters(input: unknown): ReportFilters | null {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
     return null;
   }
   const raw = input as Record<string, unknown>;
-  if (raw.version !== REPORT_FILTERS_VERSION) return null;
+  // v1 rows carry no sort fields; accept and default them (migration), reject
+  // anything from a future schema.
+  if (raw.version !== 1 && raw.version !== REPORT_FILTERS_VERSION) return null;
   if (!isIsoDate(raw.start) || !isIsoDate(raw.end)) return null;
   if (raw.start > raw.end) return null;
 
@@ -411,6 +447,9 @@ export function parseReportFilters(input: unknown): ReportFilters | null {
   const categories = parseStringList(raw.categories);
   if (!accounts || !merchants || !categories) return null;
 
+  const sortFields = parseSortFields(raw);
+  if (!sortFields) return null;
+
   return {
     version: REPORT_FILTERS_VERSION,
     start: raw.start,
@@ -423,7 +462,47 @@ export function parseReportFilters(input: unknown): ReportFilters | null {
     merchants,
     categories,
     excludePending: raw.excludePending,
+    sort: sortFields.sort,
+    direction: sortFields.direction,
   };
+}
+
+/**
+ * Applies the requested sort after projection and filtering but before
+ * pagination. Every comparator ends in the unique transaction id, so two rows
+ * can never swap pages or produce a gap when the sort key ties — the same
+ * stability rule the ledger's own chunked reads use. Descending reverses the
+ * whole (primary, date, id) tuple so ascending and descending are exact
+ * inverses.
+ */
+export function applyReportSort(
+  txns: CanonicalFinanceTransaction[],
+  filters: ReportFilters,
+): CanonicalFinanceTransaction[] {
+  const dir = filters.direction === "asc" ? 1 : -1;
+  const compareDateId = (a: CanonicalFinanceTransaction, b: CanonicalFinanceTransaction): number => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    return a.id.localeCompare(b.id);
+  };
+  const sorted = [...txns];
+  if (filters.sort === "merchant") {
+    sorted.sort((a, b) => {
+      const merchant = a.merchant.localeCompare(b.merchant);
+      return merchant !== 0 ? dir * merchant : dir * compareDateId(a, b);
+    });
+    return sorted;
+  }
+  if (filters.sort === "amount") {
+    sorted.sort((a, b) => {
+      if (a.signedAmount !== b.signedAmount) {
+        return dir * (a.signedAmount < b.signedAmount ? -1 : 1);
+      }
+      return dir * compareDateId(a, b);
+    });
+    return sorted;
+  }
+  sorted.sort((a, b) => dir * compareDateId(a, b));
+  return sorted;
 }
 
 /**
@@ -471,6 +550,8 @@ export function reportFiltersToSearchParams(
     pending: filters.excludePending ? "exclude" : "include",
   });
   if (filters.scope) params.set("scope", filters.scope);
+  if (filters.sort) params.set("sort", filters.sort);
+  if (filters.direction) params.set("dir", filters.direction);
   for (const account of filters.accounts) params.append("account", account);
   for (const merchant of filters.merchants) params.append("merchant", merchant);
   for (const category of filters.categories) params.append("category", category);
@@ -517,6 +598,10 @@ export function reportFiltersFromSearchParams(
     merchants: listValue(params.merchant),
     categories: listValue(params.category),
     excludePending: firstSearchParam(params.pending) === "exclude",
+    sort: oneOf(firstSearchParam(params.sort), REPORT_SORTS) ?? fallback.sort,
+    direction:
+      oneOf(firstSearchParam(params.dir), REPORT_DIRECTIONS) ??
+      fallback.direction,
   };
 }
 
@@ -548,5 +633,7 @@ export function defaultReportFilters(month: string): ReportFilters {
     merchants: [],
     categories: [],
     excludePending: false,
+    sort: "date",
+    direction: "desc",
   };
 }

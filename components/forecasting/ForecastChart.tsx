@@ -27,6 +27,14 @@ export default function ForecastChart({
 }: Readonly<{ points: ForecastPoint[]; currentNetWorth: number }>) {
   if (points.length === 0) return null;
 
+  const scenariosAreDegenerate = points.every(
+    (point) =>
+      point.conservative === point.base && point.base === point.optimistic,
+  );
+  const visibleSeries = scenariosAreDegenerate
+    ? SERIES.filter((series) => series.key === "base")
+    : SERIES;
+
   const allValues = [currentNetWorth, ...points.flatMap((p) => [p.conservative, p.base, p.optimistic])];
   const maxValue = Math.max(...allValues, 0);
   const minValue = Math.min(...allValues, 0);
@@ -42,7 +50,7 @@ export default function ForecastChart({
   return (
     <div>
       <div className="mb-2 flex flex-wrap gap-4 text-xs font-semibold text-muted">
-        {SERIES.map((s) => (
+        {visibleSeries.map((s) => (
           <span key={s.key} className="flex items-center gap-1.5">
             <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} aria-hidden />
             {s.label}
@@ -61,7 +69,7 @@ export default function ForecastChart({
             </g>
           );
         })}
-        {SERIES.map((s) => {
+        {visibleSeries.map((s) => {
           const pts = points.map((p, i) => ({ x: xFor(i + 1), y: yFor(p[s.key]) }));
           return (
             <path
@@ -77,28 +85,37 @@ export default function ForecastChart({
           );
         })}
       </svg>
-      {/* Table twin */}
-      <table className="sr-only">
-        <caption>Net worth projection by month and scenario</caption>
-        <thead>
-          <tr>
-            <th>Month</th>
-            <th>Conservative</th>
-            <th>Base</th>
-            <th>Optimistic</th>
-          </tr>
-        </thead>
-        <tbody>
-          {points.map((p) => (
-            <tr key={p.month}>
-              <td>{p.month}</td>
-              <td data-money>{formatCurrency(p.conservative)}</td>
-              <td data-money>{formatCurrency(p.base)}</td>
-              <td data-money>{formatCurrency(p.optimistic)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* Table twin. `sr-only` goes on a normal wrapper div, never directly on
+          the table: an absolutely-positioned table's column layout can still
+          widen the document, and Tailwind's sr-only clip does not always
+          contain it (the Optimistic column leaked a 399px document at 390px).
+          The wrapper clips it, and the inner overflow-x:auto constrains long
+          values inside the hidden representation. */}
+      <div className="sr-only">
+        <div className="overflow-x-auto">
+          <table className="min-w-full">
+            <caption>Net worth projection by month and scenario</caption>
+            <thead>
+              <tr>
+                <th>Month</th>
+                {!scenariosAreDegenerate && <th>Conservative</th>}
+                <th>Base</th>
+                {!scenariosAreDegenerate && <th>Optimistic</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {points.map((p) => (
+                <tr key={p.month}>
+                  <td>{p.month}</td>
+                  {!scenariosAreDegenerate && <td data-money>{formatCurrency(p.conservative)}</td>}
+                  <td data-money>{formatCurrency(p.base)}</td>
+                  {!scenariosAreDegenerate && <td data-money>{formatCurrency(p.optimistic)}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

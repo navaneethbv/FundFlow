@@ -5,11 +5,50 @@
  */
 export const UNKNOWN_CURRENCY = "Unknown currency";
 
+/**
+ * True when `value` renders as `0.00` at the display precision — the single
+ * shared rule that stops `-0`, `0.004`, and `-0.004` from wearing a direction
+ * sign or colour they do not have.
+ *
+ * Rounding matches Intl's half-away-from-zero default: `0.005` and `-0.005`
+ * round to one cent and keep their sign and direction, while anything whose
+ * absolute scaled value is below half a cent is a display zero.
+ */
+export function roundsToZero(
+  value: number | null | undefined,
+  decimals = 2,
+): boolean {
+  const number = value ?? 0;
+  const scale = 10 ** decimals;
+  return Math.floor(Math.abs(number * scale) + 0.5) === 0;
+}
+
+/**
+ * Sign marker to place before a `formatCurrency` output for a net delta where
+ * money in is the positive direction (net-worth change, monthly savings):
+ * `"+"` for a gain, `""` for a loss (formatCurrency prints its own minus) or a
+ * display zero.
+ */
+export function inflowMarker(amount: number): "" | "+" {
+  return !roundsToZero(amount) && amount > 0 ? "+" : "";
+}
+
+/**
+ * Direction colour for a net delta where money in is the positive direction:
+ * the gain hue, the loss hue, or no colour at all for a display zero.
+ */
+export function gainLossColor(amount: number): string | undefined {
+  if (roundsToZero(amount)) return undefined;
+  return amount >= 0 ? "var(--viz-pos)" : "var(--viz-neg)";
+}
+
 export function formatCurrency(
   amount: number | null | undefined,
   currency = "USD",
 ): string {
-  const value = amount ?? 0;
+  // A value that rounds to zero at display precision is a neutral zero, never
+  // a signed `-$0.00` — this is the one normalization every surface inherits.
+  const value = roundsToZero(amount) ? 0 : (amount ?? 0);
   if (currency === UNKNOWN_CURRENCY) {
     return new Intl.NumberFormat("en-US", {
       minimumFractionDigits: 2,

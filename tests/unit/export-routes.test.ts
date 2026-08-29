@@ -5,6 +5,7 @@ const mockErrorResponse = vi.fn<(...args: unknown[]) => unknown>(() => new Respo
 vi.mock("@/lib/http", () => ({
   requireUser: () => mockRequireUser(),
   errorResponse: (...args: unknown[]) => mockErrorResponse(...args),
+  badRequest: (message: string) => new Response(message, { status: 400 }),
 }));
 
 const mockFetchPrivacySafeRows = vi.fn<(...args: unknown[]) => unknown>();
@@ -318,8 +319,43 @@ describe("Export API Routes", () => {
 
   describe("GET /api/export/report", () => {
     const request = new Request(
-      "http://localhost/api/export/report",
+      "http://localhost/api/export/report?month=2026-08",
     ) as NextRequest;
+
+    it("returns 400 for an invalid month parameter", async () => {
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+      const invalid = await reportGet(
+        new Request(
+          "http://localhost/api/export/report?month=2026-13",
+        ) as NextRequest,
+      );
+      expect(invalid.status).toBe(400);
+      expect(mockGetWeeklyReportData).not.toHaveBeenCalled();
+    });
+
+    it("falls back to the current week's report when no month is given", async () => {
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+      const selectMock = vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { timezone: "America/New_York" },
+          }),
+        }),
+      });
+      mockServiceClient.from.mockReturnValue({ select: selectMock });
+      mockGetWeeklyReportData.mockResolvedValue({ some: "data" });
+
+      const res = await reportGet(
+        new Request("http://localhost/api/export/report") as NextRequest,
+      );
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Content-Type")).toBe("application/pdf");
+      expect(mockGetWeeklyReportData).toHaveBeenCalledWith(
+        expect.anything(),
+        "u1",
+        expect.objectContaining({ kind: "weekly" }),
+      );
+    });
 
     it("returns 404 if no report data available", async () => {
       mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
@@ -337,7 +373,7 @@ describe("Export API Routes", () => {
       expect(res.status).toBe(404);
     });
 
-    it("returns pdf report and logs audit on success", async () => {
+    it("returns pdf report for the selected month and logs audit on success", async () => {
       mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
       const selectMock = vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
@@ -352,10 +388,23 @@ describe("Export API Routes", () => {
       const res = await reportGet(request);
       expect(res.status).toBe(200);
       expect(res.headers.get("Content-Type")).toBe("application/pdf");
+      expect(res.headers.get("Content-Disposition")).toContain(
+        'attachment; filename="fundflow-report-2026-08.pdf"',
+      );
+      expect(res.headers.get("Cache-Control")).toBe("no-store");
+      expect(mockGetWeeklyReportData).toHaveBeenCalledWith(
+        expect.anything(),
+        "u1",
+        expect.objectContaining({
+          kind: "monthly",
+          start: "2026-08-01",
+          end: "2026-08-31",
+        }),
+      );
       expect(mockWriteAudit).toHaveBeenCalledWith({
         userId: "u1",
         action: "data_export",
-        metadata: { format: "pdf_report" },
+        metadata: { format: "pdf_report", period: "2026-08" },
         ip: "127.0.0.1",
       });
     });

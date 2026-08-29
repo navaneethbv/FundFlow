@@ -2,23 +2,28 @@ import type { ForecastMilestone } from "@/lib/forecasting";
 import { formatCurrency } from "@/lib/format";
 
 const BADGE_COLOR_MAP: Record<string, string> = {
-  fire: "bg-amber-500/10 text-amber-500",
-  debt: "bg-rose-500/10 text-rose-500",
-  emergency: "bg-emerald-500/10 text-emerald-500",
+  // Solid semantic fills with foreground tokens: guaranteed AA on every card
+  // surface, unlike a tinted /10 background.
+  fire: "bg-danger text-danger-foreground",
+  debt: "bg-danger text-danger-foreground",
+  emergency: "bg-success text-success-foreground",
 };
 
 function getBadgeColor(type: string): string {
-  return BADGE_COLOR_MAP[type] ?? "bg-accent-strong/10 text-accent-strong";
+  return BADGE_COLOR_MAP[type] ?? "bg-accent/10 text-accent";
 }
 
 function getMilestoneCardClass(isReachedNow: boolean, isReachedFuture: boolean): string {
   if (isReachedNow) {
-    return "border-accent-strong/40 bg-accent-strong/5";
+    return "border-accent/40 bg-accent/5";
   }
   if (isReachedFuture) {
     return "border-panel-border bg-panel";
   }
-  return "border-panel-border/60 bg-panel/50 opacity-80";
+  // A dimmed future milestone is expressed with a quieter border and panel,
+  // never a whole-card opacity: opacity dims the text too, dropping every
+  // label and badge below WCAG AA.
+  return "border-panel-border/60 bg-panel-2/60";
 }
 
 export default function MilestonesPanel({
@@ -60,7 +65,7 @@ export default function MilestonesPanel({
                     {m.type}
                   </span>
                   {isReachedNow && (
-                    <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-500">
+                    <span className="inline-flex items-center gap-1 text-xs font-bold text-success">
                       ✓ Achieved
                     </span>
                   )}

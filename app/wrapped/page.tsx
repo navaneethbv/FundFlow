@@ -7,7 +7,8 @@ import MiniBars from "@/components/charts/MiniBars";
 import StatTile from "@/components/charts/StatTile";
 import BarList from "@/components/dashboard/BarList";
 import { LineChart } from "@/components/ui/icons";
-import { computeYearInMoney, type AnnualTxn } from "@/lib/annual";
+import { computeYearInMoneyFromProjection } from "@/lib/annual";
+import { loadCanonicalProjection } from "@/lib/finance-query";
 import { formatCurrency, formatMonth, titleCase } from "@/lib/format";
 import { formatDate } from "@/lib/format-date";
 import { createClient } from "@/lib/supabase/server";
@@ -20,7 +21,13 @@ interface PageProps {
 
 /**
  * Year in Money (8.1): an annual recap over the user's own ledger.
- * RLS-scoped reads, one bounded query, pure aggregation in lib/annual.ts.
+ *
+ * The read goes through the canonical projection loader, which pages with an
+ * explicit date + id order (Supabase ranges are inclusive and unordered ranges
+ * can duplicate or omit rows) and applies merchant rules, category overrides,
+ * refund netting, duplicate exclusion, and split expansion exactly like every
+ * other finance view. A year above the bounded ceiling reports `truncated`,
+ * and the page says so instead of presenting incomplete totals as facts.
  */
 export default async function WrappedPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
@@ -33,22 +40,17 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
     data: { user },
   } = await supabase.auth.getUser();
 
-  // "The user's own ledger" is now an explicit filter: RLS also exposes a
+  // "The user's own ledger" is an explicit owner scope: RLS also exposes a
   // household member's shared transactions, and this recap is personal.
-  const { data: rows } = await supabase
-    .from("transactions")
-    .select("date, amount, merchant_name, name, pfc_primary")
-    .eq("user_id", user?.id ?? "")
-    .gte("date", `${year}-01-01`)
-    .lt("date", `${Number(year) + 1}-01-01`);
-
-  const txns: AnnualTxn[] = (rows ?? []).map((row) => ({
-    date: row.date as string,
-    amount: Number(row.amount),
-    merchant: (row.merchant_name ?? row.name ?? "Unknown") as string,
-    category: row.pfc_primary as string | null,
-  }));
-  const recap = computeYearInMoney(txns, year);
+  const loaded = await loadCanonicalProjection(supabase, {
+    scope: { kind: "mine", ownerUserId: user?.id ?? "" },
+    window: {
+      start: `${year}-01-01`,
+      endExclusive: `${Number(year) + 1}-01-01`,
+    },
+  });
+  const recap = computeYearInMoneyFromProjection(loaded.transactions, year);
+  const truncated = loaded.truncated;
 
   const yearChips = Array.from({ length: 4 }, (_, i) => String(currentYear - i));
 
@@ -65,8 +67,8 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
                 aria-current={chip === year ? "true" : undefined}
                 className={
                   chip === year
-                    ? "inline-flex min-h-11 items-center rounded-field bg-accent-soft px-2.5 text-accent"
-                    : "inline-flex min-h-11 items-center rounded-field px-2.5 text-muted transition-colors hover:bg-panel-hover hover:text-foreground"
+                    ? "inline-flex min-h-11 items-center rounded-field bg-accent-soft px-2.5 text-accent font-mono"
+                    : "inline-flex min-h-11 items-center rounded-field px-2.5 text-muted transition-colors hover:bg-panel-hover hover:text-foreground font-mono"
                 }
               >
                 {chip}
@@ -75,6 +77,22 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
           </div>
         }
       />
+
+      {truncated && (
+        <div
+          data-truncated="true"
+          role="alert"
+          className="rounded-card border border-danger/30 bg-danger/[0.06] p-4"
+        >
+          <p className="text-sm font-semibold text-danger">
+            {year} reached its bounded row limit, so this recap is incomplete.
+          </p>
+          <p className="mt-1 text-sm text-muted">
+            The totals below cover only the loaded transactions, not the whole
+            year. Narrow the view or export for complete figures.
+          </p>
+        </div>
+      )}
 
       {!recap ? (
         <EmptyState
@@ -145,10 +163,10 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
               {recap.biggestMonth && (
                 <div className="rounded-field bg-panel-2 p-3">
                   <span className="block text-xs text-muted">Your biggest month</span>
-                  <span className="mt-1 block font-semibold">
+                  <span className="mt-1 block font-semibold font-mono">
                     {formatMonth(recap.biggestMonth.month)}
                   </span>
-                  <span className="metric-value text-sm">
+                  <span data-money className="metric-value text-sm">
                     {formatCurrency(recap.biggestMonth.spend)}
                   </span>
                 </div>
@@ -156,10 +174,10 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
               {recap.quietestMonth && (
                 <div className="rounded-field bg-panel-2 p-3">
                   <span className="block text-xs text-muted">Your quietest month</span>
-                  <span className="mt-1 block font-semibold">
+                  <span className="mt-1 block font-semibold font-mono">
                     {formatMonth(recap.quietestMonth.month)}
                   </span>
-                  <span className="metric-value text-sm">
+                  <span data-money className="metric-value text-sm">
                     {formatCurrency(recap.quietestMonth.spend)}
                   </span>
                 </div>
@@ -170,10 +188,10 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
                   <span className="mt-1 block truncate font-semibold">
                     {recap.largestPurchase.merchant}
                   </span>
-                  <span className="metric-value text-sm">
+                  <span data-money className="metric-value text-sm">
                     {formatCurrency(recap.largestPurchase.amount)}
                   </span>
-                  <span className="block text-xs text-muted">
+                  <span className="block text-xs text-muted font-mono">
                     {formatDate(recap.largestPurchase.date)}
                   </span>
                 </div>

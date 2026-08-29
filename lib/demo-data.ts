@@ -18,6 +18,20 @@ const MERCHANTS: Array<{ name: string; category: string; min: number; max: numbe
   { name: "Alpine Airlines", category: "TRAVEL", min: 180, max: 420 },
 ];
 
+/**
+ * Share of each month's purchases booked to checking rather than the card.
+ * Combined with the 68-92 monthly purchase range this keeps the depository
+ * account at 30-40 entries a month, which is the density the dashboard's
+ * Ledger Strip has to survive.
+ */
+const CHECKING_PURCHASE_SHARE = 0.4;
+
+/** Fixed date each month that carries a cluster of checking purchases. */
+const BUSY_DAY = "15";
+
+/** How many checking purchases are forced onto `BUSY_DAY`. */
+const BUSY_DAY_ENTRIES = 5;
+
 /** Small deterministic PRNG (mulberry32) so demos are reproducible. */
 function toInt32(value: number): number {
   const unsigned = ((Math.trunc(value) % 2 ** 32) + 2 ** 32) % 2 ** 32;
@@ -102,16 +116,30 @@ export function buildDemoDataset(input: {
       pending: false,
     });
 
-    // 18-30 card purchases spread across the month.
-    const purchaseCount = 18 + Math.floor(random() * 13);
+    // 68-92 purchases a month. `CHECKING_PURCHASE_SHARE` of them land on
+    // checking, which puts 30-40 entries a month on the depository account
+    // once payroll and rent are counted. That density matters: the Ledger
+    // Strip anchors to the depository account, so a fixture that gave it only
+    // payroll and rent meant every screenshot and visual baseline of that
+    // widget was taken at three entries, and a layout that fails at realistic
+    // volume looked correct everywhere it was reviewed.
+    const purchaseCount = 68 + Math.floor(random() * 25);
+    const checkingPurchases = Math.round(purchaseCount * CHECKING_PURCHASE_SHARE);
     for (let i = 0; i < purchaseCount; i++) {
       const merchant = MERCHANTS[Math.floor(random() * MERCHANTS.length)]!;
-      const day = String(1 + Math.floor(random() * 28)).padStart(2, "0");
+      // Drawn unconditionally so the random stream stays independent of the
+      // busy-day override below, keeping the dataset reproducible.
+      const randomDay = String(1 + Math.floor(random() * 28)).padStart(2, "0");
       const amount =
         Math.round((merchant.min + random() * (merchant.max - merchant.min)) * 100) / 100;
+      const onChecking = i < checkingPurchases;
+      // Pile the first few checking purchases onto one fixed date so same-day
+      // aggregation is exercised by a plain demo load, not only by hand-seeded
+      // data.
+      const day = onChecking && i < BUSY_DAY_ENTRIES ? BUSY_DAY : randomDay;
       transactions.push({
         plaid_transaction_id: `demo-txn-${ym}-${i}`,
-        accountIndex: 1,
+        accountIndex: onChecking ? 0 : 1,
         date: `${ym}-${day}`,
         amount,
         name: merchant.name,

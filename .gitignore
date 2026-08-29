@@ -15,6 +15,9 @@
 /test-results
 .playwright-mcp/
 
+# QA screenshot runs (throwaway, timestamped; regenerate with scripts/qa-large-data.mjs)
+/qa-shots/
+
 # next.js
 /.next/
 /out/

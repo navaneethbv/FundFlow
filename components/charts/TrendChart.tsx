@@ -33,7 +33,7 @@ export default function TrendChart({
   const allValues = series.flatMap((s) => s.values);
   const maxValue = Math.max(0, ...allValues);
   if (maxValue <= 0 || labels.length === 0) {
-    return <p className="text-sm opacity-60 py-4">No data yet.</p>;
+    return <p className="py-4 text-sm text-muted">No data yet.</p>;
   }
 
   const ticks = niceTicks(maxValue);
@@ -43,6 +43,15 @@ export default function TrendChart({
   const y = (v: number) => PAD.top + plotH - (v / yMax) * plotH;
 
   const pointsFor = (s: TrendSeries) => s.values.map((v, i) => ({ x: x(i), y: y(v) }));
+
+  // When any period links to a drill-down, the SVG must not be an atomic image
+  // (`role="img"`) containing focusable anchors — that is a nested-interactive
+  // violation. Without the role the links are exposed directly, each carrying
+  // an accurate name; the chart summary stays available through the visible
+  // legend and the "View data table" twin.
+  const hasLinks = (links ?? []).some(Boolean);
+  const svgRole = hasLinks ? undefined : "img";
+  const svgLabel = hasLinks ? undefined : "Trend chart";
 
   // Endpoint labels: nudge apart if two series converge at the right edge.
   const endLabelY = series.map((s) => y(s.values.at(-1) ?? 0));
@@ -69,7 +78,7 @@ export default function TrendChart({
         </div>
       )}
 
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="Trend chart">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role={svgRole} aria-label={svgLabel}>
         {ticks.map((t) => (
           <g key={t}>
             <line
@@ -195,7 +204,7 @@ export default function TrendChart({
         </summary>
         <table className="mt-2 text-xs w-full">
           <thead>
-            <tr className="text-left opacity-60">
+            <tr className="text-left text-muted">
               <th className="py-1 pr-2 font-medium">Period</th>
               {series.map((s) => (
                 <th key={s.name} className="py-1 pr-2 font-medium">

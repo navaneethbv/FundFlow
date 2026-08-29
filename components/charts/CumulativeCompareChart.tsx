@@ -44,7 +44,7 @@ export default function CumulativeCompareChart({
   valueFormatter?: (value: number) => string;
 }>) {
   if (days.length === 0) {
-    return <p className="py-4 text-sm opacity-60">No spending yet.</p>;
+    return <p className="py-4 text-sm text-muted">No spending yet.</p>;
   }
 
   const values = days.flatMap((row) =>
@@ -199,7 +199,7 @@ export default function CumulativeCompareChart({
             Cumulative spending by day for {monthLabel} and {previousMonthLabel}.
           </caption>
           <thead>
-            <tr className="text-left opacity-60">
+            <tr className="text-left text-muted">
               <th className="py-1 pr-2 font-medium">Day</th>
               <th className="py-1 pr-2 font-medium">{monthLabel}</th>
               <th className="py-1 pr-2 font-medium">{previousMonthLabel}</th>

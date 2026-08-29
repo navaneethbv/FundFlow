@@ -115,7 +115,7 @@ export default function AccountsFilters({
           )}
           <button
             type="submit"
-            className="min-h-11 self-end rounded-field bg-accent-strong px-4 py-2 text-sm font-semibold text-white focus-visible:outline-2"
+            className="min-h-11 self-end rounded-field bg-accent-strong px-4 py-2 text-sm font-semibold text-accent-strong-foreground focus-visible:outline-2"
           >
             Apply filters
           </button>

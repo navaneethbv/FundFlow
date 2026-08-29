@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, inflowMarker } from "@/lib/format";
 import {
   goalMonthlyPace,
   goalProgressPct,
@@ -123,8 +123,8 @@ function GoalRow({
       </div>
 
       <p className="mt-2 text-xs text-muted">
-        This month: {monthlyNet >= 0 ? "+" : "-"}
-        {formatCurrency(Math.abs(monthlyNet))} saved.{" "}
+        This month: {inflowMarker(monthlyNet)}
+        {formatCurrency(monthlyNet)} saved.{" "}
         {remainingAmount > 0
           ? `${formatCurrency(remainingAmount)} remaining${paceSuffix}.`
           : "This goal is fully funded."}

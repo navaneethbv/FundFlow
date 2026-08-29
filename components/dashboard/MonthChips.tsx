@@ -48,7 +48,7 @@ export default function MonthChips({
             className={cn(
               "flex min-h-11 shrink-0 items-center rounded-field border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2 sm:min-h-0",
               active
-                ? "border-accent bg-accent text-white"
+                ? "border-accent bg-accent text-accent-foreground"
                 : "border-panel-border bg-panel text-muted hover:text-foreground",
             )}
           >

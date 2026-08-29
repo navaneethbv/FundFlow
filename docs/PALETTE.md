@@ -64,3 +64,41 @@ Never extend it to make a re-step pass.
 `--viz-pos` and `--viz-neg` are the diverging pair.
 They do a different job on their own charts and are deliberately excluded from
 the categorical set.
+
+## Semantic text and control pairs
+
+`scripts/validate_palette.js` also enforces WCAG 1.4.3 normal-text contrast
+(≥ 4.5:1) for the app's shared semantic token pairs, so a token re-step that
+reintroduces a failing text combination fails the build the same way a bad
+`--viz-*` slot does.
+
+The 2026-08-28 accessibility sweep found the pre-change tokens under the floor
+in both themes: white text on the vivid orange `#ff6b2e` (2.83:1), light text
+on the dark-mode accent `#ff8a54` (2.06:1), and the light `--muted` gray on
+the pill surface (4.35:1). The tokens were corrected at the shared layer
+rather than per component:
+
+| Pair (light) | Before | After |
+|---|---|---|
+| `--accent` on `--panel` | 2.83:1 | 6.85:1 (`#9a3412`) |
+| `--accent` on `--accent-soft` | 2.70:1 | 5.82:1 |
+| `--accent-foreground` on `--accent-strong` | 2.83:1 | 6.37:1 (dark text on the vivid button) |
+| `--muted` on `--pill` | 4.35:1 | 5.18:1 |
+| `--success-foreground` on `--success` | 2.40:1 | 5.30:1 |
+| `--danger-foreground` on `--danger` | 3.99:1 | 5.28:1 |
+| `--viz-muted` on `--panel` | 3.57:1 | 5.15:1 |
+
+| Pair (dark) | After |
+|---|---|
+| `--accent` on `--panel` | 7.25:1 (`#ff8a54`) |
+| `--accent-foreground` on `--accent-strong` | 5.82:1 (dark text on `#ff6b2e`) |
+| `--muted` on `--panel` | 5.69:1 |
+| `--success-foreground` on `--success` | 7.11:1 |
+| `--danger-foreground` on `--danger` | 5.95:1 |
+| `--viz-muted` on `--panel` | 5.55:1 |
+
+The brand stays orange in both themes: the light accent deepened to a burnt
+orange (`#9a3412`) so it passes as text and as a fill, while the vivid
+`#ff6b2e` remains the button fill in both themes with a dark foreground
+(`--accent-foreground`) instead of white. Run `npm run validate:palette` after
+any token change; it now gates every pair above.
