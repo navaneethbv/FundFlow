@@ -172,7 +172,7 @@ describe("Monarch import conflicts, idempotency, and authorization", () => {
       return queryStub({ data: [] });
     });
 
-    const request = {
+    const selectedOnlyRequest = {
       json: () => Promise.resolve({ batch_id: "b1", account_id: "a1", approved_row_ids: ["row-1"] }),
     } as unknown as NextRequest;
 
@@ -186,8 +186,19 @@ describe("Monarch import conflicts, idempotency, and authorization", () => {
       throw new Error(`expected 409 got ${blocked.status}: ${JSON.stringify(b)}`);
     }
 
-    // With the row explicitly approved, the commit proceeds.
-    const approved = await commitPost(request);
+    // Selecting the row for import must not also approve overwriting a newer edit.
+    const selectedOnly = await commitPost(selectedOnlyRequest);
+    expect(selectedOnly.status).toBe(409);
+
+    // A separate explicit overwrite approval allows the commit to proceed.
+    const approved = await commitPost({
+      json: () => Promise.resolve({
+        batch_id: "b1",
+        account_id: "a1",
+        approved_row_ids: ["row-1"],
+        overwrite_annotation_row_ids: ["row-1"],
+      }),
+    } as unknown as NextRequest);
     if (approved.status !== 200) {
       const ab = await approved.json();
       throw new Error(`expected 200 got ${approved.status}: ${JSON.stringify(ab)}`);

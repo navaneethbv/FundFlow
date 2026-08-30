@@ -56,6 +56,19 @@ describe("transaction override route", () => {
     expect(bad.status).toBe(400);
   });
 
+  it("rejects invalid override field values instead of clearing them", async () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+    expect((await POST(jsonRequest({
+      transaction_id: id,
+      cash_flow_classification: "transfer",
+    }))).status).toBe(400);
+    expect((await POST(jsonRequest({
+      transaction_id: id,
+      display_category: 42,
+    }))).status).toBe(400);
+    expect(supabase.writtenTo("transaction_annotations")).toBeUndefined();
+  });
+
   it("returns 400 when the transaction is not owned by the caller", async () => {
     seeded({ transactions: { data: null } });
     const res = await POST(

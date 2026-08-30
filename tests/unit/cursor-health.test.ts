@@ -4,6 +4,7 @@ import {
   recordCursorAttempt,
   recordCursorSuccess,
   recordCursorFailure,
+  recordCursorPartialSuccess,
   type CursorHealthInput,
 } from "@/lib/cursor-health";
 import { clientStub } from "../fixtures/supabase-query";
@@ -193,7 +194,7 @@ describe("recordCursor* persistence", () => {
     expect(written.cursor_reset_detected_at).toBe("2026-08-29T11:00:00.000Z");
   });
 
-  it("does not flag incomplete history when the item synced with a cursor", async () => {
+  it("does not clear durable incomplete-history facts on a later failed run", async () => {
     const supabase = clientStub({});
     await recordCursorFailure(supabase as never, {
       userId: "user-1",
@@ -204,7 +205,23 @@ describe("recordCursor* persistence", () => {
     });
     const written = supabase.writtenTo("plaid_items") as Record<string, unknown>;
     expect(written.last_sync_completed_pages).toBe(false);
-    expect(written.initial_history_incomplete).toBe(false);
-    expect(written.cursor_reset_detected_at).toBeNull();
+    expect(written).not.toHaveProperty("initial_history_incomplete");
+    expect(written).not.toHaveProperty("cursor_reset_detected_at");
+  });
+
+  it("does not clear durable incomplete-history facts on a later partial success", async () => {
+    const supabase = clientStub({});
+    await recordCursorPartialSuccess(supabase as never, {
+      userId: "user-1",
+      itemDbId: "item-1",
+      startedWithoutCursor: false,
+      priorSuccess: true,
+      nowIso: "2026-08-29T11:00:00.000Z",
+    });
+    const written = supabase.writtenTo("plaid_items") as Record<string, unknown>;
+    expect(written.last_sync_completed_pages).toBe(false);
+    expect(written.last_sync_success_at).toBe("2026-08-29T11:00:00.000Z");
+    expect(written).not.toHaveProperty("initial_history_incomplete");
+    expect(written).not.toHaveProperty("cursor_reset_detected_at");
   });
 });

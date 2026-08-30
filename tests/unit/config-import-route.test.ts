@@ -82,6 +82,26 @@ describe("POST /api/import/config", () => {
     expect((await POST(jsonRequest({ kind: "budget" }))).status).toBe(400);
   });
 
+  it("rejects unknown modes and budget decisions before writing", async () => {
+    const supabase = clientStub({ budgets: { data: [] } });
+    mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase });
+    const badMode = await POST(jsonRequest({
+      kind: "budget",
+      text: MONARCH_BUDGETS,
+      mode: "applies",
+    }));
+    expect(badMode.status).toBe(400);
+
+    const badDecision = await POST(jsonRequest({
+      kind: "budget",
+      text: MONARCH_BUDGETS,
+      mode: "apply",
+      decisions: { Rent: "overwrite" },
+    }));
+    expect(badDecision.status).toBe(400);
+    expect(supabase.writtenTo("budgets")).toBeUndefined();
+  });
+
   it("rejects imports when the rate limit is exhausted or the request body is invalid", async () => {
     mockCheckRateLimit.mockResolvedValueOnce(false);
     expect((await POST(jsonRequest({ kind: "budget", text: MONARCH_BUDGETS }))).status).toBe(429);
@@ -167,6 +187,32 @@ describe("POST /api/import/config", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ ok: true, updated: 1 });
     expect(supabase.callsOn("budget_periods").some(({ method }) => method === "upsert")).toBe(true);
+  });
+
+  it("uses the case-insensitive matched budget id for replace-month", async () => {
+    const supabase = clientStub({
+      budgets: {
+        data: [{ id: "b-1", category: "Groceries", monthly_limit: 500, group_name: "flexible" }],
+      },
+      budget_periods: { data: [] },
+    });
+    mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase });
+    const res = await POST(jsonRequest({
+      kind: "budget",
+      text: JSON.stringify({
+        groups: [{ name: "Needs", type: "flexible", categories: [{ name: "groceries", amount: 650 }] }],
+      }),
+      mode: "apply",
+      decisions: { groceries: "replace-month" },
+    }));
+    expect(res.status).toBe(200);
+    expect(supabase.writtenTo("budget_periods")).toMatchObject({
+      budget_id: "b-1",
+      planned: 650,
+    });
+    expect(
+      supabase.callsOn("budgets").filter(({ method }) => method === "select"),
+    ).toHaveLength(1);
   });
 
   it("keeps the original name of a custom budget group when applying", async () => {
