@@ -45,6 +45,7 @@ vi.mock("@/lib/plaid-service", () => ({
 const mockBackfillItemTransactions = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/sync", () => ({
   backfillItemTransactions: (...args: unknown[]) => mockBackfillItemTransactions(...args),
+  ItemSyncInProgressError: class ItemSyncInProgressError extends Error {},
 }));
 
 import { POST } from "@/app/api/plaid/repair/route";
@@ -166,7 +167,17 @@ describe("POST /api/plaid/repair", () => {
       ok: false,
       status: "institution_login_required",
     });
-    expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-1", "error", null);
+    expect(mockSetItemStatus).not.toHaveBeenCalled();
+  });
+
+  it("returns 500 without marking the item broken for a transient readiness failure", async () => {
+    mockGetItem.mockResolvedValue(item);
+    mockItemGet.mockRejectedValue(new Error("network timeout"));
+
+    const res = await POST(jsonRequest({ itemId: "item-1" }));
+
+    expect(res.status).toBe(500);
+    expect(mockSetItemStatus).not.toHaveBeenCalled();
   });
 
   it("reports rate_limited with a 429", async () => {

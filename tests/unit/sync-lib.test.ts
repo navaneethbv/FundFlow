@@ -238,7 +238,7 @@ describe("lib/sync", () => {
       expect(mockUpdateItemCursor).not.toHaveBeenCalled();
     });
 
-    it("drops transactions whose account is unknown to the user", async () => {
+    it("refuses to advance the cursor when a transaction account is unknown", async () => {
       mockTransactionsSync.mockResolvedValueOnce({
         data: {
           added: [
@@ -261,11 +261,53 @@ describe("lib/sync", () => {
         throw new Error("Unexpected table");
       });
 
-      const res = await syncItemTransactions(dummyItem);
+      await expect(syncItemTransactions(dummyItem)).rejects.toThrow(
+        /unknown Plaid account/i,
+      );
+      expect(mockUpdateItemCursor).not.toHaveBeenCalled();
+      expect(mockSetItemStatus).not.toHaveBeenCalled();
+    });
 
-      expect(res).toEqual({ added: 1, modified: 0, removed: 0 });
-      expect(mockUpdateItemCursor).toHaveBeenCalledWith("user-1", "item-db-1", "cursor-next");
-      expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", null);
+    it("persists each successfully applied page before fetching the next", async () => {
+      mockTransactionsSync
+        .mockResolvedValueOnce({
+          data: {
+            added: [],
+            modified: [],
+            removed: [],
+            accounts: [],
+            next_cursor: "cursor-1",
+            has_more: true,
+          },
+        })
+        .mockResolvedValueOnce({
+          data: {
+            added: [],
+            modified: [],
+            removed: [],
+            accounts: [],
+            next_cursor: "cursor-2",
+            has_more: false,
+          },
+        });
+      mockServiceClient.from.mockImplementation(() => {
+        throw new Error("Unexpected table");
+      });
+
+      await syncItemTransactions(dummyItem);
+
+      expect(mockUpdateItemCursor).toHaveBeenNthCalledWith(
+        1,
+        "user-1",
+        "item-db-1",
+        "cursor-1",
+      );
+      expect(mockUpdateItemCursor).toHaveBeenNthCalledWith(
+        2,
+        "user-1",
+        "item-db-1",
+        "cursor-2",
+      );
     });
 
     it("falls back to defaults for alert thresholds and merchant names", async () => {

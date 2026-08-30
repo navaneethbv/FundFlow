@@ -40,6 +40,7 @@ describe("backfillItemTransactions (bounded repair backfill)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockTransactionsSync.mockReset();
+    mockServiceClient.rpc.mockResolvedValue({ data: true, error: null });
   });
 
   const dummyItem: PlaidItemRow = {
@@ -118,6 +119,23 @@ describe("backfillItemTransactions (bounded repair backfill)", () => {
     });
     expect(mockUpdateItemCursor).toHaveBeenCalledWith("user-1", "item-db-1", "cursor-2");
     expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", null);
+    expect(mockServiceClient.rpc).toHaveBeenCalledWith("claim_item_sync", {
+      p_item_id: "item-db-1",
+      p_stale_seconds: 300,
+    });
+    expect(mockServiceClient.rpc).toHaveBeenCalledWith("release_item_sync", {
+      p_item_id: "item-db-1",
+    });
+  });
+
+  it("does not call Plaid when another sync owns the item claim", async () => {
+    mockServiceClient.rpc.mockResolvedValueOnce({ data: false, error: null });
+
+    await expect(
+      backfillItemTransactions(dummyItem, { maxPages: 2 }),
+    ).rejects.toThrow(/already in progress/i);
+    expect(mockTransactionsSync).not.toHaveBeenCalled();
+    expect(mockUpdateItemCursor).not.toHaveBeenCalled();
   });
 
   it("reports completed when has_more is false inside the bound", async () => {
