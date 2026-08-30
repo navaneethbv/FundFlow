@@ -106,13 +106,24 @@ export async function syncItemTransactions(
       nowIso: new Date().toISOString(),
     }).catch((error) => logError("sync.cursor-attempt", error));
 
-    const result = await syncItemTransactionsInner(item, supabase);
-    await recordCursorSuccess(supabase, {
+    const outcome = await syncItemTransactionsInner(item, supabase);
+    const cursorRecord = {
       userId: item.user_id,
       itemDbId: item.id,
       nowIso: new Date().toISOString(),
-    }).catch((error) => logError("sync.cursor-success", error));
-    return result;
+    };
+    if (outcome.completed) {
+      await recordCursorSuccess(supabase, cursorRecord).catch((error) =>
+        logError("sync.cursor-success", error),
+      );
+    } else {
+      await recordCursorPartialSuccess(supabase, {
+        ...cursorRecord,
+        startedWithoutCursor: !item.sync_cursor,
+        priorSuccess: Boolean(item.last_sync_success_at),
+      }).catch((error) => logError("sync.cursor-partial", error));
+    }
+    return outcome.result;
   } catch (error) {
     await recordCursorFailure(supabase, {
       userId: item.user_id,
@@ -186,66 +197,46 @@ async function notifySyncedTransactions(
   }
 }
 
-async function syncItemTransactionsInner(
+interface TransactionSyncPage {
+  added: Transaction[];
+  modified: Transaction[];
+  removed: RemovedTransaction[];
+  accounts: AccountBase[];
+  next_cursor: string;
+  has_more: boolean;
+}
+
+async function applyTransactionPage(
   item: PlaidItemRow,
   supabase: ReturnType<typeof createServiceClient>,
+  data: TransactionSyncPage,
+  notify: boolean,
 ): Promise<SyncResult> {
-  const plaid = getPlaidClient();
-  const accessToken = await decryptItemTokenAndUpgrade(item);
-
-  let cursor = item.sync_cursor ?? undefined;
-  let hasMore = true;
-
-  const added: Transaction[] = [];
-  const modified: Transaction[] = [];
-  const removed: RemovedTransaction[] = [];
-  let latestAccounts: AccountBase[] = [];
-
-  while (hasMore) {
-    const response = await plaid.transactionsSync({
-      access_token: accessToken,
-      cursor,
-    });
-    const data = response.data;
-
-    added.push(...data.added);
-    modified.push(...data.modified);
-    removed.push(...data.removed);
-    // Plaid omits `accounts` on later pages; only take the page that has them
-    // so a multi-page sync can't finish with an empty array and silently stop
-    // refreshing balances.
-    if (data.accounts.length > 0) latestAccounts = data.accounts;
-
-    cursor = data.next_cursor;
-    hasMore = data.has_more;
-  }
-
-  // Refresh accounts (and balances) first so transactions can FK to them.
-  await upsertAccounts(item.user_id, item.id, latestAccounts);
+  await upsertAccounts(item.user_id, item.id, data.accounts);
   const accountMap = await getAccountIdMap(item.user_id);
-
-  const upsertRows = [...added, ...modified]
-    .map((txn) => {
-      const accountDbId = accountMap.get(txn.account_id);
-      return accountDbId
-        ? mapTransactionRow(item.user_id, accountDbId, txn)
-        : null;
-    })
-    .filter((row): row is NonNullable<typeof row> => row !== null);
-
+  const changed = [...data.added, ...data.modified];
+  const missingAccount = changed.find((txn) => !accountMap.has(txn.account_id));
+  if (missingAccount) {
+    throw new Error(
+      `Unknown Plaid account ${missingAccount.account_id}; cursor was not advanced`,
+    );
+  }
+  const upsertRows = changed.map((txn) =>
+    mapTransactionRow(item.user_id, accountMap.get(txn.account_id)!, txn),
+  );
   if (upsertRows.length > 0) {
     const { error } = await supabase
       .from("transactions")
       .upsert(upsertRows, { onConflict: "plaid_transaction_id" });
     if (error) throw error;
-
-    await notifySyncedTransactions(supabase, item.user_id, upsertRows);
+    if (notify) {
+      await notifySyncedTransactions(supabase, item.user_id, upsertRows);
+    }
   }
-
-  if (removed.length > 0) {
-    const removedIds = removed
-      .map((r) => r.transaction_id)
-      .filter((id): id is string => Boolean(id));
+  const removedIds = data.removed
+    .map((row) => row.transaction_id)
+    .filter((id): id is string => Boolean(id));
+  if (removedIds.length > 0) {
     const { error } = await supabase
       .from("transactions")
       .delete()
@@ -253,12 +244,47 @@ async function syncItemTransactionsInner(
       .in("plaid_transaction_id", removedIds);
     if (error) throw error;
   }
+  return {
+    added: data.added.length,
+    modified: data.modified.length,
+    removed: data.removed.length,
+  };
+}
 
-  // Persist cursor only after everything applied successfully.
-  if (cursor) await updateItemCursor(item.user_id, item.id, cursor);
+async function syncItemTransactionsInner(
+  item: PlaidItemRow,
+  supabase: ReturnType<typeof createServiceClient>,
+): Promise<{ result: SyncResult; completed: boolean }> {
+  const plaid = getPlaidClient();
+  const accessToken = await decryptItemTokenAndUpgrade(item);
+
+  let cursor = item.sync_cursor ?? undefined;
+  let hasMore = true;
+  let pagesCompleted = 0;
+  const result: SyncResult = { added: 0, modified: 0, removed: 0 };
+
+  while (hasMore && pagesCompleted < REPAIR_MAX_PAGES) {
+    const response = await plaid.transactionsSync({
+      access_token: accessToken,
+      cursor,
+    });
+    const data = response.data as TransactionSyncPage;
+    const pageResult = await applyTransactionPage(item, supabase, data, true);
+    result.added += pageResult.added;
+    result.modified += pageResult.modified;
+    result.removed += pageResult.removed;
+    if (!data.next_cursor && data.has_more) {
+      throw new Error("Plaid returned an empty next cursor");
+    }
+    if (data.next_cursor) {
+      await updateItemCursor(item.user_id, item.id, data.next_cursor);
+      cursor = data.next_cursor;
+    }
+    hasMore = data.has_more;
+    pagesCompleted += 1;
+  }
   await setItemStatus(item.user_id, item.id, "active", null);
-
-  return { added: added.length, modified: modified.length, removed: removed.length };
+  return { result, completed: !hasMore };
 }
 
 /** Pull the Plaid error code out of an Axios-shaped error, if there is one. */
@@ -283,6 +309,13 @@ export interface RepairBackfillResult {
   removed: number;
 }
 
+export class ItemSyncInProgressError extends Error {
+  constructor() {
+    super("An item sync is already in progress");
+    this.name = "ItemSyncInProgressError";
+  }
+}
+
 /**
  * Bounded historical reconciliation for the authenticated repair action.
  *
@@ -301,6 +334,30 @@ export async function backfillItemTransactions(
   options?: RepairBackfillOptions,
 ): Promise<RepairBackfillResult> {
   const supabase = createServiceClient();
+  const { data: claimed, error: claimError } = await supabase.rpc(
+    "claim_item_sync",
+    {
+      p_item_id: item.id,
+      p_stale_seconds: STALE_SYNC_SECONDS,
+    },
+  );
+  if (claimError) throw claimError;
+  if (claimed !== true) throw new ItemSyncInProgressError();
+  try {
+    return await backfillClaimedItemTransactions(item, options, supabase);
+  } finally {
+    const { error } = await supabase.rpc("release_item_sync", {
+      p_item_id: item.id,
+    });
+    if (error) logError("repair.release", error);
+  }
+}
+
+async function backfillClaimedItemTransactions(
+  item: PlaidItemRow,
+  options: RepairBackfillOptions | undefined,
+  supabase: ReturnType<typeof createServiceClient>,
+): Promise<RepairBackfillResult> {
   const plaid = getPlaidClient();
   const accessToken = await decryptItemTokenAndUpgrade(item);
 
@@ -311,10 +368,7 @@ export async function backfillItemTransactions(
   }).catch((error) => logError("repair.cursor-attempt", error));
 
   let cursor = item.sync_cursor ?? undefined;
-  const added: Transaction[] = [];
-  const modified: Transaction[] = [];
-  const removed: RemovedTransaction[] = [];
-  let latestAccounts: AccountBase[] = [];
+  const result: SyncResult = { added: 0, modified: 0, removed: 0 };
   let pagesCompleted = 0;
   let hasMore = true;
   const maxPages = options?.maxPages ?? REPAIR_MAX_PAGES;
@@ -324,49 +378,22 @@ export async function backfillItemTransactions(
       access_token: accessToken,
       cursor,
     });
-    const data = response.data;
-    added.push(...data.added);
-    modified.push(...data.modified);
-    removed.push(...data.removed);
-    if (data.accounts.length > 0) latestAccounts = data.accounts;
-    cursor = data.next_cursor;
+    const data = response.data as TransactionSyncPage;
+    const pageResult = await applyTransactionPage(item, supabase, data, false);
+    result.added += pageResult.added;
+    result.modified += pageResult.modified;
+    result.removed += pageResult.removed;
+    if (!data.next_cursor && data.has_more) {
+      throw new Error("Plaid returned an empty next cursor");
+    }
+    if (data.next_cursor) {
+      await updateItemCursor(item.user_id, item.id, data.next_cursor);
+      cursor = data.next_cursor;
+    }
     hasMore = data.has_more;
     pagesCompleted += 1;
   }
   const completed = !hasMore;
-
-  await upsertAccounts(item.user_id, item.id, latestAccounts);
-  const accountMap = await getAccountIdMap(item.user_id);
-
-  const upsertRows = [...added, ...modified]
-    .map((txn) => {
-      const accountDbId = accountMap.get(txn.account_id);
-      return accountDbId
-        ? mapTransactionRow(item.user_id, accountDbId, txn)
-        : null;
-    })
-    .filter((row): row is NonNullable<typeof row> => row !== null);
-
-  if (upsertRows.length > 0) {
-    const { error } = await supabase
-      .from("transactions")
-      .upsert(upsertRows, { onConflict: "plaid_transaction_id" });
-    if (error) throw error;
-  }
-
-  if (removed.length > 0) {
-    const removedIds = removed
-      .map((r) => r.transaction_id)
-      .filter((id): id is string => Boolean(id));
-    const { error } = await supabase
-      .from("transactions")
-      .delete()
-      .eq("user_id", item.user_id)
-      .in("plaid_transaction_id", removedIds);
-    if (error) throw error;
-  }
-
-  if (cursor) await updateItemCursor(item.user_id, item.id, cursor);
   await setItemStatus(item.user_id, item.id, "active", null);
 
   const nowIso = new Date().toISOString();
@@ -390,9 +417,9 @@ export async function backfillItemTransactions(
     pagesCompleted,
     maxPages,
     completed,
-    added: added.length,
-    modified: modified.length,
-    removed: removed.length,
+    added: result.added,
+    modified: result.modified,
+    removed: result.removed,
   };
 }
 

@@ -9,7 +9,10 @@ import {
   getItem,
   setItemStatus,
 } from "@/lib/plaid-service";
-import { backfillItemTransactions } from "@/lib/sync";
+import {
+  backfillItemTransactions,
+  ItemSyncInProgressError,
+} from "@/lib/sync";
 import {
   classifyRepairError,
   repairMessage,
@@ -28,7 +31,10 @@ function providerOutcome(kind: RepairFailureKind) {
       { status: 429 },
     );
   }
-  return NextResponse.json({ ok: false, status: kind, message }, { status: 200 });
+  return NextResponse.json(
+    { ok: false, status: kind, message },
+    { status: kind === "generic_failure" ? 500 : 200 },
+  );
 }
 
 /**
@@ -93,9 +99,14 @@ export async function POST(request: NextRequest) {
         ?.response;
       const rawCode = errResponse?.data?.error_code;
       const safeCode = safeErrorCode(typeof rawCode === "string" ? rawCode : null);
-      await setItemStatus(item.user_id, item.id, "error", safeCode).catch(
-        (statusError) => logError("plaid.repair.status", statusError),
-      );
+      if (
+        safeCode &&
+        (kind === "consent_required" || kind === "institution_login_required")
+      ) {
+        await setItemStatus(item.user_id, item.id, "error", safeCode).catch(
+          (statusError) => logError("plaid.repair.status", statusError),
+        );
+      }
       return providerOutcome(kind);
     }
 
@@ -122,6 +133,16 @@ export async function POST(request: NextRequest) {
       ...result,
     });
   } catch (error) {
+    if (error instanceof ItemSyncInProgressError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          status: "sync_in_progress",
+          message: "A sync is already running for this institution. Try again shortly.",
+        },
+        { status: 409 },
+      );
+    }
     const kind = classifyRepairError(error);
     if (kind === "generic_failure") return errorResponse("plaid.repair", error);
     return providerOutcome(kind);
