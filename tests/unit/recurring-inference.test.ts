@@ -294,6 +294,59 @@ describe("recurring inference reconciliation", () => {
     expect(payload.p_payload.candidates[0]).toMatchObject({ expected_amount: 18, transaction_ids: ["txn-1", "txn-2", "txn-3"] });
   });
 
+  it("detects imported connected-account rows while excluding canonical transfers, refunds, and manual-only rows", async () => {
+    const imported = [
+      { id: "import-1::0", sourceTransactionId: "import-1", date: "2026-05-15", signedAmount: 15, flow: "expense" as const, merchant: "Imported Subscription", groupKey: "ENTERTAINMENT", categoryKey: "STREAMING", accountId: "acct-1", manualAccountId: null, pending: false, source: "import" as const },
+      { id: "import-1::1", sourceTransactionId: "import-1", date: "2026-05-15", signedAmount: 0, flow: "expense" as const, merchant: "Imported Subscription", groupKey: "ENTERTAINMENT", categoryKey: "STREAMING", accountId: "acct-1", manualAccountId: null, pending: false, source: "import" as const },
+      { id: "import-2", sourceTransactionId: "import-2", date: "2026-06-15", signedAmount: 15, flow: "expense" as const, merchant: "Imported Subscription", groupKey: "ENTERTAINMENT", categoryKey: "STREAMING", accountId: "acct-1", manualAccountId: null, pending: false, source: "import" as const },
+      { id: "import-3", sourceTransactionId: "import-3", date: "2026-07-15", signedAmount: 15, flow: "expense" as const, merchant: "Imported Subscription", groupKey: "ENTERTAINMENT", categoryKey: "STREAMING", accountId: "acct-1", manualAccountId: null, pending: false, source: "import" as const },
+      { id: "transfer-1", sourceTransactionId: "transfer-1", date: "2026-05-15", signedAmount: 15, flow: "transfer" as const, merchant: "Imported Subscription", groupKey: "TRANSFER_OUT", categoryKey: "TRANSFER_OUT", accountId: "acct-1", manualAccountId: null, pending: false, source: "plaid" as const },
+      { id: "refund-1", sourceTransactionId: "refund-1", date: "2026-06-15", signedAmount: -15, flow: "transfer" as const, merchant: "Imported Subscription", groupKey: "ENTERTAINMENT", categoryKey: "STREAMING", accountId: "acct-1", manualAccountId: null, pending: false, source: "plaid" as const },
+      { id: "manual-1", sourceTransactionId: "manual-1", date: "2026-07-15", signedAmount: 15, flow: "expense" as const, merchant: "Imported Subscription", groupKey: "ENTERTAINMENT", categoryKey: "STREAMING", accountId: null, manualAccountId: "manual-acct-1", pending: false, source: "manual" as const },
+    ];
+    mockLoadCanonicalProjection.mockResolvedValue({
+      transactions: imported,
+      currencyByAccountId: new Map([["acct-1", "USD"]]),
+      truncated: false,
+    });
+    mockServiceClient = makeQueryClient({
+      accounts: [{ id: "acct-1", user_id: "user-1", plaid_item_id: "item-1" }],
+      transactions: [
+        ["import-1", "2026-05-15"],
+        ["import-2", "2026-06-15"],
+        ["import-3", "2026-07-15"],
+        ["transfer-1", "2026-05-15"],
+        ["refund-1", "2026-06-15"],
+        ["manual-1", "2026-07-15"],
+        ["absent-duplicate", "2026-07-15"],
+      ].map(([id, date]) => ({
+        id,
+        user_id: "user-1",
+        account_id: "acct-1",
+        date,
+        authorized_date: null,
+        amount: 15,
+        merchant_name: "Imported Subscription",
+        name: "IMPORTED SUBSCRIPTION",
+        pfc_primary: "ENTERTAINMENT",
+        pfc_detailed: "STREAMING",
+        payment_channel: "online",
+        iso_currency_code: "USD",
+        pending: false,
+      })),
+      recurring_streams: [],
+      recurring_stream_transactions: [],
+    });
+
+    await refreshInferredRecurringForItem(item(), { today: "2026-08-30" });
+    const payload = mockServiceClient.rpc.mock.calls[0]?.[1] as { p_payload: { candidates: Array<Record<string, unknown>> } };
+    expect(payload.p_payload.candidates).toHaveLength(1);
+    expect(payload.p_payload.candidates[0]).toMatchObject({
+      transaction_ids: ["import-1", "import-2", "import-3"],
+    });
+    expect(payload.p_payload.candidates[0]?.transaction_ids).not.toContain("absent-duplicate");
+  });
+
   it("refreshes every active item for a user", async () => {
     const second = item({ id: "item-2" });
     mockListActiveItems.mockResolvedValue([item(), second]);
