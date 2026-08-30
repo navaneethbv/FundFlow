@@ -14,6 +14,8 @@ export interface WeeklyReportTransaction {
   name: string | null;
   category: string | null;
   accountId: string;
+  displayCategory?: string | null;
+  cashFlowClassification?: "expense" | "income" | null;
 }
 
 export interface WeeklyReportAccount {
@@ -94,6 +96,10 @@ function round4(value: number): number {
 }
 
 function isSpend(transaction: WeeklyReportTransaction): boolean {
+  if (transaction.cashFlowClassification === "income") return false;
+  if (transaction.cashFlowClassification === "expense") {
+    return transaction.amount !== 0;
+  }
   return (
     transaction.amount > 0 &&
     !EXCLUDED_PFC.has(transaction.category ?? "")
@@ -138,7 +144,7 @@ export function buildWeeklyReportModel(
   const transactions = input.transactions.map((transaction, index) => ({
     ...transaction,
     merchantName: applied[index]!.merchant,
-    category: applied[index]!.category,
+    category: transaction.displayCategory ?? applied[index]!.category,
   }));
 
   const usableForSpend = transactions.filter(
@@ -252,8 +258,14 @@ export function buildWeeklyReportModel(
     ) {
       continue;
     }
-    if (transaction.amount < 0) inflows += Math.abs(transaction.amount);
-    if (transaction.amount > 0) outflows += transaction.amount;
+    if (transaction.cashFlowClassification === "income") {
+      inflows += Math.abs(transaction.amount);
+    } else if (transaction.cashFlowClassification === "expense") {
+      outflows += Math.abs(transaction.amount);
+    } else {
+      if (transaction.amount < 0) inflows += Math.abs(transaction.amount);
+      if (transaction.amount > 0) outflows += transaction.amount;
+    }
   }
 
   return {

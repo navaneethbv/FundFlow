@@ -39,12 +39,15 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-export function computeYearInMoney(
+function computeYearInMoneyRows(
   txns: AnnualTxn[],
   year: string,
+  excludeProviderGroups: boolean,
 ): YearInMoney | null {
   const rows = txns.filter(
-    (t) => t.date.startsWith(`${year}-`) && !EXCLUDED_PFC.has(t.category ?? ""),
+    (t) =>
+      t.date.startsWith(`${year}-`) &&
+      (!excludeProviderGroups || !EXCLUDED_PFC.has(t.category ?? "")),
   );
   if (rows.length === 0) return null;
 
@@ -114,6 +117,13 @@ export function computeYearInMoney(
   };
 }
 
+export function computeYearInMoney(
+  txns: AnnualTxn[],
+  year: string,
+): YearInMoney | null {
+  return computeYearInMoneyRows(txns, year, true);
+}
+
 /**
  * Annual aggregation over the canonical financial projection, so the recap
  * agrees with every other finance view about merchant rules, category
@@ -139,5 +149,5 @@ export function computeYearInMoneyFromProjection(
       category: row.groupKey,
     });
   }
-  return computeYearInMoney(txns, year);
+  return computeYearInMoneyRows(txns, year, false);
 }

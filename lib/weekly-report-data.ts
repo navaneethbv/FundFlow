@@ -90,7 +90,8 @@ export async function getWeeklyReportData(
       .from("merchant_rules")
       .select("match_type, pattern, display_name, category, enabled")
       .eq("user_id", userId)
-      .order("created_at"),
+      .order("created_at")
+      .order("id"),
     supabase
       .from("linked_refunds")
       .select("charge_transaction_id, refund_transaction_id")
@@ -125,12 +126,39 @@ export async function getWeeklyReportData(
       return query.eq("user_id", userId);
     },
   );
+  const overrideChunks = chunks(transactionIds, SPLIT_CHUNK_SIZE).map(
+    (transactionIdChunk) =>
+      supabase
+        .from("transaction_annotations")
+        .select("transaction_id, display_category, cash_flow_classification")
+        .in("transaction_id", transactionIdChunk)
+        .eq("user_id", userId),
+  );
   const splitsResults = transactionIds.length
     ? await Promise.all(splitChunks)
+    : [];
+  const overrideResults = transactionIds.length
+    ? await Promise.all(overrideChunks)
     : [];
   for (const result of splitsResults) {
     throwIfError(result.error, "weekly report transaction splits");
   }
+  for (const result of overrideResults) {
+    throwIfError(result.error, "weekly report transaction overrides");
+  }
+  const overridesByTransactionId = new Map(
+    overrideResults.flatMap((result) => result.data ?? []).map((row) => [
+      row.transaction_id as string,
+      {
+        displayCategory: (row.display_category as string | null) ?? null,
+        cashFlowClassification:
+          row.cash_flow_classification === "expense" ||
+          row.cash_flow_classification === "income"
+            ? row.cash_flow_classification
+            : null,
+      },
+    ]),
+  );
 
   const accounts: WeeklyReportAccount[] = (accountsResult.data ?? []).map(
     (account) => ({
@@ -141,7 +169,9 @@ export async function getWeeklyReportData(
     }),
   );
   const transactionsResult: Array<WeeklyReportTransaction> = transactions.map(
-    (transaction) => ({
+    (transaction) => {
+      const override = overridesByTransactionId.get(transaction.id as string);
+      return {
       id: transaction.id as string,
       date: transaction.date as string,
       amount: Number(transaction.amount),
@@ -149,7 +179,10 @@ export async function getWeeklyReportData(
       name: transaction.name as string | null,
       category: transaction.pfc_primary as string | null,
       accountId: transaction.account_id as string,
-    }),
+      displayCategory: override?.displayCategory ?? null,
+      cashFlowClassification: override?.cashFlowClassification ?? null,
+      };
+    },
   );
   const merchantRules: MerchantRule[] = (rulesResult.data ?? []).map((rule) => ({
     matchType: rule.match_type as MerchantRule["matchType"],
