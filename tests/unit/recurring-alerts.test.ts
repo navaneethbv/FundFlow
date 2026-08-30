@@ -18,6 +18,12 @@ vi.mock("@/lib/notifications", () => ({
 
 vi.mock("@/lib/log", () => ({ logError: vi.fn() }));
 
+vi.mock("@/lib/recurring-inference", () => ({
+  refreshInferredRecurringForUser: vi.fn().mockResolvedValue({
+    active: 0, added: 0, deactivated: 0, deduplicated: 0,
+  }),
+}));
+
 // from("recurring_streams").select(...).eq(...).eq(...) resolves the existing
 // rows; .upsert(...).select(...) resolves the write and its id/stream_id
 // echo. Account resolution and the transaction-join table are exercised
@@ -34,12 +40,16 @@ vi.mock("@/lib/supabase/service", () => ({
           return {
             select: () => ({
               eq: () => ({
-                eq: () => Promise.resolve({ data: existingRows, error: null }),
+                eq: () => ({
+                  eq: () => Promise.resolve({ data: existingRows, error: null }),
+                }),
               }),
             }),
             upsert: mockUpsert,
             update: () => ({
-              eq: () => ({ in: () => Promise.resolve({ error: null }) }),
+              eq: () => ({
+                eq: () => ({ in: () => Promise.resolve({ error: null }) }),
+              }),
             }),
           };
         case "accounts":

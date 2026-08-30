@@ -31,7 +31,18 @@ vi.mock("@/lib/log", () => ({
   logError: (...args: unknown[]) => mockLogError(...args),
 }));
 
+const mockRefreshInferredForUser = vi.fn().mockResolvedValue({
+  active: 0,
+  added: 0,
+  deactivated: 0,
+  deduplicated: 0,
+});
+vi.mock("@/lib/recurring-inference", () => ({
+  refreshInferredRecurringForUser: (...args: unknown[]) => mockRefreshInferredForUser(...args),
+}));
+
 import { refreshRecurringForItem, refreshRecurringForUser } from "@/lib/recurring";
+import { normalizeRecurringMerchant, recurringIdentityKey } from "@/lib/recurring-detection";
 import type { PlaidItemRow } from "@/lib/types";
 
 /**
@@ -53,9 +64,10 @@ function createRecurringSupabaseMock(
   const accountsEq = vi.fn().mockResolvedValue(options.accounts ?? { data: [], error: null });
   const accountsSelect = vi.fn().mockReturnValue({ eq: accountsEq });
 
-  const streamsEqItem = vi
+  const streamsEqSource = vi
     .fn()
     .mockResolvedValue(options.existingStreams ?? { data: [], error: null });
+  const streamsEqItem = vi.fn().mockReturnValue({ eq: streamsEqSource });
   const streamsEqUser = vi.fn().mockReturnValue({ eq: streamsEqItem });
   const streamsSelect = vi.fn().mockReturnValue({ eq: streamsEqUser });
 
@@ -63,7 +75,8 @@ function createRecurringSupabaseMock(
   const upsert = vi.fn().mockReturnValue({ select: upsertSelect });
 
   const updateIn = vi.fn().mockResolvedValue({ error: null });
-  const updateEq = vi.fn().mockReturnValue({ in: updateIn });
+  const updateEqSource = vi.fn().mockReturnValue({ in: updateIn });
+  const updateEq = vi.fn().mockReturnValue({ eq: updateEqSource });
   const update = vi.fn().mockReturnValue({ eq: updateEq });
 
   const txIn = vi.fn().mockResolvedValue(options.transactions ?? { data: [], error: null });
@@ -100,6 +113,7 @@ function createRecurringSupabaseMock(
     upsertSelect,
     update,
     updateEq,
+    updateEqSource,
     updateIn,
     txEq,
     txIn,
@@ -129,7 +143,7 @@ describe("lib/recurring", () => {
     error_code: null,
   };
 
-  it("refreshRecurringForItem returns 0 if response contains no streams", async () => {
+  it("treats a valid empty Plaid response as a complete empty snapshot: stored plaid rows are swept, nothing is upserted", async () => {
     mockTransactionsRecurringGet.mockResolvedValueOnce({
       data: {
         inflow_streams: [],
@@ -137,9 +151,77 @@ describe("lib/recurring", () => {
       },
     });
 
+    const mock = createRecurringSupabaseMock({
+      existingStreams: {
+        data: [{ stream_id: "old-1" }, { stream_id: "old-2" }],
+        error: null,
+      },
+    });
+    mockServiceClient.from.mockImplementation(mock.from);
+
     const count = await refreshRecurringForItem(dummyItem);
     expect(count).toBe(0);
-    expect(mockServiceClient.from).not.toHaveBeenCalled();
+    expect(mock.upsert).not.toHaveBeenCalled();
+    expect(mock.update).toHaveBeenCalledWith({ is_active: false });
+    expect(mock.updateEq).toHaveBeenCalledWith("user_id", "user-1");
+    // The sweep is scoped to the plaid source so it can never deactivate an
+    // inferred row.
+    expect(mock.updateEqSource).toHaveBeenCalledWith("source", "plaid");
+    expect(mock.updateIn).toHaveBeenCalledWith("stream_id", ["old-1", "old-2"]);
+  });
+
+  it("persists source 'plaid' and a stable identity key when the account and merchant resolve", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce({
+      data: {
+        inflow_streams: [],
+        outflow_streams: [
+          {
+            stream_id: "stream-1",
+            merchant_name: "Netflix",
+            description: "Netflix Subscription",
+            average_amount: { amount: 15.99 },
+            last_amount: { amount: 15.99 },
+            frequency: "MONTHLY",
+            status: "MATURE",
+            personal_finance_category: { primary: "ENTERTAINMENT" },
+            is_active: true,
+            account_id: "plaid-acct-1",
+            transaction_ids: [],
+          },
+        ],
+      },
+    });
+
+    const mock = createRecurringSupabaseMock({
+      accounts: {
+        data: [{ id: "local-acct-1", plaid_account_id: "plaid-acct-1" }],
+        error: null,
+      },
+      existingStreams: { data: [], error: null },
+      upserted: {
+        data: [{ id: "recurring-row-1", stream_id: "stream-1" }],
+        error: null,
+      },
+    });
+    mockServiceClient.from.mockImplementation(mock.from);
+
+    await refreshRecurringForItem(dummyItem);
+
+    expect(mock.upsert).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          source: "plaid",
+          identity_key: recurringIdentityKey({
+            userId: "user-1",
+            accountId: "local-acct-1",
+            streamType: "outflow",
+            merchantIdentity: normalizeRecurringMerchant("Netflix"),
+            frequency: "MONTHLY",
+          }),
+        }),
+      ],
+      { onConflict: "stream_id" },
+    );
   });
 
   it("refreshRecurringForItem fetches streams, upserts rows, and notifies diff changes", async () => {
@@ -413,16 +495,51 @@ describe("lib/recurring", () => {
     });
     mockServiceClient.from.mockImplementation(mock.from);
 
-    const total = await refreshRecurringForUser("user-1");
-    expect(total).toBe(1);
+    const result = await refreshRecurringForUser("user-1");
+    expect(result.plaid).toBe(1);
+    expect(result.inferred).toEqual({ active: 0, added: 0, deactivated: 0, deduplicated: 0 });
+    expect(mockRefreshInferredForUser).toHaveBeenCalledWith("user-1");
+  });
+
+  it("refreshRecurringForUser runs inference even when every Plaid call failed", async () => {
+    mockListActiveItems.mockResolvedValue([dummyItem]);
+    mockTransactionsRecurringGet.mockRejectedValueOnce(new Error("API Error"));
+    mockRefreshInferredForUser.mockResolvedValueOnce({
+      active: 2,
+      added: 1,
+      deactivated: 0,
+      deduplicated: 0,
+    });
+
+    const result = await refreshRecurringForUser("user-1");
+    expect(result.plaid).toBe(0);
+    expect(result.inferred).toEqual({ active: 2, added: 1, deactivated: 0, deduplicated: 0 });
+  });
+
+  it("refreshRecurringForUser survives an inference failure with a zeroed inferred result", async () => {
+    mockListActiveItems.mockResolvedValue([dummyItem]);
+    mockTransactionsRecurringGet.mockResolvedValueOnce({
+      data: { inflow_streams: [], outflow_streams: [] },
+    });
+    mockRefreshInferredForUser.mockRejectedValueOnce(new Error("inference down"));
+
+    const mock = createRecurringSupabaseMock({
+      existingStreams: { data: [{ stream_id: "old-1" }], error: null },
+    });
+    mockServiceClient.from.mockImplementation(mock.from);
+
+    const result = await refreshRecurringForUser("user-1");
+    expect(result.plaid).toBe(0);
+    expect(result.inferred).toEqual({ active: 0, added: 0, deactivated: 0, deduplicated: 0 });
+    expect(mockLogError).toHaveBeenCalledWith("recurring.inference.user", expect.any(Error));
   });
 
   it("refreshRecurringForUser isolates errors per item and logs error", async () => {
     mockListActiveItems.mockResolvedValue([dummyItem]);
     mockTransactionsRecurringGet.mockRejectedValueOnce(new Error("API Error"));
 
-    const total = await refreshRecurringForUser("user-1");
-    expect(total).toBe(0);
+    const result = await refreshRecurringForUser("user-1");
+    expect(result.plaid).toBe(0);
     expect(mockLogError).toHaveBeenCalledWith("recurring.item", expect.any(Error));
   });
 

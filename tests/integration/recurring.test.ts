@@ -132,12 +132,19 @@ suite("recurring streams DB integration & mock Plaid", () => {
   });
 
   it("runs refreshRecurringForUser successfully", async () => {
-    // When called again, should refresh and return counts
+    // When called again with an empty Plaid snapshot, the stored Plaid rows
+    // sweep to inactive and the hybrid result reports no plaid streams.
     mockTransactionsRecurringGet.mockResolvedValue({
       data: { inflow_streams: [], outflow_streams: [] },
     });
 
-    const count = await refreshRecurringForUser(userId);
-    expect(count).toBe(0);
+    const result = await refreshRecurringForUser(userId);
+    expect(result.plaid).toBe(0);
+    expect(result.inferred).toEqual({
+      active: 0,
+      added: 0,
+      deactivated: 0,
+      deduplicated: 0,
+    });
   });
 });

@@ -124,7 +124,8 @@ export function recurringIdentityKey(input: {
   accountId: string;
   streamType: "inflow" | "outflow";
   merchantIdentity: string;
-  frequency: DetectedRecurringFrequency;
+  /** Detected cadences and Plaid frequency values both hash here. */
+  frequency: string;
 }): string {
   return createHash("sha256")
     .update(

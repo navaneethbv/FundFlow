@@ -8,6 +8,52 @@ import { logError } from "@/lib/log";
 import { diffRecurringStreams, type RecurringDiff } from "@/lib/insights";
 import { createNotification } from "@/lib/notifications";
 import { formatCurrency } from "@/lib/format";
+import {
+  normalizeRecurringMerchant,
+  recurringIdentityKey,
+} from "@/lib/recurring-detection";
+import {
+  refreshInferredRecurringForUser,
+  type InferredRecurringRefreshResult,
+} from "@/lib/recurring-inference";
+
+export interface RecurringRefreshResult {
+  plaid: number;
+  inferred: InferredRecurringRefreshResult;
+}
+
+const ZERO_INFERRED: InferredRecurringRefreshResult = {
+  active: 0,
+  added: 0,
+  deactivated: 0,
+  deduplicated: 0,
+};
+
+/**
+ * Versioned stable identity for a Plaid stream, resolved only when the
+ * stream has both an account link and merchant text. Sharing this identity
+ * with the local detector is what lets inferred rows deduplicate against
+ * (and hand their user state to) provider streams.
+ */
+function plaidStreamIdentityKey(
+  userId: string,
+  accountId: string | null,
+  streamType: "inflow" | "outflow",
+  stream: TransactionStream,
+): string | null {
+  if (!accountId) return null;
+  const merchantIdentity = normalizeRecurringMerchant(
+    stream.merchant_name ?? stream.description ?? "",
+  );
+  if (!merchantIdentity) return null;
+  return recurringIdentityKey({
+    userId,
+    accountId,
+    streamType,
+    merchantIdentity,
+    frequency: stream.frequency ?? "UNKNOWN",
+  });
+}
 
 function mapStreamRow(
   userId: string,
@@ -16,6 +62,7 @@ function mapStreamRow(
   stream: TransactionStream,
   accountIdByPlaidId: Map<string, string>,
 ) {
+  const accountId = accountIdByPlaidId.get(stream.account_id) ?? null;
   return {
     user_id: userId,
     plaid_item_id: itemDbId,
@@ -29,10 +76,12 @@ function mapStreamRow(
     status: stream.status ?? null,
     category: stream.personal_finance_category?.primary ?? null,
     is_active: stream.is_active ?? true,
-    account_id: accountIdByPlaidId.get(stream.account_id) ?? null,
+    account_id: accountId,
     first_date: stream.first_date ?? null,
     last_date: stream.last_date ?? null,
     predicted_next_date: stream.predicted_next_date ?? null,
+    source: "plaid" as const,
+    identity_key: plaidStreamIdentityKey(userId, accountId, streamType, stream),
   };
 }
 
@@ -62,7 +111,8 @@ async function resolveLocalTransactionIds(
 /**
  * Mark-and-sweep: deactivates streams that existed for this item but are
  * absent from a successful, full Plaid response. A no-op when nothing is
- * stale. Callers must only invoke this after a successful fetch/upsert — a
+ * stale. Scoped to source 'plaid' so it can never deactivate an inferred
+ * row. Callers must only invoke this after a successful fetch/upsert — a
  * thrown error upstream must skip this entirely, so a failed or partial
  * refresh changes nothing.
  */
@@ -76,6 +126,7 @@ async function deactivateStaleStreams(
     .from("recurring_streams")
     .update({ is_active: false })
     .eq("user_id", userId)
+    .eq("source", "plaid")
     .in("stream_id", staleStreamIds);
   if (error) throw error;
 }
@@ -160,12 +211,30 @@ export async function refreshRecurringForItem(item: PlaidItemRow): Promise<numbe
     ...response.data.outflow_streams.map((s) => ({ stream: s, type: "outflow" as const })),
   ];
 
-  // Short-circuit before touching the database at all when there is nothing
-  // to persist — a partial/empty response must not trip any downstream
-  // account or mark-and-sweep query.
-  if (tagged.length === 0) return 0;
-
   const supabase = createServiceClient();
+
+  // Snapshot stored Plaid rows before any write. Service client bypasses
+  // RLS, so both filters (plus the source filter) are load-bearing.
+  const { data: existing, error: existingError } = await supabase
+    .from("recurring_streams")
+    .select("stream_id, last_amount")
+    .eq("user_id", item.user_id)
+    .eq("plaid_item_id", item.id)
+    .eq("source", "plaid");
+  if (existingError) throw existingError;
+
+  // A valid, successful response with no streams is a complete empty
+  // snapshot, not a failure: every stored Plaid row for this item is stale.
+  // (Local inference still runs for the item afterwards — see
+  // refreshRecurringForUser and the webhook handlers.)
+  if (tagged.length === 0) {
+    await deactivateStaleStreams(
+      supabase,
+      item.user_id,
+      (existing ?? []).map((row) => row.stream_id as string),
+    );
+    return 0;
+  }
 
   const { data: accountRows, error: accountsError } = await supabase
     .from("accounts")
@@ -179,14 +248,6 @@ export async function refreshRecurringForItem(item: PlaidItemRow): Promise<numbe
   const rows = tagged.map(({ stream, type }) =>
     mapStreamRow(item.user_id, item.id, type, stream, accountIdByPlaidId),
   );
-
-  // Snapshot stored amounts before the upsert overwrites them. Service
-  // client bypasses RLS, so both filters are load-bearing.
-  const { data: existing } = await supabase
-    .from("recurring_streams")
-    .select("stream_id, last_amount")
-    .eq("user_id", item.user_id)
-    .eq("plaid_item_id", item.id);
 
   const { data: upserted, error } = await supabase
     .from("recurring_streams")
@@ -252,16 +313,28 @@ export async function refreshRecurringForItem(item: PlaidItemRow): Promise<numbe
   return rows.length;
 }
 
-/** Refresh recurring streams for all active items of a user. */
-export async function refreshRecurringForUser(userId: string): Promise<number> {
+/**
+ * Refresh recurring streams for all active items of a user, then run local
+ * inference over the fresh ledger. Local inference runs even when an item's
+ * Plaid recurring call failed: a Plaid outage must not hide locally
+ * detectable patterns, and a detector error must not fail the already
+ * durable Plaid refresh.
+ */
+export async function refreshRecurringForUser(userId: string): Promise<RecurringRefreshResult> {
   const items = await listActiveItems(userId);
-  let count = 0;
+  let plaidCount = 0;
   for (const item of items) {
     try {
-      count += await refreshRecurringForItem(item);
+      plaidCount += await refreshRecurringForItem(item);
     } catch (error) {
       logError("recurring.item", error);
     }
   }
-  return count;
+  try {
+    const inferred = await refreshInferredRecurringForUser(userId);
+    return { plaid: plaidCount, inferred };
+  } catch (error) {
+    logError("recurring.inference.user", error);
+    return { plaid: plaidCount, inferred: ZERO_INFERRED };
+  }
 }
