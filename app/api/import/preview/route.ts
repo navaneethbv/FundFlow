@@ -22,6 +22,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_ROWS = 20_000;
 const EXISTING_TRANSACTION_PAGE_SIZE = 1_000;
+const DATABASE_CHUNK_SIZE = 500;
 
 const INVALID_MAPPING_ERROR =
   "Invalid column mapping. Map at least a date, description, and amount (or debit/credit).";
@@ -127,16 +128,22 @@ function transactionLabel(row: Record<string, unknown>): string {
 
 async function resolveSourceAccountMappings(
   supabase: SupabaseClient,
+  userId: string,
   sourceAccounts: string[],
 ): Promise<Record<string, { account_id?: string; manual_account_id?: string }>> {
   if (sourceAccounts.length === 0) return {};
-  const { data: mappings, error } = await supabase
-    .from("import_source_account_mappings")
-    .select("source_account, account_id, manual_account_id")
-    .in("source_account", sourceAccounts);
-  if (error) throw error;
+  const mappings: Array<Record<string, unknown>> = [];
+  for (let index = 0; index < sourceAccounts.length; index += DATABASE_CHUNK_SIZE) {
+    const { data, error } = await supabase
+      .from("import_source_account_mappings")
+      .select("source_account, account_id, manual_account_id")
+      .in("source_account", sourceAccounts.slice(index, index + DATABASE_CHUNK_SIZE))
+      .eq("user_id", userId);
+    if (error) throw error;
+    mappings.push(...((data ?? []) as Array<Record<string, unknown>>));
+  }
   return Object.fromEntries(
-    (mappings ?? []).map((mapping) => [mapping.source_account as string, {
+    mappings.map((mapping) => [mapping.source_account as string, {
       ...(mapping.account_id ? { account_id: mapping.account_id as string } : {}),
       ...(mapping.manual_account_id ? { manual_account_id: mapping.manual_account_id as string } : {}),
     }]),
@@ -145,24 +152,17 @@ async function resolveSourceAccountMappings(
 
 async function loadExistingTransactions(
   supabase: SupabaseClient,
+  userId: string,
 ): Promise<Array<Record<string, unknown>>> {
   const rows: Array<Record<string, unknown>> = [];
-  for (let page = 0; page < MAX_ROWS; page += EXISTING_TRANSACTION_PAGE_SIZE) {
-    const query = supabase
+  for (let offset = 0; ; offset += EXISTING_TRANSACTION_PAGE_SIZE) {
+    const { data, error } = await supabase
       .from("transactions")
-      .select("date, amount, merchant_name, name, pfc_primary") as unknown as {
-        range?: (from: number, to: number) => unknown;
-        limit: (count: number) => unknown;
-      };
-    // The fallback keeps lightweight adapters compatible while the real
-    // Supabase builder uses explicit pages to avoid the 1,000-row cap.
-    const pageQuery = typeof query.range === "function"
-      ? query.range(page, page + EXISTING_TRANSACTION_PAGE_SIZE - 1)
-      : query.limit(EXISTING_TRANSACTION_PAGE_SIZE);
-    const { data, error } = await pageQuery as {
-      data?: unknown;
-      error?: unknown;
-    };
+      .select("id, date, amount, merchant_name, name, pfc_primary")
+      .eq("user_id", userId)
+      .order("date", { ascending: true })
+      .order("id", { ascending: true })
+      .range(offset, offset + EXISTING_TRANSACTION_PAGE_SIZE - 1);
     if (error) throw error;
     const pageRows = (data ?? []) as Array<Record<string, unknown>>;
     rows.push(...pageRows);
@@ -206,7 +206,7 @@ export async function POST(request: NextRequest) {
     }
     if (rows.length === 0) return emptyPreviewResponse(text, format, columns, errors, parsed.requiresDateOrder);
 
-    const existing = await loadExistingTransactions(supabase);
+    const existing = await loadExistingTransactions(supabase, user.id);
     const existingFingerprints = new Set(
       (existing ?? []).map((row) => `${row.date}|${Number(row.amount).toFixed(2)}|${transactionLabel(row)}`),
     );
@@ -221,7 +221,7 @@ export async function POST(request: NextRequest) {
     const review = buildImportReview(rows, existingFingerprints, existingCategoryByFingerprint);
 
     const sourceAccounts = [...new Set(rows.map((row) => row.sourceAccount).filter((value): value is string => Boolean(value)))];
-    const sourceAccountMappings = await resolveSourceAccountMappings(supabase, sourceAccounts);
+    const sourceAccountMappings = await resolveSourceAccountMappings(supabase, user.id, sourceAccounts);
 
     const service = createServiceClient();
     const { data: batch, error: batchError } = await service
@@ -234,32 +234,51 @@ export async function POST(request: NextRequest) {
       .select("id")
       .single();
     if (batchError) throw batchError;
+    if (!batch?.id) throw new Error("import_preview_batch_not_created");
 
     const batchId = batch.id as string;
     // Flagged rows (file or possible duplicates) default to "rejected" so the
     // safe default only imports clean rows; the user can still opt them back in.
-    const { data: insertedRows, error: rowsError } = await service
-      .from("import_review_rows")
-      .insert(
-        review.rows.map((row, index) => ({
-          user_id: user.id,
-          batch_id: batchId,
-          row_hash: row.rowHash,
-          date: row.row.date,
-          description: row.row.merchant,
-          amount: row.row.amount,
-          category: row.row.category,
-          source_account: row.row.sourceAccount ?? null,
-          notes: row.row.notes ?? null,
-          tags: row.row.tags ?? [],
-          row_index: index,
-          status: row.flags.length > 0 ? "rejected" : "pending",
-        })),
-      )
-      .select("id, date, description, amount, source_account, row_index, status");
-    if (rowsError) throw rowsError;
+    const stagedRows = review.rows.map((row, index) => ({
+      user_id: user.id,
+      batch_id: batchId,
+      row_hash: row.rowHash,
+      date: row.row.date,
+      description: row.row.merchant,
+      amount: row.row.amount,
+      category: row.row.category,
+      source_account: row.row.sourceAccount ?? null,
+      notes: row.row.notes ?? null,
+      tags: row.row.tags ?? [],
+      row_index: index,
+      status: row.flags.length > 0 ? "rejected" : "pending",
+    }));
+    const insertedRows: Array<Record<string, unknown>> = [];
+    try {
+      for (let index = 0; index < stagedRows.length; index += DATABASE_CHUNK_SIZE) {
+        const { data, error } = await service
+          .from("import_review_rows")
+          .insert(stagedRows.slice(index, index + DATABASE_CHUNK_SIZE))
+          .select("id, date, description, amount, source_account, row_index, status");
+        if (error) throw error;
+        insertedRows.push(...((data ?? []) as Array<Record<string, unknown>>));
+      }
+    } catch (stagingError) {
+      const { error: cleanupError } = await service
+        .from("import_review_batches")
+        .delete()
+        .eq("id", batchId)
+        .eq("user_id", user.id);
+      if (cleanupError) {
+        throw new AggregateError(
+          [stagingError, cleanupError],
+          "Failed to stage import rows and clean up the pending batch",
+        );
+      }
+      throw stagingError;
+    }
 
-    const rowsOut = [...(insertedRows ?? [])]
+    const rowsOut = [...insertedRows]
       .sort((a, b) => Number(a.row_index ?? 0) - Number(b.row_index ?? 0))
       .map((row, index) => ({
       id: row.id as string,

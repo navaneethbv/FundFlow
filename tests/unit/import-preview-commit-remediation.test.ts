@@ -12,8 +12,8 @@ const mockBadRequest = vi.fn((message: unknown) =>
 
 vi.mock("@/lib/http", () => ({
   requireUser: () => mockRequireUser(),
-  errorResponse: (...args: unknown[]) => mockErrorResponse(...args),
-  badRequest: (...args: unknown[]) => mockBadRequest(...args),
+  errorResponse: (context: unknown, error: unknown) => mockErrorResponse(context, error),
+  badRequest: (message: unknown) => mockBadRequest(message),
 }));
 
 const mockParseImportCsv = vi.fn<(...args: unknown[]) => unknown>();
@@ -100,7 +100,7 @@ describe("import preview and commit remediation", () => {
     vi.clearAllMocks();
   });
 
-  it("paginates existing transactions deterministically and chunks staged-row inserts", async () => {
+  it("paginates all existing transactions deterministically and chunks staged-row inserts", async () => {
     const parsedRows = Array.from({ length: 1_001 }, (_, index) => ({
       date: `2026-07-${String((index % 28) + 1).padStart(2, "0")}`,
       merchant: `Merchant ${index}`,
@@ -114,7 +114,7 @@ describe("import preview and commit remediation", () => {
     mockParseImportCsv.mockReturnValue({ rows: parsedRows, errors: [] });
     mockBuildImportReview.mockReturnValue({ rows: reviewRows });
 
-    const existingRows = Array.from({ length: 1_001 }, (_, index) => ({
+    const existingRows = Array.from({ length: 20_001 }, (_, index) => ({
       id: `existing-${index}`,
       date: "2026-06-01",
       amount: index,
@@ -171,14 +171,70 @@ describe("import preview and commit remediation", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ rows: expect.any(Array) });
-    expect(transactionQueries).toHaveLength(2);
+    expect(transactionQueries).toHaveLength(21);
     for (const query of transactionQueries) {
       expect(query.state.eq).toContainEqual(["user_id", "user-1"]);
       expect(query.state.order.map(([column]) => column)).toEqual(["date", "id"]);
     }
-    expect(transactionQueries[0]!.range).toHaveBeenCalledWith(0, 999);
-    expect(transactionQueries[1]!.range).toHaveBeenCalledWith(1_000, 1_999);
+    for (const [index, query] of transactionQueries.entries()) {
+      expect(query.range).toHaveBeenCalledWith(index * 1_000, index * 1_000 + 999);
+    }
+    const fingerprints = mockBuildImportReview.mock.calls[0]![1] as Set<string>;
+    expect(fingerprints.has("2026-06-01|20000.00|Existing 20000")).toBe(true);
     expect(rowInsert.mock.calls.map(([rows]) => rows.length)).toEqual([500, 500, 1]);
+  });
+
+  it("cleans up a created batch when a later staging chunk fails", async () => {
+    const parsedRows = Array.from({ length: 501 }, (_, index) => ({
+      date: "2026-07-01",
+      merchant: `Merchant ${index}`,
+      amount: index + 1,
+    }));
+    mockParseImportCsv.mockReturnValue({ rows: parsedRows, errors: [] });
+    mockBuildImportReview.mockReturnValue({
+      rows: parsedRows.map((row, index) => ({ rowHash: `hash-${index}`, row, flags: [] })),
+    });
+
+    const existingQuery = queryBuilder(() => ({ data: [], error: null }));
+    mockRequireUser.mockResolvedValue({
+      user: { id: "user-1" },
+      supabase: { from: vi.fn(() => existingQuery) },
+    });
+
+    const rowInsert = vi
+      .fn()
+      .mockImplementationOnce((payload: Array<Record<string, unknown>>) => ({
+        select: vi.fn().mockResolvedValue({ data: payload, error: null }),
+      }))
+      .mockImplementationOnce(() => ({
+        select: vi.fn().mockResolvedValue({ data: null, error: { message: "chunk failed" } }),
+      }));
+    const batchDeleteQuery = queryBuilder(() => ({ data: [], error: null }));
+    const batchDelete = vi.fn(() => batchDeleteQuery);
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (table === "import_review_batches") {
+        return {
+          insert: vi.fn(() => ({
+            select: vi.fn(() => ({
+              single: vi.fn().mockResolvedValue({ data: { id: "batch-1" }, error: null }),
+            })),
+          })),
+          delete: batchDelete,
+        };
+      }
+      if (table === "import_review_rows") return { insert: rowInsert };
+      return null as never;
+    });
+
+    const response = await previewPost(previewRequest());
+
+    expect(response.status).toBe(500);
+    expect(rowInsert).toHaveBeenCalledTimes(2);
+    expect(batchDelete).toHaveBeenCalledTimes(1);
+    expect(batchDeleteQuery.state.eq).toEqual([
+      ["id", "batch-1"],
+      ["user_id", "user-1"],
+    ]);
   });
 
   it("rejects a missing or foreign batch before creating a service client", async () => {
@@ -335,7 +391,10 @@ describe("import preview and commit remediation", () => {
         if (table === "transactions") {
           transactionsPersisted = true;
           for (const row of rows) {
-            committedByImportId.set(String(row.plaid_transaction_id), `txn-${row.rowId}`);
+            committedByImportId.set(
+              String(row.plaid_transaction_id),
+              `txn-${committedByImportId.size}`,
+            );
           }
         }
         return { error: null };
@@ -373,10 +432,14 @@ describe("import preview and commit remediation", () => {
     }
 
     const batchRowQueries = authQueries.filter(({ table }) => table === "import_review_rows");
-    expect(batchRowQueries).toHaveLength(1);
-    expect(batchRowQueries[0]!.query.state.eq).toContainEqual(["user_id", "user-1"]);
-    expect(batchRowQueries[0]!.query.state.order.map(([column]) => column)).toEqual(["row_index", "id"]);
-    expect(batchRowQueries[0]!.query.range).toHaveBeenCalledTimes(2);
+    expect(batchRowQueries).toHaveLength(2);
+    for (const { query } of batchRowQueries) {
+      expect(query.state.eq).toContainEqual(["user_id", "user-1"]);
+      expect(query.state.order.map(([column]) => column)).toEqual(["row_index", "id"]);
+      expect(query.state.range).not.toBeNull();
+    }
+    expect(batchRowQueries[0]!.query.state.range).toEqual([0, 999]);
+    expect(batchRowQueries[1]!.query.state.range).toEqual([1_000, 1_999]);
 
     const persistedMappingQueries = authQueries.filter(
       ({ table }) => table === "import_source_account_mappings",
@@ -387,7 +450,15 @@ describe("import preview and commit remediation", () => {
     }
 
     expect(upserts.filter(({ table }) => table === "import_source_account_mappings").map(({ rows }) => rows.length)).toEqual([500, 500, 1]);
-    expect(upserts.filter(({ table }) => table === "transactions").map(({ rows }) => rows.length)).toEqual([500, 500, 1]);
+    const transactionUpserts = upserts.filter(({ table }) => table === "transactions");
+    expect(transactionUpserts.map(({ rows }) => rows.length)).toEqual([500, 500, 1]);
+    for (const { rows } of transactionUpserts) {
+      for (const row of rows) {
+        expect(row).not.toHaveProperty("rowId");
+        expect(row).not.toHaveProperty("note");
+        expect(row).not.toHaveProperty("tags");
+      }
+    }
     expect(upserts.filter(({ table }) => table === "transaction_annotations").map(({ rows }) => rows.length)).toEqual([500, 500, 1]);
 
     const transactionSelects = serviceQueries.filter(
