@@ -14,4 +14,16 @@ describe("account reconciliation aggregate migration", () => {
     expect(migration).toContain(") * 100)::bigint");
     expect(migration).toContain("grant execute on function public.account_reconciliation_aggregates()");
   });
+
+  it("refreshes a capture boundary and counts only later transaction arrivals", () => {
+    const migration = fs.readFileSync(
+      "supabase/migrations/20260830100000_reconciliation_same_day_anchor.sql",
+      "utf8",
+    );
+
+    expect(migration).toContain("add column if not exists captured_at timestamptz");
+    expect(migration).toContain("t.created_at > anchor.captured_at");
+    expect(migration).not.toContain("t.date > anchor.snapshot_date or");
+    expect(migration).toContain("transactions_user_account_created_idx");
+  });
 });

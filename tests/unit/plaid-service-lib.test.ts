@@ -50,6 +50,9 @@ import {
   listActiveItems,
   getItem,
   upsertAccounts,
+  clearItemRepairCursor,
+  completeItemCursor,
+  updateItemRepairCursor,
   updateItemCursor,
   setItemStatus,
   updateItemBranding,
@@ -292,6 +295,39 @@ describe("lib/plaid-service", () => {
     expect(update).toHaveBeenCalledWith({ sync_cursor: "new-cursor" });
     expect(eqId).toHaveBeenCalledWith("id", "item-db-1");
     expect(eqUser).toHaveBeenCalledWith("user_id", "user-1");
+  });
+
+  it("stores and clears bounded Repair progress without advancing sync_cursor", async () => {
+    const eqUser = vi.fn().mockResolvedValue({ error: null });
+    const eqId = vi.fn().mockReturnValue({ eq: eqUser });
+    const update = vi.fn().mockReturnValue({ eq: eqId });
+    mockServiceClient.from.mockReturnValue({ update });
+
+    await updateItemRepairCursor("user-1", "item-db-1", "repair-cursor");
+    expect(update).toHaveBeenNthCalledWith(1, {
+      repair_sync_cursor: "repair-cursor",
+      repair_sync_started_at: expect.any(String),
+    });
+
+    await clearItemRepairCursor("user-1", "item-db-1");
+    expect(update).toHaveBeenNthCalledWith(2, {
+      repair_sync_cursor: null,
+      repair_sync_started_at: null,
+    });
+  });
+
+  it("commits a drained cursor and clears bounded Repair progress atomically", async () => {
+    const eqUser = vi.fn().mockResolvedValue({ error: null });
+    const eqId = vi.fn().mockReturnValue({ eq: eqUser });
+    const update = vi.fn().mockReturnValue({ eq: eqId });
+    mockServiceClient.from.mockReturnValue({ update });
+
+    await completeItemCursor("user-1", "item-db-1", "cursor-final");
+    expect(update).toHaveBeenCalledWith({
+      sync_cursor: "cursor-final",
+      repair_sync_cursor: null,
+      repair_sync_started_at: null,
+    });
   });
 
   it("setItemStatus updates status and error_code, scoped to user", async () => {

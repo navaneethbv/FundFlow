@@ -12,6 +12,8 @@ export interface PlaidItemRow {
   access_token_iv: string;
   access_token_tag: string;
   sync_cursor: string | null;
+  repair_sync_cursor?: string | null;
+  repair_sync_started_at?: string | null;
   status: "active" | "disconnected" | "error";
   error_code: string | null;
   access_token_rotated_at?: string | null;

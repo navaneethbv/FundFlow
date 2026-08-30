@@ -95,26 +95,59 @@ function round4(value: number): number {
   return Math.round(value * 10_000) / 10_000;
 }
 
-function isSpend(transaction: WeeklyReportTransaction): boolean {
+/**
+ * A projected report row. `category` is what the reader sees (the user's
+ * display override wins); `flowCategory` is the provider/merchant-rule
+ * category that decides spend-vs-transfer, and `spendAmount` is the signed
+ * amount to accumulate when the row counts as spending.
+ */
+interface WeeklyReportRow extends WeeklyReportTransaction {
+  merchantName: string | null;
+  flowCategory: string | null;
+  spendAmount: number;
+}
+
+/**
+ * Whether a row counts toward spending.
+ *
+ * The transfer/loan exclusion is tested against `flowCategory`, never the
+ * display category: relabelling a credit-card payment "Shopping" changes how
+ * it is grouped, but must not turn it into spending, or the payment is
+ * double-counted against the purchases it settles. This mirrors
+ * projectFinanceTransactions, which keeps the same separation so every
+ * surface agrees. Only an explicit cash-flow override reclassifies a row.
+ */
+function isSpend(transaction: WeeklyReportRow): boolean {
   if (transaction.cashFlowClassification === "income") return false;
   if (transaction.cashFlowClassification === "expense") {
     return transaction.amount !== 0;
   }
   return (
     transaction.amount > 0 &&
-    !EXCLUDED_PFC.has(transaction.category ?? "")
+    !EXCLUDED_PFC.has(transaction.flowCategory ?? "")
   );
 }
 
+/**
+ * The amount a row contributes to spend totals. An explicit expense override
+ * always contributes an outflow, so a negative-amount row forced to Spending
+ * adds to the total instead of silently subtracting from it.
+ */
+function spendAmountOf(transaction: WeeklyReportTransaction): number {
+  return transaction.cashFlowClassification === "expense"
+    ? Math.abs(transaction.amount)
+    : transaction.amount;
+}
+
 function sumByName(
-  transactions: WeeklyReportTransaction[],
-  getName: (transaction: WeeklyReportTransaction) => string | null,
+  transactions: WeeklyReportRow[],
+  getName: (transaction: WeeklyReportRow) => string | null,
 ): Array<{ name: string; amount: number }> {
   const totals = new Map<string, number>();
   for (const transaction of transactions) {
     const name = getName(transaction);
     if (!name) continue;
-    totals.set(name, (totals.get(name) ?? 0) + transaction.amount);
+    totals.set(name, (totals.get(name) ?? 0) + transaction.spendAmount);
   }
   return [...totals.entries()]
     .map(([name, amount]) => ({ name, amount: round2(amount) }))
@@ -141,11 +174,15 @@ export function buildWeeklyReportModel(
     accountName: accountById.get(transaction.accountId)?.name ?? "",
   }));
   const applied = applyMerchantRules(cleanup, input.merchantRules);
-  const transactions = input.transactions.map((transaction, index) => ({
-    ...transaction,
-    merchantName: applied[index]!.merchant,
-    category: transaction.displayCategory ?? applied[index]!.category,
-  }));
+  const transactions: WeeklyReportRow[] = input.transactions.map(
+    (transaction, index) => ({
+      ...transaction,
+      merchantName: applied[index]!.merchant,
+      category: transaction.displayCategory ?? applied[index]!.category,
+      flowCategory: applied[index]!.category,
+      spendAmount: spendAmountOf(transaction),
+    }),
+  );
 
   const usableForSpend = transactions.filter(
     (transaction) =>
@@ -166,17 +203,17 @@ export function buildWeeklyReportModel(
   );
 
   const totalSpend = round2(
-    currentSpend.reduce((sum, transaction) => sum + transaction.amount, 0),
+    currentSpend.reduce((sum, transaction) => sum + transaction.spendAmount, 0),
   );
   const previousTotalSpend = round2(
-    previousSpend.reduce((sum, transaction) => sum + transaction.amount, 0),
+    previousSpend.reduce((sum, transaction) => sum + transaction.spendAmount, 0),
   );
   const changeAmount = round2(totalSpend - previousTotalSpend);
 
   const categoryTotals = aggregateSpendWithSplits(
     currentSpend.map((transaction) => ({
       id: transaction.id,
-      amount: transaction.amount,
+      amount: transaction.spendAmount,
       category: transaction.category,
     })),
     input.splits,
@@ -191,7 +228,7 @@ export function buildWeeklyReportModel(
     const merchant = transaction.merchantName ?? transaction.name ?? "Unknown merchant";
     merchantTotals.set(
       merchant,
-      (merchantTotals.get(merchant) ?? 0) + transaction.amount,
+      (merchantTotals.get(merchant) ?? 0) + transaction.spendAmount,
     );
   }
   const merchants = [...merchantTotals.entries()]

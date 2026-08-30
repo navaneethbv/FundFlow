@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAccountReconciliation } from "@/lib/sync-health";
+import { buildAccountReconciliation, isHistoryComplete } from "@/lib/sync-health";
 
 describe("buildAccountReconciliation", () => {
   it("refuses to invent a ledger balance without a snapshot anchor", () => {
@@ -100,5 +100,66 @@ describe("buildAccountReconciliation", () => {
         historyComplete: true,
       }),
     ).toMatchObject({ ledgerBalance: 99.9, difference: 0, state: "balanced" });
+  });
+});
+
+describe("isHistoryComplete", () => {
+  const base = {
+    plaidItemId: "item-1",
+    lastAttemptAt: "2026-08-29T00:00:00.000Z",
+    lastSuccessAt: "2026-08-29T00:05:00.000Z",
+    lastSyncCompletedPages: true,
+    initialHistoryIncomplete: false,
+    cursorResetDetectedAt: null,
+    safeErrorCode: null,
+    state: "healthy" as const,
+  };
+
+  it("treats a drained, gap-free sync as complete", () => {
+    expect(isHistoryComplete(base)).toBe(true);
+  });
+
+  it("reports incomplete history when the last run stopped mid-pagination", () => {
+    expect(
+      isHistoryComplete({
+        ...base,
+        lastSyncCompletedPages: false,
+        state: "partial_page",
+      }),
+    ).toBe(false);
+  });
+
+  it("reports incomplete history after a detected cursor reset", () => {
+    expect(
+      isHistoryComplete({
+        ...base,
+        cursorResetDetectedAt: "2026-08-29T00:00:00.000Z",
+        state: "cursor_reset",
+      }),
+    ).toBe(false);
+  });
+
+  it("reports incomplete history while the initial backfill is unfinished", () => {
+    expect(
+      isHistoryComplete({
+        ...base,
+        initialHistoryIncomplete: true,
+        state: "backfill_incomplete",
+      }),
+    ).toBe(false);
+  });
+
+  it("does not flag an item whose flags are still migration defaults", () => {
+    // No recorded attempt means no evidence either way; flagging here would
+    // mark every account incomplete for a whole day after the migration lands.
+    expect(
+      isHistoryComplete({
+        ...base,
+        lastAttemptAt: null,
+        lastSuccessAt: null,
+        lastSyncCompletedPages: false,
+        state: "never_synced",
+      }),
+    ).toBe(true);
   });
 });

@@ -2,7 +2,7 @@ import "server-only";
 import type { CreditCardLiability } from "plaid";
 import { getPlaidClient } from "@/lib/plaid";
 import { createServiceClient } from "@/lib/supabase/service";
-import { decryptItemTokenAndUpgrade } from "@/lib/plaid-service";
+import { decryptItemTokenAndUpgrade, listActiveItems } from "@/lib/plaid-service";
 import type { PlaidItemRow } from "@/lib/types";
 import { logError } from "@/lib/log";
 
@@ -172,16 +172,10 @@ export async function syncCreditCardLiabilities(
 export async function syncCreditCardLiabilitiesForUser(
   userId: string,
 ): Promise<number> {
-  const supabase = createServiceClient();
-  const { data, error } = await supabase
-    .from("plaid_items")
-    .select("id, user_id, plaid_item_id, institution_id, institution_name, institution_logo, institution_brand_color, access_token_ciphertext, access_token_iv, access_token_tag, sync_cursor, status, error_code")
-    .eq("user_id", userId)
-    .eq("status", "active");
-  if (error) throw error;
+  const items = await listActiveItems(userId);
 
   let totalSynced = 0;
-  for (const row of (data ?? []) as PlaidItemRow[]) {
+  for (const row of items) {
     try {
       const result = await syncCreditCardLiabilities(row);
       totalSynced += result.billsSynced;

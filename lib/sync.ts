@@ -6,7 +6,9 @@ import {
   decryptItemTokenAndUpgrade,
   upsertAccounts,
   getAccountIdMap,
-  updateItemCursor,
+  clearItemRepairCursor,
+  completeItemCursor,
+  updateItemRepairCursor,
   setItemStatus,
   listActiveItems,
 } from "@/lib/plaid-service";
@@ -251,40 +253,112 @@ async function applyTransactionPage(
   };
 }
 
-async function syncItemTransactionsInner(
+interface TransactionSyncLoopOptions {
+  /** Hard page bound, or null to drain until `has_more` is false. */
+  maxPages: number | null;
+  /** Emit large-transaction notifications for the rows applied. */
+  notify: boolean;
+  mode: "routine" | "repair";
+}
+
+interface TransactionSyncLoopOutcome {
+  result: SyncResult;
+  /** True only when `has_more` became false. */
+  completed: boolean;
+  pagesCompleted: number;
+}
+
+/**
+ * Drive Plaid's `/transactions/sync` pagination for one item.
+ *
+ * Two rules from Plaid's pagination contract shape this loop:
+ *
+ * 1. The loop must run until `has_more` is false. A caller that stops early
+ *    leaves the item behind by however many pages it skipped, so only the
+ *    explicitly bounded repair path passes a `maxPages`; the routine sync
+ *    passes null and drains.
+ * 2. The committed cursor must stay the one the update chain *began* with
+ *    until `has_more` is false. Bounded Repair runs keep their intermediate
+ *    position in a separate repair cursor, so a mutation error can discard it
+ *    and restart from the committed cursor exactly as Plaid requires.
+ *
+ *    Within one run, the cursor also stays in memory until a clean exit. A
+ *    thrown request or page write therefore retries that run's pages without
+ *    skipping any updates.
+ *
+ * The row writes themselves stay per page: they are keyed by
+ * plaid_transaction_id, so replaying a page after a failure is idempotent.
+ */
+async function runTransactionSyncLoop(
   item: PlaidItemRow,
   supabase: ReturnType<typeof createServiceClient>,
-): Promise<{ result: SyncResult; completed: boolean }> {
+  options: TransactionSyncLoopOptions,
+): Promise<TransactionSyncLoopOutcome> {
   const plaid = getPlaidClient();
   const accessToken = await decryptItemTokenAndUpgrade(item);
 
-  let cursor = item.sync_cursor ?? undefined;
+  if (options.mode === "routine" && item.repair_sync_started_at) {
+    await clearItemRepairCursor(item.user_id, item.id);
+  }
+  const committedCursor = item.sync_cursor ?? undefined;
+  const startCursor =
+    options.mode === "repair" && item.repair_sync_started_at
+      ? (item.repair_sync_cursor ?? committedCursor)
+      : committedCursor;
+  let cursor = startCursor;
   let hasMore = true;
   let pagesCompleted = 0;
   const result: SyncResult = { added: 0, modified: 0, removed: 0 };
 
-  while (hasMore && pagesCompleted < REPAIR_MAX_PAGES) {
-    const response = await plaid.transactionsSync({
-      access_token: accessToken,
-      cursor,
-    });
-    const data = response.data as TransactionSyncPage;
-    const pageResult = await applyTransactionPage(item, supabase, data, true);
-    result.added += pageResult.added;
-    result.modified += pageResult.modified;
-    result.removed += pageResult.removed;
-    if (!data.next_cursor && data.has_more) {
-      throw new Error("Plaid returned an empty next cursor");
+  try {
+    while (hasMore && (options.maxPages === null || pagesCompleted < options.maxPages)) {
+      const response = await plaid.transactionsSync({
+        access_token: accessToken,
+        cursor,
+      });
+      const data = response.data as TransactionSyncPage;
+      const pageResult = await applyTransactionPage(item, supabase, data, options.notify);
+      result.added += pageResult.added;
+      result.modified += pageResult.modified;
+      result.removed += pageResult.removed;
+      if (!data.next_cursor && data.has_more) {
+        throw new Error("Plaid returned an empty next cursor");
+      }
+      if (data.next_cursor) cursor = data.next_cursor;
+      hasMore = data.has_more;
+      pagesCompleted += 1;
     }
-    if (data.next_cursor) {
-      await updateItemCursor(item.user_id, item.id, data.next_cursor);
-      cursor = data.next_cursor;
+  } catch (error) {
+    if (
+      options.mode === "repair" &&
+      plaidErrorCode(error) === "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION"
+    ) {
+      await clearItemRepairCursor(item.user_id, item.id);
     }
-    hasMore = data.has_more;
-    pagesCompleted += 1;
+    throw error;
+  }
+
+  if (cursor && hasMore && options.mode === "repair") {
+    await updateItemRepairCursor(item.user_id, item.id, cursor);
+  } else if (cursor && !hasMore && cursor !== committedCursor) {
+    await completeItemCursor(item.user_id, item.id, cursor);
+  } else if (!hasMore && item.repair_sync_started_at) {
+    await clearItemRepairCursor(item.user_id, item.id);
   }
   await setItemStatus(item.user_id, item.id, "active", null);
-  return { result, completed: !hasMore };
+  return { result, completed: !hasMore, pagesCompleted };
+}
+
+async function syncItemTransactionsInner(
+  item: PlaidItemRow,
+  supabase: ReturnType<typeof createServiceClient>,
+): Promise<{ result: SyncResult; completed: boolean }> {
+  const { result, completed } = await runTransactionSyncLoop(item, supabase, {
+    maxPages: null,
+    notify: true,
+    mode: "routine",
+  });
+  return { result, completed };
 }
 
 /** Pull the Plaid error code out of an Axios-shaped error, if there is one. */
@@ -319,11 +393,12 @@ export class ItemSyncInProgressError extends Error {
 /**
  * Bounded historical reconciliation for the authenticated repair action.
  *
- * Like syncItemTransactionsInner, but capped at `maxPages` so one repair
- * cannot spin unboundedly against a long backlog. Progress is durable: the
- * intermediate cursor is persisted each run and upserts are keyed by
- * plaid_transaction_id, so retrying continues from where the last run stopped
- * without ever duplicating a row.
+ * Runs the same pagination loop as the routine sync, but capped at `maxPages`
+ * so one repair cannot spin unboundedly against a long backlog. Progress is
+ * durable in a separate repair cursor, while sync_cursor remains the chain's
+ * recovery point until has_more is false. A mutation error clears only the
+ * repair cursor, so the next run restarts the full chain from sync_cursor as
+ * Plaid requires.
  *
  * Explicit Plaid tombstones (the `removed` array) are applied even when the
  * run is bounded — they are listed removals, not omissions. Transactions that
@@ -358,43 +433,18 @@ async function backfillClaimedItemTransactions(
   options: RepairBackfillOptions | undefined,
   supabase: ReturnType<typeof createServiceClient>,
 ): Promise<RepairBackfillResult> {
-  const plaid = getPlaidClient();
-  const accessToken = await decryptItemTokenAndUpgrade(item);
-
   await recordCursorAttempt(supabase, {
     userId: item.user_id,
     itemDbId: item.id,
     nowIso: new Date().toISOString(),
   }).catch((error) => logError("repair.cursor-attempt", error));
 
-  let cursor = item.sync_cursor ?? undefined;
-  const result: SyncResult = { added: 0, modified: 0, removed: 0 };
-  let pagesCompleted = 0;
-  let hasMore = true;
   const maxPages = options?.maxPages ?? REPAIR_MAX_PAGES;
-
-  while (hasMore && pagesCompleted < maxPages) {
-    const response = await plaid.transactionsSync({
-      access_token: accessToken,
-      cursor,
-    });
-    const data = response.data as TransactionSyncPage;
-    const pageResult = await applyTransactionPage(item, supabase, data, false);
-    result.added += pageResult.added;
-    result.modified += pageResult.modified;
-    result.removed += pageResult.removed;
-    if (!data.next_cursor && data.has_more) {
-      throw new Error("Plaid returned an empty next cursor");
-    }
-    if (data.next_cursor) {
-      await updateItemCursor(item.user_id, item.id, data.next_cursor);
-      cursor = data.next_cursor;
-    }
-    hasMore = data.has_more;
-    pagesCompleted += 1;
-  }
-  const completed = !hasMore;
-  await setItemStatus(item.user_id, item.id, "active", null);
+  const { result, completed, pagesCompleted } = await runTransactionSyncLoop(
+    item,
+    supabase,
+    { maxPages, notify: false, mode: "repair" },
+  );
 
   const nowIso = new Date().toISOString();
   if (completed) {

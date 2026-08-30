@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isLiabilityAccount } from "@/lib/account-balance";
-import { safeErrorCode } from "@/lib/cursor-health";
+import {
+  deriveCursorHealth,
+  safeErrorCode,
+  type ItemCursorHealth,
+} from "@/lib/cursor-health";
 
 const STALE_AFTER_MS = 48 * 60 * 60 * 1000;
 const PAGE_SIZE = 1_000;
@@ -28,6 +32,28 @@ export interface InstitutionSyncHealth {
   accountsUpdatedAt: string | null;
   oldestTransactionDate: string | null;
   newestTransactionDate: string | null;
+  /** Item-level cursor state, or null when the item predates the migration. */
+  cursor: ItemCursorHealth | null;
+}
+
+/**
+ * Whether the local ledger can be trusted to hold every transaction the
+ * provider has for this item.
+ *
+ * Reports incompleteness only on positive evidence of a gap. An item that has
+ * not recorded a sync attempt yet carries nothing but the migration's column
+ * defaults, so it is treated as unknown-but-usable rather than flagged — a
+ * freshly migrated project would otherwise show every account as "History
+ * incomplete" until its next nightly sync stamps the flags for real.
+ */
+export function isHistoryComplete(cursor: ItemCursorHealth): boolean {
+  if (!cursor.lastAttemptAt) return true;
+  return (
+    cursor.state === "healthy" &&
+    cursor.lastSyncCompletedPages &&
+    !cursor.initialHistoryIncomplete &&
+    !cursor.cursorResetDetectedAt
+  );
 }
 
 export type ReconciliationState =
@@ -63,7 +89,21 @@ interface SafeItemRow {
   institution_name: string | null;
   status: string;
   error_code: string | null;
+  /**
+   * Cursor-health facts recorded on the item by lib/sync.ts. Optional so a
+   * caller that predates the migration still renders; a missing flag is read
+   * as "no known gap" rather than inventing one.
+   */
+  last_sync_attempt_at?: string | null;
+  last_sync_success_at?: string | null;
+  last_sync_completed_pages?: boolean | null;
+  initial_history_incomplete?: boolean | null;
+  cursor_reset_detected_at?: string | null;
 }
+
+/** The columns loadInstitutionObservability reads off plaid_items. */
+export const SYNC_HEALTH_ITEM_COLUMNS =
+  "id, institution_name, status, error_code, last_sync_attempt_at, last_sync_success_at, last_sync_completed_pages, initial_history_incomplete, cursor_reset_detected_at";
 
 interface AccountRow {
   id: string;
@@ -160,6 +200,7 @@ export function buildAccountReconciliation(input: Readonly<{
   anchor: SnapshotAnchor | null;
   transactionTotalCents: number;
   historyComplete: boolean;
+  coverage?: { oldest: string | null; newest: string | null };
 }>): AccountReconciliation {
   const base = {
     accountId: input.account.id,
@@ -168,8 +209,8 @@ export function buildAccountReconciliation(input: Readonly<{
     mask: input.account.mask,
     providerBalance: input.account.currentBalance,
     anchorDate: input.anchor?.snapshotDate ?? null,
-    oldestTransactionDate: null,
-    newestTransactionDate: null,
+    oldestTransactionDate: input.coverage?.oldest ?? null,
+    newestTransactionDate: input.coverage?.newest ?? null,
     accountsUpdatedAt: input.account.updatedAt,
   };
   if (input.account.currentBalance === null) {
@@ -295,6 +336,28 @@ export async function loadInstitutionObservability(
     accountsByItem.set(account.plaid_item_id, rows);
   }
 
+  // Only items that actually carry the cursor-health columns get an entry;
+  // a caller selecting the older column set leaves the map empty and both
+  // consumers below fall back to their pre-migration behaviour.
+  const cursorHealthByItem = new Map<string, ItemCursorHealth>();
+  for (const item of items) {
+    if (item.last_sync_completed_pages === undefined) continue;
+    cursorHealthByItem.set(
+      item.id,
+      deriveCursorHealth({
+        plaidItemId: item.id,
+        itemStatus: item.status,
+        itemErrorCode: item.error_code,
+        lastAttemptAt: item.last_sync_attempt_at ?? null,
+        lastSuccessAt: item.last_sync_success_at ?? null,
+        lastSyncCompletedPages: item.last_sync_completed_pages ?? false,
+        initialHistoryIncomplete: item.initial_history_incomplete ?? false,
+        cursorResetDetectedAt: item.cursor_reset_detected_at ?? null,
+        now,
+      }),
+    );
+  }
+
   const institutions = await Promise.all(
     items.map(async (item): Promise<InstitutionSyncHealth> => {
       const itemAccounts = accountsByItem.get(item.id) ?? [];
@@ -342,6 +405,7 @@ export async function loadInstitutionObservability(
         accountsUpdatedAt: updatedTimestamps.at(-1) ?? null,
         oldestTransactionDate: oldest,
         newestTransactionDate: newest,
+        cursor: cursorHealthByItem.get(item.id) ?? null,
       };
     }),
   );
@@ -357,18 +421,23 @@ export async function loadInstitutionObservability(
           currentBalance: snapshotBalanceCents / 100,
         }
       : null;
-    return {
-      ...buildAccountReconciliation({
-        account: toReconciliationAccount(account),
-        anchor,
-        transactionTotalCents: Number.isFinite(transactionTotalCents)
-          ? transactionTotalCents
-          : 0,
-        historyComplete: true,
-      }),
-      oldestTransactionDate: aggregate?.oldest_transaction_date ?? null,
-      newestTransactionDate: aggregate?.newest_transaction_date ?? null,
-    };
+    // A ledger balance is only meaningful when every transaction after the
+    // anchor is actually present. The owning item's cursor health is the one
+    // durable record of that, so a truncated or reset sync reports
+    // "incomplete_history" instead of a confidently wrong difference.
+    const cursor = cursorHealthByItem.get(account.plaid_item_id);
+    return buildAccountReconciliation({
+      account: toReconciliationAccount(account),
+      anchor,
+      transactionTotalCents: Number.isFinite(transactionTotalCents)
+        ? transactionTotalCents
+        : 0,
+      historyComplete: cursor ? isHistoryComplete(cursor) : true,
+      coverage: {
+        oldest: aggregate?.oldest_transaction_date ?? null,
+        newest: aggregate?.newest_transaction_date ?? null,
+      },
+    });
   });
   return { institutions, reconciliations };
 }

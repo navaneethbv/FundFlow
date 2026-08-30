@@ -8,6 +8,7 @@ import RepairBankButton from "@/components/settings/RepairBankButton";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Panel from "@/components/ui/Panel";
+import type { ItemCursorHealth } from "@/lib/cursor-health";
 import type { InstitutionSyncHealth, ProductSyncHealth, ProductSyncState } from "@/lib/sync-health";
 
 interface Item {
@@ -45,6 +46,46 @@ function healthTone(state: ProductSyncState): "success" | "danger" | "warning" |
   if (state === "repair_required") return "danger";
   if (state === "stale" || state === "rate_limited") return "warning";
   return "neutral";
+}
+
+/**
+ * States that mean the user's data may actually be incomplete.
+ *
+ * `product_unavailable` and `never_synced` are excluded on purpose: a
+ * transaction-only bank reports `no_investment_product` for investments on
+ * every run, so treating a non-healthy state as trouble would pin a permanent
+ * "may have incomplete data" warning to every ordinary checking connection.
+ */
+const ATTENTION_STATES = new Set<ProductSyncState>([
+  "stale",
+  "repair_required",
+  "rate_limited",
+]);
+
+/**
+ * Plain-language explanation of an item-level history gap, or null when the
+ * ledger is known to hold everything the provider has. This is what makes the
+ * cursor-health facts lib/sync.ts records actionable rather than write-only.
+ */
+function historyGapMessage(cursor: ItemCursorHealth | null): string | null {
+  if (!cursor) return null;
+  if (cursor.cursorResetDetectedAt) {
+    return "This connection's sync position was reset, so older transactions may be missing.";
+  }
+  if (cursor.initialHistoryIncomplete) {
+    return "The first history download for this bank has not finished yet.";
+  }
+  if (cursor.state === "partial_page") {
+    return "The last sync stopped before the end of this bank's history.";
+  }
+  return null;
+}
+
+function institutionNeedsAttention(health: InstitutionSyncHealth): boolean {
+  return (
+    ATTENTION_STATES.has(health.transactions.state) ||
+    ATTENTION_STATES.has(health.investments.state)
+  );
 }
 
 function healthHelp(health: ProductSyncHealth): string {
@@ -149,8 +190,7 @@ export default function BanksSection({
         <ul className="space-y-3 text-sm">
           {items.map((i) => {
             const health = healthByItem[i.id];
-            const needsAttention = health &&
-              (health.transactions.state !== "healthy" || health.investments.state !== "healthy");
+            const needsAttention = health ? institutionNeedsAttention(health) : false;
             return (
             <li
               key={i.id}
@@ -173,6 +213,13 @@ export default function BanksSection({
                     <p className="mt-2 text-xs text-muted">
                       Transaction coverage: {health.oldestTransactionDate ?? "not available"} to {health.newestTransactionDate ?? "not available"}.
                     </p>
+                    {historyGapMessage(health.cursor) && (
+                      <output className="mt-2 block rounded-field border border-warning/30 bg-warning/10 p-2 text-xs text-foreground">
+                        {historyGapMessage(health.cursor)}{" "}
+                        Run Repair to continue the backfill; retries never
+                        duplicate transactions.
+                      </output>
+                    )}
                     {needsAttention && (
                       <output className="mt-2 block rounded-field border border-warning/30 bg-warning/10 p-2 text-xs text-foreground">
                         {health.institutionName} may have incomplete data.

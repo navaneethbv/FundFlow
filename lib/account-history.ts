@@ -23,6 +23,7 @@ export interface AccountBalanceSnapshotInsert {
   current_balance: number | null;
   available_balance: number | null;
   iso_currency_code: string;
+  captured_at: string;
 }
 
 function assertDate(value: string): void {
@@ -60,8 +61,13 @@ export function shapeDailyAccountSnapshots(input: {
   plaidAccounts: SnapshotPlaidAccount[];
   manualAccounts: SnapshotManualAccount[];
   snapshotDate: string;
+  capturedAt?: string;
 }): AccountBalanceSnapshotInsert[] {
   assertDate(input.snapshotDate);
+  const capturedAt = input.capturedAt ?? new Date().toISOString();
+  if (Number.isNaN(Date.parse(capturedAt))) {
+    throw new RangeError("Snapshot capture time must be an ISO timestamp");
+  }
 
   const plaidRows = input.plaidAccounts.flatMap((account) => {
     const currentBalance = numberOrNull(account.current_balance);
@@ -75,6 +81,7 @@ export function shapeDailyAccountSnapshots(input: {
         current_balance: currentBalance,
         available_balance: numberOrNull(account.available_balance),
         iso_currency_code: currencyCode(account.iso_currency_code),
+        captured_at: capturedAt,
       },
     ];
   });
@@ -91,6 +98,7 @@ export function shapeDailyAccountSnapshots(input: {
         current_balance: currentBalance,
         available_balance: null,
         iso_currency_code: "USD",
+        captured_at: capturedAt,
       },
     ];
   });
@@ -120,6 +128,9 @@ export async function writeDailyAccountSnapshots(
   const rows = shapeDailyAccountSnapshots({
     userId,
     snapshotDate,
+    // One timestamp describes the complete account read above. Re-upserting a
+    // same-day snapshot must refresh this boundary along with its balance.
+    capturedAt: new Date().toISOString(),
     plaidAccounts: (plaidResult.data ?? []) as SnapshotPlaidAccount[],
     manualAccounts: (manualResult.data ?? []) as SnapshotManualAccount[],
   });

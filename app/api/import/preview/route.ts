@@ -150,9 +150,19 @@ async function resolveSourceAccountMappings(
   );
 }
 
+/**
+ * Existing transactions that could possibly collide with the imported file.
+ *
+ * The duplicate fingerprint starts with the transaction date, so a row dated
+ * outside the file's own span can never match one of its rows. Bounding the
+ * read to that span keeps duplicate detection exactly as accurate as a full
+ * scan while turning an unbounded "every transaction this user has ever had"
+ * load into one proportional to the file being imported.
+ */
 async function loadExistingTransactions(
   supabase: SupabaseClient,
   userId: string,
+  dateRange: { start: string; end: string },
 ): Promise<Array<Record<string, unknown>>> {
   const rows: Array<Record<string, unknown>> = [];
   for (let offset = 0; ; offset += EXISTING_TRANSACTION_PAGE_SIZE) {
@@ -160,6 +170,8 @@ async function loadExistingTransactions(
       .from("transactions")
       .select("id, date, amount, merchant_name, name, pfc_primary")
       .eq("user_id", userId)
+      .gte("date", dateRange.start)
+      .lte("date", dateRange.end)
       .order("date", { ascending: true })
       .order("id", { ascending: true })
       .range(offset, offset + EXISTING_TRANSACTION_PAGE_SIZE - 1);
@@ -169,6 +181,19 @@ async function loadExistingTransactions(
     if (pageRows.length < EXISTING_TRANSACTION_PAGE_SIZE) break;
   }
   return rows;
+}
+
+/** Inclusive min/max date across the parsed rows. */
+function importedDateRange(
+  rows: ReadonlyArray<{ date: string }>,
+): { start: string; end: string } {
+  let start = rows[0]!.date;
+  let end = rows[0]!.date;
+  for (const row of rows) {
+    if (row.date < start) start = row.date;
+    if (row.date > end) end = row.date;
+  }
+  return { start, end };
 }
 
 async function stagePreviewRows(
@@ -239,7 +264,11 @@ export async function POST(request: NextRequest) {
     }
     if (rows.length === 0) return emptyPreviewResponse(text, format, columns, errors, parsed.requiresDateOrder);
 
-    const existing = await loadExistingTransactions(supabase, user.id);
+    const existing = await loadExistingTransactions(
+      supabase,
+      user.id,
+      importedDateRange(rows),
+    );
     const existingFingerprints = new Set(
       (existing ?? []).map((row) => `${row.date}|${Number(row.amount).toFixed(2)}|${transactionLabel(row)}`),
     );

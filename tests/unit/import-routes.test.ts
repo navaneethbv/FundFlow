@@ -82,6 +82,8 @@ import { NextRequest, NextResponse } from "next/server";
 type RouteQueryState = {
   in: Array<[string, unknown[]]>;
   range: [number, number] | null;
+  /** Inclusive date bounds recorded from gte/lte, when the query sets them. */
+  dateBounds: { gte?: string; lte?: string };
 };
 
 function routeQuery(
@@ -90,10 +92,18 @@ function routeQuery(
     error: unknown;
   },
 ) {
-  const state: RouteQueryState = { in: [], range: null };
+  const state: RouteQueryState = { in: [], range: null, dateBounds: {} };
   const builder = {
     select: vi.fn(() => builder),
     eq: vi.fn(() => builder),
+    gte: vi.fn((column: string, value: string) => {
+      if (column === "date") state.dateBounds.gte = value;
+      return builder;
+    }),
+    lte: vi.fn((column: string, value: string) => {
+      if (column === "date") state.dateBounds.lte = value;
+      return builder;
+    }),
     in: vi.fn((column: string, values: unknown[]) => {
       state.in.push([column, values]);
       return builder;
@@ -116,8 +126,17 @@ function previewSupabase(existingRows: Array<Record<string, unknown>> = []) {
   return {
     from: vi.fn((table: string) => routeQuery((state) => {
       if (table !== "transactions") return { data: [], error: null };
+      // Honour the date window the route now applies, so the mock cannot hand
+      // back rows a real query would have filtered out.
+      const { gte, lte } = state.dateBounds;
+      const inWindow = existingRows.filter((row) => {
+        const date = row.date as string | undefined;
+        if (typeof date !== "string") return true;
+        if (gte && date < gte) return false;
+        return !(lte && date > lte);
+      });
       const [from, to] = state.range ?? [0, 999];
-      return { data: existingRows.slice(from, to + 1), error: null };
+      return { data: inWindow.slice(from, to + 1), error: null };
     })),
   };
 }
@@ -655,8 +674,13 @@ describe("Import API Routes", () => {
         formData: () => Promise.resolve(formData),
       } as unknown as NextRequest;
 
+      // The file spans all three existing dates, so every fixture row falls
+      // inside the date window the preview now reads.
       mockParseImportCsv.mockReturnValue({
-        rows: [{ date: "2026-07-01", merchant: "Store", amount: 10 }],
+        rows: [
+          { date: "2026-07-01", merchant: "Store", amount: 10 },
+          { date: "2026-07-03", merchant: "Other", amount: 12 },
+        ],
         errors: [],
       });
       mockBuildImportReview.mockReturnValue({

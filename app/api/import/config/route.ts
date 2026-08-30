@@ -108,10 +108,13 @@ async function applyBudgetImport(
   rows: BudgetImportRow[],
   decisions: ImportDecisions,
 ): Promise<ApplyOutcome> {
-  const { data: existingRows } = await supabase
+  // A dropped error here would look like "no existing budgets", turning every
+  // incoming row into a create and losing the merge the user chose.
+  const { data: existingRows, error: existingError } = await supabase
     .from("budgets")
     .select("id, category, monthly_limit, group_name")
     .eq("user_id", userId);
+  if (existingError) throw existingError;
   const existingByCategory = new Map(
     (existingRows ?? []).map((budget) => [budget.category.toLowerCase(), budget]),
   );
@@ -474,10 +477,12 @@ async function processBudgetConfig(
       }
     }
   }
-  const { data: existing } = await supabase
+  // Failing here must not silently produce a conflict-free create-only plan.
+  const { data: existing, error: existingError } = await supabase
     .from("budgets")
     .select("category, monthly_limit, group_name")
     .eq("user_id", userId);
+  if (existingError) throw existingError;
   const plan = buildBudgetImportPlan(rows, existing ?? []);
   if (mode === "preview") return NextResponse.json({ kind: "budget", plan });
   const outcome = await applyBudgetImport(supabase, userId, rows, decisions);
@@ -528,10 +533,13 @@ async function processGoalConfig(
 ): Promise<NextResponse> {
   const { rows, errors } = parseMonarchGoals(text);
   if (errors.length > 0) return badRequest(errors[0] ?? "Invalid goal format");
-  const { data: existing } = await supabase
+  // Without this check a failed read looks like "no existing goals", and the
+  // apply then creates duplicates instead of merging into the matched goal.
+  const { data: existing, error: existingError } = await supabase
     .from("goals")
     .select("id, name, goal_type, target_amount, target_date, monthly_contribution, import_source, import_ref")
     .eq("user_id", userId);
+  if (existingError) throw existingError;
   const existingGoals = (existing ?? []) as ExistingGoalRow[];
   const plan = buildGoalImportPlan(rows, existingGoals);
   if (mode === "preview") return NextResponse.json({ kind: "goal", plan });

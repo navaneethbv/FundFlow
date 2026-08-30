@@ -412,23 +412,17 @@ export async function loadRecurringData(
   const creditCardBucket = buildCreditCardBucket(creditBills, input.anchorMonth);
   const today = input.today ?? localDateKey(input.now ?? new Date());
 
+  const expanded = expandStreamsForMonth(
+    streamInputs,
+    manualInputs,
+    input.anchorMonth,
+    today,
+  );
+
   return {
     view: {
-      ...expandStreamsForMonth(
-        streamInputs,
-        manualInputs,
-        input.anchorMonth,
-        today,
-      ),
-      totals: {
-        ...expandStreamsForMonth(
-          streamInputs,
-          manualInputs,
-          input.anchorMonth,
-          today,
-        ).totals,
-        creditCards: creditCardBucket,
-      },
+      ...expanded,
+      totals: { ...expanded.totals, creditCards: creditCardBucket },
       reviewCount: countUnreviewedStreams(ownerScopedInputs),
     },
     scope,

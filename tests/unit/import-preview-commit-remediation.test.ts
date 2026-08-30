@@ -51,6 +51,8 @@ type QueryState = {
   in: Array<[string, unknown[]]>;
   order: Array<[string, unknown]>;
   range: [number, number] | null;
+  gte: Array<[string, unknown]>;
+  lte: Array<[string, unknown]>;
 };
 
 type QueryResult = { data: unknown; error: unknown };
@@ -58,11 +60,19 @@ type QueryResult = { data: unknown; error: unknown };
 function queryBuilder(
   resolve: (state: QueryState, terminal: "await" | "single" | "maybeSingle" | "range") => QueryResult,
 ) {
-  const state: QueryState = { eq: [], in: [], order: [], range: null };
+  const state: QueryState = { eq: [], in: [], order: [], range: null, gte: [], lte: [] };
   const builder = {
     select: vi.fn(() => builder),
     eq: vi.fn((column: string, value: unknown) => {
       state.eq.push([column, value]);
+      return builder;
+    }),
+    gte: vi.fn((column: string, value: unknown) => {
+      state.gte.push([column, value]);
+      return builder;
+    }),
+    lte: vi.fn((column: string, value: unknown) => {
+      state.lte.push([column, value]);
       return builder;
     }),
     in: vi.fn((column: string, values: unknown[]) => {
@@ -175,6 +185,11 @@ describe("import preview and commit remediation", () => {
     for (const query of transactionQueries) {
       expect(query.state.eq).toContainEqual(["user_id", "user-1"]);
       expect(query.state.order.map(([column]) => column)).toEqual(["date", "id"]);
+      // Bounded to the imported file's own date span: a row outside it can
+      // never collide with one of the file's date-keyed fingerprints, so the
+      // preview must not scan the user's entire transaction history.
+      expect(query.state.gte).toEqual([["date", "2026-07-01"]]);
+      expect(query.state.lte).toEqual([["date", "2026-07-28"]]);
     }
     for (const [index, query] of transactionQueries.entries()) {
       expect(query.range).toHaveBeenCalledWith(index * 1_000, index * 1_000 + 999);

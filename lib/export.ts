@@ -150,12 +150,19 @@ export async function fetchPrivacySafeRows(
   // exports exactly as it does in Dashboard, Cash Flow, Reports, and Budget.
   const canonical = await loadCanonicalRows(supabase, userId, txns);
 
-  const rows: ExportRow[] = canonical.map((row) => ({
-    date: row.date,
-    merchant: row.merchant || "",
-    amount: row.signedAmount,
-    category: row.categoryKey === UNCATEGORIZED ? "" : row.categoryKey,
-  }));
+  // projectFinanceTransactions sorts ascending for its paginated consumers,
+  // but the export contract has always handed back newest-first.
+  const rows: ExportRow[] = canonical
+    .toSorted(
+      (a, b) =>
+        b.date.localeCompare(a.date) || b.sourceTransactionId.localeCompare(a.sourceTransactionId),
+    )
+    .map((row) => ({
+      date: row.date,
+      merchant: row.merchant || "",
+      amount: row.signedAmount,
+      category: row.categoryKey === UNCATEGORIZED ? "" : row.categoryKey,
+    }));
   return { allowed: true, rows };
 }
 
@@ -169,7 +176,13 @@ async function loadCanonicalRows(
   userId: string,
   rows: TransactionRow[],
 ): Promise<
-  Array<{ date: string; merchant: string; signedAmount: number; categoryKey: string }>
+  Array<{
+    sourceTransactionId: string;
+    date: string;
+    merchant: string;
+    signedAmount: number;
+    categoryKey: string;
+  }>
 > {
   const txnIds = rows.map((row) => row.id);
   const [
@@ -179,6 +192,7 @@ async function loadCanonicalRows(
     categoryOverrides,
     linkedRefunds,
     linkedDuplicates,
+    accounts,
   ] = await Promise.all([
     loadChunkedRows<{
       transaction_id: string;
@@ -249,11 +263,23 @@ async function loadCanonicalRows(
         .order("id")
         .range(from, to),
     ),
+    // Merchant rules with matchType "account" match against the account's
+    // display name, so the projection needs the same id→name map every other
+    // surface passes. Without it those rules silently no-op in the export.
+    loadPagedRows<{ id: string; name: string | null }>((from, to) =>
+      supabase
+        .from("accounts")
+        .select("id, name")
+        .eq("user_id", userId)
+        .order("id")
+        .range(from, to),
+    ),
   ]);
 
   const { projectFinanceTransactions } = await import("@/lib/finance-domain");
   const projected = projectFinanceTransactions({
     rows: rows.map(fromTransactionRow),
+    accountNames: new Map(accounts.map((account) => [account.id, account.name ?? ""])),
     merchantRules: rules.map((rule) => ({
       matchType: rule.match_type as "merchant" | "keyword" | "account",
       pattern: rule.pattern,
@@ -286,6 +312,7 @@ async function loadCanonicalRows(
     })),
   });
   return projected.map((row) => ({
+    sourceTransactionId: row.sourceTransactionId,
     date: row.date,
     merchant: row.merchant,
     signedAmount: row.signedAmount,

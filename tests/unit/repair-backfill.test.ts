@@ -18,13 +18,17 @@ vi.mock("@/lib/supabase/service", () => ({
 const mockDecryptItemTokenAndUpgrade = vi.fn().mockResolvedValue("access-token-123");
 const mockUpsertAccounts = vi.fn().mockResolvedValue(undefined);
 const mockGetAccountIdMap = vi.fn().mockResolvedValue(new Map([["plaid-acc-1", "db-acc-1"]]));
-const mockUpdateItemCursor = vi.fn().mockResolvedValue(undefined);
+const mockClearItemRepairCursor = vi.fn().mockResolvedValue(undefined);
+const mockCompleteItemCursor = vi.fn().mockResolvedValue(undefined);
+const mockUpdateItemRepairCursor = vi.fn().mockResolvedValue(undefined);
 const mockSetItemStatus = vi.fn().mockResolvedValue(undefined);
 vi.mock("@/lib/plaid-service", () => ({
   decryptItemTokenAndUpgrade: (...args: unknown[]) => mockDecryptItemTokenAndUpgrade(...args),
   upsertAccounts: (...args: unknown[]) => mockUpsertAccounts(...args),
   getAccountIdMap: (...args: unknown[]) => mockGetAccountIdMap(...args),
-  updateItemCursor: (...args: unknown[]) => mockUpdateItemCursor(...args),
+  clearItemRepairCursor: (...args: unknown[]) => mockClearItemRepairCursor(...args),
+  completeItemCursor: (...args: unknown[]) => mockCompleteItemCursor(...args),
+  updateItemRepairCursor: (...args: unknown[]) => mockUpdateItemRepairCursor(...args),
   setItemStatus: (...args: unknown[]) => mockSetItemStatus(...args),
 }));
 
@@ -117,7 +121,8 @@ describe("backfillItemTransactions (bounded repair backfill)", () => {
       modified: 0,
       removed: 0,
     });
-    expect(mockUpdateItemCursor).toHaveBeenCalledWith("user-1", "item-db-1", "cursor-2");
+    expect(mockUpdateItemRepairCursor).toHaveBeenCalledWith("user-1", "item-db-1", "cursor-2");
+    expect(mockCompleteItemCursor).not.toHaveBeenCalled();
     expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", null);
     expect(mockServiceClient.rpc).toHaveBeenCalledWith("claim_item_sync", {
       p_item_id: "item-db-1",
@@ -135,7 +140,8 @@ describe("backfillItemTransactions (bounded repair backfill)", () => {
       backfillItemTransactions(dummyItem, { maxPages: 2 }),
     ).rejects.toThrow(/already in progress/i);
     expect(mockTransactionsSync).not.toHaveBeenCalled();
-    expect(mockUpdateItemCursor).not.toHaveBeenCalled();
+    expect(mockUpdateItemRepairCursor).not.toHaveBeenCalled();
+    expect(mockCompleteItemCursor).not.toHaveBeenCalled();
   });
 
   it("reports completed when has_more is false inside the bound", async () => {
@@ -163,6 +169,11 @@ describe("backfillItemTransactions (bounded repair backfill)", () => {
 
     expect(mockTransactionsSync).toHaveBeenCalledTimes(1);
     expect(result.completed).toBe(true);
+    expect(mockCompleteItemCursor).toHaveBeenCalledWith(
+      "user-1",
+      "item-db-1",
+      "cursor-final",
+    );
     expect(eqDeleteIn).toHaveBeenCalledWith("plaid_transaction_id", ["txn-old"]);
   });
 
@@ -236,5 +247,36 @@ describe("backfillItemTransactions (bounded repair backfill)", () => {
       [expect.objectContaining({ plaid_transaction_id: "txn-1" })],
       { onConflict: "plaid_transaction_id" },
     );
+  });
+
+  it("resumes from the repair cursor but clears it on a pagination mutation", async () => {
+    const mutationError = Object.assign(new Error("transaction data changed"), {
+      response: {
+        data: {
+          error_code: "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION",
+        },
+      },
+    });
+    mockTransactionsSync.mockRejectedValueOnce(mutationError);
+    const partiallyRepairedItem: PlaidItemRow = {
+      ...dummyItem,
+      sync_cursor: "committed-cursor",
+      repair_sync_cursor: "repair-cursor-8",
+      repair_sync_started_at: "2026-08-30T12:00:00.000Z",
+    };
+
+    await expect(
+      backfillItemTransactions(partiallyRepairedItem, { maxPages: 2 }),
+    ).rejects.toThrow("transaction data changed");
+
+    expect(mockTransactionsSync).toHaveBeenCalledWith({
+      access_token: "access-token-123",
+      cursor: "repair-cursor-8",
+    });
+    expect(mockClearItemRepairCursor).toHaveBeenCalledWith(
+      "user-1",
+      "item-db-1",
+    );
+    expect(mockCompleteItemCursor).not.toHaveBeenCalled();
   });
 });

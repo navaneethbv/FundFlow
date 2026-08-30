@@ -633,3 +633,65 @@ describe("getWeeklyReportData", () => {
     expect(cardModel.cards[0]?.name).toBe("Custom Card");
   });
 });
+
+describe("buildWeeklyReportModel classification overrides", () => {
+  const baseInput = {
+    userId: "user-1",
+    userEmail: "user@example.com",
+    period,
+    accounts,
+    institutions: [{ id: "chase-item", name: "Chase" }],
+    merchantRules: [],
+    splits: [],
+    budgets: [],
+    linkedRefundTransactionIds: new Set<string>(),
+    duplicateTransactionIds: new Set<string>(),
+  };
+
+  it("keeps a relabelled card payment out of spend", () => {
+    // A display override renames the row for the reader; it must not turn a
+    // provider loan payment into spending, or the payment double-counts
+    // against the purchases it settles.
+    const report = buildWeeklyReportModel({
+      ...baseInput,
+      transactions: [
+        {
+          id: "card-payment",
+          date: "2026-07-08",
+          amount: 400,
+          merchantName: "Chase",
+          name: "AUTOPAY",
+          category: "LOAN_PAYMENTS",
+          accountId: "checking",
+          displayCategory: "Shopping",
+          cashFlowClassification: null,
+        },
+      ],
+    });
+
+    expect(report.totalSpend).toBe(0);
+  });
+
+  it("counts an explicit expense override even when the amount is negative", () => {
+    const report = buildWeeklyReportModel({
+      ...baseInput,
+      transactions: [
+        {
+          id: "reclassified",
+          date: "2026-07-08",
+          amount: -75,
+          merchantName: "Studio",
+          name: "STUDIO",
+          category: "TRANSFER_IN",
+          accountId: "checking",
+          displayCategory: null,
+          cashFlowClassification: "expense" as const,
+        },
+      ],
+    });
+
+    // Summing the signed amount here would subtract 75 from the week's spend.
+    expect(report.totalSpend).toBe(75);
+    expect(report.categories.every((category) => category.amount >= 0)).toBe(true);
+  });
+});

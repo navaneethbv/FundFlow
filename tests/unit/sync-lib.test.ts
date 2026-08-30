@@ -18,7 +18,9 @@ vi.mock("@/lib/supabase/service", () => ({
 const mockDecryptItemTokenAndUpgrade = vi.fn().mockResolvedValue("access-token-123");
 const mockUpsertAccounts = vi.fn().mockResolvedValue(undefined);
 const mockGetAccountIdMap = vi.fn().mockResolvedValue(new Map([["plaid-acc-1", "db-acc-1"]]));
-const mockUpdateItemCursor = vi.fn().mockResolvedValue(undefined);
+const mockClearItemRepairCursor = vi.fn().mockResolvedValue(undefined);
+const mockCompleteItemCursor = vi.fn().mockResolvedValue(undefined);
+const mockUpdateItemRepairCursor = vi.fn().mockResolvedValue(undefined);
 const mockSetItemStatus = vi.fn().mockResolvedValue(undefined);
 const mockListActiveItems = vi.fn();
 
@@ -26,7 +28,9 @@ vi.mock("@/lib/plaid-service", () => ({
   decryptItemTokenAndUpgrade: (...args: unknown[]) => mockDecryptItemTokenAndUpgrade(...args),
   upsertAccounts: (...args: unknown[]) => mockUpsertAccounts(...args),
   getAccountIdMap: (...args: unknown[]) => mockGetAccountIdMap(...args),
-  updateItemCursor: (...args: unknown[]) => mockUpdateItemCursor(...args),
+  clearItemRepairCursor: (...args: unknown[]) => mockClearItemRepairCursor(...args),
+  completeItemCursor: (...args: unknown[]) => mockCompleteItemCursor(...args),
+  updateItemRepairCursor: (...args: unknown[]) => mockUpdateItemRepairCursor(...args),
   setItemStatus: (...args: unknown[]) => mockSetItemStatus(...args),
   listActiveItems: (...args: unknown[]) => mockListActiveItems(...args),
 }));
@@ -144,7 +148,7 @@ describe("lib/sync", () => {
         expect.objectContaining({ title: expect.stringContaining("Netflix") }),
         "Netflix",
       );
-      expect(mockUpdateItemCursor).toHaveBeenCalledWith("user-1", "item-db-1", "cursor-next");
+      expect(mockCompleteItemCursor).toHaveBeenCalledWith("user-1", "item-db-1", "cursor-next");
       expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", null);
     });
 
@@ -155,7 +159,7 @@ describe("lib/sync", () => {
 
       expect(res).toEqual({ added: 0, modified: 0, removed: 0 });
       expect(mockTransactionsSync).not.toHaveBeenCalled();
-      expect(mockUpdateItemCursor).not.toHaveBeenCalled();
+      expect(mockCompleteItemCursor).not.toHaveBeenCalled();
       expect(mockServiceClient.rpc).toHaveBeenCalledWith("claim_item_sync", {
         p_item_id: "item-db-1",
         p_stale_seconds: 300,
@@ -211,7 +215,7 @@ describe("lib/sync", () => {
       });
 
       await expect(syncItemTransactions(dummyItem)).rejects.toThrow("Upsert error");
-      expect(mockUpdateItemCursor).not.toHaveBeenCalled();
+      expect(mockCompleteItemCursor).not.toHaveBeenCalled();
     });
 
     it("proceeds without a claim when the claim RPC fails, and does not release", async () => {
@@ -235,7 +239,7 @@ describe("lib/sync", () => {
       expect(res).toEqual({ added: 0, modified: 0, removed: 0 });
       expect(mockLogError).toHaveBeenCalledWith("sync.claim", expect.any(Error));
       expect(mockServiceClient.rpc).toHaveBeenCalledTimes(1);
-      expect(mockUpdateItemCursor).not.toHaveBeenCalled();
+      expect(mockCompleteItemCursor).not.toHaveBeenCalled();
     });
 
     it("refuses to advance the cursor when a transaction account is unknown", async () => {
@@ -264,11 +268,11 @@ describe("lib/sync", () => {
       await expect(syncItemTransactions(dummyItem)).rejects.toThrow(
         /unknown Plaid account/i,
       );
-      expect(mockUpdateItemCursor).not.toHaveBeenCalled();
+      expect(mockCompleteItemCursor).not.toHaveBeenCalled();
       expect(mockSetItemStatus).not.toHaveBeenCalled();
     });
 
-    it("persists each successfully applied page before fetching the next", async () => {
+    it("commits only the final cursor once pagination finishes", async () => {
       mockTransactionsSync
         .mockResolvedValueOnce({
           data: {
@@ -296,17 +300,43 @@ describe("lib/sync", () => {
 
       await syncItemTransactions(dummyItem);
 
-      expect(mockUpdateItemCursor).toHaveBeenNthCalledWith(
-        1,
-        "user-1",
-        "item-db-1",
-        "cursor-1",
-      );
-      expect(mockUpdateItemCursor).toHaveBeenNthCalledWith(
-        2,
+      // Plaid's pagination recovery requires a failed run to restart from the
+      // cursor it began with, so no intermediate cursor is ever stored: the
+      // loop advances in memory and writes once, after it exits cleanly.
+      expect(mockCompleteItemCursor).toHaveBeenCalledTimes(1);
+      expect(mockCompleteItemCursor).toHaveBeenCalledWith(
         "user-1",
         "item-db-1",
         "cursor-2",
+      );
+    });
+
+    it("drains every page instead of stopping at the repair page bound", async () => {
+      const pages = 10;
+      for (let page = 0; page < pages; page += 1) {
+        mockTransactionsSync.mockResolvedValueOnce({
+          data: {
+            added: [],
+            modified: [],
+            removed: [],
+            accounts: [],
+            next_cursor: `cursor-${page + 1}`,
+            has_more: page < pages - 1,
+          },
+        });
+      }
+      mockServiceClient.from.mockImplementation(() => {
+        throw new Error("Unexpected table");
+      });
+
+      await syncItemTransactions(dummyItem);
+
+      expect(mockTransactionsSync).toHaveBeenCalledTimes(pages);
+      expect(mockCompleteItemCursor).toHaveBeenCalledTimes(1);
+      expect(mockCompleteItemCursor).toHaveBeenCalledWith(
+        "user-1",
+        "item-db-1",
+        `cursor-${pages}`,
       );
     });
 

@@ -300,31 +300,49 @@ async function newerEditConflicts(input: {
   for (const transactionIdChunk of chunks(existingTxnIds)) {
     const { data, error } = await service
         .from("transaction_annotations")
-        .select("transaction_id, updated_at")
+        .select("transaction_id, updated_at, note, tags")
         .in("transaction_id", transactionIdChunk)
         .eq("user_id", userId);
     if (error) throw error;
     annotations.push(...((data ?? []) as Array<Record<string, unknown>>));
   }
   const batchTime = Date.parse(batchCreatedAt);
-  const annotationUpdatedAtByTxnId = new Map(
-    annotations.map((item) => [
-      item.transaction_id as string,
-      item.updated_at as string | undefined,
-    ]),
+  const annotationByTxnId = new Map(
+    annotations.map((item) => [item.transaction_id as string, item]),
   );
   const conflictRowIds = notesRows
     .filter((row) => {
       const txnId = txnIdByImportId.get(row.plaid_transaction_id);
-      const updatedAt = txnId ? annotationUpdatedAtByTxnId.get(txnId) : undefined;
-      return updatedAt
-        ? Date.parse(updatedAt) > batchTime
-        : false;
+      const annotation = txnId ? annotationByTxnId.get(txnId) : undefined;
+      if (!annotation) return false;
+      const updatedAt = annotation.updated_at as string | undefined;
+      if (!updatedAt || Date.parse(updatedAt) <= batchTime) return false;
+      // A newer timestamp alone is not a conflict: this batch's own earlier
+      // commit stamps one too, so a plain retry (or a second slice of the
+      // same batch) would otherwise be blocked forever. It is only a real
+      // conflict when the stored annotation actually differs from what this
+      // commit would write.
+      return !sameAnnotation(annotation, row);
     })
     .map((row) => row.rowId);
   return {
     rowIds: conflictRowIds.filter((id) => !overwriteAnnotationIds.has(String(id))),
   };
+}
+
+/** True when the stored annotation already holds exactly this row's note/tags. */
+function sameAnnotation(
+  annotation: Record<string, unknown>,
+  row: { note: string | null; tags: string[] },
+): boolean {
+  const storedNote = (annotation.note as string | null) ?? null;
+  const storedTags = ((annotation.tags as string[] | null) ?? []).slice().sort();
+  const incomingTags = row.tags.slice().sort();
+  return (
+    storedNote === row.note &&
+    storedTags.length === incomingTags.length &&
+    storedTags.every((tag, index) => tag === incomingTags[index])
+  );
 }
 
 async function persistCommit(

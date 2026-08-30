@@ -275,20 +275,22 @@ describe("lib/export", () => {
         client as never,
         "user-1",
       );
+      // The export contract is newest-first, unlike the canonical projection's
+      // ascending order that paginated in-app consumers rely on.
       expect(result).toEqual({
         allowed: true,
         rows: [
-          {
-            date: "2026-07-01",
-            merchant: "Coffee Shop",
-            amount: 4.5,
-            category: "FOOD_AND_DRINK_COFFEE_SHOP",
-          },
           {
             date: "2026-07-02",
             merchant: "Gas Station",
             amount: 35.0,
             category: "TRANSPORTATION",
+          },
+          {
+            date: "2026-07-01",
+            merchant: "Coffee Shop",
+            amount: 4.5,
+            category: "FOOD_AND_DRINK_COFFEE_SHOP",
           },
         ],
       });

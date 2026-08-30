@@ -87,6 +87,7 @@ describe("fetchPrivacySafeRows null merchant/category branches", () => {
           "linked_refunds",
           "linked_duplicates",
           "transaction_splits",
+          "accounts",
         ].includes(table)) return { select: chainableEmpty };
         throw new Error(`Unexpected table ${table}`);
       }),

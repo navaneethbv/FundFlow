@@ -40,7 +40,10 @@ import ButtonLink from "@/components/ui/ButtonLink";
 import Panel from "@/components/ui/Panel";
 import { sectionFromParam, parseDisplayPrefs, type SettingsSection } from "@/components/settings/settings-nav";
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import { loadInstitutionObservability } from "@/lib/sync-health";
+import {
+  loadInstitutionObservability,
+  SYNC_HEALTH_ITEM_COLUMNS,
+} from "@/lib/sync-health";
 
 export const dynamic = "force-dynamic";
 
@@ -298,7 +301,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
     const [{ data: items }, { data: manualAccounts }, { data: accounts }, { data: households }] = await Promise.all([
       supabase
         .from("plaid_items")
-        .select("id, institution_name, status, error_code, shared_household_id")
+        .select(`${SYNC_HEALTH_ITEM_COLUMNS}, shared_household_id`)
         .order("created_at"),
       supabase.from("manual_accounts").select("id, name, account_type, balance, include_in_net_worth").order("created_at"),
       supabase.from("accounts").select("id, name, mask, type, apr").eq("user_id", userId).order("name"),
@@ -309,6 +312,11 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
       institution_name: string | null;
       status: string;
       error_code: string | null;
+      last_sync_attempt_at?: string | null;
+      last_sync_success_at?: string | null;
+      last_sync_completed_pages?: boolean | null;
+      initial_history_incomplete?: boolean | null;
+      cursor_reset_detected_at?: string | null;
       shared_household_id?: string | null;
     }>;
     const observability = await loadInstitutionObservability(supabase, userId, safeItems);
