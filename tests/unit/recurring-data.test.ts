@@ -354,6 +354,130 @@ describe("loadRecurringData", () => {
     expect(result.view.occurrences[0]?.matchedTransactionId).toBeNull();
   });
 
+  it("projects an inferred quarterly stream with its parsed detection evidence", async () => {
+    const client = makeClient({
+      recurring_streams: {
+        data: [
+          {
+            id: "stream-inferred",
+            user_id: "user-1",
+            merchant_name: "City Water",
+            description: null,
+            stream_type: "outflow",
+            status: "MATURE",
+            is_active: true,
+            reviewed_at: null,
+            dismissed_at: null,
+            user_amount: null,
+            average_amount: 90,
+            last_amount: 90,
+            frequency: "QUARTERLY",
+            first_date: "2025-12-15",
+            last_date: "2026-06-15",
+            predicted_next_date: "2026-09-15",
+            account_id: null,
+            category: null,
+            source: "inferred",
+            detection_evidence: {
+              occurrenceCount: 3,
+              amountPattern: "fixed",
+              maximumCadenceDeviationDays: 1,
+              matchedSignifiers: [],
+            },
+          },
+        ],
+      },
+    });
+    const result = await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-09",
+    });
+
+    expect(result.view.occurrences[0]).toMatchObject({
+      source: "inferred",
+      evidenceCount: 3,
+      frequency: "Every quarter",
+    });
+    expect(result.allStreams[0]).toMatchObject({
+      source: "inferred",
+      detectionEvidence: { occurrenceCount: 3, amountPattern: "fixed" },
+    });
+  });
+
+  it("treats malformed detection evidence as absent", async () => {
+    const client = makeClient({
+      recurring_streams: {
+        data: [
+          {
+            id: "stream-bad-evidence",
+            user_id: "user-1",
+            merchant_name: "Legacy row",
+            description: null,
+            stream_type: "outflow",
+            status: "MATURE",
+            is_active: true,
+            reviewed_at: null,
+            dismissed_at: null,
+            user_amount: null,
+            average_amount: 10,
+            last_amount: 10,
+            frequency: "MONTHLY",
+            first_date: "2026-05-15",
+            last_date: "2026-06-15",
+            predicted_next_date: "2026-07-15",
+            account_id: null,
+            category: null,
+            source: "inferred",
+            detection_evidence: "not-an-object",
+          },
+        ],
+      },
+    });
+    const result = await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-07",
+    });
+
+    expect(result.allStreams[0]?.detectionEvidence).toBeNull();
+    expect(result.view.occurrences[0]?.evidenceCount).toBeNull();
+  });
+
+  it("defaults a legacy row with no source column to plaid", async () => {
+    const client = makeClient({
+      recurring_streams: {
+        data: [
+          {
+            id: "stream-legacy",
+            user_id: "user-1",
+            merchant_name: "Netflix",
+            description: null,
+            stream_type: "outflow",
+            status: "MATURE",
+            is_active: true,
+            reviewed_at: null,
+            dismissed_at: null,
+            user_amount: null,
+            average_amount: 15.49,
+            last_amount: 15.49,
+            frequency: "MONTHLY",
+            first_date: "2026-01-15",
+            last_date: "2026-06-15",
+            predicted_next_date: "2026-07-15",
+            account_id: null,
+            category: null,
+          },
+        ],
+      },
+    });
+    const result = await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-07",
+    });
+
+    expect(result.allStreams[0]?.source).toBe("plaid");
+    expect(result.view.occurrences[0]?.evidenceCount).toBeNull();
+  });
+
   it("maps unknown frequencies, unknown statuses, null amounts, and unresolved accounts safely", async () => {
     const client = makeClient({
       recurring_streams: {

@@ -100,9 +100,74 @@ function stream(overrides: Partial<RecurringStreamInput> = {}): RecurringStreamI
     dismissedAt: null,
     matchedTransactions: [],
     category: null,
+    source: "plaid",
+    detectionEvidence: null,
     ...overrides,
   };
 }
+
+describe("inferred stream projection", () => {
+  it("expands a quarterly cadence three months apart", () => {
+    const dates = occurrenceDatesInWindow(
+      "2026-06-15",
+      { unit: "months", amount: 3 },
+      "2026-09-01",
+      "2026-10-01",
+    );
+    expect(dates).toEqual(["2026-09-15"]);
+  });
+
+  it("labels an inferred quarterly occurrence with its source and evidence count", () => {
+    const result = expandStreamsForMonth(
+      [
+        stream({
+          source: "inferred",
+          frequency: "QUARTERLY",
+          predictedNextDate: "2026-09-15",
+          detectionEvidence: {
+            occurrenceCount: 3,
+            amountPattern: "fixed",
+            maximumCadenceDeviationDays: 1,
+            matchedSignifiers: [],
+          },
+        }),
+      ],
+      [],
+      "2026-09",
+      "2026-09-10",
+    );
+
+    expect(result.occurrences[0]).toMatchObject({
+      source: "inferred",
+      evidenceCount: 3,
+      frequency: "Every quarter",
+    });
+  });
+
+  it("leaves a Plaid occurrence without an evidence count", () => {
+    const result = expandStreamsForMonth(
+      [stream({ predictedNextDate: "2026-07-15" })],
+      [],
+      "2026-07",
+      "2026-07-10",
+    );
+
+    expect(result.occurrences[0]).toMatchObject({ source: "plaid", evidenceCount: null });
+  });
+
+  it("counts an inferred mature stream as unreviewed", () => {
+    expect(
+      countUnreviewedStreams([
+        {
+          isActive: true,
+          status: "MATURE",
+          dismissedAt: null,
+          reviewedAt: null,
+        },
+      ]),
+    ).toBe(1);
+  });
+});
 
 describe("expandStreamsForMonth", () => {
   it("marks an occurrence complete when a matched transaction lands near the due date", () => {

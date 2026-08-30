@@ -200,7 +200,16 @@ export default function RecurringCalendar({
             {sorted.map((occurrence) => (
               <tr key={`${occurrence.source}-${occurrence.sourceId}`} className="border-b border-panel-border last:border-b-0">
                 <td className="px-3 py-2 tabular-nums">{occurrence.dueDate}</td>
-                <td className="px-3 py-2">{occurrence.merchant}</td>
+                <td className="px-3 py-2">
+                  {occurrence.merchant}
+                  {occurrence.source === "inferred" && (
+                    <span className="block text-xs text-muted">
+                      {occurrence.evidenceCount === null
+                        ? "Detected from transactions"
+                        : `Detected from ${occurrence.evidenceCount} transactions`}
+                    </span>
+                  )}
+                </td>
                 <td className="px-3 py-2">{occurrence.isIncome ? "Income" : "Expense"}</td>
                 <td className="px-3 py-2 text-right tabular-nums">
                   {occurrence.isIncome ? "+" : "−"}{formatCurrency(Math.abs(occurrence.amount), currency)}

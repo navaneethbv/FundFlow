@@ -27,6 +27,8 @@ describe("Recurring Page Edge Branches", () => {
           reviewedAt: null,
           dismissedAt: null,
           matchedTransactions: [],
+          source: "plaid" as const,
+          detectionEvidence: null,
         },
       ],
       [

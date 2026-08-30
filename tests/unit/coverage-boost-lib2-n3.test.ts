@@ -66,6 +66,8 @@ describe("recurring-page expandStreamsForMonth", () => {
       { id: "t2", date: "2026-07-14" },
     ],
     category: null,
+    source: "plaid" as const,
+    detectionEvidence: null,
   };
 
   it("expands plaid streams, matching transactions within tolerance and consuming them", () => {
