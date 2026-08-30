@@ -299,18 +299,21 @@ async function recoverTransactionSyncError(
   }
 }
 
-async function persistTransactionSyncCursor(
+async function persistIncompleteRepairCursor(
   item: PlaidItemRow,
-  mode: TransactionSyncLoopOptions["mode"],
+  cursor: string,
+): Promise<void> {
+  await updateItemRepairCursor(item.user_id, item.id, cursor);
+}
+
+async function persistCompletedTransactionSyncCursor(
+  item: PlaidItemRow,
   cursor: string | undefined,
   committedCursor: string | undefined,
-  hasMore: boolean,
 ): Promise<void> {
-  if (cursor && hasMore && mode === "repair") {
-    await updateItemRepairCursor(item.user_id, item.id, cursor);
-  } else if (cursor && !hasMore && cursor !== committedCursor) {
+  if (cursor && cursor !== committedCursor) {
     await completeItemCursor(item.user_id, item.id, cursor);
-  } else if (!hasMore && item.repair_sync_started_at) {
+  } else if (item.repair_sync_started_at) {
     await clearItemRepairCursor(item.user_id, item.id);
   }
 }
@@ -377,13 +380,13 @@ async function runTransactionSyncLoop(
     throw error;
   }
 
-  await persistTransactionSyncCursor(
-    item,
-    options.mode,
-    cursor,
-    committedCursor,
-    hasMore,
-  );
+  if (hasMore) {
+    // Only a bounded Repair can exit with more pages. At least one page ran,
+    // and nextTransactionCursor rejected an empty resumable cursor.
+    await persistIncompleteRepairCursor(item, cursor!);
+  } else {
+    await persistCompletedTransactionSyncCursor(item, cursor, committedCursor);
+  }
   await setItemStatus(item.user_id, item.id, "active", null);
   return { result, completed: !hasMore, pagesCompleted };
 }
@@ -478,7 +481,7 @@ async function backfillClaimedItemTransactions(
     nowIso: new Date().toISOString(),
   }).catch((error) => logError("repair.cursor-attempt", error));
 
-  const maxPages = options?.maxPages ?? REPAIR_MAX_PAGES;
+  const maxPages = Math.max(1, Math.floor(options?.maxPages ?? REPAIR_MAX_PAGES));
   const { result, completed, pagesCompleted } = await runTransactionSyncLoop(
     item,
     supabase,

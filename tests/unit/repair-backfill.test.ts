@@ -165,10 +165,11 @@ describe("backfillItemTransactions (bounded repair backfill)", () => {
       throw new Error(`Unexpected table ${table}`);
     });
 
-    const result = await backfillItemTransactions(dummyItem, { maxPages: 5 });
+    const result = await backfillItemTransactions(dummyItem);
 
     expect(mockTransactionsSync).toHaveBeenCalledTimes(1);
     expect(result.completed).toBe(true);
+    expect(result.maxPages).toBe(8);
     expect(mockCompleteItemCursor).toHaveBeenCalledWith(
       "user-1",
       "item-db-1",
