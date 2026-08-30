@@ -289,13 +289,13 @@ export interface ProductSyncHealth {
 - [x] Run `npm run typecheck`.
 - [x] Run the CI-equivalent suite: 4,126 tests passed and 19 live-database suites skipped without a service credential.
 - [ ] Re-run the live credit-card ownership test after the follow-up migrations deploy.
-- [ ] Confirm the fresh PR-head production build.
+- [x] Confirm the fresh PR-head production build in CI and the Vercel preview deployment.
 - [x] Validate contrast tokens (`npm run validate:palette`).
 - [x] Rebuild the knowledge graph (`graphify update .`).
 - [x] Check for git diff hygiene (`git diff --check`).
 - [x] Re-run coverage: 98.15% statements, 95.05% branches, 98.8% functions, and 99.13% lines.
 - [x] Verify the linked migration ledger and a dry run for the three pending migrations.
-- [ ] Confirm the fresh PR-head analysis checks.
+- [x] Confirm the fresh PR-head SonarQube Cloud, Codacy, and CodeQL checks.
 - [ ] Confirm the Production deployment commit.
 - [ ] Repeat the authenticated browser comparison read-only.
 - [ ] Record which numeric differences remain because Monarch and FundFlow still contain different source or configuration data.

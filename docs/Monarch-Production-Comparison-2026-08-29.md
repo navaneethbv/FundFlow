@@ -176,7 +176,7 @@ Production deployment claims and the authenticated read-only browser comparison 
 Phases 0 through 6 are implemented with reachable migrations, data paths, UI flows, authorization boundaries, and acceptance tests.
 The re-reviewed CI-equivalent suite passes 4,126 tests with 19 live-database suites skipped when no service credential is supplied, and coverage is 98.15% statements, 95.05% branches, 98.8% functions, and 99.13% lines.
 Lint, typecheck, palette validation, focused signed-in life-event acceptance, linked migration-ledger inspection, and the three-migration dry run pass locally.
-The fresh PR-head production build and remote analysis checks remain pending, and the new live credit-card payment-account ownership assertion requires the pending ownership migration before it can pass against the linked database.
+The fresh PR-head production build, remote analysis checks, migration smoke-check, E2E smoke, and preview deployment pass, while the new live credit-card payment-account ownership assertion requires the pending ownership migration before it can pass against the linked database.
 The visual-baseline spec has pre-existing run-to-run variance (it fails identically at the PR base commit) and is unrelated to these changes.
 Dependency major bumps (ESLint 10, Plaid 46, TypeScript 7) remain intentionally excluded per the dependency-freshness convention.
 The exact Production deployment commit and the read-only authenticated browser comparison have not yet been performed.
