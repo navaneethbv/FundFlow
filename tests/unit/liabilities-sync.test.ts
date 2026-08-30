@@ -42,9 +42,16 @@ const item: PlaidItemRow = {
 function billAccountStub({
   accounts = [{ id: "db-credit-1", plaid_account_id: "plaid-credit-1" }],
   existingBillAccountIds = [],
+  existingBills,
 }: {
   accounts?: Array<{ id: string; plaid_account_id: string }>;
   existingBillAccountIds?: string[];
+  existingBills?: Array<{
+    account_id: string;
+    statement_balance: number | null;
+    minimum_payment: number | null;
+    due_date: string | null;
+  }>;
 } = {}) {
   const accountQuery = {
     eq: vi.fn().mockImplementation((column: string) => {
@@ -62,7 +69,9 @@ function billAccountStub({
   const billSelectQuery = {
     eq: vi.fn(),
     in: vi.fn().mockResolvedValue({
-      data: existingBillAccountIds.map((account_id) => ({ account_id })),
+      data:
+        existingBills ??
+        existingBillAccountIds.map((account_id) => ({ account_id })),
       error: null,
     }),
   };
@@ -157,6 +166,34 @@ describe("syncCreditCardLiabilities", () => {
     const payload = upsert.mock.calls[0]?.[0] as Array<Record<string, unknown>>;
     expect(payload[0].statement_balance).toBe(800);
     expect(payload[0].due_date).toBe("2026-08-25");
+  });
+
+  it("preserves known bill values when Plaid omits optional fields", async () => {
+    const { upsert } = billAccountStub({
+      existingBills: [{
+        account_id: "db-credit-1",
+        statement_balance: 750,
+        minimum_payment: 35,
+        due_date: "2026-09-20",
+      }],
+    });
+    mockLiabilitiesGet.mockResolvedValue({
+      data: {
+        liabilities: {
+          credit: [{ account_id: "plaid-credit-1" }],
+        },
+      },
+    });
+
+    await syncCreditCardLiabilities(item);
+
+    expect(upsert.mock.calls[0]?.[0]).toEqual([
+      expect.objectContaining({
+        statement_balance: 750,
+        minimum_payment: 35,
+        due_date: "2026-09-20",
+      }),
+    ]);
   });
 
   it("reports product_not_ready distinctly without touching the database", async () => {

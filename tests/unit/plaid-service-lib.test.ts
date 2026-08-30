@@ -155,6 +155,7 @@ describe("lib/plaid-service", () => {
       }),
     );
     expect(eq).toHaveBeenCalledWith("id", "item-db-1");
+    expect(eq).toHaveBeenCalledWith("user_id", "user-1");
   });
 
   it("decryptItemTokenAndUpgrade logs error if update fails during key rotation", async () => {
