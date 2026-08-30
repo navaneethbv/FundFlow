@@ -176,7 +176,7 @@ select throws_ok(
 );
 
 select is(
-  (select count(*)::integer from public.recurring_streams where stream_id in ('missing-stream-type', 'empty-stream-type', 'missing-transaction-ids', 'empty-transaction-ids')),
+  (select count(*)::integer from public.recurring_streams where stream_id in ('missing-stream-type', 'empty-stream-type', 'missing-transaction-ids', 'empty-transaction-ids', 'non-array-transaction-ids')),
   0,
   'incomplete candidates do not persist streams'
 );
