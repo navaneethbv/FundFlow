@@ -171,6 +171,10 @@ Phase 5 surfaces per-item investment sync status and syncs real credit-card bill
 Phase 6 adds a recurring calendar with a table twin, editable life-event forecasting through the existing projection engine, a Dashboard weekly-report entry point, and advice pin/reorder.
 Production deployment claims and the authenticated read-only browser comparison remain pending verification.
 
+## Implementation status on branch `codex/monarch-production-alignment`
+
+Phases 0 through 6 are implemented with reachable migrations, data paths, UI flows, authorization boundaries, and acceptance tests. Verified gates: 4,177 unit/integration tests, 95%+ coverage thresholds (98% statements), clean lint and typecheck, production build, palette validation, and the signed-in repair/settings/recurring/dashboard/responsive browser journeys. The visual-baseline spec has pre-existing run-to-run variance (it fails identically at the PR base commit) and is unrelated to these changes. Dependency major bumps (ESLint 10, Plaid 46, TypeScript 7) remain intentionally excluded per the dependency-freshness convention. The exact Production deployment commit and the read-only authenticated browser comparison have not yet been performed.
+
 ### High value
 
 - FundFlow now exposes a recurring calendar view with a table twin, real credit-card bill synchronization (statement balance and due date) via the approved Plaid Liabilities path, per-item investment sync status, Monarch configuration import for budgets and goals, and a weekly-recap Dashboard entry point.
