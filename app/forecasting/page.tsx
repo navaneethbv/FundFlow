@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
 import AssumptionsPanel from "@/components/forecasting/AssumptionsPanel";
-import ForecastChart from "@/components/forecasting/ForecastChart";
 import MilestonesPanel from "@/components/forecasting/MilestonesPanel";
 import Panel from "@/components/ui/Panel";
 import { isFeatureEnabled } from "@/lib/feature-flags";
@@ -38,12 +37,12 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
   const currentNetWorth = startingState.cash + startingState.investments - startingState.liabilities;
   const points = forecastNetWorth(startingState, assumptions);
   const milestones = computeForecastMilestones(startingState, assumptions);
-  const ending = points.at(-1)!;
-  const { data: lifeEventRows } = await supabase
+  const { data: lifeEventRows, error: lifeEventsError } = await supabase
     .from("life_events")
     .select("id, event_type, start_month, amount, duration_months, label")
     .eq("user_id", user.id)
     .order("start_month");
+  if (lifeEventsError) throw lifeEventsError;
   const lifeEvents = (lifeEventRows ?? []).map((row) => ({
     id: row.id as string,
     type: row.event_type as LifeEvent["type"],
@@ -87,36 +86,17 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
           <AssumptionsPanel assumptions={assumptions} defaults={defaults} />
         </Panel>
 
-        <Panel padding="lg">
-          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-muted">
-            Net worth projection
-          </h2>
-          <p className="mb-4 text-sm text-muted">
-            In {assumptions.horizonMonths} months, base case:{" "}
-            <span className="money font-semibold text-foreground">{formatCurrency(ending.base)}</span>
-            {ending.conservative !== ending.optimistic && (
-              <>
-                {" ("}
-                <span className="money">{formatCurrency(ending.conservative)}</span>
-                {" to "}
-                <span className="money">{formatCurrency(ending.optimistic)}</span>
-                {")"}
-              </>
-            )}
-          </p>
-          <ForecastChart points={points} currentNetWorth={currentNetWorth} />
-        </Panel>
+        <LifeEventsPanel
+          basePoints={points}
+          monthlySavings={assumptions.monthlySavings}
+          currentNetWorth={currentNetWorth}
+          currency="USD"
+          initialEvents={lifeEvents}
+        />
 
         <Panel padding="lg">
           <MilestonesPanel milestones={milestones} horizonMonths={assumptions.horizonMonths} />
         </Panel>
-
-        <LifeEventsPanel
-          basePoints={points}
-          monthlySavings={assumptions.monthlySavings}
-          currency="USD"
-          initialEvents={lifeEvents}
-        />
       </div>
     </AppShell>
   );

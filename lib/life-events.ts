@@ -62,7 +62,10 @@ export function parseLifeEvent(raw: unknown): ParseLifeEventResult {
   if (!Number.isFinite(amount)) {
     return { ok: false, error: "amount must be a number." };
   }
-  if (amount <= 0 && type !== "retirement") {
+  if (type === "retirement" && amount !== 0) {
+    return { ok: false, error: "Retirement amount must be zero." };
+  }
+  if (type !== "retirement" && amount <= 0) {
     return { ok: false, error: "amount must be positive." };
   }
   const durationRaw = value.durationMonths;
@@ -72,6 +75,15 @@ export function parseLifeEvent(raw: unknown): ParseLifeEventResult {
       : Number(durationRaw);
   if (durationMonths !== null && (!Number.isInteger(durationMonths) || durationMonths < 1)) {
     return { ok: false, error: "durationMonths must be null or a positive integer." };
+  }
+  if (
+    durationMonths !== null &&
+    (type === "home_purchase" || type === "retirement")
+  ) {
+    return {
+      ok: false,
+      error: "One-off home purchases and retirement cannot have a duration.",
+    };
   }
   const label =
     typeof value.label === "string" && value.label.trim()

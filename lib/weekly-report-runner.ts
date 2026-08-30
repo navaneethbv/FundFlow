@@ -35,6 +35,48 @@ type WeeklyDeliveryOutcome = {
   error?: string;
 };
 
+type WeeklyProfile = { id: string; timezone: string | null };
+
+const PROFILE_PAGE_SIZE = 1_000;
+const PROFILE_ID_CHUNK_SIZE = 500;
+
+async function loadWeeklyProfiles(
+  service: ReturnType<typeof createServiceClient>,
+  onlyUserIds?: string[],
+): Promise<WeeklyProfile[]> {
+  const uniqueUserIds = onlyUserIds ? [...new Set(onlyUserIds)] : null;
+  if (uniqueUserIds?.length === 0) return [];
+  const idChunks: Array<string[] | null> = uniqueUserIds
+    ? Array.from(
+        { length: Math.ceil(uniqueUserIds.length / PROFILE_ID_CHUNK_SIZE) },
+        (_, index) => uniqueUserIds.slice(
+          index * PROFILE_ID_CHUNK_SIZE,
+          (index + 1) * PROFILE_ID_CHUNK_SIZE,
+        ),
+      )
+    : [null];
+  const profiles: WeeklyProfile[] = [];
+
+  for (const idChunk of idChunks) {
+    for (let page = 0; ; page += 1) {
+      const from = page * PROFILE_PAGE_SIZE;
+      let query = service
+        .from("profiles")
+        .select("id, timezone")
+        .eq("weekly_report_enabled", true);
+      if (idChunk) query = query.in("id", idChunk);
+      const { data, error } = await query
+        .order("id")
+        .range(from, from + PROFILE_PAGE_SIZE - 1);
+      if (error) throw error;
+      const batch = (data ?? []) as WeeklyProfile[];
+      profiles.push(...batch);
+      if (batch.length < PROFILE_PAGE_SIZE) break;
+    }
+  }
+  return profiles;
+}
+
 async function runSingleWeeklyReport(
   service: ReturnType<typeof createServiceClient>,
   userId: string,
@@ -101,23 +143,17 @@ export async function runWeeklyReports(
   onlyUserIds?: string[],
 ): Promise<WeeklyRunResult> {
   const service = createServiceClient();
-  let profileQuery = service
-    .from("profiles")
-    .select("id, timezone")
-    .eq("weekly_report_enabled", true);
-  if (onlyUserIds) profileQuery = profileQuery.in("id", onlyUserIds);
-  const { data: profiles, error } = await profileQuery;
-  if (error) throw error;
+  const profiles = await loadWeeklyProfiles(service, onlyUserIds);
 
   const result: WeeklyRunResult = {
-    users: profiles?.length ?? 0,
+    users: profiles.length,
     due: 0,
     reports_sent: 0,
     reports_skipped: 0,
     reports_failed: 0,
   };
 
-  for (const profile of profiles ?? []) {
+  for (const profile of profiles) {
     const userId = profile.id as string;
     const timezone = normalizeReportTimezone(profile.timezone as string | null);
     if (!isWeeklyReportDue(reference, timezone)) continue;

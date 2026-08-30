@@ -21,6 +21,7 @@ suite("credit card bill RLS", () => {
   let clientB: SupabaseClient;
   let itemDbId = "";
   let creditDbId = "";
+  let paymentAccountBId = "";
 
   async function signIn(email: string, password: string): Promise<SupabaseClient> {
     const client = createClient(url!, publishable!, {
@@ -62,6 +63,26 @@ suite("credit card bill RLS", () => {
       subtype: "credit card",
     }).select("id").single();
     creditDbId = credit!.id;
+
+    const { data: itemB } = await admin.from("plaid_items").insert({
+      user_id: idB,
+      plaid_item_id: `bill-item-b-${stamp}`,
+      institution_name: "Payment Bank",
+      status: "active",
+      access_token_ciphertext: "e2e",
+      access_token_iv: "e2e",
+      access_token_tag: "e2e",
+    }).select("id").single();
+    const { data: paymentAccountB } = await admin.from("accounts").insert({
+      user_id: idB,
+      plaid_item_id: itemB!.id,
+      plaid_account_id: `bill-payment-b-${stamp}`,
+      name: "Payment Account",
+      mask: "5555",
+      type: "depository",
+      subtype: "checking",
+    }).select("id").single();
+    paymentAccountBId = paymentAccountB!.id;
   });
 
   afterAll(async () => {
@@ -95,5 +116,18 @@ suite("credit card bill RLS", () => {
     // User A's bill is untouched.
     const { data } = await clientA.from("credit_card_bills").select("statement_balance").eq("account_id", creditDbId).single();
     expect(Number((data as { statement_balance: number }).statement_balance)).toBe(1200);
+  });
+
+  it("refuses an owned bill that references another user's payment account", async () => {
+    const { error } = await clientA.from("credit_card_bills").upsert(
+      {
+        user_id: idA,
+        account_id: creditDbId,
+        payment_account_id: paymentAccountBId,
+        statement_balance: 1200,
+      },
+      { onConflict: "user_id,account_id" },
+    );
+    expect(error).not.toBeNull();
   });
 });

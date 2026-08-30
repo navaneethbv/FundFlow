@@ -83,6 +83,18 @@ describe("parseMonarchGoals", () => {
       { linkedAccountName: "Savings", allocationAmount: null, useEntireBalance: true },
     ]);
   });
+
+  it("rejects duplicate provider identities before any goal can be written", () => {
+    const result = parseMonarchGoals(JSON.stringify({
+      goals: [
+        { id: "same-id", name: "First", target_amount: 1000 },
+        { id: "same-id", name: "Second", target_amount: 2000 },
+      ],
+    }));
+
+    expect(result.errors).toContain("The goals file contains a duplicate imported goal identifier.");
+    expect(result.rows).toHaveLength(1);
+  });
 });
 
 describe("matchGoal", () => {

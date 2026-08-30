@@ -101,6 +101,9 @@ describe("Monarch import conflicts, idempotency, and authorization", () => {
 
   it("refuses to overwrite a newer FundFlow edit without explicit approval", async () => {
     const rls = clientStub({
+      import_review_batches: {
+        data: { id: "b1", created_at: "2026-08-01T00:00:00Z" },
+      },
       accounts: { data: [{ id: "a1" }] },
       import_review_rows: {
         data: [
@@ -194,6 +197,9 @@ describe("Monarch import conflicts, idempotency, and authorization", () => {
 
   it("is idempotent: rows already committed are skipped on re-commit", async () => {
     const rls = clientStub({
+      import_review_batches: {
+        data: { id: "b1", created_at: "2026-08-01T00:00:00Z" },
+      },
       accounts: { data: [{ id: "a1" }] },
       import_review_rows: {
         data: [
@@ -261,7 +267,7 @@ describe("Monarch import conflicts, idempotency, and authorization", () => {
       json: () => Promise.resolve({ batch_id: "foreign-batch", account_id: "a1" }),
     } as unknown as NextRequest;
     const res = await commitPost(request);
-    expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ ok: true, imported: 0 });
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toEqual({ error: "Import batch not found" });
   });
 });

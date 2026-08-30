@@ -57,8 +57,6 @@ export async function syncCreditCardLiabilities(
   }
 
   const credit = (response.data.liabilities.credit ?? []) as CreditCardLiability[];
-  if (credit.length === 0) return { outcome: "no_liabilities", billsSynced: 0 };
-
   const supabase = createServiceClient();
   // Scoped to this item's own accounts only, matching the investment sync
   // isolation rule.
@@ -74,6 +72,7 @@ export async function syncCreditCardLiabilities(
       account.id as string,
     ]),
   );
+  const itemAccountIds = [...accountIdMap.values()];
 
   const rows = credit
     .map((liability) => {
@@ -91,12 +90,36 @@ export async function syncCreditCardLiabilities(
     })
     .filter((row): row is NonNullable<typeof row> => row !== null);
 
-  if (rows.length === 0) return { outcome: "no_liabilities", billsSynced: 0 };
+  if (rows.length > 0) {
+    const { error } = await supabase
+      .from("credit_card_bills")
+      .upsert(rows, { onConflict: "user_id,account_id" });
+    if (error) throw error;
+  }
 
-  const { error } = await supabase
-    .from("credit_card_bills")
-    .upsert(rows, { onConflict: "user_id,account_id" });
-  if (error) throw error;
+  if (itemAccountIds.length > 0) {
+    const { data: existingBills, error: existingBillsError } = await supabase
+      .from("credit_card_bills")
+      .select("account_id")
+      .eq("user_id", item.user_id)
+      .in("account_id", itemAccountIds);
+    if (existingBillsError) throw existingBillsError;
+
+    const activeAccountIds = new Set(rows.map((row) => row.account_id));
+    const staleAccountIds = (existingBills ?? [])
+      .map((bill) => bill.account_id as string)
+      .filter((accountId) => !activeAccountIds.has(accountId));
+    if (staleAccountIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from("credit_card_bills")
+        .delete()
+        .eq("user_id", item.user_id)
+        .in("account_id", staleAccountIds);
+      if (deleteError) throw deleteError;
+    }
+  }
+
+  if (rows.length === 0) return { outcome: "no_liabilities", billsSynced: 0 };
 
   return { outcome: "synced", billsSynced: rows.length };
 }

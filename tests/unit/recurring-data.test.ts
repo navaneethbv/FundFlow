@@ -40,6 +40,56 @@ function makeClient(overrides: Record<string, { data?: unknown; error?: unknown 
 }
 
 describe("loadRecurringData", () => {
+  it("loads beyond twenty full pages instead of silently truncating", async () => {
+    const households = Array.from({ length: 20_001 }, (_, index) => ({
+      id: `household-${String(index).padStart(5, "0")}`,
+    }));
+    const client = makeClient({ households: { data: households } });
+
+    const result = await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-07",
+    });
+
+    expect(result.visibleHouseholdIds).toHaveLength(20_001);
+  });
+
+  it("uses deterministic ordering for every paged or bounded large-table read", async () => {
+    const client = makeClient({
+      recurring_stream_transactions: {
+        data: [{ recurring_stream_id: "stream-1", transaction_id: "txn-1" }],
+      },
+      transactions: { data: [{ id: "txn-1", date: "2026-07-15" }] },
+      credit_card_bills: { data: [] },
+    });
+
+    await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-07",
+    });
+
+    for (const table of [
+      "households",
+      "recurring_streams",
+      "manual_recurring_items",
+      "accounts",
+      "recurring_stream_transactions",
+      "transactions",
+      "credit_card_bills",
+    ]) {
+      expect(
+        client.callsOn(table).some((call) => call.method === "order"),
+        `${table} should have an explicit order`,
+      ).toBe(true);
+    }
+    expect(
+      client.callsOn("sync_jobs").filter((call) => call.method === "order"),
+    ).toEqual([
+      { method: "order", args: ["updated_at", { ascending: false }] },
+      { method: "order", args: ["id", { ascending: false }] },
+    ]);
+  });
+
   it("scopes every query to the requesting user in mine scope", async () => {
     const client = makeClient();
     const result = await loadRecurringData(client as never, {

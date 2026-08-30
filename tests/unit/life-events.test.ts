@@ -33,6 +33,32 @@ describe("parseLifeEvent", () => {
     expect(parseLifeEvent({ type: "child", startMonth: 1, amount: -10 }).ok).toBe(false);
     expect(parseLifeEvent({ type: "child", startMonth: 1, amount: "x" }).ok).toBe(false);
   });
+
+  it("accepts zero only for retirement because retirement stops savings", () => {
+    expect(parseLifeEvent({ type: "retirement", startMonth: 12, amount: 0 }).ok).toBe(true);
+    expect(parseLifeEvent({ type: "retirement", startMonth: 12, amount: -1 }).ok).toBe(false);
+    expect(parseLifeEvent({ type: "retirement", startMonth: 12, amount: 1 }).ok).toBe(false);
+    expect(parseLifeEvent({ type: "child", startMonth: 12, amount: 0 }).ok).toBe(false);
+  });
+
+  it("rejects durations for one-off purchases and permanent retirement", () => {
+    expect(
+      parseLifeEvent({
+        type: "home_purchase",
+        startMonth: 2,
+        amount: 50000,
+        durationMonths: 12,
+      }).ok,
+    ).toBe(false);
+    expect(
+      parseLifeEvent({
+        type: "retirement",
+        startMonth: 12,
+        amount: 0,
+        durationMonths: 6,
+      }).ok,
+    ).toBe(false);
+  });
 });
 
 describe("applyLifeEvents", () => {

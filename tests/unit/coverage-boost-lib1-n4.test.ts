@@ -58,23 +58,28 @@ describe("lib/env appUrl fallback branch", () => {
 describe("fetchPrivacySafeRows null merchant/category branches", () => {
   function clientWithTxns(txns: unknown[]) {
     const singleProfile = vi.fn().mockResolvedValue({ data: { ai_export_enabled: true } });
-    const order = vi.fn().mockResolvedValue({ data: txns, error: null });
-    const select = vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ order }) });
+    const transactionBuilder = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      range: vi.fn().mockResolvedValue({ data: txns, error: null }),
+    };
     const chainableEmpty = () => {
       const builder = {
         select: vi.fn().mockReturnThis(),
         in: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockResolvedValue({ data: [], error: null }),
         then: (resolve: (v: { data?: unknown[]; error?: unknown }) => unknown) =>
-          resolve({ data: [] }),
+          resolve({ data: [], error: null }),
       };
       return builder;
     };
     return {
       from: vi.fn((table: string) => {
         if (table === "profiles") return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle: singleProfile }) }) };
-        if (table === "transactions") return { select };
+        if (table === "transactions") return transactionBuilder;
         if (table === "transaction_annotations") return { select: chainableEmpty };
         if (table === "merchant_rules") return { select: chainableEmpty };
         if (table === "category_overrides") return { select: chainableEmpty };

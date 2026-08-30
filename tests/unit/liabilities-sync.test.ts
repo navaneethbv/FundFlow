@@ -39,12 +39,18 @@ const item: PlaidItemRow = {
   error_code: null,
 };
 
-function billAccountStub() {
+function billAccountStub({
+  accounts = [{ id: "db-credit-1", plaid_account_id: "plaid-credit-1" }],
+  existingBillAccountIds = [],
+}: {
+  accounts?: Array<{ id: string; plaid_account_id: string }>;
+  existingBillAccountIds?: string[];
+} = {}) {
   const accountQuery = {
     eq: vi.fn().mockImplementation((column: string) => {
       if (column === "user_id") {
         return Promise.resolve({
-          data: [{ id: "db-credit-1", plaid_account_id: "plaid-credit-1" }],
+          data: accounts,
           error: null,
         });
       }
@@ -53,12 +59,37 @@ function billAccountStub() {
   };
   const select = vi.fn().mockReturnValue(accountQuery);
   const upsert = vi.fn().mockResolvedValue({ error: null });
+  const billSelectQuery = {
+    eq: vi.fn(),
+    in: vi.fn().mockResolvedValue({
+      data: existingBillAccountIds.map((account_id) => ({ account_id })),
+      error: null,
+    }),
+  };
+  billSelectQuery.eq.mockReturnValue(billSelectQuery);
+  const selectBills = vi.fn().mockReturnValue(billSelectQuery);
+  const billDeleteQuery = {
+    eq: vi.fn(),
+    in: vi.fn().mockResolvedValue({ error: null }),
+  };
+  billDeleteQuery.eq.mockReturnValue(billDeleteQuery);
+  const deleteBills = vi.fn().mockReturnValue(billDeleteQuery);
   mockServiceClient.from.mockImplementation((table: string) => {
     if (table === "accounts") return { select };
-    if (table === "credit_card_bills") return { upsert };
+    if (table === "credit_card_bills") {
+      return { upsert, select: selectBills, delete: deleteBills };
+    }
     throw new Error(`Unexpected table ${table}`);
   });
-  return { upsert, select, accountQuery };
+  return {
+    upsert,
+    select,
+    accountQuery,
+    selectBills,
+    billSelectQuery,
+    deleteBills,
+    billDeleteQuery,
+  };
 }
 
 describe("syncCreditCardLiabilities", () => {
@@ -137,20 +168,108 @@ describe("syncCreditCardLiabilities", () => {
     expect(mockServiceClient.from).not.toHaveBeenCalled();
   });
 
-  it("reports rate limiting as a retriable outcome", async () => {
+  it.each(["RATE_LIMIT", "RATE_LIMIT_EXCEEDED"])(
+    "reports %s as a retriable outcome",
+    async (errorCode) => {
     mockLiabilitiesGet.mockRejectedValue({
-      response: { data: { error_code: "RATE_LIMIT_EXCEEDED" } },
+        response: { data: { error_code: errorCode } },
     });
     const result = await syncCreditCardLiabilities(item);
     expect(result.outcome).toBe("rate_limited");
+    },
+  );
+
+  it("rethrows an unclassified provider failure", async () => {
+    const failure = new Error("provider failed");
+    mockLiabilitiesGet.mockRejectedValue(failure);
+
+    await expect(syncCreditCardLiabilities(item)).rejects.toBe(failure);
+  });
+
+  it("fails closed when the owner-scoped account lookup fails", async () => {
+    const { accountQuery } = billAccountStub();
+    accountQuery.eq.mockImplementation((column: string) =>
+      column === "user_id"
+        ? Promise.resolve({ data: null, error: new Error("accounts failed") })
+        : accountQuery,
+    );
+    mockLiabilitiesGet.mockResolvedValue({
+      data: { liabilities: { credit: [] } },
+    });
+
+    await expect(syncCreditCardLiabilities(item)).rejects.toThrow("accounts failed");
+  });
+
+  it("surfaces bill upsert, stale-read, and stale-delete failures", async () => {
+    const upsertFailure = billAccountStub();
+    upsertFailure.upsert.mockResolvedValueOnce({ error: new Error("upsert failed") });
+    mockLiabilitiesGet.mockResolvedValue({
+      data: {
+        liabilities: {
+          credit: [{ account_id: "plaid-credit-1" }],
+        },
+      },
+    });
+    await expect(syncCreditCardLiabilities(item)).rejects.toThrow("upsert failed");
+
+    const readFailure = billAccountStub();
+    readFailure.billSelectQuery.in.mockResolvedValueOnce({
+      data: null,
+      error: new Error("bill read failed"),
+    });
+    mockLiabilitiesGet.mockResolvedValue({
+      data: { liabilities: { credit: [] } },
+    });
+    await expect(syncCreditCardLiabilities(item)).rejects.toThrow("bill read failed");
+
+    const deleteFailure = billAccountStub({
+      existingBillAccountIds: ["db-credit-1"],
+    });
+    deleteFailure.billDeleteQuery.in.mockResolvedValueOnce({
+      error: new Error("bill delete failed"),
+    });
+    await expect(syncCreditCardLiabilities(item)).rejects.toThrow("bill delete failed");
   });
 
   it("never invents a bill when no credit liabilities exist", async () => {
-    billAccountStub();
+    const { deleteBills, billDeleteQuery } = billAccountStub({
+      existingBillAccountIds: ["db-credit-1"],
+    });
     mockLiabilitiesGet.mockResolvedValue({
       data: { accounts: [], liabilities: { credit: [] } },
     });
     const result = await syncCreditCardLiabilities(item);
     expect(result).toEqual({ outcome: "no_liabilities", billsSynced: 0 });
+    expect(deleteBills).toHaveBeenCalledOnce();
+    expect(billDeleteQuery.eq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(billDeleteQuery.in).toHaveBeenCalledWith("account_id", ["db-credit-1"]);
+  });
+
+  it("removes an old bill that is absent from a successful Plaid snapshot", async () => {
+    const { billDeleteQuery } = billAccountStub({
+      accounts: [
+        { id: "db-credit-1", plaid_account_id: "plaid-credit-1" },
+        { id: "db-credit-2", plaid_account_id: "plaid-credit-2" },
+      ],
+      existingBillAccountIds: ["db-credit-1", "db-credit-2"],
+    });
+    mockLiabilitiesGet.mockResolvedValue({
+      data: {
+        accounts: [],
+        liabilities: {
+          credit: [
+            {
+              account_id: "plaid-credit-1",
+              last_statement_balance: 300,
+              minimum_payment_amount: 20,
+            },
+          ],
+        },
+      },
+    });
+
+    await syncCreditCardLiabilities(item);
+
+    expect(billDeleteQuery.in).toHaveBeenCalledWith("account_id", ["db-credit-2"]);
   });
 });

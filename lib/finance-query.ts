@@ -165,7 +165,22 @@ interface SplitRow {
   amount: number | string;
 }
 
-type SplitChunkResult = { data: SplitRow[] | null; error: { code?: string } | null };
+type ProjectionPage<T> = { data: T[] | null; error: { code?: string } | null };
+
+/** Reads a projection dependency to exhaustion with stable range windows. */
+async function loadProjectionRows<T>(
+  table: string,
+  fetchPage: (from: number, to: number) => PromiseLike<ProjectionPage<T>>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += FINANCE_PAGE_SIZE) {
+    const result = await fetchPage(from, from + FINANCE_PAGE_SIZE - 1);
+    assertProjectionQuery(table, result);
+    const page = result.data ?? [];
+    rows.push(...page);
+    if (page.length < FINANCE_PAGE_SIZE) return rows;
+  }
+}
 
 /** `:CODE` suffix for the thrown error message, or "" when there is none. */
 function errorCodeSuffix(error: unknown): string {
@@ -218,29 +233,33 @@ function buildSplitChunkQueries(
   supabase: SupabaseClient,
   txnIds: readonly string[],
   userId: string | null | undefined,
-): Array<() => PromiseLike<SplitChunkResult>> {
-  const queries: Array<() => PromiseLike<SplitChunkResult>> = [];
+): Array<() => Promise<SplitRow[]>> {
+  const queries: Array<() => Promise<SplitRow[]>> = [];
   for (let i = 0; i < txnIds.length; i += SPLIT_CHUNK_SIZE) {
-    queries.push(() => {
-      let splitsQuery = supabase
-        .from("transaction_splits")
-        .select("transaction_id,category,amount")
-        .in("transaction_id", txnIds.slice(i, i + SPLIT_CHUNK_SIZE))
-        .limit(2000);
-      if (userId) splitsQuery = splitsQuery.eq("user_id", userId);
-      return splitsQuery;
-    });
+    const chunk = txnIds.slice(i, i + SPLIT_CHUNK_SIZE);
+    queries.push(() =>
+      loadProjectionRows<SplitRow>("transaction_splits", (from, to) => {
+        let splitsQuery = supabase
+          .from("transaction_splits")
+          .select("transaction_id,category,amount")
+          .in("transaction_id", chunk)
+          .order("id")
+          .range(from, to);
+        if (userId) splitsQuery = splitsQuery.eq("user_id", userId);
+        return splitsQuery as unknown as PromiseLike<ProjectionPage<SplitRow>>;
+      }),
+    );
   }
   return queries;
 }
 
 /** Flattens the per-chunk split rows into the projection's split input. */
 function collectSplits(
-  chunks: readonly SplitChunkResult[],
+  chunks: readonly SplitRow[][],
 ): Array<{ transactionId: string; category: string; amount: number }> {
   const splits: Array<{ transactionId: string; category: string; amount: number }> = [];
   for (const chunk of chunks) {
-    for (const s of chunk.data ?? []) {
+    for (const s of chunk) {
       splits.push({
         transactionId: s.transaction_id,
         category: s.category,
@@ -259,31 +278,33 @@ interface OverrideRow {
 
 type CashFlowClassification = "expense" | "income" | null;
 
-type OverrideChunkResult = { data: OverrideRow[] | null; error: { code?: string } | null };
-
 function buildOverrideChunkQueries(
   supabase: SupabaseClient,
   txnIds: readonly string[],
   userId: string | null | undefined,
-): Array<() => PromiseLike<OverrideChunkResult>> {
-  const queries: Array<() => PromiseLike<OverrideChunkResult>> = [];
+): Array<() => Promise<OverrideRow[]>> {
+  const queries: Array<() => Promise<OverrideRow[]>> = [];
   for (let i = 0; i < txnIds.length; i += SPLIT_CHUNK_SIZE) {
-    queries.push(() => {
-      let overrideQuery = supabase
-        .from("transaction_annotations")
-        .select("transaction_id, display_category, cash_flow_classification")
-        .in("transaction_id", txnIds.slice(i, i + SPLIT_CHUNK_SIZE))
-        .limit(2000);
-      if (userId) overrideQuery = overrideQuery.eq("user_id", userId);
-      return overrideQuery;
-    });
+    const chunk = txnIds.slice(i, i + SPLIT_CHUNK_SIZE);
+    queries.push(() =>
+      loadProjectionRows<OverrideRow>("transaction_annotations", (from, to) => {
+        let overrideQuery = supabase
+          .from("transaction_annotations")
+          .select("transaction_id, display_category, cash_flow_classification")
+          .in("transaction_id", chunk)
+          .order("id")
+          .range(from, to);
+        if (userId) overrideQuery = overrideQuery.eq("user_id", userId);
+        return overrideQuery as unknown as PromiseLike<ProjectionPage<OverrideRow>>;
+      }),
+    );
   }
   return queries;
 }
 
 /** Flattens the per-chunk override rows into the projection's input. */
 function collectOverrides(
-  chunks: readonly OverrideChunkResult[],
+  chunks: readonly OverrideRow[][],
 ): Array<{
   transactionId: string;
   displayCategory: string | null;
@@ -295,7 +316,7 @@ function collectOverrides(
     cashFlowClassification: CashFlowClassification;
   }> = [];
   for (const chunk of chunks) {
-    for (const row of chunk.data ?? []) {
+    for (const row of chunk) {
       const classification = row.cash_flow_classification;
       overrides.push({
         transactionId: row.transaction_id,
@@ -336,38 +357,88 @@ export async function loadCanonicalProjection(
   }
   const txnIds = fetchResult.rows.map((r) => r.id);
 
-  let accountsQuery = supabase
-    .from("accounts")
-    .select("id,name,iso_currency_code")
-    .limit(5000);
-  let rulesQuery = supabase
-    .from("merchant_rules")
-    .select("match_type,pattern,display_name,category,enabled")
-    .order("created_at")
-    .limit(5000);
-  let overridesQuery = supabase
-    .from("category_overrides")
-    .select("source_category,display_category")
-    .order("source_category")
-    .limit(5000);
-  let refundsQuery = supabase
-    .from("linked_refunds")
-    .select("charge_transaction_id,refund_transaction_id")
-    .order("charge_transaction_id")
-    .limit(FINANCE_MAX_ROWS);
-  let duplicatesQuery = supabase
-    .from("linked_duplicates")
-    .select("excluded_transaction_id")
-    .order("created_at")
-    .limit(FINANCE_MAX_ROWS);
-
-  if (userId) {
-    accountsQuery = accountsQuery.eq("user_id", userId);
-    rulesQuery = rulesQuery.eq("user_id", userId);
-    overridesQuery = overridesQuery.eq("user_id", userId);
-    refundsQuery = refundsQuery.eq("user_id", userId);
-    duplicatesQuery = duplicatesQuery.eq("user_id", userId);
-  }
+  const accountsPromise = loadProjectionRows<{
+    id: string;
+    name: string | null;
+    iso_currency_code: string | null;
+  }>("accounts", (from, to) => {
+    let query = supabase
+      .from("accounts")
+      .select("id,name,iso_currency_code")
+      .order("id")
+      .range(from, to);
+    if (userId) query = query.eq("user_id", userId);
+    return query as unknown as PromiseLike<ProjectionPage<{
+      id: string;
+      name: string | null;
+      iso_currency_code: string | null;
+    }>>;
+  });
+  const rulesPromise = loadProjectionRows<{
+    match_type: "merchant" | "keyword" | "account";
+    pattern: string;
+    display_name: string | null;
+    category: string | null;
+    enabled: boolean;
+  }>("merchant_rules", (from, to) => {
+    let query = supabase
+      .from("merchant_rules")
+      .select("match_type,pattern,display_name,category,enabled")
+      .order("id")
+      .range(from, to);
+    if (userId) query = query.eq("user_id", userId);
+    return query as unknown as PromiseLike<ProjectionPage<{
+      match_type: "merchant" | "keyword" | "account";
+      pattern: string;
+      display_name: string | null;
+      category: string | null;
+      enabled: boolean;
+    }>>;
+  });
+  const overridesPromise = loadProjectionRows<{
+    source_category: string;
+    display_category: string;
+  }>("category_overrides", (from, to) => {
+    let query = supabase
+      .from("category_overrides")
+      .select("source_category,display_category")
+      .order("id")
+      .range(from, to);
+    if (userId) query = query.eq("user_id", userId);
+    return query as unknown as PromiseLike<ProjectionPage<{
+      source_category: string;
+      display_category: string;
+    }>>;
+  });
+  const refundsPromise = loadProjectionRows<{
+    charge_transaction_id: string;
+    refund_transaction_id: string;
+  }>("linked_refunds", (from, to) => {
+    let query = supabase
+      .from("linked_refunds")
+      .select("charge_transaction_id,refund_transaction_id")
+      .order("id")
+      .range(from, to);
+    if (userId) query = query.eq("user_id", userId);
+    return query as unknown as PromiseLike<ProjectionPage<{
+      charge_transaction_id: string;
+      refund_transaction_id: string;
+    }>>;
+  });
+  const duplicatesPromise = loadProjectionRows<{ excluded_transaction_id: string }>(
+    "linked_duplicates",
+    (from, to) => {
+      let query = supabase
+        .from("linked_duplicates")
+        .select("excluded_transaction_id")
+        .order("id")
+        .range(from, to);
+      if (userId) query = query.eq("user_id", userId);
+      return query as unknown as PromiseLike<ProjectionPage<{
+        excluded_transaction_id: string;
+      }>>;
+    },
+  );
 
   const splitChunksPromises = buildSplitChunkQueries(supabase, txnIds, userId);
   const overrideChunksPromises = buildOverrideChunkQueries(supabase, txnIds, userId);
@@ -375,32 +446,20 @@ export async function loadCanonicalProjection(
   // The split/override chunk batches are elements of the Promise.all, not an
   // awaited spread: awaiting them here would finish every chunk read before
   // the five dependency queries even start.
-  const [accountsRes, rulesRes, overridesRes, refundsRes, duplicatesRes, splitResChunks, overrideResChunks] =
+  const [accounts, rules, overrides, refunds, duplicates, splitResChunks, overrideResChunks] =
     await Promise.all([
-      accountsQuery,
-      rulesQuery,
-      overridesQuery,
-      refundsQuery,
-      duplicatesQuery,
+      accountsPromise,
+      rulesPromise,
+      overridesPromise,
+      refundsPromise,
+      duplicatesPromise,
       runBatched(splitChunksPromises, DEPENDENCY_CONCURRENCY),
       runBatched(overrideChunksPromises, DEPENDENCY_CONCURRENCY),
     ]);
 
-  assertProjectionQuery("accounts", accountsRes);
-  assertProjectionQuery("merchant_rules", rulesRes);
-  assertProjectionQuery("category_overrides", overridesRes);
-  assertProjectionQuery("linked_refunds", refundsRes);
-  assertProjectionQuery("linked_duplicates", duplicatesRes);
-  for (const sRes of splitResChunks) {
-    assertProjectionQuery("transaction_splits", sRes);
-  }
-  for (const oRes of overrideResChunks) {
-    assertProjectionQuery("transaction_annotations", oRes);
-  }
+  const { currencyByAccountId, accountNames } = buildAccountMaps(accounts);
 
-  const { currencyByAccountId, accountNames } = buildAccountMaps(accountsRes.data ?? []);
-
-  const merchantRules = ((rulesRes.data || []) as Array<{
+  const merchantRules = (rules as Array<{
     match_type: "merchant" | "keyword" | "account";
     pattern: string;
     display_name: string | null;
@@ -414,7 +473,7 @@ export async function loadCanonicalProjection(
     enabled: r.enabled,
   }));
 
-  const categoryOverrides = ((overridesRes.data || []) as Array<{
+  const categoryOverrides = (overrides as Array<{
     source_category: string;
     display_category: string;
   }>).map((c) => ({
@@ -422,7 +481,7 @@ export async function loadCanonicalProjection(
     displayCategory: c.display_category,
   }));
 
-  const linkedRefunds = ((refundsRes.data || []) as Array<{
+  const linkedRefunds = (refunds as Array<{
     charge_transaction_id: string;
     refund_transaction_id: string;
   }>).map((rf) => ({
@@ -445,7 +504,7 @@ export async function loadCanonicalProjection(
       linkedRefunds,
       transactionOverrides,
       excludedTransactionIds: new Set(
-        ((duplicatesRes.data ?? []) as Array<{ excluded_transaction_id: string }>)
+        (duplicates as Array<{ excluded_transaction_id: string }>)
           .map((row) => row.excluded_transaction_id),
       ),
     }),

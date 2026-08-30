@@ -10,7 +10,7 @@ describe("WeeklyReportWidget", () => {
     expect(html).not.toContain("/reports");
   });
 
-  it("shows a sent state with a link to the full report", () => {
+  it("shows a sent state with an honest link to the reports workspace", () => {
     const html = renderToStaticMarkup(
       createElement(WeeklyReportWidget, {
         delivery: { status: "sent", periodStart: "2026-08-17", periodEnd: "2026-08-23", attemptedAt: null, sentAt: null },
@@ -18,6 +18,8 @@ describe("WeeklyReportWidget", () => {
     );
     expect(html).toContain("Delivered");
     expect(html).toContain("/reports");
+    expect(html).toContain("Open reports");
+    expect(html).not.toContain("full report");
   });
 
   it("shows a pending state for a processing delivery", () => {

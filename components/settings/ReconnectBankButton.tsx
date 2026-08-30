@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
-import { usePlaidLink } from "react-plaid-link";
 import { saveResume, clearResume } from "@/lib/plaid-resume";
 import Button from "@/components/ui/Button";
+import PlaidLinkLauncher from "@/components/PlaidLinkLauncher";
 
 /**
  * Repairs a broken bank connection via Plaid Link update mode. Link fixes the
@@ -21,7 +21,6 @@ export default function ReconnectBankButton({ itemId }: Readonly<{ itemId: strin
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const wantsOpenRef = useRef(false);
 
   const onSuccess = useCallback(async () => {
     setBusy(true);
@@ -37,39 +36,21 @@ export default function ReconnectBankButton({ itemId }: Readonly<{ itemId: strin
         throw new Error(json.error ?? "Failed to finish reconnection");
       }
       clearResume();
+      setLinkToken(null);
       router.refresh();
     } catch (err) {
+      clearResume();
+      setLinkToken(null);
       setError(err instanceof Error ? err.message : "Error");
     } finally {
       setBusy(false);
     }
   }, [itemId, router]);
 
-  const { open, ready } = usePlaidLink({
-    token: linkToken,
-    onSuccess: () => onSuccess(),
-  });
-
-  // Stash this item's context before opening, so an OAuth redirect can resume
-  // it on the dashboard. Set at open time so multiple broken-bank buttons do
-  // not overwrite each other.
-  const openFor = useCallback(
-    (token: string) => {
-      saveResume({ token, mode: "reconnect", itemId });
-      open();
-    },
-    [itemId, open],
-  );
-
   const handleOpen = useCallback(async () => {
     setError(null);
-    if (linkToken) {
-      if (ready) openFor(linkToken);
-      else wantsOpenRef.current = true;
-      return;
-    }
+    if (linkToken) return;
 
-    wantsOpenRef.current = true;
     setBusy(true);
     try {
       const res = await fetch("/api/plaid/link-token", {
@@ -79,31 +60,37 @@ export default function ReconnectBankButton({ itemId }: Readonly<{ itemId: strin
       });
       if (!res.ok) throw new Error("Could not start reconnection");
       const json = await res.json();
+      saveResume({ token: json.link_token, mode: "reconnect", itemId });
       setLinkToken(json.link_token);
     } catch (err) {
-      wantsOpenRef.current = false;
+      clearResume();
+      setLinkToken(null);
       setError(err instanceof Error ? err.message : "Error");
     } finally {
       setBusy(false);
     }
-  }, [itemId, linkToken, ready, openFor]);
+  }, [itemId, linkToken]);
 
-  useEffect(() => {
-    if (!wantsOpenRef.current || !ready || !linkToken) return;
-    wantsOpenRef.current = false;
-    openFor(linkToken);
-  }, [ready, linkToken, openFor]);
+  const onExit = useCallback(() => {
+    clearResume();
+    setLinkToken(null);
+  }, []);
 
   return (
     <span className="inline-flex items-center gap-2">
+      <PlaidLinkLauncher
+        token={linkToken}
+        onSuccess={() => onSuccess()}
+        onExit={onExit}
+      />
       <Button
         onClick={handleOpen}
-        disabled={busy}
-        loading={busy}
+        disabled={busy || Boolean(linkToken)}
+        loading={busy || Boolean(linkToken)}
         variant="secondary"
         size="sm"
       >
-        {busy ? "Reconnecting..." : "Reconnect"}
+        {busy || linkToken ? "Opening..." : "Reconnect"}
       </Button>
       {error && <span className="text-xs text-danger">{error}</span>}
     </span>

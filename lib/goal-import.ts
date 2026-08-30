@@ -161,12 +161,18 @@ export function parseMonarchGoals(text: string): GoalImportResult {
 
   const rows: GoalImportRow[] = [];
   const errors: string[] = [];
+  const importedIds = new Set<string>();
   for (const goal of goals) {
     const row = parseGoalEntry(goal);
     if (!row) {
       errors.push("Skipped a goal with no usable name.");
       continue;
     }
+    if (row.importedId && importedIds.has(row.importedId)) {
+      errors.push("The goals file contains a duplicate imported goal identifier.");
+      continue;
+    }
+    if (row.importedId) importedIds.add(row.importedId);
     rows.push(row);
   }
   return { rows, errors };

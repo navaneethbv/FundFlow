@@ -6,7 +6,8 @@
 
 **Evidence:** `docs/Monarch-Production-Comparison-2026-08-29.md` and the gitignored live-data evidence under `qa-shots/production-2026-08-29/`.
 
-**Implementation status:** Phases 0 through 6 have local implementations with focused unit, integration, and signed-in browser coverage on this branch. The exact-head review, full verification gates, and the Production browser comparison remain pending before any deployment claim.
+**Implementation status:** Phases 0 through 6 have been re-reviewed and remediated on this branch with focused unit, schema, integration, and signed-in browser coverage.
+Fresh remote checks, deployment of the three follow-up migrations, and the Production browser comparison remain pending before any deployment claim.
 Do not treat a checked box below as Production evidence until the associated migration, UI flow, source path, and acceptance test have been independently verified.
 
 ## Product rules
@@ -286,21 +287,15 @@ export interface ProductSyncHealth {
 - [x] Run focused recurring and Dashboard tests during Phase 0.
 - [x] Run `npm run lint`.
 - [x] Run `npm run typecheck`.
-- [x] Run the full unit suite.
-- [x] Run the complete mixed unit and integration suite.
-- [x] Build the production application (`npm run build`).
+- [x] Run the CI-equivalent suite: 4,126 tests passed and 19 live-database suites skipped without a service credential.
+- [ ] Re-run the live credit-card ownership test after the follow-up migrations deploy.
+- [ ] Confirm the fresh PR-head production build.
 - [x] Validate contrast tokens (`npm run validate:palette`).
 - [x] Rebuild the knowledge graph (`graphify update .`).
 - [x] Check for git diff hygiene (`git diff --check`).
-- [x] Run focused recurring and Dashboard tests during Phase 0.
-- [x] Run `npm run lint`.
-- [x] Run `npm run typecheck`.
-- [x] Run the full unit suite.
-- [x] Run the complete mixed unit and integration suite.
-- [x] Build the production application (`npm run build`).
-- [x] Validate contrast tokens (`npm run validate:palette`).
-- [x] Rebuild the knowledge graph (`graphify update .`).
-- [x] Check for git diff hygiene (`git diff --check`).
+- [x] Re-run coverage: 98.15% statements, 95.05% branches, 98.8% functions, and 99.13% lines.
+- [x] Verify the linked migration ledger and a dry run for the three pending migrations.
+- [ ] Confirm the fresh PR-head analysis checks.
 - [ ] Confirm the Production deployment commit.
 - [ ] Repeat the authenticated browser comparison read-only.
 - [ ] Record which numeric differences remain because Monarch and FundFlow still contain different source or configuration data.

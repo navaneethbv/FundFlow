@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { POST as importCommitPost } from "@/app/api/import/commit/route";
 import { detectCardDesign } from "@/lib/card-design";
 import * as http from "@/lib/http";
+import { clientStub } from "../fixtures/supabase-query";
 
 describe("Coverage Boost More Tests", () => {
   beforeEach(() => {
@@ -33,19 +34,16 @@ describe("Coverage Boost More Tests", () => {
     });
 
     it("handles account not found", async () => {
-      const mockSupabase = {
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-            }),
-          }),
-        }),
-      } as never;
+      const mockSupabase = clientStub({
+        import_review_batches: {
+          data: { id: "b-1", created_at: "2026-08-01T00:00:00Z" },
+        },
+        accounts: { data: null },
+      });
 
       vi.spyOn(http, "requireUser").mockResolvedValue({
         user: { id: "u-1" } as never,
-        supabase: mockSupabase,
+        supabase: mockSupabase as never,
       });
 
       const req = new NextRequest("http://localhost/api/import/commit", {
@@ -56,39 +54,24 @@ describe("Coverage Boost More Tests", () => {
     });
 
     it("commits pending review rows successfully with approved_row_ids", async () => {
-      const mockSupabase = {
-        from: vi.fn().mockImplementation((table: string) => {
-          if (table === "accounts") {
-            return {
-              select: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  maybeSingle: vi.fn().mockResolvedValue({ data: { id: "acc-1" }, error: null }),
-                }),
-              }),
-            };
-          }
-          if (table === "import_review_rows") {
-            return {
-              select: vi.fn().mockReturnValue({
-                eq: vi.fn().mockResolvedValue({
-                  data: [
-                    {
-                      id: "row-1",
-                      date: "2026-08-01",
-                      description: "Starbucks",
-                      amount: 5.5,
-                      category: "Coffee & Dining",
-                      status: "pending",
-                    },
-                  ],
-                  error: null,
-                }),
-              }),
-            };
-          }
-          return {};
-        }),
-      } as never;
+      const mockSupabase = clientStub({
+        import_review_batches: {
+          data: { id: "b-1", created_at: "2026-08-01T00:00:00Z" },
+        },
+        accounts: { data: { id: "acc-1" } },
+        import_review_rows: {
+          data: [
+            {
+              id: "row-1",
+              date: "2026-08-01",
+              description: "Starbucks",
+              amount: 5.5,
+              category: "Coffee & Dining",
+              status: "pending",
+            },
+          ],
+        },
+      });
 
       const service = await import("@/lib/supabase/service");
       vi.spyOn(service, "createServiceClient").mockReturnValue({
@@ -131,7 +114,7 @@ describe("Coverage Boost More Tests", () => {
 
       vi.spyOn(http, "requireUser").mockResolvedValue({
         user: { id: "u-1" } as never,
-        supabase: mockSupabase,
+        supabase: mockSupabase as never,
       });
 
       const req = new NextRequest("http://localhost/api/import/commit", {

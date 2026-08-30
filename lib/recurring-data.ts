@@ -19,7 +19,6 @@ import {
 } from "@/lib/recurring-page";
 
 const PAGE_SIZE = 1_000;
-const MAX_PAGES = 20;
 
 type RecurringStreamRawRow = {
   id: string;
@@ -170,7 +169,7 @@ async function loadPagedRows<T>(
   table: string,
 ): Promise<T[]> {
   const rows: T[] = [];
-  for (let page = 0; page < MAX_PAGES; page += 1) {
+  for (let page = 0; ; page += 1) {
     const from = page * PAGE_SIZE;
     const result = await loadPage(from, from + PAGE_SIZE - 1);
     assertRecurringQuery(table, result);
@@ -195,6 +194,8 @@ async function loadJoinRows(
           .from("recurring_stream_transactions")
           .select("recurring_stream_id,transaction_id")
           .in("recurring_stream_id", chunk)
+          .order("recurring_stream_id")
+          .order("transaction_id")
           .range(from, to);
         if (userId) query = query.eq("user_id", userId);
         return query;
@@ -214,7 +215,12 @@ async function loadTransactionDates(
   const dates = new Map<string, string>();
   for (let i = 0; i < transactionIds.length; i += 500) {
     const chunk = transactionIds.slice(i, i + 500);
-    let query = supabase.from("transactions").select("id,date").in("id", chunk).limit(500);
+    let query = supabase
+      .from("transactions")
+      .select("id,date")
+      .in("id", chunk)
+      .order("id")
+      .range(0, chunk.length - 1);
     if (userId) query = query.eq("user_id", userId);
     const result = await query;
     assertRecurringQuery("transactions", result);
@@ -233,7 +239,8 @@ export async function loadRecurringData(
   },
 ): Promise<RecurringLoadResult> {
   const householdRows = await loadPagedRows<{ id: string }>(
-    (from, to) => supabase.from("households").select("id").range(from, to),
+    (from, to) =>
+      supabase.from("households").select("id").order("id").range(from, to),
     "households",
   );
   const visibleHouseholdIds = householdRows.map((row) => row.id);
@@ -251,6 +258,7 @@ export async function loadRecurringData(
         .select(
           "id,user_id,merchant_name,description,stream_type,status,is_active,reviewed_at,dismissed_at,user_amount,average_amount,last_amount,frequency,first_date,last_date,predicted_next_date,account_id,category",
         )
+        .order("id")
         .range(from, to);
       if (userId) query = query.eq("user_id", userId);
       return query;
@@ -262,6 +270,7 @@ export async function loadRecurringData(
       let query = supabase
         .from("manual_recurring_items")
         .select("id,name,amount,frequency,next_date,item_type,category,enabled")
+        .order("id")
         .range(from, to);
       if (userId) query = query.eq("user_id", userId);
       return query;
@@ -273,6 +282,7 @@ export async function loadRecurringData(
       let query = supabase
         .from("accounts")
         .select("id,name,type,subtype,iso_currency_code")
+        .order("id")
         .range(from, to);
       if (userId) query = query.eq("user_id", userId);
       return query;
@@ -285,6 +295,7 @@ export async function loadRecurringData(
     .eq("status", "done")
     .eq("job_type", "transactions")
     .order("updated_at", { ascending: false })
+    .order("id", { ascending: false })
     .limit(1);
   if (userId) syncQuery = syncQuery.eq("user_id", userId);
 
@@ -298,6 +309,7 @@ export async function loadRecurringData(
       let query = supabase
         .from("credit_card_bills")
         .select("account_id, statement_balance, minimum_payment, due_date")
+        .order("account_id")
         .range(from, to);
       if (userId) query = query.eq("user_id", userId);
       return query;

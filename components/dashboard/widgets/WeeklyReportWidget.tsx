@@ -8,7 +8,7 @@ function deliveryDisplay(
 ): { label: string; tone: BadgeTone; detail: string } {
   switch (delivery.status) {
     case "sent":
-      return { label: "Delivered", tone: "success", detail: "Read the full weekly report." };
+      return { label: "Delivered", tone: "success", detail: "Open Reports to explore this period." };
     case "processing":
       return { label: "Preparing", tone: "neutral", detail: "Your weekly report is being generated." };
     case "failed":
@@ -20,7 +20,8 @@ function deliveryDisplay(
 
 /**
  * Dashboard entry point for the latest weekly report. Shows delivery status
- * and links to the full report; Notifications remains the canonical history.
+ * and links to the reports workspace; Notifications remains the canonical
+ * delivery history.
  */
 export default function WeeklyReportWidget({
   delivery,
@@ -51,7 +52,7 @@ export default function WeeklyReportWidget({
         href="/reports"
         className="mt-4 inline-block text-xs font-semibold text-accent hover:underline"
       >
-        Open the full report
+        Open reports
       </Link>
     </Panel>
   );

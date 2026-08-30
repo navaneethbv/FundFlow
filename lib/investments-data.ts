@@ -238,6 +238,63 @@ export interface InvestmentItemStatus {
 }
 
 const INVESTMENT_STALE_AFTER_MS = 48 * 60 * 60 * 1000;
+const INVESTMENT_JOB_PAGE_SIZE = 1_000;
+
+interface InvestmentSyncJobRow {
+  id: string;
+  plaid_item_id: string;
+  updated_at: string;
+  status: string;
+  last_error: string | null;
+}
+
+interface InvestmentItemRow {
+  id: string;
+  institution_name: string | null;
+}
+
+async function loadInvestmentItems(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<InvestmentItemRow[]> {
+  const rows: InvestmentItemRow[] = [];
+  for (let page = 0; ; page += 1) {
+    const from = page * INVESTMENT_JOB_PAGE_SIZE;
+    const { data, error } = await supabase
+      .from("plaid_items")
+      .select("id, institution_name")
+      .eq("user_id", userId)
+      .order("created_at")
+      .order("id")
+      .range(from, from + INVESTMENT_JOB_PAGE_SIZE - 1);
+    if (error) throw error;
+    const batch = (data ?? []) as InvestmentItemRow[];
+    rows.push(...batch);
+    if (batch.length < INVESTMENT_JOB_PAGE_SIZE) return rows;
+  }
+}
+
+async function loadInvestmentSyncJobs(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<InvestmentSyncJobRow[]> {
+  const rows: InvestmentSyncJobRow[] = [];
+  for (let page = 0; ; page += 1) {
+    const from = page * INVESTMENT_JOB_PAGE_SIZE;
+    const { data, error } = await supabase
+      .from("sync_jobs")
+      .select("id, plaid_item_id, updated_at, status, last_error")
+      .eq("user_id", userId)
+      .eq("job_type", "investments")
+      .order("updated_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, from + INVESTMENT_JOB_PAGE_SIZE - 1);
+    if (error) throw error;
+    const batch = (data ?? []) as InvestmentSyncJobRow[];
+    rows.push(...batch);
+    if (batch.length < INVESTMENT_JOB_PAGE_SIZE) return rows;
+  }
+}
 
 /**
  * Per-item investment sync status for the Investments page. Loads the most
@@ -248,43 +305,37 @@ export async function loadInvestmentSyncStatus(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<InvestmentItemStatus[]> {
-  const [{ data: items }, { data: jobs }] = await Promise.all([
-    supabase
-      .from("plaid_items")
-      .select("id, institution_name")
-      .eq("user_id", userId)
-      .order("created_at"),
-    supabase
-      .from("sync_jobs")
-      .select("plaid_item_id, updated_at, status, last_error")
-      .eq("user_id", userId)
-      .eq("job_type", "investments")
-      .order("updated_at", { ascending: false })
-      .limit(2000),
+  const [items, jobs] = await Promise.all([
+    loadInvestmentItems(supabase, userId),
+    loadInvestmentSyncJobs(supabase, userId),
   ]);
-  const jobsByItem = new Map<string, { updated_at: string; status: string; last_error: string | null }>();
-  for (const job of jobs ?? []) {
-    const itemId = job.plaid_item_id as string;
-    if (!jobsByItem.has(itemId)) {
-      jobsByItem.set(itemId, {
-        updated_at: job.updated_at as string,
-        status: job.status as string,
-        last_error: (job.last_error as string | null) ?? null,
-      });
+
+  const latestAttemptByItem = new Map<string, InvestmentSyncJobRow>();
+  const latestSuccessByItem = new Map<string, InvestmentSyncJobRow>();
+  for (const job of jobs) {
+    if (!latestAttemptByItem.has(job.plaid_item_id)) {
+      latestAttemptByItem.set(job.plaid_item_id, job);
+    }
+    if (
+      job.status === "done" &&
+      !job.last_error &&
+      !latestSuccessByItem.has(job.plaid_item_id)
+    ) {
+      latestSuccessByItem.set(job.plaid_item_id, job);
     }
   }
   const now = Date.now();
-  return (items ?? []).map((item) => {
-    const job = jobsByItem.get(item.id as string);
-    const lastSuccessAt =
-      job?.status === "done" && !job.last_error ? job.updated_at : null;
+  return items.map((item) => {
+    const itemId = item.id;
+    const latestAttempt = latestAttemptByItem.get(itemId);
+    const lastSuccessAt = latestSuccessByItem.get(itemId)?.updated_at ?? null;
     const successTimestamp = lastSuccessAt ? Date.parse(lastSuccessAt) : Number.NaN;
     return {
-      plaidItemId: item.id as string,
-      institutionName: (item.institution_name as string | null) ?? "Bank",
-      lastAttemptAt: job?.updated_at ?? null,
+      plaidItemId: itemId,
+      institutionName: item.institution_name ?? "Bank",
+      lastAttemptAt: latestAttempt?.updated_at ?? null,
       lastSuccessAt,
-      outcome: job?.last_error ?? null,
+      outcome: latestAttempt?.last_error ?? null,
       stale: Number.isFinite(successTimestamp) && now - successTimestamp > INVESTMENT_STALE_AFTER_MS,
     };
   });

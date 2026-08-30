@@ -11,6 +11,24 @@ import * as reportDelivery from "@/lib/report-delivery";
 import * as reportPeriod from "@/lib/report-period";
 import * as reportPdf from "@/lib/report-pdf";
 
+function profileService(data: unknown, error: unknown = null) {
+  const query = {
+    select: vi.fn(),
+    eq: vi.fn(),
+    in: vi.fn(),
+    order: vi.fn(),
+    range: vi.fn(),
+    then: (resolve: (value: { data: unknown; error: unknown }) => unknown) =>
+      Promise.resolve({ data, error }).then(resolve),
+  };
+  query.select.mockReturnValue(query);
+  query.eq.mockReturnValue(query);
+  query.in.mockReturnValue(query);
+  query.order.mockReturnValue(query);
+  query.range.mockReturnValue(query);
+  return { from: vi.fn().mockReturnValue(query) };
+}
+
 describe("Cron Weekly Report Deep Branches", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -18,18 +36,9 @@ describe("Cron Weekly Report Deep Branches", () => {
 
   it("skips undeliverable recipient in runWeeklyReports", async () => {
     const service = await import("@/lib/supabase/service");
-    vi.spyOn(service, "createServiceClient").mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            in: vi.fn().mockResolvedValue({
-              data: [{ id: "u-1", timezone: "America/New_York" }],
-              error: null,
-            }),
-          }),
-        }),
-      }),
-    } as never);
+    vi.spyOn(service, "createServiceClient").mockReturnValue(
+      profileService([{ id: "u-1", timezone: "America/New_York" }]) as never,
+    );
 
     vi.spyOn(reportPeriod, "isWeeklyReportDue").mockReturnValue(true);
     vi.spyOn(reportDelivery, "claimWeeklyDelivery").mockResolvedValue({
@@ -50,18 +59,9 @@ describe("Cron Weekly Report Deep Branches", () => {
 
   it("handles PDF render failure in runWeeklyReports", async () => {
     const service = await import("@/lib/supabase/service");
-    vi.spyOn(service, "createServiceClient").mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            in: vi.fn().mockResolvedValue({
-              data: [{ id: "u-1", timezone: "America/New_York" }],
-              error: null,
-            }),
-          }),
-        }),
-      }),
-    } as never);
+    vi.spyOn(service, "createServiceClient").mockReturnValue(
+      profileService([{ id: "u-1", timezone: "America/New_York" }]) as never,
+    );
 
     vi.spyOn(reportPeriod, "isWeeklyReportDue").mockReturnValue(true);
     vi.spyOn(reportDelivery, "claimWeeklyDelivery").mockResolvedValue({
@@ -85,16 +85,9 @@ describe("Cron Weekly Report Deep Branches", () => {
     const alertSpy = vi.spyOn(cronAlert, "alertCronFailure").mockResolvedValue();
 
     const service = await import("@/lib/supabase/service");
-    vi.spyOn(service, "createServiceClient").mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({
-            data: [{ id: "u-1", timezone: "America/New_York" }],
-            error: null,
-          }),
-        }),
-      }),
-    } as never);
+    vi.spyOn(service, "createServiceClient").mockReturnValue(
+      profileService([{ id: "u-1", timezone: "America/New_York" }]) as never,
+    );
 
     vi.spyOn(reportPeriod, "isWeeklyReportDue").mockReturnValue(true);
     vi.spyOn(reportDelivery, "claimWeeklyDelivery").mockResolvedValue({
@@ -115,45 +108,24 @@ describe("Cron Weekly Report Deep Branches", () => {
     const alertSpy = vi.spyOn(cronAlert, "alertCronFailure").mockResolvedValue();
 
     const service = await import("@/lib/supabase/service");
-    vi.spyOn(service, "createServiceClient").mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({
-            data: null,
-            error: new Error("Database offline"),
-          }),
-        }),
-      }),
-    } as never);
+    vi.spyOn(service, "createServiceClient").mockReturnValue(
+      profileService(null, new Error("Database offline")) as never,
+    );
 
     await expect(runWeeklyReports()).rejects.toThrow("Database offline");
 
     // Profiles is null, isWeeklyReportDue is false, claimWeeklyDelivery throws error
-    vi.spyOn(service, "createServiceClient").mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({
-            data: null, // null profiles
-            error: null,
-          }),
-        }),
-      }),
-    } as never);
+    vi.spyOn(service, "createServiceClient").mockReturnValue(
+      profileService(null) as never,
+    );
 
     const nullProfRes = await runWeeklyReports();
     expect(nullProfRes.users).toBe(0);
 
     // Profile where report is not due
-    vi.spyOn(service, "createServiceClient").mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({
-            data: [{ id: "u-not-due", timezone: "America/New_York" }],
-            error: null,
-          }),
-        }),
-      }),
-    } as never);
+    vi.spyOn(service, "createServiceClient").mockReturnValue(
+      profileService([{ id: "u-not-due", timezone: "America/New_York" }]) as never,
+    );
     vi.spyOn(reportPeriod, "isWeeklyReportDue").mockReturnValue(false);
     const notDueRes = await runWeeklyReports();
     expect(notDueRes.due).toBe(0);
