@@ -63,14 +63,14 @@ export default function AdvicePriorities({
   }
 
   return (
-    <div className="rounded-field border border-panel-border bg-panel-2 p-3">
+    <div className="min-w-0 rounded-field border border-panel-border bg-panel-2 p-3">
       <p className="mb-2 text-sm font-semibold">Your prioritized topics</p>
       {priorities.length === 0 && (
         <p className="mb-3 text-sm text-muted">Nothing prioritized yet. Pin a topic below to reorder it.</p>
       )}
       <ol className="space-y-2">
         {priorities.map((id, index) => (
-          <li key={id} className="flex items-center justify-between gap-2 text-sm">
+          <li key={id} className="flex min-w-0 items-center justify-between gap-2 text-sm">
             <span className="min-w-0 truncate">{titleOf(id)}</span>
             <span className="flex shrink-0 items-center gap-1">
               <button
@@ -110,7 +110,7 @@ export default function AdvicePriorities({
           <p className="mb-2 text-sm font-semibold">Pin a topic</p>
           <ul className="space-y-1">
             {unprioritized.map((topic) => (
-              <li key={topic.id} className="flex items-center justify-between gap-2 text-sm">
+              <li key={topic.id} className="flex min-w-0 items-center justify-between gap-2 text-sm">
                 <span className="min-w-0 truncate">{topic.title}</span>
                 <Button type="button" size="sm" variant="secondary" onClick={() => pin(topic.id)} disabled={busy}>
                   Prioritize

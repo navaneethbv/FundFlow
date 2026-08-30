@@ -176,6 +176,7 @@ export default async function AdvicePage({ searchParams }: Readonly<PageProps>) 
             </section>
           </div>
 
+          <div className="min-w-0 space-y-4">
           <nav aria-label="Advice categories" className="space-y-1 lg:sticky lg:top-5">
             <Link
               href={adviceHref()}
@@ -209,6 +210,7 @@ export default async function AdvicePage({ searchParams }: Readonly<PageProps>) 
             topics={ADVICE_LIBRARY.map((item) => ({ id: item.id, title: item.title }))}
             initialPriorities={priorities ?? []}
           />
+          </div>
         </div>
       </div>
     </AppShell>
