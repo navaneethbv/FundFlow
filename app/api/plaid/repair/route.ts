@@ -37,6 +37,65 @@ function providerOutcome(kind: RepairFailureKind) {
   );
 }
 
+async function parseItemId(
+  request: NextRequest,
+): Promise<{ itemId: string } | { response: NextResponse }> {
+  let itemId: unknown = null;
+  try {
+    const body = (await request.json()) as { itemId?: unknown } | null;
+    itemId = body?.itemId;
+  } catch {
+    return { response: badRequest("Invalid JSON body") };
+  }
+  return typeof itemId === "string" && itemId.length > 0
+    ? { itemId }
+    : { response: badRequest("Missing itemId") };
+}
+
+type RepairItem = NonNullable<Awaited<ReturnType<typeof getItem>>>;
+
+async function providerReadinessFailure(
+  item: RepairItem,
+): Promise<NextResponse | null> {
+  try {
+    const accessToken = await decryptItemTokenAndUpgrade(item);
+    await getPlaidClient().itemGet({ access_token: accessToken });
+    return null;
+  } catch (error) {
+    const kind = classifyRepairError(error);
+    const errResponse = (error as { response?: { data?: { error_code?: unknown } } } | null)
+      ?.response;
+    const rawCode = errResponse?.data?.error_code;
+    const safeCode = safeErrorCode(typeof rawCode === "string" ? rawCode : null);
+    if (
+      safeCode &&
+      (kind === "consent_required" || kind === "institution_login_required")
+    ) {
+      await setItemStatus(item.user_id, item.id, "error", safeCode).catch(
+        (statusError) => logError("plaid.repair.status", statusError),
+      );
+    }
+    return providerOutcome(kind);
+  }
+}
+
+function repairFailureOutcome(error: unknown): NextResponse {
+  if (error instanceof ItemSyncInProgressError) {
+    return NextResponse.json(
+      {
+        ok: false,
+        status: "sync_in_progress",
+        message: "A sync is already running for this institution. Try again shortly.",
+      },
+      { status: 409 },
+    );
+  }
+  const kind = classifyRepairError(error);
+  return kind === "generic_failure"
+    ? errorResponse("plaid.repair", error)
+    : providerOutcome(kind);
+}
+
 /**
  * Authenticated, rate-limited repair for one owned Plaid item.
  *
@@ -67,19 +126,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let itemId: unknown = null;
-  try {
-    const body = (await request.json()) as { itemId?: unknown } | null;
-    itemId = body?.itemId;
-  } catch {
-    return badRequest("Invalid JSON body");
-  }
-  if (typeof itemId !== "string" || itemId.length === 0) {
-    return badRequest("Missing itemId");
-  }
+  const parsedItemId = await parseItemId(request);
+  if ("response" in parsedItemId) return parsedItemId.response;
 
   // Ownership is enforced by scoping the lookup to the authenticated user.
-  const item = await getItem(user.id, itemId);
+  const item = await getItem(user.id, parsedItemId.itemId);
   if (!item) {
     return NextResponse.json(
       { error: "Institution connection not found." },
@@ -90,25 +141,8 @@ export async function POST(request: NextRequest) {
   try {
     // Provider readiness: /item/get confirms the token is live before we spend
     // a bounded backfill against it.
-    try {
-      const accessToken = await decryptItemTokenAndUpgrade(item);
-      await getPlaidClient().itemGet({ access_token: accessToken });
-    } catch (error) {
-      const kind = classifyRepairError(error);
-      const errResponse = (error as { response?: { data?: { error_code?: unknown } } } | null)
-        ?.response;
-      const rawCode = errResponse?.data?.error_code;
-      const safeCode = safeErrorCode(typeof rawCode === "string" ? rawCode : null);
-      if (
-        safeCode &&
-        (kind === "consent_required" || kind === "institution_login_required")
-      ) {
-        await setItemStatus(item.user_id, item.id, "error", safeCode).catch(
-          (statusError) => logError("plaid.repair.status", statusError),
-        );
-      }
-      return providerOutcome(kind);
-    }
+    const readinessFailure = await providerReadinessFailure(item);
+    if (readinessFailure) return readinessFailure;
 
     const result = await backfillItemTransactions(item, { maxPages: REPAIR_MAX_PAGES });
 
@@ -133,18 +167,6 @@ export async function POST(request: NextRequest) {
       ...result,
     });
   } catch (error) {
-    if (error instanceof ItemSyncInProgressError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          status: "sync_in_progress",
-          message: "A sync is already running for this institution. Try again shortly.",
-        },
-        { status: 409 },
-      );
-    }
-    const kind = classifyRepairError(error);
-    if (kind === "generic_failure") return errorResponse("plaid.repair", error);
-    return providerOutcome(kind);
+    return repairFailureOutcome(error);
   }
 }
