@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 import { TRANSFER_GROUPS } from "@/lib/finance-domain";
@@ -38,6 +39,7 @@ export default function TransactionOverrideControl({
   initialOverride,
   categories,
 }: Readonly<Props>) {
+  const router = useRouter();
   const [displayCategory, setDisplayCategory] = useState(
     initialOverride.displayCategory ?? "",
   );
@@ -46,6 +48,12 @@ export default function TransactionOverrideControl({
   >(initialOverride.cashFlowClassification ?? "");
   const [confirmed, setConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [hasOverride, setHasOverride] = useState(
+    Boolean(
+      initialOverride.displayCategory ||
+        initialOverride.cashFlowClassification,
+    ),
+  );
   const [message, setMessage] = useState<{ kind: "error" | "success"; text: string } | null>(
     null,
   );
@@ -69,8 +77,10 @@ export default function TransactionOverrideControl({
       });
       const json = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) throw new Error(json?.error ?? "Could not save the override.");
+      setHasOverride(Boolean(displayCategory.trim() || classification));
       setMessage({ kind: "success", text: "Override saved." });
       setConfirmed(false);
+      router.refresh();
     } catch (err) {
       setMessage({ kind: "error", text: err instanceof Error ? err.message : "Could not save." });
     } finally {
@@ -90,7 +100,9 @@ export default function TransactionOverrideControl({
       if (!res.ok) throw new Error("Could not clear the override.");
       setDisplayCategory("");
       setClassification("");
+      setHasOverride(false);
       setMessage({ kind: "success", text: "Override cleared." });
+      router.refresh();
     } catch (err) {
       setMessage({
         kind: "error",
@@ -183,13 +195,14 @@ export default function TransactionOverrideControl({
       )}
 
       <div className="mt-3 flex items-center justify-end gap-2">
-        {initialOverride.displayCategory || initialOverride.cashFlowClassification ? (
+        {hasOverride ? (
           <button
             type="button"
             className="text-xs text-muted hover:text-foreground"
             onClick={() => {
               void clearOverride();
             }}
+            disabled={saving}
           >
             Clear override
           </button>

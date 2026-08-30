@@ -778,7 +778,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
       tags: ann?.tags ?? [],
       splits: splitsById.get(t.id) ?? [],
       categoryOptions,
-      providerCategory: t.category,
+      providerCategory: t.pfc_primary ?? t.pfc_detailed,
       override: overridesById.get(t.id) ?? null,
     };
   });
@@ -906,7 +906,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                       tags={annById.get(t.id)?.tags ?? []}
                       splits={splitsById.get(t.id) ?? []}
                       categoryOptions={categoryOptions}
-                      providerCategory={t.category}
+                      providerCategory={t.pfc_primary ?? t.pfc_detailed}
                       override={overridesById.get(t.id) ?? null}
                     />
                   ))}

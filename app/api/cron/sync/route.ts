@@ -100,7 +100,11 @@ async function syncUser(
   if (isFeatureEnabled("investmentsPage")) {
     await runOptionalSync("cron.sync.investments", () => syncInvestmentsForUser(userId));
   }
-  await runOptionalSync("cron.sync.liabilities", () => syncCreditCardLiabilitiesForUser(userId));
+  if (isFeatureEnabled("liabilitiesSync")) {
+    await runOptionalSync("cron.sync.liabilities", () =>
+      syncCreditCardLiabilitiesForUser(userId),
+    );
+  }
   await writeDailyAccountSnapshots(userId);
   await refreshRecurringForUser(userId);
   await writeNetWorthSnapshot(userId);

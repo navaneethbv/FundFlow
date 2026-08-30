@@ -11,7 +11,7 @@ export interface AdviceTopicRef {
 /**
  * Pin and reorder advice topics. Only the display order is saved; the
  * educational content contract is unchanged. Every change persists through the
- * authenticated advice-priorities route and is audited server-side.
+ * authenticated shared advice route and is audited server-side.
  */
 export default function AdvicePriorities({
   topics,
@@ -28,10 +28,10 @@ export default function AdvicePriorities({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/advice/priorities", {
+      const res = await fetch("/api/advice", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ advice_ids: next }),
+        body: JSON.stringify({ kind: "set_priorities", priorities: next }),
       });
       const json = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) throw new Error(json?.error ?? "Could not save priorities.");

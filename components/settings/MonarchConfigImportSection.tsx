@@ -78,6 +78,14 @@ export default function MonarchConfigImportSection() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ApplyResult | null>(null);
 
+  function changeKind(nextKind: ImportKind) {
+    setKind(nextKind);
+    setPlan(null);
+    setResult(null);
+    setError(null);
+    setDecisions({});
+  }
+
   async function preview() {
     setError(null);
     setResult(null);
@@ -138,7 +146,7 @@ export default function MonarchConfigImportSection() {
               type="radio"
               checked={kind === "budget"}
               onChange={() => {
-                setKind("budget");
+                changeKind("budget");
               }}
             />
             <span>Budgets</span>
@@ -148,7 +156,7 @@ export default function MonarchConfigImportSection() {
               type="radio"
               checked={kind === "goal"}
               onChange={() => {
-                setKind("goal");
+                changeKind("goal");
               }}
             />
             <span>Goals</span>

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
-import { writeAudit } from "@/lib/audit";
+import { getClientIp, writeAudit } from "@/lib/audit";
 import { parseLifeEvent, type LifeEvent } from "@/lib/life-events";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       action: "life_event_created",
       metadata: { event_id: data.id, event_type: parsed.event.type, start_month: parsed.event.startMonth },
+      ip: getClientIp(request),
     });
     return NextResponse.json({ event: { id: data.id, type: data.event_type, startMonth: data.start_month, amount: Number(data.amount), durationMonths: data.duration_months, label: data.label } }, { status: 201 });
   } catch (error) {
@@ -96,6 +97,7 @@ export async function PATCH(request: NextRequest) {
       userId: user.id,
       action: "life_event_updated",
       metadata: { event_id: eventId, event_type: parsed.event.type },
+      ip: getClientIp(request),
     });
     return NextResponse.json({ event: { id: data.id, type: data.event_type, startMonth: data.start_month, amount: Number(data.amount), durationMonths: data.duration_months, label: data.label } });
   } catch (error) {
@@ -126,6 +128,7 @@ export async function DELETE(request: NextRequest) {
       userId: user.id,
       action: "life_event_deleted",
       metadata: { event_id: eventId },
+      ip: getClientIp(request),
     });
     return NextResponse.json({ ok: true });
   } catch (error) {

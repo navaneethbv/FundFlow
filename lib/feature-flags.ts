@@ -7,13 +7,16 @@
  * access.
  *
  * `FUNDFLOW_FEATURE_FLAGS` is a comma-separated override list: `reportsPage`
- * forces a flag on, `-reportsPage` forces it off. Since every default below is
- * now `true`, the `-` form is the only way to re-gate a surface without a
- * redeploy — reach for it first when a released page needs to go dark.
+ * forces a flag on, and `-reportsPage` forces it off.
  */
 
 /** Every known flag and its shipped default. */
 export const FEATURE_FLAG_DEFAULTS = {
+  /**
+   * Plaid Liabilities is a separately billed provider call.
+   * Keep the daily cron call opt-in until quota and product access are approved.
+   */
+  liabilitiesSync: false,
   accountsPage: true,
   cashFlowPage: true,
   budgetPage: true,
@@ -110,7 +113,6 @@ function parseOverrides(env: FeatureFlagEnv): FlagOverrides {
 
 function resolve(flag: FeatureFlag, overrides: FlagOverrides): boolean {
   if (overrides.off.has(flag)) return false;
-  // c8 ignore next -- every FEATURE_FLAG_DEFAULTS value is true, so the force-on set is never consulted
   return FEATURE_FLAG_DEFAULTS[flag] || overrides.on.has(flag);
 }
 
