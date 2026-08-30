@@ -195,6 +195,24 @@ describe("computeYearInMoneyFromProjection", () => {
     expect(recap.totalIncome).toBe(0);
   });
 
+  it("keeps an explicitly confirmed expense even when its provider group is excluded", () => {
+    const recap = computeYearInMoneyFromProjection(
+      [
+        projected({
+          signedAmount: 275,
+          flow: "expense",
+          groupKey: "LOAN_PAYMENTS",
+          categoryKey: "LOAN_PAYMENTS",
+          merchant: "Confirmed purchase",
+        }),
+      ],
+      "2026",
+    );
+
+    expect(recap?.totalSpend).toBe(275);
+    expect(recap?.transactionCount).toBe(1);
+  });
+
   it("counts split parts as rows and totals them once", () => {
     const rows = [
       projected({ id: "parent::0", signedAmount: 40, categoryKey: "Groceries" }),

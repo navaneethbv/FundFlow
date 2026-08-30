@@ -241,6 +241,36 @@ describe("weekly report model", () => {
     expect(report.changePercent).toBeNull();
     expect(report.categories).toEqual([]);
   });
+
+  it("honors a confirmed expense override on a provider loan-payment row", () => {
+    const report = buildWeeklyReportModel({
+      userId: "user-1",
+      userEmail: "person@example.com",
+      period,
+      transactions: [
+        {
+          id: "confirmed-spend",
+          date: "2026-07-10",
+          amount: 300,
+          merchantName: "Purchase financed by loan",
+          name: "PURCHASE",
+          category: "LOAN_PAYMENTS",
+          accountId: "checking",
+          cashFlowClassification: "expense",
+        },
+      ],
+      accounts,
+      institutions: [{ id: "chase-item", name: "Chase" }],
+      budgets: [],
+      merchantRules: [],
+      splits: [],
+      linkedRefundTransactionIds: new Set(),
+      duplicateTransactionIds: new Set(),
+    });
+
+    expect(report.totalSpend).toBe(300);
+    expect(report.cashFlow.outflows).toBe(300);
+  });
 });
 describe("formatCardLabel", () => {
   it("title-cases a name Plaid returns in all caps", () => {
