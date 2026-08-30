@@ -268,6 +268,53 @@ interface TransactionSyncLoopOutcome {
   pagesCompleted: number;
 }
 
+function shouldFetchTransactionPage(
+  hasMore: boolean,
+  pagesCompleted: number,
+  maxPages: number | null,
+): boolean {
+  return hasMore && (maxPages === null || pagesCompleted < maxPages);
+}
+
+function nextTransactionCursor(
+  cursor: string | undefined,
+  page: TransactionSyncPage,
+): string | undefined {
+  if (!page.next_cursor && page.has_more) {
+    throw new Error("Plaid returned an empty next cursor");
+  }
+  return page.next_cursor || cursor;
+}
+
+async function recoverTransactionSyncError(
+  item: PlaidItemRow,
+  mode: TransactionSyncLoopOptions["mode"],
+  error: unknown,
+): Promise<void> {
+  if (
+    mode === "repair" &&
+    plaidErrorCode(error) === "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION"
+  ) {
+    await clearItemRepairCursor(item.user_id, item.id);
+  }
+}
+
+async function persistTransactionSyncCursor(
+  item: PlaidItemRow,
+  mode: TransactionSyncLoopOptions["mode"],
+  cursor: string | undefined,
+  committedCursor: string | undefined,
+  hasMore: boolean,
+): Promise<void> {
+  if (cursor && hasMore && mode === "repair") {
+    await updateItemRepairCursor(item.user_id, item.id, cursor);
+  } else if (cursor && !hasMore && cursor !== committedCursor) {
+    await completeItemCursor(item.user_id, item.id, cursor);
+  } else if (!hasMore && item.repair_sync_started_at) {
+    await clearItemRepairCursor(item.user_id, item.id);
+  }
+}
+
 /**
  * Drive Plaid's `/transactions/sync` pagination for one item.
  *
@@ -311,7 +358,7 @@ async function runTransactionSyncLoop(
   const result: SyncResult = { added: 0, modified: 0, removed: 0 };
 
   try {
-    while (hasMore && (options.maxPages === null || pagesCompleted < options.maxPages)) {
+    while (shouldFetchTransactionPage(hasMore, pagesCompleted, options.maxPages)) {
       const response = await plaid.transactionsSync({
         access_token: accessToken,
         cursor,
@@ -321,30 +368,22 @@ async function runTransactionSyncLoop(
       result.added += pageResult.added;
       result.modified += pageResult.modified;
       result.removed += pageResult.removed;
-      if (!data.next_cursor && data.has_more) {
-        throw new Error("Plaid returned an empty next cursor");
-      }
-      if (data.next_cursor) cursor = data.next_cursor;
+      cursor = nextTransactionCursor(cursor, data);
       hasMore = data.has_more;
       pagesCompleted += 1;
     }
   } catch (error) {
-    if (
-      options.mode === "repair" &&
-      plaidErrorCode(error) === "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION"
-    ) {
-      await clearItemRepairCursor(item.user_id, item.id);
-    }
+    await recoverTransactionSyncError(item, options.mode, error);
     throw error;
   }
 
-  if (cursor && hasMore && options.mode === "repair") {
-    await updateItemRepairCursor(item.user_id, item.id, cursor);
-  } else if (cursor && !hasMore && cursor !== committedCursor) {
-    await completeItemCursor(item.user_id, item.id, cursor);
-  } else if (!hasMore && item.repair_sync_started_at) {
-    await clearItemRepairCursor(item.user_id, item.id);
-  }
+  await persistTransactionSyncCursor(
+    item,
+    options.mode,
+    cursor,
+    committedCursor,
+    hasMore,
+  );
   await setItemStatus(item.user_id, item.id, "active", null);
   return { result, completed: !hasMore, pagesCompleted };
 }

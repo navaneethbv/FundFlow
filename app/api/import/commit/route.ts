@@ -336,8 +336,12 @@ function sameAnnotation(
   row: { note: string | null; tags: string[] },
 ): boolean {
   const storedNote = (annotation.note as string | null) ?? null;
-  const storedTags = ((annotation.tags as string[] | null) ?? []).slice().sort();
-  const incomingTags = row.tags.slice().sort();
+  const storedTags = ((annotation.tags as string[] | null) ?? [])
+    .slice()
+    .sort((left, right) => left.localeCompare(right));
+  const incomingTags = row.tags
+    .slice()
+    .sort((left, right) => left.localeCompare(right));
   return (
     storedNote === row.note &&
     storedTags.length === incomingTags.length &&
