@@ -11,8 +11,9 @@ Production rollout still requires the following owner-authorized actions:
 2. Deploy `20260829171000_life_event_retirement_amount.sql` before creating zero-amount retirement life events.
 3. Deploy `20260829172000_goal_import_identity_unique.sql`.
 4. Deploy `20260829173000_account_reconciliation_aggregate.sql` before opening the new Settings reconciliation surface.
-5. Re-run the linked credit-card ownership, retirement life-event, goal identity, and reconciliation RPC checks after deployment.
-6. Confirm the exact Production deployment commit and repeat the authenticated comparison read-only.
+5. Run `supabase db push --dry-run --linked` with `SUPABASE_DB_PASSWORD` available before applying the migrations.
+6. Re-run the linked credit-card ownership, retirement life-event, goal identity, and reconciliation RPC checks after deployment.
+7. Confirm the exact Production deployment commit and repeat the authenticated comparison read-only.
 
 Plaid Liabilities bill sync remains off by default because it adds a billed provider request per user and run.
 After Plaid product and quota approval, add `liabilitiesSync` to `FUNDFLOW_FEATURE_FLAGS` and monitor provider usage.

@@ -290,19 +290,25 @@ suite("sync transactions DB integration & mock Plaid", () => {
       accessToken: "dummy-token-2",
     });
 
-    // Mock transactionsSync to throw error for the first call, and succeed for the second call
-    mockTransactionsSync
-      .mockRejectedValueOnce(new Error("Plaid API offline"))
-      .mockResolvedValueOnce({
-        data: {
-          added: [],
-          modified: [],
-          removed: [],
-          accounts: [],
-          next_cursor: "cursor-second-success",
-          has_more: false,
-        },
-      });
+    // Database row order is intentionally unspecified, so tie the failure to
+    // the original item's token instead of assuming which item runs first.
+    mockTransactionsSync.mockImplementation(
+      ({ access_token: accessToken }: { access_token: string }) => {
+        if (accessToken === "dummy-token") {
+          return Promise.reject(new Error("Plaid API offline"));
+        }
+        return Promise.resolve({
+          data: {
+            added: [],
+            modified: [],
+            removed: [],
+            accounts: [],
+            next_cursor: "cursor-second-success",
+            has_more: false,
+          },
+        });
+      },
+    );
 
     const total = await syncAllForUser(userId);
     // Since first item failed, total should represent the successful syncs (0/0/0)

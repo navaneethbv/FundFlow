@@ -24,9 +24,17 @@ Deploy these four follow-up migrations in timestamp order before enabling or ver
 4. `20260829173000_account_reconciliation_aggregate.sql`
 
 Retirement life-event writes can violate the currently deployed positive-amount constraint until `20260829171000` is applied.
-The Settings reconciliation section depends on `20260829173000` and must not be treated as Production-ready before that migration is deployed.
+Until `20260829173000` is deployed, the Settings page remains usable but reconciliation rows deliberately show the missing-anchor state instead of computed ledger balances.
+The reconciliation feature must not be treated as Production-ready before that migration is deployed.
+
+Local verification passed lint, typecheck, production build, 4,147 unit tests, the focused sync integration suite, and the recurring and repair browser acceptance paths.
+Unit coverage is 98.09% statements, 95.11% branches, 98.76% functions, and 99.08% lines.
+`npm audit --omit=dev` reports zero vulnerabilities.
+The linked migration ledger confirms exactly the four pending migrations above.
+The linked `supabase db push --dry-run` could not authenticate without `SUPABASE_DB_PASSWORD`, so it must be repeated by the deployer before applying the migrations.
 
 The tracked-tree privacy pass removes 29 personal screenshots and attachments, deletes the live-data remediation plan, and replaces exact live financial evidence with synthetic values and generic labels.
+The ignored local `qa-shots` folder was also moved out of the repository workspace because its generated reports and live-data screenshots contained personal identifiers.
 The retained visual-regression baselines are generated from the disposable `Quality Reviewer` fixture and contain only synthetic data.
 The tracked tree contains no occurrence of the requested personal email address or username.
 Deleting `.vscode/settings.json` intentionally removes the repository-specific SonarLint connected-mode identifier; developers may configure connected mode locally without committing that file.

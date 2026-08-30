@@ -262,7 +262,12 @@ async function loadReconciliationAggregates(
     const { data, error } = await supabase
       .rpc("account_reconciliation_aggregates")
       .range(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
+    if (error) {
+      // Keep Settings available during the migration-before-code rollout
+      // window. Every other RPC failure remains visible to the caller.
+      if ((error as { code?: unknown }).code === "PGRST202") return rows;
+      throw error;
+    }
     const batch = (data ?? []) as ReconciliationAggregateRow[];
     rows.push(...batch);
     if (batch.length < PAGE_SIZE) return rows;

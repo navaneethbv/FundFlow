@@ -372,6 +372,39 @@ describe("loadInstitutionObservability", () => {
     });
   });
 
+  it("keeps Settings usable while the reconciliation RPC migration is pending", async () => {
+    const supabase = queryableSupabase({
+      accounts: [{
+        id: "account-1", user_id: "user-1", plaid_item_id: "item-1",
+        name: "Checking", mask: null, type: "depository", subtype: "checking",
+        current_balance: 100, updated_at: "2026-08-29T10:00:00.000Z",
+      }],
+      sync_jobs: [],
+    });
+    supabase.rpc = ((name: string) => {
+      supabase.rpcCalls.push(name);
+      return {
+        range: () => Promise.resolve({
+          data: null,
+          error: { code: "PGRST202", message: "Function not found" },
+        }),
+      };
+    }) as unknown as typeof supabase.rpc;
+
+    const result = await loadInstitutionObservability(
+      supabase as never,
+      "user-1",
+      [{ id: "item-1", institution_name: "Test Bank", status: "active", error_code: null }],
+      NOW,
+    );
+
+    expect(result.institutions).toHaveLength(1);
+    expect(result.reconciliations[0]).toMatchObject({
+      accountId: "account-1",
+      state: "missing_anchor",
+    });
+  });
+
   it("pages reconciliation aggregates beyond the database response cap", async () => {
     const aggregates = Array.from({ length: 1_001 }, (_, index) => ({
       account_id: `account-${index}`,
