@@ -67,7 +67,7 @@ describe("detectRecurringCandidates", () => {
   it("detects biweekly, monthly price-step, and quarterly sequences", () => {
     const biweekly = detectRecurringCandidates(
       series(["2026-07-01", "2026-07-15", "2026-07-29", "2026-08-12"], 24),
-      "2026-08-30",
+      "2026-08-26",
     );
     expect(biweekly[0]).toMatchObject({ frequency: "BIWEEKLY", amountPattern: "fixed" });
 
@@ -144,13 +144,21 @@ describe("detectRecurringCandidates", () => {
 
   it("rejects stale history and keeps only the most recent complete sequence", () => {
     const input = [
-      ...series(["2026-01-15", "2026-02-15", "2026-03-15"], 15.99, { idPrefix: "stale" }),
-      ...series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99, { idPrefix: "recent" }),
+      ...series(["2026-03-15", "2026-04-15", "2026-05-15"], 15.99, { idPrefix: "older" }),
+      ...series(["2026-07-01", "2026-08-01", "2026-09-01"], 15.99, { idPrefix: "recent" }),
     ];
-    const result = detectRecurringCandidates(input, "2026-08-30");
+    const result = detectRecurringCandidates(input, "2026-09-15");
     expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({ firstDate: "2026-05-15", lastDate: "2026-07-15" });
+    expect(result[0]).toMatchObject({ firstDate: "2026-07-01", lastDate: "2026-09-01" });
     expect(new Set(result.map((candidate) => candidate.identityKey)).size).toBe(1);
+  });
+
+  it("rejects a monthly sequence with an older supporting occurrence outside today window", () => {
+    const result = detectRecurringCandidates(
+      series(["2026-04-15", "2026-05-15", "2026-06-15"], 15.99),
+      "2026-10-14",
+    );
+    expect(result).toEqual([]);
   });
 
   it("ranks competing candidates by amount strength and does not reuse evidence", () => {
@@ -167,12 +175,58 @@ describe("detectRecurringCandidates", () => {
     );
   });
 
+  it("ranks by occurrence count, cadence deviation, and stable transaction IDs", () => {
+    const moreOccurrences = detectRecurringCandidates(
+      series(["2026-05-01", "2026-06-01", "2026-07-01", "2026-08-01"], 10, { merchant: "More Co", rawName: "More Co", idPrefix: "more" }),
+      "2026-08-30",
+    );
+    const fewerOccurrences = detectRecurringCandidates(
+      series(["2026-05-01", "2026-06-01", "2026-07-01"], 10, { merchant: "Fewer Co", rawName: "Fewer Co", idPrefix: "fewer" }),
+      "2026-08-30",
+    );
+    expect(moreOccurrences[0]!.evidence.occurrenceCount).toBe(4);
+    expect(fewerOccurrences[0]!.evidence.occurrenceCount).toBe(3);
+    const occurrenceRanked = detectRecurringCandidates(
+      [
+        ...series(["2026-05-01", "2026-06-01", "2026-07-01", "2026-08-01"], 10, { merchant: "More Co", rawName: "More Co", idPrefix: "more" }),
+        ...series(["2026-05-01", "2026-06-01", "2026-07-01"], 10, { merchant: "Fewer Co", rawName: "Fewer Co", idPrefix: "fewer" }),
+      ],
+      "2026-08-30",
+    );
+    expect(occurrenceRanked[0]).toMatchObject({ merchantName: "More Co" });
+
+    const candidates = detectRecurringCandidates(
+      [
+        ...series(["2026-05-01", "2026-06-01", "2026-07-01"], 10, { merchant: "Exact Co", rawName: "Exact Co", idPrefix: "z" }),
+        ...series(["2026-05-01", "2026-05-28", "2026-06-28"], 10, { merchant: "Irregular Co", rawName: "Irregular Co", idPrefix: "y" }),
+        ...series(["2026-05-01", "2026-06-01", "2026-07-01"], 10, { merchant: "Alpha Co", rawName: "Alpha Co", idPrefix: "a" }),
+      ],
+      "2026-08-30",
+    );
+    expect(candidates.map((candidate) => candidate.merchantName)).toEqual(["Alpha Co", "Exact Co", "Irregular Co"]);
+  });
+
+  it("deduplicates repeated transaction evidence before selecting a stream", () => {
+    const rows = series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99);
+    const result = detectRecurringCandidates([...rows, ...rows], "2026-08-30");
+    expect(result).toHaveLength(1);
+    expect(result[0]!.transactionIds).toEqual(["txn-1", "txn-2", "txn-3"]);
+  });
+
   it("clamps month-end predictions to the target month", () => {
     const result = detectRecurringCandidates(
       series(["2026-01-31", "2026-02-28", "2026-03-31"], 15.99),
       "2026-04-01",
     );
     expect(result[0]).toMatchObject({ frequency: "MONTHLY", predictedNextDate: "2026-04-30" });
+  });
+
+  it("clamps quarter-end predictions to the target month", () => {
+    const result = detectRecurringCandidates(
+      series(["2025-05-31", "2025-08-31", "2025-11-30"], 90),
+      "2025-12-01",
+    );
+    expect(result[0]).toMatchObject({ frequency: "QUARTERLY", predictedNextDate: "2026-02-28" });
   });
 });
 

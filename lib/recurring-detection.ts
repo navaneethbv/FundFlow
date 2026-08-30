@@ -341,7 +341,8 @@ export function detectRecurringCandidates(
   const ranked: RankedCandidate[] = [];
   for (const group of groups.values()) {
     for (const cadence of CADENCES) {
-      const inWindow = group.filter((row) => row.effectiveDate <= today);
+      const historyStart = addDays(today, -cadence.historyDays);
+      const inWindow = group.filter((row) => row.effectiveDate >= historyStart && row.effectiveDate <= today);
       if (inWindow.length < cadence.required) continue;
 
       let segmentStart = 0;
@@ -359,7 +360,6 @@ export function detectRecurringCandidates(
         const result = buildCandidate(segment, cadence);
         if (!result) return;
         const newest = segment.at(-1)!;
-        if (dayDifference(newest.effectiveDate, today) > cadence.historyDays) return;
         if (!latestComplete || newest.effectiveDate > latestComplete.latestEffectiveDate) latestComplete = result;
       };
       for (let index = 1; index < inWindow.length; index += 1) {
