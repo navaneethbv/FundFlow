@@ -23,14 +23,22 @@ function needsReconnect(item: Item): boolean {
   return item.status === "error" || item.error_code === "PENDING_EXPIRATION";
 }
 
-const HEALTH_LABELS: Record<ProductSyncState, string> = {
-  healthy: "Healthy",
-  stale: "Stale",
-  repair_required: "Repair required",
-  product_unavailable: "Not available",
-  rate_limited: "Rate limited",
-  never_synced: "Never synced",
-};
+function getHealthLabel(state: ProductSyncState): string {
+  switch (state) {
+    case "healthy":
+      return "Healthy";
+    case "stale":
+      return "Stale";
+    case "repair_required":
+      return "Repair required";
+    case "product_unavailable":
+      return "Not available";
+    case "rate_limited":
+      return "Rate limited";
+    default:
+      return "Never synced";
+  }
+}
 
 function healthTone(state: ProductSyncState): "success" | "danger" | "warning" | "neutral" {
   if (state === "healthy") return "success";
@@ -61,7 +69,7 @@ function HealthRow({ label, health }: Readonly<{ label: string; health: ProductS
     <div className="min-w-0">
       <div className="flex min-w-0 items-center justify-between gap-2">
         <dt className="text-xs font-semibold text-muted">{label}</dt>
-        <dd><Badge tone={healthTone(health.state)}>{HEALTH_LABELS[health.state]}</Badge></dd>
+        <dd><Badge tone={healthTone(health.state)}>{getHealthLabel(health.state)}</Badge></dd>
       </div>
       <dd className="mt-1 text-xs text-muted">{healthHelp(health)}</dd>
     </div>
@@ -179,7 +187,9 @@ export default function BanksSection({
                     <input
                       type="checkbox"
                       checked={Boolean(i.shared_household_id)}
-                      onChange={(e) => toggleShare(i.id, e.target.checked)}
+                      onChange={(e) => {
+                        void toggleShare(i.id, e.target.checked);
+                      }}
                     />
                     <span>Share with household</span>
                   </label>
@@ -192,7 +202,9 @@ export default function BanksSection({
                 {needsReconnect(i) && <ReconnectBankButton itemId={i.id} />}
                 <RepairBankButton itemId={i.id} />
                 <Button
-                  onClick={() => disconnect(i.id)}
+                  onClick={() => {
+                    void disconnect(i.id);
+                  }}
                   disabled={busyId === i.id}
                   variant="danger"
                   size="sm"

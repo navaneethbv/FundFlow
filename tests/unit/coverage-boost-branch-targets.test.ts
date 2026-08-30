@@ -28,13 +28,10 @@ describe("Coverage Boost for High Target Coverage (>95%)", () => {
   it("covers toLegacyGoalSummaryItem and toGoalSummaryItem branches", () => {
     const legacyCompleted = toLegacyGoalSummaryItem({
       id: "g1",
-      user_id: "u1",
       name: "Vacation",
       target_amount: 1000,
       saved_amount: 1200,
       target_date: "2026-12-31",
-      created_at: "2026-01-01T00:00:00Z",
-      updated_at: "2026-01-01T00:00:00Z",
     });
     expect(legacyCompleted.complete).toBe(true);
     expect(legacyCompleted.remainingAmount).toBe(0);
@@ -42,13 +39,10 @@ describe("Coverage Boost for High Target Coverage (>95%)", () => {
 
     const legacyInProgress = toLegacyGoalSummaryItem({
       id: "g2",
-      user_id: "u1",
       name: "Car",
       target_amount: 5000,
       saved_amount: 1000,
       target_date: null,
-      created_at: "2026-01-01T00:00:00Z",
-      updated_at: "2026-01-01T00:00:00Z",
     });
     expect(legacyInProgress.complete).toBe(false);
     expect(legacyInProgress.remainingAmount).toBe(4000);
@@ -56,18 +50,25 @@ describe("Coverage Boost for High Target Coverage (>95%)", () => {
 
     const summaryItemBadge = toGoalSummaryItem({
       id: "g3",
-      user_id: "u1",
       name: "House",
-      funded_amount: 500,
       target_amount: 1000,
+      saved_amount: 0,
+      target_date: null,
+      goal_type: "save_up",
+      image_slug: null,
+      monthly_contribution: null,
+      spending_reduces: false,
+      starting_balance: null,
+      target_balance: null,
+      funded_amount: 500,
       remainingAmount: 500,
       progressPct: 50,
       est_monthly: 100,
       badge: "completed",
-      allocation_cap: null,
-      target_date: null,
-      created_at: "2026-01-01T00:00:00Z",
-      updated_at: "2026-01-01T00:00:00Z",
+      allocatedFromAccounts: 0,
+      eventTotal: 0,
+      linkedAccountBalance: 0,
+      trailingMonthlyPace: 0,
     });
     expect(summaryItemBadge.complete).toBe(true);
   });
@@ -115,35 +116,39 @@ describe("Coverage Boost for High Target Coverage (>95%)", () => {
     expect(emptyHistoryNotDue[0]?.reason).toBe("Scheduled for 8:00 AM");
 
     // loadLatestWeeklyDelivery tests
+    const maybeSingleMock = vi.fn().mockResolvedValue({
+      data: {
+        period_start: "2026-08-03",
+        period_end: "2026-08-09",
+        status: "sent",
+        attempted_at: "2026-08-10T08:00:00Z",
+        sent_at: "2026-08-10T08:01:00Z",
+      },
+      error: null,
+    });
+
+    const mockQueryBuilder = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
+      maybeSingle: maybeSingleMock,
+    };
+
     const mockSupabase = {
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({
-          data: {
-            period_start: "2026-08-03",
-            period_end: "2026-08-09",
-            status: "sent",
-            attempted_at: "2026-08-10T08:00:00Z",
-            sent_at: "2026-08-10T08:01:00Z",
-          },
-          error: null,
-        }),
-      }),
+      from: vi.fn().mockReturnValue(mockQueryBuilder),
     } as unknown as import("@supabase/supabase-js").SupabaseClient;
 
     const latest = await loadLatestWeeklyDelivery(mockSupabase, "u1");
     expect(latest?.status).toBe("sent");
 
     // null row
-    mockSupabase.from().maybeSingle.mockResolvedValueOnce({ data: null, error: null });
+    maybeSingleMock.mockResolvedValueOnce({ data: null, error: null });
     const nullLatest = await loadLatestWeeklyDelivery(mockSupabase, "u1");
     expect(nullLatest).toBeNull();
 
     // error throw
-    mockSupabase.from().maybeSingle.mockResolvedValueOnce({ data: null, error: new Error("DB fail") });
+    maybeSingleMock.mockResolvedValueOnce({ data: null, error: new Error("DB fail") });
     await expect(loadLatestWeeklyDelivery(mockSupabase, "u1")).rejects.toThrow("DB fail");
   });
 

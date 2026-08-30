@@ -37,7 +37,9 @@ export default function RepairBankButton({
         <ReconnectBankButton itemId={itemId} />
       ) : (
         <Button
-          onClick={() => void runRepair()}
+          onClick={() => {
+            void runRepair();
+          }}
           disabled={phase === "running"}
           variant="secondary"
           size="sm"
