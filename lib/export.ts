@@ -4,6 +4,7 @@ import { fromTransactionRow, UNCATEGORIZED, type TransactionRow } from "@/lib/fi
 
 const PAGE_SIZE = 1_000;
 const ANNOTATION_CHUNK_SIZE = 250;
+const DEPENDENCY_CONCURRENCY = 6;
 
 type ExportQueryResult = { data?: unknown; error?: unknown };
 
@@ -33,6 +34,31 @@ function chunks<T>(values: T[], size: number): T[][] {
   return result;
 }
 
+async function runBatched<T>(
+  tasks: Array<() => Promise<T>>,
+  concurrency = DEPENDENCY_CONCURRENCY,
+): Promise<T[]> {
+  const results: T[] = [];
+  for (let index = 0; index < tasks.length; index += concurrency) {
+    results.push(...(await Promise.all(tasks.slice(index, index + concurrency).map((task) => task()))));
+  }
+  return results;
+}
+
+async function loadChunkedRows<T>(
+  transactionIds: string[],
+  loadPage: (
+    ids: string[],
+    from: number,
+    to: number,
+  ) => PromiseLike<ExportQueryResult>,
+): Promise<T[]> {
+  const tasks = chunks(transactionIds, ANNOTATION_CHUNK_SIZE).map(
+    (ids) => () => loadPagedRows<T>((from, to) => loadPage(ids, from, to)),
+  );
+  return (await runBatched(tasks)).flat();
+}
+
 /**
  * The privacy-safe export contract shared by the CSV and JSON endpoints:
  * date / merchant / amount / category only — no account numbers, tokens, or
@@ -50,6 +76,16 @@ export interface ExportRow {
 export type ExportFetchResult =
   | { allowed: false }
   | { allowed: true; rows: ExportRow[] };
+
+export interface ExportFetchOptions {
+  startDate?: string;
+}
+
+/** First day of the current month minus five months, in UTC. */
+export function recentHistoryStart(now = new Date()): string {
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1));
+  return start.toISOString().slice(0, 10);
+}
 
 /**
  * Resolve the `ai_export_enabled` opt-out for a user, failing closed.
@@ -88,6 +124,7 @@ export async function isExportAllowed(
 export async function fetchPrivacySafeRows(
   supabase: SupabaseClient,
   userId: string,
+  options: ExportFetchOptions = {},
 ): Promise<ExportFetchResult> {
   if (!(await readExportPreference(supabase, userId))) {
     return { allowed: false };
@@ -96,15 +133,17 @@ export async function fetchPrivacySafeRows(
   // Explicit user scoping: redundant under the RLS-bound client, but this
   // function is also called with the service client for API-token requests,
   // where this filter is the only thing standing between users.
-  const txns = await loadPagedRows<TransactionRow>((from, to) =>
-    supabase
+  const txns = await loadPagedRows<TransactionRow>((from, to) => {
+    let query = supabase
       .from("transactions")
       .select("id, user_id, account_id, manual_account_id, plaid_transaction_id, date, merchant_name, name, amount, pfc_primary, pfc_detailed, pending")
-      .eq("user_id", userId)
+      .eq("user_id", userId);
+    if (options.startDate) query = query.gte("date", options.startDate);
+    return query
       .order("date", { ascending: false })
       .order("id", { ascending: false })
-      .range(from, to),
-  );
+      .range(from, to);
+  });
 
   // The export consumes the same canonical projection as every other surface,
   // so a transaction-level classification override shows up in CSV/JSON
@@ -133,17 +172,40 @@ async function loadCanonicalRows(
   Array<{ date: string; merchant: string; signedAmount: number; categoryKey: string }>
 > {
   const txnIds = rows.map((row) => row.id);
-  const annotationQueries = chunks(txnIds, ANNOTATION_CHUNK_SIZE).map(
-    (transactionIds) =>
+  const [
+    overrides,
+    splits,
+    rules,
+    categoryOverrides,
+    linkedRefunds,
+    linkedDuplicates,
+  ] = await Promise.all([
+    loadChunkedRows<{
+      transaction_id: string;
+      display_category: string | null;
+      cash_flow_classification: "expense" | "income" | null;
+    }>(txnIds, (transactionIds, from, to) =>
       supabase
         .from("transaction_annotations")
         .select("transaction_id, display_category, cash_flow_classification")
         .in("transaction_id", transactionIds)
         .eq("user_id", userId)
-        .order("transaction_id"),
-  );
-  const [annotationResults, rules, categoryOverrides] = await Promise.all([
-    Promise.all(annotationQueries),
+        .order("transaction_id")
+        .range(from, to),
+    ),
+    loadChunkedRows<{
+      transaction_id: string;
+      category: string;
+      amount: number;
+    }>(txnIds, (transactionIds, from, to) =>
+      supabase
+        .from("transaction_splits")
+        .select("transaction_id, category, amount")
+        .in("transaction_id", transactionIds)
+        .eq("user_id", userId)
+        .order("transaction_id")
+        .range(from, to),
+    ),
     loadPagedRows<{
       match_type: string;
       pattern: string;
@@ -155,6 +217,7 @@ async function loadCanonicalRows(
         .from("merchant_rules")
         .select("match_type, pattern, display_name, category, enabled")
         .eq("user_id", userId)
+        .order("created_at")
         .order("id")
         .range(from, to),
     ),
@@ -167,15 +230,26 @@ async function loadCanonicalRows(
           .order("id")
           .range(from, to),
     ),
+    loadPagedRows<{
+      charge_transaction_id: string;
+      refund_transaction_id: string;
+    }>((from, to) =>
+      supabase
+        .from("linked_refunds")
+        .select("charge_transaction_id, refund_transaction_id")
+        .eq("user_id", userId)
+        .order("id")
+        .range(from, to),
+    ),
+    loadPagedRows<{ excluded_transaction_id: string }>((from, to) =>
+      supabase
+        .from("linked_duplicates")
+        .select("excluded_transaction_id")
+        .eq("user_id", userId)
+        .order("id")
+        .range(from, to),
+    ),
   ]);
-  annotationResults.forEach(assertExportQuery);
-  const overrides = annotationResults.flatMap(
-    (result) => (result.data ?? []) as Array<{
-      transaction_id: string;
-      display_category: string | null;
-      cash_flow_classification: "expense" | "income" | null;
-    }>,
-  );
 
   const { projectFinanceTransactions } = await import("@/lib/finance-domain");
   const projected = projectFinanceTransactions({
@@ -190,8 +264,18 @@ async function loadCanonicalRows(
     categoryOverrides: categoryOverrides.map(
       (row) => ({ sourceCategory: row.source_category, displayCategory: row.display_category }),
     ),
-    splits: [],
-    linkedRefunds: [],
+    splits: splits.map((row) => ({
+      transactionId: row.transaction_id,
+      category: row.category,
+      amount: Number(row.amount),
+    })),
+    linkedRefunds: linkedRefunds.map((row) => ({
+      chargeTransactionId: row.charge_transaction_id,
+      refundTransactionId: row.refund_transaction_id,
+    })),
+    excludedTransactionIds: new Set(
+      linkedDuplicates.map((row) => row.excluded_transaction_id),
+    ),
     transactionOverrides: overrides.map((row) => ({
       transactionId: row.transaction_id,
       displayCategory: row.display_category,

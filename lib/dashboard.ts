@@ -625,6 +625,50 @@ export interface DashboardOptions {
   scope?: "mine" | "household";
 }
 
+interface DashboardOverrideRow {
+  transaction_id: string;
+  display_category: string | null;
+  cash_flow_classification: "expense" | "income" | null;
+}
+
+const DASHBOARD_OVERRIDE_CHUNK_SIZE = 250;
+const DASHBOARD_OVERRIDE_PAGE_SIZE = 1_000;
+
+async function loadDashboardOverrides(
+  supabase: SupabaseClient,
+  transactionIds: string[],
+  userId: string | undefined,
+  applyUserScope: boolean,
+): Promise<DashboardOverrideRow[]> {
+  if (transactionIds.length === 0) return [];
+  const chunks: string[][] = [];
+  for (let index = 0; index < transactionIds.length; index += DASHBOARD_OVERRIDE_CHUNK_SIZE) {
+    chunks.push(transactionIds.slice(index, index + DASHBOARD_OVERRIDE_CHUNK_SIZE));
+  }
+  const chunkRows = await Promise.all(
+    chunks.map(async (ids) => {
+      const rows: DashboardOverrideRow[] = [];
+      for (let page = 0; ; page += 1) {
+        const from = page * DASHBOARD_OVERRIDE_PAGE_SIZE;
+        let query = supabase
+          .from("transaction_annotations")
+          .select("transaction_id, display_category, cash_flow_classification")
+          .in("transaction_id", ids);
+        if (userId && applyUserScope) query = query.eq("user_id", userId);
+        const { data, error } = await query
+          .order("transaction_id")
+          .range(from, from + DASHBOARD_OVERRIDE_PAGE_SIZE - 1);
+        if (error) throw error;
+        const batch = (data ?? []) as DashboardOverrideRow[];
+        rows.push(...batch);
+        if (batch.length < DASHBOARD_OVERRIDE_PAGE_SIZE) break;
+      }
+      return rows;
+    }),
+  );
+  return chunkRows.flat();
+}
+
 export async function getDashboardData(
   supabase: SupabaseClient,
   selectedAccountId?: string,
@@ -774,17 +818,13 @@ export async function getDashboardData(
   // Per-transaction classification overrides for the rendered window, so the
   // dashboard agrees with every other canonical surface about the same rows.
   const txnIds = ((txns ?? []) as Array<{ id: string }>).map((row) => row.id);
-  const { data: overrideRows } = await scopeUser(
-    supabase
-      .from("transaction_annotations")
-      .select("transaction_id, display_category, cash_flow_classification")
-      .in("transaction_id", txnIds.length > 0 ? txnIds : [""]),
+  const overrideRows = await loadDashboardOverrides(
+    supabase,
+    txnIds,
+    userId,
+    applyUserScope,
   );
-  const transactionOverrides = ((overrideRows ?? []) as Array<{
-    transaction_id: string;
-    display_category: string | null;
-    cash_flow_classification: "expense" | "income" | null;
-  }>).map((row) => ({
+  const transactionOverrides = overrideRows.map((row) => ({
     transactionId: row.transaction_id,
     displayCategory: row.display_category,
     cashFlowClassification:

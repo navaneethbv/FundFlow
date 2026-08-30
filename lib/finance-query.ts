@@ -386,6 +386,7 @@ export async function loadCanonicalProjection(
     let query = supabase
       .from("merchant_rules")
       .select("match_type,pattern,display_name,category,enabled")
+      .order("created_at")
       .order("id")
       .range(from, to);
     if (userId) query = query.eq("user_id", userId);

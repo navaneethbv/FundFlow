@@ -324,12 +324,13 @@ describe("lib/export", () => {
 
       const result = await fetchPrivacySafeRows(client as never, "user-1");
 
-      expect(result.allowed && result.rows).toEqual([
+      expect(result.allowed && result.rows).toHaveLength(4);
+      expect(result.allowed && result.rows).toEqual(expect.arrayContaining([
         expect.objectContaining({ amount: 60, category: "Needs" }),
         expect.objectContaining({ amount: 40, category: "Wants" }),
         expect.objectContaining({ amount: 40 }),
         expect.objectContaining({ amount: -40 }),
-      ]);
+      ]));
       expect(
         result.allowed && result.rows.some((row) => row.merchant === "Merchant 3"),
       ).toBe(false);
