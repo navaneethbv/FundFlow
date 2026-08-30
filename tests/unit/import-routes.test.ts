@@ -79,6 +79,74 @@ import { POST as commitPost } from "@/app/api/import/commit/route";
 import { POST as csvPost } from "@/app/api/import/csv/route";
 import { NextRequest, NextResponse } from "next/server";
 
+type RouteQueryState = {
+  in: Array<[string, unknown[]]>;
+  range: [number, number] | null;
+};
+
+function routeQuery(
+  resolve: (state: RouteQueryState, terminal: "await" | "maybeSingle" | "range") => {
+    data: unknown;
+    error: unknown;
+  },
+) {
+  const state: RouteQueryState = { in: [], range: null };
+  const builder = {
+    select: vi.fn(() => builder),
+    eq: vi.fn(() => builder),
+    in: vi.fn((column: string, values: unknown[]) => {
+      state.in.push([column, values]);
+      return builder;
+    }),
+    order: vi.fn(() => builder),
+    range: vi.fn((from: number, to: number) => {
+      state.range = [from, to];
+      return Promise.resolve(resolve(state, "range"));
+    }),
+    maybeSingle: vi.fn(() => Promise.resolve(resolve(state, "maybeSingle"))),
+    then: (
+      onFulfilled: (value: { data: unknown; error: unknown }) => unknown,
+      onRejected?: (reason: unknown) => unknown,
+    ) => Promise.resolve(resolve(state, "await")).then(onFulfilled, onRejected),
+  };
+  return builder;
+}
+
+function previewSupabase(existingRows: Array<Record<string, unknown>> = []) {
+  return {
+    from: vi.fn((table: string) => routeQuery((state) => {
+      if (table !== "transactions") return { data: [], error: null };
+      const [from, to] = state.range ?? [0, 999];
+      return { data: existingRows.slice(from, to + 1), error: null };
+    })),
+  };
+}
+
+function commitSupabase(batchRows: Array<Record<string, unknown>>) {
+  return {
+    from: vi.fn((table: string) => routeQuery((state, terminal) => {
+      if (table === "import_review_batches") {
+        return {
+          data: { id: "b1", created_at: "2026-07-01T00:00:00.000Z" },
+          error: null,
+        };
+      }
+      if (table === "accounts") {
+        const ids = state.in.at(-1)?.[1];
+        return {
+          data: ids ? ids.map((id) => ({ id })) : terminal === "maybeSingle" ? { id: "a1" } : [],
+          error: null,
+        };
+      }
+      if (table === "import_review_rows") {
+        const [from, to] = state.range ?? [0, 999];
+        return { data: batchRows.slice(from, to + 1), error: null };
+      }
+      return { data: [], error: null };
+    })),
+  };
+}
+
 describe("Import API Routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -136,13 +204,7 @@ describe("Import API Routes", () => {
     });
 
     it("previews statement rows, saves batch, and returns preview rows", async () => {
-      const mockSupabase = {
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue({ data: [] }),
-          }),
-        }),
-      };
+      const mockSupabase = previewSupabase();
       mockRequireUser.mockResolvedValue({
         user: { id: "u1" },
         supabase: mockSupabase,
@@ -229,13 +291,7 @@ describe("Import API Routes", () => {
     });
 
     it("sends OFX rows through the existing staged review pipeline", async () => {
-      const mockSupabase = {
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue({ data: [] }),
-          }),
-        }),
-      };
+      const mockSupabase = previewSupabase();
       mockRequireUser.mockResolvedValue({
         user: { id: "u1" },
         supabase: mockSupabase,
@@ -325,13 +381,7 @@ describe("Import API Routes", () => {
     });
 
     it("previews a Mint file without the manual column-mapping UI", async () => {
-      const mockSupabase = {
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue({ data: [] }),
-          }),
-        }),
-      };
+      const mockSupabase = previewSupabase();
       mockRequireUser.mockResolvedValue({
         user: { id: "u1" },
         supabase: mockSupabase,
@@ -439,13 +489,7 @@ describe("Import API Routes", () => {
     });
 
     it("returns 500 when batch insert fails", async () => {
-      const mockSupabase = {
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue({ data: [] }),
-          }),
-        }),
-      };
+      const mockSupabase = previewSupabase();
       mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: mockSupabase });
       const file = new File(["2026-07-01,Store,10.00"], "statement.csv", { type: "text/csv" });
       const formData = new FormData();
@@ -593,19 +637,11 @@ describe("Import API Routes", () => {
     });
 
     it("fingerprints existing rows with missing merchant and name", async () => {
-      const mockSupabase = {
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue({
-              data: [
-                { date: "2026-07-01", amount: 10, merchant_name: "Store", name: "S" },
-                { date: "2026-07-02", amount: 11, merchant_name: null, name: "PayPal" },
-                { date: "2026-07-03", amount: 12, merchant_name: null, name: null },
-              ],
-            }),
-          }),
-        }),
-      };
+      const mockSupabase = previewSupabase([
+        { date: "2026-07-01", amount: 10, merchant_name: "Store", name: "S" },
+        { date: "2026-07-02", amount: 11, merchant_name: null, name: "PayPal" },
+        { date: "2026-07-03", amount: 12, merchant_name: null, name: null },
+      ]);
       mockRequireUser.mockResolvedValue({
         user: { id: "u1" },
         supabase: mockSupabase,
@@ -661,13 +697,7 @@ describe("Import API Routes", () => {
     });
 
     it("defaults the file name and rejects flagged rows", async () => {
-      const mockSupabase = {
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue({ data: [] }),
-          }),
-        }),
-      };
+      const mockSupabase = previewSupabase();
       mockRequireUser.mockResolvedValue({
         user: { id: "u1" },
         supabase: mockSupabase,
@@ -732,13 +762,7 @@ describe("Import API Routes", () => {
     });
 
     it("returns 500 when inserting review rows fails", async () => {
-      const mockSupabase = {
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue({ data: [] }),
-          }),
-        }),
-      };
+      const mockSupabase = previewSupabase();
       mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: mockSupabase });
       const file = new File(["2026-07-01,Store,10.00"], "statement.csv", { type: "text/csv" });
       const formData = new FormData();
@@ -773,13 +797,7 @@ describe("Import API Routes", () => {
     });
 
     it("returns empty rows when the insert returns no data", async () => {
-      const mockSupabase = {
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue({ data: [] }),
-          }),
-        }),
-      };
+      const mockSupabase = previewSupabase();
       mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: mockSupabase });
       const file = new File(["2026-07-01,Store,10.00"], "statement.csv", { type: "text/csv" });
       const formData = new FormData();
@@ -815,13 +833,7 @@ describe("Import API Routes", () => {
     });
 
     it("falls back to an empty flag list for unmatched inserted rows", async () => {
-      const mockSupabase = {
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue({ data: [] }),
-          }),
-        }),
-      };
+      const mockSupabase = previewSupabase();
       mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: mockSupabase });
       const file = new File(["2026-07-01,Store,10.00"], "statement.csv", { type: "text/csv" });
       const formData = new FormData();
@@ -932,11 +944,12 @@ function serviceStubWith(
 
     it("returns 404 if account not found", async () => {
       const mockSupabase = {
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-        }),
+        from: vi.fn((table: string) => routeQuery(() => ({
+          data: table === "import_review_batches"
+            ? { id: "b1", created_at: "2026-07-01T00:00:00.000Z" }
+            : null,
+          error: null,
+        }))),
       };
       mockRequireUser.mockResolvedValue({
         user: { id: "u1" },
@@ -951,40 +964,15 @@ function serviceStubWith(
     });
 
     it("commits approved rows and updates status successfully", async () => {
-      const mockSupabase = {
-        from: vi.fn().mockImplementation((table) => {
-          if (table === "accounts") {
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              maybeSingle: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
-            };
-          }
-          if (table === "import_review_rows") {
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockResolvedValue({
-                data: [
-                  {
-                    id: "row-1",
-                    date: "2026-07-01",
-                    description: "Store",
-                    amount: 10,
-                    status: "pending",
-                  },
-                ],
-              }),
-            };
-          }
-          if (table === "import_source_account_mappings") {
-            return {
-              select: vi.fn().mockReturnThis(),
-              in: vi.fn().mockResolvedValue({ data: [] }),
-            };
-          }
-          return null as never;
-        }),
-      };
+      const mockSupabase = commitSupabase([
+        {
+          id: "row-1",
+          date: "2026-07-01",
+          description: "Store",
+          amount: 10,
+          status: "pending",
+        },
+      ]);
       mockRequireUser.mockResolvedValue({
         user: { id: "u1" },
         supabase: mockSupabase,
@@ -1007,42 +995,17 @@ function serviceStubWith(
     });
 
     it("threads a staged row's category through into pfc_primary", async () => {
-      const mockSupabase = {
-        from: vi.fn().mockImplementation((table) => {
-          if (table === "accounts") {
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              maybeSingle: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
-            };
-          }
-          if (table === "import_review_rows") {
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockResolvedValue({
-                data: [
-                  {
-                    id: "row-1",
-                    date: "2026-07-01",
-                    description: "Coffee Bar",
-                    amount: 5.5,
-                    category: "Dining",
-                    source_account: "Checking",
-                    status: "pending",
-                  },
-                ],
-              }),
-            };
-          }
-          if (table === "import_source_account_mappings") {
-            return {
-              select: vi.fn().mockReturnThis(),
-              in: vi.fn().mockResolvedValue({ data: [] }),
-            };
-          }
-          return null as never;
-        }),
-      };
+      const mockSupabase = commitSupabase([
+        {
+          id: "row-1",
+          date: "2026-07-01",
+          description: "Coffee Bar",
+          amount: 5.5,
+          category: "Dining",
+          source_account: "Checking",
+          status: "pending",
+        },
+      ]);
       mockRequireUser.mockResolvedValue({
         user: { id: "u1" },
         supabase: mockSupabase,
@@ -1081,24 +1044,7 @@ function serviceStubWith(
       ];
 
       async function commit(rows: typeof identicalRows, approvedRowIds: string[]) {
-        const mockSupabase = {
-          from: vi.fn().mockImplementation((table) => {
-            if (table === "accounts") {
-              return {
-                select: vi.fn().mockReturnThis(),
-                eq: vi.fn().mockReturnThis(),
-                maybeSingle: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
-              };
-            }
-            if (table === "import_review_rows") {
-              return {
-                select: vi.fn().mockReturnThis(),
-                eq: vi.fn().mockResolvedValue({ data: rows }),
-              };
-            }
-            return null as never;
-          }),
-        };
+        const mockSupabase = commitSupabase(rows);
         mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: mockSupabase });
         const upsertMock = vi.fn().mockResolvedValue({ error: null });
         const updateMock = vi.fn().mockResolvedValue({ error: null });
@@ -1131,36 +1077,10 @@ function serviceStubWith(
     });
 
     it("routes staged rows to their selected source-account targets", async () => {
-      const mockSupabase = {
-        from: vi.fn().mockImplementation((table) => {
-          if (table === "accounts") {
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              in: vi.fn().mockResolvedValue({ data: [{ id: "a2" }] }),
-              maybeSingle: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
-            };
-          }
-          if (table === "import_review_rows") {
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockResolvedValue({
-                data: [
-                  { id: "row-1", date: "2026-07-01", description: "Coffee", amount: 5, source_account: "Checking", row_index: 0, status: "pending" },
-                  { id: "row-2", date: "2026-07-02", description: "Rent", amount: 100, source_account: "Savings", row_index: 1, status: "pending" },
-                ],
-              }),
-            };
-          }
-          if (table === "import_source_account_mappings") {
-            return {
-              select: vi.fn().mockReturnThis(),
-              in: vi.fn().mockResolvedValue({ data: [] }),
-            };
-          }
-          return null as never;
-        }),
-      };
+      const mockSupabase = commitSupabase([
+        { id: "row-1", date: "2026-07-01", description: "Coffee", amount: 5, source_account: "Checking", row_index: 0, status: "pending" },
+        { id: "row-2", date: "2026-07-02", description: "Rent", amount: 100, source_account: "Savings", row_index: 1, status: "pending" },
+      ]);
       mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: mockSupabase });
       const request = {
         json: () => Promise.resolve({
