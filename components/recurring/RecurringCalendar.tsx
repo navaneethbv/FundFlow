@@ -29,7 +29,7 @@ function dayDelta(key: CalendarArrowKey): number {
   }
 }
 
-/** Sunday-first month grid; every cell is a real date in `month`. */
+/** Sunday-first month grid with adjacent-month padding cells. */
 export function buildMonthGrid(month: string): CalendarCell[][] {
   const parts = month.split("-").map(Number);
   const year = parts[0] ?? 2026;
@@ -101,8 +101,10 @@ export default function RecurringCalendar({
     byDate.set(occurrence.dueDate, list);
   }
   const focusDay = today.startsWith(month) ? Number(today.slice(8)) : 1;
-  const firstOfMonth = new Date(`${month}-01T00:00:00Z`);
-  const lastOfMonth = new Date(`${month}-${grid.flat().at(-1)?.day ?? 28}T00:00:00Z`);
+  const [year, oneBasedMonth] = month.split("-").map(Number);
+  const monthIndex = (oneBasedMonth ?? 1) - 1;
+  const firstOfMonth = new Date(Date.UTC(year ?? 2026, monthIndex, 1));
+  const lastOfMonth = new Date(Date.UTC(year ?? 2026, monthIndex + 1, 0));
   function handleKeyDown(
     day: number,
     event: React.KeyboardEvent<HTMLButtonElement>,
@@ -111,9 +113,10 @@ export default function RecurringCalendar({
     if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(key)) return;
     event.preventDefault();
     const next = moveDayFocus(day, key, firstOfMonth, lastOfMonth);
+    const nextDate = `${month}-${String(next).padStart(2, "0")}`;
     event.currentTarget
       .closest('[role="grid"]')
-      ?.querySelector<HTMLButtonElement>(`button[data-calendar-day="${next}"]`)
+      ?.querySelector<HTMLButtonElement>(`button[data-calendar-date="${nextDate}"]`)
       ?.focus();
   }
 
@@ -123,19 +126,19 @@ export default function RecurringCalendar({
     <div>
       <div className="overflow-x-auto" role="grid" aria-label={`Recurring calendar for ${month}`}>
         <div className="min-w-[640px]">
-          <div className="grid grid-cols-7 gap-px bg-panel-border">
+          <div role="row" className="grid grid-cols-7 gap-px bg-panel-border">
             {WEEKDAYS.map((weekday) => (
-              <div key={weekday} className="bg-panel px-2 py-2 text-center text-xs font-semibold text-muted">
+              <div role="columnheader" key={weekday} className="bg-panel px-2 py-2 text-center text-xs font-semibold text-muted">
                 {weekday}
               </div>
             ))}
           </div>
           {grid.map((week) => (
-            <div key={week.map((cell) => cell.date).join("|")} className="grid grid-cols-7 gap-px bg-panel-border">
+            <div role="row" key={week.map((cell) => cell.date).join("|")} className="grid grid-cols-7 gap-px bg-panel-border">
               {week.map((cell) => {
                 const dayOccurrences = byDate.get(cell.date) ?? [];
                 const isToday = cell.date === today;
-                const isFocus = cell.day === focusDay;
+                const isFocus = cell.inMonth && cell.day === focusDay;
                 return (
                   <div
                     key={cell.date}
@@ -143,7 +146,7 @@ export default function RecurringCalendar({
                     className={`min-h-24 bg-panel p-1.5 ${cell.inMonth ? "" : "opacity-40"}`}
                   >
                     <button
-                      data-calendar-day={cell.day}
+                      data-calendar-date={cell.date}
                       type="button"
                       tabIndex={isFocus ? 0 : -1}
                       onKeyDown={(event) => {
