@@ -280,7 +280,7 @@ describe("planning-depth", () => {
     expect(view.sinkingFunds).toEqual([]);
 
     const withDebt = buildPlanningDepthView({
-      accounts: [{ name: "Card", type: "credit", balance: -200, apr: 20, minimumPayment: 25 }],
+      accounts: [{ name: "Card", type: "credit", balance: 200, apr: 20, minimumPayment: 25 }],
       monthlyIncome: 5000,
       monthlySpend: 4000,
       goals: [],
@@ -378,8 +378,8 @@ describe("dashboard metrics", () => {
   });
 
   it("computeSavingsRate handles non-positive income and savings", () => {
-    expect(computeSavingsRate(0, 10)).toBe(0);
-    expect(computeSavingsRate(100, 150)).toBe(0);
+    expect(computeSavingsRate(0, 10)).toBeNull();
+    expect(computeSavingsRate(100, 150)).toBe(-50);
     expect(computeSavingsRate(100, 70)).toBe(30);
   });
 });

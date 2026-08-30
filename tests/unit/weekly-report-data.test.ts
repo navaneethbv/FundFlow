@@ -240,6 +240,59 @@ describe("getWeeklyReportData", () => {
     expect(data?.totalSpend).toBeDefined();
   });
 
+  it("loads transaction classification overrides into the weekly report", async () => {
+    const dbStub = clientStub({
+      accounts: {
+        data: [{ id: "acc-1", name: "Checking", type: "depository", plaid_item_id: "p1" }],
+      },
+      plaid_items: { data: [{ id: "p1", institution_name: "Chase" }] },
+      budgets: { data: [] },
+      merchant_rules: { data: [] },
+      linked_refunds: { data: [] },
+      linked_duplicates: { data: [] },
+      transactions: {
+        data: [{
+          id: "t1",
+          date: "2026-07-08",
+          amount: 90,
+          merchant_name: "Confirmed purchase",
+          name: "CONFIRMED PURCHASE",
+          pfc_primary: "LOAN_PAYMENTS",
+          account_id: "acc-1",
+        }],
+      },
+      transaction_splits: { data: [] },
+      transaction_annotations: {
+        data: [{
+          transaction_id: "t1",
+          display_category: null,
+          cash_flow_classification: "expense",
+        }],
+      },
+    });
+    const supabase = {
+      ...dbStub,
+      auth: {
+        admin: {
+          getUserById: async () => ({
+            data: { user: { email: "user@example.com" } },
+            error: null,
+          }),
+        },
+      },
+    };
+
+    const data = await getWeeklyReportData(supabase as never, "user-1", period);
+
+    expect(data?.totalSpend).toBe(90);
+    expect(supabase.callsOn("transaction_annotations")).toEqual(
+      expect.arrayContaining([
+        { method: "in", args: ["transaction_id", ["t1"]] },
+        { method: "eq", args: ["user_id", "user-1"] },
+      ]),
+    );
+  });
+
   it("throws error when query result has error", async () => {
     const dbStub = clientStub({
       accounts: { error: new Error("Accounts DB Error") },

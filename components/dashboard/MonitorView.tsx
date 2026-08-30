@@ -182,7 +182,7 @@ export default function MonitorView({
 }: Readonly<{
   data: DashboardData;
   netWorth: number;
-  savingsRate: number;
+  savingsRate: number | null;
   recentTransactions: RecentTransaction[];
   accountNames: Map<string, string>;
   linkParams: DrillLinkParams;
@@ -271,9 +271,11 @@ export default function MonitorView({
         <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
           <div className="flex h-11 items-start justify-between gap-2">
             <h3 className="eyebrow">Savings rate</h3>
-            <RadialGauge value={savingsRate} />
+            <RadialGauge value={savingsRate ?? 0} />
           </div>
-          <p className="metric-value mt-3 text-3xl">{savingsRate}%</p>
+          <p className="metric-value mt-3 text-3xl">
+            {savingsRate !== null ? `${savingsRate}%` : "N/A"}
+          </p>
           <p className="mt-2 text-xs font-medium text-muted">Based on this month</p>
         </section>
       </div>

@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import type { HoldingRow, InvestmentsPage } from "@/lib/investments";
+import type {
+  HoldingRow,
+  InvestmentAccountCoverage,
+  InvestmentsPage,
+} from "@/lib/investments";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
@@ -12,6 +16,7 @@ import HoldingsTable from "@/components/investments/HoldingsTable";
 import TopMovers from "@/components/investments/TopMovers";
 import PerformanceChart from "@/components/investments/PerformanceChart";
 import AddManualHoldingForm from "@/components/investments/AddManualHoldingForm";
+import ConnectedAccounts from "@/components/investments/ConnectedAccounts";
 
 function holding(overrides: Partial<HoldingRow> = {}): HoldingRow {
   return {
@@ -193,5 +198,49 @@ describe("AddManualHoldingForm — closed trigger and modal shell", () => {
     expect(source).toContain("fixed inset-0 z-50");
     expect(source).toContain("<dialog");
     expect(source).toContain("bg-black/50");
+  });
+});
+
+describe("ConnectedAccounts", () => {
+  it("renders the selected value source and uses mixed-coverage copy", () => {
+    const coverage: InvestmentAccountCoverage = {
+      total: 4200,
+      accountsWithoutHoldings: 1,
+      accounts: [
+        {
+          id: "with-holdings",
+          name: "Brokerage",
+          source: "plaid",
+          type: "investment",
+          subtype: "brokerage",
+          balance: 3900,
+          currency: "USD",
+          holdingValue: 3000,
+          displayValue: 3000,
+          valueSource: "holdings",
+        },
+        {
+          id: "without-holdings",
+          name: "401k",
+          source: "plaid",
+          type: "investment",
+          subtype: "401k",
+          balance: 1200,
+          currency: "USD",
+          holdingValue: null,
+          displayValue: 1200,
+          valueSource: "account-balance",
+        },
+      ],
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(ConnectedAccounts, { coverage, currency: "USD" }),
+    );
+
+    expect(html).toContain("Some security holdings unavailable");
+    expect(html).toContain("$3,000.00");
+    expect(html).not.toContain("$3,900.00");
+    expect(html).toContain("$1,200.00");
   });
 });

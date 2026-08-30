@@ -58,7 +58,7 @@ describe("POST /api/plaid/webhook", () => {
       }),
     });
 
-    const mockItem = { id: "db-item-123" };
+    const mockItem = { id: "db-item-123", user_id: "user-1" };
     mockGetItemByPlaidItemId.mockResolvedValue(mockItem);
 
     const res = await POST(request);
@@ -79,12 +79,13 @@ describe("POST /api/plaid/webhook", () => {
       }),
     });
 
-    const mockItem = { id: "db-item-123" };
+    const mockItem = { id: "db-item-123", user_id: "user-1" };
     mockGetItemByPlaidItemId.mockResolvedValue(mockItem);
 
     const res = await POST(request);
     expect(res.status).toBe(200);
     expect(mockSetItemStatus).toHaveBeenCalledWith(
+      "user-1",
       "db-item-123",
       "error",
       "ITEM_LOGIN_REQUIRED",
@@ -102,12 +103,13 @@ describe("POST /api/plaid/webhook", () => {
       }),
     });
 
-    const mockItem = { id: "db-item-123" };
+    const mockItem = { id: "db-item-123", user_id: "user-1" };
     mockGetItemByPlaidItemId.mockResolvedValue(mockItem);
 
     const res = await POST(request);
     expect(res.status).toBe(200);
     expect(mockSetItemStatus).toHaveBeenCalledWith(
+      "user-1",
       "db-item-123",
       "disconnected",
       "USER_PERMISSION_REVOKED",

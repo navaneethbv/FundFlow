@@ -9,7 +9,7 @@
 
 **Tech Stack:** Next.js 16 App Router, React 19, TypeScript, Supabase Postgres, Vitest.
 
-**Spec:** `/Users/navaneethbv/Desktop/Projects/FundFlow/features.md` §7 ("Tax-ready categorization and export").
+**Spec:** `features.md` §7 ("Tax-ready categorization and export").
 
 ## Global Constraints
 

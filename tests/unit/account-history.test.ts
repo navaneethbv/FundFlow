@@ -21,6 +21,7 @@ describe("shapeDailyAccountSnapshots", () => {
       shapeDailyAccountSnapshots({
         userId: "user-1",
         snapshotDate: "2026-07-29",
+        capturedAt: "2026-07-29T12:00:00.000Z",
         plaidAccounts: [
           {
             id: "plaid-1",
@@ -46,6 +47,7 @@ describe("shapeDailyAccountSnapshots", () => {
         current_balance: 1250.5,
         available_balance: 1200,
         iso_currency_code: "USD",
+        captured_at: "2026-07-29T12:00:00.000Z",
       },
       {
         user_id: "user-1",
@@ -55,6 +57,7 @@ describe("shapeDailyAccountSnapshots", () => {
         current_balance: 8000.25,
         available_balance: null,
         iso_currency_code: "USD",
+        captured_at: "2026-07-29T12:00:00.000Z",
       },
     ]);
   });
@@ -133,6 +136,18 @@ describe("shapeDailyAccountSnapshots", () => {
             iso_currency_code: "US",
           },
         ],
+        manualAccounts: [],
+      }),
+    ).toThrow(RangeError);
+  });
+
+  it("rejects an invalid capture timestamp", () => {
+    expect(() =>
+      shapeDailyAccountSnapshots({
+        userId: "user-1",
+        snapshotDate: "2026-07-29",
+        capturedAt: "not-a-timestamp",
+        plaidAccounts: [],
         manualAccounts: [],
       }),
     ).toThrow(RangeError);

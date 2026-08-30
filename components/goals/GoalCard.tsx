@@ -70,7 +70,7 @@ export default function GoalCard({
 
       <div className="p-5">
         <div className="flex flex-wrap items-start justify-between gap-2">
-          <h3 className="text-base font-semibold">{goal.name}</h3>
+          <h2 className="text-base font-semibold">{goal.name}</h2>
           <span className="flex items-center gap-1">
             <Badge tone={badge.tone}>{badge.label}</Badge>
             {menu}

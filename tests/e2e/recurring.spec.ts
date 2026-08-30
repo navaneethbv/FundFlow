@@ -346,6 +346,9 @@ test.describe.serial("Phase 5: recurring page", () => {
     const institutionRow = page.locator("li").filter({
       hasText: institutionName,
     });
+    await expect(institutionRow.locator("dt").getByText("Transactions", { exact: true })).toBeVisible();
+    await expect(institutionRow.locator("dt").getByText("Investments", { exact: true })).toBeVisible();
+    await expect(institutionRow.getByText("Repair required", { exact: true }).first()).toBeVisible();
     const institutionNameBox = await institutionRow
       .locator(":scope > span")
       .first()
@@ -359,6 +362,12 @@ test.describe.serial("Phase 5: recurring page", () => {
     expect(institutionActionsBox!.y).toBeGreaterThanOrEqual(
       institutionNameBox!.y + institutionNameBox!.height,
     );
+
+    await expect(
+      page.getByRole("heading", { name: "Account reconciliation" }),
+    ).toBeVisible();
+    await expect(page.locator("dt").getByText("Provider balance", { exact: true })).toBeVisible();
+    await expect(page.getByText("E2E Checking").last()).toBeVisible();
 
     const sectionPicker = page.getByRole("combobox", {
       name: "Settings section",
@@ -391,5 +400,28 @@ test.describe.serial("Phase 5: recurring page", () => {
         expect(box!.width).toBeGreaterThanOrEqual(250);
       }
     }
+  });
+
+  test("calendar arrow keys move one unique roving focus target through valid grid rows", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto("/recurring?month=2026-08&view=calendar");
+
+    const calendar = page.getByRole("grid", {
+      name: "Recurring calendar for 2026-08",
+    });
+    await expect(calendar).toBeVisible();
+    await expect(calendar.getByRole("row")).toHaveCount(7);
+    await expect(calendar.locator('button[tabindex="0"]')).toHaveCount(1);
+
+    const augustFifteenth = calendar.getByRole("button", {
+      name: /^2026-08-15, /,
+    });
+    await augustFifteenth.focus();
+    await augustFifteenth.press("ArrowRight");
+    await expect(
+      calendar.getByRole("button", { name: /^2026-08-16, / }),
+    ).toBeFocused();
   });
 });

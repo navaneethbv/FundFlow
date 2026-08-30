@@ -1,21 +1,28 @@
 import type { DashboardData } from "@/lib/dashboard";
-import type { Goal } from "@/lib/goals";
+import type { GoalSummaryItem } from "@/lib/goal-summary";
 import { buildPlanningDepthView } from "@/lib/planning-depth";
 import { formatCurrency } from "@/lib/format";
 import Panel from "@/components/ui/Panel";
 
-/** Whole months from today until a YYYY-MM-DD target date (at least 1). */
-function monthsUntil(date: string | null): number {
-  if (!date) return 12;
-  const [year, month] = date.split("-").map(Number);
-  const now = new Date();
-  const months =
-    ((year ?? now.getFullYear()) - now.getFullYear()) * 12 +
-    ((month ?? 1) - 1 - now.getMonth());
-  return Math.max(1, months);
+/**
+ * Whole months of runway a goal still has.
+ *
+ * `monthlyPace` is remaining ÷ months-to-deadline, so dividing back out
+ * recovers the deadline. It is null both for a goal with no deadline (a year
+ * is the neutral default) and for one already past due — those get 1, so an
+ * overdue goal keeps the urgency it should have rather than looking a year out.
+ */
+export function monthsRemainingFor(goal: GoalSummaryItem): number {
+  if (goal.monthlyPace && goal.remainingAmount > 0) {
+    return Math.max(1, Math.ceil(goal.remainingAmount / goal.monthlyPace));
+  }
+  return goal.targetDate ? 1 : 12;
 }
 
-export default function PlanningDepth({ data, goals }: Readonly<{ data: DashboardData; goals: Goal[] }>) {
+export default function PlanningDepth({
+  data,
+  goals,
+}: Readonly<{ data: DashboardData; goals: GoalSummaryItem[] }>) {
   const view = buildPlanningDepthView({
     accounts: data.accounts.map((account) => ({
       name: account.name,
@@ -27,9 +34,9 @@ export default function PlanningDepth({ data, goals }: Readonly<{ data: Dashboar
     goals: goals.map((goal) => ({
       id: goal.id,
       name: goal.name,
-      targetAmount: goal.target_amount,
-      currentAmount: goal.saved_amount,
-      monthsRemaining: monthsUntil(goal.target_date),
+      targetAmount: goal.targetAmount,
+      currentAmount: goal.fundedAmount,
+      monthsRemaining: monthsRemainingFor(goal),
     })),
   });
   const goalName = new Map(goals.map((goal) => [goal.id, goal.name]));

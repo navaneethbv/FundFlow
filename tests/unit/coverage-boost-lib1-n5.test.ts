@@ -78,7 +78,7 @@ describe("loadCanonicalProjection linked refunds mapping", () => {
     expect(result.transactions).toBeDefined();
     expect(supabase.callsOn("linked_refunds")).toContainEqual({
       method: "order",
-      args: ["charge_transaction_id"],
+      args: ["id"],
     });
   });
 });

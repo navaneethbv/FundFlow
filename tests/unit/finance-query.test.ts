@@ -432,6 +432,12 @@ describe("loadCanonicalProjection", () => {
     expect(result.currencyByAccountId).toEqual(
       new Map([["account-1", "USD"]]),
     );
+    expect(
+      supabase.callsOn("merchant_rules").filter(({ method }) => method === "order"),
+    ).toEqual([
+      { method: "order", args: ["created_at"] },
+      { method: "order", args: ["id"] },
+    ]);
   });
 
   it("filters every Mine dependency by owner and leaves Household visibility to RLS", async () => {
@@ -483,6 +489,83 @@ describe("loadCanonicalProjection", () => {
     expect(splitChunks[0]?.args[1]).toHaveLength(250);
     expect(splitChunks[1]?.args[1]).toHaveLength(250);
     expect(splitChunks[2]?.args[1]).toHaveLength(1);
+  });
+
+  it("pages every growing projection dependency instead of silently truncating it", async () => {
+    const rows = Array.from({ length: 1001 }, (_, index) => ({
+      id: `row-${index}`,
+      name: `Account ${index}`,
+      iso_currency_code: "usd",
+    }));
+    const supabase = projectionClient({
+      accounts: { data: rows },
+      merchant_rules: {
+        data: rows.map((_, index) => ({
+          match_type: "merchant",
+          pattern: `Never matches ${index}`,
+          display_name: null,
+          category: null,
+          enabled: false,
+        })),
+      },
+      category_overrides: {
+        data: rows.map((_, index) => ({
+          source_category: `SOURCE_${index}`,
+          display_category: `DISPLAY_${index}`,
+        })),
+      },
+      linked_refunds: {
+        data: rows.map((_, index) => ({
+          charge_transaction_id: `charge-${index}`,
+          refund_transaction_id: `refund-${index}`,
+        })),
+      },
+      linked_duplicates: {
+        data: rows.map((_, index) => ({
+          excluded_transaction_id: `duplicate-${index}`,
+        })),
+      },
+    });
+
+    const result = await loadCanonicalProjection(supabase as never, { scope: MINE });
+
+    expect(result.currencyByAccountId.size).toBe(1001);
+    for (const table of [
+      "accounts",
+      "merchant_rules",
+      "category_overrides",
+      "linked_refunds",
+      "linked_duplicates",
+    ]) {
+      expect(
+        supabase.callsOn(table).filter(({ method }) => method === "range"),
+      ).toEqual([
+        { method: "range", args: [0, 999] },
+        { method: "range", args: [1000, 1999] },
+      ]);
+    }
+  });
+
+  it("pages split rows within each URL-safe transaction chunk", async () => {
+    const supabase = projectionClient({
+      transaction_splits: {
+        data: Array.from({ length: 1001 }, (_, index) => ({
+          transaction_id: "expense-1",
+          category: `Part ${index}`,
+          amount: index === 1000 ? 1 : 0.099,
+        })),
+      },
+    });
+
+    const result = await loadCanonicalProjection(supabase as never, { scope: MINE });
+
+    expect(result.transactions).toHaveLength(1001);
+    expect(
+      supabase.callsOn("transaction_splits").filter(({ method }) => method === "range"),
+    ).toEqual([
+      { method: "range", args: [0, 999] },
+      { method: "range", args: [1000, 1999] },
+    ]);
   });
 
   it("excludes only the confirmed duplicate id loaded in the active scope", async () => {

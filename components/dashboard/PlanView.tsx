@@ -1,11 +1,12 @@
 import Link from "next/link";
 import type { DashboardData } from "@/lib/dashboard";
 import type { BillGrouping } from "@/lib/planning";
-import type { Goal } from "@/lib/goals";
+import type { GoalSummaryItem } from "@/lib/goal-summary";
 import { dashboardUrl } from "@/lib/drilldown";
 import { formatCurrency, titleCase } from "@/lib/format";
 import Badge from "@/components/ui/Badge";
 import Panel from "@/components/ui/Panel";
+import WeeklyReportWidget from "@/components/dashboard/widgets/WeeklyReportWidget";
 import BillCalendar from "@/components/dashboard/BillCalendar";
 import GoalsSummary from "@/components/dashboard/GoalsSummary";
 import PlanningDepth from "@/components/dashboard/PlanningDepth";
@@ -24,7 +25,7 @@ export type PlanSetupItem = {
 
 export function getPlanSetupItems(
   data: PlanData,
-  goals: Goal[],
+  goals: GoalSummaryItem[],
 ): PlanSetupItem[] {
   const items: PlanSetupItem[] = [];
   if (data.budgetEnvelopes.length === 0) {
@@ -66,12 +67,14 @@ function recurringTone(
 export default function PlanView({
   data,
   goals,
+  weeklyReport,
   billsGrouping = "weekly",
   billsLinkParams = {},
   prefs,
 }: Readonly<{
   data: DashboardData;
-  goals: Goal[];
+  goals: GoalSummaryItem[];
+  weeklyReport?: import("@/lib/weekly-delivery-history").LatestWeeklyDelivery | null;
   billsGrouping?: BillGrouping;
   billsLinkParams?: {
     month?: string;
@@ -117,6 +120,7 @@ export default function PlanView({
 
   return (
     <div className="space-y-5">
+      {weeklyReport && <WeeklyReportWidget delivery={weeklyReport} />}
       {setupItems.length > 0 && (
         <Panel title="Set up your plan" tone="accent">
           <p className="mb-3 text-sm text-muted">

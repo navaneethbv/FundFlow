@@ -1,5 +1,6 @@
 import { EXCLUDED_PFC } from "@/lib/dashboard";
 import type { CanonicalFinanceTransaction } from "@/lib/finance-domain";
+import { computeSavingsRate } from "@/lib/finance-metrics";
 
 /**
  * Year in Money (8.1): pure annual-recap aggregation for /wrapped.
@@ -19,8 +20,8 @@ export interface YearInMoney {
   year: string;
   totalSpend: number;
   totalIncome: number;
-  /** Whole-percent savings rate, floored at 0. */
-  savingsRate: number;
+  /** Signed savings rate (null when totalIncome <= 0). */
+  savingsRate: number | null;
   topMerchants: { merchant: string; amount: number }[];
   topCategories: { category: string; amount: number }[];
   /** Null when the year had income but no spending. */
@@ -38,12 +39,15 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-export function computeYearInMoney(
+function computeYearInMoneyRows(
   txns: AnnualTxn[],
   year: string,
+  excludeProviderGroups: boolean,
 ): YearInMoney | null {
   const rows = txns.filter(
-    (t) => t.date.startsWith(`${year}-`) && !EXCLUDED_PFC.has(t.category ?? ""),
+    (t) =>
+      t.date.startsWith(`${year}-`) &&
+      (!excludeProviderGroups || !EXCLUDED_PFC.has(t.category ?? "")),
   );
   if (rows.length === 0) return null;
 
@@ -102,10 +106,7 @@ export function computeYearInMoney(
     year,
     totalSpend,
     totalIncome,
-    savingsRate:
-      totalIncome <= 0
-        ? 0
-        : Math.max(0, Math.round(((totalIncome - totalSpend) / totalIncome) * 100)),
+    savingsRate: computeSavingsRate(totalIncome, totalSpend),
     topMerchants: top(byMerchant, "merchant"),
     topCategories: top(byCategory, "category"),
     biggestMonth,
@@ -114,6 +115,13 @@ export function computeYearInMoney(
     monthlySpendSeries,
     transactionCount: rows.length,
   };
+}
+
+export function computeYearInMoney(
+  txns: AnnualTxn[],
+  year: string,
+): YearInMoney | null {
+  return computeYearInMoneyRows(txns, year, true);
 }
 
 /**
@@ -141,5 +149,5 @@ export function computeYearInMoneyFromProjection(
       category: row.groupKey,
     });
   }
-  return computeYearInMoney(txns, year);
+  return computeYearInMoneyRows(txns, year, false);
 }

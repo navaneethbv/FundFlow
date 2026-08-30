@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { createClient } from "@supabase/supabase-js";
 import { getWeeklyReportData } from "@/lib/weekly-report-data";
 import { generateWeeklyReportPdf } from "@/lib/report-pdf";
-import { runWeeklyReports } from "@/app/api/cron/weekly-report/route";
+import { runWeeklyReports } from "@/lib/weekly-report-runner";
 import { storeItem } from "@/lib/plaid-service";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

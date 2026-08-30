@@ -1,11 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ReconnectBankButton from "@/components/settings/ReconnectBankButton";
+import RepairBankButton from "@/components/settings/RepairBankButton";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Panel from "@/components/ui/Panel";
+import type { ItemCursorHealth } from "@/lib/cursor-health";
+import type { InstitutionSyncHealth, ProductSyncHealth, ProductSyncState } from "@/lib/sync-health";
 
 interface Item {
   id: string;
@@ -20,11 +24,106 @@ function needsReconnect(item: Item): boolean {
   return item.status === "error" || item.error_code === "PENDING_EXPIRATION";
 }
 
+function getHealthLabel(state: ProductSyncState): string {
+  switch (state) {
+    case "healthy":
+      return "Healthy";
+    case "stale":
+      return "Stale";
+    case "repair_required":
+      return "Repair required";
+    case "product_unavailable":
+      return "Not available";
+    case "rate_limited":
+      return "Rate limited";
+    default:
+      return "Never synced";
+  }
+}
+
+function healthTone(state: ProductSyncState): "success" | "danger" | "warning" | "neutral" {
+  if (state === "healthy") return "success";
+  if (state === "repair_required") return "danger";
+  if (state === "stale" || state === "rate_limited") return "warning";
+  return "neutral";
+}
+
+/**
+ * States that mean the user's data may actually be incomplete.
+ *
+ * `product_unavailable` and `never_synced` are excluded on purpose: a
+ * transaction-only bank reports `no_investment_product` for investments on
+ * every run, so treating a non-healthy state as trouble would pin a permanent
+ * "may have incomplete data" warning to every ordinary checking connection.
+ */
+const ATTENTION_STATES = new Set<ProductSyncState>([
+  "stale",
+  "repair_required",
+  "rate_limited",
+]);
+
+/**
+ * Plain-language explanation of an item-level history gap, or null when the
+ * ledger is known to hold everything the provider has. This is what makes the
+ * cursor-health facts lib/sync.ts records actionable rather than write-only.
+ */
+function historyGapMessage(cursor: ItemCursorHealth | null): string | null {
+  if (!cursor) return null;
+  if (cursor.cursorResetDetectedAt) {
+    return "This connection's sync position was reset, so older transactions may be missing.";
+  }
+  if (cursor.initialHistoryIncomplete) {
+    return "The first history download for this bank has not finished yet.";
+  }
+  if (cursor.state === "partial_page") {
+    return "The last sync stopped before the end of this bank's history.";
+  }
+  return null;
+}
+
+function institutionNeedsAttention(health: InstitutionSyncHealth): boolean {
+  return (
+    ATTENTION_STATES.has(health.transactions.state) ||
+    ATTENTION_STATES.has(health.investments.state)
+  );
+}
+
+function healthHelp(health: ProductSyncHealth): string {
+  switch (health.state) {
+    case "healthy":
+      return health.lastSuccessAt ? `Last successful sync: ${health.lastSuccessAt}.` : "Sync is current.";
+    case "stale":
+      return "No successful sync completed in the last 48 hours.";
+    case "repair_required":
+      return "Reconnect this institution to restore access.";
+    case "product_unavailable":
+      return "This institution does not currently provide this product.";
+    case "rate_limited":
+      return "The provider asked FundFlow to retry later.";
+    default:
+      return "No successful sync has been recorded yet.";
+  }
+}
+
+function HealthRow({ label, health }: Readonly<{ label: string; health: ProductSyncHealth }>) {
+  return (
+    <div className="min-w-0">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <dt className="text-xs font-semibold text-muted">{label}</dt>
+        <dd><Badge tone={healthTone(health.state)}>{getHealthLabel(health.state)}</Badge></dd>
+      </div>
+      <dd className="mt-1 text-xs text-muted">{healthHelp(health)}</dd>
+    </div>
+  );
+}
+
 export default function BanksSection({
   initialItems,
+  healthByItem = {},
   householdId = null,
 }: Readonly<{
   initialItems: Item[];
+  healthByItem?: Record<string, InstitutionSyncHealth>;
   householdId?: string | null;
 }>) {
   const router = useRouter();
@@ -89,10 +188,14 @@ export default function BanksSection({
         <p className="text-sm text-muted">No banks connected.</p>
       ) : (
         <ul className="space-y-3 text-sm">
-          {items.map((i) => (
+          {items.map((i) => {
+            const health = healthByItem[i.id];
+            const needsAttention = health ? institutionNeedsAttention(health) : false;
+            return (
             <li
               key={i.id}
-              className="flex min-w-0 flex-col items-stretch gap-3 rounded-field border border-panel-border bg-panel-2 p-3 sm:flex-row sm:items-center sm:justify-between"
+              id={`institution-${i.id}`}
+              className="flex min-w-0 flex-col items-stretch gap-3 rounded-field border border-panel-border bg-panel-2 p-3 sm:flex-row sm:items-start sm:justify-between"
             >
               <span className="min-w-0">
                 <span className="block break-words font-semibold">
@@ -101,12 +204,39 @@ export default function BanksSection({
                 {i.error_code === "PENDING_EXPIRATION" && (
                   <span className="text-xs text-warning">Consent expiring soon</span>
                 )}
+                {health && (
+                  <>
+                    <dl className="mt-3 grid max-w-sm gap-2">
+                      <HealthRow label="Transactions" health={health.transactions} />
+                      <HealthRow label="Investments" health={health.investments} />
+                    </dl>
+                    <p className="mt-2 text-xs text-muted">
+                      Transaction coverage: {health.oldestTransactionDate ?? "not available"} to {health.newestTransactionDate ?? "not available"}.
+                    </p>
+                    {historyGapMessage(health.cursor) && (
+                      <output className="mt-2 block rounded-field border border-warning/30 bg-warning/10 p-2 text-xs text-foreground">
+                        {historyGapMessage(health.cursor)}{" "}
+                        Run Repair to continue the backfill; retries never
+                        duplicate transactions.
+                      </output>
+                    )}
+                    {needsAttention && (
+                      <output className="mt-2 block rounded-field border border-warning/30 bg-warning/10 p-2 text-xs text-foreground">
+                        {health.institutionName} may have incomplete data.
+                        {" "}<Link className="font-semibold underline" href="/cash-flow">Review Cash Flow</Link>
+                        {" "}or{" "}<Link className="font-semibold underline" href="/investments">Investments</Link>.
+                      </output>
+                    )}
+                  </>
+                )}
                 {householdId && (
                   <label className="mt-1 flex items-center gap-1.5 text-xs text-muted">
                     <input
                       type="checkbox"
                       checked={Boolean(i.shared_household_id)}
-                      onChange={(e) => toggleShare(i.id, e.target.checked)}
+                      onChange={(e) => {
+                        void toggleShare(i.id, e.target.checked);
+                      }}
                     />
                     <span>Share with household</span>
                   </label>
@@ -117,8 +247,11 @@ export default function BanksSection({
                   {i.status === "active" ? "Connected" : i.status}
                 </Badge>
                 {needsReconnect(i) && <ReconnectBankButton itemId={i.id} />}
+                <RepairBankButton itemId={i.id} />
                 <Button
-                  onClick={() => disconnect(i.id)}
+                  onClick={() => {
+                    void disconnect(i.id);
+                  }}
                   disabled={busyId === i.id}
                   variant="danger"
                   size="sm"
@@ -127,7 +260,7 @@ export default function BanksSection({
                 </Button>
               </span>
             </li>
-          ))}
+          );})}
         </ul>
       )}
       {error && <p className="text-sm text-red-600">{error}</p>}

@@ -98,7 +98,7 @@ describe("POST /api/plaid/webhook", () => {
 
     const res = await POST(req);
     expect(res.status).toBe(200);
-    expect(mockSetItemStatus).toHaveBeenCalledWith("item-db-1", "error", "ITEM_LOGIN_REQUIRED");
+    expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "error", "ITEM_LOGIN_REQUIRED");
   });
 
   it("handles ITEM PENDING_EXPIRATION, LOGIN_REPAIRED, and USER_PERMISSION_REVOKED webhooks", async () => {
@@ -114,7 +114,7 @@ describe("POST /api/plaid/webhook", () => {
       }),
     });
     await POST(req);
-    expect(mockSetItemStatus).toHaveBeenCalledWith("item-db-1", "active", "PENDING_EXPIRATION");
+    expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", "PENDING_EXPIRATION");
 
     // LOGIN_REPAIRED
     req = new NextRequest("http://localhost/api/plaid/webhook", {
@@ -126,7 +126,7 @@ describe("POST /api/plaid/webhook", () => {
       }),
     });
     await POST(req);
-    expect(mockSetItemStatus).toHaveBeenCalledWith("item-db-1", "active", null);
+    expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", null);
 
     // USER_PERMISSION_REVOKED
     req = new NextRequest("http://localhost/api/plaid/webhook", {
@@ -138,7 +138,7 @@ describe("POST /api/plaid/webhook", () => {
       }),
     });
     await POST(req);
-    expect(mockSetItemStatus).toHaveBeenCalledWith("item-db-1", "disconnected", "USER_PERMISSION_REVOKED");
+    expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "disconnected", "USER_PERMISSION_REVOKED");
 
     // ERROR with default code
     req = new NextRequest("http://localhost/api/plaid/webhook", {
@@ -150,7 +150,7 @@ describe("POST /api/plaid/webhook", () => {
       }),
     });
     await POST(req);
-    expect(mockSetItemStatus).toHaveBeenCalledWith("item-db-1", "error", "ITEM_ERROR");
+    expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "error", "ITEM_ERROR");
   });
 
   it("handles HOLDINGS webhook when investmentsPage feature flag is enabled", async () => {
@@ -262,7 +262,7 @@ describe("POST /api/plaid/webhook", () => {
 
     const res = await POST(req);
     expect(res.status).toBe(200);
-    expect(mockSetItemStatus).toHaveBeenCalledWith("item-db-1", "active", null);
+    expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", null);
   });
 
   it("rejects replayed webhooks with old timestamp", async () => {

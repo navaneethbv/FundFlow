@@ -145,13 +145,13 @@ async function handleItemWebhook(body: {
       typeof body.error?.error_code === "string"
         ? body.error.error_code
         : "ITEM_ERROR";
-    await setItemStatus(item.id, "error", code);
+    await setItemStatus(item.user_id, item.id, "error", code);
   } else if (body.webhook_code === "PENDING_EXPIRATION") {
-    await setItemStatus(item.id, "active", "PENDING_EXPIRATION");
+    await setItemStatus(item.user_id, item.id, "active", "PENDING_EXPIRATION");
   } else if (body.webhook_code === "LOGIN_REPAIRED") {
-    await setItemStatus(item.id, "active", null);
+    await setItemStatus(item.user_id, item.id, "active", null);
   } else if (body.webhook_code === "USER_PERMISSION_REVOKED") {
-    await setItemStatus(item.id, "disconnected", "USER_PERMISSION_REVOKED");
+    await setItemStatus(item.user_id, item.id, "disconnected", "USER_PERMISSION_REVOKED");
   }
 }
 

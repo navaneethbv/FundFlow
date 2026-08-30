@@ -5,6 +5,10 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { decryptItemTokenAndUpgrade, listActiveItems } from "@/lib/plaid-service";
 import type { PlaidItemRow } from "@/lib/types";
 import { logError } from "@/lib/log";
+import {
+  dateKeyInTimezone,
+  DEFAULT_REPORT_TIMEZONE,
+} from "@/lib/report-period";
 
 export type InvestmentSyncOutcome =
   | "synced"
@@ -116,6 +120,7 @@ async function upsertSecurities(
  */
 export async function syncInvestmentsForItem(
   item: PlaidItemRow,
+  today = dateKeyInTimezone(new Date(), DEFAULT_REPORT_TIMEZONE),
 ): Promise<InvestmentSyncResult> {
   const plaid = getPlaidClient();
   const accessToken = await decryptItemTokenAndUpgrade(item);
@@ -132,7 +137,8 @@ export async function syncInvestmentsForItem(
   const { data: itemAccounts, error: accountsError } = await supabase
     .from("accounts")
     .select("id, plaid_account_id")
-    .eq("plaid_item_id", item.id);
+    .eq("plaid_item_id", item.id)
+    .eq("user_id", item.user_id);
   if (accountsError) throw accountsError;
   const accountIdMap = new Map<string, string>(
     (itemAccounts ?? []).map((a) => [a.plaid_account_id as string, a.id as string]),
@@ -185,7 +191,6 @@ export async function syncInvestmentsForItem(
         r.id as string,
       ]),
     );
-    const today = new Date().toISOString().slice(0, 10);
     const snapshotRows = rows
       .filter((row) => idByKey.has(`${row.account_id}:${row.security_id}`))
       .map((row) => ({
@@ -303,7 +308,8 @@ export async function syncInvestmentTransactionsForItem(
   const { data: itemAccounts, error: accountsError } = await supabase
     .from("accounts")
     .select("id, plaid_account_id")
-    .eq("plaid_item_id", item.id);
+    .eq("plaid_item_id", item.id)
+    .eq("user_id", item.user_id);
   if (accountsError) throw accountsError;
   const accountIdMap = new Map<string, string>(
     (itemAccounts ?? []).map((a) => [a.plaid_account_id as string, a.id as string]),
@@ -399,14 +405,14 @@ async function recordInvestmentJob(
  */
 export async function syncInvestmentsForUser(
   userId: string,
-  today: string = new Date().toISOString().slice(0, 10),
+  today = dateKeyInTimezone(new Date(), DEFAULT_REPORT_TIMEZONE),
 ): Promise<number> {
   const items = await listActiveItems(userId);
   let totalSynced = 0;
 
   for (const item of items) {
     try {
-      const result = await syncInvestmentsForItem(item);
+      const result = await syncInvestmentsForItem(item, today);
       totalSynced += result.holdingsSynced;
       if (result.outcome === "synced") {
         await recordInvestmentJob(userId, item.id, "done", null);

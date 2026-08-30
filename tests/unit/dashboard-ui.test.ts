@@ -19,8 +19,8 @@ describe("dashboard UI overhaul", () => {
 
   it("computes savings rate from already fetched income and spending", () => {
     expect(computeSavingsRate(8000, 5200)).toBe(35);
-    expect(computeSavingsRate(0, 5200)).toBe(0);
-    expect(computeSavingsRate(5000, 6200)).toBe(0);
+    expect(computeSavingsRate(0, 5200)).toBeNull();
+    expect(computeSavingsRate(5000, 6200)).toBe(-24);
   });
 
   it("compares live net worth with the previous snapshot, not the current one", () => {

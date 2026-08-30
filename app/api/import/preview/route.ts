@@ -21,6 +21,8 @@ import { checkRateLimit } from "@/lib/rate-limit";
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_ROWS = 20_000;
+const EXISTING_TRANSACTION_PAGE_SIZE = 1_000;
+const DATABASE_CHUNK_SIZE = 500;
 
 const INVALID_MAPPING_ERROR =
   "Invalid column mapping. Map at least a date, description, and amount (or debit/credit).";
@@ -119,22 +121,112 @@ function emptyPreviewResponse(
   );
 }
 
+function transactionLabel(row: Record<string, unknown>): string {
+  const value = row.merchant_name ?? row.name;
+  return typeof value === "string" ? value : "";
+}
+
 async function resolveSourceAccountMappings(
   supabase: SupabaseClient,
+  userId: string,
   sourceAccounts: string[],
 ): Promise<Record<string, { account_id?: string; manual_account_id?: string }>> {
   if (sourceAccounts.length === 0) return {};
-  const { data: mappings, error } = await supabase
-    .from("import_source_account_mappings")
-    .select("source_account, account_id, manual_account_id")
-    .in("source_account", sourceAccounts);
-  if (error) throw error;
+  const mappings: Array<Record<string, unknown>> = [];
+  for (let index = 0; index < sourceAccounts.length; index += DATABASE_CHUNK_SIZE) {
+    const { data, error } = await supabase
+      .from("import_source_account_mappings")
+      .select("source_account, account_id, manual_account_id")
+      .in("source_account", sourceAccounts.slice(index, index + DATABASE_CHUNK_SIZE))
+      .eq("user_id", userId);
+    if (error) throw error;
+    mappings.push(...((data ?? []) as Array<Record<string, unknown>>));
+  }
   return Object.fromEntries(
-    (mappings ?? []).map((mapping) => [mapping.source_account as string, {
+    mappings.map((mapping) => [mapping.source_account as string, {
       ...(mapping.account_id ? { account_id: mapping.account_id as string } : {}),
       ...(mapping.manual_account_id ? { manual_account_id: mapping.manual_account_id as string } : {}),
     }]),
   );
+}
+
+/**
+ * Existing transactions that could possibly collide with the imported file.
+ *
+ * The duplicate fingerprint starts with the transaction date, so a row dated
+ * outside the file's own span can never match one of its rows. Bounding the
+ * read to that span keeps duplicate detection exactly as accurate as a full
+ * scan while turning an unbounded "every transaction this user has ever had"
+ * load into one proportional to the file being imported.
+ */
+async function loadExistingTransactions(
+  supabase: SupabaseClient,
+  userId: string,
+  dateRange: { start: string; end: string },
+): Promise<Array<Record<string, unknown>>> {
+  const rows: Array<Record<string, unknown>> = [];
+  for (let offset = 0; ; offset += EXISTING_TRANSACTION_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("id, date, amount, merchant_name, name, pfc_primary")
+      .eq("user_id", userId)
+      .gte("date", dateRange.start)
+      .lte("date", dateRange.end)
+      .order("date", { ascending: true })
+      .order("id", { ascending: true })
+      .range(offset, offset + EXISTING_TRANSACTION_PAGE_SIZE - 1);
+    if (error) throw error;
+    const pageRows = (data ?? []) as Array<Record<string, unknown>>;
+    rows.push(...pageRows);
+    if (pageRows.length < EXISTING_TRANSACTION_PAGE_SIZE) break;
+  }
+  return rows;
+}
+
+/** Inclusive min/max date across the parsed rows. */
+function importedDateRange(
+  rows: ReadonlyArray<{ date: string }>,
+): { start: string; end: string } {
+  let start = rows[0]!.date;
+  let end = rows[0]!.date;
+  for (const row of rows) {
+    if (row.date < start) start = row.date;
+    if (row.date > end) end = row.date;
+  }
+  return { start, end };
+}
+
+async function stagePreviewRows(
+  service: SupabaseClient,
+  batchId: string,
+  userId: string,
+  stagedRows: Array<Record<string, unknown>>,
+): Promise<Array<Record<string, unknown>>> {
+  const insertedRows: Array<Record<string, unknown>> = [];
+  try {
+    for (let index = 0; index < stagedRows.length; index += DATABASE_CHUNK_SIZE) {
+      const { data, error } = await service
+        .from("import_review_rows")
+        .insert(stagedRows.slice(index, index + DATABASE_CHUNK_SIZE))
+        .select("id, date, description, amount, source_account, row_index, status");
+      if (error) throw error;
+      insertedRows.push(...((data ?? []) as Array<Record<string, unknown>>));
+    }
+    return insertedRows;
+  } catch (stagingError) {
+    const { error: cleanupError } = await service
+      .from("import_review_batches")
+      .delete()
+      .eq("id", batchId)
+      .eq("user_id", userId);
+    if (cleanupError) {
+      throw new AggregateError(
+        [stagingError, cleanupError],
+        "Failed to stage import rows and clean up the pending batch",
+      );
+    }
+    throw stagingError;
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -172,17 +264,26 @@ export async function POST(request: NextRequest) {
     }
     if (rows.length === 0) return emptyPreviewResponse(text, format, columns, errors, parsed.requiresDateOrder);
 
-    const { data: existing } = await supabase
-      .from("transactions")
-      .select("date, amount, merchant_name, name")
-      .limit(20_000);
-    const existingFingerprints = new Set(
-      (existing ?? []).map((row) => `${row.date}|${Number(row.amount).toFixed(2)}|${row.merchant_name ?? row.name ?? ""}`),
+    const existing = await loadExistingTransactions(
+      supabase,
+      user.id,
+      importedDateRange(rows),
     );
-    const review = buildImportReview(rows, existingFingerprints);
+    const existingFingerprints = new Set(
+      (existing ?? []).map((row) => `${row.date}|${Number(row.amount).toFixed(2)}|${transactionLabel(row)}`),
+    );
+    // Plaid-vs-Monarch classification conflicts: keyed by the same fingerprint
+    // so a matching existing transaction surfaces a category-conflict flag.
+    const existingCategoryByFingerprint = new Map<string, string>(
+      (existing ?? []).map((row) => [
+        `${row.date}|${Number(row.amount).toFixed(2)}|${transactionLabel(row)}`,
+        (row.pfc_primary as string | null) ?? "",
+      ]),
+    );
+    const review = buildImportReview(rows, existingFingerprints, existingCategoryByFingerprint);
 
     const sourceAccounts = [...new Set(rows.map((row) => row.sourceAccount).filter((value): value is string => Boolean(value)))];
-    const sourceAccountMappings = await resolveSourceAccountMappings(supabase, sourceAccounts);
+    const sourceAccountMappings = await resolveSourceAccountMappings(supabase, user.id, sourceAccounts);
 
     const service = createServiceClient();
     const { data: batch, error: batchError } = await service
@@ -195,30 +296,28 @@ export async function POST(request: NextRequest) {
       .select("id")
       .single();
     if (batchError) throw batchError;
+    if (!batch?.id) throw new Error("import_preview_batch_not_created");
 
     const batchId = batch.id as string;
     // Flagged rows (file or possible duplicates) default to "rejected" so the
     // safe default only imports clean rows; the user can still opt them back in.
-    const { data: insertedRows, error: rowsError } = await service
-      .from("import_review_rows")
-      .insert(
-        review.rows.map((row, index) => ({
-          user_id: user.id,
-          batch_id: batchId,
-          row_hash: row.rowHash,
-          date: row.row.date,
-          description: row.row.merchant,
-          amount: row.row.amount,
-          category: row.row.category,
-          source_account: row.row.sourceAccount ?? null,
-          row_index: index,
-          status: row.flags.length > 0 ? "rejected" : "pending",
-        })),
-      )
-      .select("id, date, description, amount, source_account, row_index, status");
-    if (rowsError) throw rowsError;
+    const stagedRows = review.rows.map((row, index) => ({
+      user_id: user.id,
+      batch_id: batchId,
+      row_hash: row.rowHash,
+      date: row.row.date,
+      description: row.row.merchant,
+      amount: row.row.amount,
+      category: row.row.category,
+      source_account: row.row.sourceAccount ?? null,
+      notes: row.row.notes ?? null,
+      tags: row.row.tags ?? [],
+      row_index: index,
+      status: row.flags.length > 0 ? "rejected" : "pending",
+    }));
+    const insertedRows = await stagePreviewRows(service, batchId, user.id, stagedRows);
 
-    const rowsOut = [...(insertedRows ?? [])]
+    const rowsOut = [...insertedRows]
       .sort((a, b) => Number(a.row_index ?? 0) - Number(b.row_index ?? 0))
       .map((row, index) => ({
       id: row.id as string,

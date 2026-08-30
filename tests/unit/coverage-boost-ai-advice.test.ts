@@ -29,6 +29,7 @@ vi.mock("@/lib/ai-provider", async (importOriginal) => {
 
 vi.mock("@/lib/export", () => ({
   fetchPrivacySafeRows: (...args: unknown[]) => mocks.mockFetchPrivacySafeRows(...args),
+  recentHistoryStart: () => "2026-02-01",
 }));
 
 vi.mock("@/lib/rate-limit", () => ({

@@ -91,21 +91,21 @@ suite("plaid-service DB integration", () => {
 
   it("updates the sync cursor of an item", async () => {
     const newCursor = "cursor-xyz-123";
-    await updateItemCursor(itemDbId, newCursor);
+    await updateItemCursor(userId, itemDbId, newCursor);
 
     const item = await getItem(userId, itemDbId);
     expect(item!.sync_cursor).toBe(newCursor);
   });
 
   it("changes item status using setItemStatus", async () => {
-    await setItemStatus(itemDbId, "error", "item_login_required");
+    await setItemStatus(userId, itemDbId, "error", "item_login_required");
 
     const item = await getItem(userId, itemDbId);
     expect(item!.status).toBe("error");
     expect(item!.error_code).toBe("item_login_required");
 
     // Restore status
-    await setItemStatus(itemDbId, "active", null);
+    await setItemStatus(userId, itemDbId, "active", null);
     const itemRestored = await getItem(userId, itemDbId);
     expect(itemRestored!.status).toBe("active");
     expect(itemRestored!.error_code).toBeNull();

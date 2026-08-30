@@ -74,6 +74,11 @@ function localDateTime(reference: Date, timezone: string): LocalDateTime {
   };
 }
 
+/** The calendar date containing `reference` in the user's configured timezone. */
+export function dateKeyInTimezone(reference: Date, timezone: string | null | undefined): string {
+  return localDateTime(reference, normalizeReportTimezone(timezone)).date;
+}
+
 function addDays(date: string, days: number): string {
   const [year, month, day] = date.split("-").map(Number);
   const value = new Date(Date.UTC(year!, month! - 1, day! + days));
