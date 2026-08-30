@@ -18,7 +18,23 @@ function queryableSupabase(
     rpcCalls,
     rpc(name: string) {
       rpcCalls.push(name);
-      return Promise.resolve({ data: rpcSeed[name] ?? [], error: null });
+      let start = 0;
+      let end: number | null = null;
+      const builder = {
+        range(from: number, to: number) {
+          start = from;
+          end = to;
+          return builder;
+        },
+        then(resolve: (value: { data: FakeRow[]; error: null }) => unknown) {
+          const last = end === null ? undefined : end + 1;
+          return Promise.resolve(resolve({
+            data: (rpcSeed[name] ?? []).slice(start, last),
+            error: null,
+          }));
+        },
+      };
+      return builder;
     },
     from(table: string) {
       let rows = [...(seed[table] ?? [])];
@@ -320,6 +336,60 @@ describe("loadInstitutionObservability", () => {
     ])).toEqual([
       ["account-1", "2026-01-01", "2026-01-31"],
       ["account-2", "2026-08-01", "2026-08-29"],
+    ]);
+  });
+
+  it("does not invent a zero-dollar anchor from a null snapshot balance", async () => {
+    const supabase = queryableSupabase({
+      accounts: [{
+        id: "account-1", user_id: "user-1", plaid_item_id: "item-1",
+        name: "Checking", mask: null, type: "depository", subtype: "checking",
+        current_balance: 100, updated_at: "2026-08-29T10:00:00.000Z",
+      }],
+      sync_jobs: [],
+    }, {
+      account_reconciliation_aggregates: [{
+        account_id: "account-1",
+        snapshot_date: "2026-08-01",
+        snapshot_balance_cents: null,
+        post_anchor_total_cents: 0,
+        oldest_transaction_date: null,
+        newest_transaction_date: null,
+      }],
+    });
+
+    const result = await loadInstitutionObservability(
+      supabase as never,
+      "user-1",
+      [{ id: "item-1", institution_name: "Test Bank", status: "active", error_code: null }],
+      NOW,
+    );
+
+    expect(result.reconciliations[0]).toMatchObject({
+      anchorDate: null,
+      ledgerBalance: null,
+      state: "missing_anchor",
+    });
+  });
+
+  it("pages reconciliation aggregates beyond the database response cap", async () => {
+    const aggregates = Array.from({ length: 1_001 }, (_, index) => ({
+      account_id: `account-${index}`,
+      snapshot_date: null,
+      snapshot_balance_cents: null,
+      post_anchor_total_cents: 0,
+      oldest_transaction_date: null,
+      newest_transaction_date: null,
+    }));
+    const supabase = queryableSupabase({ accounts: [], sync_jobs: [] }, {
+      account_reconciliation_aggregates: aggregates,
+    });
+
+    await loadInstitutionObservability(supabase as never, "user-1", [], NOW);
+
+    expect(supabase.rpcCalls).toEqual([
+      "account_reconciliation_aggregates",
+      "account_reconciliation_aggregates",
     ]);
   });
 });
