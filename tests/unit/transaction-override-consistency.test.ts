@@ -17,11 +17,11 @@ function seededSupabase() {
           user_id: "user-1",
           account_id: ACCT_ID,
           manual_account_id: null,
-          plaid_transaction_id: "plaid-jewelry",
+          plaid_transaction_id: "plaid-retail",
           date: "2026-08-01",
-          amount: 500,
-          merchant_name: "Jewelry Store",
-          name: "JEWELRY",
+          amount: 123.45,
+          merchant_name: "Example Retailer",
+          name: "RETAIL PURCHASE",
           pfc_primary: "TRANSFER_OUT",
           pfc_detailed: "TRANSFER_OUT",
           pending: false,
@@ -57,7 +57,7 @@ describe("transaction override consistency across canonical surfaces", () => {
       flow: "expense",
       groupKey: "SHOPPING",
       categoryKey: "SHOPPING",
-      signedAmount: 500,
+      signedAmount: 123.45,
     });
   });
 
@@ -80,7 +80,7 @@ describe("transaction override consistency across canonical surfaces", () => {
     expect(result).toEqual({
       allowed: true,
       rows: [
-        { date: "2026-08-01", merchant: "Jewelry Store", amount: 500, category: "SHOPPING" },
+        { date: "2026-08-01", merchant: "Example Retailer", amount: 123.45, category: "SHOPPING" },
       ],
     });
   });

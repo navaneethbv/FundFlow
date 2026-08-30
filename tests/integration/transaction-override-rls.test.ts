@@ -85,7 +85,7 @@ suite("transaction classification override RLS", () => {
         plaid_transaction_id: `override-txn-${stamp}`,
         amount: 500,
         date: "2026-08-01",
-        name: "Jewelry",
+        name: "Retail purchase",
         pfc_primary: "TRANSFER_OUT",
         pfc_detailed: "TRANSFER_OUT",
       })

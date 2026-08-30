@@ -1,6 +1,36 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-08-28. Read this first to resume.
+Last updated: 2026-08-29. Read this first to resume.
+
+## 2026-08-29: PR #137 exact-head review and remediation
+
+Branch `codex/monarch-production-alignment` implements Phase 0 through Phase 6 of the Monarch alignment plan.
+The second full review confirmed and fixed merchant-rule precedence, recurring-calendar keyboard and ARIA behavior, cursor-health persistence, budget replacement identity, import conflict approval, override validation, canonical export dependencies, bounded reads, weekly and annual override propagation, liabilities preservation, bounded sync progress, repair locking, reconciliation aggregation, investment-account coverage, and user-timezone date boundaries.
+
+The recurring calendar now uses full date keys, a single roving tab stop, real grid rows, and the actual last date of the month.
+Normal transaction sync and repair both apply and persist bounded page progress, reject unknown accounts before cursor advancement, and coordinate through the item claim lock.
+Account reconciliation now uses `20260829173000_account_reconciliation_aggregate.sql` to compute owner-scoped integer-cent totals and per-account coverage in PostgreSQL instead of downloading up to 20,000 rows per account.
+
+Plaid Liabilities bill synchronization is disabled by default through the `liabilitiesSync` feature flag because it adds a separately billed provider request for each user and sync run.
+Enable it only after Plaid product access and quota impact are approved by adding `liabilitiesSync` to `FUNDFLOW_FEATURE_FLAGS`.
+The older APR enrichment path remains separately gated by `PLAID_LIABILITIES_ENABLED=1`.
+
+The original migrations through `20260829160000` are present in the linked migration ledger.
+Deploy these four follow-up migrations in timestamp order before enabling or verifying the affected Production paths:
+
+1. `20260829170000_credit_card_bill_insert_ownership.sql`
+2. `20260829171000_life_event_retirement_amount.sql`
+3. `20260829172000_goal_import_identity_unique.sql`
+4. `20260829173000_account_reconciliation_aggregate.sql`
+
+Retirement life-event writes can violate the currently deployed positive-amount constraint until `20260829171000` is applied.
+The Settings reconciliation section depends on `20260829173000` and must not be treated as Production-ready before that migration is deployed.
+
+The tracked-tree privacy pass removes 29 personal screenshots and attachments, deletes the live-data remediation plan, and replaces exact live financial evidence with synthetic values and generic labels.
+The retained visual-regression baselines are generated from the disposable `Quality Reviewer` fixture and contain only synthetic data.
+The tracked tree contains no occurrence of the requested personal email address or username.
+Deleting `.vscode/settings.json` intentionally removes the repository-specific SonarLint connected-mode identifier; developers may configure connected mode locally without committing that file.
+Historical Git objects and author metadata are outside a normal PR deletion and require a separately authorized coordinated history rewrite if permanent historical erasure is required.
 
 ## 2026-08-28: PR #134 UI review remediation (F1–F12)
 

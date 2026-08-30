@@ -178,7 +178,7 @@ describe("transaction override route", () => {
           user_id: "user-1",
           amount: 500,
           pfc_primary: "SHOPS",
-          pfc_detailed: "SHOPS_JEWELRY",
+          pfc_detailed: "SHOPS_OTHER",
         },
       },
       transaction_annotations: {
@@ -211,7 +211,7 @@ describe("transaction override route", () => {
         data: {
           id: "11111111-1111-4111-8111-111111111111",
           pfc_primary: "SHOPS",
-          pfc_detailed: "SHOPS_JEWELRY",
+          pfc_detailed: "SHOPS_OTHER",
         },
       },
       transaction_annotations: {
@@ -237,7 +237,7 @@ describe("transaction override route", () => {
           user_id: "user-1",
           amount: 500,
           pfc_primary: "SHOPS",
-          pfc_detailed: "SHOPS_JEWELRY",
+          pfc_detailed: "SHOPS_OTHER",
         },
       },
     });
@@ -258,7 +258,7 @@ describe("transaction override route", () => {
           user_id: "user-1",
           amount: 500,
           pfc_primary: "SHOPS",
-          pfc_detailed: "SHOPS_JEWELRY",
+          pfc_detailed: "SHOPS_OTHER",
         },
       },
     });

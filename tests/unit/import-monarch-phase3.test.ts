@@ -29,7 +29,7 @@ const headerLine = MONARCH_HEADER.map((h) => `"${h}"`).join(",");
 function monarchCsv(): File {
   const csv = [
     headerLine,
-    '"2026-08-01","Jewelry Store","Shopping","Checking","JEWELRY","Anniversary gift","-500.00","luxury,gift"',
+    '"2026-08-01","Example Retailer","Shopping","Checking","RETAIL PURCHASE","Imported note","-123.45","tag-one,tag-two"',
   ].join("\n");
   return new File([csv], "monarch.csv", { type: "text/csv" });
 }
@@ -52,9 +52,9 @@ describe("Monarch import conflicts, idempotency, and authorization", () => {
         data: [
           {
             date: "2026-08-01",
-            amount: 500,
-            merchant_name: "Jewelry Store",
-            name: "JEWELRY",
+            amount: 123.45,
+            merchant_name: "Example Retailer",
+            name: "RETAIL PURCHASE",
             pfc_primary: "TRANSFER_OUT",
           },
         ],
@@ -64,7 +64,7 @@ describe("Monarch import conflicts, idempotency, and authorization", () => {
     mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase: rls });
 
     const batch = queryStub({
-      data: [{ id: "batch-1", date: "2026-08-01", description: "Jewelry Store", amount: 500, source_account: "Checking", row_index: 0, status: "pending" }],
+      data: [{ id: "batch-1", date: "2026-08-01", description: "Example Retailer", amount: 123.45, source_account: "Checking", row_index: 0, status: "pending" }],
     });
     serviceFrom = vi.fn().mockImplementation((table: string) => {
       if (table === "import_review_batches") {
@@ -94,8 +94,8 @@ describe("Monarch import conflicts, idempotency, and authorization", () => {
     expect(inserted[0]).toMatchObject({
       user_id: "user-1",
       category: "Shopping",
-      notes: "Anniversary gift",
-      tags: ["luxury", "gift"],
+      notes: "Imported note",
+      tags: ["tag-one", "tag-two"],
     });
   });
 

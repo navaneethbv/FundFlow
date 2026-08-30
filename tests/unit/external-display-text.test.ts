@@ -3,10 +3,10 @@ import { normalizeExternalDisplayText } from "@/lib/external-display-text";
 
 describe("normalizeExternalDisplayText", () => {
   it("cleans replacement characters and collapses whitespace", () => {
-    // Reproduces the exact production mojibake: "WELLS FARGO AUTOGRAPH VISA CARD"
+    // Reproduces the replacement-character shape using a synthetic label.
     expect(
-      normalizeExternalDisplayText("WELLS FARGO AUTOGRAPH VISA\uFFFD\uFFFD CARD"),
-    ).toBe("WELLS FARGO AUTOGRAPH VISA CARD");
+      normalizeExternalDisplayText("EXAMPLE BANK REWARDS\uFFFD\uFFFD CARD"),
+    ).toBe("EXAMPLE BANK REWARDS CARD");
   });
 
   it("preserves valid trademark and registered symbols", () => {

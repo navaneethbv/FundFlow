@@ -17,18 +17,18 @@ describe("Monarch notes and tags import", () => {
   it("reads Notes and Tags alongside the display category and account", () => {
     const csv = [
       headerLine,
-      '"2026-07-01","Jewelry Store","Shopping","Checking","JEWELRY","Anniversary gift","-500.00","luxury,gift"',
+      '"2026-07-01","Example Retailer","Shopping","Checking","RETAIL PURCHASE","Imported note","-123.45","tag-one,tag-two"',
     ].join("\n");
     const { rows, errors } = parseMonarchCsv(csv);
     expect(errors).toEqual([]);
     expect(rows[0]).toEqual({
       date: "2026-07-01",
-      amount: 500,
-      merchant: "Jewelry Store",
+      amount: 123.45,
+      merchant: "Example Retailer",
       category: "Shopping",
       sourceAccount: "Checking",
-      notes: "Anniversary gift",
-      tags: ["luxury", "gift"],
+      notes: "Imported note",
+      tags: ["tag-one", "tag-two"],
     });
   });
 

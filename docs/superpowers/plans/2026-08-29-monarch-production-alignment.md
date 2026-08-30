@@ -7,7 +7,7 @@
 **Evidence:** `docs/Monarch-Production-Comparison-2026-08-29.md` and the gitignored live-data evidence under `qa-shots/production-2026-08-29/`.
 
 **Implementation status:** Phases 0 through 6 have been re-reviewed and remediated on this branch with focused unit, schema, integration, and signed-in browser coverage.
-Fresh remote checks, deployment of the three follow-up migrations, and the Production browser comparison remain pending before any deployment claim.
+Fresh remote checks, deployment of the four follow-up migrations, and the Production browser comparison remain pending before any deployment claim.
 Do not treat a checked box below as Production evidence until the associated migration, UI flow, source path, and acceptance test have been independently verified.
 
 ## Product rules
@@ -288,13 +288,13 @@ export interface ProductSyncHealth {
 - [x] Run `npm run lint`.
 - [x] Run `npm run typecheck`.
 - [x] Run the CI-equivalent suite: 4,126 tests passed and 19 live-database suites skipped without a service credential.
-- [ ] Re-run the live credit-card ownership test after the follow-up migrations deploy.
+- [ ] Re-run the linked ownership, retirement, goal-identity, and reconciliation checks after the four follow-up migrations deploy.
 - [x] Confirm the fresh PR-head production build in CI and the Vercel preview deployment.
 - [x] Validate contrast tokens (`npm run validate:palette`).
 - [x] Rebuild the knowledge graph (`graphify update .`).
 - [x] Check for git diff hygiene (`git diff --check`).
 - [x] Re-run coverage: 98.15% statements, 95.05% branches, 98.8% functions, and 99.13% lines.
-- [x] Verify the linked migration ledger and a dry run for the three pending migrations.
+- [ ] Verify the linked migration ledger and a dry run for the four pending migrations at the final PR head.
 - [x] Confirm the fresh PR-head SonarQube Cloud, Codacy, and CodeQL checks.
 - [ ] Confirm the Production deployment commit.
 - [ ] Repeat the authenticated browser comparison read-only.

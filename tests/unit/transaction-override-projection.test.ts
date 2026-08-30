@@ -20,9 +20,9 @@ function row(over: Partial<RawFinanceTransaction> = {}): RawFinanceTransaction {
     accountId: "acct-1",
     manualAccountId: null,
     date: "2026-08-01",
-    amount: 500,
-    merchant: "Jewelry Store",
-    name: "JEWELRY",
+    amount: 120,
+    merchant: "Example Retailer",
+    name: "RETAIL PURCHASE",
     pfcPrimary: "TRANSFER_OUT",
     pfcDetailed: "TRANSFER_OUT",
     pending: false,
@@ -48,7 +48,7 @@ describe("transaction-level classification overrides", () => {
       flow: "expense",
       groupKey: "SHOPPING",
       categoryKey: "SHOPPING",
-      signedAmount: 500,
+      signedAmount: 120,
     });
   });
 
@@ -83,8 +83,8 @@ describe("transaction-level classification overrides", () => {
       ...baseInput,
       rows: [row()],
       splits: [
-        { transactionId: "txn-1", category: "JEWELRY", amount: 200 },
-        { transactionId: "txn-1", category: "WATCHES", amount: 300 },
+        { transactionId: "txn-1", category: "RETAIL_A", amount: 50 },
+        { transactionId: "txn-1", category: "RETAIL_B", amount: 70 },
       ],
       transactionOverrides: [
         {
@@ -104,7 +104,7 @@ describe("transaction-level classification overrides", () => {
       ...baseInput,
       rows: [
         row({ id: "txn-transfer", providerTransactionId: "p2" }),
-        row({ id: "txn-expense", providerTransactionId: "p3", pfcPrimary: "SHOPS", pfcDetailed: "SHOPS_JEWELRY" }),
+        row({ id: "txn-expense", providerTransactionId: "p3", pfcPrimary: "SHOPS", pfcDetailed: "SHOPS_OTHER" }),
       ],
       transactionOverrides: [
         { transactionId: "txn-expense", displayCategory: "CLOTHING", cashFlowClassification: null },
