@@ -34,7 +34,7 @@ export function buildCreditCardBucket(
   let remaining = 0;
   for (const bill of bills) {
     if (!bill.statementBalance) continue;
-    if (bill.dueDate && !bill.dueDate.startsWith(month)) continue;
+    if (bill.dueDate?.startsWith(month) !== true) continue;
     remaining = round2(remaining + bill.statementBalance);
   }
   return { paid: 0, remaining };

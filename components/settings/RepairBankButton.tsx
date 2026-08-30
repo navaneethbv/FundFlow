@@ -7,6 +7,12 @@ import { runItemRepair } from "@/lib/repair";
 
 type RepairPhase = "idle" | "running" | "bounded" | "done" | "needs_action" | "error";
 
+function repairButtonLabel(phase: RepairPhase): string {
+  if (phase === "running") return "Repairing...";
+  if (phase === "done") return "Repaired";
+  return "Repair";
+}
+
 /**
  * Authenticated repair control for one Plaid item. Posts to /api/plaid/repair
  * and renders loading, success, bounded-backfill, provider-conditional
@@ -44,7 +50,7 @@ export default function RepairBankButton({
           variant="secondary"
           size="sm"
         >
-          {phase === "running" ? "Repairing..." : phase === "done" ? "Repaired" : "Repair"}
+          {repairButtonLabel(phase)}
         </Button>
       )}
       {message && (

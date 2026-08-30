@@ -75,6 +75,42 @@ interface RawCategory {
   amount?: unknown;
 }
 
+function readBudgetGroups(parsed: unknown): RawGroup[] | null {
+  if (Array.isArray(parsed)) return parsed as RawGroup[];
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const groups = (parsed as { groups?: unknown }).groups;
+  return Array.isArray(groups) ? groups as RawGroup[] : null;
+}
+
+function parseBudgetGroup(group: RawGroup): BudgetImportResult {
+  const groupName = typeof group.name === "string" ? group.name.trim() : null;
+  const rawType = typeof group.type === "string" ? group.type.trim().toLowerCase() : "";
+  const groupKind = GROUP_MAP[rawType] ?? "custom";
+  const categories = Array.isArray(group.categories) ? group.categories as RawCategory[] : [];
+  const rows: BudgetImportRow[] = [];
+  const errors: string[] = [];
+
+  for (const rawCategory of categories) {
+    const category = normalizeCategory(rawCategory.name);
+    const amount = toAmount(rawCategory.amount);
+    if (!category) {
+      errors.push(`Skipped a category with no usable name in group "${groupName ?? "?"}".`);
+      continue;
+    }
+    if (amount === null) {
+      errors.push(`Skipped category "${category}" with an unusable amount.`);
+      continue;
+    }
+    rows.push({
+      category,
+      monthlyAmount: amount,
+      group: groupKind,
+      groupName: groupKind === "custom" ? groupName : null,
+    });
+  }
+  return { rows, errors };
+}
+
 /**
  * Parse a Monarch budget configuration export. Accepts either `{ groups: [...] }`
  * or a bare array of groups; each group carries a name, a type, and a category
@@ -87,11 +123,7 @@ export function parseMonarchBudgets(text: string): BudgetImportResult {
   } catch {
     return { rows: [], errors: ["Could not parse the budget file as JSON."] };
   }
-  const groups = Array.isArray(parsed)
-    ? (parsed as RawGroup[])
-    : Array.isArray((parsed as { groups?: unknown })?.groups)
-      ? ((parsed as { groups: unknown }).groups as RawGroup[])
-      : null;
+  const groups = readBudgetGroups(parsed);
   if (!groups) {
     return { rows: [], errors: ["The budget file has no groups to import."] };
   }
@@ -99,27 +131,9 @@ export function parseMonarchBudgets(text: string): BudgetImportResult {
   const rows: BudgetImportRow[] = [];
   const errors: string[] = [];
   for (const group of groups) {
-    const groupName = typeof group.name === "string" ? group.name.trim() : null;
-    const rawType = typeof group.type === "string" ? group.type.trim().toLowerCase() : "";
-    const groupKind = GROUP_MAP[rawType] ?? "custom";
-    for (const rawCategory of (Array.isArray(group.categories) ? group.categories : []) as RawCategory[]) {
-      const category = normalizeCategory(rawCategory.name);
-      const amount = toAmount(rawCategory.amount);
-      if (!category) {
-        errors.push(`Skipped a category with no usable name in group "${groupName ?? "?"}".`);
-        continue;
-      }
-      if (amount === null) {
-        errors.push(`Skipped category "${category}" with an unusable amount.`);
-        continue;
-      }
-      rows.push({
-        category,
-        monthlyAmount: amount,
-        group: groupKind,
-        groupName: groupKind === "custom" ? groupName : null,
-      });
-    }
+    const groupResult = parseBudgetGroup(group);
+    rows.push(...groupResult.rows);
+    errors.push(...groupResult.errors);
   }
   return { rows, errors };
 }

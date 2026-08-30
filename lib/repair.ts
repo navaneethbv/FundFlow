@@ -99,7 +99,7 @@ export interface RepairUiState {
 export function repairResponseToUiState(
   response: RepairResponse | null,
 ): RepairUiState {
-  if (!response || !response.ok) {
+  if (!response?.ok) {
     const status = response?.status;
     if (status === "product_not_ready") {
       return {

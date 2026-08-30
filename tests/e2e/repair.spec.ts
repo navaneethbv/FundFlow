@@ -1,7 +1,9 @@
 import { hasLiveCredentials, signIn, test, expect } from "./fixtures/authenticated";
 
 test.describe("repair", () => {
-  test.skip(!hasLiveCredentials, "Live Supabase credentials are required");
+  // Intentional credential-gated live acceptance suite; it cannot run without
+  // the external Supabase and Plaid test environment.
+  test.skip(!hasLiveCredentials, "Live Supabase credentials are required"); // NOSONAR
 
   test("repair control reaches settings and surfaces bounded backfill progress", async ({
     page,

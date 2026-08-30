@@ -63,6 +63,11 @@ export default async function InvestmentsPage() {
   const needsAttention = itemStatus.filter(
     (item) => item.outcome !== null || item.stale,
   );
+  const syncStatusLabel = (item: (typeof itemStatus)[number]) => {
+    if (item.outcome) return `Last sync: ${item.outcome}`;
+    if (item.stale) return "Stale - no recent holdings sync";
+    return "Up to date";
+  };
   const itemStatusContent = needsAttention.length > 0 ? (
     <Panel title="Sync status" eyebrow="Investments">
       <ul className="space-y-2 text-sm">
@@ -70,11 +75,7 @@ export default async function InvestmentsPage() {
           <li key={item.plaidItemId} className="flex items-center justify-between gap-2">
             <span className="min-w-0 truncate font-medium">{item.institutionName}</span>
             <span className="shrink-0 text-xs text-muted">
-              {item.outcome
-                ? `Last sync: ${item.outcome}`
-                : item.stale
-                  ? "Stale — no recent holdings sync"
-                  : "Up to date"}
+              {syncStatusLabel(item)}
             </span>
           </li>
         ))}

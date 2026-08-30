@@ -228,8 +228,14 @@ describe("loadInstitutionObservability", () => {
           snapshot_date: "2026-08-01",
           current_balance: 1000,
         },
+        {
+          user_id: "user-1",
+          account_id: "account-1",
+          snapshot_date: "2026-07-01",
+          current_balance: 800,
+        },
       ],
-      transactions: [
+    transactions: [
         { id: "txn-1", user_id: "user-1", account_id: "account-1", date: "2026-08-02", amount: -500 },
         { id: "txn-2", user_id: "user-1", account_id: "account-1", date: "2026-08-03", amount: 175 },
       ],

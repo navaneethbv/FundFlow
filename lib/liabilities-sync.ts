@@ -65,7 +65,8 @@ export async function syncCreditCardLiabilities(
   const { data: itemAccounts, error: accountsError } = await supabase
     .from("accounts")
     .select("id, plaid_account_id")
-    .eq("plaid_item_id", item.id);
+    .eq("plaid_item_id", item.id)
+    .eq("user_id", item.user_id);
   if (accountsError) throw accountsError;
   const accountIdMap = new Map<string, string>(
     (itemAccounts ?? []).map((account) => [
@@ -83,7 +84,7 @@ export async function syncCreditCardLiabilities(
         account_id: accountDbId,
         statement_balance: liability.last_statement_balance ?? null,
         minimum_payment: liability.minimum_payment_amount ?? null,
-        due_date: billDate(liability.last_payment_date),
+        due_date: billDate(liability.next_payment_due_date),
         payment_account_id: null,
         sync_timestamp: new Date().toISOString(),
       };

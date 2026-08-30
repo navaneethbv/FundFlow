@@ -278,7 +278,7 @@ export async function loadInvestmentSyncStatus(
     const job = jobsByItem.get(item.id as string);
     const lastSuccessAt =
       job?.status === "done" && !job.last_error ? job.updated_at : null;
-    const successTimestamp = lastSuccessAt ? Date.parse(lastSuccessAt) : NaN;
+    const successTimestamp = lastSuccessAt ? Date.parse(lastSuccessAt) : Number.NaN;
     return {
       plaidItemId: item.id as string,
       institutionName: (item.institution_name as string | null) ?? "Bank",

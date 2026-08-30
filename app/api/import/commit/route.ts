@@ -251,29 +251,67 @@ async function persistCommit(
 ): Promise<void> {
   const { sourceAccounts, mappingBySource, dbRows, rowIds, batchId, userId } = params;
 
-  if (sourceAccounts.length > 0) {
-    const mappingRows = sourceAccounts.map((sourceAccount) => {
-      const target = mappingBySource.get(sourceAccount)!;
-      return {
-        user_id: userId,
-        source_account: sourceAccount,
-        account_id: target.accountId ?? null,
-        manual_account_id: target.manualAccountId ?? null,
-      };
-    });
+  await persistSourceAccountMappings(service, sourceAccounts, mappingBySource, userId);
+  await persistTransactions(service, dbRows);
+  await persistTransactionAnnotations(service, dbRows, userId);
+
+  if (rowIds.length > 0) {
     const { error } = await service
-      .from("import_source_account_mappings")
-      .upsert(mappingRows, { onConflict: "user_id,source_account" });
+      .from("import_review_rows")
+      .update({ status: "committed" })
+      .eq("user_id", userId)
+      .in("id", rowIds);
     if (error) throw error;
   }
 
+  const { error: batchError } = await service
+    .from("import_review_batches")
+    .update({ status: "committed" })
+    .eq("user_id", userId)
+    .eq("id", batchId);
+  if (batchError) throw batchError;
+}
+
+async function persistSourceAccountMappings(
+  service: ReturnType<typeof createServiceClient>,
+  sourceAccounts: string[],
+  mappingBySource: Map<string, ImportTarget>,
+  userId: string,
+): Promise<void> {
+  if (sourceAccounts.length === 0) return;
+
+  const mappingRows = sourceAccounts.map((sourceAccount) => {
+    const target = mappingBySource.get(sourceAccount)!;
+    return {
+      user_id: userId,
+      source_account: sourceAccount,
+      account_id: target.accountId ?? null,
+      manual_account_id: target.manualAccountId ?? null,
+    };
+  });
+  const { error } = await service
+    .from("import_source_account_mappings")
+    .upsert(mappingRows, { onConflict: "user_id,source_account" });
+  if (error) throw error;
+}
+
+async function persistTransactions(
+  service: ReturnType<typeof createServiceClient>,
+  dbRows: ReturnType<typeof buildCommitRows>,
+): Promise<void> {
   for (let i = 0; i < dbRows.length; i += UPSERT_CHUNK) {
     const { error } = await service
       .from("transactions")
       .upsert(dbRows.slice(i, i + UPSERT_CHUNK), { onConflict: "plaid_transaction_id" });
     if (error) throw error;
   }
+}
 
+async function persistTransactionAnnotations(
+  service: ReturnType<typeof createServiceClient>,
+  dbRows: ReturnType<typeof buildCommitRows>,
+  userId: string,
+): Promise<void> {
   // Persist Monarch notes/tags as annotations, scoped to the owner. Only the
   // note/tags columns are written, so an existing display_category or
   // cash_flow_classification override is never touched by a re-import.
@@ -302,22 +340,6 @@ async function persistCommit(
       if (error) throw error;
     }
   }
-
-  if (rowIds.length > 0) {
-    const { error } = await service
-      .from("import_review_rows")
-      .update({ status: "committed" })
-      .eq("user_id", userId)
-      .in("id", rowIds);
-    if (error) throw error;
-  }
-
-  const { error: batchError } = await service
-    .from("import_review_batches")
-    .update({ status: "committed" })
-    .eq("user_id", userId)
-    .eq("id", batchId);
-  if (batchError) throw batchError;
 }
 
 export async function POST(request: NextRequest) {

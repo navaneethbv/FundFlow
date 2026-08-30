@@ -46,6 +46,9 @@ jobs:
           # unsuitable, and that endpoint rejects the analysis token with a 403.
           # The bundle ships a JRE (and the runner has none), so skip
           # provisioning and let the scanner use the bundled JRE.
-          args: "-Dsonar.scanner.skipJreProvisioning=true"
+          args: >-
+            -Dsonar.scanner.skipJreProvisioning=true
+            -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
+            -Dsonar.organization=${{ github.repository_owner }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

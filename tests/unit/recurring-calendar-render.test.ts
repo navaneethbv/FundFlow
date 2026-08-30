@@ -35,7 +35,7 @@ describe("buildMonthGrid", () => {
     // adjacent months and are flagged inMonth=false.
     const inMonth = grid.flat().filter((cell) => cell.inMonth);
     expect(inMonth.every((cell) => cell.date.startsWith("2026-08-"))).toBe(true);
-    expect(inMonth.length).toBe(31);
+    expect(inMonth).toHaveLength(31);
   });
 });
 

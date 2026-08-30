@@ -31,6 +31,12 @@ describe("credit-card bill bucket", () => {
     expect(buildCreditCardBucket([], "2026-08")).toEqual({ paid: 0, remaining: 0 });
   });
 
+  it("does not assign a bill without a due date to an arbitrary month", () => {
+    expect(buildCreditCardBucket([
+      { accountId: "acc-3", statementBalance: 50, minimumPayment: 10, dueDate: null },
+    ], "2026-08")).toEqual({ paid: 0, remaining: 0 });
+  });
+
   it("does not count the bill payment as spending", () => {
     // The bucket is separate from expenses; a bill payment is a transfer.
     const bucket = buildCreditCardBucket(bills, "2026-08");

@@ -55,18 +55,14 @@ create policy "credit_card_bills_update_own" on public.credit_card_bills
       select 1 from public.accounts a
       where a.id = credit_card_bills.account_id and a.user_id = (select auth.uid())
     )
+    and (
+      payment_account_id is null
+      or exists (
+        select 1 from public.accounts p
+        where p.id = credit_card_bills.payment_account_id and p.user_id = (select auth.uid())
+      )
+    )
   );
 
 create policy "credit_card_bills_delete_own" on public.credit_card_bills
   for delete to authenticated using (user_id = (select auth.uid()));
-
--- A bill's payment account, when set, must also be the caller's own.
-create policy "credit_card_bills_payment_account_owns" on public.credit_card_bills
-  for update to authenticated
-  using (
-    payment_account_id is null
-    or exists (
-      select 1 from public.accounts p
-      where p.id = credit_card_bills.payment_account_id and p.user_id = (select auth.uid())
-    )
-  );

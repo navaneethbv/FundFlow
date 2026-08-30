@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Button from "@/components/ui/Button";
 import Panel from "@/components/ui/Panel";
+import { formatCurrency } from "@/lib/format";
 import type { BudgetImportPlan } from "@/lib/budget-import";
 import type { GoalImportPlan } from "@/lib/goal-import";
 
@@ -50,8 +51,8 @@ export default function MonarchConfigImportSection() {
       if (!json) throw new Error("Could not preview.");
       setPlan(json);
       const defaults: Record<string, string | undefined> = {};
-      for (const row of json.plan.rows as Array<{ category?: string; name?: string }>) {
-        defaults[row.category ?? row.name ?? ""] = "merge";
+      for (const row of json.plan.rows as Array<{ category?: string; name?: string; importedId?: string | null }>) {
+        defaults[row.importedId ?? row.category ?? row.name ?? ""] = "merge";
       }
       setDecisions(defaults);
     } catch (err) {
@@ -102,7 +103,7 @@ export default function MonarchConfigImportSection() {
                 setKind("budget");
               }}
             />
-            Budgets
+            <span>Budgets</span>
           </label>
           <label className="flex items-center gap-1.5 text-sm">
             <input
@@ -112,7 +113,7 @@ export default function MonarchConfigImportSection() {
                 setKind("goal");
               }}
             />
-            Goals
+            <span>Goals</span>
           </label>
         </div>
 
@@ -176,13 +177,26 @@ export default function MonarchConfigImportSection() {
                   {goalPlan.rows.map((row) => (
                     <li key={row.name} className="flex items-center justify-between gap-2">
                       <span className="min-w-0 truncate">{row.name}</span>
-                      <span className="text-xs text-muted">{row.goalType}</span>
+                      <span className="min-w-0 truncate text-xs text-muted">
+                        {row.goalType}
+                        {row.targetAmount !== null && ` · target ${formatCurrency(row.targetAmount)}`}
+                        {row.targetDate && ` · due ${row.targetDate}`}
+                        {row.linkedAccountName && ` · ${row.linkedAccountName}`}
+                        {row.useEntireBalance && " · whole balance"}
+                        {!row.useEntireBalance && row.allocationAmount !== null &&
+                          ` · allocate ${formatCurrency(row.allocationAmount)}`}
+                        {row.monthlyContribution !== null &&
+                          ` · ${formatCurrency(row.monthlyContribution)}/month`}
+                      </span>
                       <select
                         aria-label={`Decision for ${row.name}`}
-                        value={decisions[row.name] ?? "create"}
+                        value={decisions[row.importedId ?? row.name] ?? decisions[row.name] ?? "create"}
                         onChange={(e) => {
                           const val = e.target.value;
-                          setDecisions((cur) => ({ ...cur, [row.name]: val }));
+                          setDecisions((cur) => ({
+                            ...cur,
+                            [row.importedId ?? row.name]: val,
+                          }));
                         }}
                         className="rounded-field border border-panel-border bg-panel px-2 py-1 text-xs"
                       >

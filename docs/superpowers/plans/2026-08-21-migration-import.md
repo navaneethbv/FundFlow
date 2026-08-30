@@ -9,7 +9,7 @@
 
 **Tech Stack:** Next.js 16 App Router, React 19, TypeScript, Supabase Postgres, Vitest.
 
-**Spec:** `/Users/navaneethbv/Desktop/Projects/FundFlow/features.md` §6 ("Migration import from other personal finance apps").
+**Spec:** `features.md` §6 ("Migration import from other personal finance apps").
 
 ## Global Constraints
 

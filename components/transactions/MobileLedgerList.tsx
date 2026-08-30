@@ -84,7 +84,7 @@ export default function MobileLedgerList({
     <ul className="divide-y divide-panel-border">
       {rows.map((row, index) => {
         const prevRow = index > 0 ? rows[index - 1] : undefined;
-        const startsDay = grouped && (prevRow === undefined || prevRow.date !== row.date);
+        const startsDay = grouped && prevRow?.date !== row.date;
         const band = bands[index] ?? 0;
         const striped = band % 2 === 1;
         const group = dayGroups?.get(row.date);

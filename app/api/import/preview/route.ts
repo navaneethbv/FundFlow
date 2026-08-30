@@ -21,6 +21,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_ROWS = 20_000;
+const EXISTING_TRANSACTION_PAGE_SIZE = 1_000;
 
 const INVALID_MAPPING_ERROR =
   "Invalid column mapping. Map at least a date, description, and amount (or debit/credit).";
@@ -119,6 +120,11 @@ function emptyPreviewResponse(
   );
 }
 
+function transactionLabel(row: Record<string, unknown>): string {
+  const value = row.merchant_name ?? row.name;
+  return typeof value === "string" ? value : "";
+}
+
 async function resolveSourceAccountMappings(
   supabase: SupabaseClient,
   sourceAccounts: string[],
@@ -135,6 +141,34 @@ async function resolveSourceAccountMappings(
       ...(mapping.manual_account_id ? { manual_account_id: mapping.manual_account_id as string } : {}),
     }]),
   );
+}
+
+async function loadExistingTransactions(
+  supabase: SupabaseClient,
+): Promise<Array<Record<string, unknown>>> {
+  const rows: Array<Record<string, unknown>> = [];
+  for (let page = 0; page < MAX_ROWS; page += EXISTING_TRANSACTION_PAGE_SIZE) {
+    const query = supabase
+      .from("transactions")
+      .select("date, amount, merchant_name, name, pfc_primary") as unknown as {
+        range?: (from: number, to: number) => unknown;
+        limit: (count: number) => unknown;
+      };
+    // The fallback keeps lightweight adapters compatible while the real
+    // Supabase builder uses explicit pages to avoid the 1,000-row cap.
+    const pageQuery = typeof query.range === "function"
+      ? query.range(page, page + EXISTING_TRANSACTION_PAGE_SIZE - 1)
+      : query.limit(EXISTING_TRANSACTION_PAGE_SIZE);
+    const { data, error } = await pageQuery as {
+      data?: unknown;
+      error?: unknown;
+    };
+    if (error) throw error;
+    const pageRows = (data ?? []) as Array<Record<string, unknown>>;
+    rows.push(...pageRows);
+    if (pageRows.length < EXISTING_TRANSACTION_PAGE_SIZE) break;
+  }
+  return rows;
 }
 
 export async function POST(request: NextRequest) {
@@ -172,18 +206,15 @@ export async function POST(request: NextRequest) {
     }
     if (rows.length === 0) return emptyPreviewResponse(text, format, columns, errors, parsed.requiresDateOrder);
 
-    const { data: existing } = await supabase
-      .from("transactions")
-      .select("date, amount, merchant_name, name, pfc_primary")
-      .limit(20_000);
+    const existing = await loadExistingTransactions(supabase);
     const existingFingerprints = new Set(
-      (existing ?? []).map((row) => `${row.date}|${Number(row.amount).toFixed(2)}|${row.merchant_name ?? row.name ?? ""}`),
+      (existing ?? []).map((row) => `${row.date}|${Number(row.amount).toFixed(2)}|${transactionLabel(row)}`),
     );
     // Plaid-vs-Monarch classification conflicts: keyed by the same fingerprint
     // so a matching existing transaction surfaces a category-conflict flag.
     const existingCategoryByFingerprint = new Map<string, string>(
       (existing ?? []).map((row) => [
-        `${row.date}|${Number(row.amount).toFixed(2)}|${row.merchant_name ?? row.name ?? ""}`,
+        `${row.date}|${Number(row.amount).toFixed(2)}|${transactionLabel(row)}`,
         (row.pfc_primary as string | null) ?? "",
       ]),
     );

@@ -298,7 +298,7 @@ export interface RepairBackfillResult {
  */
 export async function backfillItemTransactions(
   item: PlaidItemRow,
-  options: RepairBackfillOptions = { maxPages: REPAIR_MAX_PAGES },
+  options?: RepairBackfillOptions,
 ): Promise<RepairBackfillResult> {
   const supabase = createServiceClient();
   const plaid = getPlaidClient();
@@ -317,8 +317,9 @@ export async function backfillItemTransactions(
   let latestAccounts: AccountBase[] = [];
   let pagesCompleted = 0;
   let hasMore = true;
+  const maxPages = options?.maxPages ?? REPAIR_MAX_PAGES;
 
-  while (hasMore && pagesCompleted < options.maxPages) {
+  while (hasMore && pagesCompleted < maxPages) {
     const response = await plaid.transactionsSync({
       access_token: accessToken,
       cursor,
@@ -387,7 +388,7 @@ export async function backfillItemTransactions(
 
   return {
     pagesCompleted,
-    maxPages: options.maxPages,
+    maxPages,
     completed,
     added: added.length,
     modified: modified.length,

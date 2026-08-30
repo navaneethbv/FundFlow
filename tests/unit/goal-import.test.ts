@@ -44,6 +44,8 @@ describe("parseMonarchGoals", () => {
       targetAmount: 15000,
       targetDate: "2027-12-31",
       linkedAccountName: "Checking",
+      allocationAmount: null,
+      useEntireBalance: false,
       monthlyContribution: 500,
     });
   });
@@ -52,6 +54,28 @@ describe("parseMonarchGoals", () => {
     const { rows, errors } = parseMonarchGoals("nope");
     expect(rows).toEqual([]);
     expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it("parses fixed and whole-account allocations without inventing a mode", () => {
+    const result = parseMonarchGoals(JSON.stringify({
+      goals: [
+        {
+          name: "Trip",
+          target_amount: 5000,
+          account_name: "Checking",
+          allocation_amount: 1200,
+        },
+        {
+          name: "Emergency Fund",
+          target_amount: 15000,
+          allocation: { account_name: "Savings", use_entire_balance: true },
+        },
+      ],
+    }));
+    expect(result.rows).toMatchObject([
+      { linkedAccountName: "Checking", allocationAmount: 1200, useEntireBalance: false },
+      { linkedAccountName: "Savings", allocationAmount: null, useEntireBalance: true },
+    ]);
   });
 });
 

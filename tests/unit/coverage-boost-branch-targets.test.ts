@@ -93,7 +93,7 @@ describe("Coverage Boost for High Target Coverage (>95%)", () => {
     ];
 
     const history = buildWeeklyDeliveryHistory(rows, new Date("2026-08-10T12:00:00Z"), "UTC", 15);
-    expect(history.length).toBe(15);
+    expect(history).toHaveLength(15);
     expect(history[0]?.reason).toBeNull();
     expect(history[1]?.reason).toBe("No run recorded");
     expect(history[2]?.reason).toBe("Skipped");
@@ -164,7 +164,7 @@ describe("Coverage Boost for High Target Coverage (>95%)", () => {
       "2026-08",
     );
     expect(bucket.paid).toBe(0);
-    expect(bucket.remaining).toBe(250.22);
+    expect(bucket.remaining).toBe(200.22);
   });
 
   it("covers transaction-quality tie-breakers and duplicate candidates", () => {
@@ -179,7 +179,7 @@ describe("Coverage Boost for High Target Coverage (>95%)", () => {
       ],
       5,
     );
-    expect(refunds.length).toBe(1);
+    expect(refunds).toHaveLength(1);
     expect(refunds[0]?.chargeId).toBe("c1");
 
     // duplicateCandidate branches
@@ -246,7 +246,7 @@ describe("Coverage Boost for High Target Coverage (>95%)", () => {
     const first2: DuplicateTransaction = { id: "3", accountId: "a", amount: 20, merchant: "A", date: "2026-08-01", plaidItemId: null, accountName: "A" };
     const second2: DuplicateTransaction = { id: "4", accountId: "b", amount: 20, merchant: "A", date: "2026-08-01", plaidItemId: null, accountName: "B" };
     const pairs = detectDuplicatePairs([first1, second1, first2, second2], []);
-    expect(pairs.length).toBe(2);
+    expect(pairs).toHaveLength(2);
 
     expect(duplicateSubjectId("b", "a")).toBe("a:b");
 
@@ -317,7 +317,7 @@ describe("Coverage Boost for High Target Coverage (>95%)", () => {
     });
     expect(reportZeroSpend.totalSpend).toBe(0);
     expect(reportZeroSpend.categories.every((c) => c.share === 0)).toBe(true);
-    expect(reportZeroSpend.cards.length).toBe(0);
+    expect(reportZeroSpend.cards).toHaveLength(0);
   });
 
   it("covers stripTrailingAccountMask and liabilities edge cases", async () => {
@@ -329,5 +329,3 @@ describe("Coverage Boost for High Target Coverage (>95%)", () => {
     expect(aprsDisabled).toBe(0);
   });
 });
-
-

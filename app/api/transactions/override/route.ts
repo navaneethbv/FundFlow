@@ -26,6 +26,59 @@ function providerGroupKey(pfcPrimary: string | null, pfcDetailed: string | null)
   return detailed ?? null;
 }
 
+function hasOverrideField(body: OverrideBody | null, field: keyof OverrideBody): boolean {
+  return Object.hasOwn(body ?? {}, field);
+}
+
+function parseDisplayCategory(
+  body: OverrideBody | null,
+  present: boolean,
+): string | null | undefined {
+  if (!present) return undefined;
+  if (typeof body?.display_category !== "string") return null;
+  const trimmed = body.display_category.trim();
+  return trimmed ? trimmed.slice(0, 100) : null;
+}
+
+function parseCashFlowClassification(
+  body: OverrideBody | null,
+  present: boolean,
+): CashFlowClassification | null | undefined {
+  if (!present) return undefined;
+  return body?.cash_flow_classification === "expense" || body?.cash_flow_classification === "income"
+    ? body.cash_flow_classification
+    : null;
+}
+
+function needsTransferConfirmation(
+  classification: CashFlowClassification | null | undefined,
+  txn: { pfc_primary: string | null; pfc_detailed: string | null },
+  confirmed: unknown,
+): boolean {
+  if (!classification) return false;
+  const groupKey = providerGroupKey(txn.pfc_primary, txn.pfc_detailed);
+  return Boolean(groupKey && TRANSFER_GROUPS.has(groupKey) && confirmed !== true);
+}
+
+function nextOverrideValues(
+  displayCategory: string | null | undefined,
+  cashFlowClassification: CashFlowClassification | null | undefined,
+  existingOverride: { display_category: string | null; cash_flow_classification: CashFlowClassification | null } | null,
+): { displayCategory: string | null; cashFlowClassification: CashFlowClassification | null } {
+  let nextDisplayCategory = displayCategory;
+  if (nextDisplayCategory === undefined) {
+    nextDisplayCategory = existingOverride?.display_category ?? null;
+  }
+  let nextCashFlowClassification = cashFlowClassification;
+  if (nextCashFlowClassification === undefined) {
+    nextCashFlowClassification = existingOverride?.cash_flow_classification ?? null;
+  }
+  return {
+    displayCategory: nextDisplayCategory,
+    cashFlowClassification: nextCashFlowClassification,
+  };
+}
+
 /**
  * Set (POST) or clear (DELETE) a transaction-level classification override.
  *
@@ -46,16 +99,11 @@ export async function POST(request: NextRequest) {
     if (typeof transactionId !== "string" || !UUID_REGEX.test(transactionId)) {
       return badRequest("Invalid transaction_id");
     }
-    const displayCategory =
-      typeof body?.display_category === "string" && body.display_category.trim()
-        ? body.display_category.trim().slice(0, 100)
-        : null;
-    const classification = body?.cash_flow_classification;
-    const cashFlowClassification: CashFlowClassification | null =
-      classification === "expense" || classification === "income"
-        ? classification
-        : null;
-    if (!displayCategory && !cashFlowClassification) {
+    const hasDisplayCategory = hasOverrideField(body, "display_category");
+    const hasClassification = hasOverrideField(body, "cash_flow_classification");
+    const displayCategory = parseDisplayCategory(body, hasDisplayCategory);
+    const cashFlowClassification = parseCashFlowClassification(body, hasClassification);
+    if (displayCategory === undefined && cashFlowClassification === undefined) {
       return badRequest("Provide a display_category or cash_flow_classification");
     }
 
@@ -71,26 +119,24 @@ export async function POST(request: NextRequest) {
 
     // Deliberate-confirmation gate: turning a provider transfer or loan
     // payment into spending/income must be confirmed explicitly.
-    if (cashFlowClassification) {
-      const groupKey = providerGroupKey(
-        txn.pfc_primary as string | null,
-        txn.pfc_detailed as string | null,
+    if (needsTransferConfirmation(cashFlowClassification, {
+      pfc_primary: txn.pfc_primary as string | null,
+      pfc_detailed: txn.pfc_detailed as string | null,
+    }, body?.confirmed)) {
+      return badRequest(
+        "This transaction is currently a transfer or loan payment. Confirm that you want it counted as cash flow before reclassifying it.",
       );
-      if (groupKey && TRANSFER_GROUPS.has(groupKey) && body?.confirmed !== true) {
-        return badRequest(
-          "This transaction is currently a transfer or loan payment. Confirm that you want it counted as cash flow before reclassifying it.",
-        );
-      }
     }
 
-    const wasOverride = await annotationHasOverride(supabase, user.id, transactionId);
+    const existingOverride = await loadExistingOverride(supabase, user.id, transactionId);
+    const next = nextOverrideValues(displayCategory, cashFlowClassification, existingOverride);
 
     const { error } = await supabase.from("transaction_annotations").upsert(
       {
         user_id: user.id,
         transaction_id: transactionId,
-        display_category: displayCategory,
-        cash_flow_classification: cashFlowClassification,
+        display_category: next.displayCategory,
+        cash_flow_classification: next.cashFlowClassification,
       },
       { onConflict: "user_id,transaction_id" },
     );
@@ -98,11 +144,11 @@ export async function POST(request: NextRequest) {
 
     await writeAudit({
       userId: user.id,
-      action: wasOverride ? "transaction_override_updated" : "transaction_override_created",
+      action: existingOverride ? "transaction_override_updated" : "transaction_override_created",
       metadata: {
         transaction_id: transactionId,
-        display_category: displayCategory,
-        cash_flow_classification: cashFlowClassification,
+        display_category: next.displayCategory,
+        cash_flow_classification: next.cashFlowClassification,
         confirmed: Boolean(body?.confirmed),
       },
       ip: getClientIp(request),
@@ -114,11 +160,11 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function annotationHasOverride(
+async function loadExistingOverride(
   supabase: SupabaseClient,
   userId: string,
   transactionId: string,
-): Promise<boolean> {
+): Promise<{ display_category: string | null; cash_flow_classification: CashFlowClassification | null } | null> {
   const { data } = await supabase
     .from("transaction_annotations")
     .select("display_category, cash_flow_classification")
@@ -126,9 +172,13 @@ async function annotationHasOverride(
     .eq("transaction_id", transactionId)
     .maybeSingle();
   const row = data as
-    | { display_category?: string | null; cash_flow_classification?: string | null }
+    | { display_category?: string | null; cash_flow_classification?: CashFlowClassification | null }
     | null;
-  return Boolean(row?.display_category || row?.cash_flow_classification);
+  if (!row) return null;
+  return {
+    display_category: row.display_category ?? null,
+    cash_flow_classification: row.cash_flow_classification ?? null,
+  };
 }
 
 /**

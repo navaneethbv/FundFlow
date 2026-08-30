@@ -17,6 +17,8 @@ export interface GoalImportRow {
   targetAmount: number | null;
   targetDate: string | null;
   linkedAccountName: string | null;
+  allocationAmount: number | null;
+  useEntireBalance: boolean;
   monthlyContribution: number | null;
 }
 
@@ -57,6 +59,61 @@ function toDate(value: unknown): string | null {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
 }
 
+function readGoalEntries(parsed: unknown): Array<Record<string, unknown>> | null {
+  if (Array.isArray(parsed)) return parsed as Array<Record<string, unknown>>;
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const goals = (parsed as { goals?: unknown }).goals;
+  return Array.isArray(goals) ? goals as Array<Record<string, unknown>> : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseGoalAllocation(goal: Record<string, unknown>): {
+  accountName: string | null;
+  allocationAmount: number | null;
+  useEntireBalance: boolean;
+} {
+  const allocation = isRecord(goal.allocation) ? goal.allocation : null;
+  const accountValue = goal.account_name ?? allocation?.account_name;
+  const accountName = typeof accountValue === "string" ? accountValue.trim() : "";
+  const amountValue =
+    goal.allocation_amount ??
+    goal.allocated_amount ??
+    allocation?.amount ??
+    allocation?.allocated_amount;
+  const useEntireBalance =
+    goal.use_entire_balance === true || allocation?.use_entire_balance === true;
+  return {
+    accountName: accountName ? accountName.slice(0, 120) : null,
+    allocationAmount: useEntireBalance ? null : toAmount(amountValue),
+    useEntireBalance,
+  };
+}
+
+function parseGoalEntry(goal: Record<string, unknown>): GoalImportRow | null {
+  const name = typeof goal.name === "string" ? goal.name.trim() : "";
+  if (!name || name.length > 120) return null;
+  const type = goal.type === "pay_down" ? "pay_down" : "save_up";
+  const importedId =
+    typeof goal.id === "string" && goal.id.length > 0 && goal.id.length <= 200
+      ? goal.id
+      : null;
+  const allocation = parseGoalAllocation(goal);
+  return {
+    importedId,
+    name,
+    goalType: type,
+    targetAmount: toAmount(goal.target_amount),
+    targetDate: toDate(goal.target_date),
+    linkedAccountName: allocation.accountName,
+    allocationAmount: allocation.allocationAmount,
+    useEntireBalance: allocation.useEntireBalance,
+    monthlyContribution: toAmount(goal.monthly_contribution),
+  };
+}
+
 /**
  * Parse a Monarch goals configuration export: `{ goals: [...] }` with id, name,
  * type (save_up/pay_down), target amount, target date, account, and monthly
@@ -69,11 +126,7 @@ export function parseMonarchGoals(text: string): GoalImportResult {
   } catch {
     return { rows: [], errors: ["Could not parse the goals file as JSON."] };
   }
-  const goals = Array.isArray(parsed)
-    ? (parsed as Array<Record<string, unknown>>)
-    : Array.isArray((parsed as { goals?: unknown })?.goals)
-      ? ((parsed as { goals: unknown }).goals as Array<Record<string, unknown>>)
-      : null;
+  const goals = readGoalEntries(parsed);
   if (!goals) {
     return { rows: [], errors: ["The goals file has no goals to import."] };
   }
@@ -81,27 +134,12 @@ export function parseMonarchGoals(text: string): GoalImportResult {
   const rows: GoalImportRow[] = [];
   const errors: string[] = [];
   for (const goal of goals) {
-    const name = typeof goal.name === "string" ? goal.name.trim() : "";
-    if (!name || name.length > 120) {
+    const row = parseGoalEntry(goal);
+    if (!row) {
       errors.push("Skipped a goal with no usable name.");
       continue;
     }
-    const type = goal.type === "pay_down" ? "pay_down" : "save_up";
-    rows.push({
-      importedId:
-        typeof goal.id === "string" && goal.id.length > 0 && goal.id.length <= 200
-          ? goal.id
-          : null,
-      name,
-      goalType: type,
-      targetAmount: toAmount(goal.target_amount),
-      targetDate: toDate(goal.target_date),
-      linkedAccountName:
-        typeof goal.account_name === "string" && goal.account_name.trim()
-          ? goal.account_name.trim().slice(0, 120)
-          : null,
-      monthlyContribution: toAmount(goal.monthly_contribution),
-    });
+    rows.push(row);
   }
   return { rows, errors };
 }

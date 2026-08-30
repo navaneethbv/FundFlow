@@ -182,9 +182,38 @@ describe("transaction override route", () => {
       }),
     );
     expect(res.status).toBe(200);
+    const written = supabase.writtenTo("transaction_annotations") as Record<string, unknown>;
+    expect(written).toMatchObject({
+      display_category: "CLOTHING",
+      cash_flow_classification: "expense",
+    });
     expect(mockWriteAudit).toHaveBeenCalledWith(
       expect.objectContaining({ action: "transaction_override_updated" }),
     );
+  });
+
+  it("preserves the other override field when updating only one field", async () => {
+    const supabase = seeded({
+      transactions: {
+        data: {
+          id: "11111111-1111-4111-8111-111111111111",
+          pfc_primary: "SHOPS",
+          pfc_detailed: "SHOPS_JEWELRY",
+        },
+      },
+      transaction_annotations: {
+        data: { display_category: "SHOPPING", cash_flow_classification: "expense" },
+      },
+    });
+    const res = await POST(jsonRequest({
+      transaction_id: "11111111-1111-4111-8111-111111111111",
+      cash_flow_classification: "income",
+    }));
+    expect(res.status).toBe(200);
+    expect(supabase.writtenTo("transaction_annotations")).toMatchObject({
+      display_category: "SHOPPING",
+      cash_flow_classification: "income",
+    });
   });
 
   it("does not need confirmation for a normal expense recategorization", async () => {

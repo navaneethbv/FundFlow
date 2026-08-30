@@ -20,6 +20,8 @@ describe("credit card bill schema", () => {
 
   it("keeps the bill table owner-scoped", () => {
     expect(migrationSql).toContain('"credit_card_bills_select_own"');
-    expect(migrationSql).toContain("credit_card_bills_payment_account_owns");
+    expect(migrationSql).toContain("credit_card_bills_update_own");
+    expect(migrationSql).toMatch(/credit_card_bills_update_own[\s\S]*payment_account_id is null/);
+    expect(migrationSql).not.toContain("credit_card_bills_payment_account_owns");
   });
 });

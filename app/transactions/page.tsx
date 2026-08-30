@@ -404,25 +404,25 @@ function buildAccountLookups(
  * filters to the caller's own so their categories are never rewritten by
  * someone else's.
  */
+type CashFlowClassification = "expense" | "income" | null;
+type TransactionOverride = {
+  displayCategory: string | null;
+  cashFlowClassification: CashFlowClassification;
+};
+
 async function loadLedgerRowDetails(
   supabase: TransactionsSupabase,
   ownerId: string,
   txnIds: string[],
 ): Promise<{
   annById: Map<string, { note: string | null; tags: string[] }>;
-  overridesById: Map<
-    string,
-    { displayCategory: string | null; cashFlowClassification: "expense" | "income" | null }
-  >;
+  overridesById: Map<string, TransactionOverride>;
   splitsById: Map<string, Array<{ category: string; amount: number }>>;
   excludedDuplicateIds: Set<string>;
   failed: boolean;
 }> {
   const annById = new Map<string, { note: string | null; tags: string[] }>();
-  const overridesById = new Map<
-    string,
-    { displayCategory: string | null; cashFlowClassification: "expense" | "income" | null }
-  >();
+  const overridesById = new Map<string, TransactionOverride>();
   const splitsById = new Map<string, Array<{ category: string; amount: number }>>();
   if (txnIds.length === 0) {
     return { annById, overridesById, splitsById, excludedDuplicateIds: new Set<string>(), failed: false };
@@ -452,9 +452,7 @@ async function loadLedgerRowDetails(
     overridesById.set(a.transaction_id as string, {
       displayCategory: (a.display_category as string | null) ?? null,
       cashFlowClassification:
-        classification === "expense" || classification === "income"
-          ? (classification as "expense" | "income")
-          : null,
+        classification === "expense" || classification === "income" ? classification : null,
     });
   }
   for (const s of splitsResult.data ?? []) {

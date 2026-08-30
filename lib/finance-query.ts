@@ -254,8 +254,10 @@ function collectSplits(
 interface OverrideRow {
   transaction_id: string;
   display_category: string | null;
-  cash_flow_classification: "expense" | "income" | null;
+  cash_flow_classification: CashFlowClassification;
 }
+
+type CashFlowClassification = "expense" | "income" | null;
 
 type OverrideChunkResult = { data: OverrideRow[] | null; error: { code?: string } | null };
 
@@ -285,12 +287,12 @@ function collectOverrides(
 ): Array<{
   transactionId: string;
   displayCategory: string | null;
-  cashFlowClassification: "expense" | "income" | null;
+  cashFlowClassification: CashFlowClassification;
 }> {
   const overrides: Array<{
     transactionId: string;
     displayCategory: string | null;
-    cashFlowClassification: "expense" | "income" | null;
+    cashFlowClassification: CashFlowClassification;
   }> = [];
   for (const chunk of chunks) {
     for (const row of chunk.data ?? []) {

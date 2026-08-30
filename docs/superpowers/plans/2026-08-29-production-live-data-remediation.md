@@ -3,7 +3,7 @@
 > **For implementers:** Execute this plan task by task with tests written before each production-code change.
 > Keep the checklist current as work is completed.
 
-**Goal:** Remove the eight user-visible inconsistencies confirmed in Production with `navaneethbv@gmail.com`, diagnose and close the weekly-report history gap, and prove that every affected surface agrees on the same financial facts.
+**Goal:** Remove the eight user-visible inconsistencies confirmed in Production with a real authenticated account, diagnose and close the weekly-report history gap, and prove that every affected surface agrees on the same financial facts.
 
 **Architecture:** Fix each inconsistency at its shared domain boundary, then make the affected pages consume that canonical result.
 Balance signs, savings rates, goal funding, investment coverage, date windows, and refund chronology must each have one explicit contract.
@@ -13,7 +13,7 @@ UI components may format or label those results, but they must not reimplement t
 
 **Production evidence:** `qa-shots/production-2026-08-29/PRODUCTION-LIVE-DATA-QA.md` and its gitignored screenshots.
 
-**Current baseline:** Production was reviewed on 2026-08-29 at `https://fund-flow-swart.vercel.app` using existing data for `navaneethbv@gmail.com` without mutating financial records.
+**Current baseline:** Production was reviewed on 2026-08-29 at `https://fund-flow-swart.vercel.app` using existing data for a real authenticated account without mutating financial records.
 
 ## Success criteria
 
@@ -715,7 +715,7 @@ npx playwright test \
 - [ ] Merge only after the exact PR head is approved and green.
 - [ ] Confirm the Vercel Production deployment SHA matches the merged commit.
 
-### Read-only Production acceptance with `navaneethbv@gmail.com`
+### Read-only Production acceptance with a real authenticated account
 
 - [ ] Accounts shows the overpaid Freedom card as a credit, liabilities of `$2,125.30`, and net worth of `$55,969.41`.
 - [ ] Dashboard Monitor and Dashboard Wealth show the same `$55,969.41` net worth.

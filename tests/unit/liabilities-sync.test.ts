@@ -40,18 +40,25 @@ const item: PlaidItemRow = {
 };
 
 function billAccountStub() {
-  const eq = vi.fn().mockResolvedValue({
-    data: [{ id: "db-credit-1", plaid_account_id: "plaid-credit-1" }],
-    error: null,
-  });
-  const select = vi.fn().mockReturnValue({ eq });
+  const accountQuery = {
+    eq: vi.fn().mockImplementation((column: string) => {
+      if (column === "user_id") {
+        return Promise.resolve({
+          data: [{ id: "db-credit-1", plaid_account_id: "plaid-credit-1" }],
+          error: null,
+        });
+      }
+      return accountQuery;
+    }),
+  };
+  const select = vi.fn().mockReturnValue(accountQuery);
   const upsert = vi.fn().mockResolvedValue({ error: null });
   mockServiceClient.from.mockImplementation((table: string) => {
     if (table === "accounts") return { select };
     if (table === "credit_card_bills") return { upsert };
     throw new Error(`Unexpected table ${table}`);
   });
-  return { upsert, select };
+  return { upsert, select, accountQuery };
 }
 
 describe("syncCreditCardLiabilities", () => {
@@ -60,7 +67,7 @@ describe("syncCreditCardLiabilities", () => {
   });
 
   it("upserts statement balance, minimum payment, and due date, scoped to the owner", async () => {
-    const { upsert, select } = billAccountStub();
+    const { upsert, select, accountQuery } = billAccountStub();
     mockLiabilitiesGet.mockResolvedValue({
       data: {
         accounts: [{ account_id: "plaid-credit-1" }],
@@ -90,6 +97,8 @@ describe("syncCreditCardLiabilities", () => {
     expect(payload[0].due_date).toBeNull();
     expect(payload[0].sync_timestamp).toBeTruthy();
     expect(select.mock.calls[0]?.[0]).toBe("id, plaid_account_id");
+    expect(accountQuery.eq).toHaveBeenNthCalledWith(1, "plaid_item_id", "item-db-1");
+    expect(accountQuery.eq).toHaveBeenNthCalledWith(2, "user_id", "user-1");
   });
 
   it("maps the due date and treats a missing credit product distinctly", async () => {
@@ -102,7 +111,8 @@ describe("syncCreditCardLiabilities", () => {
             {
               account_id: "plaid-credit-1",
               last_statement_balance: 800,
-              last_payment_date: "2026-08-25",
+              last_payment_date: "2026-07-25",
+              next_payment_due_date: "2026-08-25",
               last_payment_amount: 800,
               minimum_payment_amount: 20,
               is_overdue: false,
@@ -115,6 +125,7 @@ describe("syncCreditCardLiabilities", () => {
     expect(result.outcome).toBe("synced");
     const payload = upsert.mock.calls[0]?.[0] as Array<Record<string, unknown>>;
     expect(payload[0].statement_balance).toBe(800);
+    expect(payload[0].due_date).toBe("2026-08-25");
   });
 
   it("reports product_not_ready distinctly without touching the database", async () => {

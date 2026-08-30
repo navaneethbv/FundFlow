@@ -1,10 +1,10 @@
 "use client";
 
-import { useRef } from "react";
 import { formatCurrency, titleCase } from "@/lib/format";
 import type { RecurringOccurrence } from "@/lib/recurring-page";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+type CalendarArrowKey = "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown";
 
 export interface CalendarCell {
   day: number;
@@ -14,6 +14,19 @@ export interface CalendarCell {
 
 function dateKey(date: Date): string {
   return date.toISOString().slice(0, 10);
+}
+
+function dayDelta(key: CalendarArrowKey): number {
+  switch (key) {
+    case "ArrowLeft":
+      return -1;
+    case "ArrowRight":
+      return 1;
+    case "ArrowUp":
+      return -7;
+    case "ArrowDown":
+      return 7;
+  }
 }
 
 /** Sunday-first month grid; every cell is a real date in `month`. */
@@ -51,8 +64,7 @@ export function moveDayFocus(
   firstOfMonth: Date,
   lastOfMonth: Date,
 ): number {
-  const delta =
-    key === "ArrowLeft" ? -1 : key === "ArrowRight" ? 1 : key === "ArrowUp" ? -7 : 7;
+  const delta = dayDelta(key);
   const next = day + delta;
   return Math.max(firstOfMonth.getUTCDate(), Math.min(lastOfMonth.getUTCDate(), next));
 }
@@ -91,17 +103,18 @@ export default function RecurringCalendar({
   const focusDay = today.startsWith(month) ? Number(today.slice(8)) : 1;
   const firstOfMonth = new Date(`${month}-01T00:00:00Z`);
   const lastOfMonth = new Date(`${month}-${grid.flat().at(-1)?.day ?? 28}T00:00:00Z`);
-  const cellRefs = useRef<Record<number, HTMLButtonElement | null>>({});
-
   function handleKeyDown(
     day: number,
     event: React.KeyboardEvent<HTMLButtonElement>,
   ) {
-    const key = event.key as "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown";
+    const key = event.key as CalendarArrowKey;
     if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(key)) return;
     event.preventDefault();
     const next = moveDayFocus(day, key, firstOfMonth, lastOfMonth);
-    cellRefs.current[next]?.focus();
+    event.currentTarget
+      .closest('[role="grid"]')
+      ?.querySelector<HTMLButtonElement>(`button[data-calendar-day="${next}"]`)
+      ?.focus();
   }
 
   const sorted = [...occurrences].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
@@ -117,8 +130,8 @@ export default function RecurringCalendar({
               </div>
             ))}
           </div>
-          {grid.map((week, weekIndex) => (
-            <div key={weekIndex} className="grid grid-cols-7 gap-px bg-panel-border">
+          {grid.map((week) => (
+            <div key={week.map((cell) => cell.date).join("|")} className="grid grid-cols-7 gap-px bg-panel-border">
               {week.map((cell) => {
                 const dayOccurrences = byDate.get(cell.date) ?? [];
                 const isToday = cell.date === today;
@@ -130,9 +143,7 @@ export default function RecurringCalendar({
                     className={`min-h-24 bg-panel p-1.5 ${cell.inMonth ? "" : "opacity-40"}`}
                   >
                     <button
-                      ref={(node) => {
-                        cellRefs.current[cell.day] = node;
-                      }}
+                      data-calendar-day={cell.day}
                       type="button"
                       tabIndex={isFocus ? 0 : -1}
                       onKeyDown={(event) => {

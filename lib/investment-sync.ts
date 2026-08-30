@@ -132,7 +132,8 @@ export async function syncInvestmentsForItem(
   const { data: itemAccounts, error: accountsError } = await supabase
     .from("accounts")
     .select("id, plaid_account_id")
-    .eq("plaid_item_id", item.id);
+    .eq("plaid_item_id", item.id)
+    .eq("user_id", item.user_id);
   if (accountsError) throw accountsError;
   const accountIdMap = new Map<string, string>(
     (itemAccounts ?? []).map((a) => [a.plaid_account_id as string, a.id as string]),
@@ -303,7 +304,8 @@ export async function syncInvestmentTransactionsForItem(
   const { data: itemAccounts, error: accountsError } = await supabase
     .from("accounts")
     .select("id, plaid_account_id")
-    .eq("plaid_item_id", item.id);
+    .eq("plaid_item_id", item.id)
+    .eq("user_id", item.user_id);
   if (accountsError) throw accountsError;
   const accountIdMap = new Map<string, string>(
     (itemAccounts ?? []).map((a) => [a.plaid_account_id as string, a.id as string]),

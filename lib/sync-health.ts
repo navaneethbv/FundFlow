@@ -287,7 +287,7 @@ async function loadSnapshotAnchor(
     .select("snapshot_date, current_balance")
     .eq("user_id", userId)
     .eq("account_id", accountId)
-    .order("snapshot_date", { ascending: true })
+    .order("snapshot_date", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (error) throw error;

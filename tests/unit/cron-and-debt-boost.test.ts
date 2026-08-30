@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
-import { GET as cronWeeklyReportGet, runWeeklyReports } from "@/app/api/cron/weekly-report/route";
+import { GET as cronWeeklyReportGet } from "@/app/api/cron/weekly-report/route";
+import { runWeeklyReports } from "@/lib/weekly-report-runner";
 import { loadDebtPlannerData } from "@/lib/debt-data";
 import { clientStub } from "../fixtures/supabase-query";
 import * as http from "@/lib/http";

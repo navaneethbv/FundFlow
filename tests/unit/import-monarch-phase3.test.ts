@@ -189,6 +189,7 @@ describe("Monarch import conflicts, idempotency, and authorization", () => {
       const ab = await approved.json();
       throw new Error(`expected 200 got ${approved.status}: ${JSON.stringify(ab)}`);
     }
+    expect(approved.status).toBe(200);
   });
 
   it("is idempotent: rows already committed are skipped on re-commit", async () => {

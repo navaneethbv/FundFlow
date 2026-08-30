@@ -49,12 +49,14 @@ export default function AdvicePriorities({
   function move(index: number, delta: number) {
     const target = index + delta;
     if (target < 0 || target >= priorities.length) return;
-    const currentItem = priorities[index];
-    const targetItem = priorities[target];
-    if (currentItem === undefined || targetItem === undefined) return;
-    const next = [...priorities];
-    next[index] = targetItem;
-    next[target] = currentItem;
+    const currentItem = priorities.at(index);
+    const targetItem = priorities.at(target);
+    if (!currentItem || !targetItem) return;
+    const next = priorities.map((id, currentIndex) => {
+      if (currentIndex === index) return targetItem;
+      if (currentIndex === target) return currentItem;
+      return id;
+    });
     void save(next);
   }
 
