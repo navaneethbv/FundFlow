@@ -103,6 +103,20 @@ describe("loadRecurringData", () => {
     expect(result.currency).toBe("USD");
   });
 
+  it("classifies due dates against the caller's explicit local day", async () => {
+    const client = makeClient();
+    const result = await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-07",
+      today: "2026-07-01",
+    });
+
+    expect(result.view.occurrences[0]).toMatchObject({
+      dueDate: "2026-07-15",
+      status: "upcoming",
+    });
+  });
+
   it("falls back to USD when no account resolves a currency code", async () => {
     const client = makeClient({
       accounts: { data: [{ id: "account-1", name: "Checking", type: "depository", subtype: null, iso_currency_code: null }] },

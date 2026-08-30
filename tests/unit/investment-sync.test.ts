@@ -71,7 +71,11 @@ function tableStub(overrides: Record<string, unknown> = {}) {
   const securitiesUpsert = vi.fn().mockReturnValue({ select: securitiesUpsertSelect });
 
   const holdingsUpsertSelect = vi.fn().mockResolvedValue({
-    data: [{ id: "holding-db-1" }],
+    data: [{
+      id: "holding-db-1",
+      account_id: "db-acc-1",
+      security_id: "sec-db-1",
+    }],
     error: null,
   });
   const holdingsUpsert = vi.fn().mockReturnValue({ select: holdingsUpsertSelect });
@@ -148,7 +152,7 @@ describe("syncInvestmentsForItem", () => {
       return tables[table as keyof typeof tables];
     });
 
-    const result = await syncInvestmentsForItem(item);
+    const result = await syncInvestmentsForItem(item, "1999-12-31");
 
     expect(result).toEqual({ outcome: "synced", holdingsSynced: 1 });
     expect(spies.securitiesUpsert).toHaveBeenCalledWith(
@@ -166,7 +170,10 @@ describe("syncInvestmentsForItem", () => {
       ],
       { onConflict: "account_id,security_id,source" },
     );
-    expect(spies.snapshotsUpsert).toHaveBeenCalled();
+    expect(spies.snapshotsUpsert).toHaveBeenCalledWith(
+      [expect.objectContaining({ snapshot_date: "1999-12-31" })],
+      { onConflict: "holding_id,snapshot_date" },
+    );
     expect(spies.holdingsUpdate).not.toHaveBeenCalled();
   });
 
