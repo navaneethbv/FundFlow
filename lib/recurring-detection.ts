@@ -187,7 +187,7 @@ export function recurringIdentityKey(
 function matchedSignifiers(rows: readonly PreparedTransaction[]): string[] {
   const text = rows.flatMap((row) => [row.merchant, row.rawName ?? ""]).map(normalizedText).join(" ");
   return RECURRING_SIGNIFIERS.filter((signifier) => {
-    const pattern = new RegExp(`(?:^| )${signifier.replaceAll(" ", " ")}(?:$| )`, "u");
+    const pattern = new RegExp(`(?:^| )${signifier}(?:$| )`, "u");
     return pattern.test(text);
   });
 }
