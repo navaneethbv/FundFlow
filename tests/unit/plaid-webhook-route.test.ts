@@ -14,6 +14,16 @@ vi.mock("@/lib/sync", () => ({
     mockSyncItemTransactions(...args),
 }));
 
+vi.mock("@/lib/recurring", () => ({
+  refreshRecurringForItem: vi.fn().mockResolvedValue(0),
+}));
+
+vi.mock("@/lib/recurring-inference", () => ({
+  refreshInferredRecurringForItem: vi.fn().mockResolvedValue({
+    active: 0, added: 0, deactivated: 0, deduplicated: 0,
+  }),
+}));
+
 const mockErrorResponse = vi.fn((context, err) => {
   console.error("MOCKED WEBHOOK ERROR:", context, err);
   return new Response("error", { status: 500 });

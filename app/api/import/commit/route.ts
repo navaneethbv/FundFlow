@@ -4,6 +4,8 @@ import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { makeImportId } from "@/lib/import";
 import { createServiceClient } from "@/lib/supabase/service";
 import { normalizeImportCategory } from "@/lib/finance-domain";
+import { refreshInferredRecurringForUser } from "@/lib/recurring-inference";
+import { logError } from "@/lib/log";
 
 const UPSERT_CHUNK = 500;
 const QUERY_CHUNK = 500;
@@ -566,6 +568,17 @@ export async function POST(request: NextRequest) {
       batchId,
       userId: user.id,
     });
+
+    // Rows entering a connected account's canonical ledger can complete a
+    // local recurring pattern. Inference runs only after the durable commit
+    // and must never turn a successful import into a failure.
+    if (dbRows.some((row) => row.account_id)) {
+      try {
+        await refreshInferredRecurringForUser(user.id);
+      } catch (error) {
+        logError("import.commit.recurring", error);
+      }
+    }
 
     return NextResponse.json({ ok: true, imported: dbRows.length });
   } catch (error) {

@@ -13,6 +13,18 @@ vi.mock("@/lib/sync", () => ({
   syncItemTransactions: (...args: unknown[]) => mockSyncItemTransactions(...args),
 }));
 
+const mockRefreshRecurringForItem = vi.fn().mockResolvedValue(0);
+vi.mock("@/lib/recurring", () => ({
+  refreshRecurringForItem: (...args: unknown[]) => mockRefreshRecurringForItem(...args),
+}));
+
+const mockRefreshInferredForItem = vi.fn().mockResolvedValue({
+  active: 0, added: 0, deactivated: 0, deduplicated: 0,
+});
+vi.mock("@/lib/recurring-inference", () => ({
+  refreshInferredRecurringForItem: (...args: unknown[]) => mockRefreshInferredForItem(...args),
+}));
+
 const mockErrorResponse = vi.fn();
 const mockBadRequest = vi.fn();
 vi.mock("@/lib/http", () => ({
@@ -66,6 +78,81 @@ describe("POST /api/plaid/webhook", () => {
     const body = await res.json();
     expect(body).toEqual({ success: true });
     expect(mockGetItemByPlaidItemId).toHaveBeenCalledWith("plaid-item-1");
+    expect(mockSyncItemTransactions).toHaveBeenCalledWith(sampleItem);
+    // Local inference reconciles the same item after the durable sync.
+    expect(mockRefreshInferredForItem).toHaveBeenCalledWith(sampleItem);
+  });
+
+  it("handles RECURRING TRANSACTIONS_UPDATE by refreshing provider rows then local inference, without a transaction sync", async () => {
+    mockGetItemByPlaidItemId.mockResolvedValue(sampleItem);
+
+    const req = new NextRequest("http://localhost/api/plaid/webhook", {
+      method: "POST",
+      body: JSON.stringify({
+        webhook_type: "RECURRING",
+        webhook_code: "RECURRING_TRANSACTIONS_UPDATE",
+        item_id: "plaid-item-1",
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(mockSyncItemTransactions).not.toHaveBeenCalled();
+    expect(mockRefreshRecurringForItem).toHaveBeenCalledWith(sampleItem);
+    expect(mockRefreshInferredForItem).toHaveBeenCalledWith(sampleItem);
+    const recurringOrder = mockRefreshRecurringForItem.mock.invocationCallOrder[0]!;
+    const inferredOrder = mockRefreshInferredForItem.mock.invocationCallOrder[0]!;
+    expect(recurringOrder).toBeLessThan(inferredOrder);
+  });
+
+  it("returns badRequest if item_id is missing in RECURRING webhook", async () => {
+    const req = new NextRequest("http://localhost/api/plaid/webhook", {
+      method: "POST",
+      body: JSON.stringify({
+        webhook_type: "RECURRING",
+        webhook_code: "RECURRING_TRANSACTIONS_UPDATE",
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    expect(mockBadRequest).toHaveBeenCalledWith("Missing item_id in webhook body");
+  });
+
+  it("still runs local inference when the provider recurring refresh fails", async () => {
+    mockGetItemByPlaidItemId.mockResolvedValue(sampleItem);
+    mockRefreshRecurringForItem.mockRejectedValueOnce(new Error("plaid down"));
+
+    const req = new NextRequest("http://localhost/api/plaid/webhook", {
+      method: "POST",
+      body: JSON.stringify({
+        webhook_type: "RECURRING",
+        webhook_code: "RECURRING_TRANSACTIONS_UPDATE",
+        item_id: "plaid-item-1",
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(mockRefreshInferredForItem).toHaveBeenCalledWith(sampleItem);
+  });
+
+  it("keeps the webhook successful when local inference fails after a durable sync", async () => {
+    mockGetItemByPlaidItemId.mockResolvedValue(sampleItem);
+    mockSyncItemTransactions.mockResolvedValue({ added: 1, modified: 0, removed: 0 });
+    mockRefreshInferredForItem.mockRejectedValueOnce(new Error("inference down"));
+
+    const req = new NextRequest("http://localhost/api/plaid/webhook", {
+      method: "POST",
+      body: JSON.stringify({
+        webhook_type: "TRANSACTIONS",
+        webhook_code: "SYNC_UPDATES_AVAILABLE",
+        item_id: "plaid-item-1",
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
     expect(mockSyncItemTransactions).toHaveBeenCalledWith(sampleItem);
   });
 

@@ -5,6 +5,8 @@ import { getPlaidClient } from "@/lib/plaid";
 import { syncItemTransactions } from "@/lib/sync";
 import { syncInvestmentsForItem } from "@/lib/investment-sync";
 import { getItemByPlaidItemId, setItemStatus } from "@/lib/plaid-service";
+import { refreshRecurringForItem } from "@/lib/recurring";
+import { refreshInferredRecurringForItem } from "@/lib/recurring-inference";
 import { errorResponse, badRequest } from "@/lib/http";
 import { logError } from "@/lib/log";
 import { isFeatureEnabled } from "@/lib/feature-flags";
@@ -104,7 +106,42 @@ async function handleTransactionWebhook(body: {
     body.item_id.length === 0
   ) return;
   const item = await getItemByPlaidItemId(body.item_id);
-  if (item) await syncItemTransactions(item);
+  if (!item) return;
+  await syncItemTransactions(item);
+  // Transactions are durably synced at this point; local recurring
+  // inference over the fresh ledger must never fail the webhook.
+  await refreshInferredRecurringForItem(item).catch((err) =>
+    logError("webhook.recurring-inference", err),
+  );
+}
+
+/**
+ * Plaid's recurring webhook: provider rows are refreshed first so
+ * Plaid-first deduplication reconciles against the current snapshot, then
+ * local inference runs for the same item. A provider refresh failure never
+ * blocks local inference.
+ */
+async function handleRecurringWebhook(body: {
+  webhook_type?: unknown;
+  webhook_code?: unknown;
+  item_id?: unknown;
+}): Promise<void> {
+  if (
+    body.webhook_type !== "RECURRING" ||
+    body.webhook_code !== "RECURRING_TRANSACTIONS_UPDATE" ||
+    typeof body.item_id !== "string" ||
+    body.item_id.length === 0
+  ) return;
+  const item = await getItemByPlaidItemId(body.item_id);
+  if (!item) return;
+  try {
+    await refreshRecurringForItem(item);
+  } catch (err) {
+    logError("webhook.recurring-refresh", err);
+  }
+  await refreshInferredRecurringForItem(item).catch((err) =>
+    logError("webhook.recurring-inference", err),
+  );
 }
 
 async function handleHoldingsWebhook(body: {
@@ -174,16 +211,20 @@ export async function POST(req: NextRequest) {
       error?: { error_code?: unknown };
     };
 
-    if (body.webhook_type === "TRANSACTIONS" && body.webhook_code === "SYNC_UPDATES_AVAILABLE") {
-      if (!body.item_id) {
-        return badRequest("Missing item_id in webhook body");
-      }
+    const requiresItemId =
+      (body.webhook_type === "TRANSACTIONS" &&
+        body.webhook_code === "SYNC_UPDATES_AVAILABLE") ||
+      (body.webhook_type === "RECURRING" &&
+        body.webhook_code === "RECURRING_TRANSACTIONS_UPDATE");
+    if (requiresItemId && !body.item_id) {
+      return badRequest("Missing item_id in webhook body");
     }
 
     // Holdings changed (or the initial historical pull finished): a bounded,
     // item-scoped refresh. Gated on investmentsPage — before its migration is
     // applied, `holdings` doesn't exist to write to.
     await handleTransactionWebhook(body);
+    await handleRecurringWebhook(body);
     await handleHoldingsWebhook(body);
 
     // ITEM lifecycle: mark broken connections so Settings can offer the

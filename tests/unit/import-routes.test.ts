@@ -75,6 +75,16 @@ vi.mock("@/lib/supabase/service", () => ({
 }));
 
 import { POST as previewPost } from "@/app/api/import/preview/route";
+const mockRefreshInferredForUser = vi.fn().mockResolvedValue({
+  active: 0, added: 0, deactivated: 0, deduplicated: 0,
+});
+vi.mock("@/lib/recurring-inference", () => ({
+  refreshInferredRecurringForUser: (...args: unknown[]) => mockRefreshInferredForUser(...args),
+}));
+
+const mockLogError = vi.fn();
+vi.mock("@/lib/log", () => ({ logError: (...args: unknown[]) => mockLogError(...args) }));
+
 import { POST as commitPost } from "@/app/api/import/commit/route";
 import { POST as csvPost } from "@/app/api/import/csv/route";
 import { NextRequest, NextResponse } from "next/server";
@@ -1153,6 +1163,58 @@ function serviceStubWith(
         ]),
         expect.objectContaining({ onConflict: "user_id,source_account" }),
       );
+    });
+  });
+
+  describe("import commit recurring inference", () => {
+    function commitOnce(rows: Array<Record<string, unknown>>, target: Record<string, unknown>) {
+      const mockSupabase = commitSupabase(rows);
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: mockSupabase });
+      mockServiceClient.from.mockReturnValue(serviceStub());
+      return {
+        request: {
+          json: () => Promise.resolve({ batch_id: "b1", ...target, approved_row_ids: rows.map((row) => row.id) }),
+        } as unknown as NextRequest,
+      };
+    }
+
+    it("runs local inference after a commit that targets a connected account", async () => {
+      mockRefreshInferredForUser.mockClear();
+      const { request } = commitOnce(
+        [{ id: "row-1", date: "2026-07-01", description: "Store", amount: 10, status: "pending" }],
+        { account_id: "a1" },
+      );
+
+      const res = await commitPost(request);
+      expect(res.status).toBe(200);
+      expect(mockRefreshInferredForUser).toHaveBeenCalledWith("u1");
+    });
+
+    it("skips inference when every committed row targets a manual account", async () => {
+      mockRefreshInferredForUser.mockClear();
+      const { request } = commitOnce(
+        [{ id: "row-1", date: "2026-07-01", description: "Store", amount: 10, status: "pending" }],
+        { manual_account_id: "m1" },
+      );
+
+      const res = await commitPost(request);
+      expect(res.status).toBe(200);
+      expect(mockRefreshInferredForUser).not.toHaveBeenCalled();
+    });
+
+    it("keeps the successful import response when inference throws after the durable commit", async () => {
+      mockRefreshInferredForUser.mockClear();
+      mockRefreshInferredForUser.mockRejectedValueOnce(new Error("inference down"));
+      const { request } = commitOnce(
+        [{ id: "row-1", date: "2026-07-01", description: "Store", amount: 10, status: "pending" }],
+        { account_id: "a1" },
+      );
+
+      const res = await commitPost(request);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body).toEqual({ ok: true, imported: 1 });
+      expect(mockLogError).toHaveBeenCalledWith("import.commit.recurring", expect.any(Error));
     });
   });
 
