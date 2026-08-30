@@ -80,9 +80,14 @@ describe("fetchPrivacySafeRows null merchant/category branches", () => {
       from: vi.fn((table: string) => {
         if (table === "profiles") return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle: singleProfile }) }) };
         if (table === "transactions") return transactionBuilder;
-        if (table === "transaction_annotations") return { select: chainableEmpty };
-        if (table === "merchant_rules") return { select: chainableEmpty };
-        if (table === "category_overrides") return { select: chainableEmpty };
+        if ([
+          "transaction_annotations",
+          "merchant_rules",
+          "category_overrides",
+          "linked_refunds",
+          "linked_duplicates",
+          "transaction_splits",
+        ].includes(table)) return { select: chainableEmpty };
         throw new Error(`Unexpected table ${table}`);
       }),
     } as unknown as SupabaseClient;

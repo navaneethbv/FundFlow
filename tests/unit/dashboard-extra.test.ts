@@ -10,7 +10,7 @@ import { withinNextSevenDays } from "@/components/dashboard/widgets/RecurringWid
 function makeSupabase(seeds: Record<string, unknown> = {}) {
   const mockFrom = vi.fn((table: string) => {
     const chain: Record<string, unknown> = {};
-    for (const m of ["select", "eq", "order", "limit", "gte", "lt", "in", "single"]) {
+    for (const m of ["select", "eq", "order", "limit", "gte", "lt", "in", "range", "single"]) {
       chain[m] = () => chain;
     }
     const seed = seeds[table];
@@ -27,7 +27,7 @@ describe("getDashboardData", () => {
     const mockFrom = vi.fn((table: string) => {
       const chain: Record<string, unknown> = {};
       const methods = [
-        "select", "eq", "order", "limit", "gte", "lt", "in", "single",
+        "select", "eq", "order", "limit", "gte", "lt", "in", "range", "single",
       ];
       for (const m of methods) {
         chain[m] = () => chain;

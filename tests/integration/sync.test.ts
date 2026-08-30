@@ -247,7 +247,7 @@ suite("sync transactions DB integration & mock Plaid", () => {
     expect(total.removed).toBe(0);
   });
 
-  it("ignores transactions belonging to unknown accounts not in the database", async () => {
+  it("rejects unknown-account transactions without advancing the cursor", async () => {
     mockTransactionsSync.mockResolvedValue({
       data: {
         added: [
@@ -267,10 +267,9 @@ suite("sync transactions DB integration & mock Plaid", () => {
     });
 
     const item = await getItem(userId, itemDbId);
-    const result = await syncItemTransactions(item!);
-
-    // The service returns the number of transactions returned by Plaid, but doesn't write them to DB if the account is unknown.
-    expect(result.added).toBe(1);
+    await expect(syncItemTransactions(item!)).rejects.toThrow(
+      "Unknown Plaid account non-existent-account-id",
+    );
 
     const { data: checkTxn } = await admin
       .from("transactions")
@@ -279,6 +278,8 @@ suite("sync transactions DB integration & mock Plaid", () => {
       .maybeSingle();
 
     expect(checkTxn).toBeNull();
+    const after = await getItem(userId, itemDbId);
+    expect(after?.sync_cursor).toBe(item?.sync_cursor);
   });
 
   it("isolates sync failures per item in syncAllForUser", async () => {

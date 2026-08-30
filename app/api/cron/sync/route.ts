@@ -96,19 +96,21 @@ async function syncUser(
   service: ReturnType<typeof createServiceClient>,
   userId: string,
 ): Promise<void> {
-  const { data: profile, error: profileError } = await service
-    .from("profiles")
-    .select("timezone")
-    .eq("id", userId)
-    .maybeSingle();
-  if (profileError) logError("cron.sync.profile-timezone", profileError);
-  const today = dateKeyInTimezone(
-    new Date(),
-    profileError ? null : profile?.timezone,
-  );
   await syncAllForUser(userId);
   await runOptionalSync("cron.sync.token-rotation", () => rotateStaleItemTokens(userId));
   if (isFeatureEnabled("investmentsPage")) {
+    let today = dateKeyInTimezone(new Date(), null);
+    try {
+      const { data: profile, error: profileError } = await service
+        .from("profiles")
+        .select("timezone")
+        .eq("id", userId)
+        .maybeSingle();
+      if (profileError) throw profileError;
+      today = dateKeyInTimezone(new Date(), profile?.timezone);
+    } catch (profileError) {
+      logError("cron.sync.profile-timezone", profileError);
+    }
     await runOptionalSync("cron.sync.investments", () =>
       syncInvestmentsForUser(userId, today),
     );
