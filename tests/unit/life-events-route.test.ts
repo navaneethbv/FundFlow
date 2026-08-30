@@ -13,7 +13,7 @@ vi.mock("@/lib/http", () => ({
 }));
 vi.mock("@/lib/audit", () => ({
   writeAudit: (...args: unknown[]) => mockWriteAudit(...args),
-  getClientIp: (...args: unknown[]) => mockGetClientIp(...args),
+  getClientIp: () => mockGetClientIp(),
 }));
 
 import { GET, POST, PATCH, DELETE } from "@/app/api/forecasting/life-events/route";

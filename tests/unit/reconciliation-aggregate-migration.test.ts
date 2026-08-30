@@ -14,7 +14,8 @@ describe("account reconciliation aggregate migration", () => {
 
     expect(migration).toContain("create or replace function public.account_reconciliation_aggregates()");
     expect(migration).toContain("a.user_id = (select auth.uid())");
-    expect(migration).toContain("round(sum(t.amount) * 100)::bigint");
+    expect(migration).toContain("round(sum(t.amount) filter (");
+    expect(migration).toContain(") * 100)::bigint");
     expect(migration).toContain("grant execute on function public.account_reconciliation_aggregates()");
   });
 });

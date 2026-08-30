@@ -4,7 +4,6 @@ import { safeErrorCode } from "@/lib/cursor-health";
 
 const STALE_AFTER_MS = 48 * 60 * 60 * 1000;
 const PAGE_SIZE = 1_000;
-const MAX_TRANSACTION_PAGES = 20;
 
 export type ProductSyncState =
   | "healthy"
@@ -93,9 +92,13 @@ interface SnapshotAnchor {
   currentBalance: number;
 }
 
-interface ReconciliationTransaction {
-  date: string;
-  amount: number;
+interface ReconciliationAggregateRow {
+  account_id: string;
+  snapshot_date: string | null;
+  snapshot_balance_cents: number | string | null;
+  post_anchor_total_cents: number | string;
+  oldest_transaction_date: string | null;
+  newest_transaction_date: string | null;
 }
 
 const PRODUCT_UNAVAILABLE_CODES = new Set([
@@ -148,14 +151,14 @@ export function deriveProductSyncHealth(input: Readonly<{
   return { state, lastSuccessAt, lastAttemptAt, safeErrorCode: code };
 }
 
-function roundCurrency(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+function toCents(value: number): number {
+  return Math.round(value * 100);
 }
 
 export function buildAccountReconciliation(input: Readonly<{
   account: ReconciliationAccount;
   anchor: SnapshotAnchor | null;
-  transactions: ReconciliationTransaction[];
+  transactionTotalCents: number;
   historyComplete: boolean;
 }>): AccountReconciliation {
   const base = {
@@ -179,19 +182,16 @@ export function buildAccountReconciliation(input: Readonly<{
     return { ...base, ledgerBalance: null, difference: null, state: "incomplete_history" };
   }
 
-  const transactionTotal = input.transactions
-    .filter((transaction) => transaction.date > input.anchor!.snapshotDate)
-    .reduce((sum, transaction) => sum + transaction.amount, 0);
   const direction = isLiabilityAccount(input.account.type, input.account.subtype) ? 1 : -1;
-  const ledgerBalance = roundCurrency(
-    input.anchor.currentBalance + direction * transactionTotal,
-  );
-  const difference = roundCurrency(input.account.currentBalance - ledgerBalance);
+  const ledgerCents =
+    toCents(input.anchor.currentBalance) + direction * input.transactionTotalCents;
+  const providerCents = toCents(input.account.currentBalance);
+  const differenceCents = providerCents - ledgerCents;
   return {
     ...base,
-    ledgerBalance,
-    difference,
-    state: Math.abs(difference) < 0.01 ? "balanced" : "difference",
+    ledgerBalance: ledgerCents / 100,
+    difference: differenceCents / 100,
+    state: differenceCents === 0 ? "balanced" : "difference",
   };
 }
 
@@ -217,25 +217,6 @@ async function latestJob(
   return (data as SyncJobRow | null) ?? null;
 }
 
-async function transactionBoundary(
-  supabase: SupabaseClient,
-  userId: string,
-  accountIds: string[],
-  ascending: boolean,
-): Promise<string | null> {
-  if (accountIds.length === 0) return null;
-  const { data, error } = await supabase
-    .from("transactions")
-    .select("date")
-    .eq("user_id", userId)
-    .in("account_id", accountIds)
-    .order("date", { ascending })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  return (data as { date?: string } | null)?.date ?? null;
-}
-
 async function loadAccounts(
   supabase: SupabaseClient,
   userId: string,
@@ -256,63 +237,6 @@ async function loadAccounts(
   }
 }
 
-async function loadSnapshotAnchor(
-  supabase: SupabaseClient,
-  userId: string,
-  accountId: string,
-): Promise<SnapshotAnchor | null> {
-  const { data, error } = await supabase
-    .from("account_balance_snapshots")
-    .select("snapshot_date, current_balance")
-    .eq("user_id", userId)
-    .eq("account_id", accountId)
-    .order("snapshot_date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  const row = data as
-    | { snapshot_date: string; current_balance: number | string | null }
-    | null;
-  if (row?.current_balance == null) return null;
-  const currentBalance = Number(row.current_balance);
-  return Number.isFinite(currentBalance)
-    ? { snapshotDate: row.snapshot_date, currentBalance }
-    : null;
-}
-
-async function loadPostAnchorTransactions(
-  supabase: SupabaseClient,
-  userId: string,
-  accountId: string,
-  anchorDate: string,
-): Promise<{
-  transactions: ReconciliationTransaction[];
-  historyComplete: boolean;
-}> {
-  const transactions: ReconciliationTransaction[] = [];
-  for (let page = 0; page < MAX_TRANSACTION_PAGES; page += 1) {
-    const from = page * PAGE_SIZE;
-    const { data, error } = await supabase
-      .from("transactions")
-      .select("date, amount")
-      .eq("user_id", userId)
-      .eq("account_id", accountId)
-      .gt("date", anchorDate)
-      .order("date", { ascending: true })
-      .order("id", { ascending: true })
-      .range(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
-    const batch = (data ?? []) as Array<{ date: string; amount: number | string }>;
-    transactions.push(
-      ...batch.map((row) => ({ date: row.date, amount: Number(row.amount) })),
-    );
-    if (batch.length < PAGE_SIZE) {
-      return { transactions, historyComplete: true };
-    }
-  }
-  return { transactions, historyComplete: false };
-}
-
 function toReconciliationAccount(account: AccountRow): ReconciliationAccount {
   const parsedBalance =
     account.current_balance == null ? null : Number(account.current_balance);
@@ -329,26 +253,12 @@ function toReconciliationAccount(account: AccountRow): ReconciliationAccount {
   };
 }
 
-async function loadReconciliation(
+async function loadReconciliationAggregates(
   supabase: SupabaseClient,
-  userId: string,
-  account: AccountRow,
-): Promise<AccountReconciliation> {
-  const anchor = await loadSnapshotAnchor(supabase, userId, account.id);
-  const history = anchor
-    ? await loadPostAnchorTransactions(
-        supabase,
-        userId,
-        account.id,
-        anchor.snapshotDate,
-      )
-    : { transactions: [], historyComplete: true };
-  return buildAccountReconciliation({
-    account: toReconciliationAccount(account),
-    anchor,
-    transactions: history.transactions,
-    historyComplete: history.historyComplete,
-  });
+): Promise<ReconciliationAggregateRow[]> {
+  const { data, error } = await supabase.rpc("account_reconciliation_aggregates");
+  if (error) throw error;
+  return (data ?? []) as ReconciliationAggregateRow[];
 }
 
 export async function loadInstitutionObservability(
@@ -361,6 +271,10 @@ export async function loadInstitutionObservability(
   reconciliations: AccountReconciliation[];
 }> {
   const accounts = await loadAccounts(supabase, userId);
+  const aggregateRows = await loadReconciliationAggregates(supabase);
+  const aggregateByAccount = new Map(
+    aggregateRows.map((row) => [row.account_id, row]),
+  );
   const accountsByItem = new Map<string, AccountRow[]>();
   for (const account of accounts) {
     const rows = accountsByItem.get(account.plaid_item_id) ?? [];
@@ -371,15 +285,25 @@ export async function loadInstitutionObservability(
   const institutions = await Promise.all(
     items.map(async (item): Promise<InstitutionSyncHealth> => {
       const itemAccounts = accountsByItem.get(item.id) ?? [];
-      const accountIds = itemAccounts.map((account) => account.id);
-      const [transactionLatest, transactionSuccess, investmentLatest, investmentSuccess, oldest, newest] =
+      const itemAggregates = itemAccounts
+        .map((account) => aggregateByAccount.get(account.id))
+        .filter((row): row is ReconciliationAggregateRow => row !== undefined);
+      const oldest = itemAggregates
+        .map((row) => row.oldest_transaction_date)
+        .filter((value): value is string => value !== null)
+        .sort((left, right) => left.localeCompare(right))
+        .at(0) ?? null;
+      const newest = itemAggregates
+        .map((row) => row.newest_transaction_date)
+        .filter((value): value is string => value !== null)
+        .sort((left, right) => right.localeCompare(left))
+        .at(0) ?? null;
+      const [transactionLatest, transactionSuccess, investmentLatest, investmentSuccess] =
         await Promise.all([
           latestJob(supabase, userId, item.id, "transactions", false),
           latestJob(supabase, userId, item.id, "transactions", true),
           latestJob(supabase, userId, item.id, "investments", false),
           latestJob(supabase, userId, item.id, "investments", true),
-          transactionBoundary(supabase, userId, accountIds, true),
-          transactionBoundary(supabase, userId, accountIds, false),
         ]);
       const updatedTimestamps = itemAccounts
         .map((account) => account.updated_at)
@@ -408,18 +332,27 @@ export async function loadInstitutionObservability(
       };
     }),
   );
-  const rawReconciliations = await Promise.all(
-    accounts.map((account) => loadReconciliation(supabase, userId, account)),
-  );
-  const institutionById = new Map(
-    institutions.map((institution) => [institution.plaidItemId, institution]),
-  );
-  const reconciliations = rawReconciliations.map((row) => {
-    const institution = institutionById.get(row.plaidItemId);
+  const reconciliations = accounts.map((account) => {
+    const aggregate = aggregateByAccount.get(account.id);
+    const snapshotBalanceCents = Number(aggregate?.snapshot_balance_cents);
+    const transactionTotalCents = Number(aggregate?.post_anchor_total_cents ?? 0);
+    const anchor = aggregate?.snapshot_date && Number.isFinite(snapshotBalanceCents)
+      ? {
+          snapshotDate: aggregate.snapshot_date,
+          currentBalance: snapshotBalanceCents / 100,
+        }
+      : null;
     return {
-      ...row,
-      oldestTransactionDate: institution?.oldestTransactionDate ?? null,
-      newestTransactionDate: institution?.newestTransactionDate ?? null,
+      ...buildAccountReconciliation({
+        account: toReconciliationAccount(account),
+        anchor,
+        transactionTotalCents: Number.isFinite(transactionTotalCents)
+          ? transactionTotalCents
+          : 0,
+        historyComplete: true,
+      }),
+      oldestTransactionDate: aggregate?.oldest_transaction_date ?? null,
+      newestTransactionDate: aggregate?.newest_transaction_date ?? null,
     };
   });
   return { institutions, reconciliations };

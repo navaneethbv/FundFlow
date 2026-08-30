@@ -1,6 +1,7 @@
 import Badge, { type BadgeTone } from "@/components/ui/Badge";
 import Panel from "@/components/ui/Panel";
 import { formatCurrency } from "@/lib/format";
+import { formatDate } from "@/lib/format-date";
 import type { AccountReconciliation, ReconciliationState } from "@/lib/sync-health";
 
 function stateDisplay(state: ReconciliationState): { label: string; tone: BadgeTone } {
@@ -37,7 +38,9 @@ function AccountLabel({ row }: Readonly<{ row: AccountReconciliation }>) {
       <span className="block font-semibold">{row.accountName}</span>
       {row.mask && <span className="block text-xs text-muted">Ending in {row.mask}</span>}
       <span className="mt-1 block text-xs text-muted">{coverage}</span>
-      <span className="block text-xs text-muted">Balance refreshed: {row.accountsUpdatedAt ?? "not available"}</span>
+      <span className="block text-xs text-muted">
+        Balance refreshed: {row.accountsUpdatedAt ? formatDate(row.accountsUpdatedAt) : "not available"}
+      </span>
     </span>
   );
 }
