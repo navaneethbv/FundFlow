@@ -5,13 +5,49 @@ import Button from "@/components/ui/Button";
 import Panel from "@/components/ui/Panel";
 import { formatCurrency } from "@/lib/format";
 import type { BudgetImportPlan } from "@/lib/budget-import";
-import type { GoalImportPlan } from "@/lib/goal-import";
+import type {
+  GoalImportDecision,
+  GoalImportPlan,
+  GoalImportPlanRow,
+} from "@/lib/goal-import";
 
 type ImportKind = "budget" | "goal";
 
-interface ConfigPlan {
+export interface ConfigPlan {
   kind: ImportKind;
   plan: BudgetImportPlan | GoalImportPlan;
+}
+
+const GOAL_DECISION_LABELS: Record<GoalImportDecision, string> = {
+  create: "Create",
+  merge: "Merge",
+  replace: "Replace",
+  skip: "Skip",
+};
+
+export function defaultDecisionsForPlan(
+  config: ConfigPlan,
+): Record<string, string | undefined> {
+  if (config.kind === "budget") {
+    return Object.fromEntries(
+      (config.plan as BudgetImportPlan).rows.map((row) => [row.category, "merge"]),
+    );
+  }
+  return Object.fromEntries(
+    (config.plan as GoalImportPlan).rows.map((row) => [
+      row.decisionKey,
+      row.defaultDecision,
+    ]),
+  );
+}
+
+export function goalDecisionOptions(
+  row: GoalImportPlanRow,
+): Array<{ value: GoalImportDecision; label: string }> {
+  return row.allowedDecisions.map((value) => ({
+    value,
+    label: GOAL_DECISION_LABELS[value],
+  }));
 }
 
 interface ApplyResult {
@@ -50,11 +86,7 @@ export default function MonarchConfigImportSection() {
       if (!res.ok) throw new Error(json?.error ?? "Could not preview.");
       if (!json) throw new Error("Could not preview.");
       setPlan(json);
-      const defaults: Record<string, string | undefined> = {};
-      for (const row of json.plan.rows as Array<{ category?: string; name?: string; importedId?: string | null }>) {
-        defaults[row.importedId ?? row.category ?? row.name ?? ""] = "merge";
-      }
-      setDecisions(defaults);
+      setDecisions(defaultDecisionsForPlan(json));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not preview.");
     } finally {
@@ -175,10 +207,11 @@ export default function MonarchConfigImportSection() {
                 </p>
                 <ul className="max-h-48 space-y-1 overflow-auto">
                   {goalPlan.rows.map((row) => (
-                    <li key={row.name} className="flex items-center justify-between gap-2">
+                    <li key={row.decisionKey} className="flex items-center justify-between gap-2">
                       <span className="min-w-0 truncate">{row.name}</span>
                       <span className="min-w-0 truncate text-xs text-muted">
                         {row.goalType}
+                        {row.matchedGoalId && " · matches existing goal"}
                         {row.targetAmount !== null && ` · target ${formatCurrency(row.targetAmount)}`}
                         {row.targetDate && ` · due ${row.targetDate}`}
                         {row.linkedAccountName && ` · ${row.linkedAccountName}`}
@@ -190,20 +223,21 @@ export default function MonarchConfigImportSection() {
                       </span>
                       <select
                         aria-label={`Decision for ${row.name}`}
-                        value={decisions[row.importedId ?? row.name] ?? decisions[row.name] ?? "create"}
+                        value={decisions[row.decisionKey] ?? row.defaultDecision}
                         onChange={(e) => {
                           const val = e.target.value;
                           setDecisions((cur) => ({
                             ...cur,
-                            [row.importedId ?? row.name]: val,
+                            [row.decisionKey]: val,
                           }));
                         }}
                         className="rounded-field border border-panel-border bg-panel px-2 py-1 text-xs"
                       >
-                        <option value="create">Create</option>
-                        <option value="merge">Merge</option>
-                        <option value="skip">Skip</option>
-                        <option value="replace">Replace</option>
+                        {goalDecisionOptions(row).map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
                       </select>
                     </li>
                   ))}

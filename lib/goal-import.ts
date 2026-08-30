@@ -6,9 +6,16 @@
  * contribution events and allocation caps.
  */
 
-export const GOAL_IMPORT_VERSION = 1;
+export const GOAL_IMPORT_VERSION = 2;
 
 export type GoalImportType = "save_up" | "pay_down";
+export type GoalImportDecision = "create" | "merge" | "replace" | "skip";
+
+export interface GoalImportProvidedFields {
+  targetAmount: boolean;
+  targetDate: boolean;
+  monthlyContribution: boolean;
+}
 
 export interface GoalImportRow {
   importedId: string | null;
@@ -20,6 +27,7 @@ export interface GoalImportRow {
   allocationAmount: number | null;
   useEntireBalance: boolean;
   monthlyContribution: number | null;
+  providedFields: GoalImportProvidedFields;
 }
 
 export interface GoalImportResult {
@@ -33,8 +41,16 @@ export interface ExistingGoal {
   goal_type: string;
   target_amount: number | string;
   target_date: string | null;
+  monthly_contribution: number | string | null;
   import_source: string | null;
   import_ref: string | null;
+}
+
+export interface GoalImportPlanRow extends GoalImportRow {
+  decisionKey: string;
+  matchedGoalId: string | null;
+  defaultDecision: "create" | "merge";
+  allowedDecisions: GoalImportDecision[];
 }
 
 export interface GoalImportConflict {
@@ -46,13 +62,19 @@ export interface GoalImportConflict {
 
 export interface GoalImportPlan {
   version: number;
-  rows: GoalImportRow[];
+  rows: GoalImportPlanRow[];
   conflicts: GoalImportConflict[];
 }
 
 function toAmount(value: unknown): number | null {
   const number = typeof value === "number" ? value : Number(value);
   return Number.isFinite(number) && number > 0 ? Math.round(number * 100) / 100 : null;
+}
+
+function toNonNegativeAmount(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) && number >= 0 ? Math.round(number * 100) / 100 : null;
 }
 
 function toDate(value: unknown): string | null {
@@ -101,6 +123,11 @@ function parseGoalEntry(goal: Record<string, unknown>): GoalImportRow | null {
       ? goal.id
       : null;
   const allocation = parseGoalAllocation(goal);
+  const providedFields = {
+    targetAmount: Object.hasOwn(goal, "target_amount"),
+    targetDate: Object.hasOwn(goal, "target_date"),
+    monthlyContribution: Object.hasOwn(goal, "monthly_contribution"),
+  };
   return {
     importedId,
     name,
@@ -110,7 +137,8 @@ function parseGoalEntry(goal: Record<string, unknown>): GoalImportRow | null {
     linkedAccountName: allocation.accountName,
     allocationAmount: allocation.allocationAmount,
     useEntireBalance: allocation.useEntireBalance,
-    monthlyContribution: toAmount(goal.monthly_contribution),
+    monthlyContribution: toNonNegativeAmount(goal.monthly_contribution),
+    providedFields,
   };
 }
 
@@ -172,19 +200,29 @@ export function buildGoalImportPlan(
   existing: ExistingGoal[],
 ): GoalImportPlan {
   const conflicts: GoalImportConflict[] = [];
-  for (const row of rows) {
+  const planRows = rows.map((row, index): GoalImportPlanRow => {
     const match = matchGoal(row, existing);
-    if (!match) continue;
-    const existingTarget = Math.round(Number(match.target_amount) * 100) / 100;
-    const incoming = row.targetAmount;
-    if (incoming !== null && Math.abs(existingTarget - incoming) >= 0.01) {
-      conflicts.push({
-        existingGoalId: match.id,
-        name: match.name,
-        existingTarget,
-        incomingTarget: incoming,
-      });
+    if (match) {
+      const existingTarget = Math.round(Number(match.target_amount) * 100) / 100;
+      const incoming = row.targetAmount;
+      if (incoming !== null && Math.abs(existingTarget - incoming) >= 0.01) {
+        conflicts.push({
+          existingGoalId: match.id,
+          name: match.name,
+          existingTarget,
+          incomingTarget: incoming,
+        });
+      }
     }
-  }
-  return { version: GOAL_IMPORT_VERSION, rows, conflicts };
+    return {
+      ...row,
+      decisionKey: `goal:${index}`,
+      matchedGoalId: match?.id ?? null,
+      defaultDecision: match ? "merge" : "create",
+      allowedDecisions: match
+        ? ["merge", "replace", "skip"]
+        : ["create", "skip"],
+    };
+  });
+  return { version: GOAL_IMPORT_VERSION, rows: planRows, conflicts };
 }

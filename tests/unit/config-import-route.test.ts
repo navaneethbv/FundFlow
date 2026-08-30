@@ -90,6 +90,19 @@ describe("POST /api/import/config", () => {
     expect((await POST(invalidRequest)).status).toBe(400);
   });
 
+  it("fails closed when apply decisions are not an object", async () => {
+    const supabase = clientStub({ goals: { data: [] } });
+    mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase });
+    const res = await POST(jsonRequest({
+      kind: "goal",
+      text: MONARCH_GOALS,
+      mode: "apply",
+      decisions: ["create"],
+    }));
+    expect(res.status).toBe(400);
+    expect(supabase.writtenTo("goals")).toBeUndefined();
+  });
+
   it("returns parser errors for malformed budget and goal exports", async () => {
     expect((await POST(jsonRequest({ kind: "budget", text: JSON.stringify({ groups: [{ categories: [{ name: "Rent", amount: "nope" }] }] }) }))).status).toBe(400);
     expect((await POST(jsonRequest({ kind: "goal", text: JSON.stringify({ goals: [{ name: "" }] }) }))).status).toBe(400);

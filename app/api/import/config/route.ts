@@ -10,14 +10,15 @@ import {
 import {
   parseMonarchGoals,
   buildGoalImportPlan,
-  matchGoal,
+  type GoalImportDecision,
+  type GoalImportPlan,
+  type GoalImportPlanRow,
   type GoalImportRow,
 } from "@/lib/goal-import";
 import { isLiabilityAccount } from "@/lib/goals-v2";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 type BudgetDecision = "merge" | "replace-month" | "skip";
-type GoalDecision = "create" | "merge" | "skip" | "replace";
 type ImportDecisions = Record<string, unknown>;
 type ConfigImportMode = "apply" | "preview";
 
@@ -108,8 +109,8 @@ async function applyBudgetImport(
   );
 
   const month = currentMonthFirst();
-  const created: string[] = [];
-  const updated: string[] = [];
+  let created = 0;
+  let updated = 0;
   const changedIds: string[] = [];
   let skipped = 0;
 
@@ -117,29 +118,28 @@ async function applyBudgetImport(
     const existing = existingByCategory.get(row.category.toLowerCase());
     const result = await applyBudgetRow(supabase, userId, row, existing, decisions, month);
     if (result.status === "created") {
-      created.push(row.category);
+      created += 1;
     } else if (result.status === "updated") {
-      updated.push(existing?.category ?? row.category);
+      updated += 1;
     } else {
       skipped += 1;
     }
     if (result.id) changedIds.push(result.id);
   }
 
-  if (created.length > 0 || updated.length > 0) {
+  if (created > 0 || updated > 0) {
     await writeAudit({
       userId,
       action: "budget_config_imported",
       metadata: {
-        created,
-        updated,
+        created_count: created,
+        updated_count: updated,
+        skipped_count: skipped,
         budget_ids: changedIds,
-        skipped,
-        mode: decisions,
       },
     });
   }
-  return { created: created.length, updated: updated.length, skipped };
+  return { created, updated, skipped };
 }
 
 async function writeMonthlyPlan(
@@ -173,6 +173,7 @@ interface ExistingGoalRow {
   goal_type: string;
   target_amount: number | string;
   target_date: string | null;
+  monthly_contribution: number | string | null;
   import_source: string | null;
   import_ref: string | null;
 }
@@ -190,20 +191,43 @@ interface GoalApplyResult {
   allocationId: string | null;
 }
 
-function goalDecision(
-  row: GoalImportRow,
+interface ResolvedGoalPlanRow {
+  row: GoalImportPlanRow;
+  match: ExistingGoalRow | null;
+  decision: GoalImportDecision;
+}
+
+function resolveGoalDecisions(
+  plan: GoalImportPlan,
+  existing: ExistingGoalRow[],
   decisionMap: ImportDecisions,
-): GoalDecision | undefined {
-  const key = row.importedId ?? row.name;
-  let value: unknown;
-  for (const [candidate, candidateValue] of Object.entries(decisionMap)) {
-    if (candidate === key || (candidate === row.name && value === undefined)) {
-      value = candidateValue;
-    }
+): { rows: ResolvedGoalPlanRow[] } | { error: string } {
+  const planByKey = new Map(plan.rows.map((row) => [row.decisionKey, row]));
+  for (const key of Object.keys(decisionMap)) {
+    if (!planByKey.has(key)) return { error: "Invalid or stale goal decision key" };
   }
-  return value === "create" || value === "merge" || value === "skip" || value === "replace"
-    ? value
-    : undefined;
+
+  const existingById = new Map(existing.map((goal) => [goal.id, goal]));
+  const resolved: ResolvedGoalPlanRow[] = [];
+  for (const row of plan.rows) {
+    const requested = decisionMap[row.decisionKey];
+    const decision = (requested ?? row.defaultDecision) as GoalImportDecision;
+    if (!row.allowedDecisions.includes(decision)) {
+      return { error: `Decision ${String(decision)} is not allowed for ${row.decisionKey}` };
+    }
+    const match = row.matchedGoalId ? existingById.get(row.matchedGoalId) ?? null : null;
+    if (row.matchedGoalId && !match) {
+      return { error: "Goal match changed before import could be applied" };
+    }
+    if (decision === "create" && row.targetAmount === null) {
+      return { error: "A positive target amount is required to create an imported goal" };
+    }
+    if (row.providedFields.targetAmount && row.targetAmount === null) {
+      return { error: "Imported goal target amount must be positive" };
+    }
+    resolved.push({ row, match, decision });
+  }
+  return { rows: resolved };
 }
 
 function hasGoalAllocation(row: GoalImportRow): boolean {
@@ -271,21 +295,33 @@ function goalAccountForRow(
 async function updateGoalRow(
   supabase: SupabaseClient,
   userId: string,
-  row: GoalImportRow,
+  row: GoalImportPlanRow,
   match: ExistingGoalRow,
+  decision: "merge" | "replace",
   account: GoalAccountRow | undefined,
 ): Promise<GoalApplyResult> {
+  const values: Record<string, unknown> = {
+    name: row.name,
+    goal_type: row.goalType,
+    import_source: row.importedId ? "monarch" : match.import_source,
+    import_ref: row.importedId ?? match.import_ref,
+  };
+  if (decision === "replace") {
+    values.target_amount = row.targetAmount ?? Number(match.target_amount);
+    values.target_date = row.providedFields.targetDate ? row.targetDate : null;
+    values.monthly_contribution = row.providedFields.monthlyContribution
+      ? row.monthlyContribution
+      : null;
+  } else {
+    if (row.providedFields.targetAmount) values.target_amount = row.targetAmount;
+    if (row.providedFields.targetDate) values.target_date = row.targetDate;
+    if (row.providedFields.monthlyContribution) {
+      values.monthly_contribution = row.monthlyContribution;
+    }
+  }
   const { error } = await supabase
     .from("goals")
-    .update({
-      name: row.name,
-      goal_type: row.goalType,
-      target_amount: row.targetAmount ?? Number(match.target_amount),
-      target_date: row.targetDate ?? match.target_date,
-      monthly_contribution: row.monthlyContribution ?? undefined,
-      import_source: row.importedId ? "monarch" : match.import_source,
-      import_ref: row.importedId ?? match.import_ref,
-    })
+    .update(values)
     .eq("id", match.id)
     .eq("user_id", userId);
   if (error) throw error;
@@ -298,7 +334,7 @@ async function updateGoalRow(
 async function createGoalRow(
   supabase: SupabaseClient,
   userId: string,
-  row: GoalImportRow,
+  row: GoalImportPlanRow,
   account: GoalAccountRow | undefined,
 ): Promise<GoalApplyResult> {
   const { data, error } = await supabase
@@ -336,60 +372,53 @@ async function createGoalRow(
 async function applyGoalRow(
   supabase: SupabaseClient,
   userId: string,
-  row: GoalImportRow,
+  row: GoalImportPlanRow,
   match: ExistingGoalRow | null,
-  decisionMap: ImportDecisions,
+  decision: GoalImportDecision,
   accountsByName: Map<string, GoalAccountRow>,
 ): Promise<GoalApplyResult> {
-  const decision = goalDecision(row, decisionMap) ?? "skip";
   if (decision === "skip") return { status: "skipped", id: null, allocationId: null };
-  if (!match && row.targetAmount === null) {
-    return { status: "skipped", id: null, allocationId: null };
-  }
   const account = goalAccountForRow(row, accountsByName);
   if (needsGoalAllocation(row) && !account) {
     throw new Error(`goal_import_account_not_found:${row.linkedAccountName}`);
   }
 
   if (match) {
-    return updateGoalRow(supabase, userId, row, match, account);
+    if (decision !== "merge" && decision !== "replace") {
+      throw new Error("goal_import_invalid_matched_decision");
+    }
+    return updateGoalRow(supabase, userId, row, match, decision, account);
   }
+  if (decision !== "create") throw new Error("goal_import_invalid_unmatched_decision");
   return createGoalRow(supabase, userId, row, account);
 }
 
 async function applyGoalImport(
   supabase: SupabaseClient,
   userId: string,
-  rows: GoalImportRow[],
-  decisions: ImportDecisions,
+  resolvedRows: ResolvedGoalPlanRow[],
   accountsByName: Map<string, GoalAccountRow>,
 ): Promise<ApplyOutcome> {
-  const { data: existingRows } = await supabase
-    .from("goals")
-    .select("id, name, goal_type, target_amount, target_date, import_source, import_ref")
-    .eq("user_id", userId);
-  const existing = (existingRows ?? []) as ExistingGoalRow[];
-
-  const created: string[] = [];
-  const updated: string[] = [];
+  let created = 0;
+  let updated = 0;
   const changedIds: string[] = [];
   const allocationIds: string[] = [];
   let skipped = 0;
 
-  for (const row of rows) {
-    const match = matchGoal(row, existing);
+  for (const resolved of resolvedRows) {
+    const { row, match, decision } = resolved;
     const result = await applyGoalRow(
       supabase,
       userId,
       row,
       match,
-      decisions,
+      decision,
       accountsByName,
     );
     if (result.status === "created") {
-      created.push(row.name);
+      created += 1;
     } else if (result.status === "updated") {
-      updated.push(match?.name ?? row.name);
+      updated += 1;
     } else {
       skipped += 1;
     }
@@ -397,21 +426,20 @@ async function applyGoalImport(
     if (result.allocationId) allocationIds.push(result.allocationId);
   }
 
-  if (created.length > 0 || updated.length > 0) {
+  if (created > 0 || updated > 0) {
     await writeAudit({
       userId,
       action: "goal_config_imported",
       metadata: {
-        created,
-        updated,
+        created_count: created,
+        updated_count: updated,
+        skipped_count: skipped,
         goal_ids: changedIds,
         allocation_ids: allocationIds,
-        skipped,
-        mode: decisions,
       },
     });
   }
-  return { created: created.length, updated: updated.length, skipped };
+  return { created, updated, skipped };
 }
 
 async function processBudgetConfig(
@@ -479,19 +507,32 @@ async function processGoalConfig(
   if (errors.length > 0) return badRequest(errors[0] ?? "Invalid goal format");
   const { data: existing } = await supabase
     .from("goals")
-    .select("id, name, goal_type, target_amount, target_date, import_source, import_ref")
+    .select("id, name, goal_type, target_amount, target_date, monthly_contribution, import_source, import_ref")
     .eq("user_id", userId);
-  const plan = buildGoalImportPlan(rows, existing ?? []);
+  const existingGoals = (existing ?? []) as ExistingGoalRow[];
+  const plan = buildGoalImportPlan(rows, existingGoals);
   if (mode === "preview") return NextResponse.json({ kind: "goal", plan });
+  const decisionResult = resolveGoalDecisions(plan, existingGoals, decisions);
+  if ("error" in decisionResult) return badRequest(decisionResult.error);
+  const activeRows = decisionResult.rows.filter(({ decision }) => decision !== "skip");
   const { data: accountRows, error: accountError } = await supabase
     .from("accounts")
     .select("id, name, type, current_balance")
     .eq("user_id", userId);
   if (accountError) throw accountError;
   const { accountsByName, duplicateNames } = buildGoalAccountIndex(accountRows);
-  const allocationError = validateGoalAllocations(rows, accountsByName, duplicateNames);
+  const allocationError = validateGoalAllocations(
+    activeRows.map(({ row }) => row),
+    accountsByName,
+    duplicateNames,
+  );
   if (allocationError) return allocationError;
-  const outcome = await applyGoalImport(supabase, userId, rows, decisions, accountsByName);
+  const outcome = await applyGoalImport(
+    supabase,
+    userId,
+    decisionResult.rows,
+    accountsByName,
+  );
   return NextResponse.json({ kind: "goal", ok: true, ...outcome });
 }
 
@@ -513,6 +554,9 @@ export async function POST(request: NextRequest) {
     const kind = body?.kind;
     const text = body?.text;
     const mode: ConfigImportMode = body?.mode === "apply" ? "apply" : "preview";
+    if (body?.decisions !== undefined && !isRecord(body.decisions)) {
+      return badRequest("decisions must be an object");
+    }
     const decisions = isRecord(body?.decisions) ? body.decisions : {};
     if (kind !== "budget" && kind !== "goal") return badRequest("kind must be budget or goal");
     if (typeof text !== "string" || text.length === 0 || text.length > 2 * 1024 * 1024) {
