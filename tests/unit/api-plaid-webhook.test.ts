@@ -13,6 +13,17 @@ vi.mock("@/lib/sync", () => ({
   syncItemTransactions: (...args: unknown[]) => mockSyncItemTransactions(...args),
 }));
 
+const mockRefreshRecurringForItem = vi.fn();
+vi.mock("@/lib/recurring", () => ({
+  refreshRecurringForItem: (...args: unknown[]) => mockRefreshRecurringForItem(...args),
+}));
+
+const mockRefreshInferredRecurringForItem = vi.fn();
+vi.mock("@/lib/recurring-inference", () => ({
+  refreshInferredRecurringForItem: (...args: unknown[]) =>
+    mockRefreshInferredRecurringForItem(...args),
+}));
+
 const mockErrorResponse = vi.fn();
 const mockBadRequest = vi.fn();
 vi.mock("@/lib/http", () => ({
@@ -65,6 +76,9 @@ describe("POST /api/plaid/webhook", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({ success: true });
+    expect(mockRefreshInferredRecurringForItem).toHaveBeenCalledWith(
+      await mockGetItemByPlaidItemId.mock.results[0].value,
+    );
     expect(mockGetItemByPlaidItemId).toHaveBeenCalledWith("plaid-item-1");
     expect(mockSyncItemTransactions).toHaveBeenCalledWith(sampleItem);
   });

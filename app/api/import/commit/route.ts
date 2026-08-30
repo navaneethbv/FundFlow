@@ -4,6 +4,8 @@ import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { makeImportId } from "@/lib/import";
 import { createServiceClient } from "@/lib/supabase/service";
 import { normalizeImportCategory } from "@/lib/finance-domain";
+import { refreshInferredRecurringForUser } from "@/lib/recurring-inference";
+import { logError } from "@/lib/log";
 
 const UPSERT_CHUNK = 500;
 const QUERY_CHUNK = 500;
@@ -566,6 +568,19 @@ export async function POST(request: NextRequest) {
       batchId,
       userId: user.id,
     });
+
+    // Imported rows land in the same canonical ledger the detector reads, so a
+    // commit can complete a recurring sequence. Manual-account-only imports
+    // never can: inference is scoped to connected Plaid accounts. The commit is
+    // already durable at this point, so a detector failure is logged rather
+    // than surfaced as a failed import.
+    if (dbRows.some((row) => row.account_id)) {
+      try {
+        await refreshInferredRecurringForUser(user.id);
+      } catch (error) {
+        logError("import.commit.recurring", error);
+      }
+    }
 
     return NextResponse.json({ ok: true, imported: dbRows.length });
   } catch (error) {
