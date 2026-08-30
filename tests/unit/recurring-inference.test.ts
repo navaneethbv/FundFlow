@@ -491,3 +491,197 @@ describe("recurring inference reconciliation", () => {
     expect(mockServiceClient.calls.some((call) => call.table === "recurring_streams" && call.method === "update")).toBe(false);
   });
 });
+
+describe("recurring inference defensive branches", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListActiveItems.mockResolvedValue([item()]);
+    mockLoadCanonicalProjection.mockResolvedValue(monthlyProjection());
+  });
+
+  it("rejects a malformed today anchor and accepts the default local date", async () => {
+    mockServiceClient = makeQueryClient({ accounts: [], transactions: [], recurring_streams: [], recurring_stream_transactions: [] });
+    await expect(
+      refreshInferredRecurringForItem(item(), { today: "08/30/2026" }),
+    ).rejects.toThrow("invalid_recurring_inference_today");
+
+    await refreshInferredRecurringForItem(item());
+    expect(mockServiceClient.rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("propagates a failed accounts read before any mutation", async () => {
+    mockServiceClient = makeQueryClient({ recurring_streams: [], recurring_stream_transactions: [] });
+    const passthroughFrom = mockServiceClient.from;
+    mockServiceClient.from = vi.fn((table: string) => {
+      if (table === "accounts") {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                order: () => Promise.resolve({ data: null, error: { message: "accounts read failed" } }),
+              }),
+            }),
+          }),
+        };
+      }
+      return passthroughFrom(table);
+    });
+
+    await expect(refreshInferredRecurringForItem(item(), { today: "2026-08-30" })).rejects.toMatchObject({
+      message: "accounts read failed",
+    });
+    expect(mockServiceClient.rpc).not.toHaveBeenCalled();
+  });
+
+  it("rejects atomic writer results that are missing or malformed", async () => {
+    mockServiceClient = makeQueryClient({ accounts: [], transactions: [], recurring_streams: [], recurring_stream_transactions: [] });
+    mockServiceClient.rpc.mockResolvedValueOnce({ data: null, error: null });
+    await expect(refreshInferredRecurringForItem(item(), { today: "2026-08-30" })).rejects.toThrow(
+      "recurring_reconciliation_result_invalid",
+    );
+
+    mockServiceClient.rpc.mockResolvedValueOnce({ data: { active: "many", added: 0, deactivated: 0, deduplicated: 0 }, error: null });
+    await expect(refreshInferredRecurringForItem(item(), { today: "2026-08-30" })).rejects.toThrow(
+      "recurring_reconciliation_result_invalid",
+    );
+  });
+
+  it("proceeds with an empty pass when the item has no accounts or only unresolvable account rows", async () => {
+    mockServiceClient = makeQueryClient({
+      accounts: [{ id: 42, user_id: "user-1", plaid_item_id: "item-1" }, { id: "", user_id: "user-1", plaid_item_id: "item-1" }],
+      transactions: [{ id: "txn-1", user_id: "user-1", account_id: "acct-1", date: "2026-07-15", amount: 15, authorized_date: null, pending: false }],
+      recurring_streams: [],
+      recurring_stream_transactions: [],
+    });
+
+    const result = await refreshInferredRecurringForItem(item(), { today: "2026-08-30" });
+    expect(result).toMatchObject({ active: 0, added: 0, deactivated: 0, deduplicated: 0, failed: 0 });
+    // No account ids resolve, so raw metadata is skipped entirely.
+    expect(mockServiceClient.calls.some((call) => call.table === "transactions")).toBe(false);
+  });
+
+  it("filters pending, foreign-account, canonical-missing, transfer, and non-positive rows out of detection input", async () => {
+    mockLoadCanonicalProjection.mockResolvedValue({
+      transactions: [
+        { id: "txn-1", sourceTransactionId: "txn-1", date: "2026-05-15", signedAmount: 15, flow: "expense", merchant: "Streaming Co", groupKey: "ENTERTAINMENT", categoryKey: "STREAMING", accountId: "acct-1", manualAccountId: null, pending: false, source: "plaid" },
+        { id: "txn-2", sourceTransactionId: "txn-2", date: "2026-06-15", signedAmount: 15, flow: "expense", merchant: "Streaming Co", groupKey: "ENTERTAINMENT", categoryKey: "STREAMING", accountId: "acct-1", manualAccountId: null, pending: false, source: "plaid" },
+        { id: "txn-3", sourceTransactionId: "txn-3", date: "2026-07-15", signedAmount: 15, flow: "expense", merchant: "Streaming Co", groupKey: "ENTERTAINMENT", categoryKey: "STREAMING", accountId: "acct-1", manualAccountId: null, pending: false, source: "plaid" },
+        { id: "pending-1", sourceTransactionId: "pending-1", date: "2026-07-15", signedAmount: 15, flow: "expense", merchant: "Streaming Co", groupKey: "ENTERTAINMENT", categoryKey: "STREAMING", accountId: "acct-1", manualAccountId: null, pending: true, source: "plaid" },
+        { id: "transfer-1", sourceTransactionId: "transfer-1", date: "2026-07-15", signedAmount: 15, flow: "transfer", merchant: "Streaming Co", groupKey: "TRANSFER_OUT", categoryKey: "TRANSFER_OUT", accountId: "acct-1", manualAccountId: null, pending: false, source: "plaid" },
+      ],
+      currencyByAccountId: new Map([["acct-1", "USD"]]),
+      truncated: false,
+    });
+    mockServiceClient = makeQueryClient({
+      accounts: [{ id: "acct-1", user_id: "user-1", plaid_item_id: "item-1" }],
+      transactions: [
+        { id: "txn-1", user_id: "user-1", account_id: "acct-1", date: "2026-05-15", amount: 15, authorized_date: null, merchant_name: "Streaming Co", name: "STREAMING CO", pending: false },
+        { id: "txn-2", user_id: "user-1", account_id: "acct-1", date: "2026-06-15", amount: 15, authorized_date: null, merchant_name: "Streaming Co", name: "STREAMING CO", pending: false },
+        { id: "txn-3", user_id: "user-1", account_id: "acct-1", date: "2026-07-15", amount: 15, authorized_date: null, merchant_name: "Streaming Co", name: "STREAMING CO", pending: false },
+        { id: "pending-1", user_id: "user-1", account_id: "acct-1", date: "2026-07-15", amount: 15, authorized_date: null, pending: true },
+        { id: "foreign-1", user_id: "user-1", account_id: "acct-9", date: "2026-07-15", amount: 15, authorized_date: null, pending: false },
+        { id: "orphan-1", user_id: "user-1", account_id: "acct-1", date: "2026-07-15", amount: 15, authorized_date: null, pending: false },
+        { id: "mismatch-1", user_id: "user-1", account_id: "acct-1", date: "2026-07-15", amount: 0, authorized_date: null, pending: false },
+      ],
+      recurring_streams: [],
+      recurring_stream_transactions: [],
+    });
+
+    await refreshInferredRecurringForItem(item(), { today: "2026-08-30" });
+    const payload = mockServiceClient.rpc.mock.calls[0]?.[1] as { p_payload: { candidates: Array<Record<string, unknown>> } };
+    expect(payload.p_payload.candidates).toHaveLength(1);
+    expect(payload.p_payload.candidates[0]?.transaction_ids).toEqual(["txn-1", "txn-2", "txn-3"]);
+  });
+
+  it("maps income flow and falls back through merchant and category columns", async () => {
+    mockLoadCanonicalProjection.mockResolvedValue({
+      transactions: [
+        { id: "inc-1", sourceTransactionId: "inc-1", date: "2026-05-15", signedAmount: -3000, flow: "income", merchant: "", groupKey: "", categoryKey: "", accountId: "acct-1", manualAccountId: null, pending: false, source: "plaid" },
+        { id: "inc-2", sourceTransactionId: "inc-2", date: "2026-06-15", signedAmount: -3000, flow: "income", merchant: "", groupKey: "", categoryKey: "", accountId: "acct-1", manualAccountId: null, pending: false, source: "plaid" },
+        { id: "inc-3", sourceTransactionId: "inc-3", date: "2026-07-15", signedAmount: -3000, flow: "income", merchant: "", groupKey: "", categoryKey: "", accountId: "acct-1", manualAccountId: null, pending: false, source: "plaid" },
+      ],
+      currencyByAccountId: new Map([["acct-1", "USD"]]),
+      truncated: false,
+    });
+    mockServiceClient = makeQueryClient({
+      accounts: [{ id: "acct-1", user_id: "user-1", plaid_item_id: "item-1" }],
+      transactions: [
+        { id: "inc-1", user_id: "user-1", account_id: "acct-1", date: "2026-05-15", amount: -3000, merchant_name: "", name: "Payroll Deposit", pfc_primary: null, pfc_detailed: "PAYROLL", authorized_date: null, pending: false },
+        { id: "inc-2", user_id: "user-1", account_id: "acct-1", date: "2026-06-15", amount: -3000, merchant_name: "", name: "Payroll Deposit", pfc_primary: null, pfc_detailed: "PAYROLL", authorized_date: null, pending: false },
+        { id: "inc-3", user_id: "user-1", account_id: "acct-1", date: "2026-07-15", amount: -3000, merchant_name: "", name: "Payroll Deposit", pfc_primary: null, pfc_detailed: "PAYROLL", authorized_date: null, pending: false },
+      ],
+      recurring_streams: [],
+      recurring_stream_transactions: [],
+    });
+
+    await refreshInferredRecurringForItem(item(), { today: "2026-08-30" });
+    const payload = mockServiceClient.rpc.mock.calls[0]?.[1] as { p_payload: { candidates: Array<Record<string, unknown>> } };
+    expect(payload.p_payload.candidates).toHaveLength(1);
+    expect(payload.p_payload.candidates[0]).toMatchObject({
+      stream_type: "inflow",
+      merchant_name: "Payroll Deposit",
+      category: "PAYROLL",
+    });
+  });
+
+  it("matches a Plaid stream through its description identity and skips foreign accounts and cadences", async () => {
+    mockServiceClient = makeQueryClient({
+      accounts: [{ id: "acct-1", user_id: "user-1", plaid_item_id: "item-1" }],
+      transactions: [
+        { id: "txn-1", user_id: "user-1", account_id: "acct-1", date: "2026-05-15", amount: 15, authorized_date: null, merchant_name: "Streaming Co", name: "STREAMING CO", pending: false },
+        { id: "txn-2", user_id: "user-1", account_id: "acct-1", date: "2026-06-15", amount: 15, authorized_date: null, merchant_name: "Streaming Co", name: "STREAMING CO", pending: false },
+        { id: "txn-3", user_id: "user-1", account_id: "acct-1", date: "2026-07-15", amount: 15, authorized_date: null, merchant_name: "Streaming Co", name: "STREAMING CO", pending: false },
+      ],
+      recurring_streams: [
+        { id: "plaid-desc", user_id: "user-1", plaid_item_id: "item-1", stream_id: "plaid-desc-stream", source: "plaid", stream_type: "outflow", merchant_name: null, description: "STREAMING  CO", frequency: "MONTHLY", account_id: "acct-1", is_active: true },
+        { id: "plaid-account", user_id: "user-1", plaid_item_id: "item-1", stream_id: "plaid-account-stream", source: "plaid", stream_type: "outflow", merchant_name: "Streaming Co", frequency: "MONTHLY", account_id: "acct-9", is_active: true },
+        { id: "plaid-cadence", user_id: "user-1", plaid_item_id: "item-1", stream_id: "plaid-cadence-stream", source: "plaid", stream_type: "outflow", merchant_name: "Streaming Co", frequency: "ANNUALLY", account_id: "acct-1", is_active: true },
+      ],
+      recurring_stream_transactions: [],
+    });
+
+    const result = await refreshInferredRecurringForItem(item(), { today: "2026-08-30" });
+    expect(result).toMatchObject({ deduplicated: 1 });
+    const payload = mockServiceClient.rpc.mock.calls[0]?.[1] as { p_payload: { deduplications: Array<Record<string, unknown>> } };
+    expect(payload.p_payload.deduplications).toEqual([{ plaid_id: "plaid-desc", inferred_id: "" }]);
+    // The inferred read must not filter on is_active; only the plaid read does.
+    const isActiveCalls = mockServiceClient.calls.filter(
+      (call) => call.table === "recurring_streams" && call.method === "eq" && call.args[0] === "is_active",
+    );
+    expect(isActiveCalls).toHaveLength(1);
+    // No plaid stream rows means the join read is skipped entirely; with rows
+    // present, the join read happens exactly once.
+    expect(mockServiceClient.calls.some((call) => call.table === "recurring_stream_transactions")).toBe(true);
+  });
+});
+
+describe("recurring inference defensive edges", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListActiveItems.mockResolvedValue([item()]);
+    mockLoadCanonicalProjection.mockResolvedValue(monthlyProjection());
+  });
+
+  it("drops non-numeric metadata amounts and Plaid rows with no merchant text at all", async () => {
+    mockServiceClient = makeQueryClient({
+      accounts: [{ id: "acct-1", user_id: "user-1", plaid_item_id: "item-1" }],
+      transactions: [
+        { id: "txn-1", user_id: "user-1", account_id: "acct-1", date: "2026-05-15", amount: 15, authorized_date: null, merchant_name: "Streaming Co", name: "STREAMING CO", pending: false },
+        { id: "txn-2", user_id: "user-1", account_id: "acct-1", date: "2026-06-15", amount: 15, authorized_date: null, merchant_name: "Streaming Co", name: "STREAMING CO", pending: false },
+        { id: "txn-3", user_id: "user-1", account_id: "acct-1", date: "2026-07-15", amount: 15, authorized_date: null, merchant_name: "Streaming Co", name: "STREAMING CO", pending: false },
+        { id: "bad-1", user_id: "user-1", account_id: "acct-1", date: "2026-07-15", amount: "not-a-number", authorized_date: null, merchant_name: "Streaming Co", name: "STREAMING CO", pending: false },
+      ],
+      recurring_streams: [
+        { id: "plaid-blank", user_id: "user-1", plaid_item_id: "item-1", stream_id: "plaid-blank-stream", source: "plaid", stream_type: "outflow", merchant_name: "   ", description: null, frequency: "MONTHLY", account_id: "acct-1", is_active: true },
+      ],
+      recurring_stream_transactions: [],
+    });
+
+    const result = await refreshInferredRecurringForItem(item(), { today: "2026-08-30" });
+    // The blank Plaid row must not suppress the candidate via a shared
+    // identity, so the stream is still materialized.
+    expect(result).toMatchObject({ active: 1, added: 1, deduplicated: 0 });
+    const payload = mockServiceClient.rpc.mock.calls[0]?.[1] as { p_payload: { candidates: Array<Record<string, unknown>> } };
+    expect(payload.p_payload.candidates[0]?.transaction_ids).toEqual(["txn-1", "txn-2", "txn-3"]);
+  });
+});

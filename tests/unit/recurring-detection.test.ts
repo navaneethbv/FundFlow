@@ -248,3 +248,155 @@ describe("recurringIdentityKey", () => {
     expect(key).not.toBe(recurringIdentityKey("user-1", "account-2", "outflow", "Acme Streaming", "MONTHLY"));
   });
 });
+
+describe("detectRecurringCandidates defensive filters", () => {
+  it("rejects a malformed today anchor outright", () => {
+    expect(
+      detectRecurringCandidates(series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99), "08/30/2026"),
+    ).toEqual([]);
+  });
+
+  it("drops rows with impossible calendar dates, invalid authorized dates, or future postings", () => {
+    expect(
+      detectRecurringCandidates(series(["2026-02-30", "2026-06-15", "2026-07-15"], 15.99), "2026-08-30"),
+    ).toEqual([]);
+    expect(
+      detectRecurringCandidates(
+        series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99).map((row, index) => ({
+          ...row,
+          authorizedDate: index === 1 ? "2026-06-31" : null,
+        })),
+        "2026-08-30",
+      ),
+    ).toEqual([]);
+    expect(
+      detectRecurringCandidates(series(["2026-09-15", "2026-10-15", "2026-11-15"], 15.99), "2026-08-30"),
+    ).toEqual([]);
+  });
+
+  it("drops rows with zero, negative, or non-finite amounts", () => {
+    expect(
+      detectRecurringCandidates(series(["2026-05-15", "2026-06-15", "2026-07-15"], 0), "2026-08-30"),
+    ).toEqual([]);
+    expect(
+      detectRecurringCandidates(
+        series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99).map((row, index) => ({
+          ...row,
+          amount: index === 2 ? Number.NaN : row.amount,
+        })),
+        "2026-08-30",
+      ),
+    ).toEqual([]);
+  });
+
+  it("falls back to rawName for identity and display, and rejects rows with no identity at all", () => {
+    const fallback = detectRecurringCandidates(
+      series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99, { merchant: "   ", rawName: "Backup Name" }),
+      "2026-08-30",
+    );
+    expect(fallback).toHaveLength(1);
+    expect(fallback[0]).toMatchObject({ merchantName: "Backup Name", description: "Backup Name" });
+
+    expect(
+      detectRecurringCandidates(
+        series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99, { merchant: "   ", rawName: "  " }),
+        "2026-08-30",
+      ),
+    ).toEqual([]);
+  });
+
+  it("treats a missing currency as its own partition and accepts a fixed in-store sequence", () => {
+    const result = detectRecurringCandidates(
+      series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99, { currency: null, paymentChannel: "in store" }),
+      "2026-08-30",
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ amountPattern: "fixed" });
+  });
+
+  it("maps income flow to inflow streams", () => {
+    const result = detectRecurringCandidates(
+      series(["2026-05-15", "2026-06-15", "2026-07-15"], 3000, { flow: "income" }),
+      "2026-08-30",
+    );
+    expect(result[0]).toMatchObject({ streamType: "inflow" });
+  });
+
+  it("unlocks the variable pattern through a recurring signifier alone and forecasts the even-count median", () => {
+    const result = detectRecurringCandidates(
+      series(["2026-05-01", "2026-06-01", "2026-07-01", "2026-08-01"], [80, 100, 120, 90], {
+        category: "FOOD_AND_DRINK",
+        detailedCategory: "COFFEE",
+        rawName: "Acme Streaming SUBSCRIPTION",
+      }),
+      "2026-08-30",
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      amountPattern: "variable",
+      expectedAmount: 95,
+    });
+    expect(result[0]!.evidence.matchedSignifiers).toContain("SUBSCRIPTION");
+  });
+
+  it("falls back through newest category, newest detailed category, and oldest category", () => {
+    const rows = series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99);
+    const newestBlank = rows.map((row, index) =>
+      index === 2 ? { ...row, category: null, detailedCategory: null } : row,
+    );
+    const result = detectRecurringCandidates(newestBlank, "2026-08-30");
+    expect(result[0]!.category).toBe("ENTERTAINMENT");
+  });
+
+  it("predicts biweekly and weekly next dates from the newest effective occurrence", () => {
+    const biweekly = detectRecurringCandidates(
+      series(["2026-07-01", "2026-07-15", "2026-07-29", "2026-08-12"], 24),
+      "2026-08-26",
+    );
+    expect(biweekly[0]).toMatchObject({ predictedNextDate: "2026-08-26" });
+
+    const weekly = detectRecurringCandidates(
+      series(["2026-07-06", "2026-07-13", "2026-07-20", "2026-07-27", "2026-08-03", "2026-08-10", "2026-08-17", "2026-08-24"], 12.99),
+      "2026-08-30",
+    );
+    expect(weekly[0]).toMatchObject({ predictedNextDate: "2026-08-31" });
+  });
+});
+
+describe("recurringIdentityKey overloads and display fallbacks", () => {
+  it("accepts the object overload and agrees with the positional form", () => {
+    expect(
+      recurringIdentityKey({
+        userId: "user-1",
+        accountId: "account-1",
+        streamType: "outflow",
+        merchant: "Acme Streaming",
+        frequency: "MONTHLY",
+      }),
+    ).toBe(recurringIdentityKey("user-1", "account-1", "outflow", "Acme Streaming", "MONTHLY"));
+  });
+
+  it("falls back to detailed category and the merchant name for description when rawName is absent", () => {
+    const rows = series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99).map((row, index) =>
+      index === 2 ? { ...row, category: null, detailedCategory: "STREAMING_SERVICES", rawName: null } : { ...row, rawName: null },
+    );
+    const result = detectRecurringCandidates(rows, "2026-08-30");
+    expect(result[0]).toMatchObject({ category: "STREAMING_SERVICES", description: "Acme Streaming" });
+  });
+
+  it("accepts a variable bill with no payment channel and reads signifiers from the merchant alone", () => {
+    const result = detectRecurringCandidates(
+      series(["2026-05-15", "2026-06-15", "2026-07-15"], [80, 120, 100], {
+        category: null,
+        detailedCategory: null,
+        paymentChannel: null,
+        rawName: null,
+        merchant: "Acme Utilities AUTOPAY",
+      }),
+      "2026-08-30",
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ amountPattern: "variable", expectedAmount: 100 });
+    expect(result[0]!.evidence.matchedSignifiers).toContain("AUTOPAY");
+  });
+});

@@ -574,3 +574,102 @@ describe("loadRecurringData", () => {
     expect(result.view.occurrences).toHaveLength(1);
   });
 });
+
+describe("detection evidence parsing", () => {
+  it("degrades malformed evidence to null and defaults missing optional fields", async () => {
+    const client = clientStub({
+      households: { data: [] },
+      recurring_streams: {
+        data: [
+          {
+            id: "stream-bad-count",
+            user_id: "user-1",
+            merchant_name: "A",
+            description: null,
+            stream_type: "outflow",
+            status: "MATURE",
+            is_active: true,
+            reviewed_at: null,
+            dismissed_at: null,
+            user_amount: null,
+            average_amount: 5,
+            last_amount: 5,
+            frequency: "MONTHLY",
+            first_date: "2026-05-15",
+            last_date: "2026-06-15",
+            predicted_next_date: "2026-07-15",
+            account_id: null,
+            category: null,
+            source: "inferred",
+            detection_evidence: { occurrenceCount: "three", amountPattern: "fixed" },
+          },
+          {
+            id: "stream-bad-pattern",
+            user_id: "user-1",
+            merchant_name: "B",
+            description: null,
+            stream_type: "outflow",
+            status: "MATURE",
+            is_active: true,
+            reviewed_at: null,
+            dismissed_at: null,
+            user_amount: null,
+            average_amount: 5,
+            last_amount: 5,
+            frequency: "MONTHLY",
+            first_date: "2026-05-15",
+            last_date: "2026-06-15",
+            predicted_next_date: "2026-07-15",
+            account_id: null,
+            category: null,
+            source: "inferred",
+            detection_evidence: { occurrenceCount: 3, amountPattern: "wild" },
+          },
+          {
+            id: "stream-minimal",
+            user_id: "user-1",
+            merchant_name: "C",
+            description: null,
+            stream_type: "outflow",
+            status: "MATURE",
+            is_active: true,
+            reviewed_at: null,
+            dismissed_at: null,
+            user_amount: null,
+            average_amount: 5,
+            last_amount: 5,
+            frequency: "MONTHLY",
+            first_date: "2026-05-15",
+            last_date: "2026-06-15",
+            predicted_next_date: "2026-07-15",
+            account_id: null,
+            category: null,
+            source: "inferred",
+            detection_evidence: { occurrenceCount: 3, amountPattern: "fixed" },
+          },
+        ],
+      },
+      recurring_stream_transactions: { data: [] },
+      manual_recurring_items: { data: [] },
+      accounts: { data: [] },
+      sync_jobs: { data: null },
+      credit_card_bills: { data: [] },
+    });
+
+    const result = await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-07",
+      today: "2026-07-01",
+    });
+
+    const byId = new Map(result.allStreams.map((stream) => [stream.id, stream]));
+    expect(byId.get("stream-bad-count")!.detectionEvidence).toBeNull();
+    expect(byId.get("stream-bad-pattern")!.detectionEvidence).toBeNull();
+    expect(byId.get("stream-minimal")!.detectionEvidence).toEqual({
+      occurrenceCount: 3,
+      amountPattern: "fixed",
+      maximumCadenceDeviationDays: 0,
+      matchedSignifiers: [],
+    });
+  });
+});

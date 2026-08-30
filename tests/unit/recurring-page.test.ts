@@ -324,3 +324,15 @@ describe("expandStreamsForMonth", () => {
     expect(month.totals.expenses.paid).toBe(20);
   });
 });
+
+describe("amount fallbacks", () => {
+  it("renders a zero amount for a stream with no tracked amounts at all", () => {
+    const month = expandStreamsForMonth(
+      [stream({ userAmount: null, averageAmount: null, lastAmount: null })],
+      [],
+      "2026-07",
+      "2026-07-20",
+    );
+    expect(month.occurrences[0]!.amount).toBe(0);
+  });
+});
