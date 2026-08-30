@@ -21,6 +21,7 @@ const LINKS = {
 function occurrence(overrides: Partial<RecurringOccurrence> = {}): RecurringOccurrence {
   return {
     source: "plaid",
+    evidenceCount: null,
     sourceId: "stream-1",
     merchant: "Netflix",
     frequency: "Every month",
@@ -39,6 +40,8 @@ function stream(overrides: Partial<RecurringStreamRow> = {}): RecurringStreamRow
   return {
     id: "stream-1",
     merchantName: "Netflix",
+    source: "plaid",
+    detectionEvidence: null,
     description: null,
     streamType: "outflow",
     status: "MATURE",
@@ -328,6 +331,88 @@ describe("RecurringList — Manage tab", () => {
       }),
     );
     expect(html).toContain("var(--viz-pos)");
+  });
+});
+
+describe("RecurringList - inferred provenance", () => {
+  const inferredOccurrence = occurrence({
+    source: "inferred",
+    evidenceCount: 3,
+    merchant: "E2E LOCAL DETECT 130",
+    sourceId: "inferred-row-1",
+  });
+  const inferredStream = stream({
+    id: "inferred-row-1",
+    merchantName: "E2E LOCAL DETECT 130",
+    source: "inferred",
+    detectionEvidence: {
+      occurrenceCount: 3,
+      amountPattern: "fixed",
+      maximumCadenceDeviationDays: 1,
+      matchedSignifiers: [],
+    },
+    reviewedAt: null,
+  });
+
+  it("renders accessible provenance for inferred entries and none for plaid entries", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecurringList, {
+        occurrences: [inferredOccurrence, occurrence()],
+        streams: [inferredStream, stream()],
+        manualItems: [],
+        currency: "USD",
+        today: "2026-07-10",
+        tab: "upcoming",
+        links: LINKS,
+      }),
+    );
+    expect(html).toContain("Detected from 3 transactions");
+  });
+
+  it("keeps every owner control on an owned inferred row", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecurringList, {
+        occurrences: [inferredOccurrence],
+        streams: [inferredStream],
+        manualItems: [],
+        currency: "USD",
+        today: "2026-07-10",
+        tab: "upcoming",
+        links: LINKS,
+      }),
+    );
+    expect(html).toContain("More options for E2E LOCAL DETECT 130");
+  });
+
+  it("renders shared inferred rows read-only like shared plaid rows", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecurringList, {
+        occurrences: [inferredOccurrence],
+        streams: [{ ...inferredStream, isOwn: false }],
+        manualItems: [],
+        currency: "USD",
+        today: "2026-07-10",
+        tab: "upcoming",
+        links: LINKS,
+      }),
+    );
+    expect(html).toContain("Shared · view only");
+    expect(html).not.toContain("More options for E2E LOCAL DETECT 130");
+  });
+
+  it("labels provenance in the manage tab for inferred streams", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecurringList, {
+        occurrences: [],
+        streams: [inferredStream],
+        manualItems: [],
+        currency: "USD",
+        today: "2026-07-10",
+        tab: "manage",
+        links: LINKS,
+      }),
+    );
+    expect(html).toContain("Detected from 3 transactions");
   });
 });
 

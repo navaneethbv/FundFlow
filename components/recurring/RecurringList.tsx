@@ -8,7 +8,11 @@ import { CheckCircle2 } from "@/components/ui/icons";
 import Tabs from "@/components/ui/Tabs";
 import { daysUntil, formatDueAnnotation } from "@/lib/format-date";
 import { formatCurrency, formatDay, titleCase } from "@/lib/format";
-import type { RecurringOccurrence } from "@/lib/recurring-page";
+import {
+  inferredSourceLabel,
+  isPersistedStreamSource,
+  type RecurringOccurrence,
+} from "@/lib/recurring-page";
 import type { ManualRecurringItemRow, RecurringStreamRow } from "@/lib/recurring-data";
 
 export type RecurringTab = "overdue" | "upcoming" | "complete" | "manage";
@@ -104,7 +108,7 @@ function OccurrenceRowMenu({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open]);
 
-  if (occurrence.source === "plaid" && stream?.isOwn !== true) {
+  if (isPersistedStreamSource(occurrence.source) && stream?.isOwn !== true) {
     return <span className="text-xs text-muted">Shared · view only</span>;
   }
   if (occurrence.source === "manual" && !manualItem) return null;
@@ -139,7 +143,7 @@ function OccurrenceRowMenu({
           aria-label={`Options for ${occurrence.merchant}`}
           className="absolute right-0 z-40 mt-2 w-64 space-y-3 rounded-card border border-panel-border bg-panel p-3 shadow-float"
         >
-          {occurrence.source === "plaid" && stream && (
+          {isPersistedStreamSource(occurrence.source) && stream && (
             <>
               <label className="block text-xs font-semibold text-muted">
                 Expected amount{" "}
@@ -268,6 +272,11 @@ function OccurrenceTableRow({
           <span className="min-w-0">
             <span className="block truncate text-sm font-semibold">{occurrence.merchant}</span>
             <span className="text-xs text-muted">{occurrence.frequency}</span>
+            {occurrence.source === "inferred" && (
+              <span className="block text-xs text-muted">
+                {inferredSourceLabel(occurrence.evidenceCount)}
+              </span>
+            )}
           </span>
         </div>
       </td>
@@ -400,7 +409,11 @@ function OccurrenceTable({
               index={index}
               currency={currency}
               today={today}
-              stream={occurrence.source === "plaid" ? streamById.get(occurrence.sourceId) : undefined}
+              stream={
+                isPersistedStreamSource(occurrence.source)
+                  ? streamById.get(occurrence.sourceId)
+                  : undefined
+              }
               manualItem={occurrence.source === "manual" ? manualById.get(occurrence.sourceId) : undefined}
               pending={pending}
               onReview={onReview}
@@ -454,6 +467,9 @@ function ManageRow({
         <span className="text-xs text-muted">
           {stream.accountName ?? "Unlinked account"}
           {stream.dismissedAt ? " · Not recurring" : ""}
+          {stream.source === "inferred"
+            ? ` · ${inferredSourceLabel(stream.detectionEvidence?.occurrenceCount ?? null)}`
+            : ""}
         </span>
       </span>
       {stream.isOwn ? (

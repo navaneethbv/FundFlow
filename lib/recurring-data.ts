@@ -13,8 +13,10 @@ import {
   expandStreamsForMonth,
   type ManualRecurringFrequency,
   type ManualRecurringItemInput,
+  type RecurringDetectionEvidence,
   type RecurringMonth,
   type RecurringStreamInput,
+  type RecurringStreamSource,
   type RecurringStreamStatus,
 } from "@/lib/recurring-page";
 import { localDateKey } from "@/lib/format-date";
@@ -25,6 +27,8 @@ type RecurringStreamRawRow = {
   id: string;
   user_id: string;
   merchant_name: string | null;
+  source: string | null;
+  detection_evidence: unknown;
   description: string | null;
   stream_type: "inflow" | "outflow";
   status: RecurringStreamStatus | null;
@@ -45,6 +49,8 @@ type RecurringStreamRawRow = {
 export interface RecurringStreamRow {
   id: string;
   merchantName: string | null;
+  source: RecurringStreamSource;
+  detectionEvidence: RecurringDetectionEvidence | null;
   description: string | null;
   streamType: "inflow" | "outflow";
   status: RecurringStreamStatus;
@@ -162,8 +168,45 @@ function isStale(lastSuccessfulSyncAt: string | null, now: Date): boolean {
   return !Number.isFinite(parsed) || now.getTime() - parsed > 48 * 60 * 60 * 1000;
 }
 
-const KNOWN_FREQUENCIES = new Set(["WEEKLY", "BIWEEKLY", "SEMI_MONTHLY", "MONTHLY", "ANNUALLY"]);
+const KNOWN_FREQUENCIES = new Set([
+  "WEEKLY",
+  "BIWEEKLY",
+  "SEMI_MONTHLY",
+  "MONTHLY",
+  "QUARTERLY",
+  "ANNUALLY",
+]);
 const KNOWN_STATUSES = new Set(["MATURE", "EARLY_DETECTION", "TOMBSTONED"]);
+
+/**
+ * Defensive evidence parse: the jsonb column is constrained to objects, but
+ * a legacy or hand-edited row must degrade to null rather than break the
+ * whole Recurring page.
+ */
+function parseDetectionEvidence(value: unknown): RecurringDetectionEvidence | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const occurrenceCount = record.occurrenceCount;
+  if (typeof occurrenceCount !== "number" || !Number.isFinite(occurrenceCount)) return null;
+  const amountPattern = record.amountPattern;
+  if (amountPattern !== "fixed" && amountPattern !== "price_step" && amountPattern !== "variable") {
+    return null;
+  }
+  const deviation = record.maximumCadenceDeviationDays;
+  const signifiers = record.matchedSignifiers;
+  return {
+    occurrenceCount,
+    amountPattern,
+    maximumCadenceDeviationDays: typeof deviation === "number" && Number.isFinite(deviation) ? deviation : 0,
+    matchedSignifiers: Array.isArray(signifiers)
+      ? signifiers.filter((entry): entry is string => typeof entry === "string")
+      : [],
+  };
+}
+
+function persistedSource(value: string | null): RecurringStreamSource {
+  return value === "inferred" ? "inferred" : "plaid";
+}
 
 async function loadPagedRows<T>(
   loadPage: (from: number, to: number) => PromiseLike<{ data?: unknown; error: { code?: string } | null }>,
@@ -257,7 +300,7 @@ export async function loadRecurringData(
       let query = supabase
         .from("recurring_streams")
         .select(
-          "id,user_id,merchant_name,description,stream_type,status,is_active,reviewed_at,dismissed_at,user_amount,average_amount,last_amount,frequency,first_date,last_date,predicted_next_date,account_id,category",
+          "id,user_id,merchant_name,description,stream_type,status,is_active,reviewed_at,dismissed_at,user_amount,average_amount,last_amount,frequency,first_date,last_date,predicted_next_date,account_id,category,source,detection_evidence",
         )
         .order("id")
         .range(from, to);
@@ -357,6 +400,8 @@ export async function loadRecurringData(
       streamType: row.stream_type,
       merchantName: row.merchant_name,
       description: row.description,
+      source: persistedSource(row.source ?? null),
+      detectionEvidence: parseDetectionEvidence(row.detection_evidence),
       averageAmount: row.average_amount === null ? null : Number(row.average_amount),
       lastAmount: row.last_amount === null ? null : Number(row.last_amount),
       userAmount: row.user_amount === null ? null : Number(row.user_amount),
@@ -431,6 +476,8 @@ export async function loadRecurringData(
       id: row.id,
       merchantName: row.merchant_name,
       description: row.description,
+      source: persistedSource(row.source ?? null),
+      detectionEvidence: parseDetectionEvidence(row.detection_evidence),
       streamType: row.stream_type,
       status: KNOWN_STATUSES.has(row.status ?? "") ? (row.status as RecurringStreamStatus) : "UNKNOWN",
       isActive: row.is_active,

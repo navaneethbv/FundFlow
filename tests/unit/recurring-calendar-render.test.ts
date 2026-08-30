@@ -10,8 +10,9 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }));
 
-const occurrence = (over: Partial<{ dueDate: string; amount: number; status: "upcoming" | "overdue" | "complete"; isIncome: boolean; merchant: string }>) => ({
+const occurrence = (over: Partial<{ dueDate: string; amount: number; status: "upcoming" | "overdue" | "complete"; isIncome: boolean; merchant: string; source: "plaid" | "inferred" | "manual"; evidenceCount: number | null; sourceId: string }>) => ({
   source: "plaid" as const,
+  evidenceCount: null as number | null,
   sourceId: "s-1",
   merchant: "Netflix",
   frequency: "monthly",
@@ -49,6 +50,28 @@ describe("moveDayFocus", () => {
     expect(moveDayFocus(15, "ArrowDown", first, last)).toBe(22);
     expect(moveDayFocus(1, "ArrowLeft", first, last)).toBe(1);
     expect(moveDayFocus(31, "ArrowRight", first, last)).toBe(31);
+  });
+});
+
+describe("RecurringCalendar provenance", () => {
+  it("keeps inferred provenance in the accessible table twin and omits it for plaid rows", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecurringCalendar, {
+        month: "2026-08",
+        today: "2026-08-15",
+        currency: "USD",
+        occurrences: [
+          occurrence({
+            source: "inferred",
+            evidenceCount: 3,
+            sourceId: "inferred-row-1",
+            merchant: "E2E LOCAL DETECT 130",
+          }),
+          occurrence({ merchant: "Netflix" }),
+        ],
+      }),
+    );
+    expect(html).toContain("Detected from 3 transactions");
   });
 });
 

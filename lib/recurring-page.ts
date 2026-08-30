@@ -6,8 +6,18 @@ export type RecurringFrequency =
   | "BIWEEKLY"
   | "SEMI_MONTHLY"
   | "MONTHLY"
+  | "QUARTERLY"
   | "ANNUALLY"
   | "UNKNOWN";
+
+export type RecurringStreamSource = "plaid" | "inferred";
+
+export interface RecurringDetectionEvidence {
+  occurrenceCount: number;
+  amountPattern: "fixed" | "price_step" | "variable";
+  maximumCadenceDeviationDays: number;
+  matchedSignifiers: string[];
+}
 
 export type RecurringStreamStatus = "MATURE" | "EARLY_DETECTION" | "TOMBSTONED" | "UNKNOWN";
 
@@ -31,6 +41,10 @@ export interface RecurringStreamInput {
   matchedTransactions: { id: string; date: string }[];
   /** Plaid's `personal_finance_category.primary`. See EXCLUDED_PFC below. */
   category: string | null;
+  /** Persisted provenance; rows predating the columns default to plaid. */
+  source: RecurringStreamSource;
+  /** Non-sensitive explainability for inferred rows; null otherwise. */
+  detectionEvidence: RecurringDetectionEvidence | null;
 }
 
 interface Cadence {
@@ -43,6 +57,7 @@ const PLAID_CADENCE: Record<RecurringFrequency, Cadence> = {
   BIWEEKLY: { unit: "days", amount: 14 },
   SEMI_MONTHLY: { unit: "days", amount: 15 },
   MONTHLY: { unit: "months", amount: 1 },
+  QUARTERLY: { unit: "months", amount: 3 },
   ANNUALLY: { unit: "months", amount: 12 },
   UNKNOWN: { unit: "months", amount: 1 },
 };
@@ -52,6 +67,7 @@ const FREQUENCY_LABELS: Record<RecurringFrequency, string> = {
   BIWEEKLY: "Every 2 weeks",
   SEMI_MONTHLY: "Twice a month",
   MONTHLY: "Every month",
+  QUARTERLY: "Every quarter",
   ANNUALLY: "Every year",
   UNKNOWN: "Recurring",
 };
@@ -88,6 +104,23 @@ export function occurrenceDatesInWindow(
   return dates;
 }
 
+/**
+ * Whether an occurrence is backed by a persisted recurring stream (provider
+ * or inferred) rather than a manual schedule. Owner controls apply to both
+ * persisted sources, so gating must test for this, not for Plaid by name.
+ */
+export function isPersistedStreamSource(
+  source: RecurringOccurrence["source"],
+): source is "plaid" | "inferred" {
+  return source === "plaid" || source === "inferred";
+}
+
+/** Accessible provenance label for inferred streams. */
+export function inferredSourceLabel(count: number | null): string {
+  if (count === null) return "Detected from transactions";
+  return `Detected from ${count} transactions`;
+}
+
 export function countUnreviewedStreams(
   streams: Pick<RecurringStreamInput, "isActive" | "status" | "dismissedAt" | "reviewedAt">[],
 ): number {
@@ -114,7 +147,9 @@ export interface ManualRecurringItemInput {
 }
 
 export interface RecurringOccurrence {
-  source: "plaid" | "manual";
+  source: "plaid" | "inferred" | "manual";
+  /** Supporting transaction count for inferred rows; null otherwise. */
+  evidenceCount: number | null;
   sourceId: string;
   merchant: string;
   frequency: string;
@@ -241,7 +276,11 @@ function appendPlaidStream(
     }
     const isComplete = match !== null;
     occurrences.push({
-      source: "plaid",
+      source: stream.source === "inferred" ? "inferred" : "plaid",
+      evidenceCount:
+        stream.source === "inferred"
+          ? stream.detectionEvidence?.occurrenceCount ?? null
+          : null,
       sourceId: stream.id,
       merchant: stream.merchantName ?? stream.description ?? "Unknown",
       frequency: FREQUENCY_LABELS[stream.frequency],
@@ -279,6 +318,7 @@ function appendManualItem(
   for (const dueDate of dueDates) {
     occurrences.push({
       source: "manual",
+      evidenceCount: null,
       sourceId: item.id,
       merchant: item.name,
       frequency: MANUAL_FREQUENCY_LABELS[item.frequency],

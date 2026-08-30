@@ -100,9 +100,67 @@ function stream(overrides: Partial<RecurringStreamInput> = {}): RecurringStreamI
     dismissedAt: null,
     matchedTransactions: [],
     category: null,
+    source: "plaid",
+    detectionEvidence: null,
     ...overrides,
   };
 }
+
+describe("quarterly and inferred cadence projection", () => {
+  it("expands a QUARTERLY stream once every three months with the quarterly label", () => {
+    const month = expandStreamsForMonth(
+      [stream({ frequency: "QUARTERLY", predictedNextDate: "2026-09-15", reviewedAt: null })],
+      [],
+      "2026-09",
+      "2026-09-20",
+    );
+    expect(month.occurrences).toHaveLength(1);
+    expect(month.occurrences[0]).toMatchObject({ frequency: "Every quarter", dueDate: "2026-09-15" });
+  });
+
+  it("marks an inferred occurrence with its source and accessible evidence count", () => {
+    const month = expandStreamsForMonth(
+      [
+        stream({
+          source: "inferred",
+          detectionEvidence: {
+            occurrenceCount: 3,
+            amountPattern: "fixed",
+            maximumCadenceDeviationDays: 1,
+            matchedSignifiers: [],
+          },
+        }),
+      ],
+      [],
+      "2026-07",
+      "2026-07-20",
+    );
+    expect(month.occurrences[0]).toMatchObject({ source: "inferred", evidenceCount: 3 });
+  });
+
+  it("leaves plaid and manual occurrences without an evidence count", () => {
+    const month = expandStreamsForMonth(
+      [stream()],
+      [
+        {
+          id: "manual-1",
+          name: "Piano lessons",
+          amount: 80,
+          frequency: "monthly",
+          nextDate: "2026-07-05",
+          itemType: "expense",
+          category: null,
+          enabled: true,
+        },
+      ],
+      "2026-07",
+      "2026-07-20",
+    );
+    for (const occurrence of month.occurrences) {
+      expect(occurrence.evidenceCount).toBeNull();
+    }
+  });
+});
 
 describe("expandStreamsForMonth", () => {
   it("marks an occurrence complete when a matched transaction lands near the due date", () => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { formatCurrency, titleCase } from "@/lib/format";
-import type { RecurringOccurrence } from "@/lib/recurring-page";
+import { inferredSourceLabel, type RecurringOccurrence } from "@/lib/recurring-page";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 type CalendarArrowKey = "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown";
@@ -200,7 +200,14 @@ export default function RecurringCalendar({
             {sorted.map((occurrence) => (
               <tr key={`${occurrence.source}-${occurrence.sourceId}`} className="border-b border-panel-border last:border-b-0">
                 <td className="px-3 py-2 tabular-nums">{occurrence.dueDate}</td>
-                <td className="px-3 py-2">{occurrence.merchant}</td>
+                <td className="px-3 py-2">
+                  {occurrence.merchant}
+                  {occurrence.source === "inferred" && (
+                    <span className="block text-xs text-muted">
+                      {inferredSourceLabel(occurrence.evidenceCount)}
+                    </span>
+                  )}
+                </td>
                 <td className="px-3 py-2">{occurrence.isIncome ? "Income" : "Expense"}</td>
                 <td className="px-3 py-2 text-right tabular-nums">
                   {occurrence.isIncome ? "+" : "−"}{formatCurrency(Math.abs(occurrence.amount), currency)}

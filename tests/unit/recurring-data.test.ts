@@ -117,6 +117,99 @@ describe("loadRecurringData", () => {
     });
   });
 
+  it("projects an inferred quarterly stream with its evidence and provenance", async () => {
+    const client = makeClient({
+      recurring_streams: {
+        data: [
+          {
+            id: "stream-inferred",
+            user_id: "user-1",
+            merchant_name: "E2E LOCAL DETECT 130",
+            description: "E2E LOCAL DETECT 130",
+            stream_type: "outflow",
+            status: "MATURE",
+            is_active: true,
+            reviewed_at: null,
+            dismissed_at: null,
+            user_amount: null,
+            average_amount: 90,
+            last_amount: 90,
+            frequency: "QUARTERLY",
+            first_date: "2025-12-15",
+            last_date: "2026-06-15",
+            predicted_next_date: "2026-09-15",
+            account_id: "account-1",
+            category: null,
+            source: "inferred",
+            detection_evidence: {
+              occurrenceCount: 3,
+              amountPattern: "fixed",
+              maximumCadenceDeviationDays: 1,
+              matchedSignifiers: [],
+            },
+          },
+        ],
+      },
+    });
+
+    const result = await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-09",
+      today: "2026-07-01",
+    });
+
+    expect(result.view.occurrences).toHaveLength(1);
+    expect(result.view.occurrences[0]).toMatchObject({
+      source: "inferred",
+      evidenceCount: 3,
+      frequency: "Every quarter",
+    });
+    expect(result.allStreams[0]).toMatchObject({
+      source: "inferred",
+      detectionEvidence: { occurrenceCount: 3, amountPattern: "fixed" },
+    });
+  });
+
+  it("degrades invalid detection evidence to null instead of breaking the page", async () => {
+    const client = makeClient({
+      recurring_streams: {
+        data: [
+          {
+            id: "stream-bad-evidence",
+            user_id: "user-1",
+            merchant_name: "Weird",
+            description: null,
+            stream_type: "outflow",
+            status: "MATURE",
+            is_active: true,
+            reviewed_at: null,
+            dismissed_at: null,
+            user_amount: null,
+            average_amount: 5,
+            last_amount: 5,
+            frequency: "MONTHLY",
+            first_date: "2026-05-15",
+            last_date: "2026-06-15",
+            predicted_next_date: "2026-07-15",
+            account_id: "account-1",
+            category: null,
+            source: "inferred",
+            detection_evidence: { occurrenceCount: "three" },
+          },
+        ],
+      },
+    });
+
+    const result = await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-07",
+      today: "2026-07-01",
+    });
+
+    expect(result.allStreams[0]!.detectionEvidence).toBeNull();
+    expect(result.view.occurrences[0]).toMatchObject({ source: "inferred", evidenceCount: null });
+  });
+
   it("falls back to USD when no account resolves a currency code", async () => {
     const client = makeClient({
       accounts: { data: [{ id: "account-1", name: "Checking", type: "depository", subtype: null, iso_currency_code: null }] },

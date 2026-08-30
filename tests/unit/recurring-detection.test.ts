@@ -291,11 +291,11 @@ describe("detectRecurringCandidates isolation and determinism", () => {
       ["2026-07-06", "2026-07-13", "2026-07-20", "2026-07-27", "2026-08-03", "2026-08-10", "2026-08-17", "2026-08-24"],
       [12.99],
     );
-    const candidates = detectRecurringCandidates(weekly);
+    const candidates = detectRecurringCandidates(weekly, TODAY);
     const usedIds = candidates.flatMap((candidate) => candidate.transactionIds);
     expect(new Set(usedIds).size).toBe(usedIds.length);
     // Deterministic ranking: identical input yields identical output order.
-    const again = detectRecurringCandidates(weekly);
+    const again = detectRecurringCandidates(weekly, TODAY);
     expect(again.map((candidate) => candidate.streamId)).toEqual(
       candidates.map((candidate) => candidate.streamId),
     );

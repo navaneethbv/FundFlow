@@ -17,7 +17,9 @@ vi.mock("@/lib/plaid-service", async (importOriginal) => ({
   listActiveItems: (...args: unknown[]) => mockListActiveItems(...args),
 }));
 
-const clientRef = vi.hoisted(() => ({ current: null as { from: (table: string) => unknown } }));
+const clientRef = vi.hoisted(() => ({
+  current: null as unknown as { from: (table: string) => unknown },
+}));
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => clientRef.current,
 }));
