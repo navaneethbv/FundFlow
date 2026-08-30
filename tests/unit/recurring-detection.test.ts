@@ -143,13 +143,22 @@ describe("detectRecurringCandidates", () => {
   });
 
   it("rejects stale history and keeps only the most recent complete sequence", () => {
-    const input = [
-      ...series(["2026-03-15", "2026-04-15", "2026-05-15"], 15.99, { idPrefix: "older" }),
-      ...series(["2026-07-01", "2026-08-01", "2026-09-01"], 15.99, { idPrefix: "recent" }),
-    ];
-    const result = detectRecurringCandidates(input, "2026-09-15");
+    const stale = detectRecurringCandidates(
+      series(["2025-03-15", "2025-04-15", "2025-05-15"], 15.99, { idPrefix: "stale" }),
+      "2026-08-14",
+    );
+    expect(stale).toEqual([]);
+
+    const result = detectRecurringCandidates(
+      [
+        ...series(["2026-05-01", "2026-05-27", "2026-06-22"], 15.99, { idPrefix: "first" }),
+        ...series(["2026-06-23", "2026-07-19", "2026-08-14"], 15.99, { idPrefix: "second" }),
+      ],
+      "2026-08-14",
+    );
     expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({ firstDate: "2026-07-01", lastDate: "2026-09-01" });
+    expect(result[0]).toMatchObject({ firstDate: "2026-06-23", lastDate: "2026-08-14" });
+    expect(result[0]!.transactionIds).toEqual(["second-1", "second-2", "second-3"]);
     expect(new Set(result.map((candidate) => candidate.identityKey)).size).toBe(1);
   });
 
