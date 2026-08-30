@@ -78,6 +78,29 @@ export default function TransactionOverrideControl({
     }
   }
 
+  async function clearOverride() {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/transactions/override", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transaction_id: transactionId }),
+      });
+      if (!res.ok) throw new Error("Could not clear the override.");
+      setDisplayCategory("");
+      setClassification("");
+      setMessage({ kind: "success", text: "Override cleared." });
+    } catch (err) {
+      setMessage({
+        kind: "error",
+        text: err instanceof Error ? err.message : "Could not clear.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const inputId = (suffix: string) => `override-${suffix}-${transactionId}`;
 
   return (
@@ -101,7 +124,9 @@ export default function TransactionOverrideControl({
         id={inputId("display")}
         list={`${inputId("cats")}`}
         value={displayCategory}
-        onChange={(e) => setDisplayCategory(e.target.value)}
+        onChange={(e) => {
+          setDisplayCategory(e.target.value);
+        }}
         placeholder="SHOPPING"
         className={cn(
           "w-full rounded-field border border-panel-border bg-panel px-3 py-2 text-sm outline-none focus:border-accent/50",
@@ -119,7 +144,9 @@ export default function TransactionOverrideControl({
       <select
         id={inputId("flow")}
         value={classification}
-        onChange={(e) => setClassification(e.target.value as CashFlowClassification | "")}
+        onChange={(e) => {
+          setClassification(e.target.value as CashFlowClassification | "");
+        }}
         className="w-full rounded-field border border-panel-border bg-panel px-3 py-2 text-sm outline-none focus:border-accent/50"
       >
         <option value="">Follow provider</option>
@@ -132,7 +159,9 @@ export default function TransactionOverrideControl({
           <input
             type="checkbox"
             checked={confirmed}
-            onChange={(e) => setConfirmed(e.target.checked)}
+            onChange={(e) => {
+              setConfirmed(e.target.checked);
+            }}
             className="mt-0.5"
           />
           <span>
@@ -158,27 +187,8 @@ export default function TransactionOverrideControl({
           <button
             type="button"
             className="text-xs text-muted hover:text-foreground"
-            onClick={async () => {
-              setSaving(true);
-              setMessage(null);
-              try {
-                const res = await fetch("/api/transactions/override", {
-                  method: "DELETE",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ transaction_id: transactionId }),
-                });
-                if (!res.ok) throw new Error("Could not clear the override.");
-                setDisplayCategory("");
-                setClassification("");
-                setMessage({ kind: "success", text: "Override cleared." });
-              } catch (err) {
-                setMessage({
-                  kind: "error",
-                  text: err instanceof Error ? err.message : "Could not clear.",
-                });
-              } finally {
-                setSaving(false);
-              }
+            onClick={() => {
+              void clearOverride();
             }}
           >
             Clear override

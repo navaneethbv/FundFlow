@@ -5,15 +5,17 @@ import Button from "@/components/ui/Button";
 import { applyLifeEvents, parseLifeEvent, type ForecastPoint, type LifeEvent, type LifeEventType } from "@/lib/life-events";
 import { formatCurrency } from "@/lib/format";
 
-const EVENT_LABELS: Record<LifeEventType, string> = {
-  home_purchase: "Home purchase",
-  child: "Child",
-  income_change: "Income change",
-  expense_change: "Expense change",
-  retirement: "Retirement",
-};
+const EVENT_ITEMS: ReadonlyArray<{ type: LifeEventType; label: string }> = [
+  { type: "home_purchase", label: "Home purchase" },
+  { type: "child", label: "Child" },
+  { type: "income_change", label: "Income change" },
+  { type: "expense_change", label: "Expense change" },
+  { type: "retirement", label: "Retirement" },
+];
 
-const EVENT_TYPES = Object.keys(EVENT_LABELS) as LifeEventType[];
+function getEventLabel(type: LifeEventType): string {
+  return EVENT_ITEMS.find((item) => item.type === type)?.label ?? type;
+}
 
 interface Props {
   basePoints: ForecastPoint[];
@@ -66,7 +68,8 @@ export default function LifeEventsPanel({
       });
       const json = (await res.json().catch(() => null)) as { event?: LifeEvent; error?: string } | null;
       if (!res.ok) throw new Error(json?.error ?? "Could not add the event.");
-      if (json?.event) setEvents((current) => [...current, json.event!]);
+      const createdEvent = json?.event;
+      if (createdEvent) setEvents((current) => [...current, createdEvent]);
       setAmount("");
       setDuration("");
     } catch (err) {
@@ -108,18 +111,22 @@ export default function LifeEventsPanel({
         {events.map((event) => (
           <li key={event.id ?? `${event.type}-${event.startMonth}`} className="flex items-center justify-between gap-2">
             <span className="min-w-0 truncate">
-              <span className="font-medium">{EVENT_LABELS[event.type]}</span>
+              <span className="font-medium">{getEventLabel(event.type)}</span>
               <span className="text-muted"> · month {event.startMonth}{event.durationMonths ? ` · ${event.durationMonths} months` : ""}</span>
             </span>
             <span className="shrink-0 tabular-nums">{formatCurrency(event.amount, currency)}</span>
-            <button
-              type="button"
-              onClick={() => void removeEvent(event.id!)}
-              className="shrink-0 text-xs text-muted hover:text-danger"
-              aria-label={`Remove ${EVENT_LABELS[event.type]} event`}
-            >
-              Remove
-            </button>
+            {event.id ? (
+              <button
+                type="button"
+                onClick={() => {
+                  void removeEvent(event.id as string);
+                }}
+                className="shrink-0 text-xs text-muted hover:text-danger"
+                aria-label={`Remove ${getEventLabel(event.type)} event`}
+              >
+                Remove
+              </button>
+            ) : null}
           </li>
         ))}
         {events.length === 0 && <li className="text-sm text-muted">No life events configured.</li>}
@@ -131,11 +138,13 @@ export default function LifeEventsPanel({
             <span className="text-xs text-muted">Event</span>
             <select
               value={type}
-              onChange={(e) => setType(e.target.value as LifeEventType)}
+              onChange={(e) => {
+                setType(e.target.value as LifeEventType);
+              }}
               className="mt-1 w-full rounded-field border border-panel-border bg-panel px-2 py-1.5 text-sm"
             >
-              {EVENT_TYPES.map((eventType) => (
-                <option key={eventType} value={eventType}>{EVENT_LABELS[eventType]}</option>
+              {EVENT_ITEMS.map((item) => (
+                <option key={item.type} value={item.type}>{item.label}</option>
               ))}
             </select>
           </label>
@@ -145,7 +154,9 @@ export default function LifeEventsPanel({
               type="number"
               min="1"
               value={startMonth}
-              onChange={(e) => setStartMonth(e.target.value)}
+              onChange={(e) => {
+                setStartMonth(e.target.value);
+              }}
               className="mt-1 w-full rounded-field border border-panel-border bg-panel px-2 py-1.5 text-sm"
             />
           </label>
@@ -156,7 +167,9 @@ export default function LifeEventsPanel({
               step="0.01"
               min="0"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) => {
+                setAmount(e.target.value);
+              }}
               className="mt-1 w-full rounded-field border border-panel-border bg-panel px-2 py-1.5 text-sm"
             />
           </label>
@@ -166,7 +179,9 @@ export default function LifeEventsPanel({
               type="number"
               min="1"
               value={duration}
-              onChange={(e) => setDuration(e.target.value)}
+              onChange={(e) => {
+                setDuration(e.target.value);
+              }}
               className="mt-1 w-full rounded-field border border-panel-border bg-panel px-2 py-1.5 text-sm"
             />
           </label>

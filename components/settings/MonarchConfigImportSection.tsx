@@ -30,7 +30,7 @@ export default function MonarchConfigImportSection() {
   const [kind, setKind] = useState<ImportKind>("budget");
   const [text, setText] = useState("");
   const [plan, setPlan] = useState<ConfigPlan | null>(null);
-  const [decisions, setDecisions] = useState<Record<string, string>>({});
+  const [decisions, setDecisions] = useState<Record<string, string | undefined>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ApplyResult | null>(null);
@@ -45,10 +45,11 @@ export default function MonarchConfigImportSection() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kind, text, mode: "preview" }),
       });
-      const json = (await res.json().catch(() => null)) as ConfigPlan & { error?: string };
+      const json = (await res.json().catch(() => null)) as (ConfigPlan & { error?: string }) | null;
       if (!res.ok) throw new Error(json?.error ?? "Could not preview.");
+      if (!json) throw new Error("Could not preview.");
       setPlan(json);
-      const defaults: Record<string, string> = {};
+      const defaults: Record<string, string | undefined> = {};
       for (const row of json.plan.rows as Array<{ category?: string; name?: string }>) {
         defaults[row.category ?? row.name ?? ""] = "merge";
       }
@@ -70,7 +71,7 @@ export default function MonarchConfigImportSection() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kind, text, mode: "apply", decisions }),
       });
-      const json = (await res.json().catch(() => null)) as ApplyResult;
+      const json = (await res.json().catch(() => null)) as ApplyResult | null;
       if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Could not apply.");
       setResult(json);
     } catch (err) {
@@ -94,11 +95,23 @@ export default function MonarchConfigImportSection() {
       <div className="mt-4 space-y-3">
         <div className="flex gap-2">
           <label className="flex items-center gap-1.5 text-sm">
-            <input type="radio" checked={kind === "budget"} onChange={() => setKind("budget")} />
+            <input
+              type="radio"
+              checked={kind === "budget"}
+              onChange={() => {
+                setKind("budget");
+              }}
+            />
             Budgets
           </label>
           <label className="flex items-center gap-1.5 text-sm">
-            <input type="radio" checked={kind === "goal"} onChange={() => setKind("goal")} />
+            <input
+              type="radio"
+              checked={kind === "goal"}
+              onChange={() => {
+                setKind("goal");
+              }}
+            />
             Goals
           </label>
         </div>
@@ -106,7 +119,9 @@ export default function MonarchConfigImportSection() {
         <textarea
           aria-label="Monarch configuration JSON"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+          }}
           placeholder={'Paste the Monarch export here, e.g. { "groups": [...] } or { "goals": [...] }'}
           rows={6}
           className="w-full rounded-field border border-panel-border bg-panel px-3 py-2 text-sm outline-none focus:border-accent/50"
@@ -136,7 +151,10 @@ export default function MonarchConfigImportSection() {
                       <select
                         aria-label={`Decision for ${row.category}`}
                         value={decisions[row.category] ?? "merge"}
-                        onChange={(e) => setDecisions((cur) => ({ ...cur, [row.category]: e.target.value }))}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setDecisions((cur) => ({ ...cur, [row.category]: val }));
+                        }}
                         className="rounded-field border border-panel-border bg-panel px-2 py-1 text-xs"
                       >
                         <option value="merge">Merge</option>
@@ -162,7 +180,10 @@ export default function MonarchConfigImportSection() {
                       <select
                         aria-label={`Decision for ${row.name}`}
                         value={decisions[row.name] ?? "create"}
-                        onChange={(e) => setDecisions((cur) => ({ ...cur, [row.name]: e.target.value }))}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setDecisions((cur) => ({ ...cur, [row.name]: val }));
+                        }}
                         className="rounded-field border border-panel-border bg-panel px-2 py-1 text-xs"
                       >
                         <option value="create">Create</option>

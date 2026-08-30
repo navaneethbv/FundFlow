@@ -34,7 +34,7 @@ async function applyBudgetImport(
   supabase: SupabaseClient,
   userId: string,
   rows: BudgetImportRow[],
-  decisions: Record<string, BudgetDecision>,
+  decisions: Record<string, BudgetDecision | undefined>,
 ): Promise<ApplyOutcome> {
   const { data: existingRows } = await supabase
     .from("budgets")
@@ -135,7 +135,7 @@ async function applyGoalImport(
   supabase: SupabaseClient,
   userId: string,
   rows: GoalImportRow[],
-  decisions: Record<string, GoalDecision>,
+  decisions: Record<string, GoalDecision | undefined>,
 ): Promise<ApplyOutcome> {
   const { data: existingRows } = await supabase
     .from("goals")
@@ -237,7 +237,7 @@ export async function POST(request: NextRequest) {
 
     if (kind === "budget") {
       const { rows, errors } = parseMonarchBudgets(text);
-      if (errors.length > 0) return badRequest(errors[0]!);
+      if (errors.length > 0) return badRequest(errors[0] ?? "Invalid budget format");
       const { data: existing } = await supabase
         .from("budgets")
         .select("category, monthly_limit, group_name")
@@ -249,7 +249,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { rows, errors } = parseMonarchGoals(text);
-    if (errors.length > 0) return badRequest(errors[0]!);
+    if (errors.length > 0) return badRequest(errors[0] ?? "Invalid goal format");
     const { data: existing } = await supabase
       .from("goals")
       .select("id, name, goal_type, target_amount, target_date, import_source, import_ref")

@@ -63,8 +63,8 @@ export async function POST(request: NextRequest) {
 
   let itemId: unknown = null;
   try {
-    const body = await request.json();
-    itemId = (body as { itemId?: unknown })?.itemId;
+    const body = (await request.json()) as { itemId?: unknown } | null;
+    itemId = body?.itemId;
   } catch {
     return badRequest("Invalid JSON body");
   }
@@ -89,8 +89,9 @@ export async function POST(request: NextRequest) {
       await getPlaidClient().itemGet({ access_token: accessToken });
     } catch (error) {
       const kind = classifyRepairError(error);
-      const rawCode = (error as { response?: { data?: { error_code?: unknown } } })
-        ?.response?.data?.error_code;
+      const errResponse = (error as { response?: { data?: { error_code?: unknown } } } | null)
+        ?.response;
+      const rawCode = errResponse?.data?.error_code;
       const safeCode = safeErrorCode(typeof rawCode === "string" ? rawCode : null);
       await setItemStatus(item.user_id, item.id, "error", safeCode).catch(
         (statusError) => logError("plaid.repair.status", statusError),

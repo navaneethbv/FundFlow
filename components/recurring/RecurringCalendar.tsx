@@ -18,23 +18,25 @@ function dateKey(date: Date): string {
 
 /** Sunday-first month grid; every cell is a real date in `month`. */
 export function buildMonthGrid(month: string): CalendarCell[][] {
-  const [year, monthIndex] = month.split("-").map(Number);
-  const first = new Date(Date.UTC(year!, monthIndex! - 1, 1));
+  const parts = month.split("-").map(Number);
+  const year = parts[0] ?? 2026;
+  const monthIndex = (parts[1] ?? 1) - 1;
+  const first = new Date(Date.UTC(year, monthIndex, 1));
   const startOffset = first.getUTCDay();
   const grid: CalendarCell[][] = [];
-  let cursor = new Date(Date.UTC(year!, monthIndex! - 1, 1 - startOffset));
+  let cursor = new Date(Date.UTC(year, monthIndex, 1 - startOffset));
   for (let week = 0; week < 6; week += 1) {
     const row: CalendarCell[] = [];
     for (let day = 0; day < 7; day += 1) {
       row.push({
         day: cursor.getUTCDate(),
         date: dateKey(cursor),
-        inMonth: cursor.getUTCMonth() === monthIndex! - 1,
+        inMonth: cursor.getUTCMonth() === monthIndex,
       });
       cursor = new Date(cursor.getTime() + 86_400_000);
     }
     grid.push(row);
-    if (cursor.getUTCMonth() !== monthIndex! - 1) break;
+    if (cursor.getUTCMonth() !== monthIndex) break;
   }
   return grid;
 }
@@ -89,7 +91,7 @@ export default function RecurringCalendar({
   const focusDay = today.startsWith(month) ? Number(today.slice(8)) : 1;
   const firstOfMonth = new Date(`${month}-01T00:00:00Z`);
   const lastOfMonth = new Date(`${month}-${grid.flat().at(-1)?.day ?? 28}T00:00:00Z`);
-  const cellRefs = useRef(new Map<number, HTMLButtonElement>());
+  const cellRefs = useRef<Record<number, HTMLButtonElement | null>>({});
 
   function handleKeyDown(
     day: number,
@@ -99,7 +101,7 @@ export default function RecurringCalendar({
     if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(key)) return;
     event.preventDefault();
     const next = moveDayFocus(day, key, firstOfMonth, lastOfMonth);
-    cellRefs.current.get(next)?.focus();
+    cellRefs.current[next]?.focus();
   }
 
   const sorted = [...occurrences].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
@@ -129,11 +131,13 @@ export default function RecurringCalendar({
                   >
                     <button
                       ref={(node) => {
-                        if (node) cellRefs.current.set(cell.day, node);
+                        cellRefs.current[cell.day] = node;
                       }}
                       type="button"
                       tabIndex={isFocus ? 0 : -1}
-                      onKeyDown={(event) => handleKeyDown(cell.day, event)}
+                      onKeyDown={(event) => {
+                        handleKeyDown(cell.day, event);
+                      }}
                       aria-label={`${cell.date}, ${dayOccurrences.length} occurrence${dayOccurrences.length === 1 ? "" : "s"}`}
                       className={`block w-full rounded-field px-1 text-left text-xs font-semibold outline-none focus-visible:outline-2 ${
                         isToday ? "bg-accent/15 text-accent" : "text-muted"

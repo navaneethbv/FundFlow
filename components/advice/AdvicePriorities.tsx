@@ -47,10 +47,14 @@ export default function AdvicePriorities({
   const unprioritized = topics.filter((topic) => !priorities.includes(topic.id));
 
   function move(index: number, delta: number) {
-    const next = [...priorities];
     const target = index + delta;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target]!, next[index]!];
+    if (target < 0 || target >= priorities.length) return;
+    const currentItem = priorities[index];
+    const targetItem = priorities[target];
+    if (currentItem === undefined || targetItem === undefined) return;
+    const next = [...priorities];
+    next[index] = targetItem;
+    next[target] = currentItem;
     void save(next);
   }
 
@@ -75,7 +79,9 @@ export default function AdvicePriorities({
             <span className="flex shrink-0 items-center gap-1">
               <button
                 type="button"
-                onClick={() => move(index, -1)}
+                onClick={() => {
+                  move(index, -1);
+                }}
                 disabled={index === 0 || busy}
                 aria-label={`Move ${titleOf(id)} up`}
                 className="rounded-field px-2 py-1 text-xs text-muted hover:bg-panel-hover disabled:opacity-40"
@@ -84,7 +90,9 @@ export default function AdvicePriorities({
               </button>
               <button
                 type="button"
-                onClick={() => move(index, 1)}
+                onClick={() => {
+                  move(index, 1);
+                }}
                 disabled={index === priorities.length - 1 || busy}
                 aria-label={`Move ${titleOf(id)} down`}
                 className="rounded-field px-2 py-1 text-xs text-muted hover:bg-panel-hover disabled:opacity-40"
@@ -93,7 +101,9 @@ export default function AdvicePriorities({
               </button>
               <button
                 type="button"
-                onClick={() => remove(id)}
+                onClick={() => {
+                  remove(id);
+                }}
                 disabled={busy}
                 aria-label={`Remove ${titleOf(id)} from prioritized`}
                 className="rounded-field px-2 py-1 text-xs text-muted hover:text-danger"
@@ -112,7 +122,15 @@ export default function AdvicePriorities({
             {unprioritized.map((topic) => (
               <li key={topic.id} className="flex min-w-0 items-center justify-between gap-2 text-sm">
                 <span className="min-w-0 truncate">{topic.title}</span>
-                <Button type="button" size="sm" variant="secondary" onClick={() => pin(topic.id)} disabled={busy}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    pin(topic.id);
+                  }}
+                  disabled={busy}
+                >
                   Prioritize
                 </Button>
               </li>
