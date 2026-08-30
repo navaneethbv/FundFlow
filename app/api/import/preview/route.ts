@@ -171,6 +171,39 @@ async function loadExistingTransactions(
   return rows;
 }
 
+async function stagePreviewRows(
+  service: SupabaseClient,
+  batchId: string,
+  userId: string,
+  stagedRows: Array<Record<string, unknown>>,
+): Promise<Array<Record<string, unknown>>> {
+  const insertedRows: Array<Record<string, unknown>> = [];
+  try {
+    for (let index = 0; index < stagedRows.length; index += DATABASE_CHUNK_SIZE) {
+      const { data, error } = await service
+        .from("import_review_rows")
+        .insert(stagedRows.slice(index, index + DATABASE_CHUNK_SIZE))
+        .select("id, date, description, amount, source_account, row_index, status");
+      if (error) throw error;
+      insertedRows.push(...((data ?? []) as Array<Record<string, unknown>>));
+    }
+    return insertedRows;
+  } catch (stagingError) {
+    const { error: cleanupError } = await service
+      .from("import_review_batches")
+      .delete()
+      .eq("id", batchId)
+      .eq("user_id", userId);
+    if (cleanupError) {
+      throw new AggregateError(
+        [stagingError, cleanupError],
+        "Failed to stage import rows and clean up the pending batch",
+      );
+    }
+    throw stagingError;
+  }
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -253,30 +286,7 @@ export async function POST(request: NextRequest) {
       row_index: index,
       status: row.flags.length > 0 ? "rejected" : "pending",
     }));
-    const insertedRows: Array<Record<string, unknown>> = [];
-    try {
-      for (let index = 0; index < stagedRows.length; index += DATABASE_CHUNK_SIZE) {
-        const { data, error } = await service
-          .from("import_review_rows")
-          .insert(stagedRows.slice(index, index + DATABASE_CHUNK_SIZE))
-          .select("id, date, description, amount, source_account, row_index, status");
-        if (error) throw error;
-        insertedRows.push(...((data ?? []) as Array<Record<string, unknown>>));
-      }
-    } catch (stagingError) {
-      const { error: cleanupError } = await service
-        .from("import_review_batches")
-        .delete()
-        .eq("id", batchId)
-        .eq("user_id", user.id);
-      if (cleanupError) {
-        throw new AggregateError(
-          [stagingError, cleanupError],
-          "Failed to stage import rows and clean up the pending batch",
-        );
-      }
-      throw stagingError;
-    }
+    const insertedRows = await stagePreviewRows(service, batchId, user.id, stagedRows);
 
     const rowsOut = [...insertedRows]
       .sort((a, b) => Number(a.row_index ?? 0) - Number(b.row_index ?? 0))

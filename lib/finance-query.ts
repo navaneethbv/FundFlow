@@ -58,6 +58,14 @@ export interface FinanceFetchResult {
   truncated: boolean;
 }
 
+type MerchantRuleRow = {
+  match_type: "merchant" | "keyword" | "account";
+  pattern: string;
+  display_name: string | null;
+  category: string | null;
+  enabled: boolean;
+};
+
 async function fetchFinancePage(
   supabase: SupabaseClient,
   userId: string | undefined,
@@ -374,26 +382,14 @@ export async function loadCanonicalProjection(
       iso_currency_code: string | null;
     }>>;
   });
-  const rulesPromise = loadProjectionRows<{
-    match_type: "merchant" | "keyword" | "account";
-    pattern: string;
-    display_name: string | null;
-    category: string | null;
-    enabled: boolean;
-  }>("merchant_rules", (from, to) => {
+  const rulesPromise = loadProjectionRows<MerchantRuleRow>("merchant_rules", (from, to) => {
     let query = supabase
       .from("merchant_rules")
       .select("match_type,pattern,display_name,category,enabled")
       .order("id")
       .range(from, to);
     if (userId) query = query.eq("user_id", userId);
-    return query as unknown as PromiseLike<ProjectionPage<{
-      match_type: "merchant" | "keyword" | "account";
-      pattern: string;
-      display_name: string | null;
-      category: string | null;
-      enabled: boolean;
-    }>>;
+    return query as unknown as PromiseLike<ProjectionPage<MerchantRuleRow>>;
   });
   const overridesPromise = loadProjectionRows<{
     source_category: string;
@@ -459,13 +455,7 @@ export async function loadCanonicalProjection(
 
   const { currencyByAccountId, accountNames } = buildAccountMaps(accounts);
 
-  const merchantRules = (rules as Array<{
-    match_type: "merchant" | "keyword" | "account";
-    pattern: string;
-    display_name: string | null;
-    category: string | null;
-    enabled: boolean;
-  }>).map((r) => ({
+  const merchantRules = (rules as MerchantRuleRow[]).map((r) => ({
     matchType: r.match_type,
     pattern: r.pattern,
     displayName: r.display_name,

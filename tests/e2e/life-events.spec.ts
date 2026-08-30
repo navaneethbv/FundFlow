@@ -6,6 +6,8 @@ const FORECASTING_ON = (process.env.FUNDFLOW_FEATURE_FLAGS ?? "")
   .includes("forecastingPage");
 
 test.describe("life-event forecasting", () => {
+  // This authenticated browser flow is intentionally skipped when either the
+  // live test account or the forecasting feature flag is unavailable.
   test.skip(
     !hasLiveCredentials || !FORECASTING_ON,
     "Live credentials and the forecasting feature are required",

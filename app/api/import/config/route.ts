@@ -197,6 +197,24 @@ interface ResolvedGoalPlanRow {
   decision: GoalImportDecision;
 }
 
+function validateGoalDecision(
+  row: GoalImportPlanRow,
+  match: ExistingGoalRow | null,
+  decision: GoalImportDecision,
+): string | null {
+  if (!row.allowedDecisions.includes(decision)) {
+    return `Decision ${String(decision)} is not allowed for ${row.decisionKey}`;
+  }
+  if (row.matchedGoalId && !match) return "Goal match changed before import could be applied";
+  if (decision === "create" && row.targetAmount === null) {
+    return "A positive target amount is required to create an imported goal";
+  }
+  if (row.providedFields.targetAmount && row.targetAmount === null) {
+    return "Imported goal target amount must be positive";
+  }
+  return null;
+}
+
 function resolveGoalDecisions(
   plan: GoalImportPlan,
   existing: ExistingGoalRow[],
@@ -212,19 +230,9 @@ function resolveGoalDecisions(
   for (const row of plan.rows) {
     const requested = decisionMap[row.decisionKey];
     const decision = (requested ?? row.defaultDecision) as GoalImportDecision;
-    if (!row.allowedDecisions.includes(decision)) {
-      return { error: `Decision ${String(decision)} is not allowed for ${row.decisionKey}` };
-    }
     const match = row.matchedGoalId ? existingById.get(row.matchedGoalId) ?? null : null;
-    if (row.matchedGoalId && !match) {
-      return { error: "Goal match changed before import could be applied" };
-    }
-    if (decision === "create" && row.targetAmount === null) {
-      return { error: "A positive target amount is required to create an imported goal" };
-    }
-    if (row.providedFields.targetAmount && row.targetAmount === null) {
-      return { error: "Imported goal target amount must be positive" };
-    }
+    const error = validateGoalDecision(row, match, decision);
+    if (error) return { error };
     resolved.push({ row, match, decision });
   }
   return { rows: resolved };

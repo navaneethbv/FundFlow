@@ -34,6 +34,32 @@ function billDate(value: string | null | undefined): string | null {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
 }
 
+async function removeStaleBills(
+  supabase: ReturnType<typeof createServiceClient>,
+  userId: string,
+  itemAccountIds: string[],
+  activeAccountIds: Set<string>,
+): Promise<void> {
+  if (itemAccountIds.length === 0) return;
+  const { data: existingBills, error: existingBillsError } = await supabase
+    .from("credit_card_bills")
+    .select("account_id")
+    .eq("user_id", userId)
+    .in("account_id", itemAccountIds);
+  if (existingBillsError) throw existingBillsError;
+
+  const staleAccountIds = (existingBills ?? [])
+    .map((bill) => bill.account_id as string)
+    .filter((accountId) => !activeAccountIds.has(accountId));
+  if (staleAccountIds.length === 0) return;
+  const { error: deleteError } = await supabase
+    .from("credit_card_bills")
+    .delete()
+    .eq("user_id", userId)
+    .in("account_id", staleAccountIds);
+  if (deleteError) throw deleteError;
+}
+
 /**
  * Sync one item's credit-card liabilities via the approved Plaid Liabilities
  * integration. Statement balance, minimum payment, due date, and sync time are
@@ -97,27 +123,12 @@ export async function syncCreditCardLiabilities(
     if (error) throw error;
   }
 
-  if (itemAccountIds.length > 0) {
-    const { data: existingBills, error: existingBillsError } = await supabase
-      .from("credit_card_bills")
-      .select("account_id")
-      .eq("user_id", item.user_id)
-      .in("account_id", itemAccountIds);
-    if (existingBillsError) throw existingBillsError;
-
-    const activeAccountIds = new Set(rows.map((row) => row.account_id));
-    const staleAccountIds = (existingBills ?? [])
-      .map((bill) => bill.account_id as string)
-      .filter((accountId) => !activeAccountIds.has(accountId));
-    if (staleAccountIds.length > 0) {
-      const { error: deleteError } = await supabase
-        .from("credit_card_bills")
-        .delete()
-        .eq("user_id", item.user_id)
-        .in("account_id", staleAccountIds);
-      if (deleteError) throw deleteError;
-    }
-  }
+  await removeStaleBills(
+    supabase,
+    item.user_id,
+    itemAccountIds,
+    new Set(rows.map((row) => row.account_id)),
+  );
 
   if (rows.length === 0) return { outcome: "no_liabilities", billsSynced: 0 };
 

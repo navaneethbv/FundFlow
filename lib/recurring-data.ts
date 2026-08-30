@@ -177,7 +177,6 @@ async function loadPagedRows<T>(
     rows.push(...batch);
     if (batch.length < PAGE_SIZE) return rows;
   }
-  return rows;
 }
 
 async function loadJoinRows(

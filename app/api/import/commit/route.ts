@@ -30,6 +30,22 @@ function chunks<T>(values: T[], size = QUERY_CHUNK): T[][] {
   return result;
 }
 
+function persistedMappingTarget(mapping: Record<string, unknown>): ImportTarget | null {
+  if (typeof mapping.account_id === "string") return { accountId: mapping.account_id };
+  if (typeof mapping.manual_account_id === "string") {
+    return { manualAccountId: mapping.manual_account_id };
+  }
+  return null;
+}
+
+function requestedMappingTarget(mapping: MappingInput[string] | undefined): ImportTarget | null {
+  if (typeof mapping?.account_id === "string") return { accountId: mapping.account_id };
+  if (typeof mapping?.manual_account_id === "string") {
+    return { manualAccountId: mapping.manual_account_id };
+  }
+  return null;
+}
+
 async function loadOwnedBatch(
   supabase: SupabaseClient,
   batchId: string,
@@ -141,16 +157,12 @@ async function resolveMappings(
 
   const mappingBySource = new Map<string, ImportTarget>();
   for (const mapping of persistedMappings) {
-    if (mapping.account_id) mappingBySource.set(mapping.source_account as string, { accountId: mapping.account_id as string });
-    else if (mapping.manual_account_id) mappingBySource.set(mapping.source_account as string, { manualAccountId: mapping.manual_account_id as string });
+    const target = persistedMappingTarget(mapping);
+    if (target) mappingBySource.set(mapping.source_account as string, target);
   }
   for (const sourceAccount of sourceAccounts) {
-    const requested = requestedMappings[sourceAccount];
-    if (requested?.account_id && typeof requested.account_id === "string") {
-      mappingBySource.set(sourceAccount, { accountId: requested.account_id });
-    } else if (requested?.manual_account_id && typeof requested.manual_account_id === "string") {
-      mappingBySource.set(sourceAccount, { manualAccountId: requested.manual_account_id });
-    }
+    const target = requestedMappingTarget(requestedMappings[sourceAccount]);
+    if (target) mappingBySource.set(sourceAccount, target);
   }
   if (sourceAccounts.length === 1 && !mappingBySource.has(sourceAccounts[0]!)) {
     mappingBySource.set(sourceAccounts[0]!, defaultTarget);
