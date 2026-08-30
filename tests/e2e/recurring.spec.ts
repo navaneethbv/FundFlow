@@ -401,4 +401,27 @@ test.describe.serial("Phase 5: recurring page", () => {
       }
     }
   });
+
+  test("calendar arrow keys move one unique roving focus target through valid grid rows", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto("/recurring?month=2026-08&view=calendar");
+
+    const calendar = page.getByRole("grid", {
+      name: "Recurring calendar for 2026-08",
+    });
+    await expect(calendar).toBeVisible();
+    await expect(calendar.getByRole("row")).toHaveCount(7);
+    await expect(calendar.locator('button[tabindex="0"]')).toHaveCount(1);
+
+    const augustFifteenth = calendar.getByRole("button", {
+      name: /^2026-08-15, /,
+    });
+    await augustFifteenth.focus();
+    await augustFifteenth.press("ArrowRight");
+    await expect(
+      calendar.getByRole("button", { name: /^2026-08-16, / }),
+    ).toBeFocused();
+  });
 });

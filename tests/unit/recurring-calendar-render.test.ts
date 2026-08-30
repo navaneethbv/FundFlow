@@ -68,6 +68,9 @@ describe("RecurringCalendar", () => {
     );
     expect(html).toContain('role="grid"');
     expect(html).toContain('role="gridcell"');
+    expect(html.match(/role="row"/g)).toHaveLength(7);
+    expect(html.match(/tabindex="0"/g)).toHaveLength(1);
+    expect(html).toContain('data-calendar-date="2026-08-15"');
     expect(html).toContain("Netflix");
     expect(html).toContain("Salary");
     expect(html).toContain("Rent");
