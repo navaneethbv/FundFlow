@@ -121,13 +121,20 @@ describe("detectRecurringCandidates", () => {
       })),
       "2026-08-30",
     );
-    expect(result[0]).toMatchObject({ frequency: "WEEKLY", firstDate: "2026-07-08", lastDate: "2026-08-26" });
+    expect(result[0]).toMatchObject({ frequency: "WEEKLY", firstDate: "2026-07-08", lastDate: "2026-08-26", predictedNextDate: "2026-08-31" });
   });
 
   it("isolates account, user, item, direction, and currency boundaries", () => {
     const base = series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99);
-    const mixed = [...base, ...series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99, { accountId: "account-2", idPrefix: "account-2" }), ...series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99, { flow: "income", idPrefix: "income" })];
-    expect(detectRecurringCandidates(mixed, "2026-08-30")).toHaveLength(3);
+    const mixed = [
+      ...base,
+      ...series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99, { accountId: "account-2", idPrefix: "account-2" }),
+      ...series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99, { flow: "income", idPrefix: "income" }),
+      ...series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99, { userId: "user-2", idPrefix: "user-2" }),
+      ...series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99, { plaidItemId: "item-2", idPrefix: "item-2" }),
+      ...series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99, { currency: "EUR", idPrefix: "eur" }),
+    ];
+    expect(detectRecurringCandidates(mixed, "2026-08-30")).toHaveLength(6);
   });
 
   it("rejects empty identities and extreme variable outliers", () => {
@@ -135,7 +142,18 @@ describe("detectRecurringCandidates", () => {
     expect(detectRecurringCandidates(series(["2026-05-15", "2026-06-15", "2026-07-15"], [80, 100, 300], { category: "UTILITY" }), "2026-08-30")).toEqual([]);
   });
 
-  it("returns deterministic candidates and does not reuse transaction evidence", () => {
+  it("rejects stale history and keeps only the most recent complete sequence", () => {
+    const input = [
+      ...series(["2026-01-15", "2026-02-15", "2026-03-15"], 15.99, { idPrefix: "stale" }),
+      ...series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99, { idPrefix: "recent" }),
+    ];
+    const result = detectRecurringCandidates(input, "2026-08-30");
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ firstDate: "2026-05-15", lastDate: "2026-07-15" });
+    expect(new Set(result.map((candidate) => candidate.identityKey)).size).toBe(1);
+  });
+
+  it("ranks competing candidates by amount strength and does not reuse evidence", () => {
     const input = [
       ...series(["2026-05-15", "2026-06-15", "2026-07-15"], [80, 100, 90], { category: "UTILITY", merchant: "Power Co", rawName: "Power Co", idPrefix: "power" }),
       ...series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99, { merchant: "Other Co", rawName: "Other Co", idPrefix: "other" }),
@@ -143,9 +161,18 @@ describe("detectRecurringCandidates", () => {
     const first = detectRecurringCandidates([...input].reverse(), "2026-08-30");
     const second = detectRecurringCandidates(input, "2026-08-30");
     expect(first).toEqual(second);
+    expect(first[0]).toMatchObject({ merchantName: "Other Co", amountPattern: "fixed" });
     expect(new Set(first.flatMap((candidate) => candidate.transactionIds)).size).toBe(
       first.reduce((total, candidate) => total + candidate.transactionIds.length, 0),
     );
+  });
+
+  it("clamps month-end predictions to the target month", () => {
+    const result = detectRecurringCandidates(
+      series(["2026-01-31", "2026-02-28", "2026-03-31"], 15.99),
+      "2026-04-01",
+    );
+    expect(result[0]).toMatchObject({ frequency: "MONTHLY", predictedNextDate: "2026-04-30" });
   });
 });
 

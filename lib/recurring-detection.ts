@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { addDays, addMonths, parseDate } from "@/lib/date-utils";
+import { addDays, parseDate } from "@/lib/date-utils";
 
 export const RECURRING_DETECTION_VERSION = 1;
 
@@ -85,6 +85,7 @@ interface RankedCandidate {
   candidate: DetectedRecurringCandidate;
   cadenceDeviation: number;
   amountStrength: number;
+  latestEffectiveDate: string;
 }
 
 function isIsoDate(value: string | null | undefined): value is string {
@@ -95,6 +96,16 @@ function isIsoDate(value: string | null | undefined): value is string {
 
 function dayDifference(earlier: string, later: string): number {
   return Math.round((parseDate(later).getTime() - parseDate(earlier).getTime()) / 86_400_000);
+}
+
+function addMonthsClamped(value: string, months: number): string {
+  const date = parseDate(value);
+  const day = date.getUTCDate();
+  date.setUTCDate(1);
+  date.setUTCMonth(date.getUTCMonth() + months);
+  const lastDay = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+  date.setUTCDate(Math.min(day, lastDay));
+  return date.toISOString().slice(0, 10);
 }
 
 function roundCents(value: number): number {
@@ -244,10 +255,10 @@ function buildCandidate(
     return Math.max(maximum, deviation);
   }, 0);
   const predictedNextDate = cadence.frequency === "WEEKLY"
-    ? addDays(newest.postedDate, 7)
+    ? addDays(newest.effectiveDate, 7)
     : cadence.frequency === "BIWEEKLY"
-      ? addDays(newest.postedDate, 14)
-      : addMonths(newest.postedDate, cadence.frequency === "MONTHLY" ? 1 : 3);
+      ? addDays(newest.effectiveDate, 14)
+      : addMonthsClamped(newest.effectiveDate, cadence.frequency === "MONTHLY" ? 1 : 3);
   const merchantName = newest.merchant.trim() || newest.rawName?.trim() || newest.normalizedMerchant;
   const description = newest.rawName?.trim() || merchantName;
   const category = newest.category ?? newest.detailedCategory ?? oldest.category ?? oldest.detailedCategory ?? null;
@@ -276,7 +287,12 @@ function buildCandidate(
       matchedSignifiers: signifiers,
     },
   };
-  return { candidate, cadenceDeviation: maximumCadenceDeviationDays, amountStrength: amounts.strength };
+  return {
+    candidate,
+    cadenceDeviation: maximumCadenceDeviationDays,
+    amountStrength: amounts.strength,
+    latestEffectiveDate: newest.effectiveDate,
+  };
 }
 
 function compareRankedCandidates(a: RankedCandidate, b: RankedCandidate): number {
@@ -329,6 +345,7 @@ export function detectRecurringCandidates(
       if (inWindow.length < cadence.required) continue;
 
       let segmentStart = 0;
+      let latestComplete: RankedCandidate | null = null;
       const considerSegment = (segmentEnd: number) => {
         let windowStart = segmentStart;
         while (
@@ -340,7 +357,10 @@ export function detectRecurringCandidates(
         const segment = inWindow.slice(windowStart, segmentEnd);
         if (segment.length < cadence.required) return;
         const result = buildCandidate(segment, cadence);
-        if (result) ranked.push(result);
+        if (!result) return;
+        const newest = segment.at(-1)!;
+        if (dayDifference(newest.effectiveDate, today) > cadence.historyDays) return;
+        if (!latestComplete || newest.effectiveDate > latestComplete.latestEffectiveDate) latestComplete = result;
       };
       for (let index = 1; index < inWindow.length; index += 1) {
         const previous = inWindow[index - 1]!;
@@ -352,6 +372,7 @@ export function detectRecurringCandidates(
         }
       }
       considerSegment(inWindow.length);
+      if (latestComplete) ranked.push(latestComplete);
     }
   }
 
