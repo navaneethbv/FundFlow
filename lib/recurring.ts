@@ -8,6 +8,42 @@ import { logError } from "@/lib/log";
 import { diffRecurringStreams, type RecurringDiff } from "@/lib/insights";
 import { createNotification } from "@/lib/notifications";
 import { formatCurrency } from "@/lib/format";
+import {
+  normalizeRecurringMerchant,
+  recurringIdentityKey,
+  type DetectedRecurringFrequency,
+} from "@/lib/recurring-detection";
+import {
+  refreshInferredRecurringForUser,
+  type InferredRecurringRefreshResult,
+} from "@/lib/recurring-inference";
+
+export interface RecurringRefreshResult {
+  plaid: number;
+  inferred: InferredRecurringRefreshResult;
+}
+
+const EMPTY_INFERRED_REFRESH: InferredRecurringRefreshResult = {
+  active: 0,
+  added: 0,
+  deactivated: 0,
+  deduplicated: 0,
+};
+
+function identityFrequency(value: string | null | undefined): DetectedRecurringFrequency | null {
+  switch (value?.toUpperCase().replaceAll("-", "")) {
+    case "WEEKLY":
+      return "WEEKLY";
+    case "BIWEEKLY":
+      return "BIWEEKLY";
+    case "MONTHLY":
+      return "MONTHLY";
+    case "QUARTERLY":
+      return "QUARTERLY";
+    default:
+      return null;
+  }
+}
 
 function mapStreamRow(
   userId: string,
@@ -16,6 +52,10 @@ function mapStreamRow(
   stream: TransactionStream,
   accountIdByPlaidId: Map<string, string>,
 ) {
+  const accountId = accountIdByPlaidId.get(stream.account_id) ?? null;
+  const merchant = stream.merchant_name?.trim() || stream.description?.trim() || "";
+  const normalizedMerchant = normalizeRecurringMerchant(merchant);
+  const frequency = identityFrequency(stream.frequency);
   return {
     user_id: userId,
     plaid_item_id: itemDbId,
@@ -29,10 +69,14 @@ function mapStreamRow(
     status: stream.status ?? null,
     category: stream.personal_finance_category?.primary ?? null,
     is_active: stream.is_active ?? true,
-    account_id: accountIdByPlaidId.get(stream.account_id) ?? null,
+    account_id: accountId,
     first_date: stream.first_date ?? null,
     last_date: stream.last_date ?? null,
     predicted_next_date: stream.predicted_next_date ?? null,
+    source: "plaid" as const,
+    identity_key: accountId && normalizedMerchant && frequency
+      ? recurringIdentityKey(userId, accountId, streamType, normalizedMerchant, frequency)
+      : null,
   };
 }
 
@@ -76,6 +120,7 @@ async function deactivateStaleStreams(
     .from("recurring_streams")
     .update({ is_active: false })
     .eq("user_id", userId)
+    .eq("source", "plaid")
     .in("stream_id", staleStreamIds);
   if (error) throw error;
 }
@@ -113,8 +158,16 @@ async function replaceStreamTransactionJoins(
  * diffing a refresh against the stored streams. Best-effort by design: a
  * failed notification must never break the sync that discovered it.
  */
-async function notifyRecurringChanges(userId: string, diff: RecurringDiff) {
+async function notifyRecurringChanges(
+  userId: string,
+  diff: RecurringDiff,
+  identityByStream: ReadonlyMap<string, string | null>,
+) {
+  const notifiedIdentities = new Set<string>();
   for (const hike of diff.priceHikes) {
+    const identity = identityByStream.get(hike.streamId) ?? hike.streamId;
+    if (notifiedIdentities.has(identity)) continue;
+    notifiedIdentities.add(identity);
     try {
       await createNotification(
         userId,
@@ -130,6 +183,9 @@ async function notifyRecurringChanges(userId: string, diff: RecurringDiff) {
     }
   }
   for (const stream of diff.newStreams) {
+    const identity = identityByStream.get(stream.streamId) ?? stream.streamId;
+    if (notifiedIdentities.has(identity)) continue;
+    notifiedIdentities.add(identity);
     try {
       await createNotification(
         userId,
@@ -160,12 +216,25 @@ export async function refreshRecurringForItem(item: PlaidItemRow): Promise<numbe
     ...response.data.outflow_streams.map((s) => ({ stream: s, type: "outflow" as const })),
   ];
 
-  // Short-circuit before touching the database at all when there is nothing
-  // to persist — a partial/empty response must not trip any downstream
-  // account or mark-and-sweep query.
-  if (tagged.length === 0) return 0;
-
+  // A valid empty response is a complete provider snapshot and must sweep
+  // only the provider-owned rows.
   const supabase = createServiceClient();
+
+  if (tagged.length === 0) {
+    const { data: existing, error } = await supabase
+      .from("recurring_streams")
+      .select("stream_id")
+      .eq("user_id", item.user_id)
+      .eq("plaid_item_id", item.id)
+      .eq("source", "plaid");
+    if (error) throw error;
+    await deactivateStaleStreams(
+      supabase,
+      item.user_id,
+      (existing ?? []).map((row) => row.stream_id as string),
+    );
+    return 0;
+  }
 
   const { data: accountRows, error: accountsError } = await supabase
     .from("accounts")
@@ -182,11 +251,13 @@ export async function refreshRecurringForItem(item: PlaidItemRow): Promise<numbe
 
   // Snapshot stored amounts before the upsert overwrites them. Service
   // client bypasses RLS, so both filters are load-bearing.
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("recurring_streams")
     .select("stream_id, last_amount")
     .eq("user_id", item.user_id)
-    .eq("plaid_item_id", item.id);
+    .eq("plaid_item_id", item.id)
+    .eq("source", "plaid");
+  if (existingError) throw existingError;
 
   const { data: upserted, error } = await supabase
     .from("recurring_streams")
@@ -246,22 +317,32 @@ export async function refreshRecurringForItem(item: PlaidItemRow): Promise<numbe
         isActive: row.is_active,
       })),
     );
-    await notifyRecurringChanges(item.user_id, diff);
+    await notifyRecurringChanges(
+      item.user_id,
+      diff,
+      new Map(rows.map((row) => [row.stream_id, row.identity_key])),
+    );
   }
 
   return rows.length;
 }
 
 /** Refresh recurring streams for all active items of a user. */
-export async function refreshRecurringForUser(userId: string): Promise<number> {
+export async function refreshRecurringForUser(userId: string): Promise<RecurringRefreshResult> {
   const items = await listActiveItems(userId);
-  let count = 0;
+  let plaid = 0;
   for (const item of items) {
     try {
-      count += await refreshRecurringForItem(item);
+      plaid += await refreshRecurringForItem(item);
     } catch (error) {
       logError("recurring.item", error);
     }
   }
-  return count;
+  let inferred = EMPTY_INFERRED_REFRESH;
+  try {
+    inferred = await refreshInferredRecurringForUser(userId);
+  } catch (error) {
+    logError("recurring.inference", error);
+  }
+  return { plaid, inferred };
 }

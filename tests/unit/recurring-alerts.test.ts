@@ -34,12 +34,16 @@ vi.mock("@/lib/supabase/service", () => ({
           return {
             select: () => ({
               eq: () => ({
-                eq: () => Promise.resolve({ data: existingRows, error: null }),
+                eq: () => ({
+                  eq: () => Promise.resolve({ data: existingRows, error: null }),
+                }),
               }),
             }),
             upsert: mockUpsert,
             update: () => ({
-              eq: () => ({ in: () => Promise.resolve({ error: null }) }),
+              eq: () => ({
+                eq: () => ({ in: () => Promise.resolve({ error: null }) }),
+              }),
             }),
           };
         case "accounts":

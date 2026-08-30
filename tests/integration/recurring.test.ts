@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { createClient } from "@supabase/supabase-js";
-import { refreshRecurringForItem, refreshRecurringForUser } from "@/lib/recurring";
-import { storeItem, getItem } from "@/lib/plaid-service";
+import type { refreshRecurringForItem as RefreshRecurringForItem, refreshRecurringForUser as RefreshRecurringForUser } from "@/lib/recurring";
+
+let refreshRecurringForItem: typeof RefreshRecurringForItem;
+let refreshRecurringForUser: typeof RefreshRecurringForUser;
+let storeItem: typeof import("@/lib/plaid-service").storeItem;
+let getItem: typeof import("@/lib/plaid-service").getItem;
 
 // Mock the Plaid client getter
 const mockTransactionsRecurringGet = vi.fn();
@@ -23,6 +27,11 @@ const suite = run ? describe : describe.skip;
 
 suite("recurring streams DB integration & mock Plaid", () => {
   if (!run) return;
+
+  beforeAll(async () => {
+    ({ refreshRecurringForItem, refreshRecurringForUser } = await import("@/lib/recurring"));
+    ({ storeItem, getItem } = await import("@/lib/plaid-service"));
+  });
 
   const admin = createClient(url!, secret!, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -110,7 +119,7 @@ suite("recurring streams DB integration & mock Plaid", () => {
     // Verify DB records
     const { data: streams } = await admin
       .from("recurring_streams")
-      .select("stream_id, stream_type, merchant_name, average_amount, frequency")
+      .select("stream_id, stream_type, merchant_name, average_amount, frequency, source, identity_key")
       .eq("user_id", userId)
       .order("stream_type");
 
@@ -122,6 +131,8 @@ suite("recurring streams DB integration & mock Plaid", () => {
     expect(inflow!.merchant_name).toBe("Employer Corp");
     expect(Number(inflow!.average_amount)).toBe(2000.0);
     expect(inflow!.frequency).toBe("bi-weekly");
+    expect(inflow!.source).toBe("plaid");
+    expect(inflow!.identity_key).toBeNull();
 
     const outflow = streams!.find((s) => s.stream_type === "outflow");
     expect(outflow).toBeTruthy();
@@ -129,6 +140,8 @@ suite("recurring streams DB integration & mock Plaid", () => {
     expect(outflow!.merchant_name).toBe("Netflix");
     expect(Number(outflow!.average_amount)).toBe(15.49);
     expect(outflow!.frequency).toBe("monthly");
+    expect(outflow!.source).toBe("plaid");
+    expect(outflow!.identity_key).toBeNull();
   });
 
   it("runs refreshRecurringForUser successfully", async () => {
@@ -138,6 +151,9 @@ suite("recurring streams DB integration & mock Plaid", () => {
     });
 
     const count = await refreshRecurringForUser(userId);
-    expect(count).toBe(0);
+    expect(count).toEqual({
+      plaid: 0,
+      inferred: { active: 0, added: 0, deactivated: 0, deduplicated: 0 },
+    });
   });
 });
