@@ -101,6 +101,21 @@ export async function POST(request: NextRequest) {
     }
     const hasDisplayCategory = hasOverrideField(body, "display_category");
     const hasClassification = hasOverrideField(body, "cash_flow_classification");
+    if (
+      hasDisplayCategory &&
+      body?.display_category !== null &&
+      typeof body?.display_category !== "string"
+    ) {
+      return badRequest("display_category must be a string or null");
+    }
+    if (
+      hasClassification &&
+      body?.cash_flow_classification !== null &&
+      body?.cash_flow_classification !== "expense" &&
+      body?.cash_flow_classification !== "income"
+    ) {
+      return badRequest("cash_flow_classification must be expense, income, or null");
+    }
     const displayCategory = parseDisplayCategory(body, hasDisplayCategory);
     const cashFlowClassification = parseCashFlowClassification(body, hasClassification);
     if (displayCategory === undefined && cashFlowClassification === undefined) {

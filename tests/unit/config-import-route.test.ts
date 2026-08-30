@@ -211,8 +211,10 @@ describe("POST /api/import/config", () => {
       planned: 650,
     });
     expect(
-      supabase.callsOn("budgets").filter(({ method }) => method === "select"),
-    ).toHaveLength(1);
+      supabase.callsOn("budgets").filter(
+        ({ method, args }) => method === "eq" && args[0] === "category",
+      ),
+    ).toHaveLength(0);
   });
 
   it("keeps the original name of a custom budget group when applying", async () => {

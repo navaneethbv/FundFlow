@@ -69,7 +69,7 @@ async function applyBudgetRow(
       .eq("user_id", userId);
     if (error) throw error;
     if (decision === "replace-month") {
-      await writeMonthlyPlan(supabase, userId, row, month);
+      await writeMonthlyPlan(supabase, userId, existing.id, row, month);
     }
     return { status: "updated", id: existing.id };
   }
@@ -87,10 +87,11 @@ async function applyBudgetRow(
     .select("id")
     .maybeSingle();
   if (error) throw error;
-  if (decision === "replace-month") {
-    await writeMonthlyPlan(supabase, userId, row, month);
-  }
   const id = (data as { id?: unknown } | null)?.id;
+  if (decision === "replace-month") {
+    if (typeof id !== "string") throw new Error("Created budget did not return an id");
+    await writeMonthlyPlan(supabase, userId, id, row, month);
+  }
   return { status: "created", id: typeof id === "string" ? id : null };
 }
 
@@ -145,20 +146,14 @@ async function applyBudgetImport(
 async function writeMonthlyPlan(
   supabase: SupabaseClient,
   userId: string,
+  budgetId: string,
   row: BudgetImportRow,
   month: string,
 ): Promise<void> {
-  const { data: budget } = await supabase
-    .from("budgets")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("category", row.category)
-    .maybeSingle();
-  if (!budget) return;
   const { error } = await supabase.from("budget_periods").upsert(
     {
       user_id: userId,
-      budget_id: budget.id as string,
+      budget_id: budgetId,
       month,
       planned: row.monthlyAmount,
     },
@@ -459,6 +454,19 @@ async function processBudgetConfig(
 ): Promise<NextResponse> {
   const { rows, errors } = parseMonarchBudgets(text);
   if (errors.length > 0) return badRequest(errors[0] ?? "Invalid budget format");
+  const categorySet = new Set(rows.map((row) => row.category));
+  if (mode === "apply") {
+    for (const [category, decision] of Object.entries(decisions)) {
+      if (!categorySet.has(category)) return badRequest("Invalid or stale budget decision key");
+      if (
+        decision !== "merge" &&
+        decision !== "replace-month" &&
+        decision !== "skip"
+      ) {
+        return badRequest(`Invalid budget decision for ${category}`);
+      }
+    }
+  }
   const { data: existing } = await supabase
     .from("budgets")
     .select("category, monthly_limit, group_name")
@@ -561,6 +569,9 @@ export async function POST(request: NextRequest) {
     const body = (await request.json().catch(() => null)) as ConfigImportBody | null;
     const kind = body?.kind;
     const text = body?.text;
+    if (body?.mode !== undefined && body.mode !== "apply" && body.mode !== "preview") {
+      return badRequest("mode must be preview or apply");
+    }
     const mode: ConfigImportMode = body?.mode === "apply" ? "apply" : "preview";
     if (body?.decisions !== undefined && !isRecord(body.decisions)) {
       return badRequest("decisions must be an object");

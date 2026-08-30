@@ -99,7 +99,7 @@ export function deriveCursorHealth(input: CursorHealthInput): ItemCursorHealth {
   } else if (!input.lastSyncCompletedPages) {
     state = "partial_page";
   } else {
-    // Success that drained every page; still honest when the timestamp is old.
+    // Success that drained every page and recorded a parseable timestamp.
     state = validTimestamp(input.lastSuccessAt) ? "healthy" : "partial_page";
   }
   return { ...base, state };
@@ -157,14 +157,18 @@ export async function recordCursorFailure(
   supabase: SupabaseClient,
   input: CursorFailureRecord,
 ): Promise<void> {
+  const changes: Record<string, string | boolean> = {
+    last_sync_completed_pages: false,
+  };
+  if (input.startedWithoutCursor) {
+    changes.initial_history_incomplete = true;
+    if (input.priorSuccess) {
+      changes.cursor_reset_detected_at = input.nowIso;
+    }
+  }
   const { error } = await supabase
     .from("plaid_items")
-    .update({
-      last_sync_completed_pages: false,
-      initial_history_incomplete: input.startedWithoutCursor,
-      cursor_reset_detected_at:
-        input.startedWithoutCursor && input.priorSuccess ? input.nowIso : null,
-    })
+    .update(changes)
     .eq("id", input.itemDbId)
     .eq("user_id", input.userId);
   if (error) throw error;
@@ -180,15 +184,19 @@ export async function recordCursorPartialSuccess(
   supabase: SupabaseClient,
   input: CursorFailureRecord,
 ): Promise<void> {
+  const changes: Record<string, string | boolean> = {
+    last_sync_success_at: input.nowIso,
+    last_sync_completed_pages: false,
+  };
+  if (input.startedWithoutCursor) {
+    changes.initial_history_incomplete = true;
+    if (input.priorSuccess) {
+      changes.cursor_reset_detected_at = input.nowIso;
+    }
+  }
   const { error } = await supabase
     .from("plaid_items")
-    .update({
-      last_sync_success_at: input.nowIso,
-      last_sync_completed_pages: false,
-      initial_history_incomplete: input.startedWithoutCursor,
-      cursor_reset_detected_at:
-        input.startedWithoutCursor && input.priorSuccess ? input.nowIso : null,
-    })
+    .update(changes)
     .eq("id", input.itemDbId)
     .eq("user_id", input.userId);
   if (error) throw error;

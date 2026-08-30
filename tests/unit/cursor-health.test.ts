@@ -176,7 +176,7 @@ describe("recordCursor* persistence", () => {
     const written = supabase.writtenTo("plaid_items") as Record<string, unknown>;
     expect(written.last_sync_completed_pages).toBe(false);
     expect(written.initial_history_incomplete).toBe(true);
-    expect(written.cursor_reset_detected_at).toBeNull();
+    expect(written).not.toHaveProperty("cursor_reset_detected_at");
   });
 
   it("records a cursor reset when a prior-success item starts with no cursor", async () => {

@@ -276,9 +276,9 @@ async function newerEditConflicts(input: {
   userId: string;
   dbRows: ReturnType<typeof buildCommitRows>;
   batchCreatedAt: string;
-  approvedIds: Set<string> | null;
+  overwriteAnnotationIds: Set<string>;
 }): Promise<{ rowIds: string[] }> {
-  const { service, userId, dbRows, batchCreatedAt, approvedIds } = input;
+  const { service, userId, dbRows, batchCreatedAt, overwriteAnnotationIds } = input;
   const notesRows = dbRows.filter((row) => row.note || row.tags.length > 0);
   if (notesRows.length === 0) return { rowIds: [] };
   const importIds = notesRows.map((row) => row.plaid_transaction_id);
@@ -307,20 +307,23 @@ async function newerEditConflicts(input: {
     annotations.push(...((data ?? []) as Array<Record<string, unknown>>));
   }
   const batchTime = Date.parse(batchCreatedAt);
+  const annotationUpdatedAtByTxnId = new Map(
+    annotations.map((item) => [
+      item.transaction_id as string,
+      item.updated_at as string | undefined,
+    ]),
+  );
   const conflictRowIds = notesRows
     .filter((row) => {
       const txnId = txnIdByImportId.get(row.plaid_transaction_id);
-      const annotation = annotations.find(
-        (item) => item.transaction_id === txnId,
-      ) as { transaction_id?: string; updated_at?: string } | undefined;
-      return annotation?.updated_at
-        ? Date.parse(annotation.updated_at) > batchTime
+      const updatedAt = txnId ? annotationUpdatedAtByTxnId.get(txnId) : undefined;
+      return updatedAt
+        ? Date.parse(updatedAt) > batchTime
         : false;
     })
     .map((row) => row.rowId);
-  // Approved rows are explicitly opted into overwriting.
   return {
-    rowIds: conflictRowIds.filter((id) => !approvedIds?.has(String(id))),
+    rowIds: conflictRowIds.filter((id) => !overwriteAnnotationIds.has(String(id))),
   };
 }
 
@@ -462,6 +465,13 @@ export async function POST(request: NextRequest) {
     const accountId = typeof body?.account_id === "string" ? body.account_id : undefined;
     const manualAccountId = typeof body?.manual_account_id === "string" ? body.manual_account_id : undefined;
     const approvedIds: string[] | null = Array.isArray(body?.approved_row_ids) ? body.approved_row_ids : null;
+    const overwriteAnnotationIds = new Set<string>(
+      Array.isArray(body?.overwrite_annotation_row_ids)
+        ? body.overwrite_annotation_row_ids.filter(
+            (value: unknown): value is string => typeof value === "string",
+          )
+        : [],
+    );
     const requestedMappings = parseMappingInput(body?.account_mappings);
     if (typeof batchId !== "string" || (!accountId && !manualAccountId)) {
       return badRequest("batch_id and account_id are required");
@@ -514,7 +524,7 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       dbRows,
       batchCreatedAt: batch.created_at,
-      approvedIds: approvedIds ? new Set(approvedIds) : null,
+      overwriteAnnotationIds,
     });
     if (blockedRowIds.length > 0) {
       return NextResponse.json(
