@@ -44,6 +44,7 @@ function makeQueryClient(seed: Record<string, Row[]> = {}) {
         added,
         deactivated: 0,
         deduplicated: payload.deduplications?.length ?? 0,
+        failed: 0,
       },
       error: null,
     };
@@ -250,7 +251,7 @@ describe("recurring inference reconciliation", () => {
     });
 
     const result = await refreshInferredRecurringForItem(item(), { today: "2026-08-30" });
-    expect(result).toEqual({ active: 1, added: 1, deactivated: 0, deduplicated: 0 });
+    expect(result).toEqual({ active: 1, added: 1, deactivated: 0, deduplicated: 0, failed: 0 });
     expect(mockServiceClient.rpc).toHaveBeenCalledWith("reconcile_inferred_recurring", expect.objectContaining({
       p_user_id: "user-1",
       p_item_id: "item-1",
@@ -292,6 +293,59 @@ describe("recurring inference reconciliation", () => {
     await refreshInferredRecurringForItem(item(), { today: "2026-08-30" });
     const payload = mockServiceClient.rpc.mock.calls[0]?.[1] as { p_payload: { candidates: Array<Record<string, unknown>> } };
     expect(payload.p_payload.candidates[0]).toMatchObject({ expected_amount: 18, transaction_ids: ["txn-1", "txn-2", "txn-3"] });
+  });
+
+  it("does not let an inactive Plaid stream suppress a fresh inferred candidate", async () => {
+    mockServiceClient = makeQueryClient({
+      accounts: [{ id: "acct-1", user_id: "user-1", plaid_item_id: "item-1" }],
+      transactions: [
+        { id: "txn-1", user_id: "user-1", account_id: "acct-1", date: "2026-05-15", authorized_date: null, amount: 15, merchant_name: "Streaming Co", name: "STREAMING CO", pfc_primary: "ENTERTAINMENT", pfc_detailed: "STREAMING", payment_channel: "online", iso_currency_code: "USD", pending: false },
+        { id: "txn-2", user_id: "user-1", account_id: "acct-1", date: "2026-06-15", authorized_date: null, amount: 15, merchant_name: "Streaming Co", name: "STREAMING CO", pfc_primary: "ENTERTAINMENT", pfc_detailed: "STREAMING", payment_channel: "online", iso_currency_code: "USD", pending: false },
+        { id: "txn-3", user_id: "user-1", account_id: "acct-1", date: "2026-07-15", authorized_date: null, amount: 15, merchant_name: "Streaming Co", name: "STREAMING CO", pfc_primary: "ENTERTAINMENT", pfc_detailed: "STREAMING", payment_channel: "online", iso_currency_code: "USD", pending: false },
+      ],
+      recurring_streams: [{
+        id: "plaid-inactive",
+        user_id: "user-1",
+        plaid_item_id: "item-1",
+        stream_id: "plaid-inactive",
+        source: "plaid",
+        identity_key: recurringIdentityKey("user-1", "acct-1", "outflow", "Streaming Co", "MONTHLY"),
+        stream_type: "outflow",
+        merchant_name: "Streaming Co",
+        frequency: "MONTHLY",
+        account_id: "acct-1",
+        is_active: false,
+      }],
+      recurring_stream_transactions: [],
+    });
+
+    await refreshInferredRecurringForItem(item(), { today: "2026-08-30" });
+
+    const payload = mockServiceClient.calls.find((call) => call.method === "rpc")?.args[0] as { p_payload: { candidates: unknown[]; deduplications: unknown[] } };
+    expect(payload.p_payload.candidates).toHaveLength(1);
+    expect(payload.p_payload.deduplications).toEqual([]);
+    expect(mockServiceClient.calls.some((call) => call.table === "recurring_streams" && call.method === "eq" && call.args[0] === "is_active" && call.args[1] === true)).toBe(true);
+  });
+
+  it("retains successful item counts and reports failed item refreshes", async () => {
+    const first = item({ id: "item-1" });
+    const second = item({ id: "item-2" });
+    mockListActiveItems.mockResolvedValue([first, second]);
+    mockServiceClient = makeQueryClient({
+      accounts: [
+        { id: "acct-1", user_id: "user-1", plaid_item_id: "item-1" },
+        { id: "acct-2", user_id: "user-1", plaid_item_id: "item-2" },
+      ],
+      transactions: [],
+      recurring_streams: [],
+      recurring_stream_transactions: [],
+    });
+    mockServiceClient.rpc.mockRejectedValueOnce(new Error("second item failed"));
+    mockServiceClient.rpc.mockResolvedValueOnce({ data: { active: 0, added: 0, deactivated: 0, deduplicated: 0, failed: 0 }, error: null });
+
+    const result = await refreshInferredRecurringForUser("user-1", { today: "2026-08-30" });
+
+    expect(result).toMatchObject({ active: 0, added: 0, deactivated: 0, deduplicated: 0, failed: 1 });
   });
 
   it("detects imported connected-account rows while excluding canonical transfers, refunds, and manual-only rows", async () => {

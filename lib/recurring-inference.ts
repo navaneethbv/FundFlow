@@ -11,12 +11,14 @@ import {
 import { createServiceClient } from "@/lib/supabase/service";
 import { listActiveItems } from "@/lib/plaid-service";
 import type { PlaidItemRow } from "@/lib/types";
+import { logError } from "@/lib/log";
 
 export interface InferredRecurringRefreshResult {
   active: number;
   added: number;
   deactivated: number;
   deduplicated: number;
+  failed: number;
 }
 
 type ServiceClient = ReturnType<typeof createServiceClient>;
@@ -145,13 +147,14 @@ async function loadStreams(
   item: PlaidItemRow,
   source: "plaid" | "inferred",
 ): Promise<RecurringStreamRow[]> {
-  const { data, error } = await supabase
+  const query = supabase
     .from("recurring_streams")
     .select(STREAM_COLUMNS)
     .eq("user_id", item.user_id)
     .eq("plaid_item_id", item.id)
-    .eq("source", source)
-    .order("id", { ascending: true });
+    .eq("source", source);
+  if (source === "plaid") query.eq("is_active", true);
+  const { data, error } = await query.order("id", { ascending: true });
   throwQueryError(error);
   return asRows<RecurringStreamRow>(data);
 }
@@ -316,6 +319,7 @@ function rpcResult(data: unknown): InferredRecurringRefreshResult {
     added: result.added as number,
     deactivated: result.deactivated as number,
     deduplicated: result.deduplicated as number,
+    failed: 0,
   };
 }
 
@@ -377,13 +381,18 @@ export async function refreshInferredRecurringForUser(
   options: { today?: string } = {},
 ): Promise<InferredRecurringRefreshResult> {
   const items = await listActiveItems(userId);
-  const result: InferredRecurringRefreshResult = { active: 0, added: 0, deactivated: 0, deduplicated: 0 };
+  const result: InferredRecurringRefreshResult = { active: 0, added: 0, deactivated: 0, deduplicated: 0, failed: 0 };
   for (const item of items) {
-    const itemResult = await refreshInferredRecurringForItem(item, options);
-    result.active += itemResult.active;
-    result.added += itemResult.added;
-    result.deactivated += itemResult.deactivated;
-    result.deduplicated += itemResult.deduplicated;
+    try {
+      const itemResult = await refreshInferredRecurringForItem(item, options);
+      result.active += itemResult.active;
+      result.added += itemResult.added;
+      result.deactivated += itemResult.deactivated;
+      result.deduplicated += itemResult.deduplicated;
+    } catch (error) {
+      result.failed += 1;
+      logError("recurring.inference.item", error);
+    }
   }
   return result;
 }

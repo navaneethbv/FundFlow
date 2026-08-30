@@ -9,6 +9,7 @@ vi.mock("@/lib/plaid", () => ({
 
 const mockServiceClient = {
   from: vi.fn(),
+  rpc: vi.fn(),
 };
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => mockServiceClient,
@@ -55,16 +56,24 @@ function createRecurringSupabaseMock(
     transactions?: { data: unknown[] | null; error?: unknown };
   } = {},
 ) {
-  const accountsEq = vi.fn().mockResolvedValue(options.accounts ?? { data: [], error: null });
+  const accountsEqItem = vi.fn().mockResolvedValue(options.accounts ?? { data: [], error: null });
+  const accountsEq = vi.fn().mockReturnValue({ eq: accountsEqItem });
   const accountsSelect = vi.fn().mockReturnValue({ eq: accountsEq });
 
   const configuredExistingStreams = options.existingStreams ?? { data: [], error: null };
   const streamsEqSource = vi.fn().mockImplementation((column: string, value: string) => {
     if (column !== "source") return Promise.resolve(configuredExistingStreams);
-    return Promise.resolve({
+    const response = Promise.resolve({
       ...configuredExistingStreams,
       data: configuredExistingStreams.data?.filter((row) => ((row as { source?: string }).source ?? "plaid") === value),
     });
+    Object.assign(response, {
+      eq: vi.fn().mockResolvedValue({
+        ...configuredExistingStreams,
+        data: configuredExistingStreams.data?.filter((row) => ((row as { source?: string }).source ?? "plaid") === value),
+      }),
+    });
+    return response;
   });
   const streamsEqItem = vi.fn().mockReturnValue({ eq: streamsEqSource });
   const streamsEqUser = vi.fn().mockReturnValue({ eq: streamsEqItem });
@@ -88,6 +97,34 @@ function createRecurringSupabaseMock(
   const rstDeleteEq = vi.fn().mockReturnValue({ eq: rstDeleteEqUser });
   const rstDelete = vi.fn().mockReturnValue({ eq: rstDeleteEq });
   const rstInsert = vi.fn().mockResolvedValue({ error: null });
+  const rpc = vi.fn().mockImplementation(async (_name: string, args: { p_payload: { streams: unknown[]; joins: Array<{ stream_id: string; transaction_ids: string[] }> } }) => {
+    const payload = args.p_payload;
+    const upsertResult = options.upserted ?? { data: [], error: null };
+    if (!upsertResult.error) {
+      const write = await upsert(payload.streams, { onConflict: "stream_id" }).select();
+      if (write.error) return { data: null, error: write.error };
+      const current = new Set(payload.streams.map((stream) => (stream as { stream_id: string }).stream_id));
+      const stale = (configuredExistingStreams.data ?? [])
+        .filter((row) => ((row as { source?: string }).source ?? "plaid") === "plaid")
+        .map((row) => (row as { stream_id: string }).stream_id)
+        .filter((streamId) => !current.has(streamId));
+      if (stale.length > 0) {
+        const staleResult = await update({ is_active: false }).eq("user_id", "user-1").eq("source", "plaid").in("stream_id", stale);
+        if (staleResult.error) return { data: null, error: staleResult.error };
+      }
+      for (const join of payload.joins) {
+        const row = (upsertResult.data ?? []).find((candidate) => (candidate as { stream_id: string }).stream_id === join.stream_id) as { id: string } | undefined;
+        if (!row) continue;
+        const deleteResult = await rstDelete().eq("recurring_stream_id", row.id).eq("user_id", "user-1");
+        if (deleteResult.error) return { data: null, error: deleteResult.error };
+        if (join.transaction_ids.length > 0) {
+          const insertResult = await rstInsert(join.transaction_ids.map((transactionId) => ({ user_id: "user-1", recurring_stream_id: row.id, transaction_id: transactionId })));
+          if (insertResult.error) return { data: null, error: insertResult.error };
+        }
+      }
+    }
+    return { data: { plaid: payload.streams.length }, error: upsertResult.error ?? null };
+  });
 
   const from = vi.fn().mockImplementation((table: string) => {
     switch (table) {
@@ -104,9 +141,12 @@ function createRecurringSupabaseMock(
     }
   });
 
+  mockServiceClient.rpc = rpc;
+
   return {
     from,
     accountsEq,
+    accountsEqItem,
     streamsEqItem,
     streamsEqSource,
     upsert,
@@ -121,6 +161,7 @@ function createRecurringSupabaseMock(
     rstDeleteEq,
     rstDeleteEqUser,
     rstInsert,
+    rpc,
   };
 }
 
@@ -132,6 +173,7 @@ describe("lib/recurring", () => {
       added: 0,
       deactivated: 0,
       deduplicated: 0,
+      failed: 0,
     });
   });
 
@@ -278,6 +320,33 @@ describe("lib/recurring", () => {
       ],
       { onConflict: "stream_id" },
     );
+  });
+
+  it("hashes Plaid semi-monthly and annual identities but leaves unknown cadence identity null", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce({
+      data: {
+        inflow_streams: [],
+        outflow_streams: [
+          { stream_id: "semi", merchant_name: "Semi", description: "Semi", frequency: "SEMI_MONTHLY", account_id: "plaid-acct-1", transaction_ids: [] },
+          { stream_id: "annual", merchant_name: "Annual", description: "Annual", frequency: "ANNUALLY", account_id: "plaid-acct-1", transaction_ids: [] },
+          { stream_id: "unknown", merchant_name: "Unknown", description: "Unknown", frequency: "UNKNOWN", account_id: "plaid-acct-1", transaction_ids: [] },
+        ],
+      },
+    });
+    const mock = createRecurringSupabaseMock({
+      accounts: { data: [{ id: "local-acct-1", plaid_account_id: "plaid-acct-1" }], error: null },
+      upserted: { data: [], error: null },
+    });
+    mockServiceClient.from.mockImplementation(mock.from);
+
+    await refreshRecurringForItem(dummyItem);
+
+    const payload = mock.rpc.mock.calls[0]?.[1] as { p_payload: { streams: Array<{ stream_id: string; identity_key: string | null }> } };
+    expect(payload.p_payload.streams).toEqual(expect.arrayContaining([
+      expect.objectContaining({ stream_id: "semi", identity_key: expect.stringMatching(/^recurring-v1:/) }),
+      expect.objectContaining({ stream_id: "annual", identity_key: expect.stringMatching(/^recurring-v1:/) }),
+      expect.objectContaining({ stream_id: "unknown", identity_key: null }),
+    ]));
   });
 
   it("resolves a stream's Plaid transaction ids to local rows, replaces the join table, and omits unresolvable ids", async () => {
@@ -440,7 +509,7 @@ describe("lib/recurring", () => {
     const total = await refreshRecurringForUser("user-1");
     expect(total).toEqual({
       plaid: 1,
-      inferred: { active: 0, added: 0, deactivated: 0, deduplicated: 0 },
+      inferred: { active: 0, added: 0, deactivated: 0, deduplicated: 0, failed: 0 },
     });
   });
 
@@ -451,7 +520,7 @@ describe("lib/recurring", () => {
     const total = await refreshRecurringForUser("user-1");
     expect(total).toEqual({
       plaid: 0,
-      inferred: { active: 0, added: 0, deactivated: 0, deduplicated: 0 },
+      inferred: { active: 0, added: 0, deactivated: 0, deduplicated: 0, failed: 0 },
     });
     expect(mockLogError).toHaveBeenCalledWith("recurring.item", expect.any(Error));
   });
@@ -855,6 +924,7 @@ describe("lib/recurring", () => {
       added: 0,
       deactivated: 0,
       deduplicated: 0,
+      failed: 0,
     });
     mockListActiveItems.mockResolvedValueOnce([dummyItem]);
 
@@ -873,7 +943,7 @@ describe("lib/recurring", () => {
 
     expect(result).toEqual({
       plaid: 0,
-      inferred: { active: 1, added: 0, deactivated: 0, deduplicated: 0 },
+      inferred: { active: 1, added: 0, deactivated: 0, deduplicated: 0, failed: 0 },
     });
     expect(mock.streamsEqSource).toHaveBeenCalledWith("source", "plaid");
     expect(mock.updateEqSource).toHaveBeenCalledWith("source", "plaid");
@@ -889,13 +959,14 @@ describe("lib/recurring", () => {
       added: 1,
       deactivated: 0,
       deduplicated: 1,
+      failed: 0,
     });
 
     const result = await refreshRecurringForUser("user-1");
 
     expect(result).toEqual({
       plaid: 0,
-      inferred: { active: 2, added: 1, deactivated: 0, deduplicated: 1 },
+      inferred: { active: 2, added: 1, deactivated: 0, deduplicated: 1, failed: 0 },
     });
     expect(mockServiceClient.from).not.toHaveBeenCalled();
     expect(mockRefreshInferredRecurringForUser).toHaveBeenCalledWith("user-1");

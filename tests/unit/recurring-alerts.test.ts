@@ -26,16 +26,21 @@ vi.mock("@/lib/log", () => ({ logError: vi.fn() }));
 // resolve to harmless empty results.
 let existingRows: Array<{ stream_id: string; last_amount: number | null }>;
 const mockUpsert = vi.fn();
+const mockRpc = vi.fn();
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => ({
+    rpc: (...args: unknown[]) => mockRpc(...args),
     from: (table: string) => {
       switch (table) {
         case "recurring_streams":
+          {
+            const response = Promise.resolve({ data: existingRows, error: null });
+            Object.assign(response, { eq: () => response });
           return {
             select: () => ({
               eq: () => ({
                 eq: () => ({
-                  eq: () => Promise.resolve({ data: existingRows, error: null }),
+                  eq: () => response,
                 }),
               }),
             }),
@@ -46,8 +51,9 @@ vi.mock("@/lib/supabase/service", () => ({
               }),
             }),
           };
+          }
         case "accounts":
-          return { select: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) };
+          return { select: () => ({ eq: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) }) };
         case "transactions":
           return {
             select: () => ({
@@ -94,6 +100,7 @@ describe("recurring stream alerts", () => {
     mockUpsert.mockReturnValue({
       select: () => Promise.resolve({ data: [], error: null }),
     });
+    mockRpc.mockImplementation((_name: string, args: { p_payload: { streams: unknown[] } }) => Promise.resolve({ data: { plaid: args.p_payload.streams.length }, error: null }));
     existingRows = [
       { stream_id: "s1", last_amount: 15.49 },
       { stream_id: "s2", last_amount: 9.99 },
@@ -114,7 +121,7 @@ describe("recurring stream alerts", () => {
 
     await refreshRecurringForItem(item);
 
-    expect(mockUpsert).toHaveBeenCalled();
+    expect(mockRpc).toHaveBeenCalled();
     const calls = mockCreateNotification.mock.calls;
     const types = calls.map((call) => call[1]);
     expect(types).toContain("price_hike");
@@ -142,7 +149,7 @@ describe("recurring stream alerts", () => {
 
     await refreshRecurringForItem(item);
 
-    expect(mockUpsert).toHaveBeenCalled();
+    expect(mockRpc).toHaveBeenCalled();
     expect(mockCreateNotification).not.toHaveBeenCalled();
   });
 

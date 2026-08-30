@@ -59,4 +59,23 @@ describe("inferred recurring stream schema", () => {
     expect(sql.indexOf("-- Candidate writes")).toBeLessThan(sql.indexOf("-- Plaid state"));
     expect(sql.indexOf("raise exception 'recurring_inferred_stream_not_owned'")).toBeLessThan(sql.indexOf("update public.recurring_streams plaid"));
   });
+
+  it("defines an atomic service-role-only Plaid snapshot RPC", () => {
+    const sql = readFileSync(
+      "supabase/migrations/20260830210000_reconcile_plaid_recurring_atomic.sql",
+      "utf8",
+    );
+
+    expect(sql).toContain("create or replace function public.reconcile_plaid_recurring(");
+    expect(sql).toContain("jsonb_typeof(p_payload->'streams') <> 'array'");
+    expect(sql).toContain("jsonb_typeof(p_payload->'joins') <> 'array'");
+    expect(sql).toContain("source = 'plaid'");
+    expect(sql).toContain("recurring_plaid_account_not_owned");
+    expect(sql).toContain("recurring_plaid_transaction_not_owned");
+    expect(sql).toContain("delete from public.recurring_stream_transactions");
+    expect(sql).toContain("update public.recurring_streams");
+    expect(sql).toContain("revoke all on function public.reconcile_plaid_recurring(uuid, uuid, jsonb)");
+    expect(sql).toContain("grant execute on function public.reconcile_plaid_recurring(uuid, uuid, jsonb)");
+    expect(sql).toContain("set search_path = ''");
+  });
 });

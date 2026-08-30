@@ -4,6 +4,14 @@ import { addDays, parseDate } from "@/lib/date-utils";
 export const RECURRING_DETECTION_VERSION = 1;
 
 export type DetectedRecurringFrequency = "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "QUARTERLY";
+export type RecurringIdentityFrequency =
+  | "WEEKLY"
+  | "BIWEEKLY"
+  | "MONTHLY"
+  | "QUARTERLY"
+  | "SEMI_MONTHLY"
+  | "ANNUALLY"
+  | "UNKNOWN";
 export type RecurringAmountPattern = "fixed" | "price_step" | "variable";
 type StreamType = "inflow" | "outflow";
 
@@ -144,23 +152,23 @@ export function recurringIdentityKey(
   accountId: string,
   streamType: StreamType,
   merchant: string,
-  frequency: DetectedRecurringFrequency,
+  frequency: RecurringIdentityFrequency,
 ): string;
 export function recurringIdentityKey(input: {
   userId: string;
   accountId: string;
   streamType: StreamType;
   merchant: string;
-  frequency: DetectedRecurringFrequency;
+  frequency: RecurringIdentityFrequency;
 }): string;
 export function recurringIdentityKey(
   userIdOrInput:
     | string
-    | { userId: string; accountId: string; streamType: StreamType; merchant: string; frequency: DetectedRecurringFrequency },
+    | { userId: string; accountId: string; streamType: StreamType; merchant: string; frequency: RecurringIdentityFrequency },
   accountId?: string,
   streamType?: StreamType,
   merchant?: string,
-  frequency?: DetectedRecurringFrequency,
+  frequency?: RecurringIdentityFrequency,
 ): string {
   const input = typeof userIdOrInput === "string"
     ? { userId: userIdOrInput, accountId: accountId ?? "", streamType: streamType ?? "outflow", merchant: merchant ?? "", frequency: frequency ?? "MONTHLY" }
