@@ -27,10 +27,32 @@ type Row = Record<string, unknown>;
 function makeQueryClient(seed: Record<string, Row[]> = {}) {
   const tables = new Map(Object.entries(seed).map(([table, rows]) => [table, rows.map((row) => ({ ...row }))]));
   const calls: Array<{ table: string; method: string; args: unknown[] }> = [];
+  const seenIdentities = new Set<string>();
+  const rpc = vi.fn(async (name: string, args: Record<string, unknown>) => {
+    calls.push({ table: name, method: "rpc", args: [args] });
+    const payload = args.p_payload as { candidates?: unknown[]; deduplications?: unknown[] };
+    const candidates = payload.candidates ?? [];
+    const added = candidates.filter((candidate) => {
+      const identity = String((candidate as Row).identity_key ?? "");
+      if (seenIdentities.has(identity)) return false;
+      seenIdentities.add(identity);
+      return true;
+    }).length;
+    return {
+      data: {
+        active: candidates.length,
+        added,
+        deactivated: 0,
+        deduplicated: payload.deduplications?.length ?? 0,
+      },
+      error: null,
+    };
+  });
   const from = vi.fn((table: string) => {
     const filters: Array<(row: Row) => boolean> = [];
     let range: [number, number] | null = null;
     let selected = "*";
+    let operation: { method: "insert" | "update" | "delete"; values?: unknown } | null = null;
     const query = {} as Record<string, unknown>;
     query.select = (...args: unknown[]) => {
         selected = String(args[0] ?? "*");
@@ -39,23 +61,17 @@ function makeQueryClient(seed: Record<string, Row[]> = {}) {
       };
     query.insert = (...args: unknown[]) => {
         calls.push({ table, method: "insert", args });
-        const values = Array.isArray(args[0]) ? args[0] : [args[0]];
-        const rows = tables.get(table) ?? [];
-        rows.push(...values.map((value) => ({ ...(value as Row), id: (value as Row).id ?? `${table}-${rows.length + 1}` })));
-        tables.set(table, rows);
+        operation = { method: "insert", values: args[0] };
         return query;
       };
     query.update = (...args: unknown[]) => {
         calls.push({ table, method: "update", args });
-        const values = (args[0] ?? {}) as Row;
-        const rows = tables.get(table) ?? [];
-        for (const row of rows) if (filters.every((filter) => filter(row))) Object.assign(row, values);
+        operation = { method: "update", values: args[0] ?? {} };
         return query;
       };
     query.delete = (...args: unknown[]) => {
         calls.push({ table, method: "delete", args });
-        const rows = tables.get(table) ?? [];
-        tables.set(table, rows.filter((row) => !filters.every((filter) => filter(row))));
+        operation = { method: "delete" };
         return query;
       };
     query.eq = (...args: unknown[]) => {
@@ -97,6 +113,18 @@ function makeQueryClient(seed: Record<string, Row[]> = {}) {
         return query;
       };
     query.then = (resolve: (value: unknown) => unknown) => {
+        const allRows = tables.get(table) ?? [];
+        const matchedRows = allRows.filter((row) => filters.every((filter) => filter(row)));
+        if (operation?.method === "insert") {
+          const values = Array.isArray(operation.values) ? operation.values : [operation.values];
+          allRows.push(...values.map((value) => ({ ...(value as Row), id: (value as Row).id ?? `${table}-${allRows.length + 1}` })));
+          tables.set(table, allRows);
+        } else if (operation?.method === "update") {
+          for (const row of matchedRows) Object.assign(row, operation.values as Row);
+        } else if (operation?.method === "delete") {
+          tables.set(table, allRows.filter((row) => !matchedRows.includes(row)));
+        }
+        operation = null;
         let rows = (tables.get(table) ?? []).filter((row) => filters.every((filter) => filter(row)));
         if (range) rows = rows.slice(range[0], range[1] + 1);
         const data = selected.includes("id,stream_id") || selected.includes("id") ? rows : rows;
@@ -104,7 +132,7 @@ function makeQueryClient(seed: Record<string, Row[]> = {}) {
     };
     return query;
   });
-  return { from, tables, calls };
+  return { from, rpc, tables, calls };
 }
 
 function item(overrides: Partial<PlaidItemRow> = {}): PlaidItemRow {
@@ -178,6 +206,37 @@ describe("recurring inference reconciliation", () => {
     expect(transactionCalls.some((call) => call.method === "range" && call.args[0] === 0 && call.args[1] === 999)).toBe(true);
   });
 
+  it("pages raw metadata in stable 1,000-row windows", async () => {
+    const metadata = Array.from({ length: 1001 }, (_, index) => ({
+      id: `txn-${index}`,
+      user_id: "user-1",
+      account_id: "acct-1",
+      date: "2026-07-15",
+      authorized_date: null,
+      amount: 1,
+      merchant_name: "One-off",
+      name: "ONE-OFF",
+      pfc_primary: "GENERAL_MERCHANDISE",
+      pfc_detailed: "OTHER",
+      payment_channel: "online",
+      iso_currency_code: "USD",
+      pending: false,
+    }));
+    mockLoadCanonicalProjection.mockResolvedValue({ transactions: [], currencyByAccountId: new Map(), truncated: false });
+    mockServiceClient = makeQueryClient({
+      accounts: [{ id: "acct-1", user_id: "user-1", plaid_item_id: "item-1" }],
+      transactions: metadata,
+      recurring_streams: [],
+      recurring_stream_transactions: [],
+    });
+
+    await refreshInferredRecurringForItem(item(), { today: "2026-08-30" });
+    expect(mockServiceClient.calls.filter((call) => call.table === "transactions" && call.method === "range").map((call) => call.args)).toEqual([
+      [0, 999],
+      [1000, 1999],
+    ]);
+  });
+
   it("persists a mature stream and exact canonical transaction joins, then remains idempotent", async () => {
     mockServiceClient = makeQueryClient({
       accounts: [{ id: "acct-1", user_id: "user-1", plaid_item_id: "item-1" }],
@@ -192,17 +251,47 @@ describe("recurring inference reconciliation", () => {
 
     const result = await refreshInferredRecurringForItem(item(), { today: "2026-08-30" });
     expect(result).toEqual({ active: 1, added: 1, deactivated: 0, deduplicated: 0 });
-    const persisted = mockServiceClient.tables.get("recurring_streams")?.[0];
-    expect(persisted).toMatchObject({ source: "inferred", status: "MATURE", detection_version: 1, is_active: true });
-    expect(persisted?.stream_id).toMatch(/^inferred:[a-f0-9]+$/u);
-    expect(persisted?.detection_evidence).toMatchObject({ occurrenceCount: 3 });
-    expect(persisted).not.toHaveProperty("reviewed_at");
-    expect(mockServiceClient.tables.get("recurring_stream_transactions")?.map((row) => row.transaction_id)).toEqual(["txn-1", "txn-2", "txn-3"]);
+    expect(mockServiceClient.rpc).toHaveBeenCalledWith("reconcile_inferred_recurring", expect.objectContaining({
+      p_user_id: "user-1",
+      p_item_id: "item-1",
+      p_payload: expect.objectContaining({
+        candidates: [expect.objectContaining({
+          expected_amount: 15,
+          transaction_ids: ["txn-1", "txn-2", "txn-3"],
+          detection_evidence: expect.objectContaining({ occurrenceCount: 3 }),
+        })],
+      }),
+    }));
+    expect(mockServiceClient.calls.some((call) => ["insert", "update", "delete"].includes(call.method))).toBe(false);
 
     mockLoadCanonicalProjection.mockResolvedValue(monthlyProjection());
     const rerun = await refreshInferredRecurringForItem(item(), { today: "2026-08-30" });
     expect(rerun.added).toBe(0);
-    expect(mockServiceClient.tables.get("recurring_streams")).toHaveLength(1);
+    expect(mockServiceClient.rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses the detector expected amount and collapses split canonical rows to one source transaction", async () => {
+    mockLoadCanonicalProjection.mockResolvedValue({
+      transactions: [
+        ...monthlyProjection().transactions.flatMap((transaction) => [transaction, { ...transaction, id: `${transaction.id}::1`, categoryKey: "SPLIT" }]),
+      ],
+      currencyByAccountId: new Map([["acct-1", "USD"]]),
+      truncated: false,
+    });
+    mockServiceClient = makeQueryClient({
+      accounts: [{ id: "acct-1", user_id: "user-1", plaid_item_id: "item-1" }],
+      transactions: [
+        { id: "txn-1", user_id: "user-1", account_id: "acct-1", date: "2026-05-15", authorized_date: null, amount: 15, merchant_name: "Streaming Co", name: "STREAMING CO", pfc_primary: "ENTERTAINMENT", pfc_detailed: "STREAMING", payment_channel: "online", iso_currency_code: "USD", pending: false },
+        { id: "txn-2", user_id: "user-1", account_id: "acct-1", date: "2026-06-15", authorized_date: null, amount: 15, merchant_name: "Streaming Co", name: "STREAMING CO", pfc_primary: "ENTERTAINMENT", pfc_detailed: "STREAMING", payment_channel: "online", iso_currency_code: "USD", pending: false },
+        { id: "txn-3", user_id: "user-1", account_id: "acct-1", date: "2026-07-15", authorized_date: null, amount: 18, merchant_name: "Streaming Co", name: "STREAMING CO", pfc_primary: "ENTERTAINMENT", pfc_detailed: "STREAMING", payment_channel: "online", iso_currency_code: "USD", pending: false },
+      ],
+      recurring_streams: [],
+      recurring_stream_transactions: [],
+    });
+
+    await refreshInferredRecurringForItem(item(), { today: "2026-08-30" });
+    const payload = mockServiceClient.rpc.mock.calls[0]?.[1] as { p_payload: { candidates: Array<Record<string, unknown>> } };
+    expect(payload.p_payload.candidates[0]).toMatchObject({ expected_amount: 18, transaction_ids: ["txn-1", "txn-2", "txn-3"] });
   });
 
   it("refreshes every active item for a user", async () => {
@@ -231,18 +320,38 @@ describe("recurring inference reconciliation", () => {
     });
 
     const result = await refreshInferredRecurringForItem(item(), { today: "2026-08-30" });
-    expect(result).toMatchObject({ active: 0, added: 0, deactivated: 1, deduplicated: 1 });
-    const streams = mockServiceClient.tables.get("recurring_streams") ?? [];
-    expect(streams.find((row) => row.id === "plaid-db")).toMatchObject({
-      reviewed_at: "2026-02-01T00:00:00Z",
-      dismissed_at: "2026-01-02T00:00:00Z",
-      user_amount: 17,
+    expect(result).toMatchObject({ active: 0, added: 0, deactivated: 0, deduplicated: 1 });
+    const rpcPayload = mockServiceClient.rpc.mock.calls[0]?.[1] as { p_payload: { candidates: unknown[]; deduplications: unknown[] } };
+    expect(rpcPayload.p_payload.candidates).toEqual([]);
+    expect(rpcPayload.p_payload.deduplications).toEqual([{ plaid_id: "plaid-db", inferred_id: "inferred-db" }]);
+    expect(mockServiceClient.calls.some((call) => ["insert", "update", "delete"].includes(call.method))).toBe(false);
+  });
+
+  it("prioritizes any transaction overlap over an earlier identity-only Plaid match", async () => {
+    mockServiceClient = makeQueryClient({
+      accounts: [{ id: "acct-1", user_id: "user-1", plaid_item_id: "item-1" }],
+      transactions: [
+        { id: "txn-1", user_id: "user-1", account_id: "acct-1", date: "2026-05-15", authorized_date: null, amount: 15, merchant_name: "Streaming Co", name: "STREAMING CO", pfc_primary: "ENTERTAINMENT", pfc_detailed: "STREAMING", payment_channel: "online", iso_currency_code: "USD", pending: false },
+        { id: "txn-2", user_id: "user-1", account_id: "acct-1", date: "2026-06-15", authorized_date: null, amount: 15, merchant_name: "Streaming Co", name: "STREAMING CO", pfc_primary: "ENTERTAINMENT", pfc_detailed: "STREAMING", payment_channel: "online", iso_currency_code: "USD", pending: false },
+        { id: "txn-3", user_id: "user-1", account_id: "acct-1", date: "2026-07-15", authorized_date: null, amount: 15, merchant_name: "Streaming Co", name: "STREAMING CO", pfc_primary: "ENTERTAINMENT", pfc_detailed: "STREAMING", payment_channel: "online", iso_currency_code: "USD", pending: false },
+      ],
+      recurring_streams: [
+        { id: "plaid-identity", user_id: "user-1", plaid_item_id: "item-1", stream_id: "plaid-identity-stream", source: "plaid", stream_type: "outflow", merchant_name: "Streaming Co", frequency: "MONTHLY", account_id: "acct-1", is_active: true },
+        { id: "plaid-overlap", user_id: "user-1", plaid_item_id: "item-1", stream_id: "plaid-overlap-stream", source: "plaid", stream_type: "outflow", merchant_name: "Different Label", frequency: "MONTHLY", account_id: "acct-1", is_active: true },
+      ],
+      recurring_stream_transactions: [{ recurring_stream_id: "plaid-overlap", transaction_id: "txn-1", user_id: "user-1" }],
     });
-    expect(streams.find((row) => row.id === "inferred-db")).toMatchObject({ is_active: false });
-    const inferredUpdates = mockServiceClient.calls.filter(
-      (call) => call.table === "recurring_streams" && call.method === "update" && (call.args[0] as Row).is_active === false,
-    );
-    expect(inferredUpdates).toHaveLength(1);
+
+    await refreshInferredRecurringForItem(item(), { today: "2026-08-30" });
+    const payload = mockServiceClient.rpc.mock.calls[0]?.[1] as { p_payload: { deduplications: unknown[] } };
+    expect(payload.p_payload.deduplications).toEqual([{ plaid_id: "plaid-overlap", inferred_id: "" }]);
+  });
+
+  it("does not call the atomic writer for a truncated canonical projection", async () => {
+    mockLoadCanonicalProjection.mockResolvedValue({ transactions: [], currencyByAccountId: new Map(), truncated: true });
+    mockServiceClient = makeQueryClient({ accounts: [], transactions: [], recurring_streams: [], recurring_stream_transactions: [] });
+    await expect(refreshInferredRecurringForItem(item(), { today: "2026-08-30" })).rejects.toThrow("recurring_projection_truncated");
+    expect(mockServiceClient.rpc).not.toHaveBeenCalled();
   });
 
   it("marks only stale inferred rows for the requested item after a complete empty pass", async () => {
@@ -255,13 +364,10 @@ describe("recurring inference reconciliation", () => {
     });
 
     const result = await refreshInferredRecurringForItem(item(), { today: "2026-08-30" });
-    expect(result).toMatchObject({ active: 0, added: 0, deactivated: 1, deduplicated: 0 });
-    expect(mockServiceClient.tables.get("recurring_streams")?.[0]).toMatchObject({ is_active: false });
-    const update = mockServiceClient.calls.find((call) => call.table === "recurring_streams" && call.method === "update");
-    expect(update?.args[0]).toEqual({ is_active: false });
-    expect(mockServiceClient.calls.filter((call) => call.table === "recurring_streams" && call.method === "eq").map((call) => call.args)).toEqual(
-      expect.arrayContaining([["user_id", "user-1"], ["plaid_item_id", "item-1"], ["source", "inferred"]]),
-    );
+    expect(result).toMatchObject({ active: 0, added: 0, deactivated: 0, deduplicated: 0 });
+    expect(mockServiceClient.rpc).toHaveBeenCalledWith("reconcile_inferred_recurring", expect.objectContaining({
+      p_payload: { candidates: [], deduplications: [] },
+    }));
   });
 
   it("does not mark or mutate inferred rows when canonical loading fails", async () => {

@@ -224,46 +224,6 @@ function plaidMerchant(stream: RecurringStreamRow): string {
   return stream.merchant_name?.trim() || stream.description?.trim() || "";
 }
 
-function dedupMatches(
-  candidate: DetectedRecurringCandidate,
-  plaid: RecurringStreamRow,
-  plaidTransactionIds: ReadonlySet<string>,
-): boolean {
-  if (candidate.transactionIds.some((id) => plaidTransactionIds.has(id))) return true;
-  if (plaid.account_id !== candidate.accountId || plaid.stream_type !== candidate.streamType) return false;
-  if (!cadenceCompatible(plaid.frequency, candidate.frequency)) return false;
-  return Boolean(plaid.identity_key && plaid.identity_key === candidate.identityKey)
-    || normalizeRecurringMerchant(plaidMerchant(plaid)) === normalizeRecurringMerchant(candidate.merchantName);
-}
-
-function inferredPayload(
-  item: PlaidItemRow,
-  candidate: DetectedRecurringCandidate,
-) {
-  return {
-    user_id: item.user_id,
-    plaid_item_id: item.id,
-    stream_id: candidate.streamId,
-    stream_type: candidate.streamType,
-    description: candidate.description,
-    merchant_name: candidate.merchantName,
-    average_amount: candidate.averageAmount,
-    last_amount: candidate.lastAmount,
-    frequency: candidate.frequency,
-    status: "MATURE",
-    category: candidate.category,
-    is_active: true,
-    account_id: candidate.accountId,
-    first_date: candidate.firstDate,
-    last_date: candidate.lastDate,
-    predicted_next_date: candidate.predictedNextDate,
-    source: "inferred" as const,
-    identity_key: candidate.identityKey,
-    detection_version: RECURRING_DETECTION_VERSION,
-    detection_evidence: candidate.evidence,
-  };
-}
-
 async function findExistingInferred(
   supabase: ServiceClient,
   item: PlaidItemRow,
@@ -281,118 +241,82 @@ async function findExistingInferred(
   return asRows<RecurringStreamRow>(data)[0] ?? null;
 }
 
-async function updateInferred(
-  supabase: ServiceClient,
-  item: PlaidItemRow,
-  existing: RecurringStreamRow,
+function identityMatches(
   candidate: DetectedRecurringCandidate,
-): Promise<string> {
-  const { error } = await supabase
-    .from("recurring_streams")
-    .update(inferredPayload(item, candidate))
-    .eq("id", existing.id)
-    .eq("user_id", item.user_id)
-    .eq("plaid_item_id", item.id)
-    .eq("source", "inferred");
-  throwQueryError(error);
-  return existing.id;
-}
-
-async function insertInferred(
-  supabase: ServiceClient,
-  item: PlaidItemRow,
-  candidate: DetectedRecurringCandidate,
-): Promise<string> {
-  const result = await supabase
-    .from("recurring_streams")
-    .insert(inferredPayload(item, candidate))
-    .select("id,stream_id")
-    .maybeSingle();
-  if (!result.error) {
-    const id = asRows<{ id: string }>(result.data)[0]?.id;
-    if (id) return id;
-  } else if (result.error.code !== "23505") {
-    throw result.error;
-  }
-
-  const winner = await findExistingInferred(supabase, item, candidate.identityKey);
-  if (!winner) throw result.error ?? new Error("inferred_recurring_insert_conflict_without_winner");
-  await updateInferred(supabase, item, winner, candidate);
-  return winner.id;
-}
-
-async function replaceJoins(
-  supabase: ServiceClient,
-  userId: string,
-  streamId: string,
-  transactionIds: readonly string[],
-): Promise<void> {
-  const { error: deleteError } = await supabase
-    .from("recurring_stream_transactions")
-    .delete()
-    .eq("recurring_stream_id", streamId)
-    .eq("user_id", userId);
-  throwQueryError(deleteError);
-  if (transactionIds.length === 0) return;
-  const { error: insertError } = await supabase.from("recurring_stream_transactions").insert(
-    transactionIds.map((transactionId) => ({
-      user_id: userId,
-      recurring_stream_id: streamId,
-      transaction_id: transactionId,
-    })),
-  );
-  throwQueryError(insertError);
-}
-
-async function transferStateAndDeactivate(
-  supabase: ServiceClient,
-  item: PlaidItemRow,
-  inferred: RecurringStreamRow,
   plaid: RecurringStreamRow,
-): Promise<void> {
-  const state: Record<string, unknown> = {};
-  if ((plaid.reviewed_at === null || plaid.reviewed_at === undefined) && inferred.reviewed_at !== null && inferred.reviewed_at !== undefined) state.reviewed_at = inferred.reviewed_at;
-  if ((plaid.dismissed_at === null || plaid.dismissed_at === undefined) && inferred.dismissed_at !== null && inferred.dismissed_at !== undefined) state.dismissed_at = inferred.dismissed_at;
-  if ((plaid.user_amount === null || plaid.user_amount === undefined) && inferred.user_amount !== null && inferred.user_amount !== undefined) state.user_amount = inferred.user_amount;
-  if (Object.keys(state).length > 0) {
-    const { error } = await supabase
-      .from("recurring_streams")
-      .update(state)
-      .eq("id", plaid.id)
-      .eq("user_id", item.user_id)
-      .eq("plaid_item_id", item.id)
-      .eq("source", "plaid");
-    throwQueryError(error);
-  }
-  const { error } = await supabase
-    .from("recurring_streams")
-    .update({ is_active: false })
-    .eq("id", inferred.id)
-    .eq("user_id", item.user_id)
-    .eq("plaid_item_id", item.id)
-    .eq("source", "inferred");
-  throwQueryError(error);
+): boolean {
+  if (plaid.account_id !== candidate.accountId || plaid.stream_type !== candidate.streamType) return false;
+  if (!cadenceCompatible(plaid.frequency, candidate.frequency)) return false;
+  return Boolean(plaid.identity_key && plaid.identity_key === candidate.identityKey)
+    || normalizeRecurringMerchant(plaidMerchant(plaid)) === normalizeRecurringMerchant(candidate.merchantName);
 }
 
-async function deactivateStale(
-  supabase: ServiceClient,
-  item: PlaidItemRow,
-  rows: readonly RecurringStreamRow[],
-  activeStreamIds: ReadonlySet<string>,
-  excludedStreamIds: ReadonlySet<string>,
-): Promise<number> {
-  const stale = rows.filter((row) => row.is_active && !activeStreamIds.has(row.stream_id) && !excludedStreamIds.has(row.stream_id));
-  for (const row of stale) {
-    const { error } = await supabase
-      .from("recurring_streams")
-      .update({ is_active: false })
-      .eq("id", row.id)
-      .eq("user_id", item.user_id)
-      .eq("plaid_item_id", item.id)
-      .eq("source", "inferred");
-    throwQueryError(error);
+function findPlaidMatch(
+  candidate: DetectedRecurringCandidate,
+  plaidRows: readonly RecurringStreamRow[],
+  plaidIdsByStream: ReadonlyMap<string, ReadonlySet<string>>,
+): RecurringStreamRow | undefined {
+  const overlap = plaidRows.find((row) =>
+    candidate.transactionIds.some((id) => plaidIdsByStream.get(row.id)?.has(id)),
+  );
+  return overlap ?? plaidRows.find((row) => identityMatches(candidate, row));
+}
+
+interface ReconciliationPayload {
+  candidates: Array<Record<string, unknown>>;
+  deduplications: Array<{ plaid_id: string; inferred_id: string }>;
+}
+
+function toPayload(
+  decisions: ReadonlyArray<{
+    candidate: DetectedRecurringCandidate;
+    plaidMatch: RecurringStreamRow | undefined;
+    existing: RecurringStreamRow | null;
+  }>,
+): ReconciliationPayload {
+  return {
+    candidates: decisions
+      .filter((decision) => !decision.plaidMatch)
+      .map(({ candidate }) => ({
+        stream_id: candidate.streamId,
+        identity_key: candidate.identityKey,
+        account_id: candidate.accountId,
+        stream_type: candidate.streamType,
+        description: candidate.description,
+        merchant_name: candidate.merchantName,
+        expected_amount: candidate.expectedAmount,
+        last_amount: candidate.lastAmount,
+        frequency: candidate.frequency,
+        category: candidate.category,
+        first_date: candidate.firstDate,
+        last_date: candidate.lastDate,
+        predicted_next_date: candidate.predictedNextDate,
+        detection_version: RECURRING_DETECTION_VERSION,
+        detection_evidence: candidate.evidence,
+        transaction_ids: candidate.transactionIds,
+      })),
+    deduplications: decisions
+      .filter((decision) => Boolean(decision.plaidMatch))
+      .map((decision) => ({
+        plaid_id: decision.plaidMatch!.id,
+        inferred_id: decision.existing?.id ?? "",
+      })),
+  };
+}
+
+function rpcResult(data: unknown): InferredRecurringRefreshResult {
+  if (!data || typeof data !== "object") throw new Error("recurring_reconciliation_result_invalid");
+  const result = data as Record<string, unknown>;
+  const values = [result.active, result.added, result.deactivated, result.deduplicated];
+  if (!values.every((value) => typeof value === "number" && Number.isInteger(value) && value >= 0)) {
+    throw new Error("recurring_reconciliation_result_invalid");
   }
-  return stale.length;
+  return {
+    active: result.active as number,
+    added: result.added as number,
+    deactivated: result.deactivated as number,
+    deduplicated: result.deduplicated as number,
+  };
 }
 
 export async function refreshInferredRecurringForItem(
@@ -409,6 +333,7 @@ export async function refreshInferredRecurringForItem(
     window,
     excludePending: true,
   });
+  if (projection.truncated) throw new Error("recurring_projection_truncated");
   const metadata = await loadRawMetadata(supabase, item, accountIds, window);
   const candidates = detectRecurringCandidates(
     detectionInput(metadata, projection.transactions, item, new Set(accountIds)),
@@ -416,10 +341,7 @@ export async function refreshInferredRecurringForItem(
   );
 
   // All source rows, joins, and identity matches are read before any mutation.
-  const [plaidRows, inferredRows] = await Promise.all([
-    loadStreams(supabase, item, "plaid"),
-    loadStreams(supabase, item, "inferred"),
-  ]);
+  const plaidRows = await loadStreams(supabase, item, "plaid");
   const plaidJoins = await loadStreamTransactions(
     supabase,
     item.user_id,
@@ -437,45 +359,17 @@ export async function refreshInferredRecurringForItem(
   }
 
   const decisions = candidates.map((candidate) => {
-    const plaidMatch = plaidRows.find((row) => dedupMatches(
-      candidate,
-      row,
-      plaidIdsByStream.get(row.id) ?? new Set<string>(),
-    ));
+    const plaidMatch = findPlaidMatch(candidate, plaidRows, plaidIdsByStream);
     return { candidate, plaidMatch, existing: existingByCandidate.get(candidate.identityKey) ?? null };
   });
-
-  let added = 0;
-  let deduplicated = 0;
-  let deduplicatedActive = 0;
-  const activeStreamIds = new Set<string>();
-  const deduplicatedRows = new Set<string>();
-  for (const decision of decisions) {
-    if (decision.plaidMatch) {
-      deduplicated += 1;
-      if (decision.existing) {
-        if (decision.existing.is_active) deduplicatedActive += 1;
-        await transferStateAndDeactivate(supabase, item, decision.existing, decision.plaidMatch);
-        deduplicatedRows.add(decision.existing.stream_id);
-      }
-      continue;
-    }
-    const streamRowId = decision.existing
-      ? await updateInferred(supabase, item, decision.existing, decision.candidate)
-      : await insertInferred(supabase, item, decision.candidate);
-    if (!decision.existing) added += 1;
-    activeStreamIds.add(decision.candidate.streamId);
-    await replaceJoins(supabase, item.user_id, streamRowId, decision.candidate.transactionIds);
-  }
-
-  const deactivated = (await deactivateStale(supabase, item, inferredRows, activeStreamIds, deduplicatedRows))
-    + deduplicatedActive;
-  return {
-    active: activeStreamIds.size,
-    added,
-    deactivated,
-    deduplicated,
-  };
+  const payload = toPayload(decisions);
+  const { data, error } = await supabase.rpc("reconcile_inferred_recurring", {
+    p_user_id: item.user_id,
+    p_item_id: item.id,
+    p_payload: payload,
+  });
+  throwQueryError(error);
+  return rpcResult(data);
 }
 
 export async function refreshInferredRecurringForUser(
