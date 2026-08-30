@@ -4,6 +4,7 @@ import { clientStub } from "../fixtures/supabase-query";
 
 const mockRequireUser = vi.fn<(...args: unknown[]) => unknown>();
 const mockWriteAudit = vi.fn<(...args: unknown[]) => unknown>();
+const mockGetClientIp = vi.fn(() => "127.0.0.1");
 vi.mock("@/lib/http", () => ({
   requireUser: () => mockRequireUser(),
   errorResponse: (_c: string, e: unknown) =>
@@ -12,6 +13,7 @@ vi.mock("@/lib/http", () => ({
 }));
 vi.mock("@/lib/audit", () => ({
   writeAudit: (...args: unknown[]) => mockWriteAudit(...args),
+  getClientIp: (...args: unknown[]) => mockGetClientIp(...args),
 }));
 
 import { GET, POST, PATCH, DELETE } from "@/app/api/forecasting/life-events/route";
@@ -57,7 +59,10 @@ describe("life-events route", () => {
     mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase });
     const created = await POST(jsonRequest({ type: "home_purchase", startMonth: 6, amount: 50000 }));
     expect(created.status).toBe(201);
-    expect(mockWriteAudit).toHaveBeenCalledWith(expect.objectContaining({ action: "life_event_created" }));
+    expect(mockWriteAudit).toHaveBeenCalledWith(expect.objectContaining({
+      action: "life_event_created",
+      ip: "127.0.0.1",
+    }));
 
     const invalid = await POST(jsonRequest({ type: "lottery", startMonth: 1, amount: 100 }));
     expect(invalid.status).toBe(400);
@@ -73,7 +78,10 @@ describe("life-events route", () => {
     const res = await PATCH(jsonRequest({ id: ID, type: "child", startMonth: 3, amount: 1200, durationMonths: 12 }));
     expect(res.status).toBe(200);
     expect(supabase.scopedToUser("life_events", "user-1")).toBe(true);
-    expect(mockWriteAudit).toHaveBeenCalledWith(expect.objectContaining({ action: "life_event_updated" }));
+    expect(mockWriteAudit).toHaveBeenCalledWith(expect.objectContaining({
+      action: "life_event_updated",
+      ip: "127.0.0.1",
+    }));
 
     // Missing owned row → 400, never a cross-user write.
     const other = clientStub({ life_events: { data: null } });
@@ -87,7 +95,10 @@ describe("life-events route", () => {
     mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase });
     const res = await DELETE(jsonRequest({ id: ID }));
     expect(res.status).toBe(200);
-    expect(mockWriteAudit).toHaveBeenCalledWith(expect.objectContaining({ action: "life_event_deleted" }));
+    expect(mockWriteAudit).toHaveBeenCalledWith(expect.objectContaining({
+      action: "life_event_deleted",
+      ip: "127.0.0.1",
+    }));
     expect(supabase.scopedToUser("life_events", "user-1")).toBe(true);
   });
 });

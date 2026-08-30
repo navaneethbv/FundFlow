@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import TransactionOverrideControl from "@/components/transactions/TransactionOverrideControl";
 
 describe("TransactionOverrideControl", () => {
@@ -44,5 +45,24 @@ describe("TransactionOverrideControl", () => {
       }),
     );
     expect(html).toContain("excluded from cash flow as a transfer");
+  });
+
+  it("refreshes server data after save and keeps clear available for a new override", () => {
+    const source = readFileSync(
+      new URL("../../components/transactions/TransactionOverrideControl.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(source).toContain("const router = useRouter()");
+    expect(source.match(/router\.refresh\(\)/g)).toHaveLength(2);
+    expect(source).toContain("hasOverride");
+    expect(source).toContain("disabled={saving}");
+  });
+
+  it("passes the raw primary-or-detailed provider group to the override control", () => {
+    const source = readFileSync(
+      new URL("../../app/transactions/page.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(source).toContain("providerCategory: t.pfc_primary ?? t.pfc_detailed");
   });
 });

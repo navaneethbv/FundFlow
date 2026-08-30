@@ -67,4 +67,14 @@ describe("feature flags", () => {
     expect(isFeatureEnabled("settingsIa", { FUNDFLOW_FEATURE_FLAGS: "" })).toBe(true);
     expect(isFeatureEnabled("settingsIa", { FUNDFLOW_FEATURE_FLAGS: "settingsIa" })).toBe(true);
   });
+
+  it("keeps billed liabilities sync off unless explicitly enabled", () => {
+    expect(FEATURE_FLAG_DEFAULTS.liabilitiesSync).toBe(false);
+    expect(isFeatureEnabled("liabilitiesSync", {})).toBe(false);
+    expect(
+      isFeatureEnabled("liabilitiesSync", {
+        FUNDFLOW_FEATURE_FLAGS: "liabilitiesSync",
+      }),
+    ).toBe(true);
+  });
 });

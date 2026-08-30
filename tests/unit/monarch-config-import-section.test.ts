@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   defaultDecisionsForPlan,
   goalDecisionOptions,
@@ -38,5 +39,16 @@ describe("MonarchConfigImportSection goal decisions", () => {
       "create",
       "skip",
     ]);
+  });
+
+  it("clears the stale preview and result whenever the import kind changes", () => {
+    const source = readFileSync(
+      new URL("../../components/settings/MonarchConfigImportSection.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(source).toContain("function changeKind");
+    expect(source).toContain("setPlan(null)");
+    expect(source).toContain("setResult(null)");
+    expect(source).toContain("setDecisions({})");
   });
 });

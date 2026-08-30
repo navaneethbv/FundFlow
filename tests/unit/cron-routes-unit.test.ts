@@ -4,6 +4,7 @@ import { clientStub } from "../fixtures/supabase-query";
 
 const mockSyncAllForUser = vi.fn().mockResolvedValue({ added: 1, modified: 0, removed: 0 });
 const mockSyncInvestmentsForUser = vi.fn().mockResolvedValue(0);
+const mockSyncCreditCardLiabilitiesForUser = vi.fn().mockResolvedValue(0);
 const mockRefreshRecurringForUser = vi.fn().mockResolvedValue(0);
 const mockAlertCronFailure = vi.fn().mockResolvedValue(undefined);
 const mockCreateServiceClient = vi.fn();
@@ -25,6 +26,11 @@ vi.mock("@/lib/sync", () => ({
 
 vi.mock("@/lib/investment-sync", () => ({
   syncInvestmentsForUser: (...args: unknown[]) => mockSyncInvestmentsForUser(...args),
+}));
+
+vi.mock("@/lib/liabilities-sync", () => ({
+  syncCreditCardLiabilitiesForUser: (...args: unknown[]) =>
+    mockSyncCreditCardLiabilitiesForUser(...args),
 }));
 
 vi.mock("@/lib/recurring", () => ({
@@ -71,6 +77,7 @@ import { GET as cronBackupGet } from "@/app/api/cron/backup/route";
 describe("Cron API Route Handlers Unit Tests", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.FUNDFLOW_FEATURE_FLAGS = "";
   });
 
   describe("GET /api/cron/sync", () => {
@@ -94,6 +101,25 @@ describe("Cron API Route Handlers Unit Tests", () => {
       });
       const res = await cronSyncGet(req);
       expect(res.status).toBe(200);
+      expect(mockSyncCreditCardLiabilitiesForUser).not.toHaveBeenCalled();
+    });
+
+    it("runs the billed liabilities call only when its flag is enabled", async () => {
+      process.env.FUNDFLOW_FEATURE_FLAGS = "liabilitiesSync";
+      const db = clientStub({
+        plaid_items: { data: [{ user_id: "user-1" }] },
+        alert_preferences: { data: [] },
+        notifications: { data: [] },
+        profiles: { data: { locale: "en-US" } },
+      });
+      mockCreateServiceClient.mockReturnValue(db);
+
+      const req = new NextRequest("http://localhost/api/cron/sync", {
+        headers: { authorization: "Bearer test-cron-secret" },
+      });
+      const res = await cronSyncGet(req);
+      expect(res.status).toBe(200);
+      expect(mockSyncCreditCardLiabilitiesForUser).toHaveBeenCalledWith("user-1");
     });
   });
 

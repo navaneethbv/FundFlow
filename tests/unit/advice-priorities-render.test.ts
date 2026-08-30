@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import AdvicePriorities from "@/components/advice/AdvicePriorities";
 
 const TOPICS = [
@@ -30,5 +31,15 @@ describe("AdvicePriorities", () => {
       createElement(AdvicePriorities, { topics: TOPICS, initialPriorities: [] }),
     );
     expect(html).toContain("Nothing prioritized yet");
+  });
+
+  it("uses the shared advice writer instead of a duplicate endpoint", () => {
+    const source = readFileSync(
+      new URL("../../components/advice/AdvicePriorities.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(source).toContain('fetch("/api/advice"');
+    expect(source).toContain('kind: "set_priorities"');
+    expect(source).not.toContain("/api/advice/priorities");
   });
 });
