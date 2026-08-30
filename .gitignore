@@ -17,6 +17,7 @@
 
 # QA screenshot runs (throwaway, timestamped; regenerate with scripts/qa-large-data.mjs)
 /qa-shots/
+/img/Monarch Design/
 
 # next.js
 /.next/

@@ -64,6 +64,22 @@ describe("buildInvestmentAccountCoverage", () => {
     expect(coverage.total).toBe(5000);
     expect(coverage.accounts[0]!.valueSource).toBe("account-balance");
   });
+
+  it("includes active holding accounts even when provider account typing is incomplete", () => {
+    const coverage = buildInvestmentAccountCoverage([], [
+      holding({ accountId: "acct-untyped", accountName: "Brokerage" }),
+    ]);
+
+    expect(coverage.total).toBe(1000);
+    expect(coverage.accounts).toEqual([
+      expect.objectContaining({
+        id: "acct-untyped",
+        name: "Brokerage",
+        displayValue: 1000,
+        valueSource: "holdings",
+      }),
+    ]);
+  });
 });
 
 describe("externalFlowsFromTransactions", () => {

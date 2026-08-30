@@ -14,6 +14,12 @@ export interface GoalSummaryItem {
   remainingAmount: number;
   progressPct: number;
   monthlyPace: number | null;
+  /**
+   * The goal's own deadline. `monthlyPace` is null for a goal with no date
+   * *and* for one already past due, so planning surfaces need the date itself
+   * to tell "no deadline" apart from "overdue".
+   */
+  targetDate: string | null;
   complete: boolean;
 }
 
@@ -27,6 +33,7 @@ export function toGoalSummaryItem(goal: FundedGoal): GoalSummaryItem {
     remainingAmount: goal.remainingAmount,
     progressPct: goal.progressPct,
     monthlyPace: goal.est_monthly,
+    targetDate: goal.target_date ?? null,
     complete:
       goal.progressPct >= 100 ||
       goal.badge === "completed",
@@ -47,6 +54,7 @@ export function toLegacyGoalSummaryItem(
     remainingAmount: remaining,
     progressPct: progress,
     monthlyPace: goalMonthlyPace(goal, today),
+    targetDate: goal.target_date ?? null,
     complete: remaining <= 0,
   };
 }

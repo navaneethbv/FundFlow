@@ -62,6 +62,8 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [committed, setCommitted] = useState<number | null>(null);
+  /** Review-row ids the server refused to overwrite; empty when there are none. */
+  const [annotationConflicts, setAnnotationConflicts] = useState<string[]>([]);
 
   // Manual column-mapping choices (index-as-string; "" = unset/none).
   const [mapDate, setMapDate] = useState("");
@@ -75,6 +77,7 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
   async function runPreview(file: File, columnMap?: Record<string, number | null>) {
     setBusy(true);
     setError(null);
+    setAnnotationConflicts([]);
     try {
       const form = new FormData();
       form.set("file", file);
@@ -155,6 +158,7 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
   }
 
   function toggle(id: string) {
+    setAnnotationConflicts([]);
     setSelected((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
@@ -163,7 +167,10 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
     });
   }
 
-  async function onCommit() {
+  async function onCommit(
+    overwriteAnnotationRowIds?: string[],
+    approvedRowIds: ReadonlySet<string> = selected,
+  ) {
     if (!batchId) return;
     const selectedAccount = accounts.find((account) => account.id === accountId);
     if (!selectedAccount) return;
@@ -188,10 +195,21 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
           batch_id: batchId,
           ...(selectedAccount.kind === "manual" ? { manual_account_id: selectedAccount.id } : { account_id: selectedAccount.id }),
           account_mappings: sourceMappings,
-          approved_row_ids: [...selected],
+          approved_row_ids: [...approvedRowIds],
+          ...(overwriteAnnotationRowIds?.length
+            ? { overwrite_annotation_row_ids: overwriteAnnotationRowIds }
+            : {}),
         }),
       });
       const json = await res.json().catch(() => ({}));
+      // 409: some rows carry notes/tags that were edited in FundFlow after
+      // this batch was staged. Nothing was written; surface the count and let
+      // the user decide, rather than leaving them with an unresolvable error.
+      if (res.status === 409 && Array.isArray(json.conflicts)) {
+        setAnnotationConflicts(json.conflicts as string[]);
+        setError(null);
+        return;
+      }
       if (!res.ok) throw new Error(json.error ?? "Import failed");
       setCommitted(json.imported ?? 0);
       setRows([]);
@@ -199,11 +217,30 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
       setSelected(new Set());
       setSourceAccounts([]);
       setSourceAccountTargets({});
+      setAnnotationConflicts([]);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed");
     } finally {
       setBusy(false);
+    }
+  }
+
+  /** Re-run the commit, explicitly approving the conflicting rows. */
+  async function onOverwriteConflicts() {
+    const ids = annotationConflicts;
+    setAnnotationConflicts([]);
+    await onCommit(ids);
+  }
+
+  /** Drop the conflicting rows and immediately commit the remaining selection. */
+  async function onSkipConflicts() {
+    const conflicting = new Set(annotationConflicts);
+    const remaining = new Set([...selected].filter((id) => !conflicting.has(id)));
+    setSelected(remaining);
+    setAnnotationConflicts([]);
+    if (remaining.size > 0) {
+      await onCommit([], remaining);
     }
   }
 
@@ -448,9 +485,53 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
               </tbody>
             </table>
           </div>
-          <Button type="button" onClick={onCommit} loading={busy} disabled={selectableCount === 0}>
+          <Button
+            type="button"
+            onClick={() => {
+              void onCommit();
+            }}
+            loading={busy}
+            disabled={selectableCount === 0}
+          >
             Import {selectableCount} selected
           </Button>
+          {annotationConflicts.length > 0 && (
+            <div className="mt-3 rounded-field border border-warning/30 bg-warning/10 p-3 text-sm">
+              <p className="font-semibold">
+                {annotationConflicts.length} row
+                {annotationConflicts.length === 1 ? " was" : "s were"} edited in
+                FundFlow after this file was staged.
+              </p>
+              <p className="mt-1 text-muted">
+                Nothing has been imported yet. Keep your FundFlow notes and tags
+                by skipping those rows, or let the file overwrite them.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    void onSkipConflicts();
+                  }}
+                  disabled={busy}
+                >
+                  Skip those rows
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="danger"
+                  onClick={() => {
+                    void onOverwriteConflicts();
+                  }}
+                  loading={busy}
+                >
+                  Overwrite with imported notes
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

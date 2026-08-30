@@ -12,9 +12,16 @@ export interface PlaidItemRow {
   access_token_iv: string;
   access_token_tag: string;
   sync_cursor: string | null;
+  repair_sync_cursor?: string | null;
+  repair_sync_started_at?: string | null;
   status: "active" | "disconnected" | "error";
   error_code: string | null;
   access_token_rotated_at?: string | null;
+  last_sync_attempt_at?: string | null;
+  last_sync_success_at?: string | null;
+  last_sync_completed_pages?: boolean;
+  initial_history_incomplete?: boolean;
+  cursor_reset_detected_at?: string | null;
 }
 
 export interface AccountRow {

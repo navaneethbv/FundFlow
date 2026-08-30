@@ -9,7 +9,7 @@ import type { PlaidItemRow } from "@/lib/types";
 import { logError } from "@/lib/log";
 
 const ITEM_COLUMNS =
-  "id, user_id, plaid_item_id, institution_id, institution_name, institution_logo, institution_brand_color, access_token_ciphertext, access_token_iv, access_token_tag, sync_cursor, status, error_code, access_token_rotated_at";
+  "id, user_id, plaid_item_id, institution_id, institution_name, institution_logo, institution_brand_color, access_token_ciphertext, access_token_iv, access_token_tag, sync_cursor, repair_sync_cursor, repair_sync_started_at, status, error_code, access_token_rotated_at, last_sync_attempt_at, last_sync_success_at, last_sync_completed_pages, initial_history_incomplete, cursor_reset_detected_at";
 
 /** How often an item's Plaid access token is rotated. */
 export const TOKEN_ROTATION_DAYS = 30;
@@ -86,7 +86,8 @@ export async function decryptItemTokenAndUpgrade(
           access_token_iv: enc.iv,
           access_token_tag: enc.tag,
         })
-        .eq("id", item.id);
+        .eq("id", item.id)
+        .eq("user_id", item.user_id);
       if (error) throw error;
     } catch (error) {
       logError("plaid-service.token-rotation", error);
@@ -168,8 +169,12 @@ export async function upsertAccounts(
   if (error) throw error;
 }
 
-/** Update an item's stored sync cursor. */
+/**
+ * Update an item's stored sync cursor, scoped to the owning user so a forged
+ * or cross-user item id can never advance another user's cursor.
+ */
 export async function updateItemCursor(
+  userId: string,
   itemDbId: string,
   cursor: string,
 ): Promise<void> {
@@ -177,7 +182,59 @@ export async function updateItemCursor(
   const { error } = await supabase
     .from("plaid_items")
     .update({ sync_cursor: cursor })
-    .eq("id", itemDbId);
+    .eq("id", itemDbId)
+    .eq("user_id", userId);
+  if (error) throw error;
+}
+
+/** Persist bounded Repair progress without advancing the committed cursor. */
+export async function updateItemRepairCursor(
+  userId: string,
+  itemDbId: string,
+  cursor: string,
+): Promise<void> {
+  const supabase = createServiceClient();
+  const { error } = await supabase
+    .from("plaid_items")
+    .update({
+      repair_sync_cursor: cursor,
+      repair_sync_started_at: new Date().toISOString(),
+    })
+    .eq("id", itemDbId)
+    .eq("user_id", userId);
+  if (error) throw error;
+}
+
+/** Discard a partial Repair chain so the next run restarts from sync_cursor. */
+export async function clearItemRepairCursor(
+  userId: string,
+  itemDbId: string,
+): Promise<void> {
+  const supabase = createServiceClient();
+  const { error } = await supabase
+    .from("plaid_items")
+    .update({ repair_sync_cursor: null, repair_sync_started_at: null })
+    .eq("id", itemDbId)
+    .eq("user_id", userId);
+  if (error) throw error;
+}
+
+/** Commit a fully drained Plaid update and retire any bounded Repair state. */
+export async function completeItemCursor(
+  userId: string,
+  itemDbId: string,
+  cursor: string,
+): Promise<void> {
+  const supabase = createServiceClient();
+  const { error } = await supabase
+    .from("plaid_items")
+    .update({
+      sync_cursor: cursor,
+      repair_sync_cursor: null,
+      repair_sync_started_at: null,
+    })
+    .eq("id", itemDbId)
+    .eq("user_id", userId);
   if (error) throw error;
 }
 
@@ -251,8 +308,9 @@ export async function consumeLinkToken(
   return (consumed ?? []).length > 0;
 }
 
-/** Mark an item's status (and optional error code, never PII). */
+/** Mark an item's status (and optional error code, never PII), user-scoped. */
 export async function setItemStatus(
+  userId: string,
   itemDbId: string,
   status: PlaidItemRow["status"],
   errorCode: string | null = null,
@@ -261,7 +319,8 @@ export async function setItemStatus(
   const { error } = await supabase
     .from("plaid_items")
     .update({ status, error_code: errorCode })
-    .eq("id", itemDbId);
+    .eq("id", itemDbId)
+    .eq("user_id", userId);
   if (error) throw error;
 }
 
@@ -281,9 +340,9 @@ const STALE_CLAIM_SECONDS = 5 * 60;
  * broken connection is surfaced rather than leaving it "active" with a dead
  * token.
  */
-async function markItemTokenLost(itemDbId: string): Promise<void> {
+async function markItemTokenLost(userId: string, itemDbId: string): Promise<void> {
   try {
-    await setItemStatus(itemDbId, "error", "TOKEN_ROTATION_LOST");
+    await setItemStatus(userId, itemDbId, "error", "TOKEN_ROTATION_LOST");
   } catch (error) {
     logError("plaid-service.token-rotation-status", error);
   }
@@ -359,7 +418,7 @@ async function rotateClaimedItemAccessToken(
       "plaid-service.token-rotation-lost",
       new Error(`Plaid returned no new access token for item ${item.id}`),
     );
-    await markItemTokenLost(item.id);
+    await markItemTokenLost(item.user_id, item.id);
     return false;
   }
 
@@ -383,7 +442,7 @@ async function rotateClaimedItemAccessToken(
     "plaid-service.token-rotation-lost",
     new Error(`Could not persist rotated access token for item ${item.id}`),
   );
-  await markItemTokenLost(item.id);
+  await markItemTokenLost(item.user_id, item.id);
   return false;
 }
 

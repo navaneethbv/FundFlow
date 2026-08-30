@@ -5,16 +5,18 @@ import PageHeader from "@/components/shell/PageHeader";
 import MonthSummary from "@/components/recurring/MonthSummary";
 import ReviewBanner from "@/components/recurring/ReviewBanner";
 import RecurringList, { type RecurringTab } from "@/components/recurring/RecurringList";
+import RecurringCalendar from "@/components/recurring/RecurringCalendar";
 import Panel from "@/components/ui/Panel";
 import SegmentedControl from "@/components/ui/SegmentedControl";
 import ButtonLink from "@/components/ui/ButtonLink";
 import { ChevronLeft, ChevronRight } from "@/components/ui/icons";
 import { formatMonth } from "@/lib/format";
-import { localDateKey, localMonthKey } from "@/lib/format-date";
 import { loadRecurringData } from "@/lib/recurring-data";
+import { dateKeyInTimezone } from "@/lib/report-period";
 import { serializeFinancialScope } from "@/lib/financial-scope";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { firstSearchParam } from "@/lib/search-params";
+import { logError } from "@/lib/log";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +26,7 @@ interface PageProps {
     month?: string | string[];
     scope?: string | string[];
     tab?: string | string[];
+    view?: string | string[];
   }>;
 }
 
@@ -51,10 +54,12 @@ function recurringHref(input: {
   month: string;
   scope?: string;
   tab?: RecurringTab;
+  view?: "calendar" | "list";
 }): string {
   const params = new URLSearchParams({ month: input.month });
   if (input.scope) params.set("scope", input.scope);
   if (input.tab && input.tab !== "upcoming") params.set("tab", input.tab);
+  if (input.view === "calendar") params.set("view", "calendar");
   return `/recurring?${params.toString()}`;
 }
 
@@ -70,17 +75,28 @@ export default async function RecurringPage({
   } = await supabase.auth.getUser();
   if (!user) notFound();
 
-  const currentMonth = localMonthKey();
-  const today = localDateKey();
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("timezone")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (profileError) logError("recurring.profile-timezone", profileError);
+  const today = dateKeyInTimezone(
+    new Date(),
+    profileError ? null : profile?.timezone,
+  );
+  const currentMonth = today.slice(0, 7);
   const rawMonth = firstSearchParam(params.month);
   const month =
     rawMonth && MONTH_REGEX.test(rawMonth) ? rawMonth : currentMonth;
   const tab = parseTab(firstSearchParam(params.tab));
+  const view = firstSearchParam(params.view) === "calendar" ? "calendar" : "list";
 
   const loaded = await loadRecurringData(supabase, {
     userId: user.id,
     anchorMonth: month,
     rawScope: params.scope,
+    today,
   });
   const scope = serializeFinancialScope(loaded.scope);
   const baseLink = { month, scope };
@@ -125,7 +141,7 @@ export default async function RecurringPage({
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
         <Link
-          href={recurringHref({ ...baseLink, tab, month: shiftMonth(month, -1) })}
+          href={recurringHref({ ...baseLink, tab, view, month: shiftMonth(month, -1) })}
           aria-label="Previous month"
           className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-panel-border bg-panel"
         >
@@ -133,7 +149,7 @@ export default async function RecurringPage({
         </Link>
         <span className="min-w-[7rem] text-center text-sm font-bold">{formatMonth(month)}</span>
         <Link
-          href={recurringHref({ ...baseLink, tab, month: shiftMonth(month, 1) })}
+          href={recurringHref({ ...baseLink, tab, view, month: shiftMonth(month, 1) })}
           aria-label="Next month"
           className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-panel-border bg-panel"
         >
@@ -141,7 +157,7 @@ export default async function RecurringPage({
         </Link>
         {month !== currentMonth && (
           <Link
-            href={recurringHref({ ...baseLink, tab, month: currentMonth })}
+            href={recurringHref({ ...baseLink, tab, view, month: currentMonth })}
             className="inline-flex min-h-11 items-center rounded-field border border-panel-border bg-panel px-4 text-sm font-semibold"
           >
             Today
@@ -161,16 +177,45 @@ export default async function RecurringPage({
 
         <MonthSummary totals={loaded.view.totals} currency={loaded.currency} />
 
-        <Panel title="Occurrences" eyebrow="This month">
-          <RecurringList
-            occurrences={loaded.view.occurrences}
-            streams={loaded.allStreams}
-            manualItems={loaded.manualItems}
-            currency={loaded.currency}
-            today={today}
-            tab={tab}
-            links={links}
-          />
+        <Panel
+          title={view === "calendar" ? "Recurring calendar" : "Occurrences"}
+          eyebrow="This month"
+          action={
+            <SegmentedControl
+              ariaLabel="Occurrences view"
+              items={[
+                {
+                  label: "List",
+                  href: recurringHref({ ...baseLink, tab, view: "list" }),
+                  active: view === "list",
+                },
+                {
+                  label: "Calendar",
+                  href: recurringHref({ ...baseLink, tab, view: "calendar" }),
+                  active: view === "calendar",
+                },
+              ]}
+            />
+          }
+        >
+          {view === "calendar" ? (
+            <RecurringCalendar
+              month={month}
+              today={today}
+              currency={loaded.currency}
+              occurrences={loaded.view.occurrences}
+            />
+          ) : (
+            <RecurringList
+              occurrences={loaded.view.occurrences}
+              streams={loaded.allStreams}
+              manualItems={loaded.manualItems}
+              currency={loaded.currency}
+              today={today}
+              tab={tab}
+              links={links}
+            />
+          )}
         </Panel>
       </div>
     </AppShell>

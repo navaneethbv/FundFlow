@@ -23,7 +23,6 @@ export interface RecurringStreamInput {
   status: RecurringStreamStatus;
   isActive: boolean;
   accountName: string | null;
-  isCreditAccount: boolean;
   firstDate: string | null;
   lastDate: string | null;
   predictedNextDate: string | null;
@@ -204,12 +203,10 @@ function addPlannedTotals(
   totals: RecurringTotals,
   amount: number,
   isIncome: boolean,
-  isCreditAccount: boolean,
   isComplete: boolean,
 ): void {
   let bucket = totals.expenses;
   if (isIncome) bucket = totals.income;
-  else if (isCreditAccount) bucket = totals.creditCards;
   if (isComplete) addPaid(bucket, amount);
   else addRemaining(bucket, amount);
 }
@@ -257,7 +254,7 @@ function appendPlaidStream(
       isIncome,
     });
     if (!EXCLUDED_PFC.has(stream.category ?? "")) {
-      addPlannedTotals(totals, amount, isIncome, stream.isCreditAccount, isComplete);
+      addPlannedTotals(totals, amount, isIncome, isComplete);
     }
   }
 }
@@ -310,6 +307,8 @@ export function expandStreamsForMonth(
   const totals = {
     income: { paid: 0, remaining: 0 },
     expenses: { paid: 0, remaining: 0 },
+    // Plaid recurring streams describe purchases, including card purchases.
+    // This bucket remains reserved for actual credit-card bill data.
     creditCards: { paid: 0, remaining: 0 },
   };
 

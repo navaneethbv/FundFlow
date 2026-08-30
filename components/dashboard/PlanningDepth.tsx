@@ -4,6 +4,21 @@ import { buildPlanningDepthView } from "@/lib/planning-depth";
 import { formatCurrency } from "@/lib/format";
 import Panel from "@/components/ui/Panel";
 
+/**
+ * Whole months of runway a goal still has.
+ *
+ * `monthlyPace` is remaining ÷ months-to-deadline, so dividing back out
+ * recovers the deadline. It is null both for a goal with no deadline (a year
+ * is the neutral default) and for one already past due — those get 1, so an
+ * overdue goal keeps the urgency it should have rather than looking a year out.
+ */
+export function monthsRemainingFor(goal: GoalSummaryItem): number {
+  if (goal.monthlyPace && goal.remainingAmount > 0) {
+    return Math.max(1, Math.ceil(goal.remainingAmount / goal.monthlyPace));
+  }
+  return goal.targetDate ? 1 : 12;
+}
+
 export default function PlanningDepth({
   data,
   goals,
@@ -21,10 +36,7 @@ export default function PlanningDepth({
       name: goal.name,
       targetAmount: goal.targetAmount,
       currentAmount: goal.fundedAmount,
-      monthsRemaining:
-        goal.monthlyPace && goal.remainingAmount > 0
-          ? Math.ceil(goal.remainingAmount / goal.monthlyPace)
-          : 12,
+      monthsRemaining: monthsRemainingFor(goal),
     })),
   });
   const goalName = new Map(goals.map((goal) => [goal.id, goal.name]));

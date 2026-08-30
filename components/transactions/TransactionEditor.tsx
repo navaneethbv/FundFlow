@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Input, { fieldClasses } from "@/components/ui/Input";
+import TransactionOverrideControl, {
+  type TransactionOverride,
+} from "@/components/transactions/TransactionOverrideControl";
 import { cn } from "@/lib/cn";
 import { formatCurrency, titleCase } from "@/lib/format";
 
@@ -18,6 +21,10 @@ interface TransactionEditorProps {
   tags: string[];
   splits: EditorSplit[];
   categories: string[];
+  /** Raw provider primary category (immutable fact shown to the user). */
+  providerCategory?: string | null;
+  /** Current transaction-level classification override, when one exists. */
+  override?: TransactionOverride | null;
   /**
    * Distinguishes the mobile and desktop copies of the same row. The ledger
    * renders both for responsive layout, so without a prefix the two copies
@@ -52,6 +59,8 @@ export default function TransactionEditor({
   tags: initialTags,
   splits: initialSplits,
   categories,
+  providerCategory = null,
+  override = null,
   idPrefix = "",
 }: Readonly<TransactionEditorProps>) {
   const target = round2(Math.abs(transaction.amount));
@@ -71,9 +80,13 @@ export default function TransactionEditor({
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+    };
   }, [open]);
 
   function openEditor() {
@@ -159,7 +172,9 @@ export default function TransactionEditor({
             type="button"
             aria-label="Close editor"
             className="absolute inset-0 h-full w-full cursor-default bg-black/50"
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              setOpen(false);
+            }}
           />
           <dialog
             open
@@ -181,7 +196,9 @@ export default function TransactionEditor({
             <textarea
               id={inputId("note")}
               value={note}
-              onChange={(e) => setNote(e.target.value)}
+              onChange={(e) => {
+                setNote(e.target.value);
+              }}
               maxLength={500}
               rows={2}
               placeholder="Add a note"
@@ -194,7 +211,9 @@ export default function TransactionEditor({
             <Input
               id={inputId("tags")}
               value={tagText}
-              onChange={(e) => setTagText(e.target.value)}
+              onChange={(e) => {
+                setTagText(e.target.value);
+              }}
               placeholder="reimbursable, vacation"
               className="mb-2"
             />
@@ -232,7 +251,9 @@ export default function TransactionEditor({
                   <input
                     list={inputId("cats")}
                     value={row.category}
-                    onChange={(e) => updateRow(row.id, { category: e.target.value })}
+                    onChange={(e) => {
+                      updateRow(row.id, { category: e.target.value });
+                    }}
                     placeholder="Category"
                     className={cn(fieldClasses, "flex-1")}
                   />
@@ -242,13 +263,17 @@ export default function TransactionEditor({
                     step="0.01"
                     min="0"
                     value={row.amount}
-                    onChange={(e) => updateRow(row.id, { amount: e.target.value })}
+                    onChange={(e) => {
+                      updateRow(row.id, { amount: e.target.value });
+                    }}
                     placeholder="0.00"
                     className={cn(fieldClasses, "w-24 tabular-nums")}
                   />
                   <button
                     type="button"
-                    onClick={() => removeRow(row.id)}
+                    onClick={() => {
+                      removeRow(row.id);
+                    }}
                     className="rounded-field px-2 text-muted hover:bg-panel-hover hover:text-danger"
                     aria-label="Remove split"
                   >
@@ -262,16 +287,18 @@ export default function TransactionEditor({
                 type="button"
                 size="sm"
                 variant="secondary"
-                onClick={() =>
-                  setRows((cur) => [...cur, { id: crypto.randomUUID(), category: "", amount: "" }])
-                }
+                onClick={() => {
+                  setRows((cur) => [...cur, { id: crypto.randomUUID(), category: "", amount: "" }]);
+                }}
               >
                 Add split
               </Button>
               {rows.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => setRows([])}
+                  onClick={() => {
+                    setRows([]);
+                  }}
                   className="text-xs text-muted hover:text-foreground"
                 >
                   Clear splits
@@ -279,10 +306,26 @@ export default function TransactionEditor({
               )}
             </div>
 
+            <TransactionOverrideControl
+              transactionId={transaction.id}
+              providerCategory={providerCategory}
+              initialOverride={{
+                displayCategory: override?.displayCategory ?? null,
+                cashFlowClassification: override?.cashFlowClassification ?? null,
+              }}
+              categories={categories}
+            />
+
             {error && <p className="mt-4 text-sm text-danger">{error}</p>}
 
             <div className="mt-5 flex justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setOpen(false);
+                }}
+              >
                 Cancel
               </Button>
               <Button type="button" onClick={save} loading={saving} disabled={activeRows.length > 0 && !splitsBalanced}>

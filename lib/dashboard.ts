@@ -99,8 +99,14 @@ export interface DashboardData {
     amount: number;
     frequency: string | null;
     category: string | null;
+    predictedNextDate: string | null;
   }[];
-  incomeStreams: { merchant: string; amount: number; frequency: string | null }[];
+  incomeStreams: {
+    merchant: string;
+    amount: number;
+    frequency: string | null;
+    predictedNextDate: string | null;
+  }[];
   availableMonths: string[];
   selectedMonth: string;
   /** Completion time of the newest successful sync job, or null if none. */
@@ -561,6 +567,7 @@ interface StreamRow {
   category: string | null;
   stream_type: string;
   plaid_item_id: string;
+  predicted_next_date: string | null;
 }
 
 /**
@@ -590,6 +597,7 @@ function buildStreamSummaries(
           amount: round2(Math.abs(s.average_amount ?? 0)),
           frequency: s.frequency,
           category: s.category,
+          predictedNextDate: s.predicted_next_date,
         })),
     ),
     incomeStreams: byAmountDesc(
@@ -599,6 +607,7 @@ function buildStreamSummaries(
           merchant: label(s),
           amount: round2(Math.abs(s.average_amount ?? 0)),
           frequency: s.frequency,
+          predictedNextDate: s.predicted_next_date,
         })),
     ),
   };
@@ -614,6 +623,50 @@ export interface DashboardOptions {
    * the RLS-bound user client — service-client callers must never pass it.
    */
   scope?: "mine" | "household";
+}
+
+interface DashboardOverrideRow {
+  transaction_id: string;
+  display_category: string | null;
+  cash_flow_classification: "expense" | "income" | null;
+}
+
+const DASHBOARD_OVERRIDE_CHUNK_SIZE = 250;
+const DASHBOARD_OVERRIDE_PAGE_SIZE = 1_000;
+
+async function loadDashboardOverrides(
+  supabase: SupabaseClient,
+  transactionIds: string[],
+  userId: string | undefined,
+  applyUserScope: boolean,
+): Promise<DashboardOverrideRow[]> {
+  if (transactionIds.length === 0) return [];
+  const chunks: string[][] = [];
+  for (let index = 0; index < transactionIds.length; index += DASHBOARD_OVERRIDE_CHUNK_SIZE) {
+    chunks.push(transactionIds.slice(index, index + DASHBOARD_OVERRIDE_CHUNK_SIZE));
+  }
+  const chunkRows = await Promise.all(
+    chunks.map(async (ids) => {
+      const rows: DashboardOverrideRow[] = [];
+      for (let page = 0; ; page += 1) {
+        const from = page * DASHBOARD_OVERRIDE_PAGE_SIZE;
+        let query = supabase
+          .from("transaction_annotations")
+          .select("transaction_id, display_category, cash_flow_classification")
+          .in("transaction_id", ids);
+        if (userId && applyUserScope) query = query.eq("user_id", userId);
+        const { data, error } = await query
+          .order("transaction_id")
+          .range(from, from + DASHBOARD_OVERRIDE_PAGE_SIZE - 1);
+        if (error) throw error;
+        const batch = (data ?? []) as DashboardOverrideRow[];
+        rows.push(...batch);
+        if (batch.length < DASHBOARD_OVERRIDE_PAGE_SIZE) break;
+      }
+      return rows;
+    }),
+  );
+  return chunkRows.flat();
 }
 
 export async function getDashboardData(
@@ -666,7 +719,7 @@ export async function getDashboardData(
     scopeUser(
       supabase
         .from("recurring_streams")
-        .select("merchant_name, description, average_amount, frequency, category, stream_type, is_active, plaid_item_id")
+        .select("merchant_name, description, average_amount, frequency, category, stream_type, is_active, plaid_item_id, predicted_next_date")
         .eq("is_active", true),
     ),
     scopeUser(supabase.from("plaid_items").select("id, institution_name")),
@@ -762,6 +815,24 @@ export async function getDashboardData(
       .lt("date", windowEndExclusive),
   );
 
+  // Per-transaction classification overrides for the rendered window, so the
+  // dashboard agrees with every other canonical surface about the same rows.
+  const txnIds = ((txns ?? []) as Array<{ id: string }>).map((row) => row.id);
+  const overrideRows = await loadDashboardOverrides(
+    supabase,
+    txnIds,
+    userId,
+    applyUserScope,
+  );
+  const transactionOverrides = overrideRows.map((row) => ({
+    transactionId: row.transaction_id,
+    displayCategory: row.display_category,
+    cashFlowClassification:
+      row.cash_flow_classification === "expense" || row.cash_flow_classification === "income"
+        ? row.cash_flow_classification
+        : null,
+  }));
+
   const accountNamesById = new Map<string, string>();
   for (const a of allAccounts) {
     accountNamesById.set(a.id, a.name || "");
@@ -803,6 +874,7 @@ export async function getDashboardData(
       chargeTransactionId: row.charge_transaction_id,
       refundTransactionId: row.refund_transaction_id,
     })),
+    transactionOverrides,
     excludedTransactionIds: new Set(
       ((linkedDuplicates ?? []) as Array<{ excluded_transaction_id: string }>)
         .map((row) => row.excluded_transaction_id),
@@ -921,6 +993,15 @@ export async function getDashboardData(
   const selectedAccountObj = allAccounts.find((a) => a.id === selectedAccountId);
   const selectedItemDbId = selectedAccountObj?.plaid_item_id;
 
+  const recurringTxns = filteredTxns.map((t) => ({
+    id: t.id,
+    date: t.date,
+    merchant: extractMerchantName(t, ""),
+    amount: t.amount,
+  }));
+  const latestMatchDate = (name: string): string | null =>
+    latestMerchantMatchDate(recurringTxns, name);
+
   const { subscriptions, incomeStreams } = buildStreamSummaries(
     (streams ?? []) as StreamRow[],
     selectedItemDbId,
@@ -965,7 +1046,10 @@ export async function getDashboardData(
       amount: stream.amount,
       frequency: normalizeFrequency(stream.frequency),
       itemType: "expense" as const,
-      nextDate: monthDate(activeMonth, 15),
+      nextDate:
+        stream.predictedNextDate ??
+        latestMatchDate(stream.merchant) ??
+        monthDate(activeMonth, 15),
       category: stream.category,
     })),
     ...incomeStreams.map((stream) => ({
@@ -973,7 +1057,10 @@ export async function getDashboardData(
       amount: stream.amount,
       frequency: normalizeFrequency(stream.frequency),
       itemType: "income" as const,
-      nextDate: monthDate(activeMonth, 15),
+      nextDate:
+        stream.predictedNextDate ??
+        latestMatchDate(stream.merchant) ??
+        monthDate(activeMonth, 15),
     })),
   ];
   const cashBalance = allAccounts
@@ -1066,19 +1153,10 @@ export async function getDashboardData(
     ],
   });
 
-  // Recurring stream statuses: match each stream to a real transaction so the
+  // Recurring stream statuses match each stream to a real transaction so the
   // dashboard can show paid / unusual amount / late instead of a flat
-  // "expected". Plaid's stream table has no next-date column, so the expected
-  // date is anchored to the stream's latest matching transaction when one
-  // exists (otherwise the mid-month placeholder drives expected/late).
-  const recurringTxns = filteredTxns.map((t) => ({
-    id: t.id,
-    date: t.date,
-    merchant: extractMerchantName(t, ""),
-    amount: t.amount,
-  }));
-  const latestMatchDate = (name: string): string | null =>
-    latestMerchantMatchDate(recurringTxns, name);
+  // "expected". Plaid's prediction wins when available, then existing
+  // transaction-based and mid-month fallbacks keep older stream rows useful.
   const recurringStatuses = buildRecurringStatuses({
     asOf: monthDate(activeMonth, Math.min(activeDay, 28)),
     unusualAmountPct: 0.2,
@@ -1087,7 +1165,7 @@ export async function getDashboardData(
       name: item.name,
       amount: item.amount,
       itemType: item.itemType,
-      nextDate: latestMatchDate(item.name) ?? item.nextDate,
+      nextDate: item.nextDate,
     })),
     transactions: recurringTxns,
   });
@@ -1105,17 +1183,12 @@ export async function getDashboardData(
     }, new Map<string, number[]>());
   const spendPerPerson = computeSpendPerPerson(spendTxns, activeMonth, userId, options?.scope);
 
-  // Bill calendar (1.8): expand recurring occurrences over the horizon,
-  // anchored to each stream's latest real transaction when one exists so
-  // dates aren't the mid-month placeholder. Both groupings are cheap pure
-  // math; the Plan view toggles between them.
-  const anchoredRecurringItems = recurringItems.map((item) => {
-    const lastPaid = latestMatchDate(item.name);
-    return lastPaid ? { ...item, nextDate: lastPaid } : item;
-  });
+  // Bill calendar (1.8): expand recurring occurrences over the horizon. The
+  // items already use Plaid's prediction when available and retain the legacy
+  // transaction-based and mid-month fallbacks otherwise.
   const billPeriods = {
-    weekly: groupRecurringByPeriod(anchoredRecurringItems, insightsAsOf, 35, "weekly"),
-    monthly: groupRecurringByPeriod(anchoredRecurringItems, insightsAsOf, 62, "monthly"),
+    weekly: groupRecurringByPeriod(recurringItems, insightsAsOf, 35, "weekly"),
+    monthly: groupRecurringByPeriod(recurringItems, insightsAsOf, 62, "monthly"),
   };
 
   // Personal price drift (1.9): recent 3-month vs prior 3-month average

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { buildInsightPayload, isAiProviderConfigured } from "@/lib/ai-provider";
-import { fetchPrivacySafeRows } from "@/lib/export";
+import { fetchPrivacySafeRows, recentHistoryStart } from "@/lib/export";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { serverEnv } from "@/lib/env.server";
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
 
     const [{ data: settings }, exportResult] = await Promise.all([
       supabase.from("ai_settings").select("enabled").eq("user_id", user.id).maybeSingle(),
-      fetchPrivacySafeRows(supabase, user.id),
+      fetchPrivacySafeRows(supabase, user.id, { startDate: recentHistoryStart() }),
     ]);
     if (exportResult.allowed === false || settings?.enabled !== true) {
       return NextResponse.json(

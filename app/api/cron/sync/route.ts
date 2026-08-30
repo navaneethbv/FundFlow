@@ -3,6 +3,7 @@ import { serverEnv } from "@/lib/env.server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { syncAllForUser } from "@/lib/sync";
 import { syncInvestmentsForUser } from "@/lib/investment-sync";
+import { syncCreditCardLiabilitiesForUser } from "@/lib/liabilities-sync";
 import { rotateStaleItemTokens } from "@/lib/plaid-service";
 import { refreshRecurringForUser } from "@/lib/recurring";
 import { errorResponse, requireCronAuth } from "@/lib/http";
@@ -15,6 +16,7 @@ import { sendDailyDigestEmail } from "@/lib/reporting";
 import { alertCronFailure } from "@/lib/cron-alert";
 import { writeDailyAccountSnapshots } from "@/lib/account-history";
 import { isFeatureEnabled } from "@/lib/feature-flags";
+import { dateKeyInTimezone } from "@/lib/report-period";
 
 export const dynamic = "force-dynamic";
 // Raised from 60: investment holdings sync (Phase 9A) adds one more
@@ -97,7 +99,26 @@ async function syncUser(
   await syncAllForUser(userId);
   await runOptionalSync("cron.sync.token-rotation", () => rotateStaleItemTokens(userId));
   if (isFeatureEnabled("investmentsPage")) {
-    await runOptionalSync("cron.sync.investments", () => syncInvestmentsForUser(userId));
+    let today = dateKeyInTimezone(new Date(), null);
+    try {
+      const { data: profile, error: profileError } = await service
+        .from("profiles")
+        .select("timezone")
+        .eq("id", userId)
+        .maybeSingle();
+      if (profileError) throw profileError;
+      today = dateKeyInTimezone(new Date(), profile?.timezone);
+    } catch (profileError) {
+      logError("cron.sync.profile-timezone", profileError);
+    }
+    await runOptionalSync("cron.sync.investments", () =>
+      syncInvestmentsForUser(userId, today),
+    );
+  }
+  if (isFeatureEnabled("liabilitiesSync")) {
+    await runOptionalSync("cron.sync.liabilities", () =>
+      syncCreditCardLiabilitiesForUser(userId),
+    );
   }
   await writeDailyAccountSnapshots(userId);
   await refreshRecurringForUser(userId);

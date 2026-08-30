@@ -9,7 +9,7 @@
 
 **Tech Stack:** Next.js 16 App Router, React 19, TypeScript, Supabase Postgres, Vitest.
 
-**Spec:** `/Users/navaneethbv/Desktop/Projects/FundFlow/features.md` §1 ("One-off scheduled (future-dated) transactions").
+**Spec:** `features.md` §1 ("One-off scheduled (future-dated) transactions").
 
 ## Global Constraints
 

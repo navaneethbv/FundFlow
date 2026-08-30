@@ -16,15 +16,12 @@ import { toGoalSummaryItem } from "@/lib/goal-summary";
 import type { FundedGoal } from "@/lib/goals-v2";
 import { normalizeExternalDisplayText } from "@/lib/external-display-text";
 
-describe("Production Live-Data Cross-Surface Reconciliation", () => {
+describe("synthetic cross-surface reconciliation", () => {
   const NOW = new Date("2026-08-29T12:00:00.000Z");
 
   it("reconciles net worth with negative credit card balance across Accounts and Dashboard", () => {
-    // Fixture representing the exact balance relations:
-    // Assets: checking/savings/investments = $58,092.60
-    // Credit card 1 (positive debt) = $2,125.30
-    // Credit card 2 (Freedom card overpaid credit) = -$2.11
-    // Net worth = 58092.60 + 2.11 - 2125.30 = $55,969.41
+    // Synthetic fixture: assets include an overpaid-card credit while only a
+    // positive credit-card balance contributes to liabilities.
     const accounts: UnifiedAccountSummary[] = [
       {
         id: "acc-checking",
@@ -34,7 +31,7 @@ describe("Production Live-Data Cross-Surface Reconciliation", () => {
         mask: "1111",
         type: "depository",
         subtype: "checking",
-        currentBalance: 13669.56,
+        currentBalance: 10000,
         availableBalance: null,
         currency: "USD",
         institution: "Bank",
@@ -47,14 +44,14 @@ describe("Production Live-Data Cross-Surface Reconciliation", () => {
         id: "acc-401k-1",
         ownerUserId: "u1",
         source: "plaid",
-        name: "Retirement 401k A",
+        name: "Investment Account A",
         mask: "2222",
         type: "investment",
         subtype: "401k",
-        currentBalance: 30000.0,
+        currentBalance: 20000,
         availableBalance: null,
         currency: "USD",
-        institution: "Fidelity",
+        institution: "Brokerage",
         institutionLogo: null,
         institutionBrandColor: null,
         updatedAt: "2026-08-29T10:00:00Z",
@@ -64,14 +61,14 @@ describe("Production Live-Data Cross-Surface Reconciliation", () => {
         id: "acc-401k-2",
         ownerUserId: "u1",
         source: "plaid",
-        name: "Retirement 401k B",
+        name: "Investment Account B",
         mask: "3333",
         type: "investment",
         subtype: "401k",
-        currentBalance: 14423.04,
+        currentBalance: 15000,
         availableBalance: null,
         currency: "USD",
-        institution: "Fidelity",
+        institution: "Brokerage",
         institutionLogo: null,
         institutionBrandColor: null,
         updatedAt: "2026-08-29T10:00:00Z",
@@ -81,14 +78,14 @@ describe("Production Live-Data Cross-Surface Reconciliation", () => {
         id: "acc-card-owed",
         ownerUserId: "u1",
         source: "plaid",
-        name: "Autograph Card",
+        name: "Credit Card",
         mask: "4444",
         type: "credit",
         subtype: "credit card",
-        currentBalance: 2125.3,
+        currentBalance: 2500,
         availableBalance: null,
         currency: "USD",
-        institution: "Wells Fargo",
+        institution: "Card Issuer",
         institutionLogo: null,
         institutionBrandColor: null,
         updatedAt: "2026-08-29T10:00:00Z",
@@ -98,14 +95,14 @@ describe("Production Live-Data Cross-Surface Reconciliation", () => {
         id: "acc-card-credit",
         ownerUserId: "u1",
         source: "plaid",
-        name: "Freedom Card",
+        name: "Overpaid Card",
         mask: "5555",
         type: "credit",
         subtype: "credit card",
-        currentBalance: -2.11,
+        currentBalance: -5,
         availableBalance: null,
         currency: "USD",
-        institution: "Chase",
+        institution: "Card Issuer",
         institutionLogo: null,
         institutionBrandColor: null,
         updatedAt: "2026-08-29T10:00:00Z",
@@ -128,9 +125,9 @@ describe("Production Live-Data Cross-Surface Reconciliation", () => {
     const usdLiabilities = pageData.summary.liabilities.find((t) => t.currency === "USD")?.amount;
     const usdNetWorth = pageData.summary.netWorth.find((t) => t.currency === "USD")?.amount;
 
-    expect(usdAssets).toBe(58094.71); // 13669.56 + 30000 + 14423.04 + 2.11 credit
-    expect(usdLiabilities).toBe(2125.3); // Only the actual debt owed
-    expect(usdNetWorth).toBe(55969.41);
+    expect(usdAssets).toBe(45005);
+    expect(usdLiabilities).toBe(2500);
+    expect(usdNetWorth).toBe(42505);
 
     // 2. Dashboard metrics calculation
     const balanceAccounts: BalanceAccount[] = accounts.map((a) => ({
@@ -139,28 +136,28 @@ describe("Production Live-Data Cross-Surface Reconciliation", () => {
       current_balance: a.currentBalance,
     }));
     const dashboardNetWorth = computeNetWorth(balanceAccounts);
-    expect(dashboardNetWorth).toBe(55969.41);
+    expect(dashboardNetWorth).toBe(42505);
     expect(dashboardNetWorth).toBe(usdNetWorth);
   });
 
-  it("reconciles connected retirement accounts without holdings to $44,423.04 total", () => {
+  it("reconciles connected investment accounts without holdings", () => {
     const investmentAccounts: InvestmentAccountSummary[] = [
       {
         id: "inv-1",
-        name: "Retirement 401k A",
+        name: "Investment Account A",
         source: "plaid",
         type: "investment",
         subtype: "401k",
-        balance: 30000.0,
+        balance: 20000,
         currency: "USD",
       },
       {
         id: "inv-2",
-        name: "Retirement 401k B",
+        name: "Investment Account B",
         source: "plaid",
         type: "investment",
         subtype: "401k",
-        balance: 14423.04,
+        balance: 15000,
         currency: "USD",
       },
     ];
@@ -169,15 +166,15 @@ describe("Production Live-Data Cross-Surface Reconciliation", () => {
     const coverage = buildInvestmentAccountCoverage(investmentAccounts, holdings);
     expect(coverage.accounts).toHaveLength(2);
     expect(coverage.accountsWithoutHoldings).toBe(2);
-    expect(coverage.total).toBe(44423.04);
+    expect(coverage.total).toBe(35000);
     expect(coverage.accounts[0]!.valueSource).toBe("account-balance");
   });
 
-  it("reconciles funded goal summary to $4,000.00 / $20,000.00", () => {
+  it("reconciles a synthetic funded goal summary", () => {
     const fundedGoal: FundedGoal = {
       id: "goal-1",
       name: "Emergency fund",
-      target_amount: 20000,
+      target_amount: 15000,
       saved_amount: 0,
       target_date: "2027-08-01",
       household_id: null,
@@ -187,10 +184,10 @@ describe("Production Live-Data Cross-Surface Reconciliation", () => {
       spending_reduces: false,
       starting_balance: null,
       target_balance: null,
-      funded_amount: 4000,
-      remainingAmount: 16000,
+      funded_amount: 3000,
+      remainingAmount: 12000,
       progressPct: 20,
-      est_monthly: 1333.33,
+      est_monthly: 1000,
       badge: "on-track",
       allocatedFromAccounts: 0,
       eventTotal: 0,
@@ -199,18 +196,15 @@ describe("Production Live-Data Cross-Surface Reconciliation", () => {
     };
 
     const summary = toGoalSummaryItem(fundedGoal);
-    expect(summary.fundedAmount).toBe(4000);
-    expect(summary.targetAmount).toBe(20000);
-    expect(summary.remainingAmount).toBe(16000);
+    expect(summary.fundedAmount).toBe(3000);
+    expect(summary.targetAmount).toBe(15000);
+    expect(summary.remainingAmount).toBe(12000);
     expect(summary.progressPct).toBe(20);
   });
 
   it("preserves signed negative savings rates", () => {
-    // August: $121.80 income, $13,729.41 spend -> -11172.09%
-    expect(computeSavingsRate(121.8, 13729.41)).toBe(-11172.09);
-
-    // Annual: $71,866.97 income, $100,456.92 spend -> -39.78%
-    expect(computeSavingsRate(71866.97, 100456.92)).toBe(-39.78);
+    expect(computeSavingsRate(1000, 1250)).toBe(-25);
+    expect(computeSavingsRate(60000, 75000)).toBe(-25);
   });
 
   it("generates exact 6-month window ending on active month", () => {
@@ -228,7 +222,7 @@ describe("Production Live-Data Cross-Surface Reconciliation", () => {
 
   it("sanitizes Unicode replacement characters in account names", () => {
     expect(
-      normalizeExternalDisplayText("WELLS FARGO AUTOGRAPH VISA\uFFFD\uFFFD CARD"),
-    ).toBe("WELLS FARGO AUTOGRAPH VISA CARD");
+      normalizeExternalDisplayText("EXAMPLE BANK REWARDS\uFFFD\uFFFD CARD"),
+    ).toBe("EXAMPLE BANK REWARDS CARD");
   });
 });

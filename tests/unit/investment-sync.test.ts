@@ -48,12 +48,21 @@ const item: PlaidItemRow = {
   error_code: null,
 };
 
+function accountQuery(result: { data: unknown; error: unknown }) {
+  const query = {
+    eq: vi.fn(),
+    then: (resolve: (value: typeof result) => unknown) => resolve(result),
+  };
+  query.eq.mockReturnValue(query);
+  return query;
+}
+
 function tableStub(overrides: Record<string, unknown> = {}) {
-  const accountsSelectEq = vi.fn().mockResolvedValue({
+  const accountsSelectQuery = accountQuery({
     data: [{ id: "db-acc-1", plaid_account_id: "plaid-acc-1" }],
     error: null,
   });
-  const accountsSelect = vi.fn().mockReturnValue({ eq: accountsSelectEq });
+  const accountsSelect = vi.fn().mockReturnValue(accountsSelectQuery);
 
   const securitiesUpsertSelect = vi.fn().mockResolvedValue({
     data: [{ id: "sec-db-1", plaid_security_id: "sec-plaid-1" }],
@@ -62,7 +71,11 @@ function tableStub(overrides: Record<string, unknown> = {}) {
   const securitiesUpsert = vi.fn().mockReturnValue({ select: securitiesUpsertSelect });
 
   const holdingsUpsertSelect = vi.fn().mockResolvedValue({
-    data: [{ id: "holding-db-1" }],
+    data: [{
+      id: "holding-db-1",
+      account_id: "db-acc-1",
+      security_id: "sec-db-1",
+    }],
     error: null,
   });
   const holdingsUpsert = vi.fn().mockReturnValue({ select: holdingsUpsertSelect });
@@ -139,7 +152,7 @@ describe("syncInvestmentsForItem", () => {
       return tables[table as keyof typeof tables];
     });
 
-    const result = await syncInvestmentsForItem(item);
+    const result = await syncInvestmentsForItem(item, "1999-12-31");
 
     expect(result).toEqual({ outcome: "synced", holdingsSynced: 1 });
     expect(spies.securitiesUpsert).toHaveBeenCalledWith(
@@ -157,7 +170,10 @@ describe("syncInvestmentsForItem", () => {
       ],
       { onConflict: "account_id,security_id,source" },
     );
-    expect(spies.snapshotsUpsert).toHaveBeenCalled();
+    expect(spies.snapshotsUpsert).toHaveBeenCalledWith(
+      [expect.objectContaining({ snapshot_date: "1999-12-31" })],
+      { onConflict: "holding_id,snapshot_date" },
+    );
     expect(spies.holdingsUpdate).not.toHaveBeenCalled();
   });
 
@@ -243,8 +259,8 @@ describe("syncInvestmentsForItem", () => {
     mockInvestmentsHoldingsGet.mockResolvedValueOnce({
       data: { accounts: [{ account_id: "plaid-acc-1" }], holdings: [], securities: [] },
     });
-    const accountsSelectEq = vi.fn().mockResolvedValue({ data: null, error: null });
-    const accountsSelect = vi.fn().mockReturnValue({ eq: accountsSelectEq });
+    const accountsSelectQuery = accountQuery({ data: null, error: null });
+    const accountsSelect = vi.fn().mockReturnValue(accountsSelectQuery);
     const { tables } = tableStub({ accounts: { select: accountsSelect } });
     mockServiceClient.from.mockImplementation((table: string) => {
       if (!(table in tables)) throw new Error(`Unexpected table ${table}`);
@@ -259,8 +275,8 @@ describe("syncInvestmentsForItem", () => {
     mockInvestmentsHoldingsGet.mockResolvedValueOnce({
       data: { accounts: [{ account_id: "plaid-acc-1" }], holdings: [], securities: [] },
     });
-    const accountsSelectEq = vi.fn().mockResolvedValue({ data: null, error: new Error("Accounts error") });
-    const accountsSelect = vi.fn().mockReturnValue({ eq: accountsSelectEq });
+    const accountsSelectQuery = accountQuery({ data: null, error: new Error("Accounts error") });
+    const accountsSelect = vi.fn().mockReturnValue(accountsSelectQuery);
     const { tables } = tableStub({ accounts: { select: accountsSelect } });
     mockServiceClient.from.mockImplementation((table: string) => {
       if (!(table in tables)) throw new Error(`Unexpected table ${table}`);
@@ -694,7 +710,7 @@ describe("syncInvestmentTransactionsForItem", () => {
         data: { investment_transactions: [txn("t2")], total_investment_transactions: 2 },
       });
 
-    const accountsSelectEq = vi.fn().mockResolvedValue({
+    const accountsSelectQuery = accountQuery({
       data: [{ id: "db-acc-1", plaid_account_id: "plaid-acc-1" }],
       error: null,
     });
@@ -704,7 +720,7 @@ describe("syncInvestmentTransactionsForItem", () => {
     });
     const upsert = vi.fn().mockResolvedValue({ error: null });
     mockServiceClient.from.mockImplementation((table: string) => {
-      if (table === "accounts") return { select: () => ({ eq: accountsSelectEq }) };
+      if (table === "accounts") return { select: () => accountsSelectQuery };
       if (table === "securities") return { select: () => ({ in: securitiesSelectIn }) };
       if (table === "investment_transactions") return { upsert, update: vi.fn() };
       throw new Error(`Unexpected table ${table}`);
@@ -745,7 +761,7 @@ describe("syncInvestmentTransactionsForItem", () => {
         total_investment_transactions: 1,
       },
     });
-    const accountsSelectEq = vi.fn().mockResolvedValue({
+    const accountsSelectQuery = accountQuery({
       data: [{ id: "db-acc-1", plaid_account_id: "plaid-acc-1" }],
       error: null,
     });
@@ -753,7 +769,7 @@ describe("syncInvestmentTransactionsForItem", () => {
     const updateIn = vi.fn().mockResolvedValue({ error: null });
     const update = vi.fn().mockReturnValue({ in: updateIn });
     mockServiceClient.from.mockImplementation((table: string) => {
-      if (table === "accounts") return { select: () => ({ eq: accountsSelectEq }) };
+      if (table === "accounts") return { select: () => accountsSelectQuery };
       if (table === "securities") return { select: () => ({ in: vi.fn().mockResolvedValue({ data: [], error: null }) }) };
       if (table === "investment_transactions") return { upsert, update };
       throw new Error(`Unexpected table ${table}`);
@@ -799,9 +815,9 @@ describe("syncInvestmentTransactionsForItem", () => {
         total_investment_transactions: 1,
       },
     });
-    const accountsSelectEq = vi.fn().mockResolvedValue({ data: null, error: new Error("Accounts error") });
+    const accountsSelectQuery = accountQuery({ data: null, error: new Error("Accounts error") });
     mockServiceClient.from.mockImplementation((table: string) => {
-      if (table === "accounts") return { select: () => ({ eq: accountsSelectEq }) };
+      if (table === "accounts") return { select: () => accountsSelectQuery };
       throw new Error(`Unexpected table ${table}`);
     });
 
@@ -823,13 +839,13 @@ describe("syncInvestmentTransactionsForItem", () => {
         total_investment_transactions: 1,
       },
     });
-    const accountsSelectEq = vi.fn().mockResolvedValue({ data: null, error: null });
+    const accountsSelectQuery = accountQuery({ data: null, error: null });
     const securitiesSelectIn = vi.fn().mockResolvedValue({
       data: [{ id: "sec-db-1", plaid_security_id: "sec-plaid-1" }],
       error: null,
     });
     mockServiceClient.from.mockImplementation((table: string) => {
-      if (table === "accounts") return { select: () => ({ eq: accountsSelectEq }) };
+      if (table === "accounts") return { select: () => accountsSelectQuery };
       if (table === "securities") return { select: () => ({ in: securitiesSelectIn }) };
       if (table === "investment_transactions") return { upsert: vi.fn(), update: vi.fn() };
       throw new Error(`Unexpected table ${table}`);
@@ -854,13 +870,13 @@ describe("syncInvestmentTransactionsForItem", () => {
         total_investment_transactions: 1,
       },
     });
-    const accountsSelectEq = vi.fn().mockResolvedValue({
+    const accountsSelectQuery = accountQuery({
       data: [{ id: "db-acc-1", plaid_account_id: "plaid-acc-1" }],
       error: null,
     });
     const securitiesSelectIn = vi.fn().mockResolvedValue({ data: null, error: new Error("Securities error") });
     mockServiceClient.from.mockImplementation((table: string) => {
-      if (table === "accounts") return { select: () => ({ eq: accountsSelectEq }) };
+      if (table === "accounts") return { select: () => accountsSelectQuery };
       if (table === "securities") return { select: () => ({ in: securitiesSelectIn }) };
       throw new Error(`Unexpected table ${table}`);
     });
@@ -883,14 +899,14 @@ describe("syncInvestmentTransactionsForItem", () => {
         total_investment_transactions: 1,
       },
     });
-    const accountsSelectEq = vi.fn().mockResolvedValue({
+    const accountsSelectQuery = accountQuery({
       data: [{ id: "db-acc-1", plaid_account_id: "plaid-acc-1" }],
       error: null,
     });
     const securitiesSelectIn = vi.fn().mockResolvedValue({ data: null, error: null });
     const upsert = vi.fn().mockResolvedValue({ error: null });
     mockServiceClient.from.mockImplementation((table: string) => {
-      if (table === "accounts") return { select: () => ({ eq: accountsSelectEq }) };
+      if (table === "accounts") return { select: () => accountsSelectQuery };
       if (table === "securities") return { select: () => ({ in: securitiesSelectIn }) };
       if (table === "investment_transactions") return { upsert, update: vi.fn() };
       throw new Error(`Unexpected table ${table}`);
@@ -918,14 +934,14 @@ describe("syncInvestmentTransactionsForItem", () => {
         total_investment_transactions: 1,
       },
     });
-    const accountsSelectEq = vi.fn().mockResolvedValue({
+    const accountsSelectQuery = accountQuery({
       data: [{ id: "db-acc-1", plaid_account_id: "plaid-acc-1" }],
       error: null,
     });
     const securitiesSelectIn = vi.fn().mockResolvedValue({ data: null, error: null });
     const upsert = vi.fn().mockResolvedValue({ error: null });
     mockServiceClient.from.mockImplementation((table: string) => {
-      if (table === "accounts") return { select: () => ({ eq: accountsSelectEq }) };
+      if (table === "accounts") return { select: () => accountsSelectQuery };
       if (table === "securities") return { select: () => ({ in: securitiesSelectIn }) };
       if (table === "investment_transactions") return { upsert, update: vi.fn() };
       throw new Error(`Unexpected table ${table}`);
@@ -964,14 +980,14 @@ describe("syncInvestmentTransactionsForItem", () => {
         total_investment_transactions: 1,
       },
     });
-    const accountsSelectEq = vi.fn().mockResolvedValue({
+    const accountsSelectQuery = accountQuery({
       data: [{ id: "db-acc-1", plaid_account_id: "plaid-acc-1" }],
       error: null,
     });
     const securitiesSelectIn = vi.fn().mockResolvedValue({ data: null, error: null });
     const upsert = vi.fn().mockResolvedValue({ error: new Error("Txn upsert error") });
     mockServiceClient.from.mockImplementation((table: string) => {
-      if (table === "accounts") return { select: () => ({ eq: accountsSelectEq }) };
+      if (table === "accounts") return { select: () => accountsSelectQuery };
       if (table === "securities") return { select: () => ({ in: securitiesSelectIn }) };
       if (table === "investment_transactions") return { upsert, update: vi.fn() };
       throw new Error(`Unexpected table ${table}`);
@@ -995,7 +1011,7 @@ describe("syncInvestmentTransactionsForItem", () => {
         total_investment_transactions: 1,
       },
     });
-    const accountsSelectEq = vi.fn().mockResolvedValue({
+    const accountsSelectQuery = accountQuery({
       data: [{ id: "db-acc-1", plaid_account_id: "plaid-acc-1" }],
       error: null,
     });
@@ -1004,12 +1020,41 @@ describe("syncInvestmentTransactionsForItem", () => {
     const updateIn = vi.fn().mockResolvedValue({ error: new Error("Cancel error") });
     const update = vi.fn().mockReturnValue({ in: updateIn });
     mockServiceClient.from.mockImplementation((table: string) => {
-      if (table === "accounts") return { select: () => ({ eq: accountsSelectEq }) };
+      if (table === "accounts") return { select: () => accountsSelectQuery };
       if (table === "securities") return { select: () => ({ in: securitiesSelectIn }) };
       if (table === "investment_transactions") return { upsert, update };
       throw new Error(`Unexpected table ${table}`);
     });
 
     await expect(syncInvestmentTransactionsForItem(item, "2026-07-30")).rejects.toThrow("Cancel error");
+  });
+});
+
+describe("investment sync empty-portfolio scenario", () => {
+  it("reports a successful empty portfolio without inventing holdings", async () => {
+    mockInvestmentsHoldingsGet.mockResolvedValueOnce({
+      data: { holdings: [], securities: [], accounts: [{ account_id: "plaid-inv-1" }] },
+    });
+    mockServiceClient.from.mockImplementation((table: string) => {
+      if (table === "accounts") {
+        const query = accountQuery({
+          data: [{ id: "db-inv-1", plaid_account_id: "plaid-inv-1" }],
+          error: null,
+        });
+        return { select: vi.fn().mockReturnValue(query) };
+      }
+      if (table === "holdings") {
+        return {
+          upsert: vi.fn().mockResolvedValue({ data: [], error: null }),
+          select: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          update: vi.fn().mockResolvedValue({ error: null }),
+        };
+      }
+      throw new Error(`Unexpected table ${table}`);
+    });
+    const result = await syncInvestmentsForItem(item);
+    expect(result).toEqual({ outcome: "synced", holdingsSynced: 0 });
   });
 });

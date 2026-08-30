@@ -39,4 +39,10 @@ describe("settings UI restyle", () => {
     expect(page).toContain("settingsIa");
     expect(page).toContain("migrationDependentSections");
   });
+
+  it("uses an output element for institution health announcements", () => {
+    const banks = readFileSync("components/settings/BanksSection.tsx", "utf8");
+    expect(banks).toContain("<output");
+    expect(banks).not.toContain('role="status"');
+  });
 });

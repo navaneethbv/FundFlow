@@ -51,10 +51,16 @@ describe("ConnectBankButton Plaid success handling", () => {
   });
 
   it("rejects a null public token without exchanging it", async () => {
-    ConnectBankButton();
+    const tree = ConnectBankButton() as unknown as {
+      props: {
+        children: Array<{
+          props?: { onSuccess?: (token: string | null) => Promise<void> };
+        }>;
+      };
+    };
 
-    const config = usePlaidLinkMock.mock.calls[0]?.[0];
-    await config.onSuccess(null);
+    const launcher = tree.props.children.find((child) => child.props?.onSuccess);
+    await launcher?.props?.onSuccess?.(null);
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(stateSetters[4]).toHaveBeenCalledWith(

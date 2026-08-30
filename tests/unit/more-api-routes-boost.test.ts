@@ -375,6 +375,9 @@ describe("More API Routes Boost Suite", () => {
 
     it("handles import commit POST validations and successful commit", async () => {
       const client = clientStub({
+        import_review_batches: {
+          data: { id: "b-1", created_at: "2026-08-01T00:00:00Z" },
+        },
         accounts: { data: { id: "acc-1" } },
         import_review_rows: {
           data: [
@@ -396,6 +399,14 @@ describe("More API Routes Boost Suite", () => {
       });
 
       const service = await import("@/lib/supabase/service");
+      const chainableSelect = {
+        select: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { created_at: "2026-08-01T00:00:00Z" }, error: null }),
+        then: (resolve: (v: { data: unknown[] }) => unknown) => resolve({ data: [] }),
+      };
       vi.spyOn(service, "createServiceClient").mockReturnValue({
         from: vi.fn().mockReturnValue({
           upsert: vi.fn().mockResolvedValue({ error: null }),
@@ -405,6 +416,12 @@ describe("More API Routes Boost Suite", () => {
               eq: vi.fn().mockResolvedValue({ error: null }),
             }),
           }),
+          select: chainableSelect.select,
+          in: chainableSelect.in,
+          eq: chainableSelect.eq,
+          limit: chainableSelect.limit,
+          maybeSingle: chainableSelect.maybeSingle,
+          then: chainableSelect.then,
         }),
       } as never);
 
@@ -427,6 +444,9 @@ describe("More API Routes Boost Suite", () => {
 
       // Without approved_row_ids and empty rows
       const emptyClient = clientStub({
+        import_review_batches: {
+          data: { id: "b-1", created_at: "2026-08-01T00:00:00Z" },
+        },
         accounts: { data: { id: "acc-1" } },
         import_review_rows: { data: [] },
       });
@@ -447,6 +467,9 @@ describe("More API Routes Boost Suite", () => {
 
       // Database error on row query
       const errClient = clientStub({
+        import_review_batches: {
+          data: { id: "b-1", created_at: "2026-08-01T00:00:00Z" },
+        },
         accounts: { data: { id: "acc-1" } },
         import_review_rows: { error: new Error("Row query failed") },
       });

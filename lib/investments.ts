@@ -60,6 +60,10 @@ export function buildInvestmentAccountCoverage(
   holdings: HoldingJoinRow[],
 ): InvestmentAccountCoverage {
   const holdingSumByAccount = new Map<string, number>();
+  const holdingAccountById = new Map<
+    string,
+    Pick<HoldingJoinRow, "accountName" | "source">
+  >();
   const accountsWithHoldings = new Set<string>();
 
   for (const holding of holdings) {
@@ -73,6 +77,10 @@ export function buildInvestmentAccountCoverage(
     const value = holding.value ?? derivedValue;
     if (value === null || !Number.isFinite(value)) continue;
     accountsWithHoldings.add(acctId);
+    holdingAccountById.set(acctId, {
+      accountName: holding.accountName,
+      source: holding.source,
+    });
     holdingSumByAccount.set(
       acctId,
       (holdingSumByAccount.get(acctId) ?? 0) + value,
@@ -106,6 +114,27 @@ export function buildInvestmentAccountCoverage(
       };
     }
   });
+
+  const knownAccountIds = new Set(accounts.map((account) => account.id));
+  for (const [accountId, holdingValueRaw] of holdingSumByAccount) {
+    if (knownAccountIds.has(accountId)) continue;
+    const holdingValue =
+      Math.round((holdingValueRaw + Number.EPSILON) * 100) / 100;
+    const metadata = holdingAccountById.get(accountId);
+    total += holdingValue;
+    coverageAccounts.push({
+      id: accountId,
+      name: metadata?.accountName ?? "Investment Account",
+      source: metadata?.source ?? "plaid",
+      type: null,
+      subtype: null,
+      balance: null,
+      currency: "USD",
+      holdingValue,
+      displayValue: holdingValue,
+      valueSource: "holdings",
+    });
+  }
 
   return {
     accounts: coverageAccounts,

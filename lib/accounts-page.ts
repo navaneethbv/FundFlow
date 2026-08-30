@@ -262,10 +262,6 @@ function addAmount(map: Map<string, number>, currency: string, amount: number) {
   map.set(currency, (map.get(currency) ?? 0) + amount);
 }
 
-function displayBalance(balance: number | null): number | null {
-  return balance;
-}
-
 function createAccountGroups(): AccountsPageData["groups"] {
   const create = (key: AccountGroupKey) => ({
     label: GROUP_LABELS[key],
@@ -289,7 +285,7 @@ function buildAccountRow(
   now: Date,
 ): AccountsPageRow {
   const values = history.map(
-    (snapshot) => displayBalance(snapshot.currentBalance) ?? 0,
+    (snapshot) => snapshot.currentBalance ?? 0,
   );
   const rowSeries = history.map((snapshot, index) => ({
     date: snapshot.snapshotDate,
@@ -305,7 +301,7 @@ function buildAccountRow(
     name: `${cleanName}${mask}`,
     type: account.type,
     subtype: account.subtype,
-    balance: displayBalance(account.currentBalance),
+    balance: account.currentBalance,
     currency: account.currency,
     institution: account.institution,
     institutionLogo: account.institutionLogo,

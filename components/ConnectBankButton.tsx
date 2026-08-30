@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { usePlaidLink } from "react-plaid-link";
 import {
   saveResume,
   loadResume,
@@ -10,6 +9,7 @@ import {
   type PlaidResume,
 } from "@/lib/plaid-resume";
 import Button from "@/components/ui/Button";
+import PlaidLinkLauncher from "@/components/PlaidLinkLauncher";
 
 export default function ConnectBankButton() {
   const router = useRouter();
@@ -20,11 +20,6 @@ export default function ConnectBankButton() {
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Set once the user has actually asked to connect. A ref, not state: it only
-  // needs to survive the link-token round trip so the effect below can open Link
-  // the moment it is ready, and flipping it must not itself cause a render.
-  const wantsOpenRef = useRef(false);
-
   // The token is single-use: once Link has consumed it (success or exit) it
   // must not be handed back to Plaid. Clearing state here is what stops the
   // next "Connect a bank" click from reopening a completed session.
@@ -32,7 +27,6 @@ export default function ConnectBankButton() {
     setLinkToken(null);
     setResume(null);
     setReceivedRedirectUri(null);
-    wantsOpenRef.current = false;
   }, []);
 
   // OAuth banks bounce back to the registered redirect_uri with oauth_state_id
@@ -68,7 +62,6 @@ export default function ConnectBankButton() {
       if (saved) {
         setResume(saved);
         setReceivedRedirectUri(window.location.href);
-        wantsOpenRef.current = true;
         setLinkToken(saved.token);
       } else {
         cleanOAuthUrl();
@@ -83,6 +76,9 @@ export default function ConnectBankButton() {
   const onSuccess = useCallback(
     async (publicToken: string | null) => {
       if (resume?.mode !== "reconnect" && publicToken === null) {
+        clearResume();
+        discardFlow();
+        cleanOAuthUrl();
         setError("Bank connection did not return a public token.");
         return;
       }
@@ -122,6 +118,9 @@ export default function ConnectBankButton() {
         cleanOAuthUrl();
         router.refresh();
       } catch (err) {
+        clearResume();
+        discardFlow();
+        cleanOAuthUrl();
         setError(err instanceof Error ? err.message : "Error");
       } finally {
         setBusy(false);
@@ -139,26 +138,11 @@ export default function ConnectBankButton() {
     cleanOAuthUrl();
   }, [discardFlow, cleanOAuthUrl]);
 
-  const { open, ready } = usePlaidLink({
-    token: linkToken,
-    receivedRedirectUri: receivedRedirectUri ?? undefined,
-    onSuccess: (public_token) => onSuccess(public_token),
-    onExit: () => onExit(),
-  });
-
   // Mint the link token on click instead of on mount. Reusing an already-issued
   // token keeps a second click from spending another Plaid call.
   const startConnect = useCallback(async () => {
     setError(null);
-    if (linkToken) {
-      // Already issued: open now if Link is ready, otherwise let the effect
-      // pick it up. Either way, no second Plaid call.
-      if (ready) open();
-      else wantsOpenRef.current = true;
-      return;
-    }
-
-    wantsOpenRef.current = true;
+    if (linkToken) return;
     setBusy(true);
     try {
       const res = await fetch("/api/plaid/link-token", { method: "POST" });
@@ -169,26 +153,28 @@ export default function ConnectBankButton() {
       setResume(next);
       setLinkToken(json.link_token);
     } catch (err) {
-      wantsOpenRef.current = false;
+      clearResume();
+      setLinkToken(null);
       setError(err instanceof Error ? err.message : "Error");
     } finally {
       setBusy(false);
     }
-  }, [linkToken, ready, open]);
-
-  // Open Link as soon as it is ready, but only because the user clicked or an
-  // OAuth bounce is resuming the handshake. Clearing the intent first stops a
-  // later re-render from reopening Link behind the user's back.
-  useEffect(() => {
-    if (!wantsOpenRef.current || !ready || !linkToken) return;
-    wantsOpenRef.current = false;
-    open();
-  }, [ready, linkToken, open]);
+  }, [linkToken]);
 
   return (
     <div className="inline-flex flex-col gap-1">
-      <Button onClick={startConnect} disabled={busy} loading={busy}>
-        {busy ? "Connecting..." : "Connect a bank"}
+      <PlaidLinkLauncher
+        token={linkToken}
+        receivedRedirectUri={receivedRedirectUri ?? undefined}
+        onSuccess={onSuccess}
+        onExit={onExit}
+      />
+      <Button
+        onClick={startConnect}
+        disabled={busy || Boolean(linkToken)}
+        loading={busy || Boolean(linkToken)}
+      >
+        {busy || linkToken ? "Opening..." : "Connect a bank"}
       </Button>
       {error && <span className="text-xs text-danger">{error}</span>}
     </div>

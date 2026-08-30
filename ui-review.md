@@ -8,7 +8,7 @@ The current PR head also retains the previously reproduced Duplicate Review take
 
 ## Tested target
 
-- Preview: `https://fund-flow-git-feat-register-visual-rollout-v2-navaneethbv.vercel.app`
+- Preview: the review deployment for the tested branch
 - PR: `#134`, branch `feat/register-visual-rollout-v2`
 - Exact tested head: `4d12f6bb3092837ac1e9b1aad8a4b8ba9f07f112`
 - Vercel deployment: `dpl_GszAgHS17ZJAfmZcSa7kU6JY4HYb`

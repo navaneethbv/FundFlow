@@ -56,7 +56,6 @@ describe("recurring-page expandStreamsForMonth", () => {
     status: "MATURE" as const,
     isActive: true,
     accountName: "Checking",
-    isCreditAccount: false,
     firstDate: "2026-01-15",
     lastDate: "2026-06-15",
     predictedNextDate: "2026-07-15",

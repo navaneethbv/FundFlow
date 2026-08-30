@@ -26,6 +26,7 @@ import {
   loadHoldings,
   loadHoldingSnapshots,
   loadInvestmentAccounts,
+  loadInvestmentSyncStatus,
   loadInvestmentTransactions,
 } from "@/lib/investments-data";
 import { createClient } from "@/lib/supabase/server";
@@ -47,16 +48,44 @@ export default async function InvestmentsPage() {
     accountOptions,
     investmentTransactions,
     investmentAccounts,
+    itemStatus,
   ] = await Promise.all([
     loadHoldings(supabase),
     loadHoldingSnapshots(supabase),
     loadHoldingAccountOptions(supabase, user.id),
     loadInvestmentTransactions(supabase),
     loadInvestmentAccounts(supabase, user.id),
+    loadInvestmentSyncStatus(supabase, user.id),
   ]);
 
   const coverage = buildInvestmentAccountCoverage(investmentAccounts, holdings);
   const page = buildInvestmentsPage(holdings, snapshots);
+  const needsAttention = itemStatus.filter(
+    (item) => item.outcome !== null || item.stale,
+  );
+  const syncStatusLabel = (item: (typeof itemStatus)[number]) => {
+    if (item.outcome) return `Last sync: ${item.outcome}`;
+    if (item.stale) return "Stale - no recent holdings sync";
+    return "Up to date";
+  };
+  const itemStatusContent = needsAttention.length > 0 ? (
+    <Panel title="Sync status" eyebrow="Investments">
+      <ul className="space-y-2 text-sm">
+        {needsAttention.map((item) => (
+          <li key={item.plaidItemId} className="flex items-center justify-between gap-2">
+            <span className="min-w-0 truncate font-medium">{item.institutionName}</span>
+            <span className="shrink-0 text-xs text-muted">
+              {syncStatusLabel(item)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-xs text-muted">
+        Holdings are synchronized when the institution provides them. When the provider cannot,
+        account balances are used instead — FundFlow never invents holdings or values.
+      </p>
+    </Panel>
+  ) : null;
   const currency = "USD"; // Households and Plaid both settle on USD today; see lib/format's UNKNOWN_CURRENCY fallback elsewhere.
   const externalFlows = externalFlowsFromTransactions(investmentTransactions);
   const returns = hasSufficientPerformanceData(page.balanceHistory)
@@ -143,6 +172,8 @@ export default async function InvestmentsPage() {
             ) : null
           }
         />
+
+        {itemStatusContent}
 
         {investmentContent}
       </div>

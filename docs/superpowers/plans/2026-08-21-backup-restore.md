@@ -9,7 +9,7 @@
 
 **Tech Stack:** Next.js 16 App Router, React 19, TypeScript, Supabase Postgres, Vitest.
 
-**Spec:** `/Users/navaneethbv/Desktop/Projects/FundFlow/features.md` §5 ("Backup restore path").
+**Spec:** `features.md` §5 ("Backup restore path").
 
 ## Global Constraints
 

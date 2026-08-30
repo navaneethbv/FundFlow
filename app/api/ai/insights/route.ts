@@ -4,7 +4,7 @@ import {
   generateInsightsWithProvider,
   isAiProviderConfigured,
 } from "@/lib/ai-provider";
-import { fetchPrivacySafeRows } from "@/lib/export";
+import { fetchPrivacySafeRows, recentHistoryStart } from "@/lib/export";
 import { errorResponse, requireUser } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { logError } from "@/lib/log";
@@ -18,7 +18,7 @@ export async function POST() {
   try {
     const [{ data: settings }, exportResult] = await Promise.all([
       supabase.from("ai_settings").select("enabled").eq("user_id", user.id).maybeSingle(),
-      fetchPrivacySafeRows(supabase, user.id),
+      fetchPrivacySafeRows(supabase, user.id, { startDate: recentHistoryStart() }),
     ]);
     if (exportResult.allowed === false || settings?.enabled !== true) {
       return NextResponse.json({ insights: [] });

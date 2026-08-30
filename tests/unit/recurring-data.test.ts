@@ -40,6 +40,56 @@ function makeClient(overrides: Record<string, { data?: unknown; error?: unknown 
 }
 
 describe("loadRecurringData", () => {
+  it("loads beyond twenty full pages instead of silently truncating", async () => {
+    const households = Array.from({ length: 20_001 }, (_, index) => ({
+      id: `household-${String(index).padStart(5, "0")}`,
+    }));
+    const client = makeClient({ households: { data: households } });
+
+    const result = await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-07",
+    });
+
+    expect(result.visibleHouseholdIds).toHaveLength(20_001);
+  });
+
+  it("uses deterministic ordering for every paged or bounded large-table read", async () => {
+    const client = makeClient({
+      recurring_stream_transactions: {
+        data: [{ recurring_stream_id: "stream-1", transaction_id: "txn-1" }],
+      },
+      transactions: { data: [{ id: "txn-1", date: "2026-07-15" }] },
+      credit_card_bills: { data: [] },
+    });
+
+    await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-07",
+    });
+
+    for (const table of [
+      "households",
+      "recurring_streams",
+      "manual_recurring_items",
+      "accounts",
+      "recurring_stream_transactions",
+      "transactions",
+      "credit_card_bills",
+    ]) {
+      expect(
+        client.callsOn(table).some((call) => call.method === "order"),
+        `${table} should have an explicit order`,
+      ).toBe(true);
+    }
+    expect(
+      client.callsOn("sync_jobs").filter((call) => call.method === "order"),
+    ).toEqual([
+      { method: "order", args: ["updated_at", { ascending: false }] },
+      { method: "order", args: ["id", { ascending: false }] },
+    ]);
+  });
+
   it("scopes every query to the requesting user in mine scope", async () => {
     const client = makeClient();
     const result = await loadRecurringData(client as never, {
@@ -51,6 +101,20 @@ describe("loadRecurringData", () => {
     expect(result.view.occurrences).toHaveLength(1);
     expect(result.view.occurrences[0]!.merchant).toBe("Netflix");
     expect(result.currency).toBe("USD");
+  });
+
+  it("classifies due dates against the caller's explicit local day", async () => {
+    const client = makeClient();
+    const result = await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-07",
+      today: "2026-07-01",
+    });
+
+    expect(result.view.occurrences[0]).toMatchObject({
+      dueDate: "2026-07-15",
+      status: "upcoming",
+    });
   });
 
   it("falls back to USD when no account resolves a currency code", async () => {
@@ -93,7 +157,7 @@ describe("loadRecurringData", () => {
     expect(result.stale).toBe(true);
   });
 
-  it("marks a stream's occurrences against a credit account in the creditCards bucket", async () => {
+  it("keeps a purchase stream on a credit account in the expenses bucket", async () => {
     const client = makeClient({
       accounts: { data: [{ id: "account-1", name: "Card", type: "credit", subtype: "credit card" }] },
     });
@@ -101,7 +165,8 @@ describe("loadRecurringData", () => {
       userId: "user-1",
       anchorMonth: "2026-07",
     });
-    expect(result.view.totals.creditCards.remaining).toBeGreaterThan(0);
+    expect(result.view.totals.expenses.remaining).toBeGreaterThan(0);
+    expect(result.view.totals.creditCards.remaining).toBe(0);
   });
 
   it("passes category through to the stream input, excluding EXCLUDED_PFC streams from totals (Fix 4)", async () => {

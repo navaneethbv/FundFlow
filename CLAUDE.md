@@ -171,7 +171,7 @@ it will not survive the next install.
 
 ### Issue tracker
 
-Issues are tracked as GitHub issues on `navaneethbv/FundFlow` via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues are tracked as GitHub issues via the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Domain docs
 

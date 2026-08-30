@@ -1,0 +1,312 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const mockLiabilitiesGet = vi.fn();
+vi.mock("@/lib/plaid", () => ({
+  getPlaidClient: () => ({
+    liabilitiesGet: (...args: unknown[]) => mockLiabilitiesGet(...args),
+  }),
+}));
+
+const mockServiceClient = { from: vi.fn() };
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => mockServiceClient,
+}));
+
+const mockDecryptItemTokenAndUpgrade = vi.fn().mockResolvedValue("token");
+vi.mock("@/lib/plaid-service", () => ({
+  decryptItemTokenAndUpgrade: (...args: unknown[]) => mockDecryptItemTokenAndUpgrade(...args),
+}));
+
+const mockLogError = vi.fn();
+vi.mock("@/lib/log", () => ({
+  logError: (...args: unknown[]) => mockLogError(...args),
+}));
+
+import { syncCreditCardLiabilities } from "@/lib/liabilities-sync";
+import type { PlaidItemRow } from "@/lib/types";
+
+const item: PlaidItemRow = {
+  id: "item-db-1",
+  user_id: "user-1",
+  plaid_item_id: "plaid-item-1",
+  institution_id: "inst-1",
+  institution_name: "Chase",
+  access_token_ciphertext: "c",
+  access_token_iv: "iv",
+  access_token_tag: "tag",
+  sync_cursor: null,
+  status: "active",
+  error_code: null,
+};
+
+function billAccountStub({
+  accounts = [{ id: "db-credit-1", plaid_account_id: "plaid-credit-1" }],
+  existingBillAccountIds = [],
+  existingBills,
+}: {
+  accounts?: Array<{ id: string; plaid_account_id: string }>;
+  existingBillAccountIds?: string[];
+  existingBills?: Array<{
+    account_id: string;
+    statement_balance: number | null;
+    minimum_payment: number | null;
+    due_date: string | null;
+  }>;
+} = {}) {
+  const accountQuery = {
+    eq: vi.fn().mockImplementation((column: string) => {
+      if (column === "user_id") {
+        return Promise.resolve({
+          data: accounts,
+          error: null,
+        });
+      }
+      return accountQuery;
+    }),
+  };
+  const select = vi.fn().mockReturnValue(accountQuery);
+  const upsert = vi.fn().mockResolvedValue({ error: null });
+  const billSelectQuery = {
+    eq: vi.fn(),
+    in: vi.fn().mockResolvedValue({
+      data:
+        existingBills ??
+        existingBillAccountIds.map((account_id) => ({ account_id })),
+      error: null,
+    }),
+  };
+  billSelectQuery.eq.mockReturnValue(billSelectQuery);
+  const selectBills = vi.fn().mockReturnValue(billSelectQuery);
+  const billDeleteQuery = {
+    eq: vi.fn(),
+    in: vi.fn().mockResolvedValue({ error: null }),
+  };
+  billDeleteQuery.eq.mockReturnValue(billDeleteQuery);
+  const deleteBills = vi.fn().mockReturnValue(billDeleteQuery);
+  mockServiceClient.from.mockImplementation((table: string) => {
+    if (table === "accounts") return { select };
+    if (table === "credit_card_bills") {
+      return { upsert, select: selectBills, delete: deleteBills };
+    }
+    throw new Error(`Unexpected table ${table}`);
+  });
+  return {
+    upsert,
+    select,
+    accountQuery,
+    selectBills,
+    billSelectQuery,
+    deleteBills,
+    billDeleteQuery,
+  };
+}
+
+describe("syncCreditCardLiabilities", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("upserts statement balance, minimum payment, and due date, scoped to the owner", async () => {
+    const { upsert, select, accountQuery } = billAccountStub();
+    mockLiabilitiesGet.mockResolvedValue({
+      data: {
+        accounts: [{ account_id: "plaid-credit-1" }],
+        liabilities: {
+          credit: [
+            {
+              account_id: "plaid-credit-1",
+              minimum_payment_amount: 25,
+              last_statement_balance: 1200,
+              last_payment_amount: 1200,
+              is_overdue: false,
+            },
+          ],
+        },
+      },
+    });
+
+    const result = await syncCreditCardLiabilities(item);
+    expect(result).toEqual({ outcome: "synced", billsSynced: 1 });
+    const payload = upsert.mock.calls[0]?.[0] as Array<Record<string, unknown>>;
+    expect(payload[0]).toMatchObject({
+      user_id: "user-1",
+      account_id: "db-credit-1",
+      statement_balance: 1200,
+      minimum_payment: 25,
+    });
+    expect(payload[0].due_date).toBeNull();
+    expect(payload[0].sync_timestamp).toBeTruthy();
+    expect(select.mock.calls[0]?.[0]).toBe("id, plaid_account_id");
+    expect(accountQuery.eq).toHaveBeenNthCalledWith(1, "plaid_item_id", "item-db-1");
+    expect(accountQuery.eq).toHaveBeenNthCalledWith(2, "user_id", "user-1");
+  });
+
+  it("maps the due date and treats a missing credit product distinctly", async () => {
+    const { upsert } = billAccountStub();
+    mockLiabilitiesGet.mockResolvedValue({
+      data: {
+        accounts: [{ account_id: "plaid-credit-1" }],
+        liabilities: {
+          credit: [
+            {
+              account_id: "plaid-credit-1",
+              last_statement_balance: 800,
+              last_payment_date: "2026-07-25",
+              next_payment_due_date: "2026-08-25",
+              last_payment_amount: 800,
+              minimum_payment_amount: 20,
+              is_overdue: false,
+            },
+          ],
+        },
+      },
+    });
+    const result = await syncCreditCardLiabilities(item);
+    expect(result.outcome).toBe("synced");
+    const payload = upsert.mock.calls[0]?.[0] as Array<Record<string, unknown>>;
+    expect(payload[0].statement_balance).toBe(800);
+    expect(payload[0].due_date).toBe("2026-08-25");
+  });
+
+  it("preserves known bill values when Plaid omits optional fields", async () => {
+    const { upsert } = billAccountStub({
+      existingBills: [{
+        account_id: "db-credit-1",
+        statement_balance: 750,
+        minimum_payment: 35,
+        due_date: "2026-09-20",
+      }],
+    });
+    mockLiabilitiesGet.mockResolvedValue({
+      data: {
+        liabilities: {
+          credit: [{ account_id: "plaid-credit-1" }],
+        },
+      },
+    });
+
+    await syncCreditCardLiabilities(item);
+
+    expect(upsert.mock.calls[0]?.[0]).toEqual([
+      expect.objectContaining({
+        statement_balance: 750,
+        minimum_payment: 35,
+        due_date: "2026-09-20",
+      }),
+    ]);
+  });
+
+  it("reports product_not_ready distinctly without touching the database", async () => {
+    mockLiabilitiesGet.mockRejectedValue({
+      response: { data: { error_code: "PRODUCT_NOT_READY" } },
+    });
+    const result = await syncCreditCardLiabilities(item);
+    expect(result).toEqual({ outcome: "product_not_ready", billsSynced: 0 });
+    expect(mockServiceClient.from).not.toHaveBeenCalled();
+  });
+
+  it.each(["RATE_LIMIT", "RATE_LIMIT_EXCEEDED"])(
+    "reports %s as a retriable outcome",
+    async (errorCode) => {
+    mockLiabilitiesGet.mockRejectedValue({
+        response: { data: { error_code: errorCode } },
+    });
+    const result = await syncCreditCardLiabilities(item);
+    expect(result.outcome).toBe("rate_limited");
+    },
+  );
+
+  it("rethrows an unclassified provider failure", async () => {
+    const failure = new Error("provider failed");
+    mockLiabilitiesGet.mockRejectedValue(failure);
+
+    await expect(syncCreditCardLiabilities(item)).rejects.toBe(failure);
+  });
+
+  it("fails closed when the owner-scoped account lookup fails", async () => {
+    const { accountQuery } = billAccountStub();
+    accountQuery.eq.mockImplementation((column: string) =>
+      column === "user_id"
+        ? Promise.resolve({ data: null, error: new Error("accounts failed") })
+        : accountQuery,
+    );
+    mockLiabilitiesGet.mockResolvedValue({
+      data: { liabilities: { credit: [] } },
+    });
+
+    await expect(syncCreditCardLiabilities(item)).rejects.toThrow("accounts failed");
+  });
+
+  it("surfaces bill upsert, stale-read, and stale-delete failures", async () => {
+    const upsertFailure = billAccountStub();
+    upsertFailure.upsert.mockResolvedValueOnce({ error: new Error("upsert failed") });
+    mockLiabilitiesGet.mockResolvedValue({
+      data: {
+        liabilities: {
+          credit: [{ account_id: "plaid-credit-1" }],
+        },
+      },
+    });
+    await expect(syncCreditCardLiabilities(item)).rejects.toThrow("upsert failed");
+
+    const readFailure = billAccountStub();
+    readFailure.billSelectQuery.in.mockResolvedValueOnce({
+      data: null,
+      error: new Error("bill read failed"),
+    });
+    mockLiabilitiesGet.mockResolvedValue({
+      data: { liabilities: { credit: [] } },
+    });
+    await expect(syncCreditCardLiabilities(item)).rejects.toThrow("bill read failed");
+
+    const deleteFailure = billAccountStub({
+      existingBillAccountIds: ["db-credit-1"],
+    });
+    deleteFailure.billDeleteQuery.in.mockResolvedValueOnce({
+      error: new Error("bill delete failed"),
+    });
+    await expect(syncCreditCardLiabilities(item)).rejects.toThrow("bill delete failed");
+  });
+
+  it("never invents a bill when no credit liabilities exist", async () => {
+    const { deleteBills, billDeleteQuery } = billAccountStub({
+      existingBillAccountIds: ["db-credit-1"],
+    });
+    mockLiabilitiesGet.mockResolvedValue({
+      data: { accounts: [], liabilities: { credit: [] } },
+    });
+    const result = await syncCreditCardLiabilities(item);
+    expect(result).toEqual({ outcome: "no_liabilities", billsSynced: 0 });
+    expect(deleteBills).toHaveBeenCalledOnce();
+    expect(billDeleteQuery.eq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(billDeleteQuery.in).toHaveBeenCalledWith("account_id", ["db-credit-1"]);
+  });
+
+  it("removes an old bill that is absent from a successful Plaid snapshot", async () => {
+    const { billDeleteQuery } = billAccountStub({
+      accounts: [
+        { id: "db-credit-1", plaid_account_id: "plaid-credit-1" },
+        { id: "db-credit-2", plaid_account_id: "plaid-credit-2" },
+      ],
+      existingBillAccountIds: ["db-credit-1", "db-credit-2"],
+    });
+    mockLiabilitiesGet.mockResolvedValue({
+      data: {
+        accounts: [],
+        liabilities: {
+          credit: [
+            {
+              account_id: "plaid-credit-1",
+              last_statement_balance: 300,
+              minimum_payment_amount: 20,
+            },
+          ],
+        },
+      },
+    });
+
+    await syncCreditCardLiabilities(item);
+
+    expect(billDeleteQuery.in).toHaveBeenCalledWith("account_id", ["db-credit-2"]);
+  });
+});

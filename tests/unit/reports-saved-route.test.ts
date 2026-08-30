@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
-import { DELETE, PATCH, POST, MAX_SAVED_REPORTS } from "@/app/api/reports/saved/route";
+import { DELETE, PATCH, POST } from "@/app/api/reports/saved/route";
+import { MAX_SAVED_REPORTS } from "@/lib/saved-report-constants";
 import { writeAudit } from "@/lib/audit";
 import { requireUser } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";

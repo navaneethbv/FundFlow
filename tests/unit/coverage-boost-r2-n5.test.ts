@@ -41,6 +41,13 @@ vi.mock("@/lib/supabase/service", () => ({
             serviceState.batchUpdatePayload = payload;
             return { eq: () => ({ eq: serviceState.batchUpdate }) };
           },
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                maybeSingle: () => Promise.resolve({ data: { created_at: "2026-08-01T00:00:00Z" }, error: null }),
+              }),
+            }),
+          }),
         };
       }
       throw new Error(`unexpected table ${table}`);
@@ -54,6 +61,17 @@ function postReq(body: unknown): NextRequest {
   return new NextRequest("https://x.local/api/import/commit", {
     method: "POST",
     body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+function ownedBatchClient(
+  seeds: Parameters<typeof clientStub>[0],
+) {
+  return clientStub({
+    import_review_batches: {
+      data: { id: "b1", created_at: "2026-08-01T00:00:00Z" },
+    },
+    ...seeds,
   });
 }
 
@@ -101,7 +119,7 @@ describe("POST /api/import/commit", () => {
   it("returns 404 when the account is not found", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: "u1" },
-      supabase: clientStub({ accounts: { data: null, error: null } }),
+      supabase: ownedBatchClient({ accounts: { data: null, error: null } }),
     });
     const res = await POST(postReq({ batch_id: "b1", account_id: "a1" }));
     expect(res.status).toBe(404);
@@ -111,7 +129,7 @@ describe("POST /api/import/commit", () => {
   it("throws through errorResponse when the rows query fails", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: "u1" },
-      supabase: clientStub({
+      supabase: ownedBatchClient({
         accounts: { data: { id: "a1" }, error: null },
         import_review_rows: { data: null, error: new Error("rows query failed") },
       }),
@@ -121,7 +139,7 @@ describe("POST /api/import/commit", () => {
   });
 
   it("commits approved rows, threading categories and duplicate occurrences", async () => {
-    const client = clientStub({
+    const client = ownedBatchClient({
       accounts: { data: { id: "a1" }, error: null },
       import_review_rows: {
         data: [
@@ -172,7 +190,7 @@ describe("POST /api/import/commit", () => {
   });
 
   it("skips the id filter when no approved_row_ids are given", async () => {
-    const client = clientStub({
+    const client = ownedBatchClient({
       accounts: { data: { id: "a1" }, error: null },
       import_review_rows: {
         data: [
@@ -200,7 +218,7 @@ describe("POST /api/import/commit", () => {
   it("handles null rows as an empty import", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: "u1" },
-      supabase: clientStub({
+      supabase: ownedBatchClient({
         accounts: { data: { id: "a1" }, error: null },
         import_review_rows: { data: null, error: null },
       }),
@@ -214,7 +232,7 @@ describe("POST /api/import/commit", () => {
   it("handles an empty rows array as an empty import", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: "u1" },
-      supabase: clientStub({
+      supabase: ownedBatchClient({
         accounts: { data: { id: "a1" }, error: null },
         import_review_rows: { data: [], error: null },
       }),
@@ -230,7 +248,7 @@ describe("POST /api/import/commit", () => {
     serviceState.upsert = vi.fn().mockResolvedValue({ error: new Error("upsert failed") });
     mockRequireUser.mockResolvedValue({
       user: { id: "u1" },
-      supabase: clientStub({
+      supabase: ownedBatchClient({
         accounts: { data: { id: "a1" }, error: null },
         import_review_rows: {
           data: [
@@ -255,7 +273,7 @@ describe("POST /api/import/commit", () => {
     serviceState.rowsUpdate = vi.fn().mockResolvedValue({ error: new Error("row update failed") });
     mockRequireUser.mockResolvedValue({
       user: { id: "u1" },
-      supabase: clientStub({
+      supabase: ownedBatchClient({
         accounts: { data: { id: "a1" }, error: null },
         import_review_rows: {
           data: [
@@ -280,7 +298,7 @@ describe("POST /api/import/commit", () => {
     serviceState.batchUpdate = vi.fn().mockResolvedValue({ error: new Error("batch update failed") });
     mockRequireUser.mockResolvedValue({
       user: { id: "u1" },
-      supabase: clientStub({
+      supabase: ownedBatchClient({
         accounts: { data: { id: "a1" }, error: null },
         import_review_rows: { data: [], error: null },
       }),
