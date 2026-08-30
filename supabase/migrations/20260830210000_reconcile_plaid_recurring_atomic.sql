@@ -20,7 +20,6 @@ declare
   account_id_value uuid;
   transaction_id_value uuid;
   stream_account_id text;
-  existing_source text;
   stream_count integer;
 begin
   if not exists (
