@@ -16,7 +16,7 @@ describe("buildAccountReconciliation", () => {
           updatedAt: "2026-08-29T10:00:00.000Z",
         },
         anchor: null,
-        transactions: [{ date: "2026-08-28", amount: -500 }],
+        transactionTotalCents: -50000,
         historyComplete: true,
       }),
     ).toMatchObject({ ledgerBalance: null, difference: null, state: "missing_anchor" });
@@ -36,11 +36,7 @@ describe("buildAccountReconciliation", () => {
           updatedAt: "2026-08-29T10:00:00.000Z",
         },
         anchor: { snapshotDate: "2026-08-01", currentBalance: 1000 },
-        transactions: [
-          { date: "2026-08-02", amount: -500 },
-          { date: "2026-08-03", amount: 175 },
-          { date: "2026-08-01", amount: 999 },
-        ],
+        transactionTotalCents: -32500,
         historyComplete: true,
       }),
     ).toMatchObject({ ledgerBalance: 1325, difference: 0, state: "balanced" });
@@ -60,7 +56,7 @@ describe("buildAccountReconciliation", () => {
           updatedAt: "2026-08-29T10:00:00.000Z",
         },
         anchor: { snapshotDate: "2026-08-01", currentBalance: 100 },
-        transactions: [{ date: "2026-08-02", amount: 150 }],
+        transactionTotalCents: 15000,
         historyComplete: true,
       }),
     ).toMatchObject({ ledgerBalance: 250, difference: 0, state: "balanced" });
@@ -80,9 +76,29 @@ describe("buildAccountReconciliation", () => {
           updatedAt: "2026-08-29T10:00:00.000Z",
         },
         anchor: { snapshotDate: "2026-08-01", currentBalance: 100 },
-        transactions: [],
+        transactionTotalCents: 0,
         historyComplete: false,
       }),
     ).toMatchObject({ ledgerBalance: null, difference: null, state: "incomplete_history" });
+  });
+
+  it("keeps cent arithmetic exact across many fractional values", () => {
+    expect(
+      buildAccountReconciliation({
+        account: {
+          id: "checking",
+          plaidItemId: "item-1",
+          name: "Checking",
+          mask: null,
+          type: "depository",
+          subtype: "checking",
+          currentBalance: 99.9,
+          updatedAt: "2026-08-29T10:00:00.000Z",
+        },
+        anchor: { snapshotDate: "2026-08-01", currentBalance: 100 },
+        transactionTotalCents: 10,
+        historyComplete: true,
+      }),
+    ).toMatchObject({ ledgerBalance: 99.9, difference: 0, state: "balanced" });
   });
 });

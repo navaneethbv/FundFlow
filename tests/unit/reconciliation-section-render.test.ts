@@ -31,6 +31,7 @@ describe("ReconciliationSection", () => {
     expect(html).toContain('scope="row"');
     expect(html).toContain('aria-label="Account reconciliation details"');
     expect(html).toContain("2026-07-01 to 2026-08-29");
-    expect(html).toContain("Balance refreshed: 2026-08-29T10:00:00.000Z");
+    expect(html).toContain("Balance refreshed: Aug 29, 2026");
+    expect(html).not.toContain("2026-08-29T10:00:00.000Z");
   });
 });

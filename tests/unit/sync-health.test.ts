@@ -9,8 +9,17 @@ const NOW = new Date("2026-08-29T12:00:00.000Z");
 
 type FakeRow = Record<string, unknown>;
 
-function queryableSupabase(seed: Record<string, FakeRow[]>) {
+function queryableSupabase(
+  seed: Record<string, FakeRow[]>,
+  rpcSeed: Record<string, FakeRow[]> = {},
+) {
+  const rpcCalls: string[] = [];
   return {
+    rpcCalls,
+    rpc(name: string) {
+      rpcCalls.push(name);
+      return Promise.resolve({ data: rpcSeed[name] ?? [], error: null });
+    },
     from(table: string) {
       let rows = [...(seed[table] ?? [])];
       let start = 0;
@@ -221,23 +230,20 @@ describe("loadInstitutionObservability", () => {
           last_error: "no_investment_product",
         },
       ],
-      account_balance_snapshots: [
-        {
-          user_id: "user-1",
-          account_id: "account-1",
-          snapshot_date: "2026-08-01",
-          current_balance: 1000,
-        },
-        {
-          user_id: "user-1",
-          account_id: "account-1",
-          snapshot_date: "2026-07-01",
-          current_balance: 800,
-        },
-      ],
-    transactions: [
+      transactions: [
         { id: "txn-1", user_id: "user-1", account_id: "account-1", date: "2026-08-02", amount: -500 },
         { id: "txn-2", user_id: "user-1", account_id: "account-1", date: "2026-08-03", amount: 175 },
+      ],
+    }, {
+      account_reconciliation_aggregates: [
+        {
+          account_id: "account-1",
+          snapshot_date: "2026-08-01",
+          snapshot_balance_cents: 100000,
+          post_anchor_total_cents: -32500,
+          oldest_transaction_date: "2026-08-02",
+          newest_transaction_date: "2026-08-03",
+        },
       ],
     });
 
@@ -263,5 +269,57 @@ describe("loadInstitutionObservability", () => {
       oldestTransactionDate: "2026-08-02",
       newestTransactionDate: "2026-08-03",
     });
+    expect(supabase.rpcCalls).toEqual(["account_reconciliation_aggregates"]);
+  });
+
+  it("keeps transaction coverage scoped to each account", async () => {
+    const supabase = queryableSupabase({
+      accounts: [
+        {
+          id: "account-1", user_id: "user-1", plaid_item_id: "item-1",
+          name: "Checking", mask: null, type: "depository", subtype: "checking",
+          current_balance: 100, updated_at: "2026-08-29T10:00:00.000Z",
+        },
+        {
+          id: "account-2", user_id: "user-1", plaid_item_id: "item-1",
+          name: "Savings", mask: null, type: "depository", subtype: "savings",
+          current_balance: 200, updated_at: "2026-08-29T10:00:00.000Z",
+        },
+      ],
+      sync_jobs: [],
+      transactions: [
+        { id: "txn-1", user_id: "user-1", account_id: "account-1", date: "2026-01-01" },
+        { id: "txn-2", user_id: "user-1", account_id: "account-2", date: "2026-08-01" },
+      ],
+    }, {
+      account_reconciliation_aggregates: [
+        {
+          account_id: "account-1", snapshot_date: "2026-07-01",
+          snapshot_balance_cents: 10000, post_anchor_total_cents: 0,
+          oldest_transaction_date: "2026-01-01", newest_transaction_date: "2026-01-31",
+        },
+        {
+          account_id: "account-2", snapshot_date: "2026-07-01",
+          snapshot_balance_cents: 20000, post_anchor_total_cents: 0,
+          oldest_transaction_date: "2026-08-01", newest_transaction_date: "2026-08-29",
+        },
+      ],
+    });
+
+    const result = await loadInstitutionObservability(
+      supabase as never,
+      "user-1",
+      [{ id: "item-1", institution_name: "Test Bank", status: "active", error_code: null }],
+      NOW,
+    );
+
+    expect(result.reconciliations.map((row) => [
+      row.accountId,
+      row.oldestTransactionDate,
+      row.newestTransactionDate,
+    ])).toEqual([
+      ["account-1", "2026-01-01", "2026-01-31"],
+      ["account-2", "2026-08-01", "2026-08-29"],
+    ]);
   });
 });
