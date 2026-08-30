@@ -28,6 +28,7 @@ const existing = [
     goal_type: "save_up" as const,
     target_amount: 10000,
     target_date: "2028-06-30",
+    monthly_contribution: 250,
     import_source: "monarch" as const,
     import_ref: "monarch-goal-1",
   },
@@ -47,6 +48,11 @@ describe("parseMonarchGoals", () => {
       allocationAmount: null,
       useEntireBalance: false,
       monthlyContribution: 500,
+      providedFields: {
+        targetAmount: true,
+        targetDate: true,
+        monthlyContribution: true,
+      },
     });
   });
 
@@ -114,6 +120,18 @@ describe("buildGoalImportPlan", () => {
       name: "Emergency Fund",
       existingTarget: 10000,
       incomingTarget: 15000,
+    });
+    expect(plan.rows[0]).toMatchObject({
+      decisionKey: "goal:0",
+      matchedGoalId: "g-1",
+      defaultDecision: "merge",
+      allowedDecisions: ["merge", "replace", "skip"],
+    });
+    expect(plan.rows[1]).toMatchObject({
+      decisionKey: "goal:1",
+      matchedGoalId: null,
+      defaultDecision: "create",
+      allowedDecisions: ["create", "skip"],
     });
   });
 

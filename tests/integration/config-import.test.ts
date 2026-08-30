@@ -77,7 +77,7 @@ suite("config import DB integration", () => {
 
     const goalRes = await POST({
       json: () =>
-        Promise.resolve({ kind: "goal", text: MONARCH_GOALS, mode: "apply", decisions: { "Config Import Fund": "create" } }),
+        Promise.resolve({ kind: "goal", text: MONARCH_GOALS, mode: "apply" }),
     } as never);
     expect(goalRes.status).toBe(200);
 

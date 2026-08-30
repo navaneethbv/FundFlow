@@ -121,7 +121,12 @@ describe("POST /api/import/config", () => {
       expect.objectContaining({
         userId: "user-1",
         action: "budget_config_imported",
-        metadata: expect.objectContaining({ created: ["Rent", "Shopping"] }),
+        metadata: {
+          created_count: 2,
+          updated_count: 0,
+          skipped_count: 0,
+          budget_ids: [],
+        },
       }),
     );
   });
@@ -177,6 +182,7 @@ describe("POST /api/import/config", () => {
             goal_type: "save_up",
             target_amount: 10000,
             target_date: "2028-06-30",
+            monthly_contribution: 250,
             import_source: "monarch",
             import_ref: "monarch-goal-1",
           },
@@ -187,21 +193,37 @@ describe("POST /api/import/config", () => {
     const preview = await POST(jsonRequest({ kind: "goal", text: MONARCH_GOALS, mode: "preview" }));
     const previewBody = await preview.json();
     expect(previewBody.plan.conflicts).toHaveLength(1);
+    expect(previewBody.plan.rows[0]).toMatchObject({
+      decisionKey: "goal:0",
+      matchedGoalId: "g-1",
+      defaultDecision: "merge",
+      allowedDecisions: ["merge", "replace", "skip"],
+    });
 
-    const res = await POST(jsonRequest({ kind: "goal", text: MONARCH_GOALS, mode: "apply", decisions: { "Emergency Fund": "merge" } }));
+    const res = await POST(jsonRequest({ kind: "goal", text: MONARCH_GOALS, mode: "apply" }));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toMatchObject({ ok: true, updated: 1 });
     expect(supabase.scopedToUser("goals", "user-1")).toBe(true);
     expect(mockWriteAudit).toHaveBeenCalledWith(
-      expect.objectContaining({ action: "goal_config_imported" }),
+      {
+        userId: "user-1",
+        action: "goal_config_imported",
+        metadata: {
+          created_count: 0,
+          updated_count: 1,
+          skipped_count: 0,
+          goal_ids: ["g-1"],
+          allocation_ids: [],
+        },
+      },
     );
   });
 
-  it("creates a goal when no match exists", async () => {
+  it("creates an unmatched goal by default", async () => {
     const supabase = clientStub({ goals: { data: [] } });
     mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase });
-    const res = await POST(jsonRequest({ kind: "goal", text: MONARCH_GOALS, mode: "apply", decisions: { "Emergency Fund": "create" } }));
+    const res = await POST(jsonRequest({ kind: "goal", text: MONARCH_GOALS, mode: "apply" }));
     const body = await res.json();
     expect(body).toMatchObject({ ok: true, created: 1 });
     const inserted = supabase.writtenTo("goals") as Record<string, unknown>;
@@ -222,6 +244,7 @@ describe("POST /api/import/config", () => {
           goal_type: "save_up",
           target_amount: 10000,
           target_date: null,
+          monthly_contribution: null,
           import_source: "monarch",
           import_ref: "monarch-goal-1",
         }],
@@ -234,7 +257,7 @@ describe("POST /api/import/config", () => {
       kind: "goal",
       text: MONARCH_GOAL_WITH_ALLOCATION,
       mode: "apply",
-      decisions: { "monarch-goal-1": "merge" },
+      decisions: { "goal:0": "merge" },
     }));
     expect(res.status).toBe(200);
     expect(supabase.scopedToUser("accounts", "user-1")).toBe(true);
@@ -253,7 +276,7 @@ describe("POST /api/import/config", () => {
       kind: "goal",
       text: MONARCH_GOAL_WITH_ALLOCATION,
       mode: "apply",
-      decisions: { "monarch-goal-1": "create" },
+      decisions: { "goal:0": "create" },
     }));
     expect(res.status).toBe(400);
     expect(supabase.writtenTo("goals")).toBeUndefined();
@@ -266,7 +289,7 @@ describe("POST /api/import/config", () => {
       kind: "goal",
       text: JSON.stringify({ goals: [{ name: "Trip", target_amount: 100, allocation_amount: 50 }] }),
       mode: "apply",
-      decisions: { Trip: "create" },
+      decisions: { "goal:0": "create" },
     }));
     expect(missingAccountResponse.status).toBe(400);
 
@@ -282,7 +305,7 @@ describe("POST /api/import/config", () => {
       kind: "goal",
       text: MONARCH_GOAL_WITH_ALLOCATION,
       mode: "apply",
-      decisions: { "monarch-goal-1": "create" },
+      decisions: { "goal:0": "create" },
     }));
     expect(ambiguousResponse.status).toBe(400);
   });
@@ -296,6 +319,7 @@ describe("POST /api/import/config", () => {
           goal_type: "pay_down",
           target_amount: 3000,
           target_date: null,
+          monthly_contribution: null,
           import_source: "monarch",
           import_ref: "monarch-goal-1",
         }],
@@ -308,7 +332,7 @@ describe("POST /api/import/config", () => {
       kind: "goal",
       text: JSON.stringify({ goals: [{ id: "monarch-goal-1", name: "Card Payoff", type: "pay_down", target_amount: 3000, account_name: "Card", use_entire_balance: true }] }),
       mode: "apply",
-      decisions: { "monarch-goal-1": "merge" },
+      decisions: { "goal:0": "merge" },
     }));
     expect(res.status).toBe(200);
     expect(supabase.callsOnRpc("set_goal_allocation")).toContainEqual([{
@@ -323,17 +347,112 @@ describe("POST /api/import/config", () => {
     }));
   });
 
-  it("does not invent a target amount for a goal with incomplete source data", async () => {
+  it("fails closed when an unmatched goal has no schema-valid target amount", async () => {
     const supabase = clientStub({ goals: { data: [] } });
     mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase });
     const res = await POST(jsonRequest({
       kind: "goal",
       text: JSON.stringify({ goals: [{ name: "Unspecified goal", type: "save_up" }] }),
       mode: "apply",
-      decisions: { "Unspecified goal": "create" },
     }));
-    expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ ok: true, created: 0, skipped: 1 });
+    expect(res.status).toBe(400);
     expect(supabase.writtenTo("goals")).toBeUndefined();
+  });
+
+  it("rejects invalid goal decisions before writing", async () => {
+    const unmatched = clientStub({ goals: { data: [] } });
+    mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase: unmatched });
+    for (const decision of ["merge", "replace"]) {
+      const response = await POST(jsonRequest({
+        kind: "goal",
+        text: MONARCH_GOALS,
+        mode: "apply",
+        decisions: { "goal:0": decision },
+      }));
+      expect(response.status).toBe(400);
+    }
+    expect(unmatched.writtenTo("goals")).toBeUndefined();
+
+    const matched = clientStub({
+      goals: { data: [{
+        id: "g-1",
+        name: "Emergency Fund",
+        goal_type: "save_up",
+        target_amount: 10000,
+        target_date: null,
+        monthly_contribution: null,
+        import_source: "monarch",
+        import_ref: "monarch-goal-1",
+      }] },
+    });
+    mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase: matched });
+    const createMatched = await POST(jsonRequest({
+      kind: "goal",
+      text: MONARCH_GOALS,
+      mode: "apply",
+      decisions: { "goal:0": "create" },
+    }));
+    expect(createMatched.status).toBe(400);
+
+    const nameKeyed = await POST(jsonRequest({
+      kind: "goal",
+      text: MONARCH_GOALS,
+      mode: "apply",
+      decisions: { "Emergency Fund": "merge" },
+    }));
+    expect(nameKeyed.status).toBe(400);
+  });
+
+  it("allows skip for matched and unmatched goals", async () => {
+    const unmatched = clientStub({ goals: { data: [] } });
+    mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase: unmatched });
+    const response = await POST(jsonRequest({
+      kind: "goal",
+      text: MONARCH_GOALS,
+      mode: "apply",
+      decisions: { "goal:0": "skip" },
+    }));
+    expect(await response.json()).toMatchObject({ ok: true, skipped: 1 });
+    expect(unmatched.writtenTo("goals")).toBeUndefined();
+  });
+
+  it("merge preserves omitted fields while replace clears nullable fields", async () => {
+    const existingGoal = {
+      id: "g-1",
+      name: "Emergency Fund",
+      goal_type: "save_up",
+      target_amount: 10000,
+      target_date: "2028-06-30",
+      monthly_contribution: 250,
+      import_source: "monarch",
+      import_ref: "monarch-goal-1",
+    };
+    const text = JSON.stringify({ goals: [{
+      id: "monarch-goal-1",
+      name: "Emergency Fund",
+      type: "save_up",
+    }] });
+
+    const mergeClient = clientStub({ goals: { data: [existingGoal] } });
+    mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase: mergeClient });
+    expect((await POST(jsonRequest({ kind: "goal", text, mode: "apply" }))).status).toBe(200);
+    const mergePayload = mergeClient.writtenTo("goals") as Record<string, unknown>;
+    expect(mergePayload).not.toHaveProperty("target_amount");
+    expect(mergePayload).not.toHaveProperty("target_date");
+    expect(mergePayload).not.toHaveProperty("monthly_contribution");
+
+    const replaceClient = clientStub({ goals: { data: [existingGoal] } });
+    mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase: replaceClient });
+    expect((await POST(jsonRequest({
+      kind: "goal",
+      text,
+      mode: "apply",
+      decisions: { "goal:0": "replace" },
+    }))).status).toBe(200);
+    expect(replaceClient.writtenTo("goals")).toMatchObject({
+      target_amount: 10000,
+      target_date: null,
+      monthly_contribution: null,
+    });
   });
 });
