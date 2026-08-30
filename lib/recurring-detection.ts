@@ -202,7 +202,7 @@ function groupKeyFor(transaction: RecurringDetectionTransaction): string {
  */
 function buildMerchantGroups(
   transactions: readonly RecurringDetectionTransaction[],
-): Map<string, MerchantGroup[]> {
+): Map<string, Map<string, MerchantGroup>> {
   const partitions = new Map<string, Map<string, MerchantGroup>>();
   for (const transaction of transactions) {
     if (transaction.amount <= 0) continue;
