@@ -16,6 +16,7 @@ import { dateKeyInTimezone } from "@/lib/report-period";
 import { serializeFinancialScope } from "@/lib/financial-scope";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { firstSearchParam } from "@/lib/search-params";
+import { logError } from "@/lib/log";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -79,8 +80,11 @@ export default async function RecurringPage({
     .select("timezone")
     .eq("id", user.id)
     .maybeSingle();
-  if (profileError) throw profileError;
-  const today = dateKeyInTimezone(new Date(), profile?.timezone);
+  if (profileError) logError("recurring.profile-timezone", profileError);
+  const today = dateKeyInTimezone(
+    new Date(),
+    profileError ? null : profile?.timezone,
+  );
   const currentMonth = today.slice(0, 7);
   const rawMonth = firstSearchParam(params.month);
   const month =

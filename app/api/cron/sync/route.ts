@@ -101,8 +101,11 @@ async function syncUser(
     .select("timezone")
     .eq("id", userId)
     .maybeSingle();
-  if (profileError) throw profileError;
-  const today = dateKeyInTimezone(new Date(), profile?.timezone);
+  if (profileError) logError("cron.sync.profile-timezone", profileError);
+  const today = dateKeyInTimezone(
+    new Date(),
+    profileError ? null : profile?.timezone,
+  );
   await syncAllForUser(userId);
   await runOptionalSync("cron.sync.token-rotation", () => rotateStaleItemTokens(userId));
   if (isFeatureEnabled("investmentsPage")) {

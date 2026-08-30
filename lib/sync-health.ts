@@ -256,9 +256,17 @@ function toReconciliationAccount(account: AccountRow): ReconciliationAccount {
 async function loadReconciliationAggregates(
   supabase: SupabaseClient,
 ): Promise<ReconciliationAggregateRow[]> {
-  const { data, error } = await supabase.rpc("account_reconciliation_aggregates");
-  if (error) throw error;
-  return (data ?? []) as ReconciliationAggregateRow[];
+  const rows: ReconciliationAggregateRow[] = [];
+  for (let page = 0; ; page += 1) {
+    const from = page * PAGE_SIZE;
+    const { data, error } = await supabase
+      .rpc("account_reconciliation_aggregates")
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    const batch = (data ?? []) as ReconciliationAggregateRow[];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) return rows;
+  }
 }
 
 export async function loadInstitutionObservability(
@@ -336,7 +344,9 @@ export async function loadInstitutionObservability(
     const aggregate = aggregateByAccount.get(account.id);
     const snapshotBalanceCents = Number(aggregate?.snapshot_balance_cents);
     const transactionTotalCents = Number(aggregate?.post_anchor_total_cents ?? 0);
-    const anchor = aggregate?.snapshot_date && Number.isFinite(snapshotBalanceCents)
+    const anchor = aggregate?.snapshot_date &&
+      aggregate.snapshot_balance_cents !== null &&
+      Number.isFinite(snapshotBalanceCents)
       ? {
           snapshotDate: aggregate.snapshot_date,
           currentBalance: snapshotBalanceCents / 100,
