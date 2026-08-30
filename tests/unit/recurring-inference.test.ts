@@ -535,12 +535,12 @@ describe("recurring inference defensive branches", () => {
 
   it("rejects atomic writer results that are missing or malformed", async () => {
     mockServiceClient = makeQueryClient({ accounts: [], transactions: [], recurring_streams: [], recurring_stream_transactions: [] });
-    mockServiceClient.rpc.mockResolvedValueOnce({ data: null, error: null });
+    mockServiceClient.rpc.mockResolvedValueOnce({ data: null, error: null } as never);
     await expect(refreshInferredRecurringForItem(item(), { today: "2026-08-30" })).rejects.toThrow(
       "recurring_reconciliation_result_invalid",
     );
 
-    mockServiceClient.rpc.mockResolvedValueOnce({ data: { active: "many", added: 0, deactivated: 0, deduplicated: 0 }, error: null });
+    mockServiceClient.rpc.mockResolvedValueOnce({ data: { active: "many", added: 0, deactivated: 0, deduplicated: 0 }, error: null } as never);
     await expect(refreshInferredRecurringForItem(item(), { today: "2026-08-30" })).rejects.toThrow(
       "recurring_reconciliation_result_invalid",
     );
