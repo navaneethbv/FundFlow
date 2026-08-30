@@ -340,6 +340,56 @@ describe("lib/sync", () => {
       );
     });
 
+    it("discards stale bounded Repair progress before a routine sync", async () => {
+      const itemWithRepairProgress: PlaidItemRow = {
+        ...dummyItem,
+        repair_sync_cursor: "repair-cursor-8",
+        repair_sync_started_at: "2026-08-30T12:00:00.000Z",
+      };
+      mockTransactionsSync.mockResolvedValueOnce({
+        data: {
+          added: [],
+          modified: [],
+          removed: [],
+          accounts: [],
+          next_cursor: dummyItem.sync_cursor,
+          has_more: false,
+        },
+      });
+
+      await syncItemTransactions(itemWithRepairProgress);
+
+      expect(mockClearItemRepairCursor).toHaveBeenCalledTimes(2);
+      expect(mockClearItemRepairCursor).toHaveBeenCalledWith(
+        "user-1",
+        "item-db-1",
+      );
+      expect(mockTransactionsSync).toHaveBeenCalledWith({
+        access_token: "access-token-123",
+        cursor: "cursor-0",
+      });
+      expect(mockCompleteItemCursor).not.toHaveBeenCalled();
+    });
+
+    it("rejects has_more without a resumable next cursor", async () => {
+      mockTransactionsSync.mockResolvedValueOnce({
+        data: {
+          added: [],
+          modified: [],
+          removed: [],
+          accounts: [],
+          next_cursor: "",
+          has_more: true,
+        },
+      });
+
+      await expect(syncItemTransactions(dummyItem)).rejects.toThrow(
+        "Plaid returned an empty next cursor",
+      );
+      expect(mockCompleteItemCursor).not.toHaveBeenCalled();
+      expect(mockUpdateItemRepairCursor).not.toHaveBeenCalled();
+    });
+
     it("falls back to defaults for alert thresholds and merchant names", async () => {
       mockTransactionsSync.mockResolvedValueOnce({
         data: {

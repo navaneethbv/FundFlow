@@ -279,4 +279,38 @@ describe("backfillItemTransactions (bounded repair backfill)", () => {
     );
     expect(mockCompleteItemCursor).not.toHaveBeenCalled();
   });
+
+  it("falls back to the committed cursor when partial Repair state has no cursor", async () => {
+    mockTransactionsSync.mockResolvedValueOnce({
+      data: {
+        added: [],
+        modified: [],
+        removed: [],
+        accounts: [],
+        next_cursor: "cursor-final",
+        has_more: false,
+      },
+    });
+    const interruptedRepairItem: PlaidItemRow = {
+      ...dummyItem,
+      sync_cursor: "committed-cursor",
+      repair_sync_cursor: null,
+      repair_sync_started_at: "2026-08-30T12:00:00.000Z",
+    };
+
+    const result = await backfillItemTransactions(interruptedRepairItem, {
+      maxPages: 2,
+    });
+
+    expect(result.completed).toBe(true);
+    expect(mockTransactionsSync).toHaveBeenCalledWith({
+      access_token: "access-token-123",
+      cursor: "committed-cursor",
+    });
+    expect(mockCompleteItemCursor).toHaveBeenCalledWith(
+      "user-1",
+      "item-db-1",
+      "cursor-final",
+    );
+  });
 });
