@@ -17,6 +17,7 @@ import {
   type RecurringStreamInput,
   type RecurringStreamStatus,
 } from "@/lib/recurring-page";
+import { localDateKey } from "@/lib/format-date";
 
 const PAGE_SIZE = 1_000;
 
@@ -235,6 +236,7 @@ export async function loadRecurringData(
     anchorMonth: string;
     rawScope?: string | string[];
     now?: Date;
+    today?: string;
   },
 ): Promise<RecurringLoadResult> {
   const householdRows = await loadPagedRows<{ id: string }>(
@@ -408,6 +410,7 @@ export async function loadRecurringData(
     dueDate: bill.due_date,
   }));
   const creditCardBucket = buildCreditCardBucket(creditBills, input.anchorMonth);
+  const today = input.today ?? localDateKey(input.now ?? new Date());
 
   return {
     view: {
@@ -415,14 +418,14 @@ export async function loadRecurringData(
         streamInputs,
         manualInputs,
         input.anchorMonth,
-        (input.now ?? new Date()).toISOString().slice(0, 10),
+        today,
       ),
       totals: {
         ...expandStreamsForMonth(
           streamInputs,
           manualInputs,
           input.anchorMonth,
-          (input.now ?? new Date()).toISOString().slice(0, 10),
+          today,
         ).totals,
         creditCards: creditCardBucket,
       },

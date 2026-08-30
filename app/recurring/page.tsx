@@ -11,8 +11,8 @@ import SegmentedControl from "@/components/ui/SegmentedControl";
 import ButtonLink from "@/components/ui/ButtonLink";
 import { ChevronLeft, ChevronRight } from "@/components/ui/icons";
 import { formatMonth } from "@/lib/format";
-import { localDateKey, localMonthKey } from "@/lib/format-date";
 import { loadRecurringData } from "@/lib/recurring-data";
+import { dateKeyInTimezone } from "@/lib/report-period";
 import { serializeFinancialScope } from "@/lib/financial-scope";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { firstSearchParam } from "@/lib/search-params";
@@ -74,8 +74,14 @@ export default async function RecurringPage({
   } = await supabase.auth.getUser();
   if (!user) notFound();
 
-  const currentMonth = localMonthKey();
-  const today = localDateKey();
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("timezone")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (profileError) throw profileError;
+  const today = dateKeyInTimezone(new Date(), profile?.timezone);
+  const currentMonth = today.slice(0, 7);
   const rawMonth = firstSearchParam(params.month);
   const month =
     rawMonth && MONTH_REGEX.test(rawMonth) ? rawMonth : currentMonth;
@@ -86,6 +92,7 @@ export default async function RecurringPage({
     userId: user.id,
     anchorMonth: month,
     rawScope: params.scope,
+    today,
   });
   const scope = serializeFinancialScope(loaded.scope);
   const baseLink = { month, scope };
