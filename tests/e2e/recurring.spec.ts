@@ -425,3 +425,219 @@ test.describe.serial("Phase 5: recurring page", () => {
     ).toBeFocused();
   });
 });
+
+/**
+ * Hybrid recurring detection acceptance journey.
+ *
+ * Reproduces the defect where a recurring pattern present in FundFlow's own
+ * ledger but absent from Plaid's /transactions/recurring/get response never
+ * appeared on the Recurring page. The fixture item is connected through the
+ * product's own Link token + exchange endpoints using a real Plaid sandbox
+ * public token, because a hand-written access token makes the transaction
+ * sync fail, which marks the item `error`, which drops it from
+ * `listActiveItems` - so inference would be skipped for the very item under
+ * test.
+ *
+ * This suite therefore requires PLAID_ENV=sandbox with a matching sandbox
+ * secret; the local .env.local points PLAID_ENV at production, so it
+ * self-skips rather than issuing sandbox calls with a production secret.
+ */
+test.describe.serial("Hybrid recurring detection", () => {
+  const SANDBOX_ON =
+    process.env.PLAID_ENV === "sandbox" &&
+    Boolean(process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET);
+  test.skip(
+    !RUN || !SANDBOX_ON,
+    "Supabase credentials plus PLAID_ENV=sandbox with a matching sandbox secret are required",
+  );
+  test.setTimeout(240_000);
+
+  const inferredMerchant = "E2E LOCAL RECURRING 130";
+  const admin = () =>
+    createClient(SUPABASE_URL!, SUPABASE_SECRET_KEY!, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+  let userId = "";
+  let userEmail = "";
+  let localAdmin: SupabaseClient;
+
+  /** Monthly dates ending today, with the day clamped to 28 so the adjacent
+   *  gaps stay inside the monthly 26-35 day window in every month. */
+  function monthlyDates(): string[] {
+    const now = new Date();
+    const day = Math.min(now.getUTCDate(), 28);
+    return [2, 1, 0].map((monthsBack) => {
+      const date = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - monthsBack, day),
+      );
+      return date.toISOString().slice(0, 10);
+    });
+  }
+
+  async function syncThroughProduct(page: Page) {
+    const response = await page.request.post("/api/plaid/sync");
+    expect(response.ok()).toBeTruthy();
+  }
+
+  async function insertFixtureTransaction(
+    supabase: SupabaseClient,
+    accountId: string,
+    date: string,
+    amount: number,
+  ) {
+    const { error } = await supabase.from("transactions").insert({
+      user_id: userId,
+      account_id: accountId,
+      plaid_transaction_id: `e2e-inferred-${stamp}-${date}-${amount}`,
+      date,
+      amount,
+      name: inferredMerchant,
+      merchant_name: inferredMerchant,
+      pfc_primary: "GENERAL_MERCHANDISE",
+      pfc_detailed: "GENERAL_MERCHANDISE_OTHER",
+      payment_channel: "online",
+      pending: false,
+    });
+    if (error) throw error;
+  }
+
+  async function inferredStreamRows() {
+    const { data } = await localAdmin
+      .from("recurring_streams")
+      .select("stream_id, is_active, last_amount, average_amount, reviewed_at, dismissed_at, user_amount, detection_evidence, source")
+      .eq("user_id", userId)
+      .eq("merchant_name", inferredMerchant)
+      .like("stream_id", "inferred:%");
+    return data ?? [];
+  }
+
+  test.afterAll(async () => {
+    if (userId && localAdmin) await localAdmin.auth.admin.deleteUser(userId);
+  });
+
+  test("infers a monthly stream when Plaid omits it", async ({ page }) => {
+    localAdmin = admin();
+    userEmail = `recurring-inferred-e2e-${stamp}@example.com`;
+
+    // Throwaway user through the admin client, then sign in through the UI.
+    const { data: user, error: userError } = await localAdmin.auth.admin.createUser({
+      email: userEmail,
+      password,
+      email_confirm: true,
+    });
+    if (userError) throw userError;
+    userId = user.user.id;
+
+    await page.goto("/login");
+    await page.getByPlaceholder("you@example.com").fill(userEmail);
+    await page.getByPlaceholder("Password").fill(password);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
+
+    // Connect the fixture item through the product's own Link flow.
+    const linkTokenResponse = await page.request.post("/api/plaid/link-token");
+    expect(linkTokenResponse.ok()).toBeTruthy();
+    const { link_token: linkToken } = await linkTokenResponse.json();
+    expect(link_token(linkToken)).toBeTruthy();
+
+    const sandboxResponse = await fetch("https://sandbox.plaid.com/sandbox/public_token/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_id: process.env.PLAID_CLIENT_ID,
+        secret: process.env.PLAID_SECRET,
+        institution_id: "ins_109508",
+        initial_products: ["transactions"],
+      }),
+    });
+    expect(sandboxResponse.ok).toBe(true);
+    const { public_token: publicToken } = (await sandboxResponse.json()) as {
+      public_token?: string;
+    };
+    expect(publicToken).toBeTruthy();
+
+    const exchangeResponse = await page.request.post("/api/plaid/exchange", {
+      data: { public_token: publicToken, link_token: linkToken },
+    });
+    expect(exchangeResponse.ok()).toBeTruthy();
+
+    // First sync: creates the local account rows for the item.
+    await syncThroughProduct(page);
+    const { data: accounts, error: accountsError } = await localAdmin
+      .from("accounts")
+      .select("id")
+      .eq("user_id", userId);
+    if (accountsError) throw accountsError;
+    expect(accounts).toHaveLength(1);
+    const accountId = accounts![0]!.id as string;
+
+    // Seed the qualifying monthly series the ledger should detect on its own.
+    const dates = monthlyDates();
+    for (const date of dates) {
+      await insertFixtureTransaction(localAdmin, accountId, date, 24);
+    }
+
+    // Second sync: the hybrid path persists the inferred stream.
+    await syncThroughProduct(page);
+
+    await page.goto("/recurring?tab=manage");
+    const manageRow = page.locator("li").filter({ hasText: inferredMerchant });
+    await expect(manageRow).toBeVisible();
+    await expect(manageRow.getByText("Detected from 3 transactions")).toBeVisible();
+
+    // The inferred occurrence renders with its cadence label and amount in
+    // the current month's view (today is always inside it).
+    await page.goto("/recurring");
+    const upcomingRow = page.locator("tr").filter({ hasText: inferredMerchant });
+    await expect(upcomingRow.getByText("Every month", { exact: true })).toBeVisible();
+    await expect(upcomingRow.getByText("$24.00", { exact: true })).toBeVisible();
+
+    // Lifecycle: confirm, correct the amount, reload, dismiss, restore.
+    await page.goto("/recurring?tab=manage");
+    await manageRow.getByRole("button", { name: "Confirm" }).click();
+    await expect(manageRow.getByRole("button", { name: "Confirm" })).toHaveCount(0);
+
+    const amountInput = manageRow.getByRole("spinbutton", {
+      name: `Expected amount for ${inferredMerchant}`,
+    });
+    await amountInput.fill("55");
+    await amountInput.blur();
+    await page.waitForResponse(
+      (response) =>
+        response.request().method() === "PATCH" &&
+        response.url().includes("/api/recurring") &&
+        response.ok(),
+    );
+
+    await page.reload();
+    await expect(manageRow).toBeVisible();
+    await expect(manageRow.getByText("Detected from 3 transactions")).toBeVisible();
+
+    await manageRow.getByRole("button", { name: "Not recurring" }).click();
+    await expect(page.getByText("Detected from 3 transactions")).toHaveCount(0);
+    await manageRow.getByRole("button", { name: "Restore" }).click();
+    await expect(manageRow.getByText("Detected from 3 transactions")).toBeVisible();
+
+    // A newest higher amount stays in the same stream (price step) after
+    // another sync: same identity, updated amounts, user state preserved.
+    await insertFixtureTransaction(localAdmin, accountId, dates[2]!, 30.99);
+    await syncThroughProduct(page);
+
+    const rows = await inferredStreamRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.is_active).toBe(true);
+    expect(rows[0]!.last_amount).toBe(30.99);
+    expect(rows[0]!.average_amount).toBe(30.99);
+    expect(rows[0]!.detection_evidence).toMatchObject({
+      occurrenceCount: 4,
+      amountPattern: "price_step",
+    });
+    expect(rows[0]!.reviewed_at).not.toBeNull();
+    expect(rows[0]!.user_amount).toBe(55);
+  });
+});
+
+function link_token(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
