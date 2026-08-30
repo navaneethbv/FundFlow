@@ -162,7 +162,9 @@ export default function LifeEventsPanel({
               <span className="flex shrink-0 items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => editEvent(event)}
+                  onClick={() => {
+                    editEvent(event);
+                  }}
                   className="text-xs text-muted hover:text-foreground"
                   aria-label={`Edit ${getEventLabel(event.type)} event`}
                 >

@@ -18,12 +18,18 @@ export interface ConfigPlan {
   plan: BudgetImportPlan | GoalImportPlan;
 }
 
-const GOAL_DECISION_LABELS: Record<GoalImportDecision, string> = {
-  create: "Create",
-  merge: "Merge",
-  replace: "Replace",
-  skip: "Skip",
-};
+function goalDecisionLabel(value: GoalImportDecision): string {
+  switch (value) {
+    case "create":
+      return "Create";
+    case "merge":
+      return "Merge";
+    case "replace":
+      return "Replace";
+    case "skip":
+      return "Skip";
+  }
+}
 
 export function defaultDecisionsForPlan(
   config: ConfigPlan,
@@ -46,7 +52,7 @@ export function goalDecisionOptions(
 ): Array<{ value: GoalImportDecision; label: string }> {
   return row.allowedDecisions.map((value) => ({
     value,
-    label: GOAL_DECISION_LABELS[value],
+    label: goalDecisionLabel(value),
   }));
 }
 

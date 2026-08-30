@@ -1,3 +1,5 @@
+/* tsqllint-disable set-quoted-identifier */
+
 -- Enforce ownership of every account referenced by an authenticated bill
 -- insert. The original insert policy checked only account_id, while the
 -- update policy already enforced this invariant for payment_account_id.
