@@ -102,9 +102,9 @@ export default function RecurringCalendar({
   }
   const focusDay = today.startsWith(month) ? Number(today.slice(8)) : 1;
   const [year, oneBasedMonth] = month.split("-").map(Number);
-  const monthIndex = (oneBasedMonth ?? 1) - 1;
-  const firstOfMonth = new Date(Date.UTC(year ?? 2026, monthIndex, 1));
-  const lastOfMonth = new Date(Date.UTC(year ?? 2026, monthIndex + 1, 0));
+  const monthIndex = oneBasedMonth - 1;
+  const firstOfMonth = new Date(Date.UTC(year, monthIndex, 1));
+  const lastOfMonth = new Date(Date.UTC(year, monthIndex + 1, 0));
   function handleKeyDown(
     day: number,
     event: React.KeyboardEvent<HTMLButtonElement>,

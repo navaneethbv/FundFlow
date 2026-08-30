@@ -40,6 +40,13 @@ interface BudgetApplyResult {
   id: string | null;
 }
 
+function throwIfQueryFailed(
+  error: { message?: string } | null,
+  context: string,
+): void {
+  if (error) throw new Error(`${context}: ${error.message ?? "query failed"}`);
+}
+
 /** "2026-08" + 0 → "2026-08-01" style first-of-month date. */
 function currentMonthFirst(): string {
   const now = new Date();
@@ -159,7 +166,7 @@ async function writeMonthlyPlan(
     },
     { onConflict: "budget_id,month" },
   );
-  if (error) throw error;
+  throwIfQueryFailed(error, "budget period upsert failed");
 }
 
 interface ExistingGoalRow {

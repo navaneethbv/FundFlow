@@ -1,14 +1,10 @@
 import fs from "node:fs";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("account reconciliation aggregate migration", () => {
   it("aggregates exact cents behind an authenticated owner-scoped RPC", () => {
     const migration = fs.readFileSync(
-      path.join(
-        process.cwd(),
-        "supabase/migrations/20260829173000_account_reconciliation_aggregate.sql",
-      ),
+      "supabase/migrations/20260829173000_account_reconciliation_aggregate.sql",
       "utf8",
     );
 
