@@ -99,17 +99,47 @@ export async function syncCreditCardLiabilities(
     ]),
   );
   const itemAccountIds = [...accountIdMap.values()];
+  const { data: existingBills, error: existingBillsError } = itemAccountIds.length
+    ? await supabase
+        .from("credit_card_bills")
+        .select("account_id, statement_balance, minimum_payment, due_date")
+        .eq("user_id", item.user_id)
+        .in("account_id", itemAccountIds)
+    : { data: [], error: null };
+  if (existingBillsError) throw existingBillsError;
+  const existingByAccountId = new Map(
+    (existingBills ?? []).map((bill) => [
+      bill.account_id as string,
+      {
+        statementBalance:
+          bill.statement_balance == null ? null : Number(bill.statement_balance),
+        minimumPayment:
+          bill.minimum_payment == null ? null : Number(bill.minimum_payment),
+        dueDate: (bill.due_date as string | null) ?? null,
+      },
+    ]),
+  );
 
   const rows = credit
     .map((liability) => {
       const accountDbId = liability.account_id ? accountIdMap.get(liability.account_id) : undefined;
       if (!accountDbId) return null;
+      const existing = existingByAccountId.get(accountDbId);
       return {
         user_id: item.user_id,
         account_id: accountDbId,
-        statement_balance: liability.last_statement_balance ?? null,
-        minimum_payment: liability.minimum_payment_amount ?? null,
-        due_date: billDate(liability.next_payment_due_date),
+        statement_balance:
+          liability.last_statement_balance ??
+          existing?.statementBalance ??
+          null,
+        minimum_payment:
+          liability.minimum_payment_amount ??
+          existing?.minimumPayment ??
+          null,
+        due_date:
+          billDate(liability.next_payment_due_date) ??
+          existing?.dueDate ??
+          null,
         payment_account_id: null,
         sync_timestamp: new Date().toISOString(),
       };

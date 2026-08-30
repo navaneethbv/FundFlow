@@ -86,7 +86,8 @@ export async function decryptItemTokenAndUpgrade(
           access_token_iv: enc.iv,
           access_token_tag: enc.tag,
         })
-        .eq("id", item.id);
+        .eq("id", item.id)
+        .eq("user_id", item.user_id);
       if (error) throw error;
     } catch (error) {
       logError("plaid-service.token-rotation", error);

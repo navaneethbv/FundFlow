@@ -141,8 +141,13 @@ describe("lib/plaid-service", () => {
       usedFallbackKey: true,
     });
 
-    const eq = vi.fn().mockResolvedValue({ error: null });
-    const update = vi.fn().mockReturnValue({ eq });
+    const query = {
+      eq: vi.fn(),
+      then: (resolve: (value: { error: null }) => unknown) =>
+        resolve({ error: null }),
+    };
+    query.eq.mockReturnValue(query);
+    const update = vi.fn().mockReturnValue(query);
     mockServiceClient.from.mockReturnValue({ update });
 
     const token = await decryptItemTokenAndUpgrade(dummyItem);
@@ -154,8 +159,8 @@ describe("lib/plaid-service", () => {
         access_token_ciphertext: "cipher-123",
       }),
     );
-    expect(eq).toHaveBeenCalledWith("id", "item-db-1");
-    expect(eq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(query.eq).toHaveBeenCalledWith("id", "item-db-1");
+    expect(query.eq).toHaveBeenCalledWith("user_id", "user-1");
   });
 
   it("decryptItemTokenAndUpgrade logs error if update fails during key rotation", async () => {

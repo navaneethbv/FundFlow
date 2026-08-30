@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isLiabilityAccount } from "@/lib/account-balance";
+import { safeErrorCode } from "@/lib/cursor-health";
 
 const STALE_AFTER_MS = 48 * 60 * 60 * 1000;
 const PAGE_SIZE = 1_000;
@@ -97,24 +98,6 @@ interface ReconciliationTransaction {
   amount: number;
 }
 
-const SAFE_ERROR_CODES = new Set([
-  "ADDITIONAL_CONSENT_REQUIRED",
-  "INSTITUTION_DOWN",
-  "INSTITUTION_NOT_RESPONDING",
-  "INVALID_PRODUCT",
-  "ITEM_LOGIN_REQUIRED",
-  "NO_INVESTMENT_ACCOUNTS",
-  "PENDING_EXPIRATION",
-  "PRODUCT_NOT_READY",
-  "PRODUCTS_NOT_SUPPORTED",
-  "RATE_LIMIT",
-  "RATE_LIMIT_EXCEEDED",
-  "TOKEN_ROTATION_LOST",
-  "no_investment_product",
-  "product_not_ready",
-  "rate_limited",
-]);
-
 const PRODUCT_UNAVAILABLE_CODES = new Set([
   "INVALID_PRODUCT",
   "NO_INVESTMENT_ACCOUNTS",
@@ -123,10 +106,6 @@ const PRODUCT_UNAVAILABLE_CODES = new Set([
 ]);
 
 const RATE_LIMIT_CODES = new Set(["RATE_LIMIT", "RATE_LIMIT_EXCEEDED", "rate_limited"]);
-
-function safeErrorCode(value: string | null): string | null {
-  return value && SAFE_ERROR_CODES.has(value) ? value : null;
-}
 
 function validTimestamp(value: string | null): number | null {
   if (!value) return null;
