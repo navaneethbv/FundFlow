@@ -199,7 +199,7 @@ begin
   select count(*) into stream_count
   from jsonb_array_elements(p_payload->'streams');
   return jsonb_build_object('plaid', stream_count);
-exception when invalid_text_representation or numeric_value_out_of_range or datetime_field_overflow or datetime_field_value_out_of_range then
+exception when invalid_text_representation or numeric_value_out_of_range or datetime_field_overflow or invalid_datetime_format then
   raise exception 'recurring_plaid_payload_invalid' using errcode = '22023';
 end;
 $$;

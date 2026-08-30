@@ -87,9 +87,12 @@ begin
        or jsonb_typeof(coalesce(candidate_row->'detection_evidence', '{}'::jsonb)) is distinct from 'object'
        or not (candidate_row ? 'transaction_ids')
        or jsonb_typeof(candidate_row->'transaction_ids') is distinct from 'array'
-       or case when jsonb_typeof(candidate_row->'transaction_ids') = 'array'
-          then jsonb_array_length(candidate_row->'transaction_ids')
-          else 0 end = 0
+       -- The parentheses are load-bearing: plpgsql ends an IF condition at the
+       -- first top-level THEN, so an unparenthesized CASE ... THEN truncates
+       -- the expression and the function fails to compile.
+       or (case when jsonb_typeof(candidate_row->'transaction_ids') = 'array'
+           then jsonb_array_length(candidate_row->'transaction_ids')
+           else 0 end) = 0
        or not (candidate_row ? 'account_id')
        or jsonb_typeof(candidate_row->'account_id') is distinct from 'string'
        or candidate_row->>'account_id' is null
