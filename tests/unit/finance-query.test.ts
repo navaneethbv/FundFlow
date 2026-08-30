@@ -432,6 +432,12 @@ describe("loadCanonicalProjection", () => {
     expect(result.currencyByAccountId).toEqual(
       new Map([["account-1", "USD"]]),
     );
+    expect(
+      supabase.callsOn("merchant_rules").filter(({ method }) => method === "order"),
+    ).toEqual([
+      { method: "order", args: ["created_at"] },
+      { method: "order", args: ["id"] },
+    ]);
   });
 
   it("filters every Mine dependency by owner and leaves Household visibility to RLS", async () => {

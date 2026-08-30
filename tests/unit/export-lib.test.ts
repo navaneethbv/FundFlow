@@ -36,6 +36,10 @@ function pagedExportClient(seeds: Record<string, ExportSeed>) {
         tableCalls.push({ method: "limit", args });
         return builder;
       },
+      gte(...args: unknown[]) {
+        tableCalls.push({ method: "gte", args });
+        return builder;
+      },
       range(fromIndex: number, toIndex: number) {
         tableCalls.push({ method: "range", args: [fromIndex, toIndex] });
         range = [fromIndex, toIndex];
@@ -170,6 +174,12 @@ describe("lib/export", () => {
         { method: "order", args: ["id", { ascending: false }] },
       ]);
       expect(client.calls.merchant_rules.filter((call) => call.method === "range")).toHaveLength(2);
+      expect(client.calls.merchant_rules.filter((call) => call.method === "order")).toEqual([
+        { method: "order", args: ["created_at"] },
+        { method: "order", args: ["id"] },
+        { method: "order", args: ["created_at"] },
+        { method: "order", args: ["id"] },
+      ]);
       expect(client.calls.category_overrides.filter((call) => call.method === "range")).toHaveLength(2);
     });
 
@@ -281,6 +291,69 @@ describe("lib/export", () => {
             category: "TRANSPORTATION",
           },
         ],
+      });
+    });
+
+    it("applies splits, refund netting, and duplicate exclusion in exports", async () => {
+      const client = pagedExportClient({
+        profiles: { data: { ai_export_enabled: true } },
+        transactions: {
+          data: [
+            { ...transaction(0), id: "split", amount: 100 },
+            { ...transaction(1), id: "charge", amount: 40 },
+            { ...transaction(2), id: "refund", amount: -40 },
+            { ...transaction(3), id: "duplicate", amount: 25 },
+          ],
+        },
+        transaction_annotations: { data: [] },
+        merchant_rules: { data: [] },
+        category_overrides: { data: [] },
+        transaction_splits: {
+          data: [
+            { transaction_id: "split", category: "Needs", amount: 60 },
+            { transaction_id: "split", category: "Wants", amount: 40 },
+          ],
+        },
+        linked_refunds: {
+          data: [{ charge_transaction_id: "charge", refund_transaction_id: "refund" }],
+        },
+        linked_duplicates: {
+          data: [{ excluded_transaction_id: "duplicate" }],
+        },
+      });
+
+      const result = await fetchPrivacySafeRows(client as never, "user-1");
+
+      expect(result.allowed && result.rows).toEqual([
+        expect.objectContaining({ amount: 60, category: "Needs" }),
+        expect.objectContaining({ amount: 40, category: "Wants" }),
+        expect.objectContaining({ amount: 40 }),
+        expect.objectContaining({ amount: -40 }),
+      ]);
+      expect(
+        result.allowed && result.rows.some((row) => row.merchant === "Merchant 3"),
+      ).toBe(false);
+    });
+
+    it("can bound the transaction query before projecting AI history", async () => {
+      const client = pagedExportClient({
+        profiles: { data: { ai_export_enabled: true } },
+        transactions: { data: [transaction(0)] },
+        transaction_annotations: { data: [] },
+        merchant_rules: { data: [] },
+        category_overrides: { data: [] },
+        transaction_splits: { data: [] },
+        linked_refunds: { data: [] },
+        linked_duplicates: { data: [] },
+      });
+
+      await fetchPrivacySafeRows(client as never, "user-1", {
+        startDate: "2026-03-01",
+      });
+
+      expect(client.calls.transactions).toContainEqual({
+        method: "gte",
+        args: ["date", "2026-03-01"],
       });
     });
 
