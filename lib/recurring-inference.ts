@@ -42,23 +42,25 @@ interface TransactionMetadataRow {
   pending: boolean;
 }
 
+type NumericDatabaseValue = number | string | null;
+
 interface RecurringStreamRow {
   id: string;
   user_id: string;
   plaid_item_id: string;
   stream_id: string;
-  stream_type: "inflow" | "outflow" | string | null;
+  stream_type: string | null;
   description: string | null;
   merchant_name: string | null;
-  average_amount: number | string | null;
-  last_amount: number | string | null;
+  average_amount: NumericDatabaseValue;
+  last_amount: NumericDatabaseValue;
   frequency: string | null;
   status: string | null;
   category: string | null;
   is_active: boolean;
   reviewed_at: string | null;
   dismissed_at: string | null;
-  user_amount: number | string | null;
+  user_amount: NumericDatabaseValue;
   account_id: string | null;
   first_date: string | null;
   last_date: string | null;
@@ -197,7 +199,7 @@ function detectionInput(
   return metadata.flatMap((row) => {
     if (row.pending || !accountIds.has(row.account_id)) return [];
     const canonical = bySourceId.get(row.id);
-    if (!canonical || canonical.accountId !== row.account_id || canonical.flow === "transfer") return [];
+    if (canonical?.accountId !== row.account_id || canonical.flow === "transfer") return [];
     const amount = Math.abs(Number(row.amount));
     if (!Number.isFinite(amount) || amount <= 0) return [];
     return [{

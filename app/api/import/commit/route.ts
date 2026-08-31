@@ -478,6 +478,18 @@ async function persistTransactionAnnotations(
   }
 }
 
+async function refreshRecurringAfterConnectedImport(
+  dbRows: ReturnType<typeof buildCommitRows>,
+  userId: string,
+): Promise<void> {
+  if (!dbRows.some((row) => row.account_id)) return;
+  try {
+    await refreshInferredRecurringForUser(userId);
+  } catch (error) {
+    logError("import.commit.recurring", error);
+  }
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -574,13 +586,7 @@ export async function POST(request: NextRequest) {
     // never can: inference is scoped to connected Plaid accounts. The commit is
     // already durable at this point, so a detector failure is logged rather
     // than surfaced as a failed import.
-    if (dbRows.some((row) => row.account_id)) {
-      try {
-        await refreshInferredRecurringForUser(user.id);
-      } catch (error) {
-        logError("import.commit.recurring", error);
-      }
-    }
+    await refreshRecurringAfterConnectedImport(dbRows, user.id);
 
     return NextResponse.json({ ok: true, imported: dbRows.length });
   } catch (error) {

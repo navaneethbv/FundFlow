@@ -90,6 +90,7 @@ const VARIABLE_BILL_CATEGORY_TOKENS = new Set([
   "INTERNET",
   "CABLE",
 ]);
+const REFERENCE_LABELS = new Set(["REF", "ID", "CARD", "ACCT"]);
 
 interface PreparedTransaction extends RecurringDetectionTransaction {
   effectiveDate: string;
@@ -143,19 +144,55 @@ function normalizedText(value: string): string {
   return value.normalize("NFKC").toUpperCase().replace(/[^\p{L}\p{N}]+/gu, " ").replace(/\s+/g, " ").trim();
 }
 
+function isAsciiDigits(value: string, minimumLength: number): boolean {
+  if (value.length < minimumLength) return false;
+  for (const character of value) {
+    if (character < "0" || character > "9") return false;
+  }
+  return true;
+}
+
+function isMaskedNumericToken(value: string): boolean {
+  let maskLength = 0;
+  while (value[maskLength] === "X" || value[maskLength] === "*") maskLength += 1;
+  return maskLength >= 2 && isAsciiDigits(value.slice(maskLength), 2);
+}
+
+function stripMaskedNumericTokens(value: string): string {
+  return value
+    .split(/\s+/u)
+    .filter((token) => !isMaskedNumericToken(token))
+    .join(" ");
+}
+
+function stripLabeledReferenceTokens(value: string): string {
+  const tokens = value.split(/\s+/u);
+  const kept: string[] = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    const next = tokens[index + 1];
+    if (token && next && REFERENCE_LABELS.has(token) && isAsciiDigits(next, 3)) {
+      index += 1;
+      continue;
+    }
+    if (token) kept.push(token);
+  }
+  return kept.join(" ");
+}
+
 /** Returns a conservative identity, retaining meaningful merchant words. */
 export function normalizeRecurringMerchant(value: string): string {
-  return value
+  const normalized = value
     .replace(/[™®]/gu, " ")
     .normalize("NFKC")
     .toUpperCase()
     .replace(/\b\d{4}[-/.]\d{1,2}[-/.]\d{1,2}\b/gu, " ")
     .replace(/\b\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}\b/gu, " ")
-    .replace(/\b(?:REF|ID|CARD|ACCT)\s*#?\s*(?:X{2,}|\*{2,})?\d{3,}\b/gu, " ")
-    .replace(/(?:X{2,}|\*{2,})\d{2,}\b/gu, " ")
+    .replaceAll("#", " ");
+  return stripLabeledReferenceTokens(stripMaskedNumericTokens(normalized)
     .replace(/[\p{P}\p{S}]+/gu, " ")
     .replace(/\s+/g, " ")
-    .trim();
+    .trim());
 }
 
 function hashIdentity(parts: readonly string[]): string {
@@ -286,11 +323,7 @@ function buildCandidate(
     const deviation = Math.abs(dayDifference(previous!.effectiveDate, row.effectiveDate) - cadence.nominalGap);
     return Math.max(maximum, deviation);
   }, 0);
-  const predictedNextDate = cadence.frequency === "WEEKLY"
-    ? addDays(newest.effectiveDate, 7)
-    : cadence.frequency === "BIWEEKLY"
-      ? addDays(newest.effectiveDate, 14)
-      : addMonthsClamped(newest.effectiveDate, cadence.frequency === "MONTHLY" ? 1 : 3);
+  const predictedNextDate = nextDateForCadence(newest.effectiveDate, cadence.frequency);
   const merchantName = newest.merchant.trim() || newest.rawName?.trim() || newest.normalizedMerchant;
   const description = newest.rawName?.trim() || merchantName;
   const category = newest.category ?? newest.detailedCategory ?? oldest.category ?? oldest.detailedCategory ?? null;
@@ -334,14 +367,27 @@ function compareRankedCandidates(a: RankedCandidate, b: RankedCandidate): number
     || a.candidate.transactionIds.join("\u001f").localeCompare(b.candidate.transactionIds.join("\u001f"));
 }
 
-/** Detects stable, local recurring patterns from already-filtered canonical rows. */
-export function detectRecurringCandidates(
+function nextDateForCadence(
+  effectiveDate: string,
+  frequency: DetectedRecurringFrequency,
+): string {
+  switch (frequency) {
+    case "WEEKLY":
+      return addDays(effectiveDate, 7);
+    case "BIWEEKLY":
+      return addDays(effectiveDate, 14);
+    case "MONTHLY":
+      return addMonthsClamped(effectiveDate, 1);
+    case "QUARTERLY":
+      return addMonthsClamped(effectiveDate, 3);
+  }
+}
+
+function prepareTransactions(
   transactions: readonly RecurringDetectionTransaction[],
   today: string,
-): DetectedRecurringCandidate[] {
-  if (!isIsoDate(today)) return [];
-
-  const prepared = transactions
+): PreparedTransaction[] {
+  return transactions
     .filter((row) => row.id && row.userId && row.plaidItemId && row.accountId && row.flow !== undefined)
     .filter((row) => isIsoDate(row.postedDate) && (row.authorizedDate === null || isIsoDate(row.authorizedDate)))
     .filter((row) => row.postedDate <= today && Number.isFinite(row.amount) && row.amount > 0)
@@ -358,64 +404,94 @@ export function detectRecurringCandidates(
     })
     .filter((row): row is PreparedTransaction => row !== null)
     .sort(transactionOrder);
+}
 
+function groupPreparedTransactions(
+  prepared: readonly PreparedTransaction[],
+): PreparedTransaction[][] {
   const uniqueById = new Map<string, PreparedTransaction>();
   for (const row of prepared) {
     if (!uniqueById.has(row.id)) uniqueById.set(row.id, row);
   }
   const groups = new Map<string, PreparedTransaction[]>();
   for (const row of uniqueById.values()) {
-    const group = groups.get(groupKey(row)) ?? [];
+    const key = groupKey(row);
+    const group = groups.get(key) ?? [];
     group.push(row);
-    groups.set(groupKey(row), group);
+    groups.set(key, group);
   }
+  return [...groups.values()];
+}
 
-  const ranked: RankedCandidate[] = [];
-  for (const group of groups.values()) {
-    for (const cadence of CADENCES) {
-      const historyStart = addDays(today, -cadence.historyDays);
-      const inWindow = group.filter((row) => row.effectiveDate >= historyStart && row.effectiveDate <= today);
-      if (inWindow.length < cadence.required) continue;
+function latestCandidateForCadence(
+  group: readonly PreparedTransaction[],
+  cadence: (typeof CADENCES)[number],
+  today: string,
+): RankedCandidate | null {
+  const historyStart = addDays(today, -cadence.historyDays);
+  const inWindow = group.filter((row) => row.effectiveDate >= historyStart && row.effectiveDate <= today);
+  if (inWindow.length < cadence.required) return null;
 
-      let segmentStart = 0;
-      let latestComplete: RankedCandidate | null = null;
-      const considerSegment = (segmentEnd: number) => {
-        let windowStart = segmentStart;
-        while (
-          windowStart < segmentEnd - 1
-          && dayDifference(inWindow[windowStart]!.effectiveDate, inWindow[segmentEnd - 1]!.effectiveDate) > cadence.historyDays
-        ) {
-          windowStart += 1;
-        }
-        const segment = inWindow.slice(windowStart, segmentEnd);
-        if (segment.length < cadence.required) return;
-        const result = buildCandidate(segment, cadence);
-        if (!result) return;
-        const newest = segment.at(-1)!;
-        if (!latestComplete || newest.effectiveDate > latestComplete.latestEffectiveDate) latestComplete = result;
-      };
-      for (let index = 1; index < inWindow.length; index += 1) {
-        const previous = inWindow[index - 1]!;
-        const current = inWindow[index]!;
-        const gap = dayDifference(previous.effectiveDate, current.effectiveDate);
-        if (gap < cadence.minimumGap || gap > cadence.maximumGap) {
-          considerSegment(index);
-          segmentStart = index;
-        }
-      }
-      considerSegment(inWindow.length);
-      if (latestComplete) ranked.push(latestComplete);
+  let segmentStart = 0;
+  let latestComplete: RankedCandidate | null = null;
+  const considerSegment = (segmentEnd: number) => {
+    let windowStart = segmentStart;
+    while (
+      windowStart < segmentEnd - 1
+      && dayDifference(inWindow[windowStart]!.effectiveDate, inWindow[segmentEnd - 1]!.effectiveDate) > cadence.historyDays
+    ) {
+      windowStart += 1;
+    }
+    const segment = inWindow.slice(windowStart, segmentEnd);
+    if (segment.length < cadence.required) return;
+    const result = buildCandidate(segment, cadence);
+    if (!result) return;
+    const newest = segment.at(-1)!;
+    if (!latestComplete || newest.effectiveDate > latestComplete.latestEffectiveDate) latestComplete = result;
+  };
+
+  for (let index = 1; index < inWindow.length; index += 1) {
+    const previous = inWindow[index - 1]!;
+    const current = inWindow[index]!;
+    const gap = dayDifference(previous.effectiveDate, current.effectiveDate);
+    if (gap < cadence.minimumGap || gap > cadence.maximumGap) {
+      considerSegment(index);
+      segmentStart = index;
     }
   }
+  considerSegment(inWindow.length);
+  return latestComplete;
+}
 
-  ranked.sort(compareRankedCandidates);
+function rankedCandidatesForGroup(
+  group: readonly PreparedTransaction[],
+  today: string,
+): RankedCandidate[] {
+  return CADENCES.flatMap((cadence) => {
+    const candidate = latestCandidateForCadence(group, cadence, today);
+    return candidate ? [candidate] : [];
+  });
+}
+
+function selectCandidatesWithoutReusedTransactions(
+  ranked: readonly RankedCandidate[],
+): DetectedRecurringCandidate[] {
   const usedTransactionIds = new Set<string>();
-  return ranked
-    .filter((rankedCandidate) => {
-      const ids = rankedCandidate.candidate.transactionIds;
-      if (ids.some((id) => usedTransactionIds.has(id))) return false;
-      ids.forEach((id) => usedTransactionIds.add(id));
-      return true;
-    })
-    .map((rankedCandidate) => rankedCandidate.candidate);
+  return ranked.flatMap(({ candidate }) => {
+    if (candidate.transactionIds.some((id) => usedTransactionIds.has(id))) return [];
+    candidate.transactionIds.forEach((id) => usedTransactionIds.add(id));
+    return [candidate];
+  });
+}
+
+/** Detects stable, local recurring patterns from already-filtered canonical rows. */
+export function detectRecurringCandidates(
+  transactions: readonly RecurringDetectionTransaction[],
+  today: string,
+): DetectedRecurringCandidate[] {
+  if (!isIsoDate(today)) return [];
+  const groups = groupPreparedTransactions(prepareTransactions(transactions, today));
+  const ranked = groups.flatMap((group) => rankedCandidatesForGroup(group, today));
+  ranked.sort(compareRankedCandidates);
+  return selectCandidatesWithoutReusedTransactions(ranked);
 }

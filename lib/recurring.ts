@@ -51,6 +51,13 @@ function identityFrequency(value: string | null | undefined): RecurringIdentityF
   }
 }
 
+function plaidSnapshotCount(snapshot: unknown, fallback: number): number {
+  if (typeof snapshot === "number") return snapshot;
+  if (typeof snapshot !== "object" || snapshot === null) return fallback;
+  const count = (snapshot as { plaid?: unknown }).plaid;
+  return typeof count === "number" ? count : fallback;
+}
+
 function mapStreamRow(
   userId: string,
   itemDbId: string,
@@ -242,11 +249,7 @@ export async function refreshRecurringForItem(item: PlaidItemRow): Promise<numbe
     p_payload: { streams: rows, joins },
   });
   if (snapshotError) throw snapshotError;
-  const plaidCount = typeof snapshotResult === "number"
-    ? snapshotResult
-    : snapshotResult && typeof snapshotResult === "object" && typeof (snapshotResult as { plaid?: unknown }).plaid === "number"
-      ? (snapshotResult as { plaid: number }).plaid
-      : rows.length;
+  const plaidCount = plaidSnapshotCount(snapshotResult, rows.length);
 
   // Diff only when history exists — the first refresh seeds silently
   // instead of announcing every pre-existing subscription as "new".
