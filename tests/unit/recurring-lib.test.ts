@@ -1006,3 +1006,220 @@ describe("lib/recurring", () => {
     expect(mockLogError).toHaveBeenCalledWith("recurring.alert.price_hike", expect.any(Error));
   });
 });
+
+describe("lib/recurring stored-read failures", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRefreshInferredRecurringForUser.mockResolvedValue({
+      active: 0,
+      added: 0,
+      deactivated: 0,
+      deduplicated: 0,
+      failed: 0,
+    });
+  });
+
+  const dummyItem: PlaidItemRow = {
+    id: "item-db-1",
+    user_id: "user-1",
+    plaid_item_id: "plaid-item-1",
+    institution_id: "inst-1",
+    institution_name: "Test Bank",
+    access_token_ciphertext: "cipher",
+    access_token_iv: "iv",
+    access_token_tag: "tag",
+    sync_cursor: "cursor-1",
+    status: "active",
+    error_code: null,
+  };
+
+  function plaidResponse(streamIds: string[], amount: number) {
+    return {
+      data: {
+        inflow_streams: [],
+        outflow_streams: streamIds.map((streamId) => ({
+          stream_id: streamId,
+          merchant_name: "Netflix",
+          description: "Netflix Subscription",
+          average_amount: { amount },
+          last_amount: { amount },
+          frequency: "MONTHLY",
+          status: "MATURE",
+          personal_finance_category: { primary: "ENTERTAINMENT" },
+          is_active: true,
+          account_id: "plaid-acct-1",
+          transaction_ids: [],
+        })),
+      },
+    };
+  }
+
+  it("throws when the stored plaid snapshot read fails", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce(plaidResponse(["stream-1"], 15.99));
+    const mock = createRecurringSupabaseMock({
+      accounts: { data: [{ id: "local-acct-1", plaid_account_id: "plaid-acct-1" }], error: null },
+      existingStreams: { data: [], error: { message: "plaid snapshot read failed" } },
+    });
+    mockServiceClient.from.mockImplementation(mock.from);
+    mockServiceClient.rpc = mock.rpc;
+
+    await expect(refreshRecurringForItem(dummyItem)).rejects.toMatchObject({
+      message: "plaid snapshot read failed",
+    });
+  });
+
+  it("throws when the stored inferred identity read fails", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce(plaidResponse(["stream-1"], 15.99));
+    const mock = createRecurringSupabaseMock({
+      accounts: { data: [{ id: "local-acct-1", plaid_account_id: "plaid-acct-1" }], error: null },
+      existingStreams: { data: [], error: null },
+    });
+    // The module's second recurring_streams read (inferred identities) runs
+    // after the plaid snapshot read resolves fine.
+    let recurringStreamsReads = 0;
+    const originalFrom = mock.from;
+    mockServiceClient.from.mockImplementation((table: string) => {
+      const builder = originalFrom(table);
+      if (table === "recurring_streams") {
+        recurringStreamsReads += 1;
+        if (recurringStreamsReads === 2) {
+          return { select: () => ({ eq: () => ({ eq: () => ({ eq: () => ({ eq: () => Promise.resolve({ data: [], error: { message: "inferred read failed" } }) }) }) }) }) };
+        }
+      }
+      return builder;
+    });
+    mockServiceClient.rpc = mock.rpc;
+
+    await expect(refreshRecurringForItem(dummyItem)).rejects.toMatchObject({
+      message: "inferred read failed",
+    });
+  });
+});
+
+describe("lib/recurring snapshot and notification edge cases", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRefreshInferredRecurringForUser.mockResolvedValue({
+      active: 0,
+      added: 0,
+      deactivated: 0,
+      deduplicated: 0,
+      failed: 0,
+    });
+  });
+
+  const dummyItem: PlaidItemRow = {
+    id: "item-db-1",
+    user_id: "user-1",
+    plaid_item_id: "plaid-item-1",
+    institution_id: "inst-1",
+    institution_name: "Test Bank",
+    access_token_ciphertext: "cipher",
+    access_token_iv: "iv",
+    access_token_tag: "tag",
+    sync_cursor: "cursor-1",
+    status: "active",
+    error_code: null,
+  };
+
+  function plaidResponse(streamIds: string[], amount: number) {
+    return {
+      data: {
+        inflow_streams: [],
+        outflow_streams: streamIds.map((streamId) => ({
+          stream_id: streamId,
+          merchant_name: "Netflix",
+          description: "Netflix Subscription",
+          average_amount: { amount },
+          last_amount: { amount },
+          frequency: "MONTHLY",
+          status: "MATURE",
+          personal_finance_category: { primary: "ENTERTAINMENT" },
+          is_active: true,
+          account_id: "plaid-acct-1",
+          transaction_ids: [],
+        })),
+      },
+    };
+  }
+
+  it("falls back to the row count when the atomic writer returns no usable count", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce(plaidResponse(["stream-1"], 15.99));
+    const mock = createRecurringSupabaseMock({
+      existingStreams: { data: [], error: null },
+      upserted: { data: [{ id: "row-1", stream_id: "stream-1" }], error: null },
+    });
+    mock.rpc.mockResolvedValueOnce({ data: { plaid: "not-a-number" }, error: null });
+    mockServiceClient.from.mockImplementation(mock.from);
+    mockServiceClient.rpc = mock.rpc;
+
+    const count = await refreshRecurringForItem(dummyItem);
+    expect(count).toBe(1);
+  });
+
+  it("uses a numeric count from the atomic writer verbatim", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce(plaidResponse(["stream-1"], 15.99));
+    const mock = createRecurringSupabaseMock({
+      existingStreams: { data: [], error: null },
+      upserted: { data: [{ id: "row-1", stream_id: "stream-1" }], error: null },
+    });
+    mock.rpc.mockResolvedValueOnce({ data: 7, error: null });
+    mockServiceClient.from.mockImplementation(mock.from);
+    mockServiceClient.rpc = mock.rpc;
+
+    const count = await refreshRecurringForItem(dummyItem);
+    expect(count).toBe(7);
+  });
+
+  it("does not double-notify when two provider streams share one identity", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce(plaidResponse(["stream-a", "stream-b"], 19.99));
+    const mock = createRecurringSupabaseMock({
+      accounts: { data: [{ id: "local-acct-1", plaid_account_id: "plaid-acct-1" }], error: null },
+      existingStreams: {
+        data: [
+          { stream_id: "stream-a", last_amount: 10 },
+          { stream_id: "stream-b", last_amount: 10 },
+        ],
+        error: null,
+      },
+      upserted: {
+        data: [
+          { id: "row-a", stream_id: "stream-a" },
+          { id: "row-b", stream_id: "stream-b" },
+        ],
+        error: null,
+      },
+    });
+    mockServiceClient.from.mockImplementation(mock.from);
+    mockServiceClient.rpc = mock.rpc;
+
+    await refreshRecurringForItem(dummyItem);
+    const hikes = mockCreateNotification.mock.calls.filter((call) => call[1] === "price_hike");
+    expect(hikes).toHaveLength(1);
+  });
+
+  it("notifies each identical-identity new stream only once", async () => {
+    mockTransactionsRecurringGet.mockResolvedValueOnce(plaidResponse(["stream-a", "stream-b"], 9.99));
+    const mock = createRecurringSupabaseMock({
+      accounts: { data: [{ id: "local-acct-1", plaid_account_id: "plaid-acct-1" }], error: null },
+      // A pre-existing unrelated stream is required for the diff to run at
+      // all: the first refresh seeds silently instead of announcing every
+      // pre-existing subscription as new.
+      existingStreams: { data: [{ stream_id: "stream-old", last_amount: 5 }], error: null },
+      upserted: {
+        data: [
+          { id: "row-old", stream_id: "stream-old" },
+          { id: "row-a", stream_id: "stream-a" },
+          { id: "row-b", stream_id: "stream-b" },
+        ],
+        error: null,
+      },
+    });
+    mockServiceClient.from.mockImplementation(mock.from);
+    mockServiceClient.rpc = mock.rpc;
+
+    await refreshRecurringForItem(dummyItem);
+    const fresh = mockCreateNotification.mock.calls.filter((call) => call[1] === "new_subscription");
+    expect(fresh).toHaveLength(1);
+  });
+});
