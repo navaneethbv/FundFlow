@@ -1,4 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
+
+const mockServiceClient = {
+  from: vi.fn(),
+  rpc: vi.fn(),
+};
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => mockServiceClient,
+}));
+
+const mockListActiveItems = vi.fn().mockResolvedValue([]);
+vi.mock("@/lib/plaid-service", () => ({
+  listActiveItems: (...args: unknown[]) => mockListActiveItems(...args),
+  decryptItemToken: () => "token-123",
+}));
+
 import {
   detectRecurringCandidates,
   normalizeRecurringMerchant,
@@ -290,8 +305,8 @@ describe("Coverage Boost: Repair and Investments", () => {
     expect(backfill.kind).toBe("backfill_incomplete");
     expect(backfill.message).toContain("3 of 10 pages");
 
-    expect(repairMessage("product_not_ready")).toBe("The institution is still preparing your data. Try again shortly.");
-    expect(repairMessage("consent_required")).toBe("Your bank requires consent to be renewed before sync can resume.");
+    expect(repairMessage("product_not_ready")).toBe("This product is not ready yet at your institution. Try again in a little while.");
+    expect(repairMessage("consent_required")).toBe("Your bank needs new consent. Reconnect this institution to grant it.");
   });
 
   it("calculates investment coverage accounts with and without holdings", () => {
