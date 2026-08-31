@@ -284,7 +284,7 @@ select is(
         'transaction_ids', jsonb_build_array(
           '00000000-0000-0000-0000-000000003301',
           '00000000-0000-0000-0000-000000003302'))),
-      'deduplications', '[]'::jsonb))->>'added',
+      'deduplications', '[]'::jsonb)))->>'added',
   '1',
   'a prepared candidate is inserted exactly once'
 );
@@ -326,7 +326,7 @@ select is(
         'transaction_ids', jsonb_build_array(
           '00000000-0000-0000-0000-000000003301',
           '00000000-0000-0000-0000-000000003302'))),
-      'deduplications', '[]'::jsonb))->>'added',
+      'deduplications', '[]'::jsonb)))->>'added',
   '0',
   'an identical candidate reloads the partial-index winner without adding it'
 );
@@ -354,7 +354,7 @@ select is(
         'transaction_ids', jsonb_build_array(
           '00000000-0000-0000-0000-000000003302',
           '00000000-0000-0000-0000-000000003303'))),
-      'deduplications', '[]'::jsonb))->>'added',
+      'deduplications', '[]'::jsonb)))->>'added',
   '0',
   'an existing identity winner is reused without inflating added'
 );
@@ -400,7 +400,7 @@ select is((public.reconcile_inferred_recurring(
     'candidates', '[]'::jsonb,
     'deduplications', jsonb_build_array(jsonb_build_object(
       'plaid_id', '00000000-0000-0000-0000-000000004304',
-      'inferred_id', '00000000-0000-0000-0000-000000004305'))))->>'deduplicated',
+      'inferred_id', '00000000-0000-0000-0000-000000004305')))))->>'deduplicated',
   '1',
   'deduplication reports one processed pair');
 

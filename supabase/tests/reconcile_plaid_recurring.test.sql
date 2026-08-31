@@ -74,7 +74,7 @@ select is(
         'account_id', '00000000-0000-0000-0000-000000002401')),
       'joins', jsonb_build_array(jsonb_build_object(
         'stream_id', 'fresh-plaid-401',
-        'transaction_ids', jsonb_build_array('00000000-0000-0000-0000-000000003401')))))->>'plaid',
+        'transaction_ids', jsonb_build_array('00000000-0000-0000-0000-000000003401'))))))->>'plaid',
   '1',
   'a valid provider stream is persisted'
 );

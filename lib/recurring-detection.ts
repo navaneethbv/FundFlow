@@ -186,10 +186,8 @@ export function recurringIdentityKey(
 
 function matchedSignifiers(rows: readonly PreparedTransaction[]): string[] {
   const text = rows.flatMap((row) => [row.merchant, row.rawName ?? ""]).map(normalizedText).join(" ");
-  return RECURRING_SIGNIFIERS.filter((signifier) => {
-    const pattern = new RegExp(`(?:^| )${signifier}(?:$| )`, "u");
-    return pattern.test(text);
-  });
+  const padded = ` ${text} `;
+  return RECURRING_SIGNIFIERS.filter((signifier) => padded.includes(` ${signifier} `));
 }
 
 function hasUtilityOrBillCategory(rows: readonly PreparedTransaction[]): boolean {
