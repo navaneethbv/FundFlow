@@ -314,7 +314,7 @@ test.describe.serial("Phase 5: recurring page", () => {
    * then be skipped for the very item under test.
    */
   test("infers a monthly stream when Plaid omits it", async ({ page }) => {
-    test.skip(!PLAID_SANDBOX_READY, "Plaid sandbox credentials are required");
+    test.skip(!PLAID_SANDBOX_READY, "Plaid sandbox credentials are required"); // NOSONAR: never use production Plaid credentials for this sandbox lifecycle test.
 
     await signIn(page);
 

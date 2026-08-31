@@ -84,6 +84,24 @@ describe("detectRecurringCandidates", () => {
     expect(quarterly[0]).toMatchObject({ frequency: "QUARTERLY", amountPattern: "fixed", expectedAmount: 90 });
   });
 
+  it("keeps a monthly stream after the new price has repeated", () => {
+    const result = detectRecurringCandidates(
+      series(
+        ["2026-05-15", "2026-06-15", "2026-07-15", "2026-08-15"],
+        [10, 10, 12, 12],
+      ),
+      "2026-08-30",
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      frequency: "MONTHLY",
+      amountPattern: "price_step",
+      expectedAmount: 12,
+      lastAmount: 12,
+    });
+  });
+
   it("never infers annual sequences", () => {
     expect(
       detectRecurringCandidates(series(["2024-08-15", "2025-08-15", "2026-08-15"], 120), "2026-08-30"),
@@ -109,6 +127,33 @@ describe("detectRecurringCandidates", () => {
         "2026-08-30",
       ),
     ).toEqual([]);
+  });
+
+  it("does not classify transportation gasoline as a utility bill", () => {
+    const result = detectRecurringCandidates(
+      series(["2026-05-15", "2026-06-15", "2026-07-15"], [40, 60, 50], {
+        merchant: "Fuel Stop",
+        rawName: "Fuel Stop",
+        category: "TRANSPORTATION",
+        detailedCategory: "TRANSPORTATION_GAS",
+        paymentChannel: "other",
+      }),
+      "2026-08-30",
+    );
+
+    expect(result).toEqual([]);
+  });
+
+  it("rejects a variable bill with an extreme low outlier", () => {
+    const result = detectRecurringCandidates(
+      series(["2026-05-15", "2026-06-15", "2026-07-15"], [100, 1, 100], {
+        category: "RENT_AND_UTILITIES",
+        detailedCategory: "UTILITIES",
+      }),
+      "2026-08-30",
+    );
+
+    expect(result).toEqual([]);
   });
 
   it("uses authorized dates for cadence while retaining posted occurrence dates", () => {

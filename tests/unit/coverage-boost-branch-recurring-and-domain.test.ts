@@ -112,7 +112,7 @@ describe("Coverage Boost: Recurring Detection Branches", () => {
     }));
 
     const result = detectRecurringCandidates(txsEven, "2026-07-05");
-    expect(result.length).toBe(1);
+    expect(result).toHaveLength(1);
     expect(result[0]!.amountPattern).toBe("variable");
     expect(result[0]!.expectedAmount).toBe(13);
 
@@ -122,7 +122,7 @@ describe("Coverage Boost: Recurring Detection Branches", () => {
       amount: [10, 12, 14, 40][i]!,
     }));
     const rejected = detectRecurringCandidates(txsOutlier, "2026-07-05");
-    expect(rejected.length).toBe(0);
+    expect(rejected).toHaveLength(0);
   });
 
   it("handles candidate category fallbacks and description fallbacks", () => {
@@ -145,7 +145,7 @@ describe("Coverage Boost: Recurring Detection Branches", () => {
     }));
 
     const result = detectRecurringCandidates(txs, "2026-07-05");
-    expect(result.length).toBe(1);
+    expect(result).toHaveLength(1);
     expect(result[0]!.streamType).toBe("inflow");
     expect(result[0]!.category).toBe("INCOME");
   });
@@ -282,7 +282,7 @@ describe("Coverage Boost: Sync Health & Reconciliations", () => {
       },
     ]);
     expect(obs.reconciliations).toEqual([]);
-    expect(obs.institutions.length).toBe(1);
+    expect(obs.institutions).toHaveLength(1);
   });
 });
 
@@ -333,7 +333,7 @@ describe("Coverage Boost: Repair and Investments", () => {
       ],
     );
     expect(coverage.total).toBe(8050.25);
-    expect(coverage.accounts.length).toBe(2);
+    expect(coverage.accounts).toHaveLength(2);
     expect(coverage.accountsWithoutHoldings).toBe(1);
   });
 
@@ -368,7 +368,7 @@ describe("Coverage Boost: Repair and Investments", () => {
     } as unknown as SupabaseClient;
 
     const txs = await loadInvestmentTransactions(supabase);
-    expect(txs.length).toBe(1);
+    expect(txs).toHaveLength(1);
     expect(txs[0]!.txnSubtype).toBe("buy");
 
     const status = await loadInvestmentSyncStatus(supabase, "u1");
@@ -386,8 +386,8 @@ describe("Coverage Boost: Import, Weekly Report & Life Events", () => {
     expect(inferDateOrder(["2026-08-01", "2026-08-02"])).toBe("ymd");
     expect(inferDateOrder(["13/01/2026", "14/01/2026"])).toBe("dmy");
     expect(inferDateOrder(["01/13/2026", "02/14/2026"])).toBe("mdy");
-    expect(inferDateOrder(["2026-08-01", "13/01/2026"])).toBe(null);
-    expect(inferDateOrder(["01/02/2026"])).toBe(null);
+    expect(inferDateOrder(["2026-08-01", "13/01/2026"])).toBeNull();
+    expect(inferDateOrder(["01/02/2026"])).toBeNull();
   });
 
   it("builds weekly report with cash flow classifications and depository flows", () => {
@@ -477,7 +477,7 @@ describe("Coverage Boost: Goals and Goal Import Branches", () => {
       ],
     });
     const res = parseMonarchGoals(validAndDuplicate);
-    expect(res.rows.length).toBe(1);
-    expect(res.errors.length).toBe(2);
+    expect(res.rows).toHaveLength(1);
+    expect(res.errors).toHaveLength(2);
   });
 });

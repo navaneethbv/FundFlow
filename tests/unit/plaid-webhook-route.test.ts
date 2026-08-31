@@ -25,6 +25,11 @@ vi.mock("@/lib/recurring-inference", () => ({
     mockRefreshInferredRecurringForItem(...args),
 }));
 
+const mockLogError = vi.fn();
+vi.mock("@/lib/log", () => ({
+  logError: (...args: unknown[]) => mockLogError(...args),
+}));
+
 const mockErrorResponse = vi.fn((context, err) => {
   console.error("MOCKED WEBHOOK ERROR:", context, err);
   return new Response("error", { status: 500 });
@@ -41,6 +46,15 @@ import { NextRequest } from "next/server";
 describe("POST /api/plaid/webhook", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSyncItemTransactions.mockResolvedValue({ added: 0, modified: 0, removed: 0 });
+    mockRefreshRecurringForItem.mockResolvedValue(0);
+    mockRefreshInferredRecurringForItem.mockResolvedValue({
+      active: 0,
+      added: 0,
+      deactivated: 0,
+      deduplicated: 0,
+      failed: 0,
+    });
   });
 
   afterEach(() => {
@@ -83,6 +97,30 @@ describe("POST /api/plaid/webhook", () => {
     expect(mockRefreshRecurringForItem).not.toHaveBeenCalled();
   });
 
+  it("acknowledges a transaction webhook when derived inference fails", async () => {
+    vi.stubEnv("PLAID_ENV", "sandbox");
+    const request = new NextRequest("http://localhost/api/plaid/webhook", {
+      method: "POST",
+      body: JSON.stringify({
+        webhook_type: "TRANSACTIONS",
+        webhook_code: "SYNC_UPDATES_AVAILABLE",
+        item_id: "item-123",
+      }),
+    });
+
+    const mockItem = { id: "db-item-123", user_id: "user-1" };
+    const inferenceError = new Error("inference unavailable");
+    mockGetItemByPlaidItemId.mockResolvedValue(mockItem);
+    mockSyncItemTransactions.mockResolvedValue({ added: 1, modified: 0, removed: 0 });
+    mockRefreshInferredRecurringForItem.mockRejectedValue(inferenceError);
+
+    const res = await POST(request);
+
+    expect(res.status).toBe(200);
+    expect(mockSyncItemTransactions).toHaveBeenCalledWith(mockItem);
+    expect(mockLogError).toHaveBeenCalledWith("webhook.transactions.inference", inferenceError);
+  });
+
   it("refreshes provider streams then inference on RECURRING_TRANSACTIONS_UPDATE", async () => {
     vi.stubEnv("PLAID_ENV", "sandbox");
     const request = new NextRequest("http://localhost/api/plaid/webhook", {
@@ -123,7 +161,7 @@ describe("POST /api/plaid/webhook", () => {
     expect(mockRefreshInferredRecurringForItem).not.toHaveBeenCalled();
   });
 
-  it("skips inference when the recurring provider refresh fails", async () => {
+  it("still runs local inference and acknowledges when recurring refreshes fail", async () => {
     vi.stubEnv("PLAID_ENV", "sandbox");
     const request = new NextRequest("http://localhost/api/plaid/webhook", {
       method: "POST",
@@ -134,12 +172,19 @@ describe("POST /api/plaid/webhook", () => {
       }),
     });
 
-    mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item-123", user_id: "user-1" });
-    mockRefreshRecurringForItem.mockRejectedValue(new Error("plaid down"));
+    const mockItem = { id: "db-item-123", user_id: "user-1" };
+    const providerError = new Error("plaid down");
+    const inferenceError = new Error("inference unavailable");
+    mockGetItemByPlaidItemId.mockResolvedValue(mockItem);
+    mockRefreshRecurringForItem.mockRejectedValue(providerError);
+    mockRefreshInferredRecurringForItem.mockRejectedValue(inferenceError);
 
     const res = await POST(request);
-    expect(res.status).toBe(500);
-    expect(mockRefreshInferredRecurringForItem).not.toHaveBeenCalled();
+
+    expect(res.status).toBe(200);
+    expect(mockRefreshInferredRecurringForItem).toHaveBeenCalledWith(mockItem);
+    expect(mockLogError).toHaveBeenCalledWith("webhook.recurring.provider", providerError);
+    expect(mockLogError).toHaveBeenCalledWith("webhook.recurring.inference", inferenceError);
   });
 
   it("processes ITEM ERROR webhook", async () => {

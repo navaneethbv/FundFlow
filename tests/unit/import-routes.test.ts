@@ -1881,7 +1881,7 @@ describe("import commit target validation edges", () => {
   it("returns 404 when the default manual account target is not owned", async () => {
     const manualAccounts = { data: null, error: null };
     const mockSupabase = {
-      from: vi.fn((table: string) => routeQuery((_state, _terminal) => {
+      from: vi.fn((table: string) => routeQuery(() => {
         if (table === "import_review_batches") {
           return { data: { id: "b1", created_at: "2026-07-01T00:00:00.000Z" }, error: null };
         }
