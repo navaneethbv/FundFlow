@@ -673,3 +673,29 @@ describe("detection evidence parsing", () => {
     });
   });
 });
+
+describe("credit card bill projection", () => {
+  it("passes null statement and minimum balances through untouched", async () => {
+    const client = clientStub({
+      households: { data: [] },
+      recurring_streams: { data: [] },
+      recurring_stream_transactions: { data: [] },
+      manual_recurring_items: { data: [] },
+      accounts: { data: [{ id: "card-1", name: "Card", type: "credit", subtype: null, iso_currency_code: "USD" }] },
+      sync_jobs: { data: null },
+      credit_card_bills: {
+        data: [
+          { account_id: "card-1", statement_balance: null, minimum_payment: null, due_date: "2026-07-25" },
+        ],
+      },
+    });
+
+    const result = await loadRecurringData(client as never, {
+      userId: "user-1",
+      anchorMonth: "2026-07",
+      today: "2026-07-01",
+    });
+
+    expect(result.view.totals.creditCards).toEqual({ paid: 0, remaining: 0 });
+  });
+});
