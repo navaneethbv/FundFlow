@@ -76,6 +76,21 @@ const RECURRING_SIGNIFIERS = [
   "DIRECT DEBIT",
 ] as const;
 
+const VARIABLE_BILL_CATEGORY_TOKENS = new Set([
+  "UTILITY",
+  "UTILITIES",
+  "BILL",
+  "BILLS",
+  "RENT",
+  "MORTGAGE",
+  "INSURANCE",
+  "ELECTRIC",
+  "ELECTRICITY",
+  "WATER",
+  "INTERNET",
+  "CABLE",
+]);
+
 interface PreparedTransaction extends RecurringDetectionTransaction {
   effectiveDate: string;
   normalizedMerchant: string;
@@ -191,28 +206,39 @@ function matchedSignifiers(rows: readonly PreparedTransaction[]): string[] {
 }
 
 function hasUtilityOrBillCategory(rows: readonly PreparedTransaction[]): boolean {
-  return rows.some((row) => /(?:UTILITY|UTILITIES|BILL|RENT|MORTGAGE|INSURANCE|ELECTRIC|WATER|GAS|INTERNET|CABLE)/u.test(
-    normalizedText(`${row.category ?? ""} ${row.detailedCategory ?? ""}`),
-  ));
+  return rows.some((row) => normalizedText(`${row.category ?? ""} ${row.detailedCategory ?? ""}`)
+    .split(" ")
+    .some((token) => VARIABLE_BILL_CATEGORY_TOKENS.has(token)));
 }
 
 function isInStore(row: PreparedTransaction): boolean {
   return normalizedText(row.paymentChannel ?? "") === "IN STORE";
 }
 
+function steppedAmount(values: readonly number[]): number | null {
+  const original = values[0];
+  const transitionIndex = values.findIndex((value) => value !== original);
+  if (transitionIndex <= 0) return null;
+  const changed = values[transitionIndex];
+  if (changed === undefined) return null;
+  return values.slice(transitionIndex).every((value) => value === changed)
+    ? changed / 100
+    : null;
+}
+
 function qualifyAmounts(rows: readonly PreparedTransaction[], signifiers: readonly string[]): QualifiedAmounts | null {
   const values = rows.map((row) => cents(row.amount));
   const first = values[0];
   const allEqual = values.every((value) => value === first);
-  const newestChanged = values.length > 1 && values.slice(0, -1).every((value) => value === values[0]) && values.at(-1) !== values[0];
+  const priceStepAmount = steppedAmount(values);
   const amounts = values.map((value) => value / 100);
   const averageAmount = roundCents(amounts.reduce((sum, amount) => sum + amount, 0) / amounts.length);
 
   if (allEqual) {
     return { pattern: "fixed", expectedAmount: amounts.at(-1) ?? 0, averageAmount, strength: 3 };
   }
-  if (newestChanged) {
-    return { pattern: "price_step", expectedAmount: amounts.at(-1) ?? 0, averageAmount, strength: 2 };
+  if (priceStepAmount !== null) {
+    return { pattern: "price_step", expectedAmount: priceStepAmount, averageAmount, strength: 2 };
   }
 
   if (rows.some(isInStore) || (!hasUtilityOrBillCategory(rows) && signifiers.length === 0)) return null;
@@ -221,7 +247,7 @@ function qualifyAmounts(rows: readonly PreparedTransaction[], signifiers: readon
   const median = sorted.length % 2 === 0
     ? ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2
     : sorted[middle] ?? 0;
-  if (amounts.some((amount) => amount > median * 2.5)) return null;
+  if (amounts.some((amount) => amount < median / 2.5 || amount > median * 2.5)) return null;
   return { pattern: "variable", expectedAmount: roundCents(median), averageAmount, strength: 1 };
 }
 

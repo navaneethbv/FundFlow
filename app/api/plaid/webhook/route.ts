@@ -110,7 +110,20 @@ async function handleTransactionWebhook(body: {
   // Inference reads the canonical ledger, so it only runs once the sync that
   // populates that ledger has succeeded.
   await syncItemTransactions(item);
-  await refreshInferredRecurringForItem(item);
+  await runBestEffortWebhookStep("webhook.transactions.inference", () =>
+    refreshInferredRecurringForItem(item),
+  );
+}
+
+async function runBestEffortWebhookStep(
+  context: string,
+  operation: () => Promise<unknown>,
+): Promise<void> {
+  try {
+    await operation();
+  } catch (error) {
+    logError(context, error);
+  }
 }
 
 /**
@@ -133,8 +146,12 @@ async function handleRecurringWebhook(body: {
   ) return;
   const item = await getItemByPlaidItemId(body.item_id);
   if (!item) return;
-  await refreshRecurringForItem(item);
-  await refreshInferredRecurringForItem(item);
+  await runBestEffortWebhookStep("webhook.recurring.provider", () =>
+    refreshRecurringForItem(item),
+  );
+  await runBestEffortWebhookStep("webhook.recurring.inference", () =>
+    refreshInferredRecurringForItem(item),
+  );
 }
 
 async function handleHoldingsWebhook(body: {
