@@ -1,6 +1,31 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-08-29. Read this first to resume.
+Last updated: 2026-08-30. Read this first to resume.
+
+## 2026-08-30: PR #130 hybrid recurring detection
+
+Branch `codex/pr-130-recurring-impl` adds a local recurring detector that fills the gap when Plaid returns no recurring stream, on top of the Plaid 46 upgrade the PR already carried.
+
+Plaid stays authoritative.
+A deterministic detector reads canonical transactions and materializes inferred streams into the existing `recurring_streams` table, so the calendar, review, dismissal, override, notification, and household behavior all keep working unchanged.
+Thresholds are weekly 8-in-8-weeks, biweekly 4-in-8-weeks, monthly 3-in-4-months, and quarterly 3-in-10-months; annual is never inferred because three annual occurrences exceed reliably available history.
+Amounts qualify as fixed, single newest price step, or bounded variable, and a variable stream additionally needs a utility or bill category or a recurring signifier and is rejected outright for an `in store` channel.
+
+Inference runs after transactions are durably synced: manual refresh and the daily cron take the full hybrid path, auto refresh runs local inference only so Plaid request volume is unchanged, and both the transaction and the new `RECURRING_TRANSACTIONS_UPDATE` webhooks reconcile the affected item.
+An import commit into a connected account also triggers it.
+Failures degrade rather than break: a detector error never fails an already durable sync, webhook, or import.
+
+**All three migrations are applied to the linked project** (`20260830190000`, `20260830200000`, `20260830210000`).
+Two of them did not compile against a real Postgres and were fixed while applying: an unparenthesized `CASE ... THEN` inside an `IF` condition truncated the expression, and `datetime_field_value_out_of_range` is not a real condition name.
+Both had passed review because pgTAP could not run locally without Docker.
+
+Local verification passed typecheck, lint, production build, `npm audit` with zero vulnerabilities, and 4,338 tests across 406 files including the live-Supabase integration suite.
+The three existing recurring browser tests pass.
+
+The new `infers a monthly stream when Plaid omits it` browser test is **written but never executed**: it needs Plaid sandbox credentials, and `.env.local` points `PLAID_ENV` at production.
+It self-skips rather than issuing sandbox calls with a production secret.
+Run it in an environment with `PLAID_ENV=sandbox` and matching `PLAID_SECRET` before treating the browser regression as proven.
+
 
 ## 2026-08-29: PR #137 exact-head review and remediation
 

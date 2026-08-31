@@ -56,6 +56,17 @@ vi.mock("@/lib/import-ofx", () => ({
 }));
 
 const mockCheckRateLimit = vi.fn<(...args: unknown[]) => unknown>(() => Promise.resolve(true));
+const mockRefreshInferredRecurringForUser = vi.fn();
+vi.mock("@/lib/recurring-inference", () => ({
+  refreshInferredRecurringForUser: (...args: unknown[]) =>
+    mockRefreshInferredRecurringForUser(...args),
+}));
+
+const mockLogError = vi.fn();
+vi.mock("@/lib/log", () => ({
+  logError: (...args: unknown[]) => mockLogError(...args),
+}));
+
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
 }));
@@ -1016,6 +1027,69 @@ function serviceStubWith(
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body).toEqual({ ok: true, imported: 1 });
+      expect(mockRefreshInferredRecurringForUser).toHaveBeenCalledWith("u1");
+    });
+
+    it("skips inference when every committed row targets a manual account", async () => {
+      const mockSupabase = commitSupabase([
+        {
+          id: "row-1",
+          date: "2026-07-01",
+          description: "Store",
+          amount: 10,
+          status: "pending",
+        },
+      ]);
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: mockSupabase,
+      });
+      const request = {
+        json: () =>
+          Promise.resolve({
+            batch_id: "b1",
+            manual_account_id: "m1",
+            approved_row_ids: ["row-1"],
+          }),
+      } as unknown as NextRequest;
+
+      mockServiceClient.from.mockReturnValue(serviceStub());
+
+      const res = await commitPost(request);
+      expect(res.status).toBe(200);
+      expect(mockRefreshInferredRecurringForUser).not.toHaveBeenCalled();
+    });
+
+    it("keeps a successful commit when inference throws", async () => {
+      const mockSupabase = commitSupabase([
+        {
+          id: "row-1",
+          date: "2026-07-01",
+          description: "Store",
+          amount: 10,
+          status: "pending",
+        },
+      ]);
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: mockSupabase,
+      });
+      const request = {
+        json: () =>
+          Promise.resolve({
+            batch_id: "b1",
+            account_id: "a1",
+            approved_row_ids: ["row-1"],
+          }),
+      } as unknown as NextRequest;
+
+      mockServiceClient.from.mockReturnValue(serviceStub());
+      mockRefreshInferredRecurringForUser.mockRejectedValueOnce(new Error("detector down"));
+
+      const res = await commitPost(request);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ ok: true, imported: 1 });
+      expect(mockLogError).toHaveBeenCalledWith("import.commit.recurring", expect.any(Error));
     });
 
     it("threads a staged row's category through into pfc_primary", async () => {
@@ -1800,5 +1874,28 @@ function serviceStubWith(
       const resNullAcc = await csvPost({ formData: () => Promise.resolve(formDataWithAcc) } as unknown as NextRequest);
       expect(resNullAcc.status).toBe(404);
     });
+  });
+});
+
+describe("import commit target validation edges", () => {
+  it("returns 404 when the default manual account target is not owned", async () => {
+    const manualAccounts = { data: null, error: null };
+    const mockSupabase = {
+      from: vi.fn((table: string) => routeQuery(() => {
+        if (table === "import_review_batches") {
+          return { data: { id: "b1", created_at: "2026-07-01T00:00:00.000Z" }, error: null };
+        }
+        if (table === "manual_accounts") return manualAccounts;
+        return { data: [], error: null };
+      })),
+    };
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: mockSupabase });
+    const request = {
+      json: () => Promise.resolve({ batch_id: "b1", manual_account_id: "m1" }),
+    } as unknown as NextRequest;
+
+    const res = await commitPost(request);
+    expect(res.status).toBe(404);
+    expect(mockRefreshInferredRecurringForUser).not.toHaveBeenCalled();
   });
 });

@@ -37,6 +37,17 @@ vi.mock("@/lib/sync", () => ({
   syncItemTransactions: (...args: unknown[]) => mockSyncItemTransactions(...args),
 }));
 
+const mockRefreshRecurringForItem = vi.fn<(...args: unknown[]) => unknown>();
+vi.mock("@/lib/recurring", () => ({
+  refreshRecurringForItem: (...args: unknown[]) => mockRefreshRecurringForItem(...args),
+}));
+
+const mockRefreshInferredRecurringForItem = vi.fn<(...args: unknown[]) => unknown>();
+vi.mock("@/lib/recurring-inference", () => ({
+  refreshInferredRecurringForItem: (...args: unknown[]) =>
+    mockRefreshInferredRecurringForItem(...args),
+}));
+
 const mockSyncInvestmentsForItem = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/investment-sync", () => ({
   syncInvestmentsForItem: (...args: unknown[]) =>

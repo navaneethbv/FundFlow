@@ -61,6 +61,26 @@ export function shouldSubmitAmountCorrection(amount: string, initial: string): b
 }
 
 /**
+ * Plaid and inferred rows both live in `recurring_streams`, so both are looked
+ * up by stream id and both carry the owner controls. Only manual items come
+ * from the separate user-authored table.
+ */
+function isPersistedStreamSource(
+  source: RecurringOccurrence["source"],
+): source is "plaid" | "inferred" {
+  return source === "plaid" || source === "inferred";
+}
+
+/**
+ * Provenance for a locally inferred stream. The count comes from detection
+ * evidence, which legacy or malformed rows may not carry.
+ */
+function inferredSourceLabel(count: number | null): string {
+  if (count === null) return "Detected from transactions";
+  return `Detected from ${count} transactions`;
+}
+
+/**
  * The per-row `⋯` menu on an Upcoming/Complete table row — Monarch surfaces
  * Confirm/Not recurring/Restore and the amount correction directly on the
  * occurrence row rather than only in a separate management list. A shared,
@@ -104,7 +124,7 @@ function OccurrenceRowMenu({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open]);
 
-  if (occurrence.source === "plaid" && stream?.isOwn !== true) {
+  if (isPersistedStreamSource(occurrence.source) && stream?.isOwn !== true) {
     return <span className="text-xs text-muted">Shared · view only</span>;
   }
   if (occurrence.source === "manual" && !manualItem) return null;
@@ -139,7 +159,7 @@ function OccurrenceRowMenu({
           aria-label={`Options for ${occurrence.merchant}`}
           className="absolute right-0 z-40 mt-2 w-64 space-y-3 rounded-card border border-panel-border bg-panel p-3 shadow-float"
         >
-          {occurrence.source === "plaid" && stream && (
+          {isPersistedStreamSource(occurrence.source) && stream && (
             <>
               <label className="block text-xs font-semibold text-muted">
                 Expected amount{" "}
@@ -268,6 +288,11 @@ function OccurrenceTableRow({
           <span className="min-w-0">
             <span className="block truncate text-sm font-semibold">{occurrence.merchant}</span>
             <span className="text-xs text-muted">{occurrence.frequency}</span>
+            {occurrence.source === "inferred" && (
+              <span className="block text-xs text-muted">
+                {inferredSourceLabel(occurrence.evidenceCount)}
+              </span>
+            )}
           </span>
         </div>
       </td>
@@ -400,7 +425,7 @@ function OccurrenceTable({
               index={index}
               currency={currency}
               today={today}
-              stream={occurrence.source === "plaid" ? streamById.get(occurrence.sourceId) : undefined}
+              stream={isPersistedStreamSource(occurrence.source) ? streamById.get(occurrence.sourceId) : undefined}
               manualItem={occurrence.source === "manual" ? manualById.get(occurrence.sourceId) : undefined}
               pending={pending}
               onReview={onReview}

@@ -17,6 +17,12 @@ vi.mock("@/lib/recurring", () => ({
   refreshRecurringForUser: (...args: unknown[]) => mockRefreshRecurringForUser(...args),
 }));
 
+const mockRefreshInferredRecurringForUser = vi.fn();
+vi.mock("@/lib/recurring-inference", () => ({
+  refreshInferredRecurringForUser: (...args: unknown[]) =>
+    mockRefreshInferredRecurringForUser(...args),
+}));
+
 const mockWriteDailyAccountSnapshots = vi.fn();
 vi.mock("@/lib/account-history", () => ({
   writeDailyAccountSnapshots: (...args: unknown[]) =>
@@ -84,7 +90,10 @@ describe("POST /api/plaid/sync", () => {
     mockRequireUser.mockResolvedValue({ user: { id: "user-1" } });
     mockCheckRateLimit.mockResolvedValue(true);
     mockSyncAllForUser.mockResolvedValue({ added: 2, modified: 1, removed: 0 });
-    mockRefreshRecurringForUser.mockResolvedValue(3);
+    mockRefreshRecurringForUser.mockResolvedValue({
+      plaid: 2,
+      inferred: { active: 1, added: 1, deactivated: 0, deduplicated: 0, failed: 0 },
+    });
 
     const req = new NextRequest("http://localhost/api/plaid/sync", { method: "POST" });
     const res = await POST(req);
@@ -95,7 +104,10 @@ describe("POST /api/plaid/sync", () => {
       added: 2,
       modified: 1,
       removed: 0,
-      recurring_streams: 3,
+      recurring_streams: {
+        plaid: 2,
+        inferred: { active: 1, added: 1, deactivated: 0, deduplicated: 0, failed: 0 },
+      },
     });
     expect(mockWriteDailyAccountSnapshots).toHaveBeenCalledWith(
       "user-1",
@@ -107,6 +119,54 @@ describe("POST /api/plaid/sync", () => {
         action: "data_refresh",
       }),
     );
+  });
+
+  it("runs local inference without a Plaid recurring call on auto refresh", async () => {
+    mockRequireUser.mockResolvedValue({ user: { id: "user-1" } });
+    mockCheckRateLimit.mockResolvedValue(true);
+    mockSyncAllForUser.mockResolvedValue({ added: 1, modified: 0, removed: 0 });
+    mockRefreshInferredRecurringForUser.mockResolvedValue({
+      active: 1,
+      added: 0,
+      deactivated: 0,
+      deduplicated: 0,
+      failed: 0,
+    });
+
+    const req = new NextRequest("http://localhost/api/plaid/sync", {
+      method: "POST",
+      body: JSON.stringify({ source: "auto" }),
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      ok: true,
+      recurring_streams: {
+        plaid: 0,
+        inferred: { active: 1, added: 0, deactivated: 0, deduplicated: 0, failed: 0 },
+      },
+    });
+    expect(mockRefreshRecurringForUser).not.toHaveBeenCalled();
+    expect(mockRefreshInferredRecurringForUser).toHaveBeenCalledWith("user-1");
+    expect(mockWriteAudit).not.toHaveBeenCalled();
+  });
+
+  it("keeps a successful auto sync when local inference throws", async () => {
+    mockRequireUser.mockResolvedValue({ user: { id: "user-1" } });
+    mockCheckRateLimit.mockResolvedValue(true);
+    mockSyncAllForUser.mockResolvedValue({ added: 1, modified: 0, removed: 0 });
+    mockRefreshInferredRecurringForUser.mockRejectedValue(new Error("inference down"));
+
+    const req = new NextRequest("http://localhost/api/plaid/sync", {
+      method: "POST",
+      body: JSON.stringify({ source: "auto" }),
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, added: 1 });
+    expect(mockErrorResponse).not.toHaveBeenCalled();
   });
 
   it("calls errorResponse when sync throws error", async () => {

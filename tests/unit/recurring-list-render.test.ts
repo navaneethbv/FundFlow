@@ -31,6 +31,7 @@ function occurrence(overrides: Partial<RecurringOccurrence> = {}): RecurringOccu
     status: "upcoming",
     matchedTransactionId: null,
     isIncome: false,
+    evidenceCount: null,
     ...overrides,
   };
 }
@@ -49,6 +50,8 @@ function stream(overrides: Partial<RecurringStreamRow> = {}): RecurringStreamRow
     averageAmount: 15.49,
     accountName: "Checking",
     isOwn: true,
+    source: "plaid",
+    detectionEvidence: null,
     ...overrides,
   };
 }
@@ -346,5 +349,72 @@ describe("ReviewBanner", () => {
     expect(html).toContain("There are 2 new recurring merchants for you to review.");
     expect(html).toContain('href="/recurring?tab=manage"');
     expect(html).toContain("Review now");
+  });
+});
+
+describe("inferred stream provenance", () => {
+  const inferredOccurrence = occurrence({
+    source: "inferred",
+    sourceId: "inferred-1",
+    merchant: "City Water",
+    evidenceCount: 3,
+  });
+  const inferredStream = stream({
+    id: "inferred-1",
+    merchantName: "City Water",
+    source: "inferred",
+    detectionEvidence: {
+      occurrenceCount: 3,
+      amountPattern: "fixed",
+      maximumCadenceDeviationDays: 1,
+      matchedSignifiers: [],
+    },
+  });
+
+  function renderWith(occurrences: RecurringOccurrence[], streams: RecurringStreamRow[]) {
+    return renderToStaticMarkup(
+      createElement(RecurringList, {
+        occurrences,
+        streams,
+        manualItems: [],
+        currency: "USD",
+        today: "2026-07-10",
+        tab: "upcoming",
+        links: LINKS,
+      }),
+    );
+  }
+
+  it("labels an inferred occurrence with its supporting transaction count", () => {
+    const html = renderWith([inferredOccurrence], [inferredStream]);
+    expect(html).toContain("Detected from 3 transactions");
+  });
+
+  it("keeps owner controls on an inferred stream", () => {
+    const html = renderWith([inferredOccurrence], [inferredStream]);
+    expect(html).toContain("More options for City Water");
+    expect(html).not.toContain("Shared · view only");
+  });
+
+  it("renders a shared inferred stream read-only", () => {
+    const html = renderWith(
+      [inferredOccurrence],
+      [{ ...inferredStream, isOwn: false }],
+    );
+    expect(html).toContain("Shared · view only");
+    expect(html).not.toContain("More options for City Water");
+  });
+
+  it("adds no provenance label to Plaid or manual entries", () => {
+    const html = renderWith([occurrence()], [stream()]);
+    expect(html).not.toContain("Detected from");
+  });
+
+  it("falls back to a countless label when evidence is missing", () => {
+    const html = renderWith(
+      [occurrence({ source: "inferred", sourceId: "inferred-1", evidenceCount: null })],
+      [{ ...inferredStream, detectionEvidence: null }],
+    );
+    expect(html).toContain("Detected from transactions");
   });
 });

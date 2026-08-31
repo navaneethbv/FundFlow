@@ -22,6 +22,7 @@ const occurrence = (over: Partial<{ dueDate: string; amount: number; status: "up
   status: "upcoming" as const,
   matchedTransactionId: null,
   isIncome: false,
+  evidenceCount: null as number | null,
   ...over,
 });
 
@@ -81,5 +82,37 @@ describe("RecurringCalendar", () => {
     expect(html).toContain("2026-08-15");
     // No raw transaction or item identifiers leak into markup.
     expect(html).not.toContain("s-1");
+  });
+});
+
+describe("inferred provenance in the accessible table twin", () => {
+  it("names the detected source and count beside the merchant", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecurringCalendar, {
+        month: "2026-08",
+        today: "2026-08-15",
+        currency: "USD",
+        occurrences: [
+          {
+            ...occurrence({ merchant: "City Water", dueDate: "2026-08-15" }),
+            source: "inferred" as const,
+            evidenceCount: 3,
+          },
+        ],
+      }),
+    );
+    expect(html).toContain("Detected from 3 transactions");
+  });
+
+  it("adds no provenance for a Plaid occurrence", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecurringCalendar, {
+        month: "2026-08",
+        today: "2026-08-15",
+        currency: "USD",
+        occurrences: [occurrence({ merchant: "Netflix", dueDate: "2026-08-15" })],
+      }),
+    );
+    expect(html).not.toContain("Detected from");
   });
 });

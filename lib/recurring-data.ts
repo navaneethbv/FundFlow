@@ -13,8 +13,10 @@ import {
   expandStreamsForMonth,
   type ManualRecurringFrequency,
   type ManualRecurringItemInput,
+  type RecurringDetectionEvidence,
   type RecurringMonth,
   type RecurringStreamInput,
+  type RecurringStreamSource,
   type RecurringStreamStatus,
 } from "@/lib/recurring-page";
 import { localDateKey } from "@/lib/format-date";
@@ -40,6 +42,8 @@ type RecurringStreamRawRow = {
   predicted_next_date: string | null;
   account_id: string | null;
   category: string | null;
+  source?: string | null;
+  detection_evidence?: unknown;
 };
 
 export interface RecurringStreamRow {
@@ -62,6 +66,8 @@ export interface RecurringStreamRow {
    * to the real caller). Non-owned rows must render read-only in the UI.
    */
   isOwn: boolean;
+  source: RecurringStreamSource;
+  detectionEvidence: RecurringDetectionEvidence | null;
 }
 
 export interface ManualRecurringItemRow {
@@ -162,7 +168,38 @@ function isStale(lastSuccessfulSyncAt: string | null, now: Date): boolean {
   return !Number.isFinite(parsed) || now.getTime() - parsed > 48 * 60 * 60 * 1000;
 }
 
-const KNOWN_FREQUENCIES = new Set(["WEEKLY", "BIWEEKLY", "SEMI_MONTHLY", "MONTHLY", "ANNUALLY"]);
+const KNOWN_FREQUENCIES = new Set([
+  "WEEKLY",
+  "BIWEEKLY",
+  "SEMI_MONTHLY",
+  "MONTHLY",
+  "QUARTERLY",
+  "ANNUALLY",
+]);
+const AMOUNT_PATTERNS = new Set(["fixed", "price_step", "variable"]);
+
+/**
+ * Evidence is jsonb written by the detector, but legacy and hand-edited rows
+ * can hold anything. Parse structurally and fall back to null rather than
+ * trusting the column, so one malformed row cannot break the page.
+ */
+function parseDetectionEvidence(value: unknown): RecurringDetectionEvidence | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.occurrenceCount !== "number" || !Number.isFinite(raw.occurrenceCount)) return null;
+  if (typeof raw.amountPattern !== "string" || !AMOUNT_PATTERNS.has(raw.amountPattern)) return null;
+  const deviation = raw.maximumCadenceDeviationDays;
+  const signifiers = raw.matchedSignifiers;
+  return {
+    occurrenceCount: raw.occurrenceCount,
+    amountPattern: raw.amountPattern as RecurringDetectionEvidence["amountPattern"],
+    maximumCadenceDeviationDays:
+      typeof deviation === "number" && Number.isFinite(deviation) ? deviation : 0,
+    matchedSignifiers: Array.isArray(signifiers)
+      ? signifiers.filter((entry): entry is string => typeof entry === "string")
+      : [],
+  };
+}
 const KNOWN_STATUSES = new Set(["MATURE", "EARLY_DETECTION", "TOMBSTONED"]);
 
 async function loadPagedRows<T>(
@@ -257,7 +294,7 @@ export async function loadRecurringData(
       let query = supabase
         .from("recurring_streams")
         .select(
-          "id,user_id,merchant_name,description,stream_type,status,is_active,reviewed_at,dismissed_at,user_amount,average_amount,last_amount,frequency,first_date,last_date,predicted_next_date,account_id,category",
+          "id,user_id,merchant_name,description,stream_type,status,is_active,reviewed_at,dismissed_at,user_amount,average_amount,last_amount,frequency,first_date,last_date,predicted_next_date,account_id,category,source,detection_evidence",
         )
         .order("id")
         .range(from, to);
@@ -371,6 +408,10 @@ export async function loadRecurringData(
       dismissedAt: row.dismissed_at,
       matchedTransactions: matchedByStreamId.get(row.id) ?? [],
       category: row.category,
+      // Rows written before the hybrid migration carry no source; they are
+      // provider rows by definition.
+      source: row.source === "inferred" ? "inferred" : "plaid",
+      detectionEvidence: parseDetectionEvidence(row.detection_evidence),
     };
   });
 
@@ -440,6 +481,8 @@ export async function loadRecurringData(
       averageAmount: row.average_amount === null ? null : Number(row.average_amount),
       accountName: row.account_id ? accountById.get(row.account_id)?.name ?? null : null,
       isOwn: row.user_id === input.userId,
+      source: row.source === "inferred" ? "inferred" as const : "plaid" as const,
+      detectionEvidence: parseDetectionEvidence(row.detection_evidence),
     })),
     manualItems: manualInputs,
     stale: isStale(lastSuccessfulSyncAt, input.now ?? new Date()),

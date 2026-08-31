@@ -107,6 +107,41 @@ describe("GET /api/cron/sync", () => {
     expect(res.status).toBe(401);
   });
 
+  it("runs the full hybrid recurring refresh before notification processing", async () => {
+    mockSafeEqual.mockReturnValue(true);
+    mockRefreshRecurringForUser.mockResolvedValue({
+      plaid: 2,
+      inferred: { active: 1, added: 1, deactivated: 0, deduplicated: 0, failed: 0 },
+    });
+    const request = new NextRequest("http://localhost/api/cron/sync", {
+      headers: { authorization: "Bearer test-secret" },
+    });
+
+    mockServiceClient.from.mockImplementation((table) => {
+      const data: unknown[] = table === "plaid_items" ? [{ user_id: "u1" }] : [];
+      const query = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
+        lt: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockResolvedValue({ error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        then: undefined as unknown as (onfulfilled: (value: { data: unknown[]; error: unknown }) => unknown) => unknown,
+      };
+      query.then = (onfulfilled) =>
+        Promise.resolve({ data, error: null }).then(onfulfilled);
+      return query;
+    });
+
+    const res = await GET(request);
+    expect(res.status).toBe(200);
+    expect(mockRefreshRecurringForUser).toHaveBeenCalledWith("u1");
+    expect(mockRefreshRecurringForUser.mock.invocationCallOrder[0]).toBeLessThan(
+      mockProcessNotificationsForUser.mock.invocationCallOrder[0],
+    );
+  });
+
   it("syncs all users and sends digest email if there are notifications", async () => {
     mockSafeEqual.mockReturnValue(true);
     const request = new NextRequest("http://localhost/api/cron/sync", {

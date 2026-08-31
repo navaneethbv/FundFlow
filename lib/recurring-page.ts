@@ -6,8 +6,23 @@ export type RecurringFrequency =
   | "BIWEEKLY"
   | "SEMI_MONTHLY"
   | "MONTHLY"
+  | "QUARTERLY"
   | "ANNUALLY"
   | "UNKNOWN";
+
+/** Which side produced a persisted stream. Manual items are a separate table. */
+export type RecurringStreamSource = "plaid" | "inferred";
+
+/**
+ * Non-sensitive explainability for a locally inferred stream. Classification
+ * facts only: never a raw description, amount history, or account identifier.
+ */
+export interface RecurringDetectionEvidence {
+  occurrenceCount: number;
+  amountPattern: "fixed" | "price_step" | "variable";
+  maximumCadenceDeviationDays: number;
+  matchedSignifiers: string[];
+}
 
 export type RecurringStreamStatus = "MATURE" | "EARLY_DETECTION" | "TOMBSTONED" | "UNKNOWN";
 
@@ -31,6 +46,8 @@ export interface RecurringStreamInput {
   matchedTransactions: { id: string; date: string }[];
   /** Plaid's `personal_finance_category.primary`. See EXCLUDED_PFC below. */
   category: string | null;
+  source: RecurringStreamSource;
+  detectionEvidence: RecurringDetectionEvidence | null;
 }
 
 interface Cadence {
@@ -43,6 +60,7 @@ const PLAID_CADENCE: Record<RecurringFrequency, Cadence> = {
   BIWEEKLY: { unit: "days", amount: 14 },
   SEMI_MONTHLY: { unit: "days", amount: 15 },
   MONTHLY: { unit: "months", amount: 1 },
+  QUARTERLY: { unit: "months", amount: 3 },
   ANNUALLY: { unit: "months", amount: 12 },
   UNKNOWN: { unit: "months", amount: 1 },
 };
@@ -52,6 +70,7 @@ const FREQUENCY_LABELS: Record<RecurringFrequency, string> = {
   BIWEEKLY: "Every 2 weeks",
   SEMI_MONTHLY: "Twice a month",
   MONTHLY: "Every month",
+  QUARTERLY: "Every quarter",
   ANNUALLY: "Every year",
   UNKNOWN: "Recurring",
 };
@@ -114,7 +133,7 @@ export interface ManualRecurringItemInput {
 }
 
 export interface RecurringOccurrence {
-  source: "plaid" | "manual";
+  source: RecurringStreamSource | "manual";
   sourceId: string;
   merchant: string;
   frequency: string;
@@ -125,6 +144,12 @@ export interface RecurringOccurrence {
   status: "upcoming" | "overdue" | "complete";
   matchedTransactionId: string | null;
   isIncome: boolean;
+  /**
+   * Supporting occurrence count for a locally inferred stream, used for the
+   * accessible provenance label. Null for Plaid and manual entries, which
+   * carry provider or user authorship instead.
+   */
+  evidenceCount: number | null;
 }
 
 export interface RecurringMonth {
@@ -241,7 +266,7 @@ function appendPlaidStream(
     }
     const isComplete = match !== null;
     occurrences.push({
-      source: "plaid",
+      source: stream.source,
       sourceId: stream.id,
       merchant: stream.merchantName ?? stream.description ?? "Unknown",
       frequency: FREQUENCY_LABELS[stream.frequency],
@@ -252,6 +277,8 @@ function appendPlaidStream(
       status: occurrenceStatus(dueDate, today, isComplete),
       matchedTransactionId: match?.id ?? null,
       isIncome,
+      evidenceCount:
+        stream.source === "inferred" ? stream.detectionEvidence?.occurrenceCount ?? null : null,
     });
     if (!EXCLUDED_PFC.has(stream.category ?? "")) {
       addPlannedTotals(totals, amount, isIncome, isComplete);
@@ -289,6 +316,7 @@ function appendManualItem(
       status: dueDate < today ? "overdue" : "upcoming",
       matchedTransactionId: null,
       isIncome,
+      evidenceCount: null,
     });
     if (isIncome) addRemaining(totals.income, amount);
     else addRemaining(totals.expenses, amount);
