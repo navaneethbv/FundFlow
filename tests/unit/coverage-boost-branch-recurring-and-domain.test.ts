@@ -50,7 +50,6 @@ describe("Coverage Boost: Recurring Detection Branches", () => {
   });
 
   it("detects weekly and monthly candidates across boundary cadences", () => {
-    // 8 weekly transactions in a 56 day window
     const baseDate = new Date("2026-06-01T00:00:00Z");
     const transactions = Array.from({ length: 8 }, (_, i) => {
       const d = new Date(baseDate.getTime() + i * 7 * 86400000);
@@ -79,7 +78,6 @@ describe("Coverage Boost: Recurring Detection Branches", () => {
   });
 
   it("covers variable pattern with even transaction count and 2.5x median threshold", () => {
-    // 4 transactions (even count) with variable amounts: 10, 12, 14, 16 -> median is (12+14)/2 = 13
     const dates = ["2026-04-01", "2026-05-01", "2026-06-01", "2026-07-01"];
     const txsEven = dates.map((d, i) => ({
       id: `even-tx-${i}`,
@@ -103,7 +101,6 @@ describe("Coverage Boost: Recurring Detection Branches", () => {
     expect(result[0]!.amountPattern).toBe("variable");
     expect(result[0]!.expectedAmount).toBe(13);
 
-    // If one transaction exceeds median * 2.5 (13 * 2.5 = 32.5), variable pattern is rejected
     const txsOutlier = dates.map((d, i) => ({
       ...txsEven[i]!,
       id: `outlier-tx-${i}`,
@@ -188,7 +185,7 @@ describe("Coverage Boost: Sync Health & Reconciliations", () => {
     const r1 = buildAccountReconciliation({
       account: { ...baseAccount, currentBalance: null },
       anchor: null,
-      coverage: null,
+      coverage: undefined,
       historyComplete: false,
       transactionTotalCents: 0,
     });
@@ -198,7 +195,7 @@ describe("Coverage Boost: Sync Health & Reconciliations", () => {
     const r2 = buildAccountReconciliation({
       account: baseAccount,
       anchor: null,
-      coverage: null,
+      coverage: undefined,
       historyComplete: true,
       transactionTotalCents: 0,
     });
@@ -238,8 +235,8 @@ describe("Coverage Boost: Sync Health & Reconciliations", () => {
   });
 
   it("handles PGRST202 error in loadInstitutionObservability migration window", async () => {
-    function createQueryBuilder(data: any = []) {
-      const q: any = {};
+    function createQueryBuilder(data: unknown[] = []) {
+      const q: Record<string, unknown> = {};
       q.select = vi.fn(() => q);
       q.eq = vi.fn(() => q);
       q.order = vi.fn(() => q);
@@ -259,12 +256,9 @@ describe("Coverage Boost: Sync Health & Reconciliations", () => {
     const obs = await loadInstitutionObservability(supabase, "u1", [
       {
         id: "i1",
-        user_id: "u1",
-        plaid_item_id: "pi-1",
         institution_name: "Test Bank",
         status: "good",
         error_code: null,
-        created_at: "2026-01-01",
         last_sync_completed_pages: true,
         last_sync_attempt_at: "2026-08-01T00:00:00Z",
         last_sync_success_at: "2026-08-01T00:00:00Z",
@@ -296,34 +290,30 @@ describe("Coverage Boost: Repair and Investments", () => {
     expect(backfill.kind).toBe("backfill_incomplete");
     expect(backfill.message).toContain("3 of 10 pages");
 
-    expect(repairMessage("unknown" as any)).toBe("The repair could not be completed. Try again.");
+    expect(repairMessage("product_not_ready")).toBe("The institution is still preparing your data. Try again shortly.");
+    expect(repairMessage("consent_required")).toBe("Your bank requires consent to be renewed before sync can resume.");
   });
 
   it("calculates investment coverage accounts with and without holdings", () => {
     const coverage = buildInvestmentAccountCoverage(
       [
-        { id: "a1", name: "Brokerage 1", mask: "1111", balance: 5000, type: "investment", subtype: "brokerage", institutionName: "Bank" },
-        { id: "a2", name: "Brokerage 2", mask: "2222", balance: 3000, type: "investment", subtype: "brokerage", institutionName: "Bank" },
+        { id: "a1", name: "Brokerage 1", balance: 5000, type: "investment", subtype: "brokerage", source: "plaid", currency: "USD" },
+        { id: "a2", name: "Brokerage 2", balance: 3000, type: "investment", subtype: "brokerage", source: "plaid", currency: "USD" },
       ],
       [
         {
           id: "h1",
           accountId: "a1",
-          securityId: "s1",
-          quantity: 10,
-          value: 5050.25,
-          costBasis: 5000,
-          currency: "USD",
-          price: 505.025,
-          name: "Stock A",
-          tickerSymbol: "STKA",
-          type: "equity",
-          closePrice: null,
-          closePriceAsOf: null,
-          isCashEquivalent: false,
-          isActive: true,
+          manualAccountId: null,
           accountName: "Brokerage 1",
+          securityName: "Stock A",
+          ticker: "STKA",
+          securityType: "equity",
+          quantity: 10,
+          price: 505.025,
+          value: 5050.25,
           source: "plaid",
+          isActive: true,
         },
       ],
     );
@@ -333,8 +323,8 @@ describe("Coverage Boost: Repair and Investments", () => {
   });
 
   it("loads investment transactions and sync status", async () => {
-    function createQueryBuilder(data: any = []) {
-      const q: any = {};
+    function createQueryBuilder(data: unknown[] = []) {
+      const q: Record<string, unknown> = {};
       q.select = vi.fn(() => q);
       q.eq = vi.fn(() => q);
       q.order = vi.fn(() => q);
@@ -381,15 +371,20 @@ describe("Coverage Boost: Import, Weekly Report & Life Events", () => {
     expect(inferDateOrder(["2026-08-01", "2026-08-02"])).toBe("ymd");
     expect(inferDateOrder(["13/01/2026", "14/01/2026"])).toBe("dmy");
     expect(inferDateOrder(["01/13/2026", "02/14/2026"])).toBe("mdy");
-    expect(inferDateOrder(["2026-08-01", "13/01/2026"])).toBe(null); // conflict
-    expect(inferDateOrder(["01/02/2026"])).toBe(null); // ambiguous returns null
+    expect(inferDateOrder(["2026-08-01", "13/01/2026"])).toBe(null);
+    expect(inferDateOrder(["01/02/2026"])).toBe(null);
   });
 
   it("builds weekly report with cash flow classifications and depository flows", () => {
     const report = buildWeeklyReportModel({
       userId: "u1",
       userEmail: "test@example.com",
-      period: { start: "2026-08-01", end: "2026-08-07" },
+      period: {
+        start: "2026-08-01",
+        end: "2026-08-07",
+        previousStart: "2026-07-25",
+        previousEnd: "2026-07-31",
+      },
       accounts: [{ id: "acct-1", name: "Checking", type: "depository", plaidItemId: "p1" }],
       transactions: [
         {
@@ -458,12 +453,12 @@ describe("Coverage Boost: Goals and Goal Import Branches", () => {
     expect(parseMonarchGoals("invalid json").errors.length).toBeGreaterThan(0);
     expect(parseMonarchGoals("{}").errors).toContain("The goals file has no goals to import.");
     expect(parseMonarchGoals(JSON.stringify({ goals: [] })).rows).toEqual([]);
-    
+
     const validAndDuplicate = JSON.stringify({
       goals: [
         { id: "g1", name: "Emergency Fund", type: "save_up", target_amount: 10000 },
         { id: "g1", name: "Duplicate ID", type: "save_up", target_amount: 5000 },
-        { id: "g3", name: "", type: "save_up" }, // empty name skipped
+        { id: "g3", name: "", type: "save_up" },
       ],
     });
     const res = parseMonarchGoals(validAndDuplicate);
@@ -471,4 +466,3 @@ describe("Coverage Boost: Goals and Goal Import Branches", () => {
     expect(res.errors.length).toBe(2);
   });
 });
-
