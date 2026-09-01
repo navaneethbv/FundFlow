@@ -219,14 +219,17 @@ describe("DashboardPage Server Component", () => {
     expect(html).not.toContain('data-testid="overview-view"');
   });
 
-  it("renders monitor view when view=monitor or tab=cashflow", async () => {
+  it.each([
+    { view: "monitor", expectedView: "monitor", expectedTestId: "monitor-view" },
+    { view: "wealth", expectedView: "wealth", expectedTestId: "wealth-view" },
+  ])("renders $view view when view=$view", async ({ view, expectedView, expectedTestId }) => {
     const element = await DashboardPage({
-      searchParams: Promise.resolve({ view: "monitor" }),
+      searchParams: Promise.resolve({ view }),
     });
     const html = renderToStaticMarkup(element);
 
-    expect(html).toContain('data-active-view="monitor"');
-    expect(html).toContain('data-testid="monitor-view"');
+    expect(html).toContain(`data-active-view="${expectedView}"`);
+    expect(html).toContain(`data-testid="${expectedTestId}"`);
   });
 
   it("renders plan view with weekly report and monthly bills grouping", async () => {
@@ -239,16 +242,6 @@ describe("DashboardPage Server Component", () => {
     expect(html).toContain('data-testid="plan-view"');
     expect(html).toContain('data-bills-grouping="monthly"');
     expect(html).toContain('data-has-weekly-report="true"');
-  });
-
-  it("renders wealth view when view=wealth or tab=income", async () => {
-    const element = await DashboardPage({
-      searchParams: Promise.resolve({ view: "wealth" }),
-    });
-    const html = renderToStaticMarkup(element);
-
-    expect(html).toContain('data-active-view="wealth"');
-    expect(html).toContain('data-testid="wealth-view"');
   });
 
   it("handles multi-value search parameters safely via firstSearchParam", async () => {

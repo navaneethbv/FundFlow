@@ -264,111 +264,87 @@ describe("SettingsPage Server Component", () => {
     expect(html).toContain('data-testid="dashboard-prefs-section"');
   });
 
-  it("renders notifications section with links and reports", async () => {
+  it.each([
+    {
+      section: "notifications",
+      expectedActive: "notifications",
+      expectedContent: ["Open notifications"],
+    },
+    {
+      section: "tags",
+      expectedActive: "tags",
+      expectedContent: ['data-testid="tags-section"'],
+    },
+    {
+      section: "rules",
+      expectedActive: "rules",
+      expectedContent: ['data-testid="merchant-rules-section"'],
+    },
+    {
+      section: "categories",
+      expectedActive: "categories",
+      expectedContent: [
+        'data-testid="category-overrides-section"',
+        'data-testid="budgets-section"',
+        'data-testid="sinking-funds-section"',
+      ],
+    },
+    {
+      section: "security",
+      expectedActive: "security",
+      expectedContent: [
+        'data-testid="mfa-section"',
+        'data-testid="sessions-section"',
+        'data-testid="passkeys-section"',
+        'data-testid="audit-log-section"',
+      ],
+    },
+    {
+      section: "integrations",
+      expectedActive: "integrations",
+      expectedContent: [
+        'data-testid="calendar-feed-section"',
+        'data-testid="ai-insights-section"',
+        'data-testid="api-tokens-section"',
+        'data-testid="ask-ai-section"',
+      ],
+    },
+    {
+      section: "merchants",
+      expectedActive: "merchants",
+      expectedContent: ['data-testid="cancelled-subscriptions-section"'],
+    },
+    {
+      section: "household-general",
+      expectedActive: "household-general",
+      expectedContent: ['data-testid="household-section"'],
+    },
+    {
+      section: "household-preferences",
+      expectedActive: "household-preferences",
+      expectedContent: ['data-active-section="household-preferences"'],
+    },
+    {
+      section: "data",
+      expectedActive: "data",
+      expectedContent: [
+        'data-testid="export-section"',
+        'data-testid="import-section"',
+        'data-testid="import-review-section"',
+        'data-testid="demo-data-section"',
+        'data-testid="danger-zone"',
+      ],
+    },
+  ])("renders $section section with expected content", async ({ section, expectedActive, expectedContent }) => {
     const element = await SettingsPage({
-      searchParams: Promise.resolve({ section: "notifications" }),
+      searchParams: Promise.resolve({ section }),
     });
     const html = renderToStaticMarkup(element);
 
-    expect(html).toContain('data-active-section="notifications"');
-    expect(html).toContain("Open notifications");
-  });
-
-  it("renders tags section", async () => {
-    const element = await SettingsPage({
-      searchParams: Promise.resolve({ section: "tags" }),
-    });
-    const html = renderToStaticMarkup(element);
-
-    expect(html).toContain('data-active-section="tags"');
-    expect(html).toContain('data-testid="tags-section"');
-  });
-
-  it("renders rules section", async () => {
-    const element = await SettingsPage({
-      searchParams: Promise.resolve({ section: "rules" }),
-    });
-    const html = renderToStaticMarkup(element);
-
-    expect(html).toContain('data-active-section="rules"');
-    expect(html).toContain('data-testid="merchant-rules-section"');
-  });
-
-  it("renders categories section with overrides, budgets, and sinking funds", async () => {
-    const element = await SettingsPage({
-      searchParams: Promise.resolve({ section: "categories" }),
-    });
-    const html = renderToStaticMarkup(element);
-
-    expect(html).toContain('data-active-section="categories"');
-    expect(html).toContain('data-testid="category-overrides-section"');
-    expect(html).toContain('data-testid="budgets-section"');
-    expect(html).toContain('data-testid="sinking-funds-section"');
-  });
-
-  it("renders security section with MFA, sessions, passkeys, and audit log", async () => {
-    const element = await SettingsPage({
-      searchParams: Promise.resolve({ section: "security" }),
-    });
-    const html = renderToStaticMarkup(element);
-
-    expect(html).toContain('data-active-section="security"');
-    expect(html).toContain('data-testid="mfa-section"');
-    expect(html).toContain('data-testid="sessions-section"');
-    expect(html).toContain('data-testid="passkeys-section"');
-    expect(html).toContain('data-testid="audit-log-section"');
-  });
-
-  it("renders integrations section with calendar, api tokens, ai-insights, and ask-ai", async () => {
-    const element = await SettingsPage({
-      searchParams: Promise.resolve({ section: "integrations" }),
-    });
-    const html = renderToStaticMarkup(element);
-
-    expect(html).toContain('data-active-section="integrations"');
-    expect(html).toContain('data-testid="calendar-feed-section"');
-    expect(html).toContain('data-testid="ai-insights-section"');
-    expect(html).toContain('data-testid="api-tokens-section"');
-    expect(html).toContain('data-testid="ask-ai-section"');
-  });
-
-  it("renders merchants section with cancelled subscriptions", async () => {
-    const element = await SettingsPage({
-      searchParams: Promise.resolve({ section: "merchants" }),
-    });
-    const html = renderToStaticMarkup(element);
-
-    expect(html).toContain('data-active-section="merchants"');
-    expect(html).toContain('data-testid="cancelled-subscriptions-section"');
-  });
-
-  it("renders household-general and household-preferences sections", async () => {
-    const genElement = await SettingsPage({
-      searchParams: Promise.resolve({ section: "household-general" }),
-    });
-    const genHtml = renderToStaticMarkup(genElement);
-    expect(genHtml).toContain('data-active-section="household-general"');
-    expect(genHtml).toContain('data-testid="household-section"');
-
-    const prefElement = await SettingsPage({
-      searchParams: Promise.resolve({ section: "household-preferences" }),
-    });
-    const prefHtml = renderToStaticMarkup(prefElement);
-    expect(prefHtml).toContain('data-active-section="household-preferences"');
-  });
-
-  it("renders data section with import, export, review, demo data, and danger zone", async () => {
-    const element = await SettingsPage({
-      searchParams: Promise.resolve({ section: "data" }),
-    });
-    const html = renderToStaticMarkup(element);
-
-    expect(html).toContain('data-active-section="data"');
-    expect(html).toContain('data-testid="export-section"');
-    expect(html).toContain('data-testid="import-section"');
-    expect(html).toContain('data-testid="import-review-section"');
-    expect(html).toContain('data-testid="demo-data-section"');
-    expect(html).toContain('data-testid="danger-zone"');
+    expect(html).toContain(`data-active-section="${expectedActive}"`);
+    for (const content of expectedContent) {
+      expect(html).toContain(content);
+    }
   });
 
   it("falls back to profile section on invalid or unknown section param", async () => {
