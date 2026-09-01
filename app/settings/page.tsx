@@ -10,9 +10,11 @@ import ExportSection from "@/components/settings/ExportSection";
 import ReportsSection from "@/components/settings/ReportsSection";
 import ImportSection from "@/components/settings/ImportSection";
 import ImportReviewSection from "@/components/settings/ImportReviewSection";
+import MonarchConfigImportSection from "@/components/settings/MonarchConfigImportSection";
 import AiInsightsSection from "@/components/settings/AiInsightsSection";
 import BudgetsSection from "@/components/settings/BudgetsSection";
 import BanksSection from "@/components/settings/BanksSection";
+import ReconciliationSection from "@/components/settings/ReconciliationSection";
 import DangerZone from "@/components/settings/DangerZone";
 import ManualAccountsSection from "@/components/settings/ManualAccountsSection";
 import MerchantRulesSection from "@/components/settings/MerchantRulesSection";
@@ -39,6 +41,10 @@ import Panel from "@/components/ui/Panel";
 import { sectionFromParam, parseDisplayPrefs, type SettingsSection } from "@/components/settings/settings-nav";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { firstSearchParam } from "@/lib/search-params";
+import {
+  loadInstitutionObservability,
+  SYNC_HEALTH_ITEM_COLUMNS,
+} from "@/lib/sync-health";
 
 export const dynamic = "force-dynamic";
 
@@ -300,18 +306,39 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
     const [{ data: items }, { data: manualAccounts }, { data: accounts }, { data: households }] = await Promise.all([
       supabase
         .from("plaid_items")
-        .select("id, institution_name, status, error_code, shared_household_id")
+        .select(`${SYNC_HEALTH_ITEM_COLUMNS}, shared_household_id`)
         .order("created_at"),
       supabase.from("manual_accounts").select("id, name, account_type, balance, include_in_net_worth").order("created_at"),
       supabase.from("accounts").select("id, name, mask, type, apr").eq("user_id", userId).order("name"),
       supabase.from("households").select("id").order("created_at", { ascending: false }).limit(1),
     ]);
+    const safeItems = (items ?? []) as Array<{
+      id: string;
+      institution_name: string | null;
+      status: string;
+      error_code: string | null;
+      last_sync_attempt_at?: string | null;
+      last_sync_success_at?: string | null;
+      last_sync_completed_pages?: boolean | null;
+      initial_history_incomplete?: boolean | null;
+      cursor_reset_detected_at?: string | null;
+      shared_household_id?: string | null;
+    }>;
+    const observability = await loadInstitutionObservability(supabase, userId, safeItems);
+    const healthByItem = Object.fromEntries(
+      observability.institutions.map((health) => [health.plaidItemId, health]),
+    );
     content = (
       <>
         <div className="grid gap-6 xl:grid-cols-2">
-          <BanksSection initialItems={items ?? []} householdId={(households ?? [])[0]?.id ?? null} />
+          <BanksSection
+            initialItems={safeItems}
+            healthByItem={healthByItem}
+            householdId={(households ?? [])[0]?.id ?? null}
+          />
           <ManualAccountsSection initialAccounts={manualAccounts ?? []} />
         </div>
+        <ReconciliationSection rows={observability.reconciliations} />
         <CardAprSection
           initialAccounts={((accounts ?? []) as Array<{
             id: string;
@@ -383,6 +410,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
             cycle_anchor_date: string;
           }>}
         />
+        <MonarchConfigImportSection />
       </>
     );
       break;

@@ -1,6 +1,69 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-08-28. Read this first to resume.
+Last updated: 2026-08-30. Read this first to resume.
+
+## 2026-08-30: PR #130 hybrid recurring detection
+
+Branch `codex/pr-130-recurring-impl` adds a local recurring detector that fills the gap when Plaid returns no recurring stream, on top of the Plaid 46 upgrade the PR already carried.
+
+Plaid stays authoritative.
+A deterministic detector reads canonical transactions and materializes inferred streams into the existing `recurring_streams` table, so the calendar, review, dismissal, override, notification, and household behavior all keep working unchanged.
+Thresholds are weekly 8-in-8-weeks, biweekly 4-in-8-weeks, monthly 3-in-4-months, and quarterly 3-in-10-months; annual is never inferred because three annual occurrences exceed reliably available history.
+Amounts qualify as fixed, single newest price step, or bounded variable, and a variable stream additionally needs a utility or bill category or a recurring signifier and is rejected outright for an `in store` channel.
+
+Inference runs after transactions are durably synced: manual refresh and the daily cron take the full hybrid path, auto refresh runs local inference only so Plaid request volume is unchanged, and both the transaction and the new `RECURRING_TRANSACTIONS_UPDATE` webhooks reconcile the affected item.
+An import commit into a connected account also triggers it.
+Failures degrade rather than break: a detector error never fails an already durable sync, webhook, or import.
+
+**All three migrations are applied to the linked project** (`20260830190000`, `20260830200000`, `20260830210000`).
+Two of them did not compile against a real Postgres and were fixed while applying: an unparenthesized `CASE ... THEN` inside an `IF` condition truncated the expression, and `datetime_field_value_out_of_range` is not a real condition name.
+Both had passed review because pgTAP could not run locally without Docker.
+
+Local verification passed typecheck, lint, production build, `npm audit` with zero vulnerabilities, and 4,338 tests across 406 files including the live-Supabase integration suite.
+The three existing recurring browser tests pass.
+
+The new `infers a monthly stream when Plaid omits it` browser test is **written but never executed**: it needs Plaid sandbox credentials, and `.env.local` points `PLAID_ENV` at production.
+It self-skips rather than issuing sandbox calls with a production secret.
+Run it in an environment with `PLAID_ENV=sandbox` and matching `PLAID_SECRET` before treating the browser regression as proven.
+
+
+## 2026-08-29: PR #137 exact-head review and remediation
+
+Branch `codex/monarch-production-alignment` implements Phase 0 through Phase 6 of the Monarch alignment plan.
+The second full review confirmed and fixed merchant-rule precedence, recurring-calendar keyboard and ARIA behavior, cursor-health persistence, budget replacement identity, import conflict approval, override validation, canonical export dependencies, bounded reads, weekly and annual override propagation, liabilities preservation, bounded sync progress, repair locking, reconciliation aggregation, investment-account coverage, and user-timezone date boundaries.
+
+The recurring calendar now uses full date keys, a single roving tab stop, real grid rows, and the actual last date of the month.
+Normal transaction sync and repair both apply and persist bounded page progress, reject unknown accounts before cursor advancement, and coordinate through the item claim lock.
+Account reconciliation now uses `20260829173000_account_reconciliation_aggregate.sql` to compute owner-scoped integer-cent totals and per-account coverage in PostgreSQL instead of downloading up to 20,000 rows per account.
+
+Plaid Liabilities bill synchronization is disabled by default through the `liabilitiesSync` feature flag because it adds a separately billed provider request for each user and sync run.
+Enable it only after Plaid product access and quota impact are approved by adding `liabilitiesSync` to `FUNDFLOW_FEATURE_FLAGS`.
+The older APR enrichment path remains separately gated by `PLAID_LIABILITIES_ENABLED=1`.
+
+The original migrations through `20260829160000` are present in the linked migration ledger.
+Deploy these four follow-up migrations in timestamp order before enabling or verifying the affected Production paths:
+
+1. `20260829170000_credit_card_bill_insert_ownership.sql`
+2. `20260829171000_life_event_retirement_amount.sql`
+3. `20260829172000_goal_import_identity_unique.sql`
+4. `20260829173000_account_reconciliation_aggregate.sql`
+
+Retirement life-event writes can violate the currently deployed positive-amount constraint until `20260829171000` is applied.
+Until `20260829173000` is deployed, the Settings page remains usable but reconciliation rows deliberately show the missing-anchor state instead of computed ledger balances.
+The reconciliation feature must not be treated as Production-ready before that migration is deployed.
+
+Local verification passed lint, typecheck, production build, 4,147 unit tests, the focused sync integration suite, and the recurring and repair browser acceptance paths.
+Unit coverage is 98.09% statements, 95.11% branches, 98.76% functions, and 99.08% lines.
+`npm audit --omit=dev` reports zero vulnerabilities.
+The linked migration ledger confirms exactly the four pending migrations above.
+The linked `supabase db push --dry-run` could not authenticate without `SUPABASE_DB_PASSWORD`, so it must be repeated by the deployer before applying the migrations.
+
+The tracked-tree privacy pass removes 29 personal screenshots and attachments, deletes the live-data remediation plan, and replaces exact live financial evidence with synthetic values and generic labels.
+The ignored local `qa-shots` folder was also moved out of the repository workspace because its generated reports and live-data screenshots contained personal identifiers.
+The retained visual-regression baselines are generated from the disposable `Quality Reviewer` fixture and contain only synthetic data.
+The tracked tree contains no occurrence of the requested personal email address or username.
+Deleting `.vscode/settings.json` intentionally removes the repository-specific SonarLint connected-mode identifier; developers may configure connected mode locally without committing that file.
+Historical Git objects and author metadata are outside a normal PR deletion and require a separately authorized coordinated history rewrite if permanent historical erasure is required.
 
 ## 2026-08-28: PR #134 UI review remediation (F1–F12)
 

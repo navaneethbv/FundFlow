@@ -25,6 +25,7 @@ vi.mock("@/lib/ai-provider", async (importOriginal) => {
 const mockFetchRows = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/export", () => ({
   fetchPrivacySafeRows: (...args: unknown[]) => mockFetchRows(...args),
+  recentHistoryStart: () => "2026-03-01",
 }));
 
 vi.mock("@/lib/env.server", () => ({

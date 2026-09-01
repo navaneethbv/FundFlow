@@ -23,6 +23,50 @@ const merchantName =
   "PAYPAL 401(K) SAVINGS PLAN AUTOMATIC CONTRIBUTION 7538";
 const institutionName =
   "American Express Retirement and Investment Services";
+const inferredMerchantName = "E2E LOCAL RECURRING 130";
+const PLAID_SANDBOX_READY = Boolean(
+  process.env.PLAID_CLIENT_ID &&
+    process.env.PLAID_SECRET &&
+    (process.env.PLAID_ENV ?? "sandbox") === "sandbox",
+);
+
+/**
+ * Mints a sandbox public token straight from Plaid so the exchange route below
+ * receives a genuine one. Called over plain fetch rather than the Plaid SDK
+ * because the SDK path in this repo is reached through server-only modules.
+ */
+async function createSandboxPublicToken(): Promise<string> {
+  const response = await fetch("https://sandbox.plaid.com/sandbox/public_token/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      client_id: process.env.PLAID_CLIENT_ID,
+      secret: process.env.PLAID_SECRET,
+      institution_id: "ins_109508",
+      initial_products: ["transactions"],
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Plaid sandbox public_token/create failed: ${response.status} ${await response.text()}`,
+    );
+  }
+  return ((await response.json()) as { public_token: string }).public_token;
+}
+
+/**
+ * Calendar-aware month subtraction that clamps rather than rolling over, so a
+ * run on the 31st still produces gaps inside the monthly cadence window.
+ */
+function monthsBack(from: string, months: number): string {
+  const [year, month, day] = from.split("-").map(Number);
+  const target = new Date(Date.UTC(year!, month! - 1 - months, 1));
+  const lastDay = new Date(
+    Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  target.setUTCDate(Math.min(day!, lastDay));
+  return target.toISOString().slice(0, 10);
+}
 // Anchoring the demo stream on today's date (rather than a fixed day-of-month
 // like the 15th) keeps the fixture correct regardless of which day the suite
 // actually runs on: a dueDate equal to "today" always resolves to the
@@ -50,6 +94,8 @@ test.describe.serial("Phase 5: recurring page", () => {
   let admin: SupabaseClient;
   let userId = "";
   let householdId = "";
+  let inferredItemId = "";
+  let inferredAccountId = "";
 
   test.beforeAll(async () => {
     admin = createClient(SUPABASE_URL!, SUPABASE_SECRET_KEY!, {
@@ -156,8 +202,97 @@ test.describe.serial("Phase 5: recurring page", () => {
   });
 
   test.afterAll(async () => {
+    // Delete the inferred fixture explicitly: the joins and streams hang off
+    // the seeded transactions, and leaving a live sandbox item behind would
+    // let the next run's detector see this run's history.
+    if (inferredItemId) {
+      const { data: streams } = await admin
+        .from("recurring_streams")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("plaid_item_id", inferredItemId);
+      for (const stream of streams ?? []) {
+        await admin
+          .from("recurring_stream_transactions")
+          .delete()
+          .eq("user_id", userId)
+          .eq("recurring_stream_id", stream.id);
+      }
+      await admin
+        .from("recurring_streams")
+        .delete()
+        .eq("user_id", userId)
+        .eq("plaid_item_id", inferredItemId);
+      if (inferredAccountId) {
+        await admin
+          .from("transactions")
+          .delete()
+          .eq("user_id", userId)
+          .eq("account_id", inferredAccountId);
+      }
+    }
     if (userId) await admin.auth.admin.deleteUser(userId);
   });
+
+  /**
+   * Seeds occurrences of the detector's target merchant onto the connected
+   * sandbox account. Amounts are positive because positive is money out.
+   */
+  async function insertInferredTransactions(
+    rows: { date: string; amount: number; suffix: string }[],
+  ) {
+    const { error } = await admin.from("transactions").insert(
+      rows.map((row) => ({
+        user_id: userId,
+        account_id: inferredAccountId,
+        plaid_transaction_id: `recurring-e2e-inferred-transaction-${stamp}-${row.suffix}`,
+        date: row.date,
+        authorized_date: row.date,
+        amount: row.amount,
+        name: inferredMerchantName,
+        merchant_name: inferredMerchantName,
+        iso_currency_code: "USD",
+        pfc_primary: "GENERAL_MERCHANDISE",
+        pfc_detailed: "GENERAL_MERCHANDISE_OTHER",
+        payment_channel: "online",
+        pending: false,
+      })),
+    );
+    if (error) throw error;
+  }
+
+  /**
+   * Runs the product's own Refresh. Sandbox items can answer PRODUCT_NOT_READY
+   * on their first pulls, which marks the item `error` and takes it out of
+   * `listActiveItems`, so a transient miss is retried after restoring the
+   * status. A persistent failure still fails the test rather than passing on
+   * a stream that was never inferred.
+   */
+  async function runSyncUntilInferred(page: Page) {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await admin
+        .from("plaid_items")
+        .update({ status: "active", error_code: null })
+        .eq("id", inferredItemId)
+        .eq("user_id", userId);
+
+      // page.request shares the signed-in browser context, so this is the same
+      // authenticated call the Refresh button makes.
+      const response = await page.request.post("/api/plaid/sync", { data: {} });
+      if (response.ok()) {
+        const { count } = await admin
+          .from("recurring_streams")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq("source", "inferred")
+          .eq("is_active", true)
+          .eq("merchant_name", inferredMerchantName);
+        if ((count ?? 0) > 0) return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+    }
+    throw new Error("local recurring inference never produced the seeded stream");
+  }
 
   async function signIn(page: Page) {
     await page.goto("/login");
@@ -166,6 +301,164 @@ test.describe.serial("Phase 5: recurring page", () => {
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
   }
+
+  /**
+   * Reproduces the reported defect: qualifying transactions exist in the
+   * ledger, Plaid returns no recurring stream for them, and the Recurring page
+   * stays empty forever.
+   *
+   * The item is connected through the product's own Link exchange with a real
+   * Plaid sandbox public token rather than a hand-written row, because a fake
+   * access token makes the transaction sync fail, which marks the item
+   * `error`, which removes it from `listActiveItems` -- and inference would
+   * then be skipped for the very item under test.
+   */
+  test("infers a monthly stream when Plaid omits it", async ({ page }) => {
+    test.skip(!PLAID_SANDBOX_READY, "Plaid sandbox credentials are required"); // NOSONAR: never use production Plaid credentials for this sandbox lifecycle test.
+
+    await signIn(page);
+
+    const linkResponse = await page.request.post("/api/plaid/link-token", { data: {} });
+    expect(linkResponse.ok()).toBeTruthy();
+    const { link_token: linkToken } = await linkResponse.json();
+
+    const exchangeResponse = await page.request.post("/api/plaid/exchange", {
+      data: { public_token: await createSandboxPublicToken(), link_token: linkToken },
+    });
+    expect(exchangeResponse.ok()).toBeTruthy();
+
+    const { data: connectedItem, error: connectedItemError } = await admin
+      .from("plaid_items")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .maybeSingle();
+    if (connectedItemError) throw connectedItemError;
+    expect(connectedItem, "the sandbox exchange should leave one active item").toBeTruthy();
+    inferredItemId = connectedItem!.id;
+
+    const { data: connectedAccounts, error: connectedAccountsError } = await admin
+      .from("accounts")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("plaid_item_id", inferredItemId)
+      .order("id", { ascending: true });
+    if (connectedAccountsError) throw connectedAccountsError;
+    expect(connectedAccounts?.length ?? 0).toBeGreaterThan(0);
+    inferredAccountId = connectedAccounts![0]!.id;
+
+    // Three monthly charges at one steady amount: the smallest sequence the
+    // monthly cadence accepts. Plaid's sandbox never returns a recurring
+    // stream for them, which is precisely the gap being closed.
+    await insertInferredTransactions([
+      { date: monthsBack(today, 3), amount: 17.99, suffix: "a" },
+      { date: monthsBack(today, 2), amount: 17.99, suffix: "b" },
+      { date: monthsBack(today, 1), amount: 17.99, suffix: "c" },
+    ]);
+
+    await runSyncUntilInferred(page);
+
+    await page.goto("/recurring");
+    await expect(page.getByText(inferredMerchantName, { exact: true }).first()).toBeVisible();
+    await expect(
+      page.getByText("Detected from 3 transactions", { exact: true }).first(),
+    ).toBeVisible();
+    await expect(page.getByText("Every month", { exact: true }).first()).toBeVisible();
+    await expectNoHorizontalPageScroll(page);
+
+    // The inferred row is a first-class stream: every owner control works.
+    await page.getByRole("link", { name: /^Manage \(/ }).click();
+    const manageRow = page.locator("li").filter({ hasText: inferredMerchantName });
+    const confirmPatch = page.waitForResponse(
+      (response) =>
+        response.request().method() === "PATCH" &&
+        response.url().includes("/api/recurring") &&
+        response.ok(),
+    );
+    await manageRow.getByRole("button", { name: "Confirm" }).click();
+    await confirmPatch;
+    await expect(manageRow.getByRole("button", { name: "Confirm" })).toHaveCount(0);
+
+    const amountInput = page.getByRole("spinbutton", {
+      name: `Expected amount for ${inferredMerchantName}`,
+    });
+    const amountPatch = page.waitForResponse(
+      (response) =>
+        response.request().method() === "PATCH" &&
+        response.url().includes("/api/recurring") &&
+        response.ok(),
+    );
+    await amountInput.fill("21.50");
+    await amountInput.blur();
+    await amountPatch;
+
+    // The override has to survive a full server re-render, not just local state.
+    await page.reload();
+    await page.getByRole("link", { name: /^Manage \(/ }).click();
+    await expect(
+      page.getByRole("spinbutton", {
+        name: `Expected amount for ${inferredMerchantName}`,
+      }),
+    ).toHaveValue("21.5");
+
+    const dismissPatch = page.waitForResponse(
+      (response) =>
+        response.request().method() === "PATCH" &&
+        response.url().includes("/api/recurring") &&
+        response.ok(),
+    );
+    await page
+      .locator("li")
+      .filter({ hasText: inferredMerchantName })
+      .getByRole("button", { name: "Not recurring" })
+      .click();
+    await dismissPatch;
+
+    const restorePatch = page.waitForResponse(
+      (response) =>
+        response.request().method() === "PATCH" &&
+        response.url().includes("/api/recurring") &&
+        response.ok(),
+    );
+    await page
+      .locator("li")
+      .filter({ hasText: inferredMerchantName })
+      .getByRole("button", { name: "Restore" })
+      .click();
+    await restorePatch;
+
+    // A price change keeps the same inferred identity instead of splitting the
+    // subscription into a second merchant stream.
+    const { data: beforeStep, error: beforeStepError } = await admin
+      .from("recurring_streams")
+      .select("stream_id, identity_key")
+      .eq("user_id", userId)
+      .eq("source", "inferred")
+      .eq("is_active", true)
+      .eq("merchant_name", inferredMerchantName)
+      .single();
+    if (beforeStepError) throw beforeStepError;
+
+    await insertInferredTransactions([{ date: today, amount: 24.99, suffix: "d" }]);
+    await runSyncUntilInferred(page);
+
+    const { data: afterStep, error: afterStepError } = await admin
+      .from("recurring_streams")
+      .select("stream_id, identity_key, last_amount, average_amount, user_amount")
+      .eq("user_id", userId)
+      .eq("source", "inferred")
+      .eq("is_active", true)
+      .eq("merchant_name", inferredMerchantName)
+      .single();
+    if (afterStepError) throw afterStepError;
+
+    expect(afterStep.stream_id).toBe(beforeStep.stream_id);
+    expect(afterStep.identity_key).toBe(beforeStep.identity_key);
+    expect(Number(afterStep.last_amount)).toBe(24.99);
+    // The user's override still outranks the detector's forecast.
+    expect(Number(afterStep.user_amount)).toBe(21.5);
+  });
+
 
   test("is reachable from the sidebar, reviews an occurrence, edits its amount, and preserves scope while navigating months", async ({
     page,
@@ -346,6 +639,9 @@ test.describe.serial("Phase 5: recurring page", () => {
     const institutionRow = page.locator("li").filter({
       hasText: institutionName,
     });
+    await expect(institutionRow.locator("dt").getByText("Transactions", { exact: true })).toBeVisible();
+    await expect(institutionRow.locator("dt").getByText("Investments", { exact: true })).toBeVisible();
+    await expect(institutionRow.getByText("Repair required", { exact: true }).first()).toBeVisible();
     const institutionNameBox = await institutionRow
       .locator(":scope > span")
       .first()
@@ -359,6 +655,12 @@ test.describe.serial("Phase 5: recurring page", () => {
     expect(institutionActionsBox!.y).toBeGreaterThanOrEqual(
       institutionNameBox!.y + institutionNameBox!.height,
     );
+
+    await expect(
+      page.getByRole("heading", { name: "Account reconciliation" }),
+    ).toBeVisible();
+    await expect(page.locator("dt").getByText("Provider balance", { exact: true })).toBeVisible();
+    await expect(page.getByText("E2E Checking").last()).toBeVisible();
 
     const sectionPicker = page.getByRole("combobox", {
       name: "Settings section",
@@ -391,5 +693,28 @@ test.describe.serial("Phase 5: recurring page", () => {
         expect(box!.width).toBeGreaterThanOrEqual(250);
       }
     }
+  });
+
+  test("calendar arrow keys move one unique roving focus target through valid grid rows", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto("/recurring?month=2026-08&view=calendar");
+
+    const calendar = page.getByRole("grid", {
+      name: "Recurring calendar for 2026-08",
+    });
+    await expect(calendar).toBeVisible();
+    await expect(calendar.getByRole("row")).toHaveCount(7);
+    await expect(calendar.locator('button[tabindex="0"]')).toHaveCount(1);
+
+    const augustFifteenth = calendar.getByRole("button", {
+      name: /^2026-08-15, /,
+    });
+    await augustFifteenth.focus();
+    await augustFifteenth.press("ArrowRight");
+    await expect(
+      calendar.getByRole("button", { name: /^2026-08-16, / }),
+    ).toBeFocused();
   });
 });

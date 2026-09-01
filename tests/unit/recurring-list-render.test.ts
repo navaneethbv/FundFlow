@@ -12,6 +12,7 @@ import RecurringList from "@/components/recurring/RecurringList";
 import ReviewBanner from "@/components/recurring/ReviewBanner";
 
 const LINKS = {
+  overdue: "/recurring?month=2026-07&tab=overdue",
   upcoming: "/recurring?month=2026-07",
   complete: "/recurring?month=2026-07&tab=complete",
   manage: "/recurring?month=2026-07&tab=manage",
@@ -30,6 +31,7 @@ function occurrence(overrides: Partial<RecurringOccurrence> = {}): RecurringOccu
     status: "upcoming",
     matchedTransactionId: null,
     isIncome: false,
+    evidenceCount: null,
     ...overrides,
   };
 }
@@ -48,6 +50,8 @@ function stream(overrides: Partial<RecurringStreamRow> = {}): RecurringStreamRow
     averageAmount: 15.49,
     accountName: "Checking",
     isOwn: true,
+    source: "plaid",
+    detectionEvidence: null,
     ...overrides,
   };
 }
@@ -95,7 +99,7 @@ describe("RecurringList — Upcoming/Complete tables", () => {
         manualItems: [],
         currency: "USD",
         today: "2026-07-10",
-        tab: "upcoming",
+        tab: "overdue",
         links: LINKS,
       }),
     );
@@ -258,7 +262,7 @@ describe("RecurringList — Upcoming/Complete tables", () => {
 });
 
 describe("RecurringList — tabs are URL-driven, not client state", () => {
-  it("renders three Tabs links pointing at the links prop, with counts", () => {
+  it("renders Tabs links pointing at the links prop, with counts", () => {
     const html = renderToStaticMarkup(
       createElement(RecurringList, {
         occurrences: [occurrence()],
@@ -270,9 +274,11 @@ describe("RecurringList — tabs are URL-driven, not client state", () => {
         links: LINKS,
       }),
     );
+    expect(html).toContain(`href="${LINKS.overdue.replaceAll("&", "&amp;")}"`);
     expect(html).toContain(`href="${LINKS.upcoming}"`);
     expect(html).toContain(`href="${LINKS.complete.replaceAll("&", "&amp;")}"`);
     expect(html).toContain(`href="${LINKS.manage.replaceAll("&", "&amp;")}"`);
+    expect(html).toContain("Overdue (0)");
     expect(html).toContain("Upcoming (1)");
     expect(html).toContain("Manage (1)");
   });
@@ -343,5 +349,72 @@ describe("ReviewBanner", () => {
     expect(html).toContain("There are 2 new recurring merchants for you to review.");
     expect(html).toContain('href="/recurring?tab=manage"');
     expect(html).toContain("Review now");
+  });
+});
+
+describe("inferred stream provenance", () => {
+  const inferredOccurrence = occurrence({
+    source: "inferred",
+    sourceId: "inferred-1",
+    merchant: "City Water",
+    evidenceCount: 3,
+  });
+  const inferredStream = stream({
+    id: "inferred-1",
+    merchantName: "City Water",
+    source: "inferred",
+    detectionEvidence: {
+      occurrenceCount: 3,
+      amountPattern: "fixed",
+      maximumCadenceDeviationDays: 1,
+      matchedSignifiers: [],
+    },
+  });
+
+  function renderWith(occurrences: RecurringOccurrence[], streams: RecurringStreamRow[]) {
+    return renderToStaticMarkup(
+      createElement(RecurringList, {
+        occurrences,
+        streams,
+        manualItems: [],
+        currency: "USD",
+        today: "2026-07-10",
+        tab: "upcoming",
+        links: LINKS,
+      }),
+    );
+  }
+
+  it("labels an inferred occurrence with its supporting transaction count", () => {
+    const html = renderWith([inferredOccurrence], [inferredStream]);
+    expect(html).toContain("Detected from 3 transactions");
+  });
+
+  it("keeps owner controls on an inferred stream", () => {
+    const html = renderWith([inferredOccurrence], [inferredStream]);
+    expect(html).toContain("More options for City Water");
+    expect(html).not.toContain("Shared · view only");
+  });
+
+  it("renders a shared inferred stream read-only", () => {
+    const html = renderWith(
+      [inferredOccurrence],
+      [{ ...inferredStream, isOwn: false }],
+    );
+    expect(html).toContain("Shared · view only");
+    expect(html).not.toContain("More options for City Water");
+  });
+
+  it("adds no provenance label to Plaid or manual entries", () => {
+    const html = renderWith([occurrence()], [stream()]);
+    expect(html).not.toContain("Detected from");
+  });
+
+  it("falls back to a countless label when evidence is missing", () => {
+    const html = renderWith(
+      [occurrence({ source: "inferred", sourceId: "inferred-1", evidenceCount: null })],
+      [{ ...inferredStream, detectionEvidence: null }],
+    );
+    expect(html).toContain("Detected from transactions");
   });
 });

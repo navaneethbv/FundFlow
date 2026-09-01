@@ -99,6 +99,7 @@ export default async function GoalsPage({ searchParams }: Readonly<PageProps>) {
 
           {visible.length === 0 ? (
         <EmptyState
+          headingLevel={2}
           icon={<Target aria-hidden className="h-5 w-5" />}
           title={tab === "pay_down" ? "No payoff goals yet" : "Plan for your future"}
           description={

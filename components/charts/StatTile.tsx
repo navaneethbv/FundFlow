@@ -15,6 +15,7 @@ export default function StatTile({
   upIsGood = true,
   trend,
   chart,
+  headingLevel = 3,
 }: Readonly<{
   label: string;
   value: number;
@@ -26,7 +27,9 @@ export default function StatTile({
   trend?: number[];
   /** Decorative mini chart; overrides the default sparkline when provided. */
   chart?: ReactNode;
+  headingLevel?: 2 | 3;
 }>) {
+  const Heading = headingLevel === 2 ? "h2" : "h3";
   const showDelta = delta !== undefined && deltaVs;
   // An unchanged figure is neither good nor bad. Reading `delta >= 0` as "up"
   // paints a flat $0.00 green on one tile and red on the next, which is the
@@ -44,7 +47,7 @@ export default function StatTile({
           one-line one, so anything elastic here lands the values in a row at
           different baselines. */}
       <div className="flex h-11 items-start justify-between gap-2">
-        <h3 className="eyebrow">{label}</h3>
+        <Heading className="eyebrow">{label}</Heading>
         {chart ?? (trend && trend.length >= 2 && <Sparkline values={trend} />)}
       </div>
       <p data-money className="metric-value mt-3 text-3xl">

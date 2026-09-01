@@ -11,7 +11,7 @@ import { loadOverviewWidgetData } from "@/lib/dashboard-widgets-data";
 import type { AccountSummary } from "@/lib/dashboard";
 import { formatMonth } from "@/lib/format";
 import { localDateKey } from "@/lib/format-date";
-import type { Goal } from "@/lib/goals";
+import type { GoalSummaryItem } from "@/lib/goal-summary";
 import { createClient } from "@/lib/supabase/server";
 import type { ComponentProps } from "react";
 
@@ -37,7 +37,7 @@ export default async function OverviewView({
 }: Readonly<{
   prefsRaw: unknown;
   data: Omit<DashboardWidgetGridData, "investments">;
-  goals: Goal[];
+  goals: GoalSummaryItem[];
   recent: ComponentProps<typeof RecentActivity>["transactions"];
   accountNames: Map<string, string>;
   accounts: AccountSummary[];

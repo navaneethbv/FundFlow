@@ -1,10 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-hidden="true">
-  <rect width="320" height="200" fill="#e9f6e9"/>
-  <circle cx="160" cy="128" r="52" fill="#f2c94c"/>
-  <path d="M0 128 h320 v72 H0Z" fill="#e9f6e9"/>
-  <path d="M0 138 c56-34 108-34 160 0 52 34 104 34 160 0 v62 H0Z" fill="#008300"/>
-  <path d="M0 168 c62-24 118-24 174 4 46 22 96 26 146 10 v18 H0Z" fill="#046b04"/>
-  <g stroke="#d9a800" stroke-width="7" stroke-linecap="round">
-    <path d="M160 52 v16"/><path d="M92 74 l12 12"/><path d="M228 74 l-12 12"/>
-  </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 320 200"><rect width="320" height="200" fill="#e9f6e9"/><circle cx="160" cy="128" r="52" fill="#f2c94c"/><path fill="#e9f6e9" d="M0 128 h320 v72 H0Z"/><path fill="#008300" d="M0 138 c56-34 108-34 160 0 52 34 104 34 160 0 v62 H0Z"/><path fill="#046b04" d="M0 168 c62-24 118-24 174 4 46 22 96 26 146 10 v18 H0Z"/><g stroke="#d9a800" stroke-linecap="round" stroke-width="7"><path d="M160 52 v16"/><path d="M92 74 l12 12"/><path d="M228 74 l-12 12"/></g></svg>

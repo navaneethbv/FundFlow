@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { createClient } from "@supabase/supabase-js";
-import { refreshRecurringForItem, refreshRecurringForUser } from "@/lib/recurring";
-import { storeItem, getItem } from "@/lib/plaid-service";
+import type { refreshRecurringForItem as RefreshRecurringForItem, refreshRecurringForUser as RefreshRecurringForUser } from "@/lib/recurring";
+
+let refreshRecurringForItem: typeof RefreshRecurringForItem;
+let refreshRecurringForUser: typeof RefreshRecurringForUser;
+let storeItem: typeof import("@/lib/plaid-service").storeItem;
+let getItem: typeof import("@/lib/plaid-service").getItem;
 
 // Mock the Plaid client getter
 const mockTransactionsRecurringGet = vi.fn();
@@ -24,6 +28,11 @@ const suite = run ? describe : describe.skip;
 suite("recurring streams DB integration & mock Plaid", () => {
   if (!run) return;
 
+  beforeAll(async () => {
+    ({ refreshRecurringForItem, refreshRecurringForUser } = await import("@/lib/recurring"));
+    ({ storeItem, getItem } = await import("@/lib/plaid-service"));
+  });
+
   const admin = createClient(url!, secret!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
@@ -34,6 +43,8 @@ suite("recurring streams DB integration & mock Plaid", () => {
   const plaidItemId = `plaid-item-recur-${stamp}`;
   const inflowStreamId = `stream-in-${stamp}`;
   const outflowStreamId = `stream-out-${stamp}`;
+  const inflowAccountId = `00000000-0000-0000-0000-${String(stamp).slice(-12).padStart(12, "0")}`;
+  const outflowAccountId = `00000000-0000-0000-0001-${String(stamp).slice(-12).padStart(12, "0")}`;
 
   beforeAll(async () => {
     // Create temporary user
@@ -53,6 +64,11 @@ suite("recurring streams DB integration & mock Plaid", () => {
       institutionId: "ins_recur",
       institutionName: "Recur Bank",
     });
+    const { error: accountError } = await admin.from("accounts").insert([
+      { id: inflowAccountId, user_id: userId, plaid_item_id: itemDbId, plaid_account_id: `plaid-in-${stamp}`, name: "Checking", iso_currency_code: "USD" },
+      { id: outflowAccountId, user_id: userId, plaid_item_id: itemDbId, plaid_account_id: `plaid-out-${stamp}`, name: "Credit Card", iso_currency_code: "USD" },
+    ]);
+    if (accountError) throw accountError;
   });
 
   afterAll(async () => {
@@ -72,10 +88,11 @@ suite("recurring streams DB integration & mock Plaid", () => {
             merchant_name: "Employer Corp",
             average_amount: { amount: 2000.0, iso_currency_code: "USD" },
             last_amount: { amount: 2000.0, iso_currency_code: "USD" },
-            frequency: "bi-weekly",
-            status: "active",
+            frequency: "BIWEEKLY",
+            status: "MATURE",
             personal_finance_category: { primary: "INCOME" },
             is_active: true,
+            account_id: `plaid-in-${stamp}`,
             // Real Plaid responses always include this (TransactionStream.
             // transaction_ids is non-optional in the SDK types); empty here
             // since no local transactions exist for this stream in the test.
@@ -89,10 +106,11 @@ suite("recurring streams DB integration & mock Plaid", () => {
             merchant_name: "Netflix",
             average_amount: { amount: 15.49, iso_currency_code: "USD" },
             last_amount: { amount: 15.49, iso_currency_code: "USD" },
-            frequency: "monthly",
-            status: "active",
+            frequency: "MONTHLY",
+            status: "MATURE",
             personal_finance_category: { primary: "ENTERTAINMENT" },
             is_active: true,
+            account_id: `plaid-out-${stamp}`,
             transaction_ids: [],
           },
         ],
@@ -110,7 +128,7 @@ suite("recurring streams DB integration & mock Plaid", () => {
     // Verify DB records
     const { data: streams } = await admin
       .from("recurring_streams")
-      .select("stream_id, stream_type, merchant_name, average_amount, frequency")
+      .select("stream_id, stream_type, merchant_name, average_amount, frequency, source, identity_key")
       .eq("user_id", userId)
       .order("stream_type");
 
@@ -121,14 +139,18 @@ suite("recurring streams DB integration & mock Plaid", () => {
     expect(inflow!.stream_id).toBe(inflowStreamId);
     expect(inflow!.merchant_name).toBe("Employer Corp");
     expect(Number(inflow!.average_amount)).toBe(2000.0);
-    expect(inflow!.frequency).toBe("bi-weekly");
+    expect(inflow!.frequency).toBe("BIWEEKLY");
+    expect(inflow!.source).toBe("plaid");
+    expect(inflow!.identity_key).toMatch(/^recurring-v1:/);
 
     const outflow = streams!.find((s) => s.stream_type === "outflow");
     expect(outflow).toBeTruthy();
     expect(outflow!.stream_id).toBe(outflowStreamId);
     expect(outflow!.merchant_name).toBe("Netflix");
     expect(Number(outflow!.average_amount)).toBe(15.49);
-    expect(outflow!.frequency).toBe("monthly");
+    expect(outflow!.frequency).toBe("MONTHLY");
+    expect(outflow!.source).toBe("plaid");
+    expect(outflow!.identity_key).toMatch(/^recurring-v1:/);
   });
 
   it("runs refreshRecurringForUser successfully", async () => {
@@ -138,6 +160,9 @@ suite("recurring streams DB integration & mock Plaid", () => {
     });
 
     const count = await refreshRecurringForUser(userId);
-    expect(count).toBe(0);
+    expect(count).toEqual({
+      plaid: 0,
+      inferred: { active: 0, added: 0, deactivated: 0, deduplicated: 0, failed: 0 },
+    });
   });
 });

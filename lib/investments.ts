@@ -33,6 +33,116 @@ export interface HoldingRow extends HoldingJoinRow {
   periodChangePct: number | null; // price change over the available history, null without it
 }
 
+export interface InvestmentAccountSummary {
+  id: string;
+  name: string;
+  source: "plaid" | "manual";
+  type: string | null;
+  subtype: string | null;
+  balance: number | null;
+  currency: string;
+}
+
+export interface InvestmentAccountCoverageItem extends InvestmentAccountSummary {
+  holdingValue: number | null;
+  displayValue: number;
+  valueSource: "holdings" | "account-balance";
+}
+
+export interface InvestmentAccountCoverage {
+  accounts: InvestmentAccountCoverageItem[];
+  total: number;
+  accountsWithoutHoldings: number;
+}
+
+export function buildInvestmentAccountCoverage(
+  accounts: InvestmentAccountSummary[],
+  holdings: HoldingJoinRow[],
+): InvestmentAccountCoverage {
+  const holdingSumByAccount = new Map<string, number>();
+  const holdingAccountById = new Map<
+    string,
+    Pick<HoldingJoinRow, "accountName" | "source">
+  >();
+  const accountsWithHoldings = new Set<string>();
+
+  for (const holding of holdings) {
+    if (!holding.isActive) continue;
+    const acctId = holding.accountId ?? holding.manualAccountId;
+    if (!acctId) continue;
+    const derivedValue =
+      holding.quantity !== null && holding.price !== null
+        ? holding.quantity * holding.price
+        : null;
+    const value = holding.value ?? derivedValue;
+    if (value === null || !Number.isFinite(value)) continue;
+    accountsWithHoldings.add(acctId);
+    holdingAccountById.set(acctId, {
+      accountName: holding.accountName,
+      source: holding.source,
+    });
+    holdingSumByAccount.set(
+      acctId,
+      (holdingSumByAccount.get(acctId) ?? 0) + value,
+    );
+  }
+
+  let total = 0;
+  let accountsWithoutHoldings = 0;
+
+  const coverageAccounts: InvestmentAccountCoverageItem[] = accounts.map((acct) => {
+    const hasHoldings = accountsWithHoldings.has(acct.id);
+    if (hasHoldings) {
+      const holdingValue =
+        Math.round(((holdingSumByAccount.get(acct.id) ?? 0) + Number.EPSILON) * 100) / 100;
+      total += holdingValue;
+      return {
+        ...acct,
+        holdingValue,
+        displayValue: holdingValue,
+        valueSource: "holdings" as const,
+      };
+    } else {
+      accountsWithoutHoldings++;
+      const bal = acct.balance ?? 0;
+      total += bal;
+      return {
+        ...acct,
+        holdingValue: null,
+        displayValue: bal,
+        valueSource: "account-balance" as const,
+      };
+    }
+  });
+
+  const knownAccountIds = new Set(accounts.map((account) => account.id));
+  for (const [accountId, holdingValueRaw] of holdingSumByAccount) {
+    if (knownAccountIds.has(accountId)) continue;
+    const holdingValue =
+      Math.round((holdingValueRaw + Number.EPSILON) * 100) / 100;
+    const metadata = holdingAccountById.get(accountId);
+    total += holdingValue;
+    coverageAccounts.push({
+      id: accountId,
+      name: metadata?.accountName ?? "Investment Account",
+      source: metadata?.source ?? "plaid",
+      type: null,
+      subtype: null,
+      balance: null,
+      currency: "USD",
+      holdingValue,
+      displayValue: holdingValue,
+      valueSource: "holdings",
+    });
+  }
+
+  return {
+    accounts: coverageAccounts,
+    total: Math.round((total + Number.EPSILON) * 100) / 100,
+    accountsWithoutHoldings,
+  };
+}
+
 export interface InvestmentsPage {
   total: number;
   dayChange: { amount: number; pct: number } | null; // vs the prior snapshot day

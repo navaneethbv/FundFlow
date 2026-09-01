@@ -259,6 +259,16 @@ describe("planning roadmap features", () => {
     ).toEqual({ assets: 6000, liabilities: 12600, netWorth: -6600 });
   });
 
+  it("classifies an overpaid card as an asset in monthly net-worth snapshots", () => {
+    expect(
+      computeNetWorthSnapshot([
+        { name: "Checking", type: "depository", balance: 1000 },
+        { name: "Card credit", type: "credit", balance: -2.11 },
+        { name: "Card debt", type: "credit", balance: 125 },
+      ]),
+    ).toEqual({ assets: 1002.11, liabilities: 125, netWorth: 877.11 });
+  });
+
   it("builds notification and respects alert opt-outs", () => {
     const notification = buildNotification("budget_exceeded", {
       title: "Dining budget exceeded",

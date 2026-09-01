@@ -11,6 +11,7 @@ const mockFetchPrivacySafeRows = vi.fn();
 vi.mock("@/lib/export", () => ({
   fetchPrivacySafeRows: (...args: unknown[]) =>
     mockFetchPrivacySafeRows(...args),
+  recentHistoryStart: () => "2026-03-01",
 }));
 
 const mockGenerateAiInsightSummaries = vi.fn();

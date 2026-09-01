@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { classifyBalanceSheetAmount } from "@/lib/account-balance";
 import { formatCurrency } from "@/lib/format";
 import { addDays, addMonths, isoDate, parseDate } from "@/lib/date-utils";
 
@@ -112,6 +113,7 @@ export interface SpendingAnomaly {
 export interface NetWorthAccount {
   name: string;
   type: string | null;
+  subtype?: string | null;
   balance: number | null;
   includeInNetWorth?: boolean;
 }
@@ -500,12 +502,13 @@ export function computeNetWorthSnapshot(accounts: NetWorthAccount[]) {
 
   for (const account of accounts) {
     if (account.includeInNetWorth === false) continue;
-    const balance = Math.abs(account.balance ?? 0);
-    if (["credit", "liability", "debt", "loan"].includes(account.type ?? "")) {
-      liabilities += balance;
-    } else {
-      assets += balance;
-    }
+    const classified = classifyBalanceSheetAmount(
+      account.balance,
+      account.type,
+      account.subtype,
+    );
+    if (classified.kind === "liability") liabilities += classified.amount;
+    else assets += classified.amount;
   }
 
   return {
@@ -545,13 +548,14 @@ export function toAiInsightPayload(input: {
 }
 
 export function buildImportReview(
-  rows: { date: string; amount: number; merchant: string; category: string | null; sourceAccount?: string | null }[],
+  rows: { date: string; amount: number; merchant: string; category: string | null; sourceAccount?: string | null; notes?: string | null; tags?: string[] | null }[],
   existingFingerprints: Set<string>,
+  existingCategoryByFingerprint?: Map<string, string>,
 ) {
   const seen = new Set<string>();
   const reviewRows: Array<{
     rowHash: string;
-    row: { date: string; amount: number; merchant: string; category: string | null; sourceAccount?: string | null };
+    row: { date: string; amount: number; merchant: string; category: string | null; sourceAccount?: string | null; notes?: string | null; tags?: string[] | null };
     flags: string[];
     status: "pending" | "approved" | "rejected" | "committed";
   }> = rows.map((row) => {
@@ -560,6 +564,16 @@ export function buildImportReview(
     if (existingFingerprints.has(fingerprint)) flags.push("possible-duplicate");
     if (seen.has(fingerprint)) flags.push("file-duplicate");
     seen.add(fingerprint);
+    // Plaid-vs-Monarch classification conflict: the same transaction already
+    // exists in FundFlow under a different category. This surfaces the real
+    // Monarch parity case (a purchase Monarch calls Shopping that Plaid tagged
+    // TRANSFER_OUT) so the user decides deliberately instead of silently
+    // importing a conflicting category.
+    const existingCategory = existingCategoryByFingerprint?.get(fingerprint);
+    if (existingCategory && row.category) {
+      const normalized = row.category.toUpperCase().replace(/\s+/g, "_");
+      if (existingCategory !== normalized) flags.push("category-conflict");
+    }
     const hash = createHash("sha256").update(fingerprint).digest("hex");
     return {
       rowHash: hash,

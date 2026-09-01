@@ -45,7 +45,7 @@ const USER_DATA_TABLES: UserDataTableSpec[] = [
   table("goals", "name, target_amount, saved_amount, target_date, goal_type"),
   table("merchant_rules", "match_type, pattern, display_name, category, enabled"),
   table("manual_accounts", "name, account_type, balance, include_in_net_worth"),
-  table("account_balance_snapshots", "account_id, manual_account_id, snapshot_date, current_balance, available_balance, iso_currency_code"),
+  table("account_balance_snapshots", "account_id, manual_account_id, snapshot_date, current_balance, available_balance, iso_currency_code, captured_at"),
   table("alert_preferences", "broken_bank, budget_exceeded, goal_reached, large_transaction, low_cash_forecast"),
   table("ai_settings", "enabled"),
   table("budget_periods", "budget_id, month, planned"),

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_REPORT_TIMEZONE,
+  dateKeyInTimezone,
   getMonthlyReportPeriod,
   getWeeklyReportPeriod,
   isWeeklyReportDue,
@@ -8,6 +9,12 @@ import {
 } from "@/lib/report-period";
 
 describe("weekly report periods", () => {
+  it("derives the user's calendar day instead of the server's UTC day", () => {
+    const instant = new Date("2026-08-30T06:30:00.000Z");
+    expect(dateKeyInTimezone(instant, "America/Los_Angeles")).toBe("2026-08-29");
+    expect(dateKeyInTimezone(instant, "America/New_York")).toBe("2026-08-30");
+  });
+
   it("returns the previous Monday through Sunday", () => {
     expect(
       getWeeklyReportPeriod(

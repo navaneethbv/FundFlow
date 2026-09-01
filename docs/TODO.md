@@ -2,6 +2,37 @@
 
 Nice-to-have features and enhancements, deferred out of the initial build.
 
+## Added 2026-08-30: PR #130 remaining verification
+
+The hybrid recurring detection code, migrations, and tests are complete, and all three migrations are already applied to the linked project.
+Two items remain before the browser regression can be called proven:
+
+1. Run `npx playwright test tests/e2e/recurring.spec.ts --grep "infers a monthly stream when Plaid omits it" --project=chromium` in an environment with `PLAID_ENV=sandbox` and a matching sandbox `PLAID_SECRET`. The test self-skips everywhere else so it never spends production Plaid calls.
+2. Run the two pgTAP suites (`supabase/tests/reconcile_inferred_recurring.test.sql`, `supabase/tests/reconcile_plaid_recurring.test.sql`) once Docker is available. Both reconciliation functions shipped with compile errors that only surfaced when applied to a real Postgres, so this suite is the regression net for the next change to them.
+
+`tests/integration/api-routes.test.ts` "proceeds successfully even if one user's sync throws an error" timed out once at its 30s limit during a full-suite run against live Supabase, then passed on the two following full runs and in isolation.
+Watch it: if it recurs, the fix is contention-aware timeouts for the live integration files, not a blanket timeout bump.
+
+## Added 2026-08-29: PR #137 deployment actions
+
+PR #137's Phase 0 through Phase 6 code and focused acceptance tests are complete.
+Production rollout still requires the following owner-authorized actions:
+
+1. Deploy `20260829170000_credit_card_bill_insert_ownership.sql`.
+2. Deploy `20260829171000_life_event_retirement_amount.sql` before creating zero-amount retirement life events.
+3. Deploy `20260829172000_goal_import_identity_unique.sql`.
+4. Deploy `20260829173000_account_reconciliation_aggregate.sql` before opening the new Settings reconciliation surface.
+5. Run `supabase db push --dry-run --linked` with `SUPABASE_DB_PASSWORD` available before applying the migrations.
+6. Re-run the linked credit-card ownership, retirement life-event, goal identity, and reconciliation RPC checks after deployment.
+7. Confirm the exact Production deployment commit and repeat the authenticated comparison read-only.
+
+Plaid Liabilities bill sync remains off by default because it adds a billed provider request per user and run.
+After Plaid product and quota approval, add `liabilitiesSync` to `FUNDFLOW_FEATURE_FLAGS` and monitor provider usage.
+The existing APR enrichment path still requires its separate `PLAID_LIABILITIES_ENABLED=1` gate.
+
+The PR removes current-tree personal media and sanitizes live financial fixtures.
+A coordinated history rewrite is still required if the deleted historical blobs must be physically removed from every Git object and clone.
+
 ## Added 2026-08-21: two AI-surface findings (from the docs pass)
 
 Found while documenting `app/api/ai/*` for `docs/ARCHITECTURE.md`.

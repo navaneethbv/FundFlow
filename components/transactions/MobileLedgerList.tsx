@@ -20,6 +20,8 @@ export interface LedgerCardRow {
   tags: string[];
   splits: { category: string; amount: number }[];
   categoryOptions: string[];
+  providerCategory?: string | null;
+  override?: { displayCategory: string | null; cashFlowClassification: "expense" | "income" | null } | null;
 }
 
 /**
@@ -81,8 +83,10 @@ export default function MobileLedgerList({
   return (
     <ul className="divide-y divide-panel-border">
       {rows.map((row, index) => {
-        const startsDay = grouped && (index === 0 || rows[index - 1]!.date !== row.date);
-        const striped = bands[index]! % 2 === 1;
+        const prevRow = index > 0 ? rows[index - 1] : undefined;
+        const startsDay = grouped && prevRow?.date !== row.date;
+        const band = bands[index] ?? 0;
+        const striped = band % 2 === 1;
         const group = dayGroups?.get(row.date);
 
         return (
@@ -137,6 +141,8 @@ export default function MobileLedgerList({
                   tags={row.tags}
                   splits={row.splits}
                   categories={row.categoryOptions}
+                  providerCategory={row.providerCategory}
+                  override={row.override}
                 />
               </div>
             </li>

@@ -13,6 +13,17 @@ vi.mock("@/lib/sync", () => ({
   syncItemTransactions: (...args: unknown[]) => mockSyncItemTransactions(...args),
 }));
 
+const mockRefreshRecurringForItem = vi.fn();
+vi.mock("@/lib/recurring", () => ({
+  refreshRecurringForItem: (...args: unknown[]) => mockRefreshRecurringForItem(...args),
+}));
+
+const mockRefreshInferredRecurringForItem = vi.fn();
+vi.mock("@/lib/recurring-inference", () => ({
+  refreshInferredRecurringForItem: (...args: unknown[]) =>
+    mockRefreshInferredRecurringForItem(...args),
+}));
+
 const mockErrorResponse = vi.fn();
 const mockBadRequest = vi.fn();
 vi.mock("@/lib/http", () => ({
@@ -65,6 +76,9 @@ describe("POST /api/plaid/webhook", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({ success: true });
+    expect(mockRefreshInferredRecurringForItem).toHaveBeenCalledWith(
+      await mockGetItemByPlaidItemId.mock.results[0].value,
+    );
     expect(mockGetItemByPlaidItemId).toHaveBeenCalledWith("plaid-item-1");
     expect(mockSyncItemTransactions).toHaveBeenCalledWith(sampleItem);
   });
@@ -98,7 +112,7 @@ describe("POST /api/plaid/webhook", () => {
 
     const res = await POST(req);
     expect(res.status).toBe(200);
-    expect(mockSetItemStatus).toHaveBeenCalledWith("item-db-1", "error", "ITEM_LOGIN_REQUIRED");
+    expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "error", "ITEM_LOGIN_REQUIRED");
   });
 
   it("handles ITEM PENDING_EXPIRATION, LOGIN_REPAIRED, and USER_PERMISSION_REVOKED webhooks", async () => {
@@ -114,7 +128,7 @@ describe("POST /api/plaid/webhook", () => {
       }),
     });
     await POST(req);
-    expect(mockSetItemStatus).toHaveBeenCalledWith("item-db-1", "active", "PENDING_EXPIRATION");
+    expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", "PENDING_EXPIRATION");
 
     // LOGIN_REPAIRED
     req = new NextRequest("http://localhost/api/plaid/webhook", {
@@ -126,7 +140,7 @@ describe("POST /api/plaid/webhook", () => {
       }),
     });
     await POST(req);
-    expect(mockSetItemStatus).toHaveBeenCalledWith("item-db-1", "active", null);
+    expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", null);
 
     // USER_PERMISSION_REVOKED
     req = new NextRequest("http://localhost/api/plaid/webhook", {
@@ -138,7 +152,7 @@ describe("POST /api/plaid/webhook", () => {
       }),
     });
     await POST(req);
-    expect(mockSetItemStatus).toHaveBeenCalledWith("item-db-1", "disconnected", "USER_PERMISSION_REVOKED");
+    expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "disconnected", "USER_PERMISSION_REVOKED");
 
     // ERROR with default code
     req = new NextRequest("http://localhost/api/plaid/webhook", {
@@ -150,7 +164,7 @@ describe("POST /api/plaid/webhook", () => {
       }),
     });
     await POST(req);
-    expect(mockSetItemStatus).toHaveBeenCalledWith("item-db-1", "error", "ITEM_ERROR");
+    expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "error", "ITEM_ERROR");
   });
 
   it("handles HOLDINGS webhook when investmentsPage feature flag is enabled", async () => {
@@ -262,7 +276,7 @@ describe("POST /api/plaid/webhook", () => {
 
     const res = await POST(req);
     expect(res.status).toBe(200);
-    expect(mockSetItemStatus).toHaveBeenCalledWith("item-db-1", "active", null);
+    expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", null);
   });
 
   it("rejects replayed webhooks with old timestamp", async () => {

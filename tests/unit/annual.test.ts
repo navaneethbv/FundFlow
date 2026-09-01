@@ -48,8 +48,8 @@ describe("computeYearInMoney", () => {
     expect(result).not.toBeNull();
     expect(result!.totalSpend).toBe(1200 + 480.5 + 899.99 + 45.25);
     expect(result!.totalIncome).toBe(6000);
-    // (6000 − 2625.74) / 6000 = 56.2% → rounded to 56
-    expect(result!.savingsRate).toBe(56);
+    // (6000 − 2625.74) / 6000 = 56.24%
+    expect(result!.savingsRate).toBe(56.24);
     expect(result!.transactionCount).toBe(6);
   });
 
@@ -126,15 +126,15 @@ describe("computeYearInMoney", () => {
     ).toBeNull();
   });
 
-  it("floors the savings rate at zero and survives a no-income year", () => {
+  it("handles signed savings rate and survives a no-income year", () => {
     const spendOnly = [txn("2026-06-01", 100, "Shop")];
-    expect(computeYearInMoney(spendOnly, "2026")!.savingsRate).toBe(0);
+    expect(computeYearInMoney(spendOnly, "2026")!.savingsRate).toBeNull();
     expect(computeYearInMoney(spendOnly, "2026")!.biggestMonth).toEqual({
       month: "2026-06",
       spend: 100,
     });
     const overspent = [...spendOnly, txn("2026-06-02", -50, "Gig", "INCOME")];
-    expect(computeYearInMoney(overspent, "2026")!.savingsRate).toBe(0);
+    expect(computeYearInMoney(overspent, "2026")!.savingsRate).toBe(-100);
   });
 
   it("handles an income-only year without spend-derived fields", () => {
@@ -193,6 +193,24 @@ describe("computeYearInMoneyFromProjection", () => {
     expect(recap.transactionCount).toBe(1);
     expect(recap.totalSpend).toBe(100);
     expect(recap.totalIncome).toBe(0);
+  });
+
+  it("keeps an explicitly confirmed expense even when its provider group is excluded", () => {
+    const recap = computeYearInMoneyFromProjection(
+      [
+        projected({
+          signedAmount: 275,
+          flow: "expense",
+          groupKey: "LOAN_PAYMENTS",
+          categoryKey: "LOAN_PAYMENTS",
+          merchant: "Confirmed purchase",
+        }),
+      ],
+      "2026",
+    );
+
+    expect(recap?.totalSpend).toBe(275);
+    expect(recap?.transactionCount).toBe(1);
   });
 
   it("counts split parts as rows and totals them once", () => {

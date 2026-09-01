@@ -47,7 +47,7 @@ describe("Plaid Webhook Route Extra Branches", () => {
     const origEnv = process.env.PLAID_ENV;
     try {
       process.env.PLAID_ENV = "sandbox";
-      const mockItem = { id: "item-db-1", plaid_item_id: "plaid-item-1" };
+      const mockItem = { id: "item-db-1", user_id: "user-1", plaid_item_id: "plaid-item-1" };
       vi.spyOn(plaidService, "getItemByPlaidItemId").mockResolvedValue(mockItem as never);
       const setStatusSpy = vi.spyOn(plaidService, "setItemStatus").mockResolvedValue();
 
@@ -61,7 +61,7 @@ describe("Plaid Webhook Route Extra Branches", () => {
         }),
       });
       expect((await webhookPost(reqError)).status).toBe(200);
-      expect(setStatusSpy).toHaveBeenCalledWith("item-db-1", "error", "ITEM_ERROR");
+      expect(setStatusSpy).toHaveBeenCalledWith("user-1", "item-db-1", "error", "ITEM_ERROR");
 
       // PENDING_EXPIRATION
       const reqPending = new NextRequest("http://localhost/api/plaid/webhook", {
@@ -73,7 +73,7 @@ describe("Plaid Webhook Route Extra Branches", () => {
         }),
       });
       expect((await webhookPost(reqPending)).status).toBe(200);
-      expect(setStatusSpy).toHaveBeenCalledWith("item-db-1", "active", "PENDING_EXPIRATION");
+      expect(setStatusSpy).toHaveBeenCalledWith("user-1", "item-db-1", "active", "PENDING_EXPIRATION");
 
       // LOGIN_REPAIRED
       const reqRepaired = new NextRequest("http://localhost/api/plaid/webhook", {
@@ -85,7 +85,7 @@ describe("Plaid Webhook Route Extra Branches", () => {
         }),
       });
       expect((await webhookPost(reqRepaired)).status).toBe(200);
-      expect(setStatusSpy).toHaveBeenCalledWith("item-db-1", "active", null);
+      expect(setStatusSpy).toHaveBeenCalledWith("user-1", "item-db-1", "active", null);
 
       // USER_PERMISSION_REVOKED
       const reqRevoked = new NextRequest("http://localhost/api/plaid/webhook", {
@@ -97,7 +97,7 @@ describe("Plaid Webhook Route Extra Branches", () => {
         }),
       });
       expect((await webhookPost(reqRevoked)).status).toBe(200);
-      expect(setStatusSpy).toHaveBeenCalledWith("item-db-1", "disconnected", "USER_PERMISSION_REVOKED");
+      expect(setStatusSpy).toHaveBeenCalledWith("user-1", "item-db-1", "disconnected", "USER_PERMISSION_REVOKED");
     } finally {
       process.env.PLAID_ENV = origEnv;
     }
@@ -108,7 +108,7 @@ describe("Plaid Webhook Route Extra Branches", () => {
     try {
       process.env.PLAID_ENV = "sandbox";
       vi.spyOn(featureFlags, "isFeatureEnabled").mockReturnValue(true);
-      const mockItem = { id: "item-db-1", plaid_item_id: "plaid-item-1" };
+      const mockItem = { id: "item-db-1", user_id: "user-1", plaid_item_id: "plaid-item-1" };
       vi.spyOn(plaidService, "getItemByPlaidItemId").mockResolvedValue(mockItem as never);
       const syncInvestmentsSpy = vi.spyOn(investmentSync, "syncInvestmentsForItem").mockResolvedValue({
         outcome: "synced",

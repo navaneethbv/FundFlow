@@ -35,6 +35,7 @@ function makeSupabase(data: { accounts: Row[]; transactions: Row[]; linkedRefund
       gte: () => chain,
       lt: () => chain,
       in: () => chain,
+      range: () => chain,
       limit: () => chain,
       maybeSingle: () =>
         Promise.resolve(

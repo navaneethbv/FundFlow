@@ -294,7 +294,7 @@ export default function BudgetTable({
   return (
     <section className="overflow-hidden rounded-card border border-panel-border bg-panel shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
-        <h3 className="font-semibold">{section.label}</h3>
+        <h2 className="font-semibold">{section.label}</h2>
         <div className="flex items-center gap-4 text-right text-xs text-muted">
           <span data-money>{formatCurrency(section.planned, currency)} planned</span>
           <span data-money>{formatCurrency(section.actual, currency)} actual</span>

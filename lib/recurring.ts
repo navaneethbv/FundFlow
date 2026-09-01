@@ -8,6 +8,55 @@ import { logError } from "@/lib/log";
 import { diffRecurringStreams, type RecurringDiff } from "@/lib/insights";
 import { createNotification } from "@/lib/notifications";
 import { formatCurrency } from "@/lib/format";
+import {
+  normalizeRecurringMerchant,
+  recurringIdentityKey,
+  type RecurringIdentityFrequency,
+} from "@/lib/recurring-detection";
+import {
+  refreshInferredRecurringForUser,
+  type InferredRecurringRefreshResult,
+} from "@/lib/recurring-inference";
+
+export interface RecurringRefreshResult {
+  plaid: number;
+  inferred: InferredRecurringRefreshResult;
+}
+
+const EMPTY_INFERRED_REFRESH: InferredRecurringRefreshResult = {
+  active: 0,
+  added: 0,
+  deactivated: 0,
+  deduplicated: 0,
+  failed: 0,
+};
+
+function identityFrequency(value: string | null | undefined): RecurringIdentityFrequency | null {
+  switch (value?.toUpperCase().replaceAll("-", "_")) {
+    case "WEEKLY":
+      return "WEEKLY";
+    case "BIWEEKLY":
+    case "BI_WEEKLY":
+      return "BIWEEKLY";
+    case "MONTHLY":
+      return "MONTHLY";
+    case "QUARTERLY":
+      return "QUARTERLY";
+    case "SEMI_MONTHLY":
+      return "SEMI_MONTHLY";
+    case "ANNUALLY":
+      return "ANNUALLY";
+    default:
+      return null;
+  }
+}
+
+function plaidSnapshotCount(snapshot: unknown, fallback: number): number {
+  if (typeof snapshot === "number") return snapshot;
+  if (typeof snapshot !== "object" || snapshot === null) return fallback;
+  const count = (snapshot as { plaid?: unknown }).plaid;
+  return typeof count === "number" ? count : fallback;
+}
 
 function mapStreamRow(
   userId: string,
@@ -16,6 +65,10 @@ function mapStreamRow(
   stream: TransactionStream,
   accountIdByPlaidId: Map<string, string>,
 ) {
+  const accountId = accountIdByPlaidId.get(stream.account_id) ?? null;
+  const merchant = stream.merchant_name?.trim() || stream.description?.trim() || "";
+  const normalizedMerchant = normalizeRecurringMerchant(merchant);
+  const frequency = identityFrequency(stream.frequency);
   return {
     user_id: userId,
     plaid_item_id: itemDbId,
@@ -29,10 +82,14 @@ function mapStreamRow(
     status: stream.status ?? null,
     category: stream.personal_finance_category?.primary ?? null,
     is_active: stream.is_active ?? true,
-    account_id: accountIdByPlaidId.get(stream.account_id) ?? null,
+    account_id: accountId,
     first_date: stream.first_date ?? null,
     last_date: stream.last_date ?? null,
     predicted_next_date: stream.predicted_next_date ?? null,
+    source: "plaid" as const,
+    identity_key: accountId && normalizedMerchant && frequency
+      ? recurringIdentityKey(userId, accountId, streamType, normalizedMerchant, frequency)
+      : null,
   };
 }
 
@@ -66,55 +123,22 @@ async function resolveLocalTransactionIds(
  * thrown error upstream must skip this entirely, so a failed or partial
  * refresh changes nothing.
  */
-async function deactivateStaleStreams(
-  supabase: ReturnType<typeof createServiceClient>,
-  userId: string,
-  staleStreamIds: string[],
-): Promise<void> {
-  if (staleStreamIds.length === 0) return;
-  const { error } = await supabase
-    .from("recurring_streams")
-    .update({ is_active: false })
-    .eq("user_id", userId)
-    .in("stream_id", staleStreamIds);
-  if (error) throw error;
-}
-
-/**
- * Replaces the recurring_stream_transactions join rows for one stream with
- * its currently-resolved local transaction ids (delete-then-insert).
- */
-async function replaceStreamTransactionJoins(
-  supabase: ReturnType<typeof createServiceClient>,
-  userId: string,
-  recurringStreamId: string,
-  localTransactionIds: string[],
-): Promise<void> {
-  const { error: deleteError } = await supabase
-    .from("recurring_stream_transactions")
-    .delete()
-    .eq("recurring_stream_id", recurringStreamId)
-    .eq("user_id", userId);
-  if (deleteError) throw deleteError;
-
-  if (localTransactionIds.length === 0) return;
-  const { error: insertError } = await supabase.from("recurring_stream_transactions").insert(
-    localTransactionIds.map((transactionId) => ({
-      user_id: userId,
-      recurring_stream_id: recurringStreamId,
-      transaction_id: transactionId,
-    })),
-  );
-  if (insertError) throw insertError;
-}
-
 /**
  * Notifies about subscription price hikes and new subscriptions found by
  * diffing a refresh against the stored streams. Best-effort by design: a
  * failed notification must never break the sync that discovered it.
  */
-async function notifyRecurringChanges(userId: string, diff: RecurringDiff) {
+async function notifyRecurringChanges(
+  userId: string,
+  diff: RecurringDiff,
+  identityByStream: ReadonlyMap<string, string | null>,
+  existingInferredIdentities: ReadonlySet<string>,
+) {
+  const notifiedIdentities = new Set<string>();
   for (const hike of diff.priceHikes) {
+    const identity = identityByStream.get(hike.streamId) ?? hike.streamId;
+    if (notifiedIdentities.has(identity)) continue;
+    notifiedIdentities.add(identity);
     try {
       await createNotification(
         userId,
@@ -130,6 +154,10 @@ async function notifyRecurringChanges(userId: string, diff: RecurringDiff) {
     }
   }
   for (const stream of diff.newStreams) {
+    const identity = identityByStream.get(stream.streamId) ?? stream.streamId;
+    if (existingInferredIdentities.has(identity)) continue;
+    if (notifiedIdentities.has(identity)) continue;
+    notifiedIdentities.add(identity);
     try {
       await createNotification(
         userId,
@@ -160,17 +188,12 @@ export async function refreshRecurringForItem(item: PlaidItemRow): Promise<numbe
     ...response.data.outflow_streams.map((s) => ({ stream: s, type: "outflow" as const })),
   ];
 
-  // Short-circuit before touching the database at all when there is nothing
-  // to persist — a partial/empty response must not trip any downstream
-  // account or mark-and-sweep query.
-  if (tagged.length === 0) return 0;
-
   const supabase = createServiceClient();
-
   const { data: accountRows, error: accountsError } = await supabase
     .from("accounts")
     .select("id, plaid_account_id")
-    .eq("user_id", item.user_id);
+    .eq("user_id", item.user_id)
+    .eq("plaid_item_id", item.id);
   if (accountsError) throw accountsError;
   const accountIdByPlaidId = new Map(
     (accountRows ?? []).map((row) => [row.plaid_account_id as string, row.id as string]),
@@ -180,36 +203,31 @@ export async function refreshRecurringForItem(item: PlaidItemRow): Promise<numbe
     mapStreamRow(item.user_id, item.id, type, stream, accountIdByPlaidId),
   );
 
-  // Snapshot stored amounts before the upsert overwrites them. Service
+  // Snapshot stored amounts before the atomic RPC overwrites them. Service
   // client bypasses RLS, so both filters are load-bearing.
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("recurring_streams")
     .select("stream_id, last_amount")
     .eq("user_id", item.user_id)
-    .eq("plaid_item_id", item.id);
+    .eq("plaid_item_id", item.id)
+    .eq("source", "plaid");
+  if (existingError) throw existingError;
 
-  const { data: upserted, error } = await supabase
+  const { data: inferredRows, error: inferredError } = await supabase
     .from("recurring_streams")
-    .upsert(rows, { onConflict: "stream_id" })
-    .select("id, stream_id");
-  if (error) throw error;
-
-  // Mark-and-sweep: a stream that existed for this item but is absent from
-  // this full, successful response is no longer current. This only runs
-  // after the fetch and upsert above succeeded — a thrown error above skips
-  // straight past this block, so a failed or partial refresh changes nothing.
-  const currentStreamIds = new Set(rows.map((row) => row.stream_id));
-  const staleStreamIds = (existing ?? [])
-    .map((row) => row.stream_id as string)
-    .filter((streamId) => !currentStreamIds.has(streamId));
-  await deactivateStaleStreams(supabase, item.user_id, staleStreamIds);
-
-  // Resolve each stream's Plaid transaction ids to local rows and replace
-  // the join table's rows for that stream. Ids that don't resolve (older,
-  // pruned transactions) are simply omitted.
-  const localStreamIdByPlaidStreamId = new Map(
-    (upserted ?? []).map((row) => [row.stream_id as string, row.id as string]),
+    .select("identity_key")
+    .eq("user_id", item.user_id)
+    .eq("plaid_item_id", item.id)
+    .eq("source", "inferred")
+    .eq("is_active", true);
+  if (inferredError) throw inferredError;
+  const inferredIdentities = new Set(
+    (inferredRows ?? [])
+      .map((row) => row.identity_key as string | null)
+      .filter((identity): identity is string => Boolean(identity)),
   );
+
+  // Resolve all local transaction ids before the atomic provider snapshot.
   const allPlaidTransactionIds = [
     ...new Set(tagged.flatMap(({ stream }) => stream.transaction_ids)),
   ];
@@ -219,15 +237,19 @@ export async function refreshRecurringForItem(item: PlaidItemRow): Promise<numbe
     allPlaidTransactionIds,
   );
 
-  for (const { stream } of tagged) {
-    const recurringStreamId = localStreamIdByPlaidStreamId.get(stream.stream_id);
-    if (!recurringStreamId) continue;
-    const localTransactionIds = stream.transaction_ids
+  const joins = tagged.map(({ stream }) => ({
+    stream_id: stream.stream_id,
+    transaction_ids: stream.transaction_ids
       .map((plaidId) => localTransactionIdByPlaidId.get(plaidId))
-      .filter((id): id is string => Boolean(id));
-
-    await replaceStreamTransactionJoins(supabase, item.user_id, recurringStreamId, localTransactionIds);
-  }
+      .filter((id): id is string => Boolean(id)),
+  }));
+  const { data: snapshotResult, error: snapshotError } = await supabase.rpc("reconcile_plaid_recurring", {
+    p_user_id: item.user_id,
+    p_item_id: item.id,
+    p_payload: { streams: rows, joins },
+  });
+  if (snapshotError) throw snapshotError;
+  const plaidCount = plaidSnapshotCount(snapshotResult, rows.length);
 
   // Diff only when history exists — the first refresh seeds silently
   // instead of announcing every pre-existing subscription as "new".
@@ -246,22 +268,33 @@ export async function refreshRecurringForItem(item: PlaidItemRow): Promise<numbe
         isActive: row.is_active,
       })),
     );
-    await notifyRecurringChanges(item.user_id, diff);
+    await notifyRecurringChanges(
+      item.user_id,
+      diff,
+      new Map(rows.map((row) => [row.stream_id, row.identity_key])),
+      inferredIdentities,
+    );
   }
 
-  return rows.length;
+  return plaidCount;
 }
 
 /** Refresh recurring streams for all active items of a user. */
-export async function refreshRecurringForUser(userId: string): Promise<number> {
+export async function refreshRecurringForUser(userId: string): Promise<RecurringRefreshResult> {
   const items = await listActiveItems(userId);
-  let count = 0;
+  let plaid = 0;
   for (const item of items) {
     try {
-      count += await refreshRecurringForItem(item);
+      plaid += await refreshRecurringForItem(item);
     } catch (error) {
       logError("recurring.item", error);
     }
   }
-  return count;
+  let inferred = EMPTY_INFERRED_REFRESH;
+  try {
+    inferred = await refreshInferredRecurringForUser(userId);
+  } catch (error) {
+    logError("recurring.inference", error);
+  }
+  return { plaid, inferred };
 }

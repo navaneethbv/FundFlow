@@ -183,7 +183,11 @@ export default async function CashFlowPage({
           </p>
           <p className="mt-1 text-sm text-muted">
             Refresh connected accounts before relying on the latest
-            period.
+            period. Review the affected institution in{" "}
+            <Link className="font-semibold underline" href="/settings?section=institutions">
+              Settings
+            </Link>
+            .
           </p>
         </Panel>
       )}

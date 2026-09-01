@@ -1,10 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-hidden="true">
-  <rect width="320" height="200" fill="#e6f7f0"/>
-  <circle cx="240" cy="56" r="30" fill="#f2c94c"/>
-  <path d="M0 146 h320 v54 H0Z" fill="#1baf7a"/>
-  <path d="M0 146 c40-14 74-14 112 0 40 14 76 14 116 0 32-11 60-11 92 0 v10 H0Z" fill="#128a60"/>
-  <path d="M96 148 V78" stroke="#7a5230" stroke-width="10" stroke-linecap="round"/>
-  <path d="M96 78 c-22-16-42-12-52 4 18-6 34-2 44 8Z" fill="#0f9a6b"/>
-  <path d="M96 78 c22-16 42-12 52 4-18-6-34-2-44 8Z" fill="#0f9a6b"/>
-  <path d="M96 78 c-6-22 4-38 22-44-10 16-12 30-8 42Z" fill="#0f9a6b"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 320 200"><rect width="320" height="200" fill="#e6f7f0"/><circle cx="240" cy="56" r="30" fill="#f2c94c"/><path fill="#1baf7a" d="M0 146 h320 v54 H0Z"/><path fill="#128a60" d="M0 146 c40-14 74-14 112 0 40 14 76 14 116 0 32-11 60-11 92 0 v10 H0Z"/><path stroke="#7a5230" stroke-linecap="round" stroke-width="10" d="M96 148 V78"/><path fill="#0f9a6b" d="M96 78 c-22-16-42-12-52 4 18-6 34-2 44 8Z"/><path fill="#0f9a6b" d="M96 78 c22-16 42-12 52 4-18-6-34-2-44 8Z"/><path fill="#0f9a6b" d="M96 78 c-6-22 4-38 22-44-10 16-12 30-8 42Z"/></svg>

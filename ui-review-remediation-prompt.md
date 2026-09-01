@@ -13,10 +13,10 @@ Accessibility, responsive layout, performance, and download behavior are release
 
 ## Repository and tested baseline
 
-- Repository: `https://github.com/navaneethbv/FundFlow`
-- Pull request: [`#134`](https://github.com/navaneethbv/FundFlow/pull/134)
+- Repository: the FundFlow GitHub repository
+- Pull request: `#134`
 - Branch used by the review: `feat/register-visual-rollout-v2`
-- Preview alias used by the review: `https://fund-flow-git-feat-register-visual-rollout-v2-navaneethbv.vercel.app`
+- Preview alias used by the review: the deployment for the tested branch
 - Exact head tested by the review: `4d12f6bb3092837ac1e9b1aad8a4b8ba9f07f112`
 - Exact Vercel deployment tested by the review: `dpl_GszAgHS17ZJAfmZcSa7kU6JY4HYb`
 - Main review report: [`ui-review.md`](./ui-review.md)

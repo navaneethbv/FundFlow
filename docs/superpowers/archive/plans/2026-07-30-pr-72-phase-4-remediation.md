@@ -838,7 +838,7 @@ Add meaningful branch tests instead of excluding files or inflating thresholds.
 
 ```bash
 git push origin feat/monarch-parity-all-phases
-gh pr checks 72 --repo navaneethbv/FundFlow --watch
+gh pr checks 72 --watch
 ```
 
 Expected: CI, migration smoke, E2E smoke, CodeQL, SonarCloud, and Vercel all pass.

@@ -81,7 +81,7 @@ function q(
   const WRITE = new Set(["delete", "insert", "update", "upsert"]);
   const o: Record<string, unknown> = {};
   for (const m of [
-    "select", "eq", "neq", "in", "limit", "order", "gte", "lte",
+    "select", "eq", "neq", "in", "limit", "order", "range", "gte", "lte",
     "delete", "insert", "update", "upsert", "maybeSingle", "single", "is",
   ]) {
     o[m] = () => {
@@ -708,6 +708,10 @@ describe("POST /api/import/commit", () => {
 
   function authSupabase(rows: unknown) {
     return supabase({
+      import_review_batches: () => ({
+        data: { id: "b", created_at: "2026-08-01T00:00:00Z" },
+        error: null,
+      }),
       accounts: () => ({ data: { id: "a1" }, error: null }),
       import_review_rows: () => ({ data: rows, error: null }),
     });
@@ -727,7 +731,13 @@ describe("POST /api/import/commit", () => {
   it("returns 404 when the account is not found", async () => {
     mockRequireUser.mockResolvedValue({
       user: USER,
-      supabase: supabase({ accounts: () => ({ data: null, error: null }) }),
+      supabase: supabase({
+        import_review_batches: () => ({
+          data: { id: "b", created_at: "2026-08-01T00:00:00Z" },
+          error: null,
+        }),
+        accounts: () => ({ data: null, error: null }),
+      }),
     });
     const res = await commitPost(jsonRequest({ batch_id: "b", account_id: "a" }));
     expect(res.status).toBe(404);

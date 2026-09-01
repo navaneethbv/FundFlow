@@ -93,7 +93,6 @@ function stream(overrides: Partial<RecurringStreamInput> = {}): RecurringStreamI
     status: "MATURE",
     isActive: true,
     accountName: "Checking",
-    isCreditAccount: false,
     firstDate: "2026-01-15",
     lastDate: "2026-06-15",
     predictedNextDate: "2026-07-15",
@@ -101,9 +100,74 @@ function stream(overrides: Partial<RecurringStreamInput> = {}): RecurringStreamI
     dismissedAt: null,
     matchedTransactions: [],
     category: null,
+    source: "plaid",
+    detectionEvidence: null,
     ...overrides,
   };
 }
+
+describe("inferred stream projection", () => {
+  it("expands a quarterly cadence three months apart", () => {
+    const dates = occurrenceDatesInWindow(
+      "2026-06-15",
+      { unit: "months", amount: 3 },
+      "2026-09-01",
+      "2026-10-01",
+    );
+    expect(dates).toEqual(["2026-09-15"]);
+  });
+
+  it("labels an inferred quarterly occurrence with its source and evidence count", () => {
+    const result = expandStreamsForMonth(
+      [
+        stream({
+          source: "inferred",
+          frequency: "QUARTERLY",
+          predictedNextDate: "2026-09-15",
+          detectionEvidence: {
+            occurrenceCount: 3,
+            amountPattern: "fixed",
+            maximumCadenceDeviationDays: 1,
+            matchedSignifiers: [],
+          },
+        }),
+      ],
+      [],
+      "2026-09",
+      "2026-09-10",
+    );
+
+    expect(result.occurrences[0]).toMatchObject({
+      source: "inferred",
+      evidenceCount: 3,
+      frequency: "Every quarter",
+    });
+  });
+
+  it("leaves a Plaid occurrence without an evidence count", () => {
+    const result = expandStreamsForMonth(
+      [stream({ predictedNextDate: "2026-07-15" })],
+      [],
+      "2026-07",
+      "2026-07-10",
+    );
+
+    expect(result.occurrences[0]).toMatchObject({ source: "plaid", evidenceCount: null });
+  });
+
+  it("counts an inferred mature stream as unreviewed", () => {
+    expect(
+      countUnreviewedStreams([
+        {
+          isActive: true,
+          status: "MATURE",
+          dismissedAt: null,
+          reviewedAt: null,
+        },
+      ]),
+    ).toBe(1);
+  });
+});
 
 describe("expandStreamsForMonth", () => {
   it("marks an occurrence complete when a matched transaction lands near the due date", () => {
@@ -154,11 +218,11 @@ describe("expandStreamsForMonth", () => {
     expect(month.occurrences).toHaveLength(0);
   });
 
-  it("buckets income, expenses, and credit-card occurrences separately", () => {
+  it("keeps credit-card purchases in expenses until actual card-bill data is available", () => {
     const month = expandStreamsForMonth(
       [
         stream({ id: "paycheck", streamType: "inflow", averageAmount: 3000 }),
-        stream({ id: "card-bill", isCreditAccount: true, averageAmount: 200 }),
+        stream({ id: "card-purchase", averageAmount: 200 }),
         stream({ id: "rent", averageAmount: 1500, matchedTransactions: [{ id: "t", date: "2026-07-15" }] }),
       ],
       [],
@@ -166,8 +230,9 @@ describe("expandStreamsForMonth", () => {
       "2026-07-20",
     );
     expect(month.totals.income.remaining).toBe(3000);
-    expect(month.totals.creditCards.remaining).toBe(200);
+    expect(month.totals.expenses.remaining).toBe(200);
     expect(month.totals.expenses.paid).toBe(1500);
+    expect(month.totals.creditCards).toEqual({ paid: 0, remaining: 0 });
   });
 
   it("expands enabled manual items and skips disabled ones", () => {
@@ -200,6 +265,7 @@ describe("expandStreamsForMonth", () => {
     );
     expect(month.occurrences).toHaveLength(1);
     expect(month.occurrences[0]).toMatchObject({ source: "manual", sourceId: "manual-1", category: "Education" });
+    expect(month.occurrences[0]).not.toHaveProperty("dueDateType");
   });
 
   it("computes reviewCount independently of the viewed month's occurrences", () => {
@@ -218,7 +284,6 @@ describe("expandStreamsForMonth", () => {
         stream({
           id: "card-autopay",
           category: "LOAN_PAYMENTS",
-          isCreditAccount: false,
           averageAmount: 400,
         }),
       ],
@@ -257,5 +322,17 @@ describe("expandStreamsForMonth", () => {
     const completed = month.occurrences.filter((occurrence) => occurrence.status === "complete");
     expect(completed).toHaveLength(1);
     expect(month.totals.expenses.paid).toBe(20);
+  });
+});
+
+describe("amount fallbacks", () => {
+  it("renders a zero amount for a stream with no tracked amounts at all", () => {
+    const month = expandStreamsForMonth(
+      [stream({ userAmount: null, averageAmount: null, lastAmount: null })],
+      [],
+      "2026-07",
+      "2026-07-20",
+    );
+    expect(month.occurrences[0]!.amount).toBe(0);
   });
 });

@@ -21,6 +21,12 @@ vi.mock("@/lib/recurring", () => ({
   refreshRecurringForUser: (...args: unknown[]) => mockRefreshRecurringForUser(...args),
 }));
 
+const mockRefreshInferredRecurringForUser = vi.fn<(...args: unknown[]) => unknown>();
+vi.mock("@/lib/recurring-inference", () => ({
+  refreshInferredRecurringForUser: (...args: unknown[]) =>
+    mockRefreshInferredRecurringForUser(...args),
+}));
+
 const mockTryWriteDailyAccountSnapshots = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/account-history", () => ({
   tryWriteDailyAccountSnapshots: (...args: unknown[]) =>
@@ -101,6 +107,7 @@ describe("POST /api/plaid/sync (r3-n2)", () => {
   });
 
   it("runs a full auto-sync without recurring or audit", async () => {
+    mockRefreshInferredRecurringForUser.mockResolvedValue({ active: 0, added: 0, deactivated: 0, deduplicated: 0, failed: 0 });
     const res = await POST(post({ source: "auto" }));
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
@@ -108,7 +115,7 @@ describe("POST /api/plaid/sync (r3-n2)", () => {
       added: 2,
       modified: 1,
       removed: 0,
-      recurring_streams: null,
+      recurring_streams: { plaid: 0, inferred: { active: 0, added: 0, deactivated: 0, deduplicated: 0, failed: 0 } },
     });
     expect(mockSyncAllForUser).toHaveBeenCalledWith("user-1");
     expect(mockTryWriteDailyAccountSnapshots).toHaveBeenCalledWith(

@@ -1,21 +1,27 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { groupKeyFor } from "@/lib/accounts-page";
 import {
   parseFinancialScope,
   scopeQueryUserId,
   type FinancialScope,
 } from "@/lib/financial-scope";
 import {
+  buildCreditCardBucket,
+  type CreditCardBill,
+} from "@/lib/recurring-credit-bill";
+import {
   countUnreviewedStreams,
   expandStreamsForMonth,
   type ManualRecurringFrequency,
   type ManualRecurringItemInput,
+  type RecurringDetectionEvidence,
   type RecurringMonth,
   type RecurringStreamInput,
+  type RecurringStreamSource,
   type RecurringStreamStatus,
 } from "@/lib/recurring-page";
+import { localDateKey } from "@/lib/format-date";
 
-const DEPENDENCY_LIMIT = 5_000;
+const PAGE_SIZE = 1_000;
 
 type RecurringStreamRawRow = {
   id: string;
@@ -36,6 +42,8 @@ type RecurringStreamRawRow = {
   predicted_next_date: string | null;
   account_id: string | null;
   category: string | null;
+  source?: string | null;
+  detection_evidence?: unknown;
 };
 
 export interface RecurringStreamRow {
@@ -58,6 +66,8 @@ export interface RecurringStreamRow {
    * to the real caller). Non-owned rows must render read-only in the UI.
    */
   isOwn: boolean;
+  source: RecurringStreamSource;
+  detectionEvidence: RecurringDetectionEvidence | null;
 }
 
 export interface ManualRecurringItemRow {
@@ -158,8 +168,54 @@ function isStale(lastSuccessfulSyncAt: string | null, now: Date): boolean {
   return !Number.isFinite(parsed) || now.getTime() - parsed > 48 * 60 * 60 * 1000;
 }
 
-const KNOWN_FREQUENCIES = new Set(["WEEKLY", "BIWEEKLY", "SEMI_MONTHLY", "MONTHLY", "ANNUALLY"]);
+const KNOWN_FREQUENCIES = new Set([
+  "WEEKLY",
+  "BIWEEKLY",
+  "SEMI_MONTHLY",
+  "MONTHLY",
+  "QUARTERLY",
+  "ANNUALLY",
+]);
+const AMOUNT_PATTERNS = new Set(["fixed", "price_step", "variable"]);
+
+/**
+ * Evidence is jsonb written by the detector, but legacy and hand-edited rows
+ * can hold anything. Parse structurally and fall back to null rather than
+ * trusting the column, so one malformed row cannot break the page.
+ */
+function parseDetectionEvidence(value: unknown): RecurringDetectionEvidence | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.occurrenceCount !== "number" || !Number.isFinite(raw.occurrenceCount)) return null;
+  if (typeof raw.amountPattern !== "string" || !AMOUNT_PATTERNS.has(raw.amountPattern)) return null;
+  const deviation = raw.maximumCadenceDeviationDays;
+  const signifiers = raw.matchedSignifiers;
+  return {
+    occurrenceCount: raw.occurrenceCount,
+    amountPattern: raw.amountPattern as RecurringDetectionEvidence["amountPattern"],
+    maximumCadenceDeviationDays:
+      typeof deviation === "number" && Number.isFinite(deviation) ? deviation : 0,
+    matchedSignifiers: Array.isArray(signifiers)
+      ? signifiers.filter((entry): entry is string => typeof entry === "string")
+      : [],
+  };
+}
 const KNOWN_STATUSES = new Set(["MATURE", "EARLY_DETECTION", "TOMBSTONED"]);
+
+async function loadPagedRows<T>(
+  loadPage: (from: number, to: number) => PromiseLike<{ data?: unknown; error: { code?: string } | null }>,
+  table: string,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let page = 0; ; page += 1) {
+    const from = page * PAGE_SIZE;
+    const result = await loadPage(from, from + PAGE_SIZE - 1);
+    assertRecurringQuery(table, result);
+    const batch = (result.data ?? []) as T[];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) return rows;
+  }
+}
 
 async function loadJoinRows(
   supabase: SupabaseClient,
@@ -169,15 +225,21 @@ async function loadJoinRows(
   const rows: JoinRow[] = [];
   for (let i = 0; i < streamIds.length; i += 500) {
     const chunk = streamIds.slice(i, i + 500);
-    let query = supabase
-      .from("recurring_stream_transactions")
-      .select("recurring_stream_id,transaction_id")
-      .in("recurring_stream_id", chunk)
-      .limit(DEPENDENCY_LIMIT);
-    if (userId) query = query.eq("user_id", userId);
-    const result = await query;
-    assertRecurringQuery("recurring_stream_transactions", result);
-    rows.push(...((result.data ?? []) as JoinRow[]));
+    const chunkRows = await loadPagedRows<JoinRow>(
+      (from, to) => {
+        let query = supabase
+          .from("recurring_stream_transactions")
+          .select("recurring_stream_id,transaction_id")
+          .in("recurring_stream_id", chunk)
+          .order("recurring_stream_id")
+          .order("transaction_id")
+          .range(from, to);
+        if (userId) query = query.eq("user_id", userId);
+        return query;
+      },
+      "recurring_stream_transactions",
+    );
+    rows.push(...chunkRows);
   }
   return rows;
 }
@@ -190,7 +252,12 @@ async function loadTransactionDates(
   const dates = new Map<string, string>();
   for (let i = 0; i < transactionIds.length; i += 500) {
     const chunk = transactionIds.slice(i, i + 500);
-    let query = supabase.from("transactions").select("id,date").in("id", chunk).limit(500);
+    let query = supabase
+      .from("transactions")
+      .select("id,date")
+      .in("id", chunk)
+      .order("id")
+      .range(0, chunk.length - 1);
     if (userId) query = query.eq("user_id", userId);
     const result = await query;
     assertRecurringQuery("transactions", result);
@@ -206,11 +273,15 @@ export async function loadRecurringData(
     anchorMonth: string;
     rawScope?: string | string[];
     now?: Date;
+    today?: string;
   },
 ): Promise<RecurringLoadResult> {
-  const householdResult = await supabase.from("households").select("id").limit(DEPENDENCY_LIMIT);
-  assertRecurringQuery("households", householdResult);
-  const visibleHouseholdIds = (householdResult.data ?? []).map((row) => row.id as string);
+  const householdRows = await loadPagedRows<{ id: string }>(
+    (from, to) =>
+      supabase.from("households").select("id").order("id").range(from, to),
+    "households",
+  );
+  const visibleHouseholdIds = householdRows.map((row) => row.id);
   const scope = parseFinancialScope({
     raw: input.rawScope,
     ownerUserId: input.userId,
@@ -218,47 +289,80 @@ export async function loadRecurringData(
   });
   const userId = scopeQueryUserId(scope);
 
-  let streamsQuery = supabase
-    .from("recurring_streams")
-    .select(
-      "id,user_id,merchant_name,description,stream_type,status,is_active,reviewed_at,dismissed_at,user_amount,average_amount,last_amount,frequency,first_date,last_date,predicted_next_date,account_id,category",
-    )
-    .limit(DEPENDENCY_LIMIT);
-  let manualQuery = supabase
-    .from("manual_recurring_items")
-    .select("id,name,amount,frequency,next_date,item_type,category,enabled")
-    .limit(DEPENDENCY_LIMIT);
-  let accountsQuery = supabase
-    .from("accounts")
-    .select("id,name,type,subtype,iso_currency_code")
-    .limit(DEPENDENCY_LIMIT);
+  const streamsPromise = loadPagedRows<RecurringStreamRawRow>(
+    (from, to) => {
+      let query = supabase
+        .from("recurring_streams")
+        .select(
+          "id,user_id,merchant_name,description,stream_type,status,is_active,reviewed_at,dismissed_at,user_amount,average_amount,last_amount,frequency,first_date,last_date,predicted_next_date,account_id,category,source,detection_evidence",
+        )
+        .order("id")
+        .range(from, to);
+      if (userId) query = query.eq("user_id", userId);
+      return query;
+    },
+    "recurring_streams",
+  );
+  const manualPromise = loadPagedRows<ManualRecurringRawRow>(
+    (from, to) => {
+      let query = supabase
+        .from("manual_recurring_items")
+        .select("id,name,amount,frequency,next_date,item_type,category,enabled")
+        .order("id")
+        .range(from, to);
+      if (userId) query = query.eq("user_id", userId);
+      return query;
+    },
+    "manual_recurring_items",
+  );
+  const accountsPromise = loadPagedRows<AccountRow>(
+    (from, to) => {
+      let query = supabase
+        .from("accounts")
+        .select("id,name,type,subtype,iso_currency_code")
+        .order("id")
+        .range(from, to);
+      if (userId) query = query.eq("user_id", userId);
+      return query;
+    },
+    "accounts",
+  );
   let syncQuery = supabase
     .from("sync_jobs")
     .select("updated_at")
     .eq("status", "done")
     .eq("job_type", "transactions")
     .order("updated_at", { ascending: false })
+    .order("id", { ascending: false })
     .limit(1);
+  if (userId) syncQuery = syncQuery.eq("user_id", userId);
 
-  if (userId) {
-    streamsQuery = streamsQuery.eq("user_id", userId);
-    manualQuery = manualQuery.eq("user_id", userId);
-    accountsQuery = accountsQuery.eq("user_id", userId);
-    syncQuery = syncQuery.eq("user_id", userId);
-  }
+  const billsPromise = loadPagedRows<{
+    account_id: string;
+    statement_balance: number | string | null;
+    minimum_payment: number | string | null;
+    due_date: string | null;
+  }>(
+    (from, to) => {
+      let query = supabase
+        .from("credit_card_bills")
+        .select("account_id, statement_balance, minimum_payment, due_date")
+        .order("account_id")
+        .range(from, to);
+      if (userId) query = query.eq("user_id", userId);
+      return query;
+    },
+    "credit_card_bills",
+  );
 
-  const [streamsResult, manualResult, accountsResult, syncResult] = await Promise.all([
-    streamsQuery,
-    manualQuery,
-    accountsQuery,
+  const [streamRows, manualRows, accountRows, syncResult, billRows] = await Promise.all([
+    streamsPromise,
+    manualPromise,
+    accountsPromise,
     syncQuery.maybeSingle(),
+    billsPromise,
   ]);
-  assertRecurringQuery("recurring_streams", streamsResult);
-  assertRecurringQuery("manual_recurring_items", manualResult);
-  assertRecurringQuery("accounts", accountsResult);
   assertRecurringQuery("sync_jobs", syncResult);
-
-  const streamRows = (streamsResult.data ?? []) as RecurringStreamRawRow[];
   const streamIds = streamRows.map((row) => row.id);
 
   const joinRows = await loadJoinRows(supabase, streamIds, userId);
@@ -275,9 +379,7 @@ export async function loadRecurringData(
     matchedByStreamId.set(row.recurring_stream_id, existing);
   }
 
-  const accountById = new Map(
-    ((accountsResult.data ?? []) as AccountRow[]).map((row) => [row.id, row]),
-  );
+  const accountById = new Map(accountRows.map((row) => [row.id, row]));
 
   const streamInputs: RecurringStreamInput[] = streamRows.map((row) => {
     const account = row.account_id ? accountById.get(row.account_id) : undefined;
@@ -299,7 +401,6 @@ export async function loadRecurringData(
       status,
       isActive: row.is_active,
       accountName: account?.name ?? null,
-      isCreditAccount: account ? groupKeyFor(account.type, account.subtype) === "credit" : false,
       firstDate: row.first_date,
       lastDate: row.last_date,
       predictedNextDate: row.predicted_next_date,
@@ -307,10 +408,13 @@ export async function loadRecurringData(
       dismissedAt: row.dismissed_at,
       matchedTransactions: matchedByStreamId.get(row.id) ?? [],
       category: row.category,
+      // Rows written before the hybrid migration carry no source; they are
+      // provider rows by definition.
+      source: row.source === "inferred" ? "inferred" : "plaid",
+      detectionEvidence: parseDetectionEvidence(row.detection_evidence),
     };
   });
 
-  const manualRows = (manualResult.data ?? []) as ManualRecurringRawRow[];
   const manualInputs: ManualRecurringItemInput[] = manualRows.map((row) => ({
     id: row.id,
     name: row.name,
@@ -338,14 +442,28 @@ export async function loadRecurringData(
   );
   const ownerScopedInputs = streamInputs.filter((streamInput) => ownerStreamIds.has(streamInput.id));
 
+  // Real credit-card bills populate the credit-card bucket; without bill
+  // data the bucket stays empty (card purchases remain Expenses).
+  const creditBills: CreditCardBill[] = billRows.map((bill) => ({
+    accountId: bill.account_id,
+    statementBalance: bill.statement_balance === null ? null : Number(bill.statement_balance),
+    minimumPayment: bill.minimum_payment === null ? null : Number(bill.minimum_payment),
+    dueDate: bill.due_date,
+  }));
+  const creditCardBucket = buildCreditCardBucket(creditBills, input.anchorMonth);
+  const today = input.today ?? localDateKey(input.now ?? new Date());
+
+  const expanded = expandStreamsForMonth(
+    streamInputs,
+    manualInputs,
+    input.anchorMonth,
+    today,
+  );
+
   return {
     view: {
-      ...expandStreamsForMonth(
-        streamInputs,
-        manualInputs,
-        input.anchorMonth,
-        (input.now ?? new Date()).toISOString().slice(0, 10),
-      ),
+      ...expanded,
+      totals: { ...expanded.totals, creditCards: creditCardBucket },
       reviewCount: countUnreviewedStreams(ownerScopedInputs),
     },
     scope,
@@ -363,9 +481,11 @@ export async function loadRecurringData(
       averageAmount: row.average_amount === null ? null : Number(row.average_amount),
       accountName: row.account_id ? accountById.get(row.account_id)?.name ?? null : null,
       isOwn: row.user_id === input.userId,
+      source: row.source === "inferred" ? "inferred" as const : "plaid" as const,
+      detectionEvidence: parseDetectionEvidence(row.detection_evidence),
     })),
     manualItems: manualInputs,
     stale: isStale(lastSuccessfulSyncAt, input.now ?? new Date()),
-    currency: dominantCurrency((accountsResult.data ?? []) as AccountRow[]),
+    currency: dominantCurrency(accountRows),
   };
 }

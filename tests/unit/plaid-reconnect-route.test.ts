@@ -119,7 +119,7 @@ describe("POST /api/plaid/reconnect", () => {
       json: () => Promise.resolve({ item_id: "item-1" }),
     } as unknown as NextRequest;
 
-    const mockItem = { id: "item-1", institution_id: "inst-1", institution_name: "Chase" };
+    const mockItem = { id: "item-1", user_id: "user-1", institution_id: "inst-1", institution_name: "Chase" };
     mockGetItem.mockResolvedValue(mockItem);
 
     const res = await POST(request);
@@ -127,7 +127,7 @@ describe("POST /api/plaid/reconnect", () => {
     const body = await res.json();
     expect(body).toEqual({ ok: true });
 
-    expect(mockSetItemStatus).toHaveBeenCalledWith("item-1", "active", null);
+    expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-1", "active", null);
     expect(mockUpdateItemBranding).toHaveBeenCalledWith("u1", "item-1", {
       name: "Chase",
       logo: "logo-base64",

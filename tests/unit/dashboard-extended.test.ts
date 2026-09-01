@@ -100,6 +100,7 @@ describe("lib/dashboard extended features", () => {
       chain.lt = returnSelf;
       chain.in = returnSelf;
       chain.order = returnSelf;
+      chain.range = returnSelf;
       chain.limit = returnSelf;
       chain.maybeSingle = () =>
         Promise.resolve({
@@ -200,6 +201,7 @@ describe("lib/dashboard extended features", () => {
       chain.lt = returnSelf;
       chain.in = returnSelf;
       chain.order = returnSelf;
+      chain.range = returnSelf;
       chain.limit = returnSelf;
       chain.maybeSingle = () =>
         Promise.resolve({
@@ -311,6 +313,7 @@ describe("lib/dashboard extended features", () => {
       chain.lt = returnSelf;
       chain.in = returnSelf;
       chain.order = returnSelf;
+      chain.range = returnSelf;
       chain.limit = returnSelf;
       chain.maybeSingle = () =>
         Promise.resolve({
@@ -424,6 +427,7 @@ describe("lib/dashboard extended features", () => {
       chain.lt = returnSelf;
       chain.in = returnSelf;
       chain.order = returnSelf;
+      chain.range = returnSelf;
       chain.limit = returnSelf;
       chain.maybeSingle = () =>
         Promise.resolve({

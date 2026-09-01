@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await setItemStatus(item.id, "active", null);
+    await setItemStatus(item.user_id, item.id, "active", null);
 
     if (item.institution_id) {
       const branding = await fetchInstitutionBranding(getPlaidClient(), {

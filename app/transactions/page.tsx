@@ -404,24 +404,32 @@ function buildAccountLookups(
  * filters to the caller's own so their categories are never rewritten by
  * someone else's.
  */
+type CashFlowClassification = "expense" | "income" | null;
+type TransactionOverride = {
+  displayCategory: string | null;
+  cashFlowClassification: CashFlowClassification;
+};
+
 async function loadLedgerRowDetails(
   supabase: TransactionsSupabase,
   ownerId: string,
   txnIds: string[],
 ): Promise<{
   annById: Map<string, { note: string | null; tags: string[] }>;
+  overridesById: Map<string, TransactionOverride>;
   splitsById: Map<string, Array<{ category: string; amount: number }>>;
   excludedDuplicateIds: Set<string>;
   failed: boolean;
 }> {
   const annById = new Map<string, { note: string | null; tags: string[] }>();
+  const overridesById = new Map<string, TransactionOverride>();
   const splitsById = new Map<string, Array<{ category: string; amount: number }>>();
   if (txnIds.length === 0) {
-    return { annById, splitsById, excludedDuplicateIds: new Set<string>(), failed: false };
+    return { annById, overridesById, splitsById, excludedDuplicateIds: new Set<string>(), failed: false };
   }
 
   const [annotationsResult, splitsResult, duplicatesResult] = await Promise.all([
-    supabase.from("transaction_annotations").select("transaction_id, note, tags").eq("user_id", ownerId).in("transaction_id", txnIds),
+    supabase.from("transaction_annotations").select("transaction_id, note, tags, display_category, cash_flow_classification").eq("user_id", ownerId).in("transaction_id", txnIds),
     supabase.from("transaction_splits").select("transaction_id, category, amount").eq("user_id", ownerId).in("transaction_id", txnIds),
     supabase.from("linked_duplicates").select("excluded_transaction_id").eq("user_id", ownerId).in("excluded_transaction_id", txnIds),
   ]);
@@ -440,6 +448,12 @@ async function loadLedgerRowDetails(
       note: a.note as string | null,
       tags: (a.tags as string[]) ?? [],
     });
+    const classification = a.cash_flow_classification;
+    overridesById.set(a.transaction_id as string, {
+      displayCategory: (a.display_category as string | null) ?? null,
+      cashFlowClassification:
+        classification === "expense" || classification === "income" ? classification : null,
+    });
   }
   for (const s of splitsResult.data ?? []) {
     const list = splitsById.get(s.transaction_id as string) ?? [];
@@ -450,7 +464,7 @@ async function loadLedgerRowDetails(
     (duplicatesResult.data ?? []).map((row) => row.excluded_transaction_id as string),
   );
 
-  return { annById, splitsById, excludedDuplicateIds, failed: errorCodes.length > 0 };
+  return { annById, overridesById, splitsById, excludedDuplicateIds, failed: errorCodes.length > 0 };
 }
 
 interface LedgerTableRowProps {
@@ -467,6 +481,8 @@ interface LedgerTableRowProps {
   tags: string[];
   splits: Array<{ category: string; amount: number }>;
   categoryOptions: string[];
+  providerCategory?: string | null;
+  override?: { displayCategory: string | null; cashFlowClassification: "expense" | "income" | null } | null;
 }
 
 /**
@@ -486,6 +502,8 @@ function LedgerTableRow({
   tags,
   splits,
   categoryOptions,
+  providerCategory = null,
+  override = null,
 }: Readonly<LedgerTableRowProps>) {
   const columnCount =
     4 + (visibleColumns.has("category") ? 1 : 0) + (visibleColumns.has("account") ? 1 : 0);
@@ -592,6 +610,8 @@ function LedgerTableRow({
             tags={tags}
             splits={splits}
             categories={categoryOptions}
+            providerCategory={providerCategory}
+            override={override}
           />
         </td>
       </tr>
@@ -724,7 +744,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   // which now includes a household member's shared rows — filter to the
   // caller's own so their categories are never rewritten by someone else's.
   const rowDetails = await loadLedgerRowDetails(supabase, ownerId, rows.map((row) => row.id));
-  const { annById, splitsById, excludedDuplicateIds } = rowDetails;
+  const { annById, overridesById, splitsById, excludedDuplicateIds } = rowDetails;
   ledgerError = transactionDetailsError(ledgerError, rowDetails.failed);
 
   // Category suggestions for the split editor: categories seen on this page
@@ -762,6 +782,8 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
       tags: ann?.tags ?? [],
       splits: splitsById.get(t.id) ?? [],
       categoryOptions,
+      providerCategory: t.pfc_primary ?? t.pfc_detailed,
+      override: overridesById.get(t.id) ?? null,
     };
   });
 
@@ -888,6 +910,8 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                       tags={annById.get(t.id)?.tags ?? []}
                       splits={splitsById.get(t.id) ?? []}
                       categoryOptions={categoryOptions}
+                      providerCategory={t.pfc_primary ?? t.pfc_detailed}
+                      override={overridesById.get(t.id) ?? null}
                     />
                   ))}
                 </tbody>

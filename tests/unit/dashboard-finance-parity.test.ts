@@ -24,6 +24,7 @@ function makeSupabase(data: {
   categoryOverrides: Row[];
   oldestDate: string;
 }) {
+  const inFilters: Array<{ table: string; column: string; values: unknown[] }> = [];
   const from = (table: string) => {
     const state = { table, cols: "" };
     const chain: Record<string, unknown> = {};
@@ -52,7 +53,11 @@ function makeSupabase(data: {
       order: () => chain,
       gte: () => chain,
       lt: () => chain,
-      in: () => chain,
+      in: (column: string, values: unknown[]) => {
+        inFilters.push({ table, column, values });
+        return chain;
+      },
+      range: () => chain,
       limit: () => chain,
       maybeSingle: () =>
         Promise.resolve(
@@ -62,7 +67,7 @@ function makeSupabase(data: {
     });
     return chain;
   };
-  return { from } as never;
+  return { from, inFilters } as never;
 }
 
 const ACCOUNTS: Row[] = [
@@ -235,6 +240,45 @@ function reference(splits: TransactionSplit[] = []) {
 }
 
 describe("dashboard / canonical projection parity", () => {
+  it("skips override reads for an empty ledger and chunks non-empty ids", async () => {
+    const empty = makeSupabase({
+      accounts: ACCOUNTS,
+      transactions: [],
+      linkedRefunds: [],
+      merchantRules: [],
+      categoryOverrides: [],
+      oldestDate: "2026-07-01",
+    }) as unknown as {
+      from: unknown;
+      inFilters: Array<{ table: string; column: string; values: unknown[] }>;
+    };
+    await getDashboardData(empty as never, undefined, "2026-07", "user-1");
+    expect(
+      empty.inFilters.filter(({ table }) => table === "transaction_annotations"),
+    ).toEqual([]);
+
+    const many = makeSupabase({
+      accounts: ACCOUNTS,
+      transactions: Array.from({ length: 501 }, (_, index) => ({
+        ...TRANSACTIONS[1],
+        id: `txn-${index}`,
+        plaid_transaction_id: `plaid-${index}`,
+      })),
+      linkedRefunds: [],
+      merchantRules: [],
+      categoryOverrides: [],
+      oldestDate: "2026-07-01",
+    }) as unknown as {
+      from: unknown;
+      inFilters: Array<{ table: string; column: string; values: unknown[] }>;
+    };
+    await getDashboardData(many as never, undefined, "2026-07", "user-1");
+    const annotationFilters = many.inFilters.filter(
+      ({ table }) => table === "transaction_annotations",
+    );
+    expect(annotationFilters).toHaveLength(3);
+    expect(annotationFilters.every(({ values }) => values.length <= 250)).toBe(true);
+  });
   it("reports the same month expenses as financeTotals", async () => {
     const data = await getDashboardData(supabase(), undefined, "2026-07", "user-1");
     const totals = financeTotals(reference());

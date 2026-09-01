@@ -7,14 +7,24 @@ import NotificationFeed, { type NotificationRow } from "@/components/notificatio
 import Badge from "@/components/ui/Badge";
 import Panel from "@/components/ui/Panel";
 import { formatDate } from "@/lib/format-date";
+import { titleCase } from "@/lib/format";
 import { DEFAULT_REPORT_TIMEZONE } from "@/lib/report-period";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-function deliveryStatusTone(status: string): "success" | "danger" | "neutral" {
+import {
+  buildWeeklyDeliveryHistory,
+  type StoredDeliveryRow,
+  type WeeklyDeliveryHistoryItem,
+} from "@/lib/weekly-delivery-history";
+
+function deliveryStatusTone(
+  status: string,
+): "success" | "danger" | "neutral" | "warning" {
   if (status === "sent") return "success";
   if (status === "failed") return "danger";
+  if (status === "missing" || status === "skipped") return "neutral";
   return "neutral";
 }
 
@@ -22,9 +32,18 @@ export const metadata = {
   title: "Notifications",
 };
 
+function deliveryDescription(delivery: WeeklyDeliveryHistoryItem): string {
+  if (delivery.sentAt) return `Sent ${formatDate(delivery.sentAt)}`;
+  if (delivery.reason) return delivery.reason;
+  if (delivery.attemptedAt) return `Attempted ${formatDate(delivery.attemptedAt)}`;
+  return "Not delivered";
+}
+
 export default async function NotificationsPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const userId = user?.id ?? "";
 
   const [
@@ -40,7 +59,9 @@ export default async function NotificationsPage() {
       .maybeSingle(),
     supabase
       .from("alert_preferences")
-      .select("budget_exceeded, goal_reached, large_transaction, low_cash_forecast, large_transaction_threshold")
+      .select(
+        "budget_exceeded, goal_reached, large_transaction, low_cash_forecast, large_transaction_threshold",
+      )
       .eq("user_id", userId)
       .maybeSingle(),
     supabase
@@ -51,11 +72,19 @@ export default async function NotificationsPage() {
       .limit(25),
     supabase
       .from("weekly_report_deliveries")
-      .select("period_start, period_end, status, attempted_at, sent_at")
+      .select("period_start, period_end, status, error_code, attempted_at, sent_at")
       .eq("user_id", userId)
-      .order("attempted_at", { ascending: false })
-      .limit(6),
+      .order("period_start", { ascending: false })
+      .limit(10),
   ]);
+
+  const userTimezone = profile?.timezone ?? DEFAULT_REPORT_TIMEZONE;
+  const deliveryHistory = buildWeeklyDeliveryHistory(
+    (deliveries ?? []) as StoredDeliveryRow[],
+    new Date(),
+    userTimezone,
+    6,
+  );
 
   return (
     <AppShell active="notifications" email={user?.email}>
@@ -64,7 +93,8 @@ export default async function NotificationsPage() {
         actions={<Badge tone="accent">Private by default</Badge>}
       />
       <p className="max-w-2xl text-sm leading-6 text-muted">
-        Control optional email and planning alerts while keeping critical bank and security notices on.
+        Control optional email and planning alerts while keeping critical bank
+        and security notices on.
       </p>
 
       <EmailPreferences
@@ -75,35 +105,42 @@ export default async function NotificationsPage() {
       />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
-        <NotificationFeed initialNotifications={(notifications ?? []) as NotificationRow[]} />
+        <NotificationFeed
+          initialNotifications={(notifications ?? []) as NotificationRow[]}
+        />
         <div className="space-y-6">
           <InAppPreferences
             initialPreferences={alertPreferences}
             initialThreshold={
-              (alertPreferences as { large_transaction_threshold?: number | null } | null)
-                ?.large_transaction_threshold ?? null
+              (
+                alertPreferences as {
+                  large_transaction_threshold?: number | null;
+                } | null
+              )?.large_transaction_threshold ?? null
             }
           />
           <PushSection />
           <Panel title="Weekly delivery history" eyebrow="Last 6 reports">
             <div className="space-y-3 text-sm">
-              {(deliveries ?? []).map((delivery, index) => (
+              {deliveryHistory.map((delivery, index) => (
                 <div
-                  key={`${delivery.period_start}-${delivery.attempted_at}`}
+                  key={`${delivery.periodStart}-${index}`}
                   className={`flex items-center justify-between gap-3 rounded-field p-3${index % 2 === 1 ? " bg-panel-2" : ""}`}
                 >
                   <span>
                     <span className="block font-semibold font-mono">
-                      {formatDate(delivery.period_start)} to {formatDate(delivery.period_end)}
+                      {formatDate(delivery.periodStart)} to{" "}
+                      {formatDate(delivery.periodEnd)}
                     </span>
                     <span className="block text-xs text-muted font-mono">
-                      {delivery.sent_at ? `Sent ${formatDate(delivery.sent_at)}` : "Delivery attempted"}
+                      {deliveryDescription(delivery)}
                     </span>
                   </span>
-                  <Badge tone={deliveryStatusTone(delivery.status)}>{delivery.status}</Badge>
+                  <Badge tone={deliveryStatusTone(delivery.status)}>
+                    {titleCase(delivery.status)}
+                  </Badge>
                 </div>
               ))}
-              {(deliveries ?? []).length === 0 && <p className="py-4 text-sm text-muted">Your first weekly delivery will appear here after it is prepared.</p>}
             </div>
           </Panel>
         </div>

@@ -16,15 +16,15 @@ type SummaryQuery = {
 };
 
 /**
- * Assets can only ever be cash/investment/other by construction (credit and
- * loan always land in liabilities — see `lib/accounts-page.ts`), so three
- * fixed, identity-pinned slots is exhaustive here, well inside the 7-slot
- * CVD ceiling.
+ * Negative liability balances are credits in the user's favor, so credit and
+ * loan groups may appear on the asset side of the balance sheet.
  */
 const ASSET_GROUP_COLOR: Partial<Record<AccountGroupKey, string>> = {
   cash: "var(--viz-1)",
   investment: "var(--viz-2)",
   other: "var(--viz-3)",
+  credit: "var(--viz-4)",
+  loan: "var(--viz-5)",
 };
 
 function totalFor(totals: CurrencyTotal[], currency: string): number {

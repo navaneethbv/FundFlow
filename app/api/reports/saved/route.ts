@@ -4,6 +4,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { requestAudits } from "@/lib/request-audit";
 import { parseReportFilters, REPORT_TABS, type ReportTab } from "@/lib/reports";
 import { withUser } from "@/lib/authed-route";
+import { MAX_SAVED_REPORTS } from "@/lib/saved-report-constants";
 
 /**
  * Saved report definitions (Phase 6). Writes go through the cookie-bound
@@ -16,7 +17,6 @@ import { withUser } from "@/lib/authed-route";
  * it back later.
  */
 
-export const MAX_SAVED_REPORTS = 50;
 const MAX_NAME_LENGTH = 80;
 
 function parseName(value: unknown): string | null {

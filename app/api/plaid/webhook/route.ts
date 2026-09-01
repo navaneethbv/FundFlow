@@ -3,6 +3,8 @@ import crypto from "node:crypto";
 import { safeEqual } from "@/lib/crypto";
 import { getPlaidClient } from "@/lib/plaid";
 import { syncItemTransactions } from "@/lib/sync";
+import { refreshRecurringForItem } from "@/lib/recurring";
+import { refreshInferredRecurringForItem } from "@/lib/recurring-inference";
 import { syncInvestmentsForItem } from "@/lib/investment-sync";
 import { getItemByPlaidItemId, setItemStatus } from "@/lib/plaid-service";
 import { errorResponse, badRequest } from "@/lib/http";
@@ -104,7 +106,52 @@ async function handleTransactionWebhook(body: {
     body.item_id.length === 0
   ) return;
   const item = await getItemByPlaidItemId(body.item_id);
-  if (item) await syncItemTransactions(item);
+  if (!item) return;
+  // Inference reads the canonical ledger, so it only runs once the sync that
+  // populates that ledger has succeeded.
+  await syncItemTransactions(item);
+  await runBestEffortWebhookStep("webhook.transactions.inference", () =>
+    refreshInferredRecurringForItem(item),
+  );
+}
+
+async function runBestEffortWebhookStep(
+  context: string,
+  operation: () => Promise<unknown>,
+): Promise<void> {
+  try {
+    await operation();
+  } catch (error) {
+    logError(context, error);
+  }
+}
+
+/**
+ * Plaid recomputed this item's recurring streams. Refresh the provider rows
+ * first so the Plaid-first deduplication in inference sees the current
+ * snapshot, then reconcile the locally inferred rows against it. Transactions
+ * are not re-synced here: this webhook says the streams changed, not the
+ * ledger.
+ */
+async function handleRecurringWebhook(body: {
+  webhook_type?: unknown;
+  webhook_code?: unknown;
+  item_id?: unknown;
+}): Promise<void> {
+  if (
+    body.webhook_type !== "TRANSACTIONS" ||
+    body.webhook_code !== "RECURRING_TRANSACTIONS_UPDATE" ||
+    typeof body.item_id !== "string" ||
+    body.item_id.length === 0
+  ) return;
+  const item = await getItemByPlaidItemId(body.item_id);
+  if (!item) return;
+  await runBestEffortWebhookStep("webhook.recurring.provider", () =>
+    refreshRecurringForItem(item),
+  );
+  await runBestEffortWebhookStep("webhook.recurring.inference", () =>
+    refreshInferredRecurringForItem(item),
+  );
 }
 
 async function handleHoldingsWebhook(body: {
@@ -145,13 +192,13 @@ async function handleItemWebhook(body: {
       typeof body.error?.error_code === "string"
         ? body.error.error_code
         : "ITEM_ERROR";
-    await setItemStatus(item.id, "error", code);
+    await setItemStatus(item.user_id, item.id, "error", code);
   } else if (body.webhook_code === "PENDING_EXPIRATION") {
-    await setItemStatus(item.id, "active", "PENDING_EXPIRATION");
+    await setItemStatus(item.user_id, item.id, "active", "PENDING_EXPIRATION");
   } else if (body.webhook_code === "LOGIN_REPAIRED") {
-    await setItemStatus(item.id, "active", null);
+    await setItemStatus(item.user_id, item.id, "active", null);
   } else if (body.webhook_code === "USER_PERMISSION_REVOKED") {
-    await setItemStatus(item.id, "disconnected", "USER_PERMISSION_REVOKED");
+    await setItemStatus(item.user_id, item.id, "disconnected", "USER_PERMISSION_REVOKED");
   }
 }
 
@@ -174,7 +221,11 @@ export async function POST(req: NextRequest) {
       error?: { error_code?: unknown };
     };
 
-    if (body.webhook_type === "TRANSACTIONS" && body.webhook_code === "SYNC_UPDATES_AVAILABLE") {
+    if (
+      body.webhook_type === "TRANSACTIONS" &&
+      (body.webhook_code === "SYNC_UPDATES_AVAILABLE" ||
+        body.webhook_code === "RECURRING_TRANSACTIONS_UPDATE")
+    ) {
       if (!body.item_id) {
         return badRequest("Missing item_id in webhook body");
       }
@@ -184,6 +235,7 @@ export async function POST(req: NextRequest) {
     // item-scoped refresh. Gated on investmentsPage — before its migration is
     // applied, `holdings` doesn't exist to write to.
     await handleTransactionWebhook(body);
+    await handleRecurringWebhook(body);
     await handleHoldingsWebhook(body);
 
     // ITEM lifecycle: mark broken connections so Settings can offer the

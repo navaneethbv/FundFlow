@@ -16,7 +16,7 @@ import {
   type WidgetKey,
 } from "@/lib/dashboard-widgets";
 import type { CumulativeSpendDay } from "@/lib/dashboard";
-import type { Goal } from "@/lib/goals";
+import type { GoalSummaryItem } from "@/lib/goal-summary";
 import type { DashboardBudgetGroup } from "@/lib/dashboard-budget-groups";
 import type { DashboardInvestmentSummary } from "@/lib/dashboard-widgets-data";
 
@@ -52,7 +52,7 @@ export default function DashboardWidgetGrid({
 }: Readonly<{
   prefs: DashboardWidgetPrefs;
   data: DashboardWidgetGridData;
-  goals: Goal[];
+  goals: GoalSummaryItem[];
   cumulativeSpend: CumulativeSpendDay[];
   monthLabel: string;
   previousMonthLabel: string;

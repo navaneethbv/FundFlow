@@ -17,6 +17,10 @@ export interface ImportedRow {
   merchant: string;
   category: string | null;
   sourceAccount?: string | null;
+  /** Free-text note carried by migration exports (Monarch Notes). */
+  notes?: string | null;
+  /** Tags carried by migration exports (Monarch Tags). */
+  tags?: string[] | null;
 }
 
 export interface ImportParseResult {
@@ -423,6 +427,10 @@ export interface CsvFormatSpec {
   category?: (line: string[], cols: Record<string, number>) => string | null;
   /** Optional source account name carried by migration exports. */
   sourceAccount?: (line: string[], cols: Record<string, number>) => string | null;
+  /** Optional free-text note carried by migration exports. */
+  notes?: (line: string[], cols: Record<string, number>) => string | null;
+  /** Optional tags carried by migration exports. */
+  tags?: (line: string[], cols: Record<string, number>) => string[] | null;
 }
 
 /** True when every given header (trimmed, case-insensitive) is present. */
@@ -490,6 +498,8 @@ function parseSpecRow(
     return { error: `Line ${lineNo}: empty ${spec.merchantLabel}.` };
   }
   const sourceAccount = spec.sourceAccount?.(line, cols) ?? null;
+  const notes = spec.notes?.(line, cols) ?? null;
+  const tags = spec.tags?.(line, cols) ?? null;
 
   return {
     row: {
@@ -498,6 +508,8 @@ function parseSpecRow(
       merchant,
       category: resolveSpecCategory(line, cols, spec),
       ...(sourceAccount ? { sourceAccount } : {}),
+      ...(notes ? { notes } : {}),
+      ...(tags && tags.length > 0 ? { tags } : {}),
     },
   };
 }
@@ -583,12 +595,23 @@ export const MONARCH_FORMAT_SPEC: CsvFormatSpec = {
   optional: {
     category: "category",
     account: "account",
+    notes: "notes",
+    tags: "tags",
   },
   amount: (line, cols) => {
     const raw = parseAmount(line[cols.amount] ?? "");
     return raw === null ? null : -raw;
   },
   sourceAccount: (line, cols) => (line[cols.account] ?? "").trim() || null,
+  notes: (line, cols) => (line[cols.notes ?? -1] ?? "").trim() || null,
+  tags: (line, cols) =>
+    cols.tags === undefined
+      ? null
+      : (line[cols.tags] ?? "")
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter((tag) => tag.length > 0 && tag.length <= 40)
+          .slice(0, 20),
 };
 
 export function looksLikeMonarchCsv(headerRow: string[]): boolean {

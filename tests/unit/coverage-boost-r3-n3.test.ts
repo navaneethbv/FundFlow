@@ -37,6 +37,17 @@ vi.mock("@/lib/sync", () => ({
   syncItemTransactions: (...args: unknown[]) => mockSyncItemTransactions(...args),
 }));
 
+const mockRefreshRecurringForItem = vi.fn<(...args: unknown[]) => unknown>();
+vi.mock("@/lib/recurring", () => ({
+  refreshRecurringForItem: (...args: unknown[]) => mockRefreshRecurringForItem(...args),
+}));
+
+const mockRefreshInferredRecurringForItem = vi.fn<(...args: unknown[]) => unknown>();
+vi.mock("@/lib/recurring-inference", () => ({
+  refreshInferredRecurringForItem: (...args: unknown[]) =>
+    mockRefreshInferredRecurringForItem(...args),
+}));
+
 const mockSyncInvestmentsForItem = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/investment-sync", () => ({
   syncInvestmentsForItem: (...args: unknown[]) =>
@@ -341,13 +352,13 @@ describe("POST /api/plaid/webhook (r3-n3)", () => {
 
     it("syncs transactions when the item exists", async () => {
       vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
       const res = await webhookPost(
         plainWebhook({ webhook_type: "TRANSACTIONS", webhook_code: "SYNC_UPDATES_AVAILABLE", item_id: "i1" }),
       );
       expect(res.status).toBe(200);
       expect(mockGetItemByPlaidItemId).toHaveBeenCalledWith("i1");
-      expect(mockSyncItemTransactions).toHaveBeenCalledWith({ id: "db-item" });
+      expect(mockSyncItemTransactions).toHaveBeenCalledWith({ id: "db-item", user_id: "user-1" });
     });
 
     it("does not sync when the item is missing", async () => {
@@ -398,17 +409,17 @@ describe("POST /api/plaid/webhook (r3-n3)", () => {
 
     it("syncs investments for a DEFAULT_UPDATE webhook", async () => {
       vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
       const res = await webhookPost(
         plainWebhook({ webhook_type: "HOLDINGS", webhook_code: "DEFAULT_UPDATE", item_id: "i1" }),
       );
       expect(res.status).toBe(200);
-      expect(mockSyncInvestmentsForItem).toHaveBeenCalledWith({ id: "db-item" });
+      expect(mockSyncInvestmentsForItem).toHaveBeenCalledWith({ id: "db-item", user_id: "user-1" });
     });
 
     it("swallows a rejected holdings sync and logs it", async () => {
       vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
       mockSyncInvestmentsForItem.mockRejectedValue(new Error("holdings boom"));
       const res = await webhookPost(
         plainWebhook({ webhook_type: "HOLDINGS", webhook_code: "HISTORICAL_UPDATE", item_id: "i1" }),
@@ -449,12 +460,12 @@ describe("POST /api/plaid/webhook (r3-n3)", () => {
 
     it("marks the item in error with the plaid error code", async () => {
       vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
       const res = await webhookPost(
         plainWebhook({ webhook_type: "ITEM", webhook_code: "ERROR", item_id: "i1", error: { error_code: "ITEM_LOGIN_REQUIRED" } }),
       );
       expect(res.status).toBe(200);
-      expect(mockSetItemStatus).toHaveBeenCalledWith("db-item", "error", "ITEM_LOGIN_REQUIRED");
+      expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "db-item", "error", "ITEM_LOGIN_REQUIRED");
     });
 
     it.each([
@@ -463,27 +474,27 @@ describe("POST /api/plaid/webhook (r3-n3)", () => {
       ["handles LOGIN_REPAIRED", "LOGIN_REPAIRED", "active", null],
     ])("%s", async (_label, webhookCode, expectedStatus, expectedConsent) => {
       vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
       const res = await webhookPost(
         plainWebhook({ webhook_type: "ITEM", webhook_code: webhookCode, item_id: "i1" }),
       );
       expect(res.status).toBe(200);
-      expect(mockSetItemStatus).toHaveBeenCalledWith("db-item", expectedStatus, expectedConsent);
+      expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "db-item", expectedStatus, expectedConsent);
     });
 
     it("handles USER_PERMISSION_REVOKED", async () => {
       vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
       const res = await webhookPost(
         plainWebhook({ webhook_type: "ITEM", webhook_code: "USER_PERMISSION_REVOKED", item_id: "i1" }),
       );
       expect(res.status).toBe(200);
-      expect(mockSetItemStatus).toHaveBeenCalledWith("db-item", "disconnected", "USER_PERMISSION_REVOKED");
+      expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "db-item", "disconnected", "USER_PERMISSION_REVOKED");
     });
 
     it("ignores an ITEM webhook with an unrecognized code", async () => {
       vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
       const res = await webhookPost(
         plainWebhook({ webhook_type: "ITEM", webhook_code: "SYNC_UPDATES_AVAILABLE", item_id: "i1" }),
       );
@@ -517,7 +528,7 @@ describe("POST /api/plaid/webhook (r3-n3)", () => {
     it("verifies a signed valid webhook end-to-end", async () => {
       vi.stubEnv("NODE_ENV", "production");
       vi.stubEnv("PLAID_ENV", "production");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
       const req = signedWebhook(
         { webhook_type: "TRANSACTIONS", webhook_code: "SYNC_UPDATES_AVAILABLE", item_id: "item-1" },
         { header: { kid: "final-kid", alg: "ES256" } },
@@ -525,7 +536,7 @@ describe("POST /api/plaid/webhook (r3-n3)", () => {
       const res = await webhookPost(req);
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ success: true });
-      expect(mockSyncItemTransactions).toHaveBeenCalledWith({ id: "db-item" });
+      expect(mockSyncItemTransactions).toHaveBeenCalledWith({ id: "db-item", user_id: "user-1" });
     });
   });
 });

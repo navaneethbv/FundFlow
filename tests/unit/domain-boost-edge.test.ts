@@ -16,7 +16,6 @@ describe("Recurring Page Edge Branches", () => {
           merchantName: null,
           description: null, // falls back to "Unknown"
           accountName: "Checking",
-          isCreditAccount: false,
           userAmount: null,
           averageAmount: null,
           lastAmount: 1500,
@@ -28,6 +27,8 @@ describe("Recurring Page Edge Branches", () => {
           reviewedAt: null,
           dismissedAt: null,
           matchedTransactions: [],
+          source: "plaid" as const,
+          detectionEvidence: null,
         },
       ],
       [

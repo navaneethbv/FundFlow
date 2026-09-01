@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   HoldingJoinRow,
   HoldingSnapshotRow,
+  InvestmentAccountSummary,
   InvestmentTransactionRow,
 } from "@/lib/investments";
 
@@ -160,4 +161,182 @@ export async function loadHoldingAccountOptions(
       source: "manual" as const,
     })),
   ];
+}
+
+/** Loads connected investment/brokerage accounts for coverage accounting. */
+export async function loadInvestmentAccounts(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<InvestmentAccountSummary[]> {
+  const [plaidResult, manualResult] = await Promise.all([
+    supabase
+      .from("accounts")
+      .select("id, name, type, subtype, current_balance, iso_currency_code")
+      .eq("user_id", userId),
+    supabase
+      .from("manual_accounts")
+      .select("id, name, account_type, balance")
+      .eq("user_id", userId),
+  ]);
+  if (plaidResult.error) throw plaidResult.error;
+  if (manualResult.error) throw manualResult.error;
+
+  const isInvestment = (type: string | null, subtype: string | null) => {
+    const t = type?.toLowerCase() ?? "";
+    const s = subtype?.toLowerCase() ?? "";
+    return (
+      t === "investment" ||
+      t === "brokerage" ||
+      s.includes("401k") ||
+      s.includes("401(k)") ||
+      s.includes("ira") ||
+      s.includes("roth") ||
+      s.includes("brokerage") ||
+      s.includes("retirement") ||
+      s.includes("pension") ||
+      s.includes("mutual fund")
+    );
+  };
+
+  const plaidAccounts = (plaidResult.data ?? [])
+    .filter((a) => isInvestment(a.type as string | null, a.subtype as string | null))
+    .map((a) => ({
+      id: a.id as string,
+      name: (a.name as string | null) ?? "Investment Account",
+      source: "plaid" as const,
+      type: (a.type as string | null) ?? null,
+      subtype: (a.subtype as string | null) ?? null,
+      balance: a.current_balance !== null ? Number(a.current_balance) : null,
+      currency: (a.iso_currency_code as string | null) ?? "USD",
+    }));
+
+  const manualAccounts = (manualResult.data ?? [])
+    .filter((a) => isInvestment(a.account_type as string | null, null))
+    .map((a) => ({
+      id: a.id as string,
+      name: a.name as string,
+      source: "manual" as const,
+      type: (a.account_type as string | null) ?? null,
+      subtype: null,
+      balance: a.balance !== null ? Number(a.balance) : null,
+      currency: "USD",
+    }));
+
+  return [...plaidAccounts, ...manualAccounts].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+}
+
+export interface InvestmentItemStatus {
+  plaidItemId: string;
+  institutionName: string;
+  lastAttemptAt: string | null;
+  lastSuccessAt: string | null;
+  /** Last recorded investments outcome (synced / product_not_ready / ...). */
+  outcome: string | null;
+  stale: boolean;
+}
+
+const INVESTMENT_STALE_AFTER_MS = 48 * 60 * 60 * 1000;
+const INVESTMENT_JOB_PAGE_SIZE = 1_000;
+
+interface InvestmentSyncJobRow {
+  id: string;
+  plaid_item_id: string;
+  updated_at: string;
+  status: string;
+  last_error: string | null;
+}
+
+interface InvestmentItemRow {
+  id: string;
+  institution_name: string | null;
+}
+
+async function loadInvestmentItems(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<InvestmentItemRow[]> {
+  const rows: InvestmentItemRow[] = [];
+  for (let page = 0; ; page += 1) {
+    const from = page * INVESTMENT_JOB_PAGE_SIZE;
+    const { data, error } = await supabase
+      .from("plaid_items")
+      .select("id, institution_name")
+      .eq("user_id", userId)
+      .order("created_at")
+      .order("id")
+      .range(from, from + INVESTMENT_JOB_PAGE_SIZE - 1);
+    if (error) throw error;
+    const batch = (data ?? []) as InvestmentItemRow[];
+    rows.push(...batch);
+    if (batch.length < INVESTMENT_JOB_PAGE_SIZE) return rows;
+  }
+}
+
+async function loadInvestmentSyncJobs(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<InvestmentSyncJobRow[]> {
+  const rows: InvestmentSyncJobRow[] = [];
+  for (let page = 0; ; page += 1) {
+    const from = page * INVESTMENT_JOB_PAGE_SIZE;
+    const { data, error } = await supabase
+      .from("sync_jobs")
+      .select("id, plaid_item_id, updated_at, status, last_error")
+      .eq("user_id", userId)
+      .eq("job_type", "investments")
+      .order("updated_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, from + INVESTMENT_JOB_PAGE_SIZE - 1);
+    if (error) throw error;
+    const batch = (data ?? []) as InvestmentSyncJobRow[];
+    rows.push(...batch);
+    if (batch.length < INVESTMENT_JOB_PAGE_SIZE) return rows;
+  }
+}
+
+/**
+ * Per-item investment sync status for the Investments page. Loads the most
+ * recent investment sync_jobs row per Plaid item, scoped to the caller, so the
+ * page can explain a missing portfolio without inventing holdings.
+ */
+export async function loadInvestmentSyncStatus(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<InvestmentItemStatus[]> {
+  const [items, jobs] = await Promise.all([
+    loadInvestmentItems(supabase, userId),
+    loadInvestmentSyncJobs(supabase, userId),
+  ]);
+
+  const latestAttemptByItem = new Map<string, InvestmentSyncJobRow>();
+  const latestSuccessByItem = new Map<string, InvestmentSyncJobRow>();
+  for (const job of jobs) {
+    if (!latestAttemptByItem.has(job.plaid_item_id)) {
+      latestAttemptByItem.set(job.plaid_item_id, job);
+    }
+    if (
+      job.status === "done" &&
+      !job.last_error &&
+      !latestSuccessByItem.has(job.plaid_item_id)
+    ) {
+      latestSuccessByItem.set(job.plaid_item_id, job);
+    }
+  }
+  const now = Date.now();
+  return items.map((item) => {
+    const itemId = item.id;
+    const latestAttempt = latestAttemptByItem.get(itemId);
+    const lastSuccessAt = latestSuccessByItem.get(itemId)?.updated_at ?? null;
+    const successTimestamp = lastSuccessAt ? Date.parse(lastSuccessAt) : Number.NaN;
+    return {
+      plaidItemId: itemId,
+      institutionName: item.institution_name ?? "Bank",
+      lastAttemptAt: latestAttempt?.updated_at ?? null,
+      lastSuccessAt,
+      outcome: latestAttempt?.last_error ?? null,
+      stale: Number.isFinite(successTimestamp) && now - successTimestamp > INVESTMENT_STALE_AFTER_MS,
+    };
+  });
 }
