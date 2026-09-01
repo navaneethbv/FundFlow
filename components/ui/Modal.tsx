@@ -32,17 +32,26 @@ export default function Modal({
   if (!open) return null;
 
   return (
-    // Backdrop click is a mouse/touch-only dismiss affordance layered on top
-    // of the real keyboard path (Escape, handled by useDialogFocus below);
-    // it deliberately stays outside the tab order rather than adding an
-    // extra stop a keyboard user would have to pass through to reach the
-    // dialog's own controls.
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      {/*
+        Backdrop click-to-close as a real native <button>, not a div with a
+        click handler — keyboard-operable by default, no manual onKeyDown
+        needed. It's a sibling of <dialog>, not an ancestor, and stacks
+        beneath it (both position!=static with z-index:auto stack in DOM
+        order, and <dialog> already carries `relative` below), so it only
+        ever catches clicks that land outside the dialog box; no dialog
+        click can bubble through it. It never becomes an extra keyboard stop
+        either: useDialogFocus already intercepts every Tab/Shift+Tab at the
+        dialog's first/last control and redirects back inside, so focus can
+        never actually reach this button while the dialog is open — Escape
+        (handled there too) remains the real keyboard path to close.
+      */}
+      <button
+        type="button"
+        aria-label="Close dialog"
+        onClick={onClose}
+        className="absolute inset-0 h-full w-full cursor-default border-0 bg-transparent p-0"
+      />
       <dialog
         open
         ref={dialogRef}

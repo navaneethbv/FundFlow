@@ -143,7 +143,7 @@ export default function CommandPalette({ items }: Readonly<{ items: Command[] }>
         </div>
         <ul id="command-palette-list" className="max-h-72 overflow-y-auto p-2" role="listbox" aria-label="Commands">
           {matches.length === 0 ? (
-            <li role="presentation" className="px-3 py-2 text-sm text-muted">No matches.</li>
+            <li role="option" aria-disabled="true" aria-selected="false" className="px-3 py-2 text-sm text-muted">No matches.</li>
           ) : (
             // Standard combobox pattern: the input above stays focused and
             // owns keyboard nav (ArrowUp/Down/Enter, already wired there),
