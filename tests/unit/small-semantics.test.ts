@@ -10,7 +10,8 @@ import SegmentedControl from "@/components/ui/SegmentedControl";
 
 /**
  * Small semantics and dead code cleanup (frontend-review R11, R12):
- * - SegmentedControl active item carries aria-current="page".
+ * - SegmentedControl active item carries aria-current="true" — it's a view
+ *   toggle (a current selection), not a page, per R11.
  * - StatTile arrow glyphs carry aria-hidden="true".
  * - Chart fallback tables (TrendChart, DivergingColumns, CumulativeCompareChart)
  *   are wrapped in overflow-x-auto containers.
@@ -18,7 +19,7 @@ import SegmentedControl from "@/components/ui/SegmentedControl";
  */
 
 describe("small semantics and cleanups", () => {
-  it("SegmentedControl active item has aria-current='page'", () => {
+  it("SegmentedControl active item has aria-current='true'", () => {
     const html = renderToStaticMarkup(
       createElement(SegmentedControl, {
         ariaLabel: "Timeframe",
@@ -28,7 +29,7 @@ describe("small semantics and cleanups", () => {
         ],
       }),
     );
-    expect(html).toContain('aria-current="page"');
+    expect(html).toContain('aria-current="true"');
   });
 
   it("StatTile arrow glyphs are wrapped with aria-hidden", () => {
