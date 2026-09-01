@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import Panel from "@/components/ui/Panel";
-import { scanPattern } from "../helpers/test-scanner-utils";
+import { scanPattern } from "./test-utils";
 
 /**
  * Token migration (frontend-review R9):

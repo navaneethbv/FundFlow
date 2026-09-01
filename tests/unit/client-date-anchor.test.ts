@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { scanFileContents } from "../helpers/test-scanner-utils";
+import { scanFileContents } from "./test-utils";
 
 /**
  * Local date anchoring (frontend-review R10):

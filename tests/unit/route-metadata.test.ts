@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { walkFiles } from "../helpers/test-scanner-utils";
+import { walkFiles } from "./test-utils";
 
 /**
  * Per-route metadata (frontend-review R2): every route titles itself, so

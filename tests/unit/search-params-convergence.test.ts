@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { walkFiles } from "../helpers/test-scanner-utils";
+import { walkFiles } from "./test-utils";
 
 /**
  * Next.js 15 searchParams typing convergence (frontend-review R13):
