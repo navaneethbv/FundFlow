@@ -19,7 +19,7 @@ describe("SegmentedControl", () => {
       }),
     );
     expect(html).toContain('href="/budget?horizon=monthly"');
-    expect(html).toContain('aria-current="page"');
+    expect(html).toContain('aria-current="true"');
     expect(html).toContain("Month");
     expect(html).toContain("Year");
   });

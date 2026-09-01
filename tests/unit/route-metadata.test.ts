@@ -1,6 +1,7 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { walkFiles } from "../helpers/test-scanner-utils";
 
 /**
  * Per-route metadata (frontend-review R2): every route titles itself, so
@@ -9,18 +10,10 @@ import { describe, expect, it } from "vitest";
  */
 
 function collectPageFiles(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) {
-      // API handlers and private folders carry no document title.
-      if (entry === "api" || entry.startsWith("_")) continue;
-      out.push(...collectPageFiles(full));
-    } else if (entry === "page.tsx") {
-      out.push(full);
-    }
-  }
-  return out;
+  return walkFiles(dir, {
+    extensions: ["page.tsx"],
+    ignorePrefix: "_",
+  }).filter((file) => !file.includes("/api/"));
 }
 
 const APP_DIR = "app";

@@ -1,13 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import Button from "@/components/ui/Button";
 import Field from "@/components/ui/Field";
 import Input from "@/components/ui/Input";
+import Modal from "@/components/ui/Modal";
 import Select from "@/components/ui/Select";
 import { localDateKey } from "@/lib/format-date";
-import { useDialogFocus } from "@/lib/use-dialog-focus";
 
 export interface AddTransactionAccountOption {
   id: string;
@@ -35,7 +35,6 @@ export default function AddTransactionModal({
   categories?: string[];
 }>) {
   const router = useRouter();
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<"debit" | "credit">("debit");
   const [amount, setAmount] = useState("");
@@ -47,12 +46,6 @@ export default function AddTransactionModal({
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  const handleDialogKeyDown = useDialogFocus(dialogRef, open, () => setOpen(false));
-
-  if (!open) {
-    return <Button onClick={() => setOpen(true)}>Add transaction</Button>;
-  }
 
   async function submit(event: React.SyntheticEvent) {
     event.preventDefault();
@@ -94,15 +87,9 @@ export default function AddTransactionModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <dialog
-        open
-        ref={dialogRef}
-        aria-modal="true"
-        aria-labelledby="add-txn-title"
-        onKeyDown={handleDialogKeyDown}
-        className="relative m-0 w-full max-w-md rounded-card border border-panel-border bg-panel p-5 shadow-float sm:p-6"
-      >
+    <>
+      <Button onClick={() => setOpen(true)}>Add transaction</Button>
+      <Modal open={open} onClose={() => setOpen(false)} titleId="add-txn-title">
         <h2 id="add-txn-title" className="text-lg font-bold">Add transaction</h2>
         <form
           onSubmit={submit}
@@ -187,7 +174,7 @@ export default function AddTransactionModal({
             </Button>
           </div>
         </form>
-      </dialog>
-    </div>
+      </Modal>
+    </>
   );
 }

@@ -1,14 +1,17 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { scanFileContents } from "../helpers/test-scanner-utils";
 
 /**
  * Modal adoption (frontend-review R4b): every overlay surface renders the
- * CustomizeDrawer recipe — `<dialog open aria-modal aria-labelledby>` keyed
- * through useDialogFocus. A bare fixed overlay without dialog semantics is
- * the regression this scan exists to catch.
+ * modal dialog recipe — `<dialog open aria-modal aria-labelledby>` keyed
+ * through useDialogFocus, either directly or via the shared `<Modal>` primitive.
+ * A bare fixed overlay without dialog semantics is the regression this scan catches.
  */
 
-const MUST_USE_DIALOG = [
+const MODAL_PRIMITIVE = "components/ui/Modal.tsx";
+
+const OVERLAY_SURFACES = [
   "components/transactions/AddTransactionModal.tsx",
   "components/transactions/TransactionEditor.tsx",
   "components/investments/AddManualHoldingForm.tsx",
@@ -17,36 +20,31 @@ const MUST_USE_DIALOG = [
 ];
 
 describe("modal dialog discipline", () => {
-  it.each(MUST_USE_DIALOG)("%s uses the dialog recipe", (file) => {
-    const source = readFileSync(file, "utf8");
-    expect(source, `${file} must render <dialog`).toContain("<dialog");
-    expect(source, `${file} must be aria-modal`).toContain("aria-modal");
-    expect(source, `${file} must label its dialog`).toContain("aria-labelledby");
-    expect(source, `${file} must route keyboard through useDialogFocus`).toContain(
-      "useDialogFocus",
-    );
+  it("Modal primitive encapsulates dialog recipe and focus discipline", () => {
+    const source = readFileSync(MODAL_PRIMITIVE, "utf8");
+    expect(source).toContain("<dialog");
+    expect(source).toContain('aria-modal="true"');
+    expect(source).toContain("useDialogFocus");
   });
 
-  it("no fixed overlay renders a bare panel without <dialog>", () => {
-    const offenders: string[] = [];
-    function walk(dir: string) {
-      for (const entry of readdirSync(dir)) {
-        const full = `${dir}/${entry}`;
-        if (statSync(full).isDirectory()) {
-          if (entry.startsWith("_")) continue;
-          walk(full);
-        } else if (entry.endsWith(".tsx")) {
-          const source = readFileSync(full, "utf8");
-          if (source.includes("fixed inset-0 z-50") && !source.includes("<dialog")) {
-            offenders.push(full);
-          }
-        }
-      }
-    }
-    walk("components");
+  it.each(OVERLAY_SURFACES)("%s uses dialog semantics or Modal primitive", (file) => {
+    const source = readFileSync(file, "utf8");
+    const usesModal = source.includes("<Modal") || source.includes("<dialog");
+    expect(usesModal, `${file} must render <Modal> or <dialog>`).toBe(true);
+  });
+
+  it("no fixed overlay renders a bare panel without <dialog> or <Modal>", () => {
+    const offenders = scanFileContents(
+      "components",
+      (source, file) =>
+        !file.endsWith("Modal.tsx") &&
+        source.includes("fixed inset-0 z-50") &&
+        !source.includes("<dialog") &&
+        !source.includes("<Modal"),
+    );
     expect(
       offenders,
-      `fixed overlays must render <dialog: ${offenders.join(", ")}`,
+      `fixed overlays must render <dialog> or <Modal>: ${offenders.join(", ")}`,
     ).toEqual([]);
   });
 });

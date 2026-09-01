@@ -1,8 +1,8 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import Panel from "@/components/ui/Panel";
+import { scanPattern } from "../helpers/test-scanner-utils";
 
 /**
  * Token migration (frontend-review R9):
@@ -11,23 +11,6 @@ import Panel from "@/components/ui/Panel";
  */
 
 const HARDCODED_COLOR_REGEX = /\b(text|bg|border)-(red|green|amber|emerald|blue|orange|yellow|rose|lime|sky)-\d{2,3}\b/;
-
-function findOffenders(dir: string): string[] {
-  const offenders: string[] = [];
-  for (const entry of readdirSync(dir)) {
-    const full = `${dir}/${entry}`;
-    if (statSync(full).isDirectory()) {
-      if (entry.startsWith("_")) continue;
-      offenders.push(...findOffenders(full));
-    } else if (entry.endsWith(".tsx") || entry.endsWith(".ts")) {
-      const source = readFileSync(full, "utf8");
-      if (HARDCODED_COLOR_REGEX.test(source)) {
-        offenders.push(full);
-      }
-    }
-  }
-  return offenders;
-}
 
 describe("semantic token discipline (no hardcoded palette colors)", () => {
   it("Panel warning tone uses semantic warning tokens", () => {
@@ -40,7 +23,7 @@ describe("semantic token discipline (no hardcoded palette colors)", () => {
   });
 
   it("no components contain hardcoded Tailwind color literals", () => {
-    const offenders = findOffenders("components");
+    const offenders = scanPattern("components", HARDCODED_COLOR_REGEX);
     expect(
       offenders,
       `components must use semantic tokens instead of hardcoded colors: ${offenders.join(", ")}`,
@@ -48,7 +31,7 @@ describe("semantic token discipline (no hardcoded palette colors)", () => {
   });
 
   it("no app routes contain hardcoded Tailwind color literals", () => {
-    const offenders = findOffenders("app");
+    const offenders = scanPattern("app", HARDCODED_COLOR_REGEX);
     expect(
       offenders,
       `app routes must use semantic tokens instead of hardcoded colors: ${offenders.join(", ")}`,

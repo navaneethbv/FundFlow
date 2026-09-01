@@ -1,14 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import Button from "@/components/ui/Button";
 import Field from "@/components/ui/Field";
 import Input from "@/components/ui/Input";
+import Modal from "@/components/ui/Modal";
 import Select from "@/components/ui/Select";
 import { Plus } from "@/components/ui/icons";
 import { localDateKey } from "@/lib/format-date";
-import { useDialogFocus } from "@/lib/use-dialog-focus";
 import type { AccountOption } from "@/lib/investments-data";
 
 /**
@@ -25,7 +25,6 @@ export default function AddManualHoldingForm({
   accounts,
 }: Readonly<{ accounts: AccountOption[] }>) {
   const router = useRouter();
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
   const [securityName, setSecurityName] = useState("");
   const [accountKey, setAccountKey] = useState(accounts[0] ? `${accounts[0].source}:${accounts[0].id}` : "");
@@ -34,17 +33,6 @@ export default function AddManualHoldingForm({
   const [asOf, setAsOf] = useState(() => localDateKey());
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  const handleDialogKeyDown = useDialogFocus(dialogRef, open, () => setOpen(false));
-
-  if (!open) {
-    return (
-      <Button onClick={() => setOpen(true)}>
-        <Plus aria-hidden className="h-4 w-4" />
-        Add Holding
-      </Button>
-    );
-  }
 
   async function submit(event: React.SyntheticEvent) {
     event.preventDefault();
@@ -86,17 +74,14 @@ export default function AddManualHoldingForm({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <dialog
-        open
-        ref={dialogRef}
-        aria-modal="true"
-        aria-labelledby="add-holding-title"
-        onKeyDown={handleDialogKeyDown}
-        className="relative m-0 w-full max-w-md rounded-card border border-panel-border bg-panel p-5 shadow-float sm:p-6"
-      >
-        <h2 id="add-holding-title" className="text-xl font-bold">
-          Add Holding
+    <>
+      <Button onClick={() => setOpen(true)}>
+        <Plus aria-hidden className="h-4 w-4" />
+        Add Holding
+      </Button>
+      <Modal open={open} onClose={() => setOpen(false)} titleId="add-holding-title">
+        <h2 id="add-holding-title" className="text-lg font-bold">
+          Add manual holding
         </h2>
         <form onSubmit={submit} className="mt-4 space-y-3">
           <Field label="Security name">
@@ -152,7 +137,7 @@ export default function AddManualHoldingForm({
             </Button>
           </div>
         </form>
-      </dialog>
-    </div>
+      </Modal>
+    </>
   );
 }

@@ -1,5 +1,6 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { walkFiles } from "../helpers/test-scanner-utils";
 
 /**
  * Next.js 15 searchParams typing convergence (frontend-review R13):
@@ -8,17 +9,10 @@ import { describe, expect, it } from "vitest";
  */
 
 function findPageFiles(dir: string): string[] {
-  const pages: string[] = [];
-  for (const entry of readdirSync(dir)) {
-    const full = `${dir}/${entry}`;
-    if (statSync(full).isDirectory()) {
-      if (entry.startsWith("_") || entry === "api") continue;
-      pages.push(...findPageFiles(full));
-    } else if (entry === "page.tsx") {
-      pages.push(full);
-    }
-  }
-  return pages;
+  return walkFiles(dir, {
+    extensions: ["page.tsx"],
+    ignorePrefix: "_",
+  }).filter((file) => !file.includes("/api/"));
 }
 
 describe("searchParams Next.js 15 typing convergence", () => {

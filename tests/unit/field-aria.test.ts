@@ -71,4 +71,48 @@ describe("Field ARIA chain & focus styling", () => {
     expect(fieldClasses).not.toContain("focus:outline-none");
     expect(fieldClasses).toContain("focus:outline-2");
   });
+
+  it("handles multiple children correctly without attaching ARIA attributes to datalist", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        Field,
+        {
+          label: "Category",
+          htmlFor: "category-input",
+          error: "Select a valid category",
+        },
+        createElement("input", { id: "category-input", list: "category-options" }),
+        createElement(
+          "datalist",
+          { id: "category-options" },
+          createElement("option", { value: "Groceries" }),
+        ),
+      ),
+    );
+
+    expect(html).toContain('<input id="category-input" list="category-options" aria-describedby="category-input-error" aria-invalid="true"/>');
+    expect(html).toContain('<datalist id="category-options"><option value="Groceries"></option></datalist>');
+    expect(html).not.toContain('<datalist id="category-options" aria-describedby');
+  });
+
+  it("recursively injects ARIA attributes into nested control wrappers", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        Field,
+        {
+          label: "Search",
+          htmlFor: "search-input",
+          hint: "Type to search",
+        },
+        createElement(
+          "div",
+          { className: "relative" },
+          createElement("input", { id: "search-input" }),
+          createElement("span", { className: "icon" }, "🔍"),
+        ),
+      ),
+    );
+
+    expect(html).toContain('<input id="search-input" aria-describedby="search-input-hint"/>');
+  });
 });

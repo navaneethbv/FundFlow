@@ -195,9 +195,10 @@ describe("AddManualHoldingForm — closed trigger and modal shell", () => {
 
   it("is the standard app modal recipe, not an inline expanding form", () => {
     const source = readFileSync("components/investments/AddManualHoldingForm.tsx", "utf8");
-    expect(source).toContain("fixed inset-0 z-50");
-    expect(source).toContain("<dialog");
-    expect(source).toContain("bg-black/50");
+    const modalSource = readFileSync("components/ui/Modal.tsx", "utf8");
+    expect(source).toContain("<Modal");
+    expect(modalSource).toContain("fixed inset-0 z-50");
+    expect(modalSource).toContain("<dialog");
   });
 });
 

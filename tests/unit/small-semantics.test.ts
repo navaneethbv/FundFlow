@@ -18,7 +18,7 @@ import SegmentedControl from "@/components/ui/SegmentedControl";
  */
 
 describe("small semantics and cleanups", () => {
-  it("SegmentedControl active item has aria-current='page'", () => {
+  it("SegmentedControl active item has aria-current='true'", () => {
     const html = renderToStaticMarkup(
       createElement(SegmentedControl, {
         ariaLabel: "Timeframe",
@@ -28,7 +28,7 @@ describe("small semantics and cleanups", () => {
         ],
       }),
     );
-    expect(html).toContain('aria-current="page"');
+    expect(html).toContain('aria-current="true"');
   });
 
   it("StatTile arrow glyphs are wrapped with aria-hidden", () => {

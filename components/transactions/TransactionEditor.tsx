@@ -1,15 +1,15 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Input, { fieldClasses } from "@/components/ui/Input";
+import Modal from "@/components/ui/Modal";
 import TransactionOverrideControl, {
   type TransactionOverride,
 } from "@/components/transactions/TransactionOverrideControl";
 import { cn } from "@/lib/cn";
 import { formatCurrency, titleCase } from "@/lib/format";
-import { useDialogFocus } from "@/lib/use-dialog-focus";
 
 export interface EditorSplit {
   category: string;
@@ -67,7 +67,6 @@ export default function TransactionEditor({
   const target = round2(Math.abs(transaction.amount));
   const inputId = (suffix: string) => `${idPrefix}${suffix}-${transaction.id}`;
 
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const [saved, setSaved] = useState({
     note: initialNote ?? "",
     tags: initialTags,
@@ -79,8 +78,6 @@ export default function TransactionEditor({
   const [rows, setRows] = useState<SplitRow[]>(() => saved.splits.map(toSplitRow));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const handleDialogKeyDown = useDialogFocus(dialogRef, open, () => setOpen(false));
 
   function openEditor() {
     setNote(saved.note);
@@ -159,24 +156,12 @@ export default function TransactionEditor({
         {hasAnnotations ? "Edit" : "Add"}
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
-          <button
-            type="button"
-            aria-label="Close editor"
-            className="absolute inset-0 h-full w-full cursor-default bg-black/50"
-            onClick={() => {
-              setOpen(false);
-            }}
-          />
-          <dialog
-            open
-            ref={dialogRef}
-            aria-modal="true"
-            aria-labelledby={`${idPrefix}title-${transaction.id}`}
-            onKeyDown={handleDialogKeyDown}
-            className="relative m-0 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-[0.75rem] border border-panel-border bg-panel p-5 shadow-float sm:rounded-[0.75rem]"
-          >
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        titleId={`${idPrefix}title-${transaction.id}`}
+        className="max-h-[90vh] max-w-lg overflow-y-auto"
+      >
             <div className="mb-4">
               <p className="text-xs uppercase tracking-wider text-muted">
                 {transaction.amount < 0 ? "Money in" : "Money out"} ·{" "}
@@ -327,9 +312,7 @@ export default function TransactionEditor({
                 Save
               </Button>
             </div>
-          </dialog>
-        </div>
-      )}
+      </Modal>
     </>
   );
 }
