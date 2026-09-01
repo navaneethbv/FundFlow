@@ -152,6 +152,12 @@ export default function CommandPalette({ items }: Readonly<{ items: Command[] }>
                 role="option"
                 aria-selected={index === selected}
                 onClick={() => activate(command)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    activate(command);
+                  }
+                }}
                 onMouseEnter={() => setSelected(index)}
                 className={`flex w-full cursor-pointer items-center justify-between gap-3 rounded-field px-3 py-2 text-left text-sm transition-colors ${
                   index === selected ? "bg-panel-hover" : "hover:bg-panel-hover"

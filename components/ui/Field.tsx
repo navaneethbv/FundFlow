@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement } from "react";
+import { Children, cloneElement, isValidElement } from "react";
 import Label from "@/components/ui/Label";
 
 /** Label + control + optional hint/error, stacked. */
@@ -19,17 +19,26 @@ export default function Field({
   const hintId = htmlFor && hint && !error ? `${htmlFor}-hint` : undefined;
   const describedBy = errorId ?? hintId;
 
-  let enhancedChildren = children;
-  if (describedBy && isValidElement<{ "aria-describedby"?: string; "aria-invalid"?: boolean | "true" | "false" }>(children)) {
-    const existingDescribedBy = children.props["aria-describedby"];
-    const mergedDescribedBy = existingDescribedBy
-      ? `${existingDescribedBy} ${describedBy}`
-      : describedBy;
-    enhancedChildren = cloneElement(children, {
-      "aria-describedby": mergedDescribedBy,
-      ...(error ? { "aria-invalid": true } : {}),
-    });
-  }
+  const enhancedChildren = describedBy
+    ? Children.map(children, (child) => {
+        if (
+          !isValidElement<{
+            "aria-describedby"?: string;
+            "aria-invalid"?: boolean | "true" | "false";
+          }>(child)
+        ) {
+          return child;
+        }
+        const existingDescribedBy = child.props["aria-describedby"];
+        const mergedDescribedBy = existingDescribedBy
+          ? `${existingDescribedBy} ${describedBy}`
+          : describedBy;
+        return cloneElement(child, {
+          "aria-describedby": mergedDescribedBy,
+          ...(error ? { "aria-invalid": true } : {}),
+        });
+      })
+    : children;
 
   return (
     <div className="space-y-1.5">
