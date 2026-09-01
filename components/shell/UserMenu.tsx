@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
 import PrivacyToggle from "@/components/PrivacyToggle";
 import ThemeToggle from "@/components/ThemeToggle";
 import LogoutButton from "@/components/LogoutButton";
 import { ChevronDown, Settings } from "@/components/ui/icons";
+import { usePopoverMenu } from "@/lib/use-popover-menu";
+import PopoverBackdrop from "@/components/ui/PopoverBackdrop";
 
 /**
  * The sidebar's bottom-pinned identity block: avatar + name + chevron,
@@ -24,41 +25,17 @@ export default function UserMenu({
   email?: string | null;
   avatarUrl?: string | null;
 }>) {
-  const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-
-  function close() {
-    setOpen(false);
-    triggerRef.current?.focus();
-  }
-
-  useEffect(() => {
-    if (!open) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") close();
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open]);
-
+  const { open, toggle, close, triggerRef } = usePopoverMenu();
   const initial = displayName.trim().charAt(0).toUpperCase() || "?";
 
   return (
     <div className="relative">
-      {open && (
-        <button
-          type="button"
-          aria-hidden
-          tabIndex={-1}
-          onClick={close}
-          className="fixed inset-0 z-30 cursor-default"
-        />
-      )}
+      {open && <PopoverBackdrop onClose={close} />}
 
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={toggle}
         aria-expanded={open}
         aria-label={`Account menu for ${displayName}`}
         className="flex w-full items-center gap-2 rounded-field p-2 text-left transition-colors duration-150 hover:bg-panel-hover focus-visible:outline-2 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:p-0"

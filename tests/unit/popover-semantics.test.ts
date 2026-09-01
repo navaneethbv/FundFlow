@@ -27,6 +27,7 @@ describe("popover semantics and focus return", () => {
   it.each(POPOVER_FILES)("%s restores focus to trigger ref on close/Escape", (file) => {
     const source = readFileSync(file, "utf8");
     expect(source, `${file} must define a triggerRef`).toContain("triggerRef");
-    expect(source, `${file} must focus triggerRef on Escape or close`).toMatch(/triggerRef\.current\?\.focus\(\)/);
+    const hasFocus = /triggerRef\.current\?\.focus\(\)/.test(source) || /usePopoverMenu/.test(source);
+    expect(hasFocus, `${file} must focus triggerRef on Escape or close`).toBe(true);
   });
 });
