@@ -10,6 +10,7 @@ import {
 import { loadOverviewWidgetData } from "@/lib/dashboard-widgets-data";
 import type { AccountSummary } from "@/lib/dashboard";
 import { formatMonth } from "@/lib/format";
+import { localDateKey } from "@/lib/format-date";
 import type { Goal } from "@/lib/goals";
 import { createClient } from "@/lib/supabase/server";
 import type { ComponentProps } from "react";
@@ -45,7 +46,7 @@ export default async function OverviewView({
   month: string;
   selectedAccountId?: string;
 }>) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey();
   const supabase = await createClient();
   const prefs = normalizeWidgetPrefs(prefsRaw);
   const monthLabel = formatMonth(month);

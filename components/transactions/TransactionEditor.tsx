@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Input, { fieldClasses } from "@/components/ui/Input";
 import { cn } from "@/lib/cn";
 import { formatCurrency, titleCase } from "@/lib/format";
+import { useDialogFocus } from "@/lib/use-dialog-focus";
 
 export interface EditorSplit {
   category: string;
@@ -57,6 +58,7 @@ export default function TransactionEditor({
   const target = round2(Math.abs(transaction.amount));
   const inputId = (suffix: string) => `${idPrefix}${suffix}-${transaction.id}`;
 
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [saved, setSaved] = useState({
     note: initialNote ?? "",
     tags: initialTags,
@@ -69,12 +71,7 @@ export default function TransactionEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  const handleDialogKeyDown = useDialogFocus(dialogRef, open, () => setOpen(false));
 
   function openEditor() {
     setNote(saved.note);
@@ -163,8 +160,10 @@ export default function TransactionEditor({
           />
           <dialog
             open
+            ref={dialogRef}
             aria-modal="true"
             aria-labelledby={`${idPrefix}title-${transaction.id}`}
+            onKeyDown={handleDialogKeyDown}
             className="relative m-0 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-[0.75rem] border border-panel-border bg-panel p-5 shadow-float sm:rounded-[0.75rem]"
           >
             <div className="mb-4">

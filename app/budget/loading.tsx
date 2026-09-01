@@ -1,6 +1,8 @@
+import RouteSkeleton from "@/components/shell/RouteSkeleton";
+
 export default function BudgetLoading() {
   return (
-    <div className="space-y-4" aria-busy="true" aria-label="Loading Budget">
+    <RouteSkeleton active="budget" label="Budget">
       <div className="h-10 w-48 animate-pulse rounded-field bg-panel-hover" />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }, (_, index) => (
@@ -11,6 +13,6 @@ export default function BudgetLoading() {
         ))}
       </div>
       <div className="h-72 animate-pulse rounded-card bg-panel-hover" />
-    </div>
+    </RouteSkeleton>
   );
 }

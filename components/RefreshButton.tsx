@@ -35,7 +35,7 @@ export default function RefreshButton() {
       >
         {busy ? "Refreshing..." : "Refresh"}
       </Button>
-      {error && <span className="text-xs text-red-600">{error}</span>}
+      {error && <span className="text-xs text-danger">{error}</span>}
     </div>
   );
 }

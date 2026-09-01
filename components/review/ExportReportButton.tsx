@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Button from "@/components/ui/Button";
+import { localDateKey } from "@/lib/format-date";
 
 /**
  * Client-side "Export PDF" action for the spending-insights report.
@@ -25,7 +26,7 @@ export default function ExportReportButton({
       response.headers.get("content-disposition") ?? "",
     )?.[1];
     if (fromHeader) return fromHeader;
-    return `fundflow-report-${month ?? new Date().toISOString().slice(0, 10)}.pdf`;
+    return `fundflow-report-${month ?? localDateKey()}.pdf`;
   }
 
   async function download(): Promise<void> {

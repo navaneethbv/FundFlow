@@ -148,7 +148,7 @@ export default function SummaryPanel({
       }
     >
       {summary.currencyMismatch && (
-        <p className="mb-4 rounded-field bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+        <p className="mb-4 rounded-field border border-warning/35 bg-warning/10 p-3 text-sm text-warning">
           Totals are separated by currency because FundFlow does not guess
           exchange rates.
         </p>

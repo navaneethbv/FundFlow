@@ -60,7 +60,7 @@ export default function AccountRow({
         <p
           className={
             row.stale
-              ? "mt-1 text-xs font-semibold text-amber-700 dark:text-amber-300"
+              ? "mt-1 text-xs font-semibold text-warning"
               : "mt-1 text-xs text-muted"
           }
         >

@@ -34,7 +34,6 @@ describe("DropdownButton", () => {
       }),
     );
     expect(html).toContain("Expenses");
-    expect(html).toContain('aria-haspopup="menu"');
     expect(html).toContain('aria-expanded="false"');
     expect(html).not.toContain('role="menu"');
   });

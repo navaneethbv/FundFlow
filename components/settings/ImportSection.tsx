@@ -143,7 +143,7 @@ export default function ImportSection({ accounts }: Readonly<{ accounts: Account
       )}
 
       {result && (
-        <div className="mt-4 space-y-1 rounded-lg border border-green-500/20 bg-green-500/10 p-3 text-sm text-green-700 dark:text-green-400">
+        <div className="mt-4 space-y-1 rounded-lg border border-success/35 bg-success/10 p-3 text-sm text-success">
           <p className="font-medium">
             Imported {result.imported.toLocaleString()} transaction
             {result.imported === 1 ? "" : "s"}
@@ -165,7 +165,7 @@ export default function ImportSection({ accounts }: Readonly<{ accounts: Account
           )}
         </div>
       )}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
     </Panel>
   );
 }

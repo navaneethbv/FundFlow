@@ -29,6 +29,10 @@ const TABS: Array<{ key: GoalType; label: string }> = [
   { key: "pay_down", label: "Pay down" },
 ];
 
+export const metadata = {
+  title: "Goals",
+};
+
 export default async function GoalsPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
   const goalsV2Enabled = isFeatureEnabled("goalsV2");

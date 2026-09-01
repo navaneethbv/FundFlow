@@ -296,7 +296,7 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
             </label>
           </div>
           {dateFormatRequired && (
-            <p className="text-sm text-amber-700 dark:text-amber-300">
+            <p className="text-sm text-warning">
               The file contains ambiguous dates. Choose the source date format, then preview again.
             </p>
           )}
@@ -459,7 +459,7 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
           Imported {committed} transaction{committed === 1 ? "" : "s"}.
         </p>
       )}
-      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-3 text-sm text-danger">{error}</p>}
     </Panel>
   );
 }

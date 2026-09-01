@@ -6,23 +6,29 @@ import Panel from "@/components/ui/Panel";
 import { goalSummary, getGoals } from "@/lib/goals";
 import { getDashboardData } from "@/lib/dashboard";
 import { formatCurrency, formatMonth, gainLossColor, inflowMarker, titleCase } from "@/lib/format";
+import { firstSearchParam } from "@/lib/search-params";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
+
+export const metadata = {
+  title: "Monthly review",
+};
 
 export default async function MonthlyReviewPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
+  const month = firstSearchParam(params.month);
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   const [data, goals] = await Promise.all([
-    getDashboardData(supabase, undefined, params.month),
+    getDashboardData(supabase, undefined, month),
     getGoals(supabase),
   ]);
 

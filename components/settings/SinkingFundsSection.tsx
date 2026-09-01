@@ -7,6 +7,7 @@ import Input from "@/components/ui/Input";
 import Panel from "@/components/ui/Panel";
 import Select from "@/components/ui/Select";
 import { formatCurrency } from "@/lib/format";
+import { localDateKey } from "@/lib/format-date";
 import {
   computeSinkingFunds,
   type SinkingFundCadence,
@@ -31,7 +32,7 @@ const CADENCE_LABELS: Record<SinkingFundCadence, string> = {
 };
 
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localDateKey();
 }
 
 function planFor(fund: SinkingFundRow) {
@@ -263,7 +264,7 @@ export default function SinkingFundsSection({
         </div>
       </form>
 
-      {error && <output className="mt-3 block text-sm text-red-600">{error}</output>}
+      {error && <output className="mt-3 block text-sm text-danger">{error}</output>}
     </Panel>
   );
 }

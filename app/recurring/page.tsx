@@ -47,6 +47,10 @@ function recurringHref(input: { month: string; scope?: string; tab?: RecurringTa
   return `/recurring?${params.toString()}`;
 }
 
+export const metadata = {
+  title: "Recurring",
+};
+
 export default async function RecurringPage({ searchParams }: Readonly<PageProps>) {
   if (!isFeatureEnabled("recurringPage")) notFound();
 

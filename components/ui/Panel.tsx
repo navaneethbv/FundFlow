@@ -5,7 +5,7 @@ type Tone = "default" | "danger" | "warning" | "success" | "accent";
 const tones: Record<Tone, string> = {
   default: "border-panel-border bg-panel",
   danger: "border-danger/30 bg-danger/[0.06]",
-  warning: "border-amber-500/35 bg-amber-500/10",
+  warning: "border-warning/35 bg-warning/10",
   success: "border-success/30 bg-success/[0.06]",
   accent: "border-accent/30 bg-accent-soft",
 };

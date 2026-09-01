@@ -18,6 +18,10 @@ function deliveryStatusTone(status: string): "success" | "danger" | "neutral" {
   return "neutral";
 }
 
+export const metadata = {
+  title: "Notifications",
+};
+
 export default async function NotificationsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

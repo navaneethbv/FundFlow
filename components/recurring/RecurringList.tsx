@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { InstitutionAvatar, MerchantAvatar } from "@/components/ui/Avatar";
 import CategoryChip from "@/components/ui/CategoryChip";
@@ -94,11 +94,17 @@ function OccurrenceRowMenu({
   const [open, setOpen] = useState(false);
   const initialAmount = stream?.userAmount != null ? String(stream.userAmount) : "";
   const [amount, setAmount] = useState(initialAmount);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  function close() {
+    setOpen(false);
+    triggerRef.current?.focus();
+  }
 
   useEffect(() => {
     if (!open) return;
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") close();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -119,14 +125,14 @@ function OccurrenceRowMenu({
           type="button"
           aria-hidden
           tabIndex={-1}
-          onClick={() => setOpen(false)}
+          onClick={close}
           className="fixed inset-0 z-30 cursor-default"
         />
       )}
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`More options for ${occurrence.merchant}`}
         className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"
@@ -135,7 +141,6 @@ function OccurrenceRowMenu({
       </button>
       {open && (
         <div
-          role="menu"
           aria-label={`Options for ${occurrence.merchant}`}
           className="absolute right-0 z-40 mt-2 w-64 space-y-3 rounded-card border border-panel-border bg-panel p-3 shadow-float"
         >

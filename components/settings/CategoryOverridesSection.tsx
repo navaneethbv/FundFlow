@@ -107,7 +107,7 @@ export default function CategoryOverridesSection({
         </Button>
       </form>
 
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
     </Panel>
   );
 }

@@ -1,12 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import Button from "@/components/ui/Button";
 import Field from "@/components/ui/Field";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import { Plus } from "@/components/ui/icons";
+import { localDateKey } from "@/lib/format-date";
+import { useDialogFocus } from "@/lib/use-dialog-focus";
 import type { AccountOption } from "@/lib/investments-data";
 
 /**
@@ -29,22 +31,11 @@ export default function AddManualHoldingForm({
   const [accountKey, setAccountKey] = useState(accounts[0] ? `${accounts[0].source}:${accounts[0].id}` : "");
   const [quantity, setQuantity] = useState("");
   const [price, setPrice] = useState("");
-  const [asOf, setAsOf] = useState(() => new Date().toISOString().slice(0, 10));
+  const [asOf, setAsOf] = useState(() => localDateKey());
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (!open) return;
-    const firstControl = dialogRef.current?.querySelector<HTMLElement>(
-      "input, select, button",
-    );
-    firstControl?.focus();
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open]);
+  const handleDialogKeyDown = useDialogFocus(dialogRef, open, () => setOpen(false));
 
   if (!open) {
     return (
@@ -101,6 +92,7 @@ export default function AddManualHoldingForm({
         ref={dialogRef}
         aria-modal="true"
         aria-labelledby="add-holding-title"
+        onKeyDown={handleDialogKeyDown}
         className="relative m-0 w-full max-w-md rounded-card border border-panel-border bg-panel p-5 shadow-float sm:p-6"
       >
         <h2 id="add-holding-title" className="text-xl font-bold">
@@ -145,7 +137,7 @@ export default function AddManualHoldingForm({
             <Input
               type="date"
               value={asOf}
-              max={new Date().toISOString().slice(0, 10)}
+              max={localDateKey()}
               onChange={(e) => setAsOf(e.target.value)}
               required
             />

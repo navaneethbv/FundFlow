@@ -7,6 +7,10 @@ import AuthShell from "@/components/shell/AuthShell";
 // only does that when the page renders dynamically.
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Log in",
+};
+
 export default function LoginPage() {
   return (
     <AuthShell title="Welcome back" subtitle="Take control of your money. Make confident financial decisions.">

@@ -62,7 +62,7 @@ export default function GoogleSignInButton() {
         </svg>
         {loading ? "Redirecting..." : "Continue with Google"}
       </button>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
     </div>
   );
 }

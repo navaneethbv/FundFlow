@@ -24,23 +24,13 @@ import { getGoals } from "@/lib/goals";
 import { resolveDisplayName, greetingWord } from "@/lib/greeting";
 import ScopeChips from "@/components/dashboard/ScopeChips";
 import type { DashboardPrefs } from "@/components/settings/DashboardPrefsSection";
+import { firstSearchParam } from "@/lib/search-params";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  searchParams: Promise<{
-    accountId?: string;
-    month?: string;
-    tab?: string;
-    view?: string;
-    itemId?: string;
-    category?: string;
-    sub?: string;
-    merchant?: string;
-    bills?: string;
-    scope?: string;
-  }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 type PlaidItem = {
@@ -49,22 +39,33 @@ type PlaidItem = {
   status: string | null;
 };
 
+export const metadata = {
+  title: "Dashboard",
+};
+
 export default async function DashboardPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
-  const selectedAccountId = params.accountId;
-  const selectedMonth = params.month;
-  const selectedItemId = params.itemId;
+  const selectedAccountId = firstSearchParam(params.accountId);
+  const selectedMonth = firstSearchParam(params.month);
+  const selectedItemId = firstSearchParam(params.itemId);
+  const selectedTab = firstSearchParam(params.tab);
+  const selectedView = firstSearchParam(params.view);
+  const selectedBills = firstSearchParam(params.bills);
+  const selectedScope = firstSearchParam(params.scope);
   // The grid is the landing view only when the flag is on; existing bookmarks
   // to ?view=monitor|plan|wealth keep resolving exactly as before.
   const widgetsEnabled = isFeatureEnabled("dashboardWidgets");
-  const activeView = resolveDashboardView(params, widgetsEnabled ? "overview" : "monitor");
+  const activeView = resolveDashboardView(
+    { view: selectedView, tab: selectedTab },
+    widgetsEnabled ? "overview" : "monitor",
+  );
   const drillQuery = {
-    category: params.category,
-    sub: params.sub,
-    merchant: params.merchant,
+    category: firstSearchParam(params.category),
+    sub: firstSearchParam(params.sub),
+    merchant: firstSearchParam(params.merchant),
   };
   const dashboardScope: "mine" | "household" =
-    params.scope === "household" ? "household" : "mine";
+    selectedScope === "household" ? "household" : "mine";
   const drillOptions = {
     itemId: selectedItemId,
     drill: drillQuery,
@@ -232,7 +233,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
             <PlanView
               data={data}
               goals={goals}
-              billsGrouping={params.bills === "monthly" ? "monthly" : "weekly"}
+              billsGrouping={selectedBills === "monthly" ? "monthly" : "weekly"}
               billsLinkParams={{
                 month: selectedMonth,
                 accountId: selectedAccountId,

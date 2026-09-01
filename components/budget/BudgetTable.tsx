@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Badge from "@/components/ui/Badge";
 import CategoryChip from "@/components/ui/CategoryChip";
 import ProgressBar from "@/components/ui/ProgressBar";
@@ -28,25 +28,28 @@ export type PlannedAmountValidation =
  * explicit Save button, so every blur — including just tabbing through
  * without editing — must not fire a network request, and an unparseable or
  * negative value must revert rather than silently save. `changed: false`
- * lets the caller skip the request without reverting the field, since the
- * value shown is already correct.
+ * distinguishes an untouched blur from a real mutation.
  */
 export function validatePlannedAmount(
-  rawValue: string,
-  currentBasePlanned: number,
+  input: string,
+  currentPlanned: number,
 ): PlannedAmountValidation {
-  const value = Number(rawValue);
-  if (!Number.isFinite(value) || value < 0) return { ok: false };
-  return { ok: true, value, changed: value !== currentBasePlanned };
+  const trimmed = input.trim();
+  if (trimmed === "") return { ok: true, value: 0, changed: currentPlanned !== 0 };
+  const numeric = Number(trimmed);
+  if (!Number.isFinite(numeric) || numeric < 0) return { ok: false };
+  const rounded = Math.round(numeric * 100) / 100;
+  return { ok: true, value: rounded, changed: rounded !== currentPlanned };
 }
 
 /**
- * The group/rollover/order controls, moved off the row into a small "⋯"
- * popover — Monarch never shows these inline. Not built on `DropdownButton`:
- * that primitive's `items` are label+link/action rows, and this needs real
- * form controls (a select, a checkbox, a number field), so it gets its own
- * small trigger+backdrop+Escape popover using the same visual chrome
- * (rounded trigger, `rounded-card` panel, `shadow-float`) rather than
+ * Row-level menu for group reassignment, rollover toggle, and sort order.
+ *
+ * Placed here in `BudgetTable.tsx` because it is internal to the table's
+ * row lifecycle (shares `onUpdate` and `BudgetLinePatch`), not a reusable
+ * application menu. Kept custom rather than generic `DropdownButton`
+ * because the panel contains a `<select>`, a `<input type="checkbox">`, and
+ * a `<input type="number">` rather than a list of click targets —
  * forcing an ill-fitting shape onto the shared primitive.
  */
 function RowMenu({
@@ -60,11 +63,17 @@ function RowMenu({
 }>) {
   const [open, setOpen] = useState(false);
   const [sortOrder, setSortOrder] = useState(String(line.sortOrder));
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  function close() {
+    setOpen(false);
+    triggerRef.current?.focus();
+  }
 
   useEffect(() => {
     if (!open) return;
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") close();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -92,14 +101,14 @@ function RowMenu({
           type="button"
           aria-hidden
           tabIndex={-1}
-          onClick={() => setOpen(false)}
+          onClick={close}
           className="fixed inset-0 z-30 cursor-default"
         />
       )}
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`More options for ${line.label}`}
         className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"
@@ -108,7 +117,6 @@ function RowMenu({
       </button>
       {open && (
         <div
-          role="menu"
           aria-label={`Plan controls for ${line.label}`}
           className="absolute right-0 z-40 mt-2 w-64 space-y-3 rounded-card border border-panel-border bg-panel p-3 shadow-float"
         >

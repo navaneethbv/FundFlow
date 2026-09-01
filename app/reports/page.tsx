@@ -94,6 +94,10 @@ function ReportChart({
   );
 }
 
+export const metadata = {
+  title: "Reports",
+};
+
 export default async function ReportsPage({ searchParams }: Readonly<PageProps>) {
   if (!isFeatureEnabled("reportsPage")) notFound();
 

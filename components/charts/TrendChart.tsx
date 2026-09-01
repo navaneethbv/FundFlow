@@ -202,30 +202,32 @@ export default function TrendChart({
         <summary className="text-xs cursor-pointer" style={{ color: "var(--viz-muted)" }}>
           View data table
         </summary>
-        <table className="mt-2 text-xs w-full">
-          <thead>
-            <tr className="text-left text-muted">
-              <th className="py-1 pr-2 font-medium">Period</th>
-              {series.map((s) => (
-                <th key={s.name} className="py-1 pr-2 font-medium">
-                  {s.name}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="tabular-nums">
-            {labels.map((l, i) => (
-              <tr key={l} className="border-t border-black/5 dark:border-white/10">
-                <td className="py-1 pr-2">{l}</td>
+        <div className="overflow-x-auto">
+          <table className="mt-2 text-xs w-full">
+            <thead>
+              <tr className="text-left text-muted">
+                <th className="py-1 pr-2 font-medium">Period</th>
                 {series.map((s) => (
-                  <td key={s.name} data-money className="py-1 pr-2">
-                    {valueFormatter(s.values[i] ?? 0)}
-                  </td>
+                  <th key={s.name} className="py-1 pr-2 font-medium">
+                    {s.name}
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="tabular-nums">
+              {labels.map((l, i) => (
+                <tr key={l} className="border-t border-black/5 dark:border-white/10">
+                  <td className="py-1 pr-2">{l}</td>
+                  {series.map((s) => (
+                    <td key={s.name} data-money className="py-1 pr-2">
+                      {valueFormatter(s.values[i] ?? 0)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </details>
     </div>
   );

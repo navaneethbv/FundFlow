@@ -75,6 +75,10 @@ function periodLink(
   return `/cash-flow?${params.toString()}`;
 }
 
+export const metadata = {
+  title: "Cash flow",
+};
+
 export default async function CashFlowPage({
   searchParams,
 }: Readonly<PageProps>) {

@@ -130,7 +130,7 @@ export default function BanksSection({
           ))}
         </ul>
       )}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
     </Panel>
   );
 }

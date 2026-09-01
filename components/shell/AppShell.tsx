@@ -32,7 +32,11 @@ export default function AppShell({
       <CommandPalette items={commands} />
       <div className="md:flex">
         <AppSidebar active={active} email={email} />
-        <main className="w-full min-w-0 px-4 py-5 sm:px-6 lg:px-7 lg:py-7">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="w-full min-w-0 px-4 py-5 sm:px-6 lg:px-7 lg:py-7"
+        >
           <div className="mx-auto max-w-[1320px] space-y-5">{children}</div>
         </main>
       </div>

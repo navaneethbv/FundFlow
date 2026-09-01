@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import PrivacyToggle from "@/components/PrivacyToggle";
 import ThemeToggle from "@/components/ThemeToggle";
 import LogoutButton from "@/components/LogoutButton";
@@ -25,11 +25,17 @@ export default function UserMenu({
   avatarUrl?: string | null;
 }>) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  function close() {
+    setOpen(false);
+    triggerRef.current?.focus();
+  }
 
   useEffect(() => {
     if (!open) return;
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") close();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -44,15 +50,15 @@ export default function UserMenu({
           type="button"
           aria-hidden
           tabIndex={-1}
-          onClick={() => setOpen(false)}
+          onClick={close}
           className="fixed inset-0 z-30 cursor-default"
         />
       )}
 
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Account menu for ${displayName}`}
         className="flex w-full items-center gap-2 rounded-field p-2 text-left transition-colors duration-150 hover:bg-panel-hover focus-visible:outline-2 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:p-0"
@@ -76,7 +82,6 @@ export default function UserMenu({
 
       {open && (
         <div
-          role="menu"
           aria-label="Account menu"
           className="absolute bottom-full left-0 z-40 mb-2 w-64 rounded-card border border-panel-border bg-panel p-2 shadow-float"
         >
@@ -85,8 +90,7 @@ export default function UserMenu({
           )}
           <Link
             href="/settings"
-            role="menuitem"
-            onClick={() => setOpen(false)}
+            onClick={close}
             className="flex items-center gap-2.5 rounded-field px-2 py-2 text-sm font-semibold text-foreground transition-colors duration-150 hover:bg-panel-hover"
           >
             <Settings aria-hidden className="h-4 w-4 text-muted" />

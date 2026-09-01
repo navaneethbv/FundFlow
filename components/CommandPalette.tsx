@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "@/components/ui/icons";
 import { OPEN_COMMAND_PALETTE_EVENT } from "@/components/shell/command-palette-events";
+import { useDialogFocus } from "@/lib/use-dialog-focus";
 
 /**
  * Command palette (8.3): Cmd+K / Ctrl+K jump-to-anywhere. The command list is
@@ -20,6 +21,7 @@ interface Command {
 
 export default function CommandPalette({ items }: Readonly<{ items: Command[] }>) {
   const router = useRouter();
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
@@ -62,8 +64,6 @@ export default function CommandPalette({ items }: Readonly<{ items: Command[] }>
         setOpen((current) => !current);
         setQuery("");
         setSelected(0);
-      } else if (event.key === "Escape") {
-        setOpen(false);
       }
     }
     function onOpenRequest() {
@@ -78,6 +78,8 @@ export default function CommandPalette({ items }: Readonly<{ items: Command[] }>
       window.removeEventListener(OPEN_COMMAND_PALETTE_EVENT, onOpenRequest);
     };
   }, []);
+
+  const handleDialogKeyDown = useDialogFocus(dialogRef, open, close);
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
@@ -99,14 +101,21 @@ export default function CommandPalette({ items }: Readonly<{ items: Command[] }>
       />
       <dialog
         open
+        ref={dialogRef}
         aria-modal="true"
         aria-label="Command palette"
+        onKeyDown={handleDialogKeyDown}
         className="relative m-0 w-full max-w-lg rounded-card border border-panel-border bg-panel shadow-card"
       >
         <div className="flex items-center gap-2 border-b border-panel-border px-4 py-3">
           <Search aria-hidden className="h-4 w-4 text-muted" />
           <input
             ref={inputRef}
+            role="combobox"
+            aria-expanded="true"
+            aria-controls="command-palette-list"
+            aria-activedescendant={matches[selected] ? `command-opt-${selected}` : undefined}
+            aria-autocomplete="list"
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
@@ -132,23 +141,24 @@ export default function CommandPalette({ items }: Readonly<{ items: Command[] }>
             esc
           </kbd>
         </div>
-        <ul className="max-h-72 overflow-y-auto p-2" role="listbox" aria-label="Commands">
+        <ul id="command-palette-list" className="max-h-72 overflow-y-auto p-2" role="listbox" aria-label="Commands">
           {matches.length === 0 ? (
             <li className="px-3 py-2 text-sm text-muted">No matches.</li>
           ) : (
             matches.map((command, index) => (
-              <li key={command.href} role="option" aria-selected={index === selected}>
-                <button
-                  type="button"
-                  onClick={() => activate(command)}
-                  onMouseEnter={() => setSelected(index)}
-                  className={`flex w-full items-center justify-between gap-3 rounded-field px-3 py-2 text-left text-sm focus-visible:outline-2 ${
-                    index === selected ? "bg-panel-hover" : "hover:bg-panel-hover"
-                  }`}
-                >
-                  <span className="font-semibold">{command.label}</span>
-                  <span className="truncate text-xs text-muted">{command.hint}</span>
-                </button>
+              <li
+                key={command.href}
+                id={`command-opt-${index}`}
+                role="option"
+                aria-selected={index === selected}
+                onClick={() => activate(command)}
+                onMouseEnter={() => setSelected(index)}
+                className={`flex w-full cursor-pointer items-center justify-between gap-3 rounded-field px-3 py-2 text-left text-sm transition-colors ${
+                  index === selected ? "bg-panel-hover" : "hover:bg-panel-hover"
+                }`}
+              >
+                <span className="font-semibold">{command.label}</span>
+                <span className="truncate text-xs text-muted">{command.hint}</span>
               </li>
             ))
           )}
