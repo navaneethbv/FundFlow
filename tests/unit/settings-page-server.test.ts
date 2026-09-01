@@ -370,4 +370,36 @@ describe("SettingsPage Server Component", () => {
     expect(html).toContain('data-testid="demo-data-section"');
     expect(html).toContain('data-testid="danger-zone"');
   });
+
+  it("falls back to profile section on invalid or unknown section param", async () => {
+    const element = await SettingsPage({
+      searchParams: Promise.resolve({ section: "unknown-section-xyz" }),
+    });
+    const html = renderToStaticMarkup(element);
+
+    expect(html).toContain('data-active-section="profile"');
+    expect(html).toContain('data-testid="profile-section"');
+  });
+
+  it("passes page searchParam to audit log in security section", async () => {
+    const element = await SettingsPage({
+      searchParams: Promise.resolve({ section: "security", page: "2" }),
+    });
+    const html = renderToStaticMarkup(element);
+
+    expect(html).toContain('data-active-section="security"');
+    expect(html).toContain('data-testid="audit-log-section"');
+  });
+
+  it("handles empty user / unauthenticated state gracefully", async () => {
+    mockSupabase.auth.getUser.mockResolvedValueOnce({ data: { user: null } });
+
+    const element = await SettingsPage({
+      searchParams: Promise.resolve({ section: "profile" }),
+    });
+    const html = renderToStaticMarkup(element);
+
+    expect(html).toContain('data-active-section="profile"');
+    expect(html).toContain('data-testid="profile-section"');
+  });
 });

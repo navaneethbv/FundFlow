@@ -277,4 +277,56 @@ describe("DashboardPage Server Component", () => {
     expect(html).toContain('data-active-view="plan"');
     expect(html).toContain('data-testid="plan-view"');
   });
+
+  it("defaults to monitor view when dashboardWidgets feature flag is disabled", async () => {
+    featureFlagMap = { dashboardWidgets: false, goalsV2: false };
+
+    const element = await DashboardPage({
+      searchParams: Promise.resolve({}),
+    });
+    const html = renderToStaticMarkup(element);
+
+    expect(html).toContain('data-active-view="monitor"');
+    expect(html).toContain('data-testid="monitor-view"');
+  });
+
+  it("renders freshness banner with broken banks and stale sync state", async () => {
+    mockItems = [{ id: "item-1", institution_name: "Wells Fargo", status: "error" }];
+
+    const element = await DashboardPage({
+      searchParams: Promise.resolve({}),
+    });
+    const html = renderToStaticMarkup(element);
+
+    expect(html).toContain('data-testid="freshness-banner"');
+    expect(html).toContain('data-broken="1"');
+  });
+
+  it("handles unauthenticated / guest user state cleanly", async () => {
+    mockSupabase.auth.getUser.mockResolvedValueOnce({ data: { user: null } });
+
+    const element = await DashboardPage({
+      searchParams: Promise.resolve({}),
+    });
+    const html = renderToStaticMarkup(element);
+
+    expect(html).toContain('data-active-view="overview"');
+    expect(html).toContain('data-testid="overview-view"');
+  });
+
+  it("accepts drilldown query parameters category, sub, and merchant", async () => {
+    const element = await DashboardPage({
+      searchParams: Promise.resolve({
+        view: "monitor",
+        category: "Food & Dining",
+        sub: "Restaurants",
+        merchant: "Starbucks",
+        itemId: "item-1",
+      }),
+    });
+    const html = renderToStaticMarkup(element);
+
+    expect(html).toContain('data-active-view="monitor"');
+    expect(html).toContain('data-testid="monitor-view"');
+  });
 });
