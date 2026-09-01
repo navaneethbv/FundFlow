@@ -69,7 +69,7 @@ describe("Field ARIA chain & focus styling", () => {
 
   it("fieldClasses provides accessible outline and drops focus:outline-none", () => {
     expect(fieldClasses).not.toContain("focus:outline-none");
-    expect(fieldClasses).toContain("focus:outline-2");
+    expect(fieldClasses).toContain("focus-visible:outline-2");
   });
 
   it("handles multiple children correctly without attaching ARIA attributes to datalist", () => {
@@ -93,6 +93,23 @@ describe("Field ARIA chain & focus styling", () => {
     expect(html).toContain('<input id="category-input" list="category-options" aria-describedby="category-input-error" aria-invalid="true"/>');
     expect(html).toContain('<datalist id="category-options"><option value="Groceries"></option></datalist>');
     expect(html).not.toContain('<datalist id="category-options" aria-describedby');
+  });
+
+  it("does not tag an id-less sibling (e.g. a submit button) when the labeled control has no explicit id", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        Field,
+        {
+          label: "Amount",
+          htmlFor: "amount-field",
+          error: "Enter a valid amount",
+        },
+        createElement(Input, { type: "number" }),
+        createElement("button", { type: "submit" }, "Save"),
+      ),
+    );
+
+    expect(html).not.toMatch(/<button type="submit"[^>]*aria-/);
   });
 
   it("recursively injects ARIA attributes into nested control wrappers", () => {

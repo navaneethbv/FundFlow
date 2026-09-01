@@ -32,7 +32,17 @@ export default function Modal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    // Backdrop click is a mouse/touch-only dismiss affordance layered on top
+    // of the real keyboard path (Escape, handled by useDialogFocus below);
+    // it deliberately stays outside the tab order rather than adding an
+    // extra stop a keyboard user would have to pass through to reach the
+    // dialog's own controls.
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
       <dialog
         open
         ref={dialogRef}

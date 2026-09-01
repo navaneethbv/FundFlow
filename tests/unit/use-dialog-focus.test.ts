@@ -2,11 +2,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 let effectFn: (() => void) | null = null;
 
+let effectCleanup: (() => void) | void;
+
 vi.mock("react", () => ({
   useCallback: (cb: unknown) => cb,
-  useEffect: (fn: () => void) => {
-    effectFn = fn;
+  useEffect: (fn: () => void | (() => void)) => {
+    effectFn = () => {
+      effectCleanup = fn();
+    };
   },
+  useRef: (initial: unknown) => ({ current: initial }),
 }));
 
 import { useDialogFocus } from "@/lib/use-dialog-focus";
@@ -14,6 +19,7 @@ import { useDialogFocus } from "@/lib/use-dialog-focus";
 describe("useDialogFocus", () => {
   beforeEach(() => {
     effectFn = null;
+    effectCleanup = undefined;
   });
 
   it("handles useEffect focus when open is true and false", () => {
@@ -29,10 +35,32 @@ describe("useDialogFocus", () => {
     expect(fakeDialog.querySelector).not.toHaveBeenCalled();
 
     // open = true
+    (globalThis as unknown as { document: { activeElement: HTMLElement | null } }).document = {
+      activeElement: null,
+    };
     useDialogFocus({ current: fakeDialog }, true, vi.fn());
     effectFn!();
     expect(fakeDialog.querySelector).toHaveBeenCalled();
     expect(focusFn).toHaveBeenCalled();
+  });
+
+  it("restores focus to whatever was focused before the dialog opened, once it closes", () => {
+    const trigger = { focus: vi.fn() } as unknown as HTMLElement;
+    (globalThis as unknown as { document: { activeElement: HTMLElement } }).document = {
+      activeElement: trigger,
+    };
+    const controlFocus = vi.fn();
+    const fakeDialog = {
+      querySelector: vi.fn().mockReturnValue({ focus: controlFocus }),
+    } as unknown as HTMLDialogElement;
+
+    useDialogFocus({ current: fakeDialog }, true, vi.fn());
+    effectFn!();
+    expect(controlFocus).toHaveBeenCalled();
+    expect(trigger.focus).not.toHaveBeenCalled();
+
+    effectCleanup!();
+    expect(trigger.focus).toHaveBeenCalled();
   });
 
   it("handles Escape key", () => {

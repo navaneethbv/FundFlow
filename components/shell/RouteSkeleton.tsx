@@ -20,7 +20,7 @@ export default function RouteSkeleton({
   children?: ReactNode;
 }>) {
   return (
-    <AppShell active={active}>
+    <AppShell active={active} skeleton>
       <div className="space-y-4" aria-busy="true" aria-label={`Loading ${label}`}>
         {children ?? (
           <>

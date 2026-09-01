@@ -163,8 +163,12 @@ describe("normalizeManualHolding", () => {
 
   it("rejects a malformed or future as-of date", () => {
     expect(normalizeManualHolding(body({ asOf: "07/29/2026" }), TODAY).ok).toBe(false);
-    expect(normalizeManualHolding(body({ asOf: "2026-07-31" }), TODAY).ok).toBe(false);
+    expect(normalizeManualHolding(body({ asOf: "2026-08-01" }), TODAY).ok).toBe(false);
     expect(normalizeManualHolding(body({ asOf: TODAY }), TODAY).ok).toBe(true);
+  });
+
+  it("accepts an as-of date one day ahead of the server's UTC today, to tolerate a client whose local calendar date has already rolled over", () => {
+    expect(normalizeManualHolding(body({ asOf: "2026-07-31" }), TODAY).ok).toBe(true);
   });
 
   it("falls back to USD for a missing or malformed currency", () => {

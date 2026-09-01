@@ -7,6 +7,13 @@ function enhanceElement(
   hasError?: boolean,
   htmlFor?: string,
 ): React.ReactNode {
+  // Only trust an id-less "candidate control" guess when it's the sole
+  // child at this level — with siblings present (e.g. a submit Button next
+  // to the labeled input), guessing would tag every sibling that happens to
+  // share a non-string element type, not just the actual control. An
+  // explicit id === htmlFor match is unambiguous and always trusted.
+  const isSoleChild = Children.count(node) === 1;
+
   return Children.map(node, (child) => {
     if (
       !isValidElement<{
@@ -30,7 +37,10 @@ function enhanceElement(
         ? ["input", "select", "textarea", "button"].includes(child.type.toLowerCase())
         : true;
 
-    if (isExplicitMatch || (!htmlFor && isCandidateControl) || (htmlFor && !child.props.id && isCandidateControl)) {
+    if (
+      isExplicitMatch ||
+      (isSoleChild && ((!htmlFor && isCandidateControl) || (htmlFor && !child.props.id && isCandidateControl)))
+    ) {
       const existingDescribedBy = child.props["aria-describedby"];
       const mergedDescribedBy = existingDescribedBy
         ? `${existingDescribedBy} ${describedBy}`

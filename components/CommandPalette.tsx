@@ -143,8 +143,13 @@ export default function CommandPalette({ items }: Readonly<{ items: Command[] }>
         </div>
         <ul id="command-palette-list" className="max-h-72 overflow-y-auto p-2" role="listbox" aria-label="Commands">
           {matches.length === 0 ? (
-            <li className="px-3 py-2 text-sm text-muted">No matches.</li>
+            <li role="presentation" className="px-3 py-2 text-sm text-muted">No matches.</li>
           ) : (
+            // Standard combobox pattern: the input above stays focused and
+            // owns keyboard nav (ArrowUp/Down/Enter, already wired there),
+            // with aria-activedescendant pointing at the selected option
+            // here. These options are mouse/touch-activatable only — they
+            // never receive DOM focus, so no onKeyDown belongs on them.
             matches.map((command, index) => (
               <li
                 key={command.href}
@@ -152,12 +157,6 @@ export default function CommandPalette({ items }: Readonly<{ items: Command[] }>
                 role="option"
                 aria-selected={index === selected}
                 onClick={() => activate(command)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    activate(command);
-                  }
-                }}
                 onMouseEnter={() => setSelected(index)}
                 className={`flex w-full cursor-pointer items-center justify-between gap-3 rounded-field px-3 py-2 text-left text-sm transition-colors ${
                   index === selected ? "bg-panel-hover" : "hover:bg-panel-hover"

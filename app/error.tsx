@@ -1,13 +1,20 @@
 "use client";
 
+import { useEffect } from "react";
+
 export default function RootError({
+  error,
   reset,
 }: Readonly<{
   error: Error & { digest?: string };
   reset: () => void;
 }>) {
+  useEffect(() => {
+    console.error("Root error boundary caught", error.digest ?? error.message);
+  }, [error]);
+
   return (
-    <main className="mx-auto max-w-xl px-4 py-16 text-center">
+    <main id="main-content" tabIndex={-1} className="mx-auto max-w-xl px-4 py-16 text-center">
       <p className="eyebrow">FundFlow</p>
       <h1 className="display mt-2 text-3xl">This view is temporarily unavailable</h1>
       <p className="mt-3 text-sm leading-6 text-muted">

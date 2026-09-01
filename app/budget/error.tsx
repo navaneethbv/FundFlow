@@ -1,13 +1,20 @@
 "use client";
 
+import { useEffect } from "react";
+
 export default function BudgetError({
+  error,
   reset,
 }: Readonly<{
   error: Error & { digest?: string };
   reset: () => void;
 }>) {
+  useEffect(() => {
+    console.error("Budget error boundary caught", error.digest ?? error.message);
+  }, [error]);
+
   return (
-    <main className="mx-auto max-w-xl px-4 py-16 text-center">
+    <main id="main-content" tabIndex={-1} className="mx-auto max-w-xl px-4 py-16 text-center">
       <p className="eyebrow">Budget</p>
       <h1 className="display mt-2 text-3xl">
         Budget is temporarily unavailable

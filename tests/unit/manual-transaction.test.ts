@@ -56,8 +56,12 @@ describe("normalizeManualTxn", () => {
 
   it("rejects a malformed or future date", () => {
     expect(normalizeManualTxn(body({ date: "07/29/2026" }), TODAY).ok).toBe(false);
-    expect(normalizeManualTxn(body({ date: "2026-07-31" }), TODAY).ok).toBe(false);
+    expect(normalizeManualTxn(body({ date: "2026-08-01" }), TODAY).ok).toBe(false);
     expect(normalizeManualTxn(body({ date: TODAY }), TODAY).ok).toBe(true);
+  });
+
+  it("accepts a date one day ahead of the server's UTC today, to tolerate a client whose local calendar date has already rolled over", () => {
+    expect(normalizeManualTxn(body({ date: "2026-07-31" }), TODAY).ok).toBe(true);
   });
 
   it("rejects a missing or malformed account reference", () => {

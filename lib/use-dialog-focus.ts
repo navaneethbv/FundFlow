@@ -1,4 +1,4 @@
-import { useCallback, useEffect, type RefObject } from "react";
+import { useCallback, useEffect, useRef, type RefObject } from "react";
 
 /**
  * Every control a dialog can move focus to. Kept exported and covered by
@@ -20,9 +20,15 @@ export function useDialogFocus(
   open: boolean,
   onEscape: () => void,
 ) {
+  const previouslyFocused = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     if (!open) return;
+    previouslyFocused.current = document.activeElement as HTMLElement | null;
     dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+    return () => {
+      previouslyFocused.current?.focus();
+    };
   }, [dialogRef, open]);
 
   return useCallback(

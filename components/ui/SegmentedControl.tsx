@@ -30,7 +30,7 @@ export default function SegmentedControl({
         <Link
           key={item.label}
           href={item.href}
-          aria-current={item.active ? "true" : undefined}
+          aria-current={item.active ? "page" : undefined}
           className={cn(
             // `min-h-11` (44px), matching Button/Input/DropdownButton. This was
             // the one interactive primitive left at `min-h-9`: the 4px track

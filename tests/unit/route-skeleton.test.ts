@@ -10,16 +10,18 @@ import { describe, expect, it, vi } from "vitest";
  * motion.
  */
 
-let shellProps: { active?: string } = {};
+let shellProps: { active?: string; skeleton?: boolean } = {};
 vi.mock("@/components/shell/AppShell", () => ({
   default: ({
     active,
+    skeleton,
     children,
   }: {
     active: string;
+    skeleton?: boolean;
     children: React.ReactNode;
   }) => {
-    shellProps = { active };
+    shellProps = { active, skeleton };
     return createElement("main", null, children);
   },
 }));
@@ -35,6 +37,14 @@ describe("RouteSkeleton", () => {
     expect(shellProps.active).toBe("transactions");
     expect(html).toContain("aria-busy");
     expect(html).toContain("Loading Transactions");
+  });
+
+  it("tells AppShell to skip its Supabase-backed sidebar data so the fallback paints instantly", () => {
+    shellProps = {};
+    renderToStaticMarkup(
+      createElement(RouteSkeleton, { active: "transactions", label: "Transactions" }),
+    );
+    expect(shellProps.skeleton).toBe(true);
   });
 
   it("uses restrained pulse placeholders on token surfaces, no JS animation", () => {

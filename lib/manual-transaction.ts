@@ -7,6 +7,8 @@
  * same way they already skip imports.
  */
 
+import { addDays } from "@/lib/date-utils";
+
 export interface ManualTxnAccountRef {
   source: "plaid" | "manual";
   id: string;
@@ -16,7 +18,7 @@ export interface ManualTxnInput {
   kind: "debit" | "credit";
   amount: number;
   merchant: string;
-  date: string; // YYYY-MM-DD, not in the future
+  date: string; // YYYY-MM-DD, not more than a day past the server's UTC date
   account: ManualTxnAccountRef;
   category: string | null;
   goalId: string | null;
@@ -67,7 +69,10 @@ export function normalizeManualTxn(body: unknown, today: string): ManualTxnResul
   if (typeof date !== "string" || !DATE_RE.test(date)) {
     return { ok: false, error: "date must be a YYYY-MM-DD date" };
   }
-  if (date > today) {
+  // `today` is the server's UTC date; the client defaults this field to its
+  // own local date, which can run up to a day ahead of UTC (any timezone
+  // east of it). Allow one extra day so that default doesn't self-reject.
+  if (date > addDays(today, 1)) {
     return { ok: false, error: "date cannot be in the future" };
   }
 
