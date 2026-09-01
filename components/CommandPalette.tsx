@@ -113,8 +113,8 @@ export default function CommandPalette({ items }: Readonly<{ items: Command[] }>
             ref={inputRef}
             role="combobox"
             aria-expanded="true"
-            aria-controls="command-palette-list"
-            aria-activedescendant={matches[selected] ? `command-opt-${selected}` : undefined}
+            aria-controls={matches.length > 0 ? "command-palette-list" : undefined}
+            aria-activedescendant={matches.length > 0 && matches[selected] ? `command-opt-${selected}` : undefined}
             aria-autocomplete="list"
             value={query}
             onChange={(event) => {
@@ -141,16 +141,11 @@ export default function CommandPalette({ items }: Readonly<{ items: Command[] }>
             esc
           </kbd>
         </div>
-        <ul id="command-palette-list" className="max-h-72 overflow-y-auto p-2" role="listbox" aria-label="Commands">
-          {matches.length === 0 ? (
-            <li role="option" aria-disabled="true" aria-selected="false" className="px-3 py-2 text-sm text-muted">No matches.</li>
-          ) : (
-            // Standard combobox pattern: the input above stays focused and
-            // owns keyboard nav (ArrowUp/Down/Enter, already wired there),
-            // with aria-activedescendant pointing at the selected option
-            // here. These options are mouse/touch-activatable only — they
-            // never receive DOM focus, so no onKeyDown belongs on them.
-            matches.map((command, index) => (
+        {matches.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-muted">No matches.</p>
+        ) : (
+          <ul id="command-palette-list" className="max-h-72 overflow-y-auto p-2" role="listbox" aria-label="Commands">
+            {matches.map((command, index) => (
               <li
                 key={command.href}
                 id={`command-opt-${index}`}
@@ -165,9 +160,9 @@ export default function CommandPalette({ items }: Readonly<{ items: Command[] }>
                 <span className="font-semibold">{command.label}</span>
                 <span className="truncate text-xs text-muted">{command.hint}</span>
               </li>
-            ))
-          )}
-        </ul>
+            ))}
+          </ul>
+        )}
       </dialog>
     </div>
   );

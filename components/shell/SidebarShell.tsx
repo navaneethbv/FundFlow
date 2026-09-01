@@ -45,9 +45,16 @@ export default function SidebarShell({
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const supabase = createClient();
 
+  function setSidebarCollapsedCookie(value: boolean) {
+    if (typeof document !== "undefined") {
+      document.cookie = `sidebar_collapsed=${value}; path=/; max-age=31536000; SameSite=Lax`;
+    }
+  }
+
   async function toggle() {
     const next = !collapsed;
     setCollapsed(next);
+    setSidebarCollapsedCookie(next);
     const { data } = await supabase.auth.getUser();
     if (!data.user) return;
     const { data: profile } = await supabase
@@ -67,7 +74,10 @@ export default function SidebarShell({
       .eq("id", data.user.id);
     // Revert the optimistic toggle if the write failed, so the UI never
     // claims a collapse state that wasn't actually persisted.
-    if (error) setCollapsed(!next);
+    if (error) {
+      setCollapsed(!next);
+      setSidebarCollapsedCookie(!next);
+    }
   }
 
   return (

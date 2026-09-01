@@ -159,6 +159,7 @@ export default function TransactionEditor({
       <Modal
         open={open}
         onClose={() => setOpen(false)}
+        placement="sheet"
         titleId={`${idPrefix}title-${transaction.id}`}
         className="max-h-[90vh] max-w-lg overflow-y-auto"
       >

@@ -10,13 +10,17 @@ export interface ModalProps {
   titleId?: string;
   ariaLabel?: string;
   className?: string;
-  children: React.ReactNode;
+  placement?: "center" | "sheet";
+  children?: React.ReactNode;
 }
 
 /**
  * Accessible modal dialog primitive enforcing the dialog focus discipline:
  * native `<dialog open aria-modal="true">` with focus trapping, Tab cycling,
  * Escape key dismissing, and focus restoration to the trigger upon close.
+ *
+ * Supports `placement="sheet"` for mobile-first bottom-sheet drawers that
+ * transition to centered modals on desktop viewports.
  */
 export default function Modal({
   open,
@@ -24,6 +28,7 @@ export default function Modal({
   titleId,
   ariaLabel,
   className,
+  placement = "center",
   children,
 }: Readonly<ModalProps>) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -31,8 +36,17 @@ export default function Modal({
 
   if (!open) return null;
 
+  const isSheet = placement === "sheet";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <div
+      className={cn(
+        "fixed inset-0 z-50 flex justify-center bg-black/60",
+        isSheet
+          ? "items-end p-0 sm:items-center sm:p-4"
+          : "items-center p-4",
+      )}
+    >
       {/*
         Backdrop click-to-close as a real native <button>, not a div with a
         click handler — keyboard-operable by default, no manual onKeyDown
@@ -60,7 +74,10 @@ export default function Modal({
         aria-label={!titleId ? ariaLabel : undefined}
         onKeyDown={handleDialogKeyDown}
         className={cn(
-          "relative m-0 w-full max-w-md rounded-card border border-panel-border bg-panel p-5 shadow-float sm:p-6",
+          "relative m-0 w-full max-w-md border border-panel-border bg-panel p-5 shadow-float sm:p-6",
+          isSheet
+            ? "rounded-t-card sm:rounded-card"
+            : "rounded-card",
           className,
         )}
       >

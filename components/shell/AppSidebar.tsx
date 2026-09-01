@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { cn } from "@/lib/cn";
 import { getEnabledNavItems, type AppShellActive, type NavItemDefinition } from "@/components/shell/nav-model";
 import AskAiLowerRailLink from "@/components/shell/AskAiLowerRailLink";
@@ -79,17 +80,20 @@ export default async function AppSidebar({
   const planningItems = enabledItems.filter((i) => i.category === "planning");
   const manageItems = enabledItems.filter((i) => i.category === "manage");
 
-  let initialCollapsed = false;
+  const cookieStore = await cookies();
+  const cookieCollapsed = cookieStore.get("sidebar_collapsed")?.value === "true";
+  let initialCollapsed = cookieCollapsed;
   let displayName = resolveDisplayName({ email });
   let avatarUrl: string | null = null;
   let unreviewedRecurringCount = 0;
 
   // A loading.tsx fallback (RouteSkeleton) mounts this same shell so
   // navigation never unmounts the frame, but it must paint instantly — so it
-  // skips every Supabase round trip below and renders with the same
-  // fallback values already used for a signed-out user. The real page
-  // (skeleton=false) resolves collapse state, identity, and the recurring
-  // badge count in one extra round trip, same as before.
+  // skips every Supabase round trip below and renders with the cookie-backed
+  // collapse state (0 round-trips) plus fallback values already used for a
+  // signed-out user. The real page (skeleton=false) resolves collapse state,
+  // identity, and the recurring badge count in one extra round trip, same as
+  // before.
   if (!skeleton) {
     const supabase = await createClient();
     const {
@@ -102,7 +106,9 @@ export default async function AppSidebar({
         .eq("id", user.id)
         .maybeSingle();
       const dashboardPrefs = (profile?.dashboard_prefs ?? {}) as DashboardPrefs;
-      initialCollapsed = dashboardPrefs.sidebarCollapsed === true;
+      if (typeof dashboardPrefs.sidebarCollapsed === "boolean") {
+        initialCollapsed = dashboardPrefs.sidebarCollapsed === true;
+      }
       displayName = resolveDisplayName({
         displayName: profile?.display_name as string | null,
         fullName: profile?.full_name as string | null,

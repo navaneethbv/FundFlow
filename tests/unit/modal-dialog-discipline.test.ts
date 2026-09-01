@@ -37,8 +37,9 @@ describe("modal dialog discipline", () => {
     const offenders = scanFileContents(
       "components",
       (source, file) =>
-        !file.endsWith("Modal.tsx") &&
-        source.includes("fixed inset-0 z-50") &&
+        !file.endsWith("components/ui/Modal.tsx") &&
+        !file.endsWith("components/ui/PopoverBackdrop.tsx") &&
+        /fixed\s+inset-0\s+(z-50|z-40)/.test(source) &&
         !source.includes("<dialog") &&
         !source.includes("<Modal"),
     );

@@ -32,14 +32,14 @@ export type PlannedAmountValidation =
  */
 export function validatePlannedAmount(
   input: string,
-  currentPlanned: number,
+  currentBasePlanned: number,
 ): PlannedAmountValidation {
   const trimmed = input.trim();
-  if (trimmed === "") return { ok: true, value: 0, changed: currentPlanned !== 0 };
+  if (trimmed === "") return { ok: true, value: 0, changed: currentBasePlanned !== 0 };
   const numeric = Number(trimmed);
   if (!Number.isFinite(numeric) || numeric < 0) return { ok: false };
   const rounded = Math.round(numeric * 100) / 100;
-  return { ok: true, value: rounded, changed: rounded !== currentPlanned };
+  return { ok: true, value: rounded, changed: rounded !== currentBasePlanned };
 }
 
 /**
