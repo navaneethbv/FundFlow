@@ -61,6 +61,13 @@ describe("Frontend Multiverse: GoalWizard Focus Management", () => {
 });
 
 describe("Frontend Multiverse: Filter & Navigation ARIA Contracts", () => {
+  it("names transaction annotation split controls and live errors", () => {
+    const source = readFileSync("components/transactions/TransactionEditor.tsx", "utf8");
+    expect(source).toContain("htmlFor={categoryId}");
+    expect(source).toContain("htmlFor={amountId}");
+    expect(source).toContain('role="alert"');
+  });
+
   it("MonthChips sets aria-current on active month link", () => {
     const source = readFileSync("components/dashboard/MonthChips.tsx", "utf8");
     expect(source).toContain('aria-current={active ? "true" : undefined}');

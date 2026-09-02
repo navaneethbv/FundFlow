@@ -90,6 +90,7 @@ export default function SavedViewsBar({
         (saving ? (
           <form onSubmit={save} className="inline-flex items-center gap-1">
             <input
+              aria-label="Saved view name"
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}

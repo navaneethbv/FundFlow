@@ -64,6 +64,8 @@ export default function CardAprSection({
               {account.mask ? ` ••${account.mask}` : ""}
             </span>
             <Input
+              id={`card-apr-${account.id}`}
+              aria-label={`APR for ${account.name ?? "card"}${account.mask ? ` ending in ${account.mask}` : ""}`}
               type="number"
               min="0"
               max="99.99"

@@ -54,7 +54,11 @@ export default function AskAiSection({ enabled }: Readonly<{ enabled: boolean }>
         </p>
       )}
       <form onSubmit={ask} className="flex flex-wrap items-center gap-2">
+        <label htmlFor="ask-ai-question" className="sr-only">
+          Question about your spending
+        </label>
         <Input
+          id="ask-ai-question"
           placeholder="How much did I spend on groceries last month?"
           value={question}
           maxLength={300}
@@ -68,11 +72,11 @@ export default function AskAiSection({ enabled }: Readonly<{ enabled: boolean }>
         </Button>
       </form>
       {answer && (
-        <p className="mt-3 rounded-field border border-panel-border bg-panel-2 p-3 text-sm">
+        <p role="status" aria-live="polite" className="mt-3 rounded-field border border-panel-border bg-panel-2 p-3 text-sm">
           {answer}
         </p>
       )}
-      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+      {error && <p role="alert" className="mt-2 text-sm text-danger">{error}</p>}
     </Panel>
   );
 }

@@ -68,6 +68,7 @@ export default function BulkTagBar({ transactionIds }: Readonly<{ transactionIds
         className="inline-flex items-center gap-1"
       >
         <input
+          aria-label="Custom tag"
           value={tag}
           onChange={(e) => setTag(e.target.value)}
           placeholder="custom tag"

@@ -89,14 +89,21 @@ test.describe("responsive interaction matrix", () => {
         (element as HTMLElement).style.display = "none";
       });
     });
-    await page.getByRole("button", { name: "Collapse sidebar" }).click();
+    const collapseButton = page.getByRole("button", { name: "Collapse sidebar" });
+    await expect(collapseButton).toBeEnabled();
+    await collapseButton.click();
     await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
     await page.getByRole("button", { name: /Account menu for/ }).click();
-    await expect(page.getByRole("menu", { name: "Account menu" })).toBeVisible();
+    // The account popover contains toggles and a logout action, so it is a
+    // disclosure region rather than an ARIA menu. Query its accessible label
+    // instead of requiring menuitem semantics that would be invalid here.
+    await expect(page.getByLabel("Account menu", { exact: true })).toBeVisible();
 
     await page.setViewportSize({ width: 375, height: 812 });
     await page.reload();
-    await page.getByRole("button", { name: "More" }).click();
+    const moreButton = page.getByRole("button", { name: "More" });
+    await expect(moreButton).toBeEnabled();
+    await moreButton.click();
     await expect(page.getByRole("dialog", { name: "All navigation" })).toBeVisible();
   });
 });

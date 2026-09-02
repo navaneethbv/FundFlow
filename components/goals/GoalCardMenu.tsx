@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, type FocusEvent } from "react";
+import { useState, type FocusEvent } from "react";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import { createClient } from "@/lib/supabase/client";
 import { goalTargetAmount, type GoalV2Row } from "@/lib/goals-v2";
+import { usePopoverMenu } from "@/lib/use-popover-menu";
 
 type MenuMode = "menu" | "edit" | "contribute";
 
@@ -35,8 +36,7 @@ export default function GoalCardMenu({
 }>) {
   const router = useRouter();
   const supabase = createClient();
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const [open, setOpen] = useState(false);
+  const { open, toggle, close, triggerRef, onBlur } = usePopoverMenu();
   const [mode, setMode] = useState<MenuMode>("menu");
   const [name, setName] = useState(goal.name);
   const [targetAmount, setTargetAmount] = useState(() => String(goalTargetAmount(goal)));
@@ -45,30 +45,16 @@ export default function GoalCardMenu({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") close();
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open]);
-
-  function close() {
-    setOpen(false);
+  function resetMenu() {
     setMode("menu");
     setError(null);
-    triggerRef.current?.focus();
   }
 
-  // Mouse users get an outside-click dismiss from the invisible backdrop
-  // below; without this, a keyboard user tabbing past the panel's last
-  // control left it open and orphaned. Guarded on `open` so a plain Tab away
-  // from the closed trigger doesn't call close() and yank focus back via
-  // triggerRef.focus().
-  function onBlur(event: FocusEvent<HTMLDivElement>) {
-    if (!open) return;
-    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) close();
+  function handleBlur(event: FocusEvent<HTMLElement>) {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      resetMenu();
+    }
+    onBlur(event);
   }
 
   async function saveEdit(event: React.SyntheticEvent) {
@@ -113,6 +99,7 @@ export default function GoalCardMenu({
       setError(updateError.message);
       return;
     }
+    resetMenu();
     close();
     router.refresh();
   }
@@ -138,6 +125,7 @@ export default function GoalCardMenu({
         return;
       }
       setContribution("");
+      resetMenu();
       close();
       router.refresh();
     } catch {
@@ -169,12 +157,13 @@ export default function GoalCardMenu({
       setError(deleteError.message);
       return;
     }
+    resetMenu();
     close();
     router.refresh();
   }
 
   return (
-    <div className="relative inline-block" onBlur={onBlur}>
+    <div className="relative inline-block" onBlur={handleBlur}>
       {open && (
         <button
           type="button"
@@ -187,7 +176,7 @@ export default function GoalCardMenu({
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={toggle}
         aria-expanded={open}
         aria-label={`More options for ${goal.name}`}
         className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"

@@ -92,7 +92,11 @@ export default function HouseholdSection({ initialHouseholds }: Readonly<{ initi
                   }
                 }}
               >
+                <label htmlFor={`household-invite-${household.id}`} className="sr-only">
+                  Email address to invite to {household.name}
+                </label>
                 <Input
+                  id={`household-invite-${household.id}`}
                   name="email"
                   type="email"
                   required
@@ -108,7 +112,10 @@ export default function HouseholdSection({ initialHouseholds }: Readonly<{ initi
         )}
       </div>
       <div className="mt-4 flex gap-2">
-        <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Household name" />
+        <label htmlFor="new-household-name" className="sr-only">
+          New household name
+        </label>
+        <Input id="new-household-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Household name" />
         <Button type="button" onClick={createHousehold} disabled={busy} loading={busy}>
           {busy ? "Creating…" : "Create"}
         </Button>

@@ -12,6 +12,10 @@ export function usePopoverMenu(initialOpen = false) {
     triggerRef.current?.focus();
   }, []);
 
+  const dismiss = useCallback(() => {
+    setOpen(false);
+  }, []);
+
   const toggle = useCallback(() => {
     setOpen((prev) => !prev);
   }, []);
@@ -31,18 +35,21 @@ export function usePopoverMenu(initialOpen = false) {
    * dismiss for free from the invisible `PopoverBackdrop`; without this,
    * keyboard users had no equivalent — tabbing past the last control just
    * left the popover open and orphaned behind whatever they tabbed onto.
-   * Guarded on `open` so a plain Tab away from a *closed* trigger doesn't
-   * call `close()` and yank focus back via its own `triggerRef.focus()`.
+   * Guarded on `open` so a plain Tab away from a *closed* trigger does not
+   * perform any state update, and uses `dismiss()` so focus can continue
+   * naturally to the next page control.
    */
   const onBlur = useCallback(
     (event: FocusEvent<HTMLElement>) => {
       if (!open) return;
       if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-        close();
+        // Let normal Tab navigation continue from the next control instead
+        // of moving focus back to the trigger the user just left.
+        dismiss();
       }
     },
-    [open, close],
+    [open, dismiss],
   );
 
-  return { open, setOpen, close, toggle, triggerRef, onBlur };
+  return { open, setOpen, close, dismiss, toggle, triggerRef, onBlur };
 }

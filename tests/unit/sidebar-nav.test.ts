@@ -151,9 +151,11 @@ describe("Sidebar Navigation Contract", () => {
   it("SidebarShell persists collapse state through profiles.dashboard_prefs", () => {
     const source = readFileSync("components/shell/SidebarShell.tsx", "utf8");
     expect(source).toContain('"use client"');
+    expect(source).toContain("useSyncExternalStore");
     expect(source).toContain("dashboard_prefs");
     expect(source).toContain("sidebarCollapsed");
     expect(source).toContain("aria-pressed");
+    expect(source).toContain("disabled={!hydrated}");
   });
 
   it("AppSidebar has no use client directive, so the env-var feature-flag override keeps working", () => {

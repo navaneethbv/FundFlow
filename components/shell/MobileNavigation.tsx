@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/cn";
 import type {
   AppShellActive,
@@ -11,6 +11,7 @@ import { OPEN_COMMAND_PALETTE_EVENT } from "@/components/shell/command-palette-e
 import PrivacyToggle from "@/components/PrivacyToggle";
 import ThemeToggle from "@/components/ThemeToggle";
 import LogoutButton from "@/components/LogoutButton";
+import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { LogoMark } from "@/components/ui/Logo";
 import {
   ArrowLeftRight,
@@ -32,6 +33,8 @@ import {
   Wallet,
   X,
 } from "@/components/ui/icons";
+
+const subscribeToHydration = () => () => undefined;
 
 export interface MobileNavItem {
   key: NavItemKey;
@@ -93,28 +96,24 @@ export default function MobileNavigation({
   active,
 }: Readonly<{ items: MobileNavItem[]; active: AppShellActive }>) {
   const [open, setOpen] = useState(false);
+  const hydrated = useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false,
+  );
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const activeKey = resolvedActive(active);
   const quickItems = items.filter((item) => QUICK_KEYS.has(item.key));
   const moreIsActive = !QUICK_KEYS.has(activeKey);
+  const handleDialogKeyDown = useDialogFocus(dialogRef, open, () => setOpen(false));
 
   useEffect(() => {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    closeButtonRef.current?.focus();
-    const trigger = triggerRef.current;
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-    window.addEventListener("keydown", onKeyDown);
     return () => {
       document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", onKeyDown);
-      // Restore focus to the "More" trigger when the dialog closes.
-      trigger?.focus();
     };
   }, [open]);
 
@@ -146,6 +145,7 @@ export default function MobileNavigation({
         <button
           ref={triggerRef}
           type="button"
+          disabled={!hydrated}
           aria-expanded={open}
           aria-haspopup="dialog"
           onClick={() => setOpen(true)}
@@ -172,8 +172,10 @@ export default function MobileNavigation({
           />
           <dialog
             open
+            ref={dialogRef}
             aria-modal="true"
             aria-label="All navigation"
+            onKeyDown={handleDialogKeyDown}
             className="relative m-0 max-h-[85vh] w-full overflow-y-auto rounded-t-2xl border border-panel-border bg-panel p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-pop"
           >
             <div className="flex items-center justify-between gap-3">
@@ -182,7 +184,6 @@ export default function MobileNavigation({
                 <h2 className="text-lg font-bold">All destinations</h2>
               </div>
               <button
-                ref={closeButtonRef}
                 type="button"
                 aria-label="Close navigation"
                 onClick={() => setOpen(false)}

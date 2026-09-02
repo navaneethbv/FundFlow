@@ -120,13 +120,14 @@ describe("usePopoverMenu & PopoverBackdrop", () => {
     expect(mockState).toBe(true);
     expect(focusFn).not.toHaveBeenCalled();
 
-    // Open, focus moving outside the container: closes and returns focus.
+    // Open, focus moving outside the container: closes without yanking focus
+    // back to the trigger, so Tab can continue to the next page control.
     openMenu.onBlur({
       currentTarget: { contains: () => false },
       relatedTarget: outside,
     } as unknown as FocusEvent<HTMLElement>);
     expect(mockState).toBe(false);
-    expect(focusFn).toHaveBeenCalled();
+    expect(focusFn).not.toHaveBeenCalled();
   });
 
   it("renders PopoverBackdrop with accessibility attributes and handles click", () => {
