@@ -1,10 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
+import Modal from "@/components/ui/Modal";
 import { createClient } from "@/lib/supabase/client";
-import { useDialogFocus } from "@/lib/use-dialog-focus";
 import {
   DEFAULT_WIDGET_ORDER,
   mergeWidgetPrefs,
@@ -25,18 +25,16 @@ import {
  * the server after `router.refresh()`, so leaving local state ahead of a failed
  * write would show a layout the database does not have.
  *
- * Renders as a modal overlay (the same `bg-black/50` + `rounded-card` +
- * `shadow-float` recipe as `SeedBudgetButton`/`TransactionEditor`) rather
- * than an inline-expanding section, specifically so the trigger — Monarch's
- * "Customize" white pill — can sit in the page header without its open
- * panel pushing header content around.
+ * Renders as a modal overlay (the same `bg-black/60` + `rounded-card` +
+ * `shadow-float` recipe via `Modal`) rather than an inline-expanding section,
+ * specifically so the trigger — Monarch's "Customize" white pill — can sit in
+ * the page header without its open panel pushing header content around.
  */
 export default function CustomizeDrawer({
   initialPrefs,
 }: Readonly<{ initialPrefs: DashboardWidgetPrefs }>) {
   const router = useRouter();
   const supabase = createClient();
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
   const [prefs, setPrefs] = useState<DashboardWidgetPrefs>(initialPrefs);
   const [error, setError] = useState<string | null>(null);
@@ -118,25 +116,17 @@ export default function CustomizeDrawer({
     }
   }
 
-  const handleDialogKeyDown = useDialogFocus(dialogRef, open, close);
-
-  if (!open) {
-    return (
+  return (
+    <>
       <Button type="button" variant="secondary" size="sm" onClick={() => setOpen(true)}>
         Customize
       </Button>
-    );
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <dialog
-        open
-        ref={dialogRef}
-        aria-modal="true"
-        aria-labelledby="customize-widgets-title"
-        onKeyDown={handleDialogKeyDown}
-        className="relative m-0 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-card border border-panel-border bg-panel p-5 shadow-float sm:p-6"
+      <Modal
+        open={open}
+        onClose={close}
+        placement="sheet"
+        titleId="customize-widgets-title"
+        className="max-h-[90vh] max-w-lg overflow-y-auto"
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 id="customize-widgets-title" className="text-xl font-bold">
@@ -208,7 +198,7 @@ export default function CustomizeDrawer({
             {busy ? "Saving…" : "Save layout"}
           </Button>
         </div>
-      </dialog>
-    </div>
+      </Modal>
+    </>
   );
 }

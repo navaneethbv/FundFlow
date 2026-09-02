@@ -24,7 +24,7 @@ export default function SettingsSectionPicker({
         onChange={(event) => {
           router.push(`/settings?section=${event.target.value}`);
         }}
-        className="min-h-11 w-full rounded-field border border-panel-border bg-panel px-3 text-sm font-semibold text-foreground"
+        className="min-h-11 w-full rounded-field border border-panel-border bg-panel px-3 text-sm font-semibold text-foreground focus-visible:outline-2"
       >
         {sections.map((section) => (
           <option key={section.key} value={section.key}>

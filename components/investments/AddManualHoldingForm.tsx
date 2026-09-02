@@ -79,7 +79,7 @@ export default function AddManualHoldingForm({
         <Plus aria-hidden className="h-4 w-4" />
         Add Holding
       </Button>
-      <Modal open={open} onClose={() => setOpen(false)} titleId="add-holding-title">
+      <Modal open={open} onClose={() => setOpen(false)} placement="sheet" titleId="add-holding-title">
         <h2 id="add-holding-title" className="text-lg font-bold">
           Add manual holding
         </h2>

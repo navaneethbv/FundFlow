@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
+import PopoverBackdrop from "@/components/ui/PopoverBackdrop";
 import Select from "@/components/ui/Select";
 import { Calendar, ChevronDown, Search, X } from "@/components/ui/icons";
 import { formatMonth, titleCase } from "@/lib/format";
@@ -200,9 +201,7 @@ export default function TransactionQueryControls({
         </form>
 
         <div className="relative">
-          {open === "date" && (
-            <button type="button" aria-hidden tabIndex={-1} onClick={() => close("date")} className="fixed inset-0 z-30 cursor-default" />
-          )}
+          {open === "date" && <PopoverBackdrop onClose={() => close("date")} />}
           <button
             ref={dateTriggerRef}
             type="button"
@@ -238,9 +237,7 @@ export default function TransactionQueryControls({
         </div>
 
         <div className="relative">
-          {open === "filters" && (
-            <button type="button" aria-hidden tabIndex={-1} onClick={() => close("filters")} className="fixed inset-0 z-30 cursor-default" />
-          )}
+          {open === "filters" && <PopoverBackdrop onClose={() => close("filters")} />}
           <button
             ref={filtersTriggerRef}
             type="button"

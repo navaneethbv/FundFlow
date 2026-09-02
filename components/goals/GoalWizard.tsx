@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
@@ -9,6 +9,7 @@ import { ChevronLeft, X } from "@/components/ui/icons";
 import { createClient } from "@/lib/supabase/client";
 import { GOAL_TEMPLATES, goalImageFor } from "@/lib/goal-templates";
 import type { GoalType } from "@/lib/goals-v2";
+import { useDialogFocus } from "@/lib/use-dialog-focus";
 
 /**
  * The four-step goal wizard: Select → Targets → Contribution → Budget.
@@ -338,10 +339,13 @@ export default function GoalWizard({
 }: GoalWizardProps) {
   const router = useRouter();
   const supabase = createClient();
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>({ ...EMPTY, goalType: defaultGoalType });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const handleDialogKeyDown = useDialogFocus(dialogRef, open, cancel);
 
   /**
    * Restore on open rather than on mount. Reading sessionStorage during the
@@ -482,8 +486,10 @@ export default function GoalWizard({
   return (
     <dialog
       open
+      ref={dialogRef}
       aria-modal="true"
       aria-label="New goal"
+      onKeyDown={handleDialogKeyDown}
       className="fixed inset-0 z-50 m-0 flex flex-col overflow-y-auto border-0 bg-background p-0"
     >
       <div className="border-b border-panel-border">

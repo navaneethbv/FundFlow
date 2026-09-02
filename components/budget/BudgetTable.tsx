@@ -347,7 +347,7 @@ export default function BudgetTable({
           <button
             type="button"
             onClick={() => setShowUnbudgeted((value) => !value)}
-            className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-accent"
+            className="inline-flex min-h-11 items-center gap-2 rounded-field px-2 -mx-2 text-sm font-semibold text-accent hover:bg-panel-hover focus-visible:outline-2"
           >
             {showUnbudgeted ? (
               <EyeOff aria-hidden className="h-4 w-4" />

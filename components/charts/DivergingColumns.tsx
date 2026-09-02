@@ -197,7 +197,7 @@ export default function DivergingColumns({
             </thead>
             <tbody className="tabular-nums">
               {labels.map((l, i) => (
-                <tr key={l} className="border-t border-black/5 dark:border-white/10">
+                <tr key={l} className="border-t border-panel-border">
                   <td className="py-1 pr-2">{l}</td>
                   <td data-money className="py-1 pr-2">{valueFormatter(up[i] ?? 0)}</td>
                   <td data-money className="py-1 pr-2">{valueFormatter(down[i] ?? 0)}</td>

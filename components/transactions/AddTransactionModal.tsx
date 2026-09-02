@@ -89,7 +89,7 @@ export default function AddTransactionModal({
   return (
     <>
       <Button onClick={() => setOpen(true)}>Add transaction</Button>
-      <Modal open={open} onClose={() => setOpen(false)} titleId="add-txn-title">
+      <Modal open={open} onClose={() => setOpen(false)} placement="sheet" titleId="add-txn-title">
         <h2 id="add-txn-title" className="text-lg font-bold">Add transaction</h2>
         <form
           onSubmit={submit}

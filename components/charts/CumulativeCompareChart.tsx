@@ -210,7 +210,7 @@ export default function CumulativeCompareChart({
               {days.map((row) => (
                 <tr
                   key={row.day}
-                  className="border-t border-black/5 dark:border-white/10"
+                  className="border-t border-panel-border"
                 >
                   <td className="py-1 pr-2">{row.day}</td>
                   <td data-money className="py-1 pr-2">
