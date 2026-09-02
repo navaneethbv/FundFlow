@@ -33,7 +33,7 @@
     "react-dom": "19.2.8",
     "react-plaid-link": "^5.0.0",
     "server-only": "^0.0.1",
-    "sharp": "0.35.3",
+    "sharp": "0.35.4",
     "tailwind-merge": "^3.6.0",
     "web-push": "^3.6.7"
   },
