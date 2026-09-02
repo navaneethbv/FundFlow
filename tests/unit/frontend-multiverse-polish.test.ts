@@ -77,11 +77,11 @@ describe("Frontend Multiverse Polish: DropdownButton Semantics & Motion", () => 
     expect(html).toContain("active:scale-[0.98]");
   });
 
-  it("verifies DropdownButton source wires role=menu, role=menuitem, and animate-dropdown", () => {
+  it("verifies DropdownButton source follows disclosure pattern with animate-dropdown", () => {
     const source = readFileSync("components/ui/DropdownButton.tsx", "utf8");
-    expect(source).toContain('role="menu"');
-    expect(source).toContain('role="menuitem"');
+    expect(source).toContain('aria-haspopup="true"');
     expect(source).toContain("animate-dropdown");
+    expect(source).not.toContain('role="menu"');
   });
 });
 

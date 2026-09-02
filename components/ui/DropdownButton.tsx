@@ -54,7 +54,6 @@ export default function DropdownButton({
 
       {open && (
         <div
-          role="menu"
           aria-label={label}
           className={cn(
             "absolute z-40 mt-2 w-48 rounded-card border border-panel-border bg-panel p-1.5 shadow-float",
@@ -66,7 +65,6 @@ export default function DropdownButton({
               <Link
                 key={item.label}
                 href={item.href}
-                role="menuitem"
                 onClick={close}
                 className={cn(
                   "flex min-h-11 items-center rounded-field px-2.5 text-sm font-medium transition-all duration-150 active:scale-[0.98]",
@@ -81,7 +79,6 @@ export default function DropdownButton({
               <button
                 key={item.label}
                 type="button"
-                role="menuitem"
                 onClick={() => {
                   item.onClick?.();
                   close();
