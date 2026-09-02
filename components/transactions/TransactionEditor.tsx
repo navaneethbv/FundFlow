@@ -105,6 +105,18 @@ export default function TransactionEditor({
   const splitsBalanced = activeRows.length === 0 || Math.abs(splitTotal - target) < 0.01;
   const hasAnnotations = saved.note.length > 0 || saved.tags.length > 0 || saved.splits.length > 0;
 
+  function applySplitPreset(parts: number) {
+    if (parts <= 0) return;
+    const perPart = round2(target / parts);
+    const remainder = round2(target - perPart * (parts - 1));
+    const newRows = Array.from({ length: parts }, (_, i) => ({
+      id: crypto.randomUUID(),
+      category: rows[i]?.category || "",
+      amount: String(i === parts - 1 ? remainder : perPart),
+    }));
+    setRows(newRows);
+  }
+
   async function save() {
     setError(null);
     if (activeRows.length > 0 && !splitsBalanced) {
@@ -334,12 +346,7 @@ export default function TransactionEditor({
                 <button
                   type="button"
                   onClick={() => {
-                    const perPart = round2(target / 2);
-                    const remainder = round2(target - perPart);
-                    setRows([
-                      { id: crypto.randomUUID(), category: rows[0]?.category || "", amount: String(perPart) },
-                      { id: crypto.randomUUID(), category: rows[1]?.category || "", amount: String(remainder) },
-                    ]);
+                    applySplitPreset(2);
                   }}
                   className="rounded-field bg-panel-2 px-2 py-0.5 font-medium hover:bg-panel-hover"
                 >
@@ -348,13 +355,7 @@ export default function TransactionEditor({
                 <button
                   type="button"
                   onClick={() => {
-                    const perPart = round2(target / 3);
-                    const last = round2(target - perPart * 2);
-                    setRows([
-                      { id: crypto.randomUUID(), category: rows[0]?.category || "", amount: String(perPart) },
-                      { id: crypto.randomUUID(), category: rows[1]?.category || "", amount: String(perPart) },
-                      { id: crypto.randomUUID(), category: rows[2]?.category || "", amount: String(last) },
-                    ]);
+                    applySplitPreset(3);
                   }}
                   className="rounded-field bg-panel-2 px-2 py-0.5 font-medium hover:bg-panel-hover"
                 >
@@ -363,14 +364,7 @@ export default function TransactionEditor({
                 <button
                   type="button"
                   onClick={() => {
-                    const perPart = round2(target / 4);
-                    const last = round2(target - perPart * 3);
-                    setRows([
-                      { id: crypto.randomUUID(), category: rows[0]?.category || "", amount: String(perPart) },
-                      { id: crypto.randomUUID(), category: rows[1]?.category || "", amount: String(perPart) },
-                      { id: crypto.randomUUID(), category: rows[2]?.category || "", amount: String(perPart) },
-                      { id: crypto.randomUUID(), category: rows[3]?.category || "", amount: String(last) },
-                    ]);
+                    applySplitPreset(4);
                   }}
                   className="rounded-field bg-panel-2 px-2 py-0.5 font-medium hover:bg-panel-hover"
                 >

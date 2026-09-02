@@ -22,6 +22,45 @@ export interface SmartRule {
   category?: string | null;
   tags?: string[];
   enabled?: boolean;
+  compiledRegex?: RegExp | null;
+}
+
+/**
+ * Maximum character length allowed for user-supplied regex patterns.
+ */
+export const MAX_REGEX_PATTERN_LENGTH = 120;
+
+/**
+ * Detects nested quantifiers and repetition that cause catastrophic backtracking (ReDoS).
+ * e.g. (a+)+, (a*)*, (a|b+)+, (a+){2,}
+ */
+const EXPONENTIAL_BACKTRACKING_PATTERN =
+  /\([^)]*[*+]\)[*+]|\([^)]*\{[0-9]+,[0-9]*\}\)[*+]|\([^)]*[*+]\)\{[0-9]+,[0-9]*\}/;
+
+/**
+ * Safely compiles a user-supplied regex pattern with ReDoS guards:
+ * - Length restriction (<= 120 chars)
+ * - Nested quantifier rejection (guards against exponential backtracking)
+ * - Backreference rejection (guards against algorithmic complexity attacks)
+ * Returns null if the pattern is invalid or unsafe.
+ */
+export function safeCompileRegex(pattern: string): RegExp | null {
+  const trimmed = pattern.trim();
+  if (!trimmed || trimmed.length > MAX_REGEX_PATTERN_LENGTH) {
+    return null;
+  }
+  if (EXPONENTIAL_BACKTRACKING_PATTERN.test(trimmed)) {
+    return null;
+  }
+  if (/\\[1-9]/.test(trimmed)) {
+    return null;
+  }
+
+  try {
+    return new RegExp(trimmed, "i");
+  } catch {
+    return null;
+  }
 }
 
 export interface RuleTransactionCandidate {
@@ -122,13 +161,9 @@ export function evaluateRule(
       return accountName.toLowerCase().includes(pattern.toLowerCase());
     }
     case "regex": {
-      try {
-        const regex = new RegExp(pattern, "i");
-        return regex.test(rawMerchant) || regex.test(rawName);
-      } catch {
-        // Safe regex evaluation: never throw on invalid user-provided regex
-        return false;
-      }
+      const regex = rule.compiledRegex !== undefined ? rule.compiledRegex : safeCompileRegex(pattern);
+      if (!regex) return false;
+      return regex.test(rawMerchant) || regex.test(rawName);
     }
     default:
       return false;
@@ -219,8 +254,15 @@ export function simulateRulesBatch(
   let matchedCount = 0;
   let modifiedCount = 0;
 
+  // Pre-compile regex rules once before batch evaluation to avoid inner-loop overhead and ReDoS
+  const preparedRules = rules.map((r) =>
+    r.matchType === "regex" && r.compiledRegex === undefined
+      ? { ...r, compiledRegex: safeCompileRegex(r.pattern) }
+      : r,
+  );
+
   const results: RuleApplicationResult[] = transactions.map((tx) => {
-    const res = applyRulesToTransaction(rules, tx);
+    const res = applyRulesToTransaction(preparedRules, tx);
     if (res.matchedRuleId !== null) matchedCount++;
     if (res.modified) modifiedCount++;
     return res;

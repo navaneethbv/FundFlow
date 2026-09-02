@@ -4,6 +4,7 @@ import {
   applyRulesToTransaction,
   simulateRulesBatch,
   matchesAmountCondition,
+  safeCompileRegex,
   type SmartRule,
   type RuleTransactionCandidate,
   type AmountOperator,
@@ -145,6 +146,40 @@ describe("Smart Rules Engine: Rule Evaluation", () => {
       enabled: true,
     };
     expect(evaluateRule(invalidRegexRule, sampleTx)).toBe(false);
+
+    // ReDoS protection against nested quantifiers
+    const redosRule: SmartRule = {
+      id: "r-redos",
+      matchType: "regex",
+      pattern: "(a+)+$",
+      enabled: true,
+    };
+    expect(evaluateRule(redosRule, sampleTx)).toBe(false);
+
+    // Precompiled regex support
+    const precompiledRule: SmartRule = {
+      id: "r-precompiled",
+      matchType: "regex",
+      pattern: "ignored",
+      compiledRegex: /^Starbucks/i,
+      enabled: true,
+    };
+    expect(evaluateRule(precompiledRule, sampleTx)).toBe(true);
+  });
+
+  it("safeCompileRegex guards against ReDoS vulnerabilities and length overflow", () => {
+    expect(safeCompileRegex("")).toBeNull();
+    expect(safeCompileRegex("   ")).toBeNull();
+    expect(safeCompileRegex("a".repeat(150))).toBeNull(); // exceeds MAX_REGEX_PATTERN_LENGTH
+    expect(safeCompileRegex("(a+)+")).toBeNull(); // nested +
+    expect(safeCompileRegex("(a*)*")).toBeNull(); // nested *
+    expect(safeCompileRegex("(a+){2,}")).toBeNull(); // nested range
+    expect(safeCompileRegex("([a-z]+){2,5}")).toBeNull(); // nested range
+    expect(safeCompileRegex("(a)\\1")).toBeNull(); // backreference \1
+    expect(safeCompileRegex("[incomplete")).toBeNull(); // invalid syntax
+
+    const valid = safeCompileRegex("^[a-z0-9_-]+$");
+    expect(valid).toBeInstanceOf(RegExp);
   });
 
   it("returns false for unknown match types", () => {

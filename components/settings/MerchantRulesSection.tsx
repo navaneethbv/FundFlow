@@ -9,6 +9,7 @@ import Input from "@/components/ui/Input";
 import Modal from "@/components/ui/Modal";
 import Panel from "@/components/ui/Panel";
 import Select from "@/components/ui/Select";
+import { safeCompileRegex } from "@/lib/rules-engine";
 
 export interface MerchantRule {
   id: string;
@@ -68,10 +69,11 @@ export default function MerchantRulesSection({
     }
 
     if (matchType === "regex") {
-      try {
-        new RegExp(pattern.trim());
-      } catch {
-        setError("Invalid regular expression syntax.");
+      const compiled = safeCompileRegex(pattern);
+      if (!compiled) {
+        setError(
+          "Invalid or unsafe regular expression syntax (nested quantifiers disallowed, max 120 chars).",
+        );
         return;
       }
     }
@@ -196,10 +198,12 @@ export default function MerchantRulesSection({
           <Select
             id="rule-match-type"
             value={matchType}
-            onChange={(event) => setMatchType(event.target.value as MerchantRule["match_type"])}
+            onChange={(event) => {
+              setMatchType(event.target.value as MerchantRule["match_type"]);
+            }}
           >
             <option value="keyword">Keyword (contains)</option>
-            <option value="merchant">Exact merchant</option>
+            <option value="merchant">Merchant contains</option>
             <option value="account">Account name</option>
             <option value="regex">Regex pattern (advanced)</option>
           </Select>
@@ -208,7 +212,9 @@ export default function MerchantRulesSection({
           <Input
             id="rule-pattern"
             value={pattern}
-            onChange={(event) => setPattern(event.target.value)}
+            onChange={(event) => {
+              setPattern(event.target.value);
+            }}
             placeholder={matchType === "regex" ? "^(AMZN|Amazon).*Mktp" : "SQ *COFFEE"}
           />
         </Field>
@@ -216,7 +222,9 @@ export default function MerchantRulesSection({
           <Input
             id="rule-display-name"
             value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
+            onChange={(event) => {
+              setDisplayName(event.target.value);
+            }}
             placeholder="Coffee Bar"
           />
         </Field>
@@ -224,7 +232,9 @@ export default function MerchantRulesSection({
           <Input
             id="rule-category"
             value={category}
-            onChange={(event) => setCategory(event.target.value)}
+            onChange={(event) => {
+              setCategory(event.target.value);
+            }}
             placeholder="FOOD_AND_DRINK"
           />
         </Field>
@@ -239,7 +249,9 @@ export default function MerchantRulesSection({
       {/* Batch Preview & Apply Modal */}
       <Modal
         open={batchModalOpen}
-        onClose={() => setBatchModalOpen(false)}
+        onClose={() => {
+          setBatchModalOpen(false);
+        }}
         titleId="rules-batch-title"
         ariaLabel="Retroactive rule simulation"
       >
@@ -299,7 +311,9 @@ export default function MerchantRulesSection({
               <div className="flex justify-end gap-2 pt-2">
                 <Button
                   variant="ghost"
-                  onClick={() => setBatchModalOpen(false)}
+                  onClick={() => {
+                    setBatchModalOpen(false);
+                  }}
                   disabled={applying}
                 >
                   Close

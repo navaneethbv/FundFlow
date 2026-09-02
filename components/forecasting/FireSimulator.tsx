@@ -157,7 +157,9 @@ export default function FireSimulator({
               id="fire-age"
               type="number"
               value={currentAge}
-              onChange={(e) => setCurrentAge(Number(e.target.value) || 30)}
+              onChange={(e) => {
+                setCurrentAge(Number(e.target.value) || 30);
+              }}
               min={18}
               max={80}
             />
@@ -167,7 +169,9 @@ export default function FireSimulator({
               id="fire-spend"
               type="number"
               value={monthlySpend}
-              onChange={(e) => setMonthlySpend(Number(e.target.value) || 0)}
+              onChange={(e) => {
+                setMonthlySpend(Number(e.target.value) || 0);
+              }}
               min={0}
               step={100}
             />
@@ -177,7 +181,9 @@ export default function FireSimulator({
               id="fire-savings"
               type="number"
               value={monthlySavings}
-              onChange={(e) => setMonthlySavings(Number(e.target.value) || 0)}
+              onChange={(e) => {
+                setMonthlySavings(Number(e.target.value) || 0);
+              }}
               min={0}
               step={100}
             />
@@ -187,7 +193,9 @@ export default function FireSimulator({
               id="fire-return"
               type="number"
               value={annualReturn}
-              onChange={(e) => setAnnualReturn(Number(e.target.value) || 0)}
+              onChange={(e) => {
+                setAnnualReturn(Number(e.target.value) || 0);
+              }}
               step={0.5}
             />
           </Field>
@@ -196,7 +204,9 @@ export default function FireSimulator({
               id="fire-swr"
               type="number"
               value={withdrawalRate}
-              onChange={(e) => setWithdrawalRate(Number(e.target.value) || 4.0)}
+              onChange={(e) => {
+                setWithdrawalRate(Number(e.target.value) || 4.0);
+              }}
               step={0.25}
             />
           </Field>
@@ -223,7 +233,9 @@ export default function FireSimulator({
                 </span>
                 <button
                   type="button"
-                  onClick={() => removeEvent(ev.id)}
+                  onClick={() => {
+                    removeEvent(ev.id);
+                  }}
                   aria-label={`Remove event ${ev.name}`}
                   className="ml-1 text-muted hover:text-foreground"
                 >
@@ -237,21 +249,27 @@ export default function FireSimulator({
             <Input
               placeholder="Event name (e.g. Wedding, Sabbatical)"
               value={newEventName}
-              onChange={(e) => setNewEventName(e.target.value)}
+              onChange={(e) => {
+                setNewEventName(e.target.value);
+              }}
               className="sm:col-span-2"
             />
             <Input
               type="number"
               placeholder="Month in future (e.g. 18)"
               value={newEventMonth}
-              onChange={(e) => setNewEventMonth(Number(e.target.value))}
+              onChange={(e) => {
+                setNewEventMonth(Number(e.target.value));
+              }}
             />
             <div className="flex gap-2">
               <Input
                 type="number"
                 placeholder="Amount delta ($)"
                 value={newEventCashFlow}
-                onChange={(e) => setNewEventCashFlow(Number(e.target.value))}
+                onChange={(e) => {
+                  setNewEventCashFlow(Number(e.target.value));
+                }}
               />
               <Button type="submit" size="sm">
                 Add

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { writeAudit, getClientIp } from "@/lib/audit";
+import { createServiceClient } from "@/lib/supabase/service";
 import {
   simulateRulesBatch,
   type SmartRule,
@@ -155,27 +156,65 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // 7. Live apply: persist tag changes to transaction_annotations
+  // 7. Live apply: bulk upsert tag changes & category remapping to transaction_annotations,
+  // and update merchant renaming on transactions without N+1 query loops.
   let appliedCount = 0;
-  const modifiedWithTags = simulation.results.filter(
-    (r) => r.modified && r.updated.tags.length > 0,
-  );
+  const modifiedItems = simulation.results.filter((r) => r.modified);
 
-  for (const item of modifiedWithTags) {
+  // A. Bulk upsert annotations (tags and display_category)
+  const annotationRows = modifiedItems
+    .filter(
+      (r) =>
+        r.updated.tags.length > 0 ||
+        (r.updated.category && r.updated.category !== r.original.category),
+    )
+    .map((r) => ({
+      user_id: user.id,
+      transaction_id: r.transactionId,
+      tags: r.updated.tags,
+      ...(r.updated.category && r.updated.category !== r.original.category
+        ? { display_category: r.updated.category }
+        : {}),
+      updated_at: new Date().toISOString(),
+    }));
+
+  if (annotationRows.length > 0) {
     const { error: upsertError } = await supabase
       .from("transaction_annotations")
-      .upsert(
-        {
-          user_id: user.id,
-          transaction_id: item.transactionId,
-          tags: item.updated.tags,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "transaction_id" },
-      );
+      .upsert(annotationRows, { onConflict: "user_id,transaction_id" });
 
     if (!upsertError) {
-      appliedCount++;
+      appliedCount += annotationRows.length;
+    }
+  }
+
+  // B. Persist merchant renaming to transactions table (grouped by target merchant name)
+  const merchantUpdates = modifiedItems.filter(
+    (r) => r.updated.merchant && r.updated.merchant !== r.original.merchant,
+  );
+  if (merchantUpdates.length > 0) {
+    const service = createServiceClient();
+    const byMerchant = new Map<string, string[]>();
+    for (const item of merchantUpdates) {
+      const targetName = item.updated.merchant!;
+      const list = byMerchant.get(targetName) ?? [];
+      list.push(item.transactionId);
+      byMerchant.set(targetName, list);
+    }
+
+    for (const [newMerchant, ids] of byMerchant.entries()) {
+      const { error: merchantError } = await service
+        .from("transactions")
+        .update({ merchant_name: newMerchant, updated_at: new Date().toISOString() })
+        .in("id", ids)
+        .eq("user_id", user.id);
+
+      if (!merchantError) {
+        const notInAnnotations = ids.filter(
+          (id) => !annotationRows.some((a) => a.transaction_id === id),
+        );
+        appliedCount += notInAnnotations.length;
+      }
     }
   }
 

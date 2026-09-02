@@ -51,7 +51,9 @@ export default function PriceSpikeBanner({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setDismissed(true)}
+            onClick={() => {
+              setDismissed(true);
+            }}
             aria-label="Dismiss price increase alerts"
           >
             Dismiss all
@@ -94,7 +96,9 @@ export default function PriceSpikeBanner({
               </Link>
               <button
                 type="button"
-                onClick={() => dismissItem(alert.id)}
+                onClick={() => {
+                  dismissItem(alert.id);
+                }}
                 aria-label={`Dismiss alert for ${alert.merchantName}`}
                 className="text-muted hover:text-foreground text-sm"
               >
