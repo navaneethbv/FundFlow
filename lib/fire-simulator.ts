@@ -139,8 +139,11 @@ function generateTimeline(
  * Calculates core FIRE milestones, time to independence, and life event projections.
  */
 export function calculateFireSimulation(input: FireSimulatorInput): FireSimulationResult {
-  const annualReturn = (input.annualReturnPct ?? 7.0) / 100;
-  const swr = (input.withdrawalRatePct ?? 4.0) / 100;
+  // Inputs come from free-form numeric controls, so clamp to values that keep
+  // the math defined: a non-positive SWR divides by zero and returns at or
+  // below -100% make the compound growth factor zero or negative.
+  const annualReturn = Math.max((input.annualReturnPct ?? 7.0) / 100, -0.99);
+  const swr = Math.max((input.withdrawalRatePct ?? 4.0) / 100, 0.005);
   const currentAge = input.currentAge ?? 30;
   const horizon = input.projectionHorizonMonths ?? 240;
 

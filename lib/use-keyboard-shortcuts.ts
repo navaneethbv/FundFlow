@@ -54,11 +54,15 @@ export interface ShortcutHandlerState {
  * Returns the next pending chord (e.g. "g" or null).
  */
 export function processShortcutKeyDown(
-  e: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey" | "target" | "preventDefault">,
+  e: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey" | "target" | "preventDefault"> & {
+    repeat?: boolean;
+  },
   state: ShortcutHandlerState,
 ): string | null {
   if (isEditableElement(e.target)) return state.pendingChord;
   if (e.metaKey || e.ctrlKey || e.altKey) return state.pendingChord;
+  // OS key auto-repeat (holding a key) must not re-trigger chords or the help toggle
+  if (e.repeat) return state.pendingChord;
 
   const key = e.key.toLowerCase();
 

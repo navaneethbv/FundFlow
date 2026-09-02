@@ -68,4 +68,19 @@ describe("FIRE Simulator: Calculations & Milestones", () => {
     expect(zeroIncome.currentProgressPct).toBe(0);
     expect(zeroIncome.timeline).toHaveLength(241);
   });
+
+  it("clamps a non-positive withdrawal rate so targets stay finite", () => {
+    const result = calculateFireSimulation({ ...baseInput, withdrawalRatePct: -2 });
+    expect(Number.isFinite(result.milestones.standardFireTarget)).toBe(true);
+    expect(result.milestones.standardFireTarget).toBeGreaterThan(0);
+    expect(Number.isFinite(result.milestones.coastFireTarget)).toBe(true);
+  });
+
+  it("clamps returns at or below -100% so the timeline stays numeric", () => {
+    const result = calculateFireSimulation({ ...baseInput, annualReturnPct: -120 });
+    for (const point of result.timeline) {
+      expect(Number.isFinite(point.netWorthBase)).toBe(true);
+      expect(Number.isFinite(point.netWorthWithEvents)).toBe(true);
+    }
+  });
 });

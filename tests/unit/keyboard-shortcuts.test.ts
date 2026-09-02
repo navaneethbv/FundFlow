@@ -99,6 +99,34 @@ describe("Keyboard Shortcuts: Logic & Definitions", () => {
     ).toBeNull();
   });
 
+  it("ignores OS auto-repeat events so holding 'g' never navigates", () => {
+    const started = makeState();
+    const chord = processShortcutKeyDown(
+      { key: "g", metaKey: false, ctrlKey: false, altKey: false, target: null, preventDefault: vi.fn(), repeat: false },
+      started.state,
+    );
+    expect(chord).toBe("g");
+
+    const repeated = makeState(chord);
+    const next = processShortcutKeyDown(
+      { key: "g", metaKey: false, ctrlKey: false, altKey: false, target: null, preventDefault: vi.fn(), repeat: true },
+      repeated.state,
+    );
+    expect(repeated.navigate).not.toHaveBeenCalled();
+    expect(repeated.preventDefault).not.toHaveBeenCalled();
+    expect(next).toBe("g"); // pending chord preserved, still waiting for a real second key
+  });
+
+  it("ignores OS auto-repeat of '?' so the help modal does not flicker", () => {
+    const { toggleHelp, state } = makeState();
+    const next = processShortcutKeyDown(
+      { key: "?", metaKey: false, ctrlKey: false, altKey: false, target: null, preventDefault: vi.fn(), repeat: true },
+      state,
+    );
+    expect(toggleHelp).not.toHaveBeenCalled();
+    expect(next).toBeNull();
+  });
+
   it("starts chord sequence on 'g' key", () => {
     const { preventDefault, state } = makeState();
     const next = processShortcutKeyDown(
