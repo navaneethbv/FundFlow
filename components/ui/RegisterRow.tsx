@@ -43,7 +43,7 @@ export default function RegisterRow({
   return (
     <li
       className={cn(
-        "flex items-center gap-3 rounded-field p-2 transition-colors duration-150 hover:bg-panel-hover active:bg-panel-2/60",
+        "flex items-center gap-3 rounded-field p-2 transition-colors duration-150 hover:bg-panel-hover active:scale-[0.99] active:opacity-90",
         index % 2 === 1 && "bg-panel-2",
       )}
     >

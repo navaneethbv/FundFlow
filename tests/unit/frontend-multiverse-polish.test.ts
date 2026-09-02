@@ -168,7 +168,7 @@ describe("Frontend Multiverse Polish: Interactive Primitives & Navigation", () =
     );
     expect(html).toContain("rounded-field");
     expect(html).toContain("transition-colors");
-    expect(html).toContain("active:bg-panel-2/60");
+    expect(html).toContain("active:scale-[0.99]");
   });
 
   it("EmptyState supports hover transition and accent border highlight", () => {

@@ -82,8 +82,8 @@ export default function Modal({
           // that pass their own max-h/overflow still win via twMerge.
           "relative m-0 max-h-[90vh] w-full max-w-md overflow-y-auto border border-panel-border bg-panel p-5 shadow-float sm:p-6",
           isSheet
-            ? "animate-sheet-slide rounded-t-card sm:animate-modal-pop sm:rounded-card"
-            : "animate-modal-pop rounded-card",
+            ? "rounded-t-card sm:rounded-card animate-sheet-slide sm:animate-modal-pop"
+            : "rounded-card animate-modal-pop",
           className,
         )}
       >
