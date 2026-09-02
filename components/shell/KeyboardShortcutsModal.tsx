@@ -36,8 +36,10 @@ export default function KeyboardShortcutsModal({
   open: boolean;
   onClose: () => void;
 }>) {
-  const navigationShortcuts = SHORTCUTS.filter((s) => s.category === "Navigation");
-  const generalShortcuts = SHORTCUTS.filter((s) => s.category === "General");
+  const sections = [
+    { label: "Navigation (Type sequentially)", items: SHORTCUTS.filter((s) => s.category === "Navigation") },
+    { label: "General", items: SHORTCUTS.filter((s) => s.category === "General") },
+  ];
 
   return (
     <Modal
@@ -54,27 +56,18 @@ export default function KeyboardShortcutsModal({
           <Badge tone="neutral">Power-user</Badge>
         </div>
 
-        <div>
-          <h4 className="mb-2.5 text-xs font-bold uppercase tracking-wider text-muted">
-            Navigation (Type sequentially)
-          </h4>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {navigationShortcuts.map((s) => (
-              <ShortcutItem key={s.chord} description={s.description} chord={s.chord} />
-            ))}
+        {sections.map((section) => (
+          <div key={section.label}>
+            <h4 className="mb-2.5 text-xs font-bold uppercase tracking-wider text-muted">
+              {section.label}
+            </h4>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {section.items.map((s) => (
+                <ShortcutItem key={s.chord} description={s.description} chord={s.chord} />
+              ))}
+            </div>
           </div>
-        </div>
-
-        <div>
-          <h4 className="mb-2.5 text-xs font-bold uppercase tracking-wider text-muted">
-            General
-          </h4>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {generalShortcuts.map((s) => (
-              <ShortcutItem key={s.chord} description={s.description} chord={s.chord} />
-            ))}
-          </div>
-        </div>
+        ))}
 
         <div className="flex justify-end pt-2">
           <Button variant="ghost" onClick={onClose}>

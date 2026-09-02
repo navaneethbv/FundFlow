@@ -31,11 +31,13 @@ export interface SmartRule {
 export const MAX_REGEX_PATTERN_LENGTH = 120;
 
 /**
- * Detects nested quantifiers and repetition that cause catastrophic backtracking (ReDoS).
- * e.g. (a+)+, (a*)*, (a|b+)+, (a+){2,}
+ * Detects quantified groups whose body is itself ambiguous — a nested
+ * quantifier or an alternation — the two shapes that cause catastrophic
+ * backtracking (ReDoS): (a+)+, (a*)*, (a|b+)+, (a|aa)+, (a+){2,}.
+ * Quantified groups with a plain literal body, e.g. (foo)+, are still allowed.
  */
 const EXPONENTIAL_BACKTRACKING_PATTERN =
-  /\([^)]*[*+]\)[*+]|\([^)]*\{[0-9]+,[0-9]*\}\)[*+]|\([^)]*[*+]\)\{[0-9]+,[0-9]*\}/;
+  /\([^()]*[*+{][^()]*\)[*+{]|\([^()]*\|[^()]*\)[*+{]/;
 
 /**
  * Safely compiles a user-supplied regex pattern with ReDoS guards:

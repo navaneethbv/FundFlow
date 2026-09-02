@@ -72,7 +72,9 @@ async function fetchCandidateTransactions(
     .select("id, merchant, name, amount, pfc_primary")
     .eq("user_id", userId)
     .order("date", { ascending: false })
-    .limit(500);
+    // Rules run retroactively on history, so cover a large window; pagination
+    // is avoided to keep the batch evaluation a single atomic simulation.
+    .limit(5000);
 
   if (txError) {
     return errorResponse("Failed to load transactions: " + txError.message, 500);

@@ -82,7 +82,7 @@ describe("Frontend Multiverse Polish: DropdownButton Semantics & Motion", () => 
   it("verifies DropdownButton source follows list disclosure pattern with animate-dropdown", () => {
     const source = readFileSync("components/ui/DropdownButton.tsx", "utf8");
     expect(source).toContain('aria-haspopup="true"');
-    expect(source).toContain('role="list"');
+    expect(source).not.toContain('role="list"');
     expect(source).toContain("animate-dropdown");
     expect(source).not.toContain('role="menu"');
   });

@@ -74,6 +74,10 @@ function TransactionSplitSection({
   splitsBalanced: boolean;
   activeRows: SplitRow[];
 }>) {
+  let splitBarColor = "bg-accent";
+  if (splitTotal > target) splitBarColor = "bg-danger";
+  if (splitsBalanced) splitBarColor = "bg-success";
+
   return (
     <>
       <div className="mb-2 mt-4 flex items-center justify-between">
@@ -103,7 +107,7 @@ function TransactionSplitSection({
             <div
               className={cn(
                 "h-full transition-all duration-200",
-                splitsBalanced ? "bg-success" : splitTotal > target ? "bg-danger" : "bg-accent",
+                splitBarColor,
               )}
               style={{ width: `${Math.min(100, (splitTotal / target) * 100)}%` }}
             />

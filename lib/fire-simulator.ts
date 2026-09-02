@@ -113,8 +113,13 @@ function generateTimeline(
       monthsToStandardFire = m;
     }
 
+    // The baseline path always compounds with the user's current savings; the
+    // events path adjusts savings by how much life events have shifted monthly
+    // spend, so lifestyle changes decelerate or accelerate net worth growth.
     netWorthBase = netWorthBase * (1 + monthlyReturn) + input.monthlySavings;
-    netWorthWithEvents = netWorthWithEvents * (1 + monthlyReturn) + input.monthlySavings;
+    const spendDelta = currentMonthlySpend - input.monthlySpend;
+    netWorthWithEvents =
+      netWorthWithEvents * (1 + monthlyReturn) + (input.monthlySavings - spendDelta);
 
     const scheduled = eventsByMonth.get(m + 1);
     if (scheduled) {

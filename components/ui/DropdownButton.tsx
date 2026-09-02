@@ -54,7 +54,6 @@ export default function DropdownButton({
 
       {open && (
         <ul
-          role="list"
           aria-label={label}
           className={cn(
             "absolute z-40 mt-2 w-48 list-none rounded-card border border-panel-border bg-panel p-1.5 shadow-float",
