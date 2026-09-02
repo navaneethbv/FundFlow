@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
+import ReconcilePanel from "@/components/accounts/ReconcilePanel";
 import AccountGroup from "@/components/accounts/AccountGroup";
 import AccountPreferences, {
   type AccountsPagePreferences,
@@ -328,6 +329,11 @@ export default async function AccountsPage({
     summary: params.summary === "percent" ? "percent" : "totals",
   };
   const allRows = Object.values(built.groups).flatMap((group) => group.rows);
+
+  // Reconcile is the caller's own ledger; household-shared rows are excluded.
+  const reconcileAccounts = accounts
+    .filter((account) => account.ownerUserId === user.id)
+    .map((account) => ({ ref: `${account.source}:${account.id}`, name: account.name }));
   const exportHref = `/api/export/accounts-csv${
     firstSearchParam(params.scope)
       ? `?scope=${encodeURIComponent(firstSearchParam(params.scope)!)}`
@@ -346,6 +352,7 @@ export default async function AccountsPage({
                 unsupported. */}
             {accounts.length > 0 && <ConnectBankButton />}
             {plaidAccounts.length > 0 && <RefreshButton />}
+            {reconcileAccounts.length > 0 && <ReconcilePanel accounts={reconcileAccounts} />}
           </>
         }
       />

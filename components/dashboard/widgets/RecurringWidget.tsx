@@ -1,4 +1,5 @@
 import { MerchantAvatar } from "@/components/ui/Avatar";
+import { merchantLogoDataUri } from "@/lib/merchant-logos";
 import Badge, { type BadgeTone } from "@/components/ui/Badge";
 import ButtonLink from "@/components/ui/ButtonLink";
 import DropdownButton from "@/components/ui/DropdownButton";
@@ -91,7 +92,12 @@ export default function RecurringWidget({
               key={`${item.name}-${item.nextDate}`}
               className="flex items-center gap-3 text-sm"
             >
-              <MerchantAvatar name={item.name} size={32} className="shrink-0" />
+              <MerchantAvatar
+                name={item.name}
+                logoUrl={merchantLogoDataUri(item.name)}
+                size={32}
+                className="shrink-0"
+              />
               <span className="min-w-0 flex-1 truncate font-medium">{item.name}</span>
               <Badge tone={STATUS_TONE[item.status]}>{STATUS_LABEL[item.status]}</Badge>
               <span data-money className="whitespace-nowrap tabular-nums text-xs text-muted">

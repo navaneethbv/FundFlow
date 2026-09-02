@@ -1,4 +1,5 @@
 import { MerchantAvatar } from "@/components/ui/Avatar";
+import { merchantLogoDataUri } from "@/lib/merchant-logos";
 import { formatCurrency, roundsToZero } from "@/lib/format";
 import { formatDate } from "@/lib/format-date";
 import { cn } from "@/lib/cn";
@@ -29,6 +30,7 @@ export default function RegisterRow({
   amount,
   currency = "USD",
   trailing,
+  logoUrl,
 }: Readonly<{
   index: number;
   merchant: string;
@@ -37,6 +39,8 @@ export default function RegisterRow({
   amount: number;
   currency?: string;
   trailing?: ReactNode;
+  /** Explicit avatar image; defaults to the curated merchant-logo lookup. */
+  logoUrl?: string | null;
 }>) {
   const inflow = amount > 0 && !roundsToZero(amount);
   const outflow = amount < 0 && !roundsToZero(amount);
@@ -47,7 +51,12 @@ export default function RegisterRow({
         index % 2 === 1 && "bg-panel-2",
       )}
     >
-      <MerchantAvatar name={merchant} size={36} className="shrink-0" />
+      <MerchantAvatar
+        name={merchant}
+        logoUrl={logoUrl ?? merchantLogoDataUri(merchant)}
+        size={36}
+        className="shrink-0"
+      />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold">{merchant}</span>
         {meta && (

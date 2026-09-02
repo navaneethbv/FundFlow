@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { InstitutionAvatar, MerchantAvatar } from "@/components/ui/Avatar";
+import { merchantLogoDataUri } from "@/lib/merchant-logos";
 import CategoryChip from "@/components/ui/CategoryChip";
 import { CheckCircle2 } from "@/components/ui/icons";
 import Tabs from "@/components/ui/Tabs";
@@ -275,7 +276,12 @@ function OccurrenceTableRow({
     <tr className={`border-t border-panel-border${index % 2 === 1 ? " bg-panel-2" : ""}`}>
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
-          <MerchantAvatar name={occurrence.merchant} size={32} className="shrink-0" />
+          <MerchantAvatar
+            name={occurrence.merchant}
+            logoUrl={merchantLogoDataUri(occurrence.merchant)}
+            size={32}
+            className="shrink-0"
+          />
           <span className="min-w-0">
             <span className="block truncate text-sm font-semibold">{occurrence.merchant}</span>
             <span className="text-xs text-muted">{occurrence.frequency}</span>

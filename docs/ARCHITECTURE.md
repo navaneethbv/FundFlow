@@ -80,6 +80,24 @@ flowchart TB
   `/api/export/tax` is the yearly tax export: canonical-projection rows for one
   calendar year filtered by the curated tag→line-item map in `tax-categories.ts`
   and grouped by `tax-export.ts`, with `toTaxCsv` for the detail block.
+- `restore.ts` — the restore half of the backup system: `buildRestorePlan`
+  validates a decrypted archive against the `USER_DATA_TABLES` registry
+  (unknown sections reported, missing ones listed), `executeRestore` writes
+  user-scope tables all-or-nothing per table in foreign-key order. Backups
+  carry natural keys (ids, `plaid_transaction_id`) via the spec's
+  `restoreKeys` — takeout does not, keeping its no-identifiers contract — so
+  `transactions` upserts onto itself and converges with the next sync.
+- `scheduled-transactions.ts` / `scheduled-promotion.ts` — one-off
+  future-dated entries: pure validation/projection helpers plus the cron-side
+  idempotent promotion into the ledger (deterministic `scheduled-<id>`,
+  ignore-conflicts upsert, status flip). A `"once"` recurrence frequency
+  projects them into the forecast and bill calendar before they materialize.
+- `reconcile.ts` — pure reconcile math (cleared/outstanding/difference with
+  the asset/liability `direction` convention). Cleared flags live on
+  `transaction_annotations.cleared_at`, never on synced rows.
+- `merchant-logos.ts` — curated offline merchant brand icons (Simple Icons)
+  rendered as brand-colored data URIs; unmatched merchants keep the
+  deterministic initial disc.
 - `sankey.ts` — pure Sankey geometry for `components/charts/SankeyChart.tsx`.
   Two invariants: one value→pixel scale is shared by every column (per-column
   scaling silently breaks flow conservation), and ribbon thickness is never

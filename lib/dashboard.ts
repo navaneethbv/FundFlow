@@ -52,6 +52,7 @@ import {
   buildDashboardBudgetGroups,
   type DashboardBudgetGroup,
 } from "@/lib/dashboard-budget-groups";
+import { toRecurringItem } from "@/lib/scheduled-transactions";
 /**
  * Aggregations for the dashboard. Runs with the caller's user-scoped Supabase
  * client, so RLS guarantees only the current user's rows are visible.
@@ -704,9 +705,11 @@ export async function getDashboardData(
     { data: merchantRules },
     { data: snapshots },
     { data: linkedRefunds },
+    { data: linkedTransfers },
     { data: linkedDuplicates },
     { data: categoryOverrideRows },
     { data: sinkingFundRows },
+    { data: scheduledRows },
   ] = await Promise.all([
     scopeUser(
       supabase
@@ -759,6 +762,11 @@ export async function getDashboardData(
     ),
     scopeUser(
       supabase
+        .from("linked_transfers")
+        .select("out_transaction_id, in_transaction_id"),
+    ),
+    scopeUser(
+      supabase
         .from("linked_duplicates")
         .select("excluded_transaction_id"),
     ),
@@ -772,6 +780,18 @@ export async function getDashboardData(
         .from("sinking_funds")
         .select("name, target_amount, due_date, cadence, custom_interval_months, cycle_anchor_date")
         .order("due_date"),
+    ),
+    // Scheduled one-off entries feed the forecast and bill calendar so a
+    // committed future payment shows in the projection before it hits the
+    // ledger. Bounded to the dashboard's window of interest.
+    scopeUser(
+      supabase
+        .from("scheduled_transactions")
+        .select("kind, amount, merchant, scheduled_date, category")
+        .eq("status", "scheduled")
+        .gte("scheduled_date", `${currentMonth}-01`)
+        .order("scheduled_date")
+        .limit(100),
     ),
   ]);
 
@@ -873,6 +893,13 @@ export async function getDashboardData(
     }>).map((row) => ({
       chargeTransactionId: row.charge_transaction_id,
       refundTransactionId: row.refund_transaction_id,
+    })),
+    linkedTransfers: ((linkedTransfers ?? []) as Array<{
+      out_transaction_id: string;
+      in_transaction_id: string;
+    }>).map((row) => ({
+      outTransactionId: row.out_transaction_id,
+      inTransactionId: row.in_transaction_id,
     })),
     transactionOverrides,
     excludedTransactionIds: new Set(
@@ -1062,6 +1089,13 @@ export async function getDashboardData(
         latestMatchDate(stream.merchant) ??
         monthDate(activeMonth, 15),
     })),
+    ...((scheduledRows ?? []) as Array<{
+      kind: string;
+      amount: number | string;
+      merchant: string;
+      scheduled_date: string;
+      category: string | null;
+    }>).map(toRecurringItem),
   ];
   const cashBalance = allAccounts
     .filter((account) => account.type === "depository")

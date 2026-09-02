@@ -33,6 +33,7 @@ import SettleUpSection from "@/components/settings/SettleUpSection";
 import CancelledSubscriptionsSection from "@/components/settings/CancelledSubscriptionsSection";
 import DashboardPrefsSection from "@/components/settings/DashboardPrefsSection";
 import DemoDataSection from "@/components/settings/DemoDataSection";
+import RestoreSection from "@/components/settings/RestoreSection";
 import { buildAuditLogPage, buildSessionList } from "@/lib/security-account";
 import { currentSessionId } from "@/lib/http";
 import { suggestBudgets } from "@/lib/insights";
@@ -466,6 +467,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
           <ReceiptScanSection enabled={aiSettings?.enabled ?? false} />
         </div>
         <DemoDataSection hasBanks={(items ?? []).length > 0} />
+        <RestoreSection />
         <DangerZone />
       </>
     );

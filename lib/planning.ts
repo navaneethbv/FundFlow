@@ -34,7 +34,10 @@ export interface BudgetEnvelope {
   effectiveLimit: number;
 }
 
-export type RecurringFrequency = "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
+/** "once" is a one-off scheduled item (lib/scheduled-transactions.ts): it
+ *  fires on its date and never repeats — its next occurrence lands outside
+ *  any plausible forecast horizon. */
+export type RecurringFrequency = "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly" | "once";
 export type RecurringItemType = "income" | "expense";
 
 export interface RecurringItem {
@@ -170,6 +173,7 @@ function round2(value: number): number {
 }
 
 function nextOccurrence(date: string, frequency: RecurringFrequency): string {
+  if (frequency === "once") return addDays(date, 3660);
   if (frequency === "weekly") return addDays(date, 7);
   if (frequency === "biweekly") return addDays(date, 14);
   if (frequency === "quarterly") return addMonths(date, 3);
@@ -273,7 +277,7 @@ export function forecastCashFlow(input: ForecastInput): CashFlowForecast {
     assumptions: [
       `Starts from ${formatCurrency(input.startingBalance ?? 0)} cash.`,
       `Looks ahead ${input.horizonDays} days from ${input.asOf}.`,
-      "Uses enabled recurring income and expense items only.",
+      "Uses enabled recurring income and expense items plus scheduled one-offs only.",
     ],
     events,
   };

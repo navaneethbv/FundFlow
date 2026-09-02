@@ -21,12 +21,18 @@ import { isFeatureEnabled } from "@/lib/feature-flags";
  */
 type TableScope = "user" | "shared" | "owner";
 
-interface UserDataTableSpec {
+export interface UserDataTableSpec {
   key: string;
   table: string;
   select: string;
   scope: TableScope;
   gated?: boolean;
+  /**
+   * Extra columns only the encrypted BACKUP carries (never the takeout, whose
+   * contract excludes identifiers): the natural keys a restore needs to
+   * converge with Plaid sync and satisfy cross-table foreign keys.
+   */
+  restoreKeys?: string;
 }
 
 function table(
@@ -34,17 +40,26 @@ function table(
   select: string,
   scope: TableScope = "user",
   gated = false,
+  restoreKeys?: string,
 ): UserDataTableSpec {
-  return { key, table: key, select, scope, ...(gated ? { gated: true } : {}) };
+  return {
+    key,
+    table: key,
+    select,
+    scope,
+    ...(gated ? { gated: true } : {}),
+    ...(restoreKeys ? { restoreKeys } : {}),
+  };
 }
 
-const USER_DATA_TABLES: UserDataTableSpec[] = [
-  table("accounts", "name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code"),
-  table("transactions", "date, amount, iso_currency_code, name, merchant_name, pfc_primary, pfc_detailed, pending"),
-  table("budgets", "category, monthly_limit, rollover_enabled"),
-  table("goals", "name, target_amount, saved_amount, target_date, goal_type"),
+/** Exported for the restore planner (lib/restore.ts) - same list, same drift guard. */
+export const USER_DATA_TABLES: UserDataTableSpec[] = [
+  table("accounts", "name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code", "user", false, "id"),
+  table("transactions", "date, amount, iso_currency_code, name, merchant_name, pfc_primary, pfc_detailed, pending", "user", false, "id, plaid_transaction_id, account_id, manual_account_id, source"),
+  table("budgets", "category, monthly_limit, rollover_enabled", "user", false, "id"),
+  table("goals", "name, target_amount, saved_amount, target_date, goal_type", "user", false, "id"),
   table("merchant_rules", "match_type, pattern, display_name, category, enabled"),
-  table("manual_accounts", "name, account_type, balance, include_in_net_worth"),
+  table("manual_accounts", "name, account_type, balance, include_in_net_worth", "user", false, "id"),
   table("account_balance_snapshots", "account_id, manual_account_id, snapshot_date, current_balance, available_balance, iso_currency_code, captured_at"),
   table("alert_preferences", "broken_bank, budget_exceeded, goal_reached, large_transaction, low_cash_forecast"),
   table("ai_settings", "enabled"),
@@ -61,7 +76,8 @@ const USER_DATA_TABLES: UserDataTableSpec[] = [
   table("receipts", "transaction_id, storage_path, merchant, purchase_date, total, status, created_at"),
   table("user_tags", "name, color_slot, created_at"),
   table("sinking_funds", "name, target_amount, due_date, created_at"),
-  table("recurring_streams", "stream_type, description, merchant_name, average_amount, last_amount, frequency, status, category, is_active, first_date, last_date, predicted_next_date, user_amount, created_at"),
+  table("scheduled_transactions", "kind, amount, merchant, scheduled_date, category, notes, account_id, manual_account_id, status, created_at"),
+  table("recurring_streams", "stream_type, description, merchant_name, average_amount, last_amount, frequency, status, category, is_active, first_date, last_date, predicted_next_date, user_amount, created_at", "user", false, "id"),
   table("recurring_stream_transactions", "recurring_stream_id, transaction_id, created_at"),
   table("milestones", "key, title, created_at"),
   table("goal_accounts", "goal_id, account_id, allocated_amount, use_entire_balance, created_at"),
@@ -71,6 +87,9 @@ const USER_DATA_TABLES: UserDataTableSpec[] = [
   table("shared_expenses", "description, amount, paid_by, owed_user_id, settled_at, created_at", "shared"),
   table("net_worth_snapshots", "snapshot_month, assets, liabilities, created_at"),
   table("households", "name, created_at, updated_at", "owner"),
+  table("budget_templates", "name, items, created_at"),
+  table("linked_transfers", "out_transaction_id, in_transaction_id, amount, created_at"),
+  table("account_reconciliations", "account_id, manual_account_id, statement_date, statement_balance, created_at"),
 ];
 
 /**
@@ -81,6 +100,7 @@ const USER_DATA_TABLES: UserDataTableSpec[] = [
 export async function collectUserData(
   client: Pick<SupabaseClient, "from">,
   userId: string,
+  options: { includeRestoreKeys?: boolean } = {},
 ): Promise<Record<string, unknown[]>> {
   const investmentsEnabled = isFeatureEnabled("investmentsPage");
 
@@ -88,7 +108,11 @@ export async function collectUserData(
     if (spec.gated && !investmentsEnabled) {
       return Promise.resolve({ data: [], error: null });
     }
-    const query = client.from(spec.table).select(spec.select);
+    const select =
+      options.includeRestoreKeys && spec.restoreKeys
+        ? spec.select + ", " + spec.restoreKeys
+        : spec.select;
+    const query = client.from(spec.table).select(select);
     if (spec.scope === "user") return query.eq("user_id", userId);
     if (spec.scope === "owner") return query.eq("owner_user_id", userId);
     return query.or(`paid_by.eq.${userId},owed_user_id.eq.${userId}`);

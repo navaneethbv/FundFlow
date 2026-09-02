@@ -26,6 +26,8 @@ interface TransactionEditorProps {
   providerCategory?: string | null;
   /** Current transaction-level classification override, when one exists. */
   override?: TransactionOverride | null;
+  /** Reconcile cleared flag; omitted where the surface doesn't track it. */
+  cleared?: boolean;
   /**
    * Distinguishes the mobile and desktop copies of the same row. The ledger
    * renders both for responsive layout, so without a prefix the two copies
@@ -253,6 +255,7 @@ export default function TransactionEditor({
   categories,
   providerCategory = null,
   override = null,
+  cleared: initialCleared,
   idPrefix = "",
 }: Readonly<TransactionEditorProps>) {
   const target = round2(Math.abs(transaction.amount));
@@ -266,6 +269,7 @@ export default function TransactionEditor({
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState(saved.note);
   const [tagText, setTagText] = useState(saved.tags.join(", "));
+  const [cleared, setCleared] = useState(initialCleared ?? false);
   const [rows, setRows] = useState<SplitRow[]>(() => saved.splits.map(toSplitRow));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -328,6 +332,7 @@ export default function TransactionEditor({
           note,
           tags: parsedTags,
           splits: splitPayload,
+          ...(initialCleared !== undefined ? { cleared } : {}),
         }),
       });
       if (!res.ok) {
@@ -407,6 +412,17 @@ export default function TransactionEditor({
                   <Badge key={t}>{t}</Badge>
                 ))}
               </div>
+            )}
+
+            {initialCleared !== undefined && (
+              <label className="mb-4 flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={cleared}
+                  onChange={(e) => setCleared(e.target.checked)}
+                />
+                Cleared (reconciled against the bank)
+              </label>
             )}
 
             <TransactionSplitSection

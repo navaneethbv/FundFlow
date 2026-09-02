@@ -59,7 +59,11 @@ async function saveAnnotation(
       ? body.goal_id.trim()
       : null;
   const keepsGoalLink = goalProvided && goalId !== null;
-  if (!note && tags.length === 0 && !keepsGoalLink) {
+  // Reconcile cleared flag: explicit in the payload only when the caller sent
+  // it; absent means "leave the flag alone".
+  const clearedProvided = body.cleared !== undefined;
+  const clearedAt = body.cleared === true ? new Date().toISOString() : null;
+  if (!note && tags.length === 0 && !keepsGoalLink && !clearedProvided) {
     const { error } = await supabase
       .from("transaction_annotations")
       .delete()
@@ -68,6 +72,17 @@ async function saveAnnotation(
     if (error) throw error;
     return;
   }
+  if (!note && tags.length === 0 && !keepsGoalLink && clearedProvided) {
+    // Only the cleared flag is present: defaultToNull keeps note/tags intact.
+    const { error } = await supabase.from("transaction_annotations").upsert(
+      { user_id: userId, transaction_id: transactionId, cleared_at: clearedAt },
+      { onConflict: "user_id,transaction_id", defaultToNull: false },
+    );
+    if (error) throw error;
+    return;
+  }
+  // defaultToNull: absent columns (e.g. cleared_at on a note-only edit) keep
+  // their stored value instead of being reset to NULL.
   const { error } = await supabase.from("transaction_annotations").upsert(
     {
       user_id: userId,
@@ -75,8 +90,9 @@ async function saveAnnotation(
       note,
       tags,
       ...(goalProvided ? { goal_id: goalId } : {}),
+      ...(clearedProvided ? { cleared_at: clearedAt } : {}),
     },
-    { onConflict: "user_id,transaction_id" },
+    { onConflict: "user_id,transaction_id", defaultToNull: false },
   );
   if (error) throw error;
 }

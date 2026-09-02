@@ -9,6 +9,8 @@ import EmptyState from "@/components/ui/EmptyState";
 import Panel from "@/components/ui/Panel";
 import RefundReview from "@/components/transactions/RefundReview";
 import DuplicateReview from "@/components/transactions/DuplicateReview";
+import ScheduledTransactionsSection from "@/components/transactions/ScheduledTransactionsSection";
+import TransferReview from "@/components/transactions/TransferReview";
 import TransactionEditor from "@/components/transactions/TransactionEditor";
 import MobileLedgerList, { type LedgerCardRow } from "@/components/transactions/MobileLedgerList";
 import SavedViewsBar from "@/components/transactions/SavedViewsBar";
@@ -19,6 +21,7 @@ import TableToolbar from "@/components/transactions/TableToolbar";
 import TransactionQueryControls from "@/components/transactions/TransactionQueryControls";
 import TransactionSortMenu from "@/components/transactions/TransactionSortMenu";
 import { MerchantAvatar } from "@/components/ui/Avatar";
+import { merchantLogoDataUri } from "@/lib/merchant-logos";
 import CategoryChip from "@/components/ui/CategoryChip";
 import { formatCurrency, roundsToZero, titleCase, formatMonth } from "@/lib/format";
 import { formatDate } from "@/lib/format-date";
@@ -415,13 +418,13 @@ async function loadLedgerRowDetails(
   ownerId: string,
   txnIds: string[],
 ): Promise<{
-  annById: Map<string, { note: string | null; tags: string[] }>;
+  annById: Map<string, { note: string | null; tags: string[]; cleared: boolean }>;
   overridesById: Map<string, TransactionOverride>;
   splitsById: Map<string, Array<{ category: string; amount: number }>>;
   excludedDuplicateIds: Set<string>;
   failed: boolean;
 }> {
-  const annById = new Map<string, { note: string | null; tags: string[] }>();
+  const annById = new Map<string, { note: string | null; tags: string[]; cleared: boolean }>();
   const overridesById = new Map<string, TransactionOverride>();
   const splitsById = new Map<string, Array<{ category: string; amount: number }>>();
   if (txnIds.length === 0) {
@@ -429,7 +432,7 @@ async function loadLedgerRowDetails(
   }
 
   const [annotationsResult, splitsResult, duplicatesResult] = await Promise.all([
-    supabase.from("transaction_annotations").select("transaction_id, note, tags, display_category, cash_flow_classification").eq("user_id", ownerId).in("transaction_id", txnIds),
+    supabase.from("transaction_annotations").select("transaction_id, note, tags, display_category, cash_flow_classification, cleared_at").eq("user_id", ownerId).in("transaction_id", txnIds),
     supabase.from("transaction_splits").select("transaction_id, category, amount").eq("user_id", ownerId).in("transaction_id", txnIds),
     supabase.from("linked_duplicates").select("excluded_transaction_id").eq("user_id", ownerId).in("excluded_transaction_id", txnIds),
   ]);
@@ -447,6 +450,7 @@ async function loadLedgerRowDetails(
     annById.set(a.transaction_id as string, {
       note: a.note as string | null,
       tags: (a.tags as string[]) ?? [],
+      cleared: a.cleared_at != null,
     });
     const classification = a.cash_flow_classification;
     overridesById.set(a.transaction_id as string, {
@@ -479,6 +483,7 @@ interface LedgerTableRowProps {
   excludedDuplicate: boolean;
   note: string | null;
   tags: string[];
+  cleared: boolean;
   splits: Array<{ category: string; amount: number }>;
   categoryOptions: string[];
   providerCategory?: string | null;
@@ -500,6 +505,7 @@ function LedgerTableRow({
   excludedDuplicate,
   note,
   tags,
+  cleared,
   splits,
   categoryOptions,
   providerCategory = null,
@@ -507,7 +513,7 @@ function LedgerTableRow({
 }: Readonly<LedgerTableRowProps>) {
   const columnCount =
     4 + (visibleColumns.has("category") ? 1 : 0) + (visibleColumns.has("account") ? 1 : 0);
-  const hasAnnotations = Boolean(note) || tags.length > 0 || splits.length > 0;
+  const hasAnnotations = Boolean(note) || tags.length > 0 || splits.length > 0 || cleared;
   const merchant = row.merchant || "Unknown";
   const currency = row.iso_currency_code ?? "USD";
   const isMoneyIn = row.amount < 0 && !roundsToZero(row.amount);
@@ -556,12 +562,22 @@ function LedgerTableRow({
         </td>
         <td className="px-4 py-3 align-top">
           <div className="flex items-start gap-2.5">
-            <MerchantAvatar name={row.merchant || "?"} size={28} className="mt-0.5" />
+            <MerchantAvatar
+              name={row.merchant || "?"}
+              logoUrl={merchantLogoDataUri(row.merchant || "?")}
+              size={28}
+              className="mt-0.5"
+            />
             <span className="min-w-0">
               <span className="font-medium">{merchant}</span>
               {row.pending && (
                 <Badge tone="warning" className="ml-2">
                   pending
+                </Badge>
+              )}
+              {cleared && (
+                <Badge tone="success" className="ml-2">
+                  cleared
                 </Badge>
               )}
               {excludedDuplicate && (
@@ -612,6 +628,7 @@ function LedgerTableRow({
             categories={categoryOptions}
             providerCategory={providerCategory}
             override={override}
+            cleared={cleared}
           />
         </td>
       </tr>
@@ -784,6 +801,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
       categoryOptions,
       providerCategory: t.pfc_primary ?? t.pfc_detailed,
       override: overridesById.get(t.id) ?? null,
+      cleared: ann?.cleared ?? false,
     };
   });
 
@@ -821,7 +839,15 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
         />
 
         <RefundReview />
+        <TransferReview />
         <DuplicateReview />
+
+        {transactionsParityEnabled && accountOptions.length > 0 && (
+          <ScheduledTransactionsSection
+            accounts={accountOptions}
+            categories={categoryOptions}
+          />
+        )}
 
         <SavedViewsBar
           initialViews={savedViews}
@@ -908,6 +934,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                       excludedDuplicate={excludedDuplicateIds.has(t.id)}
                       note={annById.get(t.id)?.note ?? null}
                       tags={annById.get(t.id)?.tags ?? []}
+                      cleared={annById.get(t.id)?.cleared ?? false}
                       splits={splitsById.get(t.id) ?? []}
                       categoryOptions={categoryOptions}
                       providerCategory={t.pfc_primary ?? t.pfc_detailed}

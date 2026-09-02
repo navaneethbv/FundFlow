@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
         // can silently drop the user's own budgets, goals, rules, manual
         // records, or annotations. The shared_expenses or() filter keeps one
         // member's backup from carrying the whole household's expenses.
-        const sections = await collectUserData(service, userId);
+        const sections = await collectUserData(service, userId, { includeRestoreKeys: true });
         // Preference rows alone don't earn a monthly archive email: an account
         // that only ever toggled a notification setting has nothing to restore.
         if (countUserRecordRows(sections) === 0) {
