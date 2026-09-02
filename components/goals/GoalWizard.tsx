@@ -396,6 +396,10 @@ export default function GoalWizard({
   }
 
   async function finish() {
+    // Guards re-entrancy in place of a native `disabled`: the submit button
+    // below stays enabled through the async call on purpose (see its own
+    // comment) rather than disabling out from under its own focus.
+    if (busy) return;
     setError(null);
     if (!isStepValid(draft)) {
       setError("Fill in the highlighted fields first.");
@@ -567,7 +571,14 @@ export default function GoalWizard({
                   Continue
                 </Button>
               ) : (
-                <Button type="button" disabled={busy} onClick={finish}>
+                // Deliberately not disabled while busy: this button is what
+                // currently holds focus when finish() runs, and disabling
+                // the focused control gets it blurred to <body> by the
+                // browser — walking focus out of useDialogFocus's trap while
+                // the dialog is still open (and back into the page behind
+                // it, since the trigger button stays mounted there). finish()
+                // itself now guards against a second concurrent submit.
+                <Button type="button" aria-busy={busy || undefined} onClick={finish}>
                   {submitLabel(draft, busy)}
                 </Button>
               )}

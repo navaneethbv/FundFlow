@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, type FocusEvent } from "react";
 import { useRouter } from "next/navigation";
 import { InstitutionAvatar, MerchantAvatar } from "@/components/ui/Avatar";
 import CategoryChip from "@/components/ui/CategoryChip";
@@ -121,6 +121,16 @@ function OccurrenceRowMenu({
     triggerRef.current?.focus();
   }
 
+  // Mouse users get an outside-click dismiss from the invisible backdrop
+  // below; without this, a keyboard user tabbing past the panel's last
+  // control left it open and orphaned. Guarded on `open` so a plain Tab away
+  // from the closed trigger doesn't call close() and yank focus back via
+  // triggerRef.focus().
+  function onBlur(event: FocusEvent<HTMLDivElement>) {
+    if (!open) return;
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) close();
+  }
+
   useEffect(() => {
     if (!open) return;
     function onKeyDown(event: KeyboardEvent) {
@@ -139,7 +149,7 @@ function OccurrenceRowMenu({
     stream?.status === "MATURE" && !stream.dismissedAt && !stream.reviewedAt;
 
   return (
-    <div className="relative inline-block">
+    <div className="relative inline-block" onBlur={onBlur}>
       {open && (
         <button
           type="button"

@@ -35,8 +35,20 @@ describe("GoalWizard — full-screen overlay shell", () => {
 
   it("is a fixed full-viewport overlay, not an inline card", () => {
     expect(source).toContain("fixed inset-0 z-50");
-    expect(source).toContain("<dialog");
-    expect(source).toContain("open");
+    // A bare `toContain("open")` passed regardless of whether the <dialog>
+    // actually carried the attribute, since "open" also matches the `open`
+    // state variable, `openWizard`, `open &&`, etc. elsewhere in the file.
+    // Anchor it to the dialog tag itself instead.
+    expect(source).toMatch(/<dialog\s+open\b/);
+  });
+
+  it("keeps the submit button focusable while busy, guarding re-entrancy in finish() instead", () => {
+    // A focused control that goes `disabled` gets blurred to <body> by the
+    // browser, breaking useDialogFocus's trap while the dialog is still
+    // open. finish() must guard re-entrancy itself since the button no
+    // longer can.
+    expect(source).not.toMatch(/<Button type="button" disabled=\{busy\}/);
+    expect(source).toContain("if (busy) return;");
   });
 
   it("has a back arrow that steps back, and a separate close control", () => {

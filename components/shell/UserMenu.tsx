@@ -28,7 +28,7 @@ export default function UserMenu({
   email?: string | null;
   avatarUrl?: string | null;
 }>) {
-  const { open, toggle, close, triggerRef } = usePopoverMenu();
+  const { open, toggle, close, triggerRef, onBlur } = usePopoverMenu();
   const hydrated = useSyncExternalStore(
     subscribeToHydration,
     () => true,
@@ -37,7 +37,7 @@ export default function UserMenu({
   const initial = displayName.trim().charAt(0).toUpperCase() || "?";
 
   return (
-    <div className="relative">
+    <div className="relative" onBlur={onBlur}>
       {open && <PopoverBackdrop onClose={close} />}
 
       <button

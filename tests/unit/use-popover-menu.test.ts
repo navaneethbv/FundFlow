@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, type FocusEvent } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -92,6 +92,41 @@ describe("usePopoverMenu & PopoverBackdrop", () => {
     } finally {
       (globalThis as unknown as { window: unknown }).window = originalWindow;
     }
+  });
+
+  it("closes on blur only while open and only when focus leaves the container", () => {
+    const focusFn = vi.fn();
+    currentRefValue = { focus: focusFn } as unknown as HTMLButtonElement;
+
+    // Closed: a plain blur must not call close() and yank focus back.
+    const closedMenu = usePopoverMenu(false);
+    // The test environment is "node" (no jsdom); a plain object stands in
+    // for the newly focused element since onBlur only ever passes it
+    // through to `Node.contains()`, which is stubbed on currentTarget below.
+    const outside = {} as Node;
+    closedMenu.onBlur({
+      currentTarget: { contains: () => false },
+      relatedTarget: outside,
+    } as unknown as FocusEvent<HTMLElement>);
+    expect(focusFn).not.toHaveBeenCalled();
+
+    // Open, focus moving inside the container: stays open.
+    mockState = true;
+    const openMenu = usePopoverMenu(true);
+    openMenu.onBlur({
+      currentTarget: { contains: () => true },
+      relatedTarget: outside,
+    } as unknown as FocusEvent<HTMLElement>);
+    expect(mockState).toBe(true);
+    expect(focusFn).not.toHaveBeenCalled();
+
+    // Open, focus moving outside the container: closes and returns focus.
+    openMenu.onBlur({
+      currentTarget: { contains: () => false },
+      relatedTarget: outside,
+    } as unknown as FocusEvent<HTMLElement>);
+    expect(mockState).toBe(false);
+    expect(focusFn).toHaveBeenCalled();
   });
 
   it("renders PopoverBackdrop with accessibility attributes and handles click", () => {
