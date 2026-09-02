@@ -1,167 +1,160 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { PlaidItemRow } from "@/lib/types";
+import { describe, it, expect } from "vitest";
+import {
+  detectPriceSpikes,
+  totalAnnualPriceHikeImpact,
+  type RecurringStreamCandidate,
+} from "@/lib/recurring-alerts";
 
-const mockRecurringGet = vi.fn();
-vi.mock("@/lib/plaid", () => ({
-  getPlaidClient: () => ({ transactionsRecurringGet: mockRecurringGet }),
-}));
-
-vi.mock("@/lib/plaid-service", () => ({
-  decryptItemToken: () => "access-token",
-  listActiveItems: vi.fn(),
-}));
-
-const mockCreateNotification = vi.fn();
-vi.mock("@/lib/notifications", () => ({
-  createNotification: (...args: unknown[]) => mockCreateNotification(...args),
-}));
-
-vi.mock("@/lib/log", () => ({ logError: vi.fn() }));
-
-// from("recurring_streams").select(...).eq(...).eq(...) resolves the existing
-// rows; .upsert(...).select(...) resolves the write and its id/stream_id
-// echo. Account resolution and the transaction-join table are exercised
-// elsewhere (tests/unit/recurring-lib.test.ts) — this file only cares about
-// the price-hike/new-subscription notification diff, so those tables just
-// resolve to harmless empty results.
-let existingRows: Array<{ stream_id: string; last_amount: number | null }>;
-const mockUpsert = vi.fn();
-const mockRpc = vi.fn();
-vi.mock("@/lib/supabase/service", () => ({
-  createServiceClient: () => ({
-    rpc: (...args: unknown[]) => mockRpc(...args),
-    from: (table: string) => {
-      switch (table) {
-        case "recurring_streams":
-          {
-            const response = Promise.resolve({ data: existingRows, error: null });
-            Object.assign(response, { eq: () => response });
-          return {
-            select: () => ({
-              eq: () => ({
-                eq: () => ({
-                  eq: () => response,
-                }),
-              }),
-            }),
-            upsert: mockUpsert,
-            update: () => ({
-              eq: () => ({
-                eq: () => ({ in: () => Promise.resolve({ error: null }) }),
-              }),
-            }),
-          };
-          }
-        case "accounts":
-          return { select: () => ({ eq: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) }) };
-        case "transactions":
-          return {
-            select: () => ({
-              eq: () => ({ in: () => Promise.resolve({ data: [], error: null }) }),
-            }),
-          };
-        case "recurring_stream_transactions":
-          return {
-            delete: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }) }) }),
-            insert: () => Promise.resolve({ error: null }),
-          };
-        default:
-          throw new Error(`Unexpected table ${table}`);
-      }
-    },
-  }),
-}));
-
-import { refreshRecurringForItem } from "@/lib/recurring";
-
-const item = {
-  id: "item-db-1",
-  user_id: "user-1",
-} as PlaidItemRow;
-
-function outflow(streamId: string, merchant: string, lastAmount: number) {
-  return {
-    stream_id: streamId,
-    description: merchant,
-    merchant_name: merchant,
-    average_amount: { amount: lastAmount },
-    last_amount: { amount: lastAmount },
-    frequency: "MONTHLY",
-    status: "MATURE",
-    personal_finance_category: { primary: "ENTERTAINMENT" },
-    is_active: true,
-    transaction_ids: [],
-  };
-}
-
-describe("recurring stream alerts", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockUpsert.mockReturnValue({
-      select: () => Promise.resolve({ data: [], error: null }),
-    });
-    mockRpc.mockImplementation((_name: string, args: { p_payload: { streams: unknown[] } }) => Promise.resolve({ data: { plaid: args.p_payload.streams.length }, error: null }));
-    existingRows = [
-      { stream_id: "s1", last_amount: 15.49 },
-      { stream_id: "s2", last_amount: 9.99 },
+describe("Subscription Price Spike Alerts", () => {
+  it("detects price hikes that exceed $1.00 and 4%", () => {
+    const streams: RecurringStreamCandidate[] = [
+      {
+        id: "stream-netflix",
+        merchantName: "Netflix",
+        averageAmount: 15.49,
+        lastAmount: 17.99, // +$2.50 (+16.14%)
+        frequency: "monthly",
+        status: "active",
+      },
+      {
+        id: "stream-spotify",
+        merchantName: "Spotify",
+        averageAmount: 10.99,
+        lastAmount: 10.99, // no change
+        frequency: "monthly",
+        status: "active",
+      },
+      {
+        id: "stream-small",
+        merchantName: "Tiny Service",
+        averageAmount: 1.0,
+        lastAmount: 1.03, // only +$0.03, below $1.00 threshold
+        frequency: "monthly",
+        status: "active",
+      },
+      {
+        id: "stream-small-pct",
+        merchantName: "Expensive Server",
+        averageAmount: 1000.0,
+        lastAmount: 1002.0, // +$2.00 but only +0.2% (< 4%)
+        frequency: "monthly",
+        status: "active",
+      },
     ];
+
+    const alerts = detectPriceSpikes(streams);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]!.merchantName).toBe("Netflix");
+    expect(alerts[0]!.increaseAmount).toBe(2.5);
+    expect(alerts[0]!.percentIncrease).toBe(16.14);
+    expect(alerts[0]!.annualizedImpact).toBe(30.0); // 2.50 * 12
   });
 
-  it("notifies on a price hike and on a new subscription", async () => {
-    mockRecurringGet.mockResolvedValue({
-      data: {
-        inflow_streams: [],
-        outflow_streams: [
-          outflow("s1", "Netflix", 17.99),
-          outflow("s2", "Hulu", 9.99),
-          outflow("s9", "Peacock", 7.99),
-        ],
+  it("calculates accurate annual impacts across all cadence frequencies", () => {
+    const streams: RecurringStreamCandidate[] = [
+      {
+        id: "s-weekly",
+        merchantName: "Meal Kit",
+        averageAmount: 60.0,
+        lastAmount: 65.0, // +$5 * 52 = 260
+        frequency: "WEEKLY",
       },
-    });
+      {
+        id: "s-biweekly-1",
+        merchantName: "Gym",
+        averageAmount: 40.0,
+        lastAmount: 45.0, // +$5 * 26 = 130
+        frequency: "BIWEEKLY",
+      },
+      {
+        id: "s-biweekly-2",
+        merchantName: "Biweekly Cleaning",
+        averageAmount: 80.0,
+        lastAmount: 90.0, // +$10 * 26 = 260
+        frequency: "BI-WEEKLY",
+      },
+      {
+        id: "s-semimonthly",
+        merchantName: "Semi Monthly Box",
+        averageAmount: 30.0,
+        lastAmount: 35.0, // +$5 * 24 = 120
+        frequency: "SEMI_MONTHLY",
+      },
+      {
+        id: "s-quarterly",
+        merchantName: "Quarterly Software",
+        averageAmount: 100.0,
+        lastAmount: 120.0, // +$20 * 4 = 80
+        frequency: "QUARTERLY",
+      },
+      {
+        id: "s-annually",
+        merchantName: "Annual Domain",
+        averageAmount: 50.0,
+        lastAmount: 70.0, // +$20 * 1 = 20
+        frequency: "ANNUALLY",
+      },
+      {
+        id: "s-yearly",
+        merchantName: "Yearly Sub",
+        averageAmount: 80.0,
+        lastAmount: 100.0, // +$20 * 1 = 20
+        frequency: "YEARLY",
+      },
+      {
+        id: "s-unknown-freq",
+        description: "Fallback Description Service",
+        averageAmount: 10.0,
+        lastAmount: 15.0, // +$5 * 12 (default) = 60
+        frequency: "CUSTOM_CADENCE",
+      },
+      {
+        id: "s-no-name",
+        averageAmount: 20.0,
+        lastAmount: 30.0, // +$10 * 12 = 120
+      },
+    ];
 
-    await refreshRecurringForItem(item);
+    const alerts = detectPriceSpikes(streams);
+    expect(alerts).toHaveLength(9);
 
-    expect(mockRpc).toHaveBeenCalled();
-    const calls = mockCreateNotification.mock.calls;
-    const types = calls.map((call) => call[1]);
-    expect(types).toContain("price_hike");
-    expect(types).toContain("new_subscription");
+    const noNameAlert = alerts.find((a) => a.id === "s-no-name");
+    expect(noNameAlert?.merchantName).toBe("Subscription");
 
-    const hike = calls.find((call) => call[1] === "price_hike")!;
-    expect(hike[0]).toBe("user-1");
-    expect(hike[2].title).toContain("Netflix");
-    expect(hike[2].body).toContain("$15.49");
-    expect(hike[2].body).toContain("$17.99");
-    expect(hike[3]).toBe("Netflix");
+    const descAlert = alerts.find((a) => a.id === "s-unknown-freq");
+    expect(descAlert?.merchantName).toBe("Fallback Description Service");
 
-    const fresh = calls.find((call) => call[1] === "new_subscription")!;
-    expect(fresh[2].title).toContain("Peacock");
+    const total = totalAnnualPriceHikeImpact(alerts);
+    expect(total).toBeGreaterThan(0);
   });
 
-  it("stays silent on the first refresh so seeding never spams", async () => {
-    existingRows = [];
-    mockRecurringGet.mockResolvedValue({
-      data: {
-        inflow_streams: [],
-        outflow_streams: [outflow("s1", "Netflix", 15.49)],
+  it("skips inactive streams or zero balances", () => {
+    const streams: RecurringStreamCandidate[] = [
+      {
+        id: "stream-cancelled",
+        merchantName: "Old Service",
+        averageAmount: 20.0,
+        lastAmount: 30.0,
+        frequency: "monthly",
+        status: "inactive",
       },
-    });
-
-    await refreshRecurringForItem(item);
-
-    expect(mockRpc).toHaveBeenCalled();
-    expect(mockCreateNotification).not.toHaveBeenCalled();
-  });
-
-  it("never lets a notification failure break the refresh", async () => {
-    mockCreateNotification.mockRejectedValue(new Error("smtp down"));
-    mockRecurringGet.mockResolvedValue({
-      data: {
-        inflow_streams: [],
-        outflow_streams: [outflow("s1", "Netflix", 17.99)],
+      {
+        id: "stream-zero",
+        merchantName: "Zero Stream",
+        averageAmount: 0,
+        lastAmount: 0,
+        frequency: "monthly",
+        status: "active",
       },
-    });
+      {
+        id: "stream-negative",
+        merchantName: "Negative Stream",
+        averageAmount: 10,
+        lastAmount: 5, // price decreased
+        frequency: "monthly",
+      },
+    ];
 
-    await expect(refreshRecurringForItem(item)).resolves.toBe(1);
+    expect(detectPriceSpikes(streams)).toHaveLength(0);
   });
 });

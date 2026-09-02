@@ -219,6 +219,27 @@ export default function TransactionEditor({
                 </span>
               )}
             </div>
+            {activeRows.length > 0 && (
+              <div className="mb-3 space-y-1">
+                <div className="flex justify-between text-xs font-semibold">
+                  <span>Allocated: {formatCurrency(splitTotal, transaction.currency)}</span>
+                  <span className={splitsBalanced ? "text-success" : "text-warning font-bold"}>
+                    {splitsBalanced
+                      ? "Balanced"
+                      : `Remaining: ${formatCurrency(round2(target - splitTotal), transaction.currency)}`}
+                  </span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-panel-2">
+                  <div
+                    className={cn(
+                      "h-full transition-all duration-200",
+                      splitsBalanced ? "bg-success" : splitTotal > target ? "bg-danger" : "bg-accent",
+                    )}
+                    style={{ width: `${Math.min(100, (splitTotal / target) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
             <datalist id={inputId("cats")}>
               {categories.map((c) => (
                 <option key={c} value={c}>
@@ -275,28 +296,87 @@ export default function TransactionEditor({
                 );
               })}
             </div>
-            <div className="mt-2 flex items-center gap-3">
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  setRows((cur) => [...cur, { id: crypto.randomUUID(), category: "", amount: "" }]);
-                }}
-              >
-                Add split
-              </Button>
-              {rows.length > 0 && (
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    const unallocated = round2(Math.max(0, target - splitTotal));
+                    setRows((cur) => [
+                      ...cur,
+                      {
+                        id: crypto.randomUUID(),
+                        category: "",
+                        amount: unallocated > 0 ? String(unallocated) : "",
+                      },
+                    ]);
+                  }}
+                >
+                  Add split
+                </Button>
+                {rows.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRows([]);
+                    }}
+                    className="text-xs text-muted hover:text-foreground"
+                  >
+                    Clear splits
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-muted">Presets:</span>
                 <button
                   type="button"
                   onClick={() => {
-                    setRows([]);
+                    const perPart = round2(target / 2);
+                    const remainder = round2(target - perPart);
+                    setRows([
+                      { id: crypto.randomUUID(), category: rows[0]?.category || "", amount: String(perPart) },
+                      { id: crypto.randomUUID(), category: rows[1]?.category || "", amount: String(remainder) },
+                    ]);
                   }}
-                  className="text-xs text-muted hover:text-foreground"
+                  className="rounded-field bg-panel-2 px-2 py-0.5 font-medium hover:bg-panel-hover"
                 >
-                  Clear splits
+                  50/50
                 </button>
-              )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const perPart = round2(target / 3);
+                    const last = round2(target - perPart * 2);
+                    setRows([
+                      { id: crypto.randomUUID(), category: rows[0]?.category || "", amount: String(perPart) },
+                      { id: crypto.randomUUID(), category: rows[1]?.category || "", amount: String(perPart) },
+                      { id: crypto.randomUUID(), category: rows[2]?.category || "", amount: String(last) },
+                    ]);
+                  }}
+                  className="rounded-field bg-panel-2 px-2 py-0.5 font-medium hover:bg-panel-hover"
+                >
+                  1/3
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const perPart = round2(target / 4);
+                    const last = round2(target - perPart * 3);
+                    setRows([
+                      { id: crypto.randomUUID(), category: rows[0]?.category || "", amount: String(perPart) },
+                      { id: crypto.randomUUID(), category: rows[1]?.category || "", amount: String(perPart) },
+                      { id: crypto.randomUUID(), category: rows[2]?.category || "", amount: String(perPart) },
+                      { id: crypto.randomUUID(), category: rows[3]?.category || "", amount: String(last) },
+                    ]);
+                  }}
+                  className="rounded-field bg-panel-2 px-2 py-0.5 font-medium hover:bg-panel-hover"
+                >
+                  1/4
+                </button>
+              </div>
             </div>
 
             <TransactionOverrideControl

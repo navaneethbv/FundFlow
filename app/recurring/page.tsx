@@ -4,8 +4,10 @@ import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
 import MonthSummary from "@/components/recurring/MonthSummary";
 import ReviewBanner from "@/components/recurring/ReviewBanner";
+import PriceSpikeBanner from "@/components/recurring/PriceSpikeBanner";
 import RecurringList, { type RecurringTab } from "@/components/recurring/RecurringList";
 import RecurringCalendar from "@/components/recurring/RecurringCalendar";
+import { detectPriceSpikes } from "@/lib/recurring-alerts";
 import Panel from "@/components/ui/Panel";
 import SegmentedControl from "@/components/ui/SegmentedControl";
 import ButtonLink from "@/components/ui/ButtonLink";
@@ -176,6 +178,20 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
         )}
 
         <ReviewBanner reviewCount={loaded.view.reviewCount} reviewHref={links.manage} />
+
+        <PriceSpikeBanner
+          initialAlerts={detectPriceSpikes(
+            loaded.allStreams.map((s) => ({
+              id: s.id,
+              merchantName: s.merchantName,
+              description: s.description,
+              lastAmount: s.userAmount ?? s.averageAmount,
+              averageAmount: s.averageAmount,
+              frequency: "monthly",
+              status: s.status,
+            })),
+          )}
+        />
 
         <MonthSummary totals={loaded.view.totals} currency={loaded.currency} />
 

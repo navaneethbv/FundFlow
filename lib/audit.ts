@@ -89,7 +89,8 @@ export type AuditAction =
   | "life_event_deleted"
   | "profile_updated"
   | "avatar_updated"
-  | "display_prefs_updated";
+  | "display_prefs_updated"
+  | "rules_batch_applied";
 
 interface AuditParams {
   userId: string | null;
