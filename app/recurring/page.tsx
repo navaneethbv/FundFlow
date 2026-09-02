@@ -187,7 +187,7 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
               description: s.description,
               lastAmount: s.userAmount ?? s.averageAmount,
               averageAmount: s.averageAmount,
-              frequency: "monthly",
+              frequency: s.frequency,
               status: s.status,
             })),
           )}

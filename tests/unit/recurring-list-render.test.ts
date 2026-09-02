@@ -52,6 +52,7 @@ function stream(overrides: Partial<RecurringStreamRow> = {}): RecurringStreamRow
     isOwn: true,
     source: "plaid",
     detectionEvidence: null,
+    frequency: "MONTHLY",
     ...overrides,
   };
 }

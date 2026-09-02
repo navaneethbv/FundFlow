@@ -147,4 +147,32 @@ describe("useKeyboardShortcuts Hook Lifecycle", () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
+
+  it("swallows keys while a modal dialog is open and drops the pending chord", () => {
+    const mockWin = createMockWindow();
+
+    vi.stubGlobal("window", mockWin.windowObj);
+
+    useKeyboardShortcuts();
+    currentEffect!();
+
+    const handler = mockWin.getHandler();
+    expect(handler).not.toBeNull();
+
+    // No document in node -> no dialog -> chord starts normally
+    handler!(createMockKeyEvent("g"));
+    expect(chordRef.current).toBe("g");
+
+    // A dialog opens (any dialog[open] or [role="dialog"] present): the next
+    // key must not navigate behind the modal and the half-typed chord clears.
+    vi.stubGlobal("document", {
+      querySelector: (selector: string) =>
+        selector === 'dialog[open], [role="dialog"]' ? {} : null,
+    });
+    handler!(createMockKeyEvent("t"));
+    expect(mockRouterPush).not.toHaveBeenCalled();
+    expect(chordRef.current).toBeNull();
+
+    vi.unstubAllGlobals();
+  });
 });

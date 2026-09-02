@@ -26,33 +26,51 @@ const DEFAULT_EVENTS: LifeEvent[] = [
   { id: "e2", name: "Career Promotion / Raise", monthOffset: 36, oneTimeCashFlow: 0, ongoingMonthlySpendDelta: -500 },
 ];
 
+/**
+ * Parses a controlled numeric input without the `Number(x) || fallback`
+ * trap, where a legitimately typed 0 (or a mid-edit empty field) silently
+ * snapped back to the default. Empty/garbage input falls back; a real 0
+ * survives.
+ */
+export function parseNumericInput(raw: string, fallback: number): number {
+  if (raw.trim() === "") return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 export default function FireSimulator({
   initialNetWorth,
   initialMonthlyIncome,
   initialMonthlySpend,
   initialMonthlySavings,
 }: Readonly<FireSimulatorProps>) {
-  const [currentAge, setCurrentAge] = useState(32);
-  const [withdrawalRate, setWithdrawalRate] = useState(4.0);
-  const [annualReturn, setAnnualReturn] = useState(7.0);
-  const [monthlySavings, setMonthlySavings] = useState(initialMonthlySavings > 0 ? initialMonthlySavings : 1500);
-  const [monthlySpend, setMonthlySpend] = useState(initialMonthlySpend > 0 ? initialMonthlySpend : 4000);
+  // Inputs are string-backed so mid-edit states ("0.", "-", a cleared field)
+  // render exactly as typed; parseNumericInput derives the simulation value.
+  const [currentAge, setCurrentAge] = useState("32");
+  const [withdrawalRate, setWithdrawalRate] = useState("4");
+  const [annualReturn, setAnnualReturn] = useState("7");
+  const [monthlySavings, setMonthlySavings] = useState(
+    String(initialMonthlySavings > 0 ? initialMonthlySavings : 1500),
+  );
+  const [monthlySpend, setMonthlySpend] = useState(
+    String(initialMonthlySpend > 0 ? initialMonthlySpend : 4000),
+  );
   const [events, setEvents] = useState<LifeEvent[]>(DEFAULT_EVENTS);
 
   // New event form state
   const [newEventName, setNewEventName] = useState("");
-  const [newEventMonth, setNewEventMonth] = useState(12);
-  const [newEventCashFlow, setNewEventCashFlow] = useState(-20000);
+  const [newEventMonth, setNewEventMonth] = useState("12");
+  const [newEventCashFlow, setNewEventCashFlow] = useState("-20000");
 
   const simulation = useMemo(() => {
     const input: FireSimulatorInput = {
       currentNetWorth: initialNetWorth,
       monthlyIncome: initialMonthlyIncome,
-      monthlySpend,
-      monthlySavings,
-      annualReturnPct: annualReturn,
-      withdrawalRatePct: withdrawalRate,
-      currentAge,
+      monthlySpend: parseNumericInput(monthlySpend, 0),
+      monthlySavings: parseNumericInput(monthlySavings, 0),
+      annualReturnPct: parseNumericInput(annualReturn, 0),
+      withdrawalRatePct: parseNumericInput(withdrawalRate, 4.0),
+      currentAge: parseNumericInput(currentAge, 30),
       lifeEvents: events,
       projectionHorizonMonths: 300, // 25 years
     };
@@ -74,8 +92,8 @@ export default function FireSimulator({
     const ev: LifeEvent = {
       id: crypto.randomUUID(),
       name: newEventName.trim(),
-      monthOffset: Number(newEventMonth) || 12,
-      oneTimeCashFlow: Number(newEventCashFlow) || 0,
+      monthOffset: parseNumericInput(newEventMonth, 12),
+      oneTimeCashFlow: parseNumericInput(newEventCashFlow, 0),
     };
     setEvents((cur) => [...cur, ev]);
     setNewEventName("");
@@ -158,7 +176,7 @@ export default function FireSimulator({
               type="number"
               value={currentAge}
               onChange={(e) => {
-                setCurrentAge(Number(e.target.value) || 30);
+                setCurrentAge(e.target.value);
               }}
               min={18}
               max={80}
@@ -170,7 +188,7 @@ export default function FireSimulator({
               type="number"
               value={monthlySpend}
               onChange={(e) => {
-                setMonthlySpend(Number(e.target.value) || 0);
+                setMonthlySpend(e.target.value);
               }}
               min={0}
               step={100}
@@ -182,7 +200,7 @@ export default function FireSimulator({
               type="number"
               value={monthlySavings}
               onChange={(e) => {
-                setMonthlySavings(Number(e.target.value) || 0);
+                setMonthlySavings(e.target.value);
               }}
               min={0}
               step={100}
@@ -194,7 +212,7 @@ export default function FireSimulator({
               type="number"
               value={annualReturn}
               onChange={(e) => {
-                setAnnualReturn(Number(e.target.value) || 0);
+                setAnnualReturn(e.target.value);
               }}
               step={0.5}
             />
@@ -205,7 +223,7 @@ export default function FireSimulator({
               type="number"
               value={withdrawalRate}
               onChange={(e) => {
-                setWithdrawalRate(Number(e.target.value) || 4.0);
+                setWithdrawalRate(e.target.value);
               }}
               step={0.25}
             />
@@ -259,7 +277,7 @@ export default function FireSimulator({
               placeholder="Month in future (e.g. 18)"
               value={newEventMonth}
               onChange={(e) => {
-                setNewEventMonth(Number(e.target.value));
+                setNewEventMonth(e.target.value);
               }}
             />
             <div className="flex gap-2">
@@ -268,7 +286,7 @@ export default function FireSimulator({
                 placeholder="Amount delta ($)"
                 value={newEventCashFlow}
                 onChange={(e) => {
-                  setNewEventCashFlow(Number(e.target.value));
+                  setNewEventCashFlow(e.target.value);
                 }}
               />
               <Button type="submit" size="sm">

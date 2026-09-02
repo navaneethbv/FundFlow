@@ -177,7 +177,14 @@ describe("Smart Rules Engine: Rule Evaluation", () => {
     expect(safeCompileRegex(["(", "a", "+", ")", "{2,}"].join(""))).toBeNull(); // nested range
     expect(safeCompileRegex(["([a-z]+)", "{2,5}"].join(""))).toBeNull(); // nested range
     expect(safeCompileRegex(["(", "a", ")", "\\", "1"].join(""))).toBeNull(); // backreference \1
+    expect(safeCompileRegex("(a|aa)+")).toBeNull(); // overlapping alternatives
+    expect(safeCompileRegex("(?:a+)+")).toBeNull(); // non-capturing nested +
     expect(safeCompileRegex("[incomplete")).toBeNull(); // invalid syntax
+
+    // A quantified group with a plain literal body stays allowed, as does a
+    // quantified group elsewhere in the pattern with an unambiguous body.
+    expect(safeCompileRegex("(foo)+")).toBeInstanceOf(RegExp);
+    expect(safeCompileRegex("(?:bar)+x")).toBeInstanceOf(RegExp);
 
     const valid = safeCompileRegex("^[a-z0-9_-]+$");
     expect(valid).toBeInstanceOf(RegExp);

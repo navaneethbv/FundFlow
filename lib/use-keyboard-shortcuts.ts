@@ -43,6 +43,16 @@ export function isEditableElement(target: EventTarget | null): boolean {
   return tag === "input" || tag === "textarea" || tag === "select" || Boolean(el.isContentEditable);
 }
 
+/**
+ * Checks whether any modal dialog is currently open, so shortcuts must stay
+ * dormant instead of navigating behind it. SSR-safe (no document -> false).
+ */
+export function isDialogOpen(doc?: Pick<Document, "querySelector">): boolean {
+  const root = doc ?? (typeof document === "undefined" ? null : document);
+  if (!root) return false;
+  return Boolean(root.querySelector('dialog[open], [role="dialog"]'));
+}
+
 export interface ShortcutHandlerState {
   pendingChord: string | null;
   toggleHelp: () => void;
@@ -102,6 +112,13 @@ export function useKeyboardShortcuts() {
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      if (isDialogOpen()) {
+        // A modal is up (help sheet, editors, batch previews): ignore chords
+        // so they cannot navigate behind it, and drop any half-typed chord.
+        pendingChordRef.current = null;
+        return;
+      }
+
       const nextChord = processShortcutKeyDown(e, {
         pendingChord: pendingChordRef.current,
         toggleHelp: () => setHelpOpen((cur) => !cur),

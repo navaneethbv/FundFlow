@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import Panel from "@/components/ui/Panel";
 import Badge from "@/components/ui/Badge";
@@ -11,21 +11,66 @@ import {
   type PriceSpikeAlert,
 } from "@/lib/recurring-alerts";
 
+const DISMISSED_STORAGE_KEY = "fundflow.price-spike-dismissed-ids";
+
+// Subscribes to nothing: used purely so useSyncExternalStore flips `hydrated`
+// after mount, matching the SidebarShell/MobileNavigation idiom for state that
+// must stay identical between server render and first client render.
+const subscribeToHydration = () => () => undefined;
+
+const EMPTY_DISMISSED: ReadonlySet<string> = new Set();
+
+function readDismissedIds(): string[] {
+  try {
+    const raw = window.localStorage.getItem(DISMISSED_STORAGE_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((v): v is string => typeof v === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistDismissedIds(ids: readonly string[]): void {
+  try {
+    window.localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(ids));
+  } catch {
+    // Storage unavailable (private mode, quota): dismissal stays session-only.
+  }
+}
+
 export default function PriceSpikeBanner({
   initialAlerts,
 }: Readonly<{
   initialAlerts: PriceSpikeAlert[];
 }>) {
-  const [alerts, setAlerts] = useState(initialAlerts);
-  const [dismissed, setDismissed] = useState(false);
+  const [sessionDismissed, setSessionDismissed] = useState<ReadonlySet<string>>(new Set());
+  const hydrated = useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false,
+  );
 
-  if (dismissed || alerts.length === 0) return null;
+  // Dismissals persist across reloads. Stored ids only apply after hydration
+  // so the server and first client render agree on which alerts are visible.
+  const dismissedIds: ReadonlySet<string> = hydrated
+    ? new Set([...readDismissedIds(), ...sessionDismissed])
+    : EMPTY_DISMISSED;
 
-  const totalImpact = totalAnnualPriceHikeImpact(alerts);
+  const visibleAlerts = initialAlerts.filter((a) => !dismissedIds.has(a.id));
 
-  function dismissItem(id: string) {
-    setAlerts((cur) => cur.filter((a) => a.id !== id));
+  function dismiss(ids: readonly string[]) {
+    if (ids.length === 0) return;
+    const next = new Set(sessionDismissed);
+    for (const id of ids) next.add(id);
+    persistDismissedIds([...next, ...(hydrated ? readDismissedIds() : [])]);
+    setSessionDismissed(next);
   }
+
+  if (visibleAlerts.length === 0) return null;
+
+  const totalImpact = totalAnnualPriceHikeImpact(visibleAlerts);
 
   return (
     <Panel
@@ -42,7 +87,7 @@ export default function PriceSpikeBanner({
               Subscription price increases detected
             </h3>
             <p className="text-xs text-muted">
-              {alerts.length} recurring {alerts.length === 1 ? "service has" : "services have"} raised prices recently.
+              {visibleAlerts.length} recurring {visibleAlerts.length === 1 ? "service has" : "services have"} raised prices recently.
             </p>
           </div>
         </div>
@@ -52,7 +97,7 @@ export default function PriceSpikeBanner({
             variant="ghost"
             size="sm"
             onClick={() => {
-              setDismissed(true);
+              dismiss(visibleAlerts.map((a) => a.id));
             }}
             aria-label="Dismiss price increase alerts"
           >
@@ -62,7 +107,7 @@ export default function PriceSpikeBanner({
       </div>
 
       <div className="mt-3 space-y-2">
-        {alerts.map((alert) => (
+        {visibleAlerts.map((alert) => (
           <div
             key={alert.id}
             className="flex flex-wrap items-center justify-between gap-2 rounded-field bg-panel p-2.5 text-xs shadow-sm"
@@ -97,7 +142,7 @@ export default function PriceSpikeBanner({
               <button
                 type="button"
                 onClick={() => {
-                  dismissItem(alert.id);
+                  dismiss([alert.id]);
                 }}
                 aria-label={`Dismiss alert for ${alert.merchantName}`}
                 className="text-muted hover:text-foreground text-sm"

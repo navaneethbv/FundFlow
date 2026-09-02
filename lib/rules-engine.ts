@@ -35,9 +35,28 @@ export const MAX_REGEX_PATTERN_LENGTH = 120;
  * quantifier or an alternation — the two shapes that cause catastrophic
  * backtracking (ReDoS): (a+)+, (a*)*, (a|b+)+, (a|aa)+, (a+){2,}.
  * Quantified groups with a plain literal body, e.g. (foo)+, are still allowed.
+ *
+ * Implemented as a single-pass capture of each quantified group's body plus a
+ * linear check on that body. Folding both conditions into one alternation
+ * regex (e.g. /\([^()]*[*+{][^()]*\)[*+{]/) makes the overlapping [^()]*
+ * scans backtrack super-linearly on adversarial patterns, which static
+ * analysis rightly flags.
  */
-const EXPONENTIAL_BACKTRACKING_PATTERN =
-  /\([^()]*[*+{][^()]*\)[*+{]|\([^()]*\|[^()]*\)[*+{]/;
+const AMBIGUOUS_GROUP_BODY_PATTERN = /[*+{|]/;
+
+function hasAmbiguousQuantifiedGroup(pattern: string): boolean {
+  // Fresh literal per call: a /g regex reuses lastIndex across exec calls,
+  // so a shared instance would leak match state between patterns.
+  const quantifiedGroup = /\(([^()]*)\)([*+{])/g;
+  for (
+    let match = quantifiedGroup.exec(pattern);
+    match !== null;
+    match = quantifiedGroup.exec(pattern)
+  ) {
+    if (AMBIGUOUS_GROUP_BODY_PATTERN.test(match[1])) return true;
+  }
+  return false;
+}
 
 /**
  * Safely compiles a user-supplied regex pattern with ReDoS guards:
@@ -51,7 +70,7 @@ export function safeCompileRegex(pattern: string): RegExp | null {
   if (!trimmed || trimmed.length > MAX_REGEX_PATTERN_LENGTH) {
     return null;
   }
-  if (EXPONENTIAL_BACKTRACKING_PATTERN.test(trimmed)) {
+  if (hasAmbiguousQuantifiedGroup(trimmed)) {
     return null;
   }
   if (/\\[1-9]/.test(trimmed)) {

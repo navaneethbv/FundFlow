@@ -1,5 +1,21 @@
 import { describe, it, expect } from "vitest";
 import { calculateFireSimulation, type FireSimulatorInput } from "@/lib/fire-simulator";
+import { parseNumericInput } from "@/components/forecasting/FireSimulator";
+
+describe("FireSimulator numeric input parsing", () => {
+  it("preserves a typed 0 instead of snapping to the default", () => {
+    expect(parseNumericInput("0", 4.0)).toBe(0);
+    expect(parseNumericInput("0.", 0)).toBe(0);
+    expect(parseNumericInput("-3", 0)).toBe(-3);
+  });
+
+  it("falls back only for empty or non-numeric input", () => {
+    expect(parseNumericInput("", 4.0)).toBe(4.0);
+    expect(parseNumericInput("   ", 30)).toBe(30);
+    expect(parseNumericInput("abc", 4.0)).toBe(4.0);
+    expect(parseNumericInput("42", 4.0)).toBe(42);
+  });
+});
 
 describe("FIRE Simulator: Calculations & Milestones", () => {
   const baseInput: FireSimulatorInput = {

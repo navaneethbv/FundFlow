@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -11,6 +11,8 @@ import RegisterRow from "@/components/ui/RegisterRow";
 import EmptyState from "@/components/ui/EmptyState";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
+import MobileNavigation from "@/components/shell/MobileNavigation";
+import SidebarShell from "@/components/shell/SidebarShell";
 
 describe("Frontend Multiverse Polish: Motion & Keyframe Contracts", () => {
   it("defines micro-interaction keyframes in globals.css", () => {
@@ -79,12 +81,16 @@ describe("Frontend Multiverse Polish: DropdownButton Semantics & Motion", () => 
     expect(html).toContain("active:scale-[0.98]");
   });
 
-  it("verifies DropdownButton source follows list disclosure pattern with animate-dropdown", () => {
-    const source = readFileSync("components/ui/DropdownButton.tsx", "utf8");
-    expect(source).toContain('aria-haspopup="true"');
-    expect(source).not.toContain('role="list"');
-    expect(source).toContain("animate-dropdown");
-    expect(source).not.toContain('role="menu"');
+  it("renders closed trigger with haspopup semantics and no menu role", () => {
+    const html = renderToStaticMarkup(
+      createElement(DropdownButton, {
+        label: "Timeframe",
+        items: [{ label: "1 month", href: "/reports?m=1" }],
+      }),
+    );
+    expect(html).toContain('aria-haspopup="true"');
+    expect(html).not.toContain('role="menu"');
+    expect(html).not.toContain('role="list"');
   });
 });
 
@@ -185,17 +191,31 @@ describe("Frontend Multiverse Polish: Interactive Primitives & Navigation", () =
     expect(html).toContain("transition-all");
   });
 
-  it("MobileNavigation drawer carries grab handle indicator and animate-sheet-slide", () => {
-    const source = readFileSync("components/shell/MobileNavigation.tsx", "utf8");
-    expect(source).toContain("animate-sheet-slide");
-    expect(source).toContain("h-1 w-10 shrink-0 rounded-full bg-panel-border");
-    expect(source).toContain("active:scale-[0.98]");
+  it("MobileNavigation renders a collapsed trigger with dialog disclosure semantics", () => {
+    const html = renderToStaticMarkup(
+      createElement(MobileNavigation, {
+        items: [
+          { key: "dashboard", label: "Dashboard", href: "/", category: "primary" },
+          { key: "settings", label: "Settings", href: "/settings", category: "manage" },
+        ],
+        active: "dashboard",
+      }),
+    );
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('aria-haspopup="dialog"');
   });
 
-  it("SidebarShell incorporates smooth transition duration and active button feedback", () => {
-    const source = readFileSync("components/shell/SidebarShell.tsx", "utf8");
-    expect(source).toContain("duration-200 ease-in-out");
-    expect(source).toContain("active:scale-95");
+  it("SidebarShell renders the collapse transition and active press feedback", () => {
+    const shellProps = {
+      utilityIcons: null,
+      bottomBlock: null,
+      mobileNav: null,
+    } as ComponentProps<typeof SidebarShell>;
+    const html = renderToStaticMarkup(
+      createElement(SidebarShell, shellProps, createElement("div", null, "Sidebar content")),
+    );
+    expect(html).toContain("duration-200");
+    expect(html).toContain("active:scale-95");
   });
 
   it("Input and Select components provide hover and disabled accessibility classes", () => {

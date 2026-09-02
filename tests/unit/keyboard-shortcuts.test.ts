@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   isEditableElement,
+  isDialogOpen,
   processShortcutKeyDown,
   SHORTCUTS,
   NAVIGATION_ROUTES,
@@ -125,6 +126,16 @@ describe("Keyboard Shortcuts: Logic & Definitions", () => {
     );
     expect(toggleHelp).not.toHaveBeenCalled();
     expect(next).toBeNull();
+  });
+
+  it("detects an open dialog so shortcuts can stay dormant behind modals", () => {
+    expect(isDialogOpen({ querySelector: () => null })).toBe(false);
+    expect(
+      isDialogOpen({
+        querySelector: (selector: string) =>
+          selector === 'dialog[open], [role="dialog"]' ? {} : null,
+      } as unknown as Parameters<typeof isDialogOpen>[0]),
+    ).toBe(true);
   });
 
   it("starts chord sequence on 'g' key", () => {

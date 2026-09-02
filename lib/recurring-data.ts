@@ -68,6 +68,8 @@ export interface RecurringStreamRow {
   isOwn: boolean;
   source: RecurringStreamSource;
   detectionEvidence: RecurringDetectionEvidence | null;
+  /** Plaid/manual cadence (WEEKLY, MONTHLY, ...); null when unknown. */
+  frequency: string | null;
 }
 
 export interface ManualRecurringItemRow {
@@ -483,6 +485,7 @@ export async function loadRecurringData(
       isOwn: row.user_id === input.userId,
       source: row.source === "inferred" ? "inferred" as const : "plaid" as const,
       detectionEvidence: parseDetectionEvidence(row.detection_evidence),
+      frequency: row.frequency,
     })),
     manualItems: manualInputs,
     stale: isStale(lastSuccessfulSyncAt, input.now ?? new Date()),
