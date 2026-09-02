@@ -44,12 +44,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: settings } = await supabase
-      .from("ai_settings")
-      .select("enabled")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    if (settings?.enabled !== true) {
+    const [{ data: settings }, { data: profile }] = await Promise.all([
+      supabase.from("ai_settings").select("enabled").eq("user_id", user.id).maybeSingle(),
+      supabase.from("profiles").select("ai_export_enabled").eq("id", user.id).maybeSingle(),
+    ]);
+    if (settings?.enabled !== true || profile?.ai_export_enabled === false) {
       return NextResponse.json(
         { error: "Enable AI insights in Settings first." },
         { status: 403 },
@@ -72,7 +71,7 @@ export async function POST(request: NextRequest) {
 
     const client = new Anthropic({ apiKey: serverEnv.anthropicApiKey });
     const response = await client.messages.create({
-      model: process.env.AI_INSIGHTS_MODEL ?? "claude-opus-4-8",
+      model: process.env.AI_INSIGHTS_MODEL ?? "claude-3-7-sonnet-latest",
       max_tokens: 1024,
       thinking: { type: "adaptive" },
       system:

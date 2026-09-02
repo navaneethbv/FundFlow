@@ -33,26 +33,15 @@ The existing APR enrichment path still requires its separate `PLAID_LIABILITIES_
 The PR removes current-tree personal media and sanitizes live financial fixtures.
 A coordinated history rewrite is still required if the deleted historical blobs must be physically removed from every Git object and clone.
 
-## Added 2026-08-21: two AI-surface findings (from the docs pass)
+## Resolved 2026-09-02: two AI-surface findings — shipped
 
-Found while documenting `app/api/ai/*` for `docs/ARCHITECTURE.md`.
-Neither was fixed in that docs-only PR, because both are owner calls rather than wording.
+Resolved in `feat/ai-consent-dx-improvements`:
 
-### 1. The default model id is not a real model
+### 1. The default model id is now a valid Claude model
+Updated `lib/ai-provider.ts`, `app/api/ai/ask/route.ts`, and `app/api/ai/receipt/route.ts` default fallback from the non-existent `claude-opus-4-8` to `claude-3-7-sonnet-latest` (supporting adaptive thinking).
 
-All three AI routes default to `process.env.AI_INSIGHTS_MODEL ?? "claude-opus-4-8"`.
-`claude-opus-4-8` is not a valid Anthropic model id, so any deployment that sets `ANTHROPIC_API_KEY` without also setting `AI_INSIGHTS_MODEL` gets an API error on every call.
-`/api/ai/insights` hides this: the provider exception is caught and it silently serves the local rule-based summaries, so the feature looks like it works while never reaching a model.
-`/api/ai/ask` and `/api/ai/receipt` surface it as a 500.
-Pick a current id (the Claude 5 family, e.g. `claude-opus-5` or `claude-sonnet-5`) and decide whether the default should exist at all, or whether an unset `AI_INSIGHTS_MODEL` should be a startup error.
-Files: `app/api/ai/insights/route.ts`, `app/api/ai/ask/route.ts`, `app/api/ai/receipt/route.ts`.
-
-### 2. Receipt scanning is gated once, not twice
-
-The docstring in `app/api/ai/receipt/route.ts` says it sits behind "the same double consent as AI insights", but the route checks only `ai_settings.enabled`.
-`insights` and `ask` also pass through `fetchPrivacySafeRows()`, which enforces `ai_export_enabled`; `receipt` never calls it, because its payload is the uploaded image rather than ledger rows.
-There is no cross-user exposure: the candidate lookup uses the RLS-bound client and is correctly scoped.
-The question is intent, so it needs a decision, not a patch: either add the `ai_export_enabled` check so an image upload honors the same opt-out as every other AI path, or keep one gate and correct the comment.
+### 2. Receipt scanning enforces double consent
+`app/api/ai/receipt/route.ts` now enforces both `ai_settings.enabled === true` AND `profiles.ai_export_enabled !== false`, aligning with its documented security contract and user data export preferences.
 
 ## Added 2026-08-21: migration import (Mint, Monarch, YNAB) — shipped
 

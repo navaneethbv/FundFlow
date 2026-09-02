@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     const client = new Anthropic({ apiKey: serverEnv.anthropicApiKey });
     const response = await client.messages.create({
-      model: process.env.AI_INSIGHTS_MODEL ?? "claude-opus-4-8",
+      model: process.env.AI_INSIGHTS_MODEL ?? "claude-3-7-sonnet-latest",
       max_tokens: 600,
       thinking: { type: "adaptive" },
       system:

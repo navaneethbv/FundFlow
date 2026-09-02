@@ -65,3 +65,4 @@ lib/graphify-out/
 .agents/workflows/*
 !.agents/workflows/graphify.md
 .vscode/settings.json
+.claude/plan/

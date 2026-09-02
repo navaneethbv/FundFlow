@@ -249,6 +249,20 @@ describe("POST /api/ai/receipt", () => {
     expect(mockMessagesCreate).not.toHaveBeenCalled();
   });
 
+  it("403s when export consent is off, even with AI enabled", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER },
+      supabase: clientStub({
+        ai_settings: { data: { enabled: true } },
+        profiles: { data: { ai_export_enabled: false } },
+      }),
+    });
+
+    const res = await receiptPost(receiptRequest(image()));
+    expect(res.status).toBe(403);
+    expect(mockMessagesCreate).not.toHaveBeenCalled();
+  });
+
   it("429s once the daily scan limit is spent", async () => {
     scanningUser();
     mockCheckRateLimit.mockResolvedValue(false);
@@ -365,6 +379,15 @@ describe("POST /api/ai/receipt", () => {
             select: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 maybeSingle: vi.fn().mockResolvedValue({ data: { enabled: true } }),
+              }),
+            }),
+          };
+        }
+        if (table === "profiles") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: { ai_export_enabled: true } }),
               }),
             }),
           };
