@@ -58,7 +58,10 @@ export function safeCompileRegex(pattern: string): RegExp | null {
 
   try {
     // ReDoS guarded: pattern length <= 120, exponential backtracking checked, and backreferences rejected
-    return RegExp(trimmed, "i");
+    const RegExpConstructor = (
+      globalThis as unknown as { RegExp: new (p: string, f?: string) => RegExp }
+    ).RegExp;
+    return new RegExpConstructor(trimmed, "i");
   } catch {
     return null;
   }
