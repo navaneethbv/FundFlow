@@ -64,3 +64,4 @@ lib/graphify-out/
 !.agents/rules/graphify.md
 .agents/workflows/*
 !.agents/workflows/graphify.md
+.vscode/settings.json
