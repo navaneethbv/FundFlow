@@ -404,7 +404,8 @@ button,
 a,
 summary,
 input,
-select {
+select,
+textarea {
   outline-color: var(--accent);
   outline-offset: 3px;
 }

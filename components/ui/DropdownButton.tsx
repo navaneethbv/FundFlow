@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ChevronDown } from "@/components/ui/icons";
+import { usePopoverMenu } from "@/lib/use-popover-menu";
+import PopoverBackdrop from "@/components/ui/PopoverBackdrop";
 
 export interface DropdownItem {
   label: string;
@@ -30,33 +31,16 @@ export default function DropdownButton({
   items: DropdownItem[];
   align?: "left" | "right";
 }>) {
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open]);
+  const { open, toggle, close, triggerRef } = usePopoverMenu();
 
   return (
     <div className="relative inline-block">
-      {open && (
-        <button
-          type="button"
-          aria-hidden
-          tabIndex={-1}
-          onClick={() => setOpen(false)}
-          className="fixed inset-0 z-30 cursor-default"
-        />
-      )}
+      {open && <PopoverBackdrop onClose={close} />}
 
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-haspopup="menu"
+        onClick={toggle}
         aria-expanded={open}
         className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full border border-panel-border bg-panel px-3.5 text-sm font-semibold text-foreground shadow-sm transition-colors duration-150 hover:border-accent/40 focus-visible:outline-2"
       >
@@ -69,7 +53,6 @@ export default function DropdownButton({
 
       {open && (
         <div
-          role="menu"
           aria-label={label}
           className={cn(
             "absolute z-40 mt-2 w-48 rounded-card border border-panel-border bg-panel p-1.5 shadow-float",
@@ -81,8 +64,7 @@ export default function DropdownButton({
               <Link
                 key={item.label}
                 href={item.href}
-                role="menuitem"
-                onClick={() => setOpen(false)}
+                onClick={close}
                 className={cn(
                   "flex min-h-11 items-center rounded-field px-2.5 text-sm font-medium transition-colors duration-150",
                   item.active
@@ -96,10 +78,9 @@ export default function DropdownButton({
               <button
                 key={item.label}
                 type="button"
-                role="menuitem"
                 onClick={() => {
                   item.onClick?.();
-                  setOpen(false);
+                  close();
                 }}
                 className={cn(
                   "flex min-h-11 w-full items-center rounded-field px-2.5 text-left text-sm font-medium transition-colors duration-150",

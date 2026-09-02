@@ -1,14 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "@/components/ui/icons";
+import Modal from "@/components/ui/Modal";
 import { formatCurrency, titleCase } from "@/lib/format";
 import type {
   BudgetGroup,
   BudgetSeedProposal,
 } from "@/lib/budget-page";
-import { useDialogFocus } from "@/lib/use-dialog-focus";
 
 interface EditableProposal extends BudgetSeedProposal {
   included: boolean;
@@ -30,7 +30,6 @@ export default function SeedBudgetButton({
   currency: string;
 }>) {
   const router = useRouter();
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<EditableProposal[]>([]);
   const [loading, setLoading] = useState(false);
@@ -99,10 +98,8 @@ export default function SeedBudgetButton({
     }
   }
 
-  const handleDialogKeyDown = useDialogFocus(dialogRef, open, () => setOpen(false));
-
-  if (!open) {
-    return (
+  return (
+    <>
       <button
         type="button"
         onClick={openPreview}
@@ -112,18 +109,12 @@ export default function SeedBudgetButton({
         <Sparkles aria-hidden className="h-4 w-4" />
         Create from history
       </button>
-    );
-  }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <dialog
-        open
-        ref={dialogRef}
-        aria-modal="true"
-        aria-labelledby="budget-proposal-title"
-        onKeyDown={handleDialogKeyDown}
-        className="relative m-0 max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-card border border-panel-border bg-panel p-5 shadow-float sm:p-6"
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        titleId="budget-proposal-title"
+        className="max-h-[90vh] max-w-3xl overflow-y-auto"
       >
         <div className="flex items-start gap-3">
           <Sparkles aria-hidden className="mt-1 h-5 w-5 text-accent" />
@@ -232,7 +223,7 @@ export default function SeedBudgetButton({
             {loading ? "Saving..." : "Confirm proposals"}
           </button>
         </div>
-      </dialog>
-    </div>
+      </Modal>
+    </>
   );
 }

@@ -194,38 +194,40 @@ export default function CumulativeCompareChart({
         >
           View data table
         </summary>
-        <table className="mt-2 w-full text-xs">
-          <caption className="sr-only">
-            Cumulative spending by day for {monthLabel} and {previousMonthLabel}.
-          </caption>
-          <thead>
-            <tr className="text-left text-muted">
-              <th className="py-1 pr-2 font-medium">Day</th>
-              <th className="py-1 pr-2 font-medium">{monthLabel}</th>
-              <th className="py-1 pr-2 font-medium">{previousMonthLabel}</th>
-            </tr>
-          </thead>
-          <tbody className="tabular-nums">
-            {days.map((row) => (
-              <tr
-                key={row.day}
-                className="border-t border-black/5 dark:border-white/10"
-              >
-                <td className="py-1 pr-2">{row.day}</td>
-                <td data-money className="py-1 pr-2">
-                  {row.thisMonth === null ? "—" : valueFormatter(row.thisMonth)}
-                </td>
-                <td data-money className="py-1 pr-2">
-                  {/* Forward-filled: the previous month ended, so its total did
-                      not change. Plotting it would imply a day that existed. */}
-                  {row.lastMonth === null && lastMonthFinal === null
-                    ? "—"
-                    : valueFormatter(row.lastMonth ?? lastMonthFinal ?? 0)}
-                </td>
+        <div className="overflow-x-auto">
+          <table className="mt-2 w-full text-xs">
+            <caption className="sr-only">
+              Cumulative spending by day for {monthLabel} and {previousMonthLabel}.
+            </caption>
+            <thead>
+              <tr className="text-left text-muted">
+                <th className="py-1 pr-2 font-medium">Day</th>
+                <th className="py-1 pr-2 font-medium">{monthLabel}</th>
+                <th className="py-1 pr-2 font-medium">{previousMonthLabel}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="tabular-nums">
+              {days.map((row) => (
+                <tr
+                  key={row.day}
+                  className="border-t border-panel-border"
+                >
+                  <td className="py-1 pr-2">{row.day}</td>
+                  <td data-money className="py-1 pr-2">
+                    {row.thisMonth === null ? "—" : valueFormatter(row.thisMonth)}
+                  </td>
+                  <td data-money className="py-1 pr-2">
+                    {/* Forward-filled: the previous month ended, so its total did
+                        not change. Plotting it would imply a day that existed. */}
+                    {row.lastMonth === null && lastMonthFinal === null
+                      ? "—"
+                      : valueFormatter(row.lastMonth ?? lastMonthFinal ?? 0)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </details>
     </div>
   );

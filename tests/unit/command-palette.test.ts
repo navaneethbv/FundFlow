@@ -74,4 +74,24 @@ describe("command palette", () => {
     const source = readFileSync("components/CommandPalette.tsx", "utf8");
     expect(source).toContain("OPEN_COMMAND_PALETTE_EVENT");
   });
+
+  it("enforces combobox ARIA semantics and dialog focus trap", () => {
+    const source = readFileSync("components/CommandPalette.tsx", "utf8");
+    // Input must be combobox
+    expect(source).toContain('role="combobox"');
+    expect(source).toContain("aria-expanded");
+    expect(source).toContain("aria-controls");
+    expect(source).toContain("aria-activedescendant");
+    // Dialog focus trap
+    expect(source).toContain("useDialogFocus");
+    // Listbox and options
+    expect(source).toContain('role="listbox"');
+    expect(source).toContain('role="option"');
+    expect(source).toContain("aria-selected");
+    // Options must not contain interactive buttons
+    const optionMatches = source.match(/<li[^>]*role="option"[^>]*>[\s\S]*?<\/li>/g) ?? [];
+    for (const opt of optionMatches) {
+      expect(opt).not.toContain("<button");
+    }
+  });
 });

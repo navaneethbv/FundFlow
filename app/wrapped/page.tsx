@@ -11,12 +11,13 @@ import { computeYearInMoneyFromProjection } from "@/lib/annual";
 import { loadCanonicalProjection } from "@/lib/finance-query";
 import { formatCurrency, formatMonth, titleCase } from "@/lib/format";
 import { formatDate } from "@/lib/format-date";
+import { firstSearchParam } from "@/lib/search-params";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  searchParams: Promise<{ year?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 /**
@@ -29,11 +30,16 @@ interface PageProps {
  * other finance view. A year above the bounded ceiling reports `truncated`,
  * and the page says so instead of presenting incomplete totals as facts.
  */
+export const metadata = {
+  title: "Year in Money",
+};
+
 export default async function WrappedPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
+  const rawYear = firstSearchParam(params.year);
   const currentYear = new Date().getFullYear();
   const year =
-    params.year && /^\d{4}$/.test(params.year) ? params.year : String(currentYear);
+    rawYear && /^\d{4}$/.test(rawYear) ? rawYear : String(currentYear);
 
   const supabase = await createClient();
   const {

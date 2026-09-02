@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { writeSidebarCollapsedCookie } from "@/lib/sidebar-collapsed-cookie";
 import { cn } from "@/lib/cn";
 import { ChevronLeft, ChevronRight } from "@/components/ui/icons";
 import { LogoMark } from "@/components/ui/Logo";
@@ -48,6 +49,7 @@ export default function SidebarShell({
   async function toggle() {
     const next = !collapsed;
     setCollapsed(next);
+    writeSidebarCollapsedCookie(next);
     const { data } = await supabase.auth.getUser();
     if (!data.user) return;
     const { data: profile } = await supabase
@@ -67,7 +69,10 @@ export default function SidebarShell({
       .eq("id", data.user.id);
     // Revert the optimistic toggle if the write failed, so the UI never
     // claims a collapse state that wasn't actually persisted.
-    if (error) setCollapsed(!next);
+    if (error) {
+      setCollapsed(!next);
+      writeSidebarCollapsedCookie(!next);
+    }
   }
 
   return (

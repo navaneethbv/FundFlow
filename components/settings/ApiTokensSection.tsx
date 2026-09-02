@@ -115,7 +115,7 @@ export default function ApiTokensSection({
           <code className="mt-1 block break-all text-xs">{minted}</code>
         </div>
       )}
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
     </Panel>
   );
 }

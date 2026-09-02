@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { cn } from "@/lib/cn";
+import { SIDEBAR_COLLAPSED_COOKIE } from "@/lib/sidebar-collapsed-cookie";
 import { getEnabledNavItems, type AppShellActive, type NavItemDefinition } from "@/components/shell/nav-model";
 import AskAiLowerRailLink from "@/components/shell/AskAiLowerRailLink";
 import MobileNavigation from "@/components/shell/MobileNavigation";
@@ -71,61 +73,72 @@ function NavLink({
 export default async function AppSidebar({
   active,
   email,
-}: Readonly<{ active: AppShellActive; email?: string | null }>) {
+  skeleton = false,
+}: Readonly<{ active: AppShellActive; email?: string | null; skeleton?: boolean }>) {
   const enabledItems = getEnabledNavItems();
 
   const primaryItems = enabledItems.filter((i) => i.category === "primary");
   const planningItems = enabledItems.filter((i) => i.category === "planning");
   const manageItems = enabledItems.filter((i) => i.category === "manage");
 
-  // Resolve the persisted collapse state and the account-menu identity in
-  // one query so every page load costs a single extra round trip, not two.
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  let initialCollapsed = false;
+  const cookieStore = await cookies();
+  const cookieCollapsed = cookieStore.get(SIDEBAR_COLLAPSED_COOKIE)?.value === "true";
+  let initialCollapsed = cookieCollapsed;
   let displayName = resolveDisplayName({ email });
   let avatarUrl: string | null = null;
-  if (user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("dashboard_prefs, display_name, full_name, avatar_path")
-      .eq("id", user.id)
-      .maybeSingle();
-    const dashboardPrefs = (profile?.dashboard_prefs ?? {}) as DashboardPrefs;
-    initialCollapsed = dashboardPrefs.sidebarCollapsed === true;
-    displayName = resolveDisplayName({
-      displayName: profile?.display_name as string | null,
-      fullName: profile?.full_name as string | null,
-      email,
-    });
-    if (profile?.avatar_path) {
-      const { data: signed } = await supabase.storage
-        .from("avatars")
-        .createSignedUrl(profile.avatar_path as string, 3600);
-      avatarUrl = signed?.signedUrl ?? null;
-    }
-  }
-
   let unreviewedRecurringCount = 0;
-  if (user) {
-    const { data: reviewRows } = await supabase
-      .from("recurring_streams")
-      .select("is_active,status,dismissed_at,reviewed_at")
-      .eq("user_id", user.id)
-      .eq("is_active", true)
-      .eq("status", "MATURE")
-      .is("dismissed_at", null)
-      .is("reviewed_at", null);
-    unreviewedRecurringCount = countUnreviewedStreams(
-      (reviewRows ?? []).map((row) => ({
-        isActive: row.is_active,
-        status: row.status,
-        dismissedAt: row.dismissed_at,
-        reviewedAt: row.reviewed_at,
-      })),
-    );
+
+  // A loading.tsx fallback (RouteSkeleton) mounts this same shell so
+  // navigation never unmounts the frame, but it must paint instantly — so it
+  // skips every Supabase round trip below and renders with the cookie-backed
+  // collapse state (0 round-trips) plus fallback values already used for a
+  // signed-out user. The real page (skeleton=false) resolves collapse state,
+  // identity, and the recurring badge count in one extra round trip, same as
+  // before.
+  if (!skeleton) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("dashboard_prefs, display_name, full_name, avatar_path")
+        .eq("id", user.id)
+        .maybeSingle();
+      const dashboardPrefs = (profile?.dashboard_prefs ?? {}) as DashboardPrefs;
+      if (typeof dashboardPrefs.sidebarCollapsed === "boolean") {
+        initialCollapsed = dashboardPrefs.sidebarCollapsed === true;
+      }
+      displayName = resolveDisplayName({
+        displayName: profile?.display_name as string | null,
+        fullName: profile?.full_name as string | null,
+        email,
+      });
+      if (profile?.avatar_path) {
+        const { data: signed } = await supabase.storage
+          .from("avatars")
+          .createSignedUrl(profile.avatar_path as string, 3600);
+        avatarUrl = signed?.signedUrl ?? null;
+      }
+
+      const { data: reviewRows } = await supabase
+        .from("recurring_streams")
+        .select("is_active,status,dismissed_at,reviewed_at")
+        .eq("user_id", user.id)
+        .eq("is_active", true)
+        .eq("status", "MATURE")
+        .is("dismissed_at", null)
+        .is("reviewed_at", null);
+      unreviewedRecurringCount = countUnreviewedStreams(
+        (reviewRows ?? []).map((row) => ({
+          isActive: row.is_active,
+          status: row.status,
+          dismissedAt: row.dismissed_at,
+          reviewedAt: row.reviewed_at,
+        })),
+      );
+    }
   }
 
   const badgeFor = (item: NavItemDefinition): number | undefined =>

@@ -16,10 +16,12 @@ const EXTRA_COMMANDS = [
 export default function AppShell({
   active,
   email,
+  skeleton = false,
   children,
 }: Readonly<{
   active: AppShellActive;
   email?: string | null;
+  skeleton?: boolean;
   children: ReactNode;
 }>) {
   const commands = [
@@ -31,8 +33,12 @@ export default function AppShell({
     <div className="min-h-screen bg-background text-foreground">
       <CommandPalette items={commands} />
       <div className="md:flex">
-        <AppSidebar active={active} email={email} />
-        <main className="w-full min-w-0 px-4 py-5 sm:px-6 lg:px-7 lg:py-7">
+        <AppSidebar active={active} email={email} skeleton={skeleton} />
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="w-full min-w-0 px-4 py-5 sm:px-6 lg:px-7 lg:py-7"
+        >
           <div className="mx-auto max-w-[1320px] space-y-5">{children}</div>
         </main>
       </div>

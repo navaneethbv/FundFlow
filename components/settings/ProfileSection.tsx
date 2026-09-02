@@ -6,6 +6,7 @@ import Button from "@/components/ui/Button";
 import Field from "@/components/ui/Field";
 import Input from "@/components/ui/Input";
 import Panel from "@/components/ui/Panel";
+import { localDateKey } from "@/lib/format-date";
 
 export interface ProfileSectionProps {
   fullName: string | null;
@@ -32,7 +33,7 @@ export default function ProfileSection({
   const [birthdayValue, setBirthdayValue] = useState(birthday ?? "");
   const today = useSyncExternalStore(
     () => () => undefined,
-    () => new Date().toISOString().slice(0, 10),
+    () => localDateKey(),
     () => undefined,
   );
   const [error, setError] = useState<string | null>(null);

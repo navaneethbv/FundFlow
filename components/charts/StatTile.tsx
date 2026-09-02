@@ -59,7 +59,7 @@ export default function StatTile({
             "No change"
           ) : (
             <>
-              {delta! > 0 ? "▲" : "▼"}{" "}
+              <span aria-hidden="true">{delta! > 0 ? "▲" : "▼"}</span>{" "}
               <span data-money>{formatCurrency(Math.abs(delta!))}</span>
             </>
           )}{" "}

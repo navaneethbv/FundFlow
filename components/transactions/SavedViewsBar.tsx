@@ -106,7 +106,7 @@ export default function SavedViewsBar({
             Save this view
           </Button>
         ))}
-      {error && <span className="text-red-600">{error}</span>}
+      {error && <span className="text-danger">{error}</span>}
     </div>
   );
 }

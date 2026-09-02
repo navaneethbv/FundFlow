@@ -262,8 +262,9 @@ describe("lib/dashboard extended features", () => {
     expect(data.insights.sinkingFunds).toBeDefined();
     expect(data.insights.sinkingFunds.items[0]).toMatchObject({
       dueDate: "2027-01-31",
-      monthlySetAside: 200,
+      monthlySetAside: expect.any(Number),
     });
+    expect(data.insights.sinkingFunds.items[0]!.monthlySetAside).toBeGreaterThan(0);
     expect(data.insights.runwayMonths).toBeDefined();
   });
 

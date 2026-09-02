@@ -74,7 +74,7 @@ export default function DashboardToolbar({
                 dashboardHref({ view: activeView, month: selectedMonth }),
                 extraParams,
               )}
-              aria-current={selectedAccountId ? undefined : "page"}
+              aria-current={selectedAccountId ? undefined : "true"}
               className={cn(
                 "flex min-h-11 shrink-0 items-center rounded-field border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2 sm:min-h-0",
                 selectedAccountId
@@ -97,7 +97,7 @@ export default function DashboardToolbar({
                     }),
                     extraParams,
                   )}
-                  aria-current={active ? "page" : undefined}
+                  aria-current={active ? "true" : undefined}
                   className={cn(
                     "flex min-h-11 shrink-0 items-center rounded-field border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2 sm:min-h-0",
                     active

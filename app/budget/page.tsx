@@ -68,6 +68,10 @@ function budgetHref(input: {
   return `/budget?${params.toString()}`;
 }
 
+export const metadata = {
+  title: "Budget",
+};
+
 export default async function BudgetPage({
   searchParams,
 }: Readonly<PageProps>) {

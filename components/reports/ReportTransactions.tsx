@@ -58,7 +58,7 @@ function DayHeaderRow({
   return (
     <tr
       data-ledger-day-header={group.date}
-      className="border-t border-black/5 bg-panel/60 dark:border-white/10"
+      className="border-t border-panel-border bg-panel/60"
     >
       <th
         scope="row"
@@ -153,7 +153,7 @@ export default function ReportTransactions({
                   {startsDay && group && <DayHeaderRow group={group} currency={currency} />}
                   <tr
                     className={cn(
-                      "border-t border-black/5 dark:border-white/10",
+                      "border-t border-panel-border",
                       striped && "bg-panel-2",
                     )}
                   >

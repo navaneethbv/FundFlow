@@ -143,6 +143,10 @@ function assertQueryResults(
   }
 }
 
+export const metadata = {
+  title: "Accounts",
+};
+
 export default async function AccountsPage({
   searchParams,
 }: Readonly<PageProps>) {

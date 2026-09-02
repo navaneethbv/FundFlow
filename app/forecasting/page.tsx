@@ -19,6 +19,10 @@ interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
+export const metadata = {
+  title: "Forecasting",
+};
+
 export default async function ForecastingPage({ searchParams }: Readonly<PageProps>) {
   if (!isFeatureEnabled("forecastingPage")) notFound();
 

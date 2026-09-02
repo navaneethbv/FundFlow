@@ -33,6 +33,10 @@ import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Investments",
+};
+
 export default async function InvestmentsPage() {
   if (!isFeatureEnabled("investmentsPage")) notFound();
 

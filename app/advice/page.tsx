@@ -49,6 +49,10 @@ function splitCompleted<T extends AdviceItemProgress>(items: T[]): { active: T[]
   return { active, completed };
 }
 
+export const metadata = {
+  title: "Advice",
+};
+
 export default async function AdvicePage({ searchParams }: Readonly<PageProps>) {
   if (!isFeatureEnabled("advicePage")) notFound();
 

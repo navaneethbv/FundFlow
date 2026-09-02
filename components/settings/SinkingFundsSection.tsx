@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Button from "@/components/ui/Button";
 import Field from "@/components/ui/Field";
 import Input from "@/components/ui/Input";
 import Panel from "@/components/ui/Panel";
 import Select from "@/components/ui/Select";
+import { isoDate } from "@/lib/date-utils";
 import { formatCurrency } from "@/lib/format";
+import { localDateKey } from "@/lib/format-date";
 import {
   computeSinkingFunds,
   type SinkingFundCadence,
@@ -30,11 +32,7 @@ const CADENCE_LABELS: Record<SinkingFundCadence, string> = {
   custom: "Custom interval",
 };
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function planFor(fund: SinkingFundRow) {
+function planFor(fund: SinkingFundRow, asOf: string) {
   return computeSinkingFunds({
     funds: [{
       name: fund.name,
@@ -44,7 +42,7 @@ function planFor(fund: SinkingFundRow) {
       customIntervalMonths: fund.custom_interval_months,
       cycleAnchorDate: fund.cycle_anchor_date,
     }],
-    asOf: today(),
+    asOf,
   }).items[0]!;
 }
 
@@ -54,6 +52,19 @@ export default function SinkingFundsSection({
   initialFunds: SinkingFundRow[];
 }>) {
   const [funds, setFunds] = useState(initialFunds);
+  // Sinking-fund plans are computed off "today", which is timezone-
+  // dependent (localDateKey()) — using it directly in render would make the
+  // SSR pass (server's UTC date) and hydration (viewer's local date) able
+  // to disagree, a React hydration mismatch. useSyncExternalStore's server
+  // snapshot renders the UTC date instead (Date#toISOString is always UTC,
+  // so server and client agree on it for that first paint), matching the
+  // `today` pattern already used in ProfileSection; the client snapshot
+  // swaps to the viewer's true local date once mounted.
+  const asOf = useSyncExternalStore(
+    () => () => undefined,
+    () => localDateKey(),
+    () => isoDate(new Date()),
+  );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
@@ -165,7 +176,7 @@ export default function SinkingFundsSection({
       {funds.length > 0 && (
         <ul className="mb-5 grid gap-2 text-sm md:grid-cols-2">
           {funds.map((fund) => {
-            const plan = planFor(fund);
+            const plan = planFor(fund, asOf);
             return (
               <li key={fund.id} className="rounded-field border border-panel-border bg-panel-2 p-3">
                 <div className="flex items-start justify-between gap-3">
@@ -263,7 +274,7 @@ export default function SinkingFundsSection({
         </div>
       </form>
 
-      {error && <output className="mt-3 block text-sm text-red-600">{error}</output>}
+      {error && <output className="mt-3 block text-sm text-danger">{error}</output>}
     </Panel>
   );
 }

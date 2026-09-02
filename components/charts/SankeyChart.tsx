@@ -440,29 +440,31 @@ function FlowTable({
   money: (value: number) => string;
 }>) {
   return (
-    <table className="mt-2 w-full text-xs">
-      <caption className="sr-only">
-        Every flow in the diagram, with its amount.
-      </caption>
-      <thead>
-        <tr className="text-left text-muted">
-          <th className="py-1 pr-2 font-medium">From</th>
-          <th className="py-1 pr-2 font-medium">To</th>
-          <th className="py-1 pr-2 text-right font-medium">Amount</th>
-        </tr>
-      </thead>
-      <tbody className="tabular-nums">
-        {links.map((link) => (
-          <tr
-            key={`${link.source}->${link.target}`}
-            className="border-t border-black/5 dark:border-white/10"
-          >
-            <td className="py-1 pr-2">{labelById.get(link.source) ?? link.source}</td>
-            <td className="py-1 pr-2">{labelById.get(link.target) ?? link.target}</td>
-            <td data-money className="py-1 pr-2 text-right">{money(link.value)}</td>
+    <div className="overflow-x-auto">
+      <table className="mt-2 w-full text-xs">
+        <caption className="sr-only">
+          Every flow in the diagram, with its amount.
+        </caption>
+        <thead>
+          <tr className="text-left text-muted">
+            <th className="py-1 pr-2 font-medium">From</th>
+            <th className="py-1 pr-2 font-medium">To</th>
+            <th className="py-1 pr-2 text-right font-medium">Amount</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody className="tabular-nums">
+          {links.map((link) => (
+            <tr
+              key={`${link.source}->${link.target}`}
+              className="border-t border-panel-border"
+            >
+              <td className="py-1 pr-2">{labelById.get(link.source) ?? link.source}</td>
+              <td className="py-1 pr-2">{labelById.get(link.target) ?? link.target}</td>
+              <td data-money className="py-1 pr-2 text-right">{money(link.value)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

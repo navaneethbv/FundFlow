@@ -1,12 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Button from "@/components/ui/Button";
 import Field from "@/components/ui/Field";
 import Input from "@/components/ui/Input";
+import Modal from "@/components/ui/Modal";
 import Select from "@/components/ui/Select";
 import { Plus } from "@/components/ui/icons";
+import { localDateKey } from "@/lib/format-date";
 import type { AccountOption } from "@/lib/investments-data";
 
 /**
@@ -23,37 +25,14 @@ export default function AddManualHoldingForm({
   accounts,
 }: Readonly<{ accounts: AccountOption[] }>) {
   const router = useRouter();
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
   const [securityName, setSecurityName] = useState("");
   const [accountKey, setAccountKey] = useState(accounts[0] ? `${accounts[0].source}:${accounts[0].id}` : "");
   const [quantity, setQuantity] = useState("");
   const [price, setPrice] = useState("");
-  const [asOf, setAsOf] = useState(() => new Date().toISOString().slice(0, 10));
+  const [asOf, setAsOf] = useState(() => localDateKey());
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    const firstControl = dialogRef.current?.querySelector<HTMLElement>(
-      "input, select, button",
-    );
-    firstControl?.focus();
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open]);
-
-  if (!open) {
-    return (
-      <Button onClick={() => setOpen(true)}>
-        <Plus aria-hidden className="h-4 w-4" />
-        Add Holding
-      </Button>
-    );
-  }
 
   async function submit(event: React.SyntheticEvent) {
     event.preventDefault();
@@ -95,16 +74,14 @@ export default function AddManualHoldingForm({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <dialog
-        open
-        ref={dialogRef}
-        aria-modal="true"
-        aria-labelledby="add-holding-title"
-        className="relative m-0 w-full max-w-md rounded-card border border-panel-border bg-panel p-5 shadow-float sm:p-6"
-      >
-        <h2 id="add-holding-title" className="text-xl font-bold">
-          Add Holding
+    <>
+      <Button onClick={() => setOpen(true)}>
+        <Plus aria-hidden className="h-4 w-4" />
+        Add Holding
+      </Button>
+      <Modal open={open} onClose={() => setOpen(false)} placement="sheet" titleId="add-holding-title">
+        <h2 id="add-holding-title" className="text-lg font-bold">
+          Add manual holding
         </h2>
         <form onSubmit={submit} className="mt-4 space-y-3">
           <Field label="Security name">
@@ -145,7 +122,7 @@ export default function AddManualHoldingForm({
             <Input
               type="date"
               value={asOf}
-              max={new Date().toISOString().slice(0, 10)}
+              max={localDateKey()}
               onChange={(e) => setAsOf(e.target.value)}
               required
             />
@@ -160,7 +137,7 @@ export default function AddManualHoldingForm({
             </Button>
           </div>
         </form>
-      </dialog>
-    </div>
+      </Modal>
+    </>
   );
 }

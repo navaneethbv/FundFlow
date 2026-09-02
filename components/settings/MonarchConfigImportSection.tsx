@@ -267,7 +267,7 @@ export default function MonarchConfigImportSection() {
           </div>
         )}
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-danger">{error}</p>}
         {result && (
           <output className="block text-sm text-success">
             Applied: {result.created ?? 0} created, {result.updated ?? 0} updated, {result.skipped ?? 0} skipped.

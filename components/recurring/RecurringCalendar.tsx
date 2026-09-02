@@ -1,6 +1,7 @@
 "use client";
 
 import { formatCurrency, titleCase } from "@/lib/format";
+import { localDateKey } from "@/lib/format-date";
 import type { RecurringOccurrence } from "@/lib/recurring-page";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -13,7 +14,7 @@ export interface CalendarCell {
 }
 
 function dateKey(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  return localDateKey(date);
 }
 
 function dayDelta(key: CalendarArrowKey): number {
@@ -34,22 +35,22 @@ export function buildMonthGrid(month: string): CalendarCell[][] {
   const parts = month.split("-").map(Number);
   const year = parts[0] ?? 2026;
   const monthIndex = (parts[1] ?? 1) - 1;
-  const first = new Date(Date.UTC(year, monthIndex, 1));
-  const startOffset = first.getUTCDay();
+  const first = new Date(year, monthIndex, 1, 12, 0, 0);
+  const startOffset = first.getDay();
   const grid: CalendarCell[][] = [];
-  let cursor = new Date(Date.UTC(year, monthIndex, 1 - startOffset));
+  let cursor = new Date(year, monthIndex, 1 - startOffset, 12, 0, 0);
   for (let week = 0; week < 6; week += 1) {
     const row: CalendarCell[] = [];
     for (let day = 0; day < 7; day += 1) {
       row.push({
-        day: cursor.getUTCDate(),
+        day: cursor.getDate(),
         date: dateKey(cursor),
-        inMonth: cursor.getUTCMonth() === monthIndex,
+        inMonth: cursor.getMonth() === monthIndex,
       });
-      cursor = new Date(cursor.getTime() + 86_400_000);
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1, 12, 0, 0);
     }
     grid.push(row);
-    if (cursor.getUTCMonth() !== monthIndex) break;
+    if (cursor.getMonth() !== monthIndex) break;
   }
   return grid;
 }

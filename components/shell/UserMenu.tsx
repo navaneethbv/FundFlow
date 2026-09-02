@@ -1,11 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import PrivacyToggle from "@/components/PrivacyToggle";
 import ThemeToggle from "@/components/ThemeToggle";
 import LogoutButton from "@/components/LogoutButton";
 import { ChevronDown, Settings } from "@/components/ui/icons";
+import { usePopoverMenu } from "@/lib/use-popover-menu";
+import PopoverBackdrop from "@/components/ui/PopoverBackdrop";
+
+const subscribeToHydration = () => () => undefined;
 
 /**
  * The sidebar's bottom-pinned identity block: avatar + name + chevron,
@@ -24,35 +28,23 @@ export default function UserMenu({
   email?: string | null;
   avatarUrl?: string | null;
 }>) {
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open]);
-
+  const { open, toggle, close, triggerRef } = usePopoverMenu();
+  const hydrated = useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false,
+  );
   const initial = displayName.trim().charAt(0).toUpperCase() || "?";
 
   return (
     <div className="relative">
-      {open && (
-        <button
-          type="button"
-          aria-hidden
-          tabIndex={-1}
-          onClick={() => setOpen(false)}
-          className="fixed inset-0 z-30 cursor-default"
-        />
-      )}
+      {open && <PopoverBackdrop onClose={close} />}
 
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-haspopup="menu"
+        disabled={!hydrated}
+        onClick={toggle}
         aria-expanded={open}
         aria-label={`Account menu for ${displayName}`}
         className="flex w-full items-center gap-2 rounded-field p-2 text-left transition-colors duration-150 hover:bg-panel-hover focus-visible:outline-2 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:p-0"
@@ -76,7 +68,6 @@ export default function UserMenu({
 
       {open && (
         <div
-          role="menu"
           aria-label="Account menu"
           className="absolute bottom-full left-0 z-40 mb-2 w-64 rounded-card border border-panel-border bg-panel p-2 shadow-float"
         >
@@ -85,8 +76,7 @@ export default function UserMenu({
           )}
           <Link
             href="/settings"
-            role="menuitem"
-            onClick={() => setOpen(false)}
+            onClick={close}
             className="flex items-center gap-2.5 rounded-field px-2 py-2 text-sm font-semibold text-foreground transition-colors duration-150 hover:bg-panel-hover"
           >
             <Settings aria-hidden className="h-4 w-4 text-muted" />

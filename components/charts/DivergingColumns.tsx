@@ -182,34 +182,36 @@ export default function DivergingColumns({
         <summary className="text-xs cursor-pointer" style={{ color: "var(--viz-muted)" }}>
           View data table
         </summary>
-        <table className="mt-2 text-xs w-full">
-          <thead>
-            <tr className="text-left text-muted">
-              <th className="py-1 pr-2 font-medium">Period</th>
-              <th className="py-1 pr-2 font-medium">{upName}</th>
-              <th className="py-1 pr-2 font-medium">{downName}</th>
-              <th className="py-1 pr-2 font-medium">Net</th>
-              {line && (
-                <th className="py-1 pr-2 font-medium">{line.name}</th>
-              )}
-            </tr>
-          </thead>
-          <tbody className="tabular-nums">
-            {labels.map((l, i) => (
-              <tr key={l} className="border-t border-black/5 dark:border-white/10">
-                <td className="py-1 pr-2">{l}</td>
-                <td data-money className="py-1 pr-2">{valueFormatter(up[i] ?? 0)}</td>
-                <td data-money className="py-1 pr-2">{valueFormatter(down[i] ?? 0)}</td>
-                <td data-money className="py-1 pr-2">{valueFormatter((up[i] ?? 0) - (down[i] ?? 0))}</td>
+        <div className="overflow-x-auto">
+          <table className="mt-2 text-xs w-full">
+            <thead>
+              <tr className="text-left text-muted">
+                <th className="py-1 pr-2 font-medium">Period</th>
+                <th className="py-1 pr-2 font-medium">{upName}</th>
+                <th className="py-1 pr-2 font-medium">{downName}</th>
+                <th className="py-1 pr-2 font-medium">Net</th>
                 {line && (
-                  <td data-money className="py-1 pr-2">
-                    {valueFormatter(line.values[i] ?? 0)}
-                  </td>
+                  <th className="py-1 pr-2 font-medium">{line.name}</th>
                 )}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="tabular-nums">
+              {labels.map((l, i) => (
+                <tr key={l} className="border-t border-panel-border">
+                  <td className="py-1 pr-2">{l}</td>
+                  <td data-money className="py-1 pr-2">{valueFormatter(up[i] ?? 0)}</td>
+                  <td data-money className="py-1 pr-2">{valueFormatter(down[i] ?? 0)}</td>
+                  <td data-money className="py-1 pr-2">{valueFormatter((up[i] ?? 0) - (down[i] ?? 0))}</td>
+                  {line && (
+                    <td data-money className="py-1 pr-2">
+                      {valueFormatter(line.values[i] ?? 0)}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </details>
     </div>
   );

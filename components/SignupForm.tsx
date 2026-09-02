@@ -80,8 +80,8 @@ export default function SignupForm() {
         </Button>
       </form>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      {message && <p className="text-sm text-green-600">{message}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
+      {message && <p className="text-sm text-success">{message}</p>}
 
       <GoogleSignInButton />
 

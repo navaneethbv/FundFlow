@@ -20,6 +20,10 @@ function jobStatusTone(status: string): "success" | "danger" | "warning" {
   return "warning";
 }
 
+export const metadata = {
+  title: "Admin",
+};
+
 export default async function AdminObservabilityPage() {
   const supabase = await createClient();
   const {

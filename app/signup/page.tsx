@@ -5,6 +5,10 @@ import AuthShell from "@/components/shell/AuthShell";
 // static prerender ships scripts with no nonce, which the CSP then blocks.
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Sign up",
+};
+
 export default function SignupPage() {
   return (
     <AuthShell title="Create your account" subtitle="Start with secure bank sync and privacy-safe exports.">

@@ -619,6 +619,10 @@ function LedgerTableRow({
   );
 }
 
+export const metadata = {
+  title: "Transactions",
+};
+
 export default async function TransactionsPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
   const state = parseLedgerQuery(params);

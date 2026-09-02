@@ -174,7 +174,7 @@ export default function SettleUpSection({
           Invite a partner above to start splitting expenses.
         </p>
       )}
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
     </Panel>
   );
 }

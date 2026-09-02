@@ -5,7 +5,7 @@ import DropdownButton from "@/components/ui/DropdownButton";
 import { Repeat } from "@/components/ui/icons";
 import WidgetShell from "@/components/dashboard/widgets/WidgetShell";
 import { formatCurrency } from "@/lib/format";
-import { daysUntil, formatDueAnnotation } from "@/lib/format-date";
+import { daysUntil, formatDueAnnotation, localDateKey } from "@/lib/format-date";
 
 export interface UpcomingRecurringItem {
   name: string;
@@ -24,9 +24,9 @@ export function withinNextSevenDays(
   items: UpcomingRecurringItem[],
   today: string,
 ): UpcomingRecurringItem[] {
-  const end = new Date(`${today}T00:00:00Z`);
-  end.setUTCDate(end.getUTCDate() + 7);
-  const endKey = end.toISOString().slice(0, 10);
+  const end = new Date(`${today}T00:00:00`);
+  end.setDate(end.getDate() + 7);
+  const endKey = localDateKey(end);
   return items
     .filter((item) => item.nextDate >= today && item.nextDate <= endKey)
     .sort((a, b) => a.nextDate.localeCompare(b.nextDate) || a.name.localeCompare(b.name));

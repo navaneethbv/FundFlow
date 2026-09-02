@@ -5,6 +5,8 @@
  * unit-testable without a database.
  */
 
+import { addDays } from "@/lib/date-utils";
+
 export interface HoldingJoinRow {
   id: string; // holdings.id
   accountId: string | null;
@@ -191,7 +193,7 @@ export interface ManualHoldingInput {
   securityType: string | null;
   quantity: number;
   price: number;
-  asOf: string; // YYYY-MM-DD
+  asOf: string; // YYYY-MM-DD, not more than a day past the server's UTC date
   currency: string;
 }
 
@@ -267,7 +269,10 @@ export function normalizeManualHolding(
   if (typeof asOf !== "string" || !DATE_RE.test(asOf)) {
     return { ok: false, error: "asOf must be a YYYY-MM-DD date" };
   }
-  if (asOf > today) {
+  // `today` is the server's UTC date; the client defaults this field to its
+  // own local date, which can run up to a day ahead of UTC (any timezone
+  // east of it). Allow one extra day so that default doesn't self-reject.
+  if (asOf > addDays(today, 1)) {
     return { ok: false, error: "asOf cannot be in the future" };
   }
 

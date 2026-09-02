@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import { createClient } from "@/lib/supabase/client";
-import type { FundedGoal } from "@/lib/goals-v2";
+import { goalTargetAmount, type GoalV2Row } from "@/lib/goals-v2";
 
-type Mode = "menu" | "edit" | "contribute";
+type MenuMode = "menu" | "edit" | "contribute";
 
 /**
  * The v2 goal card's `⋯` menu — Edit, Add contribution, household
@@ -28,20 +28,18 @@ type Mode = "menu" | "edit" | "contribute";
  */
 export default function GoalCardMenu({
   goal,
-  householdId,
+  householdId = null,
 }: Readonly<{
-  goal: FundedGoal;
-  /** When set, the goal can be shared with this household (4.2-lite). */
+  goal: GoalV2Row;
   householdId?: string | null;
 }>) {
   const router = useRouter();
   const supabase = createClient();
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<Mode>("menu");
+  const [mode, setMode] = useState<MenuMode>("menu");
   const [name, setName] = useState(goal.name);
-  const [targetAmount, setTargetAmount] = useState(
-    String(goal.target_amount),
-  );
+  const [targetAmount, setTargetAmount] = useState(() => String(goalTargetAmount(goal)));
   const [targetDate, setTargetDate] = useState(goal.target_date ?? "");
   const [contribution, setContribution] = useState("");
   const [busy, setBusy] = useState(false);
@@ -60,6 +58,7 @@ export default function GoalCardMenu({
     setOpen(false);
     setMode("menu");
     setError(null);
+    triggerRef.current?.focus();
   }
 
   async function saveEdit(event: React.SyntheticEvent) {
@@ -176,9 +175,9 @@ export default function GoalCardMenu({
         />
       )}
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`More options for ${goal.name}`}
         className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"
@@ -187,7 +186,6 @@ export default function GoalCardMenu({
       </button>
       {open && (
         <div
-          role="menu"
           aria-label={`Options for ${goal.name}`}
           className="absolute right-0 z-40 mt-2 w-72 space-y-3 rounded-card border border-panel-border bg-panel p-3 shadow-float"
         >

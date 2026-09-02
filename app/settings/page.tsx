@@ -40,6 +40,7 @@ import ButtonLink from "@/components/ui/ButtonLink";
 import Panel from "@/components/ui/Panel";
 import { sectionFromParam, parseDisplayPrefs, type SettingsSection } from "@/components/settings/settings-nav";
 import { isFeatureEnabled } from "@/lib/feature-flags";
+import { firstSearchParam } from "@/lib/search-params";
 import {
   loadInstitutionObservability,
   SYNC_HEALTH_ITEM_COLUMNS,
@@ -48,7 +49,7 @@ import {
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  searchParams: Promise<{ section?: string | string[] }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 /** First day of the month `offset` months from now, as YYYY-MM-01. */
@@ -157,6 +158,10 @@ async function loadSettleUpMembers(
   return members;
 }
 
+export const metadata = {
+  title: "Settings",
+};
+
 export default async function SettingsPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
   // Gated: Profile/Display/Tags are the only sections that read the new
@@ -164,7 +169,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
   // existed, so this only needs to redirect three sections, not the page.
   const settingsIaReady = isFeatureEnabled("settingsIa");
   const migrationDependentSections: SettingsSection[] = ["profile", "display", "tags"];
-  let active = sectionFromParam(params.section);
+  let active = sectionFromParam(firstSearchParam(params.section));
   if (!settingsIaReady && migrationDependentSections.includes(active)) {
     active = "institutions";
   }

@@ -28,6 +28,10 @@ function deliveryStatusTone(
   return "neutral";
 }
 
+export const metadata = {
+  title: "Notifications",
+};
+
 function deliveryDescription(delivery: WeeklyDeliveryHistoryItem): string {
   if (delivery.sentAt) return `Sent ${formatDate(delivery.sentAt)}`;
   if (delivery.reason) return delivery.reason;

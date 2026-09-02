@@ -35,6 +35,10 @@ function scopeHref(
   return `/debt?${params.toString()}`;
 }
 
+export const metadata = {
+  title: "Debt payoff",
+};
+
 export default async function DebtPage({ searchParams }: Readonly<PageProps>) {
   const [params, supabase] = await Promise.all([searchParams, createClient()]);
   const {

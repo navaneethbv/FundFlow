@@ -199,7 +199,7 @@ function GoalRow({
           Delete
         </Button>
       </form>
-      {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-1 text-sm text-danger">{error}</p>}
       {footer}
     </li>
   );
@@ -384,7 +384,7 @@ export default function GoalsManager({
         </Button>
       </form>
 
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
     </Panel>
   );
 }
