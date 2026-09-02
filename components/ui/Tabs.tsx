@@ -4,7 +4,7 @@ import { cn } from "@/lib/cn";
 /** Link-based underline tabs; server-safe, active state passed by the page. */
 export default function Tabs({
   items,
-  ariaLabel = "Tabs",
+  ariaLabel = "Section navigation",
 }: Readonly<{
   items: { label: string; href: string; active: boolean }[];
   ariaLabel?: string;

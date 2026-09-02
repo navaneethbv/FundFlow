@@ -9,6 +9,8 @@ import ProgressBar from "@/components/ui/ProgressBar";
 import SegmentedControl from "@/components/ui/SegmentedControl";
 import RegisterRow from "@/components/ui/RegisterRow";
 import EmptyState from "@/components/ui/EmptyState";
+import Input from "@/components/ui/Input";
+import Select from "@/components/ui/Select";
 
 describe("Frontend Multiverse Polish: Motion & Keyframe Contracts", () => {
   it("defines micro-interaction keyframes in globals.css", () => {
@@ -40,7 +42,7 @@ describe("Frontend Multiverse Polish: Tabs ARIA & Micro-physics", () => {
         ],
       }),
     );
-    expect(defaultHtml).toContain('<nav aria-label="Tabs"');
+    expect(defaultHtml).toContain('<nav aria-label="Section navigation"');
 
     const customHtml = renderToStaticMarkup(
       createElement(Tabs, {
@@ -77,9 +79,10 @@ describe("Frontend Multiverse Polish: DropdownButton Semantics & Motion", () => 
     expect(html).toContain("active:scale-[0.98]");
   });
 
-  it("verifies DropdownButton source follows disclosure pattern with animate-dropdown", () => {
+  it("verifies DropdownButton source follows list disclosure pattern with animate-dropdown", () => {
     const source = readFileSync("components/ui/DropdownButton.tsx", "utf8");
     expect(source).toContain('aria-haspopup="true"');
+    expect(source).toContain('role="list"');
     expect(source).toContain("animate-dropdown");
     expect(source).not.toContain('role="menu"');
   });
@@ -193,5 +196,19 @@ describe("Frontend Multiverse Polish: Interactive Primitives & Navigation", () =
     const source = readFileSync("components/shell/SidebarShell.tsx", "utf8");
     expect(source).toContain("duration-200 ease-in-out");
     expect(source).toContain("active:scale-95");
+  });
+
+  it("Input and Select components provide hover and disabled accessibility classes", () => {
+    const inputHtml = renderToStaticMarkup(createElement(Input, { disabled: true }));
+    expect(inputHtml).toContain("disabled:cursor-not-allowed");
+    expect(inputHtml).toContain("disabled:opacity-50");
+    expect(inputHtml).toContain("hover:border-panel-border/80");
+
+    const selectHtml = renderToStaticMarkup(
+      createElement(Select, { disabled: true }, createElement("option", null, "Option")),
+    );
+    expect(selectHtml).toContain("disabled:cursor-not-allowed");
+    expect(selectHtml).toContain("disabled:opacity-50");
+    expect(selectHtml).toContain("hover:border-panel-border/80");
   });
 });

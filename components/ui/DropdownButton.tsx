@@ -53,48 +53,49 @@ export default function DropdownButton({
       </button>
 
       {open && (
-        <div
+        <ul
+          role="list"
           aria-label={label}
           className={cn(
-            "absolute z-40 mt-2 w-48 rounded-card border border-panel-border bg-panel p-1.5 shadow-float",
+            "absolute z-40 mt-2 w-48 list-none rounded-card border border-panel-border bg-panel p-1.5 shadow-float",
             align === "right" ? "right-0 animate-dropdown" : "left-0 animate-dropdown-left",
           )}
         >
-          {items.map((item) =>
-            item.href ? (
-              <Link
-                key={item.label}
-                href={item.href}
-                onClick={close}
-                className={cn(
-                  "flex min-h-11 items-center rounded-field px-2.5 text-sm font-medium transition-all duration-150 active:scale-[0.98]",
-                  item.active
-                    ? "bg-accent-soft text-accent"
-                    : "text-foreground hover:bg-panel-hover",
-                )}
-              >
-                {item.label}
-              </Link>
-            ) : (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => {
-                  item.onClick?.();
-                  close();
-                }}
-                className={cn(
-                  "flex min-h-11 w-full items-center rounded-field px-2.5 text-left text-sm font-medium transition-all duration-150 active:scale-[0.98]",
-                  item.active
-                    ? "bg-accent-soft text-accent"
-                    : "text-foreground hover:bg-panel-hover",
-                )}
-              >
-                {item.label}
-              </button>
-            ),
-          )}
-        </div>
+          {items.map((item) => (
+            <li key={item.label}>
+              {item.href ? (
+                <Link
+                  href={item.href}
+                  onClick={close}
+                  className={cn(
+                    "flex min-h-11 items-center rounded-field px-2.5 text-sm font-medium transition-all duration-150 active:scale-[0.98]",
+                    item.active
+                      ? "bg-accent-soft text-accent"
+                      : "text-foreground hover:bg-panel-hover",
+                  )}
+                >
+                  {item.label}
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    item.onClick?.();
+                    close();
+                  }}
+                  className={cn(
+                    "flex min-h-11 w-full items-center rounded-field px-2.5 text-left text-sm font-medium transition-all duration-150 active:scale-[0.98]",
+                    item.active
+                      ? "bg-accent-soft text-accent"
+                      : "text-foreground hover:bg-panel-hover",
+                  )}
+                >
+                  {item.label}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

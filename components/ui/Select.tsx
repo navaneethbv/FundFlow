@@ -8,7 +8,14 @@ export default function Select({
 }: Readonly<React.SelectHTMLAttributes<HTMLSelectElement>>) {
   return (
     <div className="relative">
-      <select className={cn(fieldClasses, "appearance-none pr-8", className)} {...props}>
+      <select
+        className={cn(
+          fieldClasses,
+          "appearance-none pr-8 transition-colors hover:border-panel-border/80 disabled:cursor-not-allowed disabled:opacity-50",
+          className,
+        )}
+        {...props}
+      >
         {children}
       </select>
       {/* The native arrow is removed by appearance-none; supply an explicit
