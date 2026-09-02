@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { writeSidebarCollapsedCookie } from "@/lib/sidebar-collapsed-cookie";
 import { cn } from "@/lib/cn";
 import { ChevronLeft, ChevronRight } from "@/components/ui/icons";
 import { LogoMark } from "@/components/ui/Logo";
@@ -45,16 +46,10 @@ export default function SidebarShell({
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const supabase = createClient();
 
-  function setSidebarCollapsedCookie(value: boolean) {
-    if (typeof document !== "undefined") {
-      document.cookie = `sidebar_collapsed=${value}; path=/; max-age=31536000; SameSite=Lax`;
-    }
-  }
-
   async function toggle() {
     const next = !collapsed;
     setCollapsed(next);
-    setSidebarCollapsedCookie(next);
+    writeSidebarCollapsedCookie(next);
     const { data } = await supabase.auth.getUser();
     if (!data.user) return;
     const { data: profile } = await supabase
@@ -76,7 +71,7 @@ export default function SidebarShell({
     // claims a collapse state that wasn't actually persisted.
     if (error) {
       setCollapsed(!next);
-      setSidebarCollapsedCookie(!next);
+      writeSidebarCollapsedCookie(!next);
     }
   }
 

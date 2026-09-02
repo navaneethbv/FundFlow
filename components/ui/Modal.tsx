@@ -74,7 +74,13 @@ export default function Modal({
         aria-label={!titleId ? ariaLabel : undefined}
         onKeyDown={handleDialogKeyDown}
         className={cn(
-          "relative m-0 w-full max-w-md border border-panel-border bg-panel p-5 shadow-float sm:p-6",
+          // Height is capped and scrolled here, not left to each caller: a
+          // sheet is pinned to the bottom edge, so content taller than the
+          // viewport overflows off the *top* of a `fixed inset-0` container
+          // that does not scroll, putting the first fields out of reach.
+          // MobileNavigation's hand-rolled sheet caps the same way. Callers
+          // that pass their own max-h/overflow still win via twMerge.
+          "relative m-0 max-h-[90vh] w-full max-w-md overflow-y-auto border border-panel-border bg-panel p-5 shadow-float sm:p-6",
           isSheet
             ? "rounded-t-card sm:rounded-card"
             : "rounded-card",

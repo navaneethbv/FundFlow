@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { clearSidebarCollapsedCookie } from "@/lib/sidebar-collapsed-cookie";
 import Button from "@/components/ui/Button";
 
 export default function LogoutButton() {
@@ -10,6 +11,8 @@ export default function LogoutButton() {
 
   async function signOut() {
     await supabase.auth.signOut();
+    // The next account on this browser must not inherit this one's layout.
+    clearSidebarCollapsedCookie();
     router.push("/login");
     router.refresh();
   }

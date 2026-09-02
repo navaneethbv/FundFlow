@@ -74,7 +74,14 @@ describe("Frontend Multiverse: Filter & Navigation ARIA Contracts", () => {
 
   it("BudgetTable has focus-visible styling on unbudgeted toggle button", () => {
     const source = readFileSync("components/budget/BudgetTable.tsx", "utf8");
-    expect(source).toContain("focus-visible:outline-2");
+    // Anchored to the unbudgeted toggle specifically — a bare
+    // toContain("focus-visible:outline-2") passes on any other button in
+    // this file and so asserts nothing about the control under test.
+    const toggle = /onClick=\{\(\) => setShowUnbudgeted\([^}]*\}\s*className="([^"]*)"/.exec(
+      source,
+    );
+    expect(toggle, "unbudgeted toggle button not found").not.toBeNull();
+    expect(toggle![1]).toContain("focus-visible:outline-2");
   });
 
   it("TransactionQueryControls uses PopoverBackdrop for date and filters popovers", () => {

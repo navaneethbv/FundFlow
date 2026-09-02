@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { cn } from "@/lib/cn";
+import { SIDEBAR_COLLAPSED_COOKIE } from "@/lib/sidebar-collapsed-cookie";
 import { getEnabledNavItems, type AppShellActive, type NavItemDefinition } from "@/components/shell/nav-model";
 import AskAiLowerRailLink from "@/components/shell/AskAiLowerRailLink";
 import MobileNavigation from "@/components/shell/MobileNavigation";
@@ -81,7 +82,7 @@ export default async function AppSidebar({
   const manageItems = enabledItems.filter((i) => i.category === "manage");
 
   const cookieStore = await cookies();
-  const cookieCollapsed = cookieStore.get("sidebar_collapsed")?.value === "true";
+  const cookieCollapsed = cookieStore.get(SIDEBAR_COLLAPSED_COOKIE)?.value === "true";
   let initialCollapsed = cookieCollapsed;
   let displayName = resolveDisplayName({ email });
   let avatarUrl: string | null = null;

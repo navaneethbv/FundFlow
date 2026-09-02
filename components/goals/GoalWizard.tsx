@@ -475,102 +475,106 @@ export default function GoalWizard({
     }
   }
 
-  if (!open) {
-    return (
+  // The trigger stays mounted while the wizard is open (it is covered by the
+  // opaque full-screen dialog, and useDialogFocus traps Tab inside, so it is
+  // neither visible nor reachable). Unmounting it instead would leave
+  // useDialogFocus holding a detached node as the element to restore focus
+  // to, and closing the wizard would drop focus to <body>.
+  return (
+    <>
       <Button type="button" onClick={openWizard}>
         Add goal
       </Button>
-    );
-  }
-
-  return (
-    <dialog
-      open
-      ref={dialogRef}
-      aria-modal="true"
-      aria-label="New goal"
-      onKeyDown={handleDialogKeyDown}
-      className="fixed inset-0 z-50 m-0 flex flex-col overflow-y-auto border-0 bg-background p-0"
-    >
-      <div className="border-b border-panel-border">
-        <div className="flex items-center justify-between gap-2 px-4 py-3 sm:px-6">
-          <button
-            type="button"
-            onClick={draft.step > 1 ? () => patch({ step: draft.step - 1 }) : cancel}
-            disabled={busy || draft.createdGoalId !== null}
-            aria-label={draft.step > 1 ? "Back" : "Cancel"}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"
-          >
-            <ChevronLeft aria-hidden className="h-5 w-5" />
-          </button>
-          <ol className="flex gap-2" aria-label={`Step ${draft.step} of 4`}>
-            {STEP_TITLES.map((title, index) => (
-              <li
-                key={title}
-                aria-current={index === draft.step - 1 ? "step" : undefined}
-                className={
-                  index === draft.step - 1
-                    ? "rounded-full bg-accent-soft px-3 py-1.5 text-xs font-bold text-accent"
-                    : "hidden rounded-full px-3 py-1.5 text-xs font-semibold text-muted sm:block"
-                }
+      {open && (
+        <dialog
+          open
+          ref={dialogRef}
+          aria-modal="true"
+          aria-label="New goal"
+          onKeyDown={handleDialogKeyDown}
+          className="fixed inset-0 z-50 m-0 flex flex-col overflow-y-auto border-0 bg-background p-0"
+        >
+          <div className="border-b border-panel-border">
+            <div className="flex items-center justify-between gap-2 px-4 py-3 sm:px-6">
+              <button
+                type="button"
+                onClick={draft.step > 1 ? () => patch({ step: draft.step - 1 }) : cancel}
+                disabled={busy || draft.createdGoalId !== null}
+                aria-label={draft.step > 1 ? "Back" : "Cancel"}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"
               >
-                {title}
-              </li>
-            ))}
-          </ol>
-          <button
-            type="button"
-            onClick={cancel}
-            aria-label="Close"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"
-          >
-            <X aria-hidden className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="h-1 bg-panel-2">
-          <div
-            className="h-1 bg-accent transition-all duration-150"
-            style={{ width: `${(draft.step / STEP_TITLES.length) * 100}%` }}
+                <ChevronLeft aria-hidden className="h-5 w-5" />
+              </button>
+              <ol className="flex gap-2" aria-label={`Step ${draft.step} of 4`}>
+                {STEP_TITLES.map((title, index) => (
+                  <li
+                    key={title}
+                    aria-current={index === draft.step - 1 ? "step" : undefined}
+                    className={
+                      index === draft.step - 1
+                        ? "rounded-full bg-accent-soft px-3 py-1.5 text-xs font-bold text-accent"
+                        : "hidden rounded-full px-3 py-1.5 text-xs font-semibold text-muted sm:block"
+                    }
+                  >
+                    {title}
+                  </li>
+                ))}
+              </ol>
+              <button
+                type="button"
+                onClick={cancel}
+                aria-label="Close"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"
+              >
+                <X aria-hidden className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="h-1 bg-panel-2">
+              <div
+                className="h-1 bg-accent transition-all duration-150"
+                style={{ width: `${(draft.step / STEP_TITLES.length) * 100}%` }}
+              />
+            </div>
+          </div>
+
+          <GoalWizardStepContent
+            accounts={accounts}
+            draft={draft}
+            error={error}
+            patch={patch}
           />
-        </div>
-      </div>
 
-      <GoalWizardStepContent
-        accounts={accounts}
-        draft={draft}
-        error={error}
-        patch={patch}
-      />
-
-      <div className="border-t border-panel-border px-4 py-4 sm:px-6">
-        <div className="mx-auto flex w-full max-w-2xl justify-center gap-3">
-          {draft.step === 3 && (
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => patch({ step: draft.step + 1 })}
-            >
-              Skip
-            </Button>
-          )}
-          {draft.step < 4 ? (
-            <Button
-              type="button"
-              disabled={!isStepValid(draft)}
-              onClick={() => {
-                if (!isStepValid(draft)) return;
-                patch({ step: draft.step + 1 });
-              }}
-            >
-              Continue
-            </Button>
-          ) : (
-            <Button type="button" disabled={busy} onClick={finish}>
-              {submitLabel(draft, busy)}
-            </Button>
-          )}
-        </div>
-      </div>
-    </dialog>
+          <div className="border-t border-panel-border px-4 py-4 sm:px-6">
+            <div className="mx-auto flex w-full max-w-2xl justify-center gap-3">
+              {draft.step === 3 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => patch({ step: draft.step + 1 })}
+                >
+                  Skip
+                </Button>
+              )}
+              {draft.step < 4 ? (
+                <Button
+                  type="button"
+                  disabled={!isStepValid(draft)}
+                  onClick={() => {
+                    if (!isStepValid(draft)) return;
+                    patch({ step: draft.step + 1 });
+                  }}
+                >
+                  Continue
+                </Button>
+              ) : (
+                <Button type="button" disabled={busy} onClick={finish}>
+                  {submitLabel(draft, busy)}
+                </Button>
+              )}
+            </div>
+          </div>
+        </dialog>
+      )}
+    </>
   );
 }
