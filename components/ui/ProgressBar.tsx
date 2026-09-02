@@ -25,6 +25,7 @@ export default function ProgressBar({
   size = "md",
   label,
   ariaLabel,
+  shimmer = false,
   className,
 }: Readonly<{
   /** 0-100; clamped to that range. */
@@ -35,6 +36,8 @@ export default function ProgressBar({
   label?: string;
   /** Numeric-progressbar variant only: names *which* bar, e.g. "Income progress". */
   ariaLabel?: string;
+  /** Optional animated shimmer highlight */
+  shimmer?: boolean;
   className?: string;
 }>) {
   const clamped = Math.max(0, Math.min(100, percent));
@@ -51,16 +54,26 @@ export default function ProgressBar({
   return (
     <div
       className={cn(
-        "w-full overflow-hidden rounded-full bg-panel-2",
+        "relative w-full overflow-hidden rounded-full bg-panel-2",
         size === "sm" ? "h-1.5" : "h-2",
         className,
       )}
       {...a11yProps}
     >
       <div
-        className={cn("h-full rounded-full transition-[width] duration-300", TONE_CLASSES[tone])}
+        className={cn(
+          "relative h-full overflow-hidden rounded-full transition-[width] duration-300",
+          TONE_CLASSES[tone],
+        )}
         style={{ width: `${clamped}%` }}
-      />
+      >
+        {shimmer && (
+          <div
+            aria-hidden
+            className="animate-shimmer absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent"
+          />
+        )}
+      </div>
     </div>
   );
 }

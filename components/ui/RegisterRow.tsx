@@ -1,6 +1,7 @@
 import { MerchantAvatar } from "@/components/ui/Avatar";
 import { formatCurrency, roundsToZero } from "@/lib/format";
 import { formatDate } from "@/lib/format-date";
+import { cn } from "@/lib/cn";
 import type { ReactNode } from "react";
 
 function amountPrefix(amount: number): string {
@@ -41,9 +42,10 @@ export default function RegisterRow({
   const outflow = amount < 0 && !roundsToZero(amount);
   return (
     <li
-      className={`flex items-center gap-3 p-2 hover:bg-panel-hover${
-        index % 2 === 1 ? " bg-panel-2" : ""
-      }`}
+      className={cn(
+        "flex items-center gap-3 rounded-field p-2 transition-colors duration-150 hover:bg-panel-hover active:bg-panel-2/60",
+        index % 2 === 1 && "bg-panel-2",
+      )}
     >
       <MerchantAvatar name={merchant} size={36} className="shrink-0" />
       <span className="min-w-0 flex-1">

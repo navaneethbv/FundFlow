@@ -42,7 +42,8 @@ export default function DropdownButton({
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full border border-panel-border bg-panel px-3.5 text-sm font-semibold text-foreground shadow-sm transition-colors duration-150 hover:border-accent/40 focus-visible:outline-2"
+        aria-haspopup="true"
+        className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full border border-panel-border bg-panel px-3.5 text-sm font-semibold text-foreground shadow-sm transition-all duration-150 hover:border-accent/40 active:scale-[0.98] focus-visible:outline-2"
       >
         {label}
         <ChevronDown
@@ -53,10 +54,11 @@ export default function DropdownButton({
 
       {open && (
         <div
+          role="menu"
           aria-label={label}
           className={cn(
             "absolute z-40 mt-2 w-48 rounded-card border border-panel-border bg-panel p-1.5 shadow-float",
-            align === "right" ? "right-0" : "left-0",
+            align === "right" ? "right-0 animate-dropdown" : "left-0 animate-dropdown-left",
           )}
         >
           {items.map((item) =>
@@ -64,9 +66,10 @@ export default function DropdownButton({
               <Link
                 key={item.label}
                 href={item.href}
+                role="menuitem"
                 onClick={close}
                 className={cn(
-                  "flex min-h-11 items-center rounded-field px-2.5 text-sm font-medium transition-colors duration-150",
+                  "flex min-h-11 items-center rounded-field px-2.5 text-sm font-medium transition-all duration-150 active:scale-[0.98]",
                   item.active
                     ? "bg-accent-soft text-accent"
                     : "text-foreground hover:bg-panel-hover",
@@ -78,12 +81,13 @@ export default function DropdownButton({
               <button
                 key={item.label}
                 type="button"
+                role="menuitem"
                 onClick={() => {
                   item.onClick?.();
                   close();
                 }}
                 className={cn(
-                  "flex min-h-11 w-full items-center rounded-field px-2.5 text-left text-sm font-medium transition-colors duration-150",
+                  "flex min-h-11 w-full items-center rounded-field px-2.5 text-left text-sm font-medium transition-all duration-150 active:scale-[0.98]",
                   item.active
                     ? "bg-accent-soft text-accent"
                     : "text-foreground hover:bg-panel-hover",

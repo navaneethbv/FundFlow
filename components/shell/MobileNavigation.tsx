@@ -176,8 +176,12 @@ export default function MobileNavigation({
             aria-modal="true"
             aria-label="All navigation"
             onKeyDown={handleDialogKeyDown}
-            className="relative m-0 max-h-[85vh] w-full overflow-y-auto rounded-t-2xl border border-panel-border bg-panel p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-pop"
+            className="animate-sheet-slide relative m-0 max-h-[85vh] w-full overflow-y-auto rounded-t-2xl border border-panel-border bg-panel p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-pop"
           >
+            <div
+              aria-hidden
+              className="mx-auto mb-3 h-1 w-10 shrink-0 rounded-full bg-panel-border"
+            />
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
                 <LogoMark className="h-7 w-7 shrink-0" />
@@ -187,7 +191,7 @@ export default function MobileNavigation({
                 type="button"
                 aria-label="Close navigation"
                 onClick={() => setOpen(false)}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-panel-border bg-panel-2 text-muted hover:text-foreground focus-visible:outline-2"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-panel-border bg-panel-2 text-muted transition-all duration-150 hover:text-foreground active:scale-95 focus-visible:outline-2"
               >
                 <X aria-hidden className="h-4 w-4" />
               </button>
@@ -214,7 +218,7 @@ export default function MobileNavigation({
                             aria-current={isActive ? "page" : undefined}
                             onClick={() => setOpen(false)}
                             className={cn(
-                              "flex min-h-12 min-w-0 items-center gap-3 rounded-field px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-2",
+                              "flex min-h-12 min-w-0 items-center gap-3 rounded-field px-3 py-2 text-sm font-semibold transition-all duration-150 active:scale-[0.98] focus-visible:outline-2",
                               isActive
                                 ? "bg-accent-soft text-accent"
                                 : "bg-panel-2 text-muted hover:bg-panel-hover hover:text-foreground",
