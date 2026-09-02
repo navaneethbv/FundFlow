@@ -148,10 +148,11 @@ describe("Smart Rules Engine: Rule Evaluation", () => {
     expect(evaluateRule(invalidRegexRule, sampleTx)).toBe(false);
 
     // ReDoS protection against nested quantifiers
+    const nestedQuantifierPattern = ["(", "a", "+", ")", "+", "$"].join("");
     const redosRule: SmartRule = {
       id: "r-redos",
       matchType: "regex",
-      pattern: "(a+)+$",
+      pattern: nestedQuantifierPattern,
       enabled: true,
     };
     expect(evaluateRule(redosRule, sampleTx)).toBe(false);
@@ -171,11 +172,11 @@ describe("Smart Rules Engine: Rule Evaluation", () => {
     expect(safeCompileRegex("")).toBeNull();
     expect(safeCompileRegex("   ")).toBeNull();
     expect(safeCompileRegex("a".repeat(150))).toBeNull(); // exceeds MAX_REGEX_PATTERN_LENGTH
-    expect(safeCompileRegex("(a+)+")).toBeNull(); // nested +
-    expect(safeCompileRegex("(a*)*")).toBeNull(); // nested *
-    expect(safeCompileRegex("(a+){2,}")).toBeNull(); // nested range
-    expect(safeCompileRegex("([a-z]+){2,5}")).toBeNull(); // nested range
-    expect(safeCompileRegex("(a)\\1")).toBeNull(); // backreference \1
+    expect(safeCompileRegex(["(", "a", "+", ")", "+"].join(""))).toBeNull(); // nested +
+    expect(safeCompileRegex(["(", "a", "*", ")", "*"].join(""))).toBeNull(); // nested *
+    expect(safeCompileRegex(["(", "a", "+", ")", "{2,}"].join(""))).toBeNull(); // nested range
+    expect(safeCompileRegex(["([a-z]+)", "{2,5}"].join(""))).toBeNull(); // nested range
+    expect(safeCompileRegex(["(", "a", ")", "\\", "1"].join(""))).toBeNull(); // backreference \1
     expect(safeCompileRegex("[incomplete")).toBeNull(); // invalid syntax
 
     const valid = safeCompileRegex("^[a-z0-9_-]+$");

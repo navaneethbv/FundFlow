@@ -150,6 +150,16 @@ describe("POST /api/rules/batch", () => {
   it("performs live apply with bulk upsert of annotations and merchant updates", async () => {
     const mockUpsert = vi.fn().mockResolvedValue({ error: null });
     const mockSupabase = createMockBatchDb({
+      rules: [
+        {
+          id: "r1",
+          match_type: "keyword",
+          pattern: "Target",
+          display_name: "Target Supercenter",
+          category: "GROCERIES",
+          enabled: true,
+        },
+      ],
       transactions: [
         {
           id: "tx-1",
@@ -170,17 +180,6 @@ describe("POST /api/rules/batch", () => {
     const res = await POST(
       createBatchRequest({
         dryRun: false,
-        rules: [
-          {
-            id: "r1",
-            matchType: "keyword",
-            pattern: "Target",
-            displayName: "Target Supercenter",
-            category: "GROCERIES",
-            tags: ["supplies"],
-            enabled: true,
-          },
-        ],
       }),
     );
 
@@ -196,7 +195,7 @@ describe("POST /api/rules/batch", () => {
         expect.objectContaining({
           transaction_id: "tx-1",
           display_category: "GROCERIES",
-          tags: ["supplies"],
+          tags: [],
         }),
       ],
       { onConflict: "user_id,transaction_id" },

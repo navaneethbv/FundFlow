@@ -12,7 +12,6 @@ import {
 type SimulationItem = ReturnType<typeof simulateRulesBatch>["results"][number];
 
 interface BatchRulesRequest {
-  rules?: SmartRule[];
   dryRun?: boolean;
 }
 
@@ -38,15 +37,10 @@ interface DbAnnotation {
   tags: string[] | null;
 }
 
-async function resolveRulesToRun(
-  rulesPayload: SmartRule[] | undefined,
+async function loadUserRules(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<SmartRule[] | Response> {
-  if (Array.isArray(rulesPayload) && rulesPayload.length > 0) {
-    return rulesPayload;
-  }
-
   const { data: dbRules, error: rulesError } = await supabase
     .from("merchant_rules")
     .select("id, match_type, pattern, display_name, category, enabled")
@@ -196,7 +190,7 @@ export async function POST(req: NextRequest) {
 
   const dryRun = body.dryRun !== false;
 
-  const rulesResult = await resolveRulesToRun(body.rules, supabase, user.id);
+  const rulesResult = await loadUserRules(supabase, user.id);
   if (rulesResult instanceof Response) return rulesResult;
   const rulesToRun = rulesResult;
 
