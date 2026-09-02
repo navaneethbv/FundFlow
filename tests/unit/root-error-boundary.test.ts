@@ -15,8 +15,21 @@ describe("root error boundary", () => {
   it("is a client component with a retry", () => {
     const source = readFileSync("app/error.tsx", "utf8");
     expect(source).toContain('"use client"');
-    expect(source).toContain("reset");
+    expect(source).toContain("retry");
+    expect(source).not.toContain("reset");
     expect(source).toContain("Try again");
+  });
+
+  it("uses the re-fetching recovery prop in every touched route boundary", () => {
+    for (const file of [
+      "app/budget/error.tsx",
+      "app/cash-flow/error.tsx",
+      "app/recurring/error.tsx",
+    ]) {
+      const source = readFileSync(file, "utf8");
+      expect(source, file).toContain("retry");
+      expect(source, file).not.toContain("reset");
+    }
   });
 
   it("speaks the register's error voice: what happened, what was not affected", () => {

@@ -4,10 +4,10 @@ import { useEffect } from "react";
 
 export default function CashFlowError({
   error,
-  reset,
+  retry,
 }: Readonly<{
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }>) {
   useEffect(() => {
     console.error("Cash flow error boundary caught", error.digest ?? error.message);
@@ -25,7 +25,7 @@ export default function CashFlowError({
       </p>
       <button
         type="button"
-        onClick={reset}
+        onClick={retry}
         className="mt-6 min-h-11 rounded-field bg-accent px-4 py-2 text-sm font-bold text-accent-foreground focus-visible:outline-2"
       >
         Try again

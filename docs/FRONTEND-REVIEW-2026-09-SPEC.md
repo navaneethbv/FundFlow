@@ -230,12 +230,11 @@ of UTC get yesterday's date in the evening. The repo already has `localDateKey()
 
 ### R14 — Dependency freshness (Milestone 1)
 
-`npx npm-check-updates` was run. Applied: `next` and `eslint-config-next` 16.3.3 →
-16.3.4 (patch). Skipped, with reasons recorded in the PR description: `eslint` 9→10,
-`typescript` 6→7, `plaid` 43→46 (major toolchain/data-layer risk, no review-related
-benefit); `lucide-react` 1.33→1.38, `nodemailer` 9.0→9.1 (minor churn unrelated to
-this work); major-version-zero bumps (`@anthropic-ai/sdk`, `@supabase/ssr`, `pdfkit`,
-`sharp`) with no benefit for this branch.
+`npx npm-check-updates` was run.
+Applied: `next` and `eslint-config-next` 16.3.3 to 16.3.4 (patch), plus the safe transitive Browserslist security update.
+Skipped: `eslint` 9 to 10, `typescript` 6 to 7, and `plaid` 46 to 47 because they are major toolchain or data-layer upgrades with no review-related benefit.
+Skipped: `lucide-react` 1.37 to 1.39 and `nodemailer` 9.0 to 9.1 because they are unrelated minor-version churn.
+Skipped: major-version-zero bumps to `@anthropic-ai/sdk`, `@supabase/ssr`, `pdfkit`, and `sharp` because they have no benefit for this branch.
 
 ## Explicitly deferred (specified, not built here)
 

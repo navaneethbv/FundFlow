@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useSyncExternalStore } from "react";
 import PrivacyToggle from "@/components/PrivacyToggle";
 import ThemeToggle from "@/components/ThemeToggle";
 import LogoutButton from "@/components/LogoutButton";
 import { ChevronDown, Settings } from "@/components/ui/icons";
 import { usePopoverMenu } from "@/lib/use-popover-menu";
 import PopoverBackdrop from "@/components/ui/PopoverBackdrop";
+
+const subscribeToHydration = () => () => undefined;
 
 /**
  * The sidebar's bottom-pinned identity block: avatar + name + chevron,
@@ -26,6 +29,11 @@ export default function UserMenu({
   avatarUrl?: string | null;
 }>) {
   const { open, toggle, close, triggerRef } = usePopoverMenu();
+  const hydrated = useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false,
+  );
   const initial = displayName.trim().charAt(0).toUpperCase() || "?";
 
   return (
@@ -35,6 +43,7 @@ export default function UserMenu({
       <button
         ref={triggerRef}
         type="button"
+        disabled={!hydrated}
         onClick={toggle}
         aria-expanded={open}
         aria-label={`Account menu for ${displayName}`}
