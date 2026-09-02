@@ -52,45 +52,37 @@ function round2(num: number): number {
   return Math.round(num * 100) / 100;
 }
 
-/**
- * Calculates core FIRE milestones, time to independence, and life event projections.
- */
-export function calculateFireSimulation(input: FireSimulatorInput): FireSimulationResult {
-  const annualReturn = (input.annualReturnPct ?? 7.0) / 100;
-  const monthlyReturn = annualReturn / 12;
-  const swr = (input.withdrawalRatePct ?? 4.0) / 100;
-  const currentAge = input.currentAge ?? 30;
-  const horizon = input.projectionHorizonMonths ?? 240; // 20 years
-
-  const annualSpend = input.monthlySpend * 12;
+function calculateMilestones(
+  annualSpend: number,
+  swr: number,
+  currentAge: number,
+  annualReturn: number,
+): FireMilestones {
   const standardFireTarget = round2(annualSpend / swr);
   const leanFireTarget = round2((annualSpend * 0.75) / swr);
   const fatFireTarget = round2((annualSpend * 1.5) / swr);
 
-  // Coast FIRE: capital required today that compounds to FIRE target by age 65
   const yearsTo65 = Math.max(0, 65 - currentAge);
   const coastFireTarget = round2(
     yearsTo65 > 0 ? standardFireTarget / Math.pow(1 + annualReturn, yearsTo65) : standardFireTarget,
   );
 
-  const milestones: FireMilestones = {
+  return {
     leanFireTarget,
     standardFireTarget,
     fatFireTarget,
     coastFireTarget,
   };
+}
 
-  const savingsRatePct =
-    input.monthlyIncome > 0
-      ? round2(Math.min(100, Math.max(0, (input.monthlySavings / input.monthlyIncome) * 100)))
-      : 0;
-
-  const currentProgressPct =
-    standardFireTarget > 0
-      ? round2(Math.min(100, Math.max(0, (input.currentNetWorth / standardFireTarget) * 100)))
-      : 0;
-
-  // Simulate month by month
+function generateTimeline(
+  input: FireSimulatorInput,
+  annualReturn: number,
+  swr: number,
+  currentAge: number,
+  horizon: number,
+) {
+  const monthlyReturn = annualReturn / 12;
   let netWorthBase = Math.max(0, input.currentNetWorth);
   let netWorthWithEvents = Math.max(0, input.currentNetWorth);
   let currentMonthlySpend = input.monthlySpend;
@@ -121,12 +113,9 @@ export function calculateFireSimulation(input: FireSimulatorInput): FireSimulati
       monthsToStandardFire = m;
     }
 
-    // Step next month:
-    // 1. Compound existing wealth
     netWorthBase = netWorthBase * (1 + monthlyReturn) + input.monthlySavings;
     netWorthWithEvents = netWorthWithEvents * (1 + monthlyReturn) + input.monthlySavings;
 
-    // 2. Apply scheduled life events for next month
     const scheduled = eventsByMonth.get(m + 1);
     if (scheduled) {
       for (const ev of scheduled) {
@@ -137,6 +126,38 @@ export function calculateFireSimulation(input: FireSimulatorInput): FireSimulati
       }
     }
   }
+
+  return { timeline, monthsToStandardFire };
+}
+
+/**
+ * Calculates core FIRE milestones, time to independence, and life event projections.
+ */
+export function calculateFireSimulation(input: FireSimulatorInput): FireSimulationResult {
+  const annualReturn = (input.annualReturnPct ?? 7.0) / 100;
+  const swr = (input.withdrawalRatePct ?? 4.0) / 100;
+  const currentAge = input.currentAge ?? 30;
+  const horizon = input.projectionHorizonMonths ?? 240;
+
+  const milestones = calculateMilestones(input.monthlySpend * 12, swr, currentAge, annualReturn);
+
+  const savingsRatePct =
+    input.monthlyIncome > 0
+      ? round2(Math.min(100, Math.max(0, (input.monthlySavings / input.monthlyIncome) * 100)))
+      : 0;
+
+  const currentProgressPct =
+    milestones.standardFireTarget > 0
+      ? round2(Math.min(100, Math.max(0, (input.currentNetWorth / milestones.standardFireTarget) * 100)))
+      : 0;
+
+  const { timeline, monthsToStandardFire } = generateTimeline(
+    input,
+    annualReturn,
+    swr,
+    currentAge,
+    horizon,
+  );
 
   const projectedFireAge =
     monthsToStandardFire !== null ? round2(currentAge + monthsToStandardFire / 12) : null;

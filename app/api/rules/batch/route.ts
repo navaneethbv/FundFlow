@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { writeAudit, getClientIp } from "@/lib/audit";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -7,6 +8,8 @@ import {
   type SmartRule,
   type RuleTransactionCandidate,
 } from "@/lib/rules-engine";
+
+type SimulationItem = ReturnType<typeof simulateRulesBatch>["results"][number];
 
 interface BatchRulesRequest {
   rules?: SmartRule[];
@@ -35,65 +38,45 @@ interface DbAnnotation {
   tags: string[] | null;
 }
 
-export async function POST(req: NextRequest) {
-  const auth = await requireUser();
-  if (auth instanceof Response) return auth;
-  const { user, supabase } = auth;
-
-  let body: BatchRulesRequest;
-  try {
-    body = (await req.json()) as BatchRulesRequest;
-  } catch {
-    return badRequest("Invalid JSON body");
+async function resolveRulesToRun(
+  rulesPayload: SmartRule[] | undefined,
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<SmartRule[] | Response> {
+  if (Array.isArray(rulesPayload) && rulesPayload.length > 0) {
+    return rulesPayload;
   }
 
-  const dryRun = body.dryRun !== false;
+  const { data: dbRules, error: rulesError } = await supabase
+    .from("merchant_rules")
+    .select("id, match_type, pattern, display_name, category, enabled")
+    .eq("user_id", userId)
+    .eq("enabled", true)
+    .order("created_at", { ascending: true });
 
-  // 1. Resolve rules: either provided in payload or fetched from database
-  let rulesToRun: SmartRule[] = [];
-  if (Array.isArray(body.rules) && body.rules.length > 0) {
-    rulesToRun = body.rules;
-  } else {
-    const { data: dbRules, error: rulesError } = await supabase
-      .from("merchant_rules")
-      .select("id, match_type, pattern, display_name, category, enabled")
-      .eq("user_id", user.id)
-      .eq("enabled", true)
-      .order("created_at", { ascending: true });
-
-    if (rulesError) {
-      return errorResponse("Failed to load rules: " + rulesError.message, 500);
-    }
-
-    const typedDbRules = (dbRules || []) as unknown as DbMerchantRule[];
-    rulesToRun = typedDbRules.map((r) => ({
-      id: r.id,
-      matchType: r.match_type,
-      pattern: r.pattern,
-      displayName: r.display_name,
-      category: r.category,
-      enabled: r.enabled,
-    }));
+  if (rulesError) {
+    return errorResponse("Failed to load rules: " + rulesError.message, 500);
   }
 
-  if (rulesToRun.length === 0) {
-    return NextResponse.json({
-      success: true,
-      dryRun,
-      totalEvaluated: 0,
-      matchedCount: 0,
-      modifiedCount: 0,
-      appliedCount: 0,
-      preview: [],
-      message: "No active rules to apply.",
-    });
-  }
+  const typedDbRules = (dbRules || []) as unknown as DbMerchantRule[];
+  return typedDbRules.map((r) => ({
+    id: r.id,
+    matchType: r.match_type,
+    pattern: r.pattern,
+    displayName: r.display_name,
+    category: r.category,
+    enabled: r.enabled,
+  }));
+}
 
-  // 2. Fetch recent user transactions (capped at 500 for safety and performance)
+async function fetchCandidateTransactions(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<RuleTransactionCandidate[] | Response> {
   const { data: txns, error: txError } = await supabase
     .from("transactions")
     .select("id, merchant, name, amount, pfc_primary")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .order("date", { ascending: false })
     .limit(500);
 
@@ -102,8 +85,6 @@ export async function POST(req: NextRequest) {
   }
 
   const typedTxns = (txns || []) as unknown as DbTransaction[];
-
-  // 3. Fetch existing annotations for these transactions
   const txnIds = typedTxns.map((t) => t.id);
   const annotationsMap = new Map<string, string[]>();
 
@@ -121,8 +102,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 4. Build candidate list
-  const candidates: RuleTransactionCandidate[] = typedTxns.map((t) => ({
+  return typedTxns.map((t) => ({
     id: t.id,
     merchant: t.merchant,
     name: t.name,
@@ -130,36 +110,14 @@ export async function POST(req: NextRequest) {
     category: t.pfc_primary,
     tags: annotationsMap.get(t.id) || [],
   }));
+}
 
-  // 5. Run rules simulation
-  const simulation = simulateRulesBatch(rulesToRun, candidates);
-
-  // 6. If dry run, return preview of modified items
-  if (dryRun) {
-    const preview = simulation.results
-      .filter((r) => r.modified)
-      .slice(0, 50)
-      .map((r) => ({
-        transactionId: r.transactionId,
-        original: r.original,
-        updated: r.updated,
-        matchedRuleId: r.matchedRuleId,
-      }));
-
-    return NextResponse.json({
-      success: true,
-      dryRun: true,
-      totalEvaluated: simulation.totalEvaluated,
-      matchedCount: simulation.matchedCount,
-      modifiedCount: simulation.modifiedCount,
-      preview,
-    });
-  }
-
-  // 7. Live apply: bulk upsert tag changes & category remapping to transaction_annotations,
-  // and update merchant renaming on transactions without N+1 query loops.
+async function applyBatchLivePersistence(
+  modifiedItems: SimulationItem[],
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<number> {
   let appliedCount = 0;
-  const modifiedItems = simulation.results.filter((r) => r.modified);
 
   // A. Bulk upsert annotations (tags and display_category)
   const annotationRows = modifiedItems
@@ -169,7 +127,7 @@ export async function POST(req: NextRequest) {
         (r.updated.category && r.updated.category !== r.original.category),
     )
     .map((r) => ({
-      user_id: user.id,
+      user_id: userId,
       transaction_id: r.transactionId,
       tags: r.updated.tags,
       ...(r.updated.category && r.updated.category !== r.original.category
@@ -210,7 +168,7 @@ export async function POST(req: NextRequest) {
         .from("transactions")
         .update({ merchant_name: newMerchant, updated_at: new Date().toISOString() })
         .in("id", ids)
-        .eq("user_id", user.id);
+        .eq("user_id", userId);
 
       if (!merchantError) {
         const notInAnnotations = ids.filter(
@@ -220,6 +178,73 @@ export async function POST(req: NextRequest) {
       }
     }
   }
+
+  return appliedCount;
+}
+
+export async function POST(req: NextRequest) {
+  const auth = await requireUser();
+  if (auth instanceof Response) return auth;
+  const { user, supabase } = auth;
+
+  let body: BatchRulesRequest;
+  try {
+    body = (await req.json()) as BatchRulesRequest;
+  } catch {
+    return badRequest("Invalid JSON body");
+  }
+
+  const dryRun = body.dryRun !== false;
+
+  const rulesResult = await resolveRulesToRun(body.rules, supabase, user.id);
+  if (rulesResult instanceof Response) return rulesResult;
+  const rulesToRun = rulesResult;
+
+  if (rulesToRun.length === 0) {
+    return NextResponse.json({
+      success: true,
+      dryRun,
+      totalEvaluated: 0,
+      matchedCount: 0,
+      modifiedCount: 0,
+      appliedCount: 0,
+      preview: [],
+      message: "No active rules to apply.",
+    });
+  }
+
+  const candidatesResult = await fetchCandidateTransactions(supabase, user.id);
+  if (candidatesResult instanceof Response) return candidatesResult;
+  const candidates = candidatesResult;
+
+  const simulation = simulateRulesBatch(rulesToRun, candidates);
+
+  if (dryRun) {
+    const preview = simulation.results
+      .filter((r) => r.modified)
+      .slice(0, 50)
+      .map((r) => ({
+        transactionId: r.transactionId,
+        original: r.original,
+        updated: r.updated,
+        matchedRuleId: r.matchedRuleId,
+      }));
+
+    return NextResponse.json({
+      success: true,
+      dryRun: true,
+      totalEvaluated: simulation.totalEvaluated,
+      matchedCount: simulation.matchedCount,
+      modifiedCount: simulation.modifiedCount,
+      preview,
+    });
+  }
+
+  const appliedCount = await applyBatchLivePersistence(
+    simulation.results.filter((r) => r.modified),
+    supabase,
+    user.id,
+  );
 
   await writeAudit({
     userId: user.id,

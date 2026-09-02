@@ -47,6 +47,193 @@ function toSplitRow(split: { category: string; amount: number }): SplitRow {
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
+function TransactionSplitSection({
+  rows,
+  target,
+  currency,
+  categories,
+  inputId,
+  updateRow,
+  removeRow,
+  setRows,
+  applySplitPreset,
+  splitTotal,
+  splitsBalanced,
+  activeRows,
+}: Readonly<{
+  rows: SplitRow[];
+  target: number;
+  currency: string;
+  categories: string[];
+  inputId: (suffix: string) => string;
+  updateRow: (id: string, patch: Partial<Omit<SplitRow, "id">>) => void;
+  removeRow: (id: string) => void;
+  setRows: React.Dispatch<React.SetStateAction<SplitRow[]>>;
+  applySplitPreset: (parts: number) => void;
+  splitTotal: number;
+  splitsBalanced: boolean;
+  activeRows: SplitRow[];
+}>) {
+  return (
+    <>
+      <div className="mb-2 mt-4 flex items-center justify-between">
+        <span className="text-sm font-medium">Split by category</span>
+        {activeRows.length > 0 && (
+          <span
+            className={cn(
+              "text-xs font-semibold",
+              splitsBalanced ? "text-muted" : "text-danger",
+            )}
+          >
+            {formatCurrency(splitTotal, currency)} / {formatCurrency(target, currency)}
+          </span>
+        )}
+      </div>
+      {activeRows.length > 0 && (
+        <div className="mb-3 space-y-1">
+          <div className="flex justify-between text-xs font-semibold">
+            <span>Allocated: {formatCurrency(splitTotal, currency)}</span>
+            <span className={splitsBalanced ? "text-success" : "text-warning font-bold"}>
+              {splitsBalanced
+                ? "Balanced"
+                : `Remaining: ${formatCurrency(round2(target - splitTotal), currency)}`}
+            </span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-panel-2">
+            <div
+              className={cn(
+                "h-full transition-all duration-200",
+                splitsBalanced ? "bg-success" : splitTotal > target ? "bg-danger" : "bg-accent",
+              )}
+              style={{ width: `${Math.min(100, (splitTotal / target) * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+      <datalist id={inputId("cats")}>
+        {categories.map((c) => (
+          <option key={c} value={c}>
+            {titleCase(c)}
+          </option>
+        ))}
+      </datalist>
+      <div className="space-y-2">
+        {rows.map((row, index) => {
+          const categoryId = `${inputId("split-category")}-${row.id}`;
+          const amountId = `${inputId("split-amount")}-${row.id}`;
+          return (
+            <div key={row.id} className="flex gap-2">
+              <label className="sr-only" htmlFor={categoryId}>
+                Category for split {index + 1}
+              </label>
+              <input
+                id={categoryId}
+                list={inputId("cats")}
+                value={row.category}
+                onChange={(e) => {
+                  updateRow(row.id, { category: e.target.value });
+                }}
+                placeholder="Category"
+                className={cn(fieldClasses, "flex-1")}
+              />
+              <label className="sr-only" htmlFor={amountId}>
+                Amount for split {index + 1}
+              </label>
+              <input
+                id={amountId}
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                value={row.amount}
+                onChange={(e) => {
+                  updateRow(row.id, { amount: e.target.value });
+                }}
+                placeholder="0.00"
+                className={cn(fieldClasses, "w-24 tabular-nums")}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  removeRow(row.id);
+                }}
+                className="rounded-field px-2 text-muted hover:bg-panel-hover hover:text-danger"
+                aria-label={`Remove split ${index + 1}`}
+              >
+                ×
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              const unallocated = round2(Math.max(0, target - splitTotal));
+              setRows((cur) => [
+                ...cur,
+                {
+                  id: crypto.randomUUID(),
+                  category: "",
+                  amount: unallocated > 0 ? String(unallocated) : "",
+                },
+              ]);
+            }}
+          >
+            Add split
+          </Button>
+          {rows.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setRows([]);
+              }}
+              className="text-xs text-muted hover:text-foreground"
+            >
+              Clear splits
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5 text-xs">
+          <span className="text-muted">Presets:</span>
+          <button
+            type="button"
+            onClick={() => {
+              applySplitPreset(2);
+            }}
+            className="rounded-field bg-panel-2 px-2 py-0.5 font-medium hover:bg-panel-hover"
+          >
+            50/50
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              applySplitPreset(3);
+            }}
+            className="rounded-field bg-panel-2 px-2 py-0.5 font-medium hover:bg-panel-hover"
+          >
+            1/3
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              applySplitPreset(4);
+            }}
+            className="rounded-field bg-panel-2 px-2 py-0.5 font-medium hover:bg-panel-hover"
+          >
+            1/4
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 /**
  * Per-row notes/tags/splits editor for the ledger. The row stays server-
  * rendered; this renders a small trigger (with an indicator when annotations or
@@ -218,160 +405,20 @@ export default function TransactionEditor({
               </div>
             )}
 
-            <div className="mb-2 mt-4 flex items-center justify-between">
-              <span className="text-sm font-medium">Split by category</span>
-              {activeRows.length > 0 && (
-                <span
-                  className={cn(
-                    "text-xs font-semibold",
-                    splitsBalanced ? "text-muted" : "text-danger",
-                  )}
-                >
-                  {formatCurrency(splitTotal, transaction.currency)} / {formatCurrency(target, transaction.currency)}
-                </span>
-              )}
-            </div>
-            {activeRows.length > 0 && (
-              <div className="mb-3 space-y-1">
-                <div className="flex justify-between text-xs font-semibold">
-                  <span>Allocated: {formatCurrency(splitTotal, transaction.currency)}</span>
-                  <span className={splitsBalanced ? "text-success" : "text-warning font-bold"}>
-                    {splitsBalanced
-                      ? "Balanced"
-                      : `Remaining: ${formatCurrency(round2(target - splitTotal), transaction.currency)}`}
-                  </span>
-                </div>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-panel-2">
-                  <div
-                    className={cn(
-                      "h-full transition-all duration-200",
-                      splitsBalanced ? "bg-success" : splitTotal > target ? "bg-danger" : "bg-accent",
-                    )}
-                    style={{ width: `${Math.min(100, (splitTotal / target) * 100)}%` }}
-                  />
-                </div>
-              </div>
-            )}
-            <datalist id={inputId("cats")}>
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {titleCase(c)}
-                </option>
-              ))}
-            </datalist>
-            <div className="space-y-2">
-              {rows.map((row, index) => {
-                const categoryId = `${inputId("split-category")}-${row.id}`;
-                const amountId = `${inputId("split-amount")}-${row.id}`;
-                return (
-                  <div key={row.id} className="flex gap-2">
-                    <label className="sr-only" htmlFor={categoryId}>
-                      Category for split {index + 1}
-                    </label>
-                    <input
-                      id={categoryId}
-                      list={inputId("cats")}
-                      value={row.category}
-                      onChange={(e) => {
-                        updateRow(row.id, { category: e.target.value });
-                      }}
-                      placeholder="Category"
-                      className={cn(fieldClasses, "flex-1")}
-                    />
-                    <label className="sr-only" htmlFor={amountId}>
-                      Amount for split {index + 1}
-                    </label>
-                    <input
-                      id={amountId}
-                      type="number"
-                      inputMode="decimal"
-                      step="0.01"
-                      min="0"
-                      value={row.amount}
-                      onChange={(e) => {
-                        updateRow(row.id, { amount: e.target.value });
-                      }}
-                      placeholder="0.00"
-                      className={cn(fieldClasses, "w-24 tabular-nums")}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        removeRow(row.id);
-                      }}
-                      className="rounded-field px-2 text-muted hover:bg-panel-hover hover:text-danger"
-                      aria-label={`Remove split ${index + 1}`}
-                    >
-                      ×
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    const unallocated = round2(Math.max(0, target - splitTotal));
-                    setRows((cur) => [
-                      ...cur,
-                      {
-                        id: crypto.randomUUID(),
-                        category: "",
-                        amount: unallocated > 0 ? String(unallocated) : "",
-                      },
-                    ]);
-                  }}
-                >
-                  Add split
-                </Button>
-                {rows.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRows([]);
-                    }}
-                    className="text-xs text-muted hover:text-foreground"
-                  >
-                    Clear splits
-                  </button>
-                )}
-              </div>
-
-              <div className="flex items-center gap-1.5 text-xs">
-                <span className="text-muted">Presets:</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    applySplitPreset(2);
-                  }}
-                  className="rounded-field bg-panel-2 px-2 py-0.5 font-medium hover:bg-panel-hover"
-                >
-                  50/50
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    applySplitPreset(3);
-                  }}
-                  className="rounded-field bg-panel-2 px-2 py-0.5 font-medium hover:bg-panel-hover"
-                >
-                  1/3
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    applySplitPreset(4);
-                  }}
-                  className="rounded-field bg-panel-2 px-2 py-0.5 font-medium hover:bg-panel-hover"
-                >
-                  1/4
-                </button>
-              </div>
-            </div>
+            <TransactionSplitSection
+              rows={rows}
+              target={target}
+              currency={transaction.currency}
+              categories={categories}
+              inputId={inputId}
+              updateRow={updateRow}
+              removeRow={removeRow}
+              setRows={setRows}
+              applySplitPreset={applySplitPreset}
+              splitTotal={splitTotal}
+              splitsBalanced={splitsBalanced}
+              activeRows={activeRows}
+            />
 
             <TransactionOverrideControl
               transactionId={transaction.id}
