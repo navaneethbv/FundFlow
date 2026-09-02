@@ -150,7 +150,16 @@ prerequisite for any future "spending is only what left the household" feature.
 
 ## 4. Budget templates and month-to-month copy
 
-**Status: partial. Per-category rollover exists; templates and bulk copy do not.**
+**Status: partial — copy-last-month shipped 2026-09-02; saved templates still missing.**
+
+Shipped: "Copy last month" on the Budget page (`components/budget/CopyLastMonthButton.tsx`)
+backs `POST /api/budget/copy` (`app/api/budget/copy/`, plan logic in
+`lib/budget-copy.ts`), which upserts the previous month's `budget_periods`
+planned amounts into the target month keyed by the same `budget_id`, leaving
+rollover/group/category untouched. When the target month already has envelopes
+the route answers 409 and the dialog forces an explicit merge (fill empty) or
+overwrite choice — never a silent replace. Still missing: a *saved* budget
+template that seeds a month without needing a populated previous month.
 
 `lib/budget-page.ts` supports `rollover_enabled` per budget row, so an
 underspent envelope can carry forward. There is no budget template, no "copy
@@ -259,7 +268,19 @@ into a ten-minute task.
 
 ## 7. Tax-ready categorization and export
 
-**Status: partial. A tag filter exists; tax categories do not.**
+**Status: shipped 2026-09-02.**
+
+Shipped: the yearly tax export lives at `GET /api/export/tax?year=YYYY`
+(`app/api/export/tax/route.ts`) with its Settings entry in Export data
+(`components/settings/TaxExportButton.tsx`). Tax line items come from a curated
+set (`lib/tax-categories.ts`) resolved from the free-form tags users already
+assign in the ledger editor — no new column, no new editor; the legacy bare
+`tax` tag falls back to "Other tax-tagged". Rows run through the canonical
+projection (overrides, merchant rules, refunds, duplicates, splits), so splits
+are counted once by construction, and `toTaxCsv` is finally wired (resolving
+F3) with a per-line-item summary block appended. Session-only, gated by
+`ai_export_enabled`, same date/merchant/amount/category privacy contract, and
+the export carries a "not tax advice" note in the UI.
 
 `app/api/export/csv?scope=tax` exports only transactions the user manually
 tagged `"tax"` (`app/api/export/csv/route.ts:26`), and `toTaxCsv` in

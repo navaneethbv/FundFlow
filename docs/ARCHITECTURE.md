@@ -77,6 +77,9 @@ flowchart TB
   `/api/export/report` serves the weekly PDF on demand, and
   `/api/export/report-csv` the Reports page's filtered row set (`isExportAllowed`
   is the shared `ai_export_enabled` gate for exports that build their own rows).
+  `/api/export/tax` is the yearly tax export: canonical-projection rows for one
+  calendar year filtered by the curated tag→line-item map in `tax-categories.ts`
+  and grouped by `tax-export.ts`, with `toTaxCsv` for the detail block.
 - `sankey.ts` — pure Sankey geometry for `components/charts/SankeyChart.tsx`.
   Two invariants: one value→pixel scale is shared by every column (per-column
   scaling silently breaks flow conservation), and ribbon thickness is never

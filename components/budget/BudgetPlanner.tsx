@@ -17,6 +17,7 @@ import type {
   BudgetViewData,
 } from "@/lib/budget-page";
 import SeedBudgetButton from "@/components/budget/SeedBudgetButton";
+import CopyLastMonthButton from "@/components/budget/CopyLastMonthButton";
 
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -347,7 +348,8 @@ export default function BudgetPlanner({
     <div className="space-y-5">
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-5">
-          <div className="flex justify-end">
+          <div className="flex flex-wrap justify-end gap-2">
+            <CopyLastMonthButton month={month} />
             <SeedBudgetButton proposals={proposals} month={month} currency={currency} />
           </div>
 
