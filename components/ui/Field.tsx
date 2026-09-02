@@ -1,5 +1,50 @@
-import { Children, cloneElement, isValidElement } from "react";
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  type ReactElement,
+} from "react";
 import Label from "@/components/ui/Label";
+
+interface EnhanceableProps {
+  id?: string;
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean | "true" | "false";
+  children?: React.ReactNode;
+}
+
+function isCandidateControl(child: ReactElement<EnhanceableProps>): boolean {
+  if (typeof child.type !== "string") return true;
+  return ["input", "select", "textarea", "button"].includes(
+    child.type.toLowerCase(),
+  );
+}
+
+function shouldEnhanceControl(
+  child: ReactElement<EnhanceableProps>,
+  isSoleChild: boolean,
+  htmlFor?: string,
+): boolean {
+  if (htmlFor && child.props.id === htmlFor) return true;
+  if (!isSoleChild || !isCandidateControl(child)) return false;
+  return !htmlFor || !child.props.id;
+}
+
+function enhanceControl(
+  child: ReactElement<EnhanceableProps>,
+  describedBy?: string,
+  hasError?: boolean,
+): ReactElement<EnhanceableProps> {
+  const existingDescribedBy = child.props["aria-describedby"];
+  const mergedDescribedBy = existingDescribedBy
+    ? `${existingDescribedBy} ${describedBy}`
+    : describedBy;
+
+  return cloneElement(child, {
+    ...(describedBy ? { "aria-describedby": mergedDescribedBy } : {}),
+    ...(hasError ? { "aria-invalid": true } : {}),
+  });
+}
 
 function enhanceElement(
   node: React.ReactNode,
@@ -15,14 +60,7 @@ function enhanceElement(
   const isSoleChild = Children.count(node) === 1;
 
   return Children.map(node, (child) => {
-    if (
-      !isValidElement<{
-        id?: string;
-        "aria-describedby"?: string;
-        "aria-invalid"?: boolean | "true" | "false";
-        children?: React.ReactNode;
-      }>(child)
-    ) {
+    if (!isValidElement<EnhanceableProps>(child)) {
       return child;
     }
 
@@ -31,24 +69,8 @@ function enhanceElement(
       return child;
     }
 
-    const isExplicitMatch = htmlFor ? child.props.id === htmlFor : false;
-    const isCandidateControl =
-      typeof child.type === "string"
-        ? ["input", "select", "textarea", "button"].includes(child.type.toLowerCase())
-        : true;
-
-    if (
-      isExplicitMatch ||
-      (isSoleChild && ((!htmlFor && isCandidateControl) || (htmlFor && !child.props.id && isCandidateControl)))
-    ) {
-      const existingDescribedBy = child.props["aria-describedby"];
-      const mergedDescribedBy = existingDescribedBy
-        ? `${existingDescribedBy} ${describedBy}`
-        : describedBy;
-      return cloneElement(child, {
-        ...(describedBy ? { "aria-describedby": mergedDescribedBy } : {}),
-        ...(hasError ? { "aria-invalid": true } : {}),
-      });
+    if (shouldEnhanceControl(child, isSoleChild, htmlFor)) {
+      return enhanceControl(child, describedBy, hasError);
     }
 
     if (child.props.children && typeof child.props.children !== "string") {
