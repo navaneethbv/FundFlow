@@ -38,13 +38,20 @@ describe("Keyboard Shortcuts: Logic & Definitions", () => {
     expect(isEditableElement({ tagName: "button" } as unknown as EventTarget)).toBe(false);
   });
 
-  it("ignores keydown events when focus is inside an editable element", () => {
+  function makeState(pendingChord: string | null = null) {
+    const toggleHelp = vi.fn();
+    const navigate = vi.fn();
+    const preventDefault = vi.fn();
     const state: ShortcutHandlerState = {
-      pendingChord: "g",
-      toggleHelp: vi.fn(),
-      navigate: vi.fn(),
+      pendingChord,
+      toggleHelp,
+      navigate,
     };
+    return { toggleHelp, navigate, preventDefault, state };
+  }
 
+  it("ignores keydown events when focus is inside an editable element", () => {
+    const { state } = makeState("g");
     const target = { tagName: "INPUT" } as unknown as EventTarget;
     const next = processShortcutKeyDown(
       { key: "t", metaKey: false, ctrlKey: false, altKey: false, target, preventDefault: vi.fn() },
@@ -56,16 +63,7 @@ describe("Keyboard Shortcuts: Logic & Definitions", () => {
   });
 
   it("processes '?' shortcut to toggle help", () => {
-    const toggleHelp = vi.fn();
-    const navigate = vi.fn();
-    const preventDefault = vi.fn();
-
-    const state: ShortcutHandlerState = {
-      pendingChord: null,
-      toggleHelp,
-      navigate,
-    };
-
+    const { toggleHelp, preventDefault, state } = makeState();
     const next = processShortcutKeyDown(
       { key: "?", metaKey: false, ctrlKey: false, altKey: false, target: null, preventDefault },
       state,
@@ -77,15 +75,7 @@ describe("Keyboard Shortcuts: Logic & Definitions", () => {
   });
 
   it("ignores key events with modifier keys", () => {
-    const toggleHelp = vi.fn();
-    const navigate = vi.fn();
-    const preventDefault = vi.fn();
-
-    const state: ShortcutHandlerState = {
-      pendingChord: null,
-      toggleHelp,
-      navigate,
-    };
+    const { preventDefault, state } = makeState();
 
     expect(
       processShortcutKeyDown(
@@ -110,16 +100,7 @@ describe("Keyboard Shortcuts: Logic & Definitions", () => {
   });
 
   it("starts chord sequence on 'g' key", () => {
-    const toggleHelp = vi.fn();
-    const navigate = vi.fn();
-    const preventDefault = vi.fn();
-
-    const state: ShortcutHandlerState = {
-      pendingChord: null,
-      toggleHelp,
-      navigate,
-    };
-
+    const { preventDefault, state } = makeState();
     const next = processShortcutKeyDown(
       { key: "g", metaKey: false, ctrlKey: false, altKey: false, target: null, preventDefault },
       state,
@@ -130,16 +111,7 @@ describe("Keyboard Shortcuts: Logic & Definitions", () => {
 
   it("completes chord navigation when pending chord is 'g'", () => {
     for (const [key, path] of Object.entries(NAVIGATION_ROUTES)) {
-      const toggleHelp = vi.fn();
-      const navigate = vi.fn();
-      const preventDefault = vi.fn();
-
-      const state: ShortcutHandlerState = {
-        pendingChord: "g",
-        toggleHelp,
-        navigate,
-      };
-
+      const { navigate, preventDefault, state } = makeState("g");
       const next = processShortcutKeyDown(
         { key, metaKey: false, ctrlKey: false, altKey: false, target: null, preventDefault },
         state,
@@ -152,16 +124,7 @@ describe("Keyboard Shortcuts: Logic & Definitions", () => {
   });
 
   it("handles unknown key following 'g' by clearing pending chord without navigating", () => {
-    const toggleHelp = vi.fn();
-    const navigate = vi.fn();
-    const preventDefault = vi.fn();
-
-    const state: ShortcutHandlerState = {
-      pendingChord: "g",
-      toggleHelp,
-      navigate,
-    };
-
+    const { navigate, preventDefault, state } = makeState("g");
     const next = processShortcutKeyDown(
       { key: "z", metaKey: false, ctrlKey: false, altKey: false, target: null, preventDefault },
       state,

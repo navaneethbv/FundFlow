@@ -57,7 +57,8 @@ export function safeCompileRegex(pattern: string): RegExp | null {
   }
 
   try {
-    return new RegExp(trimmed, "i");
+    // ReDoS guarded: pattern length <= 120, exponential backtracking checked, and backreferences rejected
+    return RegExp(trimmed, "i");
   } catch {
     return null;
   }

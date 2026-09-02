@@ -40,6 +40,70 @@ vi.mock("@/lib/audit", () => ({
   getClientIp: () => "127.0.0.1",
 }));
 
+function createMockBatchDb(options?: {
+  rules?: Array<Record<string, unknown>>;
+  transactions?: Array<Record<string, unknown>>;
+  onUpsert?: (...args: unknown[]) => Promise<{ error: null }>;
+}) {
+  const {
+    rules = [
+      {
+        id: "r1",
+        match_type: "keyword",
+        pattern: "Target",
+        display_name: "Target Store",
+        category: "SHOPPING",
+        enabled: true,
+      },
+    ],
+    transactions = [
+      {
+        id: "tx-1",
+        merchant: "Target #123",
+        name: "TARGET",
+        amount: -40,
+        pfc_primary: "GENERAL",
+      },
+    ],
+    onUpsert = vi.fn().mockResolvedValue({ error: null }),
+  } = options ?? {};
+
+  return {
+    from: vi.fn((table: string) => {
+      if (table === "merchant_rules") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockResolvedValue({ data: rules }),
+        };
+      }
+      if (table === "transactions") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue({ data: transactions }),
+        };
+      }
+      if (table === "transaction_annotations") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          in: vi.fn().mockResolvedValue({ data: [] }),
+          upsert: onUpsert,
+        };
+      }
+      return {};
+    }),
+  };
+}
+
+function createBatchRequest(body: unknown) {
+  return new NextRequest("http://localhost/api/rules/batch", {
+    method: "POST",
+    body: typeof body === "string" ? body : JSON.stringify(body),
+  });
+}
+
 describe("POST /api/rules/batch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -50,12 +114,7 @@ describe("POST /api/rules/batch", () => {
       new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }),
     );
 
-    const req = new NextRequest("http://localhost/api/rules/batch", {
-      method: "POST",
-      body: JSON.stringify({ dryRun: true }),
-    });
-
-    const res = await POST(req);
+    const res = await POST(createBatchRequest({ dryRun: true }));
     expect(res.status).toBe(401);
   });
 
@@ -65,75 +124,19 @@ describe("POST /api/rules/batch", () => {
       supabase: {},
     });
 
-    const req = new NextRequest("http://localhost/api/rules/batch", {
-      method: "POST",
-      body: "not-json",
-    });
-
-    const res = await POST(req);
+    const res = await POST(createBatchRequest("not-json"));
     expect(res.status).toBe(400);
   });
 
   it("returns dry run preview when dryRun is true", async () => {
-    const mockSupabase = {
-      from: vi.fn((table: string) => {
-        if (table === "merchant_rules") {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            order: vi.fn().mockResolvedValue({
-              data: [
-                {
-                  id: "r1",
-                  match_type: "keyword",
-                  pattern: "Target",
-                  display_name: "Target Store",
-                  category: "SHOPPING",
-                  enabled: true,
-                },
-              ],
-            }),
-          };
-        }
-        if (table === "transactions") {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            order: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockResolvedValue({
-              data: [
-                {
-                  id: "tx-1",
-                  merchant: "Target #123",
-                  name: "TARGET",
-                  amount: -40,
-                  pfc_primary: "GENERAL",
-                },
-              ],
-            }),
-          };
-        }
-        if (table === "transaction_annotations") {
-          return {
-            select: vi.fn().mockReturnThis(),
-            in: vi.fn().mockResolvedValue({ data: [] }),
-          };
-        }
-        return {};
-      }),
-    };
+    const mockSupabase = createMockBatchDb();
 
     mockRequireUser.mockResolvedValueOnce({
       user: { id: "u-1" },
       supabase: mockSupabase,
     });
 
-    const req = new NextRequest("http://localhost/api/rules/batch", {
-      method: "POST",
-      body: JSON.stringify({ dryRun: true }),
-    });
-
-    const res = await POST(req);
+    const res = await POST(createBatchRequest({ dryRun: true }));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
@@ -146,64 +149,26 @@ describe("POST /api/rules/batch", () => {
 
   it("performs live apply with bulk upsert of annotations and merchant updates", async () => {
     const mockUpsert = vi.fn().mockResolvedValue({ error: null });
-    const mockSupabase = {
-      from: vi.fn((table: string) => {
-        if (table === "merchant_rules") {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            order: vi.fn().mockResolvedValue({
-              data: [
-                {
-                  id: "r1",
-                  match_type: "keyword",
-                  pattern: "Target",
-                  display_name: "Target Supercenter",
-                  category: "GROCERIES",
-                  tags: ["supplies"],
-                  enabled: true,
-                },
-              ],
-            }),
-          };
-        }
-        if (table === "transactions") {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            order: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockResolvedValue({
-              data: [
-                {
-                  id: "tx-1",
-                  merchant: "Target Store",
-                  name: "TARGET",
-                  amount: -50,
-                  pfc_primary: "GENERAL",
-                },
-              ],
-            }),
-          };
-        }
-        if (table === "transaction_annotations") {
-          return {
-            select: vi.fn().mockReturnThis(),
-            in: vi.fn().mockResolvedValue({ data: [] }),
-            upsert: mockUpsert,
-          };
-        }
-        return {};
-      }),
-    };
+    const mockSupabase = createMockBatchDb({
+      transactions: [
+        {
+          id: "tx-1",
+          merchant: "Target Store",
+          name: "TARGET",
+          amount: -50,
+          pfc_primary: "GENERAL",
+        },
+      ],
+      onUpsert: mockUpsert,
+    });
 
     mockRequireUser.mockResolvedValueOnce({
       user: { id: "u-1" },
       supabase: mockSupabase,
     });
 
-    const req = new NextRequest("http://localhost/api/rules/batch", {
-      method: "POST",
-      body: JSON.stringify({
+    const res = await POST(
+      createBatchRequest({
         dryRun: false,
         rules: [
           {
@@ -217,9 +182,8 @@ describe("POST /api/rules/batch", () => {
           },
         ],
       }),
-    });
+    );
 
-    const res = await POST(req);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);

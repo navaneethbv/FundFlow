@@ -5,6 +5,30 @@ import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import { SHORTCUTS } from "@/lib/use-keyboard-shortcuts";
 
+function ShortcutItem({
+  description,
+  chord,
+}: Readonly<{
+  description: string;
+  chord: string;
+}>) {
+  return (
+    <div className="flex items-center justify-between rounded-field bg-panel-2 px-3 py-2 text-xs">
+      <span className="text-foreground">{description}</span>
+      <span className="flex items-center gap-1 font-mono">
+        {chord.split(" ").map((k) => (
+          <kbd
+            key={k}
+            className="rounded border border-panel-border bg-panel px-1.5 py-0.5 font-bold uppercase text-foreground shadow-sm"
+          >
+            {k}
+          </kbd>
+        ))}
+      </span>
+    </div>
+  );
+}
+
 export default function KeyboardShortcutsModal({
   open,
   onClose,
@@ -36,22 +60,7 @@ export default function KeyboardShortcutsModal({
           </h4>
           <div className="grid gap-2 sm:grid-cols-2">
             {navigationShortcuts.map((s) => (
-              <div
-                key={s.chord}
-                className="flex items-center justify-between rounded-field bg-panel-2 px-3 py-2 text-xs"
-              >
-                <span className="text-foreground">{s.description}</span>
-                <span className="flex items-center gap-1 font-mono">
-                  {s.chord.split(" ").map((k) => (
-                    <kbd
-                      key={k}
-                      className="rounded border border-panel-border bg-panel px-1.5 py-0.5 font-bold uppercase text-foreground shadow-sm"
-                    >
-                      {k}
-                    </kbd>
-                  ))}
-                </span>
-              </div>
+              <ShortcutItem key={s.chord} description={s.description} chord={s.chord} />
             ))}
           </div>
         </div>
@@ -62,22 +71,7 @@ export default function KeyboardShortcutsModal({
           </h4>
           <div className="grid gap-2 sm:grid-cols-2">
             {generalShortcuts.map((s) => (
-              <div
-                key={s.chord}
-                className="flex items-center justify-between rounded-field bg-panel-2 px-3 py-2 text-xs"
-              >
-                <span className="text-foreground">{s.description}</span>
-                <span className="flex items-center gap-1 font-mono">
-                  {s.chord.split(" ").map((k) => (
-                    <kbd
-                      key={k}
-                      className="rounded border border-panel-border bg-panel px-1.5 py-0.5 font-bold uppercase text-foreground shadow-sm"
-                    >
-                      {k}
-                    </kbd>
-                  ))}
-                </span>
-              </div>
+              <ShortcutItem key={s.chord} description={s.description} chord={s.chord} />
             ))}
           </div>
         </div>

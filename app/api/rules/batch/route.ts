@@ -196,7 +196,10 @@ export async function POST(req: NextRequest) {
     const service = createServiceClient();
     const byMerchant = new Map<string, string[]>();
     for (const item of merchantUpdates) {
-      const targetName = item.updated.merchant!;
+      const targetName = item.updated.merchant;
+      if (!targetName) {
+        continue;
+      }
       const list = byMerchant.get(targetName) ?? [];
       list.push(item.transactionId);
       byMerchant.set(targetName, list);

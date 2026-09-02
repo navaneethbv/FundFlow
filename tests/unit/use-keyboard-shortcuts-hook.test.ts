@@ -35,6 +35,31 @@ vi.mock("react", async (importOriginal) => {
 
 import { useKeyboardShortcuts } from "@/lib/use-keyboard-shortcuts";
 
+function createMockKeyEvent(key: string): KeyboardEvent {
+  return {
+    key,
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    target: null,
+    preventDefault: vi.fn(),
+  } as unknown as KeyboardEvent;
+}
+
+function createMockWindow() {
+  let capturedHandler: ((e: KeyboardEvent) => void) | null = null;
+  const addEventListener = vi.fn((event: string, handler: unknown) => {
+    if (event === "keydown") {
+      capturedHandler = handler as (e: KeyboardEvent) => void;
+    }
+  });
+  const removeEventListener = vi.fn();
+  return {
+    getHandler: () => capturedHandler,
+    windowObj: { addEventListener, removeEventListener },
+  };
+}
+
 describe("useKeyboardShortcuts Hook Lifecycle", () => {
   beforeEach(() => {
     currentEffect = null;
@@ -46,55 +71,37 @@ describe("useKeyboardShortcuts Hook Lifecycle", () => {
   });
 
   it("mounts keydown event listener and cleans up on unmount", () => {
-    const addEventListener = vi.fn();
-    const removeEventListener = vi.fn();
+    const { windowObj } = createMockWindow();
 
-    vi.stubGlobal("window", {
-      addEventListener,
-      removeEventListener,
-    });
+    vi.stubGlobal("window", windowObj);
 
     useKeyboardShortcuts();
     expect(currentEffect).not.toBeNull();
 
     const cleanup = currentEffect!();
-    expect(addEventListener).toHaveBeenCalledWith("keydown", expect.any(Function));
+    expect(windowObj.addEventListener).toHaveBeenCalledWith("keydown", expect.any(Function));
 
     if (typeof cleanup === "function") {
       cleanup();
-      expect(removeEventListener).toHaveBeenCalledWith("keydown", expect.any(Function));
+      expect(windowObj.removeEventListener).toHaveBeenCalledWith("keydown", expect.any(Function));
     }
 
     vi.unstubAllGlobals();
   });
 
   it("clears active chord timeout on unmount", () => {
-    let capturedHandler: ((e: KeyboardEvent) => void) | null = null;
-    const addEventListener = vi.fn((event: string, handler: unknown) => {
-      if (event === "keydown") capturedHandler = handler as (e: KeyboardEvent) => void;
-    });
-    const removeEventListener = vi.fn();
+    const mockWin = createMockWindow();
     const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
 
-    vi.stubGlobal("window", {
-      addEventListener,
-      removeEventListener,
-    });
+    vi.stubGlobal("window", mockWin.windowObj);
 
     useKeyboardShortcuts();
     const cleanup = currentEffect!();
 
     // Start chord 'g' to trigger timeout creation
-    const eventG = {
-      key: "g",
-      metaKey: false,
-      ctrlKey: false,
-      altKey: false,
-      target: null,
-      preventDefault: vi.fn(),
-    } as unknown as KeyboardEvent;
-
-    capturedHandler!(eventG);
+    const handler = mockWin.getHandler();
+    expect(handler).not.toBeNull();
+    handler!(createMockKeyEvent("g"));
 
     if (typeof cleanup === "function") {
       cleanup();
@@ -106,35 +113,20 @@ describe("useKeyboardShortcuts Hook Lifecycle", () => {
   });
 
   it("executes keydown handler inside effect: 'g' starts chord, 't' navigates, timeout clears chord", () => {
-    let capturedHandler: ((e: KeyboardEvent) => void) | null = null;
-    const addEventListener = vi.fn((event: string, handler: unknown) => {
-      if (event === "keydown") capturedHandler = handler as (e: KeyboardEvent) => void;
-    });
-    const removeEventListener = vi.fn();
+    const mockWin = createMockWindow();
 
-    vi.stubGlobal("window", {
-      addEventListener,
-      removeEventListener,
-    });
+    vi.stubGlobal("window", mockWin.windowObj);
 
     vi.useFakeTimers();
 
     useKeyboardShortcuts();
     currentEffect!();
 
-    expect(capturedHandler).not.toBeNull();
+    const handler = mockWin.getHandler();
+    expect(handler).not.toBeNull();
 
     // 1. Press 'g'
-    const eventG = {
-      key: "g",
-      metaKey: false,
-      ctrlKey: false,
-      altKey: false,
-      target: null,
-      preventDefault: vi.fn(),
-    } as unknown as KeyboardEvent;
-
-    capturedHandler!(eventG);
+    handler!(createMockKeyEvent("g"));
     expect(chordRef.current).toBe("g");
 
     // Advance timer by 1300ms to test timeout chord reset
@@ -142,32 +134,14 @@ describe("useKeyboardShortcuts Hook Lifecycle", () => {
     expect(chordRef.current).toBeNull();
 
     // 2. Press 'g' then 't'
-    capturedHandler!(eventG);
+    handler!(createMockKeyEvent("g"));
     expect(chordRef.current).toBe("g");
 
-    const eventT = {
-      key: "t",
-      metaKey: false,
-      ctrlKey: false,
-      altKey: false,
-      target: null,
-      preventDefault: vi.fn(),
-    } as unknown as KeyboardEvent;
-
-    capturedHandler!(eventT);
+    handler!(createMockKeyEvent("t"));
     expect(mockRouterPush).toHaveBeenCalledWith("/transactions");
 
     // 3. Press '?' -> Toggles help
-    const eventHelp = {
-      key: "?",
-      metaKey: false,
-      ctrlKey: false,
-      altKey: false,
-      target: null,
-      preventDefault: vi.fn(),
-    } as unknown as KeyboardEvent;
-
-    capturedHandler!(eventHelp);
+    handler!(createMockKeyEvent("?"));
     expect(mockHelpOpen).toBe(true);
 
     vi.useRealTimers();
