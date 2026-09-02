@@ -12,6 +12,12 @@ interface CreditAccount {
   apr: number | null;
 }
 
+function aprLabel(account: CreditAccount): string {
+  const accountName = account.name ?? "card";
+  const accountSuffix = account.mask ? `ending in ${account.mask}` : null;
+  return ["APR for", accountName, accountSuffix].filter(Boolean).join(" ");
+}
+
 /**
  * Card APRs feed the debt payoff planner (1.10). Plaid's transactions
  * product doesn't provide rates, so the user enters them once here.
@@ -65,7 +71,7 @@ export default function CardAprSection({
             </span>
             <Input
               id={`card-apr-${account.id}`}
-              aria-label={`APR for ${account.name ?? "card"}${account.mask ? ` ending in ${account.mask}` : ""}`}
+              aria-label={aprLabel(account)}
               type="number"
               min="0"
               max="99.99"
