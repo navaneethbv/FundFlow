@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { InstitutionAvatar, MerchantAvatar } from "@/components/ui/Avatar";
 import CategoryChip from "@/components/ui/CategoryChip";
@@ -10,6 +10,7 @@ import { daysUntil, formatDueAnnotation } from "@/lib/format-date";
 import { formatCurrency, formatDay, titleCase } from "@/lib/format";
 import type { RecurringOccurrence } from "@/lib/recurring-page";
 import type { ManualRecurringItemRow, RecurringStreamRow } from "@/lib/recurring-data";
+import { usePopoverMenu } from "@/lib/use-popover-menu";
 
 export type RecurringTab = "overdue" | "upcoming" | "complete" | "manage";
 
@@ -111,24 +112,9 @@ function OccurrenceRowMenu({
   onToggleManualEnabled: (id: string, enabled: boolean) => void;
   onDeleteManualItem: (id: string) => void;
 }>) {
-  const [open, setOpen] = useState(false);
+  const { open, toggle, close, triggerRef, onBlur } = usePopoverMenu();
   const initialAmount = stream?.userAmount != null ? String(stream.userAmount) : "";
   const [amount, setAmount] = useState(initialAmount);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-
-  function close() {
-    setOpen(false);
-    triggerRef.current?.focus();
-  }
-
-  useEffect(() => {
-    if (!open) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") close();
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open]);
 
   if (isPersistedStreamSource(occurrence.source) && stream?.isOwn !== true) {
     return <span className="text-xs text-muted">Shared · view only</span>;
@@ -139,7 +125,7 @@ function OccurrenceRowMenu({
     stream?.status === "MATURE" && !stream.dismissedAt && !stream.reviewedAt;
 
   return (
-    <div className="relative inline-block">
+    <div className="relative inline-block" onBlur={onBlur}>
       {open && (
         <button
           type="button"
@@ -152,7 +138,7 @@ function OccurrenceRowMenu({
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={toggle}
         aria-expanded={open}
         aria-label={`More options for ${occurrence.merchant}`}
         className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"
@@ -192,7 +178,7 @@ function OccurrenceRowMenu({
                     disabled={pending}
                     onClick={() => {
                       onReview(stream.id);
-                      setOpen(false);
+                      close();
                     }}
                     className="min-h-11 flex-1 rounded-field bg-accent px-3 text-sm font-semibold text-accent-foreground"
                   >
@@ -203,7 +189,7 @@ function OccurrenceRowMenu({
                     disabled={pending}
                     onClick={() => {
                       onDismiss(stream.id);
-                      setOpen(false);
+                      close();
                     }}
                     className="min-h-11 flex-1 rounded-field border border-panel-border px-3 text-sm font-semibold"
                   >
@@ -217,7 +203,7 @@ function OccurrenceRowMenu({
                   disabled={pending}
                   onClick={() => {
                     onRestore(stream.id);
-                    setOpen(false);
+                    close();
                   }}
                   className="min-h-11 w-full rounded-field border border-panel-border px-3 text-sm font-semibold"
                 >
@@ -242,7 +228,7 @@ function OccurrenceRowMenu({
                 disabled={pending}
                 onClick={() => {
                   onDeleteManualItem(manualItem.id);
-                  setOpen(false);
+                  close();
                 }}
                 className="min-h-11 w-full rounded-field border border-panel-border px-3 text-sm font-semibold"
               >

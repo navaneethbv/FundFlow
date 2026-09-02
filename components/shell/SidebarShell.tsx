@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { writeSidebarCollapsedCookie } from "@/lib/sidebar-collapsed-cookie";
 import { cn } from "@/lib/cn";
 import { ChevronLeft, ChevronRight } from "@/components/ui/icons";
 import { LogoMark } from "@/components/ui/Logo";
+
+const subscribeToHydration = () => () => undefined;
 
 /**
  * Owns the collapse/expand chrome and the three-region layout (logo +
@@ -44,6 +46,11 @@ export default function SidebarShell({
   initialCollapsed?: boolean;
 }>) {
   const [collapsed, setCollapsed] = useState(initialCollapsed);
+  const hydrated = useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false,
+  );
   const supabase = createClient();
 
   async function toggle() {
@@ -100,6 +107,7 @@ export default function SidebarShell({
 
           <button
             type="button"
+            disabled={!hydrated}
             onClick={toggle}
             aria-pressed={collapsed}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}

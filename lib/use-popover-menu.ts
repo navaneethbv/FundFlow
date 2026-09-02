@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type FocusEvent } from "react";
 
 /**
  * Shared hook for popover / dropdown menus with keyboard dismiss and focus return.
@@ -10,6 +10,10 @@ export function usePopoverMenu(initialOpen = false) {
   const close = useCallback(() => {
     setOpen(false);
     triggerRef.current?.focus();
+  }, []);
+
+  const dismiss = useCallback(() => {
+    setOpen(false);
   }, []);
 
   const toggle = useCallback(() => {
@@ -25,5 +29,27 @@ export function usePopoverMenu(initialOpen = false) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, close]);
 
-  return { open, setOpen, close, toggle, triggerRef };
+  /**
+   * Closes when focus leaves the menu's wrapping element (spread onto its
+   * `relative inline-block` container). Mouse users get an outside-click
+   * dismiss for free from the invisible `PopoverBackdrop`; without this,
+   * keyboard users had no equivalent — tabbing past the last control just
+   * left the popover open and orphaned behind whatever they tabbed onto.
+   * Guarded on `open` so a plain Tab away from a *closed* trigger does not
+   * perform any state update, and uses `dismiss()` so focus can continue
+   * naturally to the next page control.
+   */
+  const onBlur = useCallback(
+    (event: FocusEvent<HTMLElement>) => {
+      if (!open) return;
+      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+        // Let normal Tab navigation continue from the next control instead
+        // of moving focus back to the trigger the user just left.
+        dismiss();
+      }
+    },
+    [open, dismiss],
+  );
+
+  return { open, setOpen, close, dismiss, toggle, triggerRef, onBlur };
 }

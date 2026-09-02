@@ -138,15 +138,17 @@ export default function SettleUpSection({
 
       {others.length > 0 ? (
         <form onSubmit={add} className="flex flex-wrap items-end gap-2">
-          <Field label="I paid for">
+          <Field label="I paid for" htmlFor="settle-up-description">
             <Input
+              id="settle-up-description"
               placeholder="Groceries"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
           </Field>
-          <Field label="Their share">
+          <Field label="Their share" htmlFor="settle-up-amount">
             <Input
+              id="settle-up-amount"
               type="number"
               min="0.01"
               step="0.01"
@@ -156,8 +158,8 @@ export default function SettleUpSection({
               className="w-28"
             />
           </Field>
-          <Field label="Owed by">
-            <Select value={owedBy} onChange={(e) => setOwedBy(e.target.value)}>
+          <Field label="Owed by" htmlFor="settle-up-owed-by">
+            <Select id="settle-up-owed-by" value={owedBy} onChange={(e) => setOwedBy(e.target.value)}>
               {others.map((member) => (
                 <option key={member.userId} value={member.userId}>
                   {member.email}

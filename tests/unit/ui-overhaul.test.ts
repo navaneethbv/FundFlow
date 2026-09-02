@@ -2,6 +2,16 @@ import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("UI overhaul primitives and shell", () => {
+  it("traps focus and restores it for the mobile navigation dialog", () => {
+    const source = readFileSync("components/shell/MobileNavigation.tsx", "utf8");
+    expect(source).toContain('import { useDialogFocus } from "@/lib/use-dialog-focus"');
+    expect(source).toContain("useDialogFocus(dialogRef, open");
+    expect(source).toContain("ref={dialogRef}");
+    expect(source).toContain("onKeyDown={handleDialogKeyDown}");
+    expect(source).toContain("useSyncExternalStore");
+    expect(source).toContain("disabled={!hydrated}");
+  });
+
   it("keeps stat tile text on app tokens instead of chart ink tokens", () => {
     const statTile = readFileSync("components/charts/StatTile.tsx", "utf8");
 

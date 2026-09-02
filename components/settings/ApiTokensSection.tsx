@@ -94,8 +94,9 @@ export default function ApiTokensSection({
       )}
 
       <form onSubmit={mint} className="flex flex-wrap items-end gap-2">
-        <Field label="Token name">
+        <Field label="Token name" htmlFor="api-token-name">
           <Input
+            id="api-token-name"
             placeholder="spreadsheet-sync"
             value={name}
             onChange={(e) => setName(e.target.value)}

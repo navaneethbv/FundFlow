@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Badge from "@/components/ui/Badge";
 import CategoryChip from "@/components/ui/CategoryChip";
 import ProgressBar from "@/components/ui/ProgressBar";
 import { Eye, EyeOff } from "@/components/ui/icons";
 import { formatCurrency } from "@/lib/format";
+import { usePopoverMenu } from "@/lib/use-popover-menu";
 import type {
   BudgetGroup,
   BudgetLine,
@@ -61,23 +62,8 @@ function RowMenu({
   disabled: boolean;
   onUpdate: (line: BudgetLine, patch: BudgetLinePatch) => Promise<void>;
 }>) {
-  const [open, setOpen] = useState(false);
+  const { open, toggle, close, triggerRef, onBlur } = usePopoverMenu();
   const [sortOrder, setSortOrder] = useState(String(line.sortOrder));
-  const triggerRef = useRef<HTMLButtonElement>(null);
-
-  function close() {
-    setOpen(false);
-    triggerRef.current?.focus();
-  }
-
-  useEffect(() => {
-    if (!open) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") close();
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open]);
 
   async function saveSortOrder() {
     // An empty field parses to 0, which would silently overwrite a real order
@@ -95,7 +81,7 @@ function RowMenu({
   }
 
   return (
-    <div className="relative inline-block">
+    <div className="relative inline-block" onBlur={onBlur}>
       {open && (
         <button
           type="button"
@@ -108,7 +94,7 @@ function RowMenu({
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={toggle}
         aria-expanded={open}
         aria-label={`More options for ${line.label}`}
         className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"

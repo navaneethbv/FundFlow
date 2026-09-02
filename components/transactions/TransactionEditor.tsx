@@ -227,41 +227,53 @@ export default function TransactionEditor({
               ))}
             </datalist>
             <div className="space-y-2">
-              {rows.map((row) => (
-                <div key={row.id} className="flex gap-2">
-                  <input
-                    list={inputId("cats")}
-                    value={row.category}
-                    onChange={(e) => {
-                      updateRow(row.id, { category: e.target.value });
-                    }}
-                    placeholder="Category"
-                    className={cn(fieldClasses, "flex-1")}
-                  />
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    step="0.01"
-                    min="0"
-                    value={row.amount}
-                    onChange={(e) => {
-                      updateRow(row.id, { amount: e.target.value });
-                    }}
-                    placeholder="0.00"
-                    className={cn(fieldClasses, "w-24 tabular-nums")}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      removeRow(row.id);
-                    }}
-                    className="rounded-field px-2 text-muted hover:bg-panel-hover hover:text-danger"
-                    aria-label="Remove split"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
+              {rows.map((row, index) => {
+                const categoryId = `${inputId("split-category")}-${row.id}`;
+                const amountId = `${inputId("split-amount")}-${row.id}`;
+                return (
+                  <div key={row.id} className="flex gap-2">
+                    <label className="sr-only" htmlFor={categoryId}>
+                      Category for split {index + 1}
+                    </label>
+                    <input
+                      id={categoryId}
+                      list={inputId("cats")}
+                      value={row.category}
+                      onChange={(e) => {
+                        updateRow(row.id, { category: e.target.value });
+                      }}
+                      placeholder="Category"
+                      className={cn(fieldClasses, "flex-1")}
+                    />
+                    <label className="sr-only" htmlFor={amountId}>
+                      Amount for split {index + 1}
+                    </label>
+                    <input
+                      id={amountId}
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      min="0"
+                      value={row.amount}
+                      onChange={(e) => {
+                        updateRow(row.id, { amount: e.target.value });
+                      }}
+                      placeholder="0.00"
+                      className={cn(fieldClasses, "w-24 tabular-nums")}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        removeRow(row.id);
+                      }}
+                      className="rounded-field px-2 text-muted hover:bg-panel-hover hover:text-danger"
+                      aria-label={`Remove split ${index + 1}`}
+                    >
+                      ×
+                    </button>
+                  </div>
+                );
+              })}
             </div>
             <div className="mt-2 flex items-center gap-3">
               <Button
@@ -297,7 +309,7 @@ export default function TransactionEditor({
               categories={categories}
             />
 
-            {error && <p className="mt-4 text-sm text-danger">{error}</p>}
+            {error && <p role="alert" className="mt-4 text-sm text-danger">{error}</p>}
 
             <div className="mt-5 flex justify-end gap-2">
               <Button

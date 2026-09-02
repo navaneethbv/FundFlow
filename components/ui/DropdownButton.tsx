@@ -31,10 +31,10 @@ export default function DropdownButton({
   items: DropdownItem[];
   align?: "left" | "right";
 }>) {
-  const { open, toggle, close, triggerRef } = usePopoverMenu();
+  const { open, toggle, close, triggerRef, onBlur } = usePopoverMenu();
 
   return (
-    <div className="relative inline-block">
+    <div className="relative inline-block" onBlur={onBlur}>
       {open && <PopoverBackdrop onClose={close} />}
 
       <button

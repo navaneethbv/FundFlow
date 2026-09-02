@@ -77,6 +77,61 @@ function isDirty(draft: Draft): boolean {
 
 const STEP_TITLES = ["Select", "Targets", "Contribution", "Budget"];
 
+type SupabaseClient = ReturnType<typeof createClient>;
+
+async function createGoalRecord(supabase: SupabaseClient, draft: Draft) {
+  const { data: userData } = await supabase.auth.getUser();
+  const targetAmount = Math.round(Number(draft.targetAmount) * 100) / 100;
+  return supabase
+    .from("goals")
+    .insert({
+      user_id: userData.user?.id,
+      name: draft.name.trim(),
+      target_amount: targetAmount,
+      target_date: draft.targetDate || null,
+      goal_type: draft.goalType,
+      image_slug: draft.slug,
+      monthly_contribution:
+        draft.monthlyContribution === ""
+          ? null
+          : Math.round(Number(draft.monthlyContribution) * 100) / 100,
+      spending_reduces: draft.spendingReduces,
+      target_balance: draft.goalType === "save_up" ? targetAmount : 0,
+    })
+    .select("id")
+    .single();
+}
+
+async function linkAccountToGoal(
+  goalId: string | null,
+  draft: Draft,
+): Promise<string | null> {
+  if (!goalId) return "Could not create the goal.";
+  if (draft.allocationMode === "none" || !draft.accountId) return null;
+
+  const response = await fetch("/api/goals/accounts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      goalId,
+      accountId: draft.accountId,
+      useEntireBalance: draft.allocationMode === "entire",
+      allocatedAmount:
+        draft.allocationMode === "fixed"
+          ? Math.round(Number(draft.allocationAmount) * 100) / 100
+          : undefined,
+    }),
+  });
+  if (response.ok) return null;
+
+  const body = (await response.json().catch(() => null)) as
+    | { error?: string }
+    | null;
+  return `Goal created, but the account could not be linked: ${
+    body?.error ?? "please try again from the goal card."
+  }`;
+}
+
 type GoalWizardProps = Readonly<{
   accounts: WizardAccount[];
   defaultGoalType?: GoalType;
@@ -396,6 +451,10 @@ export default function GoalWizard({
   }
 
   async function finish() {
+    // Guards re-entrancy in place of a native `disabled`: the submit button
+    // below stays enabled through the async call on purpose (see its own
+    // comment) rather than disabling out from under its own focus.
+    if (busy) return;
     setError(null);
     if (!isStepValid(draft)) {
       setError("Fill in the highlighted fields first.");
@@ -407,63 +466,27 @@ export default function GoalWizard({
       // instead of inserting a duplicate row from the same draft.
       let goalId = draft.createdGoalId;
       if (!goalId) {
-        const { data: userData } = await supabase.auth.getUser();
-        const targetAmount = Math.round(Number(draft.targetAmount) * 100) / 100;
-        const { data: goal, error: insertError } = await supabase
-          .from("goals")
-          .insert({
-            user_id: userData.user?.id,
-            name: draft.name.trim(),
-            target_amount: targetAmount,
-            target_date: draft.targetDate || null,
-            goal_type: draft.goalType,
-            image_slug: draft.slug,
-            monthly_contribution:
-              draft.monthlyContribution === ""
-                ? null
-                : Math.round(Number(draft.monthlyContribution) * 100) / 100,
-            spending_reduces: draft.spendingReduces,
-            target_balance: draft.goalType === "save_up" ? targetAmount : 0,
-          })
-          .select("id")
-          .single();
+        const { data: goal, error: insertError } = await createGoalRecord(
+          supabase,
+          draft,
+        );
         if (insertError) {
           setError(insertError.message);
+          return;
+        }
+        if (!goal?.id) {
+          setError("Could not create the goal.");
           return;
         }
         goalId = goal.id;
         patch({ createdGoalId: goal.id });
       }
 
-      if (draft.allocationMode !== "none" && draft.accountId) {
-        // The allocation goes through the API, not a direct insert: its
-        // cross-goal rules need the database function's row lock.
-        const response = await fetch("/api/goals/accounts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            goalId,
-            accountId: draft.accountId,
-            useEntireBalance: draft.allocationMode === "entire",
-            allocatedAmount:
-              draft.allocationMode === "fixed"
-                ? Math.round(Number(draft.allocationAmount) * 100) / 100
-                : undefined,
-          }),
-        });
-        if (!response.ok) {
-          const body = (await response.json().catch(() => null)) as
-            | { error?: string }
-            | null;
-          // The goal itself saved; say so rather than implying nothing happened.
-          setError(
-            `Goal created, but the account could not be linked: ${
-              body?.error ?? "please try again from the goal card."
-            }`,
-          );
-          router.refresh();
-          return;
-        }
+      const linkError = await linkAccountToGoal(goalId, draft);
+      if (linkError) {
+        setError(linkError);
+        router.refresh();
+        return;
       }
 
       discard();
@@ -567,7 +590,14 @@ export default function GoalWizard({
                   Continue
                 </Button>
               ) : (
-                <Button type="button" disabled={busy} onClick={finish}>
+                // Deliberately not disabled while busy: this button is what
+                // currently holds focus when finish() runs, and disabling
+                // the focused control gets it blurred to <body> by the
+                // browser — walking focus out of useDialogFocus's trap while
+                // the dialog is still open (and back into the page behind
+                // it, since the trigger button stays mounted there). finish()
+                // itself now guards against a second concurrent submit.
+                <Button type="button" aria-busy={busy || undefined} onClick={finish}>
                   {submitLabel(draft, busy)}
                 </Button>
               )}
