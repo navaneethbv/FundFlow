@@ -87,7 +87,7 @@ export default function SidebarShell({
       <aside
         data-collapsed={collapsed}
         className={cn(
-          "group/sidebar sticky top-0 hidden h-screen w-16 shrink-0 flex-col border-r border-panel-border bg-panel transition-[width] duration-150 md:flex",
+          "group/sidebar sticky top-0 hidden h-screen w-16 shrink-0 flex-col border-r border-panel-border bg-panel transition-[width] duration-200 ease-in-out md:flex",
           collapsed ? "lg:w-16" : "lg:w-60",
         )}
       >
@@ -95,7 +95,7 @@ export default function SidebarShell({
           <Link
             href="/dashboard"
             aria-label="FundFlow, dashboard"
-            className="mb-3 flex items-center gap-2.5 rounded-field px-1 focus-visible:outline-2 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0"
+            className="mb-3 flex items-center gap-2.5 rounded-field px-1 transition-transform duration-150 active:scale-95 focus-visible:outline-2 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0"
           >
             <LogoMark className="h-8 w-8 shrink-0" />
             <span className="text-base font-bold tracking-tight md:sr-only lg:not-sr-only group-data-[collapsed=true]/sidebar:sr-only">
@@ -112,7 +112,7 @@ export default function SidebarShell({
             aria-pressed={collapsed}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="hidden h-8 w-8 items-center justify-center rounded-field text-muted hover:bg-panel-hover hover:text-foreground focus-visible:outline-2 lg:inline-flex"
+            className="hidden h-8 w-8 items-center justify-center rounded-field text-muted transition-all duration-150 hover:bg-panel-hover hover:text-foreground active:scale-95 focus-visible:outline-2 lg:inline-flex"
           >
             {collapsed ? (
               <ChevronRight aria-hidden className="h-4 w-4" />

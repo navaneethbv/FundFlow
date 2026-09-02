@@ -444,6 +444,69 @@ a {
   }
 }
 
+/* Micro-interactions and motion primitives */
+@keyframes modal-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes sheet-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes dropdown-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes shimmer-wave {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-modal-pop {
+  animation: modal-pop-in 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-sheet-slide {
+  animation: sheet-slide-up 240ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-dropdown {
+  animation: dropdown-pop-in 140ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: top right;
+}
+
+.animate-dropdown-left {
+  animation: dropdown-pop-in 140ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: top left;
+}
+
+.animate-shimmer {
+  animation: shimmer-wave 2s infinite ease-in-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,
@@ -454,3 +517,4 @@ a {
     scroll-behavior: auto !important;
   }
 }
+
