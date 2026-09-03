@@ -54,11 +54,13 @@ export default function ReconcilePanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  const [createAdjustment, setCreateAdjustment] = useState(false);
 
   async function loadPreview() {
     if (!accountRef) return;
     setError(null);
     setSaved(null);
+    setCreateAdjustment(false);
     setLoading(true);
     try {
       const params = new URLSearchParams({ account: accountRef, statement_date: statementDate });
@@ -99,6 +101,7 @@ export default function ReconcilePanel({
           statement_date: statementDate,
           statement_balance: Number(statementBalance),
           cleared_ids: [...clearedIds],
+          create_adjustment: withAdjustment,
           ...(withAdjustment ? { adjustment_note: "Balance adjustment" } : {}),
         }),
       });
@@ -236,10 +239,17 @@ export default function ReconcilePanel({
                   <span data-money className="money">{money(live.totals.difference)}</span>
                 </p>
                 {!live.totals.balanced && (
-                  <p className="text-xs text-muted">
-                    Saving records a manual balance-adjustment entry of{" "}
-                    {money(Math.abs(live.totals.difference))} so the ledger matches the bank.
-                  </p>
+                  <label className="mt-2 flex items-center gap-2 text-xs text-muted cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={createAdjustment}
+                      onChange={(e) => setCreateAdjustment(e.target.checked)}
+                      className="rounded border-panel-border"
+                    />
+                    <span>
+                      Create a balance adjustment entry of {money(Math.abs(live.totals.difference))} so the ledger matches the bank
+                    </span>
+                  </label>
                 )}
               </div>
             )}
@@ -249,7 +259,7 @@ export default function ReconcilePanel({
                 Close
               </Button>
               <Button
-                onClick={() => void save(false)}
+                onClick={() => void save(createAdjustment && Boolean(live && !live.totals.balanced))}
                 disabled={saving || !balanceValid}
                 loading={saving}
               >

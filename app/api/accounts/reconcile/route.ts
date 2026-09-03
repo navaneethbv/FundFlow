@@ -225,6 +225,7 @@ interface ReconcileParams {
   statementBalance: number;
   clearedIds: string[];
   adjustmentNote: string | null;
+  createAdjustment: boolean;
 }
 
 function parseReconcilePayload(body: unknown): { ok: true; params: ReconcileParams } | { ok: false; response: NextResponse } {
@@ -245,7 +246,8 @@ function parseReconcilePayload(body: unknown): { ok: true; params: ReconcilePara
     typeof b?.adjustment_note === "string" && b.adjustment_note.trim()
       ? b.adjustment_note.trim().slice(0, 120)
       : null;
-  return { ok: true, params: { ref, statementDate, statementBalance, clearedIds, adjustmentNote } };
+  const createAdjustment = b?.create_adjustment === true;
+  return { ok: true, params: { ref, statementDate, statementBalance, clearedIds, adjustmentNote, createAdjustment } };
 }
 
 async function recordReconciliation(
@@ -303,7 +305,8 @@ export async function POST(request: NextRequest) {
 
     const direction = account.liability ? 1 : -1;
     const difference = Math.round((account.bookBalance - params.statementBalance) * 100) / 100;
-    const adjustmentAmount = Math.abs(difference) < 0.005 ? 0 : -direction * difference;
+    const calculatedAdjustment = Math.abs(difference) < 0.005 ? 0 : -direction * difference;
+    const adjustmentAmount = params.createAdjustment ? calculatedAdjustment : 0;
 
     const syncFailure = await syncClearedStatus(
       supabase,

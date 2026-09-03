@@ -679,6 +679,7 @@ describe("POST /api/accounts/reconcile — edge branches", () => {
       statement_date: "2026-08-31",
       statement_balance: 1930,
       cleared_ids: [],
+      create_adjustment: true,
     });
     expect(res4.status).toBe(500);
   });
