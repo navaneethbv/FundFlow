@@ -42,7 +42,7 @@ export const MAX_REGEX_PATTERN_LENGTH = 120;
  * recorded body is checked for inner quantifiers or alternations at any nesting
  * depth, avoiding regex-on-regex backtracking risks.
  */
-const AMBIGUOUS_GROUP_BODY_PATTERN = /[*+{|]/;
+const AMBIGUOUS_BODY_CHARS = new Set(["*", "+", "{", "|"]);
 
 function isLoopQuantifier(char: string | undefined): boolean {
   // Only looping quantifiers (*, +, {) can cause super-linear
@@ -51,15 +51,33 @@ function isLoopQuantifier(char: string | undefined): boolean {
   return char === "*" || char === "+" || char === "{";
 }
 
+function hasAmbiguousQuantifiedBody(body: string): boolean {
+  let inClass = false;
+  for (let i = 0; i < body.length; i++) {
+    const char = body[i];
+    if (char === "\\") {
+      i++; // Skip escaped character
+      continue;
+    }
+    if (inClass) {
+      inClass = char !== "]";
+      continue;
+    }
+    if (char === "[") {
+      inClass = true;
+    } else if (AMBIGUOUS_BODY_CHARS.has(char)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function checkClosingGroup(pattern: string, openIdx: number, closeIdx: number): boolean {
   if (!isLoopQuantifier(pattern[closeIdx + 1])) {
     return false;
   }
   const body = pattern.slice(openIdx + 1, closeIdx);
-  const strippedBody = body
-    .replace(/\\./g, "")
-    .replace(/\[[^\]]*\]/g, "");
-  return AMBIGUOUS_GROUP_BODY_PATTERN.test(strippedBody);
+  return hasAmbiguousQuantifiedBody(body);
 }
 
 function hasAmbiguousQuantifiedGroup(pattern: string): boolean {
