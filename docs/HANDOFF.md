@@ -1,6 +1,21 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-08-30. Read this first to resume.
+Last updated: 2026-09-03. Read this first to resume.
+
+## 2026-09-03: PR #149 review round and migration state
+
+PR #149 (`feat/frontend-motion-and-power-features`) went through a full review; the findings and their reasoning are in `docs/CODE_REVIEW-PR149-2026-09-02.md`.
+
+**All six of the PR's migrations are now applied to the linked project** `zrxbmmtqqhlwtrinocww`:
+`20260902100000_scheduled_transactions`, `20260902110000_budget_templates`, `20260902120000_linked_transfers`, `20260902130000_account_reconciliation_workflow`, `20260902220000_smart_rules_regex`, `20260903010000_merchant_rules_tags`.
+
+The first four were already applied and were verified rather than assumed: the `linked_transfers` one matters most because its second half widens `transaction_review_decisions_kind_check`, which is now `('duplicate', 'refund', 'transfer')`.
+The last two were applied on 2026-09-03 against an empty `merchant_rules` table, so neither could violate anything: `merchant_rules_match_type_check` is now `('merchant', 'keyword', 'account', 'regex')`, and `merchant_rules.tags` is `text[] not null default '{}'`.
+
+Backup restore ships **disabled**.
+`executeRestore` deleted `accounts` before reinserting them, and `accounts` cascades into `transactions` and most of the schema, while the reinsert could never satisfy the `plaid_item_id` / `plaid_account_id` NOT NULL columns because `plaid_items` holds the encrypted Plaid token and is deliberately outside the backup registry.
+That is a design gap rather than a missing column, so the surface sits behind `FEATURE_FLAG_DEFAULTS.backupRestore: false`, gated in the route immediately after `requireUser()`.
+The redesign is recorded in `docs/TODO.md`.
 
 ## 2026-08-30: PR #130 hybrid recurring detection
 
