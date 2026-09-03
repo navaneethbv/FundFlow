@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import AppSidebar, { type AppShellActive } from "@/components/shell/AppSidebar";
 import CommandPalette from "@/components/CommandPalette";
+import KeyboardShortcutsListener from "@/components/shell/KeyboardShortcutsListener";
 import { getEnabledNavItems } from "@/components/shell/nav-model";
 import { dashboardUrl } from "@/lib/drilldown";
 
@@ -32,6 +33,7 @@ export default function AppShell({
   return (
     <div className="min-h-screen bg-background text-foreground">
       <CommandPalette items={commands} />
+      <KeyboardShortcutsListener />
       <div className="md:flex">
         <AppSidebar active={active} email={email} skeleton={skeleton} />
         <main

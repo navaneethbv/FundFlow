@@ -2,6 +2,19 @@
 
 Nice-to-have features and enhancements, deferred out of the initial build.
 
+## Added 2026-09-03: scheduled transactions cron per-user timezone promotion
+
+`promoteDueScheduledTransactions(service, dateKeyInTimezone(new Date(), null))` in `app/api/cron/sync/route.ts` promotes due scheduled transactions on the default `America/Los_Angeles` date for all users rather than resolving each user's configured `profiles.timezone`.
+For the current 1-2 user deployment (both LA-based), this is harmless and consistent. If the app scales to users across divergent timezones, the promotion cron should group or iterate users by their profile timezone so transactions promote on each user's local day rollover.
+
+## Added 2026-09-02: backup restore redesign
+
+The restore endpoint is disabled behind `FEATURE_FLAG_DEFAULTS.backupRestore: false` because restoring provider-synced tables (such as `accounts`) causes cascade deletions across the ledger and fails on missing `plaid_items` foreign keys.
+Future restore redesign requirements:
+- Treat provider-synced tables as non-restorable (a third scope beside shared/owner).
+- Restore only user-authored configuration (budgets, goals, rules, manual accounts, tags, user annotations), rather than reconstructing accounts.
+- If any multi-table restore is executed, run it within an atomic Postgres transaction (RPC) to guarantee all-or-nothing rollback on partial failures.
+
 ## Added 2026-08-30: PR #130 remaining verification
 
 The hybrid recurring detection code, migrations, and tests are complete, and all three migrations are already applied to the linked project.

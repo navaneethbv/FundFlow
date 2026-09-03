@@ -46,6 +46,17 @@ export type AuditAction =
   | "manual_account_deleted"
   | "budget_updated"
   | "budget_proposals_created"
+  | "budget_copied"
+  | "scheduled_transaction_created"
+  | "scheduled_transaction_updated"
+  | "scheduled_transaction_cancelled"
+  | "budget_template_created"
+  | "budget_template_deleted"
+  | "budget_template_applied"
+  | "account_reconciled"
+  | "data_restore"
+  | "data_restore_dry_run"
+  | "data_restore_failed"
   | "budget_config_imported"
   | "goal_config_imported"
   | "demo_data_loaded"
@@ -89,7 +100,8 @@ export type AuditAction =
   | "life_event_deleted"
   | "profile_updated"
   | "avatar_updated"
-  | "display_prefs_updated";
+  | "display_prefs_updated"
+  | "rules_batch_applied";
 
 interface AuditParams {
   userId: string | null;

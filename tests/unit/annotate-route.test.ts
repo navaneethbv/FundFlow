@@ -183,3 +183,81 @@ describe("POST /api/transactions/annotate", () => {
   });
 });
 
+
+describe("POST /api/transactions/annotate — cleared flag", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRequireUser.mockResolvedValue({
+      user: { id: "user-1" },
+      supabase: makeClient({ id: "txn-1", amount: 100 }).client,
+    });
+  });
+
+  it("persists cleared_at alone without touching note or tags", async () => {
+    const upserts: unknown[] = [];
+    mockRequireUser.mockResolvedValue({
+      user: { id: "user-1" },
+      supabase: {
+        from: () => ({
+          select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: "txn-1", amount: 100 } }) }) }) }),
+          upsert: (rows: unknown, opts: unknown) => {
+            upserts.push({ rows, opts });
+            return Promise.resolve({ error: null });
+          },
+        }),
+      } as never,
+    });
+    const res = await post({ transaction_id: "txn-1", cleared: true });
+    expect(res.status).toBe(200);
+    expect(upserts).toHaveLength(1);
+    const { rows, opts } = upserts[0] as { rows: Record<string, unknown>; opts: Record<string, unknown> };
+    expect(rows.cleared_at).toBeTruthy();
+    expect(opts.defaultToNull).toBe(false);
+  });
+
+  it("clearing false writes a null cleared_at", async () => {
+    const upserts: unknown[] = [];
+    mockRequireUser.mockResolvedValue({
+      user: { id: "user-1" },
+      supabase: {
+        from: () => ({
+          select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: "txn-1", amount: 100 } }) }) }) }),
+          upsert: (rows: unknown, opts: unknown) => {
+            upserts.push({ rows, opts });
+            return Promise.resolve({ error: null });
+          },
+        }),
+      } as never,
+    });
+    const res = await post({ transaction_id: "txn-1", cleared: false });
+    expect(res.status).toBe(200);
+    const { rows } = upserts[0] as { rows: Record<string, unknown> };
+    expect(rows.cleared_at).toBeNull();
+  });
+
+  it("keeps an annotation alive when only the cleared flag is present", async () => {
+    let deleted = false;
+    let upserted: unknown = null;
+    mockRequireUser.mockResolvedValue({
+      user: { id: "user-1" },
+      supabase: {
+        from: () => ({
+          select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: "txn-1", amount: 100 } }) }) }) }),
+          delete: () => {
+            deleted = true;
+            return { eq: () => ({ eq: () => Promise.resolve({ error: null }) }) };
+          },
+          upsert: (rows: unknown) => {
+            upserted = rows;
+            return Promise.resolve({ error: null });
+          },
+        }),
+      } as never,
+    });
+    // Empty note + tags + cleared flag: the row must be upserted, not deleted.
+    const res = await post({ transaction_id: "txn-1", note: "", tags: [], cleared: false });
+    expect(res.status).toBe(200);
+    expect(deleted).toBe(false);
+    expect(upserted).not.toBeNull();
+  });
+});

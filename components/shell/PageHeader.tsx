@@ -14,10 +14,10 @@ export default function PageHeader({
   actions?: ReactNode;
 }>) {
   return (
-    <header className="flex flex-wrap items-center justify-between gap-3">
+    <header className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
       <h1 className="page-title min-w-0">{title}</h1>
       {actions && (
-        <div className="flex flex-wrap items-center gap-2">{actions}</div>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">{actions}</div>
       )}
     </header>
   );

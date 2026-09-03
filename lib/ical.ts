@@ -8,7 +8,7 @@
  * biweekly +14d, monthly +1 calendar month, quarterly +3mo, yearly +12mo.
  */
 import { formatCurrency } from "@/lib/format";
-import { addDays, addMonths } from "@/lib/date-utils";
+import { addDays, advanceFrequency } from "@/lib/date-utils";
 
 export interface CalendarBill {
   /** Stable stream id, when available — makes VEVENT UIDs collision-free. */
@@ -22,13 +22,7 @@ export interface CalendarBill {
 
 const CRLF = "\r\n";
 
-function advance(date: string, frequency: CalendarBill["frequency"]): string {
-  if (frequency === "weekly") return addDays(date, 7);
-  if (frequency === "biweekly") return addDays(date, 14);
-  if (frequency === "quarterly") return addMonths(date, 3);
-  if (frequency === "yearly") return addMonths(date, 12);
-  return addMonths(date, 1);
-}
+const advance = advanceFrequency;
 
 /**
  * RFC 5545 TEXT escaping — backslash first, then structural characters.

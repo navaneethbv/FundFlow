@@ -7,6 +7,8 @@ import Button from "@/components/ui/Button";
 import ButtonLink from "@/components/ui/ButtonLink";
 import Panel from "@/components/ui/Panel";
 import ExportReportButton from "@/components/review/ExportReportButton";
+import TaxExportButton from "@/components/settings/TaxExportButton";
+import { TAX_CATEGORIES } from "@/lib/tax-categories";
 
 export default function ExportSection({
   initialEnabled,
@@ -78,6 +80,7 @@ export default function ExportSection({
           label="Export PDF report"
           className={!enabled ? "pointer-events-none opacity-40" : ""}
         />
+        <TaxExportButton className={!enabled ? "pointer-events-none opacity-40" : ""} />
         <ButtonLink
           href="/api/export/csv?scope=tax"
           className={!enabled ? "pointer-events-none opacity-40" : ""}
@@ -85,6 +88,12 @@ export default function ExportSection({
           Tax-tagged CSV
         </ButtonLink>
       </div>
+      <p className="mt-4 text-sm text-muted">
+        The tax year CSV groups a calendar year of transactions by tax line item.
+        Tag transactions in the ledger with any of:{" "}
+        {TAX_CATEGORIES.map((category) => category.lineItem.toLowerCase()).join(", ")} —
+        or the plain tag <em>tax</em>. Splits are counted once. Data only, not tax advice.
+      </p>
       <Button type="button" variant="ghost" size="sm" onClick={toggle} disabled={saving} className="mt-4">
         {toggleLabel}
       </Button>

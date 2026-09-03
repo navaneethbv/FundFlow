@@ -6,7 +6,7 @@
  * Everything here is pure math over data the dashboard already loads —
  * no I/O, no Plaid calls. Amount sign follows Plaid: positive = money out.
  */
-import { addDays, addMonths } from "@/lib/date-utils";
+import { addDays, advanceFrequency } from "@/lib/date-utils";
 
 /**
  * Primary personal-finance categories treated as essential spending.
@@ -148,13 +148,7 @@ export interface Paycheck {
   nextPayDate: string | null;
 }
 
-function advance(date: string, frequency: PayFrequency): string {
-  if (frequency === "weekly") return addDays(date, 7);
-  if (frequency === "biweekly") return addDays(date, 14);
-  if (frequency === "quarterly") return addMonths(date, 3);
-  if (frequency === "yearly") return addMonths(date, 12);
-  return addMonths(date, 1);
-}
+const advance = advanceFrequency;
 
 function normalizeName(value: string): string {
   return value.trim().toLowerCase();

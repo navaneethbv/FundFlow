@@ -82,11 +82,17 @@ export default function Modal({
           // that pass their own max-h/overflow still win via twMerge.
           "relative m-0 max-h-[90vh] w-full max-w-md overflow-y-auto border border-panel-border bg-panel p-5 shadow-float sm:p-6",
           isSheet
-            ? "rounded-t-card sm:rounded-card"
-            : "rounded-card",
+            ? "rounded-t-card sm:rounded-card animate-sheet-slide sm:animate-modal-pop"
+            : "rounded-card animate-modal-pop",
           className,
         )}
       >
+        {isSheet && (
+          <div
+            aria-hidden
+            className="mx-auto mb-3.5 h-1 w-10 shrink-0 rounded-full bg-panel-border sm:hidden"
+          />
+        )}
         {children}
       </dialog>
     </div>

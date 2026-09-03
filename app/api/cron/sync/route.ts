@@ -17,6 +17,7 @@ import { alertCronFailure } from "@/lib/cron-alert";
 import { writeDailyAccountSnapshots } from "@/lib/account-history";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { dateKeyInTimezone } from "@/lib/report-period";
+import { promoteDueScheduledTransactions } from "@/lib/scheduled-promotion";
 
 export const dynamic = "force-dynamic";
 // Raised from 60: investment holdings sync (Phase 9A) adds one more
@@ -166,6 +167,13 @@ export async function GET(request: NextRequest) {
     const userIds = [...new Set((data ?? []).map((r) => r.user_id as string))];
 
     const { synced, failures } = await syncUsers(service, userIds);
+
+    // Scheduled-transaction promotion runs for everyone (manual-only users
+    // have no plaid_items row, so it cannot ride the per-user loop). Best
+    // effort: a failure is logged, never blocks the sync.
+    await runOptionalSync("cron.sync.scheduled-promotion", () =>
+      promoteDueScheduledTransactions(service, dateKeyInTimezone(new Date(), null)),
+    );
 
     // Data-integrity pass (2.3, best-effort): stuck jobs, orphaned
     // transactions, duplicate Plaid ids. Bounded queries per user; findings

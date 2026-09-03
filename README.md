@@ -9,13 +9,27 @@ library, CSP-safe). A filterable **transactions ledger** (`/transactions`)
 covers search, month, and account views. Built for **1-2 users** (personal
 use), deployed on **Vercel + Supabase**.
 
+## Features
+
+- **Transactions** (`/transactions`) — searchable ledger with month/account filters, editable categories and merchant names, transaction **splits** with `50/50`, `1/3`, and `1/4` presets, a receipt inbox (`/transactions/receipts`), **scheduled one-off entries** (rent on the 25th, a savings transfer on the 1st — projected into the forecast and bill calendar now, materialized in the ledger by the daily sync), **transfer linking** review (pair the outflow and inflow of one move between your own accounts so both sides net out of spending), and merchant **brand logos** in every list.
+- **Smart rules** (Settings) — keyword, merchant, account, and ReDoS-guarded regex rules with amount conditions that set display name, category, and tags on incoming transactions. Rules can be applied **retroactively** to up to 5,000 historical transactions through a dry-run preview before anything is written.
+- **Recurring & subscriptions** (`/recurring`) — Plaid recurring streams (plus locally inferred ones) with **price-spike alerts** that surface subscription increases and their annualized cost.
+- **Budgets** (`/budget`), **Goals** (`/goals`), and **Debt payoff** (`/debt`) — category budgets with household/horizon scoping, **copy last month** and **saved templates** (both with explicit merge/overwrite when the month already has envelopes), savings and payoff goals (with liability accounts that lack a goal flagged), and payoff planning.
+- **Cash flow & reports** (`/cash-flow`, `/reports`) — inflow/outflow views and income/expense report breakdowns over custom date ranges.
+- **Tax year CSV** (Settings → Export data) — a calendar year of transactions grouped by curated tax line items (from the tags you assign in the ledger), split-safe, with a per-line-item summary. Data only, not tax advice.
+- **Investments** (`/investments`) — holdings, allocation, performance, and top movers from Plaid investment accounts.
+- **Account reconciliation** (Accounts → Reconcile) — enter a statement's ending balance, mark its transactions cleared, see cleared/outstanding/the difference, and record an audited balance adjustment when the bank is right.
+- **Forecasting** (`/forecasting`) — a **FIRE independence simulator**: month-by-month compounding projection with scheduled life events (windfalls, one-time outlays, ongoing spend changes), safe-withdrawal-rate targets, and progress toward Lean/Standard/Fat/Coast FIRE.
+- **Advice** (`/advice`), **monthly review** (`/review`), and a yearly **Wrapped** (`/wrapped`) retrospective.
+- **Keyboard shortcuts** — type `g` then a destination key (`d` dashboard, `t` transactions, `b` budget, `c` cash flow, `r` recurring, `g` goals, `f` forecasting, `s` settings), `?` for the cheat sheet, and `Cmd+K` for the command palette. Input fields are exempt and `prefers-reduced-motion` is respected across the UI.
+
 The default path for AI is **export, not upload**.
 FundFlow gives you a **privacy-safe CSV or JSON** (merchant, amount, date, category only) to feed to any AI tool you choose, plus an on-demand **PDF summary report**, all from Settings.
 Nothing leaves the app on that path.
 
 There is also an **opt-in in-app AI surface**, dark by default and described under [AI](#ai) below.
 
-FundFlow can also deliver a visual weekly report for the previous Monday through Sunday to the user's signup email. The Monday report includes categorized spending, week-over-week change, top merchants, budget pace, cash flow, and bank and credit card breakdowns, with an expanded PDF attached. It excludes balances, account numbers or masks, and transaction-level detail.
+The monthly encrypted backup is restorable in-app (Settings → Data → Restore a backup): upload the `.json.enc` archive, preview what it would change, confirm with your step-up code. FundFlow can also deliver a visual weekly report for the previous Monday through Sunday to the user's signup email. The Monday report includes categorized spending, week-over-week change, top merchants, budget pace, cash flow, and bank and credit card breakdowns, with an expanded PDF attached. It excludes balances, account numbers or masks, and transaction-level detail.
 
 ## Stack
 
@@ -160,7 +174,9 @@ username `user_good` / password `pass_good`.
 ## Testing
 
 ```bash
-npm run test:unit   # crypto round-trip/tamper, CSV masking (no external services)
+npm run test:unit   # the full unit suite: crypto round-trip/tamper, CSV masking,
+                    # rules engine, FIRE simulator, keyboard shortcuts, and
+                    # component render tests (no external services)
 npm test            # also runs integration tests against your Supabase project
 ```
 
@@ -191,6 +207,7 @@ app/
   api/ai/{insights,ask,receipt}/                    opt-in AI (see "AI" above)
   api/{account,cron/*,admin/*,health,tokens}/       delete, cron, admin, ops
   api/{accounts,budget,goals,recurring,reports,transactions,...}/    page data
+  api/rules/batch/                                  retroactive smart-rules apply (dry-run preview + live)
   dashboard/ transactions/ accounts/ cash-flow/ budget/ recurring/
   reports/ goals/ investments/ forecasting/ advice/ debt/ review/
   wrapped/ calendar-ish views, plus login/ signup/ settings/ notifications/ admin/
@@ -206,6 +223,10 @@ lib/
   recurring.ts     recurring streams
   dashboard.ts     aggregations (RLS-scoped)
   finance-domain.ts canonical category/sign semantics
+  rules-engine.ts  smart transaction rules (ReDoS-guarded regex matching)
+  fire-simulator.ts FIRE projection + life-event timeline engine
+  recurring-alerts.ts subscription price-spike detection
+  use-keyboard-shortcuts.ts global g-chord navigation hook
   import*.ts       CSV, OFX, Mint, Monarch, YNAB parsers
   ai-provider.ts   server-only Anthropic client + payload capping
   ai-insights.ts   local rule-based summaries (the no-key fallback)

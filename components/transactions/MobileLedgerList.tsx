@@ -2,6 +2,7 @@ import { Fragment } from "react";
 import Badge from "@/components/ui/Badge";
 import TransactionEditor from "@/components/transactions/TransactionEditor";
 import { MerchantAvatar } from "@/components/ui/Avatar";
+import { merchantLogoDataUri } from "@/lib/merchant-logos";
 import { formatCurrency, roundsToZero, titleCase } from "@/lib/format";
 import { formatDate } from "@/lib/format-date";
 import { ledgerZebraBands, type LedgerDayGroup } from "@/lib/ledger-data";
@@ -93,7 +94,12 @@ export default function MobileLedgerList({
           <Fragment key={row.id}>
             {startsDay && group && <DayHeader group={group} currency={row.currency} />}
             <li className={`flex items-start gap-3 px-4 py-3${striped ? " bg-panel-2" : ""}`}>
-              <MerchantAvatar name={row.merchant} size={32} className="mt-0.5 shrink-0" />
+              <MerchantAvatar
+                name={row.merchant}
+                logoUrl={merchantLogoDataUri(row.merchant)}
+                size={32}
+                className="mt-0.5 shrink-0"
+              />
               <div className="min-w-0 flex-1">
                 <p className="flex flex-wrap items-center gap-2">
                   <span className="truncate font-medium">{row.merchant}</span>

@@ -86,6 +86,20 @@ export function buildBackupArchive(
 }
 
 export function readBackupArchive(archive: Buffer, keyBase64: string): unknown {
+  return readBackupEnvelope(archive, keyBase64).payload;
+}
+
+/**
+ * Decrypt an archive and also expose its binding metadata, for the restore
+ * path: `userId` is the envelope's user binding (null on legacy raw-key
+ * archives), so the caller can reject an archive that is not bound to the
+ * authenticated user. The GCM auth tag already proves the envelope (including
+ * the user id) was not tampered with.
+ */
+export function readBackupEnvelope(
+  archive: Buffer,
+  keyBase64: string,
+): { payload: unknown; userId: string | null; kdf: string | null } {
   const envelope = JSON.parse(archive.toString("utf8")) as BackupEnvelope;
   if (envelope.v !== 1 || envelope.alg !== "aes-256-gcm") {
     throw new Error("Unsupported backup envelope");
@@ -104,5 +118,9 @@ export function readBackupArchive(archive: Buffer, keyBase64: string): unknown {
     decipher.update(Buffer.from(envelope.data, "base64")),
     decipher.final(),
   ]);
-  return JSON.parse(gunzipSync(compressed).toString("utf8"));
+  return {
+    payload: JSON.parse(gunzipSync(compressed).toString("utf8")),
+    userId: envelope.user_id ?? null,
+    kdf: envelope.kdf ?? null,
+  };
 }

@@ -26,6 +26,8 @@ interface TransactionEditorProps {
   providerCategory?: string | null;
   /** Current transaction-level classification override, when one exists. */
   override?: TransactionOverride | null;
+  /** Reconcile cleared flag; omitted where the surface doesn't track it. */
+  cleared?: boolean;
   /**
    * Distinguishes the mobile and desktop copies of the same row. The ledger
    * renders both for responsive layout, so without a prefix the two copies
@@ -47,6 +49,197 @@ function toSplitRow(split: { category: string; amount: number }): SplitRow {
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
+function TransactionSplitSection({
+  rows,
+  target,
+  currency,
+  categories,
+  inputId,
+  updateRow,
+  removeRow,
+  setRows,
+  applySplitPreset,
+  splitTotal,
+  splitsBalanced,
+  activeRows,
+}: Readonly<{
+  rows: SplitRow[];
+  target: number;
+  currency: string;
+  categories: string[];
+  inputId: (suffix: string) => string;
+  updateRow: (id: string, patch: Partial<Omit<SplitRow, "id">>) => void;
+  removeRow: (id: string) => void;
+  setRows: React.Dispatch<React.SetStateAction<SplitRow[]>>;
+  applySplitPreset: (parts: number) => void;
+  splitTotal: number;
+  splitsBalanced: boolean;
+  activeRows: SplitRow[];
+}>) {
+  let splitBarColor = "bg-accent";
+  if (splitTotal > target) splitBarColor = "bg-danger";
+  if (splitsBalanced) splitBarColor = "bg-success";
+
+  return (
+    <>
+      <div className="mb-2 mt-4 flex items-center justify-between">
+        <span className="text-sm font-medium">Split by category</span>
+        {activeRows.length > 0 && (
+          <span
+            className={cn(
+              "text-xs font-semibold",
+              splitsBalanced ? "text-muted" : "text-danger",
+            )}
+          >
+            {formatCurrency(splitTotal, currency)} / {formatCurrency(target, currency)}
+          </span>
+        )}
+      </div>
+      {activeRows.length > 0 && (
+        <div className="mb-3 space-y-1">
+          <div className="flex justify-between text-xs font-semibold">
+            <span>Allocated: {formatCurrency(splitTotal, currency)}</span>
+            <span className={splitsBalanced ? "text-success" : "text-warning font-bold"}>
+              {splitsBalanced
+                ? "Balanced"
+                : `Remaining: ${formatCurrency(round2(target - splitTotal), currency)}`}
+            </span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-panel-2">
+            <div
+              className={cn(
+                "h-full transition-all duration-200",
+                splitBarColor,
+              )}
+              style={{ width: `${Math.min(100, (splitTotal / target) * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+      <datalist id={inputId("cats")}>
+        {categories.map((c) => (
+          <option key={c} value={c}>
+            {titleCase(c)}
+          </option>
+        ))}
+      </datalist>
+      <div className="space-y-2">
+        {rows.map((row, index) => {
+          const categoryId = `${inputId("split-category")}-${row.id}`;
+          const amountId = `${inputId("split-amount")}-${row.id}`;
+          return (
+            <div key={row.id} className="flex gap-2">
+              <label className="sr-only" htmlFor={categoryId}>
+                Category for split {index + 1}
+              </label>
+              <input
+                id={categoryId}
+                list={inputId("cats")}
+                value={row.category}
+                onChange={(e) => {
+                  updateRow(row.id, { category: e.target.value });
+                }}
+                placeholder="Category"
+                className={cn(fieldClasses, "flex-1")}
+              />
+              <label className="sr-only" htmlFor={amountId}>
+                Amount for split {index + 1}
+              </label>
+              <input
+                id={amountId}
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                value={row.amount}
+                onChange={(e) => {
+                  updateRow(row.id, { amount: e.target.value });
+                }}
+                placeholder="0.00"
+                className={cn(fieldClasses, "w-24 tabular-nums")}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  removeRow(row.id);
+                }}
+                className="rounded-field px-2 text-muted hover:bg-panel-hover hover:text-danger"
+                aria-label={`Remove split ${index + 1}`}
+              >
+                ×
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              const unallocated = round2(Math.max(0, target - splitTotal));
+              setRows((cur) => [
+                ...cur,
+                {
+                  id: crypto.randomUUID(),
+                  category: "",
+                  amount: unallocated > 0 ? String(unallocated) : "",
+                },
+              ]);
+            }}
+          >
+            Add split
+          </Button>
+          {rows.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setRows([]);
+              }}
+              className="text-xs text-muted hover:text-foreground"
+            >
+              Clear splits
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5 text-xs">
+          <span className="text-muted">Presets:</span>
+          <button
+            type="button"
+            onClick={() => {
+              applySplitPreset(2);
+            }}
+            className="rounded-field bg-panel-2 px-2 py-0.5 font-medium hover:bg-panel-hover"
+          >
+            50/50
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              applySplitPreset(3);
+            }}
+            className="rounded-field bg-panel-2 px-2 py-0.5 font-medium hover:bg-panel-hover"
+          >
+            1/3
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              applySplitPreset(4);
+            }}
+            className="rounded-field bg-panel-2 px-2 py-0.5 font-medium hover:bg-panel-hover"
+          >
+            1/4
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 /**
  * Per-row notes/tags/splits editor for the ledger. The row stays server-
  * rendered; this renders a small trigger (with an indicator when annotations or
@@ -62,6 +255,7 @@ export default function TransactionEditor({
   categories,
   providerCategory = null,
   override = null,
+  cleared: initialCleared,
   idPrefix = "",
 }: Readonly<TransactionEditorProps>) {
   const target = round2(Math.abs(transaction.amount));
@@ -75,6 +269,7 @@ export default function TransactionEditor({
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState(saved.note);
   const [tagText, setTagText] = useState(saved.tags.join(", "));
+  const [cleared, setCleared] = useState(initialCleared ?? false);
   const [rows, setRows] = useState<SplitRow[]>(() => saved.splits.map(toSplitRow));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,6 +300,18 @@ export default function TransactionEditor({
   const splitsBalanced = activeRows.length === 0 || Math.abs(splitTotal - target) < 0.01;
   const hasAnnotations = saved.note.length > 0 || saved.tags.length > 0 || saved.splits.length > 0;
 
+  function applySplitPreset(parts: number) {
+    if (parts <= 0) return;
+    const perPart = round2(target / parts);
+    const remainder = round2(target - perPart * (parts - 1));
+    const newRows = Array.from({ length: parts }, (_, i) => ({
+      id: crypto.randomUUID(),
+      category: rows[i]?.category || "",
+      amount: String(i === parts - 1 ? remainder : perPart),
+    }));
+    setRows(newRows);
+  }
+
   async function save() {
     setError(null);
     if (activeRows.length > 0 && !splitsBalanced) {
@@ -125,6 +332,7 @@ export default function TransactionEditor({
           note,
           tags: parsedTags,
           splits: splitPayload,
+          ...(initialCleared !== undefined ? { cleared } : {}),
         }),
       });
       if (!res.ok) {
@@ -206,98 +414,31 @@ export default function TransactionEditor({
               </div>
             )}
 
-            <div className="mb-2 mt-4 flex items-center justify-between">
-              <span className="text-sm font-medium">Split by category</span>
-              {activeRows.length > 0 && (
-                <span
-                  className={cn(
-                    "text-xs font-semibold",
-                    splitsBalanced ? "text-muted" : "text-danger",
-                  )}
-                >
-                  {formatCurrency(splitTotal, transaction.currency)} / {formatCurrency(target, transaction.currency)}
-                </span>
-              )}
-            </div>
-            <datalist id={inputId("cats")}>
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {titleCase(c)}
-                </option>
-              ))}
-            </datalist>
-            <div className="space-y-2">
-              {rows.map((row, index) => {
-                const categoryId = `${inputId("split-category")}-${row.id}`;
-                const amountId = `${inputId("split-amount")}-${row.id}`;
-                return (
-                  <div key={row.id} className="flex gap-2">
-                    <label className="sr-only" htmlFor={categoryId}>
-                      Category for split {index + 1}
-                    </label>
-                    <input
-                      id={categoryId}
-                      list={inputId("cats")}
-                      value={row.category}
-                      onChange={(e) => {
-                        updateRow(row.id, { category: e.target.value });
-                      }}
-                      placeholder="Category"
-                      className={cn(fieldClasses, "flex-1")}
-                    />
-                    <label className="sr-only" htmlFor={amountId}>
-                      Amount for split {index + 1}
-                    </label>
-                    <input
-                      id={amountId}
-                      type="number"
-                      inputMode="decimal"
-                      step="0.01"
-                      min="0"
-                      value={row.amount}
-                      onChange={(e) => {
-                        updateRow(row.id, { amount: e.target.value });
-                      }}
-                      placeholder="0.00"
-                      className={cn(fieldClasses, "w-24 tabular-nums")}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        removeRow(row.id);
-                      }}
-                      className="rounded-field px-2 text-muted hover:bg-panel-hover hover:text-danger"
-                      aria-label={`Remove split ${index + 1}`}
-                    >
-                      ×
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-2 flex items-center gap-3">
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  setRows((cur) => [...cur, { id: crypto.randomUUID(), category: "", amount: "" }]);
-                }}
-              >
-                Add split
-              </Button>
-              {rows.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRows([]);
-                  }}
-                  className="text-xs text-muted hover:text-foreground"
-                >
-                  Clear splits
-                </button>
-              )}
-            </div>
+            {initialCleared !== undefined && (
+              <label className="mb-4 flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={cleared}
+                  onChange={(e) => setCleared(e.target.checked)}
+                />
+                <span>Cleared (reconciled against the bank)</span>
+              </label>
+            )}
+
+            <TransactionSplitSection
+              rows={rows}
+              target={target}
+              currency={transaction.currency}
+              categories={categories}
+              inputId={inputId}
+              updateRow={updateRow}
+              removeRow={removeRow}
+              setRows={setRows}
+              applySplitPreset={applySplitPreset}
+              splitTotal={splitTotal}
+              splitsBalanced={splitsBalanced}
+              activeRows={activeRows}
+            />
 
             <TransactionOverrideControl
               transactionId={transaction.id}

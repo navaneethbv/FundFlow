@@ -593,3 +593,61 @@ describe("loadCanonicalProjection", () => {
     ).rejects.toThrow("finance_projection_query_failed:category_overrides:42501");
   });
 });
+
+describe("loadCanonicalProjection — unmigrated linked_transfers", () => {
+  const transactionRows = [
+    {
+      id: "expense-1",
+      user_id: "user-1",
+      account_id: "account-1",
+      plaid_transaction_id: "plaid-expense-1",
+      date: "2026-07-10",
+      amount: 100,
+      merchant_name: "Original Market",
+      name: "ORIGINAL MARKET",
+      pfc_primary: "FOOD_AND_DRINK",
+      pfc_detailed: "FOOD_AND_DRINK_GROCERIES",
+      pending: false,
+    },
+  ];
+  const MINE: FinancialScope = { kind: "mine", ownerUserId: "user-1" };
+
+  function minimalClient(overrides: Record<string, { data?: unknown; error?: unknown }> = {}) {
+    return clientStub({
+      transactions: { data: transactionRows },
+      accounts: { data: [{ id: "account-1", name: "Daily Checking", iso_currency_code: "usd" }] },
+      merchant_rules: { data: [] },
+      category_overrides: { data: [] },
+      transaction_splits: { data: [] },
+      transaction_annotations: { data: [] },
+      linked_refunds: { data: [] },
+      linked_duplicates: { data: [] },
+      ...overrides,
+    });
+  }
+
+  it("degrades to no linked transfers when the table is missing (42P01)", async () => {
+    const supabase = minimalClient({
+      linked_transfers: { error: { code: "42P01" } },
+    });
+    const result = await loadCanonicalProjection(supabase as never, {
+      scope: MINE,
+      window: { start: "2026-07-01", endExclusive: "2026-08-01" },
+    });
+    // The projection completes; the row keeps its provider flow (expense).
+    expect(result.transactions).toHaveLength(1);
+    expect(result.transactions[0]!.flow).toBe("expense");
+  });
+
+  it("rethrows non-42P01 linked_transfers failures", async () => {
+    const supabase = minimalClient({
+      linked_transfers: { error: { code: "XX000" } },
+    });
+    await expect(
+      loadCanonicalProjection(supabase as never, {
+        scope: MINE,
+        window: { start: "2026-07-01", endExclusive: "2026-08-01" },
+      }),
+    ).rejects.toThrow("finance_projection_query_failed:linked_transfers:XX000");
+  });
+});

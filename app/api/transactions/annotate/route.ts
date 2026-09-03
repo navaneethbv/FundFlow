@@ -35,31 +35,42 @@ async function resolveGoal(
   return { ok: true, goalProvided, goalId, linkedGoal: goal as LinkedGoal };
 }
 
-async function saveAnnotation(
-  supabase: UserSupabase,
-  userId: string,
-  transactionId: string,
-  body: Record<string, unknown>,
-): Promise<void> {
+function parseTags(tagsValue: unknown): string[] {
+  if (!Array.isArray(tagsValue)) return [];
+  const valid = (tagsValue as unknown[])
+    .filter((tag): tag is string => typeof tag === "string")
+    .map((tag) => tag.trim())
+    .filter((tag) => tag.length > 0 && tag.length <= 40);
+  return [...new Set(valid)].slice(0, 20);
+}
+
+function parseAnnotationFields(body: Record<string, unknown>) {
   const rawNote = typeof body.note === "string" ? body.note.trim() : "";
   const note = rawNote.length ? rawNote.slice(0, 500) : null;
-  const tags = Array.isArray(body.tags)
-    ? [
-        ...new Set(
-          (body.tags as unknown[])
-            .filter((tag): tag is string => typeof tag === "string")
-            .map((tag) => tag.trim())
-            .filter((tag) => tag.length > 0 && tag.length <= 40),
-        ),
-      ].slice(0, 20)
-    : [];
+  const tags = parseTags(body.tags);
   const goalProvided = body.goal_id !== undefined;
   const goalId =
     typeof body.goal_id === "string" && body.goal_id.trim()
       ? body.goal_id.trim()
       : null;
   const keepsGoalLink = goalProvided && goalId !== null;
-  if (!note && tags.length === 0 && !keepsGoalLink) {
+  const clearedProvided = body.cleared !== undefined;
+  const clearedAt = body.cleared === true ? new Date().toISOString() : null;
+  const hasMetadata = Boolean(note || tags.length > 0 || keepsGoalLink);
+
+  return { note, tags, goalProvided, goalId, clearedProvided, clearedAt, hasMetadata };
+}
+
+async function saveAnnotation(
+  supabase: UserSupabase,
+  userId: string,
+  transactionId: string,
+  body: Record<string, unknown>,
+): Promise<void> {
+  const { note, tags, goalProvided, goalId, clearedProvided, clearedAt, hasMetadata } =
+    parseAnnotationFields(body);
+
+  if (!hasMetadata && !clearedProvided) {
     const { error } = await supabase
       .from("transaction_annotations")
       .delete()
@@ -68,6 +79,16 @@ async function saveAnnotation(
     if (error) throw error;
     return;
   }
+
+  if (!hasMetadata && clearedProvided) {
+    const { error } = await supabase.from("transaction_annotations").upsert(
+      { user_id: userId, transaction_id: transactionId, cleared_at: clearedAt },
+      { onConflict: "user_id,transaction_id", defaultToNull: false },
+    );
+    if (error) throw error;
+    return;
+  }
+
   const { error } = await supabase.from("transaction_annotations").upsert(
     {
       user_id: userId,
@@ -75,8 +96,9 @@ async function saveAnnotation(
       note,
       tags,
       ...(goalProvided ? { goal_id: goalId } : {}),
+      ...(clearedProvided ? { cleared_at: clearedAt } : {}),
     },
-    { onConflict: "user_id,transaction_id" },
+    { onConflict: "user_id,transaction_id", defaultToNull: false },
   );
   if (error) throw error;
 }

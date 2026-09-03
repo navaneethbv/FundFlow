@@ -422,6 +422,30 @@ export async function loadCanonicalProjection(
       refund_transaction_id: string;
     }>>;
   });
+  const transfersPromise = loadProjectionRows<{
+    out_transaction_id: string;
+    in_transaction_id: string;
+  }>("linked_transfers", (from, to) => {
+    let query = supabase
+      .from("linked_transfers")
+      .select("out_transaction_id,in_transaction_id")
+      .order("id")
+      .range(from, to);
+    if (userId) query = query.eq("user_id", userId);
+    return query as unknown as PromiseLike<ProjectionPage<{
+      out_transaction_id: string;
+      in_transaction_id: string;
+    }>>;
+  }).catch((error: unknown) => {
+    // Unmigrated deployment: the table's migration hasn't been applied yet.
+    // Degrade to "no linked transfers" (the pre-feature behavior) instead of
+    // failing every projection consumer, mirroring the transactionsParity
+    // feature-flag approach.
+    if (error instanceof Error && error.message.includes("linked_transfers:42P01")) {
+      return [] as Array<{ out_transaction_id: string; in_transaction_id: string }>;
+    }
+    throw error;
+  });
   const duplicatesPromise = loadProjectionRows<{ excluded_transaction_id: string }>(
     "linked_duplicates",
     (from, to) => {
@@ -443,12 +467,13 @@ export async function loadCanonicalProjection(
   // The split/override chunk batches are elements of the Promise.all, not an
   // awaited spread: awaiting them here would finish every chunk read before
   // the five dependency queries even start.
-  const [accounts, rules, overrides, refunds, duplicates, splitResChunks, overrideResChunks] =
+  const [accounts, rules, overrides, refunds, transfers, duplicates, splitResChunks, overrideResChunks] =
     await Promise.all([
       accountsPromise,
       rulesPromise,
       overridesPromise,
       refundsPromise,
+      transfersPromise,
       duplicatesPromise,
       runBatched(splitChunksPromises, DEPENDENCY_CONCURRENCY),
       runBatched(overrideChunksPromises, DEPENDENCY_CONCURRENCY),
@@ -480,6 +505,14 @@ export async function loadCanonicalProjection(
     refundTransactionId: rf.refund_transaction_id,
   }));
 
+  const linkedTransfers = (transfers as Array<{
+    out_transaction_id: string;
+    in_transaction_id: string;
+  }>).map((tf) => ({
+    outTransactionId: tf.out_transaction_id,
+    inTransactionId: tf.in_transaction_id,
+  }));
+
   const splits = collectSplits(splitResChunks);
   const transactionOverrides = collectOverrides(overrideResChunks);
 
@@ -493,6 +526,7 @@ export async function loadCanonicalProjection(
       categoryOverrides,
       splits,
       linkedRefunds,
+      linkedTransfers,
       transactionOverrides,
       excludedTransactionIds: new Set(
         (duplicates as Array<{ excluded_transaction_id: string }>)

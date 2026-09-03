@@ -99,6 +99,7 @@ export function projectLedgerDisplayRows<T extends LedgerDisplaySourceRow>(
     rows.map((row) => ({
       id: row.id,
       merchant: row.merchant_name ?? row.name ?? "",
+      name: row.name,
       category: row.pfc_primary,
       accountName:
         ruleAccountNamesById.get(resolvedLedgerAccountId(row)) ?? "",

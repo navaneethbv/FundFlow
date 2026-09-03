@@ -26,6 +26,7 @@ export const TRANSFER_GROUPS = new Set([
   "TRANSFER_OUT",
   "LOAN_PAYMENTS",
   "LOAN_DISBURSEMENTS",
+  "RECONCILE_ADJUSTMENT",
 ]);
 
 export const UNCATEGORIZED = "UNCATEGORIZED";
@@ -96,6 +97,12 @@ export interface LinkedRefundPair {
   refundTransactionId: string;
 }
 
+/** The two sides of one user-confirmed inter-account transfer. */
+export interface LinkedTransferPair {
+  outTransactionId: string;
+  inTransactionId: string;
+}
+
 /**
  * Durable per-transaction classification override. `displayCategory` replaces
  * the grouped category; `cashFlowClassification` forces spending or income for
@@ -115,6 +122,8 @@ export interface ProjectFinanceInput {
   categoryOverrides: CategoryOverrideRow[];
   splits: TransactionSplit[];
   linkedRefunds: LinkedRefundPair[];
+  /** Confirmed inter-account transfer pairs: both sides flow as "transfer". */
+  linkedTransfers?: LinkedTransferPair[];
   excludedTransactionIds?: Set<string>;
   /** Account id → name, only needed for merchant rules that match on account. */
   accountNames?: Map<string, string>;
@@ -157,6 +166,7 @@ export function projectFinanceTransactions(
     rowsToProject.map((row) => ({
       id: row.id,
       merchant: displayMerchant(row),
+      name: row.name,
       category: row.pfcPrimary,
       amount: row.amount,
       accountName: (row.accountId && accountNames.get(row.accountId)) || "",
@@ -168,11 +178,17 @@ export function projectFinanceTransactions(
   //    can itself be remapped by a user rename.
   const overrides = buildCategoryOverrideMap(usableOverrides(categoryOverrides));
 
-  // 3. Refund pairs: both halves stop counting as spending or income.
+  // 3. Refund pairs and confirmed transfer pairs: both halves stop counting
+  //    as spending or income. The rows stay in the ledger with real amounts;
+  //    only their flow becomes "transfer", which every spend/income total skips.
   const nettedIds = new Set<string>();
   for (const pair of linkedRefunds) {
     nettedIds.add(pair.chargeTransactionId);
     nettedIds.add(pair.refundTransactionId);
+  }
+  for (const pair of input.linkedTransfers ?? []) {
+    nettedIds.add(pair.outTransactionId);
+    nettedIds.add(pair.inTransactionId);
   }
 
   const splitsByTransaction = new Map<string, TransactionSplit[]>();

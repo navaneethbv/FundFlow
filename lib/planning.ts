@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { classifyBalanceSheetAmount } from "@/lib/account-balance";
 import { formatCurrency } from "@/lib/format";
-import { addDays, addMonths, isoDate, parseDate } from "@/lib/date-utils";
+import { addDays, advanceFrequency, isoDate, parseDate } from "@/lib/date-utils";
+import { safeCompileRegex } from "@/lib/rules-engine";
 
 export type EnvelopeStatus = "over" | "at-risk" | "on-track";
 
@@ -34,7 +35,10 @@ export interface BudgetEnvelope {
   effectiveLimit: number;
 }
 
-export type RecurringFrequency = "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
+/** "once" is a one-off scheduled item (lib/scheduled-transactions.ts): it
+ *  fires on its date and never repeats — its next occurrence lands outside
+ *  any plausible forecast horizon. */
+export type RecurringFrequency = "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly" | "once";
 export type RecurringItemType = "income" | "expense";
 
 export interface RecurringItem {
@@ -82,6 +86,7 @@ export interface MerchantRule {
 export interface CleanupTransaction {
   id: string;
   merchant: string;
+  name?: string | null;
   category: string | null;
   amount?: number;
   tags?: string[] | null;
@@ -170,11 +175,8 @@ function round2(value: number): number {
 }
 
 function nextOccurrence(date: string, frequency: RecurringFrequency): string {
-  if (frequency === "weekly") return addDays(date, 7);
-  if (frequency === "biweekly") return addDays(date, 14);
-  if (frequency === "quarterly") return addMonths(date, 3);
-  if (frequency === "yearly") return addMonths(date, 12);
-  return addMonths(date, 1);
+  if (frequency === "once") return addDays(date, 3660);
+  return advanceFrequency(date, frequency);
 }
 
 function normalize(value: string): string {
@@ -273,7 +275,7 @@ export function forecastCashFlow(input: ForecastInput): CashFlowForecast {
     assumptions: [
       `Starts from ${formatCurrency(input.startingBalance ?? 0)} cash.`,
       `Looks ahead ${input.horizonDays} days from ${input.asOf}.`,
-      "Uses enabled recurring income and expense items only.",
+      "Uses enabled recurring income and expense items plus scheduled one-offs only.",
     ],
     events,
   };
@@ -382,12 +384,12 @@ function matchesRule(transaction: CleanupTransaction, rule: MerchantRule): boole
   }
 
   if (rule.matchType === "regex") {
-    try {
-      const re = new RegExp(rule.pattern.trim(), "i");
-      return re.test(transaction.merchant) || Boolean(transaction.accountName && re.test(transaction.accountName));
-    } catch {
-      return false;
-    }
+    const re = safeCompileRegex(rule.pattern);
+    return Boolean(
+      re &&
+        (re.test(transaction.merchant) ||
+          Boolean(transaction.name && re.test(transaction.name))),
+    );
   }
 
   const pattern = normalize(rule.pattern);

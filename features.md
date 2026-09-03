@@ -6,6 +6,11 @@ not yet ship, with the current state verified against the codebase (2026-08-20).
 Features are ranked by how much of a hole they leave in a real deployment.
 Multi-currency is explicitly out of scope and deliberately not listed.
 
+**Update (2026-09-02): every implementation item below has shipped.** The
+status lines record where and how; the list is kept as the design record for
+each feature, and the two owner-action items and out-of-scope notes at the
+bottom are still live.
+
 This list has been triaged to the items actually worth implementing as code.
 Two items that are fully coded already but gated behind an owner action (not a
 dev task) are noted separately below the list. Two items that are excluded by
@@ -31,7 +36,18 @@ item ships, update the status line and the Definition of Done at the end.
 
 ## 1. One-off scheduled (future-dated) transactions
 
-**Status: missing. Nothing schedules a future transaction.**
+**Status: shipped 2026-09-02.**
+
+Shipped: `scheduled_transactions` (owner-scoped RLS, migration
+`20260902100000_scheduled_transactions.sql`), CRUD at
+`/api/scheduled-transactions` with a create/edit/cancel UI beside the Add
+Transaction modal (`components/transactions/ScheduledTransactionsSection.tsx`).
+The daily sync cron promotes due rows (`lib/scheduled-promotion.ts`) with a
+deterministic `scheduled-<id>` plaid_transaction_id via an
+ignore-conflicts upsert, so re-runs never duplicate, then flips status to
+`promoted`. One-off entries feed both the cash-flow forecast and the bill
+calendar through a `"once"` recurrence frequency
+(`lib/scheduled-transactions.ts` → `lib/dashboard.ts`'s recurring items).
 
 Plaid recurring streams model bills that repeat. FundFlow has a Recurring page
 (`/recurring`, `app/recurring/`) and a manual-transaction path
@@ -72,7 +88,16 @@ ledger.
 
 ## 2. Account reconciliation
 
-**Status: missing. There is no reconcile workflow.**
+**Status: shipped 2026-09-02.**
+
+Shipped: `cleared_at` on `transaction_annotations` (the synced row is never
+mutated) with a per-row badge and an editor toggle; a per-account statement
+workflow (`/api/accounts/reconcile` GET preview + POST commit,
+`lib/reconcile.ts` for the pure cleared/outstanding/difference math, UI in
+`components/accounts/ReconcilePanel.tsx`); a persisted
+`account_reconciliations` statement record; and a manual balance-adjustment
+entry (the bank is right, the ledger gets an audited correction, adjustment
+amount = −direction × difference).
 
 The ledger (`app/transactions/`) is a raw list of synced and manual entries.
 There is no concept of a transaction being cleared versus outstanding, no
@@ -110,7 +135,19 @@ noticed when a balance looks wrong.
 
 ## 3. Transfer detection and linking between own accounts
 
-**Status: partial. Transfers are excluded by category, not linked.**
+**Status: shipped 2026-09-02.**
+
+Shipped: `linked_transfers` table + the `transfer` kind on
+`transaction_review_decisions` (migration
+`20260902120000_linked_transfers.sql`). Suggestions (same amount, opposite
+sign, different accounts, within 7 days) come from `detectTransferPairs`
+(lib/transaction-quality.ts) via `/api/transactions/transfers`, surfaced in
+`components/transactions/TransferReview.tsx` beside Refund Review;
+dismissals persist across syncs. Confirmed pairs net out exactly once: the
+canonical projection (`projectFinanceTransactions` via `linkedTransfers`)
+flows both sides as `"transfer"` — the same mechanism as linked refunds —
+so Cash Flow, Reports, Budget, and the dashboard all skip them, and splits
+compose without double counting.
 
 `lib/dashboard.ts` exports `TRANSFER_GROUPS as EXCLUDED_PFC` and drops
 transfer/loan-payment categories from every spend total. That stops a card
@@ -150,7 +187,17 @@ prerequisite for any future "spending is only what left the household" feature.
 
 ## 4. Budget templates and month-to-month copy
 
-**Status: partial. Per-category rollover exists; templates and bulk copy do not.**
+**Status: shipped 2026-09-02.**
+
+Shipped: "Copy last month" (`components/budget/CopyLastMonthButton.tsx`,
+`POST /api/budget/copy`, plan logic in `lib/budget-copy.ts`) and saved
+templates (`budget_templates` table, CRUD at `/api/budget/templates`, apply at
+`/api/budget/templates/apply`, UI in `components/budget/BudgetTemplateButton.tsx`).
+Both upsert planned amounts keyed by `budget_id` via `update_budget_period`,
+leaving rollover/group/category untouched, and both force an explicit merge
+(fill empty) vs overwrite choice through a 409 + confirmation flow whenever
+the target month already has envelopes — never a silent replace. Templates
+also report (and skip) categories with no matching budget row.
 
 `lib/budget-page.ts` supports `rollover_enabled` per budget row, so an
 underspent envelope can carry forward. There is no budget template, no "copy
@@ -183,7 +230,17 @@ point of envelope budgeting.
 
 ## 5. Backup restore path
 
-**Status: missing. Backups are produced; there is no restore.**
+**Status: shipped 2026-09-02.** (Implementation notes: `lib/restore.ts`
+builds the plan and executes it; `POST /api/backup/restore` requires the
+monthly-cron-style archive to be bound to the uploading user, runs behind the
+same step-up + rate limit as account deletion, always audits the dry run, and
+executes all-or-nothing per table in foreign-key order. Backups now also
+carry the natural keys (`id`, `plaid_transaction_id`, account refs) the
+restore needs — takeout deliberately does not, preserving its no-identifiers
+contract — and `transactions` upserts on `plaid_transaction_id` so a restore
+followed by a sync converges instead of duplicating. `shared_expenses` and
+`households` are reported as skipped: a restore never deletes other people's
+rows.)
 
 `/api/cron/backup` builds an encrypted, gzipped takeout archive per user and
 emails it monthly (`lib/backup.ts`, `lib/user-data.ts`). `readBackupArchive`
@@ -259,7 +316,19 @@ into a ten-minute task.
 
 ## 7. Tax-ready categorization and export
 
-**Status: partial. A tag filter exists; tax categories do not.**
+**Status: shipped 2026-09-02.**
+
+Shipped: the yearly tax export lives at `GET /api/export/tax?year=YYYY`
+(`app/api/export/tax/route.ts`) with its Settings entry in Export data
+(`components/settings/TaxExportButton.tsx`). Tax line items come from a curated
+set (`lib/tax-categories.ts`) resolved from the free-form tags users already
+assign in the ledger editor — no new column, no new editor; the legacy bare
+`tax` tag falls back to "Other tax-tagged". Rows run through the canonical
+projection (overrides, merchant rules, refunds, duplicates, splits), so splits
+are counted once by construction, and `toTaxCsv` is finally wired (resolving
+F3) with a per-line-item summary block appended. Session-only, gated by
+`ai_export_enabled`, same date/merchant/amount/category privacy contract, and
+the export carries a "not tax advice" note in the UI.
 
 `app/api/export/csv?scope=tax` exports only transactions the user manually
 tagged `"tax"` (`app/api/export/csv/route.ts:26`), and `toTaxCsv` in
@@ -296,7 +365,14 @@ that.
 
 ## 8. Merchant logos and brand enrichment
 
-**Status: partial. Institution logos yes; merchant logos no.**
+**Status: shipped 2026-09-02.**
+
+Shipped without a table or any new external host: a curated static dataset
+(`lib/merchant-logos.ts`) resolves the rules-applied merchant display name to
+an offline Simple Icons SVG rendered as a brand-colored data URI
+(`img-src data:` was already in the CSP), falling back to the deterministic
+initial disc for unmapped merchants exactly as before. Wired into the ledger,
+mobile ledger, dashboard Recent Activity, and recurring lists.
 
 Phase 12 shipped `plaid_institution.ts` and the institution backfill, so banks
 render real logos and brand colors. Merchant avatars still fall back to the

@@ -18,13 +18,13 @@ export interface LedgerTransaction {
 }
 
 export interface ReviewAnomaly {
-  kind: "duplicate" | "refund";
+  kind: "duplicate" | "refund" | "transfer";
   subjectId: string;
   message: string;
 }
 
 export interface ReviewDecision {
-  kind: "duplicate" | "refund";
+  kind: "duplicate" | "refund" | "transfer";
   subjectId: string;
   decision: "confirmed" | "dismissed";
 }
@@ -124,6 +124,73 @@ export function detectRefundPairs(transactions: LedgerTransaction[], windowDays:
     if (!refund) continue;
     usedRefunds.add(refund.id);
     pairs.push({ chargeId: charge.id, refundId: refund.id, amount: round2(charge.amount) });
+  }
+
+  return pairs;
+}
+
+/** One side of a candidate transfer: a ledger row plus its owning account. */
+export interface TransferTransaction extends LedgerTransaction {
+  accountId: string;
+}
+
+export interface TransferPair {
+  subjectId: string;
+  outId: string;
+  inId: string;
+  amount: number;
+  outDate: string;
+  inDate: string;
+}
+
+export function transferSubjectId(outId: string, inId: string): string {
+  return `${outId}:${inId}`;
+}
+
+/**
+ * Candidate inter-account transfer pairs: the same amount leaving one own
+ * account and arriving on another within the window. Unlike refunds, the
+ * merchants differ by design (each side carries its own account's descriptor),
+ * so matching is amount + account + date only. Each side pairs at most once,
+ * with the nearest-date inflow, deterministically.
+ */
+export function detectTransferPairs(
+  transactions: TransferTransaction[],
+  windowDays: number,
+): TransferPair[] {
+  const outs = transactions
+    .filter((txn) => txn.amount > 0)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  const ins = transactions.filter((txn) => txn.amount < 0);
+  const usedIns = new Set<string>();
+  const pairs: TransferPair[] = [];
+
+  for (const out of outs) {
+    const outDate = parseDate(out.date);
+    const eligible = ins
+      .filter((candidate) => {
+        if (usedIns.has(candidate.id)) return false;
+        if (candidate.accountId === out.accountId) return false;
+        if (round2(Math.abs(candidate.amount)) !== round2(out.amount)) return false;
+        const dayDiff = (parseDate(candidate.date) - outDate) / 86_400_000;
+        return dayDiff >= 0 && dayDiff <= windowDays;
+      })
+      .sort((a, b) => {
+        const diffA = (parseDate(a.date) - outDate) / 86_400_000;
+        const diffB = (parseDate(b.date) - outDate) / 86_400_000;
+        return diffA - diffB || a.date.localeCompare(b.date) || a.id.localeCompare(b.id);
+      });
+    const inbound = eligible[0];
+    if (!inbound) continue;
+    usedIns.add(inbound.id);
+    pairs.push({
+      subjectId: transferSubjectId(out.id, inbound.id),
+      outId: out.id,
+      inId: inbound.id,
+      amount: round2(out.amount),
+      outDate: out.date,
+      inDate: inbound.date,
+    });
   }
 
   return pairs;

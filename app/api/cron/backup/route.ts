@@ -58,7 +58,14 @@ export async function GET(request: NextRequest) {
         // can silently drop the user's own budgets, goals, rules, manual
         // records, or annotations. The shared_expenses or() filter keeps one
         // member's backup from carrying the whole household's expenses.
-        const sections = await collectUserData(service, userId);
+        //
+        // Keep includeRestoreKeys: true for encrypted backup archives. Even though
+        // the in-app restore surface is gated off, these archives are user-bound and
+        // encrypted with backupEncKey. Retaining natural keys (id, manual_account_id,
+        // source, plaid_transaction_id, etc.) ensures archives generated now will be
+        // usable once the redesigned user-authored config restore lands, without
+        // compromising the privacy contract of unencrypted takeouts (which omit restoreKeys).
+        const sections = await collectUserData(service, userId, { includeRestoreKeys: true });
         // Preference rows alone don't earn a monthly archive email: an account
         // that only ever toggled a notification setting has nothing to restore.
         if (countUserRecordRows(sections) === 0) {

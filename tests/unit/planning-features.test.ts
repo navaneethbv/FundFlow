@@ -501,6 +501,24 @@ describe("planning roadmap features", () => {
     expect(applied[3]).toEqual({ id: "f", merchant: "Raw Cafe", category: "DINING" });
   });
 
+  it("supports safe regex rules and rejects ambiguous quantified groups", () => {
+    const transactions = [
+      { id: "safe", merchant: "AMZN Marketplace", category: "GENERAL" },
+      { id: "unsafe", merchant: `${"a".repeat(40)}!`, category: "GENERAL" },
+    ];
+
+    expect(
+      applyMerchantRules(transactions, [
+        { matchType: "regex", pattern: "^AMZN", category: "SHOPPING", enabled: true },
+      ])[0]!.category,
+    ).toBe("SHOPPING");
+    expect(
+      applyMerchantRules(transactions, [
+        { matchType: "regex", pattern: "(a|aa)+", category: "UNSAFE", enabled: true },
+      ]),
+    ).toEqual(transactions);
+  });
+
   it("falls back to the transaction merchant and category for null rule fields", () => {
     const applied = applyMerchantRules(
       [{ id: "g", merchant: "Raw Cafe", category: null }],
