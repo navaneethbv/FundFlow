@@ -219,6 +219,73 @@ async function syncClearedStatus(
   return null;
 }
 
+interface ReconcileParams {
+  ref: { source: "plaid" | "manual"; id: string };
+  statementDate: string;
+  statementBalance: number;
+  clearedIds: string[];
+  adjustmentNote: string | null;
+}
+
+function parseReconcilePayload(body: unknown): { ok: true; params: ReconcileParams } | { ok: false; response: NextResponse } {
+  const b = body as Record<string, unknown> | null;
+  const ref = parseAccountRef(b?.account);
+  if (!ref) return { ok: false, response: badRequest("Invalid account reference") };
+  const statementDate = typeof b?.statement_date === "string" ? b.statement_date : "";
+  const statementBalance = Number(b?.statement_balance);
+  if (!DATE_RE.test(statementDate)) return { ok: false, response: badRequest("Invalid statement date") };
+  if (!Number.isFinite(statementBalance)) return { ok: false, response: badRequest("Invalid statement balance") };
+  const clearedIds = Array.isArray(b?.cleared_ids)
+    ? (b.cleared_ids as unknown[]).filter(
+        (id): id is string => typeof id === "string" && id.length > 0,
+      )
+    : [];
+  if (clearedIds.length > MAX_CLEARED_IDS) return { ok: false, response: badRequest("Too many cleared ids") };
+  const adjustmentNote =
+    typeof b?.adjustment_note === "string" && b.adjustment_note.trim()
+      ? b.adjustment_note.trim().slice(0, 120)
+      : null;
+  return { ok: true, params: { ref, statementDate, statementBalance, clearedIds, adjustmentNote } };
+}
+
+async function recordReconciliation(
+  supabase: SupabaseClient,
+  userId: string,
+  params: ReconcileParams,
+  adjustmentAmount: number,
+): Promise<string> {
+  const { data: statement, error: statementError } = await supabase
+    .from("account_reconciliations")
+    .insert({
+      user_id: userId,
+      account_id: params.ref.source === "plaid" ? params.ref.id : null,
+      manual_account_id: params.ref.source === "manual" ? params.ref.id : null,
+      statement_date: params.statementDate,
+      statement_balance: params.statementBalance,
+    })
+    .select("id")
+    .single();
+  if (statementError) throw statementError;
+
+  if (adjustmentAmount !== 0) {
+    const { error: adjustError } = await supabase.from("transactions").insert({
+      user_id: userId,
+      account_id: params.ref.source === "plaid" ? params.ref.id : null,
+      manual_account_id: params.ref.source === "manual" ? params.ref.id : null,
+      plaid_transaction_id: `manual-${crypto.randomUUID()}`,
+      amount: adjustmentAmount,
+      date: params.statementDate,
+      name: params.adjustmentNote ?? "Balance adjustment",
+      merchant_name: params.adjustmentNote ?? "Balance adjustment",
+      pfc_primary: "RECONCILE_ADJUSTMENT",
+      source: "manual",
+      pending: false,
+    });
+    if (adjustError) throw adjustError;
+  }
+  return statement.id;
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -226,84 +293,39 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json().catch(() => null);
-    const ref = parseAccountRef(body?.account);
-    if (!ref) return badRequest("Invalid account reference");
-    const statementDate = typeof body?.statement_date === "string" ? body.statement_date : "";
-    const statementBalance = Number(body?.statement_balance);
-    if (!DATE_RE.test(statementDate)) return badRequest("Invalid statement date");
-    if (!Number.isFinite(statementBalance)) return badRequest("Invalid statement balance");
-    const clearedIds = Array.isArray(body?.cleared_ids)
-      ? (body.cleared_ids as unknown[]).filter(
-          (id): id is string => typeof id === "string" && id.length > 0,
-        )
-      : [];
-    if (clearedIds.length > MAX_CLEARED_IDS) return badRequest("Too many cleared ids");
-    const adjustmentNote =
-      typeof body?.adjustment_note === "string" && body.adjustment_note.trim()
-        ? body.adjustment_note.trim().slice(0, 120)
-        : null;
+    const parsed = parseReconcilePayload(body);
+    if (!parsed.ok) return parsed.response;
+    const { params } = parsed;
 
-    const account = await loadOwnedAccount(supabase, user.id, ref);
+    const account = await loadOwnedAccount(supabase, user.id, params.ref);
     if (!account) return badRequest("Account not found");
-    const accountColumn = ref.source === "plaid" ? "account_id" : "manual_account_id";
+    const accountColumn = params.ref.source === "plaid" ? "account_id" : "manual_account_id";
 
-    // The adjustment entry moves the ledger toward the statement: the bank is
-    // right, the ledger gets a correction. A ledger row shifts the balance by
-    // direction × amount, so hitting a gap of `difference` needs
-    // amount = −direction × difference.
     const direction = account.liability ? 1 : -1;
-    const difference = Math.round((account.bookBalance - statementBalance) * 100) / 100;
+    const difference = Math.round((account.bookBalance - params.statementBalance) * 100) / 100;
     const adjustmentAmount = Math.abs(difference) < 0.005 ? 0 : -direction * difference;
 
     const syncFailure = await syncClearedStatus(
       supabase,
       user.id,
       accountColumn,
-      ref.id,
-      statementDate,
-      clearedIds,
+      params.ref.id,
+      params.statementDate,
+      params.clearedIds,
     );
     if (syncFailure) return syncFailure;
 
-    const { data: statement, error: statementError } = await supabase
-      .from("account_reconciliations")
-      .insert({
-        user_id: user.id,
-        account_id: ref.source === "plaid" ? ref.id : null,
-        manual_account_id: ref.source === "manual" ? ref.id : null,
-        statement_date: statementDate,
-        statement_balance: statementBalance,
-      })
-      .select("id")
-      .single();
-    if (statementError) throw statementError;
-
-    if (adjustmentAmount !== 0) {
-      const { error: adjustError } = await supabase.from("transactions").insert({
-        user_id: user.id,
-        account_id: ref.source === "plaid" ? ref.id : null,
-        manual_account_id: ref.source === "manual" ? ref.id : null,
-        plaid_transaction_id: `manual-${crypto.randomUUID()}`,
-        amount: adjustmentAmount,
-        date: statementDate,
-        name: adjustmentNote ?? "Balance adjustment",
-        merchant_name: adjustmentNote ?? "Balance adjustment",
-        pfc_primary: "RECONCILE_ADJUSTMENT",
-        source: "manual",
-        pending: false,
-      });
-      if (adjustError) throw adjustError;
-    }
+    const statementId = await recordReconciliation(supabase, user.id, params, adjustmentAmount);
 
     await writeAudit({
       userId: user.id,
       action: "account_reconciled",
       metadata: {
-        account: `${ref.source}:${ref.id}`,
-        statement_id: statement.id,
-        statement_date: statementDate,
-        statement_balance: statementBalance,
-        cleared_count: clearedIds.length,
+        account: `${params.ref.source}:${params.ref.id}`,
+        statement_id: statementId,
+        statement_date: params.statementDate,
+        statement_balance: params.statementBalance,
+        cleared_count: params.clearedIds.length,
         difference,
         adjustment_amount: adjustmentAmount,
       },
@@ -314,7 +336,7 @@ export async function POST(request: NextRequest) {
       ok: true,
       difference,
       adjustment_amount: adjustmentAmount,
-      cleared_count: clearedIds.length,
+      cleared_count: params.clearedIds.length,
     });
   } catch (error) {
     return errorResponse("accounts.reconcile.write", error);
