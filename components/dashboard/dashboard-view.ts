@@ -43,6 +43,25 @@ export function dashboardHref({
   return `/dashboard?${params.toString()}`;
 }
 
+/**
+ * Layers arbitrary extra query params onto a `/dashboard?...` href.
+ *
+ * Every dashboard filter chip (accounts, months, and now the ledger's own
+ * account picker) needs to change one param while preserving whatever else
+ * is active — item, drilldown, scope. One implementation, so they can't
+ * drift into disagreeing about which params survive a click.
+ */
+export function withExtraParams(
+  href: string,
+  extraParams?: Record<string, string | undefined>,
+): string {
+  const params = new URLSearchParams(href.split("?")[1]);
+  for (const [key, value] of Object.entries(extraParams ?? {})) {
+    if (value) params.set(key, value);
+  }
+  return `/dashboard?${params.toString()}`;
+}
+
 /** Toolbar tab order. Overview only appears once the Phase 8 flag is on. */
 export const DASHBOARD_VIEW_TABS: Record<"withOverview" | "legacy", readonly DashboardView[]> = {
   withOverview: ["overview", "monitor", "plan", "wealth"],

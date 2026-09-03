@@ -8,19 +8,9 @@ import ButtonLink from "@/components/ui/ButtonLink";
 import MonthChips from "@/components/dashboard/MonthChips";
 import {
   dashboardHref,
+  withExtraParams,
   type DashboardView,
 } from "@/components/dashboard/dashboard-view";
-
-function withExtraParams(
-  href: string,
-  extraParams?: Record<string, string | undefined>,
-) {
-  const params = new URLSearchParams(href.split("?")[1]);
-  for (const [key, value] of Object.entries(extraParams ?? {})) {
-    if (value) params.set(key, value);
-  }
-  return `/dashboard?${params.toString()}`;
-}
 
 export default function DashboardToolbar({
   accounts,

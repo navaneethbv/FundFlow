@@ -1,12 +1,23 @@
-import { describe, it, expect } from "vitest";
-import { createElement } from "react";
+import { describe, it, expect, vi } from "vitest";
+import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import LedgerStrip from "@/components/dashboard/LedgerStrip";
 import {
   LEDGER_LABEL_SLOT_BUDGETS,
   LEDGER_LABEL_WIDTH_PX,
+  type LedgerStripAccount,
   type LedgerTick,
 } from "@/lib/ledger-strip";
+
+vi.mock("@/lib/use-popover-menu", () => ({
+  usePopoverMenu: () => ({
+    open: true,
+    toggle: vi.fn(),
+    close: vi.fn(),
+    triggerRef: { current: null },
+    onBlur: vi.fn(),
+  }),
+}));
 
 function tick(partial: Partial<LedgerTick> = {}): LedgerTick {
   return {
@@ -29,7 +40,7 @@ const baseProps = {
   currency: "USD",
 };
 
-function render(props: Partial<typeof baseProps> = {}): string {
+function render(props: Partial<ComponentProps<typeof LedgerStrip>> = {}): string {
   return renderToStaticMarkup(createElement(LedgerStrip, { ...baseProps, ...props }));
 }
 
@@ -226,4 +237,80 @@ describe("LedgerStrip", () => {
   it("renders nothing when every tick falls outside the month", () => {
     expect(render({ ticks: [tick({ date: "2026-07-14" })] })).toBe("");
   });
+
+  describe("account picker", () => {
+    const accounts: LedgerStripAccount[] = [
+      {
+        id: "acct-1",
+        name: "Checking",
+        mask: "1234",
+        current_balance: 1000,
+        iso_currency_code: "USD",
+        type: "depository",
+      },
+      {
+        id: "acct-2",
+        name: "Savings",
+        mask: "5678",
+        current_balance: 5000,
+        iso_currency_code: "USD",
+        type: "depository",
+      },
+    ];
+
+    const buildAccountHref = (accountId: string | undefined) =>
+      `/dashboard?view=overview${accountId ? `&ledgerAccount=${accountId}` : ""}`;
+
+    it("renders dropdown button when 2+ accounts and buildAccountHref are provided", () => {
+      const html = render({
+        accountId: "acct-1",
+        accounts,
+        buildAccountHref,
+      });
+      expect(html).toContain('aria-haspopup="true"');
+      expect(html).toContain("Checking");
+      expect(html).toContain("Savings");
+    });
+
+    it("assigns href from buildAccountHref for each item and clicking active item clears back to default", () => {
+      const html = render({
+        accountId: "acct-1",
+        accounts,
+        buildAccountHref,
+      });
+      // Active item (acct-1) clears to undefined -> /dashboard?view=overview
+      expect(html).toContain('href="/dashboard?view=overview"');
+      // Inactive item (acct-2) sets ledgerAccount
+      expect(html).toContain('href="/dashboard?view=overview&amp;ledgerAccount=acct-2"');
+    });
+
+    it("marks the current account as active", () => {
+      const html = render({
+        accountId: "acct-1",
+        accounts,
+        buildAccountHref,
+      });
+      expect(html).toContain("bg-accent-soft text-accent");
+    });
+
+    it("falls back to plain text when accounts has 1 or fewer entries", () => {
+      const html = render({
+        accountId: "acct-1",
+        accounts: [accounts[0]!],
+        buildAccountHref,
+      });
+      expect(html).not.toContain('aria-haspopup="true"');
+      expect(html).toContain("Demo Checking •0001");
+    });
+
+    it("falls back to plain text when buildAccountHref is omitted", () => {
+      const html = render({
+        accountId: "acct-1",
+        accounts,
+      });
+      expect(html).not.toContain('aria-haspopup="true"');
+      expect(html).toContain("Demo Checking •0001");
+    });
+  });
 });
+

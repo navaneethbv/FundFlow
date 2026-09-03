@@ -15,6 +15,7 @@ import type { WidgetKey } from "@/lib/dashboard-widgets";
 import {
   loadLedgerStripTicks,
   pickAnchorAccount,
+  listAnchorableAccounts,
   type LedgerStripAccount,
   type LedgerTick,
 } from "@/lib/ledger-strip";
@@ -146,6 +147,8 @@ export async function loadDashboardInvestmentSummary(
 export interface OverviewLedgerStrip {
   ticks: LedgerTick[];
   account: LedgerStripAccount | null;
+  /** Every account the strip could anchor to, for the account picker. */
+  accounts: LedgerStripAccount[];
   currency: string;
 }
 
@@ -170,6 +173,10 @@ export async function loadOverviewWidgetData(
     household: options.household,
     selectedAccountId: options.selectedAccountId,
   });
+  const anchorableAccounts = listAnchorableAccounts(options.accounts, {
+    ownerUserId: options.userId,
+    household: options.household,
+  });
   const [cumulativeSpend, investments, ledgerTicks] = await Promise.all([
     options.visible.includes("spendingCompare")
       ? loadCumulativeSpend(supabase, options)
@@ -192,6 +199,7 @@ export async function loadOverviewWidgetData(
     ledgerStrip: {
       ticks: ledgerTicks,
       account: anchorAccount,
+      accounts: anchorableAccounts,
       currency: anchorAccount?.iso_currency_code ?? "USD",
     },
   };

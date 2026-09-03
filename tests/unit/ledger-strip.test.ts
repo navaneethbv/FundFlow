@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   pickAnchorAccount,
+  listAnchorableAccounts,
   buildLedgerStripTicks,
   buildLedgerStripDays,
   ledgerLabelMinDayGap,
@@ -157,6 +158,67 @@ describe("pickAnchorAccount", () => {
     );
   });
 });
+
+describe("listAnchorableAccounts", () => {
+  // The picker offers exactly what pickAnchorAccount could ever select, so
+  // these mirror its scoping rules rather than re-deriving new ones.
+  const anyOwner = { household: true } as const;
+
+  it("returns every depository account with a known balance, in order", () => {
+    const accounts = [
+      account({ id: "credit-1", type: "credit", current_balance: -500 }),
+      account({ id: "checking-1", type: "depository", current_balance: 1000 }),
+      account({ id: "savings-1", type: "depository", current_balance: 5000 }),
+    ];
+    expect(listAnchorableAccounts(accounts, anyOwner).map((a) => a.id)).toEqual([
+      "checking-1",
+      "savings-1",
+    ]);
+  });
+
+  it("excludes a depository account with no balance on record", () => {
+    const accounts = [
+      account({ id: "checking-1", type: "depository", current_balance: null }),
+      account({ id: "checking-2", type: "depository", current_balance: 250 }),
+    ];
+    expect(listAnchorableAccounts(accounts, anyOwner).map((a) => a.id)).toEqual(["checking-2"]);
+  });
+
+  it("returns an empty array when no depository account exists", () => {
+    const accounts = [account({ type: "credit" }), account({ type: "loan" })];
+    expect(listAnchorableAccounts(accounts, anyOwner)).toEqual([]);
+  });
+
+  it("fails closed in personal scope when no ownerUserId is known", () => {
+    const accounts = [
+      account({ id: "checking-1", type: "depository", user_id: "user-b", current_balance: 1000 }),
+    ];
+    expect(listAnchorableAccounts(accounts, { ownerUserId: "" })).toEqual([]);
+    expect(listAnchorableAccounts(accounts)).toEqual([]);
+  });
+
+  it("excludes accounts owned by someone else in personal scope", () => {
+    const accounts = [
+      account({ id: "checking-1", type: "depository", user_id: "user-b", current_balance: 1000 }),
+      account({ id: "checking-2", type: "depository", user_id: "user-a", current_balance: 2000 }),
+    ];
+    expect(
+      listAnchorableAccounts(accounts, { ownerUserId: "user-a" }).map((a) => a.id),
+    ).toEqual(["checking-2"]);
+  });
+
+  it("spans owners only when household scope is passed", () => {
+    const accounts = [
+      account({ id: "checking-1", type: "depository", user_id: "user-b", current_balance: 1000 }),
+    ];
+    expect(
+      listAnchorableAccounts(accounts, { ownerUserId: "user-a", household: true }).map(
+        (a) => a.id,
+      ),
+    ).toEqual(["checking-1"]);
+  });
+});
+
 describe("buildLedgerStripTicks", () => {
   it("returns an empty array for no transactions", () => {
     expect(buildLedgerStripTicks([], 100)).toEqual([]);

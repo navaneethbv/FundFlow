@@ -64,7 +64,18 @@ vi.mock("@/components/dashboard/PriorityRail", () => ({
 }));
 
 vi.mock("@/components/dashboard/OverviewView", () => ({
-  default: () => createElement("div", { "data-testid": "overview-view" }),
+  default: ({
+    selectedLedgerAccountId,
+    extraParams,
+  }: {
+    selectedLedgerAccountId?: string;
+    extraParams?: Record<string, string | undefined>;
+  }) =>
+    createElement("div", {
+      "data-testid": "overview-view",
+      "data-selected-ledger-account": selectedLedgerAccountId,
+      "data-has-extra-params": String(Boolean(extraParams)),
+    }),
 }));
 
 vi.mock("@/components/dashboard/MonitorView", () => ({
@@ -204,6 +215,20 @@ describe("DashboardPage Server Component", () => {
     expect(html).toContain('data-testid="scope-chips"');
     expect(html).toContain("Good");
     expect(html).toContain("Alex");
+  });
+
+  it("passes selectedLedgerAccountId and extraParams from searchParams to OverviewView", async () => {
+    const element = await DashboardPage({
+      searchParams: Promise.resolve({
+        view: "overview",
+        ledgerAccount: "acct-selected-ledger",
+      }),
+    });
+    const html = renderToStaticMarkup(element);
+
+    expect(html).toContain('data-testid="overview-view"');
+    expect(html).toContain('data-selected-ledger-account="acct-selected-ledger"');
+    expect(html).toContain('data-has-extra-params="true"');
   });
 
   it("renders empty state when no banks are connected", async () => {

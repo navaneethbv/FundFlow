@@ -55,6 +55,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
   const selectedView = firstSearchParam(params.view);
   const selectedBills = firstSearchParam(params.bills);
   const selectedScope = firstSearchParam(params.scope);
+  const selectedLedgerAccountId = firstSearchParam(params.ledgerAccount);
   // The grid is the landing view only when the flag is on; existing bookmarks
   // to ?view=monitor|plan|wealth keep resolving exactly as before.
   const widgetsEnabled = isFeatureEnabled("dashboardWidgets");
@@ -201,6 +202,8 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
               household={dashboardScope === "household"}
               month={data.selectedMonth}
               selectedAccountId={selectedAccountId}
+              selectedLedgerAccountId={selectedLedgerAccountId}
+              extraParams={extraParams}
             />
           )}
           {activeView === "monitor" && (

@@ -343,6 +343,49 @@ describe("loadOverviewWidgetData", () => {
     expect(result.ledgerStrip.account?.id).toBe("acct-savings");
   });
 
+  it("lists every anchorable account for the picker, regardless of which one is anchored", async () => {
+    const checking = {
+      id: "acct-checking",
+      name: "Checking",
+      mask: "1111",
+      current_balance: 900,
+      iso_currency_code: "USD",
+      type: "depository",
+      user_id: "user-1",
+    };
+    const savings = {
+      id: "acct-savings",
+      name: "Savings",
+      mask: "2222",
+      current_balance: 5000,
+      iso_currency_code: "USD",
+      type: "depository",
+      user_id: "user-1",
+    };
+    const card = {
+      id: "acct-card",
+      name: "Credit Card",
+      mask: "3333",
+      current_balance: -200,
+      iso_currency_code: "USD",
+      type: "credit",
+      user_id: "user-1",
+    };
+    const supabase = clientStub({ transactions: { data: [] } });
+
+    const result = await loadOverviewWidgetData(supabase as never, {
+      ...options,
+      selectedAccountId: "acct-savings",
+      visible: [],
+      accounts: [checking, savings, card],
+    });
+
+    expect(result.ledgerStrip.accounts.map((a) => a.id)).toEqual([
+      "acct-checking",
+      "acct-savings",
+    ]);
+  });
+
   it("handles anchor account with null current_balance and null iso_currency_code gracefully", async () => {
     const fakeAccount = {
       id: "acct-dep-2",
