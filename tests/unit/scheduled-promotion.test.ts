@@ -116,4 +116,23 @@ describe("promoteDueScheduledTransactions — remaining branches", () => {
     expect(result.promoted).toBe(1);
     expect(result.failed).toBe("status failed");
   });
+
+  it("reports a read error when querying scheduled_transactions fails", async () => {
+    const service = {
+      from: vi.fn(() => ({
+        select: () => ({
+          eq: () => ({
+            lte: () => ({
+              order: () => ({
+                limit: () => Promise.resolve({ data: null, error: { message: "db unavailable" } }),
+              }),
+            }),
+          }),
+        }),
+      })),
+    };
+    const result = await promoteDueScheduledTransactions(service as never, "2026-09-02");
+    expect(result).toEqual({ promoted: 0, failed: "db unavailable" });
+  });
 });
+

@@ -208,4 +208,19 @@ describe("executeRestore — chunking and failure branches", () => {
     const inserts = control.calls.filter((call) => call.table === "budgets" && call.op === "insert");
     expect(inserts.length).toBeGreaterThanOrEqual(2);
   });
+
+  it("skips tables with rowCount === 0 and handles non-object rows in non-transaction tables", async () => {
+    const { service, calls } = serviceStub();
+    const archive = {
+      budgets: [],
+      goals: ["non-object", null, { name: "Save", target_amount: 100 }],
+    };
+    const plan = buildRestorePlan(archive);
+    const result = await executeRestore(service as never, "user-123", plan, archive);
+    expect(result.tables).toHaveLength(1);
+    expect(result.tables[0]!.name).toBe("goals");
+    expect(result.tables[0]!.rowsWritten).toBe(3);
+    expect(calls.some((call) => call.table === "budgets")).toBe(false);
+  });
 });
+

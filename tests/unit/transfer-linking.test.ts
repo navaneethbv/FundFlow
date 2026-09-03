@@ -141,4 +141,14 @@ describe("detectTransferPairs — deterministic tie-breaks", () => {
     expect(pairs).toHaveLength(1);
     expect(pairs[0]!.inId).toBe("inA");
   });
+
+  it("sorts multiple outflows on the same date by id", () => {
+    const outB = { id: "outB", date: "2026-09-01", merchant: "", amount: 500, accountId: "checking" };
+    const outA = { id: "outA", date: "2026-09-01", merchant: "", amount: 500, accountId: "checking" };
+    const in1 = { id: "in1", date: "2026-09-02", merchant: "", amount: -500, accountId: "cardA" };
+    const pairs = detectTransferPairs([outB, outA, in1], 7);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0]!.outId).toBe("outA");
+  });
 });
+
