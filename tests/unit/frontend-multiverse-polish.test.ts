@@ -17,6 +17,10 @@ import SidebarShell from "@/components/shell/SidebarShell";
 describe("Frontend Multiverse Polish: Motion & Keyframe Contracts", () => {
   it("defines micro-interaction keyframes in globals.css", () => {
     const css = readFileSync("app/globals.css", "utf8");
+    expect(css).toContain("@keyframes fade-in");
+    expect(css).toContain("@keyframes scale-in");
+    expect(css).toContain("@keyframes slide-in-right");
+    expect(css).toContain("@keyframes pulse-subtle");
     expect(css).toContain("@keyframes modal-pop-in");
     expect(css).toContain("@keyframes sheet-slide-up");
     expect(css).toContain("@keyframes dropdown-pop-in");
@@ -25,6 +29,10 @@ describe("Frontend Multiverse Polish: Motion & Keyframe Contracts", () => {
 
   it("defines animation utility classes and respects reduced motion", () => {
     const css = readFileSync("app/globals.css", "utf8");
+    expect(css).toContain(".animate-fade-in");
+    expect(css).toContain(".animate-scale-in");
+    expect(css).toContain(".animate-slide-in-right");
+    expect(css).toContain(".animate-pulse-subtle");
     expect(css).toContain(".animate-modal-pop");
     expect(css).toContain(".animate-sheet-slide");
     expect(css).toContain(".animate-dropdown");
