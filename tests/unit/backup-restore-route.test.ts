@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
 import { POST } from "@/app/api/backup/restore/route";
 import { requireUser } from "@/lib/http";
@@ -56,6 +56,7 @@ const PAYLOAD = {
 };
 
 beforeEach(() => {
+  process.env.FUNDFLOW_FEATURE_FLAGS = "backupRestore";
   vi.clearAllMocks();
   from.mockReturnValue(thenable());
   vi.mocked(requireUser).mockResolvedValue({
@@ -64,6 +65,11 @@ beforeEach(() => {
   } as never);
   vi.mocked(writeAudit).mockResolvedValue(undefined);
 });
+
+afterEach(() => {
+  delete process.env.FUNDFLOW_FEATURE_FLAGS;
+});
+
 
 describe("POST /api/backup/restore", () => {
   it("dry-run returns the plan without executing", async () => {
@@ -141,6 +147,7 @@ describe("POST /api/backup/restore", () => {
 
 describe("POST /api/backup/restore — guards and validation", () => {
   beforeEach(() => {
+    process.env.FUNDFLOW_FEATURE_FLAGS = "backupRestore";
     vi.clearAllMocks();
     from.mockReturnValue(thenable());
     vi.mocked(requireUser).mockResolvedValue({
@@ -148,6 +155,10 @@ describe("POST /api/backup/restore — guards and validation", () => {
       supabase: {} as never,
     } as never);
     vi.mocked(writeAudit).mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    delete process.env.FUNDFLOW_FEATURE_FLAGS;
   });
 
   it("429s past the rate limit", async () => {
@@ -187,5 +198,16 @@ describe("POST /api/backup/restore — guards and validation", () => {
     const archive = buildBackupArchive({ accounts: "corrupt" }, KEY, USER_ID);
     const res = await POST(formRequest(archive, { dry_run: "true", code: "000000" }));
     expect(res.status).toBe(400);
+  });
+
+  it("returns 403 when backupRestore flag is off regardless of step-up", async () => {
+    process.env.FUNDFLOW_FEATURE_FLAGS = "";
+    const { verifyStepUp } = await import("@/lib/step-up");
+    const archive = buildBackupArchive(PAYLOAD, KEY, USER_ID);
+    const res = await POST(formRequest(archive, { dry_run: "true", code: "wrong" }));
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain("disabled");
+    expect(verifyStepUp).not.toHaveBeenCalled();
   });
 });

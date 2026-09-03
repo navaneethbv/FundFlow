@@ -169,6 +169,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
   // profile columns or user_tags — everything else uses tables that already
   // existed, so this only needs to redirect three sections, not the page.
   const settingsIaReady = isFeatureEnabled("settingsIa");
+  const backupRestoreReady = isFeatureEnabled("backupRestore");
   const migrationDependentSections: SettingsSection[] = ["profile", "display", "tags"];
   let active = sectionFromParam(firstSearchParam(params.section));
   if (!settingsIaReady && migrationDependentSections.includes(active)) {
@@ -467,7 +468,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
           <ReceiptScanSection enabled={aiSettings?.enabled ?? false} />
         </div>
         <DemoDataSection hasBanks={(items ?? []).length > 0} />
-        <RestoreSection />
+        {backupRestoreReady && <RestoreSection />}
         <DangerZone />
       </>
     );

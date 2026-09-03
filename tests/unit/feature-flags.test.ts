@@ -77,4 +77,14 @@ describe("feature flags", () => {
       }),
     ).toBe(true);
   });
+
+  it("keeps backup restore off unless explicitly enabled", () => {
+    expect(FEATURE_FLAG_DEFAULTS.backupRestore).toBe(false);
+    expect(isFeatureEnabled("backupRestore", {})).toBe(false);
+    expect(
+      isFeatureEnabled("backupRestore", {
+        FUNDFLOW_FEATURE_FLAGS: "backupRestore",
+      }),
+    ).toBe(true);
+  });
 });

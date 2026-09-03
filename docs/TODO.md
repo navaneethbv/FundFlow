@@ -2,6 +2,14 @@
 
 Nice-to-have features and enhancements, deferred out of the initial build.
 
+## Added 2026-09-02: backup restore redesign
+
+The restore endpoint is disabled behind `FEATURE_FLAG_DEFAULTS.backupRestore: false` because restoring provider-synced tables (such as `accounts`) causes cascade deletions across the ledger and fails on missing `plaid_items` foreign keys.
+Future restore redesign requirements:
+- Treat provider-synced tables as non-restorable (a third scope beside shared/owner).
+- Restore only user-authored configuration (budgets, goals, rules, manual accounts, tags, user annotations), rather than reconstructing accounts.
+- If any multi-table restore is executed, run it within an atomic Postgres transaction (RPC) to guarantee all-or-nothing rollback on partial failures.
+
 ## Added 2026-08-30: PR #130 remaining verification
 
 The hybrid recurring detection code, migrations, and tests are complete, and all three migrations are already applied to the linked project.

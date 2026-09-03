@@ -79,6 +79,13 @@ export const FEATURE_FLAG_DEFAULTS = {
    * Categories, Merchants, Rules, Household, Integrations, Data) predate it.
    */
   settingsIa: true,
+  /**
+   * Backup restore (features.md #5).
+   * Disabled until the restore redesign lands. Restoring provider-synced tables
+   * (like accounts) cascades across the schema and fails on missing plaid_items foreign keys.
+   * Only user-authored config should be restorable in-app.
+   */
+  backupRestore: false,
 } as const;
 
 export type FeatureFlag = keyof typeof FEATURE_FLAG_DEFAULTS;

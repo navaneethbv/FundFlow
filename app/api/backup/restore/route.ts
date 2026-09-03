@@ -12,6 +12,7 @@ import {
 import { createServiceClient } from "@/lib/supabase/service";
 import { writeAudit, getClientIp } from "@/lib/audit";
 import type { User } from "@supabase/supabase-js";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 
 /**
  * The backup restore path (features.md #5): upload the encrypted archive the
@@ -28,6 +29,13 @@ export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
   const { user, supabase } = auth;
+
+  if (!isFeatureEnabled("backupRestore")) {
+    return NextResponse.json(
+      { error: "Backup restore is temporarily disabled." },
+      { status: 403 },
+    );
+  }
 
   const allowed = await checkRateLimit(`backup-restore:${user.id}`, MAX_STEP_UP_ATTEMPTS_PER_HOUR, 3600);
   if (!allowed) {
