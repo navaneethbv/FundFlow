@@ -760,11 +760,36 @@ export async function getDashboardData(
         .from("linked_refunds")
         .select("charge_transaction_id, refund_transaction_id"),
     ),
-    scopeUser(
-      supabase
-        .from("linked_transfers")
-        .select("out_transaction_id, in_transaction_id"),
-    ),
+    Promise.resolve(
+      scopeUser(
+        supabase
+          .from("linked_transfers")
+          .select("out_transaction_id, in_transaction_id"),
+      ),
+    )
+      .then((res: { data?: unknown; error?: unknown }) => {
+        if (
+          res?.error &&
+          ((res.error as { code?: string }).code === "42P01" ||
+            (res.error as { message?: string }).message?.includes("linked_transfers"))
+        ) {
+          return { data: [] as Array<{ out_transaction_id: string; in_transaction_id: string }>, error: null };
+        }
+        return res;
+      })
+      .catch((error: unknown) => {
+        if (
+          (error instanceof Error &&
+            (error.message.includes("42P01") || error.message.includes("linked_transfers"))) ||
+          (typeof error === "object" &&
+            error !== null &&
+            "code" in error &&
+            (error as { code: string }).code === "42P01")
+        ) {
+          return { data: [] as Array<{ out_transaction_id: string; in_transaction_id: string }>, error: null };
+        }
+        throw error;
+      }),
     scopeUser(
       supabase
         .from("linked_duplicates")

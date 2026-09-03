@@ -41,4 +41,39 @@ describe("getDashboardData user scoping", () => {
     await getDashboardData(makeSupabase(eqCalls), undefined, "2026-07");
     expect(eqCalls.some(([column]) => column === "user_id")).toBe(false);
   });
+
+  it("degrades gracefully to empty array when linked_transfers returns 42P01 (unmigrated table)", async () => {
+    const chain: Record<string, unknown> = {};
+    Object.assign(chain, {
+      select: () => chain,
+      order: () => chain,
+      gte: () => chain,
+      lt: () => chain,
+      in: () => chain,
+      limit: () => chain,
+      eq: () => chain,
+      maybeSingle: () => Promise.resolve({ data: null }),
+      then: (resolve: (value: { data: unknown[]; error?: unknown }) => unknown) =>
+        resolve({ data: [] }),
+    });
+
+    const mockSupabase = {
+      from: (table: string) => {
+        if (table === "linked_transfers") {
+          const failChain = { ...chain };
+          failChain.then = (resolve: (value: { data: null; error: { code: string; message: string } }) => unknown) =>
+            resolve({
+              data: null,
+              error: { code: "42P01", message: 'relation "public.linked_transfers" does not exist' },
+            });
+          return failChain;
+        }
+        return chain;
+      },
+    } as never;
+
+    const data = await getDashboardData(mockSupabase, undefined, "2026-07", "user-1");
+    expect(data).toBeDefined();
+    expect(data.cashFlow).toBeDefined();
+  });
 });
