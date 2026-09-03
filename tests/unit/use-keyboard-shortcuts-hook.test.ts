@@ -62,6 +62,7 @@ function createMockWindow() {
 
 describe("useKeyboardShortcuts Hook Lifecycle", () => {
   beforeEach(() => {
+    vi.unstubAllGlobals();
     currentEffect = null;
     mockHelpOpen = false;
     refCallCount = 0;
@@ -143,6 +144,14 @@ describe("useKeyboardShortcuts Hook Lifecycle", () => {
     // 3. Press '?' -> Toggles help
     handler!(createMockKeyEvent("?"));
     expect(mockHelpOpen).toBe(true);
+
+    // 4. Press '?' again while help dialog is open -> Toggles help closed
+    vi.stubGlobal("document", {
+      querySelector: (selector: string) =>
+        selector === 'dialog[open], [role="dialog"]' ? {} : null,
+    });
+    handler!(createMockKeyEvent("?"));
+    expect(mockHelpOpen).toBe(false);
 
     vi.useRealTimers();
     vi.unstubAllGlobals();

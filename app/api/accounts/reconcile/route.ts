@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { getClientIp, writeAudit } from "@/lib/audit";
 import { isLiabilityAccount } from "@/lib/account-balance";
 import {
@@ -89,18 +90,7 @@ export async function GET(request: NextRequest) {
     if (!account) return badRequest("Account not found");
 
     const accountColumn = ref.source === "plaid" ? "account_id" : "manual_account_id";
-    const { data: lastStatement } = await supabase
-      .from("account_reconciliations")
-      .select("statement_date")
-      .eq("user_id", user.id)
-      .eq(accountColumn, ref.id)
-      .order("statement_date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const sinceDate = lastStatement?.statement_date
-      ? lastStatement.statement_date as string
-      : isoDaysAgo(LOOKBACK_DAYS);
+    const sinceDate = await getReconcileSinceDate(supabase, user.id, accountColumn, ref.id);
 
     const { data: txnRows, error: txnError } = await supabase
       .from("transactions")
@@ -164,6 +154,26 @@ export async function GET(request: NextRequest) {
   }
 }
 
+async function getReconcileSinceDate(
+  supabase: SupabaseClient,
+  userId: string,
+  accountColumn: string,
+  accountId: string,
+): Promise<string> {
+  const { data: lastStatement } = await supabase
+    .from("account_reconciliations")
+    .select("statement_date")
+    .eq("user_id", userId)
+    .eq(accountColumn, accountId)
+    .order("statement_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return lastStatement?.statement_date
+    ? (lastStatement.statement_date as string)
+    : isoDaysAgo(LOOKBACK_DAYS);
+}
+
 async function syncClearedStatus(
   supabase: SupabaseClient,
   userId: string,
@@ -172,6 +182,7 @@ async function syncClearedStatus(
   statementDate: string,
   clearedIds: string[],
 ): Promise<NextResponse | null> {
+  const clearedSet = new Set(clearedIds);
   if (clearedIds.length > 0) {
     const { data: owned, error: ownedError } = await supabase
       .from("transactions")
@@ -180,7 +191,7 @@ async function syncClearedStatus(
       .eq(accountColumn, accountId)
       .in("id", clearedIds);
     if (ownedError) throw ownedError;
-    if ((owned ?? []).length !== new Set(clearedIds).size) {
+    if ((owned ?? []).length !== clearedSet.size) {
       return badRequest("cleared_ids contains transactions outside this account");
     }
     const now = new Date().toISOString();
@@ -198,16 +209,17 @@ async function syncClearedStatus(
   }
 
   // Un-clear in-scope rows the user unchecked this round.
+  const sinceDate = await getReconcileSinceDate(supabase, userId, accountColumn, accountId);
   const { data: txnRows } = await supabase
     .from("transactions")
     .select("id")
     .eq("user_id", userId)
     .eq(accountColumn, accountId)
-    .gte("date", isoDaysAgo(LOOKBACK_DAYS))
+    .gte("date", sinceDate)
     .lte("date", statementDate)
     .limit(2000);
   const inScopeIds = (txnRows ?? []).map((row) => row.id as string);
-  const unmarkIds = inScopeIds.filter((id) => !new Set(clearedIds).has(id));
+  const unmarkIds = inScopeIds.filter((id) => !clearedSet.has(id));
   if (unmarkIds.length > 0) {
     const { error: unmarkError } = await supabase
       .from("transaction_annotations")
@@ -292,6 +304,9 @@ export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
   const { supabase, user } = auth;
+  if (!(await checkRateLimit(`reconcile:${user.id}:write`, 30, 3600))) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
 
   try {
     const body = await request.json().catch(() => null);

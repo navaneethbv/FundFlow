@@ -9,8 +9,22 @@ vi.mock("@/lib/http", () => ({
   requireUser: () => mockRequireUser(),
   badRequest: (msg: string) =>
     new Response(JSON.stringify({ error: msg }), { status: 400 }),
-  errorResponse: (msg: string, status: number) =>
-    new Response(JSON.stringify({ error: msg }), { status }),
+  errorResponse: (context: string, error: unknown, status = 500) =>
+    new Response(
+      JSON.stringify({
+        error:
+          error instanceof Error
+            ? error.message
+            : typeof error === "object" && error !== null && "message" in error
+              ? (error as { message: string }).message
+              : String(error),
+      }),
+      { status: typeof status === "number" ? status : 500 },
+    ),
+}));
+
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: vi.fn().mockResolvedValue(true),
 }));
 
 const mockServiceUpdate = vi.fn();
@@ -44,7 +58,8 @@ vi.mock("@/lib/audit", () => ({
 function createMockBatchDb(options?: {
   rules?: Array<Record<string, unknown>>;
   transactions?: Array<Record<string, unknown>>;
-  onUpsert?: (...args: unknown[]) => Promise<{ error: null }>;
+  annotations?: Array<Record<string, unknown>>;
+  onUpsert?: (...args: unknown[]) => Promise<{ error: unknown }>;
 }) {
   const {
     rules = [
@@ -66,6 +81,7 @@ function createMockBatchDb(options?: {
         pfc_primary: "GENERAL",
       },
     ],
+    annotations = [],
     onUpsert = vi.fn().mockResolvedValue({ error: null }),
   } = options ?? {};
 
@@ -93,7 +109,7 @@ function createMockBatchDb(options?: {
       if (table === "transaction_annotations") {
         return {
           select: vi.fn().mockReturnThis(),
-          in: vi.fn().mockResolvedValue({ data: [] }),
+          in: vi.fn().mockResolvedValue({ data: annotations }),
           upsert: onUpsert,
         };
       }
@@ -215,4 +231,165 @@ describe("POST /api/rules/batch", () => {
     );
     expect(mockServiceIn).toHaveBeenCalledWith("id", ["tx-1"]);
   });
+
+  it("propagates annotation write failure and records audit trail with failed_table", async () => {
+    const mockUpsert = vi.fn().mockResolvedValue({ error: { message: "upsert failed" } });
+    const mockSupabase = createMockBatchDb({
+      rules: [
+        {
+          id: "r1",
+          match_type: "keyword",
+          pattern: "Target",
+          display_name: "Target Supercenter",
+          category: "GROCERIES",
+          enabled: true,
+        },
+      ],
+      transactions: [
+        {
+          id: "tx-1",
+          merchant: "Target Store",
+          name: "TARGET",
+          amount: -50,
+          pfc_primary: "GENERAL",
+        },
+      ],
+      onUpsert: mockUpsert,
+    });
+
+    mockRequireUser.mockResolvedValueOnce({
+      user: { id: "u-1" },
+      supabase: mockSupabase,
+    });
+
+    const res = await POST(createBatchRequest({ dryRun: false }));
+    expect(res.status).toBe(500);
+
+    // Should log attempt first, then failure result with failed_table
+    expect(mockWriteAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "rules_batch_applied",
+        metadata: expect.objectContaining({ phase: "attempt" }),
+      }),
+    );
+    expect(mockWriteAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "rules_batch_applied",
+        metadata: expect.objectContaining({
+          phase: "result",
+          failed_table: "transaction_annotations",
+        }),
+      }),
+    );
+  });
+
+  it("propagates merchant update failure and records audit trail with failed_table", async () => {
+    const mockUpsert = vi.fn().mockResolvedValue({ error: null });
+    mockServiceEq.mockResolvedValueOnce({ error: { message: "merchant update failed" } });
+
+    const mockSupabase = createMockBatchDb({
+      rules: [
+        {
+          id: "r1",
+          match_type: "keyword",
+          pattern: "Target",
+          display_name: "Target Supercenter",
+          category: "GROCERIES",
+          enabled: true,
+        },
+      ],
+      transactions: [
+        {
+          id: "tx-1",
+          merchant: "Target Store",
+          name: "TARGET",
+          amount: -50,
+          pfc_primary: "GENERAL",
+        },
+      ],
+      onUpsert: mockUpsert,
+    });
+
+    mockRequireUser.mockResolvedValueOnce({
+      user: { id: "u-1" },
+      supabase: mockSupabase,
+    });
+
+    const res = await POST(createBatchRequest({ dryRun: false }));
+    expect(res.status).toBe(500);
+
+    expect(mockWriteAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "rules_batch_applied",
+        metadata: expect.objectContaining({ phase: "attempt" }),
+      }),
+    );
+    expect(mockWriteAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "rules_batch_applied",
+        metadata: expect.objectContaining({
+          phase: "result",
+          failed_table: "transactions",
+        }),
+      }),
+    );
+  });
+
+  it("returns 429 when rate limit is exceeded", async () => {
+    const { checkRateLimit } = await import("@/lib/rate-limit");
+    vi.mocked(checkRateLimit).mockResolvedValueOnce(false);
+    mockRequireUser.mockResolvedValueOnce({
+      user: { id: "u-1" },
+      supabase: {},
+    });
+    const res = await POST(createBatchRequest({ dryRun: false }));
+    expect(res.status).toBe(429);
+    const data = await res.json();
+    expect(data.error).toBe("Too many requests");
+  });
+
+  it("does not rewrite annotations or inflate appliedCount for transactions with unchanged tags and category", async () => {
+    const mockUpsert = vi.fn().mockResolvedValue({ error: null });
+    const mockSupabase = createMockBatchDb({
+      rules: [
+        {
+          id: "r1",
+          match_type: "keyword",
+          pattern: "Target",
+          display_name: "Target Store", // Merchant change only!
+          enabled: true,
+        },
+      ],
+      transactions: [
+        {
+          id: "tx-1",
+          merchant: "Target",
+          name: "TARGET",
+          amount: -50,
+          pfc_primary: "GENERAL",
+        },
+      ],
+      annotations: [
+        {
+          transaction_id: "tx-1",
+          tags: ["existing-tag"],
+          display_category: null,
+        },
+      ],
+      onUpsert: mockUpsert,
+    });
+
+    mockRequireUser.mockResolvedValueOnce({
+      user: { id: "u-1" },
+      supabase: mockSupabase,
+    });
+
+    const res = await POST(createBatchRequest({ dryRun: false }));
+    expect(res.status).toBe(200);
+    // Annotation upsert should NOT have been called because category and tags didn't change!
+    expect(mockUpsert).not.toHaveBeenCalled();
+    const data = await res.json();
+    expect(data.appliedCount).toBe(1); // 1 merchant update, 0 annotation rewrites
+  });
 });
+

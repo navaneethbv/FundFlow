@@ -45,16 +45,50 @@ export const MAX_REGEX_PATTERN_LENGTH = 120;
 const AMBIGUOUS_GROUP_BODY_PATTERN = /[*+{|]/;
 
 function hasAmbiguousQuantifiedGroup(pattern: string): boolean {
-  // Fresh literal per call: a /g regex reuses lastIndex across exec calls,
-  // so a shared instance would leak match state between patterns.
-  const quantifiedGroup = /\(([^()]*)\)([*+{])/g;
-  for (
-    let match = quantifiedGroup.exec(pattern);
-    match !== null;
-    match = quantifiedGroup.exec(pattern)
-  ) {
-    if (AMBIGUOUS_GROUP_BODY_PATTERN.test(match[1])) return true;
+  const stack: number[] = [];
+  let inCharClass = false;
+
+  for (let i = 0; i < pattern.length; i++) {
+    const char = pattern[i];
+
+    if (char === "\\") {
+      i++; // Skip escaped character
+      continue;
+    }
+
+    if (inCharClass) {
+      if (char === "]") inCharClass = false;
+      continue;
+    }
+
+    if (char === "[") {
+      inCharClass = true;
+      continue;
+    }
+
+    if (char === "(") {
+      stack.push(i);
+    } else if (char === ")" && stack.length > 0) {
+      const openIdx = stack.pop()!;
+      const nextChar = pattern[i + 1];
+      // Only looping quantifiers (*, +, {) can cause super-linear
+      // backtracking. A trailing ? makes the group optional (0-or-1) with
+      // no loop, so patterns like ^Uber(\s*Eats)?$ stay allowed.
+      const isQuantified =
+        nextChar === "*" || nextChar === "+" || nextChar === "{";
+
+      if (isQuantified) {
+        const body = pattern.slice(openIdx + 1, i);
+        const strippedBody = body
+          .replace(/\\./g, "")
+          .replace(/\[.*?\]/g, "");
+        if (AMBIGUOUS_GROUP_BODY_PATTERN.test(strippedBody)) {
+          return true;
+        }
+      }
+    }
   }
+
   return false;
 }
 
@@ -247,10 +281,14 @@ export function applyRulesToTransaction(
   }
   const nextTags = Array.from(tagSet);
 
+  const tagsChanged =
+    nextTags.length !== originalTags.length ||
+    nextTags.some((tag, index) => tag !== originalTags[index]);
+
   const modified =
     nextMerchant !== originalMerchant ||
     nextCategory !== originalCategory ||
-    nextTags.length !== originalTags.length;
+    tagsChanged;
 
   return {
     transactionId: tx.id,

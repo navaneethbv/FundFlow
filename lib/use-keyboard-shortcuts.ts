@@ -113,9 +113,11 @@ export function useKeyboardShortcuts() {
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (isDialogOpen()) {
-        // A modal is up (help sheet, editors, batch previews): ignore chords
-        // so they cannot navigate behind it, and drop any half-typed chord.
         pendingChordRef.current = null;
+        if (e.key === "?") {
+          e.preventDefault();
+          setHelpOpen((cur) => !cur);
+        }
         return;
       }
 

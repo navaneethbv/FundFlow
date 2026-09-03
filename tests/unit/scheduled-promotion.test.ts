@@ -18,7 +18,8 @@ function serviceStub({
   due = [DUE],
   upsertError = null,
   statusError = null,
-}: { due?: unknown[]; upsertError?: unknown; statusError?: unknown } = {}) {
+  insertedRows,
+}: { due?: unknown[]; upsertError?: unknown; statusError?: unknown; insertedRows?: unknown[] } = {}) {
   const calls = { upserts: [] as unknown[][], statusUpdates: [] as unknown[] };
   const service = {
     from: vi.fn((table: string) => {
@@ -36,7 +37,11 @@ function serviceStub({
         return {
           upsert: (rows: unknown[]) => {
             calls.upserts.push(rows);
-            return Promise.resolve({ data: null, error: upsertError });
+            const data = upsertError ? null : (insertedRows ?? rows.map(() => ({ id: "1" })));
+            return {
+              select: () => Promise.resolve({ data, error: upsertError }),
+              then: (resolve: (value: unknown) => unknown) => resolve({ data, error: upsertError }),
+            };
           },
         };
       }
@@ -95,6 +100,13 @@ describe("promoteDueScheduledTransactions", () => {
     const result = await promoteDueScheduledTransactions(service as never, "2026-09-02");
     expect(result.failed).toBe("boom");
     expect(calls.statusUpdates).toHaveLength(0);
+  });
+
+  it("reports 0 promoted when upsert skips duplicate rows", async () => {
+    const { service } = serviceStub({ insertedRows: [] });
+    const result = await promoteDueScheduledTransactions(service as never, "2026-09-02");
+    expect(result.promoted).toBe(0);
+    expect(result.failed).toBeNull();
   });
 });
 

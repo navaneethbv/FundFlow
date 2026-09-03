@@ -34,7 +34,7 @@ create policy linked_transfers_delete_own on public.linked_transfers
 
 -- Widen the review-decision kinds to cover transfer suggestions.
 alter table public.transaction_review_decisions
-  drop constraint transaction_review_decisions_kind_check;
+  drop constraint if exists transaction_review_decisions_kind_check;
 alter table public.transaction_review_decisions
   add constraint transaction_review_decisions_kind_check
     check (kind in ('duplicate', 'refund', 'transfer'));

@@ -179,6 +179,8 @@ describe("Smart Rules Engine: Rule Evaluation", () => {
     expect(safeCompileRegex(["(", "a", ")", "\\", "1"].join(""))).toBeNull(); // backreference \1
     expect(safeCompileRegex("(a|aa)+")).toBeNull(); // overlapping alternatives
     expect(safeCompileRegex("(?:a+)+")).toBeNull(); // non-capturing nested +
+    expect(safeCompileRegex("((a+))+")).toBeNull(); // deeply nested +
+    expect(safeCompileRegex("((a|b))+")).toBeNull(); // nested alternation with quantifier
     expect(safeCompileRegex("[incomplete")).toBeNull(); // invalid syntax
 
     // A quantified group with a plain literal body stays allowed, as does a
@@ -282,6 +284,25 @@ describe("Smart Rules Engine: Application & Batch Simulation", () => {
     expect(result.modified).toBe(false);
     expect(result.matchedRuleId).toBeNull();
     expect(result.updated.merchant).toBe("Other Store");
+  });
+
+  it("detects tag changes even when tag count remains the same", () => {
+    const swapRule: SmartRule = {
+      id: "rule-swap",
+      matchType: "keyword",
+      pattern: "Gas",
+      tags: ["fuel"],
+      enabled: true,
+    };
+    const txWithTag: RuleTransactionCandidate = {
+      id: "tx-tagged",
+      merchant: "Gas Station",
+      amount: -50,
+      tags: ["gas"],
+    };
+    const result = applyRulesToTransaction([swapRule], txWithTag);
+    expect(result.modified).toBe(true);
+    expect(result.updated.tags).toEqual(["gas", "fuel"]);
   });
 
   it("simulates batch processing accurately", () => {

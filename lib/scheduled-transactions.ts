@@ -54,7 +54,11 @@ function validateDate(date: unknown, today: string): { ok: true; date: string } 
   if (typeof date !== "string" || !TRANSACTION_DATE_RE.test(date)) {
     return { ok: false, error: "date must be a YYYY-MM-DD date" };
   }
-  if (date < today) {
+  // `today` is the server's UTC date; the client defaults this field to its
+  // own local date, which can lag up to a day behind UTC for any timezone
+  // west of it (e.g. PDT after 17:00). Allow one day in the past so a user's
+  // own "today" is never rejected as past.
+  if (date < addDays(today, -1)) {
     return { ok: false, error: "date cannot be in the past" };
   }
   if (date > addDays(today, MAX_HORIZON_DAYS)) {

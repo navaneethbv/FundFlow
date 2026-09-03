@@ -52,13 +52,14 @@ export async function promoteDueScheduledTransactions(
   let promoted = 0;
   for (let index = 0; index < rows.length; index += INSERT_CHUNK) {
     const chunk = rows.slice(index, index + INSERT_CHUNK);
-    const { error: insertError } = await service
+    const { data: inserted, error: insertError } = await service
       .from("transactions")
-      .upsert(chunk, { onConflict: "plaid_transaction_id", ignoreDuplicates: true });
+      .upsert(chunk, { onConflict: "plaid_transaction_id", ignoreDuplicates: true })
+      .select("id");
     if (insertError) {
       return { promoted, failed: insertError.message };
     }
-    promoted += chunk.length;
+    promoted += inserted?.length ?? 0;
   }
 
   const { error: statusError } = await service

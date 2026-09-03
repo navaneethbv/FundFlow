@@ -12,6 +12,7 @@ vi.mock("@/lib/http", async () => {
 });
 
 vi.mock("@/lib/audit", () => ({ writeAudit: vi.fn(), getClientIp: vi.fn(() => "127.0.0.1") }));
+vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: vi.fn(async () => true) }));
 
 const ACC_ID = "11111111-1111-1111-1111-111111111111";
 const T1 = "22222222-2222-2222-2222-222222222221";
@@ -52,8 +53,15 @@ function mockTables(tables: Record<string, TableSpec>) {
       return builder;
     };
     let lastIn: { column: string; values: unknown[] } | null = null;
+    let lastGte: { column: string; value: unknown } | null = null;
     const resolveData = () => {
-      const data = spec.data ?? null;
+      let data = spec.data ?? null;
+      if (Array.isArray(data) && lastGte) {
+        data = data.filter((row) => {
+          const val = (row as Record<string, unknown>)[lastGte!.column];
+          return val === undefined || val === null || (val as string) >= (lastGte!.value as string);
+        });
+      }
       // Honor `.in("id", ...)` so ownership checks see only the filtered rows.
       if (Array.isArray(data) && lastIn?.column === "id") {
         return data.filter((row) =>
@@ -66,9 +74,13 @@ function mockTables(tables: Record<string, TableSpec>) {
       then: (resolve: (value: unknown) => unknown) =>
         resolve({ data: resolveData(), error: spec.error ?? null }),
     };
-    for (const method of ["select", "eq", "gte", "lte", "order", "limit", "not", "maybeSingle", "single"]) {
+    for (const method of ["select", "eq", "lte", "order", "limit", "not", "maybeSingle", "single"]) {
       builder[method] = () => builder;
     }
+    builder.gte = (column: string, value: unknown) => {
+      lastGte = { column, value };
+      return builder;
+    };
     builder.in = (column: string, values: unknown[]) => {
       lastIn = { column, values };
       return builder;
@@ -254,6 +266,19 @@ describe("POST /api/accounts/reconcile", () => {
     );
   }
 
+  it("returns 429 when rate limit is exceeded", async () => {
+    const { checkRateLimit } = await import("@/lib/rate-limit");
+    vi.mocked(checkRateLimit).mockResolvedValueOnce(false);
+    const res = await post({
+      account: `plaid:${ACC_ID}`,
+      statement_date: "2026-08-31",
+      statement_balance: 1930,
+    });
+    expect(res.status).toBe(429);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("Too many requests");
+  });
+
   it("persists cleared flags, records the statement, and audits", async () => {
     setup({ bookBalance: 1930 });
     const res = await post({
@@ -300,6 +325,45 @@ describe("POST /api/accounts/reconcile", () => {
     const update = writes.annotations.find((w) => w.op === "update");
     expect(update).toBeDefined();
     expect(update!.args[0]).toEqual({ cleared_at: null });
+  });
+
+  it("does not un-clear transactions cleared in a prior reconciliation before the previous statement date", async () => {
+    writes.annotations = [];
+    writes.transactions = [];
+    writes.account_reconciliations = [];
+
+    const T_EARLY = "33333333-3333-3333-3333-333333333331";
+    const T_LATE = "33333333-3333-3333-3333-333333333332";
+
+    mockTables({
+      accounts: { data: { ...PLAID_ACCOUNT, current_balance: 1930 } },
+      account_reconciliations: {
+        data: { statement_date: "2026-07-31" },
+        onWrite: (op, args) => writes.account_reconciliations.push({ op, args }),
+      },
+      transactions: {
+        data: [
+          { id: T_EARLY, date: "2026-07-15" },
+          { id: T_LATE, date: "2026-08-10" },
+        ],
+        onWrite: (op, args) => writes.transactions.push({ op, args }),
+      },
+      transaction_annotations: {
+        onWrite: (op, args) => writes.annotations.push({ op, args }),
+      },
+    });
+
+    const res = await post({
+      account: `plaid:${ACC_ID}`,
+      statement_date: "2026-08-31",
+      statement_balance: 1930,
+      cleared_ids: [T_LATE],
+    });
+
+    expect(res.status).toBe(200);
+    expect(writes.annotations.some((w) => w.op === "upsert")).toBe(true);
+    const unmarks = writes.annotations.filter((w) => w.op === "update");
+    expect(unmarks).toEqual([]);
   });
 
   it("does not create an adjustment unless the user explicitly requests one", async () => {

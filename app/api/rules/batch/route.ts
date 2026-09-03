@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { writeAudit, getClientIp } from "@/lib/audit";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
@@ -112,6 +113,11 @@ async function applyBatchLivePersistence(
   modifiedItems: SimulationItem[],
   supabase: SupabaseClient,
   userId: string,
+  auditContext: {
+    ip: string | null;
+    totalEvaluated: number;
+    matchedCount: number;
+  },
 ): Promise<number> {
   let appliedCount = 0;
 
@@ -119,8 +125,9 @@ async function applyBatchLivePersistence(
   const annotationRows = modifiedItems
     .filter(
       (r) =>
-        r.updated.tags.length > 0 ||
-        (r.updated.category && r.updated.category !== r.original.category),
+        (r.updated.category && r.updated.category !== r.original.category) ||
+        r.updated.tags.length !== r.original.tags.length ||
+        r.updated.tags.some((t, i) => t !== r.original.tags[i]),
     )
     .map((r) => ({
       user_id: userId,
@@ -137,9 +144,22 @@ async function applyBatchLivePersistence(
       .from("transaction_annotations")
       .upsert(annotationRows, { onConflict: "user_id,transaction_id" });
 
-    if (!upsertError) {
-      appliedCount += annotationRows.length;
+    if (upsertError) {
+      await writeAudit({
+        userId,
+        action: "rules_batch_applied",
+        ip: auditContext.ip,
+        metadata: {
+          phase: "result",
+          totalEvaluated: auditContext.totalEvaluated,
+          matchedCount: auditContext.matchedCount,
+          appliedCount,
+          failed_table: "transaction_annotations",
+        },
+      });
+      throw upsertError;
     }
+    appliedCount += annotationRows.length;
   }
 
   // B. Persist merchant renaming to transactions table (grouped by target merchant name)
@@ -166,12 +186,26 @@ async function applyBatchLivePersistence(
         .in("id", ids)
         .eq("user_id", userId);
 
-      if (!merchantError) {
-        const notInAnnotations = ids.filter(
-          (id) => !annotationRows.some((a) => a.transaction_id === id),
-        );
-        appliedCount += notInAnnotations.length;
+      if (merchantError) {
+        await writeAudit({
+          userId,
+          action: "rules_batch_applied",
+          ip: auditContext.ip,
+          metadata: {
+            phase: "result",
+            totalEvaluated: auditContext.totalEvaluated,
+            matchedCount: auditContext.matchedCount,
+            appliedCount,
+            failed_table: "transactions",
+          },
+        });
+        throw merchantError;
       }
+
+      const notInAnnotations = ids.filter(
+        (id) => !annotationRows.some((a) => a.transaction_id === id),
+      );
+      appliedCount += notInAnnotations.length;
     }
   }
 
@@ -182,6 +216,10 @@ export async function POST(req: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof Response) return auth;
   const { user, supabase } = auth;
+
+  if (!(await checkRateLimit(`rules:batch:${user.id}`, 30, 3600))) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
 
   let body: BatchRulesRequest;
   try {
@@ -236,29 +274,52 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const appliedCount = await applyBatchLivePersistence(
-    simulation.results.filter((r) => r.modified),
-    supabase,
-    user.id,
-  );
+  try {
+    const clientIp = getClientIp(req);
+    await writeAudit({
+      userId: user.id,
+      action: "rules_batch_applied",
+      ip: clientIp,
+      metadata: {
+        phase: "attempt",
+        totalEvaluated: simulation.totalEvaluated,
+        matchedCount: simulation.matchedCount,
+        modifiedCount: simulation.modifiedCount,
+      },
+    });
 
-  await writeAudit({
-    userId: user.id,
-    action: "rules_batch_applied",
-    ip: getClientIp(req),
-    metadata: {
+    const appliedCount = await applyBatchLivePersistence(
+      simulation.results.filter((r) => r.modified),
+      supabase,
+      user.id,
+      {
+        ip: clientIp,
+        totalEvaluated: simulation.totalEvaluated,
+        matchedCount: simulation.matchedCount,
+      },
+    );
+
+    await writeAudit({
+      userId: user.id,
+      action: "rules_batch_applied",
+      ip: clientIp,
+      metadata: {
+        phase: "result",
+        totalEvaluated: simulation.totalEvaluated,
+        matchedCount: simulation.matchedCount,
+        appliedCount,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      dryRun: false,
       totalEvaluated: simulation.totalEvaluated,
       matchedCount: simulation.matchedCount,
+      modifiedCount: simulation.modifiedCount,
       appliedCount,
-    },
-  });
-
-  return NextResponse.json({
-    success: true,
-    dryRun: false,
-    totalEvaluated: simulation.totalEvaluated,
-    matchedCount: simulation.matchedCount,
-    modifiedCount: simulation.modifiedCount,
-    appliedCount,
-  });
+    });
+  } catch (error) {
+    return errorResponse("rules.batch.post", error);
+  }
 }

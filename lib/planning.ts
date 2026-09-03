@@ -86,6 +86,7 @@ export interface MerchantRule {
 export interface CleanupTransaction {
   id: string;
   merchant: string;
+  name?: string | null;
   category: string | null;
   amount?: number;
   tags?: string[] | null;
@@ -387,7 +388,7 @@ function matchesRule(transaction: CleanupTransaction, rule: MerchantRule): boole
     return Boolean(
       re &&
         (re.test(transaction.merchant) ||
-          Boolean(transaction.accountName && re.test(transaction.accountName))),
+          Boolean(transaction.name && re.test(transaction.name))),
     );
   }
 

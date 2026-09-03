@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
@@ -25,7 +26,7 @@ function isoDaysAgo(days: number): string {
 export async function GET() {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
-  const { supabase, user } = auth;
+  const { user, supabase } = auth;
 
   try {
     if (!(await checkRateLimit(`transfers:${user.id}:read`, 60, 60))) {
@@ -44,8 +45,12 @@ export async function GET() {
       supabase
         .from("transaction_review_decisions")
         .select("subject_id, decision")
+        .eq("user_id", user.id)
         .eq("kind", "transfer"),
-      supabase.from("linked_transfers").select("out_transaction_id, in_transaction_id"),
+      supabase
+        .from("linked_transfers")
+        .select("out_transaction_id, in_transaction_id")
+        .eq("user_id", user.id),
     ]);
 
     const ledger = (txns ?? []).map((row) => ({
@@ -80,8 +85,9 @@ export async function GET() {
       })),
     ).filter((anomaly) => !resolved.has(anomaly.subjectId) && !alreadyLinked.has(anomaly.subjectId));
 
+    const pairBySubject = new Map(pairs.map((p) => [p.subjectId, p]));
     const pairsOut = visible.map((anomaly) => {
-      const pair = pairs.find((candidate) => candidate.subjectId === anomaly.subjectId)!;
+      const pair = pairBySubject.get(anomaly.subjectId)!;
       const out = byId.get(pair.outId);
       const inbound = byId.get(pair.inId);
       return {
@@ -101,7 +107,7 @@ export async function GET() {
 }
 
 async function linkConfirmedTransfer(
-  supabase: ReturnType<typeof requireUser> extends Promise<infer R> ? (R extends { supabase: infer S } ? S : never) : never,
+  supabase: SupabaseClient,
   userId: string,
   subjectId: string,
   body: Record<string, unknown> | null,
@@ -117,18 +123,8 @@ async function linkConfirmedTransfer(
   if (subjectId !== transferSubjectId(outId, inId)) {
     return badRequest("subject_id does not match the pair");
   }
-  const client = supabase as unknown as {
-    from: (table: string) => {
-      select: (cols: string) => {
-        eq: (col: string, val: string) => {
-          in: (col: string, ids: string[]) => Promise<{ data: unknown[] | null; error: unknown }>;
-        };
-      };
-      upsert: (values: unknown, opts: unknown) => Promise<{ error: unknown }>;
-    };
-  };
   // Both sides of a link must be rows in the caller's own ledger.
-  const { data: owned, error: verifyError } = await client
+  const { data: owned, error: verifyError } = await supabase
     .from("transactions")
     .select("id, amount")
     .eq("user_id", userId)
@@ -153,7 +149,7 @@ async function linkConfirmedTransfer(
   ) {
     return badRequest("transactions do not form a valid transfer pair");
   }
-  const { error: linkError } = await client.from("linked_transfers").upsert(
+  const { error: linkError } = await supabase.from("linked_transfers").upsert(
     {
       user_id: userId,
       out_transaction_id: outId,
@@ -185,7 +181,7 @@ export async function POST(request: NextRequest) {
 
     if (decision === "confirmed") {
       const linkFailure = await linkConfirmedTransfer(
-        supabase as never,
+        supabase,
         user.id,
         subjectId,
         body,
