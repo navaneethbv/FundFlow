@@ -170,6 +170,7 @@ export function buildWeeklyReportModel(
   const cleanup = input.transactions.map((transaction) => ({
     id: transaction.id,
     merchant: transaction.merchantName ?? transaction.name ?? "Unknown merchant",
+    name: transaction.name,
     category: transaction.category,
     accountName: accountById.get(transaction.accountId)?.name ?? "",
   }));

@@ -166,6 +166,7 @@ export function projectFinanceTransactions(
     rowsToProject.map((row) => ({
       id: row.id,
       merchant: displayMerchant(row),
+      name: row.name,
       category: row.pfcPrimary,
       amount: row.amount,
       accountName: (row.accountId && accountNames.get(row.accountId)) || "",
