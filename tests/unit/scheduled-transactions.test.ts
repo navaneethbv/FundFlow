@@ -36,6 +36,7 @@ describe("normalizeScheduledTxn", () => {
   it("rejects past dates (the inverted manual-entry guard)", () => {
     const result = normalizeScheduledTxn({ ...VALID, date: "2026-08-31" }, "2026-09-02");
     expect(result).toMatchObject({ ok: false });
+    expect(normalizeScheduledTxn({ ...VALID, date: "2026-09-01" }, "2026-09-02")).toMatchObject({ ok: false });
   });
 
   it("allows today and one day ahead (UTC-east client default)", () => {

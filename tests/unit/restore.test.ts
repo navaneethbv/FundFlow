@@ -209,18 +209,15 @@ describe("executeRestore — chunking and failure branches", () => {
     expect(inserts.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("skips tables with rowCount === 0 and handles non-object rows in non-transaction tables", async () => {
+  it("clears tables represented by an empty archive section", async () => {
     const { service, calls } = serviceStub();
     const archive = {
       budgets: [],
-      goals: ["non-object", null, { name: "Save", target_amount: 100 }],
     };
     const plan = buildRestorePlan(archive);
     const result = await executeRestore(service as never, "user-123", plan, archive);
     expect(result.tables).toHaveLength(1);
-    expect(result.tables[0]!.name).toBe("goals");
-    expect(result.tables[0]!.rowsWritten).toBe(3);
-    expect(calls.some((call) => call.table === "budgets")).toBe(false);
+    expect(result.tables[0]).toEqual({ name: "budgets", rowsWritten: 0 });
+    expect(calls.some((call) => call.table === "budgets" && call.op === "delete")).toBe(true);
   });
 });
-

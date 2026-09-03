@@ -302,7 +302,22 @@ describe("POST /api/accounts/reconcile", () => {
     expect(update!.args[0]).toEqual({ cleared_at: null });
   });
 
-  it("inserts an adjustment entry when the ledger differs from the statement", async () => {
+  it("does not create an adjustment unless the user explicitly requests one", async () => {
+    setup({ bookBalance: 1980 });
+    const res = await post({
+      account: `plaid:${ACC_ID}`,
+      statement_date: "2026-08-31",
+      statement_balance: 1930,
+      cleared_ids: [],
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { difference: number; adjustment_amount: number };
+    expect(body.difference).toBe(50);
+    expect(body.adjustment_amount).toBe(0);
+    expect(writes.transactions.some((w) => w.op === "insert")).toBe(false);
+  });
+
+  it("inserts an adjustment entry when the user explicitly requests one", async () => {
     // Asset, book 1980 vs statement 1930: difference 50, adjustment = +50.
     setup({ bookBalance: 1980 });
     const res = await post({
@@ -310,6 +325,7 @@ describe("POST /api/accounts/reconcile", () => {
       statement_date: "2026-08-31",
       statement_balance: 1930,
       cleared_ids: [],
+      create_adjustment: true,
       adjustment_note: "Bank fee correction",
     });
     expect(res.status).toBe(200);
@@ -577,6 +593,7 @@ describe("POST /api/accounts/reconcile — edge branches", () => {
       statement_date: "2026-08-31",
       statement_balance: -450,
       cleared_ids: [],
+      create_adjustment: true,
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { adjustment_amount: number };
@@ -598,6 +615,7 @@ describe("POST /api/accounts/reconcile — edge branches", () => {
       statement_date: "2026-08-31",
       statement_balance: 1930,
       cleared_ids: [],
+      create_adjustment: true,
     });
     expect(res.status).toBe(200);
     const insert = writes.find((w) => w.op === "insert");
@@ -646,6 +664,7 @@ describe("POST /api/accounts/reconcile — edge branches", () => {
       statement_date: "2026-08-31",
       statement_balance: 1930,
       cleared_ids: [],
+      create_adjustment: true,
     });
     expect(res3.status).toBe(500);
 

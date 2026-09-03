@@ -16,6 +16,7 @@ vi.mock("@/lib/http", () => ({
 const mockServiceUpdate = vi.fn();
 const mockServiceIn = vi.fn();
 const mockServiceEq = vi.fn().mockResolvedValue({ error: null });
+const mockTransactionSelect = vi.fn();
 
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => ({
@@ -79,10 +80,14 @@ function createMockBatchDb(options?: {
       }
       if (table === "transactions") {
         return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          order: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockResolvedValue({ data: transactions }),
+          select: (...args: unknown[]) => {
+            mockTransactionSelect(...args);
+            return {
+              eq: vi.fn().mockReturnThis(),
+              order: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockResolvedValue({ data: transactions }),
+            };
+          },
         };
       }
       if (table === "transaction_annotations") {
@@ -145,6 +150,9 @@ describe("POST /api/rules/batch", () => {
     expect(body.matchedCount).toBe(1);
     expect(body.modifiedCount).toBe(1);
     expect(body.preview[0].updated.merchant).toBe("Target Store");
+    expect(mockTransactionSelect).toHaveBeenCalledWith(
+      "id, merchant_name, name, amount, pfc_primary",
+    );
   });
 
   it("performs live apply with bulk upsert of annotations and merchant updates", async () => {

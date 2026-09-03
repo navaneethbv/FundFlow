@@ -67,7 +67,7 @@ describe("buildTaxExport", () => {
     const { rows, summary } = buildTaxExport(splitTxns, new Map([["s1", ["donations"]]]));
     expect(rows).toHaveLength(2);
     expect(rows.every((row) => row.category === "Charitable donations")).toBe(true);
-    expect(summary).toEqual([{ lineItem: "Charitable donations", count: 2, total: 100 }]);
+    expect(summary).toEqual([{ lineItem: "Charitable donations", count: 1, total: 100 }]);
   });
 
   it("falls back to Unknown for blank merchants and rounds summary totals", () => {

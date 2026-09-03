@@ -97,7 +97,10 @@ describe("POST /api/transactions/transfers", () => {
       if (table === "transaction_review_decisions") {
         return { upsert };
       }
-      if (table === "transactions") return thenable([{ id: OUT_ID }, { id: IN_ID }]);
+      if (table === "transactions") return thenable([
+        { id: OUT_ID, date: "2026-09-01", amount: 500, account_id: "a1", manual_account_id: null },
+        { id: IN_ID, date: "2026-09-02", amount: -500, account_id: "a2", manual_account_id: null },
+      ]);
       return { upsert };
     });
     const res = await POST(
@@ -113,6 +116,69 @@ describe("POST /api/transactions/transfers", () => {
       }),
     );
     expect(res.status).toBe(200);
+  });
+
+  it("validates the current pair before persisting a confirmed decision", async () => {
+    const decisionUpsert = vi.fn(() => Promise.resolve({ data: null, error: null }));
+    from.mockImplementation((table: string) => {
+      if (table === "transactions") return thenable([
+        { id: OUT_ID, date: "2026-09-01", amount: 500, account_id: "a1", manual_account_id: null },
+        { id: IN_ID, date: "2026-09-02", amount: 500, account_id: "a2", manual_account_id: null },
+      ]);
+      if (table === "transaction_review_decisions") return { upsert: decisionUpsert };
+      if (table === "linked_transfers") return { upsert: vi.fn() };
+      throw new Error(`unexpected ${table}`);
+    });
+
+    const res = await POST(
+      new NextRequest("http://localhost/api/transactions/transfers", {
+        method: "POST",
+        body: JSON.stringify({
+          subject_id: SUBJECT,
+          decision: "confirmed",
+          out_id: OUT_ID,
+          in_id: IN_ID,
+          amount: 500,
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(400);
+    expect(decisionUpsert).not.toHaveBeenCalled();
+  });
+
+  it("derives the linked amount from the owned transactions", async () => {
+    const linkUpsert = vi.fn(() => Promise.resolve({ data: null, error: null }));
+    from.mockImplementation((table: string) => {
+      if (table === "transactions") return thenable([
+        { id: OUT_ID, date: "2026-09-01", amount: 500, account_id: "a1", manual_account_id: null },
+        { id: IN_ID, date: "2026-09-02", amount: -500, account_id: "a2", manual_account_id: null },
+      ]);
+      if (table === "linked_transfers") return { upsert: linkUpsert };
+      if (table === "transaction_review_decisions") {
+        return { upsert: vi.fn(() => Promise.resolve({ data: null, error: null })) };
+      }
+      throw new Error(`unexpected ${table}`);
+    });
+
+    const res = await POST(
+      new NextRequest("http://localhost/api/transactions/transfers", {
+        method: "POST",
+        body: JSON.stringify({
+          subject_id: SUBJECT,
+          decision: "confirmed",
+          out_id: OUT_ID,
+          in_id: IN_ID,
+          amount: 1,
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(linkUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 500 }),
+      expect.anything(),
+    );
   });
 
   it("rejects a subject that does not match the pair", async () => {

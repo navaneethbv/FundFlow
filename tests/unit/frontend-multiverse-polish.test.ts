@@ -13,6 +13,7 @@ import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import MobileNavigation from "@/components/shell/MobileNavigation";
 import SidebarShell from "@/components/shell/SidebarShell";
+import RestoreSection from "@/components/settings/RestoreSection";
 
 describe("Frontend Multiverse Polish: Motion & Keyframe Contracts", () => {
   it("defines micro-interaction keyframes in globals.css", () => {
@@ -238,5 +239,14 @@ describe("Frontend Multiverse Polish: Interactive Primitives & Navigation", () =
     expect(selectHtml).toContain("disabled:cursor-not-allowed");
     expect(selectHtml).toContain("disabled:opacity-50");
     expect(selectHtml).toContain("hover:border-panel-border/80");
+  });
+});
+
+describe("Backup restore entry point", () => {
+  it("lets a user preview a selected archive from the initial stage", () => {
+    const html = renderToStaticMarkup(createElement(RestoreSection));
+
+    expect(html).toContain("Preview restore");
+    expect(html).toContain('type="password"');
   });
 });
