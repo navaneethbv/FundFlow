@@ -11,7 +11,12 @@ export interface ReviewCardProps {
   error?: string | null;
 }
 
-export function ReviewCard({ title, eyebrow, children, error }: ReviewCardProps) {
+export function ReviewCard({
+  title,
+  eyebrow,
+  children,
+  error,
+}: Readonly<ReviewCardProps>) {
   return (
     <Panel title={title} eyebrow={eyebrow}>
       <div className="space-y-2 text-sm">{children}</div>
@@ -34,7 +39,7 @@ export function ReviewItemActions({
   confirmLabel,
   onConfirm,
   onDismiss,
-}: ReviewItemActionProps) {
+}: Readonly<ReviewItemActionProps>) {
   const isBusy = busyId === id;
   return (
     <span className="flex gap-2">
