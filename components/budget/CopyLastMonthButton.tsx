@@ -69,6 +69,10 @@ export default function CopyLastMonthButton({
     }
   }
 
+  function handleCloseModal(): void {
+    setConflict(null);
+  }
+
   return (
     <>
       <div className="flex flex-col items-end gap-1">
@@ -95,9 +99,7 @@ export default function CopyLastMonthButton({
 
       <Modal
         open={conflict !== null}
-        onClose={() => {
-          setConflict(null);
-        }}
+        onClose={handleCloseModal}
         titleId="budget-copy-conflict-title"
         className="max-w-lg"
       >
@@ -113,9 +115,7 @@ export default function CopyLastMonthButton({
         <div className="mt-5 flex flex-wrap justify-end gap-3">
           <button
             type="button"
-            onClick={() => {
-              setConflict(null);
-            }}
+            onClick={handleCloseModal}
             className="min-h-11 rounded-field px-4 text-sm font-semibold text-muted hover:bg-panel-hover"
           >
             Cancel

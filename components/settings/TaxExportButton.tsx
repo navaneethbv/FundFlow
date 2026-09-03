@@ -43,11 +43,11 @@ export default function TaxExportButton({
   return (
     <div className="flex flex-col items-start gap-1">
       <div className="flex items-center gap-2">
-        <label className="text-sm text-muted" htmlFor="tax-export-year">
+        <label className="text-sm text-muted" htmlFor="tax-year-dropdown">
           Tax year
         </label>
         <select
-          id="tax-export-year"
+          id="tax-year-dropdown"
           value={selectedYear}
           onChange={(e) => setSelectedYear(e.target.value)}
           className="min-h-11 rounded-field border border-panel-border bg-background px-3 text-sm text-foreground"
