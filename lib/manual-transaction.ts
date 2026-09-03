@@ -8,11 +8,14 @@
  */
 
 import { addDays } from "@/lib/date-utils";
+import {
+  type TransactionAccountRef,
+  TRANSACTION_DATE_RE,
+  MAX_TRANSACTION_AMOUNT,
+  isValidTransactionAccount,
+} from "@/lib/transaction-validation";
 
-export interface ManualTxnAccountRef {
-  source: "plaid" | "manual";
-  id: string;
-}
+export type ManualTxnAccountRef = TransactionAccountRef;
 
 export interface ManualTxnInput {
   kind: "debit" | "credit";
@@ -29,19 +32,6 @@ export type ManualTxnResult =
   | { ok: true; value: ManualTxnInput & { signedAmount: number } }
   | { ok: false; error: string };
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const MAX_AMOUNT = 1_000_000;
-
-function validAccount(
-  account: { source?: unknown; id?: unknown } | undefined,
-): account is { source: "plaid" | "manual"; id: string } {
-  return Boolean(
-    account &&
-      (account.source === "plaid" || account.source === "manual") &&
-      typeof account.id === "string" &&
-      account.id,
-  );
-}
 
 /**
  * Validates a manual ledger entry and resolves its stored sign: a debit
@@ -56,8 +46,8 @@ export function normalizeManualTxn(body: unknown, today: string): ManualTxnResul
   }
 
   const amount = b.amount;
-  if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0 || amount > MAX_AMOUNT) {
-    return { ok: false, error: `amount must be a positive number up to ${MAX_AMOUNT}` };
+  if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0 || amount > MAX_TRANSACTION_AMOUNT) {
+    return { ok: false, error: `amount must be a positive number up to ${MAX_TRANSACTION_AMOUNT}` };
   }
 
   const merchant = typeof b.merchant === "string" ? b.merchant.trim() : "";
@@ -66,7 +56,7 @@ export function normalizeManualTxn(body: unknown, today: string): ManualTxnResul
   }
 
   const date = b.date;
-  if (typeof date !== "string" || !DATE_RE.test(date)) {
+  if (typeof date !== "string" || !TRANSACTION_DATE_RE.test(date)) {
     return { ok: false, error: "date must be a YYYY-MM-DD date" };
   }
   // `today` is the server's UTC date; the client defaults this field to its
@@ -77,7 +67,7 @@ export function normalizeManualTxn(body: unknown, today: string): ManualTxnResul
   }
 
   const account = b.account as { source?: unknown; id?: unknown } | undefined;
-  if (!validAccount(account)) {
+  if (!isValidTransactionAccount(account)) {
     return { ok: false, error: "account must reference a plaid or manual account id" };
   }
 

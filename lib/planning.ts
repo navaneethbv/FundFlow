@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { classifyBalanceSheetAmount } from "@/lib/account-balance";
 import { formatCurrency } from "@/lib/format";
-import { addDays, addMonths, isoDate, parseDate } from "@/lib/date-utils";
+import { addDays, advanceFrequency, isoDate, parseDate } from "@/lib/date-utils";
 
 export type EnvelopeStatus = "over" | "at-risk" | "on-track";
 
@@ -174,11 +174,7 @@ function round2(value: number): number {
 
 function nextOccurrence(date: string, frequency: RecurringFrequency): string {
   if (frequency === "once") return addDays(date, 3660);
-  if (frequency === "weekly") return addDays(date, 7);
-  if (frequency === "biweekly") return addDays(date, 14);
-  if (frequency === "quarterly") return addMonths(date, 3);
-  if (frequency === "yearly") return addMonths(date, 12);
-  return addMonths(date, 1);
+  return advanceFrequency(date, frequency);
 }
 
 function normalize(value: string): string {

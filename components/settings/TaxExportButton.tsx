@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Button from "@/components/ui/Button";
+import { downloadBlob } from "@/lib/browser-download";
 
 /**
  * Client-side "Tax year CSV" action for Settings → Export data. A plain link
@@ -31,14 +32,7 @@ export default function TaxExportButton({
         return;
       }
       const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = objectUrl;
-      anchor.download = `fundflow-tax-${year}.csv`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(objectUrl);
+      downloadBlob(blob, `fundflow-tax-${year}.csv`);
     } catch {
       setError("Could not generate the tax CSV. Try again.");
     } finally {

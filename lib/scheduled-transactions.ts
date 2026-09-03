@@ -12,11 +12,14 @@
 
 import { addDays } from "@/lib/date-utils";
 import type { RecurringItem } from "@/lib/planning";
+import {
+  type TransactionAccountRef,
+  TRANSACTION_DATE_RE,
+  MAX_TRANSACTION_AMOUNT,
+  isValidTransactionAccount,
+} from "@/lib/transaction-validation";
 
-export interface ScheduledTxnAccountRef {
-  source: "plaid" | "manual";
-  id: string;
-}
+export type ScheduledTxnAccountRef = TransactionAccountRef;
 
 export interface ScheduledTxnInput {
   kind: "debit" | "credit";
@@ -32,36 +35,23 @@ export type ScheduledTxnResult =
   | { ok: true; value: ScheduledTxnInput & { signedAmount: number } }
   | { ok: false; error: string };
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const MAX_AMOUNT = 1_000_000;
 /** Ten years out is a typo, not a plan. */
 const MAX_HORIZON_DAYS = 3650;
-
-function validAccount(
-  account: { source?: unknown; id?: unknown } | undefined,
-): account is { source: "plaid" | "manual"; id: string } {
-  return Boolean(
-    account &&
-      (account.source === "plaid" || account.source === "manual") &&
-      typeof account.id === "string" &&
-      account.id,
-  );
-}
 
 function validateAmount(amount: unknown): { ok: true; amount: number } | { ok: false; error: string } {
   if (
     typeof amount !== "number" ||
     !Number.isFinite(amount) ||
     amount <= 0 ||
-    amount > MAX_AMOUNT
+    amount > MAX_TRANSACTION_AMOUNT
   ) {
-    return { ok: false, error: `amount must be a positive number up to ${MAX_AMOUNT}` };
+    return { ok: false, error: `amount must be a positive number up to ${MAX_TRANSACTION_AMOUNT}` };
   }
   return { ok: true, amount };
 }
 
 function validateDate(date: unknown, today: string): { ok: true; date: string } | { ok: false; error: string } {
-  if (typeof date !== "string" || !DATE_RE.test(date)) {
+  if (typeof date !== "string" || !TRANSACTION_DATE_RE.test(date)) {
     return { ok: false, error: "date must be a YYYY-MM-DD date" };
   }
   if (date < addDays(today, -1)) {
@@ -94,7 +84,7 @@ export function normalizeScheduledTxn(body: unknown, today: string): ScheduledTx
   const date = dateCheck.date;
 
   const account = b.account as { source?: unknown; id?: unknown } | undefined;
-  if (!validAccount(account)) {
+  if (!isValidTransactionAccount(account)) {
     return { ok: false, error: "account must reference a plaid or manual account id" };
   }
 

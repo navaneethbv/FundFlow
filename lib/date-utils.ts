@@ -20,3 +20,22 @@ export function addMonths(value: string, months: number): string {
   date.setUTCMonth(date.getUTCMonth() + months);
   return isoDate(date);
 }
+
+export type RecurrenceFrequency =
+  | "weekly"
+  | "biweekly"
+  | "monthly"
+  | "quarterly"
+  | "yearly";
+
+export function advanceFrequency(
+  date: string,
+  frequency: RecurrenceFrequency,
+): string {
+  if (frequency === "weekly") return addDays(date, 7);
+  if (frequency === "biweekly") return addDays(date, 14);
+  if (frequency === "quarterly") return addMonths(date, 3);
+  if (frequency === "yearly") return addMonths(date, 12);
+  return addMonths(date, 1);
+}
+

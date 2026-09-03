@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Button from "@/components/ui/Button";
-import Panel from "@/components/ui/Panel";
+import { ReviewCard, ReviewItemActions } from "@/components/transactions/ReviewPairList";
 import { formatCurrency } from "@/lib/format";
 
 interface TransferPair {
@@ -73,40 +72,31 @@ export default function TransferReview() {
   if (!loaded || pairs.length === 0) return null;
 
   return (
-    <Panel title="Transfer review" eyebrow="Possible transfers">
-      <div className="space-y-2 text-sm">
-        {pairs.map((pair) => (
-          <div
-            key={pair.subject_id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-field bg-panel-2 p-3"
-          >
-            <span>
-              <span className="block font-semibold">Transfer between your accounts</span>
-              <span className="block text-xs text-muted">
-                Left {pair.out_date}, arrived {pair.in_date} · {formatCurrency(pair.amount)}
-              </span>
+    <ReviewCard title="Transfer review" eyebrow="Possible transfers" error={error}>
+      {pairs.map((pair) => (
+        <div
+          key={pair.subject_id}
+          className="flex flex-wrap items-center justify-between gap-3 rounded-field bg-panel-2 p-3"
+        >
+          <span>
+            <span className="block font-semibold">Transfer between your accounts</span>
+            <span className="block text-xs text-muted">
+              Left {pair.out_date}, arrived {pair.in_date} · {formatCurrency(pair.amount)}
             </span>
-            <span className="flex gap-2">
-              <Button
-                size="sm"
-                onClick={() => decide(pair, "confirmed")}
-                loading={busyId === pair.subject_id}
-              >
-                Link
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => decide(pair, "dismissed")}
-                loading={busyId === pair.subject_id}
-              >
-                Dismiss
-              </Button>
-            </span>
-          </div>
-        ))}
-      </div>
-      {error && <p className="mt-3 text-sm text-danger">{error}</p>}
-    </Panel>
+          </span>
+          <ReviewItemActions
+            id={pair.subject_id}
+            busyId={busyId}
+            confirmLabel="Link"
+            onConfirm={() => {
+              void decide(pair, "confirmed");
+            }}
+            onDismiss={() => {
+              void decide(pair, "dismissed");
+            }}
+          />
+        </div>
+      ))}
+    </ReviewCard>
   );
 }

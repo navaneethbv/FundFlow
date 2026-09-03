@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Button from "@/components/ui/Button";
 import { localDateKey } from "@/lib/format-date";
+import { downloadBlob } from "@/lib/browser-download";
 
 /**
  * Client-side "Export PDF" action for the spending-insights report.
@@ -45,14 +46,7 @@ export default function ExportReportButton({
         return;
       }
       const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = objectUrl;
-      anchor.download = filenameFrom(response);
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(objectUrl);
+      downloadBlob(blob, filenameFrom(response));
     } catch {
       setError("Could not generate the PDF report. Try again.");
     } finally {
