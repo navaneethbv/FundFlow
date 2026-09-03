@@ -23,13 +23,13 @@ alter table public.linked_transfers enable row level security;
 revoke all on table public.linked_transfers from anon;
 grant select, insert, update, delete on table public.linked_transfers to authenticated;
 
-create policy "linked_transfers_select_own" on public.linked_transfers
+create policy linked_transfers_select_own on public.linked_transfers
   for select to authenticated using (user_id = (select auth.uid()));
-create policy "linked_transfers_insert_own" on public.linked_transfers
+create policy linked_transfers_insert_own on public.linked_transfers
   for insert to authenticated with check (user_id = (select auth.uid()));
-create policy "linked_transfers_update_own" on public.linked_transfers
+create policy linked_transfers_update_own on public.linked_transfers
   for update to authenticated using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
-create policy "linked_transfers_delete_own" on public.linked_transfers
+create policy linked_transfers_delete_own on public.linked_transfers
   for delete to authenticated using (user_id = (select auth.uid()));
 
 -- Widen the review-decision kinds to cover transfer suggestions.

@@ -120,7 +120,9 @@ export default function CopyLastMonthButton({
           </button>
           <button
             type="button"
-            onClick={() => void copy("merge")}
+            onClick={() => {
+              void copy("merge");
+            }}
             disabled={busy}
             className="min-h-11 rounded-field border border-panel-border px-4 text-sm font-semibold text-foreground hover:bg-panel-hover disabled:opacity-50"
           >
@@ -128,7 +130,9 @@ export default function CopyLastMonthButton({
           </button>
           <button
             type="button"
-            onClick={() => void copy("overwrite")}
+            onClick={() => {
+              void copy("overwrite");
+            }}
             disabled={busy}
             className="min-h-11 rounded-field bg-accent px-4 text-sm font-bold text-accent-foreground disabled:opacity-50"
           >
