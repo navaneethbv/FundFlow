@@ -184,4 +184,39 @@ describe("useKeyboardShortcuts Hook Lifecycle", () => {
 
     vi.unstubAllGlobals();
   });
+
+  it("does not intercept '?' when typed into an editable input inside an open dialog", () => {
+    const { windowObj, getHandler } = createMockWindow();
+    vi.stubGlobal("window", windowObj);
+
+    useKeyboardShortcuts();
+    currentEffect!();
+
+    const handler = getHandler();
+    expect(handler).not.toBeNull();
+
+    // A modal dialog is open
+    vi.stubGlobal("document", {
+      querySelector: (selector: string) =>
+        selector === 'dialog[open], [role="dialog"]' ? {} : null,
+    });
+
+    const preventDefault = vi.fn();
+    const inputEvent = {
+      key: "?",
+      metaKey: false,
+      ctrlKey: false,
+      altKey: false,
+      repeat: false,
+      target: { tagName: "textarea" },
+      preventDefault,
+    } as unknown as KeyboardEvent;
+
+    handler!(inputEvent);
+
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(mockHelpOpen).toBe(false);
+
+    vi.unstubAllGlobals();
+  });
 });

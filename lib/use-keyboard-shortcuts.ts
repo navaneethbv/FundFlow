@@ -114,7 +114,7 @@ export function useKeyboardShortcuts() {
     function onKeyDown(e: KeyboardEvent) {
       if (isDialogOpen()) {
         pendingChordRef.current = null;
-        if (e.key === "?") {
+        if (!isEditableElement(e.target) && !e.repeat && e.key === "?") {
           e.preventDefault();
           setHelpOpen((cur) => !cur);
         }
