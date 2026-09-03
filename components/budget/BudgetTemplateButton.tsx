@@ -147,10 +147,11 @@ export default function BudgetTemplateButton({
         setError(payload.error ?? "Could not apply the template.");
         return;
       }
-      const unmatchedNote =
-        payload.unmatched && payload.unmatched.length > 0
-          ? ` (${payload.unmatched.length} categor${payload.unmatched.length === 1 ? "y" : "ies"} had no matching budget row)`
-          : "";
+      let unmatchedNote = "";
+      if (payload.unmatched && payload.unmatched.length > 0) {
+        const noun = payload.unmatched.length === 1 ? "category" : "categories";
+        unmatchedNote = ` (${payload.unmatched.length} ${noun} had no matching budget row)`;
+      }
       setStatus(`Applied ${payload.applied ?? 0} planned amount(s) to ${formatMonth(month)}.${unmatchedNote}`);
       setConflict(null);
       router.refresh();

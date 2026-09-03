@@ -259,7 +259,7 @@ export default function ReconcilePanel({
           </>
         )}
 
-        {saved && <p role="status" className="mt-3 text-sm text-muted">{saved}</p>}
+        {saved && <output className="mt-3 block text-sm text-muted">{saved}</output>}
         {error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}
       </Modal>
     </>

@@ -15,6 +15,7 @@ export default function TaxExportButton({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const currentYear = new Date().getFullYear();
+  const [selectedYear, setSelectedYear] = useState<string>(String(currentYear));
   const years = Array.from({ length: 6 }, (_, index) => currentYear - index);
 
   async function download(year: string): Promise<void> {
@@ -53,7 +54,8 @@ export default function TaxExportButton({
         </label>
         <select
           id="tax-export-year"
-          defaultValue={String(currentYear)}
+          value={selectedYear}
+          onChange={(e) => setSelectedYear(e.target.value)}
           className="min-h-11 rounded-field border border-panel-border bg-background px-3 text-sm text-foreground"
         >
           {years.map((year) => (
@@ -68,8 +70,7 @@ export default function TaxExportButton({
           loading={busy}
           disabled={busy}
           onClick={() => {
-            const select = document.getElementById("tax-export-year") as HTMLSelectElement | null;
-            void download(select?.value ?? String(currentYear));
+            void download(selectedYear);
           }}
           className={className}
         >

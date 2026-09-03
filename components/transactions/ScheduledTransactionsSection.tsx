@@ -34,6 +34,11 @@ interface FormState {
   notes: string;
 }
 
+function submitLabel(submitting: boolean, editing: unknown): string {
+  if (submitting) return "Saving…";
+  return editing ? "Save" : "Schedule";
+}
+
 function emptyForm(accounts: AddTransactionAccountOption[]): FormState {
   return {
     kind: "debit",
@@ -47,13 +52,15 @@ function emptyForm(accounts: AddTransactionAccountOption[]): FormState {
 }
 
 function formFromEntry(entry: ScheduledEntry, accounts: AddTransactionAccountOption[]): FormState {
-  const accountKey = entry.accountId
-    ? `plaid:${entry.accountId}`
-    : entry.manualAccountId
-      ? `manual:${entry.manualAccountId}`
-      : accounts[0]
-        ? `${accounts[0].source}:${accounts[0].id}`
-        : "";
+  let accountKey = "";
+  if (entry.accountId) {
+    accountKey = `plaid:${entry.accountId}`;
+  } else if (entry.manualAccountId) {
+    accountKey = `manual:${entry.manualAccountId}`;
+  } else if (accounts[0]) {
+    accountKey = `${accounts[0].source}:${accounts[0].id}`;
+  }
+
   return {
     kind: entry.kind,
     amount: String(entry.amount),
@@ -336,7 +343,7 @@ export default function ScheduledTransactionsSection({
               Cancel
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? "Saving…" : editing ? "Save" : "Schedule"}
+              {submitLabel(submitting, editing)}
             </Button>
           </div>
         </form>

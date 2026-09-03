@@ -23,7 +23,7 @@ export type TemplateItemsResult =
   | { ok: true; value: BudgetTemplateItem[] }
   | { ok: false; message: string };
 
-const BUDGET_GROUPS: readonly BudgetGroup[] = ["income", "fixed", "flexible", "non_monthly"];
+const BUDGET_GROUPS = new Set<BudgetGroup>(["income", "fixed", "flexible", "non_monthly"]);
 const MAX_ITEMS = 200;
 
 function hasAtMostTwoDecimals(value: number): boolean {
@@ -47,7 +47,7 @@ export function parseTemplateItems(value: unknown): TemplateItemsResult {
     }
     if (
       typeof row.group_name !== "string" ||
-      !BUDGET_GROUPS.includes(row.group_name as BudgetGroup)
+      !BUDGET_GROUPS.has(row.group_name as BudgetGroup)
     ) {
       return { ok: false, message: "Invalid template group" };
     }

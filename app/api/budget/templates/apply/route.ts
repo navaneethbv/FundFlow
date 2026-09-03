@@ -11,6 +11,36 @@ interface TemplateItemsRow {
   items: unknown;
 }
 
+async function applyPlanToPeriods(
+  supabase: ReturnType<typeof requireUser> extends Promise<infer R> ? (R extends { supabase: infer S } ? S : never) : never,
+  rows: readonly { budgetId: string; planned: number }[],
+  monthDate: string,
+): Promise<{ error?: unknown; applied: number }> {
+  let applied = 0;
+  for (let index = 0; index < rows.length; index += RPC_CONCURRENCY) {
+    const lane = rows.slice(index, index + RPC_CONCURRENCY);
+    const results = await Promise.all(
+      lane.map((row) =>
+        (supabase as unknown as { rpc: (fn: string, params: unknown) => Promise<{ error: unknown }> }).rpc(
+          "update_budget_period",
+          {
+            p_budget_id: row.budgetId,
+            p_month: monthDate,
+            p_planned: row.planned,
+            p_group_name: null,
+            p_rollover_enabled: null,
+            p_sort_order: null,
+          },
+        ),
+      ),
+    );
+    const failure = results.find(({ error }) => error);
+    if (failure?.error) return { error: failure.error, applied };
+    applied += lane.length;
+  }
+  return { applied };
+}
+
 /**
  * Apply a saved template to a month: upsert the template's planned amounts
  * onto the user's matching `budgets` rows via `update_budget_period`, with
@@ -77,25 +107,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let applied = 0;
-    for (let index = 0; index < plan.rows.length; index += RPC_CONCURRENCY) {
-      const lane = plan.rows.slice(index, index + RPC_CONCURRENCY);
-      const results = await Promise.all(
-        lane.map((row) =>
-          supabase.rpc("update_budget_period", {
-            p_budget_id: row.budgetId,
-            p_month: `${month}-01`,
-            p_planned: row.planned,
-            p_group_name: null,
-            p_rollover_enabled: null,
-            p_sort_order: null,
-          }),
-        ),
-      );
-      const failure = results.find(({ error }) => error);
-      if (failure?.error) return errorResponse("budget.templates.apply.write", failure.error);
-      applied += lane.length;
-    }
+    const { error: applyError, applied } = await applyPlanToPeriods(
+      supabase as never,
+      plan.rows,
+      `${month}-01`,
+    );
+    if (applyError) return errorResponse("budget.templates.apply.write", applyError);
 
     if (applied > 0) {
       await writeAudit({

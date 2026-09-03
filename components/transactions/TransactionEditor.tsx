@@ -415,13 +415,13 @@ export default function TransactionEditor({
             )}
 
             {initialCleared !== undefined && (
-              <label className="mb-4 flex items-center gap-2 text-sm">
+              <label className="mb-4 flex items-center gap-2 text-sm cursor-pointer">
                 <input
                   type="checkbox"
                   checked={cleared}
                   onChange={(e) => setCleared(e.target.checked)}
                 />
-                Cleared (reconciled against the bank)
+                <span>Cleared (reconciled against the bank)</span>
               </label>
             )}
 

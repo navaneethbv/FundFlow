@@ -100,6 +100,57 @@ export async function GET() {
   }
 }
 
+async function linkConfirmedTransfer(
+  supabase: ReturnType<typeof requireUser> extends Promise<infer R> ? (R extends { supabase: infer S } ? S : never) : never,
+  userId: string,
+  subjectId: string,
+  body: Record<string, unknown> | null,
+): Promise<NextResponse | null> {
+  const outId = body?.out_id;
+  const inId = body?.in_id;
+  const amount = Number(body?.amount);
+  if (typeof outId !== "string" || typeof inId !== "string" || !Number.isFinite(amount)) {
+    return badRequest("out_id, in_id, and amount are required to link a transfer");
+  }
+  if (outId === inId) {
+    return badRequest("a transfer needs two different transactions");
+  }
+  if (subjectId !== transferSubjectId(outId, inId)) {
+    return badRequest("subject_id does not match the pair");
+  }
+  const client = supabase as unknown as {
+    from: (table: string) => {
+      select: (cols: string) => {
+        eq: (col: string, val: string) => {
+          in: (col: string, ids: string[]) => Promise<{ data: unknown[] | null; error: unknown }>;
+        };
+      };
+      upsert: (values: unknown, opts: unknown) => Promise<{ error: unknown }>;
+    };
+  };
+  // Both sides of a link must be rows in the caller's own ledger.
+  const { data: owned, error: verifyError } = await client
+    .from("transactions")
+    .select("id")
+    .eq("user_id", userId)
+    .in("id", [outId, inId]);
+  if (verifyError) throw verifyError;
+  if ((owned ?? []).length !== 2) {
+    return badRequest("both sides of a transfer must be your own transactions");
+  }
+  const { error: linkError } = await client.from("linked_transfers").upsert(
+    {
+      user_id: userId,
+      out_transaction_id: outId,
+      in_transaction_id: inId,
+      amount: Math.abs(amount),
+    },
+    { onConflict: "user_id,out_transaction_id,in_transaction_id" },
+  );
+  if (linkError) throw linkError;
+  return null;
+}
+
 /** Record a transfer-pair decision; a confirmed pair also nets out via linked_transfers. */
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
@@ -126,38 +177,13 @@ export async function POST(request: NextRequest) {
     if (decisionError) throw decisionError;
 
     if (decision === "confirmed") {
-      const outId = body?.out_id;
-      const inId = body?.in_id;
-      const amount = Number(body?.amount);
-      if (typeof outId !== "string" || typeof inId !== "string" || !Number.isFinite(amount)) {
-        return badRequest("out_id, in_id, and amount are required to link a transfer");
-      }
-      if (outId === inId) {
-        return badRequest("a transfer needs two different transactions");
-      }
-      if (subjectId !== transferSubjectId(outId, inId)) {
-        return badRequest("subject_id does not match the pair");
-      }
-      // Both sides of a link must be rows in the caller's own ledger.
-      const { data: owned, error: verifyError } = await supabase
-        .from("transactions")
-        .select("id")
-        .eq("user_id", user.id)
-        .in("id", [outId, inId]);
-      if (verifyError) throw verifyError;
-      if ((owned ?? []).length !== 2) {
-        return badRequest("both sides of a transfer must be your own transactions");
-      }
-      const { error: linkError } = await supabase.from("linked_transfers").upsert(
-        {
-          user_id: user.id,
-          out_transaction_id: outId,
-          in_transaction_id: inId,
-          amount: Math.abs(amount),
-        },
-        { onConflict: "user_id,out_transaction_id,in_transaction_id" },
+      const linkFailure = await linkConfirmedTransfer(
+        supabase as never,
+        user.id,
+        subjectId,
+        body,
       );
-      if (linkError) throw linkError;
+      if (linkFailure) return linkFailure;
     }
 
     return NextResponse.json({ ok: true });

@@ -160,6 +160,53 @@ function stampRows(
   return { rows: stamped, regenerated };
 }
 
+async function restoreTransactions(
+  service: SupabaseClient,
+  userId: string,
+  rows: readonly unknown[],
+): Promise<{ error: string | null; regenerated: number; rowsWritten: number }> {
+  const { rows: stamped, regenerated } = stampRows(rows, userId);
+  for (let index = 0; index < stamped.length; index += INSERT_CHUNK) {
+    const { error } = await service
+      .from("transactions")
+      .upsert(stamped.slice(index, index + INSERT_CHUNK), {
+        onConflict: "plaid_transaction_id",
+      });
+    if (error) {
+      return { error: error.message, regenerated, rowsWritten: 0 };
+    }
+  }
+  return { error: null, regenerated, rowsWritten: stamped.length };
+}
+
+async function restoreUserTable(
+  service: SupabaseClient,
+  userId: string,
+  name: string,
+  rows: readonly unknown[],
+): Promise<{ error: string | null; rowsWritten: number }> {
+  const { error: deleteError } = await service
+    .from(name)
+    .delete()
+    .eq("user_id", userId);
+  if (deleteError) {
+    return { error: deleteError.message, rowsWritten: 0 };
+  }
+  const stamped = rows.map((row) => ({
+    ...(row && typeof row === "object" ? row : {}),
+    user_id: userId,
+  }));
+  for (let index = 0; index < stamped.length; index += INSERT_CHUNK) {
+    const { error } = await service
+      .from(name)
+      .insert(stamped.slice(index, index + INSERT_CHUNK));
+    if (error) {
+      return { error: error.message, rowsWritten: 0 };
+    }
+  }
+  return { error: null, rowsWritten: stamped.length };
+}
+
 export async function executeRestore(
   service: SupabaseClient,
   userId: string,
@@ -192,45 +239,22 @@ export async function executeRestore(
 
     const rows = archive[name] ?? [];
     if (name === "transactions") {
-      const { rows: stamped, regenerated } = stampRows(rows, userId);
-      result.regeneratedIds += regenerated;
-      for (let index = 0; index < stamped.length; index += INSERT_CHUNK) {
-        const { error } = await service
-          .from("transactions")
-          .upsert(stamped.slice(index, index + INSERT_CHUNK), {
-            onConflict: "plaid_transaction_id",
-          });
-        if (error) {
-          result.failedTable = name;
-          return result;
-        }
-      }
-      result.tables.push({ name, rowsWritten: stamped.length });
-      continue;
-    }
-
-    const { error: deleteError } = await service
-      .from(name)
-      .delete()
-      .eq("user_id", userId);
-    if (deleteError) {
-      result.failedTable = name;
-      return result;
-    }
-    const stamped = rows.map((row) => ({
-      ...(row && typeof row === "object" ? row : {}),
-      user_id: userId,
-    }));
-    for (let index = 0; index < stamped.length; index += INSERT_CHUNK) {
-      const { error } = await service
-        .from(name)
-        .insert(stamped.slice(index, index + INSERT_CHUNK));
-      if (error) {
+      const outcome = await restoreTransactions(service, userId, rows);
+      result.regeneratedIds += outcome.regenerated;
+      if (outcome.error) {
         result.failedTable = name;
         return result;
       }
+      result.tables.push({ name, rowsWritten: outcome.rowsWritten });
+      continue;
     }
-    result.tables.push({ name, rowsWritten: stamped.length });
+
+    const outcome = await restoreUserTable(service, userId, name, rows);
+    if (outcome.error) {
+      result.failedTable = name;
+      return result;
+    }
+    result.tables.push({ name, rowsWritten: outcome.rowsWritten });
   }
 
   return result;

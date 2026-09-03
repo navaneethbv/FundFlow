@@ -164,6 +164,61 @@ export async function GET(request: NextRequest) {
   }
 }
 
+async function syncClearedStatus(
+  supabase: SupabaseClient,
+  userId: string,
+  accountColumn: string,
+  accountId: string,
+  statementDate: string,
+  clearedIds: string[],
+): Promise<NextResponse | null> {
+  if (clearedIds.length > 0) {
+    const { data: owned, error: ownedError } = await supabase
+      .from("transactions")
+      .select("id")
+      .eq("user_id", userId)
+      .eq(accountColumn, accountId)
+      .in("id", clearedIds);
+    if (ownedError) throw ownedError;
+    if ((owned ?? []).length !== new Set(clearedIds).size) {
+      return badRequest("cleared_ids contains transactions outside this account");
+    }
+    const now = new Date().toISOString();
+    const { error: clearError } = await supabase
+      .from("transaction_annotations")
+      .upsert(
+        clearedIds.map((transactionId) => ({
+          user_id: userId,
+          transaction_id: transactionId,
+          cleared_at: now,
+        })),
+        { onConflict: "user_id,transaction_id", defaultToNull: false },
+      );
+    if (clearError) throw clearError;
+  }
+
+  // Un-clear in-scope rows the user unchecked this round.
+  const { data: txnRows } = await supabase
+    .from("transactions")
+    .select("id")
+    .eq("user_id", userId)
+    .eq(accountColumn, accountId)
+    .gte("date", isoDaysAgo(LOOKBACK_DAYS))
+    .lte("date", statementDate)
+    .limit(2000);
+  const inScopeIds = (txnRows ?? []).map((row) => row.id as string);
+  const unmarkIds = inScopeIds.filter((id) => !new Set(clearedIds).has(id));
+  if (unmarkIds.length > 0) {
+    const { error: unmarkError } = await supabase
+      .from("transaction_annotations")
+      .update({ cleared_at: null })
+      .eq("user_id", userId)
+      .in("transaction_id", unmarkIds);
+    if (unmarkError) throw unmarkError;
+  }
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -200,51 +255,15 @@ export async function POST(request: NextRequest) {
     const difference = Math.round((account.bookBalance - statementBalance) * 100) / 100;
     const adjustmentAmount = Math.abs(difference) < 0.005 ? 0 : -direction * difference;
 
-    if (clearedIds.length > 0) {
-      // Verify every cleared id belongs to this user AND this account.
-      const { data: owned, error: ownedError } = await supabase
-        .from("transactions")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq(accountColumn, ref.id)
-        .in("id", clearedIds);
-      if (ownedError) throw ownedError;
-      if ((owned ?? []).length !== new Set(clearedIds).size) {
-        return badRequest("cleared_ids contains transactions outside this account");
-      }
-      const now = new Date().toISOString();
-      const { error: clearError } = await supabase
-        .from("transaction_annotations")
-        .upsert(
-          clearedIds.map((transactionId) => ({
-            user_id: user.id,
-            transaction_id: transactionId,
-            cleared_at: now,
-          })),
-          { onConflict: "user_id,transaction_id", defaultToNull: false },
-        );
-      if (clearError) throw clearError;
-    }
-
-    // Un-clear in-scope rows the user unchecked this round.
-    const { data: txnRows } = await supabase
-      .from("transactions")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq(accountColumn, ref.id)
-      .gte("date", isoDaysAgo(LOOKBACK_DAYS))
-      .lte("date", statementDate)
-      .limit(2000);
-    const inScopeIds = (txnRows ?? []).map((row) => row.id as string);
-    const unmarkIds = inScopeIds.filter((id) => !new Set(clearedIds).has(id));
-    if (unmarkIds.length > 0) {
-      const { error: unmarkError } = await supabase
-        .from("transaction_annotations")
-        .update({ cleared_at: null })
-        .eq("user_id", user.id)
-        .in("transaction_id", unmarkIds);
-      if (unmarkError) throw unmarkError;
-    }
+    const syncFailure = await syncClearedStatus(
+      supabase,
+      user.id,
+      accountColumn,
+      ref.id,
+      statementDate,
+      clearedIds,
+    );
+    if (syncFailure) return syncFailure;
 
     const { data: statement, error: statementError } = await supabase
       .from("account_reconciliations")

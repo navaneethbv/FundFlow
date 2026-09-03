@@ -48,14 +48,7 @@ function validAccount(
   );
 }
 
-export function normalizeScheduledTxn(body: unknown, today: string): ScheduledTxnResult {
-  const b = (body ?? {}) as Record<string, unknown>;
-
-  if (b.kind !== "debit" && b.kind !== "credit") {
-    return { ok: false, error: "kind must be 'debit' or 'credit'" };
-  }
-
-  const amount = b.amount;
+function validateAmount(amount: unknown): { ok: true; amount: number } | { ok: false; error: string } {
   if (
     typeof amount !== "number" ||
     !Number.isFinite(amount) ||
@@ -64,24 +57,41 @@ export function normalizeScheduledTxn(body: unknown, today: string): ScheduledTx
   ) {
     return { ok: false, error: `amount must be a positive number up to ${MAX_AMOUNT}` };
   }
+  return { ok: true, amount };
+}
 
-  const merchant = typeof b.merchant === "string" ? b.merchant.trim() : "";
-  if (!merchant || merchant.length > 120) {
-    return { ok: false, error: "merchant must be between 1 and 120 characters" };
-  }
-
-  const date = b.date;
+function validateDate(date: unknown, today: string): { ok: true; date: string } | { ok: false; error: string } {
   if (typeof date !== "string" || !DATE_RE.test(date)) {
     return { ok: false, error: "date must be a YYYY-MM-DD date" };
   }
-  // Today is allowed (the ledger hasn't seen it yet) and clients east of UTC
-  // may default to a day ahead, so the floor is yesterday-equivalent UTC.
   if (date < addDays(today, -1)) {
     return { ok: false, error: "date cannot be in the past" };
   }
   if (date > addDays(today, MAX_HORIZON_DAYS)) {
     return { ok: false, error: "date cannot be more than ten years out" };
   }
+  return { ok: true, date };
+}
+
+export function normalizeScheduledTxn(body: unknown, today: string): ScheduledTxnResult {
+  const b = (body ?? {}) as Record<string, unknown>;
+
+  if (b.kind !== "debit" && b.kind !== "credit") {
+    return { ok: false, error: "kind must be 'debit' or 'credit'" };
+  }
+
+  const amountCheck = validateAmount(b.amount);
+  if (!amountCheck.ok) return amountCheck;
+  const amount = amountCheck.amount;
+
+  const merchant = typeof b.merchant === "string" ? b.merchant.trim() : "";
+  if (!merchant || merchant.length > 120) {
+    return { ok: false, error: "merchant must be between 1 and 120 characters" };
+  }
+
+  const dateCheck = validateDate(b.date, today);
+  if (!dateCheck.ok) return dateCheck;
+  const date = dateCheck.date;
 
   const account = b.account as { source?: unknown; id?: unknown } | undefined;
   if (!validAccount(account)) {
