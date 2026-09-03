@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { getClientIp, writeAudit } from "@/lib/audit";
-import { localDateKey } from "@/lib/format-date";
+import { dateKeyInTimezone } from "@/lib/report-period";
 import { normalizeScheduledTxn } from "@/lib/scheduled-transactions";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -24,6 +25,19 @@ function serializeRow(row: Record<string, unknown>) {
   };
 }
 
+async function getUserToday(supabase: SupabaseClient, userId: string): Promise<string> {
+  try {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("timezone")
+      .eq("id", userId)
+      .maybeSingle();
+    return dateKeyInTimezone(new Date(), (profile as { timezone?: string | null } | null)?.timezone);
+  } catch {
+    return dateKeyInTimezone(new Date(), null);
+  }
+}
+
 /**
  * Owner-scoped CRUD for one-off scheduled (future-dated) transactions. Rows
  * stay here until the daily sync cron promotes them into the ledger; cancel
@@ -39,7 +53,7 @@ export async function GET() {
       .select(SELECT_COLUMNS)
       .eq("user_id", user.id)
       .eq("status", "scheduled")
-      .order("scheduled_date")
+      .order("scheduled_date", { ascending: true })
       .limit(200);
     if (error) throw error;
     return NextResponse.json({ scheduled: (data ?? []).map(serializeRow) });
@@ -53,9 +67,10 @@ export async function POST(request: NextRequest) {
   if (auth instanceof NextResponse) return auth;
   const { user, supabase } = auth;
   try {
+    const today = await getUserToday(supabase, user.id);
     const parsed = normalizeScheduledTxn(
       await request.json().catch(() => null),
-      localDateKey(),
+      today,
     );
     if (!parsed.ok) return badRequest(parsed.error);
     const input = parsed.value;
@@ -97,7 +112,8 @@ export async function PATCH(request: NextRequest) {
     if (typeof id !== "string" || !UUID_REGEX.test(id)) {
       return badRequest("Invalid scheduled transaction id");
     }
-    const parsed = normalizeScheduledTxn(body, localDateKey());
+    const today = await getUserToday(supabase, user.id);
+    const parsed = normalizeScheduledTxn(body, today);
     if (!parsed.ok) return badRequest(parsed.error);
     const input = parsed.value;
     const { data, error } = await supabase

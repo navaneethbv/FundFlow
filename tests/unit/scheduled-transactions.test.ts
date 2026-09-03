@@ -33,13 +33,11 @@ describe("normalizeScheduledTxn", () => {
     if (result.ok) expect(result.value.signedAmount).toBe(-500);
   });
 
-  it("rejects past dates beyond 1-day client timezone grace period", () => {
-    const result = normalizeScheduledTxn({ ...VALID, date: "2026-08-30" }, "2026-09-02");
-    expect(result).toMatchObject({ ok: false });
+  it("rejects past dates", () => {
+    expect(normalizeScheduledTxn({ ...VALID, date: "2026-09-01" }, "2026-09-02")).toMatchObject({ ok: false });
   });
 
-  it("allows yesterday (PDT after 17:00 grace), today, and one day ahead", () => {
-    expect(normalizeScheduledTxn({ ...VALID, date: "2026-09-01" }, "2026-09-02").ok).toBe(true);
+  it("allows today and one day ahead", () => {
     expect(normalizeScheduledTxn({ ...VALID, date: "2026-09-02" }, "2026-09-02").ok).toBe(true);
     expect(normalizeScheduledTxn({ ...VALID, date: "2026-09-03" }, "2026-09-02").ok).toBe(true);
   });

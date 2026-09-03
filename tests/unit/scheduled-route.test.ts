@@ -54,6 +54,7 @@ describe("POST /api/scheduled-transactions", () => {
   it("inserts with an explicit user_id and both account columns resolved", async () => {
     const insert = vi.fn(() => thenable([{ id: "s1", kind: "debit", amount: "500.00", merchant: "Landlord", scheduled_date: "2026-09-25", category: "rent", notes: null, account_id: "acc-1", manual_account_id: null, status: "scheduled" }]));
     from.mockImplementation((table: string) => {
+      if (table === "profiles") return thenable({ timezone: "America/Los_Angeles" });
       expect(table).toBe("scheduled_transactions");
       return { insert };
     });
@@ -71,15 +72,65 @@ describe("POST /api/scheduled-transactions", () => {
 
   it("routes a manual account into manual_account_id", async () => {
     const insert = vi.fn(() => thenable([{ id: "s2", kind: "debit", amount: "10.00", merchant: "Cash", scheduled_date: "2026-09-25", category: null, notes: null, account_id: null, manual_account_id: "m1", status: "scheduled" }]));
-    from.mockReturnValue({ insert });
+    from.mockImplementation((table: string) => {
+      if (table === "profiles") return thenable({ timezone: "America/Los_Angeles" });
+      return { insert };
+    });
     await POST(request({ ...VALID, account: { source: "manual", id: "m1" } }));
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ account_id: null, manual_account_id: "m1" }));
   });
 
-  it("400s on validation errors before any query", async () => {
+  it("400s on validation errors before writing to scheduled_transactions", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "profiles") return thenable({ timezone: "America/Los_Angeles" });
+      return {};
+    });
     const res = await POST(request({ ...VALID, date: "2001-01-01" }));
     expect(res.status).toBe(400);
-    expect(from).not.toHaveBeenCalled();
+    expect(from).not.toHaveBeenCalledWith("scheduled_transactions");
+  });
+
+  it("allows a user west of UTC to schedule their local today when server UTC date has rolled over", async () => {
+    vi.useFakeTimers();
+    // UTC is Sept 3, 2026 at 03:00 UTC (Sept 2 at 20:00 PDT in Los Angeles)
+    vi.setSystemTime(new Date("2026-09-03T03:00:00Z"));
+
+    const insert = vi.fn(() =>
+      thenable([
+        {
+          id: "s-tz",
+          kind: "debit",
+          amount: "100.00",
+          merchant: "Local Shop",
+          scheduled_date: "2026-09-02",
+          category: null,
+          notes: null,
+          account_id: "acc-1",
+          manual_account_id: null,
+          status: "scheduled",
+        },
+      ]),
+    );
+
+    from.mockImplementation((table: string) => {
+      if (table === "profiles") return thenable({ timezone: "America/Los_Angeles" });
+      return { insert };
+    });
+
+    // 2026-09-02 is yesterday in UTC, but today in America/Los_Angeles: accepted!
+    const res = await POST(request({ ...VALID, date: "2026-09-02" }));
+    expect(res.status).toBe(201);
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scheduled_date: "2026-09-02",
+      }),
+    );
+
+    // 2026-09-01 is yesterday in America/Los_Angeles: strictly rejected!
+    const pastRes = await POST(request({ ...VALID, date: "2026-09-01" }));
+    expect(pastRes.status).toBe(400);
+
+    vi.useRealTimers();
   });
 
   it("returns the auth response when signed out", async () => {
@@ -105,7 +156,10 @@ describe("PATCH /api/scheduled-transactions", () => {
   it("updates only the caller's own scheduled rows", async () => {
     const builder = thenable([{ id: "s1", kind: "debit", amount: "500.00", merchant: "Landlord", scheduled_date: "2026-09-26", category: null, notes: null, account_id: "acc-1", manual_account_id: null, status: "scheduled" }]);
     const update = vi.fn(() => builder);
-    from.mockReturnValue({ update });
+    from.mockImplementation((table: string) => {
+      if (table === "profiles") return thenable({ timezone: "America/Los_Angeles" });
+      return { update };
+    });
     const res = await PATCH_LIKE({ ...VALID, date: "2026-09-26", id: "11111111-1111-1111-1111-111111111111" });
     expect(res.status).toBe(200);
     expect(update).toHaveBeenCalled();
@@ -240,9 +294,10 @@ describe("PATCH/DELETE — final branch sides", () => {
     expect(invalid.status).toBe(400);
 
     // Manual account routes into manual_account_id.
-    from.mockReturnValue(
-      thenable([{ id, kind: "debit", amount: "10.00", merchant: "Cash", scheduled_date: "2026-09-25", category: null, notes: null, account_id: null, manual_account_id: "m1", status: "scheduled" }]),
-    );
+    from.mockImplementation((table: string) => {
+      if (table === "profiles") return thenable({ timezone: "America/Los_Angeles" });
+      return thenable([{ id, kind: "debit", amount: "10.00", merchant: "Cash", scheduled_date: "2026-09-25", category: null, notes: null, account_id: null, manual_account_id: "m1", status: "scheduled" }]);
+    });
     const ok = await PATCH(
       request({ ...VALID, amount: 10, account: { source: "manual", id: "m1" }, id }, "PATCH"),
     );
