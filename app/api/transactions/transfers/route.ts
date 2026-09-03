@@ -108,9 +108,8 @@ async function linkConfirmedTransfer(
 ): Promise<NextResponse | null> {
   const outId = body?.out_id;
   const inId = body?.in_id;
-  const amount = Number(body?.amount);
-  if (typeof outId !== "string" || typeof inId !== "string" || !Number.isFinite(amount)) {
-    return badRequest("out_id, in_id, and amount are required to link a transfer");
+  if (typeof outId !== "string" || typeof inId !== "string") {
+    return badRequest("out_id and in_id are required to link a transfer");
   }
   if (outId === inId) {
     return badRequest("a transfer needs two different transactions");
@@ -131,19 +130,35 @@ async function linkConfirmedTransfer(
   // Both sides of a link must be rows in the caller's own ledger.
   const { data: owned, error: verifyError } = await client
     .from("transactions")
-    .select("id")
+    .select("id, amount")
     .eq("user_id", userId)
     .in("id", [outId, inId]);
   if (verifyError) throw verifyError;
   if ((owned ?? []).length !== 2) {
     return badRequest("both sides of a transfer must be your own transactions");
   }
+  const outRow = (owned as Array<{ id: string; amount?: number | string | null }>).find((r) => r.id === outId);
+  const inRow = (owned as Array<{ id: string; amount?: number | string | null }>).find((r) => r.id === inId);
+  if (!outRow || !inRow) {
+    return badRequest("both sides of a transfer must be your own transactions");
+  }
+  const outAmount = Number(outRow.amount);
+  const inAmount = Number(inRow.amount);
+  if (
+    !Number.isFinite(outAmount) ||
+    !Number.isFinite(inAmount) ||
+    outAmount <= 0 ||
+    inAmount >= 0 ||
+    Math.round(Math.abs(outAmount) * 100) !== Math.round(Math.abs(inAmount) * 100)
+  ) {
+    return badRequest("transactions do not form a valid transfer pair");
+  }
   const { error: linkError } = await client.from("linked_transfers").upsert(
     {
       user_id: userId,
       out_transaction_id: outId,
       in_transaction_id: inId,
-      amount: Math.abs(amount),
+      amount: Math.round(outAmount * 100) / 100,
     },
     { onConflict: "user_id,out_transaction_id,in_transaction_id" },
   );
@@ -168,14 +183,6 @@ export async function POST(request: NextRequest) {
       return badRequest("subject_id and a valid decision are required");
     }
 
-    const { error: decisionError } = await supabase
-      .from("transaction_review_decisions")
-      .upsert(
-        { user_id: user.id, kind: "transfer", subject_id: subjectId, decision },
-        { onConflict: "user_id,kind,subject_id" },
-      );
-    if (decisionError) throw decisionError;
-
     if (decision === "confirmed") {
       const linkFailure = await linkConfirmedTransfer(
         supabase as never,
@@ -185,6 +192,14 @@ export async function POST(request: NextRequest) {
       );
       if (linkFailure) return linkFailure;
     }
+
+    const { error: decisionError } = await supabase
+      .from("transaction_review_decisions")
+      .upsert(
+        { user_id: user.id, kind: "transfer", subject_id: subjectId, decision },
+        { onConflict: "user_id,kind,subject_id" },
+      );
+    if (decisionError) throw decisionError;
 
     return NextResponse.json({ ok: true });
   } catch (error) {
