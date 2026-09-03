@@ -99,7 +99,7 @@ export default function RestoreSection() {
         />
       </label>
 
-      {(stage === "preview" || stage === "confirm") && (
+      {(stage === "pick" || stage === "preview" || stage === "confirm") && (
         <label className="mb-3 block text-sm">
           <span className="mb-1 block font-medium">Verification code or password</span>
           <input
@@ -163,9 +163,14 @@ export default function RestoreSection() {
       )}
 
       <div className="flex flex-wrap gap-2">
+        {stage === "pick" && (
+          <Button onClick={() => void submit(true)} disabled={!file || !code} loading={busy}>
+            Preview restore
+          </Button>
+        )}
         {stage === "preview" && (
           <Button onClick={() => setStage("confirm")} disabled={!file}>
-            Preview restore
+            Continue to confirmation
           </Button>
         )}
         {stage === "confirm" && (

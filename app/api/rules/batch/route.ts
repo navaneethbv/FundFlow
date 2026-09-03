@@ -26,7 +26,7 @@ interface DbMerchantRule {
 
 interface DbTransaction {
   id: string;
-  merchant: string | null;
+  merchant_name: string | null;
   name: string | null;
   amount: number | string;
   pfc_primary: string | null;
@@ -69,7 +69,7 @@ async function fetchCandidateTransactions(
 ): Promise<RuleTransactionCandidate[] | Response> {
   const { data: txns, error: txError } = await supabase
     .from("transactions")
-    .select("id, merchant, name, amount, pfc_primary")
+    .select("id, merchant_name, name, amount, pfc_primary")
     .eq("user_id", userId)
     .order("date", { ascending: false })
     // Rules run retroactively on history, so cover a large window; pagination
@@ -100,7 +100,7 @@ async function fetchCandidateTransactions(
 
   return typedTxns.map((t) => ({
     id: t.id,
-    merchant: t.merchant,
+    merchant: t.merchant_name,
     name: t.name,
     amount: Number(t.amount) || 0,
     category: t.pfc_primary,

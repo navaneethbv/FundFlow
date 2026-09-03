@@ -46,6 +46,7 @@ export function buildTaxExport(
   tagsByTransactionId: ReadonlyMap<string, readonly string[]>,
 ): TaxExport {
   const totals = new Map<string, { count: number; total: number }>();
+  const countedTransactions = new Map<string, Set<string>>();
   const rows: ExportRow[] = [];
 
   for (const txn of transactions) {
@@ -59,7 +60,12 @@ export function buildTaxExport(
       category: lineItem,
     });
     const bucket = totals.get(lineItem) ?? { count: 0, total: 0 };
-    bucket.count += 1;
+    const countedForLine = countedTransactions.get(lineItem) ?? new Set<string>();
+    if (!countedForLine.has(txn.sourceTransactionId)) {
+      bucket.count += 1;
+      countedForLine.add(txn.sourceTransactionId);
+      countedTransactions.set(lineItem, countedForLine);
+    }
     bucket.total += txn.signedAmount;
     totals.set(lineItem, bucket);
   }

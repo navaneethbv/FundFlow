@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { classifyBalanceSheetAmount } from "@/lib/account-balance";
 import { formatCurrency } from "@/lib/format";
 import { addDays, advanceFrequency, isoDate, parseDate } from "@/lib/date-utils";
+import { safeCompileRegex } from "@/lib/rules-engine";
 
 export type EnvelopeStatus = "over" | "at-risk" | "on-track";
 
@@ -382,12 +383,12 @@ function matchesRule(transaction: CleanupTransaction, rule: MerchantRule): boole
   }
 
   if (rule.matchType === "regex") {
-    try {
-      const re = new RegExp(rule.pattern.trim(), "i");
-      return re.test(transaction.merchant) || Boolean(transaction.accountName && re.test(transaction.accountName));
-    } catch {
-      return false;
-    }
+    const re = safeCompileRegex(rule.pattern);
+    return Boolean(
+      re &&
+        (re.test(transaction.merchant) ||
+          Boolean(transaction.accountName && re.test(transaction.accountName))),
+    );
   }
 
   const pattern = normalize(rule.pattern);

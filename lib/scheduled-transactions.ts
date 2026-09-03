@@ -54,7 +54,7 @@ function validateDate(date: unknown, today: string): { ok: true; date: string } 
   if (typeof date !== "string" || !TRANSACTION_DATE_RE.test(date)) {
     return { ok: false, error: "date must be a YYYY-MM-DD date" };
   }
-  if (date < addDays(today, -1)) {
+  if (date < today) {
     return { ok: false, error: "date cannot be in the past" };
   }
   if (date > addDays(today, MAX_HORIZON_DAYS)) {

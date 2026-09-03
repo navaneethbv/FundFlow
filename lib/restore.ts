@@ -235,8 +235,6 @@ export async function executeRestore(
       });
       continue;
     }
-    if (entry.rowCount === 0) continue;
-
     const rows = archive[name] ?? [];
     if (name === "transactions") {
       const outcome = await restoreTransactions(service, userId, rows);
