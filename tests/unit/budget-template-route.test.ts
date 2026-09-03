@@ -15,6 +15,7 @@ vi.mock("@/lib/http", async () => {
 vi.mock("@/lib/audit", () => ({ writeAudit: vi.fn(), getClientIp: vi.fn(() => "127.0.0.1") }));
 
 const TEMPLATE_ID = "11111111-1111-1111-1111-111111111111";
+const ITEM_VALID = { category: "rent", group_name: "fixed", planned: 1500, rollover_enabled: false };
 
 function thenable(data: unknown, error: unknown = null) {
   const builder: Record<string, unknown> = {
@@ -124,5 +125,318 @@ describe("budget templates routes", () => {
     const res = await createPost(request({ name: "x", items: [{ category: "rent", group_name: "fixed", planned: 1, rollover_enabled: false }] }));
     expect(res.status).toBe(401);
     expect(from).not.toHaveBeenCalled();
+  });
+});
+
+describe("budget templates routes — full branch coverage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireUser).mockResolvedValue({
+      user: { id: "user-123" },
+      supabase: { from } as never,
+    } as never);
+    vi.mocked(writeAudit).mockResolvedValue(undefined);
+  });
+
+  it("GET lists the caller's templates", async () => {
+    const { GET } = await import("@/app/api/budget/templates/route");
+    from.mockReturnValue(
+      thenable([{ id: TEMPLATE_ID, name: "Monthly", items: [], created_at: "2026-09-02" }]),
+    );
+    const res = await GET();
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { templates: Array<{ id: string }> };
+    expect(body.templates[0]!.id).toBe(TEMPLATE_ID);
+  });
+
+  it("POST rejects an over-long name and invalid items", async () => {
+    const longName = "x".repeat(121);
+    const res = await createPost(request({ name: longName, items: [ITEM_VALID] }));
+    expect(res.status).toBe(400);
+    const res2 = await createPost(request({ name: "Ok", items: [{ bad: true }] }));
+    expect(res2.status).toBe(400);
+  });
+
+  it("POST surfaces an insert failure", async () => {
+    from.mockReturnValue(thenable(null, { message: "boom", code: "P0001" }));
+    const res = await createPost(request({ name: "Ok", items: [ITEM_VALID] }));
+    expect(res.status).toBe(500);
+  });
+
+  it("DELETE rejects an invalid id, a missing template, and read failures", async () => {
+    const badId = await deleteRoute(
+      new NextRequest("http://localhost/api/budget/templates?id=nope", { method: "DELETE" }),
+    );
+    expect(badId.status).toBe(400);
+
+    from.mockReturnValue(thenable(null));
+    const missing = await deleteRoute(
+      new NextRequest(`http://localhost/api/budget/templates?id=${TEMPLATE_ID}`, { method: "DELETE" }),
+    );
+    expect(missing.status).toBe(400);
+
+    from.mockReturnValue(thenable(null, { message: "boom", code: "P0001" }));
+    const failing = await deleteRoute(
+      new NextRequest(`http://localhost/api/budget/templates?id=${TEMPLATE_ID}`, { method: "DELETE" }),
+    );
+    expect(failing.status).toBe(500);
+  });
+
+  it("apply surfaces template read failures and a missing template", async () => {
+    from.mockReturnValue(thenable(null, { message: "boom", code: "P0001" }));
+    const failing = await applyPost(
+      request({ template_id: TEMPLATE_ID, month: "2026-09" }, "http://localhost/api/budget/templates/apply"),
+    );
+    expect(failing.status).toBe(500);
+
+    from.mockReturnValue(thenable(null));
+    const missing = await applyPost(
+      request({ template_id: TEMPLATE_ID, month: "2026-09" }, "http://localhost/api/budget/templates/apply"),
+    );
+    expect(missing.status).toBe(400);
+  });
+
+  it("apply rejects an invalid template id, month, or mode", async () => {
+    const cases = [
+      { template_id: "nope", month: "2026-09" },
+      { template_id: TEMPLATE_ID, month: "september" },
+      { template_id: TEMPLATE_ID, month: "2026-09", mode: "replace" },
+    ];
+    for (const body of cases.slice(0, 2)) {
+      const res = await applyPost(request(body, "http://localhost/api/budget/templates/apply"));
+      expect(res.status).toBe(400);
+    }
+    expect(from).not.toHaveBeenCalled();
+    // An unrecognized mode falls back to the default (conflict-checked) flow.
+    from.mockImplementation((table: string) => {
+      if (table === "budget_templates") return thenable({ items: [ITEM_VALID] });
+      if (table === "budgets") return thenable([]);
+      throw new Error(`unexpected ${table}`);
+    });
+    const res = await applyPost(
+      request(cases[2]!, "http://localhost/api/budget/templates/apply"),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("apply surfaces budget and period read failures", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "budget_templates") return thenable({ items: [ITEM_VALID] });
+      if (table === "budgets") return thenable(null, { message: "boom", code: "P0001" });
+      throw new Error(`unexpected ${table}`);
+    });
+    const failing = await applyPost(
+      request({ template_id: TEMPLATE_ID, month: "2026-09" }, "http://localhost/api/budget/templates/apply"),
+    );
+    expect(failing.status).toBe(500);
+
+    from.mockImplementation((table: string) => {
+      if (table === "budget_templates") return thenable({ items: [ITEM_VALID] });
+      if (table === "budgets") return thenable([{ id: "b1", category: "rent" }]);
+      if (table === "budget_periods") return thenable(null, { message: "boom", code: "P0001" });
+      throw new Error(`unexpected ${table}`);
+    });
+    const failing2 = await applyPost(
+      request({ template_id: TEMPLATE_ID, month: "2026-09" }, "http://localhost/api/budget/templates/apply"),
+    );
+    expect(failing2.status).toBe(500);
+  });
+
+  it("apply skips the period read entirely when the user has no budgets", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "budget_templates") return thenable({ items: [ITEM_VALID] });
+      if (table === "budgets") return thenable([]);
+      throw new Error(`unexpected ${table}`);
+    });
+    const res = await applyPost(
+      request({ template_id: TEMPLATE_ID, month: "2026-09" }, "http://localhost/api/budget/templates/apply"),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { applied: number; unmatched: string[] };
+    expect(body.applied).toBe(0);
+    expect(body.unmatched).toEqual(["rent"]);
+  });
+
+  it("apply surfaces an RPC failure", async () => {
+    const rpc = vi.fn(() => Promise.resolve({ data: null, error: { message: "boom", code: "P0001" } }));
+    from.mockImplementation((table: string) => {
+      if (table === "budget_templates") return thenable({ items: [ITEM_VALID] });
+      if (table === "budgets") return thenable([{ id: "b1", category: "rent" }]);
+      if (table === "budget_periods") return thenable([]);
+      throw new Error(`unexpected ${table}`);
+    });
+    vi.mocked(requireUser).mockResolvedValue({
+      user: { id: "user-123" },
+      supabase: { from, rpc } as never,
+    } as never);
+    const res = await applyPost(
+      request({ template_id: TEMPLATE_ID, month: "2026-09" }, "http://localhost/api/budget/templates/apply"),
+    );
+    expect(res.status).toBe(500);
+  });
+});
+
+describe("budget templates routes — guards and null-data branches", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireUser).mockResolvedValue({
+      user: { id: "user-123" },
+      supabase: { from } as never,
+    } as never);
+    vi.mocked(writeAudit).mockResolvedValue(undefined);
+  });
+
+  it("returns the auth response when signed out (GET, DELETE, apply)", async () => {
+    vi.mocked(requireUser).mockResolvedValue(
+      NextResponse.json({ error: "Unauthorized" }, { status: 401 }) as never,
+    );
+    const { GET, DELETE } = await import("@/app/api/budget/templates/route");
+    expect((await GET()).status).toBe(401);
+    expect(
+      (
+        await DELETE(
+          new NextRequest(`http://localhost/api/budget/templates?id=${TEMPLATE_ID}`, { method: "DELETE" }),
+        )
+      ).status,
+    ).toBe(401);
+    expect(
+      (
+        await applyPost(
+          request({ template_id: TEMPLATE_ID, month: "2026-09" }, "http://localhost/api/budget/templates/apply"),
+        )
+      ).status,
+    ).toBe(401);
+  });
+
+  it("GET handles read failures and null data", async () => {
+    const { GET } = await import("@/app/api/budget/templates/route");
+    from.mockReturnValue(thenable(null, { message: "boom", code: "P0001" }));
+    expect((await GET()).status).toBe(500);
+    from.mockReturnValue(thenable(null));
+    const ok = await GET();
+    expect(ok.status).toBe(200);
+    expect(((await ok.json()) as { templates: unknown[] }).templates).toEqual([]);
+  });
+
+  it("POST rejects a non-string name", async () => {
+    const res = await createPost(request({ name: 42, items: [ITEM_VALID] }));
+    expect(res.status).toBe(400);
+  });
+
+  it("apply runs in merge mode and handles null budget rows", async () => {
+    const rpc = vi.fn(() => Promise.resolve({ data: [{ budget_id: "b1" }], error: null }));
+    from.mockImplementation((table: string) => {
+      if (table === "budget_templates") return thenable({ items: [ITEM_VALID] });
+      if (table === "budgets") return thenable(null);
+      if (table === "budget_periods") return thenable([{ budget_id: "b1" }]);
+      throw new Error(`unexpected ${table}`);
+    });
+    vi.mocked(requireUser).mockResolvedValue({
+      user: { id: "user-123" },
+      supabase: { from, rpc } as never,
+    } as never);
+    // Null budgets rows -> no ids -> every template item is unmatched.
+    const res = await applyPost(
+      request(
+        { template_id: TEMPLATE_ID, month: "2026-09", mode: "merge" },
+        "http://localhost/api/budget/templates/apply",
+      ),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { applied: number; unmatched: string[] };
+    expect(body.applied).toBe(0);
+    expect(body.unmatched).toEqual(["rent"]);
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+});
+
+describe("apply route — final branch sides", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireUser).mockResolvedValue({
+      user: { id: "user-123" },
+      supabase: { from } as never,
+    } as never);
+    vi.mocked(writeAudit).mockResolvedValue(undefined);
+  });
+
+  it("rejects non-string template ids and months", async () => {
+    for (const body of [
+      { template_id: 42, month: "2026-09" },
+      { template_id: TEMPLATE_ID, month: 9 },
+    ]) {
+      const res = await applyPost(request(body, "http://localhost/api/budget/templates/apply"));
+      expect(res.status).toBe(400);
+    }
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("handles null existing period rows", async () => {
+    const rpc = vi.fn(() => Promise.resolve({ data: [{ budget_id: "b1" }], error: null }));
+    from.mockImplementation((table: string) => {
+      if (table === "budget_templates") return thenable({ items: [ITEM_VALID] });
+      if (table === "budgets") return thenable([{ id: "b1", category: "rent" }]);
+      if (table === "budget_periods") return thenable(null);
+      throw new Error(`unexpected ${table}`);
+    });
+    vi.mocked(requireUser).mockResolvedValue({
+      user: { id: "user-123" },
+      supabase: { from, rpc } as never,
+    } as never);
+    const res = await applyPost(
+      request({ template_id: TEMPLATE_ID, month: "2026-09" }, "http://localhost/api/budget/templates/apply"),
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()).applied).toBe(1);
+  });
+
+  it("audits an overwrite with the explicit mode recorded", async () => {
+    const rpc = vi.fn(() => Promise.resolve({ data: [{ budget_id: "b1" }], error: null }));
+    from.mockImplementation((table: string) => {
+      if (table === "budget_templates") return thenable({ items: [ITEM_VALID] });
+      if (table === "budgets") return thenable([{ id: "b1", category: "rent" }]);
+      if (table === "budget_periods") return thenable([{ budget_id: "b1" }]);
+      throw new Error(`unexpected ${table}`);
+    });
+    vi.mocked(requireUser).mockResolvedValue({
+      user: { id: "user-123" },
+      supabase: { from, rpc } as never,
+    } as never);
+    const res = await applyPost(
+      request(
+        { template_id: TEMPLATE_ID, month: "2026-09", mode: "overwrite" },
+        "http://localhost/api/budget/templates/apply",
+      ),
+    );
+    expect(res.status).toBe(200);
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "budget_template_applied",
+        metadata: expect.objectContaining({ mode: "overwrite" }),
+      }),
+    );
+  });
+
+  it("skips the audit when a merge writes nothing", async () => {
+    const rpc = vi.fn();
+    from.mockImplementation((table: string) => {
+      if (table === "budget_templates") return thenable({ items: [ITEM_VALID] });
+      if (table === "budgets") return thenable([{ id: "b1", category: "rent" }]);
+      if (table === "budget_periods") return thenable([{ budget_id: "b1" }]);
+      throw new Error(`unexpected ${table}`);
+    });
+    vi.mocked(requireUser).mockResolvedValue({
+      user: { id: "user-123" },
+      supabase: { from, rpc } as never,
+    } as never);
+    const res = await applyPost(
+      request(
+        { template_id: TEMPLATE_ID, month: "2026-09", mode: "merge" },
+        "http://localhost/api/budget/templates/apply",
+      ),
+    );
+    expect(res.status).toBe(200);
+    expect(rpc).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
   });
 });

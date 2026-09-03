@@ -151,3 +151,108 @@ describe("DELETE /api/scheduled-transactions", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("GET /api/scheduled-transactions and remaining branches", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireUser).mockResolvedValue({
+      user: { id: "user-123" },
+      supabase: { from } as never,
+    } as never);
+    vi.mocked(writeAudit).mockResolvedValue(undefined);
+  });
+
+  it("GET lists the caller's scheduled rows sorted by date", async () => {
+    from.mockReturnValue(
+      thenable([
+        { id: "s1", kind: "debit", amount: "500.00", merchant: "Landlord", scheduled_date: "2026-09-25", category: "rent", notes: null, account_id: "acc-1", manual_account_id: null, status: "scheduled" },
+      ]),
+    );
+    const { GET } = await import("@/app/api/scheduled-transactions/route");
+    const res = await GET();
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { scheduled: Array<{ id: string; amount: number }> };
+    expect(body.scheduled[0]!.id).toBe("s1");
+    expect(body.scheduled[0]!.amount).toBe(500);
+  });
+
+  it("GET handles read failures and null data", async () => {
+    const { GET } = await import("@/app/api/scheduled-transactions/route");
+    from.mockReturnValue(thenable(null, { message: "boom", code: "P0001" }));
+    expect((await GET()).status).toBe(500);
+    from.mockReturnValue(thenable(null));
+    const ok = await GET();
+    expect(((await ok.json()) as { scheduled: unknown[] }).scheduled).toEqual([]);
+  });
+
+  it("returns the auth response when signed out on every method", async () => {
+    vi.mocked(requireUser).mockResolvedValue(
+      NextResponse.json({ error: "Unauthorized" }, { status: 401 }) as never,
+    );
+    const mod = await import("@/app/api/scheduled-transactions/route");
+    expect((await mod.GET()).status).toBe(401);
+    expect((await mod.POST(request(VALID))).status).toBe(401);
+    expect((await mod.PATCH(request({ ...VALID, id: "11111111-1111-1111-1111-111111111111" }, "PATCH"))).status).toBe(401);
+    expect((await mod.DELETE(request({ id: "11111111-1111-1111-1111-111111111111" }, "DELETE"))).status).toBe(401);
+  });
+
+  it("PATCH surfaces insert/update failures and a not-found row", async () => {
+    const { PATCH } = await import("@/app/api/scheduled-transactions/route");
+    const id = "11111111-1111-1111-1111-111111111111";
+    from.mockReturnValue(thenable(null, { message: "boom", code: "P0001" }));
+    const failing = await PATCH(request({ ...VALID, date: "2026-09-26", id }, "PATCH"));
+    expect(failing.status).toBe(500);
+
+    from.mockReturnValue(thenable(null));
+    const missing = await PATCH(request({ ...VALID, date: "2026-09-26", id }, "PATCH"));
+    expect(missing.status).toBe(400);
+  });
+
+  it("DELETE surfaces a delete failure", async () => {
+    const { DELETE } = await import("@/app/api/scheduled-transactions/route");
+    from.mockReturnValue(thenable([{ id: "s1" }], { message: "boom", code: "P0001" }));
+    const res = await DELETE(request({ id: "11111111-1111-1111-1111-111111111111" }, "DELETE"));
+    expect(res.status).toBe(500);
+  });
+
+  it("POST surfaces an insert failure", async () => {
+    from.mockReturnValue(thenable(null, { message: "boom", code: "P0001" }));
+    const res = await POST(request(VALID));
+    expect(res.status).toBe(500);
+  });
+});
+
+describe("PATCH/DELETE — final branch sides", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireUser).mockResolvedValue({
+      user: { id: "user-123" },
+      supabase: { from } as never,
+    } as never);
+    vi.mocked(writeAudit).mockResolvedValue(undefined);
+  });
+
+  it("PATCH validates the payload after the id and routes manual accounts", async () => {
+    const { PATCH } = await import("@/app/api/scheduled-transactions/route");
+    const id = "11111111-1111-1111-1111-111111111111";
+    // Valid id, invalid payload (past date).
+    const invalid = await PATCH(request({ ...VALID, date: "2001-01-01", id }, "PATCH"));
+    expect(invalid.status).toBe(400);
+
+    // Manual account routes into manual_account_id.
+    from.mockReturnValue(
+      thenable([{ id, kind: "debit", amount: "10.00", merchant: "Cash", scheduled_date: "2026-09-25", category: null, notes: null, account_id: null, manual_account_id: "m1", status: "scheduled" }]),
+    );
+    const ok = await PATCH(
+      request({ ...VALID, amount: 10, account: { source: "manual", id: "m1" }, id }, "PATCH"),
+    );
+    expect(ok.status).toBe(200);
+  });
+
+  it("DELETE rejects a non-string id", async () => {
+    const { DELETE } = await import("@/app/api/scheduled-transactions/route");
+    const res = await DELETE(request({ id: 42 }, "DELETE"));
+    expect(res.status).toBe(400);
+    expect(from).not.toHaveBeenCalled();
+  });
+});

@@ -138,3 +138,54 @@ describe("POST /api/backup/restore", () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe("POST /api/backup/restore — guards and validation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    from.mockReturnValue(thenable());
+    vi.mocked(requireUser).mockResolvedValue({
+      user: { id: USER_ID, email: "user@example.com" },
+      supabase: {} as never,
+    } as never);
+    vi.mocked(writeAudit).mockResolvedValue(undefined);
+  });
+
+  it("429s past the rate limit", async () => {
+    const { checkRateLimit } = await import("@/lib/rate-limit");
+    vi.mocked(checkRateLimit).mockResolvedValueOnce(false as never);
+    const archive = buildBackupArchive(PAYLOAD, KEY, USER_ID);
+    const res = await POST(formRequest(archive, { dry_run: "true", code: "000000" }));
+    expect(res.status).toBe(429);
+  });
+
+  it("400s when backups are not configured", async () => {
+    const env = await import("@/lib/env.server");
+    const original = env.serverEnv.backupEncKey;
+    (env.serverEnv as { backupEncKey?: string }).backupEncKey = undefined;
+    try {
+      const res = await POST(formRequest(null, { dry_run: "true", code: "000000" }));
+      expect(res.status).toBe(400);
+    } finally {
+      (env.serverEnv as { backupEncKey?: string }).backupEncKey = original;
+    }
+  });
+
+  it("400s when the step-up code is missing", async () => {
+    const archive = buildBackupArchive(PAYLOAD, KEY, USER_ID);
+    const res = await POST(formRequest(archive, { dry_run: "true" }));
+    expect(res.status).toBe(400);
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("400s when the decrypted payload is not an object", async () => {
+    const archive = buildBackupArchive("just a string", KEY, USER_ID);
+    const res = await POST(formRequest(archive, { dry_run: "true", code: "000000" }));
+    expect(res.status).toBe(400);
+  });
+
+  it("400s when a section is not a row list", async () => {
+    const archive = buildBackupArchive({ accounts: "corrupt" }, KEY, USER_ID);
+    const res = await POST(formRequest(archive, { dry_run: "true", code: "000000" }));
+    expect(res.status).toBe(400);
+  });
+});

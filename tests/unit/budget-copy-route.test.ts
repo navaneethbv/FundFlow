@@ -20,7 +20,7 @@ vi.mock("@/lib/audit", () => ({
 }));
 
 /** Builder returning `this`, resolving to the seeded rows for its table. */
-function tableStub(rows: unknown[] | { error: unknown }) {
+function tableStub(rows: unknown[] | { data?: unknown; error: unknown }) {
   const builder: Record<string, unknown> = {
     then: (resolve: (value: unknown) => unknown) =>
       resolve(
@@ -188,5 +188,102 @@ describe("POST /api/budget/copy", () => {
     const res = await POST(request({ month: "2026-09" }));
     expect(res.status).toBe(401);
     expect(from).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/budget/copy — failure and empty branches", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireUser).mockResolvedValue({
+      user: { id: "user-123", email: "test@example.com" },
+      supabase: { rpc, from } as never,
+    } as never);
+    vi.mocked(writeAudit).mockResolvedValue(undefined);
+    rpc.mockResolvedValue({ data: [{ budget_id: "b1" }], error: null });
+  });
+
+  it("propagates a budgets read failure", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "budgets") return tableStub({ error: { message: "boom", code: "P0001" } });
+      throw new Error(`unexpected ${table}`);
+    });
+    const res = await POST(request({ month: "2026-09" }));
+    expect(res.status).toBe(500);
+  });
+
+  it("short-circuits when the user has no budgets", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "budgets") return tableStub([]);
+      throw new Error(`unexpected ${table}`);
+    });
+    const res = await POST(request({ month: "2026-09" }));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { copied: number; source_count: number };
+    expect(body.copied).toBe(0);
+    expect(body.source_count).toBe(0);
+  });
+
+  it("propagates a source period read failure", async () => {
+    let periodReads = 0;
+    from.mockImplementation((table: string) => {
+      if (table === "budgets") return tableStub([{ id: "b1" }]);
+      periodReads += 1;
+      // First periods read (previous month) fails.
+      return tableStub(periodReads === 1 ? { error: { message: "boom", code: "P0001" } } : []);
+    });
+    const res = await POST(request({ month: "2026-09" }));
+    expect(res.status).toBe(500);
+  });
+
+  it("propagates a current period read failure", async () => {
+    let periodReads = 0;
+    from.mockImplementation((table: string) => {
+      if (table === "budgets") return tableStub([{ id: "b1" }]);
+      periodReads += 1;
+      return tableStub(periodReads === 2 ? { error: { message: "boom", code: "P0001" } } : []);
+    });
+    const res = await POST(request({ month: "2026-09" }));
+    expect(res.status).toBe(500);
+  });
+
+  it("reports an RPC failure mid-copy as a 500-style error", async () => {
+    setupTables({});
+    rpc.mockResolvedValue({ data: null, error: { message: "boom", code: "P0001" } });
+    const res = await POST(request({ month: "2026-09" }));
+    expect(res.status).toBe(500);
+  });
+});
+
+describe("POST /api/budget/copy — null-data branches", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireUser).mockResolvedValue({
+      user: { id: "user-123", email: "test@example.com" },
+      supabase: { rpc, from } as never,
+    } as never);
+    vi.mocked(writeAudit).mockResolvedValue(undefined);
+  });
+
+  it("handles a null budgets payload", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "budgets") {
+        return tableStub({ data: null, error: null });
+      }
+      throw new Error(`unexpected ${table}`);
+    });
+    const res = await POST(request({ month: "2026-09" }));
+    expect(res.status).toBe(200);
+    expect((await res.json()).copied).toBe(0);
+  });
+
+  it("handles null period rows", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "budgets") return tableStub([{ id: "b1" }]);
+      return tableStub({ data: null, error: null });
+    });
+    const res = await POST(request({ month: "2026-09" }));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { copied: number };
+    expect(body.copied).toBe(0);
   });
 });

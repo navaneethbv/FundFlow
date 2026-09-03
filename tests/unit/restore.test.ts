@@ -74,7 +74,7 @@ function serviceStub() {
       return builder;
     },
   };
-  return { service: service as never, calls, setFailOn: (table: string | null) => { failOn = table; } };
+  return { service, calls, setFailOn: (table: string | null) => { failOn = table; } };
 }
 
 describe("executeRestore", () => {
@@ -83,7 +83,7 @@ describe("executeRestore", () => {
   it("delete-then-inserts user tables with user_id stamped, restoring parents first", async () => {
     const { service, calls } = serviceStub();
     const plan = buildRestorePlan(ARCHIVE);
-    const result = await executeRestore(service, "user-123", plan, ARCHIVE);
+    const result = await executeRestore(service as never, "user-123", plan, ARCHIVE);
     expect(result.failedTable).toBeNull();
 
     const insertIdx = (table: string, op = "insert") =>
@@ -106,7 +106,7 @@ describe("executeRestore", () => {
   it("skips shared/owner-scope tables instead of deleting other people's rows", async () => {
     const { service, calls } = serviceStub();
     const plan = buildRestorePlan(ARCHIVE);
-    const result = await executeRestore(service, "user-123", plan, ARCHIVE);
+    const result = await executeRestore(service as never, "user-123", plan, ARCHIVE);
     expect(result.skipped).toEqual([
       { name: "shared_expenses", reason: "involves other users' rows; not restorable in-app" },
     ]);
@@ -116,7 +116,7 @@ describe("executeRestore", () => {
   it("upserts transactions on plaid_transaction_id without a delete", async () => {
     const { service, calls } = serviceStub();
     const plan = buildRestorePlan(ARCHIVE);
-    const result = await executeRestore(service, "user-123", plan, ARCHIVE);
+    const result = await executeRestore(service as never, "user-123", plan, ARCHIVE);
     const upsert = calls.find((call) => call.table === "transactions" && call.op === "upsert")!;
     expect(upsert).toBeDefined();
     expect(calls.some((call) => call.table === "transactions" && call.op === "delete")).toBe(false);
@@ -131,7 +131,7 @@ describe("executeRestore", () => {
       transactions: [{ amount: 5, date: "2026-08-02" }],
     };
     const plan = buildRestorePlan(archive);
-    const result = await executeRestore(service, "user-123", plan, archive);
+    const result = await executeRestore(service as never, "user-123", plan, archive);
     expect(result.regeneratedIds).toBe(1);
   });
 
@@ -141,5 +141,71 @@ describe("executeRestore", () => {
     const plan = buildRestorePlan(ARCHIVE);
     const result = await executeRestore(stubControl.service, "user-123", plan, ARCHIVE);
     expect(result.failedTable).toBe("transactions");
+  });
+});
+
+describe("executeRestore — chunking and failure branches", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("regenerates ids for null rows too", async () => {
+    const { service } = serviceStub();
+    const archive = { transactions: [null, { amount: 5, date: "2026-08-02" }] };
+    const plan = buildRestorePlan(archive);
+    const result = await executeRestore(service as never, "user-123", plan, archive);
+    expect(result.regeneratedIds).toBe(2);
+  });
+
+  it("reports a delete failure by table name", async () => {
+    const control = serviceStub();
+    const baseFrom = control.service.from as unknown as (table: string) => unknown;
+    const failing = {
+      from: vi.fn((table: string) => {
+        if (table === "budgets") {
+          return {
+            delete: () => ({
+              eq: () => Promise.resolve({ data: null, error: { message: "boom" } }),
+            }),
+          };
+        }
+        return baseFrom(table);
+      }),
+    };
+    const archive = { budgets: [{ id: "b1", category: "rent" }] };
+    const plan = buildRestorePlan(archive);
+    const result = await executeRestore(failing as never, "user-123", plan, archive);
+    expect(result.failedTable).toBe("budgets");
+  });
+
+  it("reports an insert failure by table name", async () => {
+    const control = serviceStub();
+    const baseFrom = control.service.from as unknown as (table: string) => unknown;
+    const failing = {
+      from: vi.fn((table: string) => {
+        if (table === "budgets") {
+          return {
+            delete: () => ({
+              eq: () => Promise.resolve({ data: null, error: null }),
+            }),
+            insert: () => Promise.resolve({ data: null, error: { message: "boom" } }),
+          };
+        }
+        return baseFrom(table);
+      }),
+    };
+    const archive = { budgets: [{ id: "b1", category: "rent" }] };
+    const plan = buildRestorePlan(archive);
+    const result = await executeRestore(failing as never, "user-123", plan, archive);
+    expect(result.failedTable).toBe("budgets");
+  });
+
+  it("chunks large tables across multiple inserts", async () => {
+    const control = serviceStub();
+    const rows = Array.from({ length: 601 }, (_, index) => ({ id: `b${index}`, category: "x" }));
+    const archive = { budgets: rows };
+    const plan = buildRestorePlan(archive);
+    const result = await executeRestore(control.service as never, "user-123", plan, archive);
+    expect(result.tables[0]!.rowsWritten).toBe(601);
+    const inserts = control.calls.filter((call) => call.table === "budgets" && call.op === "insert");
+    expect(inserts.length).toBeGreaterThanOrEqual(2);
   });
 });

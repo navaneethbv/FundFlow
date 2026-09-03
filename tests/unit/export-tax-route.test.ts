@@ -65,9 +65,20 @@ vi.mock("@/lib/supabase/service", () => ({
 }));
 
 import { GET as taxGet } from "@/app/api/export/tax/route";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 const USER_ID = "11111111-1111-1111-1111-111111111111";
+
+/** Chainable thenable resolving `{ data: null, error }` — the query-error shape. */
+function thenableErr(error: unknown) {
+  const builder: Record<string, unknown> = {
+    then: (resolve: (value: unknown) => unknown) => resolve({ data: null, error }),
+  };
+  for (const method of ["select", "eq", "in", "order", "range"]) {
+    builder[method] = () => builder;
+  }
+  return builder;
+}
 
 function callYear(args: unknown[], column: string, value: unknown) {
   return args[0] === column && args[1] === value;
@@ -177,5 +188,96 @@ describe("GET /api/export/tax", () => {
     });
     const res = await taxGet(new NextRequest("http://localhost/api/export/tax"));
     expect(res.headers.get("X-FundFlow-Truncated")).toBe("true");
+  });
+});
+
+describe("GET /api/export/tax — remaining branches", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    seeds.transaction_annotations = [];
+    mockRequireUser.mockResolvedValue({ user: { id: USER_ID }, supabase: mockSupabase });
+    mockIsExportAllowed.mockResolvedValue(true);
+    mockLoadCanonicalProjection.mockResolvedValue({
+      transactions: [],
+      currencyByAccountId: new Map(),
+      truncated: false,
+    });
+  });
+
+  it("defaults to the current year when no year param is given", async () => {
+    const res = await taxGet(new NextRequest("http://localhost/api/export/tax"));
+    expect(res.status).toBe(200);
+    const year = new Date().getUTCFullYear();
+    expect(mockLoadCanonicalProjection).toHaveBeenCalledWith(
+      mockSupabase,
+      expect.objectContaining({
+        window: { start: `${year}-01-01`, endExclusive: `${year + 1}-01-01` },
+      }),
+    );
+  });
+
+  it("surfaces an annotation read failure through the error path", async () => {
+    mockLoadCanonicalProjection.mockResolvedValue({
+      transactions: [{ sourceTransactionId: "t1", date: "2025-06-01", merchant: "X", signedAmount: 1 }],
+      currencyByAccountId: new Map(),
+      truncated: false,
+    });
+    // The mocked errorResponse rethrows, so the route's catch surfaces as a
+    // rejection here while still exercising the error branch.
+    mockSupabase.from.mockImplementationOnce(
+      (() => thenableErr({ message: "annotation query failed", code: "P0001" })) as never,
+    );
+    await expect(
+      taxGet(new NextRequest("http://localhost/api/export/tax?year=2025")),
+    ).rejects.toThrow("annotation query failed");
+  });
+
+  it("tolerates null annotation pages and null tags", async () => {
+    mockLoadCanonicalProjection.mockResolvedValue({
+      transactions: [{ sourceTransactionId: "t1", date: "2025-06-01", merchant: "X", signedAmount: 1 }],
+      currencyByAccountId: new Map(),
+      truncated: false,
+    });
+    mockSupabase.from.mockImplementationOnce((() => thenableErr(null)) as never);
+    seeds.transaction_annotations = [{ transaction_id: "t1", tags: null }];
+    const res = await taxGet(new NextRequest("http://localhost/api/export/tax?year=2025"));
+    expect(res.status).toBe(200);
+    const csv = await res.text();
+    expect(csv).toContain("Date,Description,Category,Amount,Type");
+  });
+
+  it("returns the auth response when signed out", async () => {
+    mockRequireUser.mockResolvedValue(
+      NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+    );
+    const res = await taxGet(new NextRequest("http://localhost/api/export/tax"));
+    expect(res.status).toBe(401);
+  });
+
+  it("ignores annotation rows whose tags are not a string list", async () => {
+    mockLoadCanonicalProjection.mockResolvedValue({
+      transactions: [
+        { sourceTransactionId: "t1", date: "2025-06-01", merchant: "Food Bank", signedAmount: 75 },
+      ],
+      currencyByAccountId: new Map(),
+      truncated: false,
+    });
+    seeds.transaction_annotations = [
+      { transaction_id: "t1", tags: "charity" }, // not an array: ignored
+      { transaction_id: "t9", tags: [1, 2] }, // non-string entries: ignored
+    ];
+    const res = await taxGet(new NextRequest("http://localhost/api/export/tax?year=2025"));
+    expect(res.status).toBe(200);
+    const csv = await res.text();
+    expect(csv).not.toContain("Charitable donations");
+  });
+
+  it("emits headers only when nothing is tax-tagged", async () => {
+    const res = await taxGet(new NextRequest("http://localhost/api/export/tax?year=2025"));
+    expect(res.status).toBe(200);
+    const csv = await res.text();
+    expect(csv).toContain("Date,Description,Category,Amount,Type");
+    expect(csv).not.toContain("Tax line item,Transactions,Total");
+    expect(res.headers.get("X-FundFlow-Truncated")).toBe("false");
   });
 });

@@ -73,6 +73,8 @@ export function buildTaxExport(
       (lineItem, index) => [lineItem, index],
     ),
   );
+  // Every line item in `totals` comes from resolveTaxLineItem, which only
+  // returns curated items or the fallback — all present in declarationOrder.
   const summary = [...totals.entries()]
     .map(([lineItem, { count, total }]) => ({
       lineItem,
@@ -81,8 +83,7 @@ export function buildTaxExport(
     }))
     .sort(
       (a, b) =>
-        (declarationOrder.get(a.lineItem) ?? declarationOrder.size) -
-          (declarationOrder.get(b.lineItem) ?? declarationOrder.size) ||
+        declarationOrder.get(a.lineItem)! - declarationOrder.get(b.lineItem)! ||
         a.lineItem.localeCompare(b.lineItem),
     );
 

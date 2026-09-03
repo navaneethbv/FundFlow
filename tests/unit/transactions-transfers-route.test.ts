@@ -155,3 +155,197 @@ describe("POST /api/transactions/transfers", () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe("GET /api/transactions/transfers — remaining branches", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireUser).mockResolvedValue({
+      user: { id: "user-123" },
+      supabase: { from } as never,
+    } as never);
+    vi.mocked(checkRateLimit).mockResolvedValue(true as never);
+  });
+
+  it("returns the auth response when signed out (GET and POST)", async () => {
+    vi.mocked(requireUser).mockResolvedValue(
+      NextResponse.json({ error: "Unauthorized" }, { status: 401 }) as never,
+    );
+    expect((await GET()).status).toBe(401);
+    const res = await POST(
+      new NextRequest("http://localhost/api/transactions/transfers", {
+        method: "POST",
+        body: JSON.stringify({ subject_id: SUBJECT, decision: "dismissed" }),
+      }),
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("429s past the read rate limit", async () => {
+    vi.mocked(checkRateLimit).mockResolvedValue(false as never);
+    const res = await GET();
+    expect(res.status).toBe(429);
+  });
+
+  it("handles null query payloads and missing ids on rows", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "transactions") return thenable(null);
+      return thenable(null);
+    });
+    const res = await GET();
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { pairs: unknown[] };
+    expect(body.pairs).toEqual([]);
+  });
+
+  it("hides rows already linked via linked_transfers", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "transactions") {
+        return thenable([
+          { id: OUT_ID, date: "2026-09-01", amount: 500, account_id: "a1", manual_account_id: null },
+          { id: IN_ID, date: "2026-09-02", amount: -500, account_id: "a2", manual_account_id: null },
+        ]);
+      }
+      if (table === "transaction_review_decisions") return thenable([]);
+      if (table === "linked_transfers") {
+        return thenable([{ out_transaction_id: OUT_ID, in_transaction_id: IN_ID }]);
+      }
+      throw new Error(`unexpected ${table}`);
+    });
+    const res = await GET();
+    const body = (await res.json()) as { pairs: unknown[] };
+    expect(body.pairs).toEqual([]);
+  });
+
+  it("resolves account ids from manual accounts and renders null dates", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "transactions") {
+        return thenable([
+          { id: OUT_ID, date: "2026-09-01", amount: 500, account_id: null, manual_account_id: "m1" },
+          { id: IN_ID, date: "2026-09-02", amount: -500, account_id: null, manual_account_id: "m2" },
+        ]);
+      }
+      return thenable([]);
+    });
+    const res = await GET();
+    const body = (await res.json()) as { pairs: Array<{ out_date: string | null }> };
+    expect(body.pairs).toHaveLength(1);
+  });
+
+  it("pairs rows with no account reference at all (two distinct blank accounts)", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "transactions") {
+        return thenable([
+          { id: OUT_ID, date: "2026-09-01", amount: 500, account_id: null, manual_account_id: null },
+          { id: IN_ID, date: "2026-09-02", amount: -500, account_id: null, manual_account_id: null },
+        ]);
+      }
+      return thenable([]);
+    });
+    const res = await GET();
+    const body = (await res.json()) as { pairs: unknown[] };
+    // Both sides resolve to "" — same (missing) account, so no pair.
+    expect(body.pairs).toEqual([]);
+  });
+});
+
+describe("POST /api/transactions/transfers — validation branches", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireUser).mockResolvedValue({
+      user: { id: "user-123" },
+      supabase: { from } as never,
+    } as never);
+    vi.mocked(checkRateLimit).mockResolvedValue(true as never);
+  });
+
+  function post(body: Record<string, unknown>) {
+    return POST(
+      new NextRequest("http://localhost/api/transactions/transfers", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    );
+  }
+
+  it("400s on a missing subject or invalid decision", async () => {
+    expect((await post({ subject_id: SUBJECT })).status).toBe(400);
+    expect((await post({ subject_id: SUBJECT, decision: "maybe" })).status).toBe(400);
+  });
+
+  it("propagates a decision upsert failure", async () => {
+    from.mockImplementation(() => ({
+      upsert: () => Promise.resolve({ data: null, error: { message: "boom" } }),
+    }));
+    const res = await post({ subject_id: SUBJECT, decision: "dismissed" });
+    expect(res.status).toBe(500);
+  });
+
+  it("400s when confirm lacks ids or amount, or repeats one transaction", async () => {
+    from.mockReturnValue({
+      upsert: () => Promise.resolve({ data: null, error: null }),
+    });
+    expect(
+      (await post({ subject_id: SUBJECT, decision: "confirmed", amount: 500 })).status,
+    ).toBe(400);
+    expect(
+      (await post({ subject_id: SUBJECT, decision: "confirmed", out_id: OUT_ID, in_id: OUT_ID, amount: 500 }))
+        .status,
+    ).toBe(400);
+  });
+
+  it("propagates ownership and link write failures", async () => {
+    // Ownership read failure.
+    from.mockImplementation((table: string) => {
+      if (table === "transaction_review_decisions") {
+        return { upsert: () => Promise.resolve({ data: null, error: null }) };
+      }
+      if (table === "transactions") {
+        return thenable(null, { message: "verify failed" });
+      }
+      throw new Error(`unexpected ${table}`);
+    });
+    const res = await post({
+      subject_id: SUBJECT,
+      decision: "confirmed",
+      out_id: OUT_ID,
+      in_id: IN_ID,
+      amount: 500,
+    });
+    expect(res.status).toBe(500);
+
+    // Link write failure after ownership passes.
+    from.mockImplementation((table: string) => {
+      if (table === "transaction_review_decisions") {
+        return { upsert: () => Promise.resolve({ data: null, error: null }) };
+      }
+      if (table === "transactions") return thenable([{ id: OUT_ID }, { id: IN_ID }]);
+      return { upsert: () => Promise.resolve({ data: null, error: { message: "link failed" } }) };
+    });
+    const res2 = await post({
+      subject_id: SUBJECT,
+      decision: "confirmed",
+      out_id: OUT_ID,
+      in_id: IN_ID,
+      amount: 500,
+    });
+    expect(res2.status).toBe(500);
+  });
+
+  it("400s when ownership finds fewer than both rows", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "transaction_review_decisions") {
+        return { upsert: () => Promise.resolve({ data: null, error: null }) };
+      }
+      if (table === "transactions") return thenable([{ id: OUT_ID }]);
+      throw new Error(`unexpected ${table}`);
+    });
+    const res = await post({
+      subject_id: SUBJECT,
+      decision: "confirmed",
+      out_id: OUT_ID,
+      in_id: IN_ID,
+      amount: 500,
+    });
+    expect(res.status).toBe(400);
+  });
+});

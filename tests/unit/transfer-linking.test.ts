@@ -131,3 +131,14 @@ describe("projectFinanceTransactions with linkedTransfers", () => {
     expect(flows).toEqual({ out1: "transfer", in1: "transfer", chg1: "transfer", ref1: "transfer" });
   });
 });
+
+describe("detectTransferPairs — deterministic tie-breaks", () => {
+  it("pairs the lowest-id inflow when two arrive the same day", () => {
+    const out = { id: "out1", date: "2026-09-01", merchant: "", amount: 500, accountId: "checking" };
+    const inA = { id: "inA", date: "2026-09-02", merchant: "", amount: -500, accountId: "cardA" };
+    const inB = { id: "inB", date: "2026-09-02", merchant: "", amount: -500, accountId: "cardB" };
+    const pairs = detectTransferPairs([inB, out, inA], 7);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0]!.inId).toBe("inA");
+  });
+});

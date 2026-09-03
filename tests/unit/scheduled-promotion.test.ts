@@ -97,3 +97,23 @@ describe("promoteDueScheduledTransactions", () => {
     expect(calls.statusUpdates).toHaveLength(0);
   });
 });
+
+describe("promoteDueScheduledTransactions — remaining branches", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("filters rows missing a usable user_id", async () => {
+    const { service, calls } = serviceStub({
+      due: [DUE, { ...DUE, id: "33333333-3333-3333-3333-333333333333", user_id: null }],
+    });
+    const result = await promoteDueScheduledTransactions(service as never, "2026-09-02");
+    expect(result.promoted).toBe(1);
+    expect(calls.upserts[0]).toHaveLength(1);
+  });
+
+  it("reports a status-update failure after writing the ledger rows", async () => {
+    const { service } = serviceStub({ statusError: { message: "status failed" } });
+    const result = await promoteDueScheduledTransactions(service as never, "2026-09-02");
+    expect(result.promoted).toBe(1);
+    expect(result.failed).toBe("status failed");
+  });
+});

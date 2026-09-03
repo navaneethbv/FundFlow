@@ -141,3 +141,42 @@ describe("toRecurringItem", () => {
     ).toBe("income");
   });
 });
+
+describe("normalizeScheduledTxn — remaining validation branches", () => {
+  it("rejects non-string kinds, dates, and non-finite amounts", () => {
+    expect(normalizeScheduledTxn({ ...VALID, kind: 1 }, "2026-09-02").ok).toBe(false);
+    expect(normalizeScheduledTxn({ ...VALID, date: 20260925 }, "2026-09-02").ok).toBe(false);
+    expect(normalizeScheduledTxn({ ...VALID, amount: Number.NaN }, "2026-09-02").ok).toBe(false);
+    expect(normalizeScheduledTxn({ ...VALID, amount: 1_000_001 }, "2026-09-02").ok).toBe(false);
+  });
+
+  it("rejects merchants longer than 120 characters", () => {
+    const result = normalizeScheduledTxn({ ...VALID, merchant: "x".repeat(121) }, "2026-09-02");
+    expect(result.ok).toBe(false);
+  });
+
+  it("clamps over-long categories and notes rather than rejecting", () => {
+    const result = normalizeScheduledTxn(
+      { ...VALID, category: "c".repeat(200), notes: "n".repeat(600) },
+      "2026-09-02",
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.category).toHaveLength(120);
+      expect(result.value.notes).toHaveLength(500);
+    }
+  });
+
+  it("treats empty category and notes as null", () => {
+    const result = normalizeScheduledTxn({ ...VALID, category: "   ", notes: "" }, "2026-09-02");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.category).toBeNull();
+      expect(result.value.notes).toBeNull();
+    }
+  });
+
+  it("rejects a null body", () => {
+    expect(normalizeScheduledTxn(null, "2026-09-02").ok).toBe(false);
+  });
+});
