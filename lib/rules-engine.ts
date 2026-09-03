@@ -32,15 +32,15 @@ export const MAX_REGEX_PATTERN_LENGTH = 120;
 
 /**
  * Detects quantified groups whose body is itself ambiguous — a nested
- * quantifier or an alternation — the two shapes that cause catastrophic
- * backtracking (ReDoS): (a+)+, (a*)*, (a|b+)+, (a|aa)+, (a+){2,}.
+ * quantifier or an alternation — the shapes that cause catastrophic
+ * backtracking (ReDoS): ((a+))+, (a*)*, (a|b+)+, (a|aa)+, (a+){2,}.
  * Quantified groups with a plain literal body, e.g. (foo)+, are still allowed.
  *
- * Implemented as a single-pass capture of each quantified group's body plus a
- * linear check on that body. Folding both conditions into one alternation
- * regex (e.g. /\([^()]*[*+{][^()]*\)[*+{]/) makes the overlapping [^()]*
- * scans backtrack super-linearly on adversarial patterns, which static
- * analysis rightly flags.
+ * Implemented with a balanced-parentheses stack scanner that tracks group
+ * depth while ignoring escaped characters and bracketed character classes.
+ * When a closing parenthesis is immediately followed by a quantifier, the
+ * recorded body is checked for inner quantifiers or alternations at any nesting
+ * depth, avoiding regex-on-regex backtracking risks.
  */
 const AMBIGUOUS_GROUP_BODY_PATTERN = /[*+{|]/;
 

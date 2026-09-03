@@ -98,6 +98,7 @@ describe("Settings control labels", () => {
     expectLinkedControl(html, "Pattern", "rule-pattern");
     expectLinkedControl(html, "Display name", "rule-display-name");
     expectLinkedControl(html, "Category", "rule-category");
+    expectLinkedControl(html, "Tags", "rule-tags");
   });
 
   it("labels the import file input, account select, and date-format select", () => {

@@ -22,6 +22,7 @@ interface DbMerchantRule {
   pattern: string;
   display_name: string | null;
   category: string | null;
+  tags?: string[] | null;
   enabled: boolean;
 }
 
@@ -44,13 +45,13 @@ async function loadUserRules(
 ): Promise<SmartRule[] | Response> {
   const { data: dbRules, error: rulesError } = await supabase
     .from("merchant_rules")
-    .select("id, match_type, pattern, display_name, category, enabled")
+    .select("id, match_type, pattern, display_name, category, tags, enabled")
     .eq("user_id", userId)
     .eq("enabled", true)
     .order("created_at", { ascending: true });
 
   if (rulesError) {
-    return errorResponse("Failed to load rules: " + rulesError.message, 500);
+    return errorResponse("rules.batch.loadRules", rulesError);
   }
 
   const typedDbRules = (dbRules || []) as unknown as DbMerchantRule[];
@@ -60,6 +61,7 @@ async function loadUserRules(
     pattern: r.pattern,
     displayName: r.display_name,
     category: r.category,
+    tags: Array.isArray(r.tags) ? r.tags : [],
     enabled: r.enabled,
   }));
 }
@@ -78,7 +80,7 @@ async function fetchCandidateTransactions(
     .limit(5000);
 
   if (txError) {
-    return errorResponse("Failed to load transactions: " + txError.message, 500);
+    return errorResponse("rules.batch.fetchTransactions", txError);
   }
 
   const typedTxns = (txns || []) as unknown as DbTransaction[];

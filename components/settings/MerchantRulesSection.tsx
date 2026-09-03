@@ -17,6 +17,7 @@ export interface MerchantRule {
   pattern: string;
   display_name: string | null;
   category: string | null;
+  tags?: string[];
   enabled: boolean;
 }
 
@@ -45,6 +46,7 @@ export default function MerchantRulesSection({
   const [pattern, setPattern] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [category, setCategory] = useState("");
+  const [tags, setTags] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -59,12 +61,13 @@ export default function MerchantRulesSection({
     preview: BatchPreviewItem[];
   } | null>(null);
 
-  async function addRule(event: React.SyntheticEvent) {
+  async function addRule(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setSuccess(null);
+
     if (!pattern.trim()) {
-      setError("Enter a merchant, keyword, account, or regex pattern.");
+      setError("Pattern is required.");
       return;
     }
 
@@ -78,6 +81,11 @@ export default function MerchantRulesSection({
       }
     }
 
+    const parsedTags = tags
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+
     const { data: userData } = await supabase.auth.getUser();
     const { data, error: insertError } = await supabase
       .from("merchant_rules")
@@ -87,8 +95,9 @@ export default function MerchantRulesSection({
         pattern: pattern.trim(),
         display_name: displayName.trim() || null,
         category: category.trim() || null,
+        tags: parsedTags,
       })
-      .select("id, match_type, pattern, display_name, category, enabled")
+      .select("id, match_type, pattern, display_name, category, tags, enabled")
       .single();
 
     if (insertError) {
@@ -100,22 +109,31 @@ export default function MerchantRulesSection({
     setPattern("");
     setDisplayName("");
     setCategory("");
+    setTags("");
     setSuccess("Rule added successfully.");
   }
 
   async function removeRule(id: string) {
-    const previous = rules;
-    setRules((current) => current.filter((rule) => rule.id !== id));
-    const { error: deleteError } = await supabase.from("merchant_rules").delete().eq("id", id);
+    setError(null);
+    setSuccess(null);
+
+    const { error: deleteError } = await supabase
+      .from("merchant_rules")
+      .delete()
+      .eq("id", id);
+
     if (deleteError) {
-      setRules(previous);
       setError(deleteError.message);
+      return;
     }
+
+    setRules((current) => current.filter((rule) => rule.id !== id));
+    setSuccess("Rule removed.");
   }
 
   async function runBatchSimulation() {
-    setError(null);
     setSimulating(true);
+    setError(null);
     try {
       const res = await fetch("/api/rules/batch", {
         method: "POST",
@@ -123,13 +141,11 @@ export default function MerchantRulesSection({
         body: JSON.stringify({ dryRun: true }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to simulate rules");
-      }
+      if (!res.ok) throw new Error(data.error || "Simulation failed");
       setBatchResult(data);
       setBatchModalOpen(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Error simulating rules");
+      setError(err instanceof Error ? err.message : "Error running simulation");
     } finally {
       setSimulating(false);
     }
@@ -137,6 +153,7 @@ export default function MerchantRulesSection({
 
   async function applyBatchLive() {
     setApplying(true);
+    setError(null);
     try {
       const res = await fetch("/api/rules/batch", {
         method: "POST",
@@ -144,9 +161,7 @@ export default function MerchantRulesSection({
         body: JSON.stringify({ dryRun: false }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to apply rules");
-      }
+      if (!res.ok) throw new Error(data.error || "Applying rules failed");
       setSuccess(`Rules applied successfully across ${data.appliedCount} transactions.`);
       setBatchModalOpen(false);
     } catch (err: unknown) {
@@ -168,6 +183,7 @@ export default function MerchantRulesSection({
               </span>
               <span className="block text-xs text-muted">
                 {rule.display_name || "Keep merchant"} - {rule.category || "Keep category"}
+                {rule.tags && rule.tags.length > 0 ? ` • Tags: ${rule.tags.join(", ")}` : ""}
               </span>
             </span>
             <Button variant="ghost" size="sm" onClick={() => removeRule(rule.id)}>
@@ -238,6 +254,18 @@ export default function MerchantRulesSection({
             placeholder="FOOD_AND_DRINK"
           />
         </Field>
+        <div className="sm:col-span-2">
+          <Field label="Tags (comma-separated)" htmlFor="rule-tags">
+            <Input
+              id="rule-tags"
+              value={tags}
+              onChange={(event) => {
+                setTags(event.target.value);
+              }}
+              placeholder="groceries, essential"
+            />
+          </Field>
+        </div>
         <Button type="submit" className="sm:col-span-2">
           Add rule
         </Button>
