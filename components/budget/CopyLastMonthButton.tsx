@@ -74,7 +74,9 @@ export default function CopyLastMonthButton({
       <div className="flex flex-col items-end gap-1">
         <button
           type="button"
-          onClick={() => void copy()}
+          onClick={() => {
+            void copy();
+          }}
           disabled={busy}
           className="inline-flex min-h-11 items-center gap-2 rounded-field border border-panel-border px-4 text-sm font-semibold text-foreground hover:bg-panel-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
