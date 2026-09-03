@@ -139,7 +139,7 @@ describe("executeRestore", () => {
     const stubControl = serviceStub();
     stubControl.setFailOn("transactions");
     const plan = buildRestorePlan(ARCHIVE);
-    const result = await executeRestore(stubControl.service, "user-123", plan, ARCHIVE);
+    const result = await executeRestore(stubControl.service as never, "user-123", plan, ARCHIVE);
     expect(result.failedTable).toBe("transactions");
   });
 });
