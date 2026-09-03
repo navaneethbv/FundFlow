@@ -61,7 +61,7 @@ export default function MerchantRulesSection({
     preview: BatchPreviewItem[];
   } | null>(null);
 
-  async function addRule(event: React.FormEvent<HTMLFormElement>) {
+  async function addRule(event: React.SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setSuccess(null);

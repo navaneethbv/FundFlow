@@ -44,6 +44,24 @@ export const MAX_REGEX_PATTERN_LENGTH = 120;
  */
 const AMBIGUOUS_GROUP_BODY_PATTERN = /[*+{|]/;
 
+function isLoopQuantifier(char: string | undefined): boolean {
+  // Only looping quantifiers (*, +, {) can cause super-linear
+  // backtracking. A trailing ? makes the group optional (0-or-1) with
+  // no loop, so patterns like ^Uber(\s*Eats)?$ stay allowed.
+  return char === "*" || char === "+" || char === "{";
+}
+
+function checkClosingGroup(pattern: string, openIdx: number, closeIdx: number): boolean {
+  if (!isLoopQuantifier(pattern[closeIdx + 1])) {
+    return false;
+  }
+  const body = pattern.slice(openIdx + 1, closeIdx);
+  const strippedBody = body
+    .replace(/\\./g, "")
+    .replace(/\[[^\]]*\]/g, "");
+  return AMBIGUOUS_GROUP_BODY_PATTERN.test(strippedBody);
+}
+
 function hasAmbiguousQuantifiedGroup(pattern: string): boolean {
   const stack: number[] = [];
   let inCharClass = false;
@@ -57,34 +75,18 @@ function hasAmbiguousQuantifiedGroup(pattern: string): boolean {
     }
 
     if (inCharClass) {
-      if (char === "]") inCharClass = false;
+      inCharClass = char !== "]";
       continue;
     }
 
     if (char === "[") {
       inCharClass = true;
-      continue;
-    }
-
-    if (char === "(") {
+    } else if (char === "(") {
       stack.push(i);
-    } else if (char === ")" && stack.length > 0) {
-      const openIdx = stack.pop()!;
-      const nextChar = pattern[i + 1];
-      // Only looping quantifiers (*, +, {) can cause super-linear
-      // backtracking. A trailing ? makes the group optional (0-or-1) with
-      // no loop, so patterns like ^Uber(\s*Eats)?$ stay allowed.
-      const isQuantified =
-        nextChar === "*" || nextChar === "+" || nextChar === "{";
-
-      if (isQuantified) {
-        const body = pattern.slice(openIdx + 1, i);
-        const strippedBody = body
-          .replace(/\\./g, "")
-          .replace(/\[.*?\]/g, "");
-        if (AMBIGUOUS_GROUP_BODY_PATTERN.test(strippedBody)) {
-          return true;
-        }
+    } else if (char === ")") {
+      const openIdx = stack.pop();
+      if (openIdx !== undefined && checkClosingGroup(pattern, openIdx, i)) {
+        return true;
       }
     }
   }
