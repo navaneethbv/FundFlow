@@ -40,7 +40,7 @@ function round2(value: number): number {
 }
 
 function partialMonthFor(asOfDate: string | undefined, year: string): string | null {
-  if (!asOfDate || !asOfDate.startsWith(`${year}-`)) return null;
+  if (!asOfDate?.startsWith(`${year}-`)) return null;
   const month = Number(asOfDate.slice(5, 7));
   const day = Number(asOfDate.slice(8, 10));
   const daysInMonth = new Date(Date.UTC(Number(year), month, 0)).getUTCDate();
