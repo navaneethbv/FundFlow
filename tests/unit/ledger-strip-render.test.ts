@@ -311,6 +311,35 @@ describe("LedgerStrip", () => {
       expect(html).not.toContain('aria-haspopup="true"');
       expect(html).toContain("Demo Checking •0001");
     });
+
+    it("keeps the picker on screen when the chosen account has no activity this month", () => {
+      const html = render({
+        ticks: [],
+        accountId: "acct-2",
+        accounts,
+        buildAccountHref,
+      });
+      // Hiding here would strand the reader: ?ledgerAccount= stays pinned to
+      // the empty account and the only control that could change it is gone.
+      expect(html).toContain('aria-haspopup="true"');
+      expect(html).toContain('href="/dashboard?view=overview&amp;ledgerAccount=acct-1"');
+      expect(html).toContain("No transactions");
+    });
+
+    it("still renders nothing for an empty month when there is no picker to keep", () => {
+      expect(render({ ticks: [], accounts: [accounts[0]!], buildAccountHref })).toBe("");
+      expect(render({ ticks: [] })).toBe("");
+    });
+
+    it("still offers both accounts when neither has a name or mask", () => {
+      const unnamed: LedgerStripAccount[] = [
+        { ...accounts[0]!, name: null, mask: null },
+        { ...accounts[1]!, name: null, mask: null },
+      ];
+      const html = render({ accountId: "acct-1", accounts: unnamed, buildAccountHref });
+      expect(html).toContain('href="/dashboard?view=overview"');
+      expect(html).toContain('href="/dashboard?view=overview&amp;ledgerAccount=acct-2"');
+    });
   });
 });
 

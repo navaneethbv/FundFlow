@@ -7,6 +7,11 @@ import { usePopoverMenu } from "@/lib/use-popover-menu";
 import PopoverBackdrop from "@/components/ui/PopoverBackdrop";
 
 export interface DropdownItem {
+  /**
+   * React key for the row. Worth passing whenever labels come from user data -
+   * two accounts can genuinely share a name, and the label alone would collide.
+   */
+  id?: string;
   label: string;
   href?: string;
   onClick?: () => void;
@@ -61,7 +66,7 @@ export default function DropdownButton({
           )}
         >
           {items.map((item) => (
-            <li key={item.label}>
+            <li key={item.id ?? item.label}>
               {item.href ? (
                 <Link
                   href={item.href}

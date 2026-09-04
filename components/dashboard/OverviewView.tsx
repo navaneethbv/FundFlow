@@ -55,7 +55,6 @@ export default async function OverviewView({
   const supabase = await createClient();
   const prefs = normalizeWidgetPrefs(prefsRaw);
   const monthLabel = formatMonth(month);
-  const ledgerAnchorAccountId = selectedLedgerAccountId ?? selectedAccountId;
   const loaded = await loadOverviewWidgetData(supabase, {
     month,
     today,
@@ -63,7 +62,10 @@ export default async function OverviewView({
     household,
     visible: visibleWidgets(prefs),
     accounts,
-    selectedAccountId: ledgerAnchorAccountId,
+    // Kept as two separate ids on purpose: the widget's pick must never stand
+    // in for the dashboard-wide filter, which also feeds the other widgets.
+    selectedAccountId,
+    ledgerAccountId: selectedLedgerAccountId,
   });
 
   const buildLedgerAccountHref = (accountId: string | undefined) =>

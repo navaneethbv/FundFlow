@@ -61,7 +61,7 @@ describe("OverviewView", () => {
     vi.clearAllMocks();
   });
 
-  it("passes selectedLedgerAccountId to loadOverviewWidgetData when provided", async () => {
+  it("passes selectedLedgerAccountId as the widget-scoped id, not as the global filter", async () => {
     const element = await OverviewView({
       ...baseProps,
       selectedLedgerAccountId: "acct-ledger-specific",
@@ -72,12 +72,13 @@ describe("OverviewView", () => {
     expect(loadOverviewWidgetData).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        selectedAccountId: "acct-ledger-specific",
+        selectedAccountId: "acct-global",
+        ledgerAccountId: "acct-ledger-specific",
       }),
     );
   });
 
-  it("falls back to selectedAccountId when selectedLedgerAccountId is omitted", async () => {
+  it("leaves ledgerAccountId unset when selectedLedgerAccountId is omitted", async () => {
     const element = await OverviewView({
       ...baseProps,
       selectedAccountId: "acct-global",
@@ -88,6 +89,7 @@ describe("OverviewView", () => {
       expect.anything(),
       expect.objectContaining({
         selectedAccountId: "acct-global",
+        ledgerAccountId: undefined,
       }),
     );
   });

@@ -161,22 +161,37 @@ export async function loadOverviewWidgetData(
     household: boolean;
     visible: readonly WidgetKey[];
     accounts: readonly LedgerStripAccount[];
+    /** The toolbar's dashboard-wide account filter. */
     selectedAccountId?: string;
+    /** The ledger widget's own account pick (`?ledgerAccount=`). */
+    ledgerAccountId?: string;
   }>,
 ): Promise<{
   cumulativeSpend: CumulativeSpendView;
   investments: DashboardInvestmentSummary | null;
   ledgerStrip: OverviewLedgerStrip;
 }> {
-  const anchorAccount = pickAnchorAccount(options.accounts, {
-    ownerUserId: options.userId,
-    household: options.household,
-    selectedAccountId: options.selectedAccountId,
-  });
   const anchorableAccounts = listAnchorableAccounts(options.accounts, {
     ownerUserId: options.userId,
     household: options.household,
   });
+  // The widget's own pick outranks the toolbar filter, but only while it still
+  // resolves to an eligible account. One that no longer does - a bank
+  // unlinked, the scope switched back to personal, a hand-edited URL - falls
+  // back to the default anchor rather than blanking the strip: `ledgerAccount`
+  // has no toolbar control to undo it, so hiding the widget would take the
+  // only way back with it. Resolution runs through `listAnchorableAccounts`,
+  // so the ownership rule fails closed here exactly as it does for the default.
+  const pickedLedgerAccount = options.ledgerAccountId
+    ? anchorableAccounts.find((account) => account.id === options.ledgerAccountId)
+    : undefined;
+  const anchorAccount =
+    pickedLedgerAccount ??
+    pickAnchorAccount(options.accounts, {
+      ownerUserId: options.userId,
+      household: options.household,
+      selectedAccountId: options.selectedAccountId,
+    });
   const [cumulativeSpend, investments, ledgerTicks] = await Promise.all([
     options.visible.includes("spendingCompare")
       ? loadCumulativeSpend(supabase, options)

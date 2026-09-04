@@ -75,6 +75,25 @@ test.describe("dashboard completion", () => {
       pending: false,
     });
 
+    // A third eligible account with no activity in the month under test: the
+    // picker has to survive choosing it, or ?ledgerAccount= strands the reader.
+    await admin
+      .from("accounts")
+      .insert({
+        user_id: account.id,
+        plaid_item_id: item!.id,
+        plaid_account_id: `vault-${account.stamp}`,
+        name: "Quality Vault",
+        mask: "4004",
+        type: "depository",
+        subtype: "savings",
+        current_balance: 8000,
+        available_balance: 8000,
+        iso_currency_code: "USD",
+      })
+      .select("id")
+      .single();
+
     await signIn(page, account);
     await page.goto("/dashboard?month=2026-08");
 
@@ -99,6 +118,19 @@ test.describe("dashboard completion", () => {
     // Dashboard global widgets remain unaffected (budgets still visible)
     await expect(page.getByText("Fixed", { exact: true })).toBeVisible();
     await expect(page.getByText("Flexible", { exact: true })).toBeVisible();
+
+    // An account with no activity this month keeps the panel and its picker on
+    // screen, so the reader can get back out of the empty selection.
+    await page.getByRole("button", { name: /Quality Savings •3003/ }).click();
+    await page.getByRole("link", { name: /Quality Vault •4004/ }).click();
+    const vaultTrigger = page.getByRole("button", { name: /Quality Vault •4004/ });
+    await expect(vaultTrigger).toBeVisible();
+    await expect(page.getByText(/No transactions in .* for Quality Vault/i)).toBeVisible();
+
+    // Back to an account that has activity, via that same picker.
+    await vaultTrigger.click();
+    await page.getByRole("link", { name: /Quality Savings •3003/ }).click();
+    await expect(page.getByRole("button", { name: /Quality Savings •3003/ })).toBeVisible();
 
     // Clicking the active account clears ledgerAccount back to default
     await page.getByRole("button", { name: /Quality Savings •3003/ }).click();
