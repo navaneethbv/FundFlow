@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isLiabilityAccount } from "@/lib/account-balance";
+import { normalizeExternalDisplayText } from "@/lib/external-display-text";
 import {
   deriveCursorHealth,
   safeErrorCode,
@@ -205,7 +206,7 @@ export function buildAccountReconciliation(input: Readonly<{
   const base = {
     accountId: input.account.id,
     plaidItemId: input.account.plaidItemId,
-    accountName: input.account.name,
+    accountName: normalizeExternalDisplayText(input.account.name) ?? "Unnamed account",
     mask: input.account.mask,
     providerBalance: input.account.currentBalance,
     anchorDate: input.anchor?.snapshotDate ?? null,

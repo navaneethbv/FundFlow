@@ -28,11 +28,12 @@ describe("MonthSummary", () => {
       createElement(MonthSummary, { totals: totals(), currency: "USD" }),
     );
     // Income and Expenses columns each render 3 data-money spans (total, paid,
-    // remaining); Credit cards is hidden (0/0), so 2 columns x 3 = 6.
+    // remaining); the empty credit-card state has no money values, so the
+    // total remains 6.
     expect(html.match(/data-money/g)?.length).toBe(6);
   });
 
-  it("shows a credit cards column only when there is credit card activity", () => {
+  it("keeps a credit cards column visible when bills are unavailable", () => {
     const withCards = renderToStaticMarkup(
       createElement(MonthSummary, {
         totals: totals({ creditCards: { paid: 100, remaining: 50 } }),
@@ -44,6 +45,7 @@ describe("MonthSummary", () => {
     const withoutCards = renderToStaticMarkup(
       createElement(MonthSummary, { totals: totals(), currency: "USD" }),
     );
-    expect(withoutCards).not.toContain("Credit cards");
+    expect(withoutCards).toContain("Credit cards");
+    expect(withoutCards).toContain("No credit-card bills tracked.");
   });
 });

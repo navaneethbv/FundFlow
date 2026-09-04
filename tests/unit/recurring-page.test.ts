@@ -170,6 +170,16 @@ describe("inferred stream projection", () => {
 });
 
 describe("expandStreamsForMonth", () => {
+  it("uses a visible fallback when the provider omits a merchant name", () => {
+    const month = expandStreamsForMonth(
+      [stream({ merchantName: "", description: "  " })],
+      [],
+      "2026-07",
+      "2026-07-10",
+    );
+    expect(month.occurrences[0]?.merchant).toBe("Unknown");
+  });
+
   it("marks an occurrence complete when a matched transaction lands near the due date", () => {
     const month = expandStreamsForMonth(
       [stream({ matchedTransactions: [{ id: "txn-1", date: "2026-07-16" }] })],

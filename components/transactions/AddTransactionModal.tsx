@@ -169,8 +169,8 @@ export default function AddTransactionModal({
             <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "Adding…" : "Add"}
+            <Button type="submit" loading={submitting}>
+              Add
             </Button>
           </div>
         </form>

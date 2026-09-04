@@ -39,10 +39,19 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function partialMonthFor(asOfDate: string | undefined, year: string): string | null {
+  if (!asOfDate?.startsWith(`${year}-`)) return null;
+  const month = Number(asOfDate.slice(5, 7));
+  const day = Number(asOfDate.slice(8, 10));
+  const daysInMonth = new Date(Date.UTC(Number(year), month, 0)).getUTCDate();
+  return day < daysInMonth ? asOfDate.slice(0, 7) : null;
+}
+
 function computeYearInMoneyRows(
   txns: AnnualTxn[],
   year: string,
   excludeProviderGroups: boolean,
+  excludedSuperlativeMonth: string | null = null,
 ): YearInMoney | null {
   const rows = txns.filter(
     (t) =>
@@ -83,6 +92,7 @@ function computeYearInMoneyRows(
   let quietestMonth: YearInMoney["quietestMonth"] = null;
   monthlySpendSeries.forEach((spend, index) => {
     if (spend <= 0) return;
+    if (monthKey(index) === excludedSuperlativeMonth) return;
     if (!biggestMonth || spend > biggestMonth.spend) {
       biggestMonth = { month: monthKey(index), spend };
     }
@@ -137,10 +147,12 @@ export function computeYearInMoney(
 export function computeYearInMoneyFromProjection(
   rows: CanonicalFinanceTransaction[],
   year: string,
+  asOfDate?: string,
 ): YearInMoney | null {
   const txns: AnnualTxn[] = [];
   for (const row of rows) {
     if (!row.date.startsWith(`${year}-`)) continue;
+    if (asOfDate && row.date > asOfDate) continue;
     if (row.flow === "transfer") continue;
     txns.push({
       date: row.date,
@@ -149,5 +161,5 @@ export function computeYearInMoneyFromProjection(
       category: row.groupKey,
     });
   }
-  return computeYearInMoneyRows(txns, year, false);
+  return computeYearInMoneyRows(txns, year, false, partialMonthFor(asOfDate, year));
 }

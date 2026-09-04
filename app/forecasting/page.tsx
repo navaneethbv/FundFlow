@@ -3,7 +3,6 @@ import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
 import AssumptionsPanel from "@/components/forecasting/AssumptionsPanel";
 import MilestonesPanel from "@/components/forecasting/MilestonesPanel";
-import FireSimulator from "@/components/forecasting/FireSimulator";
 import Panel from "@/components/ui/Panel";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { formatCurrency } from "@/lib/format";
@@ -103,12 +102,6 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
           <MilestonesPanel milestones={milestones} horizonMonths={assumptions.horizonMonths} />
         </Panel>
 
-        <FireSimulator
-          initialNetWorth={currentNetWorth}
-          initialMonthlyIncome={assumptions.monthlySavings > 0 ? assumptions.monthlySavings * 2.5 : 5000}
-          initialMonthlySpend={assumptions.monthlySavings > 0 ? assumptions.monthlySavings * 1.5 : 3500}
-          initialMonthlySavings={assumptions.monthlySavings}
-        />
       </div>
     </AppShell>
   );

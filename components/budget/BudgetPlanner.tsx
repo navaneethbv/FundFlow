@@ -402,8 +402,7 @@ export default function BudgetPlanner({
             <Panel eyebrow="Goals" title="Savings and payoff goals">
               {monthlyData.contributions.goals.length === 0 ? (
                 <p className="text-sm text-muted">
-                  Goal contribution events arrive in Phase 7. No contribution
-                  activity is inferred from balance changes.
+                  No goal contribution activity was recorded for this month.
                 </p>
               ) : (
                 <ul className="space-y-2 text-sm">

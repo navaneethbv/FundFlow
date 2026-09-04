@@ -68,7 +68,11 @@ export default async function InvestmentsPage() {
     (item) => item.outcome !== null || item.stale,
   );
   const syncStatusLabel = (item: (typeof itemStatus)[number]) => {
-    if (item.outcome) return `Last sync: ${item.outcome}`;
+    if (item.outcome === "synced") return "Holdings synced";
+    if (item.outcome === "no_investment_product") return "Holdings unavailable from provider";
+    if (item.outcome === "product_not_ready") return "Holdings product not ready";
+    if (item.outcome === "rate_limited") return "Provider rate limited the sync";
+    if (item.outcome) return "Holdings sync needs attention";
     if (item.stale) return "Stale - no recent holdings sync";
     return "Up to date";
   };

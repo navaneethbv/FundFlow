@@ -46,10 +46,10 @@ export default function DemoDataSection({ hasBanks }: Readonly<{ hasBanks: boole
         connected.
       </p>
       <div className="flex flex-wrap gap-2">
-        <Button onClick={() => run("POST")} disabled={busy || hasBanks} size="md">
+        <Button onClick={() => run("POST")} loading={busy} disabled={hasBanks} size="md">
           Load sample data
         </Button>
-        <Button onClick={() => run("DELETE")} disabled={busy} variant="ghost" size="md">
+        <Button onClick={() => run("DELETE")} loading={busy} variant="ghost" size="md">
           Clear sample data
         </Button>
       </div>

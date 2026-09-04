@@ -22,6 +22,26 @@ describe("buildAccountReconciliation", () => {
     ).toMatchObject({ ledgerBalance: null, difference: null, state: "missing_anchor" });
   });
 
+  it("normalizes corrupted provider account labels", () => {
+    expect(
+      buildAccountReconciliation({
+        account: {
+          id: "checking",
+          plaidItemId: "item-1",
+          name: "Bank\uFFFD  Checking",
+          mask: null,
+          type: "depository",
+          subtype: "checking",
+          currentBalance: null,
+          updatedAt: null,
+        },
+        anchor: null,
+        transactionTotalCents: 0,
+        historyComplete: true,
+      }),
+    ).toMatchObject({ accountName: "Bank Checking" });
+  });
+
   it("calculates an asset ledger from a real earlier balance snapshot", () => {
     expect(
       buildAccountReconciliation({

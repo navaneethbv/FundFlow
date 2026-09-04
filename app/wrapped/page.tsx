@@ -40,6 +40,7 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
   const currentYear = new Date().getFullYear();
   const year =
     rawYear && /^\d{4}$/.test(rawYear) ? rawYear : String(currentYear);
+  const asOfDate = new Date().toISOString().slice(0, 10);
 
   const supabase = await createClient();
   const {
@@ -55,7 +56,7 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
       endExclusive: `${Number(year) + 1}-01-01`,
     },
   });
-  const recap = computeYearInMoneyFromProjection(loaded.transactions, year);
+  const recap = computeYearInMoneyFromProjection(loaded.transactions, year, asOfDate);
   const truncated = loaded.truncated;
 
   const yearChips = Array.from({ length: 4 }, (_, i) => String(currentYear - i));

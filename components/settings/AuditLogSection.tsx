@@ -12,17 +12,23 @@ interface AuditRow {
 export default function AuditLogSection({ initialRows }: Readonly<{ initialRows: AuditRow[] }>) {
   const [rows, setRows] = useState(initialRows);
   const [status, setStatus] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   async function refresh() {
+    setRefreshing(true);
     setStatus(null);
-    const res = await fetch("/api/settings/audit");
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setStatus(json.error ?? "Could not load audit log.");
-      return;
+    try {
+      const res = await fetch("/api/settings/audit");
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setStatus(json.error ?? "Could not load audit log.");
+        return;
+      }
+      setRows(json.rows ?? []);
+      setStatus("Audit log refreshed.");
+    } finally {
+      setRefreshing(false);
     }
-    setRows(json.rows ?? []);
-    setStatus("Audit log refreshed.");
   }
 
   return (
@@ -39,7 +45,7 @@ export default function AuditLogSection({ initialRows }: Readonly<{ initialRows:
           ))}
         </ul>
       )}
-      <Button className="mt-4" variant="secondary" onClick={refresh}>
+      <Button className="mt-4" variant="secondary" onClick={refresh} loading={refreshing}>
         Refresh audit log
       </Button>
       {status && <p className="mt-3 text-sm text-muted">{status}</p>}

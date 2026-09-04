@@ -53,11 +53,9 @@ export default function MonthSummary({
   totals,
   currency,
 }: Readonly<{ totals: RecurringMonth["totals"]; currency: string }>) {
-  const showCreditCards = totals.creditCards.paid > 0 || totals.creditCards.remaining > 0;
-
   return (
     <Panel>
-      <div className={`grid gap-6 ${showCreditCards ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+      <div className="grid gap-6 sm:grid-cols-3">
         <SummaryColumn
           label="Income"
           paid={totals.income.paid}
@@ -75,14 +73,13 @@ export default function MonthSummary({
           remaining={totals.expenses.remaining}
           currency={currency}
         />
-        {showCreditCards && (
-          <SummaryColumn
-            label="Credit cards"
-            paid={totals.creditCards.paid}
-            remaining={totals.creditCards.remaining}
-            currency={currency}
-          />
-        )}
+        <SummaryColumn
+          label="Credit cards"
+          paid={totals.creditCards.paid}
+          remaining={totals.creditCards.remaining}
+          currency={currency}
+          emptyAction={<p className="mt-2 text-xs text-muted">No credit-card bills tracked.</p>}
+        />
       </div>
     </Panel>
   );

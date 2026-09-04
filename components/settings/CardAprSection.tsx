@@ -30,30 +30,36 @@ export default function CardAprSection({
   const [accounts, setAccounts] = useState(initialAccounts);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<string | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
 
   if (accounts.length === 0) return null;
 
   async function save(accountId: string) {
+    setSavingId(accountId);
     setStatus(null);
-    const raw = drafts[accountId]?.trim();
-    const apr = raw === "" || raw === undefined ? null : Number(raw);
-    if (apr !== null && (!Number.isFinite(apr) || apr < 0 || apr > 99.99)) {
-      setStatus("APR must be between 0 and 99.99.");
-      return;
+    try {
+      const raw = drafts[accountId]?.trim();
+      const apr = raw === "" || raw === undefined ? null : Number(raw);
+      if (apr !== null && (!Number.isFinite(apr) || apr < 0 || apr > 99.99)) {
+        setStatus("APR must be between 0 and 99.99.");
+        return;
+      }
+      const response = await fetch("/api/accounts/apr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId, apr }),
+      });
+      if (!response.ok) {
+        setStatus("Could not save the APR.");
+        return;
+      }
+      setAccounts((rows) =>
+        rows.map((row) => (row.id === accountId ? { ...row, apr } : row)),
+      );
+      setStatus("Saved.");
+    } finally {
+      setSavingId(null);
     }
-    const response = await fetch("/api/accounts/apr", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accountId, apr }),
-    });
-    if (!response.ok) {
-      setStatus("Could not save the APR.");
-      return;
-    }
-    setAccounts((rows) =>
-      rows.map((row) => (row.id === accountId ? { ...row, apr } : row)),
-    );
-    setStatus("Saved.");
   }
 
   return (
@@ -83,7 +89,7 @@ export default function CardAprSection({
               }
               className="w-28"
             />
-            <Button onClick={() => save(account.id)} variant="ghost" size="sm">
+            <Button onClick={() => save(account.id)} variant="ghost" size="sm" loading={savingId === account.id}>
               Save
             </Button>
           </li>

@@ -131,7 +131,7 @@ export default function AdvicePriorities({
                   onClick={() => {
                     pin(topic.id);
                   }}
-                  disabled={busy}
+                  loading={busy}
                 >
                   Prioritize
                 </Button>
