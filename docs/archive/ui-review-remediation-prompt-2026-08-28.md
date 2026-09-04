@@ -6,7 +6,7 @@ Reproduce every confirmed issue in an end-user browser flow, implement the fixes
 
 ## Objective
 
-Fix findings F1 through F12 in [`ui-review.md`](./ui-review.md) without regressing the PR-specific behavior that already passed.
+Fix findings F1 through F12 in [`ui-review-2026-08-28.md`](./ui-review-2026-08-28.md) without regressing the PR-specific behavior that already passed.
 The tested preview looked healthy with small fixtures but failed at realistic volume, so the finished work must be proven with a dataset that crosses both the Supabase 1,000-row response boundary and FundFlow's 25,000-row bounded-query ceiling.
 Financial correctness takes priority over rendering a polished but incomplete number.
 Accessibility, responsive layout, performance, and download behavior are release requirements, not optional polish.
@@ -19,7 +19,7 @@ Accessibility, responsive layout, performance, and download behavior are release
 - Preview alias used by the review: the deployment for the tested branch
 - Exact head tested by the review: `4d12f6bb3092837ac1e9b1aad8a4b8ba9f07f112`
 - Exact Vercel deployment tested by the review: `dpl_GszAgHS17ZJAfmZcSa7kU6JY4HYb`
-- Main review report: [`ui-review.md`](./ui-review.md)
+- Main review report: [`ui-review-2026-08-28.md`](./ui-review-2026-08-28.md)
 - Large-run machine evidence: [`results.json`](./qa-shots/ui-review-large-2026-08-28T20-20-16-621Z/results.json)
 - Focused PDF reproduction: [`export-repro.json`](./qa-shots/ui-review-large-2026-08-28T20-20-16-621Z/export-repro.json)
 - Large-run desktop contact sheet: [`contact-desktop-light.png`](./qa-shots/ui-review-large-2026-08-28T20-20-16-621Z/contact-desktop-light.png)
@@ -32,7 +32,7 @@ If those identities do not match, stop and resolve the target before implementin
 
 ## Non-negotiable repository rules
 
-Read the repository's `AGENTS.md`, `CLAUDE.md`, [`docs/HANDOFF.md`](./docs/HANDOFF.md), and [`ui-review.md`](./ui-review.md) before editing.
+Read the repository's `AGENTS.md`, `CLAUDE.md`, [`docs/HANDOFF.md`](../HANDOFF.md), and [`ui-review-2026-08-28.md`](./ui-review-2026-08-28.md) before editing.
 Read the Next.js guides shipped in the installed package before changing Next.js code because this repository uses a version with behavior that may differ from prior Next.js knowledge.
 At minimum, read these installed guides:
 
@@ -815,7 +815,7 @@ Produce a final remediation report, preferably `ui-review-remediation.md`, conta
 11. Any dependency update made or skipped after `npm-check-updates`.
 12. Any residual uncertainty, explicitly labeled and never presented as a pass.
 
-Keep [`ui-review.md`](./ui-review.md) as the immutable record of the original failing run unless the operator explicitly asks you to revise it.
+Keep [`ui-review-2026-08-28.md`](./ui-review-2026-08-28.md) as the immutable record of the original failing run unless the operator explicitly asks you to revise it.
 Do not push, merge, promote a deployment, or mutate production data unless the operator explicitly authorizes that action.
 If commit creation is authorized, use focused commits and never add an agent co-author.
 

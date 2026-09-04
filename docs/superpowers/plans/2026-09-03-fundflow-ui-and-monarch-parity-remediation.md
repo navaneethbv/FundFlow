@@ -8,6 +8,11 @@ It is written so another LLM can reproduce the evidence, implement each fix, and
 The companion findings document is `docs/FundFlow-UI-and-Monarch-Parity-Findings-2026-09-03.md`.
 Read it before modifying code.
 
+As of 2026-09-04, the initial interaction-confidence and low-risk trust-fix
+slice is merged in PR #151.
+The remaining phases below are still an implementation handoff and are not
+evidence that those follow-up phases have shipped.
+
 ## Non-negotiable constraints
 
 - Treat production FundFlow and Monarch data as read-only unless the user separately authorizes a specific mutation.

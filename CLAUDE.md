@@ -169,6 +169,21 @@ it will not survive the next install.
 
 ## Agent skills
 
+### Documentation governance
+
+- `README.md` is the product and setup overview. `docs/ARCHITECTURE.md` is the
+  structural map and invariant reference. `docs/TODO.md` is current status and
+  deferred work. `docs/HANDOFF.md` is dated session history and deployment
+  context.
+- Treat `docs/archive/` and `docs/superpowers/archive/` as historical evidence,
+  not current instructions. Keep completed reviews and plans there so active
+  documents do not describe merged branches as pending.
+- Before claiming a database migration is deployed, verify it with
+  `supabase migration list --linked` and record any local/remote mismatch in
+  `docs/TODO.md` or `docs/HANDOFF.md`.
+- Keep one canonical owner for each fact. Link to the owner from other docs
+  instead of copying mutable status or implementation details.
+
 ### Issue tracker
 
 Issues are tracked as GitHub issues via the `gh` CLI. See `docs/agents/issue-tracker.md`.

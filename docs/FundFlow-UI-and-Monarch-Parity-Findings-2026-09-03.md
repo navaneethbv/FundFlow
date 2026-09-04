@@ -424,7 +424,11 @@ The remaining problems are concentrated in financial consistency and data proven
 Those problems are important because polished UI can make an incorrect planning assumption look authoritative.
 The implementation plan in `docs/superpowers/plans/2026-09-03-fundflow-ui-and-monarch-parity-remediation.md` treats those trust defects as the first delivery gate.
 
-## Implementation status on `codex/fundflow-ui-parity-remediation`
+## Implementation status after PR #151
+
+The first remediation slice from this audit was merged into `main` by PR #151
+on 2026-09-04.
+The source branch and commit below are retained only for traceability.
 
 The first remediation slice is implemented and covered by focused regression tests.
 

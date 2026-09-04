@@ -1,15 +1,17 @@
-# FundFlow — Missing Must-Have Features
+# FundFlow - Feature Gap Register
 
 Status of this document: a gap list, not a roadmap. Each feature below is
-something a mature personal finance app is expected to have that FundFlow does
-not yet ship, with the current state verified against the codebase (2026-08-20).
+something a mature personal finance app is expected to have, with its current
+FundFlow state verified against the codebase (2026-09-04).
 Features are ranked by how much of a hole they leave in a real deployment.
 Multi-currency is explicitly out of scope and deliberately not listed.
 
-**Update (2026-09-02): every implementation item below has shipped.** The
-status lines record where and how; the list is kept as the design record for
-each feature, and the two owner-action items and out-of-scope notes at the
-bottom are still live.
+**Update (2026-09-04): every implementation item below has shipped or has an
+explicit current status.** Migration import remains missing, and backup restore
+is implemented but disabled by default until its provider-synced data model is
+redesigned. The status lines record where and how; the list is kept as the
+design record for each feature, and the two owner-action items and out-of-scope
+notes at the bottom are still live.
 
 This list has been triaged to the items actually worth implementing as code.
 Two items that are fully coded already but gated behind an owner action (not a
@@ -230,17 +232,14 @@ point of envelope budgeting.
 
 ## 5. Backup restore path
 
-**Status: shipped 2026-09-02.** (Implementation notes: `lib/restore.ts`
-builds the plan and executes it; `POST /api/backup/restore` requires the
-monthly-cron-style archive to be bound to the uploading user, runs behind the
-same step-up + rate limit as account deletion, always audits the dry run, and
-executes all-or-nothing per table in foreign-key order. Backups now also
-carry the natural keys (`id`, `plaid_transaction_id`, account refs) the
-restore needs — takeout deliberately does not, preserving its no-identifiers
-contract — and `transactions` upserts on `plaid_transaction_id` so a restore
-followed by a sync converges instead of duplicating. `shared_expenses` and
-`households` are reported as skipped: a restore never deletes other people's
-rows.)
+**Status: implemented, disabled by default (2026-09-04).** `lib/restore.ts`
+builds the plan and the route enforces user binding, step-up authentication,
+rate limiting, dry-run auditing, and per-table ordering. The route remains
+behind `FEATURE_FLAG_DEFAULTS.backupRestore: false` because restoring provider-
+synced accounts can cascade-delete the ledger before the archive can satisfy
+the provider foreign keys. The replacement design is tracked in
+`docs/TODO.md`; do not describe restore as available until that design ships
+and is verified against a real database.
 
 `/api/cron/backup` builds an encrypted, gzipped takeout archive per user and
 emails it monthly (`lib/backup.ts`, `lib/user-data.ts`). `readBackupArchive`
@@ -298,7 +297,7 @@ into a ten-minute task.
 ### What is needed
 - Sniffers for Mint, Monarch, and YNAB export formats that normalize into the
   existing import-row contract (same as OFX/QFX already feed the preview
-  pipeline, per `docs/superpowers/specs/2026-08-09-deferred-features-design.md`).
+  pipeline, per `docs/superpowers/archive/specs/2026-08-09-deferred-features-design.md`).
 - Account mapping: each source account maps to a FundFlow account (or creates a
   manual account), with the deterministic `import-<hash>` id convention so
   re-imports are idempotent and the Plaid-overlap guard still applies.
@@ -333,7 +332,7 @@ the export carries a "not tax advice" note in the UI.
 `app/api/export/csv?scope=tax` exports only transactions the user manually
 tagged `"tax"` (`app/api/export/csv/route.ts:26`), and `toTaxCsv` in
 `lib/export-formats.ts` is a tested but unwired dead export
-(`docs/Security-Review-2026-08-20.md` F3). There is no structured notion of
+(`docs/archive/Security-Review-2026-08-20.md` F3). There is no structured notion of
 tax category (W-2 income, mortgage interest, charitable donations, capital
 gains, deductible expenses) and no tax-oriented report.
 
@@ -435,7 +434,7 @@ don't belong on an implementation backlog.
 - **Multi-currency support.** Deliberately not pursued.
 - **In-app AI assistant as a first-class nav surface.** Product decision:
   the gated Ask-AI link keeps its slot, no sparkle everywhere
-  (`docs/superpowers/specs/2026-08-02-monarch-visual-parity-design.md` §8.1).
+  (`docs/superpowers/archive/specs/2026-08-02-monarch-visual-parity-design.md` §8.1).
 - **Household write access for members.** Shared rows are read-only for
   members everywhere by design; member writes are not a gap
   (`docs/TODO.md`).

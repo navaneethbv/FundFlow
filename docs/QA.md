@@ -3,6 +3,10 @@
 This runbook covers roadmap items that require live credentials, browser state,
 or screenshots. Keep it current when flows change.
 
+The dated PR completion sections below are historical evidence.
+For current release status and deployment caveats, use `docs/TODO.md` and
+`docs/HANDOFF.md` first.
+
 ## Diagnosing "the app looks broken" reports
 
 Added 2026-08-10, after a report of broken web login that was an ad blocker.
