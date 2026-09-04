@@ -29,7 +29,7 @@ Nothing leaves the app on that path.
 
 There is also an **opt-in in-app AI surface**, dark by default and described under [AI](#ai) below.
 
-The monthly encrypted backup is restorable in-app (Settings → Data → Restore a backup): upload the `.json.enc` archive, preview what it would change, confirm with your step-up code. FundFlow can also deliver a visual weekly report for the previous Monday through Sunday to the user's signup email. The Monday report includes categorized spending, week-over-week change, top merchants, budget pace, cash flow, and bank and credit card breakdowns, with an expanded PDF attached. It excludes balances, account numbers or masks, and transaction-level detail.
+The monthly encrypted backup can be generated in-app, but restore is currently disabled by default while the provider-synced account restore design is being replaced. FundFlow can also deliver a visual weekly report for the previous Monday through Sunday to the user's signup email. The Monday report includes categorized spending, week-over-week change, top merchants, budget pace, cash flow, and bank and credit card breakdowns, with an expanded PDF attached. It excludes balances, account numbers or masks, and transaction-level detail.
 
 ## Stack
 
@@ -203,7 +203,7 @@ The report delivery row is claimed before rendering and has a unique user and pe
 app/
   api/plaid/{link-token,exchange,sync,disconnect,reconnect,webhook}/  Plaid routes
   api/import/{csv,preview,commit}/                  CSV + Mint/Monarch/YNAB import
-  api/export/{csv,json,qif,report}/                 in-app data exports
+  api/export/{csv,json,qif,report,report-csv,tax,...}/ in-app data exports
   api/ai/{insights,ask,receipt}/                    opt-in AI (see "AI" above)
   api/{account,cron/*,admin/*,health,tokens}/       delete, cron, admin, ops
   api/{accounts,budget,goals,recurring,reports,transactions,...}/    page data
@@ -267,7 +267,7 @@ Routing it through the page-auth guard redirects it to `/login`, and the browser
 
 ## Docs
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - request path, every `lib/` module, subsystem invariants in full.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - request path, key `lib/` modules, and subsystem invariants.
 - [`docs/TODO.md`](docs/TODO.md) - deferred work and the current program status.
 - [`docs/HANDOFF.md`](docs/HANDOFF.md) - session-resume notes.
 - [`docs/QA.md`](docs/QA.md) - runbook for flows needing live credentials or screenshots.

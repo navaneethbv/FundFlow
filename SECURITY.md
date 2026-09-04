@@ -1,21 +1,19 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+FundFlow does not publish versioned releases yet.
+Security fixes are maintained on the default branch and in the latest deployed application revision.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+| Version | Supported |
+| --- | --- |
+| `main` and latest deployment | Yes |
+| Older commits and local branches | No |
 
-## Reporting a Vulnerability
+## Reporting a vulnerability
 
-Use this section to tell people how to report a vulnerability.
+Do not open a public issue for a suspected vulnerability.
+Use the repository's private GitHub security-advisory flow so the report can be triaged without exposing exploit details.
+Include the affected route or component, reproduction steps, impact, and any safe mitigation.
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+The maintainers will acknowledge receipt, investigate against the current `main` revision, and coordinate a fix or disclosure timeline through the private report.

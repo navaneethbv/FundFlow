@@ -1,16 +1,40 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-09-03. Read this first to resume.
+Last updated: 2026-09-04. Read this first to resume.
+
+## 2026-09-04: documentation refresh and deployment-state reconciliation
+
+PR #151 is merged into `main`.
+Completed reviews, plans, and prompts were moved under `docs/archive/` and
+`docs/superpowers/archive/`; those files are provenance, not current
+instructions.
+
+The linked Supabase migration ledger does not match the local names for
+`20260902220000_smart_rules_regex`, `20260903010000_merchant_rules_tags`, or
+`20260904000000_account_preferences_atomic`.
+It contains two different September 3 remote entries that are not present
+locally.
+Reconcile that history before describing those migrations as deployed.
 
 ## 2026-09-03: PR #149 review round and migration state
 
-PR #149 (`feat/frontend-motion-and-power-features`) went through a full review; the findings and their reasoning are in `docs/CODE_REVIEW-PR149-2026-09-02.md`.
+PR #149 (`feat/frontend-motion-and-power-features`) went through a full review;
+the findings and their reasoning are archived in
+`docs/archive/CODE_REVIEW-PR149-2026-09-02.md`.
 
-**All six of the PR's migrations are now applied to the linked project** `zrxbmmtqqhlwtrinocww`:
-`20260902100000_scheduled_transactions`, `20260902110000_budget_templates`, `20260902120000_linked_transfers`, `20260902130000_account_reconciliation_workflow`, `20260902220000_smart_rules_regex`, `20260903010000_merchant_rules_tags`.
+The scheduled-transactions, budget-template, linked-transfer, and account-
+reconciliation migrations are recorded as applied to the linked project
+`zrxbmmtqqhlwtrinocww`.
+The smart-rules, merchant-tags, and account-preferences migrations need their
+remote-history mapping reconciled before they can be called deployed.
 
-The first four were already applied and were verified rather than assumed: the `linked_transfers` one matters most because its second half widens `transaction_review_decisions_kind_check`, which is now `('duplicate', 'refund', 'transfer')`.
-The last two were applied on 2026-09-03 against an empty `merchant_rules` table, so neither could violate anything: `merchant_rules_match_type_check` is now `('merchant', 'keyword', 'account', 'regex')`, and `merchant_rules.tags` is `text[] not null default '{}'`.
+The first four were already applied and were verified rather than assumed: the
+`linked_transfers` one matters most because its second half widens
+`transaction_review_decisions_kind_check` to `('duplicate', 'refund',
+'transfer')`.
+The smart-rules and merchant-tags schema changes were recorded as applied in
+the earlier review, but their current remote migration names do not match the
+local files and must be reconciled before relying on that record.
 
 Backup restore ships **disabled**.
 `executeRestore` deleted `accounts` before reinserting them, and `accounts` cascades into `transactions` and most of the schema, while the reinsert could never satisfy the `plaid_item_id` / `plaid_account_id` NOT NULL columns because `plaid_items` holds the encrypted Plaid token and is deliberately outside the backup registry.
@@ -56,22 +80,25 @@ Enable it only after Plaid product access and quota impact are approved by addin
 The older APR enrichment path remains separately gated by `PLAID_LIABILITIES_ENABLED=1`.
 
 The original migrations through `20260829160000` are present in the linked migration ledger.
-Deploy these four follow-up migrations in timestamp order before enabling or verifying the affected Production paths:
+The four follow-up migrations are recorded as applied in the linked migration
+ledger.
+They should still be rechecked with the linked ownership, retirement,
+identity, and reconciliation assertions before any production claim is made:
 
 1. `20260829170000_credit_card_bill_insert_ownership.sql`
 2. `20260829171000_life_event_retirement_amount.sql`
 3. `20260829172000_goal_import_identity_unique.sql`
 4. `20260829173000_account_reconciliation_aggregate.sql`
 
-Retirement life-event writes can violate the currently deployed positive-amount constraint until `20260829171000` is applied.
-Until `20260829173000` is deployed, the Settings page remains usable but reconciliation rows deliberately show the missing-anchor state instead of computed ledger balances.
-The reconciliation feature must not be treated as Production-ready before that migration is deployed.
+The migration ledger is evidence of deployment, but it does not replace the
+linked behavioral checks or the authenticated production comparison.
 
 Local verification passed lint, typecheck, production build, 4,147 unit tests, the focused sync integration suite, and the recurring and repair browser acceptance paths.
 Unit coverage is 98.09% statements, 95.11% branches, 98.76% functions, and 99.08% lines.
 `npm audit --omit=dev` reports zero vulnerabilities.
-The linked migration ledger confirms exactly the four pending migrations above.
-The linked `supabase db push --dry-run` could not authenticate without `SUPABASE_DB_PASSWORD`, so it must be repeated by the deployer before applying the migrations.
+The linked migration ledger confirms those four migrations are present remotely.
+The exact Production deployment commit and authenticated comparison remain
+external verification steps.
 
 The tracked-tree privacy pass removes 29 personal screenshots and attachments, deletes the live-data remediation plan, and replaces exact live financial evidence with synthetic values and generic labels.
 The ignored local `qa-shots` folder was also moved out of the repository workspace because its generated reports and live-data screenshots contained personal identifiers.
@@ -80,12 +107,13 @@ The tracked tree contains no occurrence of the requested personal email address 
 Deleting `.vscode/settings.json` intentionally removes the repository-specific SonarLint connected-mode identifier; developers may configure connected mode locally without committing that file.
 Historical Git objects and author metadata are outside a normal PR deletion and require a separately authorized coordinated history rewrite if permanent historical erasure is required.
 
-## 2026-08-28: PR #134 UI review remediation (F1–F12)
+## 2026-08-28: PR #134 UI review remediation (F1-F12)
 
-Branch `feat/register-visual-rollout-v2`, work uncommitted in the working tree at `4d12f6b`.
-See `ui-review-remediation.md` for the full finding-by-finding table, QA evidence, and residual items.
+PR #134 is merged.
+The point-in-time review and remediation notes are archived under
+`docs/archive/`.
 
-### Follow-up review fixes (post-remediation, still uncommitted)
+### Follow-up review fixes (historical working-tree state)
 
 A second review of the uncommitted remediation caught a regression and a correctness bug in the F2 (Review PDF) work, plus a few smaller items.
 
@@ -145,7 +173,7 @@ never just a move.
 ## 2026-08-21: migration import from Mint, Monarch, and YNAB
 
 Branch `feat/production-readiness-2026-08`. Plan:
-`docs/superpowers/plans/2026-08-21-migration-import.md`.
+`docs/superpowers/archive/plans/2026-08-21-migration-import.md`.
 
 **What shipped.** Three pure sniffer+normalizer pairs feed the existing
 import pipeline: `lib/import-mint.ts`, `lib/import-monarch.ts`,
@@ -189,7 +217,7 @@ re-import.
 
 Phase 0 (mechanical), Phase 1 (fresh security/money review), Phase 2
 (dependabot sweep), and Phase 3 (owner-decision checklist). See
-`docs/Security-Review-2026-08-20.md` for the full Phase 1 findings.
+`docs/archive/Security-Review-2026-08-20.md` for the full Phase 1 findings.
 
 **nanoid CVE (GHSA-2v37-7h3g-55p8, alert #18).** `npm audit fix` bumped nanoid
 3.3.17 → 3.3.18 via the single deduped `postcss@8.5.25`, which is the common
@@ -239,9 +267,10 @@ commit. Nothing to merge.
 steps for the custom domain, E2E CI secrets (`gh secret set` commands),
 Plaid Liabilities, VAPID keys, and the migration deployment status.
 
-## In flight: PR #114, Sonar refactor plus its review fixes
+## Previous delivery: PR #114, Sonar refactor plus its review fixes
 
-`fix/form-control-accent-color` is an open PR that refactors the reported Sonar cognitive-complexity findings across 85 files.
+PR #114 (`fix/form-control-accent-color`) is merged and refactored the reported
+Sonar cognitive-complexity findings across 85 files.
 Every check on it was green, Sonar's quality gate included, before the review below ran.
 The last Sonar finding (S4323 on `app/api/goals/accounts/route.ts`) is fixed by extracting `NumericColumn`, `GoalBaselineRow`, and `AccountBaselineRow`.
 

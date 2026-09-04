@@ -2,6 +2,20 @@
 
 Nice-to-have features and enhancements, deferred out of the initial build.
 
+## Current status (2026-09-04)
+
+PRs #99, #110, #114, #124, #130, #134, #137, #145, #149, and #151 are merged.
+The linked migration ledger was checked during this documentation refresh.
+The four PR #137 migrations and the three PR #130 migrations are recorded as
+applied remotely.
+The PR #149-era local migrations `20260902220000_smart_rules_regex.sql`,
+`20260903010000_merchant_rules_tags.sql`, and
+`20260904000000_account_preferences_atomic.sql` are not recorded under those
+names remotely, while the remote ledger contains two different September 3
+entries that are not present locally.
+Treat that migration-history mismatch as an operational follow-up and do not
+claim those three migrations are deployed until the mapping is reconciled.
+
 ## Added 2026-09-03: scheduled transactions cron per-user timezone promotion
 
 `promoteDueScheduledTransactions(service, dateKeyInTimezone(new Date(), null))` in `app/api/cron/sync/route.ts` promotes due scheduled transactions on the default `America/Los_Angeles` date for all users rather than resolving each user's configured `profiles.timezone`.
@@ -29,15 +43,12 @@ Watch it: if it recurs, the fix is contention-aware timeouts for the live integr
 ## Added 2026-08-29: PR #137 deployment actions
 
 PR #137's Phase 0 through Phase 6 code and focused acceptance tests are complete.
-Production rollout still requires the following owner-authorized actions:
-
-1. Deploy `20260829170000_credit_card_bill_insert_ownership.sql`.
-2. Deploy `20260829171000_life_event_retirement_amount.sql` before creating zero-amount retirement life events.
-3. Deploy `20260829172000_goal_import_identity_unique.sql`.
-4. Deploy `20260829173000_account_reconciliation_aggregate.sql` before opening the new Settings reconciliation surface.
-5. Run `supabase db push --dry-run --linked` with `SUPABASE_DB_PASSWORD` available before applying the migrations.
-6. Re-run the linked credit-card ownership, retirement life-event, goal identity, and reconciliation RPC checks after deployment.
-7. Confirm the exact Production deployment commit and repeat the authenticated comparison read-only.
+The four follow-up migrations are recorded as applied in the linked migration
+ledger.
+The remaining owner-authorized work is to rerun the linked credit-card
+ownership, retirement life-event, goal identity, and reconciliation checks, then
+confirm the exact Production deployment commit and repeat the authenticated
+comparison read-only.
 
 Plaid Liabilities bill sync remains off by default because it adds a billed provider request per user and run.
 After Plaid product and quota approval, add `liabilitiesSync` to `FUNDFLOW_FEATURE_FLAGS` and monitor provider usage.
@@ -59,7 +70,7 @@ Updated `lib/ai-provider.ts`, `app/api/ai/ask/route.ts`, and `app/api/ai/receipt
 ## Added 2026-08-21: migration import (Mint, Monarch, YNAB) — shipped
 
 Done on 2026-08-21 (`feat/production-readiness-2026-08`, plan
-`docs/superpowers/plans/2026-08-21-migration-import.md`): Mint, Monarch, and
+`docs/superpowers/archive/plans/2026-08-21-migration-import.md`): Mint, Monarch, and
 YNAB CSVs normalize into the existing `ImportedRow` pipeline via
 `lib/import-mint.ts` / `lib/import-monarch.ts` / `lib/import-ynab.ts` and the
 new `lib/import.ts::detectSourceFormat` dispatcher. `import_review_rows`
@@ -177,49 +188,38 @@ Fourteen phases bringing FundFlow to parity with the reference planner screensho
   Cash-flow Sankey (pure `lib/sankey.ts` layout + server-rendered
   `SankeyChart` with a full-detail table twin), a date-range/tab/scope report
   explorer, versioned saved reports, and a filtered privacy-safe CSV export are
-  complete. **Released behind `reportsPage`, which defaults to OFF**: the page
-  reads the new `saved_reports` table, so flip the default (or set
-  `FUNDFLOW_FEATURE_FLAGS=reportsPage`) only after applying
-  `20260730190000_saved_reports.sql` to the live project. Retire the
-  "Year in Money" sidebar entry in that same change — the Reports page already
-  links to `/wrapped`, and dropping it sooner would strand that page.
+  complete. **Released behind `reportsPage`, which now defaults to ON**: the
+  `saved_reports` migration is recorded as applied. Use
+  `FUNDFLOW_FEATURE_FLAGS=-reportsPage` only as an emergency rollback.
 - **Phase 7: Goals.** Done (2026-07-30), branch `feat/goals-v2`.
   Funded goals with three progress sources (manual, account allocations, a dated
   event ledger), a transactional allocation function that holds a row lock,
   pay-down goals with a captured baseline, the four-step wizard on eight
   original SVG illustrations, goal linking in the ledger editor, and planned vs
   actual contributions feeding the Budget page. **Released behind `goalsV2`,
-  which defaults to OFF** — unlike `reportsPage` this gates *already-released*
-  pages: `/goals` and `/budget` both start reading `goal_accounts` and
-  `goal_progress_events` when it turns on, so apply
-  `20260730200000_goals_v2.sql` first.
+  which now defaults to ON**. The required migration is recorded as applied.
 - **Phase 8: Dashboard widgets.** Done (2026-07-30), branch `feat/dashboard-widgets`.
   A customizable seven-widget grid over the existing data, a cumulative
   spending-vs-last-month chart, per-widget empty/stale/error states, and
   reconciliation tests tying the dashboard, Budget, Cash Flow, and Reports to
-  one canonical monthly total. **Released behind `dashboardWidgets`, default
-  OFF — but no migration is involved**, so this one can be flipped as soon as
-  the grid has been reviewed. Monitor, Plan, and Wealth are untouched.
+  one canonical monthly total. **Released behind `dashboardWidgets`, which now
+  defaults to ON**. No migration is involved. Monitor, Plan, and Wealth remain
+  reachable from the same toolbar.
 - **Phase 9A: Investments.** Done (2026-07-30), branch `feat/investments`.
   Plaid-synced and manual investment holdings, grouped allocation by asset
   class, price-based top movers, a day-over-day change indicator, and full
   mark-and-sweep sync isolation from transaction sync. **Released behind
-  `investmentsPage`, default OFF** — the page, the daily cron, and the
-  HOLDINGS webhook all read/write `securities`/`holdings`/`holding_snapshots`,
-  so apply `20260730210000_investments.sql` first. That migration also adds
-  `sync_jobs.job_type` so an investments-only sync success can never be
-  misread as "the bank sync is up to date" by the four surfaces that read
-  `sync_jobs` for a stale-data banner.
+  `investmentsPage`, which now defaults to ON**. The required migration is
+  recorded as applied.
 - **Phase 9B: Investment performance.** Done (2026-07-30), branch
   `feat/investment-performance`.
   Investment-transaction sync (idempotent, cancellations deactivate rather
   than delete), a time-weighted-return calculator that removes deposits and
   withdrawals so a balance chart can't be mistaken for market performance,
   and a CSV export of the current allocation. The benchmark adapter exists as
-  an interface and cache only — deliberately not wired into any page until a
+  an interface and cache only - deliberately not wired into any page until a
   licensed market-data source is provisioned. **Released behind the same
-  `investmentsPage` flag** — apply `20260730220000_investment_transactions.sql`
-  in addition to Phase 9A's migration.
+  `investmentsPage` flag**. The required migration is recorded as applied.
 - **Phase 10: Forecasting.** Done (2026-07-30), branch `feat/forecasting`.
   Three deterministic net-worth scenarios (conservative/base/optimistic,
   spread by +/-2 points around the entered return so ordering holds even for
@@ -227,7 +227,7 @@ Fourteen phases bringing FundFlow to parity with the reference planner screensho
   assumption a plain GET query param so the page needs no client JS.
   Extracted the dashboard's What-if sandbox math into `lib/forecasting.ts`
   with the panel's behavior unchanged. **Released behind `forecastingPage`,
-  default OFF** — a review gate only, no migration required.
+  which now defaults to ON**. No migration is required.
 - **Phase 11: Advice.** Done (2026-07-30), branch `feat/advice`.
   A versioned library of twelve original education items (two per category),
   sourced only from neutral federal-agency domains, with a content-review
@@ -235,7 +235,8 @@ Fourteen phases bringing FundFlow to parity with the reference planner screensho
   tripped the prohibited-guarantee-language check. Priority ordering,
   eligibility, and a profile questionnaire that's never used for advice
   eligibility without a separate, visible explanation. **Released behind
-  `advicePage`, default OFF** — apply `20260730230000_advice.sql` first.
+  `advicePage`, which now defaults to ON**. The required migration is recorded
+  as applied.
 - **Phase 12: Transactions parity.** Done (2026-07-30), branch
   `feat/transactions-parity`.
   Manual ledger entries for anything Plaid doesn't cover, day-group headers
@@ -244,10 +245,8 @@ Fourteen phases bringing FundFlow to parity with the reference planner screensho
   downstream breakage because Phase 0 designed the canonical projection for
   this from the start. Found and fixed a real latent bug along the way: the
   daily cron's integrity check would have flagged every manual transaction as
-  "orphaned." **Released behind `transactionsParity`, default OFF** — unlike
-  the other Phase 9-11 flags this gates an *already-live* page: with it off,
-  `/transactions` runs the exact pre-Phase-12 query. Apply
-  `20260730240000_manual_transactions_receipts.sql` first.
+  "orphaned." **Released behind `transactionsParity`, which now defaults to
+  ON**. The required migration is recorded as applied.
   The migration also added a `receipts` table and the app's first Supabase
   Storage bucket.
   The persistent receipt workflow was completed in PR #99 on 2026-08-09.
@@ -260,15 +259,13 @@ Fourteen phases bringing FundFlow to parity with the reference planner screensho
   through a second private Storage bucket), Display preferences, and a real
   tag registry (`rename_user_tag` merges/renames in one SQL statement so a
   rename can't race a concurrent annotation edit). **Released behind
-  `settingsIa`, default OFF** — gates only the three sections that read new
-  schema (Profile/Display/Tags redirect to Institutions when off); every
-  other section stays reachable unmigrated. Apply
-  `20260730250000_profile_and_tags.sql` first.
+  `settingsIa`, which now defaults to ON**. The required migration is recorded
+  as applied.
 
-All fourteen phases of the program are now implemented. Remaining before any
-of Phases 9A-13 ship to real users: apply their five migrations (in the order
-listed above) to the live Supabase project, then flip each flag
-independently, in any order, after review.
+All fourteen phases of the program are implemented and their feature flags
+default to the released behavior.
+The historical phase entries above remain as provenance; current operational
+exceptions belong in the dated sections at the top of this file.
 
 Excluded from the program by decision, revisit only if asked: credit score (no consented bureau integration), billing/free-trial/referrals (not a commercial product), Retail Sync (no authorized data source), and investment benchmark overlays (needs a licensed market-data feed, deferred inside Phase 9B).
 

@@ -1,7 +1,9 @@
 # FundFlow architecture
 
-What this repository contains: the request path, the modules in `lib/`, and the
-subsystem invariants in full.
+What this repository contains: the request path, a curated catalogue of key
+modules in `lib/`, and the subsystem invariants in full.
+The catalogue is intentionally selective; use the source tree and graphify for
+the complete module inventory.
 
 `CLAUDE.md` holds the short version, which is the set of rules to follow while
 working. This file is the reference behind those rules.
@@ -85,8 +87,18 @@ flowchart TB
   (unknown sections reported, missing ones listed), `executeRestore` writes
   user-scope tables all-or-nothing per table in foreign-key order. Backups
   carry natural keys (ids, `plaid_transaction_id`) via the spec's
-  `restoreKeys` — takeout does not, keeping its no-identifiers contract — so
+  `restoreKeys` - takeout does not, keeping its no-identifiers contract - so
   `transactions` upserts onto itself and converges with the next sync.
+  The route is currently disabled by default while provider-synced account
+  restoration is redesigned; see `docs/TODO.md` for the active constraint.
+- `account-preferences.ts` - validates and persists account visibility and
+  ordering through one authenticated JSONB merge RPC so sibling dashboard
+  preferences are preserved.
+- `annual.ts` - computes Year in Money from the bounded, date-ordered finance
+  query and excludes future rows from current partial years.
+- `use-dialog-focus.ts`, `use-popover-menu.ts`, and
+  `components/ui/LinkPendingIndicator.tsx` - shared interaction primitives for
+  focus management, popover semantics, and route-pending feedback.
 - `scheduled-transactions.ts` / `scheduled-promotion.ts` — one-off
   future-dated entries: pure validation/projection helpers plus the cron-side
   idempotent promotion into the ledger (deterministic `scheduled-<id>`,

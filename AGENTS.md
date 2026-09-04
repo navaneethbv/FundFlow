@@ -8,6 +8,19 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
+## Repository instructions
+
+`CLAUDE.md` is the detailed repository constitution for all coding agents.
+Read it before changing code; it contains the data-access, security, money,
+testing, and production-safety rules that must stay aligned with this file.
+
+Current navigation and status sources are `docs/ARCHITECTURE.md`,
+`docs/TODO.md`, and `docs/HANDOFF.md`.
+Treat `docs/archive/` and `docs/superpowers/archive/` as historical evidence,
+not executable instructions.
+Verify deployment and migration claims against the current repository,
+`supabase migration list --linked`, and the exact remote commit before acting.
+
 ## Dependency freshness
 
 Run `npx npm-check-updates` before starting a new task to check for newer dependency versions.
