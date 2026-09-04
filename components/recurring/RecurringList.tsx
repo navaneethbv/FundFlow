@@ -7,7 +7,6 @@ import { merchantLogoDataUri } from "@/lib/merchant-logos";
 import CategoryChip from "@/components/ui/CategoryChip";
 import { CheckCircle2 } from "@/components/ui/icons";
 import Tabs from "@/components/ui/Tabs";
-import { ButtonSpinner } from "@/components/ui/Button";
 import { daysUntil, formatDueAnnotation } from "@/lib/format-date";
 import { formatCurrency, formatDay, titleCase } from "@/lib/format";
 import type { RecurringOccurrence } from "@/lib/recurring-page";
@@ -184,7 +183,6 @@ function OccurrenceRowMenu({
                     }}
                     className="min-h-11 flex-1 rounded-field bg-accent px-3 text-sm font-semibold text-accent-foreground"
                   >
-                    {pending && <ButtonSpinner />}
                     Confirm
                   </button>
                   <button
@@ -196,7 +194,6 @@ function OccurrenceRowMenu({
                     }}
                     className="min-h-11 flex-1 rounded-field border border-panel-border px-3 text-sm font-semibold"
                   >
-                    {pending && <ButtonSpinner />}
                     Not recurring
                   </button>
                 </div>
@@ -211,7 +208,6 @@ function OccurrenceRowMenu({
                   }}
                   className="min-h-11 w-full rounded-field border border-panel-border px-3 text-sm font-semibold"
                 >
-                  {pending && <ButtonSpinner />}
                   Restore
                 </button>
               )}
@@ -237,7 +233,6 @@ function OccurrenceRowMenu({
                 }}
                 className="min-h-11 w-full rounded-field border border-panel-border px-3 text-sm font-semibold"
               >
-                {pending && <ButtonSpinner />}
                 Delete
               </button>
             </>
@@ -509,7 +504,6 @@ function ManageRow({
                 onClick={() => onReview(stream.id)}
                 className="min-h-11 rounded-field bg-accent px-3 text-sm font-semibold text-accent-foreground"
               >
-                {pending && <ButtonSpinner />}
                 Confirm
               </button>
               <button
@@ -518,7 +512,6 @@ function ManageRow({
                 onClick={() => onDismiss(stream.id)}
                 className="min-h-11 rounded-field border border-panel-border px-3 text-sm font-semibold"
               >
-                {pending && <ButtonSpinner />}
                 Not recurring
               </button>
             </>
@@ -530,7 +523,6 @@ function ManageRow({
               onClick={() => onRestore(stream.id)}
               className="min-h-11 rounded-field border border-panel-border px-3 text-sm font-semibold"
             >
-              {pending && <ButtonSpinner />}
               Restore
             </button>
           )}
@@ -587,7 +579,6 @@ function ManualItemRow({
           onClick={() => onDelete(item.id)}
           className="min-h-11 rounded-field border border-panel-border px-3 text-sm font-semibold"
         >
-          {pending && <ButtonSpinner />}
           Delete
         </button>
       </span>
@@ -695,7 +686,6 @@ function AddManualItemForm({
         disabled={pending}
         className="min-h-11 rounded-field bg-accent px-3 text-sm font-semibold text-accent-foreground"
       >
-        {pending && <ButtonSpinner />}
         Add
       </button>
       {formError && <p className="w-full text-xs font-semibold text-danger">{formError}</p>}
