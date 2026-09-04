@@ -14,6 +14,8 @@ const run = Boolean(
 const suite = run ? describe : describe.skip;
 
 suite("AccountPreferences JSONB persistence", () => {
+  if (!run) return;
+
   const admin = createClient(url!, secret!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
