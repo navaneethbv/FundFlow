@@ -158,6 +158,18 @@ describe("computeYearInMoney", () => {
 });
 
 describe("computeYearInMoneyFromProjection", () => {
+  it("does not include future transactions in the current partial year", () => {
+    const result = computeYearInMoneyFromProjection(
+      [
+        projected({ date: "2026-09-01", signedAmount: 20 }),
+        projected({ id: "future", sourceTransactionId: "future", date: "2026-12-31", signedAmount: 900 }),
+      ],
+      "2026",
+      "2026-09-03",
+    );
+    expect(result?.totalSpend).toBe(20);
+  });
+
   it("aggregates the full below-ceiling set without a 1,000-row cap", () => {
     const rows: CanonicalFinanceTransaction[] = [];
     for (let index = 0; index < 16_497; index += 1) {
