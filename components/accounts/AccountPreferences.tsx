@@ -25,6 +25,7 @@ export default function AccountPreferences({
     order: initialOrder,
   });
   const [status, setStatus] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   function move(id: string, delta: -1 | 1) {
     setPrefs((current) => {
@@ -47,37 +48,42 @@ export default function AccountPreferences({
   }
 
   async function save() {
+    setSaving(true);
     setStatus(null);
-    const { data: authData } = await supabase.auth.getUser();
-    if (!authData.user) {
-      setStatus("Sign in again to save account preferences.");
-      return;
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) {
+        setStatus("Sign in again to save account preferences.");
+        return;
+      }
+      const { data: profile, error: readError } = await supabase
+        .from("profiles")
+        .select("dashboard_prefs")
+        .eq("id", authData.user.id)
+        .maybeSingle();
+      if (readError) {
+        setStatus(readError.message);
+        return;
+      }
+      const dashboardPrefs =
+        profile?.dashboard_prefs &&
+        typeof profile.dashboard_prefs === "object" &&
+        !Array.isArray(profile.dashboard_prefs)
+          ? profile.dashboard_prefs
+          : {};
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          dashboard_prefs: {
+            ...dashboardPrefs,
+            accountsPage: prefs,
+          },
+        })
+        .eq("id", authData.user.id);
+      setStatus(error?.message ?? "Account preferences saved.");
+    } finally {
+      setSaving(false);
     }
-    const { data: profile, error: readError } = await supabase
-      .from("profiles")
-      .select("dashboard_prefs")
-      .eq("id", authData.user.id)
-      .maybeSingle();
-    if (readError) {
-      setStatus(readError.message);
-      return;
-    }
-    const dashboardPrefs =
-      profile?.dashboard_prefs &&
-      typeof profile.dashboard_prefs === "object" &&
-      !Array.isArray(profile.dashboard_prefs)
-        ? profile.dashboard_prefs
-        : {};
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        dashboard_prefs: {
-          ...dashboardPrefs,
-          accountsPage: prefs,
-        },
-      })
-      .eq("id", authData.user.id);
-    setStatus(error?.message ?? "Account preferences saved.");
   }
 
   return (
@@ -122,7 +128,7 @@ export default function AccountPreferences({
             </div>
           );
         })}
-        <Button onClick={save}>Save preferences</Button>
+        <Button onClick={save} loading={saving}>Save preferences</Button>
         {status && <p className="text-sm text-muted">{status}</p>}
       </div>
     </details>

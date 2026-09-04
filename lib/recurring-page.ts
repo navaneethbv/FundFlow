@@ -268,7 +268,7 @@ function appendPlaidStream(
     occurrences.push({
       source: stream.source,
       sourceId: stream.id,
-      merchant: stream.merchantName ?? stream.description ?? "Unknown",
+      merchant: stream.merchantName?.trim() || stream.description?.trim() || "Unknown",
       frequency: FREQUENCY_LABELS[stream.frequency],
       dueDate,
       account: stream.accountName,

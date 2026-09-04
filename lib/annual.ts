@@ -137,10 +137,12 @@ export function computeYearInMoney(
 export function computeYearInMoneyFromProjection(
   rows: CanonicalFinanceTransaction[],
   year: string,
+  asOfDate?: string,
 ): YearInMoney | null {
   const txns: AnnualTxn[] = [];
   for (const row of rows) {
     if (!row.date.startsWith(`${year}-`)) continue;
+    if (asOfDate && row.date > asOfDate) continue;
     if (row.flow === "transfer") continue;
     txns.push({
       date: row.date,

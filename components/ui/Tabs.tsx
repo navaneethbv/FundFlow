@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
+import LinkPendingIndicator from "@/components/ui/LinkPendingIndicator";
 
 /** Link-based underline tabs; server-safe, active state passed by the page. */
 export default function Tabs({
@@ -18,6 +19,7 @@ export default function Tabs({
         <Link
           key={item.label}
           href={item.href}
+          prefetch={false}
           aria-current={item.active ? "page" : undefined}
           className={cn(
             // `min-h-11` (44px) to match Button/Input/SegmentedControl. Padding
@@ -30,6 +32,7 @@ export default function Tabs({
           )}
         >
           {item.label}
+          <LinkPendingIndicator />
         </Link>
       ))}
     </nav>

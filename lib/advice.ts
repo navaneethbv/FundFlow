@@ -29,7 +29,7 @@ export interface AdviceView {
 }
 
 /**
- * Splits the library into two sections. "Prioritized by you" honors the
+ * Splits the library into two sections. Saved priorities honor the
  * user's saved order verbatim (a user who explicitly chose an item wants to
  * see it, whether or not its relevantWhen still matches — priorities are a
  * decision, not a suggestion); with no saved priorities it falls back to

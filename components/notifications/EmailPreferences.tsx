@@ -134,8 +134,8 @@ export default function EmailPreferences({
       </label>
 
       <div className="mt-5 flex items-center gap-3">
-        <Button type="button" onClick={save} disabled={saving}>
-          {saving ? "Saving..." : "Save email preferences"}
+        <Button type="button" onClick={save} loading={saving}>
+          Save email preferences
         </Button>
         {status && <output className="text-sm text-muted">{status}</output>}
       </div>

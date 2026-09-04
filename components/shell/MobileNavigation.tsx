@@ -13,6 +13,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 import LogoutButton from "@/components/LogoutButton";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { LogoMark } from "@/components/ui/Logo";
+import LinkPendingIndicator from "@/components/ui/LinkPendingIndicator";
 import {
   ArrowLeftRight,
   BarChart3,
@@ -129,6 +130,7 @@ export default function MobileNavigation({
             <Link
               key={item.key}
               href={item.href}
+              prefetch={false}
               aria-current={isActive ? "page" : undefined}
               className={cn(
                 "flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-field px-1 py-1.5 text-[0.7rem] font-semibold transition-colors focus-visible:outline-2",
@@ -139,6 +141,7 @@ export default function MobileNavigation({
             >
               <NavIcon itemKey={item.key} />
               <span className="max-w-full truncate">{item.label}</span>
+              <LinkPendingIndicator />
             </Link>
           );
         })}
@@ -215,6 +218,7 @@ export default function MobileNavigation({
                           <Link
                             key={item.key}
                             href={item.href}
+                            prefetch={false}
                             aria-current={isActive ? "page" : undefined}
                             onClick={() => setOpen(false)}
                             className={cn(
@@ -228,6 +232,7 @@ export default function MobileNavigation({
                             <span className="min-w-0 truncate">
                               {item.label}
                             </span>
+                            <LinkPendingIndicator />
                             {!!item.badge && item.badge > 0 && (
                               <span className="ml-auto flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-danger px-1 text-[0.6rem] font-bold text-danger-foreground">
                                 {item.badge > 9 ? "9+" : item.badge}

@@ -8,6 +8,7 @@ import MobileNavigation from "@/components/shell/MobileNavigation";
 import SidebarShell from "@/components/shell/SidebarShell";
 import SidebarUtilityIcons from "@/components/shell/SidebarUtilityIcons";
 import UserMenu from "@/components/shell/UserMenu";
+import LinkPendingIndicator from "@/components/ui/LinkPendingIndicator";
 import { createClient } from "@/lib/supabase/server";
 import { countUnreviewedStreams } from "@/lib/recurring-page";
 import { resolveDisplayName } from "@/lib/greeting";
@@ -35,6 +36,7 @@ function NavLink({
   return (
     <Link
       href={item.href}
+      prefetch={false}
       title={item.label}
       aria-label={badge && badge > 0 ? `${item.label}, ${badge} to review` : undefined}
       aria-current={isActive ? "page" : undefined}
@@ -58,6 +60,7 @@ function NavLink({
       >
         {item.label}
       </span>
+      <LinkPendingIndicator />
       {!!badge && badge > 0 && (
         <span
           aria-hidden

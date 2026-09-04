@@ -1,5 +1,10 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
 import type { ForecastAssumptions, ForecastDefaults } from "@/lib/forecasting";
+import Button from "@/components/ui/Button";
+import LinkPendingIndicator from "@/components/ui/LinkPendingIndicator";
 
 const HORIZONS: { value: ForecastAssumptions["horizonMonths"]; label: string }[] = [
   { value: 12, label: "1 year" },
@@ -26,6 +31,7 @@ export default function AssumptionsPanel({
   assumptions,
   defaults,
 }: Readonly<{ assumptions: ForecastAssumptions; defaults: ForecastDefaults }>) {
+  const [pending, setPending] = useState(false);
   const presets = [
     {
       label: "Baseline",
@@ -72,6 +78,7 @@ export default function AssumptionsPanel({
             <Link
               key={p.label}
               href={p.href}
+              prefetch={false}
               className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
                 p.isActive
                   ? "bg-accent-strong text-accent-strong-foreground shadow-sm"
@@ -79,12 +86,19 @@ export default function AssumptionsPanel({
               }`}
             >
               {p.label}
+              <LinkPendingIndicator />
             </Link>
           ))}
         </div>
       </div>
 
-      <form method="get" action="/forecasting" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <form
+        method="get"
+        action="/forecasting"
+        aria-busy={pending || undefined}
+        onSubmit={() => setPending(true)}
+        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5"
+      >
         <label className="text-sm font-semibold">
           <span className="mb-1 block text-xs text-muted">
             Monthly savings {defaults.monthlySavings > 0 && "(from your last 6 months)"}
@@ -142,12 +156,12 @@ export default function AssumptionsPanel({
           </select>
         </label>
         <div className="sm:col-span-2 lg:col-span-5">
-          <button
+          <Button
             type="submit"
-            className="min-h-11 rounded-field bg-accent-strong px-4 text-sm font-semibold text-accent-strong-foreground shadow-sm hover:brightness-110"
+            loading={pending}
           >
             Update projection
-          </button>
+          </Button>
         </div>
       </form>
     </div>

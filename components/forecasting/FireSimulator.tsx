@@ -21,11 +21,6 @@ interface FireSimulatorProps {
   initialMonthlySavings: number;
 }
 
-const DEFAULT_EVENTS: LifeEvent[] = [
-  { id: "e1", name: "Home Purchase Down Payment", monthOffset: 24, oneTimeCashFlow: -60000 },
-  { id: "e2", name: "Career Promotion / Raise", monthOffset: 36, oneTimeCashFlow: 0, ongoingMonthlySpendDelta: -500 },
-];
-
 /**
  * Parses a controlled numeric input without the `Number(x) || fallback`
  * trap, where a legitimately typed 0 (or a mid-edit empty field) silently
@@ -50,12 +45,12 @@ export default function FireSimulator({
   const [withdrawalRate, setWithdrawalRate] = useState("4");
   const [annualReturn, setAnnualReturn] = useState("7");
   const [monthlySavings, setMonthlySavings] = useState(
-    String(initialMonthlySavings > 0 ? initialMonthlySavings : 1500),
+    String(initialMonthlySavings),
   );
   const [monthlySpend, setMonthlySpend] = useState(
-    String(initialMonthlySpend > 0 ? initialMonthlySpend : 4000),
+    String(initialMonthlySpend),
   );
-  const [events, setEvents] = useState<LifeEvent[]>(DEFAULT_EVENTS);
+  const [events, setEvents] = useState<LifeEvent[]>([]);
 
   // New event form state
   const [newEventName, setNewEventName] = useState("");
@@ -238,6 +233,9 @@ export default function FireSimulator({
           </p>
 
           <div className="mt-3 flex flex-wrap gap-2">
+            {events.length === 0 && (
+              <p className="text-xs text-muted">No life-event scenarios configured.</p>
+            )}
             {events.map((ev) => (
               <div
                 key={ev.id}
