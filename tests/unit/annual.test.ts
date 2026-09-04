@@ -170,6 +170,20 @@ describe("computeYearInMoneyFromProjection", () => {
     expect(result?.totalSpend).toBe(20);
   });
 
+  it("excludes the current partial month from biggest and quietest month", () => {
+    const result = computeYearInMoneyFromProjection(
+      [
+        projected({ date: "2026-01-10", signedAmount: 100 }),
+        projected({ id: "august", sourceTransactionId: "august", date: "2026-08-10", signedAmount: 50 }),
+        projected({ id: "september", sourceTransactionId: "september", date: "2026-09-01", signedAmount: 1000 }),
+      ],
+      "2026",
+      "2026-09-03",
+    );
+    expect(result?.biggestMonth).toEqual({ month: "2026-01", spend: 100 });
+    expect(result?.quietestMonth).toEqual({ month: "2026-08", spend: 50 });
+  });
+
   it("aggregates the full below-ceiling set without a 1,000-row cap", () => {
     const rows: CanonicalFinanceTransaction[] = [];
     for (let index = 0; index < 16_497; index += 1) {
