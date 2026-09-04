@@ -1,6 +1,7 @@
 import DashboardWidgetGrid, {
   type DashboardWidgetGridData,
 } from "@/components/dashboard/DashboardWidgetGrid";
+import { dashboardHref, withExtraParams } from "@/components/dashboard/dashboard-view";
 import LedgerStrip from "@/components/dashboard/LedgerStrip";
 import RecentActivity from "@/components/dashboard/RecentActivity";
 import {
@@ -34,6 +35,8 @@ export default async function OverviewView({
   household,
   month,
   selectedAccountId,
+  selectedLedgerAccountId,
+  extraParams,
 }: Readonly<{
   prefsRaw: unknown;
   data: Omit<DashboardWidgetGridData, "investments">;
@@ -45,6 +48,8 @@ export default async function OverviewView({
   household: boolean;
   month: string;
   selectedAccountId?: string;
+  selectedLedgerAccountId?: string;
+  extraParams?: Record<string, string | undefined>;
 }>) {
   const today = localDateKey();
   const supabase = await createClient();
@@ -57,8 +62,17 @@ export default async function OverviewView({
     household,
     visible: visibleWidgets(prefs),
     accounts,
+    // Kept as two separate ids on purpose: the widget's pick must never stand
+    // in for the dashboard-wide filter, which also feeds the other widgets.
     selectedAccountId,
+    ledgerAccountId: selectedLedgerAccountId,
   });
+
+  const buildLedgerAccountHref = (accountId: string | undefined) =>
+    withExtraParams(
+      dashboardHref({ view: "overview", accountId: selectedAccountId, month }),
+      { ...extraParams, ledgerAccount: accountId },
+    );
 
   return (
     <>
@@ -70,6 +84,9 @@ export default async function OverviewView({
           month={month}
           monthLabel={monthLabel}
           currency={loaded.ledgerStrip.currency}
+          accountId={loaded.ledgerStrip.account.id}
+          accounts={loaded.ledgerStrip.accounts}
+          buildAccountHref={buildLedgerAccountHref}
         />
       )}
       <DashboardWidgetGrid

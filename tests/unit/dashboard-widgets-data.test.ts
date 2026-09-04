@@ -343,6 +343,134 @@ describe("loadOverviewWidgetData", () => {
     expect(result.ledgerStrip.account?.id).toBe("acct-savings");
   });
 
+  describe("ledgerAccountId (the widget's own picker)", () => {
+    const checking = {
+      id: "acct-checking",
+      name: "Checking",
+      mask: "1111",
+      current_balance: 900,
+      iso_currency_code: "USD",
+      type: "depository",
+      user_id: "user-1",
+    };
+    const savings = {
+      id: "acct-savings",
+      name: "Savings",
+      mask: "2222",
+      current_balance: 5000,
+      iso_currency_code: "USD",
+      type: "depository",
+      user_id: "user-1",
+    };
+
+    it("anchors to ledgerAccountId in preference to the toolbar's selectedAccountId", async () => {
+      const supabase = clientStub({ transactions: { data: [] } });
+
+      const result = await loadOverviewWidgetData(supabase as never, {
+        ...options,
+        selectedAccountId: "acct-checking",
+        ledgerAccountId: "acct-savings",
+        visible: [],
+        accounts: [checking, savings],
+      });
+
+      expect(result.ledgerStrip.account?.id).toBe("acct-savings");
+    });
+
+    it("falls back to the default anchor when ledgerAccountId no longer resolves", async () => {
+      const supabase = clientStub({ transactions: { data: [] } });
+
+      const result = await loadOverviewWidgetData(supabase as never, {
+        ...options,
+        ledgerAccountId: "acct-unlinked",
+        visible: [],
+        accounts: [checking, savings],
+      });
+
+      expect(result.ledgerStrip.account?.id).toBe("acct-checking");
+    });
+
+    it("never lets ledgerAccountId reach an account the ownership filter excludes", async () => {
+      const othersAccount = { ...savings, id: "acct-theirs", user_id: "user-2" };
+      const supabase = clientStub({ transactions: { data: [] } });
+
+      const result = await loadOverviewWidgetData(supabase as never, {
+        ...options,
+        household: false,
+        ledgerAccountId: "acct-theirs",
+        visible: [],
+        accounts: [checking, othersAccount],
+      });
+
+      expect(result.ledgerStrip.account?.id).toBe("acct-checking");
+    });
+
+    it("keeps hiding the strip when the toolbar filter itself selects a non-anchorable account", async () => {
+      const card = {
+        id: "acct-card",
+        name: "Card",
+        mask: "3333",
+        current_balance: -200,
+        iso_currency_code: "USD",
+        type: "credit",
+        user_id: "user-1",
+      };
+      const supabase = clientStub({ transactions: { data: [] } });
+
+      const result = await loadOverviewWidgetData(supabase as never, {
+        ...options,
+        selectedAccountId: "acct-card",
+        visible: [],
+        accounts: [checking, card],
+      });
+
+      expect(result.ledgerStrip.account).toBeNull();
+    });
+  });
+
+  it("lists every anchorable account for the picker, regardless of which one is anchored", async () => {
+    const checking = {
+      id: "acct-checking",
+      name: "Checking",
+      mask: "1111",
+      current_balance: 900,
+      iso_currency_code: "USD",
+      type: "depository",
+      user_id: "user-1",
+    };
+    const savings = {
+      id: "acct-savings",
+      name: "Savings",
+      mask: "2222",
+      current_balance: 5000,
+      iso_currency_code: "USD",
+      type: "depository",
+      user_id: "user-1",
+    };
+    const card = {
+      id: "acct-card",
+      name: "Credit Card",
+      mask: "3333",
+      current_balance: -200,
+      iso_currency_code: "USD",
+      type: "credit",
+      user_id: "user-1",
+    };
+    const supabase = clientStub({ transactions: { data: [] } });
+
+    const result = await loadOverviewWidgetData(supabase as never, {
+      ...options,
+      selectedAccountId: "acct-savings",
+      visible: [],
+      accounts: [checking, savings, card],
+    });
+
+    expect(result.ledgerStrip.accounts.map((a) => a.id)).toEqual([
+      "acct-checking",
+      "acct-savings",
+    ]);
+  });
+
   it("handles anchor account with null current_balance and null iso_currency_code gracefully", async () => {
     const fakeAccount = {
       id: "acct-dep-2",

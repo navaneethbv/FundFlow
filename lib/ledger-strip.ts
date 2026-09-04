@@ -42,14 +42,42 @@ function round2(value: number): number {
 }
 
 /**
- * Picks the account the strip reconstructs a running balance for.
+ * Every account the strip could ever anchor to, in the caller's order.
  *
  * Ownership fails **closed**: personal scope without a known `ownerUserId`
  * matches nothing rather than falling through to whatever account is first.
  * `household` is the only way to span owners, and it has to be passed
  * deliberately — `getDashboardData` drops its `user_id` filter in that scope,
- * so an accidentally-empty id must never be what widens the match.
+ * so an accidentally-empty id must never be what widens the match. Shared by
+ * `pickAnchorAccount` (picks one) and the account picker (offers all of
+ * them), so the two can never drift into disagreeing about what's eligible.
  */
+export function listAnchorableAccounts(
+  accounts: readonly LedgerStripAccount[],
+  options?: Readonly<{
+    ownerUserId?: string;
+    household?: boolean;
+  }>,
+): LedgerStripAccount[] {
+  const requireOwner = !options?.household;
+  const ownerUserId = options?.ownerUserId;
+  if (requireOwner && !ownerUserId) {
+    return [];
+  }
+
+  // The running balance walks Plaid's sign convention against a depository
+  // balance, so a credit or loan account would read inverted. Excluding one
+  // means the widget hides itself (or omits it from the picker) rather than
+  // lying.
+  return accounts.filter(
+    (account) =>
+      account.type === "depository" &&
+      account.current_balance !== null &&
+      (!requireOwner || account.user_id === ownerUserId),
+  );
+}
+
+/** Picks the account the strip reconstructs a running balance for. */
 export function pickAnchorAccount(
   accounts: readonly LedgerStripAccount[],
   options?: Readonly<{
@@ -58,26 +86,13 @@ export function pickAnchorAccount(
     household?: boolean;
   }>,
 ): LedgerStripAccount | null {
-  const requireOwner = !options?.household;
-  const ownerUserId = options?.ownerUserId;
-  if (requireOwner && !ownerUserId) {
-    return null;
-  }
-
-  // The running balance walks Plaid's sign convention against a depository
-  // balance, so a credit or loan account would read inverted. Selecting one
-  // yields no anchor, and the widget hides itself rather than lying.
-  const isAnchorable = (account: LedgerStripAccount): boolean =>
-    account.type === "depository" &&
-    account.current_balance !== null &&
-    (!requireOwner || account.user_id === ownerUserId);
+  const anchorable = listAnchorableAccounts(accounts, options);
 
   if (options?.selectedAccountId) {
-    const selected = accounts.find((account) => account.id === options.selectedAccountId);
-    return selected && isAnchorable(selected) ? selected : null;
+    return anchorable.find((account) => account.id === options.selectedAccountId) ?? null;
   }
 
-  return accounts.find(isAnchorable) ?? null;
+  return anchorable[0] ?? null;
 }
 
 /**

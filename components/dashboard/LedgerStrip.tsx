@@ -1,5 +1,6 @@
 import Panel from "@/components/ui/Panel";
 import Money from "@/components/ui/Money";
+import DropdownButton, { type DropdownItem } from "@/components/ui/DropdownButton";
 import { formatCurrency, roundsToZero } from "@/lib/format";
 import { formatDate } from "@/lib/format-date";
 import {
@@ -9,6 +10,7 @@ import {
   type LedgerDayColumn,
   type LedgerDayLabel,
   type LedgerLabelTier,
+  type LedgerStripAccount,
   type LedgerTick,
 } from "@/lib/ledger-strip";
 
@@ -149,6 +151,9 @@ export default function LedgerStrip({
   month,
   monthLabel,
   currency,
+  accountId,
+  accounts = [],
+  buildAccountHref,
 }: Readonly<{
   ticks: LedgerTick[];
   accountName: string;
@@ -156,21 +161,57 @@ export default function LedgerStrip({
   month: string;
   monthLabel: string;
   currency: string;
+  accountId?: string;
+  accounts?: LedgerStripAccount[];
+  buildAccountHref?: (accountId: string | undefined) => string;
 }>) {
-  if (ticks.length === 0) {
-    return null;
-  }
+  const accountLabel = accountMask ? `${accountName} •${accountMask}` : accountName;
+  const accountItems: DropdownItem[] =
+    accounts.length > 1 && buildAccountHref
+      ? accounts.map((acct) => ({
+          id: acct.id,
+          label: acct.mask ? `${acct.name ?? "Account"} •${acct.mask}` : (acct.name ?? "Account"),
+          href: buildAccountHref(acct.id === accountId ? undefined : acct.id), // clicking active item again clears back to default
+          active: acct.id === accountId,
+        }))
+      : [];
+  const hasPicker = accountItems.length > 0;
 
-  const days = buildLedgerStripDays(ticks, month);
+  const eyebrowRow = (
+    <div className="eyebrow font-mono mb-4 flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span>{monthLabel}</span>
+      <span aria-hidden="true">&middot;</span>
+      {hasPicker ? (
+        <DropdownButton label={accountLabel} items={accountItems} align="left" />
+      ) : (
+        <span>{accountLabel}</span>
+      )}
+    </div>
+  );
+
+  const days = ticks.length > 0 ? buildLedgerStripDays(ticks, month) : [];
   const lastDay = days.at(-1);
   if (!lastDay) {
-    return null;
+    // Nothing to draw. Without a picker there is no control to keep on screen,
+    // so the widget stays hidden as before. With one, hiding would strand the
+    // reader: `?ledgerAccount=` remains pinned to the empty account and the
+    // only way back just disappeared along with the strip.
+    if (!hasPicker) {
+      return null;
+    }
+    return (
+      <Panel eyebrow="Account activity" title="Month to date, by day" padding="lg">
+        {eyebrowRow}
+        <p className="text-sm text-muted">
+          No transactions in {monthLabel} for {accountLabel}.
+        </p>
+      </Panel>
+    );
   }
 
   const totalDays = ledgerDaysInMonth(month);
   const maxGross = Math.max(...days.map((day) => Math.max(day.grossIn, day.grossOut)), 1);
   const entryCount = days.reduce((sum, day) => sum + day.transactionCount, 0);
-  const accountLabel = accountMask ? `${accountName} •${accountMask}` : accountName;
 
   return (
     <Panel
@@ -184,9 +225,7 @@ export default function LedgerStrip({
       }
       padding="lg"
     >
-      <p className="eyebrow font-mono mb-4">
-        {monthLabel} &middot; {accountLabel}
-      </p>
+      {eyebrowRow}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-6">
         <div
           className="relative w-full"

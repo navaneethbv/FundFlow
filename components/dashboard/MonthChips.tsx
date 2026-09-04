@@ -4,6 +4,7 @@ import { formatMonth } from "@/lib/format";
 import {
   dashboardHref,
   resolveDashboardView,
+  withExtraParams,
   type DashboardView,
 } from "@/components/dashboard/dashboard-view";
 
@@ -31,20 +32,19 @@ export default function MonthChips({
     >
       {months.map((month) => {
         const active = month === selectedMonth;
-        const href = dashboardHref({
-          view,
-          accountId: selectedAccountId,
-          month: active ? undefined : month,
-        });
-        const params = new URLSearchParams(href.split("?")[1]);
-        for (const [key, value] of Object.entries(extraParams ?? {})) {
-          if (value) params.set(key, value);
-        }
+        const href = withExtraParams(
+          dashboardHref({
+            view,
+            accountId: selectedAccountId,
+            month: active ? undefined : month,
+          }),
+          extraParams,
+        );
 
         return (
           <Link
             key={month}
-            href={`/dashboard?${params.toString()}`}
+            href={href}
             aria-current={active ? "true" : undefined}
             className={cn(
               "flex min-h-11 shrink-0 items-center rounded-field border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2 sm:min-h-0",
