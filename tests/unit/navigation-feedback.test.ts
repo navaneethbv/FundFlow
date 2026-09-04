@@ -22,4 +22,11 @@ describe("navigation feedback", () => {
       expect(source).toContain(`label=\"${label}\"`);
     }
   });
+
+  it("does not inject fictional FIRE scenarios into the forecasting page", () => {
+    const page = readFileSync("app/forecasting/page.tsx", "utf8");
+    const simulator = readFileSync("components/forecasting/FireSimulator.tsx", "utf8");
+    expect(page).not.toContain("FireSimulator");
+    expect(simulator).not.toContain("DEFAULT_EVENTS");
+  });
 });
