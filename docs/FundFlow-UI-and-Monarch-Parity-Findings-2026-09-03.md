@@ -437,6 +437,7 @@ The first remediation slice is implemented and covered by focused regression tes
 - The recurring month summary always reserves a Credit cards column and states when bill data is unavailable.
 - Reconciliation account labels are normalized before display, and investment sync outcomes are presented as user-readable states.
 - Year in Money can exclude future rows from a current partial year, and the page applies the current date cutoff.
+- Account visibility and ordering now use one authenticated JSONB merge function, so saving `accountsPage` cannot clobber sibling dashboard preferences.
 - Advice now labels contextual recommendations separately from saved priorities, and Budget no longer exposes internal phase language.
 
 The following findings remain provider, consent, configuration, or larger data-model work and were not silently fabricated in this branch.

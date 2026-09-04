@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Button from "@/components/ui/Button";
+import {
+  persistAccountPreferences,
+  type AccountsPagePreferences,
+} from "@/lib/account-preferences";
 
-export interface AccountsPagePreferences {
-  hiddenIds?: string[];
-  order?: string[];
-}
+export type { AccountsPagePreferences } from "@/lib/account-preferences";
 
 export default function AccountPreferences({
   accounts,
@@ -51,36 +52,10 @@ export default function AccountPreferences({
     setSaving(true);
     setStatus(null);
     try {
-      const { data: authData } = await supabase.auth.getUser();
-      if (!authData.user) {
-        setStatus("Sign in again to save account preferences.");
-        return;
-      }
-      const { data: profile, error: readError } = await supabase
-        .from("profiles")
-        .select("dashboard_prefs")
-        .eq("id", authData.user.id)
-        .maybeSingle();
-      if (readError) {
-        setStatus(readError.message);
-        return;
-      }
-      const dashboardPrefs =
-        profile?.dashboard_prefs &&
-        typeof profile.dashboard_prefs === "object" &&
-        !Array.isArray(profile.dashboard_prefs)
-          ? profile.dashboard_prefs
-          : {};
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          dashboard_prefs: {
-            ...dashboardPrefs,
-            accountsPage: prefs,
-          },
-        })
-        .eq("id", authData.user.id);
-      setStatus(error?.message ?? "Account preferences saved.");
+      await persistAccountPreferences(supabase, prefs);
+      setStatus("Account preferences saved.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not save account preferences.");
     } finally {
       setSaving(false);
     }

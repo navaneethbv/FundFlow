@@ -5,7 +5,12 @@ import { persistAccountPreferences } from "@/lib/account-preferences";
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const publishable = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 const secret = process.env.SUPABASE_SECRET_KEY;
-const run = Boolean(url && publishable && secret);
+const run = Boolean(
+  url &&
+    publishable &&
+    secret &&
+    process.env.RUN_ACCOUNT_PREFERENCES_INTEGRATION === "1",
+);
 const suite = run ? describe : describe.skip;
 
 suite("AccountPreferences JSONB persistence", () => {

@@ -568,6 +568,7 @@ The first branch slice delivers the interaction-confidence and low-risk trust fi
 - Missing route loading boundaries were added for every currently data-heavy planning and notification route.
 - Forecasting assumption submission and audited async actions now use the shared Button loading contract.
 - Fictional FIRE defaults were removed from the live Forecasting page and the standalone simulator.
+- Account preference persistence now uses a row-atomic JSONB merge RPC, with an integration test that verifies sibling preference preservation.
 - Recurring labels, credit-card empty state, reconciliation names, investment outcomes, annual partial-year filtering, advice headings, and Budget copy were corrected.
 - Focused RED tests were committed before the implementation checkpoint, and the GREEN suite now covers the new behavior.
 

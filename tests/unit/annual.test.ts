@@ -180,6 +180,7 @@ describe("computeYearInMoneyFromProjection", () => {
       "2026",
       "2026-09-03",
     );
+    expect(result?.totalSpend).toBe(1150);
     expect(result?.biggestMonth).toEqual({ month: "2026-01", spend: 100 });
     expect(result?.quietestMonth).toEqual({ month: "2026-08", spend: 50 });
   });
