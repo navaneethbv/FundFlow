@@ -18,7 +18,8 @@ This branch has not been deployed or exercised against production financial data
 The dashboard keeps the signed savings-rate calculation, but now flags a period where spending is more than ten times recorded income as denominator-sensitive.
 The card exposes the recorded income and spending amounts in its explanatory copy so a large negative percentage is not mistaken for a calculation failure.
 The six-month savings-rate series now uses the same shared signed calculation and returns no rate for months without an income denominator.
-Focused savings-rate tests pass; broader verification for this follow-up is pending.
+The focused and full unit suites, coverage, lint, typecheck, build, palette validation, graph update, and fresh remote checks all pass.
+The full coverage command still does not run live integration files because `TEST_SUPABASE_URL` is not approved on this machine.
 
 ## 2026-09-05: Third review of PR #153
 
