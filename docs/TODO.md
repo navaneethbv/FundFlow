@@ -16,7 +16,13 @@ The distinction is the point: the previous version of this file asserted complet
 The linked migration ledger still lists `20260904120000`, `20260905100000`, `20260905110000`, and `20260905120000` as local-only.
 The new send-boundary migration must be applied with the earlier hardening and delivery-journal migrations before deploying this branch.
 Older local-only versions `20260902220000`, `20260903010000`, and `20260904000000`, and remote-only versions `20260903171727` and `20260903171733`, still require content-based reconciliation.
-No production migrations were applied during the third review.
+The transfer confirmation backfill migration `20260905130000` was applied to the linked project after this verification and recorded as applied.
+No other local-only migrations were applied during the third review.
+
+### Transfer linking follow-up verified on 2026-09-05
+
+PR #154 makes transfer subjects independent of posting direction and restores the atomic `confirm_transfer_link` RPC for environments where the transfer tables were deployed without the hardening migration.
+The linked project now has the RPC, its one-use transaction indexes, and the explicit null guards used by the migration.
 
 ### Closed
 
@@ -90,12 +96,13 @@ Both migrations were applied to a clean Postgres by `.github/workflows/migration
 `scripts/check-rls.sql` now also asserts FF-02 directly against the applied schema: every `authenticated` policy on a `public` table must carry both gates, with only the three auth-bootstrap tables excepted.
 That makes the invariant ongoing rather than a one-time fix, since the next migration that copies an owner-only policy from an older table would otherwise reopen the hole.
 
-Not verified here, and not claimed: production exploit testing, a live restore from a real archive, and either new migration applied to the *linked* project.
+Not verified here, and not claimed: production exploit testing and a live restore from a real archive.
 
-Both new migrations are **local only** and must be applied by hand, since there is no migration runner in CI:
+The remaining local-only migrations must be applied by hand, since there is no migration runner in CI:
 
 - `20260905100000_mfa_gate_remaining_user_tables.sql`
 - `20260905110000_backup_delivery_journal.sql`
+- `20260905120000_backup_send_boundary.sql`
 
 The backup cron writes to `public.backup_deliveries` on every run, so deploying the code before the second migration would fail every backup.
 

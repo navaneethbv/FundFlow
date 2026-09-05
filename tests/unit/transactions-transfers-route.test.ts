@@ -17,6 +17,9 @@ vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: vi.fn(async () => true) }))
 const OUT_ID = "11111111-1111-1111-1111-111111111101";
 const IN_ID = "11111111-1111-1111-1111-111111111102";
 const SUBJECT = `${OUT_ID}:${IN_ID}`;
+const OUT_ID_AFTER_IN_ID = "ffffffff-ffff-ffff-ffff-ffffffffffff";
+const IN_ID_BEFORE_OUT_ID = "00000000-0000-0000-0000-000000000000";
+const DIRECTION_INDEPENDENT_SUBJECT = `${IN_ID_BEFORE_OUT_ID}:${OUT_ID_AFTER_IN_ID}`;
 
 function thenable(data: unknown, error: unknown = null) {
   const builder: Record<string, unknown> = {
@@ -38,6 +41,29 @@ function pagedThenable(pages: unknown[][]) {
     builder[method] = () => builder;
   }
   return builder;
+}
+
+function mockOwnedTransferPair({
+  outId = OUT_ID,
+  inId = IN_ID,
+  outAmount = 500,
+  inAmount = -500,
+}: {
+  outId?: string;
+  inId?: string;
+  outAmount?: number | string;
+  inAmount?: number | string;
+} = {}) {
+  from.mockImplementation((table: string) => {
+    if (table === "transactions") {
+      return thenable([
+        { id: outId, date: "2026-09-01", amount: outAmount, account_id: "a1", manual_account_id: null },
+        { id: inId, date: "2026-09-02", amount: inAmount, account_id: "a2", manual_account_id: null },
+      ]);
+    }
+    if (table === "linked_transfers") return { select: () => thenable([]) };
+    throw new Error(`unexpected ${table}`);
+  });
 }
 
 beforeEach(() => {
@@ -106,17 +132,7 @@ describe("POST /api/transactions/transfers", () => {
   });
 
   it("confirms only when both sides are the caller's own rows", async () => {
-    const upsert = vi.fn(() => Promise.resolve({ data: null, error: null }));
-    from.mockImplementation((table: string) => {
-      if (table === "transaction_review_decisions") {
-        return { upsert };
-      }
-      if (table === "transactions") return thenable([
-        { id: OUT_ID, date: "2026-09-01", amount: 500, account_id: "a1", manual_account_id: null },
-        { id: IN_ID, date: "2026-09-02", amount: -500, account_id: "a2", manual_account_id: null },
-      ]);
-      return { upsert };
-    });
+    mockOwnedTransferPair();
     const res = await POST(
       new NextRequest("http://localhost/api/transactions/transfers", {
         method: "POST",
@@ -130,6 +146,32 @@ describe("POST /api/transactions/transfers", () => {
       }),
     );
     expect(res.status).toBe(200);
+  });
+
+  it("uses a direction-independent subject when the outgoing UUID sorts after the incoming UUID", async () => {
+    mockOwnedTransferPair({ outId: OUT_ID_AFTER_IN_ID, inId: IN_ID_BEFORE_OUT_ID });
+
+    const res = await POST(
+      new NextRequest("http://localhost/api/transactions/transfers", {
+        method: "POST",
+        body: JSON.stringify({
+          subject_id: DIRECTION_INDEPENDENT_SUBJECT,
+          decision: "confirmed",
+          out_id: OUT_ID_AFTER_IN_ID,
+          in_id: IN_ID_BEFORE_OUT_ID,
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(rpc).toHaveBeenCalledWith(
+      "confirm_transfer_link",
+      expect.objectContaining({
+        p_subject_id: DIRECTION_INDEPENDENT_SUBJECT,
+        p_out_transaction_id: OUT_ID_AFTER_IN_ID,
+        p_in_transaction_id: IN_ID_BEFORE_OUT_ID,
+      }),
+    );
   });
 
   it("validates the current pair before persisting a confirmed decision", async () => {
@@ -162,18 +204,7 @@ describe("POST /api/transactions/transfers", () => {
   });
 
   it("derives the linked amount from the owned transactions", async () => {
-    const linkUpsert = vi.fn(() => Promise.resolve({ data: null, error: null }));
-    from.mockImplementation((table: string) => {
-      if (table === "transactions") return thenable([
-        { id: OUT_ID, date: "2026-09-01", amount: 500, account_id: "a1", manual_account_id: null },
-        { id: IN_ID, date: "2026-09-02", amount: -500, account_id: "a2", manual_account_id: null },
-      ]);
-      if (table === "linked_transfers") return { upsert: linkUpsert };
-      if (table === "transaction_review_decisions") {
-        return { upsert: vi.fn(() => Promise.resolve({ data: null, error: null })) };
-      }
-      throw new Error(`unexpected ${table}`);
-    });
+    mockOwnedTransferPair();
 
     const res = await POST(
       new NextRequest("http://localhost/api/transactions/transfers", {
@@ -196,18 +227,7 @@ describe("POST /api/transactions/transfers", () => {
   });
 
   it("coerces string amounts and links successfully without requiring body amount", async () => {
-    const linkUpsert = vi.fn(() => Promise.resolve({ data: null, error: null }));
-    from.mockImplementation((table: string) => {
-      if (table === "transactions") return thenable([
-        { id: OUT_ID, date: "2026-09-01", amount: "500.00", account_id: "a1", manual_account_id: null },
-        { id: IN_ID, date: "2026-09-02", amount: "-500.00", account_id: "a2", manual_account_id: null },
-      ]);
-      if (table === "linked_transfers") return { upsert: linkUpsert };
-      if (table === "transaction_review_decisions") {
-        return { upsert: vi.fn(() => Promise.resolve({ data: null, error: null })) };
-      }
-      throw new Error(`unexpected ${table}`);
-    });
+    mockOwnedTransferPair({ outAmount: "500.00", inAmount: "-500.00" });
 
     const res = await POST(
       new NextRequest("http://localhost/api/transactions/transfers", {
