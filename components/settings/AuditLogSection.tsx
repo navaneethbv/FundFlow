@@ -41,20 +41,42 @@ function formatActionLabel(action: string): string {
   return ACTION_LABELS[action] ?? action.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function formatPrimitive(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return null;
+}
+
+function formatMetadataValue(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "[complex value]";
+  }
+}
+
 function formatMetadataSummary(metadata: Record<string, unknown>): string | null {
   const parts: string[] = [];
-  if (metadata.institution) parts.push(String(metadata.institution));
-  if (metadata.format) parts.push(`Format: ${metadata.format}`);
-  if (metadata.count !== undefined) parts.push(`${metadata.count} items`);
-  if (metadata.rows !== undefined) parts.push(`${metadata.rows} rows`);
-  if (metadata.status) parts.push(`Status: ${metadata.status}`);
+  const inst = formatPrimitive(metadata.institution);
+  if (inst) parts.push(inst);
+  const format = formatPrimitive(metadata.format);
+  if (format) parts.push(`Format: ${format}`);
+  const count = formatPrimitive(metadata.count);
+  if (count !== null) parts.push(`${count} items`);
+  const rows = formatPrimitive(metadata.rows);
+  if (rows !== null) parts.push(`${rows} rows`);
+  const status = formatPrimitive(metadata.status);
+  if (status) parts.push(`Status: ${status}`);
   if (parts.length > 0) return parts.join(" · ");
 
   const entries = Object.entries(metadata).filter(
     ([k]) => !k.toLowerCase().includes("token") && !k.toLowerCase().includes("secret"),
   );
   if (entries.length === 0) return null;
-  return entries.map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`).join(" · ");
+  return entries.map(([k, v]) => `${k}: ${formatMetadataValue(v)}`).join(" · ");
 }
 
 export default function AuditLogSection({ initialRows }: Readonly<{ initialRows: AuditRow[] }>) {

@@ -24,6 +24,6 @@ export async function checkRateLimit(
     return data === true;
   } catch (error) {
     logError("rate-limit", error);
-    return options?.failClosed ? false : true;
+    return !options?.failClosed;
   }
 }

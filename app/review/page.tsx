@@ -20,6 +20,26 @@ export const metadata = {
   title: "Monthly review",
 };
 
+function BudgetStatusMessage({
+  envelopeCount,
+  issueCount,
+}: Readonly<{
+  envelopeCount: number;
+  issueCount: number;
+}>) {
+  if (envelopeCount === 0) {
+    return (
+      <p className="py-4 text-sm text-muted">
+        No budget configured for this month. Set up categories on the Budget page to track limits.
+      </p>
+    );
+  }
+  if (issueCount === 0) {
+    return <p className="py-4 text-sm text-muted">No budget categories are projected over limit.</p>;
+  }
+  return null;
+}
+
 export default async function MonthlyReviewPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
   const month = firstSearchParam(params.month);
@@ -103,13 +123,10 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
                 </p>
               </div>
             ))}
-            {data.budgetEnvelopes.length === 0 ? (
-              <p className="py-4 text-sm text-muted">
-                No budget configured for this month. Set up categories on the Budget page to track limits.
-              </p>
-            ) : budgetIssues.length === 0 ? (
-              <p className="py-4 text-sm text-muted">No budget categories are projected over limit.</p>
-            ) : null}
+            <BudgetStatusMessage
+              envelopeCount={data.budgetEnvelopes.length}
+              issueCount={budgetIssues.length}
+            />
           </div>
         </Panel>
       </div>

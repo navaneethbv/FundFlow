@@ -26,7 +26,7 @@ function HistoryChart({ summary }: Readonly<{ summary: Summary }>) {
   const max = Math.max(...allValues);
   const range = max - min || 1;
   const firstDate = allPoints[0]?.date;
-  const lastDate = allPoints[allPoints.length - 1]?.date;
+  const lastDate = allPoints.at(-1)?.date;
 
   return (
     <div className="space-y-1.5">

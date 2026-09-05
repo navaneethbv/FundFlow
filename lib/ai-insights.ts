@@ -18,8 +18,9 @@ export function generateAiInsightSummaries(input: {
     (row): row is AiInsightRow & { amount: number } =>
       typeof row.amount === "number" && !Number.isNaN(row.amount),
   );
-  const months = [...new Set(rows.map((row) => row.month).filter(Boolean))] as string[];
-  const month = months.length > 0 ? months.sort().at(-1)! : null;
+  const months = [...new Set(rows.map((row) => row.month).filter(Boolean) as string[])];
+  months.sort((a, b) => a.localeCompare(b));
+  const month = months.at(-1) ?? null;
   const spending = rows
     .filter((row) => row.amount > 0)
     .reduce((sum, row) => sum + row.amount, 0);

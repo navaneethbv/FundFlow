@@ -640,6 +640,59 @@ export const metadata = {
   title: "Transactions",
 };
 
+function resolveDateBounds(
+  month?: string,
+  year?: string,
+): { start: string; end: string } | null {
+  if (month) return monthBounds(month);
+  if (year) return { start: `${year}-01-01`, end: `${year}-12-31` };
+  return null;
+}
+
+function describeLedgerPeriod(
+  month?: string,
+  year?: string,
+  hasBounds?: boolean,
+): string {
+  if (!hasBounds) return "";
+  if (month) return ` in ${formatMonth(month)}`;
+  if (year) return ` in ${year}`;
+  return "";
+}
+
+function buildLedgerCardRows(
+  rows: LedgerProjectedRow[],
+  details: {
+    annById: Awaited<ReturnType<typeof loadLedgerRowDetails>>["annById"];
+    overridesById: Awaited<ReturnType<typeof loadLedgerRowDetails>>["overridesById"];
+    splitsById: Awaited<ReturnType<typeof loadLedgerRowDetails>>["splitsById"];
+    excludedDuplicateIds: Set<string>;
+    categoryOptions: string[];
+  },
+): LedgerCardRow[] {
+  return rows.map((t) => {
+    const ann = details.annById.get(t.id);
+    return {
+      id: t.id,
+      date: t.date,
+      merchant: t.merchant || "Unknown",
+      category: t.category,
+      accountLabel: t.accountLabel || "-",
+      amount: t.amount,
+      currency: t.iso_currency_code ?? "USD",
+      pending: t.pending,
+      excludedDuplicate: details.excludedDuplicateIds.has(t.id),
+      note: ann?.note ?? null,
+      tags: ann?.tags ?? [],
+      splits: details.splitsById.get(t.id) ?? [],
+      categoryOptions: details.categoryOptions,
+      providerCategory: t.pfc_primary ?? t.pfc_detailed,
+      override: details.overridesById.get(t.id) ?? null,
+      cleared: ann?.cleared ?? false,
+    };
+  });
+}
+
 export default async function TransactionsPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
   const state = parseLedgerQuery(params);
@@ -720,11 +773,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   // Widening to `string` falls back to the untyped overload instead, which
   // is what every downstream `as string`/`?? null` read already expects.
   const columns: string = transactionsParityEnabled ? `${baseColumns}, manual_account_id, source` : baseColumns;
-  const bounds = month
-    ? monthBounds(month)
-    : state.year
-      ? { start: `${state.year}-01-01`, end: `${state.year}-12-31` }
-      : null;
+  const bounds = resolveDateBounds(month, state.year);
   const typedIds = accountType
     ? accounts.filter((account) => account.type === accountType).map((account) => account.id as string)
     : [];
@@ -787,26 +836,12 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   });
   const zebraBands = ledgerZebraBands(rows, showDayGroups);
 
-  const cardRows: LedgerCardRow[] = rows.map((t) => {
-    const ann = annById.get(t.id);
-    return {
-      id: t.id,
-      date: t.date,
-      merchant: t.merchant || "Unknown",
-      category: t.category,
-      accountLabel: t.accountLabel || "-",
-      amount: t.amount,
-      currency: t.iso_currency_code ?? "USD",
-      pending: t.pending,
-      excludedDuplicate: excludedDuplicateIds.has(t.id),
-      note: ann?.note ?? null,
-      tags: ann?.tags ?? [],
-      splits: splitsById.get(t.id) ?? [],
-      categoryOptions,
-      providerCategory: t.pfc_primary ?? t.pfc_detailed,
-      override: overridesById.get(t.id) ?? null,
-      cleared: ann?.cleared ?? false,
-    };
+  const cardRows = buildLedgerCardRows(rows, {
+    annById,
+    overridesById,
+    splitsById,
+    excludedDuplicateIds,
+    categoryOptions,
   });
 
   const queryEntries = ledgerQueryEntries(state);
@@ -870,11 +905,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
         {!ledgerError && (
           <p className="text-xs text-muted">
             {total.toLocaleString()} transaction{total === 1 ? "" : "s"}
-            {month && bounds
-              ? ` in ${formatMonth(month)}`
-              : state.year && bounds
-                ? ` in ${state.year}`
-                : ""}
+            {describeLedgerPeriod(month, state.year, Boolean(bounds))}
             . Negative amounts represent expenses; positive amounts represent income.
           </p>
         )}

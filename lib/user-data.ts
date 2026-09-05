@@ -95,6 +95,23 @@ export const USER_DATA_TABLES: UserDataTableSpec[] = [
   table("life_events", "event_type, target_date, target_amount, notes", "user"),
 ];
 
+function applySpecScope(
+  builder: {
+    eq: (column: string, value: string) => unknown;
+    or: (filters: string) => unknown;
+  },
+  scope: UserDataTableSpec["scope"],
+  userId: string,
+) {
+  if (scope === "user") {
+    return builder.eq("user_id", userId);
+  }
+  if (scope === "owner") {
+    return builder.eq("owner_user_id", userId);
+  }
+  return builder.or(`paid_by.eq.${userId},owed_user_id.eq.${userId}`);
+}
+
 async function fetchPagedSpecRows(
   client: Pick<SupabaseClient, "from">,
   spec: UserDataTableSpec,
@@ -112,13 +129,7 @@ async function fetchPagedSpecRows(
     const from = page * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
     const builder = client.from(spec.table).select(select);
-    const query = (
-      spec.scope === "user"
-        ? builder.eq("user_id", userId)
-        : spec.scope === "owner"
-          ? builder.eq("owner_user_id", userId)
-          : builder.or(`paid_by.eq.${userId},owed_user_id.eq.${userId}`)
-    ) as unknown as {
+    const query = applySpecScope(builder, spec.scope, userId) as unknown as {
       range?: (from: number, to: number) => PromiseLike<{ data?: unknown; error?: unknown }>;
     } & PromiseLike<{ data?: unknown; error?: unknown }>;
 

@@ -55,6 +55,29 @@ async function cleanupAvatarStorage(
   }
 }
 
+function collectReceiptPaths(
+  receiptRows: unknown,
+  receiptFiles: unknown,
+  userId: string,
+): string[] {
+  const paths = new Set<string>();
+  if (Array.isArray(receiptRows)) {
+    for (const row of receiptRows) {
+      if (row?.storage_path && typeof row.storage_path === "string") {
+        paths.add(row.storage_path);
+      }
+    }
+  }
+  if (Array.isArray(receiptFiles)) {
+    for (const f of receiptFiles) {
+      if (f?.name && typeof f.name === "string") {
+        paths.add(`${userId}/${f.name}`);
+      }
+    }
+  }
+  return Array.from(paths);
+}
+
 async function cleanupReceiptStorage(
   service: ReturnType<typeof createServiceClient>,
   userId: string,
@@ -66,23 +89,13 @@ async function cleanupReceiptStorage(
       .from("receipts")
       .select("storage_path")
       .eq("user_id", userId);
-    const paths = new Set<string>();
-    if (Array.isArray(receiptRows)) {
-      for (const row of receiptRows) {
-        if (row.storage_path) paths.add(row.storage_path as string);
-      }
-    }
-    if (receiptBucket?.list) {
-      const { data: receiptFiles } = await receiptBucket.list(userId);
-      if (Array.isArray(receiptFiles)) {
-        for (const f of receiptFiles) {
-          paths.add(`${userId}/${f.name}`);
-        }
-      }
-    }
-    if (paths.size === 0) return 0;
-    const { error: removeErr } = await receiptBucket.remove(Array.from(paths));
-    return !removeErr ? paths.size : 0;
+    const receiptFilesResult = receiptBucket.list
+      ? await receiptBucket.list(userId)
+      : null;
+    const paths = collectReceiptPaths(receiptRows, receiptFilesResult?.data, userId);
+    if (paths.length === 0) return 0;
+    const { error: removeErr } = await receiptBucket.remove(paths);
+    return removeErr ? 0 : paths.length;
   } catch (err) {
     logError("account.delete.receiptCleanup", err);
     return 0;

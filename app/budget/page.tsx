@@ -45,9 +45,24 @@ function shiftMonth(month: string, delta: number): string {
   return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
 }
 
+function horizonStep(delta: number, horizon: BudgetHorizon): number {
+  if (horizon === "decade") return delta * 120;
+  if (horizon === "yearly") return delta * 12;
+  return delta;
+}
+
 function shiftHorizon(month: string, delta: number, horizon: BudgetHorizon): string {
-  const step = horizon === "decade" ? delta * 120 : horizon === "yearly" ? delta * 12 : delta;
-  return shiftMonth(month, step);
+  return shiftMonth(month, horizonStep(delta, horizon));
+}
+
+function formatPeriodLabel(month: string, horizon: BudgetHorizon): string {
+  if (horizon === "yearly") {
+    return month.slice(0, 4);
+  }
+  if (horizon === "decade") {
+    return `${month.slice(0, 4)} – ${Number(month.slice(0, 4)) + 9}`;
+  }
+  return formatMonth(month);
 }
 
 function summaryTab(value: string | undefined): BudgetSummaryTab {
@@ -146,11 +161,7 @@ export default async function BudgetPage({
           aria-live="polite"
           data-testid="budget-active-period"
         >
-          {horizon === "yearly"
-            ? month.slice(0, 4)
-            : horizon === "decade"
-              ? `${month.slice(0, 4)} – ${Number(month.slice(0, 4)) + 9}`
-              : formatMonth(month)}
+          {formatPeriodLabel(month, horizon)}
         </span>
         <Link
           href={budgetHref({
