@@ -22,6 +22,7 @@ const BADGE_COPY: Record<GoalBadge, { label: string; tone: "success" | "warning"
   "on-track": { label: "On track", tone: "success" },
   "at-risk": { label: "At risk", tone: "warning" },
   behind: { label: "Behind", tone: "danger" },
+  "no-pace": { label: "No pace data", tone: "neutral" },
 };
 
 const BAR_TONE: Record<GoalBadge, ProgressBarTone> = {
@@ -29,6 +30,7 @@ const BAR_TONE: Record<GoalBadge, ProgressBarTone> = {
   "on-track": "accent",
   "at-risk": "warning",
   behind: "danger",
+  "no-pace": "neutral",
 };
 
 export default function GoalCard({

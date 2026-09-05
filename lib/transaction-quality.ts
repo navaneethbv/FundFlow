@@ -172,12 +172,12 @@ export function detectTransferPairs(
         if (usedIns.has(candidate.id)) return false;
         if (candidate.accountId === out.accountId) return false;
         if (round2(Math.abs(candidate.amount)) !== round2(out.amount)) return false;
-        const dayDiff = (parseDate(candidate.date) - outDate) / 86_400_000;
-        return dayDiff >= 0 && dayDiff <= windowDays;
+        const dayDiff = Math.abs(parseDate(candidate.date) - outDate) / 86_400_000;
+        return dayDiff <= windowDays;
       })
       .sort((a, b) => {
-        const diffA = (parseDate(a.date) - outDate) / 86_400_000;
-        const diffB = (parseDate(b.date) - outDate) / 86_400_000;
+        const diffA = Math.abs(parseDate(a.date) - outDate) / 86_400_000;
+        const diffB = Math.abs(parseDate(b.date) - outDate) / 86_400_000;
         return diffA - diffB || a.date.localeCompare(b.date) || a.id.localeCompare(b.id);
       });
     const inbound = eligible[0];

@@ -18,7 +18,8 @@ export function generateAiInsightSummaries(input: {
     (row): row is AiInsightRow & { amount: number } =>
       typeof row.amount === "number" && !Number.isNaN(row.amount),
   );
-  const month = rows.find((row) => row.month)?.month ?? null;
+  const months = [...new Set(rows.map((row) => row.month).filter(Boolean))] as string[];
+  const month = months.length > 0 ? months.sort().at(-1)! : null;
   const spending = rows
     .filter((row) => row.amount > 0)
     .reduce((sum, row) => sum + row.amount, 0);
@@ -34,11 +35,16 @@ export function generateAiInsightSummaries(input: {
     }, new Map<string, number>());
   const top = [...topCategory.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "spending";
 
+  const periodSummary =
+    months.length > 1
+      ? `Across ${months.length} months, you tracked ${Math.round(spending)} in spending against ${Math.round(income)} in income.`
+      : `This month shows ${Math.round(spending)} in tracked spending against ${Math.round(income)} in income.`;
+
   return [
     {
       insightType: "what_changed",
       sourceMonth: month,
-      summary: `This month shows ${Math.round(spending)} in tracked spending against ${Math.round(income)} in income.`,
+      summary: periodSummary,
     },
     {
       insightType: "save_100",

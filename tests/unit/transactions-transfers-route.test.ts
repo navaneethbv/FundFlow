@@ -471,4 +471,54 @@ describe("POST /api/transactions/transfers — validation branches", () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it("400s when both transactions belong to the same account", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "transaction_review_decisions") {
+        return { upsert: () => Promise.resolve({ data: null, error: null }) };
+      }
+      if (table === "transactions") {
+        return thenable([
+          { id: OUT_ID, date: "2026-09-01", amount: 500, account_id: "same-acc", manual_account_id: null },
+          { id: IN_ID, date: "2026-09-02", amount: -500, account_id: "same-acc", manual_account_id: null },
+        ]);
+      }
+      throw new Error(`unexpected ${table}`);
+    });
+    const res = await post({
+      subject_id: SUBJECT,
+      decision: "confirmed",
+      out_id: OUT_ID,
+      in_id: IN_ID,
+      amount: 500,
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("different accounts");
+  });
+
+  it("400s when transactions are outside the 7-day window", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "transaction_review_decisions") {
+        return { upsert: () => Promise.resolve({ data: null, error: null }) };
+      }
+      if (table === "transactions") {
+        return thenable([
+          { id: OUT_ID, date: "2026-09-01", amount: 500, account_id: "a1", manual_account_id: null },
+          { id: IN_ID, date: "2026-09-15", amount: -500, account_id: "a2", manual_account_id: null },
+        ]);
+      }
+      throw new Error(`unexpected ${table}`);
+    });
+    const res = await post({
+      subject_id: SUBJECT,
+      decision: "confirmed",
+      out_id: OUT_ID,
+      in_id: IN_ID,
+      amount: 500,
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("7 days");
+  });
 });

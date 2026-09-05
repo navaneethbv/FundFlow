@@ -12,7 +12,7 @@ const mockCreateServiceClient = vi.fn();
 vi.mock("@/lib/env.server", () => ({
   serverEnv: {
     cronSecret: "test-cron-secret",
-    backupEncKey: "12345678901234567890123456789012",
+    backupEncKey: Buffer.from("12345678901234567890123456789012").toString("base64"),
   },
 }));
 
@@ -212,7 +212,7 @@ describe("Cron API Route Handlers Unit Tests", () => {
         headers: { authorization: "Bearer test-cron-secret" },
       });
       const res = await cronBackupGet(req);
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(500);
       expect(mockAlertCronFailure).toHaveBeenCalledWith("backup", expect.objectContaining({ failed: 1 }));
     });
 

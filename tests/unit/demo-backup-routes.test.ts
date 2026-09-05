@@ -335,8 +335,8 @@ describe("GET /api/cron/backup", () => {
 
     const res = await backupGet(cronRequest());
 
-    expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({ sent: 0 });
+    expect(res.status).toBe(500);
+    await expect(res.json()).resolves.toMatchObject({ ok: false, sent: 0, failed: 1 });
     expect(mockBuildBackupArchive).not.toHaveBeenCalled();
     expect(mockSendBackupEmail).not.toHaveBeenCalled();
     expect(mockAlertCronFailure).toHaveBeenCalledWith(
@@ -391,12 +391,57 @@ describe("GET /api/cron/backup", () => {
 
     const res = await backupGet(cronRequest());
 
-    // The run still reports success; the failure is surfaced via the alert.
-    expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({ sent: 0 });
+    // FF-10: Failures report non-200 so backup automation does not mask missing backups.
+    expect(res.status).toBe(500);
+    await expect(res.json()).resolves.toMatchObject({ ok: false, sent: 0, failed: 1 });
     expect(mockAlertCronFailure).toHaveBeenCalledWith(
       "backup",
       expect.objectContaining({ failed: 1, total: 1 }),
     );
+  });
+
+  it("returns 207 when some users succeed and others fail", async () => {
+    serviceClient = buildServiceClient({
+      profiles: { data: [{ id: "user-ok" }, { id: "user-fail" }], error: null },
+      transactions: { data: [{ date: "2026-07-01", amount: 10 }] },
+      accounts: { data: [] },
+      budgets: { data: [] },
+      goals: { data: [] },
+      merchant_rules: { data: [] },
+      manual_accounts: { data: [] },
+    });
+    // First user succeeds, second user fails
+    mockSendBackupEmail.mockResolvedValueOnce(undefined);
+    mockSendBackupEmail.mockRejectedValueOnce(new Error("smtp failure"));
+
+    const res = await backupGet(cronRequest());
+    expect(res.status).toBe(207);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.sent).toBe(1);
+    expect(body.failed).toBe(1);
+  });
+
+  it("skips users who have already received a backup in the current month", async () => {
+    serviceClient = buildServiceClient({
+      profiles: { data: [{ id: "user-already-sent" }], error: null },
+      audit_logs: {
+        data: [{ user_id: "user-already-sent", action: "data_backup" }],
+        error: null,
+      },
+      transactions: { data: [{ date: "2026-07-01", amount: 10 }] },
+      accounts: { data: [] },
+      budgets: { data: [] },
+      goals: { data: [] },
+      merchant_rules: { data: [] },
+      manual_accounts: { data: [] },
+    });
+
+    const res = await backupGet(cronRequest());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.sent).toBe(0);
+    expect(body.skipped).toBe(1);
+    expect(mockSendBackupEmail).not.toHaveBeenCalled();
   });
 });

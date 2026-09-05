@@ -1,10 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
-import { buildInsightPayload, isAiProviderConfigured } from "@/lib/ai-provider";
+import {
+  answerSpendingQuestionWithProvider,
+  buildInsightPayload,
+  isAiProviderConfigured,
+} from "@/lib/ai-provider";
 import { fetchPrivacySafeRows, recentHistoryStart } from "@/lib/export";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { serverEnv } from "@/lib/env.server";
 import { writeAudit, getClientIp } from "@/lib/audit";
 
 /**
@@ -59,27 +61,10 @@ export async function POST(request: NextRequest) {
       })),
     );
 
-    const client = new Anthropic({ apiKey: serverEnv.anthropicApiKey });
-    const response = await client.messages.create({
-      model: process.env.AI_INSIGHTS_MODEL ?? "claude-3-7-sonnet-latest",
-      max_tokens: 600,
-      thinking: { type: "adaptive" },
-      system:
-        "You answer one question about the user's own spending using ONLY the provided aggregates (monthly category totals and top merchants). If the aggregates cannot answer the question, say so plainly. 1-4 sentences, specific dollar figures, no advice about financial products, no invented data.",
-      messages: [
-        {
-          role: "user",
-          content: `Aggregates:\n${JSON.stringify(payload)}\n\nQuestion: ${question}`,
-        },
-      ],
+    const { answer } = await answerSpendingQuestionWithProvider({
+      question,
+      payload,
     });
-
-    if (response.stop_reason === "refusal") {
-      return NextResponse.json({ answer: "I can't help with that question." });
-    }
-    const textBlock = response.content.find(
-      (block): block is Anthropic.TextBlock => block.type === "text",
-    );
 
     await writeAudit({
       userId: user.id,
@@ -88,7 +73,7 @@ export async function POST(request: NextRequest) {
       ip: getClientIp(request),
     });
 
-    return NextResponse.json({ answer: textBlock?.text ?? "No answer produced." });
+    return NextResponse.json({ answer });
   } catch (error) {
     return errorResponse("ai.ask", error);
   }

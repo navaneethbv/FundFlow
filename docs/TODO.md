@@ -4,7 +4,18 @@ Nice-to-have features and enhancements, deferred out of the initial build.
 
 ## Current status (2026-09-04)
 
-PRs #99, #110, #114, #124, #130, #134, #137, #145, #149, and #151 are merged.
+Comprehensive review remediation completed across all 33 findings (FF-01 through FF-33, Packages A–J) on branch `codex/comprehensive-review-remediation`.
+All 438 test files (4,775 unit tests) pass 100%, next build succeeds for all 70 routes, and lint/typecheck/audit are clean.
+
+Key resolved items:
+- Security & Access (FF-01, FF-02, FF-04): Cookie client queries `user_session_records` directly; service role isolated to revocation; fail-closed MFA assurance checking; fail-closed rate-limit option for sensitive endpoints.
+- Safety & Consent (FF-03, FF-06, FF-07, FF-29): Strict fail-closed AI double consent (`resolveAiConsent`); ReDoS-bounded regex rules; server-only AI provider routing (`lib/ai-provider.ts`) excluding transfers and loan payments from prompts.
+- Data Lifecycles (FF-05, FF-08, FF-09, FF-10): Storage object cleanup (avatars and receipts) during account deletion; chunked pagination for takeout and backup (`lib/user-data.ts`); full state capture for credit card bills, preferences, life events; backup deduplication.
+- Financial Accuracy (FF-11, FF-12, FF-13): Net worth calculation respects excluded accounts and throws on query errors; forecasting stepMonth conserves cash across income and expenses; un-clamped savings rate.
+- Transaction Quality & Depth (FF-14, FF-15, FF-16, FF-23): Symmetric transfer date window; pre-filtered linked transactions in transfer suggestions; account distinctness checks; year-bounded ledger and recap queries.
+- UI/UX Polish (FF-17 through FF-28): Dashboard investment coverage and holding notices; recurring stream badges and overdue tracking; budget guided setup state; goal pace evidence distinctions; human-readable session device labels; audit action descriptions.
+- Test Guards & Dependency Freshness (FF-30, FF-31, FF-32, FF-33): Production database guard in test setup; blocking audit in CI; minor dependency updates.
+
 The linked migration ledger was checked during this documentation refresh.
 The four PR #137 migrations and the three PR #130 migrations are recorded as
 applied remotely.

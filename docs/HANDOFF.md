@@ -2,6 +2,45 @@
 
 Last updated: 2026-09-04. Read this first to resume.
 
+## 2026-09-04: Comprehensive review remediation (Packages A–J, FF-01 through FF-33)
+
+Branch: `codex/comprehensive-review-remediation`.
+All 33 findings identified in `docs/reviews/2026-09-04-comprehensive-review.md` and planned in `docs/reviews/2026-09-04-implementation-plan.md` have been fully resolved, verified, and regression tested.
+
+Key architectural and behavioral updates:
+1. **Security & Session Enforcement**:
+   - `supabase/migrations/20260904120000_session_revocation_and_mfa_hardening.sql`: RLS policy allowing users to select their own `user_session_records`.
+   - `app/api/settings/sessions/route.ts`: Switched GET to cookie-bound user client; restricted service-role client strictly to session revocation.
+   - `lib/http.ts`: MFA verification fails closed (503) on `aalError` instead of falling back to aal1.
+   - `lib/rate-limit.ts`: Added `failClosed` option for sensitive / security routes.
+2. **AI Consent & Rules Engine**:
+   - `lib/ai-gate.ts`: Introduced `resolveAiConsent` strictly enforcing double-consent (`ai_settings.enabled` AND `profiles.ai_export_enabled !== false`) and failing closed (403/503) on errors or missing profiles.
+   - `lib/rules-engine.ts`: Regex compilation validates length (<= 250 chars) and complexity to prevent ReDoS before evaluating rules.
+   - `lib/ai-provider.ts`: Server-only AI provider routing (`claude-3-5-sonnet-20241022`) explicitly filters out transfers and loan payments from prompts.
+3. **Data Lifecycle & Account Hygiene**:
+   - `app/api/account/route.ts`: Purges user-owned storage objects (`avatars` and `receipts`) via service role client before deleting auth user to prevent Supabase deletion failures and orphaned bytes.
+   - `lib/user-data.ts`: Deterministic 1,000-row chunked pagination for takeout and backup; added full state table coverage (`account_preferences`, `credit_card_bills`, `life_events`).
+   - `app/api/cron/backup/route.ts`: Fails with non-200 status when user queries error; skips redundant monthly backups.
+4. **Financial Calculations & Forecasting**:
+   - `lib/net-worth.ts`: Properly respects `include_in_net_worth === false` across accounts and throws on query errors rather than reporting partial net worth.
+   - `lib/forecasting.ts`: Ensures cash conservation in `stepMonth` (balance adjusts for income minus expenses); computes un-clamped negative savings rates for honest debt visibility.
+   - `app/forecasting/page.tsx`: Uses median monthly expense for milestone calculation.
+5. **Transaction Integrity & Ledger Depth**:
+   - `lib/transaction-quality.ts`: Symmetric transfer detection date window (+/- days).
+   - `app/api/transactions/transfers/route.ts`: Pre-filters already linked transfer transactions and enforces account distinctness.
+   - `lib/ledger-query.ts` & `app/wrapped/page.tsx`: Adds explicit year filter bounds to prevent unbounded history scans.
+6. **UI/UX Polish**:
+   - Investments widget displays itemization notices when balance is present without holdings.
+   - Recurring widget clearly labels income vs expense, marks overdue items, and clarifies dropdown range ("Next 7 days").
+   - Budget page provides horizon-aware shifting, visible period labels, and guided unconfigured state.
+   - Goal cards distinguish missing pace evidence with `"no-pace"` badge and bookkeeping disclaimers.
+   - Settings sessions displays human-readable device/browser labels (`lib/security-account.ts`) and readable audit actions (`AuditLogSection.tsx`).
+7. **Verification & Freshness**:
+   - Production database safety check enforced in `tests/setup.ts`.
+   - CI audit made blocking (`npm audit --audit-level=high`).
+   - Minor dependencies updated cleanly via `npm-check-updates`.
+   - All 438 test files (4,775 tests) pass 100%. TypeScript (`tsc --noEmit`), ESLint (`npm run lint`), palette validator, and `next build` all exit 0.
+
 ## 2026-09-04: documentation refresh and deployment-state reconciliation
 
 PR #151 is merged into `main`.

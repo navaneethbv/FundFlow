@@ -8,6 +8,9 @@ import {
 } from "@/lib/forecasting";
 import { loadCanonicalProjection } from "@/lib/finance-query";
 
+import { financeTotals } from "@/lib/finance-domain";
+import { medianOf } from "@/lib/insights";
+
 const TRAILING_MONTHS = 6;
 
 function dayAfter(dateStr: string): string {
@@ -29,6 +32,7 @@ function trailingMonths(today: string, count: number): string[] {
 export interface ForecastPageData {
   startingState: ForecastStartingState;
   defaults: ForecastDefaults;
+  monthlyExpenses: number;
 }
 
 /**
@@ -68,5 +72,18 @@ export async function loadForecastPageData(
 
   const defaults = computeForecastDefaults(projection.transactions, months);
 
-  return { startingState, defaults };
+  const byMonth = new Map<string, typeof projection.transactions>();
+  for (const t of projection.transactions) {
+    const m = t.date.slice(0, 7);
+    if (!months.includes(m)) continue;
+    const list = byMonth.get(m) ?? [];
+    list.push(t);
+    byMonth.set(m, list);
+  }
+  const monthlyExpensesList = months
+    .map((m) => financeTotals(byMonth.get(m) ?? []).expenses)
+    .filter((e) => e > 0);
+  const monthlyExpenses = monthlyExpensesList.length > 0 ? Math.round(medianOf(monthlyExpensesList)) : 3000;
+
+  return { startingState, defaults, monthlyExpenses };
 }

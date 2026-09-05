@@ -1,26 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
-import { isAiProviderConfigured } from "@/lib/ai-provider";
+import {
+  extractReceiptWithProvider,
+  isAiProviderConfigured,
+} from "@/lib/ai-provider";
+import { resolveAiConsent } from "@/lib/ai-gate";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { serverEnv } from "@/lib/env.server";
 import { writeAudit, getClientIp } from "@/lib/audit";
 import { findReceiptCandidates, receiptAmountBandFilter } from "@/lib/receipts";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
-
-const RECEIPT_SCHEMA = {
-  type: "object",
-  properties: {
-    merchant: { type: "string" },
-    amount: { type: "number" },
-    date: { type: "string" },
-    line_items: { type: "array", items: { type: "string" } },
-  },
-  required: ["merchant", "amount", "date", "line_items"],
-  additionalProperties: false,
-} as const;
 
 /**
  * Receipt scanning (Bucket 2): a receipt photo goes to the vision model,
@@ -44,11 +34,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const [{ data: settings }, { data: profile }] = await Promise.all([
-      supabase.from("ai_settings").select("enabled").eq("user_id", user.id).maybeSingle(),
-      supabase.from("profiles").select("ai_export_enabled").eq("id", user.id).maybeSingle(),
-    ]);
-    if (settings?.enabled !== true || profile?.ai_export_enabled === false) {
+    const consent = await resolveAiConsent(supabase, user.id);
+    if (!consent.allowed) {
+      if (consent.reason === "unconfigured") {
+        return NextResponse.json(
+          { error: "AI is not configured on this deployment." },
+          { status: 503 },
+        );
+      }
+      if (consent.reason === "unavailable") {
+        return NextResponse.json(
+          { error: "AI preferences temporarily unavailable." },
+          { status: 503 },
+        );
+      }
       return NextResponse.json(
         { error: "Enable AI insights in Settings first." },
         { status: 403 },
@@ -69,41 +68,15 @@ export async function POST(request: NextRequest) {
 
     const data = Buffer.from(await file.arrayBuffer()).toString("base64");
 
-    const client = new Anthropic({ apiKey: serverEnv.anthropicApiKey });
-    const response = await client.messages.create({
-      model: process.env.AI_INSIGHTS_MODEL ?? "claude-3-7-sonnet-latest",
-      max_tokens: 1024,
-      thinking: { type: "adaptive" },
-      system:
-        "Extract the receipt's merchant name, total amount (number), purchase date (YYYY-MM-DD), and up to 15 short line-item descriptions. If a field is unreadable, use your best guess for merchant, 0 for amount, and today's implied date only if printed.",
-      output_config: { format: { type: "json_schema", schema: RECEIPT_SCHEMA } },
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: { type: "base64", media_type: mediaType as "image/jpeg", data },
-            },
-            { type: "text", text: "Extract this receipt." },
-          ],
-        },
-      ],
+    const extractionResult = await extractReceiptWithProvider({
+      fileBase64: data,
+      mediaType,
     });
 
-    if (response.stop_reason === "refusal") {
+    if (extractionResult.refusal || !extractionResult.extracted) {
       return NextResponse.json({ error: "The image could not be processed." }, { status: 422 });
     }
-    const textBlock = response.content.find(
-      (block): block is Anthropic.TextBlock => block.type === "text",
-    );
-    if (!textBlock) throw new Error("receipt: empty response");
-    const extracted = JSON.parse(textBlock.text) as {
-      merchant: string;
-      amount: number;
-      date: string;
-      line_items: string[];
-    };
+    const extracted = extractionResult.extracted;
 
     // Match against the ledger within the shared receipt candidate rules.
     let matchedTransactionId: string | null = null;

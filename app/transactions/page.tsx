@@ -720,7 +720,11 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   // Widening to `string` falls back to the untyped overload instead, which
   // is what every downstream `as string`/`?? null` read already expects.
   const columns: string = transactionsParityEnabled ? `${baseColumns}, manual_account_id, source` : baseColumns;
-  const bounds = month ? monthBounds(month) : null;
+  const bounds = month
+    ? monthBounds(month)
+    : state.year
+      ? { start: `${state.year}-01-01`, end: `${state.year}-12-31` }
+      : null;
   const typedIds = accountType
     ? accounts.filter((account) => account.type === accountType).map((account) => account.id as string)
     : [];
@@ -866,8 +870,12 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
         {!ledgerError && (
           <p className="text-xs text-muted">
             {total.toLocaleString()} transaction{total === 1 ? "" : "s"}
-            {month && bounds ? ` in ${formatMonth(month)}` : ""}. Positive amounts are money out
-            (Plaid sign convention).
+            {month && bounds
+              ? ` in ${formatMonth(month)}`
+              : state.year && bounds
+                ? ` in ${state.year}`
+                : ""}
+            . Negative amounts represent expenses; positive amounts represent income.
           </p>
         )}
 

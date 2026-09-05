@@ -46,6 +46,8 @@ export function monthWindow(anchorMonth: string, monthsBack: number): FinanceWin
 export interface FetchFinanceOptions {
   scope: FinancialScope;
   window?: FinanceWindow;
+  /** Filter transactions to a specific account. */
+  accountId?: string;
   /** Default false: pending rows count in every total (see finance-domain). */
   excludePending?: boolean;
   pageSize?: number;
@@ -75,6 +77,7 @@ async function fetchFinancePage(
 ): Promise<TransactionRow[]> {
   let query = supabase.from("transactions").select(FINANCE_TRANSACTION_COLUMNS);
   if (userId) query = query.eq("user_id", userId);
+  if (options.accountId) query = query.eq("account_id", options.accountId);
   if (options.excludePending) query = query.eq("pending", false);
   if (options.window) {
     query = query
@@ -99,6 +102,7 @@ async function fetchFinancePageCount(
     .from("transactions")
     .select("id", { count: "exact", head: true });
   if (userId) query = query.eq("user_id", userId);
+  if (options.accountId) query = query.eq("account_id", options.accountId);
   if (options.excludePending) query = query.eq("pending", false);
   if (options.window) {
     query = query

@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { serverEnv } from "@/lib/env.server";
 
 /**
- * Real AI insights (Phase 3): a server-only Anthropic client behind the
+ * Real AI provider integration: a server-only Anthropic client behind the
  * privacy contract. The ONLY data that crosses the wire is what the CSV
  * export already exposes — month/category/merchant aggregates. Never
  * balances, account names, masks, emails, or transaction-level rows.
@@ -12,6 +12,20 @@ import { serverEnv } from "@/lib/env.server";
  * ANTHROPIC_API_KEY the app falls back to the built-in rule-based
  * summaries — the feature degrades, never breaks.
  */
+
+export const DEFAULT_AI_MODEL = "claude-3-5-sonnet-20241022";
+
+export function getAiModel(): string {
+  return process.env.AI_INSIGHTS_MODEL ?? DEFAULT_AI_MODEL;
+}
+
+function supportsAdaptiveThinking(model: string): boolean {
+  return model.includes("3-7") || model.includes("opus");
+}
+
+function getAnthropicClient(): Anthropic {
+  return new Anthropic({ apiKey: serverEnv.anthropicApiKey });
+}
 
 export function isAiProviderConfigured(): boolean {
   return Boolean(serverEnv.anthropicApiKey);
@@ -23,11 +37,12 @@ export interface ProviderInsight {
   summary: string;
 }
 
-interface AggregateRow {
+export interface AggregateRow {
   month?: string;
   merchant?: string;
   category?: string;
   amount?: number;
+  flow?: string;
 }
 
 const MAX_MERCHANTS = 25;
@@ -41,7 +56,12 @@ export function buildInsightPayload(rows: AggregateRow[]) {
 
   for (const row of rows) {
     const amount = row.amount ?? 0;
-    if (amount <= 0) continue; // spending only
+    // Spending only: positive amount in Plaid sign convention, excluding loan payments and transfers
+    if (amount <= 0) continue;
+    const catUpper = (row.category ?? "").toUpperCase();
+    if (catUpper === "TRANSFER" || catUpper === "LOAN_PAYMENTS" || row.flow === "transfer") {
+      continue;
+    }
     const month = row.month ?? "unknown";
     months.add(month);
     const category = row.category ?? "UNCATEGORIZED";
@@ -116,11 +136,12 @@ export async function generateInsightsWithProvider(input: {
       .sort((a, b) => a.localeCompare(b))
       .at(-1) ?? null;
 
-  const client = new Anthropic({ apiKey: serverEnv.anthropicApiKey });
-  const response = await client.messages.create({
-    model: process.env.AI_INSIGHTS_MODEL ?? "claude-3-7-sonnet-latest",
+  const client = getAnthropicClient();
+  const model = getAiModel();
+  const requestOptions: Anthropic.MessageCreateParams = {
+    model,
     max_tokens: 2048,
-    thinking: { type: "adaptive" },
+    ...(supportsAdaptiveThinking(model) ? { thinking: { type: "adaptive" } } : {}),
     system: SYSTEM_PROMPT,
     output_config: {
       format: { type: "json_schema", schema: INSIGHT_SCHEMA },
@@ -131,7 +152,9 @@ export async function generateInsightsWithProvider(input: {
         content: `Spending aggregates:\n${JSON.stringify(payload)}`,
       },
     ],
-  });
+  };
+
+  const response = await client.messages.create(requestOptions);
 
   if (response.stop_reason === "refusal") {
     throw new Error("ai-provider refusal");
@@ -149,4 +172,105 @@ export async function generateInsightsWithProvider(input: {
     sourceMonth: latestMonth,
     summary: insight.summary.slice(0, 1200),
   }));
+}
+
+/**
+ * Ask AI about spending aggregates: centralized in ai-provider.
+ */
+export async function answerSpendingQuestionWithProvider(input: {
+  question: string;
+  payload: ReturnType<typeof buildInsightPayload>;
+}): Promise<{ answer: string; refusal?: boolean }> {
+  const client = getAnthropicClient();
+  const model = getAiModel();
+  const requestOptions: Anthropic.MessageCreateParams = {
+    model,
+    max_tokens: 600,
+    ...(supportsAdaptiveThinking(model) ? { thinking: { type: "adaptive" } } : {}),
+    system:
+      "You answer one question about the user's own spending using ONLY the provided aggregates (monthly category totals and top merchants). If the aggregates cannot answer the question, say so plainly. 1-4 sentences, specific dollar figures, no advice about financial products, no invented data.",
+    messages: [
+      {
+        role: "user",
+        content: `Aggregates:\n${JSON.stringify(input.payload)}\n\nQuestion: ${input.question}`,
+      },
+    ],
+  };
+
+  const response = await client.messages.create(requestOptions);
+
+  if (response.stop_reason === "refusal") {
+    return { answer: "I can't help with that question.", refusal: true };
+  }
+  const textBlock = response.content.find(
+    (block): block is Anthropic.TextBlock => block.type === "text",
+  );
+  return { answer: textBlock?.text ?? "No answer produced." };
+}
+
+export const RECEIPT_SCHEMA = {
+  type: "object",
+  properties: {
+    merchant: { type: "string" },
+    amount: { type: "number" },
+    date: { type: "string" },
+    line_items: { type: "array", items: { type: "string" } },
+  },
+  required: ["merchant", "amount", "date", "line_items"],
+  additionalProperties: false,
+} as const;
+
+export interface ExtractedReceiptData {
+  merchant: string;
+  amount: number;
+  date: string;
+  line_items: string[];
+}
+
+/**
+ * Extract receipt data from an image: centralized in ai-provider.
+ */
+export async function extractReceiptWithProvider(input: {
+  fileBase64: string;
+  mediaType: string;
+}): Promise<{ extracted: ExtractedReceiptData | null; refusal?: boolean }> {
+  const client = getAnthropicClient();
+  const model = getAiModel();
+  const requestOptions: Anthropic.MessageCreateParams = {
+    model,
+    max_tokens: 1024,
+    ...(supportsAdaptiveThinking(model) ? { thinking: { type: "adaptive" } } : {}),
+    system:
+      "Extract the receipt's merchant name, total amount (number), purchase date (YYYY-MM-DD), and up to 15 short line-item descriptions. If a field is unreadable, use your best guess for merchant, 0 for amount, and today's implied date only if printed.",
+    output_config: { format: { type: "json_schema", schema: RECEIPT_SCHEMA } },
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: input.mediaType as "image/jpeg",
+              data: input.fileBase64,
+            },
+          },
+          { type: "text", text: "Extract this receipt." },
+        ],
+      },
+    ],
+  };
+
+  const response = await client.messages.create(requestOptions);
+
+  if (response.stop_reason === "refusal") {
+    return { extracted: null, refusal: true };
+  }
+  const textBlock = response.content.find(
+    (block): block is Anthropic.TextBlock => block.type === "text",
+  );
+  if (!textBlock) throw new Error("receipt: empty response");
+
+  const parsed = JSON.parse(textBlock.text) as ExtractedReceiptData;
+  return { extracted: parsed };
 }

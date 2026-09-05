@@ -66,11 +66,65 @@ export async function DELETE(request: NextRequest) {
     // Remove each bank connection at Plaid first (best effort).
     const items = await listActiveItems(user.id);
     const plaid = getPlaidClient();
+    let itemsRemoved = 0;
+    let itemsFailed = 0;
     for (const item of items) {
       try {
         await plaid.itemRemove({ access_token: decryptItemToken(item) });
+        itemsRemoved += 1;
       } catch (error) {
+        itemsFailed += 1;
         logError("account.delete.itemRemove", error);
+      }
+    }
+
+    // Clean user-owned Storage objects before deleting the Auth identity.
+    // Supabase prevents deleting Auth users that own Storage objects.
+    const service = createServiceClient();
+    let storageRemoved = 0;
+    if (service.storage?.from) {
+      try {
+        const avatarBucket = service.storage.from("avatars");
+        if (avatarBucket?.list && avatarBucket?.remove) {
+          const { data: avatarFiles } = await avatarBucket.list(user.id);
+          if (avatarFiles && avatarFiles.length > 0) {
+            const paths = avatarFiles.map((f: { name: string }) => `${user.id}/${f.name}`);
+            const { error: removeErr } = await avatarBucket.remove(paths);
+            if (!removeErr) storageRemoved += paths.length;
+          }
+        }
+      } catch (err) {
+        logError("account.delete.avatarCleanup", err);
+      }
+
+      try {
+        const receiptBucket = service.storage.from("receipts");
+        if (receiptBucket?.remove) {
+          const { data: receiptRows } = await service
+            .from("receipts")
+            .select("storage_path")
+            .eq("user_id", user.id);
+          const paths = new Set<string>();
+          if (Array.isArray(receiptRows)) {
+            for (const row of receiptRows) {
+              if (row.storage_path) paths.add(row.storage_path as string);
+            }
+          }
+          if (receiptBucket?.list) {
+            const { data: receiptFiles } = await receiptBucket.list(user.id);
+            if (Array.isArray(receiptFiles)) {
+              for (const f of receiptFiles) {
+                paths.add(`${user.id}/${f.name}`);
+              }
+            }
+          }
+          if (paths.size > 0) {
+            const { error: removeErr } = await receiptBucket.remove(Array.from(paths));
+            if (!removeErr) storageRemoved += paths.size;
+          }
+        }
+      } catch (err) {
+        logError("account.delete.receiptCleanup", err);
       }
     }
 
@@ -79,12 +133,15 @@ export async function DELETE(request: NextRequest) {
     await writeAudit({
       userId: user.id,
       action: "account_delete",
-      metadata: { items_removed: items.length },
+      metadata: {
+        items_removed: itemsRemoved,
+        items_failed: itemsFailed,
+        storage_objects_removed: storageRemoved,
+      },
       ip: getClientIp(request),
     });
 
     // Deleting the auth user cascades to all user-owned rows.
-    const service = createServiceClient();
     const { error } = await service.auth.admin.deleteUser(user.id);
     if (error) throw error;
 

@@ -42,7 +42,7 @@ export const MAX_REGEX_PATTERN_LENGTH = 120;
  * recorded body is checked for inner quantifiers or alternations at any nesting
  * depth, avoiding regex-on-regex backtracking risks.
  */
-const AMBIGUOUS_BODY_CHARS = new Set(["*", "+", "{", "|"]);
+const AMBIGUOUS_BODY_CHARS = new Set(["*", "+", "?", "{", "|"]);
 
 function isLoopQuantifier(char: string | undefined): boolean {
   // Only looping quantifiers (*, +, {) can cause super-linear
@@ -53,7 +53,11 @@ function isLoopQuantifier(char: string | undefined): boolean {
 
 function hasAmbiguousQuantifiedBody(body: string): boolean {
   let inClass = false;
-  for (let i = 0; i < body.length; i++) {
+  let startIdx = 0;
+  if (body.startsWith("?:")) {
+    startIdx = 2;
+  }
+  for (let i = startIdx; i < body.length; i++) {
     const char = body[i];
     if (char === "\\") {
       i++; // Skip escaped character
@@ -219,9 +223,9 @@ export function evaluateRule(
     return false;
   }
 
-  const rawMerchant = (tx.merchant ?? "").trim();
-  const rawName = (tx.name ?? "").trim();
-  const accountName = (tx.accountName ?? "").trim();
+  const rawMerchant = (tx.merchant ?? "").trim().slice(0, 300);
+  const rawName = (tx.name ?? "").trim().slice(0, 300);
+  const accountName = (tx.accountName ?? "").trim().slice(0, 300);
   const pattern = (rule.pattern ?? "").trim();
 
   if (!pattern) return false;

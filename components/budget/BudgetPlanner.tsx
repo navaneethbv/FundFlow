@@ -345,6 +345,11 @@ export default function BudgetPlanner({
     monthlyData.contributions.goals.reduce((total, goal) => total + goal.actual, 0),
   );
 
+  const hasConfiguredBudget =
+    monthlyData.totalIncome.planned > 0 ||
+    monthlyData.totalExpenses.planned > 0 ||
+    monthlyData.sections.some((s) => s.lines.some((l) => l.budgeted));
+
   return (
     <div className="space-y-5">
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -357,6 +362,15 @@ export default function BudgetPlanner({
             />
             <SeedBudgetButton proposals={proposals} month={month} currency={currency} />
           </div>
+
+          {!hasConfiguredBudget && (
+            <Panel tone="accent" className="border-dashed">
+              <p className="text-sm font-semibold">No budget configured for {formatMonth(month)}</p>
+              <p className="mt-1 text-sm text-muted">
+                You haven&apos;t set up planned spending or income for this month yet. Use the actions above to seed envelopes from recent transactions, copy last month&apos;s budget, or start from a template.
+              </p>
+            </Panel>
+          )}
 
           <div className="space-y-3">
             <SuperBand label="Income" />
@@ -426,15 +440,22 @@ export default function BudgetPlanner({
             )}
           </div>
 
-          <div
-            className={cn(
-              "flex items-center justify-between rounded-card px-5 py-4 text-base font-bold",
-              monthlyData.leftToBudget < 0 ? "bg-danger text-danger-foreground" : "bg-success text-success-foreground",
-            )}
-          >
-            <span>Left to Budget</span>
-            <span data-money>{formatCurrency(monthlyData.leftToBudget, currency)}</span>
-          </div>
+          {hasConfiguredBudget ? (
+            <div
+              className={cn(
+                "flex items-center justify-between rounded-card px-5 py-4 text-base font-bold",
+                monthlyData.leftToBudget < 0 ? "bg-danger text-danger-foreground" : "bg-success text-success-foreground",
+              )}
+            >
+              <span>Left to Budget</span>
+              <span data-money>{formatCurrency(monthlyData.leftToBudget, currency)}</span>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between rounded-card border border-panel-border bg-panel-2 px-5 py-4 text-base font-medium text-muted">
+              <span>Budget Status</span>
+              <span>Not yet configured</span>
+            </div>
+          )}
         </div>
 
         <BudgetRightRail

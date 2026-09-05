@@ -41,6 +41,31 @@ export function buildAuditLogPage(
   };
 }
 
+export function formatDeviceLabel(ua: string | null): string {
+  if (!ua || ua.trim() === "") return "Unknown device";
+  if (!ua.includes("Mozilla/") && !ua.includes(";")) {
+    return ua.trim();
+  }
+  let os = "";
+  if (/Macintosh|Mac OS X/i.test(ua)) os = "Mac";
+  else if (/iPhone/i.test(ua)) os = "iPhone";
+  else if (/iPad/i.test(ua)) os = "iPad";
+  else if (/Windows/i.test(ua)) os = "Windows";
+  else if (/Android/i.test(ua)) os = "Android";
+  else if (/Linux/i.test(ua)) os = "Linux";
+
+  let browser = "";
+  if (/Edg\//i.test(ua)) browser = "Edge";
+  else if (/Chrome\//i.test(ua) && !/Chromium|Edg\//i.test(ua)) browser = "Chrome";
+  else if (/Safari\//i.test(ua) && !/Chrome|Chromium|Edg\//i.test(ua)) browser = "Safari";
+  else if (/Firefox\//i.test(ua)) browser = "Firefox";
+
+  if (browser && os) return `${browser} on ${os}`;
+  if (browser) return browser;
+  if (os) return os;
+  return ua.slice(0, 40);
+}
+
 export function buildSessionList(
   sessions: { id: string; current: boolean; userAgent: string | null; lastSeenAt: string }[],
 ) {
@@ -48,7 +73,7 @@ export function buildSessionList(
     .sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt))
     .map((session) => ({
       id: session.id,
-      label: session.userAgent || "Unknown device",
+      label: formatDeviceLabel(session.userAgent),
       current: session.current,
     }));
 }

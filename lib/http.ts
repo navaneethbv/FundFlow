@@ -52,8 +52,15 @@ export async function requireUser(): Promise<AuthedContext | NextResponse> {
 
   // Enforce MFA server-side: an MFA-enrolled user with a password-only (aal1)
   // session must complete the TOTP challenge before any API grants access.
-  const { data: aal } =
+  const { data: aal, error: aalError } =
     await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (aalError) {
+    logError("requireUser.mfa", aalError);
+    return NextResponse.json(
+      { error: "Authentication assurance check temporarily unavailable" },
+      { status: 503 },
+    );
+  }
   if (needsMfaStepUp(aal?.currentLevel, aal?.nextLevel)) {
     return NextResponse.json(
       { error: "MFA verification required" },

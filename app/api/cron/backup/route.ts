@@ -47,11 +47,29 @@ export async function GET(request: NextRequest) {
     if (error) throw error;
 
     const today = new Date().toISOString().slice(0, 10);
+    const monthPrefix = today.slice(0, 7);
     let sent = 0;
-    const failures: string[] = [];
+    let skipped = 0;
+    const failures: { userId: string; error: string }[] = [];
+
+    // Check delivery journal/audit log so retries don't re-send to users who already succeeded
+    const { data: recentAudits } = await service
+      .from("audit_logs")
+      .select("user_id")
+      .eq("action", "data_backup")
+      .gte("created_at", `${monthPrefix}-01T00:00:00Z`);
+
+    const alreadySentUsers = new Set(
+      (recentAudits ?? []).map((r) => r.user_id).filter(Boolean) as string[],
+    );
 
     for (const profile of profiles ?? []) {
       const userId = profile.id as string;
+      if (alreadySentUsers.has(userId)) {
+        skipped += 1;
+        continue;
+      }
+
       try {
         // ADDING A USER-OWNED TABLE? Add it once in lib/user-data.ts — the
         // takeout route and this backup both read from that list, so neither
@@ -103,7 +121,10 @@ export async function GET(request: NextRequest) {
         sent += 1;
       } catch (err) {
         logError("cron.backup.user", err);
-        failures.push(err instanceof Error ? err.name : "unknown_error");
+        failures.push({
+          userId,
+          error: err instanceof Error ? err.name : "unknown_error",
+        });
       }
     }
 
@@ -111,11 +132,27 @@ export async function GET(request: NextRequest) {
       await alertCronFailure("backup", {
         failed: failures.length,
         total: (profiles ?? []).length,
-        firstError: failures[0],
+        firstError: failures[0].error,
       });
+      return NextResponse.json(
+        {
+          ok: false,
+          users: (profiles ?? []).length,
+          sent,
+          skipped,
+          failed: failures.length,
+          failures,
+        },
+        { status: sent > 0 ? 207 : 500 },
+      );
     }
 
-    return NextResponse.json({ ok: true, users: (profiles ?? []).length, sent });
+    return NextResponse.json({
+      ok: true,
+      users: (profiles ?? []).length,
+      sent,
+      skipped,
+    });
   } catch (error) {
     await alertCronFailure("backup", { failed: 1, total: 1, firstError: "run_crashed" });
     return errorResponse("cron.backup", error);

@@ -89,9 +89,10 @@ function stepMonth(state: ForecastState, assumptions: ForecastAssumptions, annua
   const monthlyCashYield = assumptions.annualCashYieldPct / 100 / 12;
   const monthlyReturn = annualReturnPct / 100 / 12;
 
-  const cash = state.cash * (1 + monthlyCashYield) + assumptions.monthlySavings;
+  const actualDebtPayment = Math.max(0, Math.min(state.liabilities, assumptions.monthlyDebtPayment));
+  const cash = state.cash * (1 + monthlyCashYield) + assumptions.monthlySavings - actualDebtPayment;
   const investments = Math.max(0, state.investments) * (1 + monthlyReturn);
-  const liabilities = Math.max(0, state.liabilities - assumptions.monthlyDebtPayment);
+  const liabilities = Math.max(0, state.liabilities - actualDebtPayment);
 
   return { cash, investments, liabilities };
 }
@@ -246,7 +247,8 @@ export function computeForecastDefaults(
     const totals = financeTotals(byMonth.get(month) ?? []);
     return totals.income - totals.expenses;
   });
-  const monthlySavings = monthlyNet.length > 0 ? Math.max(0, round2(medianOf(monthlyNet))) : 0;
+  // Do not clamp negative savings to zero: spending deficits are real
+  const monthlySavings = monthlyNet.length > 0 ? round2(medianOf(monthlyNet)) : 0;
 
   const monthlyDebtAmounts = months
     .map((month) =>

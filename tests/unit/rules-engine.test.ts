@@ -181,6 +181,8 @@ describe("Smart Rules Engine: Rule Evaluation", () => {
     expect(safeCompileRegex("(?:a+)+")).toBeNull(); // non-capturing nested +
     expect(safeCompileRegex("((a+))+")).toBeNull(); // deeply nested +
     expect(safeCompileRegex("((a|b))+")).toBeNull(); // nested alternation with quantifier
+    expect(safeCompileRegex("^(a?a?)+$")).toBeNull(); // nested optional quantifiers
+    expect(safeCompileRegex("(a?)+")).toBeNull(); // nested optional inside loop quantifier
     expect(safeCompileRegex("[incomplete")).toBeNull(); // invalid syntax
 
     // A quantified group with a plain literal body stays allowed, as does a

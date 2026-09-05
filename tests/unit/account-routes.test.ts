@@ -485,7 +485,91 @@ describe("DELETE /api/account", () => {
     const res = await accountDelete(del("http://localhost/api/account", { code: "secret" }));
     expect(res.status).toBe(200);
     expect(mockWriteAudit).toHaveBeenCalledWith(
-      expect.objectContaining({ action: "account_delete" }),
+      expect.objectContaining({
+        action: "account_delete",
+        metadata: expect.objectContaining({
+          items_removed: 0,
+          items_failed: 0,
+          storage_objects_removed: 0,
+        }),
+      }),
+    );
+  });
+
+  it("removes user storage objects from avatars and receipts buckets before user deletion", async () => {
+    const mockSupabase = {
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: USER, email: "user@example.com" } },
+          error: null,
+        }),
+        mfa: {
+          listFactors: vi.fn().mockResolvedValue({
+            data: { totp: [] },
+            error: null,
+          }),
+        },
+        signInWithPassword: vi.fn().mockResolvedValue({
+          data: { user: { id: USER } },
+          error: null,
+        }),
+      },
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+        }),
+      }),
+    };
+
+    const avatarRemove = vi.fn().mockResolvedValue({ error: null });
+    const avatarList = vi.fn().mockResolvedValue({ data: [{ name: "avatar.png" }], error: null });
+    const receiptRemove = vi.fn().mockResolvedValue({ error: null });
+    const receiptList = vi.fn().mockResolvedValue({ data: [{ name: "rec-1.jpg" }], error: null });
+
+    serviceClient = Object.assign(
+      clientStub({
+        plaid_items: { data: [] },
+        rate_limit_hit: { data: true },
+        receipts: { data: [{ storage_path: `${USER}/rec-1.jpg` }] },
+      }),
+      {
+        auth: {
+          admin: {
+            deleteUser: vi.fn().mockResolvedValue({ error: null }),
+          },
+        },
+        storage: {
+          from: vi.fn((bucket: string) => {
+            if (bucket === "avatars") {
+              return { list: avatarList, remove: avatarRemove };
+            }
+            if (bucket === "receipts") {
+              return { list: receiptList, remove: receiptRemove };
+            }
+            return { list: vi.fn().mockResolvedValue({ data: [] }), remove: vi.fn() };
+          }),
+        },
+      },
+    );
+
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER, email: "user@example.com" },
+      supabase: mockSupabase,
+    });
+
+    const res = await accountDelete(del("http://localhost/api/account", { code: "secret" }));
+    expect(res.status).toBe(200);
+    expect(avatarRemove).toHaveBeenCalledWith([`${USER}/avatar.png`]);
+    expect(receiptRemove).toHaveBeenCalledWith([`${USER}/rec-1.jpg`]);
+    expect(mockWriteAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "account_delete",
+        metadata: expect.objectContaining({
+          items_removed: 0,
+          items_failed: 0,
+          storage_objects_removed: 2,
+        }),
+      }),
     );
   });
 });

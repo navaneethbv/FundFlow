@@ -7,6 +7,54 @@ import Panel from "@/components/ui/Panel";
 interface AuditRow {
   action: string;
   metadata: Record<string, unknown>;
+  createdAt?: string;
+}
+
+const ACTION_LABELS: Record<string, string> = {
+  login: "Signed in",
+  logout: "Signed out",
+  signup: "Account created",
+  mfa_enroll: "MFA factor enrolled",
+  mfa_unenroll: "MFA factor removed",
+  mfa_verify: "MFA verified",
+  passkey_register: "Passkey registered",
+  passkey_delete: "Passkey deleted",
+  plaid_connect: "Bank connected",
+  plaid_disconnect: "Bank disconnected",
+  plaid_reconnect: "Bank reconnected",
+  plaid_repair: "Bank repaired",
+  data_refresh: "Bank data refreshed",
+  data_export: "Data exported",
+  data_import: "Data imported",
+  data_backup: "Backup created",
+  account_delete: "Account deletion requested",
+  receipt_scanned: "Receipt scanned",
+  receipt_uploaded: "Receipt uploaded",
+  ai_question: "Asked spending question",
+  household_invite_sent: "Household invitation sent",
+  household_invite_accepted: "Household invitation accepted",
+  calendar_token_created: "Calendar token created",
+  calendar_token_revoked: "Calendar token revoked",
+};
+
+function formatActionLabel(action: string): string {
+  return ACTION_LABELS[action] ?? action.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatMetadataSummary(metadata: Record<string, unknown>): string | null {
+  const parts: string[] = [];
+  if (metadata.institution) parts.push(String(metadata.institution));
+  if (metadata.format) parts.push(`Format: ${metadata.format}`);
+  if (metadata.count !== undefined) parts.push(`${metadata.count} items`);
+  if (metadata.rows !== undefined) parts.push(`${metadata.rows} rows`);
+  if (metadata.status) parts.push(`Status: ${metadata.status}`);
+  if (parts.length > 0) return parts.join(" · ");
+
+  const entries = Object.entries(metadata).filter(
+    ([k]) => !k.toLowerCase().includes("token") && !k.toLowerCase().includes("secret"),
+  );
+  if (entries.length === 0) return null;
+  return entries.map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`).join(" · ");
 }
 
 export default function AuditLogSection({ initialRows }: Readonly<{ initialRows: AuditRow[] }>) {
@@ -37,12 +85,22 @@ export default function AuditLogSection({ initialRows }: Readonly<{ initialRows:
         <p className="text-sm text-muted">No account activity has been recorded yet.</p>
       ) : (
         <ul className="space-y-2 text-sm">
-          {rows.slice(0, 5).map((row, index) => (
-            <li key={`${row.action}-${index}`} className="rounded-field bg-panel-2 p-3">
-              <span className="font-semibold">{row.action}</span>
-              <span className="ml-2 text-xs text-muted">{Object.keys(row.metadata).join(", ") || "no metadata"}</span>
-            </li>
-          ))}
+          {rows.slice(0, 5).map((row, index) => {
+            const summary = formatMetadataSummary(row.metadata);
+            return (
+              <li key={`${row.action}-${index}`} className="rounded-field bg-panel-2 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-foreground">{formatActionLabel(row.action)}</span>
+                  <span className="text-xs text-muted font-mono">{row.action}</span>
+                </div>
+                {summary && (
+                  <p className="mt-1 text-xs text-muted">
+                    {summary}
+                  </p>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
       <Button className="mt-4" variant="secondary" onClick={refresh} loading={refreshing}>

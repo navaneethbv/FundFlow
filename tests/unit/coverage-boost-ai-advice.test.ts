@@ -344,7 +344,12 @@ describe("ai/receipt route", () => {
   });
 
   it("validates the upload and rate limit", async () => {
-    authed(clientStub({ ai_settings: { data: { enabled: true }, error: null } }));
+    authed(
+      clientStub({
+        ai_settings: { data: { enabled: true }, error: null },
+        profiles: { data: { ai_export_enabled: true }, error: null },
+      }),
+    );
     expect((await aiReceiptPost(formRequest([]))).status).toBe(400);
     expect((await aiReceiptPost(formRequest([], true))).status).toBe(400);
     const big = new File([new Uint8Array(5 * 1024 * 1024 + 1)], "r.png", { type: "image/png" });
@@ -358,6 +363,7 @@ describe("ai/receipt route", () => {
   it("scans a receipt, matches a transaction, and covers the catch", async () => {
     const supabase = clientStub({
       ai_settings: { data: { enabled: true }, error: null },
+      profiles: { data: { ai_export_enabled: true }, error: null },
       transactions: {
         data: [{ id: "t1", date: "2026-07-10", amount: 5.5, merchant_name: "Starbucks", name: "SB" }],
       },

@@ -159,7 +159,10 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
 
   return (
     <AppShell active="reports" email={user.email}>
-      <PageHeader title="Reports" />
+      <PageHeader
+        title="Reports"
+        description="Custom multidimensional analysis across dates, categories, and merchants. For periodic cash flow trends, see Cash Flow."
+      />
 
       <Tabs
         items={(Object.keys(TAB_LABELS) as ReportTab[]).map((tab) => ({

@@ -225,6 +225,7 @@ describe("POST /api/ai/receipt", () => {
       user: { id: USER },
       supabase: clientStub({
         ai_settings: { data: { enabled: true } },
+        profiles: { data: { ai_export_enabled: true } },
         transactions: { data: transactions },
       }),
     });

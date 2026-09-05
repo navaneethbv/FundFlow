@@ -33,14 +33,14 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
   if (!user) notFound();
 
   const today = localDateKey();
-  const [{ startingState, defaults }, params] = await Promise.all([
+  const [{ startingState, defaults, monthlyExpenses }, params] = await Promise.all([
     loadForecastPageData(supabase, user.id, today),
     searchParams,
   ]);
   const assumptions = parseForecastAssumptions(params, defaults);
   const currentNetWorth = startingState.cash + startingState.investments - startingState.liabilities;
   const points = forecastNetWorth(startingState, assumptions);
-  const milestones = computeForecastMilestones(startingState, assumptions);
+  const milestones = computeForecastMilestones(startingState, assumptions, monthlyExpenses);
   const { data: lifeEventRows, error: lifeEventsError } = await supabase
     .from("life_events")
     .select("id, event_type, start_month, amount, duration_months, label")

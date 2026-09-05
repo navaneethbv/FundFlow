@@ -90,9 +90,19 @@ export default function ProfileSection({
 
   async function removeAvatar() {
     setBusy(true);
+    setError(null);
+    setStatus(null);
     try {
-      await fetch("/api/settings/profile", { method: "DELETE" });
+      const res = await fetch("/api/settings/profile", { method: "DELETE" });
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(payload.error ?? "Could not remove the photo.");
+        return;
+      }
+      setStatus("Photo removed.");
       router.refresh();
+    } catch {
+      setError("Network error while removing photo.");
     } finally {
       setBusy(false);
     }
@@ -148,9 +158,11 @@ export default function ProfileSection({
         </Field>
         {error && <p className="text-sm text-danger">{error}</p>}
         {status && <p className="text-sm text-success">{status}</p>}
-        <Button type="submit" size="lg" disabled={busy}>
-          {busy ? "Saving…" : "Update Profile"}
-        </Button>
+        <div className="pt-1">
+          <Button type="submit" size="md" disabled={busy}>
+            {busy ? "Saving…" : "Update Profile"}
+          </Button>
+        </div>
       </form>
     </Panel>
   );

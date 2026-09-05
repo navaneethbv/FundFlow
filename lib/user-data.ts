@@ -58,7 +58,7 @@ export const USER_DATA_TABLES: UserDataTableSpec[] = [
   table("transactions", "date, amount, iso_currency_code, name, merchant_name, pfc_primary, pfc_detailed, pending", "user", false, "id, plaid_transaction_id, account_id, manual_account_id, source"),
   table("budgets", "category, monthly_limit, rollover_enabled", "user", false, "id"),
   table("goals", "name, target_amount, saved_amount, target_date, goal_type", "user", false, "id"),
-  table("merchant_rules", "match_type, pattern, display_name, category, enabled"),
+  table("merchant_rules", "match_type, pattern, display_name, category, enabled, tags, amount_operator, amount_value, amount_max_value"),
   table("manual_accounts", "name, account_type, balance, include_in_net_worth", "user", false, "id"),
   table("account_balance_snapshots", "account_id, manual_account_id, snapshot_date, current_balance, available_balance, iso_currency_code, captured_at"),
   table("alert_preferences", "broken_bank, budget_exceeded, goal_reached, large_transaction, low_cash_forecast"),
@@ -90,10 +90,53 @@ export const USER_DATA_TABLES: UserDataTableSpec[] = [
   table("budget_templates", "name, items, created_at"),
   table("linked_transfers", "out_transaction_id, in_transaction_id, amount, created_at"),
   table("account_reconciliations", "account_id, manual_account_id, statement_date, statement_balance, created_at"),
+  table("account_preferences", "account_id, manual_account_id, is_hidden, include_in_net_worth, custom_name, display_order", "user"),
+  table("credit_card_bills", "account_id, balance, minimum_payment, due_date, apr", "user"),
+  table("life_events", "event_type, target_date, target_amount, notes", "user"),
 ];
+
+async function fetchPagedSpecRows(
+  client: Pick<SupabaseClient, "from">,
+  spec: UserDataTableSpec,
+  userId: string,
+  options: { includeRestoreKeys?: boolean },
+): Promise<{ data: unknown[]; error: unknown }> {
+  const PAGE_SIZE = 1000;
+  const select =
+    options.includeRestoreKeys && spec.restoreKeys
+      ? spec.select + ", " + spec.restoreKeys
+      : spec.select;
+
+  const rows: unknown[] = [];
+  for (let page = 0; ; page++) {
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    const builder = client.from(spec.table).select(select);
+    const query = (
+      spec.scope === "user"
+        ? builder.eq("user_id", userId)
+        : spec.scope === "owner"
+          ? builder.eq("owner_user_id", userId)
+          : builder.or(`paid_by.eq.${userId},owed_user_id.eq.${userId}`)
+    ) as unknown as {
+      range?: (from: number, to: number) => PromiseLike<{ data?: unknown; error?: unknown }>;
+    } & PromiseLike<{ data?: unknown; error?: unknown }>;
+
+    const result =
+      typeof query?.range === "function"
+        ? await query.range(from, to)
+        : await query;
+    if (result?.error) return { data: [], error: result.error };
+    const batch = (result?.data ?? []) as unknown[];
+    rows.push(...batch);
+    if (typeof query?.range !== "function" || batch.length < PAGE_SIZE) break;
+  }
+  return { data: rows, error: null };
+}
 
 /**
  * Fetch every user-owned section in parallel, keyed by archive section name.
+ * Uses deterministic pagination (1,000 rows/page) so large tables are not truncated.
  * Throws on the first failing query; null data is coerced to empty arrays so
  * callers can spread the result straight into a payload.
  */
@@ -108,14 +151,7 @@ export async function collectUserData(
     if (spec.gated && !investmentsEnabled) {
       return Promise.resolve({ data: [], error: null });
     }
-    const select =
-      options.includeRestoreKeys && spec.restoreKeys
-        ? spec.select + ", " + spec.restoreKeys
-        : spec.select;
-    const query = client.from(spec.table).select(select);
-    if (spec.scope === "user") return query.eq("user_id", userId);
-    if (spec.scope === "owner") return query.eq("owner_user_id", userId);
-    return query.or(`paid_by.eq.${userId},owed_user_id.eq.${userId}`);
+    return fetchPagedSpecRows(client, spec, userId, options);
   });
 
   const results = await Promise.all(queries);
