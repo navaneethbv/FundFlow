@@ -17,6 +17,9 @@ vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: vi.fn(async () => true) }))
 const OUT_ID = "11111111-1111-1111-1111-111111111101";
 const IN_ID = "11111111-1111-1111-1111-111111111102";
 const SUBJECT = `${OUT_ID}:${IN_ID}`;
+const OUT_ID_AFTER_IN_ID = "ffffffff-ffff-ffff-ffff-ffffffffffff";
+const IN_ID_BEFORE_OUT_ID = "00000000-0000-0000-0000-000000000000";
+const DIRECTION_INDEPENDENT_SUBJECT = `${IN_ID_BEFORE_OUT_ID}:${OUT_ID_AFTER_IN_ID}`;
 
 function thenable(data: unknown, error: unknown = null) {
   const builder: Record<string, unknown> = {
@@ -130,6 +133,53 @@ describe("POST /api/transactions/transfers", () => {
       }),
     );
     expect(res.status).toBe(200);
+  });
+
+  it("uses a direction-independent subject when the outgoing UUID sorts after the incoming UUID", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "transactions") {
+        return thenable([
+          {
+            id: OUT_ID_AFTER_IN_ID,
+            date: "2026-09-01",
+            amount: 500,
+            account_id: "a1",
+            manual_account_id: null,
+          },
+          {
+            id: IN_ID_BEFORE_OUT_ID,
+            date: "2026-09-02",
+            amount: -500,
+            account_id: "a2",
+            manual_account_id: null,
+          },
+        ]);
+      }
+      if (table === "linked_transfers") return { select: () => thenable([]) };
+      throw new Error(`unexpected ${table}`);
+    });
+
+    const res = await POST(
+      new NextRequest("http://localhost/api/transactions/transfers", {
+        method: "POST",
+        body: JSON.stringify({
+          subject_id: DIRECTION_INDEPENDENT_SUBJECT,
+          decision: "confirmed",
+          out_id: OUT_ID_AFTER_IN_ID,
+          in_id: IN_ID_BEFORE_OUT_ID,
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(rpc).toHaveBeenCalledWith(
+      "confirm_transfer_link",
+      expect.objectContaining({
+        p_subject_id: DIRECTION_INDEPENDENT_SUBJECT,
+        p_out_transaction_id: OUT_ID_AFTER_IN_ID,
+        p_in_transaction_id: IN_ID_BEFORE_OUT_ID,
+      }),
+    );
   });
 
   it("validates the current pair before persisting a confirmed decision", async () => {
