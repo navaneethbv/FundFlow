@@ -241,6 +241,30 @@ describe("executeRestore — chunking and failure branches", () => {
     );
   });
 
+  it("rejects multiple profile preference rows", async () => {
+    const { service } = serviceStub();
+    const archive = {
+      account_preferences: [{ dashboard_prefs: {} }, { dashboard_prefs: {} }],
+    };
+    const plan = buildRestorePlan(archive);
+
+    const result = await executeRestore(service as never, "user-123", plan, archive);
+
+    expect(result.failedTable).toBe("account_preferences");
+  });
+
+  it("rejects malformed profile preference payloads", async () => {
+    const { service } = serviceStub();
+    const archive = {
+      account_preferences: [{ dashboard_prefs: ["invalid"] }],
+    };
+    const plan = buildRestorePlan(archive);
+
+    const result = await executeRestore(service as never, "user-123", plan, archive);
+
+    expect(result.failedTable).toBe("account_preferences");
+  });
+
   it("handles non-object rows and missing archive sections safely", async () => {
     const { service } = serviceStub();
     const plan1 = buildRestorePlan({ budgets: [{ id: "b1" }] });

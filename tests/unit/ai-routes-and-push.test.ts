@@ -164,6 +164,33 @@ describe("POST /api/ai/ask", () => {
     expect(mockMessagesCreate).not.toHaveBeenCalled();
   });
 
+  it("503s when AI consent preferences cannot be read", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER },
+      supabase: clientStub({
+        ai_settings: { error: { message: "settings unavailable" } },
+        profiles: { data: { ai_export_enabled: true } },
+      }),
+    });
+
+    const res = await askPost(askRequest("where did it go?"));
+
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toEqual({
+      error: "AI preferences temporarily unavailable.",
+    });
+  });
+
+  it("403s when the privacy-safe export is denied after consent", async () => {
+    consentingUser();
+    mockFetchRows.mockResolvedValue({ allowed: false });
+
+    const res = await askPost(askRequest("where did it go?"));
+
+    expect(res.status).toBe(403);
+    expect(mockMessagesCreate).not.toHaveBeenCalled();
+  });
+
   it("429s once the daily question limit is spent", async () => {
     consentingUser();
     mockCheckRateLimit.mockResolvedValue(false);
@@ -637,6 +664,17 @@ describe("POST /api/ai/insights", () => {
 
     const res = await insightsPost();
     expect(res.status).toBe(200);
+  });
+
+  it("returns no insights when the privacy-safe export is denied", async () => {
+    consentingUser();
+    mockFetchRows.mockResolvedValue({ allowed: false });
+
+    const res = await insightsPost();
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ insights: [] });
+    expect(serviceClient.callsOn("ai_insights")).toHaveLength(0);
   });
 
   it("handles sendPushToUser outer error logging", async () => {
