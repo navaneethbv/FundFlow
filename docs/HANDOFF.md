@@ -35,8 +35,13 @@ What this round changed:
 Verification: 444 test files, 4,900 unit tests, all passing.
 Branch coverage is 95.07% against the 95% gate; lint, typecheck, `next build` (70 routes) and the palette validator are clean.
 
+`.github/workflows/migration-check.yml` applies every migration to a clean Postgres and then runs `scripts/check-rls.sql`, so both new migrations are executed in CI, not merely reviewed.
+That run is also what caught `backup_deliveries` having RLS enabled with no policy; it is now in the script's documented deny-all exception list, beside `rate_limit_counters`.
+`check-rls.sql` gained an FF-02 assertion in the same pass: every `authenticated` policy on a `public` table must carry both the revocation and MFA gates, excepting only `profiles`, `user_session_records` and `mfa_backup_codes`.
+Checking it against the applied schema rather than trusting the migration is deliberate, because the next migration that copies an owner-only policy from an older table would otherwise reopen the hole silently.
+
 **Not verified, and not claimed.**
-Neither new migration has been applied to the linked project, and neither was run against a real Postgres (no Docker on this machine), so the `DO` block in the gate migration is reviewed but unexecuted.
+Neither migration has been applied to the *linked* project.
 Apply both by hand before deploying: the backup cron writes to `backup_deliveries` on every run, so shipping the code without `20260905110000` fails every backup.
 Production exploit testing and a live restore from a real archive were also not performed.
 

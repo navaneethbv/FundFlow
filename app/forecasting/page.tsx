@@ -8,6 +8,7 @@ import { isFeatureEnabled } from "@/lib/feature-flags";
 import { formatCurrency } from "@/lib/format";
 import { localDateKey } from "@/lib/format-date";
 import { computeForecastMilestones, forecastNetWorth, parseForecastAssumptions } from "@/lib/forecasting";
+import type { ForecastStartingGaps } from "@/lib/forecasting";
 import LifeEventsPanel from "@/components/forecasting/LifeEventsPanel";
 import type { LifeEvent } from "@/lib/life-events";
 import { loadForecastPageData } from "@/lib/forecasting-data";
@@ -22,6 +23,29 @@ interface PageProps {
 export const metadata = {
   title: "Forecasting",
 };
+
+function pluralAccounts(count: number): string {
+  return count === 1 ? "1 account" : `${count} accounts`;
+}
+
+/**
+ * Names what the balance sheet left out, so the page can say so rather than
+ * projecting from a silently incomplete starting point (a zeroed unknown
+ * balance reads as a real $0).
+ */
+function describeStartingPointGaps(gaps: ForecastStartingGaps): string[] {
+  const notes: string[] = [];
+  if (gaps.excludedFromNetWorth > 0) {
+    notes.push(`${pluralAccounts(gaps.excludedFromNetWorth)} you excluded from net worth`);
+  }
+  if (gaps.unknownBalance > 0) {
+    notes.push(`${pluralAccounts(gaps.unknownBalance)} with no reported balance`);
+  }
+  if (gaps.foreignCurrencies.length > 0) {
+    notes.push(`balances in ${gaps.foreignCurrencies.join(", ")} (no exchange rate)`);
+  }
+  return notes;
+}
 
 export default async function ForecastingPage({ searchParams }: Readonly<PageProps>) {
   if (!isFeatureEnabled("forecastingPage")) notFound();
@@ -40,18 +64,7 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
   const assumptions = parseForecastAssumptions(params, defaults);
   // Say what the balance sheet left out rather than projecting from a silently
   // incomplete starting point (a zeroed unknown balance reads as a real $0).
-  const { gaps } = startingState;
-  const startingPointNotes = [
-    gaps.excludedFromNetWorth > 0
-      ? `${gaps.excludedFromNetWorth} account${gaps.excludedFromNetWorth === 1 ? "" : "s"} you excluded from net worth`
-      : null,
-    gaps.unknownBalance > 0
-      ? `${gaps.unknownBalance} account${gaps.unknownBalance === 1 ? "" : "s"} with no reported balance`
-      : null,
-    gaps.foreignCurrencies.length > 0
-      ? `balances in ${gaps.foreignCurrencies.join(", ")} (no exchange rate)`
-      : null,
-  ].filter((note): note is string => note !== null);
+  const startingPointNotes = describeStartingPointGaps(startingState.gaps);
   const currentNetWorth = startingState.cash + startingState.investments - startingState.liabilities;
   const points = forecastNetWorth(startingState, assumptions);
   const milestones = computeForecastMilestones(startingState, assumptions, monthlyExpenses);

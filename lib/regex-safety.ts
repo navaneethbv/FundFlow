@@ -89,8 +89,8 @@ function addRange(set: CharSet, from: string, to: string): void {
   }
 }
 
-const DIGIT_RE = /[0-9]/;
-const WORD_RE = /[A-Za-z0-9_]/;
+const DIGIT_RE = /\d/;
+const WORD_RE = /\w/;
 const SPACE_RE = /\s/;
 
 function charMatchesClass(char: string, cls: PredefinedClass): boolean {
@@ -105,25 +105,42 @@ function classesOverlap(a: PredefinedClass, b: PredefinedClass): boolean {
   return (a === "s") === (b === "s");
 }
 
-function setsOverlap(a: CharSet, b: CharSet): boolean {
-  if (a.any || b.any) return true;
-  for (const literal of a.literals) {
-    if (b.literals.has(literal)) return true;
-    for (const cls of b.classes) {
+function anyLiteralInClasses(literals: Set<string>, classes: Set<PredefinedClass>): boolean {
+  for (const literal of literals) {
+    for (const cls of classes) {
       if (charMatchesClass(literal, cls)) return true;
     }
   }
-  for (const literal of b.literals) {
-    for (const cls of a.classes) {
-      if (charMatchesClass(literal, cls)) return true;
-    }
+  return false;
+}
+
+function anySharedLiteral(a: Set<string>, b: Set<string>): boolean {
+  for (const literal of a) {
+    if (b.has(literal)) return true;
   }
-  for (const clsA of a.classes) {
-    for (const clsB of b.classes) {
+  return false;
+}
+
+function anyOverlappingClass(
+  a: Set<PredefinedClass>,
+  b: Set<PredefinedClass>,
+): boolean {
+  for (const clsA of a) {
+    for (const clsB of b) {
       if (classesOverlap(clsA, clsB)) return true;
     }
   }
   return false;
+}
+
+function setsOverlap(a: CharSet, b: CharSet): boolean {
+  if (a.any || b.any) return true;
+  return (
+    anySharedLiteral(a.literals, b.literals) ||
+    anyLiteralInClasses(a.literals, b.classes) ||
+    anyLiteralInClasses(b.literals, a.classes) ||
+    anyOverlappingClass(a.classes, b.classes)
+  );
 }
 
 interface Quantifier {
@@ -149,16 +166,32 @@ function readQuantifier(pattern: string, index: number): { quantifier: Quantifie
 
   const close = pattern.indexOf("}", index);
   if (close === -1) return { quantifier: NO_QUANTIFIER, next: index };
-  const body = pattern.slice(index + 1, close);
-  const range = /^(\d+)(,(\d*)?)?$/.exec(body);
-  if (!range) return { quantifier: NO_QUANTIFIER, next: index };
+  const bounds = parseBraceBounds(pattern.slice(index + 1, close));
+  if (!bounds) return { quantifier: NO_QUANTIFIER, next: index };
 
-  const min = Number(range[1]);
-  let max = min;
-  if (range[2] !== undefined) {
-    max = range[3] ? Number(range[3]) : Number.POSITIVE_INFINITY;
-  }
-  return { quantifier: { min, loop: max > 1 }, next: skipLazy(pattern, close + 1) };
+  return {
+    quantifier: { min: bounds.min, loop: bounds.max > 1 },
+    next: skipLazy(pattern, close + 1),
+  };
+}
+
+const DIGITS_ONLY = /^\d+$/;
+
+/**
+ * Reads the inside of `{...}`: `3`, `2,`, or `2,5`. Returns null for anything
+ * else, which the caller treats as a literal brace rather than a quantifier.
+ * Split out of a regex because the natural one (`^(\d+)(,(\d*)?)?$`) has a
+ * sub-pattern that matches the empty string.
+ */
+function parseBraceBounds(body: string): { min: number; max: number } | null {
+  const parts = body.split(",");
+  if (parts.length > 2 || !DIGITS_ONLY.test(parts[0])) return null;
+
+  const min = Number(parts[0]);
+  if (parts.length === 1) return { min, max: min };
+  if (parts[1] === "") return { min, max: Number.POSITIVE_INFINITY };
+  if (!DIGITS_ONLY.test(parts[1])) return null;
+  return { min, max: Number(parts[1]) };
 }
 
 function skipLazy(pattern: string, index: number): number {
@@ -303,83 +336,99 @@ interface GroupFrame {
   openIndex: number;
 }
 
+const GROUP_PREFIX = /^\((\?[:=!]|\?<[=!]|\?<[A-Za-z_$][\w$]*>)/;
+
+/** The scanner's mutable position: where it is, and what it has counted. */
+interface ScanState {
+  stack: GroupFrame[];
+  sequence: SequenceState;
+  loopCount: number;
+  index: number;
+}
+
+/** Reads a plain atom (escape, class, `.`, or literal) at `scan.index`. */
+function readPlainAtom(
+  pattern: string,
+  index: number,
+): { set: CharSet; atomEnd: number } | "zero-width" {
+  const char = pattern[index];
+  if (char === "\\") {
+    const escaped = pattern[index + 1];
+    if (escaped !== undefined && ZERO_WIDTH_ESCAPES.has(escaped)) return "zero-width";
+    return { set: escapeSet(escaped), atomEnd: index + 2 };
+  }
+  if (char === "[") {
+    const parsed = readCharClass(pattern, index);
+    return { set: parsed.set, atomEnd: parsed.next };
+  }
+  if (char === ".") return { set: anySet(), atomEnd: index + 1 };
+  return { set: literalSet(char), atomEnd: index + 1 };
+}
+
+/** Closes the group opened at the top of the stack. False rejects the pattern. */
+function closeGroup(pattern: string, scan: ScanState): boolean {
+  const frame = scan.stack.pop();
+  if (!frame) return false; // Unbalanced; RegExp would reject it anyway.
+
+  const groupSet = sequenceFirstSet(scan.sequence);
+  const { quantifier, next } = readQuantifier(pattern, scan.index + 1);
+  if (quantifier.loop) {
+    scan.loopCount += 1;
+    if (bodyIsAmbiguous(pattern.slice(frame.openIndex + 1, scan.index))) return false;
+  }
+  scan.sequence = frame.state;
+  scan.index = next;
+  return acceptAtom(scan.sequence, groupSet, quantifier);
+}
+
+/** Consumes one atom and its quantifier. False rejects the pattern. */
+function consumeAtom(pattern: string, scan: ScanState): boolean {
+  const atom = readPlainAtom(pattern, scan.index);
+  if (atom === "zero-width") {
+    scan.index += 2;
+    return true;
+  }
+
+  const { quantifier, next } = readQuantifier(pattern, atom.atomEnd);
+  if (quantifier.loop) scan.loopCount += 1;
+  scan.index = next;
+  return acceptAtom(scan.sequence, atom.set, quantifier);
+}
+
 /**
  * Returns true when `pattern` is in the restricted language described at the
  * top of this module, i.e. its worst-case matching cost is bounded.
  */
 export function isRegexShapeSafe(pattern: string): boolean {
-  const stack: GroupFrame[] = [];
-  let state = newSequence();
-  let loopCount = 0;
-  let index = 0;
+  const scan: ScanState = {
+    stack: [],
+    sequence: newSequence(),
+    loopCount: 0,
+    index: 0,
+  };
 
-  while (index < pattern.length) {
-    const char = pattern[index];
+  while (scan.index < pattern.length) {
+    const char = pattern[scan.index];
 
-    // Zero-width assertions are not atoms and cannot bound or create loops.
+    // Zero-width assertions are not atoms: they neither bound nor create loops.
     if (char === "^" || char === "$") {
-      index += 1;
-      continue;
+      scan.index += 1;
+    } else if (char === "|") {
+      startAlternative(scan.sequence);
+      scan.index += 1;
+    } else if (char === "(") {
+      scan.stack.push({ state: scan.sequence, openIndex: scan.index });
+      scan.sequence = newSequence();
+      // Skip the group prefix so `?:` / `?=` do not read as atoms.
+      const prefix = GROUP_PREFIX.exec(pattern.slice(scan.index));
+      scan.index += prefix ? prefix[0].length : 1;
+    } else if (char === ")") {
+      if (!closeGroup(pattern, scan)) return false;
+    } else if (!consumeAtom(pattern, scan)) {
+      return false;
     }
-
-    if (char === "|") {
-      startAlternative(state);
-      index += 1;
-      continue;
-    }
-
-    if (char === "(") {
-      stack.push({ state, openIndex: index });
-      state = newSequence();
-      // Skip the group prefix so `?:`/`?=` do not read as atoms.
-      const prefix = /^\((\?[:=!]|\?<[=!]|\?<[A-Za-z_$][\w$]*>)/.exec(pattern.slice(index));
-      index += prefix ? prefix[0].length : 1;
-      continue;
-    }
-
-    if (char === ")") {
-      const frame = stack.pop();
-      if (!frame) return false; // Unbalanced; RegExp would reject it anyway.
-      const groupSet = sequenceFirstSet(state);
-      const { quantifier, next } = readQuantifier(pattern, index + 1);
-      if (quantifier.loop) {
-        loopCount += 1;
-        if (bodyIsAmbiguous(pattern.slice(frame.openIndex + 1, index))) return false;
-      }
-      state = frame.state;
-      if (!acceptAtom(state, groupSet, quantifier)) return false;
-      index = next;
-      continue;
-    }
-
-    let set: CharSet;
-    let atomEnd: number;
-    if (char === "\\") {
-      const escaped = pattern[index + 1];
-      if (escaped !== undefined && ZERO_WIDTH_ESCAPES.has(escaped)) {
-        index += 2;
-        continue;
-      }
-      set = escapeSet(escaped);
-      atomEnd = index + 2;
-    } else if (char === "[") {
-      const parsed = readCharClass(pattern, index);
-      set = parsed.set;
-      atomEnd = parsed.next;
-    } else if (char === ".") {
-      set = anySet();
-      atomEnd = index + 1;
-    } else {
-      set = literalSet(char);
-      atomEnd = index + 1;
-    }
-
-    const { quantifier, next } = readQuantifier(pattern, atomEnd);
-    if (quantifier.loop) loopCount += 1;
-    if (!acceptAtom(state, set, quantifier)) return false;
-    index = next;
   }
 
-  if (stack.length > 0) return false;
-  return loopCount <= MAX_LOOP_QUANTIFIERS;
+  if (scan.stack.length > 0) return false;
+  return scan.loopCount <= MAX_LOOP_QUANTIFIERS;
 }

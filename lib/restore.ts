@@ -374,6 +374,78 @@ async function restoreProfilePreferences(
     : { error: null, rowsWritten: 1 };
 }
 
+/** One table's outcome: what to record, or which table stopped the run. */
+type TableOutcome =
+  | { kind: "written"; rowsWritten: number }
+  | { kind: "skipped"; name: string; reason: string }
+  | { kind: "failed" };
+
+/**
+ * Restores one table with the strategy its shape demands. Split out of
+ * `executeRestore` so the dispatch reads as a list of cases rather than one
+ * long branch, and so each strategy's contract stays visible.
+ */
+async function restoreOneTable(
+  service: SupabaseClient,
+  userId: string,
+  entry: RestorePlanTable,
+  rows: readonly unknown[],
+  result: RestoreResult,
+): Promise<TableOutcome> {
+  const { name, scope } = entry;
+
+  if (scope === "profile") {
+    const outcome = await restoreProfilePreferences(service, userId, rows);
+    return outcome.error ? { kind: "failed" } : { kind: "written", rowsWritten: outcome.rowsWritten };
+  }
+
+  if (scope !== "user") {
+    return {
+      kind: "skipped",
+      name,
+      reason: "involves other users' rows; not restorable in-app",
+    };
+  }
+
+  if (name === "transactions") {
+    const outcome = await restoreTransactions(service, userId, rows);
+    result.regeneratedIds += outcome.regenerated;
+    return outcome.error ? { kind: "failed" } : { kind: "written", rowsWritten: outcome.rowsWritten };
+  }
+
+  if (name === "accounts") {
+    const split = await splitRestorableAccounts(service, userId, rows);
+    if (split.error) return { kind: "failed" };
+    if (split.orphaned > 0) {
+      result.skipped.push({
+        name: "accounts (unlinked banks)",
+        reason: unlinkedBankReason(split.orphaned),
+      });
+    }
+    const outcome = await restoreParentTable(
+      service,
+      userId,
+      name,
+      split.restorable,
+      "plaid_account_id",
+    );
+    return outcome.error ? { kind: "failed" } : { kind: "written", rowsWritten: outcome.rowsWritten };
+  }
+
+  if (name === "manual_accounts") {
+    const outcome = await restoreParentTable(service, userId, name, rows, "id");
+    return outcome.error ? { kind: "failed" } : { kind: "written", rowsWritten: outcome.rowsWritten };
+  }
+
+  const outcome = await restoreUserTable(service, userId, name, rows);
+  return outcome.error ? { kind: "failed" } : { kind: "written", rowsWritten: outcome.rowsWritten };
+}
+
+function unlinkedBankReason(count: number): string {
+  const subject = count === 1 ? "1 account belongs" : `${count} accounts belong`;
+  return `${subject} to a Plaid connection this account no longer has; relink the bank, then restore again`;
+}
+
 export async function executeRestore(
   service: SupabaseClient,
   userId: string,
@@ -397,85 +469,30 @@ export async function executeRestore(
 
   for (const name of ordered) {
     const entry = present.get(name)!;
-    if (entry.scope === "profile") {
-      const outcome = await restoreProfilePreferences(service, userId, archive[name] ?? []);
-      if (outcome.error) {
-        result.failedTable = name;
-        return result;
-      }
-      result.tables.push({ name, rowsWritten: outcome.rowsWritten });
-      continue;
-    }
-    if (entry.scope !== "user") {
-      result.skipped.push({
-        name,
-        reason: "involves other users' rows; not restorable in-app",
-      });
-      continue;
-    }
-    const rows = archive[name] ?? [];
-    if (name === "accounts") {
-      const split = await splitRestorableAccounts(service, userId, rows);
-      if (split.error) {
-        result.failedTable = name;
-        return result;
-      }
-      if (split.orphaned > 0) {
-        result.skipped.push({
-          name: "accounts (unlinked banks)",
-          reason:
-            split.orphaned === 1
-              ? "1 account belongs to a Plaid connection this account no longer has; relink the bank, then restore again"
-              : `${split.orphaned} accounts belong to a Plaid connection this account no longer has; relink the bank, then restore again`,
-        });
-      }
-      const outcome = await restoreParentTable(
-        service,
-        userId,
-        name,
-        split.restorable,
-        "plaid_account_id",
-      );
-      if (outcome.error) {
-        result.failedTable = name;
-        return result;
-      }
-      result.tables.push({ name, rowsWritten: outcome.rowsWritten });
-      continue;
-    }
-    if (name === "manual_accounts") {
-      const outcome = await restoreParentTable(service, userId, name, rows, "id");
-      if (outcome.error) {
-        result.failedTable = name;
-        return result;
-      }
-      result.tables.push({ name, rowsWritten: outcome.rowsWritten });
-      continue;
-    }
-    if (name === "transactions") {
-      const outcome = await restoreTransactions(service, userId, rows);
-      result.regeneratedIds += outcome.regenerated;
-      if (outcome.error) {
-        result.failedTable = name;
-        return result;
-      }
-      result.tables.push({ name, rowsWritten: outcome.rowsWritten });
-      continue;
-    }
+    const outcome = await restoreOneTable(
+      service,
+      userId,
+      entry,
+      archive[name] ?? [],
+      result,
+    );
 
-    const outcome = await restoreUserTable(service, userId, name, rows);
-    if (outcome.error) {
+    if (outcome.kind === "failed") {
       result.failedTable = name;
       return result;
+    }
+    if (outcome.kind === "skipped") {
+      result.skipped.push({ name: outcome.name, reason: outcome.reason });
+      continue;
     }
     result.tables.push({ name, rowsWritten: outcome.rowsWritten });
   }
 
   const receiptAssets = archive[RECEIPT_ASSETS_KEY] ?? [];
   if (receiptAssets.length > 0) {
-    const outcome = await restoreReceiptAssets(service, receiptAssets);
-    result.receiptAssetsRestored = outcome.restored;
-    result.receiptAssetsMissing += outcome.failed;
+    const uploaded = await restoreReceiptAssets(service, receiptAssets);
+    result.receiptAssetsRestored = uploaded.restored;
+    result.receiptAssetsMissing += uploaded.failed;
   }
 
   return result;

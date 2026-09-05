@@ -65,8 +65,9 @@ The distinction is the point: the previous version of this file asserted complet
   Unchanged.
   Unit coverage meets the 95% project threshold, but Sonar measures the whole tree including paths only the integration suite exercises, so its number stays below the gate.
 - **Integration tests in CI.**
-  CI still runs unit tests only, so a schema-breaking migration can show all-green.
-  This is a known gap, recorded here so nobody reads a green CI badge as schema verification.
+  CI runs unit tests only, so the Supabase-backed integration suite in `tests/integration/` never runs there.
+  Schema changes are still covered: `.github/workflows/migration-check.yml` applies every migration to a clean local Postgres and runs `scripts/check-rls.sql` against the result, which is what caught `backup_deliveries` having RLS on and no policy.
+  What CI does not cover is application behaviour against a live database.
 - **`/api/import/csv`.**
   FF-26 removed the one-shot `ImportSection` from Settings, so this route now has no UI caller; `ImportReviewSection` uses `/api/import/preview` and `/api/import/commit`.
   The route still works and is still tested, so it was left in place rather than deleted as part of a review-remediation branch.
@@ -77,8 +78,11 @@ The distinction is the point: the previous version of this file asserted complet
 Unit suite: 444 files, 4,900 tests, all passing.
 Branch coverage is 95.07% against the project's 95% gate; lint, typecheck, `next build` (70 routes) and the palette validator are clean.
 
-Not verified here, and not claimed: production exploit testing, a live restore from a real archive, and either new migration applied to the linked project.
-Neither migration was run against a real Postgres either (no Docker on this machine), so the `DO` block in the gate migration is reviewed but unexecuted.
+Both migrations were applied to a clean Postgres by `.github/workflows/migration-check.yml`, so the gate migration's `DO` block is executed, not merely reviewed.
+`scripts/check-rls.sql` now also asserts FF-02 directly against the applied schema: every `authenticated` policy on a `public` table must carry both gates, with only the three auth-bootstrap tables excepted.
+That makes the invariant ongoing rather than a one-time fix, since the next migration that copies an owner-only policy from an older table would otherwise reopen the hole.
+
+Not verified here, and not claimed: production exploit testing, a live restore from a real archive, and either new migration applied to the *linked* project.
 
 Both new migrations are **local only** and must be applied by hand, since there is no migration runner in CI:
 

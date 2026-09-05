@@ -33,6 +33,10 @@ END $$;
 --
 --   rate_limit_counters — written solely by the security-definer
 --     public.rate_limit_hit() RPC and read by the service client (0002).
+--   backup_deliveries — the monthly backup cron's delivery journal, written
+--     and read only by app/api/cron/backup/route.ts under the service key
+--     (20260905110000). No user-facing role has any business reading who was
+--     sent a backup and when.
 DO $$
 DECLARE
   missing text;
@@ -44,7 +48,7 @@ BEGIN
   WHERE t.schemaname = 'public'
     AND t.rowsecurity = true
     AND p.policyname IS NULL
-    AND t.tablename <> ALL (ARRAY['rate_limit_counters']);
+    AND t.tablename <> ALL (ARRAY['rate_limit_counters', 'backup_deliveries']);
   IF missing IS NOT NULL THEN
     RAISE EXCEPTION 'RLS-enabled tables with zero policies: %', missing;
   END IF;
@@ -114,3 +118,56 @@ BEGIN
   END IF;
 END $$;
 
+
+-- FF-02: every policy granted to `authenticated` must ALSO gate on session
+-- revocation and MFA assurance. Owner scoping alone is not enough: a stolen
+-- token that has been revoked, or a session still at aal1 for a user with a
+-- verified factor, satisfies `user_id = auth.uid()` perfectly well.
+--
+-- This is checked here rather than trusted to a migration because it is an
+-- ongoing invariant, not a one-time fix: the next migration that adds a table
+-- and copies an owner-only policy from an older one reintroduces the hole,
+-- and only a check against the applied schema catches that.
+--
+-- Exception list: tables read or written BEFORE a session can reach aal2, so
+-- gating them would lock an MFA-enrolled user out of their own step-up.
+--
+--   profiles              — read during the auth/proxy bootstrap.
+--   user_session_records  — the revocation ledger itself; the gate would
+--                           depend on the table it guards.
+--   mfa_backup_codes      — redeemed in order to satisfy MFA.
+DO $$
+DECLARE
+  ungated text;
+BEGIN
+  SELECT string_agg(format('%I.%I', p.tablename, p.policyname), E'\n  ' ORDER BY 1)
+    INTO ungated
+  FROM pg_policies p
+  WHERE p.schemaname = 'public'
+    AND 'authenticated' = ANY (p.roles)
+    AND p.tablename <> ALL (ARRAY['profiles', 'user_session_records', 'mfa_backup_codes'])
+    AND NOT (
+      coalesce(p.qual, '') || coalesce(p.with_check, '') ILIKE '%mfa_satisfied%'
+    );
+  IF ungated IS NOT NULL THEN
+    RAISE EXCEPTION 'Authenticated policies missing the MFA/revocation gate:%', ungated;
+  END IF;
+END $$;
+
+DO $$
+DECLARE
+  ungated text;
+BEGIN
+  SELECT string_agg(format('%I.%I', p.tablename, p.policyname), E'\n  ' ORDER BY 1)
+    INTO ungated
+  FROM pg_policies p
+  WHERE p.schemaname = 'public'
+    AND 'authenticated' = ANY (p.roles)
+    AND p.tablename <> ALL (ARRAY['profiles', 'user_session_records', 'mfa_backup_codes'])
+    AND NOT (
+      coalesce(p.qual, '') || coalesce(p.with_check, '') ILIKE '%session_not_revoked%'
+    );
+  IF ungated IS NOT NULL THEN
+    RAISE EXCEPTION 'Authenticated policies missing the session-revocation gate:%', ungated;
+  END IF;
+END $$;
