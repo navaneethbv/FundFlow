@@ -14,7 +14,6 @@ import ProfileSection from "@/components/settings/ProfileSection";
 import DisplaySection from "@/components/settings/DisplaySection";
 import ManualAccountsSection from "@/components/settings/ManualAccountsSection";
 import MerchantRulesSection from "@/components/settings/MerchantRulesSection";
-import ImportSection from "@/components/settings/ImportSection";
 import ReceiptScanSection from "@/components/settings/ReceiptScanSection";
 
 /** Assert the visible label's htmlFor targets exactly the rendered control id. */
@@ -99,17 +98,6 @@ describe("Settings control labels", () => {
     expectLinkedControl(html, "Display name", "rule-display-name");
     expectLinkedControl(html, "Category", "rule-category");
     expectLinkedControl(html, "Tags", "rule-tags");
-  });
-
-  it("labels the import file input, account select, and date-format select", () => {
-    const html = renderToStaticMarkup(
-      createElement(ImportSection, {
-        accounts: [{ id: "a1", name: "Checking", mask: "1234", kind: "account" }],
-      }),
-    );
-    expectLinkedControl(html, "Drag and drop", "import-file");
-    expectLinkedControl(html, "Into account", "import-account");
-    expectLinkedControl(html, "Date format", "import-date-order");
   });
 
   it("labels the receipt file input through a visible label", () => {

@@ -1,6 +1,11 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { fromTransactionRow, UNCATEGORIZED, type TransactionRow } from "@/lib/finance-domain";
+import {
+  fromTransactionRow,
+  UNCATEGORIZED,
+  type FinanceFlow,
+  type TransactionRow,
+} from "@/lib/finance-domain";
 
 const PAGE_SIZE = 1_000;
 const ANNOTATION_CHUNK_SIZE = 250;
@@ -71,6 +76,8 @@ export interface ExportRow {
   merchant: string;
   amount: number;
   category: string;
+  /** Internal AI-only context; omitted from the user-facing export contract. */
+  flow?: FinanceFlow;
 }
 
 export type ExportFetchResult =
@@ -79,6 +86,7 @@ export type ExportFetchResult =
 
 export interface ExportFetchOptions {
   startDate?: string;
+  includeFlow?: boolean;
 }
 
 /** First day of the current month minus five months, in UTC. */
@@ -162,6 +170,7 @@ export async function fetchPrivacySafeRows(
       merchant: row.merchant || "",
       amount: row.signedAmount,
       category: row.categoryKey === UNCATEGORIZED ? "" : row.categoryKey,
+      ...(options.includeFlow ? { flow: row.flow } : {}),
     }));
   return { allowed: true, rows };
 }
@@ -181,6 +190,7 @@ async function loadCanonicalRows(
     date: string;
     merchant: string;
     signedAmount: number;
+    flow: FinanceFlow;
     categoryKey: string;
   }>
 > {
@@ -316,6 +326,7 @@ async function loadCanonicalRows(
     date: row.date,
     merchant: row.merchant,
     signedAmount: row.signedAmount,
+    flow: row.flow,
     categoryKey: row.categoryKey,
   }));
 }

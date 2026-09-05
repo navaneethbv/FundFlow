@@ -11,8 +11,8 @@ function totalFor(totals: CurrencyTotal[], currency: string): number {
 
 function HistoryChart({ summary }: Readonly<{ summary: Summary }>) {
   const W = 720;
-  const H = 220;
-  const PAD = 24;
+  const H = 130;
+  const PAD = 20;
   const allPoints = Object.values(summary.netWorthSeries).flat();
   if (allPoints.length < 2) {
     return (
@@ -25,39 +25,49 @@ function HistoryChart({ summary }: Readonly<{ summary: Summary }>) {
   const min = Math.min(...allValues);
   const max = Math.max(...allValues);
   const range = max - min || 1;
+  const firstDate = allPoints[0]?.date;
+  const lastDate = allPoints.at(-1)?.date;
 
   return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      className="h-auto w-full"
-      role="img"
-      aria-label="Daily net worth by currency"
-    >
-      <line x1={PAD} x2={W - PAD} y1={H - PAD} y2={H - PAD} stroke="var(--viz-grid)" />
-      {Object.entries(summary.netWorthSeries).map(([currency, series], seriesIndex) => {
-        const points = series.map((point, index) => ({
-          x:
-            PAD +
-            (series.length === 1
-              ? (W - PAD * 2) / 2
-              : (index / (series.length - 1)) * (W - PAD * 2)),
-          y: PAD + (1 - (point.value - min) / range) * (H - PAD * 2),
-        }));
-        return (
-          <path
-            key={currency}
-            d={linePath(points)}
-            fill="none"
-            stroke={`var(--viz-${(seriesIndex % 6) + 1})`}
-            strokeWidth={3}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <title>{currency}</title>
-          </path>
-        );
-      })}
-    </svg>
+    <div className="space-y-1.5">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="h-auto w-full max-h-36"
+        role="img"
+        aria-label="Daily net worth by currency"
+      >
+        <line x1={PAD} x2={W - PAD} y1={H - PAD} y2={H - PAD} stroke="var(--viz-grid)" />
+        {Object.entries(summary.netWorthSeries).map(([currency, series], seriesIndex) => {
+          const points = series.map((point, index) => ({
+            x:
+              PAD +
+              (series.length === 1
+                ? (W - PAD * 2) / 2
+                : (index / (series.length - 1)) * (W - PAD * 2)),
+            y: PAD + (1 - (point.value - min) / range) * (H - PAD * 2),
+          }));
+          return (
+            <path
+              key={currency}
+              d={linePath(points)}
+              fill="none"
+              stroke={`var(--viz-${(seriesIndex % 6) + 1})`}
+              strokeWidth={2.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <title>{currency}</title>
+            </path>
+          );
+        })}
+      </svg>
+      {firstDate && lastDate && (
+        <div className="flex justify-between px-1 text-xs text-muted font-mono">
+          <span>{firstDate}</span>
+          <span>{lastDate}</span>
+        </div>
+      )}
+    </div>
   );
 }
 

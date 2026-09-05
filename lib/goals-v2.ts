@@ -20,7 +20,7 @@ import type { Goal } from "@/lib/goals";
  */
 
 export type GoalType = "save_up" | "pay_down";
-export type GoalBadge = "on-track" | "at-risk" | "completed" | "behind";
+export type GoalBadge = "on-track" | "at-risk" | "completed" | "behind" | "no-pace";
 
 export interface GoalV2Row extends Goal {
   goal_type: GoalType;
@@ -181,9 +181,8 @@ function badgeFor(
 ): GoalBadge {
   if (target <= 0 || remaining <= 0) return "completed";
   if (targetDate && parseDate(targetDate) < today) return "behind";
-  // No plan and no ledger yet: there is nothing to judge a pace against, and
-  // flagging a goal created moments ago would be noise, not information.
-  if (requiredPace === null || expectedPace === null) return "on-track";
+  // Without pace evidence or a planned contribution, pace cannot be judged honestly.
+  if (requiredPace === null || expectedPace === null) return "no-pace";
   return expectedPace + 0.01 < requiredPace ? "at-risk" : "on-track";
 }
 

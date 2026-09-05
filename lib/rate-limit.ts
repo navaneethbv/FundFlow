@@ -11,6 +11,7 @@ export async function checkRateLimit(
   key: string,
   max: number,
   windowSeconds: number,
+  options?: { failClosed?: boolean },
 ): Promise<boolean> {
   try {
     const supabase = createServiceClient();
@@ -23,6 +24,6 @@ export async function checkRateLimit(
     return data === true;
   } catch (error) {
     logError("rate-limit", error);
-    return true;
+    return !options?.failClosed;
   }
 }

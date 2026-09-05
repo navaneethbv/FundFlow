@@ -74,6 +74,17 @@ export function queryStub(result: QueryResult = {}): QueryStub {
 export function clientStub(seeds: Record<string, QueryResult> = {}) {
   const tables: Record<string, QueryStub> = {};
   const rpcs: Record<string, QueryStub> = {};
+  type StorageBucketStub = {
+    list?: (...args: unknown[]) => Promise<{ data: Array<{ name: string }>; error: unknown }>;
+    remove?: (...args: unknown[]) => Promise<{ error: unknown }>;
+    upload?: (...args: unknown[]) => Promise<{ error: unknown }>;
+  };
+  const storage: { from: (bucket: string) => StorageBucketStub } = {
+    from: () => ({
+      list: vi.fn().mockResolvedValue({ data: [], error: null }),
+      remove: vi.fn().mockResolvedValue({ error: null }),
+    }),
+  };
   const rpcCalls: Record<string, unknown[][]> = {};
   const client = {
     from: vi.fn((table: string) => {
@@ -86,6 +97,7 @@ export function clientStub(seeds: Record<string, QueryResult> = {}) {
       rpcs[fn] ??= queryStub(seeds[fn] ?? { data: null });
       return rpcs[fn];
     }),
+    storage,
     tables,
     rpcs,
     /** Every call recorded against `table`, or [] if it was never touched. */

@@ -89,8 +89,7 @@ export function buildTaxExport(
     }))
     .sort(
       (a, b) =>
-        declarationOrder.get(a.lineItem)! - declarationOrder.get(b.lineItem)! ||
-        a.lineItem.localeCompare(b.lineItem),
+        declarationOrder.get(a.lineItem)! - declarationOrder.get(b.lineItem)!,
     );
 
   return { rows, summary };

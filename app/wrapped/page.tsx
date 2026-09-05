@@ -124,7 +124,7 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
                 {recap.savingsRate !== null ? `${recap.savingsRate}%` : "N/A"}
               </p>
               <p className="mt-2 text-xs font-medium text-muted">
-                Across the whole year
+                {year === String(currentYear) ? "Year-to-date (incomplete year)" : "Across the whole year"}
               </p>
             </section>
             <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
@@ -148,7 +148,7 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
                 items={recap.topCategories.map((row) => ({
                   label: titleCase(row.category),
                   amount: row.amount,
-                  href: `/transactions?category=${encodeURIComponent(row.category)}`,
+                  href: `/transactions?category=${encodeURIComponent(row.category)}&year=${year}`,
                 }))}
                 max={Math.max(1, ...recap.topCategories.map((row) => row.amount))}
               />
@@ -162,7 +162,7 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
                 items={recap.topMerchants.map((row) => ({
                   label: row.merchant,
                   amount: row.amount,
-                  href: `/transactions?merchant=${encodeURIComponent(row.merchant)}`,
+                  href: `/transactions?merchant=${encodeURIComponent(row.merchant)}&year=${year}`,
                 }))}
                 max={Math.max(1, ...recap.topMerchants.map((row) => row.amount))}
               />

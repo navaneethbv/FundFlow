@@ -9,9 +9,11 @@ import { formatCurrency } from "@/lib/format";
 import { daysUntil, formatDueAnnotation, localDateKey } from "@/lib/format-date";
 
 export interface UpcomingRecurringItem {
+  id?: string;
   name: string;
   amount: number;
   nextDate: string;
+  itemType?: "income" | "expense";
   /**
    * "paid" once a matching transaction has been seen. "unusual_amount" means
    * one was seen but it did not match the expected figure — that is worth
@@ -33,12 +35,34 @@ export function withinNextSevenDays(
     .sort((a, b) => a.nextDate.localeCompare(b.nextDate) || a.name.localeCompare(b.name));
 }
 
+export function overdueRecurringItems(
+  items: UpcomingRecurringItem[],
+  today: string,
+): UpcomingRecurringItem[] {
+  return items
+    .filter((item) => item.status === "late" || (item.nextDate < today && item.status !== "paid"))
+    .sort((a, b) => a.nextDate.localeCompare(b.nextDate) || a.name.localeCompare(b.name));
+}
+
 const STATUS_LABEL: Record<UpcomingRecurringItem["status"], string> = {
   paid: "Paid",
   expected: "Due",
   late: "Late",
   unusual_amount: "Check amount",
 };
+
+function resolveStatusLabel(
+  status: UpcomingRecurringItem["status"],
+  itemType?: "income" | "expense",
+): string {
+  if (itemType === "income") {
+    if (status === "paid") return "Paid";
+    if (status === "expected") return "Expected";
+    if (status === "late") return "Late";
+    return "Check amount";
+  }
+  return STATUS_LABEL[status];
+}
 
 const STATUS_TONE: Record<UpcomingRecurringItem["status"], BadgeTone> = {
   paid: "success",
@@ -59,6 +83,8 @@ export default function RecurringWidget({
   error?: string | null;
 }>) {
   const upcoming = withinNextSevenDays(items, today);
+  const overdue = overdueRecurringItems(items, today);
+  const displayItems = [...overdue, ...upcoming.filter((u) => !overdue.some((o) => o.name === u.name && o.nextDate === u.nextDate))];
 
   return (
     <WidgetShell
@@ -66,12 +92,12 @@ export default function RecurringWidget({
       error={error}
       action={
         <DropdownButton
-          label="This month"
+          label="Next 7 days"
           items={[{ label: "Manage recurring", href: "/recurring" }]}
         />
       }
     >
-      {upcoming.length === 0 ? (
+      {displayItems.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-6 text-center">
           <span
             aria-hidden
@@ -87,25 +113,36 @@ export default function RecurringWidget({
         </div>
       ) : (
         <ul className="space-y-2">
-          {upcoming.map((item) => (
-            <li
-              key={`${item.name}-${item.nextDate}`}
-              className="flex items-center gap-3 text-sm"
-            >
-              <MerchantAvatar
-                name={item.name}
-                logoUrl={merchantLogoDataUri(item.name)}
-                size={32}
-                className="shrink-0"
-              />
-              <span className="min-w-0 flex-1 truncate font-medium">{item.name}</span>
-              <Badge tone={STATUS_TONE[item.status]}>{STATUS_LABEL[item.status]}</Badge>
-              <span data-money className="whitespace-nowrap tabular-nums text-xs text-muted">
-                {formatCurrency(Math.abs(item.amount), currency)} /{" "}
-                {formatDueAnnotation(daysUntil(item.nextDate, today))}
-              </span>
-            </li>
-          ))}
+          {displayItems.map((item) => {
+            const isIncome = item.itemType === "income";
+            const isLate = item.status === "late" || (item.nextDate < today && item.status !== "paid");
+            const tone = isLate ? "danger" : STATUS_TONE[item.status];
+            const label = isLate ? "Late" : resolveStatusLabel(item.status, item.itemType);
+            const amountPrefix = isIncome ? "+" : "";
+
+            return (
+              <li
+                key={`${item.name}-${item.nextDate}`}
+                className="flex items-center gap-3 text-sm"
+              >
+                <MerchantAvatar
+                  name={item.name}
+                  logoUrl={merchantLogoDataUri(item.name)}
+                  size={32}
+                  className="shrink-0"
+                />
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {item.name}
+                  {isIncome && <span className="ml-1.5 text-xs text-muted font-normal">(Income)</span>}
+                </span>
+                <Badge tone={tone}>{label}</Badge>
+                <span data-money className="whitespace-nowrap tabular-nums text-xs text-muted">
+                  {amountPrefix}{formatCurrency(Math.abs(item.amount), currency)} /{" "}
+                  {formatDueAnnotation(daysUntil(item.nextDate, today))}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       )}
     </WidgetShell>

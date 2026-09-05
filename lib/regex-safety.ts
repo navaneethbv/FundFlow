@@ -1,0 +1,409 @@
+/**
+ * Compatibility checks for the existing merchant-rule regex language (FF-06).
+ * These checks keep previously rejected patterns invalid; they are not a proof
+ * of safe execution under JavaScript's backtracking engine. In particular,
+ * separated loops can still produce expensive unanchored searches.
+ * `safeCompileRegex` uses the browser-compatible RE2JS engine for execution.
+ */
+
+/**
+ * Maximum number of looping quantifiers (`*`, `+`, `{n,}`, `{n,m}` with m > n)
+ * allowed in one pattern by the existing validation contract.
+ */
+export const MAX_LOOP_QUANTIFIERS = 3;
+
+type PredefinedClass = "d" | "w" | "s";
+
+/** Conservative approximation of the characters an atom can match. */
+interface CharSet {
+  /** True when the atom may match anything the scanner cannot enumerate. */
+  any: boolean;
+  literals: Set<string>;
+  classes: Set<PredefinedClass>;
+}
+
+function emptySet(): CharSet {
+  return { any: false, literals: new Set(), classes: new Set() };
+}
+
+function anySet(): CharSet {
+  return { any: true, literals: new Set(), classes: new Set() };
+}
+
+function literalSet(char: string): CharSet {
+  return { any: false, literals: new Set([char]), classes: new Set() };
+}
+
+function classSet(cls: PredefinedClass): CharSet {
+  return { any: false, literals: new Set(), classes: new Set([cls]) };
+}
+
+function unionInto(target: CharSet, source: CharSet): void {
+  if (source.any) target.any = true;
+  for (const literal of source.literals) target.literals.add(literal);
+  for (const cls of source.classes) target.classes.add(cls);
+}
+
+/**
+ * Largest range expanded into individual characters. `[a-z]` and `[0-9]` are
+ * ordinary merchant-pattern building blocks and deserve an exact set; a range
+ * wider than this (`[\u0000-\uffff]`) is not worth enumerating and widens to
+ * `any`, which can only cause a rejection.
+ */
+const MAX_RANGE_EXPANSION = 128;
+
+function addRange(set: CharSet, from: string, to: string): void {
+  const start = from.codePointAt(0) ?? 0;
+  const end = to.codePointAt(0) ?? 0;
+  if (end < start || end - start + 1 > MAX_RANGE_EXPANSION) {
+    set.any = true;
+    return;
+  }
+  for (let code = start; code <= end; code++) {
+    set.literals.add(String.fromCodePoint(code));
+  }
+}
+
+const DIGIT_RE = /\d/;
+const WORD_RE = /\w/;
+const SPACE_RE = /\s/;
+
+function charMatchesClass(char: string, cls: PredefinedClass): boolean {
+  if (cls === "d") return DIGIT_RE.test(char);
+  if (cls === "w") return WORD_RE.test(char);
+  return SPACE_RE.test(char);
+}
+
+/** `\d` is a subset of `\w`; `\s` is disjoint from both. */
+function classesOverlap(a: PredefinedClass, b: PredefinedClass): boolean {
+  if (a === b) return true;
+  return (a === "s") === (b === "s");
+}
+
+function anyLiteralInClasses(literals: Set<string>, classes: Set<PredefinedClass>): boolean {
+  for (const literal of literals) {
+    for (const cls of classes) {
+      if (charMatchesClass(literal, cls)) return true;
+    }
+  }
+  return false;
+}
+
+function anySharedLiteral(a: Set<string>, b: Set<string>): boolean {
+  for (const literal of a) {
+    if (b.has(literal)) return true;
+  }
+  return false;
+}
+
+function anyOverlappingClass(
+  a: Set<PredefinedClass>,
+  b: Set<PredefinedClass>,
+): boolean {
+  for (const clsA of a) {
+    for (const clsB of b) {
+      if (classesOverlap(clsA, clsB)) return true;
+    }
+  }
+  return false;
+}
+
+function setsOverlap(a: CharSet, b: CharSet): boolean {
+  if (a.any || b.any) return true;
+  return (
+    anySharedLiteral(a.literals, b.literals) ||
+    anyLiteralInClasses(a.literals, b.classes) ||
+    anyLiteralInClasses(b.literals, a.classes) ||
+    anyOverlappingClass(a.classes, b.classes)
+  );
+}
+
+interface Quantifier {
+  /** Minimum repetitions; 0 means the atom can be skipped entirely. */
+  min: number;
+  /** True when the atom can repeat more than once, i.e. it is a loop. */
+  loop: boolean;
+}
+
+const NO_QUANTIFIER: Quantifier = { min: 1, loop: false };
+
+/**
+ * Reads the quantifier that follows an atom, if any. Returns the quantifier
+ * and the index just past it (past a lazy `?` suffix too, which changes match
+ * preference but not the backtracking class).
+ */
+function readQuantifier(pattern: string, index: number): { quantifier: Quantifier; next: number } {
+  const char = pattern[index];
+  if (char === "*") return { quantifier: { min: 0, loop: true }, next: skipLazy(pattern, index + 1) };
+  if (char === "+") return { quantifier: { min: 1, loop: true }, next: skipLazy(pattern, index + 1) };
+  if (char === "?") return { quantifier: { min: 0, loop: false }, next: skipLazy(pattern, index + 1) };
+  if (char !== "{") return { quantifier: NO_QUANTIFIER, next: index };
+
+  const close = pattern.indexOf("}", index);
+  if (close === -1) return { quantifier: NO_QUANTIFIER, next: index };
+  const bounds = parseBraceBounds(pattern.slice(index + 1, close));
+  if (!bounds) return { quantifier: NO_QUANTIFIER, next: index };
+
+  return {
+    quantifier: { min: bounds.min, loop: bounds.max > 1 },
+    next: skipLazy(pattern, close + 1),
+  };
+}
+
+const DIGITS_ONLY = /^\d+$/;
+
+/**
+ * Reads the inside of `{...}`: `3`, `2,`, or `2,5`. Returns null for anything
+ * else, which the caller treats as a literal brace rather than a quantifier.
+ * Split out of a regex because the natural one (`^(\d+)(,(\d*)?)?$`) has a
+ * sub-pattern that matches the empty string.
+ */
+function parseBraceBounds(body: string): { min: number; max: number } | null {
+  const parts = body.split(",");
+  if (parts.length > 2 || !DIGITS_ONLY.test(parts[0])) return null;
+
+  const min = Number(parts[0]);
+  if (parts.length === 1) return { min, max: min };
+  if (parts[1] === "") return { min, max: Number.POSITIVE_INFINITY };
+  if (!DIGITS_ONLY.test(parts[1])) return null;
+  return { min, max: Number(parts[1]) };
+}
+
+function skipLazy(pattern: string, index: number): number {
+  return pattern[index] === "?" ? index + 1 : index;
+}
+
+/** Parses `[...]`, returning its set and the index just past the closing `]`. */
+function readCharClass(pattern: string, openIndex: number): { set: CharSet; next: number } {
+  let index = openIndex + 1;
+  const negated = pattern[index] === "^";
+  if (negated) index += 1;
+
+  const set = emptySet();
+  // A `]` in first position is a literal `]`, per regex grammar.
+  let first = true;
+  while (index < pattern.length) {
+    const char = pattern[index];
+    if (char === "]" && !first) {
+      return { set: negated ? anySet() : set, next: index + 1 };
+    }
+    first = false;
+    if (char === "\\") {
+      unionInto(set, escapeSet(pattern[index + 1]));
+      index += 2;
+      continue;
+    }
+    if (pattern[index + 1] === "-" && pattern[index + 2] !== undefined && pattern[index + 2] !== "]") {
+      addRange(set, char, pattern[index + 2]);
+      index += 3;
+      continue;
+    }
+    set.literals.add(char);
+    index += 1;
+  }
+  // Unterminated class: the RegExp constructor will reject it. Report `any`
+  // and let compilation fail with the real syntax error.
+  return { set: anySet(), next: pattern.length };
+}
+
+/** The set an escape sequence can match; `undefined` means zero-width. */
+function escapeSet(char: string | undefined): CharSet {
+  if (char === undefined) return anySet();
+  if (char === "d") return classSet("d");
+  if (char === "w") return classSet("w");
+  if (char === "s") return classSet("s");
+  if (char === "D" || char === "W" || char === "S") return anySet();
+  return literalSet(char);
+}
+
+const ZERO_WIDTH_ESCAPES = new Set(["b", "B"]);
+
+/**
+ * One concatenation level: the top level, or the inside of a group. Tracks the
+ * loops that are still "open" (no mandatory atom has forced progress since) and
+ * the set of characters the sequence can start with.
+ */
+interface SequenceState {
+  openLoops: CharSet[];
+  firstSet: CharSet;
+  /** False once a mandatory atom has been seen, closing the first set. */
+  firstSetOpen: boolean;
+  /** Union of the first sets of every alternative seen so far. */
+  alternativeFirstSets: CharSet;
+}
+
+function newSequence(): SequenceState {
+  return {
+    openLoops: [],
+    firstSet: emptySet(),
+    firstSetOpen: true,
+    alternativeFirstSets: emptySet(),
+  };
+}
+
+function startAlternative(state: SequenceState): void {
+  unionInto(state.alternativeFirstSets, state.firstSet);
+  state.openLoops = [];
+  state.firstSet = emptySet();
+  state.firstSetOpen = true;
+}
+
+function sequenceFirstSet(state: SequenceState): CharSet {
+  const combined = emptySet();
+  unionInto(combined, state.alternativeFirstSets);
+  unionInto(combined, state.firstSet);
+  return combined;
+}
+
+/**
+ * Records an atom in its sequence, rejecting rule-2 violations.
+ * Returns false when the atom introduces an ambiguous adjacent loop.
+ */
+function acceptAtom(state: SequenceState, set: CharSet, quantifier: Quantifier): boolean {
+  if (quantifier.loop) {
+    for (const open of state.openLoops) {
+      if (setsOverlap(open, set)) return false;
+    }
+  }
+
+  if (state.firstSetOpen) {
+    unionInto(state.firstSet, set);
+    if (quantifier.min > 0) state.firstSetOpen = false;
+  }
+
+  if (quantifier.min > 0) {
+    // A mandatory atom forces progress, so every earlier loop is now pinned.
+    state.openLoops = [];
+  }
+  if (quantifier.loop) {
+    state.openLoops.push(set);
+  }
+  return true;
+}
+
+/** Rule 1: a quantified group whose body contains a quantifier or alternation. */
+const AMBIGUOUS_BODY_CHARS = new Set(["*", "+", "?", "{", "|"]);
+
+function bodyIsAmbiguous(body: string): boolean {
+  let inClass = false;
+  const start = body.startsWith("?:") ? 2 : 0;
+  for (let index = start; index < body.length; index++) {
+    const char = body[index];
+    if (char === "\\") {
+      index += 1;
+      continue;
+    }
+    if (inClass) {
+      inClass = char !== "]";
+      continue;
+    }
+    if (char === "[") {
+      inClass = true;
+    } else if (AMBIGUOUS_BODY_CHARS.has(char)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+interface GroupFrame {
+  state: SequenceState;
+  openIndex: number;
+}
+
+const GROUP_PREFIX = /^\((\?[:=!]|\?<[=!]|\?<[A-Za-z_$][\w$]*>)/;
+
+/** The scanner's mutable position: where it is, and what it has counted. */
+interface ScanState {
+  stack: GroupFrame[];
+  sequence: SequenceState;
+  loopCount: number;
+  index: number;
+}
+
+/** Reads a plain atom (escape, class, `.`, or literal) at `scan.index`. */
+function readPlainAtom(
+  pattern: string,
+  index: number,
+): { set: CharSet; atomEnd: number } | "zero-width" {
+  const char = pattern[index];
+  if (char === "\\") {
+    const escaped = pattern[index + 1];
+    if (escaped !== undefined && ZERO_WIDTH_ESCAPES.has(escaped)) return "zero-width";
+    return { set: escapeSet(escaped), atomEnd: index + 2 };
+  }
+  if (char === "[") {
+    const parsed = readCharClass(pattern, index);
+    return { set: parsed.set, atomEnd: parsed.next };
+  }
+  if (char === ".") return { set: anySet(), atomEnd: index + 1 };
+  return { set: literalSet(char), atomEnd: index + 1 };
+}
+
+/** Closes the group opened at the top of the stack. False rejects the pattern. */
+function closeGroup(pattern: string, scan: ScanState): boolean {
+  const frame = scan.stack.pop();
+  if (!frame) return false; // Unbalanced; RegExp would reject it anyway.
+
+  const groupSet = sequenceFirstSet(scan.sequence);
+  const { quantifier, next } = readQuantifier(pattern, scan.index + 1);
+  if (quantifier.loop) {
+    scan.loopCount += 1;
+    if (bodyIsAmbiguous(pattern.slice(frame.openIndex + 1, scan.index))) return false;
+  }
+  scan.sequence = frame.state;
+  scan.index = next;
+  return acceptAtom(scan.sequence, groupSet, quantifier);
+}
+
+/** Consumes one atom and its quantifier. False rejects the pattern. */
+function consumeAtom(pattern: string, scan: ScanState): boolean {
+  const atom = readPlainAtom(pattern, scan.index);
+  if (atom === "zero-width") {
+    scan.index += 2;
+    return true;
+  }
+
+  const { quantifier, next } = readQuantifier(pattern, atom.atomEnd);
+  if (quantifier.loop) scan.loopCount += 1;
+  scan.index = next;
+  return acceptAtom(scan.sequence, atom.set, quantifier);
+}
+
+/**
+ * Returns true when `pattern` is in the restricted language described at the
+ * compatibility contract. Runtime safety is enforced by RE2JS.
+ */
+export function isRegexShapeSafe(pattern: string): boolean {
+  const scan: ScanState = {
+    stack: [],
+    sequence: newSequence(),
+    loopCount: 0,
+    index: 0,
+  };
+
+  while (scan.index < pattern.length) {
+    const char = pattern[scan.index];
+
+    // Zero-width assertions are not atoms: they neither bound nor create loops.
+    if (char === "^" || char === "$") {
+      scan.index += 1;
+    } else if (char === "|") {
+      startAlternative(scan.sequence);
+      scan.index += 1;
+    } else if (char === "(") {
+      scan.stack.push({ state: scan.sequence, openIndex: scan.index });
+      scan.sequence = newSequence();
+      // Skip the group prefix so `?:` / `?=` do not read as atoms.
+      const prefix = GROUP_PREFIX.exec(pattern.slice(scan.index));
+      scan.index += prefix ? prefix[0].length : 1;
+    } else if (char === ")") {
+      if (!closeGroup(pattern, scan)) return false;
+    } else if (!consumeAtom(pattern, scan)) {
+      return false;
+    }
+  }
+
+  if (scan.stack.length > 0) return false;
+  return scan.loopCount <= MAX_LOOP_QUANTIFIERS;
+}

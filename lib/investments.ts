@@ -375,7 +375,7 @@ export function buildInvestmentsPage(
   }
 
   const byClass = ASSET_CLASS_ORDER.filter((label) => byClassMap.has(label)).map((label) => {
-    const classHoldings = [...(byClassMap.get(label) ?? [])].sort(
+    const classHoldings = [...byClassMap.get(label)!].sort(
       (a, b) => effectiveValue(b) - effectiveValue(a),
     );
     return {

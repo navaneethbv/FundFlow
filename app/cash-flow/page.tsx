@@ -162,7 +162,10 @@ export default async function CashFlowPage({
 
   return (
     <AppShell active="cashflow" email={user.email}>
-      <PageHeader title="Cash Flow" />
+      <PageHeader
+        title="Cash Flow"
+        description="Track regular income and expense trends across months, quarters, and years. For custom multidimensional filtering, see Reports."
+      />
 
       {loaded.truncated && (
         <Panel tone="warning">

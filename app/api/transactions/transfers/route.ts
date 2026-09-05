@@ -10,6 +10,42 @@ import {
 
 const WINDOW_DAYS = 7;
 const LOOKBACK_DAYS = 60;
+const PAGE_SIZE = 1_000;
+
+type PagedQueryResult = { data?: unknown; error?: unknown };
+
+type TransferLedgerRow = {
+  id: string;
+  date: string;
+  amount: number | string | null;
+  merchant_name: string | null;
+  name: string | null;
+  account_id: string | null;
+  manual_account_id: string | null;
+};
+
+type TransferDecisionRow = {
+  subject_id: string;
+  decision: "confirmed" | "dismissed";
+};
+
+type LinkedTransferRow = {
+  out_transaction_id: string;
+  in_transaction_id: string;
+};
+
+async function loadPaged<T>(
+  loadPage: (from: number, to: number) => PromiseLike<PagedQueryResult>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let page = 0; ; page += 1) {
+    const result = await loadPage(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+    if (result.error) throw result.error;
+    const batch = (result.data ?? []) as T[];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) return rows;
+  }
+}
 
 function isoDaysAgo(days: number): string {
   const date = new Date();
@@ -33,43 +69,84 @@ export async function GET() {
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
     const since = isoDaysAgo(LOOKBACK_DAYS);
-    const [{ data: txns }, { data: decisions }, { data: linked }] = await Promise.all([
+    const [txns, decisions, linked] = await Promise.all([
       // Own ledger only: a link is a statement that two rows are one event,
       // which must never span two people's data.
-      supabase
-        .from("transactions")
-        .select("id, date, amount, account_id, manual_account_id")
-        .eq("user_id", user.id)
-        .gte("date", since)
-        .limit(5000),
-      supabase
-        .from("transaction_review_decisions")
-        .select("subject_id, decision")
-        .eq("user_id", user.id)
-        .eq("kind", "transfer"),
-      supabase
-        .from("linked_transfers")
-        .select("out_transaction_id, in_transaction_id")
-        .eq("user_id", user.id),
+      loadPaged<TransferLedgerRow>((from, to) =>
+        supabase
+          .from("transactions")
+          .select("id, date, amount, merchant_name, name, account_id, manual_account_id")
+          .eq("user_id", user.id)
+          .gte("date", since)
+          .order("date", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to),
+      ),
+      loadPaged<TransferDecisionRow>((from, to) =>
+        supabase
+          .from("transaction_review_decisions")
+          .select("subject_id, decision")
+          .eq("user_id", user.id)
+          .eq("kind", "transfer")
+          .order("id", { ascending: true })
+          .range(from, to),
+      ),
+      loadPaged<LinkedTransferRow>((from, to) =>
+        supabase
+          .from("linked_transfers")
+          .select("out_transaction_id, in_transaction_id")
+          .eq("user_id", user.id)
+          .order("id", { ascending: true })
+          .range(from, to),
+      ),
     ]);
 
-    const ledger = (txns ?? []).map((row) => ({
-      id: row.id as string,
-      date: row.date as string,
-      merchant: "",
-      amount: Number(row.amount),
-      accountId: (row.account_id ?? row.manual_account_id ?? "") as string,
-    }));
+    const accountNames = new Map<string, string>();
+    try {
+      const [{ data: plaidAccs }, { data: manualAccs }] = await Promise.all([
+        supabase.from("accounts").select("id, name").eq("user_id", user.id),
+        supabase.from("manual_accounts").select("id, name").eq("user_id", user.id),
+      ]);
+      for (const a of (plaidAccs ?? []) as Array<{ id: string; name: string }>) {
+        accountNames.set(a.id, a.name);
+      }
+      for (const m of (manualAccs ?? []) as Array<{ id: string; name: string }>) {
+        accountNames.set(m.id, m.name);
+      }
+    } catch {
+      // Fall back gracefully when account tables are omitted in test stubs
+    }
+
+    const alreadyLinkedIds = new Set(
+      linked.flatMap((row) => [
+        row.out_transaction_id as string,
+        row.in_transaction_id as string,
+      ]),
+    );
+
+    const ledger = (txns ?? [])
+      .filter((row) => !alreadyLinkedIds.has(row.id as string))
+      .map((row) => {
+        const accId = (row.account_id ?? row.manual_account_id ?? "") as string;
+        return {
+          id: row.id as string,
+          date: row.date as string,
+          merchant: (row.merchant_name || row.name || "") as string,
+          amount: Number(row.amount),
+          accountId: accId,
+          accountName: accountNames.get(accId) ?? "Account",
+        };
+      });
     const byId = new Map(ledger.map((row) => [row.id, row]));
 
     const alreadyLinked = new Set(
-      (linked ?? []).flatMap((row) => [
+      linked.flatMap((row) => [
         `${row.out_transaction_id}:${row.in_transaction_id}`,
         row.out_transaction_id as string,
         row.in_transaction_id as string,
       ]),
     );
-    const resolved = new Set((decisions ?? []).map((row) => row.subject_id as string));
+    const resolved = new Set(decisions.map((row) => row.subject_id as string));
 
     const pairs = detectTransferPairs(ledger, WINDOW_DAYS);
     const visible = filterReviewDecisions(
@@ -78,7 +155,7 @@ export async function GET() {
         subjectId: pair.subjectId,
         message: "",
       })),
-      (decisions ?? []).map((row) => ({
+      decisions.map((row) => ({
         kind: "transfer" as const,
         subjectId: row.subject_id as string,
         decision: row.decision as "confirmed" | "dismissed",
@@ -97,6 +174,10 @@ export async function GET() {
         amount: pair.amount,
         out_date: out?.date ?? null,
         in_date: inbound?.date ?? null,
+        out_account_name: out?.accountName ?? "Account",
+        in_account_name: inbound?.accountName ?? "Account",
+        out_merchant: out?.merchant || "Outflow",
+        in_merchant: inbound?.merchant || "Inflow",
       };
     });
 
@@ -104,6 +185,68 @@ export async function GET() {
   } catch (error) {
     return errorResponse("transactions.transfers", error);
   }
+}
+
+type TransferRow = {
+  id: string;
+  amount?: number | string | null;
+  date?: string;
+  account_id?: string | null;
+  manual_account_id?: string | null;
+};
+
+function validateTransferPairProperties(outRow: TransferRow, inRow: TransferRow): string | null {
+  const outAcc = outRow.account_id ?? outRow.manual_account_id;
+  const inAcc = inRow.account_id ?? inRow.manual_account_id;
+  if (outAcc && inAcc && outAcc === inAcc) {
+    return "transfers must be between two different accounts";
+  }
+
+  if (outRow.date && inRow.date) {
+    const dayDiff = Math.abs(new Date(inRow.date).getTime() - new Date(outRow.date).getTime()) / 86_400_000;
+    if (dayDiff > WINDOW_DAYS) {
+      return `transactions must be within ${WINDOW_DAYS} days of each other`;
+    }
+  }
+
+  const outAmount = Number(outRow.amount);
+  const inAmount = Number(inRow.amount);
+  if (
+    !Number.isFinite(outAmount) ||
+    !Number.isFinite(inAmount) ||
+    outAmount <= 0 ||
+    inAmount >= 0 ||
+    Math.round(Math.abs(outAmount) * 100) !== Math.round(Math.abs(inAmount) * 100)
+  ) {
+    return "transactions do not form a valid transfer pair";
+  }
+
+  return null;
+}
+
+async function checkTransferAlreadyLinked(
+  linkedTable: ReturnType<SupabaseClient["from"]>,
+  userId: string,
+  outId: string,
+  inId: string,
+): Promise<string | null> {
+  if (typeof linkedTable?.select !== "function") return null;
+  const { data: existingLinks, error } = await linkedTable
+    .select("out_transaction_id, in_transaction_id")
+    .eq("user_id", userId)
+    .or(`out_transaction_id.in.(${outId},${inId}),in_transaction_id.in.(${outId},${inId})`);
+  // Let a query failure reach the route's error handler. Swallowing it here
+  // would report "not linked" for a check that never ran.
+  if (error) throw error;
+  if (Array.isArray(existingLinks) && existingLinks.length > 0) {
+    const isSelfMatch = existingLinks.every(
+      (l) => l.out_transaction_id === outId && l.in_transaction_id === inId,
+    );
+    if (!isSelfMatch) {
+      return "one or both transactions are already linked to another transfer";
+    }
+  }
+  return null;
 }
 
 async function linkConfirmedTransfer(
@@ -123,46 +266,49 @@ async function linkConfirmedTransfer(
   if (subjectId !== transferSubjectId(outId, inId)) {
     return badRequest("subject_id does not match the pair");
   }
-  // Both sides of a link must be rows in the caller's own ledger.
+
   const { data: owned, error: verifyError } = await supabase
     .from("transactions")
-    .select("id, amount")
+    .select("id, amount, date, account_id, manual_account_id")
     .eq("user_id", userId)
     .in("id", [outId, inId]);
   if (verifyError) throw verifyError;
   if ((owned ?? []).length !== 2) {
     return badRequest("both sides of a transfer must be your own transactions");
   }
-  const outRow = (owned as Array<{ id: string; amount?: number | string | null }>).find((r) => r.id === outId);
-  const inRow = (owned as Array<{ id: string; amount?: number | string | null }>).find((r) => r.id === inId);
+
+  const outRow = (owned as TransferRow[]).find((r) => r.id === outId);
+  const inRow = (owned as TransferRow[]).find((r) => r.id === inId);
   if (!outRow || !inRow) {
     return badRequest("both sides of a transfer must be your own transactions");
   }
+
+  const validationError = validateTransferPairProperties(outRow, inRow);
+  if (validationError) return badRequest(validationError);
+
+  const linkedTable = supabase.from("linked_transfers");
+  const linkConflict = await checkTransferAlreadyLinked(linkedTable, userId, outId, inId);
+  if (linkConflict) return badRequest(linkConflict);
+
   const outAmount = Number(outRow.amount);
-  const inAmount = Number(inRow.amount);
-  if (
-    !Number.isFinite(outAmount) ||
-    !Number.isFinite(inAmount) ||
-    outAmount <= 0 ||
-    inAmount >= 0 ||
-    Math.round(Math.abs(outAmount) * 100) !== Math.round(Math.abs(inAmount) * 100)
-  ) {
-    return badRequest("transactions do not form a valid transfer pair");
+  const { error: linkError } = await supabase.rpc("confirm_transfer_link", {
+    p_user_id: userId,
+    p_subject_id: subjectId,
+    p_out_transaction_id: outId,
+    p_in_transaction_id: inId,
+    p_amount: Math.round(outAmount * 100) / 100,
+  });
+  if (linkError?.message?.includes("transfer_link_conflict")) {
+    return NextResponse.json(
+      { error: "One of these transactions is already linked to another transfer." },
+      { status: 409 },
+    );
   }
-  const { error: linkError } = await supabase.from("linked_transfers").upsert(
-    {
-      user_id: userId,
-      out_transaction_id: outId,
-      in_transaction_id: inId,
-      amount: Math.round(outAmount * 100) / 100,
-    },
-    { onConflict: "user_id,out_transaction_id,in_transaction_id" },
-  );
   if (linkError) throw linkError;
   return null;
 }
 
-/** Record a transfer-pair decision; a confirmed pair also nets out via linked_transfers. */
+/** Record a transfer-pair decision; confirmed links and decisions commit atomically. */
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -189,13 +335,15 @@ export async function POST(request: NextRequest) {
       if (linkFailure) return linkFailure;
     }
 
-    const { error: decisionError } = await supabase
-      .from("transaction_review_decisions")
-      .upsert(
-        { user_id: user.id, kind: "transfer", subject_id: subjectId, decision },
-        { onConflict: "user_id,kind,subject_id" },
-      );
-    if (decisionError) throw decisionError;
+    if (decision === "dismissed") {
+      const { error: decisionError } = await supabase
+        .from("transaction_review_decisions")
+        .upsert(
+          { user_id: user.id, kind: "transfer", subject_id: subjectId, decision },
+          { onConflict: "user_id,kind,subject_id" },
+        );
+      if (decisionError) throw decisionError;
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

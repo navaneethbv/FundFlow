@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 const from = vi.fn();
+const rpc = vi.fn();
 
 vi.mock("@/lib/http", async () => {
   const actual = await vi.importActual<typeof import("@/lib/http")>("@/lib/http");
@@ -21,7 +22,19 @@ function thenable(data: unknown, error: unknown = null) {
   const builder: Record<string, unknown> = {
     then: (resolve: (value: unknown) => unknown) => resolve({ data, error }),
   };
-  for (const method of ["select", "eq", "gte", "limit", "upsert", "in", "flat"]) {
+  for (const method of ["select", "eq", "gte", "order", "range", "limit", "upsert", "in", "or", "flat"]) {
+    builder[method] = () => builder;
+  }
+  return builder;
+}
+
+function pagedThenable(pages: unknown[][]) {
+  let page = 0;
+  const builder: Record<string, unknown> = {
+    then: (resolve: (value: unknown) => unknown) =>
+      resolve({ data: pages[page++] ?? [], error: null }),
+  };
+  for (const method of ["select", "eq", "gte", "order", "range"]) {
     builder[method] = () => builder;
   }
   return builder;
@@ -29,9 +42,10 @@ function thenable(data: unknown, error: unknown = null) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  rpc.mockResolvedValue({ data: null, error: null });
   vi.mocked(requireUser).mockResolvedValue({
     user: { id: "user-123" },
-    supabase: { from } as never,
+    supabase: { from, rpc } as never,
   } as never);
 });
 
@@ -175,9 +189,9 @@ describe("POST /api/transactions/transfers", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(linkUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: 500 }),
-      expect.anything(),
+    expect(rpc).toHaveBeenCalledWith(
+      "confirm_transfer_link",
+      expect.objectContaining({ p_amount: 500 }),
     );
   });
 
@@ -208,9 +222,9 @@ describe("POST /api/transactions/transfers", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(linkUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: 500 }),
-      expect.anything(),
+    expect(rpc).toHaveBeenCalledWith(
+      "confirm_transfer_link",
+      expect.objectContaining({ p_amount: 500 }),
     );
   });
 
@@ -282,9 +296,10 @@ describe("POST /api/transactions/transfers", () => {
 describe("GET /api/transactions/transfers — remaining branches", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    rpc.mockResolvedValue({ data: null, error: null });
     vi.mocked(requireUser).mockResolvedValue({
       user: { id: "user-123" },
-      supabase: { from } as never,
+      supabase: { from, rpc } as never,
     } as never);
     vi.mocked(checkRateLimit).mockResolvedValue(true as never);
   });
@@ -369,14 +384,47 @@ describe("GET /api/transactions/transfers — remaining branches", () => {
     // Both sides resolve to "" — same (missing) account, so no pair.
     expect(body.pairs).toEqual([]);
   });
+
+  it("returns an error when a paged ledger query fails", async () => {
+    from.mockImplementation((table: string) =>
+      table === "transactions"
+        ? thenable(null, { message: "ledger unavailable" })
+        : thenable([]),
+    );
+
+    const res = await GET();
+
+    expect(res.status).toBe(500);
+  });
+
+  it("loads a full first page before stopping on the next page", async () => {
+    const firstPage = Array.from({ length: 1_000 }, (_, index) => ({
+      id: `transaction-${index}`,
+      date: "2026-09-01",
+      amount: 1,
+      account_id: "account-1",
+      manual_account_id: null,
+    }));
+    const transactions = pagedThenable([firstPage, []]);
+    from.mockImplementation((table: string) => {
+      if (table === "transactions") return transactions;
+      return thenable([]);
+    });
+
+    const res = await GET();
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ pairs: [] });
+  });
 });
 
 describe("POST /api/transactions/transfers — validation branches", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    rpc.mockResolvedValue({ data: null, error: null });
     vi.mocked(requireUser).mockResolvedValue({
       user: { id: "user-123" },
-      supabase: { from } as never,
+      supabase: { from, rpc } as never,
     } as never);
     vi.mocked(checkRateLimit).mockResolvedValue(true as never);
   });
@@ -444,6 +492,7 @@ describe("POST /api/transactions/transfers — validation branches", () => {
       if (table === "transactions") return thenable([{ id: OUT_ID, amount: 500 }, { id: IN_ID, amount: -500 }]);
       return { upsert: () => Promise.resolve({ data: null, error: { message: "link failed" } }) };
     });
+    rpc.mockResolvedValueOnce({ data: null, error: { message: "link failed" } });
     const res2 = await post({
       subject_id: SUBJECT,
       decision: "confirmed",
@@ -470,5 +519,130 @@ describe("POST /api/transactions/transfers — validation branches", () => {
       amount: 500,
     });
     expect(res.status).toBe(400);
+  });
+
+  it("400s when both transactions belong to the same account", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "transaction_review_decisions") {
+        return { upsert: () => Promise.resolve({ data: null, error: null }) };
+      }
+      if (table === "transactions") {
+        return thenable([
+          { id: OUT_ID, date: "2026-09-01", amount: 500, account_id: "same-acc", manual_account_id: null },
+          { id: IN_ID, date: "2026-09-02", amount: -500, account_id: "same-acc", manual_account_id: null },
+        ]);
+      }
+      throw new Error(`unexpected ${table}`);
+    });
+    const res = await post({
+      subject_id: SUBJECT,
+      decision: "confirmed",
+      out_id: OUT_ID,
+      in_id: IN_ID,
+      amount: 500,
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("different accounts");
+  });
+
+  it("400s when transactions are outside the 7-day window", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "transaction_review_decisions") {
+        return { upsert: () => Promise.resolve({ data: null, error: null }) };
+      }
+      if (table === "transactions") {
+        return thenable([
+          { id: OUT_ID, date: "2026-09-01", amount: 500, account_id: "a1", manual_account_id: null },
+          { id: IN_ID, date: "2026-09-15", amount: -500, account_id: "a2", manual_account_id: null },
+        ]);
+      }
+      throw new Error(`unexpected ${table}`);
+    });
+    const res = await post({
+      subject_id: SUBJECT,
+      decision: "confirmed",
+      out_id: OUT_ID,
+      in_id: IN_ID,
+      amount: 500,
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("7 days");
+  });
+
+  it("rejects a pair that is already linked to another transfer", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "transactions") {
+        return thenable([
+          { id: OUT_ID, date: "2026-09-01", amount: 500, account_id: "a1", manual_account_id: null },
+          { id: IN_ID, date: "2026-09-02", amount: -500, account_id: "a2", manual_account_id: null },
+        ]);
+      }
+      if (table === "linked_transfers") {
+        return thenable([{ out_transaction_id: "other-out", in_transaction_id: IN_ID }]);
+      }
+      return thenable([]);
+    });
+
+    const res = await post({
+      subject_id: SUBJECT,
+      decision: "confirmed",
+      out_id: OUT_ID,
+      in_id: IN_ID,
+    });
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ error: expect.stringContaining("already linked") });
+  });
+
+  it("surfaces a linked-transfer lookup failure", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "transactions") {
+        return thenable([
+          { id: OUT_ID, date: "2026-09-01", amount: 500, account_id: "a1", manual_account_id: null },
+          { id: IN_ID, date: "2026-09-02", amount: -500, account_id: "a2", manual_account_id: null },
+        ]);
+      }
+      if (table === "linked_transfers") return thenable(null, { message: "linked lookup failed" });
+      return thenable([]);
+    });
+
+    const res = await post({
+      subject_id: SUBJECT,
+      decision: "confirmed",
+      out_id: OUT_ID,
+      in_id: IN_ID,
+    });
+
+    expect(res.status).toBe(500);
+  });
+
+  it("returns a conflict when the atomic confirmation reports a race", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "transactions") {
+        return thenable([
+          { id: OUT_ID, date: "2026-09-01", amount: 500, account_id: "a1", manual_account_id: null },
+          { id: IN_ID, date: "2026-09-02", amount: -500, account_id: "a2", manual_account_id: null },
+        ]);
+      }
+      return thenable([]);
+    });
+    rpc.mockResolvedValue({
+      data: null,
+      error: { message: "transfer_link_conflict: already linked" },
+    });
+
+    const res = await post({
+      subject_id: SUBJECT,
+      decision: "confirmed",
+      out_id: OUT_ID,
+      in_id: IN_ID,
+    });
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toEqual({
+      error: "One of these transactions is already linked to another transfer.",
+    });
   });
 });

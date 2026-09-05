@@ -1,22 +1,47 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isAiProviderConfigured } from "@/lib/ai-provider";
 
+export type AiConsentResult =
+  | { allowed: true }
+  | { allowed: false; reason: "disabled" | "unavailable" };
+
 /**
- * Same double-consent gate as /api/ai/ask (ai_settings.enabled AND
- * profiles.ai_export_enabled), but two cheap column selects instead of
- * fetchPrivacySafeRows's full export-row query — this is only used to
- * decide whether to show a nav link, not to fetch AI grounding data.
+ * Evaluates double-consent for AI features (ai_settings.enabled AND
+ * profiles.ai_export_enabled), strictly failing closed on missing profile or query error.
+ */
+export async function resolveAiConsent(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<AiConsentResult> {
+  try {
+    const [{ data: settings, error: settingsError }, { data: profile, error: profileError }] =
+      await Promise.all([
+        supabase.from("ai_settings").select("enabled").eq("user_id", userId).maybeSingle(),
+        supabase.from("profiles").select("ai_export_enabled").eq("id", userId).maybeSingle(),
+      ]);
+
+    if (settingsError || profileError) {
+      return { allowed: false, reason: "unavailable" };
+    }
+
+    if (settings?.enabled !== true || !profile || profile.ai_export_enabled === false) {
+      return { allowed: false, reason: "disabled" };
+    }
+
+    return { allowed: true };
+  } catch {
+    return { allowed: false, reason: "unavailable" };
+  }
+}
+
+/**
+ * Same double-consent gate for navigation links, failing closed.
  */
 export async function isAskAiAvailable(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<boolean> {
   if (!isAiProviderConfigured()) return false;
-
-  const [{ data: settings }, { data: profile }] = await Promise.all([
-    supabase.from("ai_settings").select("enabled").eq("user_id", userId).maybeSingle(),
-    supabase.from("profiles").select("ai_export_enabled").eq("id", userId).maybeSingle(),
-  ]);
-
-  return settings?.enabled === true && profile?.ai_export_enabled !== false;
+  const result = await resolveAiConsent(supabase, userId);
+  return result.allowed;
 }

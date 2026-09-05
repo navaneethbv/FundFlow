@@ -8,6 +8,7 @@ import { isFeatureEnabled } from "@/lib/feature-flags";
 import { formatCurrency } from "@/lib/format";
 import { localDateKey } from "@/lib/format-date";
 import { computeForecastMilestones, forecastNetWorth, parseForecastAssumptions } from "@/lib/forecasting";
+import type { ForecastStartingGaps } from "@/lib/forecasting";
 import LifeEventsPanel from "@/components/forecasting/LifeEventsPanel";
 import type { LifeEvent } from "@/lib/life-events";
 import { loadForecastPageData } from "@/lib/forecasting-data";
@@ -23,6 +24,29 @@ export const metadata = {
   title: "Forecasting",
 };
 
+function pluralAccounts(count: number): string {
+  return count === 1 ? "1 account" : `${count} accounts`;
+}
+
+/**
+ * Names what the balance sheet left out, so the page can say so rather than
+ * projecting from a silently incomplete starting point (a zeroed unknown
+ * balance reads as a real $0).
+ */
+function describeStartingPointGaps(gaps: ForecastStartingGaps): string[] {
+  const notes: string[] = [];
+  if (gaps.excludedFromNetWorth > 0) {
+    notes.push(`${pluralAccounts(gaps.excludedFromNetWorth)} you excluded from net worth`);
+  }
+  if (gaps.unknownBalance > 0) {
+    notes.push(`${pluralAccounts(gaps.unknownBalance)} with no reported balance`);
+  }
+  if (gaps.foreignCurrencies.length > 0) {
+    notes.push(`balances in ${gaps.foreignCurrencies.join(", ")} (no exchange rate)`);
+  }
+  return notes;
+}
+
 export default async function ForecastingPage({ searchParams }: Readonly<PageProps>) {
   if (!isFeatureEnabled("forecastingPage")) notFound();
 
@@ -33,14 +57,17 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
   if (!user) notFound();
 
   const today = localDateKey();
-  const [{ startingState, defaults }, params] = await Promise.all([
+  const [{ startingState, defaults, monthlyExpenses }, params] = await Promise.all([
     loadForecastPageData(supabase, user.id, today),
     searchParams,
   ]);
   const assumptions = parseForecastAssumptions(params, defaults);
+  // Say what the balance sheet left out rather than projecting from a silently
+  // incomplete starting point (a zeroed unknown balance reads as a real $0).
+  const startingPointNotes = describeStartingPointGaps(startingState.gaps);
   const currentNetWorth = startingState.cash + startingState.investments - startingState.liabilities;
   const points = forecastNetWorth(startingState, assumptions);
-  const milestones = computeForecastMilestones(startingState, assumptions);
+  const milestones = computeForecastMilestones(startingState, assumptions, monthlyExpenses);
   const { data: lifeEventRows, error: lifeEventsError } = await supabase
     .from("life_events")
     .select("id, event_type, start_month, amount, duration_months, label")
@@ -84,6 +111,11 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
           <p className="mt-3 text-sm text-muted">
             Net worth today: {" "}<span className="money font-semibold text-foreground">{formatCurrency(currentNetWorth)}</span>
           </p>
+          {startingPointNotes.length > 0 && (
+            <p className="mt-2 text-sm text-muted">
+              Not counted in this starting point: {startingPointNotes.join("; ")}.
+            </p>
+          )}
         </Panel>
 
         <Panel padding="lg">

@@ -94,6 +94,56 @@ describe("buildInsightPayload", () => {
     expect(food?.amount).toBe(25);
   });
 
+  it("excludes canonical transfer flows even when their category is user-defined", () => {
+    const payload = buildInsightPayload([
+      { month: "2026-07", category: "Rent", merchant: "Transfer", amount: 900, flow: "transfer" },
+      { month: "2026-07", category: "Rent", merchant: "Landlord", amount: 900, flow: "expense" },
+    ]);
+    expect(payload.monthly_category_spend).toEqual([
+      { month: "2026-07", category: "Rent", amount: 900 },
+    ]);
+    expect(payload.top_merchants).toEqual([{ merchant: "Landlord", amount: 900 }]);
+  });
+
+  it("uses canonical flow instead of the raw sign for spending", () => {
+    const payload = buildInsightPayload([
+      { month: "2026-07", category: "Refunded income", merchant: "Refund", amount: 25, flow: "income" },
+      { month: "2026-07", category: "Corrected expense", merchant: "Store", amount: -15, flow: "expense" },
+    ]);
+    // The credit keeps its sign: it is money coming back, not $15 more spent.
+    expect(payload.monthly_category_spend).toEqual([
+      { month: "2026-07", category: "Corrected expense", amount: -15 },
+    ]);
+    expect(payload.top_merchants).toEqual([{ merchant: "Store", amount: -15 }]);
+  });
+
+  it("nets an expense credit against the charge instead of adding to it (FF-13)", () => {
+    // Arrange: a $100 charge and a $20 refund, both canonically classified as
+    // expense flow, in the same category and at the same merchant.
+    const rows = [
+      { month: "2026-07", category: "Shopping", merchant: "Store", amount: 100, flow: "expense" as const },
+      { month: "2026-07", category: "Shopping", merchant: "Store", amount: -20, flow: "expense" as const },
+    ];
+
+    // Act
+    const payload = buildInsightPayload(rows);
+
+    // Assert: $80 of spending, not the $120 that Math.abs() produced.
+    expect(payload.monthly_category_spend).toEqual([
+      { month: "2026-07", category: "Shopping", amount: 80 },
+    ]);
+    expect(payload.top_merchants).toEqual([{ merchant: "Store", amount: 80 }]);
+  });
+
+  it("drops a category and merchant whose credits exactly cancel the charges", () => {
+    const payload = buildInsightPayload([
+      { month: "2026-07", category: "Shopping", merchant: "Store", amount: 40, flow: "expense" },
+      { month: "2026-07", category: "Shopping", merchant: "Store", amount: -40, flow: "expense" },
+    ]);
+    expect(payload.monthly_category_spend).toEqual([]);
+    expect(payload.top_merchants).toEqual([]);
+  });
+
   it("keeps only the most recent six months", () => {
     const rows = Array.from({ length: 10 }, (_, i) => ({
       month: `2026-${String(i + 1).padStart(2, "0")}`,

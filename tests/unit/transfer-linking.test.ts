@@ -64,10 +64,11 @@ describe("detectTransferPairs", () => {
     expect(pairs).toEqual([]);
   });
 
-  it("respects the window and the out-before-in direction", () => {
+  it("respects the window with symmetric date tolerance (inflow before or after outflow)", () => {
     expect(detectTransferPairs([out, { ...inbound, date: "2026-09-08" }], WINDOW)).toHaveLength(1);
     expect(detectTransferPairs([out, { ...inbound, date: "2026-09-09" }], WINDOW)).toEqual([]);
-    expect(detectTransferPairs([out, { ...inbound, date: "2026-08-31" }], WINDOW)).toEqual([]);
+    expect(detectTransferPairs([out, { ...inbound, date: "2026-08-31" }], WINDOW)).toHaveLength(1);
+    expect(detectTransferPairs([out, { ...inbound, date: "2026-08-24" }], WINDOW)).toEqual([]);
   });
 
   it("each side pairs at most once, nearest date first", () => {

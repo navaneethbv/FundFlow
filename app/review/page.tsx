@@ -6,6 +6,7 @@ import Panel from "@/components/ui/Panel";
 import { goalSummary, getGoals } from "@/lib/goals";
 import { getDashboardData } from "@/lib/dashboard";
 import { formatCurrency, formatMonth, gainLossColor, inflowMarker, titleCase } from "@/lib/format";
+import { localMonthKey } from "@/lib/format-date";
 import { firstSearchParam } from "@/lib/search-params";
 import { createClient } from "@/lib/supabase/server";
 
@@ -18,6 +19,26 @@ interface PageProps {
 export const metadata = {
   title: "Monthly review",
 };
+
+function BudgetStatusMessage({
+  envelopeCount,
+  issueCount,
+}: Readonly<{
+  envelopeCount: number;
+  issueCount: number;
+}>) {
+  if (envelopeCount === 0) {
+    return (
+      <p className="py-4 text-sm text-muted">
+        No budget configured for this month. Set up categories on the Budget page to track limits.
+      </p>
+    );
+  }
+  if (issueCount === 0) {
+    return <p className="py-4 text-sm text-muted">No budget categories are projected over limit.</p>;
+  }
+  return null;
+}
 
 export default async function MonthlyReviewPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
@@ -32,6 +53,7 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
     getGoals(supabase),
   ]);
 
+  const isCurrentMonth = data.selectedMonth === localMonthKey();
   const net = data.currentMonthIncome - data.currentMonthExpenses;
   const goalsSummary = goalSummary(goals).slice(0, 4);
   const topCategories = data.categoryBreakdown.slice(0, 5).map((category) => ({
@@ -44,11 +66,13 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
   return (
     <AppShell active="reports" email={user?.email}>
       <PageHeader
-        title={`${formatMonth(data.selectedMonth)} review`}
+        title={`${formatMonth(data.selectedMonth)} review${isCurrentMonth ? " (Month-to-date)" : ""}`}
         actions={<ExportReportButton month={data.selectedMonth} />}
       />
       <p className="max-w-2xl text-sm text-muted">
-        A guided snapshot of income, spending, budgets, goals, and notable changes for the month.
+        {isCurrentMonth
+          ? "A month-to-date snapshot of income, spending, budgets, goals, and notable changes so far."
+          : "A guided snapshot of income, spending, budgets, goals, and notable changes for the month."}
       </p>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -75,7 +99,7 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <Panel title="Top spending categories" eyebrow="This month">
+        <Panel title="Top spending categories" eyebrow={isCurrentMonth ? "Month-to-date" : "This month"}>
           <BarList items={topCategories} max={topCategoryMax} />
         </Panel>
         <Panel title="Budget review" eyebrow="Envelope status">
@@ -99,9 +123,10 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
                 </p>
               </div>
             ))}
-            {budgetIssues.length === 0 && (
-              <p className="py-4 text-sm text-muted">No budget categories are projected over limit.</p>
-            )}
+            <BudgetStatusMessage
+              envelopeCount={data.budgetEnvelopes.length}
+              issueCount={budgetIssues.length}
+            />
           </div>
         </Panel>
       </div>

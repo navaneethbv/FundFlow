@@ -8,7 +8,6 @@ import TagsSection from "@/components/settings/TagsSection";
 import MfaSection from "@/components/settings/MfaSection";
 import ExportSection from "@/components/settings/ExportSection";
 import ReportsSection from "@/components/settings/ReportsSection";
-import ImportSection from "@/components/settings/ImportSection";
 import ImportReviewSection from "@/components/settings/ImportReviewSection";
 import MonarchConfigImportSection from "@/components/settings/MonarchConfigImportSection";
 import AiInsightsSection from "@/components/settings/AiInsightsSection";
@@ -227,7 +226,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
     const [{ data: auditLogs }, { data: sessionRows }] = await Promise.all([
       supabase
         .from("audit_logs")
-        .select("user_id, action, metadata")
+        .select("user_id, action, metadata, created_at")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(5),
@@ -243,6 +242,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
         userId: row.user_id as string | null,
         action: row.action as string,
         metadata: (row.metadata ?? {}) as Record<string, unknown>,
+        createdAt: (row.created_at ?? null) as string | null,
       })),
       userId,
       5,
@@ -459,12 +459,18 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
     ];
     content = (
       <>
+        {/*
+          One import workflow, not two. ImportReviewSection is a strict superset
+          of the old one-shot ImportSection - same CSV upload, plus OFX, column
+          mapping and a duplicate-flagged review step - so rendering both offered
+          two doors to the same job, one of which silently skipped duplicate
+          review.
+        */}
         <div className="grid gap-6 xl:grid-cols-2">
           <ExportSection initialEnabled={profile?.ai_export_enabled ?? true} />
-          <ImportSection accounts={importAccounts} />
+          <ImportReviewSection accounts={importAccounts} />
         </div>
         <div className="grid gap-6 xl:grid-cols-2">
-          <ImportReviewSection accounts={importAccounts} />
           <ReceiptScanSection enabled={aiSettings?.enabled ?? false} />
         </div>
         <DemoDataSection hasBanks={(items ?? []).length > 0} />

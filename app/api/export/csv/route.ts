@@ -5,7 +5,10 @@ import { exportError, recordExport, resolveExportContext } from "@/lib/export-ro
 
 /**
  * Download a privacy-safe CSV report: merchant, amount, date, category only.
- * No account numbers, tokens, or identifiers. Intended for the user to feed to
+ * No balances, account numbers, masks, tokens, or provider identifiers. The
+ * merchant column is the user's own transaction text and is exported verbatim,
+ * so it is privacy-safe in the sense of carrying no account or provider
+ * identity - not in the sense of being anonymous. Intended for the user to feed to
  * an external AI. Gated by the profile's ai_export_enabled setting (the data
  * contract lives in lib/export.ts, shared with the JSON export).
  */

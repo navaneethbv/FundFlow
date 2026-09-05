@@ -156,7 +156,7 @@ describe("goalTargetAmount", () => {
     ]);
     expect(funded.target_amount).toBe(5_000);
     expect(funded.remainingAmount).toBe(5_000);
-    expect(funded.badge).toBe("on-track");
+    expect(funded.badge).toBe("no-pace");
   });
 });
 
@@ -400,14 +400,12 @@ describe("computeFundedGoals badges", () => {
     expect(funded.badge).toBe("behind");
   });
 
-  it("on-track for a goal with no date and no plan yet", () => {
-    expect(only([goal()]).badge).toBe("on-track");
+  it("no-pace for a goal with no date and no plan yet", () => {
+    expect(only([goal()]).badge).toBe("no-pace");
   });
 
-  it("on-track when there is no pace evidence to judge", () => {
-    // A goal created moments ago has no ledger and no plan; nagging before any
-    // month has elapsed would be noise, not information.
-    expect(only([goal({ target_date: "2026-12-31" })]).badge).toBe("on-track");
+  it("no-pace when there is no pace evidence to judge", () => {
+    expect(only([goal({ target_date: "2026-12-31" })]).badge).toBe("no-pace");
   });
 
   it("at-risk when the planned contribution cannot reach the date", () => {

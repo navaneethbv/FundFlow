@@ -18,6 +18,7 @@ export type LedgerSortDirection = "asc" | "desc";
 
 export interface LedgerRawSearchParams {
   month?: string | string[];
+  year?: string | string[];
   accountId?: string | string[];
   q?: string | string[];
   page?: string | string[];
@@ -35,6 +36,7 @@ export interface LedgerRawSearchParams {
 export interface LedgerFilters {
   q: string;
   month: string;
+  year?: string;
   accountId: string;
   category: string;
   sub: string;
@@ -61,9 +63,11 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CATEGORY_RE = /^[A-Z][A-Z0-9_]*$/;
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+const YEAR_RE = /^\d{4}$/;
 const FILTER_KEYS = [
   "q",
   "month",
+  "year",
   "accountId",
   "category",
   "sub",
@@ -85,6 +89,7 @@ export function parseLedgerQuery(
   const sortValue = firstSearchParamOrEmpty(raw.sort);
   const directionValue = firstSearchParamOrEmpty(raw.direction);
   const monthValue = firstSearchParamOrEmpty(raw.month);
+  const yearValue = firstSearchParamOrEmpty(raw.year);
   const accountValue = firstSearchParamOrEmpty(raw.accountId);
   const categoryValue = firstSearchParamOrEmpty(raw.category);
   const subValue = firstSearchParamOrEmpty(raw.sub);
@@ -94,6 +99,7 @@ export function parseLedgerQuery(
   return {
     q: sanitizeLedgerSearch(firstSearchParamOrEmpty(raw.q)),
     month: MONTH_RE.test(monthValue) ? monthValue : "",
+    year: YEAR_RE.test(yearValue) ? yearValue : "",
     accountId: UUID_RE.test(accountValue) ? accountValue : "",
     category: CATEGORY_RE.test(categoryValue) ? categoryValue : "",
     sub: CATEGORY_RE.test(subValue) ? subValue : "",

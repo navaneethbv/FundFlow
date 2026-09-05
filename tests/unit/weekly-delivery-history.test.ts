@@ -118,4 +118,20 @@ describe("buildWeeklyDeliveryHistory", () => {
     );
     expect(history[0]!.reason).toBe("Delivery failed");
   });
+
+  it("defaults falsy status to processing", () => {
+    const history = buildWeeklyDeliveryHistory(
+      [
+        {
+          period_start: "2026-08-17",
+          period_end: "2026-08-23",
+          status: "" as unknown as string,
+        },
+      ],
+      anchorDate,
+      "America/Los_Angeles",
+      1,
+    );
+    expect(history[0]?.status).toBe("processing");
+  });
 });

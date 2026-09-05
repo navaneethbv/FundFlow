@@ -25,8 +25,12 @@ npm run test:watch  # vitest watch mode
 Run one file: `npx vitest run tests/unit/csv.test.ts`.
 
 Integration tests (`tests/integration/`) need `.env.local` plus applied
-migrations and auto-skip without them. They create throwaway users against the
-real Supabase project, so never point them at a database with real user data.
+migrations, and they create and delete throwaway users against a real Supabase
+project. Because that is destructive, `tests/setup.ts` denies by default: a run
+that reaches `tests/integration/` with a `SUPABASE_SECRET_KEY` present **fails**
+unless `TEST_SUPABASE_URL` is set and equals the URL under test. Point it at a
+throwaway project, never one holding real user data. Unit tests
+(`npm run test:unit`) are unaffected and need none of this.
 
 ## What this app is
 
@@ -54,13 +58,27 @@ Treat "no in-app AI" as retired wording: the constraint that survived it is the 
   and the `profiles` preference columns. User-authored configuration is the
   test for joining that list; a provider-synced table never qualifies.
 - Migrations in `supabase/migrations/` are applied by hand (CLI or dashboard).
-  There is no migration runner in CI, so code reading a new column fails until
-  someone applies it to the live project.
+  Nothing applies them to the live project for you, so code reading a new
+  column fails until someone does. CI does verify them: `migration-check.yml`
+  applies every migration to a clean local Postgres and runs
+  `scripts/check-rls.sql` against the result, so a migration that will not
+  apply, or that leaves the schema in a state the script forbids, fails there
+  rather than in production.
 
 ### Security
 
 - MFA is enforced server-side in both `proxy.ts` (pages) and `requireUser()`
   (APIs). Do not add an auth entry point that skips the AAL check.
+- **Every policy granted to `authenticated` also gates on
+  `private.session_not_revoked()` and `private.mfa_satisfied()`**, not just
+  ownership: `user_id = auth.uid()` is satisfied perfectly well by a revoked
+  token, or by an aal1 session belonging to a user with a verified factor.
+  `scripts/check-rls.sql` asserts this against the applied schema in CI. The
+  only exceptions are `profiles`, `user_session_records` and
+  `mfa_backup_codes`, all read before a session can reach aal2; gating them
+  would lock an enrolled user out of their own step-up. Copying an owner-only
+  policy from an older table is how this hole gets reopened, so let the check
+  catch it rather than adding a new exception.
 - Plaid `access_token`s are encrypted app-side before insert, and are never
   logged, returned to the browser, or stored plaintext.
 - Cron routes authenticate `Authorization: Bearer $CRON_SECRET` via `safeEqual`.

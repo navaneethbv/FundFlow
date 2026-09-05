@@ -42,6 +42,11 @@ export default function NetWorthWidget({
       <p data-money className="metric-value text-2xl sm:text-3xl">
         {formatCurrency(latest?.netWorth ?? 0, currency)}
       </p>
+      {latest?.month && (
+        <p className="mt-1 text-xs text-muted">
+          As of {latest.month}
+        </p>
+      )}
       {change !== null && (
         <Badge tone={change >= 0 ? "success" : "danger"} className="mt-2">
           {change >= 0 ? "Up" : "Down"} {formatCurrency(Math.abs(change), currency)} in

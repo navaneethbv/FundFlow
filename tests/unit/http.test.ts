@@ -3,6 +3,7 @@ import { requireUser, requireAdmin, errorResponse, badRequest } from "@/lib/http
 
 const mockGetUser = vi.fn();
 const mockGetAal = vi.fn();
+const mockGetSession = vi.fn();
 const mockSingle = vi.fn();
 const mockEq = vi.fn();
 const mockSelect = vi.fn();
@@ -11,6 +12,7 @@ const mockFrom = vi.fn();
 const mockSupabaseClient = {
   auth: {
     getUser: mockGetUser,
+    getSession: mockGetSession,
     mfa: {
       getAuthenticatorAssuranceLevel: mockGetAal,
     },
@@ -83,6 +85,7 @@ describe("errorResponse", () => {
 describe("requireUser", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetSession.mockResolvedValue({ data: { session: null } });
   });
 
   it("returns 401 if user is not authenticated", async () => {
@@ -134,6 +137,7 @@ describe("requireUser", () => {
 describe("requireAdmin", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetSession.mockResolvedValue({ data: { session: null } });
   });
 
   it("returns 401 if requireUser fails", async () => {

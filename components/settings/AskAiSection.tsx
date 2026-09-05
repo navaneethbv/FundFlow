@@ -50,7 +50,11 @@ export default function AskAiSection({ enabled }: Readonly<{ enabled: boolean }>
       </p>
       {!enabled && (
         <p className="mb-3 text-xs text-warning">
-          Enable AI insights above to use this.
+          Enable AI insights in{" "}
+          <a href="/settings?tab=integrations" className="underline font-semibold">
+            Integrations
+          </a>{" "}
+          to use this.
         </p>
       )}
       <form onSubmit={ask} className="flex flex-wrap items-center gap-2">

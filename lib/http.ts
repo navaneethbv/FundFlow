@@ -26,9 +26,9 @@ export interface AuthedContext {
 export async function currentSessionId(
   supabase: SupabaseClient,
 ): Promise<string | null> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  const session = data?.session;
   return decodeSessionId(session?.access_token);
 }
 
@@ -52,8 +52,15 @@ export async function requireUser(): Promise<AuthedContext | NextResponse> {
 
   // Enforce MFA server-side: an MFA-enrolled user with a password-only (aal1)
   // session must complete the TOTP challenge before any API grants access.
-  const { data: aal } =
+  const { data: aal, error: aalError } =
     await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (aalError) {
+    logError("requireUser.mfa", aalError);
+    return NextResponse.json(
+      { error: "Authentication assurance check temporarily unavailable" },
+      { status: 503 },
+    );
+  }
   if (needsMfaStepUp(aal?.currentLevel, aal?.nextLevel)) {
     return NextResponse.json(
       { error: "MFA verification required" },
@@ -63,8 +70,8 @@ export async function requireUser(): Promise<AuthedContext | NextResponse> {
 
   // Record this session for the device list and enforce user-initiated
   // revocation: once a session record is revoked, every subsequent API call
-  // from it returns 401. The recording is best-effort — a transient failure
-  // here must fall open, not lock the user out of the whole app.
+  // from it returns 401. A failed revocation lookup cannot authorize a
+  // protected request, so return temporary unavailability instead.
   try {
     const sessionId = await currentSessionId(supabase);
     if (sessionId) {
@@ -74,7 +81,7 @@ export async function requireUser(): Promise<AuthedContext | NextResponse> {
       } catch {
         // headers() is unavailable outside a request scope (e.g. unit tests).
       }
-      const { data: record } = await supabase
+      const { data: record, error: recordError } = await supabase
         .from("user_session_records")
         .upsert(
           {
@@ -87,6 +94,7 @@ export async function requireUser(): Promise<AuthedContext | NextResponse> {
         )
         .select("revoked_at, created_at")
         .maybeSingle();
+      if (recordError) throw recordError;
       if (record?.revoked_at) {
         return NextResponse.json({ error: "Session revoked" }, { status: 401 });
       }
@@ -101,6 +109,10 @@ export async function requireUser(): Promise<AuthedContext | NextResponse> {
     }
   } catch (error) {
     logError("session.record", error);
+    return NextResponse.json(
+      { error: "Session security check temporarily unavailable" },
+      { status: 503 },
+    );
   }
 
   return { user, supabase };

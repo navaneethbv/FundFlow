@@ -89,6 +89,18 @@ flowchart TB
   carry natural keys (ids, `plaid_transaction_id`) via the spec's
   `restoreKeys` - takeout does not, keeping its no-identifiers contract - so
   `transactions` upserts onto itself and converges with the next sync.
+  `accounts` and `manual_accounts` are foreign-key parents and are never
+  delete-then-inserted either: deleting an account cascades to the very
+  transactions the restore is about to write, so both upsert on their natural
+  key (`plaid_account_id` and `id`). An account whose `plaid_items` row is gone
+  cannot be reinserted at all - `plaid_item_id` is NOT NULL and `plaid_items`
+  is deliberately unarchived because it holds the encrypted access token - so
+  those rows are reported as skipped, never dropped in silence.
+  Receipt images travel in the backup-only `receipt_assets` section as base64
+  and are uploaded back into the `receipts` bucket; whatever the 8 MiB budget
+  or a failed download left behind is listed in `receipt_assets_omitted` and
+  counted in the restore result, so an archive always states its own
+  completeness.
   The route is currently disabled by default while provider-synced account
   restoration is redesigned; see `docs/TODO.md` for the active constraint.
 - `account-preferences.ts` - validates and persists account visibility and
@@ -178,6 +190,19 @@ flowchart TB
   the entered rate goes negative. Every projection surface must say
   "projection," never "prediction" or a confidence level this module doesn't
   compute.
+  `computeForecastStartingState` starts from the same balance sheet the
+  net-worth view uses: it honours `include_in_net_worth` and the accounts
+  page's `excludedNetWorthIds`, keeps an unreported balance as unknown rather
+  than $0, and leaves out non-USD balances because the app has no FX rate.
+  Each of those omissions is returned in `gaps` and shown on the page, so the
+  projection never starts from a silently incomplete balance sheet.
+  `computeForecastDefaults` counts only the outflow leg of a `LOAN_PAYMENTS`
+  posting; the projection records both legs, so summing absolute values doubled
+  every debt payment.
+- `regex-safety.ts` preserves the existing merchant-rule pattern restrictions.
+  `safeCompileRegex` executes accepted patterns through RE2JS, a non-backtracking engine that works in server and browser bundles.
+  Shape checks alone do not guarantee safe native JavaScript matching: `.*a.*a.*!` took over a second on a 300-character description.
+  Unsupported RE2 syntax is rejected rather than falling back to native matching.
 - `advice.ts` / `advice-content.ts` — `ADVICE_LIBRARY` is reviewed education
   content, not user data; `ALLOWED_SOURCE_HOSTS` is an enforcement allowlist
   (a security-review test, not documentation) restricting sources to neutral
@@ -304,11 +329,17 @@ Invariants:
   transient send failure can catch up. A send the provider rejects with a 5xx
   is permanent (`isPermanentDeliveryError`) and is not retried, otherwise an
   undeliverable address burns an attempt every hour until the period rolls.
+- The monthly backup cron deduplicates through `public.backup_deliveries`, a cron-only journal keyed on `(user_id, period)`.
+  The insert claims a delivery; `send_started_at` is persisted before SMTP is contacted, and the completion write checks both errors and affected rows.
+  Stale claims may be reclaimed after 30 minutes only if sending never started.
+  Once sending may have started, a missing completion marker produces `BackupDeliveryUncertainError` and a failed cron response until an operator reconciles it with the mail provider.
+  Mark confirmed delivery complete, or clear the send boundary only after confirming non-delivery; SMTP cannot provide atomic exactly-once delivery with Postgres.
+  Failures before sending release their claim for retry.
 - `/api/plaid/webhook` verifies the `plaid-verification` JWT outside sandbox:
   pinned `alg: ES256`, key via `webhookVerificationKeyGet`, signature checked
   with `dsaEncoding: "ieee-p1363"` (JWS raw r||s, not DER — omitting this
   rejects all genuine webhooks), body SHA-256 compared with `safeEqual`, 5-min
-  `iat` freshness. Sandbox and `NODE_ENV=test` skip verification.
+  `iat` freshness. Only sandbox skips verification.
 - The CSV export contains only date/merchant/amount/category and is gated by
   the profile's `ai_export_enabled` flag.
 - CSP (in `proxy.ts`, not middleware — Next 16 renamed it) is nonce-based with

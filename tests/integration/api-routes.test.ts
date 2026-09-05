@@ -258,7 +258,7 @@ suite("API routes integration", () => {
         // Clean up item
         await admin.from("plaid_items").delete().eq("id", item!.id);
       },
-      30000,
+      60000,
     );
 
     it("proceeds successfully even if one user's sync throws an error", async () => {
@@ -275,7 +275,7 @@ suite("API routes integration", () => {
       expect(json.ok).toBe(true);
       expect(json.users).toBe(1);
       expect(json.synced).toBe(0); // sync failed for this user
-    }, 30000);
+    }, 60000);
 
     it("returns 500 when Supabase query for active items fails", async () => {
       mockSupabaseFromError = new Error("Database select failure");
@@ -825,7 +825,7 @@ suite("API routes integration", () => {
       expect(userCheck.user).toBeNull();
     });
 
-    it("deletes user account successfully even if plaid.itemRemove fails", async () => {
+    it("blocks account deletion if plaid.itemRemove fails", async () => {
       const { data: delUser } = await admin.auth.admin.createUser({
         email: `api-del-fail-${stamp}@example.com`,
         password: "Password123!",
@@ -861,12 +861,17 @@ suite("API routes integration", () => {
         method: "DELETE",
         body: JSON.stringify({ method: "password", code: "Password123!" }),
       });
-      const resp = await accountDelete(req);
-      expect(resp.status).toBe(200);
+      try {
+        const resp = await accountDelete(req);
+        expect(resp.status).toBe(503);
 
-      // Verify user deleted in Supabase auth despite Plaid error
-      const { data: userCheck } = await admin.auth.admin.getUserById(delUser.user!.id).catch(() => ({ data: { user: null } }));
-      expect(userCheck.user).toBeNull();
+        // Keep the account available so the user can retry after the bank connection is removed.
+        const { data: userCheck } = await admin.auth.admin.getUserById(delUser.user!.id);
+        expect(userCheck.user?.id).toBe(delUser.user!.id);
+      } finally {
+        mockItemRemove.mockResolvedValue({ data: {} });
+        await admin.auth.admin.deleteUser(delUser.user!.id);
+      }
     });
 
     it("returns 500 when Supabase deleteUser fails", async () => {

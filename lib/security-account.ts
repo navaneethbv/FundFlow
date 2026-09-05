@@ -17,8 +17,18 @@ export function buildDataTakeout(sections: Record<string, unknown[]>) {
   return redactTakeoutSecrets(sections);
 }
 
+/**
+ * An audit row without its timestamp cannot answer the only question the log
+ * exists to answer -- when did this happen -- so `createdAt` is carried through
+ * rather than dropped. It stays null only for a row that genuinely has none.
+ */
 export function buildAuditLogPage(
-  rows: { userId: string | null; action: string; metadata: Record<string, unknown> }[],
+  rows: {
+    userId: string | null;
+    action: string;
+    metadata: Record<string, unknown>;
+    createdAt?: string | null;
+  }[],
   userId: string,
   limit: number,
 ) {
@@ -27,6 +37,7 @@ export function buildAuditLogPage(
     .slice(0, limit)
     .map((row) => ({
       action: row.action,
+      createdAt: row.createdAt ?? null,
       metadata: Object.fromEntries(
         Object.entries(row.metadata).map(([key, value]) => [
           key,
@@ -41,6 +52,40 @@ export function buildAuditLogPage(
   };
 }
 
+function detectOs(ua: string): string {
+  if (/iPhone/i.test(ua)) return "iPhone";
+  if (/iPad/i.test(ua)) return "iPad";
+  if (/Macintosh|Mac OS X/i.test(ua)) return "Mac";
+  if (/Windows/i.test(ua)) return "Windows";
+  if (/Android/i.test(ua)) return "Android";
+  if (/Linux/i.test(ua)) return "Linux";
+  return "";
+}
+
+function detectBrowser(ua: string): string {
+  if (/Edg\//i.test(ua)) return "Edge";
+  if (/Chrome\//i.test(ua) && !/Chromium|Edg\//i.test(ua)) return "Chrome";
+  if (/Safari\//i.test(ua) && !/Chrome|Chromium|Edg\//i.test(ua)) return "Safari";
+  if (/Firefox\//i.test(ua)) return "Firefox";
+  return "";
+}
+
+export function formatDeviceLabel(ua: string | null): string {
+  if (!ua || ua.trim() === "") return "Unknown device";
+  if (!ua.includes("Mozilla/") && !ua.includes(";")) return ua.trim();
+
+  const os = detectOs(ua);
+  const browser = detectBrowser(ua);
+
+  if (browser && os) return `${browser} on ${os}`;
+  return browser || os || ua.slice(0, 40);
+}
+
+/**
+ * Sessions are sorted newest-first and keep `lastSeenAt`: "Chrome on Mac" three
+ * times over tells the user nothing about which one to revoke, and last-active
+ * is the field that distinguishes them.
+ */
 export function buildSessionList(
   sessions: { id: string; current: boolean; userAgent: string | null; lastSeenAt: string }[],
 ) {
@@ -48,7 +93,8 @@ export function buildSessionList(
     .sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt))
     .map((session) => ({
       id: session.id,
-      label: session.userAgent || "Unknown device",
+      label: formatDeviceLabel(session.userAgent),
       current: session.current,
+      lastSeenAt: session.lastSeenAt,
     }));
 }

@@ -1222,4 +1222,97 @@ describe("lib/recurring snapshot and notification edge cases", () => {
     const fresh = mockCreateNotification.mock.calls.filter((call) => call[1] === "new_subscription");
     expect(fresh).toHaveLength(1);
   });
+
+  it("catches and logs when refreshInferredRecurringForUser throws", async () => {
+    mockListActiveItems.mockResolvedValueOnce([]);
+    mockRefreshInferredRecurringForUser.mockRejectedValueOnce(new Error("Inference crashed"));
+
+    const result = await refreshRecurringForUser("user-1");
+
+    expect(result).toEqual({
+      plaid: 0,
+      inferred: { active: 0, added: 0, deactivated: 0, deduplicated: 0, failed: 0 },
+    });
+    expect(mockLogError).toHaveBeenCalledWith("recurring.inference", expect.any(Error));
+  });
+
+  it("maps streams with different frequencies, merchants, and snapshot types", async () => {
+    const freqs = [
+      "WEEKLY",
+      "BIWEEKLY",
+      "BI_WEEKLY",
+      "QUARTERLY",
+      "SEMI_MONTHLY",
+      "ANNUALLY",
+      "UNKNOWN",
+      null,
+      undefined,
+    ];
+    mockTransactionsRecurringGet.mockResolvedValue({
+      data: {
+        inflow_streams: [
+          {
+            stream_id: "inflow-1",
+            merchant_name: null,
+            description: "Paycheck",
+            average_amount: { amount: 2000 },
+            last_amount: { amount: 2000 },
+            frequency: "BIWEEKLY",
+            status: "MATURE",
+            is_active: true,
+            account_id: "plaid-acct-1",
+            transaction_ids: [],
+          },
+          {
+            stream_id: "inflow-2",
+            merchant_name: null,
+            description: null,
+            average_amount: null,
+            last_amount: null,
+            frequency: null,
+            status: null,
+            is_active: false,
+            account_id: "missing-acct",
+            transaction_ids: [],
+          },
+        ],
+        outflow_streams: freqs.map((f, i) => ({
+          stream_id: `stream-freq-${i}`,
+          merchant_name: `Merchant ${i}`,
+          description: `Desc ${i}`,
+          average_amount: { amount: 10 + i },
+          last_amount: { amount: 10 + i },
+          frequency: f,
+          status: "MATURE",
+          personal_finance_category: { primary: "SERVICES" },
+          is_active: true,
+          account_id: "plaid-acct-1",
+          transaction_ids: [],
+        })),
+      },
+    });
+
+    const mock = createRecurringSupabaseMock({
+      accounts: { data: [{ id: "local-acct-1", plaid_account_id: "plaid-acct-1" }], error: null },
+      existingStreams: { data: [], error: null },
+      upserted: { data: [], error: null },
+    });
+    mockServiceClient.from.mockImplementation(mock.from);
+
+    // Test with number snapshot, object with number, object with non-number, non-object, and null
+    mockServiceClient.rpc = vi.fn().mockResolvedValueOnce({ data: 10, error: null });
+    await refreshRecurringForItem(dummyItem);
+
+    mockServiceClient.rpc = vi.fn().mockResolvedValueOnce({ data: { plaid: 5 }, error: null });
+    await refreshRecurringForItem(dummyItem);
+
+    mockServiceClient.rpc = vi.fn().mockResolvedValueOnce({ data: { plaid: "bad" }, error: null });
+    await refreshRecurringForItem(dummyItem);
+
+    mockServiceClient.rpc = vi.fn().mockResolvedValueOnce({ data: "string-snapshot", error: null });
+    await refreshRecurringForItem(dummyItem);
+
+    mockServiceClient.rpc = vi.fn().mockResolvedValueOnce({ data: null, error: null });
+    await refreshRecurringForItem(dummyItem);
+  });
 });

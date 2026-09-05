@@ -71,4 +71,22 @@ describe("roadmap completion schema", () => {
     expect(migration).toContain("grant execute on function private.confirm_transaction_duplicate(uuid, text, uuid, uuid) to service_role");
     expect(migration).toContain("grant execute on function private.undo_transaction_duplicate(uuid, text) to service_role");
   });
+
+  it("enforces one-use transfer and refund links at the database boundary", () => {
+    const hardening = readFileSync(
+      "supabase/migrations/20260904120000_session_revocation_and_mfa_hardening.sql",
+      "utf8",
+    );
+    for (const indexName of [
+      "linked_transfers_user_out_transaction_unique",
+      "linked_transfers_user_in_transaction_unique",
+      "linked_refunds_user_charge_transaction_unique",
+      "linked_refunds_user_refund_transaction_unique",
+    ]) {
+      expect(hardening).toContain(indexName);
+    }
+    expect(hardening).toContain("create or replace function public.confirm_transfer_link(");
+    expect(hardening).toContain("on conflict (user_id, out_transaction_id, in_transaction_id)");
+    expect(hardening).toContain("transfer_link_conflict");
+  });
 });

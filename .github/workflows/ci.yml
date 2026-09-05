@@ -36,6 +36,6 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: build-placeholder
 
-      # Dependency scan (non-blocking on transitive advisories).
+      # Dependency scan (blocking on high/critical advisories).
       - name: Audit dependencies
-        run: npm audit --audit-level=high || true
+        run: npm audit --audit-level=high

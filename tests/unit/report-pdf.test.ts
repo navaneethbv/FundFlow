@@ -98,7 +98,10 @@ describe("weekly report PDF", () => {
           previousEnd: "2026-06-28",
         },
         changePercent: 0,
-        cards: [{ name: "Chase Checking *1234", amount: 100 }],
+        cards: [
+          { name: "Chase Checking *1234", amount: 100 },
+          { name: "•••• 1234", amount: 50 },
+        ],
       }),
     );
     expect(buffer.subarray(0, 4).toString()).toBe("%PDF");

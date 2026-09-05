@@ -15,7 +15,8 @@ import { writeAudit, getClientIp } from "@/lib/audit";
 /**
  * The Reports page's "Download CSV": the exact filtered row set behind the
  * chart, through the privacy-safe export contract (date / merchant / amount /
- * category only — no account ids, masks, or provider identifiers).
+ * category only, no account ids, masks, or provider identifiers; merchant is
+ * the user's own transaction text, exported verbatim).
  *
  * Session-only by design. The `/api/export/csv` API-token path exists for
  * unattended scripts pulling everything; this endpoint's meaning depends on URL

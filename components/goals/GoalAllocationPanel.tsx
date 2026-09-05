@@ -178,6 +178,10 @@ export default function GoalAllocationPanel({
         </>
       )}
 
+      <p className="text-xs text-muted">
+        Allocating funds is bookkeeping within FundFlow to track progress toward your goal. It does not move or transfer money between bank accounts.
+      </p>
+
       {error && (
         <p role="alert" className="text-sm text-danger">
           {error}

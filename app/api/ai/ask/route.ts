@@ -1,10 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
-import { buildInsightPayload, isAiProviderConfigured } from "@/lib/ai-provider";
+import {
+  answerSpendingQuestionWithProvider,
+  buildInsightPayload,
+  isAiProviderConfigured,
+} from "@/lib/ai-provider";
+import { resolveAiConsent } from "@/lib/ai-gate";
 import { fetchPrivacySafeRows, recentHistoryStart } from "@/lib/export";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { serverEnv } from "@/lib/env.server";
 import { writeAudit, getClientIp } from "@/lib/audit";
 
 /**
@@ -31,18 +34,34 @@ export async function POST(request: NextRequest) {
       return badRequest("A question of up to 300 characters is required");
     }
 
-    const [{ data: settings }, exportResult] = await Promise.all([
-      supabase.from("ai_settings").select("enabled").eq("user_id", user.id).maybeSingle(),
-      fetchPrivacySafeRows(supabase, user.id, { startDate: recentHistoryStart() }),
-    ]);
-    if (exportResult.allowed === false || settings?.enabled !== true) {
+    const consent = await resolveAiConsent(supabase, user.id);
+    if (!consent.allowed) {
+      if (consent.reason === "unavailable") {
+        return NextResponse.json(
+          { error: "AI preferences temporarily unavailable." },
+          { status: 503 },
+        );
+      }
       return NextResponse.json(
         { error: "Enable AI insights in Settings first." },
         { status: 403 },
       );
     }
 
-    const allowed = await checkRateLimit(`ai-ask:${user.id}`, 10, 24 * 3600);
+    const exportResult = await fetchPrivacySafeRows(supabase, user.id, {
+      startDate: recentHistoryStart(),
+      includeFlow: true,
+    });
+    if (exportResult.allowed === false) {
+      return NextResponse.json(
+        { error: "Enable AI insights in Settings first." },
+        { status: 403 },
+      );
+    }
+
+    const allowed = await checkRateLimit(`ai-ask:${user.id}`, 10, 24 * 3600, {
+      failClosed: true,
+    });
     if (!allowed) {
       return NextResponse.json(
         { error: "Daily question limit reached." },
@@ -56,30 +75,14 @@ export async function POST(request: NextRequest) {
         merchant: row.merchant,
         category: row.category,
         amount: row.amount,
+        flow: row.flow,
       })),
     );
 
-    const client = new Anthropic({ apiKey: serverEnv.anthropicApiKey });
-    const response = await client.messages.create({
-      model: process.env.AI_INSIGHTS_MODEL ?? "claude-3-7-sonnet-latest",
-      max_tokens: 600,
-      thinking: { type: "adaptive" },
-      system:
-        "You answer one question about the user's own spending using ONLY the provided aggregates (monthly category totals and top merchants). If the aggregates cannot answer the question, say so plainly. 1-4 sentences, specific dollar figures, no advice about financial products, no invented data.",
-      messages: [
-        {
-          role: "user",
-          content: `Aggregates:\n${JSON.stringify(payload)}\n\nQuestion: ${question}`,
-        },
-      ],
+    const { answer } = await answerSpendingQuestionWithProvider({
+      question,
+      payload,
     });
-
-    if (response.stop_reason === "refusal") {
-      return NextResponse.json({ answer: "I can't help with that question." });
-    }
-    const textBlock = response.content.find(
-      (block): block is Anthropic.TextBlock => block.type === "text",
-    );
 
     await writeAudit({
       userId: user.id,
@@ -88,7 +91,7 @@ export async function POST(request: NextRequest) {
       ip: getClientIp(request),
     });
 
-    return NextResponse.json({ answer: textBlock?.text ?? "No answer produced." });
+    return NextResponse.json({ answer });
   } catch (error) {
     return errorResponse("ai.ask", error);
   }

@@ -1,6 +1,105 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-09-04. Read this first to resume.
+Last updated: 2026-09-05. Read this first to resume.
+
+## 2026-09-05: Third review of PR #153
+
+Reviewed head `6c69927` and reproduced two residual defects through request-handler regressions with isolated dependencies.
+Rule preview took about 1.7 seconds for one repetitive 300-character bank description under `.*a.*a.*!`.
+Accepted merchant patterns now execute through browser-compatible RE2JS while retaining existing shape validation.
+Backup delivery previously deleted its claim after sending when the completion write failed.
+The new `20260905120000_backup_send_boundary.sql` migration records sending before SMTP and prevents automatic retries of uncertain delivery outcomes.
+Pre-send failures remain retryable; uncertain outcomes fail visibly until reconciled with the mail provider.
+The linked migration ledger is recorded in `TODO.md`; no production migration was applied.
+Validation: 4,902 unit tests passed, the 46 restore tests passed again after the Sonar refactor, and lint, typecheck, production build, palette validation, and dependency audit passed.
+All six signed-out browser smoke tests passed against the local production build.
+The formerly slow pattern completed in 3.6 ms in Chromium with the browser-compatible matcher.
+Authenticated production writes and recovery tests were not run.
+
+## 2026-09-05: Second review round on PR #153
+
+Branch: `codex/comprehensive-review-remediation` (unchanged).
+
+The 2026-09-04 entry below claims all 33 findings were "fully resolved".
+A second review of the branch at `4ddf547` rejected that, reproducing defects against seven findings plus four unfinished follow-ups.
+Read the 2026-09-04 entry as the record of what each package touched, not as a statement of what shipped.
+[`TODO.md`](TODO.md) now carries the accurate closed / closed-with-a-limit / deferred split.
+
+What this round changed:
+
+1. **FF-02, MFA and revocation gates were incomplete.**
+   `life_events`, `credit_card_bills` and `account_reconciliations` still had owner-only policies, and a wider audit found 37 user-data tables in the same state.
+   `supabase/migrations/20260905100000_mfa_gate_remaining_user_tables.sql` rewrites each policy in place from `pg_policies`, ANDing the two gates onto the recorded predicate so no existing ownership check is retyped by hand.
+   `profiles`, `user_session_records` and `mfa_backup_codes` are excluded on purpose: all three are read before a session can reach AAL2.
+2. **FF-06, the regex guard only looked at groups.**
+   `^a*a*a*a*a*a*!$` has none, so it compiled and then ran for seconds.
+   New `lib/regex-safety.ts` defines a restricted language: no ambiguous quantified group, no two adjacent loops over a shared character, at most three loops.
+   RE2 and worker-thread timeouts were not options, because `safeCompileRegex` is imported by a client component.
+3. **FF-09, backups could not restore what they promised.**
+   Added the missing annotation columns, the account provider keys, and receipt image bytes.
+   `accounts` and `manual_accounts` now upsert instead of delete-then-insert, so a restore no longer cascades the ledger away before refilling it.
+   Both remaining limits (an 8 MiB image budget, and accounts whose Plaid item is gone) are reported in the archive and the restore result rather than hidden.
+4. **FF-10, backup deduplication was not durable.**
+   New `public.backup_deliveries` journal; the claim is the insert, so the primary key arbitrates concurrent runs, and both the claim and the completion check their errors.
+5. **The rest.**
+   FF-13 signed expense credits; FF-12 loan-payment double counting and net-worth-parity starting balances; FF-30 fail-closed test-database guard; FF-07 export copy; FF-26 one import workflow; FF-27 session and audit timestamps.
+6. **Three Sonar findings.**
+   `computeForecastMilestones` cognitive complexity, `table()`'s eight parameters, and a rethrow-only catch in the transfers route.
+
+Verification: 444 test files, 4,900 unit tests, all passing.
+Branch coverage is 95.07% against the 95% gate; lint, typecheck, `next build` (70 routes) and the palette validator are clean.
+
+`.github/workflows/migration-check.yml` applies every migration to a clean Postgres and then runs `scripts/check-rls.sql`, so both new migrations are executed in CI, not merely reviewed.
+That run is also what caught `backup_deliveries` having RLS enabled with no policy; it is now in the script's documented deny-all exception list, beside `rate_limit_counters`.
+`check-rls.sql` gained an FF-02 assertion in the same pass: every `authenticated` policy on a `public` table must carry both the revocation and MFA gates, excepting only `profiles`, `user_session_records` and `mfa_backup_codes`.
+Checking it against the applied schema rather than trusting the migration is deliberate, because the next migration that copies an owner-only policy from an older table would otherwise reopen the hole silently.
+
+**Not verified, and not claimed.**
+Neither migration has been applied to the *linked* project.
+Apply both by hand before deploying: the backup cron writes to `backup_deliveries` on every run, so shipping the code without `20260905110000` fails every backup.
+Production exploit testing and a live restore from a real archive were also not performed.
+
+## 2026-09-04: Comprehensive review remediation (Packages A–J, FF-01 through FF-33)
+
+Branch: `codex/comprehensive-review-remediation`.
+> **Superseded.** This section claimed all 33 findings were fully resolved. The 2026-09-05 review found seven of them
+> reproducible and four follow-ups unfinished; see the entry above. Kept for the record of what each package touched.
+
+All 33 findings identified in `docs/reviews/2026-09-04-comprehensive-review.md` and planned in `docs/reviews/2026-09-04-implementation-plan.md` were addressed in this round.
+
+Key architectural and behavioral updates:
+1. **Security & Session Enforcement**:
+   - `supabase/migrations/20260904120000_session_revocation_and_mfa_hardening.sql`: RLS policy allowing users to select their own `user_session_records`.
+   - `app/api/settings/sessions/route.ts`: Switched GET to cookie-bound user client; restricted service-role client strictly to session revocation.
+   - `lib/http.ts`: MFA verification fails closed (503) on `aalError` instead of falling back to aal1.
+   - `lib/rate-limit.ts`: Added `failClosed` option for sensitive / security routes.
+2. **AI Consent & Rules Engine**:
+   - `lib/ai-gate.ts`: Introduced `resolveAiConsent` strictly enforcing double-consent (`ai_settings.enabled` AND `profiles.ai_export_enabled !== false`) and failing closed (403/503) on errors or missing profiles.
+   - `lib/rules-engine.ts`: Regex compilation validates length (<= 250 chars) and complexity to prevent ReDoS before evaluating rules.
+   - `lib/ai-provider.ts`: Server-only AI provider routing (`claude-sonnet-4-6`) explicitly filters out transfers and loan payments from prompts.
+3. **Data Lifecycle & Account Hygiene**:
+   - `app/api/account/route.ts`: Purges user-owned storage objects (`avatars` and `receipts`) via service role client before deleting auth user to prevent Supabase deletion failures and orphaned bytes.
+   - `lib/user-data.ts`: Deterministic 1,000-row chunked pagination for takeout and backup; added full state table coverage (`account_preferences`, `credit_card_bills`, `life_events`).
+   - `app/api/cron/backup/route.ts`: Fails with non-200 status when user queries error; skips redundant monthly backups.
+4. **Financial Calculations & Forecasting**:
+   - `lib/net-worth.ts`: Properly respects `include_in_net_worth === false` across accounts and throws on query errors rather than reporting partial net worth.
+   - `lib/forecasting.ts`: Ensures cash conservation in `stepMonth` (balance adjusts for income minus expenses); computes un-clamped negative savings rates for honest debt visibility.
+   - `app/forecasting/page.tsx`: Uses median monthly expense for milestone calculation.
+5. **Transaction Integrity & Ledger Depth**:
+   - `lib/transaction-quality.ts`: Symmetric transfer detection date window (+/- days).
+   - `app/api/transactions/transfers/route.ts`: Pre-filters already linked transfer transactions and enforces account distinctness.
+   - `lib/ledger-query.ts` & `app/wrapped/page.tsx`: Adds explicit year filter bounds to prevent unbounded history scans.
+6. **UI/UX Polish**:
+   - Investments widget displays itemization notices when balance is present without holdings.
+   - Recurring widget clearly labels income vs expense, marks overdue items, and clarifies dropdown range ("Next 7 days").
+   - Budget page provides horizon-aware shifting, visible period labels, and guided unconfigured state.
+   - Goal cards distinguish missing pace evidence with `"no-pace"` badge and bookkeeping disclaimers.
+   - Settings sessions displays human-readable device/browser labels (`lib/security-account.ts`) and readable audit actions (`AuditLogSection.tsx`).
+7. **Verification & Freshness**:
+   - Production database safety check enforced in `tests/setup.ts`.
+   - CI audit made blocking (`npm audit --audit-level=high`).
+   - Minor dependencies updated cleanly via `npm-check-updates`.
+   - All 438 test files (4,775 tests) pass 100%. TypeScript (`tsc --noEmit`), ESLint (`npm run lint`), palette validator, and `next build` all exit 0.
 
 ## 2026-09-04: documentation refresh and deployment-state reconciliation
 
@@ -155,11 +254,12 @@ absence of AI, is the thing to protect. `docs/ARCHITECTURE.md` gained an
 `ANTHROPIC_API_KEY` (it never did, so the feature was undiscoverable).
 
 **Two findings came out of writing that up**, both recorded at the top of
-`docs/TODO.md` and both deliberately left unfixed here: the default model id
-`claude-opus-4-8` is not a real model (and `insights` masks the failure by
-falling back to local summaries), and `/api/ai/receipt` is gated on
+`docs/TODO.md` and deliberately left unfixed in that documentation refresh:
+the default model id was not a real model (and `insights` masked the failure by
+falling back to local summaries), and `/api/ai/receipt` was gated on
 `ai_settings.enabled` only, despite a docstring claiming the same double
-consent as insights. Each is an owner call, not a wording fix.
+consent as insights. Both findings were resolved in the September AI hardening
+work; this entry preserves the state of the earlier refresh.
 
 **Archived, not deleted.** Closed reviews and superseded changelogs moved to
 `docs/archive/` (with a new `docs/archive/README.md` index saying what each

@@ -94,7 +94,13 @@ export default function ReceiptScanSection({ enabled }: Readonly<{ enabled: bool
         the AI provider and is stored only when you explicitly save it.
       </p>
       {!enabled && (
-        <p className="mb-3 text-xs text-warning">Enable AI insights above to use this.</p>
+        <p className="mb-3 text-xs text-warning">
+          Enable AI insights in{" "}
+          <a href="/settings?tab=integrations" className="underline font-semibold">
+            Integrations
+          </a>{" "}
+          to use this.
+        </p>
       )}
       <form onSubmit={scan} className="flex flex-wrap items-center gap-2">
         <label

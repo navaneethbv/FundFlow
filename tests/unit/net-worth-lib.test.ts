@@ -61,10 +61,16 @@ describe("writeNetWorthSnapshot", () => {
         error: null,
       }),
     };
+    const profileChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    };
 
     mockSupabase.from.mockImplementation((table: string) => {
       if (table === "accounts") return plaidChain;
       if (table === "manual_accounts") return manualChain;
+      if (table === "profiles") return profileChain;
       if (table === "net_worth_snapshots") return upsertChain;
       throw new Error(`Unexpected table ${table}`);
     });

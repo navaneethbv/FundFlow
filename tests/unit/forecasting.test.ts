@@ -137,10 +137,10 @@ describe("forecastNetWorth", () => {
 
   it("reduces liabilities by the monthly debt payment, flooring at zero", () => {
     const points = forecastNetWorth(
-      { cash: 0, investments: 0, liabilities: 300 },
+      { cash: 300, investments: 0, liabilities: 300 },
       { ...BASE_ASSUMPTIONS, monthlyDebtPayment: 100, horizonMonths: 12 },
     );
-    // Paid off after 3 months; never goes negative from there.
+    // Paid off after 3 months; net worth stays 0 as cash pays down liabilities.
     expect(points[2].base).toBe(0);
     expect(points[11].base).toBe(0);
   });
@@ -184,6 +184,8 @@ describe("forecastNetWorth", () => {
 });
 
 describe("computeForecastStartingState", () => {
+  const noGaps = { excludedFromNetWorth: 0, unknownBalance: 0, foreignCurrencies: [] };
+
   it("buckets accounts into cash, investments, and liabilities using the accounts-page classification", () => {
     const state = computeForecastStartingState(
       [
@@ -193,7 +195,7 @@ describe("computeForecastStartingState", () => {
       ],
       [],
     );
-    expect(state).toEqual({ cash: 5000, investments: 20000, liabilities: 1500 });
+    expect(state).toEqual({ cash: 5000, investments: 20000, liabilities: 1500, gaps: noGaps });
   });
 
   it("treats a negative liability balance as a credit asset", () => {
@@ -201,7 +203,7 @@ describe("computeForecastStartingState", () => {
       [{ type: "loan", subtype: "student", balance: -1000 }],
       [],
     );
-    expect(state).toEqual({ cash: 1000, investments: 0, liabilities: 0 });
+    expect(state).toEqual({ cash: 1000, investments: 0, liabilities: 0, gaps: noGaps });
   });
 
   it("includes manual accounts alongside Plaid ones", () => {
@@ -213,7 +215,44 @@ describe("computeForecastStartingState", () => {
         { accountType: "debt", balance: 400 },
       ],
     );
-    expect(state).toEqual({ cash: 200, investments: 3000, liabilities: 400 });
+    expect(state).toEqual({ cash: 200, investments: 3000, liabilities: 400, gaps: noGaps });
+  });
+
+  it("skips accounts the user excluded from net worth, matching the net-worth view (FF-12)", () => {
+    const state = computeForecastStartingState(
+      [
+        { type: "depository", subtype: "checking", balance: 5000, includeInNetWorth: true },
+        { type: "depository", subtype: "savings", balance: 9000, includeInNetWorth: false },
+      ],
+      [{ accountType: "cash", balance: 300, includeInNetWorth: false }],
+    );
+    expect(state.cash).toBe(5000);
+    expect(state.gaps.excludedFromNetWorth).toBe(2);
+  });
+
+  it("reports an unreported balance instead of counting it as $0 (FF-12)", () => {
+    const state = computeForecastStartingState(
+      [
+        { type: "depository", subtype: "checking", balance: null },
+        { type: "depository", subtype: "checking", balance: 100 },
+      ],
+      [{ accountType: "cash", balance: null }],
+    );
+    expect(state.cash).toBe(100);
+    expect(state.gaps.unknownBalance).toBe(2);
+  });
+
+  it("leaves out a foreign-currency balance rather than summing it as dollars (FF-12)", () => {
+    const state = computeForecastStartingState(
+      [
+        { type: "depository", subtype: "checking", balance: 5000, isoCurrencyCode: "USD" },
+        { type: "depository", subtype: "checking", balance: 4000, isoCurrencyCode: "eur" },
+        { type: "depository", subtype: "checking", balance: 100, isoCurrencyCode: null },
+      ],
+      [],
+    );
+    expect(state.cash).toBe(5100);
+    expect(state.gaps.foreignCurrencies).toEqual(["EUR"]);
   });
 });
 
@@ -251,13 +290,13 @@ describe("computeForecastDefaults", () => {
     expect(defaults.monthlySavings).toBe(800);
   });
 
-  it("floors a negative median savings at 0 rather than projecting a shrinking default", () => {
+  it("preserves a negative median savings rather than projecting a false zero default", () => {
     const months = ["2026-07"];
     const txns = [
       txn("2026-07", { signedAmount: -1000, flow: "income" }),
       txn("2026-07", { signedAmount: 2000, flow: "expense" }),
     ];
-    expect(computeForecastDefaults(txns, months).monthlySavings).toBe(0);
+    expect(computeForecastDefaults(txns, months).monthlySavings).toBe(-1000);
   });
 
   it("uses the median of LOAN_PAYMENTS transfers as the debt payment default", () => {
@@ -267,6 +306,22 @@ describe("computeForecastDefaults", () => {
       txn("2026-07", { signedAmount: 500, flow: "transfer", groupKey: "LOAN_PAYMENTS" }),
     ];
     expect(computeForecastDefaults(txns, months).monthlyDebtPayment).toBe(400);
+  });
+
+  it("counts only the outflow leg of a loan payment, not both postings (FF-12)", () => {
+    // Arrange: one $400 payment, recorded twice in the canonical projection -
+    // money out of checking and the matching money in to the loan account.
+    const months = ["2026-07"];
+    const txns = [
+      txn("2026-07", { signedAmount: 400, flow: "transfer", groupKey: "LOAN_PAYMENTS" }),
+      txn("2026-07", { signedAmount: -400, flow: "transfer", groupKey: "LOAN_PAYMENTS" }),
+    ];
+
+    // Act
+    const defaults = computeForecastDefaults(txns, months);
+
+    // Assert: $400, not the $800 that summing both legs by absolute value gave.
+    expect(defaults.monthlyDebtPayment).toBe(400);
   });
 
   it("ignores transactions outside the requested months", () => {
@@ -363,12 +418,16 @@ describe("computeForecastMilestones", () => {
 
     // Starting cash is 10,000 >= 6,000, so ef3 was already achieved
     expect(ef3?.reachedMonth).toBe(0);
-    // ef6 (12,000) reached within first few months
-    expect(ef6?.reachedMonth).toBe(2);
+    // ef6 (12,000) reached in month 7 after liabilities are paid down
+    expect(ef6?.reachedMonth).toBe(7);
   });
 
   it("computes net worth milestones as wealth compounds", () => {
-    const milestones = computeForecastMilestones(starting, assumptions, 2000);
+    const milestones = computeForecastMilestones(
+      starting,
+      { ...assumptions, horizonMonths: 120 },
+      2000,
+    );
     const nw50k = milestones.find((m) => m.id === "nw-50000");
     const nw100k = milestones.find((m) => m.id === "nw-100000");
 
@@ -384,5 +443,11 @@ describe("computeForecastMilestones", () => {
     expect(fire).toBeDefined();
     expect(fire!.description).not.toMatch(/sustainable/i);
     expect(fire!.description.toLowerCase()).toContain("planning assumption");
+  });
+
+  it("does not invent expense-based targets when there is no expense history", () => {
+    const milestones = computeForecastMilestones(starting, assumptions);
+    expect(milestones.some((milestone) => milestone.type === "emergency")).toBe(false);
+    expect(milestones.some((milestone) => milestone.type === "fire")).toBe(false);
   });
 });

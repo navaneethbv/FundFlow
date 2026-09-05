@@ -32,6 +32,11 @@ export default function InvestmentsWidget({
       <p data-money className="metric-value text-2xl sm:text-3xl">
         {formatCurrency(summary?.total ?? 0, currency)}
       </p>
+      {summary && summary.total > 0 && summary.hasHoldings === false && (
+        <p className="mt-1.5 text-xs text-muted">
+          Itemized holdings are unavailable from your provider; tracking total account balance.
+        </p>
+      )}
       {summary?.dayChange && (
         <p
           data-money

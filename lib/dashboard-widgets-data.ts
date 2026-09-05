@@ -6,10 +6,11 @@ import {
 } from "@/lib/dashboard";
 import { loadCanonicalProjection } from "@/lib/finance-query";
 import { formatMonth } from "@/lib/format";
-import { buildInvestmentsPage } from "@/lib/investments";
+import { buildInvestmentsPage, buildInvestmentAccountCoverage } from "@/lib/investments";
 import {
   loadHoldings,
   loadHoldingSnapshots,
+  loadInvestmentAccounts,
 } from "@/lib/investments-data";
 import type { WidgetKey } from "@/lib/dashboard-widgets";
 import {
@@ -48,6 +49,7 @@ export async function loadCumulativeSpend(
     today: string;
     userId: string;
     household: boolean;
+    selectedAccountId?: string;
   }>,
 ): Promise<CumulativeSpendView> {
   const previousMonth = shiftMonthKey(options.month, -1);
@@ -63,6 +65,7 @@ export async function loadCumulativeSpend(
       start: `${previousMonth}-01`,
       endExclusive: `${shiftMonthKey(options.month, 1)}-01`,
     },
+    accountId: options.selectedAccountId,
   });
 
   return {
@@ -88,6 +91,8 @@ export interface DashboardInvestmentSummary {
     ticker: string | null;
     changePct: number;
   }[] | null;
+  hasHoldings?: boolean;
+  hasAccountsWithoutHoldings?: boolean;
 }
 
 /**
@@ -119,16 +124,19 @@ async function latestSnapshotDate(supabase: SupabaseClient): Promise<string | nu
 
 export async function loadDashboardInvestmentSummary(
   supabase: SupabaseClient,
+  userId?: string,
 ): Promise<DashboardInvestmentSummary> {
   const newest = await latestSnapshotDate(supabase);
-  const [holdings, snapshots] = await Promise.all([
+  const [holdings, snapshots, investmentAccounts] = await Promise.all([
     loadHoldings(supabase),
     newest
       ? loadHoldingSnapshots(supabase, {
           since: isoDaysBefore(newest, SNAPSHOT_LOOKBACK_DAYS),
         })
       : Promise.resolve([]),
+    userId ? loadInvestmentAccounts(supabase, userId) : Promise.resolve([]),
   ]);
+  const coverage = buildInvestmentAccountCoverage(investmentAccounts, holdings);
   const latestDates = [...new Set(snapshots.map((row) => row.snapshotDate))]
     .sort((left, right) => right.localeCompare(left))
     .slice(0, 2);
@@ -137,11 +145,22 @@ export async function loadDashboardInvestmentSummary(
     holdings,
     snapshots.filter((row) => latestDateSet.has(row.snapshotDate)),
   );
-  return {
-    total: page.total,
+  const hasHoldings = holdings.some(
+    (h) => h.isActive && (h.value !== null || (h.quantity !== null && h.price !== null)),
+  );
+  const total = coverage.total > 0 ? coverage.total : page.total;
+  const result: DashboardInvestmentSummary = {
+    total,
     dayChange: page.dayChange,
     topMovers: page.topMovers?.slice(0, 3) ?? null,
   };
+  if (total > 0 && !hasHoldings) {
+    result.hasHoldings = false;
+  }
+  if (coverage.accountsWithoutHoldings > 0) {
+    result.hasAccountsWithoutHoldings = true;
+  }
+  return result;
 }
 
 export interface OverviewLedgerStrip {
@@ -197,7 +216,7 @@ export async function loadOverviewWidgetData(
       ? loadCumulativeSpend(supabase, options)
       : Promise.resolve(EMPTY_CUMULATIVE_SPEND),
     options.visible.includes("investments")
-      ? loadDashboardInvestmentSummary(supabase)
+      ? loadDashboardInvestmentSummary(supabase, options.userId)
       : Promise.resolve(null),
     anchorAccount
       ? loadLedgerStripTicks(supabase, {

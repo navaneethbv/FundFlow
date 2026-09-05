@@ -3,11 +3,13 @@
 import { useState } from "react";
 import Button from "@/components/ui/Button";
 import Panel from "@/components/ui/Panel";
+import { formatTimestampUtc } from "@/lib/format-date";
 
 interface SessionRow {
   id: string;
   label: string;
   current: boolean;
+  lastSeenAt?: string | null;
 }
 
 export default function SessionsSection({ initialSessions }: Readonly<{ initialSessions: SessionRow[] }>) {
@@ -46,8 +48,20 @@ export default function SessionsSection({ initialSessions }: Readonly<{ initialS
           {sessions.map((session) => (
             <li key={session.id} className="flex items-center justify-between gap-3 rounded-field bg-panel-2 p-3">
               <span>
-                {session.label}
-                {session.current && <span className="ml-2 text-xs text-muted">current</span>}
+                <span className="block">
+                  {session.label}
+                  {session.current && <span className="ml-2 text-xs text-muted">current</span>}
+                </span>
+                {/* Several sessions can share a device label; last-active is what
+                    tells the user which row is the one they mean to revoke. */}
+                <span className="mt-0.5 block text-xs text-muted">
+                  Last active:{" "}
+                  {session.lastSeenAt ? (
+                    <time dateTime={session.lastSeenAt}>{formatTimestampUtc(session.lastSeenAt)}</time>
+                  ) : (
+                    "Unknown time"
+                  )}
+                </span>
               </span>
               {!session.current && (
                 <Button

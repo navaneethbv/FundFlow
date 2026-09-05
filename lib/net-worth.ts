@@ -10,35 +10,56 @@ export async function writeNetWorthSnapshot(userId: string) {
   const currentMonthDate = `${new Date().toISOString().slice(0, 7)}-01`; // YYYY-MM-01
 
   // 1. Fetch Plaid accounts
-  const { data: plaidAccounts } = await supabase
+  const { data: plaidAccounts, error: plaidError } = await supabase
     .from("accounts")
-    .select("name, type, subtype, current_balance")
+    .select("id, name, type, subtype, current_balance")
     .eq("user_id", userId);
+  if (plaidError) throw plaidError;
 
   // 2. Fetch manual accounts
-  const { data: manualAccounts } = await supabase
+  const { data: manualAccounts, error: manualError } = await supabase
     .from("manual_accounts")
-    .select("name, account_type, balance, include_in_net_worth")
+    .select("id, name, account_type, balance, include_in_net_worth")
     .eq("user_id", userId);
+  if (manualError) throw manualError;
 
-  // 3. Map to standard NetWorthAccount shape
+  // 3. Respect user exclusions from preferences if configured
+  let excludedNetWorthIds = new Set<string>();
+  const profileQuery = supabase
+    .from("profiles")
+    .select("dashboard_prefs")
+    .eq("id", userId);
+  const profileResult = typeof (profileQuery as { maybeSingle?: unknown }).maybeSingle === "function"
+    ? await (profileQuery as typeof profileQuery & { maybeSingle: () => Promise<{ data?: unknown; error?: unknown }> }).maybeSingle()
+    : await profileQuery;
+  const profile = profileResult.data as { dashboard_prefs?: unknown } | null | undefined;
+  const profileError = profileResult.error;
+  if (profileError) throw profileError;
+  const accountsPage = (profile?.dashboard_prefs as Record<string, unknown> | null)?.accountsPage as
+    | { excludedNetWorthIds?: string[] }
+    | undefined;
+  if (Array.isArray(accountsPage?.excludedNetWorthIds)) {
+    excludedNetWorthIds = new Set(accountsPage.excludedNetWorthIds);
+  }
+
+  // 4. Map to standard NetWorthAccount shape
   const accounts = [
     ...(plaidAccounts ?? []).map((a) => ({
       name: a.name,
       type: a.type,
       subtype: a.subtype,
       balance: a.current_balance !== null ? Number(a.current_balance) : null,
-      includeInNetWorth: true,
+      includeInNetWorth: !excludedNetWorthIds.has(a.id),
     })),
     ...(manualAccounts ?? []).map((a) => ({
       name: a.name,
       type: a.account_type,
       balance: a.balance !== null ? Number(a.balance) : null,
-      includeInNetWorth: a.include_in_net_worth,
+      includeInNetWorth: a.include_in_net_worth && !excludedNetWorthIds.has(a.id),
     })),
   ];
 
-  // 4. Compute snapshot
+  // 5. Compute snapshot
   const snapshot = computeNetWorthSnapshot(accounts);
 
   // 5. Upsert on user_id + snapshot_month

@@ -16,7 +16,7 @@ import {
   serializeFinancialScope,
 } from "@/lib/financial-scope";
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import { UNKNOWN_CURRENCY } from "@/lib/format";
+import { UNKNOWN_CURRENCY, formatMonth } from "@/lib/format";
 import { localMonthKey } from "@/lib/format-date";
 import { firstSearchParam } from "@/lib/search-params";
 import { createClient } from "@/lib/supabase/server";
@@ -43,6 +43,26 @@ function shiftMonth(month: string, delta: number): string {
   const [year, oneBasedMonth] = month.split("-").map(Number);
   const total = year! * 12 + oneBasedMonth! - 1 + delta;
   return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
+}
+
+function horizonStep(delta: number, horizon: BudgetHorizon): number {
+  if (horizon === "decade") return delta * 120;
+  if (horizon === "yearly") return delta * 12;
+  return delta;
+}
+
+function shiftHorizon(month: string, delta: number, horizon: BudgetHorizon): string {
+  return shiftMonth(month, horizonStep(delta, horizon));
+}
+
+function formatPeriodLabel(month: string, horizon: BudgetHorizon): string {
+  if (horizon === "yearly") {
+    return month.slice(0, 4);
+  }
+  if (horizon === "decade") {
+    return `${month.slice(0, 4)} – ${Number(month.slice(0, 4)) + 9}`;
+  }
+  return formatMonth(month);
 }
 
 function summaryTab(value: string | undefined): BudgetSummaryTab {
@@ -129,18 +149,27 @@ export default async function BudgetPage({
         <Link
           href={budgetHref({
             ...baseLink,
-            month: shiftMonth(month, -1),
+            month: shiftHorizon(month, -1, horizon),
           })}
           className="inline-flex min-h-11 items-center rounded-field border border-panel-border bg-panel px-4 text-sm font-semibold"
+          aria-label={`Previous ${HORIZON_LABELS[horizon].toLowerCase()}`}
         >
           Previous
         </Link>
+        <span
+          className="px-3 text-base font-bold text-foreground"
+          aria-live="polite"
+          data-testid="budget-active-period"
+        >
+          {formatPeriodLabel(month, horizon)}
+        </span>
         <Link
           href={budgetHref({
             ...baseLink,
-            month: shiftMonth(month, 1),
+            month: shiftHorizon(month, 1, horizon),
           })}
           className="inline-flex min-h-11 items-center rounded-field border border-panel-border bg-panel px-4 text-sm font-semibold"
+          aria-label={`Next ${HORIZON_LABELS[horizon].toLowerCase()}`}
         >
           Next
         </Link>

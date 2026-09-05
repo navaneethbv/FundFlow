@@ -64,6 +64,7 @@ vi.mock("web-push", () => ({
 
 import { POST as askPost } from "@/app/api/ai/ask/route";
 import { POST as receiptPost } from "@/app/api/ai/receipt/route";
+import { extractReceiptWithProvider } from "@/lib/ai-provider";
 import { isPushConfigured, sendPushToUser } from "@/lib/push";
 import { getRecentTransactions } from "@/lib/recent-transactions";
 import { NextResponse, NextRequest } from "next/server";
@@ -82,7 +83,10 @@ function askRequest(question: unknown) {
 function consentingUser() {
   mockRequireUser.mockResolvedValue({
     user: { id: USER },
-    supabase: clientStub({ ai_settings: { data: { enabled: true } } }),
+    supabase: clientStub({
+      ai_settings: { data: { enabled: true } },
+      profiles: { data: { ai_export_enabled: true } },
+    }),
   });
   mockFetchRows.mockResolvedValue({
     allowed: true,
@@ -147,9 +151,39 @@ describe("POST /api/ai/ask", () => {
   it("403s when the export consent is off, even with the AI setting on", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: USER },
-      supabase: clientStub({ ai_settings: { data: { enabled: true } } }),
+      supabase: clientStub({
+        ai_settings: { data: { enabled: true } },
+        profiles: { data: { ai_export_enabled: false } },
+      }),
     });
     mockFetchRows.mockResolvedValue({ allowed: false, rows: [] });
+
+    const res = await askPost(askRequest("where did it go?"));
+
+    expect(res.status).toBe(403);
+    expect(mockMessagesCreate).not.toHaveBeenCalled();
+  });
+
+  it("503s when AI consent preferences cannot be read", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER },
+      supabase: clientStub({
+        ai_settings: { error: { message: "settings unavailable" } },
+        profiles: { data: { ai_export_enabled: true } },
+      }),
+    });
+
+    const res = await askPost(askRequest("where did it go?"));
+
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toEqual({
+      error: "AI preferences temporarily unavailable.",
+    });
+  });
+
+  it("403s when the privacy-safe export is denied after consent", async () => {
+    consentingUser();
+    mockFetchRows.mockResolvedValue({ allowed: false });
 
     const res = await askPost(askRequest("where did it go?"));
 
@@ -164,7 +198,12 @@ describe("POST /api/ai/ask", () => {
     const res = await askPost(askRequest("where did it go?"));
 
     expect(res.status).toBe(429);
-    expect(mockCheckRateLimit).toHaveBeenCalledWith(`ai-ask:${USER}`, 10, 24 * 3600);
+    expect(mockCheckRateLimit).toHaveBeenCalledWith(
+      `ai-ask:${USER}`,
+      10,
+      24 * 3600,
+      { failClosed: true },
+    );
     expect(mockMessagesCreate).not.toHaveBeenCalled();
   });
 
@@ -225,6 +264,7 @@ describe("POST /api/ai/receipt", () => {
       user: { id: USER },
       supabase: clientStub({
         ai_settings: { data: { enabled: true } },
+        profiles: { data: { ai_export_enabled: true } },
         transactions: { data: transactions },
       }),
     });
@@ -274,6 +314,7 @@ describe("POST /api/ai/receipt", () => {
       `ai-receipt:${USER}`,
       10,
       24 * 3600,
+      { failClosed: true },
     );
   });
 
@@ -327,6 +368,43 @@ describe("POST /api/ai/receipt", () => {
     expect(payload.matchedTransactionId).toBe("txn-1");
     // Line items are capped at 15.
     expect(payload.lineItems).toHaveLength(15);
+  });
+
+  it("extracts a PNG receipt image properly", async () => {
+    scanningUser();
+    mockMessagesCreate.mockResolvedValue(
+      textResponse(
+        JSON.stringify({
+          merchant: "Bookstore",
+          amount: 15.0,
+          date: "2026-07-02",
+          line_items: ["Book"],
+        }),
+      ),
+    );
+
+    const res = await receiptPost(receiptRequest(image("image/png")));
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as { merchant: string };
+    expect(payload.merchant).toBe("Bookstore");
+  });
+
+  it("defaults to image/jpeg when mediaType is unrecognized", async () => {
+    mockMessagesCreate.mockResolvedValue(
+      textResponse(
+        JSON.stringify({
+          merchant: "Store",
+          amount: 10.0,
+          date: "2026-07-02",
+          line_items: [],
+        }),
+      ),
+    );
+    const result = await extractReceiptWithProvider({
+      fileBase64: "dGVzdA==",
+      mediaType: "image/unknown",
+    });
+    expect(result.extracted?.merchant).toBe("Store");
   });
 
   it("returns no match when the extracted date is unusable", async () => {
@@ -586,6 +664,17 @@ describe("POST /api/ai/insights", () => {
 
     const res = await insightsPost();
     expect(res.status).toBe(200);
+  });
+
+  it("returns no insights when the privacy-safe export is denied", async () => {
+    consentingUser();
+    mockFetchRows.mockResolvedValue({ allowed: false });
+
+    const res = await insightsPost();
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ insights: [] });
+    expect(serviceClient.callsOn("ai_insights")).toHaveLength(0);
   });
 
   it("handles sendPushToUser outer error logging", async () => {
