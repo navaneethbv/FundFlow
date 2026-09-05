@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { logError } from "@/lib/log";
 import {
   detectTransferPairs,
   filterReviewDecisions,
@@ -11,6 +12,8 @@ import {
 const WINDOW_DAYS = 7;
 const LOOKBACK_DAYS = 60;
 const PAGE_SIZE = 1_000;
+const MAX_BULK_TRANSFERS = 100;
+const BULK_CONCURRENCY = 8;
 
 type PagedQueryResult = { data?: unknown; error?: unknown };
 
@@ -308,6 +311,147 @@ async function linkConfirmedTransfer(
   return null;
 }
 
+type BulkTransferFailure = {
+  subject_id: string | null;
+  error: string;
+};
+
+type BulkTransferResult = {
+  subjectId: string | null;
+  failure?: BulkTransferFailure;
+};
+
+async function readLinkFailure(response: NextResponse): Promise<string> {
+  const body = await response.json().catch(() => null) as { error?: unknown } | null;
+  return typeof body?.error === "string" ? body.error : "Could not link transfer.";
+}
+
+async function linkBulkTransferCandidate(
+  supabase: SupabaseClient,
+  userId: string,
+  candidate: unknown,
+): Promise<BulkTransferResult> {
+  const record = asRecord(candidate);
+  const subjectId = typeof record?.subject_id === "string" ? record.subject_id : null;
+
+  if (!record) {
+    return {
+      subjectId,
+      failure: { subject_id: subjectId, error: "Each transfer must be an object." },
+    };
+  }
+
+  try {
+    const failure = await linkConfirmedTransfer(supabase, userId, subjectId ?? "", record);
+    if (failure) {
+      return {
+        subjectId,
+        failure: { subject_id: subjectId, error: await readLinkFailure(failure) },
+      };
+    }
+    return { subjectId };
+  } catch (error) {
+    logError("transactions.transfers.bulk.item", error);
+    return {
+      subjectId,
+      failure: { subject_id: subjectId, error: "Could not link transfer." },
+    };
+  }
+}
+
+async function linkBulkTransfers(
+  supabase: SupabaseClient,
+  userId: string,
+  transfers: unknown[],
+): Promise<{ linked: string[]; failures: BulkTransferFailure[] }> {
+  const workers = Math.min(BULK_CONCURRENCY, transfers.length);
+  const results = new Array<BulkTransferResult>(transfers.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < transfers.length) {
+      const index = nextIndex++;
+      results[index] = await linkBulkTransferCandidate(supabase, userId, transfers[index]);
+    }
+  }
+
+  await Promise.all(Array.from({ length: workers }, worker));
+
+  const linked: string[] = [];
+  const failures: BulkTransferFailure[] = [];
+  for (const result of results) {
+    if (result.failure) failures.push(result.failure);
+    else if (result.subjectId) linked.push(result.subjectId);
+  }
+
+  return { linked, failures };
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function getBulkTransfers(body: unknown): unknown[] | null {
+  const record = asRecord(body);
+  return record && Array.isArray(record.transfers) ? record.transfers : null;
+}
+
+async function handleBulkTransferRequest(
+  supabase: SupabaseClient,
+  userId: string,
+  body: Record<string, unknown>,
+  transfers: unknown[],
+): Promise<NextResponse> {
+  if (body.decision !== "confirmed") {
+    return badRequest("bulk transfer requests must use the confirmed decision");
+  }
+  if (transfers.length === 0 || transfers.length > MAX_BULK_TRANSFERS) {
+    return badRequest(`bulk transfer requests must contain between 1 and ${MAX_BULK_TRANSFERS} transfers`);
+  }
+
+  const result = await linkBulkTransfers(supabase, userId, transfers);
+  return NextResponse.json(
+    { ok: result.failures.length === 0, ...result },
+    { status: result.failures.length > 0 ? 207 : 200 },
+  );
+}
+
+async function handleSingleTransferRequest(
+  supabase: SupabaseClient,
+  userId: string,
+  body: Record<string, unknown> | null,
+): Promise<NextResponse> {
+  const subjectId = body?.subject_id;
+  const decision = body?.decision;
+  if (typeof subjectId !== "string" || (decision !== "confirmed" && decision !== "dismissed")) {
+    return badRequest("subject_id and a valid decision are required");
+  }
+
+  if (decision === "confirmed") {
+    const linkFailure = await linkConfirmedTransfer(
+      supabase,
+      userId,
+      subjectId,
+      body,
+    );
+    if (linkFailure) return linkFailure;
+  }
+
+  if (decision === "dismissed") {
+    const { error: decisionError } = await supabase
+      .from("transaction_review_decisions")
+      .upsert(
+        { user_id: userId, kind: "transfer", subject_id: subjectId, decision },
+        { onConflict: "user_id,kind,subject_id" },
+      );
+    if (decisionError) throw decisionError;
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
 /** Record a transfer-pair decision; confirmed links and decisions commit atomically. */
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
@@ -315,37 +459,21 @@ export async function POST(request: NextRequest) {
   const { user, supabase } = auth;
 
   try {
-    if (!(await checkRateLimit(`transfers:${user.id}:write`, 30, 3600))) {
+    const body = await request.json().catch(() => null);
+    const transfers = getBulkTransfers(body);
+    const isBulk = transfers !== null;
+    if (!(await checkRateLimit(
+      `transfers:${user.id}:${isBulk ? "bulk" : "write"}`,
+      isBulk ? 5 : 30,
+      3600,
+    ))) {
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
-    const body = await request.json().catch(() => null);
-    const subjectId = body?.subject_id;
-    const decision = body?.decision;
-    if (typeof subjectId !== "string" || (decision !== "confirmed" && decision !== "dismissed")) {
-      return badRequest("subject_id and a valid decision are required");
-    }
 
-    if (decision === "confirmed") {
-      const linkFailure = await linkConfirmedTransfer(
-        supabase,
-        user.id,
-        subjectId,
-        body,
-      );
-      if (linkFailure) return linkFailure;
+    if (transfers !== null) {
+      return await handleBulkTransferRequest(supabase, user.id, asRecord(body)!, transfers);
     }
-
-    if (decision === "dismissed") {
-      const { error: decisionError } = await supabase
-        .from("transaction_review_decisions")
-        .upsert(
-          { user_id: user.id, kind: "transfer", subject_id: subjectId, decision },
-          { onConflict: "user_id,kind,subject_id" },
-        );
-      if (decisionError) throw decisionError;
-    }
-
-    return NextResponse.json({ ok: true });
+    return await handleSingleTransferRequest(supabase, user.id, asRecord(body));
   } catch (error) {
     return errorResponse("transactions.transfers.post", error);
   }

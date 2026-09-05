@@ -2,6 +2,25 @@
 
 Last updated: 2026-09-05. Read this first to resume.
 
+## 2026-09-05: Bulk transfer review action
+
+Branch `codex/bulk-transfer-linking` adds explicit row selection, a select-all checkbox, and a `Link all transfers` action to the transfer review panel.
+The action sends one bounded bulk request with up to eight concurrent per-pair operations, reuses the existing ownership and transfer invariant checks, and reports partial failures while leaving failed rows available for retry.
+Individual link actions are disabled while a bulk operation is running to prevent overlapping writes.
+Bulk requests use their own five-per-hour limiter so a user who exhausted the single-link limiter can still process the review list in one intentional action.
+
+Validation passed with 4,909 unit tests, 95.04% branch coverage, lint, typecheck, and the production build.
+The full coverage command was not allowed to run its live integration files because `TEST_SUPABASE_URL` is not approved on this machine.
+This branch has not been deployed or exercised against production financial data.
+
+## 2026-09-05: Savings-rate denominator context
+
+The dashboard keeps the signed savings-rate calculation, but now flags a period where spending is more than ten times recorded income as denominator-sensitive.
+The card exposes the recorded income and spending amounts in its explanatory copy so a large negative percentage is not mistaken for a calculation failure.
+The six-month savings-rate series now uses the same shared signed calculation and returns no rate for months without an income denominator.
+The focused and full unit suites, coverage, lint, typecheck, build, palette validation, graph update, and fresh remote checks all pass.
+The full coverage command still does not run live integration files because `TEST_SUPABASE_URL` is not approved on this machine.
+
 ## 2026-09-05: Third review of PR #153
 
 Reviewed head `6c69927` and reproduced two residual defects through request-handler regressions with isolated dependencies.

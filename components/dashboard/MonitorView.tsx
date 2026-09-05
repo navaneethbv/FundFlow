@@ -3,7 +3,10 @@ import type { DashboardData } from "@/lib/dashboard";
 import { foldTail } from "@/lib/chart-utils";
 import { medianOf } from "@/lib/insights";
 import { dashboardUrl, OTHER_CATEGORY_KEY } from "@/lib/drilldown";
-import { netWorthDeltaFromHistory } from "@/components/dashboard/metrics";
+import {
+  hasSmallSavingsRateBase,
+  netWorthDeltaFromHistory,
+} from "@/components/dashboard/metrics";
 import {
   formatCurrency,
   formatDay,
@@ -198,6 +201,12 @@ export default function MonitorView({
   const previousMonth = monthLabels.at(-2) ?? "last month";
   const currentNet = data.currentMonthIncome - data.currentMonthExpenses;
   const previousNet = (incomeSeries.at(-2) ?? 0) - (spendSeries.at(-2) ?? 0);
+  const isCurrentSelectedMonth =
+    data.selectedMonth === new Date().toISOString().slice(0, 7);
+  const savingsRateHasSmallBase = hasSmallSavingsRateBase(
+    data.currentMonthIncome,
+    data.currentMonthExpenses,
+  );
   // Net-worth delta comes from the net-worth history series (assets minus
   // liabilities per month), not from this month's cash flow: those are
   // different numbers and the tile must report the change in what it displays.
@@ -273,10 +282,29 @@ export default function MonitorView({
             <h3 className="eyebrow">Savings rate</h3>
             <RadialGauge value={savingsRate ?? 0} />
           </div>
-          <p className="metric-value mt-3 text-3xl">
+          <p
+            className={`metric-value mt-3 text-3xl${savingsRateHasSmallBase ? " text-warning" : ""}`}
+            title={
+              savingsRateHasSmallBase && savingsRate !== null
+                ? `Calculated from ${formatCurrency(data.currentMonthIncome)} of recorded income and ${formatCurrency(data.currentMonthExpenses)} of spending.`
+                : undefined
+            }
+          >
             {savingsRate !== null ? `${savingsRate}%` : "N/A"}
           </p>
-          <p className="mt-2 text-xs font-medium text-muted">Based on this month</p>
+          <p className={`mt-2 text-xs font-medium${savingsRateHasSmallBase ? " text-warning" : " text-muted"}`}>
+            {savingsRate === null ? (
+              "No income recorded this month"
+            ) : savingsRateHasSmallBase ? (
+              <>
+                <Money amount={data.currentMonthIncome} /> income and{" "}
+                <Money amount={data.currentMonthExpenses} /> spending recorded{" "}
+                {isCurrentSelectedMonth ? "month-to-date" : "for the selected month"}; the rate is highly sensitive to income timing.
+              </>
+            ) : (
+              `Based on ${isCurrentSelectedMonth ? "month-to-date" : "the selected month's"} recorded income`
+            )}
+          </p>
         </section>
       </div>
 

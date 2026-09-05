@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeNetWorth,
   computeSavingsRate,
+  hasSmallSavingsRateBase,
   netWorthDeltaFromHistory,
 } from "@/components/dashboard/metrics";
 
@@ -21,6 +22,14 @@ describe("dashboard UI overhaul", () => {
     expect(computeSavingsRate(8000, 5200)).toBe(35);
     expect(computeSavingsRate(0, 5200)).toBeNull();
     expect(computeSavingsRate(5000, 6200)).toBe(-24);
+  });
+
+  it("flags rates dominated by a very small income base without changing the rate", () => {
+    expect(hasSmallSavingsRateBase(14.34, 6109.75)).toBe(true);
+    expect(hasSmallSavingsRateBase(5000, 6200)).toBe(false);
+    expect(hasSmallSavingsRateBase(0, 500)).toBe(false);
+    expect(hasSmallSavingsRateBase(undefined, 500)).toBe(false);
+    expect(hasSmallSavingsRateBase(10, undefined)).toBe(false);
   });
 
   it("compares live net worth with the previous snapshot, not the current one", () => {

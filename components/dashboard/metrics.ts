@@ -38,3 +38,17 @@ export function computeSavingsRate(
 ): number | null {
   return sharedComputeSavingsRate(income, spending);
 }
+
+/**
+ * A dashboard rate is denominator-sensitive when spending is more than ten
+ * times the income recorded for the period. The exact signed rate remains
+ * available; this flag only tells the UI to explain the small income base.
+ */
+export function hasSmallSavingsRateBase(
+  income: number | null | undefined,
+  spending: number | null | undefined,
+): boolean {
+  const inc = income ?? 0;
+  const spend = spending ?? 0;
+  return inc > 0 && spend > inc * 10;
+}

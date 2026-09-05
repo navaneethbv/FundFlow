@@ -28,6 +28,7 @@ describe("insights wiring", () => {
     expect(monitorView).toContain("Emergency runway");
     expect(monitorView).toContain("Next paycheck");
     expect(monitorView).toContain("data.insights");
+    expect(monitorView).toContain("month-to-date");
   });
 
   it("monitor view keeps category-spike (info) anomalies out of the danger bucket", () => {
