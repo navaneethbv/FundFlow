@@ -201,6 +201,8 @@ export default function MonitorView({
   const previousMonth = monthLabels.at(-2) ?? "last month";
   const currentNet = data.currentMonthIncome - data.currentMonthExpenses;
   const previousNet = (incomeSeries.at(-2) ?? 0) - (spendSeries.at(-2) ?? 0);
+  const isCurrentSelectedMonth =
+    data.selectedMonth === new Date().toISOString().slice(0, 7);
   const savingsRateHasSmallBase = hasSmallSavingsRateBase(
     data.currentMonthIncome,
     data.currentMonthExpenses,
@@ -296,10 +298,11 @@ export default function MonitorView({
             ) : savingsRateHasSmallBase ? (
               <>
                 <Money amount={data.currentMonthIncome} /> income and{" "}
-                <Money amount={data.currentMonthExpenses} /> spending recorded; the rate is highly sensitive to income timing.
+                <Money amount={data.currentMonthExpenses} /> spending recorded{" "}
+                {isCurrentSelectedMonth ? "month-to-date" : "for the selected month"}; the rate is highly sensitive to income timing.
               </>
             ) : (
-              "Based on this month's recorded income"
+              `Based on ${isCurrentSelectedMonth ? "month-to-date" : "the selected month's"} recorded income`
             )}
           </p>
         </section>
