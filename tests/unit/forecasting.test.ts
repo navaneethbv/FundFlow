@@ -389,4 +389,10 @@ describe("computeForecastMilestones", () => {
     expect(fire!.description).not.toMatch(/sustainable/i);
     expect(fire!.description.toLowerCase()).toContain("planning assumption");
   });
+
+  it("does not invent expense-based targets when there is no expense history", () => {
+    const milestones = computeForecastMilestones(starting, assumptions);
+    expect(milestones.some((milestone) => milestone.type === "emergency")).toBe(false);
+    expect(milestones.some((milestone) => milestone.type === "fire")).toBe(false);
+  });
 });

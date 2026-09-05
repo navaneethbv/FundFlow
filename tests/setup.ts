@@ -16,3 +16,9 @@ export function assertSafeTestDatabase(url?: string): void {
     );
   }
 }
+
+// Integration tests are the only Vitest path that needs the service key. When
+// one is present, enforce the guard before any test module can create a client.
+if (process.env.SUPABASE_SECRET_KEY) {
+  assertSafeTestDatabase();
+}

@@ -9,9 +9,25 @@ vi.mock("@/lib/feature-flags", () => ({
 import {
   collectUserData,
   countUserDataRows,
+  USER_DATA_TABLES,
 } from "@/lib/user-data";
 
 describe("lib/user-data", () => {
+  it("uses columns that exist for the latest backup tables", () => {
+    const spec = (key: string) => USER_DATA_TABLES.find((table) => table.key === key)!;
+    expect(spec("account_preferences")).toMatchObject({
+      table: "profiles",
+      scope: "profile",
+      select: "dashboard_prefs",
+    });
+    expect(spec("credit_card_bills").select).toContain("statement_balance");
+    expect(spec("credit_card_bills").select).not.toMatch(/(^|, )balance(,|$)/);
+    expect(spec("life_events").select).toContain("start_month");
+    expect(spec("life_events").select).not.toContain("target_date");
+    expect(spec("alert_preferences").orderBySecondary).toBeNull();
+    expect(spec("ai_settings").orderBySecondary).toBeNull();
+  });
+
   it("collects every user-owned section scoped to the caller", async () => {
     const supabase = clientStub({
       accounts: { data: [{ name: "Checking" }] },
@@ -27,6 +43,9 @@ describe("lib/user-data", () => {
     expect(supabase.scopedToUser("accounts", "u1")).toBe(true);
     expect(supabase.scopedToUser("transactions", "u1")).toBe(true);
     expect(supabase.scopedToUser("households", "u1")).toBe(false);
+    expect(supabase.callsOn("profiles")).toContainEqual(
+      expect.objectContaining({ method: "eq", args: ["id", "u1"] }),
+    );
   });
 
   it("scopes households by owner and shared expenses by involvement", async () => {

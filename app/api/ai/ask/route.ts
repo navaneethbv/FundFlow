@@ -4,6 +4,7 @@ import {
   buildInsightPayload,
   isAiProviderConfigured,
 } from "@/lib/ai-provider";
+import { resolveAiConsent } from "@/lib/ai-gate";
 import { fetchPrivacySafeRows, recentHistoryStart } from "@/lib/export";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -33,18 +34,34 @@ export async function POST(request: NextRequest) {
       return badRequest("A question of up to 300 characters is required");
     }
 
-    const [{ data: settings }, exportResult] = await Promise.all([
-      supabase.from("ai_settings").select("enabled").eq("user_id", user.id).maybeSingle(),
-      fetchPrivacySafeRows(supabase, user.id, { startDate: recentHistoryStart() }),
-    ]);
-    if (exportResult.allowed === false || settings?.enabled !== true) {
+    const consent = await resolveAiConsent(supabase, user.id);
+    if (!consent.allowed) {
+      if (consent.reason === "unavailable") {
+        return NextResponse.json(
+          { error: "AI preferences temporarily unavailable." },
+          { status: 503 },
+        );
+      }
       return NextResponse.json(
         { error: "Enable AI insights in Settings first." },
         { status: 403 },
       );
     }
 
-    const allowed = await checkRateLimit(`ai-ask:${user.id}`, 10, 24 * 3600);
+    const exportResult = await fetchPrivacySafeRows(supabase, user.id, {
+      startDate: recentHistoryStart(),
+      includeFlow: true,
+    });
+    if (exportResult.allowed === false) {
+      return NextResponse.json(
+        { error: "Enable AI insights in Settings first." },
+        { status: 403 },
+      );
+    }
+
+    const allowed = await checkRateLimit(`ai-ask:${user.id}`, 10, 24 * 3600, {
+      failClosed: true,
+    });
     if (!allowed) {
       return NextResponse.json(
         { error: "Daily question limit reached." },
@@ -58,6 +75,7 @@ export async function POST(request: NextRequest) {
         merchant: row.merchant,
         category: row.category,
         amount: row.amount,
+        flow: row.flow,
       })),
     );
 

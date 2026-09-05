@@ -83,7 +83,10 @@ function askRequest(question: unknown) {
 function consentingUser() {
   mockRequireUser.mockResolvedValue({
     user: { id: USER },
-    supabase: clientStub({ ai_settings: { data: { enabled: true } } }),
+    supabase: clientStub({
+      ai_settings: { data: { enabled: true } },
+      profiles: { data: { ai_export_enabled: true } },
+    }),
   });
   mockFetchRows.mockResolvedValue({
     allowed: true,
@@ -148,7 +151,10 @@ describe("POST /api/ai/ask", () => {
   it("403s when the export consent is off, even with the AI setting on", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: USER },
-      supabase: clientStub({ ai_settings: { data: { enabled: true } } }),
+      supabase: clientStub({
+        ai_settings: { data: { enabled: true } },
+        profiles: { data: { ai_export_enabled: false } },
+      }),
     });
     mockFetchRows.mockResolvedValue({ allowed: false, rows: [] });
 
@@ -165,7 +171,12 @@ describe("POST /api/ai/ask", () => {
     const res = await askPost(askRequest("where did it go?"));
 
     expect(res.status).toBe(429);
-    expect(mockCheckRateLimit).toHaveBeenCalledWith(`ai-ask:${USER}`, 10, 24 * 3600);
+    expect(mockCheckRateLimit).toHaveBeenCalledWith(
+      `ai-ask:${USER}`,
+      10,
+      24 * 3600,
+      { failClosed: true },
+    );
     expect(mockMessagesCreate).not.toHaveBeenCalled();
   });
 
@@ -276,6 +287,7 @@ describe("POST /api/ai/receipt", () => {
       `ai-receipt:${USER}`,
       10,
       24 * 3600,
+      { failClosed: true },
     );
   });
 

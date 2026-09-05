@@ -1,6 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { serverEnv } from "@/lib/env.server";
+import type { FinanceFlow } from "@/lib/finance-domain";
 
 /**
  * Real AI provider integration: a server-only Anthropic client behind the
@@ -13,14 +14,15 @@ import { serverEnv } from "@/lib/env.server";
  * summaries — the feature degrades, never breaks.
  */
 
-export const DEFAULT_AI_MODEL = "claude-3-5-sonnet-20241022";
+export const DEFAULT_AI_MODEL = "claude-sonnet-4-6";
 
 export function getAiModel(): string {
   return process.env.AI_INSIGHTS_MODEL ?? DEFAULT_AI_MODEL;
 }
 
 function supportsAdaptiveThinking(model: string): boolean {
-  return model.includes("3-7") || model.includes("opus");
+  return ["sonnet-4-6", "sonnet-5", "opus-4-6", "opus-4-7", "opus-4-8", "opus-5"]
+    .some((modelId) => model.includes(modelId));
 }
 
 function getAnthropicClient(): Anthropic {
@@ -42,7 +44,7 @@ export interface AggregateRow {
   merchant?: string;
   category?: string;
   amount?: number;
-  flow?: string;
+  flow?: FinanceFlow;
 }
 
 const MAX_MERCHANTS = 25;
@@ -56,10 +58,21 @@ export function buildInsightPayload(rows: AggregateRow[]) {
 
   for (const row of rows) {
     const amount = row.amount ?? 0;
-    // Spending only: positive amount in Plaid sign convention, excluding loan payments and transfers
-    if (amount <= 0) continue;
+    // Spending only: use the canonical flow when present, otherwise retain
+    // the legacy Plaid-sign fallback for callers that still provide raw rows.
+    if (row.flow ? row.flow !== "expense" : amount <= 0) continue;
     const catUpper = (row.category ?? "").toUpperCase();
-    if (catUpper === "TRANSFER" || catUpper === "LOAN_PAYMENTS" || row.flow === "transfer") {
+    if (
+      [
+        "TRANSFER",
+        "TRANSFER_IN",
+        "TRANSFER_OUT",
+        "LOAN_PAYMENTS",
+        "LOAN_DISBURSEMENTS",
+        "RECONCILE_ADJUSTMENT",
+      ].includes(catUpper) ||
+      row.flow === "transfer"
+    ) {
       continue;
     }
     const month = row.month ?? "unknown";
@@ -67,10 +80,10 @@ export function buildInsightPayload(rows: AggregateRow[]) {
     const category = row.category ?? "UNCATEGORIZED";
     byMonthCategory.set(
       `${month}|${category}`,
-      (byMonthCategory.get(`${month}|${category}`) ?? 0) + amount,
+      (byMonthCategory.get(`${month}|${category}`) ?? 0) + Math.abs(amount),
     );
     if (row.merchant) {
-      byMerchant.set(row.merchant, (byMerchant.get(row.merchant) ?? 0) + amount);
+      byMerchant.set(row.merchant, (byMerchant.get(row.merchant) ?? 0) + Math.abs(amount));
     }
   }
 

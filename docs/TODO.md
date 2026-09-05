@@ -73,7 +73,7 @@ A coordinated history rewrite is still required if the deleted historical blobs 
 Resolved in `feat/ai-consent-dx-improvements`:
 
 ### 1. The default model id is now a valid Claude model
-Updated `lib/ai-provider.ts`, `app/api/ai/ask/route.ts`, and `app/api/ai/receipt/route.ts` default fallback from the non-existent `claude-opus-4-8` to `claude-3-7-sonnet-latest` (supporting adaptive thinking).
+Updated `lib/ai-provider.ts`, `app/api/ai/ask/route.ts`, and `app/api/ai/receipt/route.ts` default fallback to `claude-sonnet-4-6`, with adaptive thinking enabled only for model families that support it.
 
 ### 2. Receipt scanning enforces double consent
 `app/api/ai/receipt/route.ts` now enforces both `ai_settings.enabled === true` AND `profiles.ai_export_enabled !== false`, aligning with its documented security contract and user data export preferences.

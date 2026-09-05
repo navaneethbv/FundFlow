@@ -353,10 +353,10 @@ function checkMilestoneReached(
 export function computeForecastMilestones(
   startingState: ForecastStartingState,
   assumptions: ForecastAssumptions,
-  monthlyExpenses = 3000,
+  monthlyExpenses = 0,
 ): ForecastMilestone[] {
   const milestones: ForecastMilestone[] = [];
-  const safeMonthlyExpenses = Math.max(100, monthlyExpenses);
+  const safeMonthlyExpenses = monthlyExpenses > 0 ? Math.max(100, monthlyExpenses) : null;
 
   // 1. Debt-Free milestone (if starting with liabilities)
   if (startingState.liabilities > 0) {
@@ -372,7 +372,9 @@ export function computeForecastMilestones(
   }
 
   // 2 & 3. Emergency Funds (3mo & 6mo)
-  milestones.push(...buildEmergencyMilestones(startingState.cash, safeMonthlyExpenses));
+  if (safeMonthlyExpenses !== null) {
+    milestones.push(...buildEmergencyMilestones(startingState.cash, safeMonthlyExpenses));
+  }
 
   // 4. Net Worth Milestones
   const netWorthTargets = [50000, 100000, 250000, 500000, 1000000];
@@ -393,17 +395,19 @@ export function computeForecastMilestones(
   }
 
   // 5. Financial Independence (FIRE - 4% Safe Withdrawal Rule = 25x Annual Expenses)
-  const fireTarget = round2(safeMonthlyExpenses * 12 * 25);
-  if (startingNetWorth < fireTarget) {
-    milestones.push({
-      id: "fire",
-      name: "Financial Independence (FIRE)",
-      targetAmount: fireTarget,
-      type: "fire",
-      reachedMonth: null,
-      reachedAmount: null,
-      description: `25x annual expenses ($${fireTarget.toLocaleString()}), using a 4% withdrawal rate as a rough planning assumption.`,
-    });
+  if (safeMonthlyExpenses !== null) {
+    const fireTarget = round2(safeMonthlyExpenses * 12 * 25);
+    if (startingNetWorth < fireTarget) {
+      milestones.push({
+        id: "fire",
+        name: "Financial Independence (FIRE)",
+        targetAmount: fireTarget,
+        type: "fire",
+        reachedMonth: null,
+        reachedAmount: null,
+        description: `25x annual expenses ($${fireTarget.toLocaleString()}), using a 4% withdrawal rate as a rough planning assumption.`,
+      });
+    }
   }
 
   // Step through months to compute when each milestone is reached

@@ -3,7 +3,7 @@ import { isAiProviderConfigured } from "@/lib/ai-provider";
 
 export type AiConsentResult =
   | { allowed: true }
-  | { allowed: false; reason: "unconfigured" | "disabled" | "unavailable" };
+  | { allowed: false; reason: "disabled" | "unavailable" };
 
 /**
  * Evaluates double-consent for AI features (ai_settings.enabled AND
@@ -13,10 +13,6 @@ export async function resolveAiConsent(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<AiConsentResult> {
-  if (!isAiProviderConfigured()) {
-    return { allowed: false, reason: "unconfigured" };
-  }
-
   try {
     const [{ data: settings, error: settingsError }, { data: profile, error: profileError }] =
       await Promise.all([
@@ -45,6 +41,7 @@ export async function isAskAiAvailable(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<boolean> {
+  if (!isAiProviderConfigured()) return false;
   const result = await resolveAiConsent(supabase, userId);
   return result.allowed;
 }

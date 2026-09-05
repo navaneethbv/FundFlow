@@ -25,20 +25,21 @@ export async function writeNetWorthSnapshot(userId: string) {
 
   // 3. Respect user exclusions from preferences if configured
   let excludedNetWorthIds = new Set<string>();
-  try {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("dashboard_prefs")
-      .eq("id", userId)
-      .maybeSingle();
-    const accountsPage = (profile?.dashboard_prefs as Record<string, unknown> | null)?.accountsPage as
-      | { excludedNetWorthIds?: string[] }
-      | undefined;
-    if (Array.isArray(accountsPage?.excludedNetWorthIds)) {
-      excludedNetWorthIds = new Set(accountsPage.excludedNetWorthIds);
-    }
-  } catch {
-    // If profiles query is unavailable or omitted in minimal client stubs, proceed with empty set
+  const profileQuery = supabase
+    .from("profiles")
+    .select("dashboard_prefs")
+    .eq("id", userId);
+  const profileResult = typeof (profileQuery as { maybeSingle?: unknown }).maybeSingle === "function"
+    ? await (profileQuery as typeof profileQuery & { maybeSingle: () => Promise<{ data?: unknown; error?: unknown }> }).maybeSingle()
+    : await profileQuery;
+  const profile = profileResult.data as { dashboard_prefs?: unknown } | null | undefined;
+  const profileError = profileResult.error;
+  if (profileError) throw profileError;
+  const accountsPage = (profile?.dashboard_prefs as Record<string, unknown> | null)?.accountsPage as
+    | { excludedNetWorthIds?: string[] }
+    | undefined;
+  if (Array.isArray(accountsPage?.excludedNetWorthIds)) {
+    excludedNetWorthIds = new Set(accountsPage.excludedNetWorthIds);
   }
 
   // 4. Map to standard NetWorthAccount shape

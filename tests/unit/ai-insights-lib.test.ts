@@ -31,4 +31,16 @@ describe("generateAiInsightSummaries", () => {
     expect(summaries[0]!.sourceMonth).toBeNull();
     expect(summaries[1]!.summary).toContain("spending");
   });
+
+  it("uses canonical flow to keep transfers out of the spending total", () => {
+    const summaries = generateAiInsightSummaries({
+      enabled: true,
+      rows: [
+        { month: "2026-07", amount: 500, category: "Rent", flow: "transfer" },
+        { month: "2026-07", amount: 80, category: "Food", flow: "expense" },
+      ],
+    });
+    expect(summaries[0]!.summary).toContain("80 in tracked spending");
+    expect(summaries[0]!.summary).not.toContain("580");
+  });
 });

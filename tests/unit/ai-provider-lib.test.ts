@@ -94,6 +94,28 @@ describe("buildInsightPayload", () => {
     expect(food?.amount).toBe(25);
   });
 
+  it("excludes canonical transfer flows even when their category is user-defined", () => {
+    const payload = buildInsightPayload([
+      { month: "2026-07", category: "Rent", merchant: "Transfer", amount: 900, flow: "transfer" },
+      { month: "2026-07", category: "Rent", merchant: "Landlord", amount: 900, flow: "expense" },
+    ]);
+    expect(payload.monthly_category_spend).toEqual([
+      { month: "2026-07", category: "Rent", amount: 900 },
+    ]);
+    expect(payload.top_merchants).toEqual([{ merchant: "Landlord", amount: 900 }]);
+  });
+
+  it("uses canonical flow instead of the raw sign for spending", () => {
+    const payload = buildInsightPayload([
+      { month: "2026-07", category: "Refunded income", merchant: "Refund", amount: 25, flow: "income" },
+      { month: "2026-07", category: "Corrected expense", merchant: "Store", amount: -15, flow: "expense" },
+    ]);
+    expect(payload.monthly_category_spend).toEqual([
+      { month: "2026-07", category: "Corrected expense", amount: 15 },
+    ]);
+    expect(payload.top_merchants).toEqual([{ merchant: "Store", amount: 15 }]);
+  });
+
   it("keeps only the most recent six months", () => {
     const rows = Array.from({ length: 10 }, (_, i) => ({
       month: `2026-${String(i + 1).padStart(2, "0")}`,

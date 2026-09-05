@@ -17,9 +17,9 @@ import { USER_DATA_TABLES, type UserDataTableSpec } from "@/lib/user-data";
  *   converges instead of duplicating. Rows from older archives without a
  *   plaid id get a `restored-<uuid>` provenance id and are counted as
  *   regenerated in the result.
- * - Only "user"-scope tables are restored. `shared_expenses` and `households`
- *   involve other people's rows; a restore reports them as skipped rather
- *   than deleting anyone else's data.
+ * - Only user-owned tables and the caller's profile preferences are restored.
+ *   `shared_expenses` and `households` involve other people's rows; a restore
+ *   reports them as skipped rather than deleting anyone else's data.
  * - Tables restore in foreign-key order (accounts before transactions, and so
  *   on); a failure in one table stops the run and is reported by name, never
  *   silently swallowed.
@@ -108,6 +108,7 @@ const RESTORE_ORDER: readonly string[] = [
   "category_overrides",
   "alert_preferences",
   "ai_settings",
+  "account_preferences",
   "milestones",
   "advice_progress",
   "saved_reports",
@@ -207,6 +208,35 @@ async function restoreUserTable(
   return { error: null, rowsWritten: stamped.length };
 }
 
+async function restoreProfilePreferences(
+  service: SupabaseClient,
+  userId: string,
+  rows: readonly unknown[],
+): Promise<{ error: string | null; rowsWritten: number }> {
+  if (rows.length === 0) return { error: null, rowsWritten: 0 };
+  if (rows.length > 1) {
+    return { error: "profile preferences section contains multiple rows", rowsWritten: 0 };
+  }
+  const record = rows[0];
+  if (!record || typeof record !== "object") {
+    return { error: "profile preferences row is invalid", rowsWritten: 0 };
+  }
+  const dashboardPrefs = (record as Record<string, unknown>).dashboard_prefs;
+  if (
+    dashboardPrefs !== null &&
+    (typeof dashboardPrefs !== "object" || Array.isArray(dashboardPrefs))
+  ) {
+    return { error: "profile preferences payload is invalid", rowsWritten: 0 };
+  }
+  const { error } = await service
+    .from("profiles")
+    .update({ dashboard_prefs: dashboardPrefs ?? {} })
+    .eq("id", userId);
+  return error
+    ? { error: error.message, rowsWritten: 0 }
+    : { error: null, rowsWritten: 1 };
+}
+
 export async function executeRestore(
   service: SupabaseClient,
   userId: string,
@@ -228,6 +258,15 @@ export async function executeRestore(
 
   for (const name of ordered) {
     const entry = present.get(name)!;
+    if (entry.scope === "profile") {
+      const outcome = await restoreProfilePreferences(service, userId, archive[name] ?? []);
+      if (outcome.error) {
+        result.failedTable = name;
+        return result;
+      }
+      result.tables.push({ name, rowsWritten: outcome.rowsWritten });
+      continue;
+    }
     if (entry.scope !== "user") {
       result.skipped.push({
         name,

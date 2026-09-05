@@ -58,7 +58,7 @@ function serviceStub() {
       const make = (op: string) => (...args: unknown[]) => {
         calls.push({ table, op, args });
         const builder: Record<string, unknown> = {};
-        for (const method of ["delete", "eq", "insert", "upsert"]) {
+        for (const method of ["delete", "eq", "insert", "update", "upsert"]) {
           builder[method] = make(method);
         }
         builder.then = (resolve: (value: unknown) => unknown) =>
@@ -66,7 +66,7 @@ function serviceStub() {
         return builder;
       };
       const builder: Record<string, unknown> = {};
-      for (const method of ["delete", "eq", "insert", "upsert"]) {
+      for (const method of ["delete", "eq", "insert", "update", "upsert"]) {
         builder[method] = make(method);
       }
       builder.then = (resolve: (value: unknown) => unknown) =>
@@ -219,6 +219,26 @@ describe("executeRestore — chunking and failure branches", () => {
     expect(result.tables).toHaveLength(1);
     expect(result.tables[0]).toEqual({ name: "budgets", rowsWritten: 0 });
     expect(calls.some((call) => call.table === "budgets" && call.op === "delete")).toBe(true);
+  });
+
+  it("restores profile preferences through the profiles row", async () => {
+    const { service, calls } = serviceStub();
+    const archive = {
+      account_preferences: [{ dashboard_prefs: { accountsPage: { density: "compact" } } }],
+    };
+    const plan = buildRestorePlan(archive);
+    const result = await executeRestore(service as never, "user-123", plan, archive);
+    expect(result.tables).toEqual([{ name: "account_preferences", rowsWritten: 1 }]);
+    expect(calls).toContainEqual(
+      expect.objectContaining({
+        table: "profiles",
+        op: "update",
+        args: [{ dashboard_prefs: { accountsPage: { density: "compact" } } }],
+      }),
+    );
+    expect(calls).toContainEqual(
+      expect.objectContaining({ table: "profiles", op: "eq", args: ["id", "user-123"] }),
+    );
   });
 
   it("handles non-object rows and missing archive sections safely", async () => {

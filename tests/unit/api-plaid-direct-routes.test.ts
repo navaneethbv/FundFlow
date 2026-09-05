@@ -142,7 +142,7 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
       expect(mockWriteAudit).toHaveBeenCalledWith(expect.objectContaining({ action: "account_delete" }));
     });
 
-    it("continues deletion even if itemRemove throws", async () => {
+    it("blocks deletion if itemRemove throws", async () => {
       mockListActiveItems.mockResolvedValue([{ id: "item-1" }]);
       mockItemRemove.mockRejectedValue(new Error("Plaid error"));
       serviceClient = {
@@ -161,8 +161,8 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
       const res = await accountDelete(req);
       const json = await res.json();
 
-      expect(res.status).toBe(200);
-      expect(json).toEqual({ ok: true });
+      expect(res.status).toBe(503);
+      expect(json).toEqual({ error: "Some bank connections could not be removed. Try again." });
       expect(mockLogError).toHaveBeenCalledWith("account.delete.itemRemove", expect.any(Error));
     });
 
@@ -186,6 +186,12 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
 
       expect(res.status).toBe(500);
       expect(json.error).toBe("DB Error");
+      expect(mockWriteAudit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "account_delete_failed",
+          metadata: expect.objectContaining({ reason: "auth_delete_failed" }),
+        }),
+      );
     });
   });
 

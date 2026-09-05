@@ -41,7 +41,11 @@ async function listAllBucketFiles(
   bucket: {
     list: (
       path?: string,
-      options?: { limit?: number; offset?: number },
+      options?: {
+        limit?: number;
+        offset?: number;
+        sortBy?: { column: "name" | "updated_at" | "created_at"; order: "asc" | "desc" };
+      },
     ) => Promise<{ data: Array<{ name: string }> | null; error?: unknown }>;
   },
   folder: string,
@@ -50,7 +54,12 @@ async function listAllBucketFiles(
   const limit = 1000;
   let offset = 0;
   while (true) {
-    const { data } = await bucket.list(folder, { limit, offset });
+    const { data, error } = await bucket.list(folder, {
+      limit,
+      offset,
+      sortBy: { column: "name", order: "asc" },
+    });
+    if (error) throw error;
     const batch = data ?? [];
     if (batch.length === 0) break;
     files.push(...batch);
@@ -58,6 +67,27 @@ async function listAllBucketFiles(
     offset += batch.length;
   }
   return files;
+}
+
+async function listReceiptRows(
+  service: ReturnType<typeof createServiceClient>,
+  userId: string,
+): Promise<unknown[]> {
+  const rows: unknown[] = [];
+  const pageSize = 1000;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await service
+      .from("receipts")
+      .select("storage_path")
+      .eq("user_id", userId)
+      .order("id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw error;
+    const batch = (data ?? []) as unknown[];
+    rows.push(...batch);
+    if (batch.length < pageSize) break;
+  }
+  return rows;
 }
 
 async function removeBucketPaths(
@@ -68,7 +98,8 @@ async function removeBucketPaths(
   for (let i = 0; i < paths.length; i += 1000) {
     const chunk = paths.slice(i, i + 1000);
     const { error } = await bucket.remove(chunk);
-    if (!error) removedCount += chunk.length;
+    if (error) throw error;
+    removedCount += chunk.length;
   }
   return removedCount;
 }
@@ -79,14 +110,16 @@ async function cleanupAvatarStorage(
 ): Promise<number> {
   try {
     const avatarBucket = service.storage.from("avatars");
-    if (!avatarBucket?.list || !avatarBucket?.remove) return 0;
+    if (!avatarBucket?.list || !avatarBucket?.remove) {
+      throw new Error("Avatar storage cleanup unavailable");
+    }
     const avatarFiles = await listAllBucketFiles(avatarBucket, userId);
     if (avatarFiles.length === 0) return 0;
     const paths = avatarFiles.map((f: { name: string }) => `${userId}/${f.name}`);
     return await removeBucketPaths(avatarBucket, paths);
   } catch (err) {
     logError("account.delete.avatarCleanup", err);
-    return 0;
+    throw err;
   }
 }
 
@@ -98,7 +131,11 @@ function collectReceiptPaths(
   const paths = new Set<string>();
   if (Array.isArray(receiptRows)) {
     for (const row of receiptRows) {
-      if (row?.storage_path && typeof row.storage_path === "string") {
+      if (
+        row?.storage_path &&
+        typeof row.storage_path === "string" &&
+        row.storage_path.startsWith(`${userId}/`)
+      ) {
         paths.add(row.storage_path);
       }
     }
@@ -119,18 +156,17 @@ async function cleanupReceiptStorage(
 ): Promise<number> {
   try {
     const receiptBucket = service.storage.from("receipts");
-    if (!receiptBucket?.list || !receiptBucket?.remove) return 0;
-    const { data: receiptRows } = await service
-      .from("receipts")
-      .select("storage_path")
-      .eq("user_id", userId);
+    if (!receiptBucket?.list || !receiptBucket?.remove) {
+      throw new Error("Receipt storage cleanup unavailable");
+    }
+    const receiptRows = await listReceiptRows(service, userId);
     const receiptFiles = await listAllBucketFiles(receiptBucket, userId);
     const paths = collectReceiptPaths(receiptRows, receiptFiles, userId);
     if (paths.length === 0) return 0;
     return await removeBucketPaths(receiptBucket, paths);
   } catch (err) {
     logError("account.delete.receiptCleanup", err);
-    return 0;
+    throw err;
   }
 }
 
@@ -138,7 +174,9 @@ async function cleanupUserStorageObjects(
   service: ReturnType<typeof createServiceClient>,
   userId: string,
 ): Promise<number> {
-  if (!service.storage?.from) return 0;
+  if (!service.storage?.from) {
+    throw new Error("User storage cleanup unavailable");
+  }
   const avatars = await cleanupAvatarStorage(service, userId);
   const receipts = await cleanupReceiptStorage(service, userId);
   return avatars + receipts;
@@ -153,6 +191,7 @@ export async function DELETE(request: NextRequest) {
     `account-delete:${user.id}`,
     MAX_STEP_UP_ATTEMPTS_PER_HOUR,
     3600,
+    { failClosed: true },
   );
   if (!allowed) {
     return NextResponse.json(
@@ -182,23 +221,52 @@ export async function DELETE(request: NextRequest) {
     }
 
     const { removed: itemsRemoved, failed: itemsFailed } = await removeUserPlaidItems(user.id);
+    if (itemsFailed > 0) {
+      await writeAudit({
+        userId: user.id,
+        action: "account_delete_failed",
+        metadata: {
+          reason: "plaid_cleanup_failed",
+          items_removed: itemsRemoved,
+          items_failed: itemsFailed,
+        },
+        ip: getClientIp(request),
+      });
+      return NextResponse.json(
+        { error: "Some bank connections could not be removed. Try again." },
+        { status: 503 },
+      );
+    }
     const service = createServiceClient();
     const storageRemoved = await cleanupUserStorageObjects(service, user.id);
+    // Deleting the auth user cascades to all user-owned rows.
+    const { error } = await service.auth.admin.deleteUser(user.id);
+    if (error) {
+      await writeAudit({
+        userId: user.id,
+        action: "account_delete_failed",
+        metadata: {
+          reason: "auth_delete_failed",
+          items_removed: itemsRemoved,
+          items_failed: itemsFailed,
+          storage_objects_removed: storageRemoved,
+        },
+        ip: getClientIp(request),
+      });
+      throw error;
+    }
 
     await writeAudit({
-      userId: user.id,
+      userId: null,
       action: "account_delete",
       metadata: {
+        deleted_user_id: user.id,
         items_removed: itemsRemoved,
         items_failed: itemsFailed,
         storage_objects_removed: storageRemoved,
       },
       ip: getClientIp(request),
     });
-
-    // Deleting the auth user cascades to all user-owned rows.
-    const { error } = await service.auth.admin.deleteUser(user.id);
-    if (error) throw error;
 
     return NextResponse.json({ ok: true });
   } catch (error) {

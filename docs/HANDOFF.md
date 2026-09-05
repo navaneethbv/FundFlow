@@ -16,7 +16,7 @@ Key architectural and behavioral updates:
 2. **AI Consent & Rules Engine**:
    - `lib/ai-gate.ts`: Introduced `resolveAiConsent` strictly enforcing double-consent (`ai_settings.enabled` AND `profiles.ai_export_enabled !== false`) and failing closed (403/503) on errors or missing profiles.
    - `lib/rules-engine.ts`: Regex compilation validates length (<= 250 chars) and complexity to prevent ReDoS before evaluating rules.
-   - `lib/ai-provider.ts`: Server-only AI provider routing (`claude-3-5-sonnet-20241022`) explicitly filters out transfers and loan payments from prompts.
+   - `lib/ai-provider.ts`: Server-only AI provider routing (`claude-sonnet-4-6`) explicitly filters out transfers and loan payments from prompts.
 3. **Data Lifecycle & Account Hygiene**:
    - `app/api/account/route.ts`: Purges user-owned storage objects (`avatars` and `receipts`) via service role client before deleting auth user to prevent Supabase deletion failures and orphaned bytes.
    - `lib/user-data.ts`: Deterministic 1,000-row chunked pagination for takeout and backup; added full state table coverage (`account_preferences`, `credit_card_bills`, `life_events`).
@@ -194,11 +194,12 @@ absence of AI, is the thing to protect. `docs/ARCHITECTURE.md` gained an
 `ANTHROPIC_API_KEY` (it never did, so the feature was undiscoverable).
 
 **Two findings came out of writing that up**, both recorded at the top of
-`docs/TODO.md` and both deliberately left unfixed here: the default model id
-`claude-opus-4-8` is not a real model (and `insights` masks the failure by
-falling back to local summaries), and `/api/ai/receipt` is gated on
+`docs/TODO.md` and deliberately left unfixed in that documentation refresh:
+the default model id was not a real model (and `insights` masked the failure by
+falling back to local summaries), and `/api/ai/receipt` was gated on
 `ai_settings.enabled` only, despite a docstring claiming the same double
-consent as insights. Each is an owner call, not a wording fix.
+consent as insights. Both findings were resolved in the September AI hardening
+work; this entry preserves the state of the earlier refresh.
 
 **Archived, not deleted.** Closed reviews and superseded changelogs moved to
 `docs/archive/` (with a new `docs/archive/README.md` index saying what each

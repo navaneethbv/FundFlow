@@ -83,7 +83,7 @@ export async function loadForecastPageData(
   const monthlyExpensesList = months
     .map((m) => financeTotals(byMonth.get(m) ?? []).expenses)
     .filter((e) => e > 0);
-  const monthlyExpenses = monthlyExpensesList.length > 0 ? Math.round(medianOf(monthlyExpensesList)) : 3000;
+  const monthlyExpenses = monthlyExpensesList.length > 0 ? Math.round(medianOf(monthlyExpensesList)) : 0;
 
   return { startingState, defaults, monthlyExpenses };
 }

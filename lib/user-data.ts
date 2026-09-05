@@ -15,11 +15,12 @@ import { isFeatureEnabled } from "@/lib/feature-flags";
  *   - "user":   .eq("user_id", userId)
  *   - "shared": .or(paid_by/owed_user_id match) — no user_id column
  *   - "owner":  .eq("owner_user_id", userId)
+ *   - "profile": .eq("id", userId) on the caller's profile row
  *
  * Investment tables are feature-gated: before the investments migration is
  * applied they don't exist, so they must not be queried unconditionally.
  */
-type TableScope = "user" | "shared" | "owner";
+type TableScope = "user" | "shared" | "owner" | "profile";
 
 export interface UserDataTableSpec {
   key: string;
@@ -35,6 +36,8 @@ export interface UserDataTableSpec {
   restoreKeys?: string;
   /** Deterministic sorting column for paginated chunk queries. */
   orderBy?: string;
+  /** Optional unique tie-breaker. Null means orderBy is already unique. */
+  orderBySecondary?: string | null;
 }
 
 function table(
@@ -44,15 +47,18 @@ function table(
   gated = false,
   restoreKeys?: string,
   orderBy?: string,
+  tableName = key,
+  orderBySecondary: string | null = "id",
 ): UserDataTableSpec {
   return {
     key,
-    table: key,
+    table: tableName,
     select,
     scope,
     ...(gated ? { gated: true } : {}),
     ...(restoreKeys ? { restoreKeys } : {}),
     orderBy: orderBy ?? (select.includes("created_at") ? "created_at" : "id"),
+    orderBySecondary,
   };
 }
 
@@ -65,8 +71,8 @@ export const USER_DATA_TABLES: UserDataTableSpec[] = [
   table("merchant_rules", "match_type, pattern, display_name, category, enabled, tags, amount_operator, amount_value, amount_max_value"),
   table("manual_accounts", "name, account_type, balance, include_in_net_worth", "user", false, "id"),
   table("account_balance_snapshots", "account_id, manual_account_id, snapshot_date, current_balance, available_balance, iso_currency_code, captured_at", "user", false, undefined, "captured_at"),
-  table("alert_preferences", "broken_bank, budget_exceeded, goal_reached, large_transaction, low_cash_forecast", "user", false, undefined, "user_id"),
-  table("ai_settings", "enabled", "user", false, undefined, "user_id"),
+  table("alert_preferences", "broken_bank, budget_exceeded, goal_reached, large_transaction, low_cash_forecast", "user", false, undefined, "user_id", "alert_preferences", null),
+  table("ai_settings", "enabled", "user", false, undefined, "user_id", "ai_settings", null),
   table("budget_periods", "budget_id, month, planned"),
   table("saved_reports", "name, report_type, filters, created_at, updated_at"),
   table("holdings", "account_id, manual_account_id, quantity, cost_basis, institution_price, institution_value, as_of, source, is_active", "user", true),
@@ -94,9 +100,9 @@ export const USER_DATA_TABLES: UserDataTableSpec[] = [
   table("budget_templates", "name, items, created_at"),
   table("linked_transfers", "out_transaction_id, in_transaction_id, amount, created_at"),
   table("account_reconciliations", "account_id, manual_account_id, statement_date, statement_balance, created_at"),
-  table("account_preferences", "account_id, manual_account_id, is_hidden, include_in_net_worth, custom_name, display_order", "user"),
-  table("credit_card_bills", "account_id, balance, minimum_payment, due_date, apr", "user"),
-  table("life_events", "event_type, target_date, target_amount, notes", "user"),
+  table("account_preferences", "dashboard_prefs", "profile", false, "id", "id", "profiles"),
+  table("credit_card_bills", "account_id, statement_balance, minimum_payment, due_date, payment_account_id, sync_timestamp, created_at, updated_at", "user", false, "id"),
+  table("life_events", "event_type, start_month, amount, duration_months, label, created_at, updated_at", "user", false, "id"),
 ];
 
 interface ScopedQueryBuilder {
@@ -116,6 +122,9 @@ function applySpecScope(
   }
   if (scope === "owner") {
     return builder.eq("owner_user_id", userId);
+  }
+  if (scope === "profile") {
+    return builder.eq("id", userId);
   }
   return builder.or(`paid_by.eq.${userId},owed_user_id.eq.${userId}`);
 }
@@ -138,8 +147,12 @@ async function fetchPagedSpecRows(
     const to = from + PAGE_SIZE - 1;
     const builder = client.from(spec.table).select(select) as unknown as ScopedQueryBuilder;
     const scoped = applySpecScope(builder, spec.scope, userId);
-    const ordered = scoped.order(spec.orderBy ?? "id", { ascending: true });
-    const result = await ordered.range(from, to);
+    const primaryOrder = spec.orderBy ?? "id";
+    const ordered = scoped.order(primaryOrder, { ascending: true });
+    const stableOrder = spec.orderBySecondary === null
+      ? ordered
+      : ordered.order(spec.orderBySecondary ?? "id", { ascending: true });
+    const result = await stableOrder.range(from, to);
     if (result?.error) return { data: [], error: result.error };
     const batch = (result?.data ?? []) as unknown[];
     rows.push(...batch);
@@ -192,7 +205,11 @@ export function countUserDataRows(sections: Record<string, unknown[]>): number {
  * moment someone flips a single toggle, so counting them would make an account
  * that has never linked a bank or entered a transaction look worth backing up.
  */
-const PREFERENCE_SECTION_KEYS = new Set(["alert_preferences", "ai_settings"]);
+const PREFERENCE_SECTION_KEYS = new Set([
+  "account_preferences",
+  "alert_preferences",
+  "ai_settings",
+]);
 
 /**
  * Row count across the sections that represent actual financial records. The

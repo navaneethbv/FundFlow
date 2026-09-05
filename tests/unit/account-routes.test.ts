@@ -474,6 +474,12 @@ describe("DELETE /api/account", () => {
             deleteUser: vi.fn().mockResolvedValue({ error: null }),
           },
         },
+        storage: {
+          from: vi.fn(() => ({
+            list: vi.fn().mockResolvedValue({ data: [], error: null }),
+            remove: vi.fn().mockResolvedValue({ error: null }),
+          })),
+        },
       },
     );
 
@@ -530,7 +536,12 @@ describe("DELETE /api/account", () => {
       clientStub({
         plaid_items: { data: [] },
         rate_limit_hit: { data: true },
-        receipts: { data: [{ storage_path: `${USER}/rec-1.jpg` }] },
+        receipts: {
+          data: [
+            { storage_path: `${USER}/rec-1.jpg` },
+            { storage_path: "another-user/should-not-delete.jpg" },
+          ],
+        },
       }),
       {
         auth: {
@@ -561,6 +572,11 @@ describe("DELETE /api/account", () => {
     expect(res.status).toBe(200);
     expect(avatarRemove).toHaveBeenCalledWith([`${USER}/avatar.png`]);
     expect(receiptRemove).toHaveBeenCalledWith([`${USER}/rec-1.jpg`]);
+    expect(
+      serviceClient
+        .callsOn("receipts")
+        .some(({ method, args }) => method === "order" && args[0] === "id"),
+    ).toBe(true);
     expect(mockWriteAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "account_delete",
@@ -573,7 +589,7 @@ describe("DELETE /api/account", () => {
     );
   });
 
-  it("handles paginated storage file lists and bucket removal errors gracefully", async () => {
+  it("blocks account deletion when a storage removal fails", async () => {
     const avatarList = vi
       .fn()
       .mockResolvedValueOnce({
@@ -598,6 +614,7 @@ describe("DELETE /api/account", () => {
         }),
       }),
     };
+    const deleteUser = vi.fn().mockResolvedValue({ error: null });
     serviceClient = Object.assign(
       clientStub({
         plaid_items: { data: [] },
@@ -605,7 +622,7 @@ describe("DELETE /api/account", () => {
         receipts: { data: [] },
       }),
       {
-        auth: { admin: { deleteUser: vi.fn().mockResolvedValue({ error: null }) } },
+        auth: { admin: { deleteUser } },
         storage: {
           from: vi.fn((bucket: string) => {
             if (bucket === "avatars") return { list: avatarList, remove: avatarRemove };
@@ -621,7 +638,8 @@ describe("DELETE /api/account", () => {
     });
 
     const res = await accountDelete(del("http://localhost/api/account", { code: "secret" }));
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(500);
     expect(avatarRemove).toHaveBeenCalledTimes(2);
+    expect(deleteUser).not.toHaveBeenCalled();
   });
 });

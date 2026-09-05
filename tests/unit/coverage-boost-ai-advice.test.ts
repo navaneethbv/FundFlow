@@ -224,7 +224,10 @@ describe("ai/ask route", () => {
   });
 
   it("rate limits, answers, handles refusal, and covers the catch", async () => {
-    const supabase = clientStub({ ai_settings: { data: { enabled: true }, error: null } });
+    const supabase = clientStub({
+      ai_settings: { data: { enabled: true }, error: null },
+      profiles: { data: { ai_export_enabled: true }, error: null },
+    });
     mocks.mockFetchPrivacySafeRows.mockResolvedValue({
       allowed: true,
       rows: [
@@ -277,8 +280,22 @@ describe("ai/insights route", () => {
     await expect(res.json()).resolves.toEqual({ insights: [] });
   });
 
+  it("returns temporary unavailability when consent cannot be read", async () => {
+    const supabase = clientStub({
+      ai_settings: { data: { enabled: true }, error: { message: "profile read failed" } },
+      profiles: { data: { ai_export_enabled: true }, error: null },
+    });
+    authed(supabase);
+    const res = await aiInsightsPost();
+    expect(res.status).toBe(503);
+    expect(mocks.mockGenerateInsightsWithProvider).not.toHaveBeenCalled();
+  });
+
   it("falls back to built-in summaries when provider is rate-limited or fails", async () => {
-    const supabase = clientStub({ ai_settings: { data: { enabled: true }, error: null } });
+    const supabase = clientStub({
+      ai_settings: { data: { enabled: true }, error: null },
+      profiles: { data: { ai_export_enabled: true }, error: null },
+    });
     authed(supabase);
     mockServiceClient.from.mockReturnValue({ insert: vi.fn().mockResolvedValue({ error: null }) });
     mocks.mockFetchPrivacySafeRows.mockResolvedValue({
@@ -296,7 +313,10 @@ describe("ai/insights route", () => {
   });
 
   it("uses provider insights and covers the provider-error fallback and insert error", async () => {
-    const supabase = clientStub({ ai_settings: { data: { enabled: true }, error: null } });
+    const supabase = clientStub({
+      ai_settings: { data: { enabled: true }, error: null },
+      profiles: { data: { ai_export_enabled: true }, error: null },
+    });
     authed(supabase);
     mocks.mockFetchPrivacySafeRows.mockResolvedValue({
       allowed: true,

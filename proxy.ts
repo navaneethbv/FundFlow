@@ -124,8 +124,16 @@ export async function proxy(request: NextRequest) {
   // protected pages; /login shows the TOTP prompt to finish the sign-in.
   let mfaPending = false;
   if (user) {
-    const { data: aal } =
+    const { data: aal, error: aalError } =
       await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aalError) {
+      const unavailable = NextResponse.json(
+        { error: "Authentication assurance check temporarily unavailable" },
+        { status: 503 },
+      );
+      applySecurityHeaders(unavailable, csp);
+      return unavailable;
+    }
     mfaPending = needsMfaStepUp(aal?.currentLevel, aal?.nextLevel);
   }
 
@@ -135,11 +143,20 @@ export async function proxy(request: NextRequest) {
   // Session revocation: a device revoked in Settings must lose page access on
   // its next navigation, not only API access (requireUser already gates
   // those). One indexed RLS-scoped lookup per protected page render; the
-  // helper fails open. signOut(local) invalidates this session's refresh
+  // helper fails closed. signOut(local) invalidates this session's refresh
   // token and queues its cookie clears on `response` via the setAll plumbing.
   let sessionRevoked = false;
   if (user && !mfaPending && !isApi && !isPublicPage(pathname)) {
-    sessionRevoked = await isSessionRevoked(supabase, user.id);
+    try {
+      sessionRevoked = await isSessionRevoked(supabase, user.id);
+    } catch {
+      const unavailable = NextResponse.json(
+        { error: "Session security check temporarily unavailable" },
+        { status: 503 },
+      );
+      applySecurityHeaders(unavailable, csp);
+      return unavailable;
+    }
     if (sessionRevoked) {
       await supabase.auth.signOut({ scope: "local" });
     }

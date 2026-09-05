@@ -61,10 +61,11 @@ describe("requireUser session revocation", () => {
     );
   });
 
-  it("falls open (still authorizes) if session recording throws", async () => {
+  it("returns temporary unavailability if session recording throws", async () => {
     mockMaybeSingle.mockRejectedValue(new Error("db down"));
     const result = await requireUser();
-    expect(result).not.toBeInstanceOf(Response);
+    expect(result).toBeInstanceOf(Response);
+    expect((result as Response).status).toBe(503);
   });
 
   it("passes and does not record session if no session token is available", async () => {

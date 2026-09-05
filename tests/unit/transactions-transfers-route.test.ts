@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 const from = vi.fn();
+const rpc = vi.fn();
 
 vi.mock("@/lib/http", async () => {
   const actual = await vi.importActual<typeof import("@/lib/http")>("@/lib/http");
@@ -21,7 +22,7 @@ function thenable(data: unknown, error: unknown = null) {
   const builder: Record<string, unknown> = {
     then: (resolve: (value: unknown) => unknown) => resolve({ data, error }),
   };
-  for (const method of ["select", "eq", "gte", "limit", "upsert", "in", "flat"]) {
+  for (const method of ["select", "eq", "gte", "order", "range", "limit", "upsert", "in", "or", "flat"]) {
     builder[method] = () => builder;
   }
   return builder;
@@ -29,9 +30,10 @@ function thenable(data: unknown, error: unknown = null) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  rpc.mockResolvedValue({ data: null, error: null });
   vi.mocked(requireUser).mockResolvedValue({
     user: { id: "user-123" },
-    supabase: { from } as never,
+    supabase: { from, rpc } as never,
   } as never);
 });
 
@@ -175,9 +177,9 @@ describe("POST /api/transactions/transfers", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(linkUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: 500 }),
-      expect.anything(),
+    expect(rpc).toHaveBeenCalledWith(
+      "confirm_transfer_link",
+      expect.objectContaining({ p_amount: 500 }),
     );
   });
 
@@ -208,9 +210,9 @@ describe("POST /api/transactions/transfers", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(linkUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: 500 }),
-      expect.anything(),
+    expect(rpc).toHaveBeenCalledWith(
+      "confirm_transfer_link",
+      expect.objectContaining({ p_amount: 500 }),
     );
   });
 
@@ -282,9 +284,10 @@ describe("POST /api/transactions/transfers", () => {
 describe("GET /api/transactions/transfers — remaining branches", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    rpc.mockResolvedValue({ data: null, error: null });
     vi.mocked(requireUser).mockResolvedValue({
       user: { id: "user-123" },
-      supabase: { from } as never,
+      supabase: { from, rpc } as never,
     } as never);
     vi.mocked(checkRateLimit).mockResolvedValue(true as never);
   });
@@ -374,9 +377,10 @@ describe("GET /api/transactions/transfers — remaining branches", () => {
 describe("POST /api/transactions/transfers — validation branches", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    rpc.mockResolvedValue({ data: null, error: null });
     vi.mocked(requireUser).mockResolvedValue({
       user: { id: "user-123" },
-      supabase: { from } as never,
+      supabase: { from, rpc } as never,
     } as never);
     vi.mocked(checkRateLimit).mockResolvedValue(true as never);
   });
@@ -444,6 +448,7 @@ describe("POST /api/transactions/transfers — validation branches", () => {
       if (table === "transactions") return thenable([{ id: OUT_ID, amount: 500 }, { id: IN_ID, amount: -500 }]);
       return { upsert: () => Promise.resolve({ data: null, error: { message: "link failed" } }) };
     });
+    rpc.mockResolvedValueOnce({ data: null, error: { message: "link failed" } });
     const res2 = await post({
       subject_id: SUBJECT,
       decision: "confirmed",

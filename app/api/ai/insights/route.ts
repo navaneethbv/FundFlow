@@ -4,6 +4,7 @@ import {
   generateInsightsWithProvider,
   isAiProviderConfigured,
 } from "@/lib/ai-provider";
+import { resolveAiConsent } from "@/lib/ai-gate";
 import { fetchPrivacySafeRows, recentHistoryStart } from "@/lib/export";
 import { errorResponse, requireUser } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -16,19 +17,29 @@ export async function POST() {
   const { user, supabase } = auth;
 
   try {
-    const [{ data: settings }, exportResult] = await Promise.all([
-      supabase.from("ai_settings").select("enabled").eq("user_id", user.id).maybeSingle(),
-      fetchPrivacySafeRows(supabase, user.id, { startDate: recentHistoryStart() }),
-    ]);
-    if (exportResult.allowed === false || settings?.enabled !== true) {
+    const consent = await resolveAiConsent(supabase, user.id);
+    if (!consent.allowed) {
+      if (consent.reason === "unavailable") {
+        return NextResponse.json(
+          { error: "AI preferences temporarily unavailable." },
+          { status: 503 },
+        );
+      }
       return NextResponse.json({ insights: [] });
     }
+
+    const exportResult = await fetchPrivacySafeRows(supabase, user.id, {
+      startDate: recentHistoryStart(),
+      includeFlow: true,
+    });
+    if (exportResult.allowed === false) return NextResponse.json({ insights: [] });
 
     const rows = exportResult.rows.map((row) => ({
       month: row.date.slice(0, 7),
       merchant: row.merchant,
       category: row.category,
       amount: row.amount,
+      flow: row.flow,
     }));
 
     // Provider path (Phase 3): real model-generated insights over the same
@@ -41,7 +52,9 @@ export async function POST() {
       summary: string;
     }> | null = null;
     if (isAiProviderConfigured()) {
-      const allowed = await checkRateLimit(`ai-insights:${user.id}`, 4, 24 * 3600);
+      const allowed = await checkRateLimit(`ai-insights:${user.id}`, 4, 24 * 3600, {
+        failClosed: true,
+      });
       if (allowed) {
         try {
           insights = await generateInsightsWithProvider({ rows });

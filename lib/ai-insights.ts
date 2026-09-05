@@ -1,3 +1,5 @@
+import type { FinanceFlow } from "@/lib/finance-domain";
+
 export interface AiInsightRow {
   month?: string;
   merchant?: string;
@@ -6,6 +8,7 @@ export interface AiInsightRow {
    *  null. Typing it `string | undefined` made a real row shape unassignable. */
   category?: string | null;
   amount?: number;
+  flow?: FinanceFlow;
 }
 
 export function generateAiInsightSummaries(input: {
@@ -21,17 +24,20 @@ export function generateAiInsightSummaries(input: {
   const months = [...new Set(rows.map((row) => row.month).filter(Boolean) as string[])];
   months.sort((a, b) => a.localeCompare(b));
   const month = months.at(-1) ?? null;
-  const spending = rows
-    .filter((row) => row.amount > 0)
-    .reduce((sum, row) => sum + row.amount, 0);
-  const income = rows
-    .filter((row) => row.amount < 0)
+  const spendingRows = rows.filter((row) =>
+    row.flow ? row.flow === "expense" : row.amount > 0,
+  );
+  const incomeRows = rows.filter((row) =>
+    row.flow ? row.flow === "income" : row.amount < 0,
+  );
+  const spending = spendingRows
     .reduce((sum, row) => sum + Math.abs(row.amount), 0);
-  const topCategory = rows
-    .filter((row) => row.amount > 0)
+  const income = incomeRows
+    .reduce((sum, row) => sum + Math.abs(row.amount), 0);
+  const topCategory = spendingRows
     .reduce((map, row) => {
       const category = row.category ?? "UNCATEGORIZED";
-      map.set(category, (map.get(category) ?? 0) + row.amount);
+      map.set(category, (map.get(category) ?? 0) + Math.abs(row.amount));
       return map;
     }, new Map<string, number>());
   const top = [...topCategory.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "spending";

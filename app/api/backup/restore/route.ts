@@ -37,7 +37,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const allowed = await checkRateLimit(`backup-restore:${user.id}`, MAX_STEP_UP_ATTEMPTS_PER_HOUR, 3600);
+  const allowed = await checkRateLimit(
+    `backup-restore:${user.id}`,
+    MAX_STEP_UP_ATTEMPTS_PER_HOUR,
+    3600,
+    { failClosed: true },
+  );
   if (!allowed) {
     return NextResponse.json(
       { error: "Too many attempts. Please wait a while." },

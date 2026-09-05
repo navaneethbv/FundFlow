@@ -66,12 +66,12 @@ describe("isSessionRevoked", () => {
     expect(await isSessionRevoked(client, "u1")).toBe(false);
   });
 
-  it("fails open on lookup errors", async () => {
+  it("throws on lookup errors so page access fails closed", async () => {
     const client = mockClient({
       accessToken: makeToken("s1"),
       lookupError: true,
     });
-    expect(await isSessionRevoked(client, "u1")).toBe(false);
+    await expect(isSessionRevoked(client, "u1")).rejects.toThrow("db down");
     expect(mockLogError).toHaveBeenCalledWith(
       "session-revocation.lookup",
       expect.any(Error),

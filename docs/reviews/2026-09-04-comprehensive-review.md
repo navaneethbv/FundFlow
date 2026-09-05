@@ -396,10 +396,10 @@ Those accessibility checks are acceptance work, not a claim that each currently 
 ### FF-29: The default AI model configuration is obsolete and internally incompatible
 
 **P1 | Source + official provider documentation; conditional on environment override.**
-Three call sites default to `claude-3-7-sonnet-latest` while requesting adaptive thinking.
-The provider documents Sonnet 3.7 as retired and adaptive thinking for newer supported models.
+The PR changed the default to `claude-3-5-sonnet-20241022` while requesting adaptive thinking on newer model families.
+The provider documents that default as retired, so a deployment without an explicit model override can fail at runtime.
 An environment override may avoid the retired default, but the deployed override was not disclosed or tested.
-The September 2 TODO assertion that this default supports adaptive thinking is incorrect.
+The September 2 TODO assertion that the previous default was supported is incorrect.
 Ask and receipt errors also use generic failure responses while documentation describes graceful degradation more broadly.
 
 Evidence: `lib/ai-provider.ts:119`, `app/api/ai/ask/route.ts:62`, `app/api/ai/receipt/route.ts:72`, and `docs/TODO.md`.

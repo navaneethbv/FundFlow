@@ -89,6 +89,7 @@ async function fetchAllAuditUserIds(
       .gte("created_at", sinceIso)
       .order("id", { ascending: true });
     const res = await query.range(from, to);
+    if (res?.error) throw res.error;
     const rows = (res?.data ?? []) as Array<{ user_id?: string | null }>;
     for (const r of rows) {
       if (r?.user_id) userIds.add(r.user_id);

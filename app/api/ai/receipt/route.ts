@@ -36,12 +36,6 @@ export async function POST(request: NextRequest) {
 
     const consent = await resolveAiConsent(supabase, user.id);
     if (!consent.allowed) {
-      if (consent.reason === "unconfigured") {
-        return NextResponse.json(
-          { error: "AI is not configured on this deployment." },
-          { status: 503 },
-        );
-      }
       if (consent.reason === "unavailable") {
         return NextResponse.json(
           { error: "AI preferences temporarily unavailable." },
@@ -54,7 +48,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const allowed = await checkRateLimit(`ai-receipt:${user.id}`, 10, 24 * 3600);
+    const allowed = await checkRateLimit(`ai-receipt:${user.id}`, 10, 24 * 3600, {
+      failClosed: true,
+    });
     if (!allowed) {
       return NextResponse.json({ error: "Daily scan limit reached." }, { status: 429 });
     }
