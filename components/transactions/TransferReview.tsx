@@ -19,6 +19,42 @@ interface TransferPair {
   in_merchant?: string;
 }
 
+export function getTransferSelectionState(
+  pairs: ReadonlyArray<Pick<TransferPair, "subject_id">>,
+  selectedIds: ReadonlySet<string>,
+) {
+  const selectedCount = pairs.reduce(
+    (count, pair) => count + (selectedIds.has(pair.subject_id) ? 1 : 0),
+    0,
+  );
+  return {
+    selectedCount,
+    allSelected: pairs.length > 0 && selectedCount === pairs.length,
+    indeterminate: selectedCount > 0 && selectedCount < pairs.length,
+  };
+}
+
+export function toggleTransferSelection(
+  selectedIds: ReadonlySet<string>,
+  subjectId: string,
+): Set<string> {
+  const next = new Set(selectedIds);
+  if (next.has(subjectId)) next.delete(subjectId);
+  else next.add(subjectId);
+  return next;
+}
+
+export function selectAllTransferSuggestions(
+  pairs: ReadonlyArray<Pick<TransferPair, "subject_id">>,
+  selectAll: boolean,
+): Set<string> {
+  return selectAll ? new Set(pairs.map((pair) => pair.subject_id)) : new Set();
+}
+
+export function areTransferReviewActionsDisabled(busyIds: ReadonlySet<string>): boolean {
+  return busyIds.size > 0;
+}
+
 /**
  * Surfaces detected inter-account transfer pairs (same amount, opposite sign,
  * different accounts, close in time) as a compact review drawer that can be
@@ -34,6 +70,8 @@ export default function TransferReview() {
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const selectAllRef = useRef<HTMLInputElement>(null);
+  const selectionState = getTransferSelectionState(pairs, selectedIds);
+  const actionsDisabled = areTransferReviewActionsDisabled(busyIds);
 
   useEffect(() => {
     let active = true;
@@ -55,9 +93,9 @@ export default function TransferReview() {
 
   useEffect(() => {
     if (selectAllRef.current) {
-      selectAllRef.current.indeterminate = selectedIds.size > 0 && selectedIds.size < pairs.length;
+      selectAllRef.current.indeterminate = selectionState.indeterminate;
     }
-  }, [pairs.length, selectedIds.size]);
+  }, [selectionState.indeterminate]);
 
   function removePairs(subjectIds: ReadonlySet<string>) {
     setPairs((current) => current.filter((row) => !subjectIds.has(row.subject_id)));
@@ -95,7 +133,7 @@ export default function TransferReview() {
       const json = await res.json().catch(() => ({}));
       const message = json.error ?? "Could not save decision.";
       throw new Error(
-        message === "Too many requests"
+        res.status === 429
           ? "Too many individual link requests. Select the remaining transfers and use Link selected."
           : message,
       );
@@ -145,7 +183,11 @@ export default function TransferReview() {
       } | null;
       if (!res.ok) {
         throw new Error(
-          typeof json?.error === "string" ? json.error : "Could not link selected transfers.",
+          res.status === 429
+            ? "Bulk linking is temporarily limited. Try again later."
+            : typeof json?.error === "string"
+              ? json.error
+              : "Could not link selected transfers.",
         );
       }
 
@@ -172,11 +214,7 @@ export default function TransferReview() {
     }
   }
 
-  const selectedCount = pairs.reduce(
-    (count, pair) => count + (selectedIds.has(pair.subject_id) ? 1 : 0),
-    0,
-  );
-  const allSelected = pairs.length > 0 && selectedCount === pairs.length;
+  const { selectedCount, allSelected } = selectionState;
 
   if (!loaded || pairs.length === 0) return null;
 
@@ -213,9 +251,9 @@ export default function TransferReview() {
                 ref={selectAllRef}
                 type="checkbox"
                 checked={allSelected}
-                disabled={busyIds.size > 0}
+                disabled={actionsDisabled}
                 onChange={() => {
-                  setSelectedIds(allSelected ? new Set() : new Set(pairs.map((pair) => pair.subject_id)));
+                  setSelectedIds(selectAllTransferSuggestions(pairs, !allSelected));
                 }}
                 className="h-4 w-4 accent-accent"
                 aria-label="Select all transfer suggestions"
@@ -227,7 +265,7 @@ export default function TransferReview() {
               onClick={() => {
                 void linkSelected();
               }}
-              disabled={selectedCount === 0 || busyIds.size > 0}
+              disabled={selectedCount === 0 || actionsDisabled}
               loading={bulkBusy}
             >
               {allSelected ? `Link all transfers (${selectedCount})` : `Link selected (${selectedCount})`}
@@ -242,14 +280,9 @@ export default function TransferReview() {
                 <input
                   type="checkbox"
                   checked={selectedIds.has(pair.subject_id)}
-                  disabled={busyIds.size > 0}
+                  disabled={actionsDisabled}
                   onChange={() => {
-                    setSelectedIds((current) => {
-                      const next = new Set(current);
-                      if (next.has(pair.subject_id)) next.delete(pair.subject_id);
-                      else next.add(pair.subject_id);
-                      return next;
-                    });
+                    setSelectedIds((current) => toggleTransferSelection(current, pair.subject_id));
                   }}
                   className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
                   aria-label={`Select transfer from ${pair.out_account_name || "Account A"} to ${pair.in_account_name || "Account B"}`}
@@ -273,7 +306,7 @@ export default function TransferReview() {
                 id={pair.subject_id}
                 busyId={busyIds.has(pair.subject_id) ? pair.subject_id : null}
                 confirmLabel="Link transfer"
-                disabled={busyIds.size > 0}
+                disabled={actionsDisabled}
                 onConfirm={() => {
                   void decide(pair, "confirmed");
                 }}

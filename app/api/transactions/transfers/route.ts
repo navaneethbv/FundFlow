@@ -13,6 +13,7 @@ const WINDOW_DAYS = 7;
 const LOOKBACK_DAYS = 60;
 const PAGE_SIZE = 1_000;
 const MAX_BULK_TRANSFERS = 100;
+const BULK_CONCURRENCY = 8;
 
 type PagedQueryResult = { data?: unknown; error?: unknown };
 
@@ -315,9 +316,47 @@ type BulkTransferFailure = {
   error: string;
 };
 
+type BulkTransferResult = {
+  subjectId: string | null;
+  failure?: BulkTransferFailure;
+};
+
 async function readLinkFailure(response: NextResponse): Promise<string> {
   const body = await response.json().catch(() => null) as { error?: unknown } | null;
   return typeof body?.error === "string" ? body.error : "Could not link transfer.";
+}
+
+async function linkBulkTransferCandidate(
+  supabase: SupabaseClient,
+  userId: string,
+  candidate: unknown,
+): Promise<BulkTransferResult> {
+  const record = asRecord(candidate);
+  const subjectId = typeof record?.subject_id === "string" ? record.subject_id : null;
+
+  if (!record) {
+    return {
+      subjectId,
+      failure: { subject_id: subjectId, error: "Each transfer must be an object." },
+    };
+  }
+
+  try {
+    const failure = await linkConfirmedTransfer(supabase, userId, subjectId ?? "", record);
+    if (failure) {
+      return {
+        subjectId,
+        failure: { subject_id: subjectId, error: await readLinkFailure(failure) },
+      };
+    }
+    return { subjectId };
+  } catch (error) {
+    logError("transactions.transfers.bulk.item", error);
+    return {
+      subjectId,
+      failure: { subject_id: subjectId, error: "Could not link transfer." },
+    };
+  }
 }
 
 async function linkBulkTransfers(
@@ -325,37 +364,24 @@ async function linkBulkTransfers(
   userId: string,
   transfers: unknown[],
 ): Promise<{ linked: string[]; failures: BulkTransferFailure[] }> {
+  const workers = Math.min(BULK_CONCURRENCY, transfers.length);
+  const results = new Array<BulkTransferResult>(transfers.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < transfers.length) {
+      const index = nextIndex++;
+      results[index] = await linkBulkTransferCandidate(supabase, userId, transfers[index]);
+    }
+  }
+
+  await Promise.all(Array.from({ length: workers }, worker));
+
   const linked: string[] = [];
   const failures: BulkTransferFailure[] = [];
-
-  for (const candidate of transfers) {
-    const subjectId =
-      candidate && typeof candidate === "object" && !Array.isArray(candidate) &&
-      typeof (candidate as Record<string, unknown>).subject_id === "string"
-        ? (candidate as Record<string, unknown>).subject_id as string
-        : null;
-
-    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
-      failures.push({ subject_id: subjectId, error: "Each transfer must be an object." });
-      continue;
-    }
-
-    try {
-      const failure = await linkConfirmedTransfer(
-        supabase,
-        userId,
-        subjectId ?? "",
-        candidate as Record<string, unknown>,
-      );
-      if (failure) {
-        failures.push({ subject_id: subjectId, error: await readLinkFailure(failure) });
-      } else if (subjectId) {
-        linked.push(subjectId);
-      }
-    } catch (error) {
-      logError("transactions.transfers.bulk.item", error);
-      failures.push({ subject_id: subjectId, error: "Could not link transfer." });
-    }
+  for (const result of results) {
+    if (result.failure) failures.push(result.failure);
+    else if (result.subjectId) linked.push(result.subjectId);
   }
 
   return { linked, failures };

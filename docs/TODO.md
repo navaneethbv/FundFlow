@@ -27,7 +27,7 @@ The linked project now has the RPC, its one-use transaction indexes, and the exp
 ### Transfer review bulk action in progress on 2026-09-05
 
 Branch `codex/bulk-transfer-linking` adds per-row selection, select all, and bulk linking for transfer suggestions.
-The bulk endpoint is bounded at 100 pairs per request, validates each pair through the existing ownership and transfer checks, and returns partial failures so valid links are not hidden by one bad suggestion.
+The bulk endpoint is bounded at 100 pairs per request, processes up to eight pairs concurrently, validates each pair through the existing ownership and transfer checks, and returns partial failures so valid links are not hidden by one bad suggestion.
 The feature is verified locally and remains pending merge and deployment.
 
 ### Closed

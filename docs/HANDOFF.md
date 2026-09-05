@@ -5,11 +5,11 @@ Last updated: 2026-09-05. Read this first to resume.
 ## 2026-09-05: Bulk transfer review action
 
 Branch `codex/bulk-transfer-linking` adds explicit row selection, a select-all checkbox, and a `Link all transfers` action to the transfer review panel.
-The action sends one bounded bulk request, reuses the existing per-pair ownership and transfer invariant checks, and reports partial failures while leaving failed rows available for retry.
+The action sends one bounded bulk request with up to eight concurrent per-pair operations, reuses the existing ownership and transfer invariant checks, and reports partial failures while leaving failed rows available for retry.
 Individual link actions are disabled while a bulk operation is running to prevent overlapping writes.
 Bulk requests use their own five-per-hour limiter so a user who exhausted the single-link limiter can still process the review list in one intentional action.
 
-Validation passed with 4,906 unit tests, 95.04% branch coverage, lint, typecheck, and the production build.
+Validation passed with 4,909 unit tests, 95.04% branch coverage, lint, typecheck, and the production build.
 The full coverage command was not allowed to run its live integration files because `TEST_SUPABASE_URL` is not approved on this machine.
 This branch has not been deployed or exercised against production financial data.
 
