@@ -147,7 +147,7 @@ export function transferSubjectId(outId: string, inId: string): string {
   // Keep the subject independent of posting direction. The confirmation RPC
   // uses PostgreSQL's least/greatest ordering for the same invariant, so a
   // random UUID ordering must not make an otherwise valid pair un-linkable.
-  return [outId, inId].sort((left, right) => left.localeCompare(right)).join(":");
+  return outId < inId ? `${outId}:${inId}` : `${inId}:${outId}`;
 }
 
 /**
