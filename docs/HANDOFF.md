@@ -2,6 +2,20 @@
 
 Last updated: 2026-09-05. Read this first to resume.
 
+## 2026-09-05: Third review of PR #153
+
+Reviewed head `6c69927` and reproduced two residual defects through request-handler regressions with isolated dependencies.
+Rule preview took about 1.7 seconds for one repetitive 300-character bank description under `.*a.*a.*!`.
+Accepted merchant patterns now execute through browser-compatible RE2JS while retaining existing shape validation.
+Backup delivery previously deleted its claim after sending when the completion write failed.
+The new `20260905120000_backup_send_boundary.sql` migration records sending before SMTP and prevents automatic retries of uncertain delivery outcomes.
+Pre-send failures remain retryable; uncertain outcomes fail visibly until reconciled with the mail provider.
+The linked migration ledger is recorded in `TODO.md`; no production migration was applied.
+Validation: 4,902 unit tests passed, the 46 restore tests passed again after the Sonar refactor, and lint, typecheck, production build, palette validation, and dependency audit passed.
+All six signed-out browser smoke tests passed against the local production build.
+The formerly slow pattern completed in 3.6 ms in Chromium with the browser-compatible matcher.
+Authenticated production writes and recovery tests were not run.
+
 ## 2026-09-05: Second review round on PR #153
 
 Branch: `codex/comprehensive-review-remediation` (unchanged).

@@ -199,14 +199,10 @@ flowchart TB
   `computeForecastDefaults` counts only the outflow leg of a `LOAN_PAYMENTS`
   posting; the projection records both legs, so summing absolute values doubled
   every debt payment.
-- `regex-safety.ts` - the ReDoS guard behind `safeCompileRegex`. A backtracking
-  engine plus a length cap is not enough (`^a*a*a*a*a*a*!$` is 16 characters and
-  superexponential), and RE2 or a worker timeout is unavailable because
-  `safeCompileRegex` is imported by a client component. So user patterns are
-  restricted to a shape whose cost is bounded: no ambiguous quantified group,
-  no two adjacent loops matching a common character, at most three looping
-  quantifiers. Character sets are approximated conservatively, so an
-  unanalyzable atom can only cause a rejection, never a false accept.
+- `regex-safety.ts` preserves the existing merchant-rule pattern restrictions.
+  `safeCompileRegex` executes accepted patterns through RE2JS, a non-backtracking engine that works in server and browser bundles.
+  Shape checks alone do not guarantee safe native JavaScript matching: `.*a.*a.*!` took over a second on a 300-character description.
+  Unsupported RE2 syntax is rejected rather than falling back to native matching.
 - `advice.ts` / `advice-content.ts` — `ADVICE_LIBRARY` is reviewed education
   content, not user data; `ALLOWED_SOURCE_HOSTS` is an enforcement allowlist
   (a security-review test, not documentation) restricting sources to neutral
@@ -333,20 +329,17 @@ Invariants:
   transient send failure can catch up. A send the provider rejects with a 5xx
   is permanent (`isPermanentDeliveryError`) and is not retried, otherwise an
   undeliverable address burns an attempt every hour until the period rolls.
-- The monthly backup cron deduplicates through `public.backup_deliveries`, a
-  cron-only journal keyed on `(user_id, period)`. The claim *is* the insert, so
-  the primary key arbitrates concurrent runs, and both the claim and the
-  `delivered_at` completion check their returned error. It replaced a dedup that
-  read `audit_logs` rows written by `writeAudit()` - which swallows both the
-  returned error and any exception - so a delivered backup could lose its marker
-  and be emailed again. A claim left undelivered for 30 minutes (longer than the
-  route's `maxDuration`) is treated as a crashed run and may be taken over; a
-  failed send releases its claim so the next run retries.
+- The monthly backup cron deduplicates through `public.backup_deliveries`, a cron-only journal keyed on `(user_id, period)`.
+  The insert claims a delivery; `send_started_at` is persisted before SMTP is contacted, and the completion write checks both errors and affected rows.
+  Stale claims may be reclaimed after 30 minutes only if sending never started.
+  Once sending may have started, a missing completion marker produces `BackupDeliveryUncertainError` and a failed cron response until an operator reconciles it with the mail provider.
+  Mark confirmed delivery complete, or clear the send boundary only after confirming non-delivery; SMTP cannot provide atomic exactly-once delivery with Postgres.
+  Failures before sending release their claim for retry.
 - `/api/plaid/webhook` verifies the `plaid-verification` JWT outside sandbox:
   pinned `alg: ES256`, key via `webhookVerificationKeyGet`, signature checked
   with `dsaEncoding: "ieee-p1363"` (JWS raw r||s, not DER — omitting this
   rejects all genuine webhooks), body SHA-256 compared with `safeEqual`, 5-min
-  `iat` freshness. Sandbox and `NODE_ENV=test` skip verification.
+  `iat` freshness. Only sandbox skips verification.
 - The CSV export contains only date/merchant/amount/category and is gated by
   the profile's `ai_export_enabled` flag.
 - CSP (in `proxy.ts`, not middleware — Next 16 renamed it) is nonce-based with

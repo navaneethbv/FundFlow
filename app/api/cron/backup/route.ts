@@ -25,6 +25,31 @@ export const maxDuration = 60;
  */
 const STALE_CLAIM_MS = 30 * 60 * 1000;
 
+class BackupDeliveryUncertainError extends Error {
+  constructor() {
+    super("Backup delivery may have reached the recipient. Reconcile the delivery journal before retrying.");
+    this.name = "BackupDeliveryUncertainError";
+  }
+}
+
+/** Persist the send boundary before contacting SMTP, which has no idempotency key. */
+async function startBackupSend(
+  service: ReturnType<typeof createServiceClient>,
+  userId: string,
+  period: string,
+): Promise<void> {
+  const { data, error } = await service
+    .from("backup_deliveries")
+    .update({ send_started_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .eq("period", period)
+    .is("send_started_at", null)
+    .is("delivered_at", null)
+    .select("user_id");
+  if (error) throw error;
+  if (!data?.length) throw new BackupDeliveryUncertainError();
+}
+
 /**
  * Monthly encrypted backup (2.1): per user, serialize the full takeout
  * payload, gzip + AES-256-GCM encrypt with BACKUP_ENC_KEY, and email it to
@@ -60,27 +85,27 @@ async function backupSingleUser(
     userId,
   );
 
-  const { data: userData } = await service.auth.admin.getUserById(userId);
+  const { data: userData, error: userError } = await service.auth.admin.getUserById(userId);
+  if (userError) throw userError;
   const email = userData?.user?.email;
   if (!email) return false;
 
-  await sendBackupEmail(
-    email,
-    `fundflow-backup-${today}.json.enc`,
-    archive,
-    today,
-  );
-
-  // The claim row already exists (see claimBackupDelivery); this is the
-  // completion half, and its error is checked because losing it is exactly how
-  // a delivered backup gets sent a second time.
-  const { error: completionError } = await service
-    .from("backup_deliveries")
-    .update({ delivered_at: new Date().toISOString(), rows_backed_up: countUserDataRows(sections) })
-    .eq("user_id", userId)
-    .eq("period", today.slice(0, 7));
-  if (completionError) {
-    throw new Error(`backup delivery marker failed to persist: ${completionError.message}`);
+  await startBackupSend(service, userId, today.slice(0, 7));
+  try {
+    await sendBackupEmail(email, `fundflow-backup-${today}.json.enc`, archive, today);
+    const { data, error } = await service
+      .from("backup_deliveries")
+      .update({ delivered_at: new Date().toISOString(), rows_backed_up: countUserDataRows(sections) })
+      .eq("user_id", userId)
+      .eq("period", today.slice(0, 7))
+      .select("user_id");
+    if (error) throw error;
+    if (!data?.length) throw new Error("Backup completion row is missing");
+  } catch (error) {
+    logError("cron.backup.delivery_uncertain", error);
+    // Neither an SMTP rejection nor a failed completion write proves that the
+    // recipient did not receive the email. Keep the durable send boundary.
+    throw new BackupDeliveryUncertainError();
   }
 
   await writeAudit({
@@ -114,9 +139,8 @@ type ClaimOutcome = "claimed" | "already_delivered" | "claimed_elsewhere";
  * written by writeAudit(), which swallows both the returned error and any
  * exception, so a delivered backup could lose its marker and be resent.
  *
- * A claim with no `delivered_at` is a run that crashed between claiming and
- * sending. Taking it over is the safe direction: at worst the user receives a
- * duplicate archive, whereas leaving it would skip their backup forever.
+ * Only a stale claim that never crossed the send boundary can be reclaimed.
+ * Once SMTP may have accepted the email, recovery requires reconciliation.
  */
 async function claimBackupDelivery(
   service: ReturnType<typeof createServiceClient>,
@@ -132,12 +156,13 @@ async function claimBackupDelivery(
 
   const { data: existing, error: readError } = await service
     .from("backup_deliveries")
-    .select("delivered_at, claimed_at")
+    .select("delivered_at, claimed_at, send_started_at")
     .eq("user_id", userId)
     .eq("period", period)
     .maybeSingle();
   if (readError) throw readError;
   if (existing?.delivered_at) return "already_delivered";
+  if (existing?.send_started_at) throw new BackupDeliveryUncertainError();
 
   const claimedAt = Date.parse(String(existing?.claimed_at ?? ""));
   const isStale =
@@ -150,6 +175,7 @@ async function claimBackupDelivery(
     .eq("user_id", userId)
     .eq("period", period)
     .is("delivered_at", null)
+    .is("send_started_at", null)
     .lt("claimed_at", new Date(Date.now() - STALE_CLAIM_MS).toISOString())
     .select("user_id");
   if (reclaimError) throw reclaimError;
@@ -170,7 +196,8 @@ async function releaseBackupClaim(
     .delete()
     .eq("user_id", userId)
     .eq("period", period)
-    .is("delivered_at", null);
+    .is("delivered_at", null)
+    .is("send_started_at", null);
   if (error) logError("cron.backup.release_claim", error);
 }
 
@@ -223,7 +250,9 @@ async function processUserBackups(
       }
     } catch (err) {
       logError("cron.backup.user", err);
-      if (claimed) await releaseBackupClaim(service, userId, period);
+      if (claimed && !(err instanceof BackupDeliveryUncertainError)) {
+        await releaseBackupClaim(service, userId, period);
+      }
       failures.push({
         userId,
         error: err instanceof Error ? err.name : "unknown_error",

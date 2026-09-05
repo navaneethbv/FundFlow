@@ -130,6 +130,21 @@ describe("POST /api/rules/batch", () => {
     vi.clearAllMocks();
   });
 
+  it("keeps rule previews responsive on repetitive bank descriptions", async () => {
+    mockRequireUser.mockResolvedValueOnce({
+      user: { id: "u-1" },
+      supabase: createMockBatchDb({
+        rules: [{ id: "r", match_type: "regex", pattern: ".*a.*a.*!", enabled: true }],
+        transactions: [{ id: "tx", merchant_name: "a".repeat(300), amount: 10 }],
+      }),
+    });
+    const started = performance.now();
+    const response = await POST(createBatchRequest({ dryRun: true }));
+    expect(response.status).toBe(200);
+    expect((await response.json()).matchedCount).toBe(0);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
   it("returns 401 if unauthenticated", async () => {
     mockRequireUser.mockResolvedValueOnce(
       new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }),

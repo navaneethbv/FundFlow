@@ -81,7 +81,7 @@ describe("isRegexShapeSafe", () => {
       "^\\d{4}-\\d{2}$",
       "SQ \\*COFFEE",
     ]) {
-      expect(safeCompileRegex(pattern), pattern).toBeInstanceOf(RegExp);
+      expect(safeCompileRegex(pattern), pattern).toEqual(expect.objectContaining({ test: expect.any(Function) }));
     }
   });
 

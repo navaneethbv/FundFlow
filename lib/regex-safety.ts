@@ -1,39 +1,14 @@
 /**
- * Static safety analysis for user-supplied regex patterns (FF-06).
- *
- * JavaScript's RegExp is a backtracking engine, and neither a length cap on
- * the pattern nor one on the subject is enough on its own: `^a*a*a*a*a*a*!$`
- * is 16 characters and still needs superexponential work on a 280-character
- * subject, because six ambiguous loops can split the same run of `a` in
- * combinatorially many ways.
- *
- * Since `safeCompileRegex` is imported by a client component, a non-backtracking
- * engine (RE2) or a worker-thread timeout is not available. Instead this module
- * defines a **restricted language**: a pattern is accepted only when its shape
- * makes catastrophic backtracking impossible.
- *
- * Three rules, each rejecting a distinct source of ambiguity:
- *
- * 1. No quantified group whose body is itself ambiguous - a nested quantifier
- *    or an alternation: `(a+)+`, `(a*)*`, `(a|aa)+`. This is exponential.
- * 2. No two looping atoms that can match the same character with nothing
- *    mandatory between them: `a*a*`, `\d+[0-9]*`, `(?:x)*x+`. This is what
- *    makes `^a*a*a*a*a*a*!$` polynomial in the number of loops. Loops separated
- *    by a mandatory atom (`.*Eats.*`) stay allowed: the separator bounds the
- *    split points to the places it actually occurs.
- * 3. At most MAX_LOOP_QUANTIFIERS looping atoms overall. Rules 1 and 2 leave
- *    only polynomial behaviour, of degree at most the number of loops, so this
- *    caps the exponent. With a 300-character subject the worst case is 300^3,
- *    which finishes in milliseconds.
- *
- * Character sets are approximated conservatively: anything the scanner cannot
- * analyse (`.`, a negated class, `\W`) is treated as matching everything, so an
- * unanalyzable atom can only ever cause a rejection, never a false accept.
+ * Compatibility checks for the existing merchant-rule regex language (FF-06).
+ * These checks keep previously rejected patterns invalid; they are not a proof
+ * of safe execution under JavaScript's backtracking engine. In particular,
+ * separated loops can still produce expensive unanchored searches.
+ * `safeCompileRegex` uses the browser-compatible RE2JS engine for execution.
  */
 
 /**
  * Maximum number of looping quantifiers (`*`, `+`, `{n,}`, `{n,m}` with m > n)
- * allowed in one pattern. Bounds the degree of the polynomial worst case.
+ * allowed in one pattern by the existing validation contract.
  */
 export const MAX_LOOP_QUANTIFIERS = 3;
 
@@ -397,7 +372,7 @@ function consumeAtom(pattern: string, scan: ScanState): boolean {
 
 /**
  * Returns true when `pattern` is in the restricted language described at the
- * top of this module, i.e. its worst-case matching cost is bounded.
+ * compatibility contract. Runtime safety is enforced by RE2JS.
  */
 export function isRegexShapeSafe(pattern: string): boolean {
   const scan: ScanState = {

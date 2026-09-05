@@ -187,13 +187,13 @@ describe("Smart Rules Engine: Rule Evaluation", () => {
 
     // A quantified group with a plain literal body stays allowed, as does a
     // quantified group elsewhere in the pattern with an unambiguous body.
-    expect(safeCompileRegex("(foo)+")).toBeInstanceOf(RegExp);
-    expect(safeCompileRegex("(?:bar)+x")).toBeInstanceOf(RegExp);
-    expect(safeCompileRegex("(foo\\+bar)+")).toBeInstanceOf(RegExp);
+    expect(safeCompileRegex("(foo)+")).toEqual(expect.objectContaining({ test: expect.any(Function) }));
+    expect(safeCompileRegex("(?:bar)+x")).toEqual(expect.objectContaining({ test: expect.any(Function) }));
+    expect(safeCompileRegex("(foo\\+bar)+")).toEqual(expect.objectContaining({ test: expect.any(Function) }));
     expect(safeCompileRegex("a".repeat(251))).toBeNull();
 
     const valid = safeCompileRegex("^[a-z0-9_-]+$");
-    expect(valid).toBeInstanceOf(RegExp);
+    expect(valid).toEqual(expect.objectContaining({ test: expect.any(Function) }));
   });
 
   it("returns false for unknown match types", () => {

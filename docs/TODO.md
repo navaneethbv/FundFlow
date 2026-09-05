@@ -11,6 +11,13 @@ Those are now addressed.
 This section records what is genuinely closed, what is closed with a stated limit, and what is deferred, rather than a single completion count.
 The distinction is the point: the previous version of this file asserted completion for work a reviewer could still reproduce a defect against.
 
+### Deployment prerequisite verified on 2026-09-05
+
+The linked migration ledger still lists `20260904120000`, `20260905100000`, `20260905110000`, and `20260905120000` as local-only.
+The new send-boundary migration must be applied with the earlier hardening and delivery-journal migrations before deploying this branch.
+Older local-only versions `20260902220000`, `20260903010000`, and `20260904000000`, and remote-only versions `20260903171727` and `20260903171733`, still require content-based reconciliation.
+No production migrations were applied during the third review.
+
 ### Closed
 
 - **FF-01, FF-04 Session identity and service-role isolation.**
@@ -25,11 +32,12 @@ The distinction is the point: the previous version of this file asserted complet
 - **FF-06 Regex ReDoS.**
   The old guard only inspected quantified *groups*, so `^a*a*a*a*a*a*!$` passed and then ran for seconds on a 280-character subject.
   `lib/regex-safety.ts` replaces it with a restricted language: no ambiguous quantified group, no two adjacent loops that can match the same character, and at most three looping quantifiers in total.
-  A non-backtracking engine was not an option because `safeCompileRegex` is imported by a client component.
+  The third review reproduced slow matching even inside that language, so `safeCompileRegex` now uses browser-compatible RE2JS for non-backtracking execution.
 - **FF-10 Backup deduplication.**
   `public.backup_deliveries` is a real delivery journal keyed on `(user_id, period)`.
   The claim is the insert, so concurrent runs are arbitrated by the primary key, and both the claim and the `delivered_at` completion check their returned error.
   `writeAudit()` is no longer load-bearing for deduplication.
+  The third review adds a durable send boundary: uncertain SMTP outcomes or completion-write failures require operator reconciliation instead of automatic resending.
 - **FF-13 AI spending credits.**
   Aggregation keeps the signed amount for canonically classified rows, so a $100 expense plus a $20 expense credit reports $80.
 - **FF-30 Test database guard.**

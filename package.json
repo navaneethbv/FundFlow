@@ -29,6 +29,7 @@
     "nodemailer": "^9.1.1",
     "pdfkit": "^0.20.2",
     "plaid": "^46.0.0",
+    "re2js": "^2.8.6",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-plaid-link": "^5.0.0",

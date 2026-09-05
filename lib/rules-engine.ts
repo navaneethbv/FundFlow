@@ -4,6 +4,7 @@
  * category remapping, merchant renaming, and auto-tagging.
  */
 
+import { RE2JS } from "re2js";
 import { isRegexShapeSafe } from "@/lib/regex-safety";
 
 export type RuleMatchType = "merchant" | "keyword" | "account" | "regex";
@@ -24,7 +25,7 @@ export interface SmartRule {
   category?: string | null;
   tags?: string[];
   enabled?: boolean;
-  compiledRegex?: RegExp | null;
+  compiledRegex?: Pick<RegExp, "test"> | null;
 }
 
 /**
@@ -38,10 +39,11 @@ export const MAX_REGEX_PATTERN_LENGTH = 120;
  * - Backreference rejection (guards against algorithmic complexity attacks)
  * - Restricted pattern shape (`lib/regex-safety.ts`): no ambiguous quantified
  *   group, no overlapping adjacent loops, and a hard cap on loop count, which
- *   together bound worst-case matching cost.
+ *   retained for compatibility with existing validation.
+ * - RE2JS executes accepted patterns without backtracking in both server and browser.
  * Returns null if the pattern is invalid or unsafe.
  */
-export function safeCompileRegex(pattern: string): RegExp | null {
+export function safeCompileRegex(pattern: string): Pick<RegExp, "test"> | null {
   const trimmed = pattern.trim();
   if (!trimmed || trimmed.length > MAX_REGEX_PATTERN_LENGTH) {
     return null;
@@ -54,11 +56,10 @@ export function safeCompileRegex(pattern: string): RegExp | null {
   }
 
   try {
-    // ReDoS guarded: pattern length <= 120, exponential backtracking checked, and backreferences rejected
-    const RegExpConstructor = (
-      globalThis as unknown as { RegExp: new (p: string, f?: string) => RegExp }
-    ).RegExp;
-    return new RegExpConstructor(trimmed, "i");
+    // The shape check preserves the existing accepted rule language. Execution
+    // must still be non-backtracking: even three separated loops can take
+    // seconds per description under the native JavaScript engine.
+    return RE2JS.compile(trimmed, RE2JS.CASE_INSENSITIVE);
   } catch {
     return null;
   }

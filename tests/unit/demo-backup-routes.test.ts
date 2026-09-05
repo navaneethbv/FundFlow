@@ -95,9 +95,10 @@ function journalStub(behaviour: JournalBehaviour) {
       if (first === "upsert") return resolve({ data: behaviour.claim ?? [], error: null });
       if (first === "select") return resolve({ data: behaviour.existing ?? null, error: null });
       if (first === "update") {
+        const values = ops[0].args[0] as Record<string, unknown>;
         return resolve({
-          data: behaviour.reclaim ?? [],
-          error: behaviour.updateError ?? null,
+          data: "claimed_at" in values ? behaviour.reclaim ?? [] : [{ user_id: USER }],
+          error: "delivered_at" in values ? behaviour.updateError ?? null : null,
         });
       }
       return resolve({ data: null, error: null });
@@ -541,6 +542,19 @@ describe("GET /api/cron/backup", () => {
     expect(mockSendBackupEmail).not.toHaveBeenCalled();
   });
 
+  it("does not resend an uncertain delivery even after its claim expires", async () => {
+    serviceClient = buildServiceClient(populatedSeeds, "user@example.com", {
+      claim: [],
+      existing: { delivered_at: null, send_started_at: "2026-01-01T00:00:00Z", claimed_at: "2026-01-01T00:00:00Z" },
+      reclaim: [{ user_id: USER }],
+    });
+    const res = await backupGet(cronRequest());
+    expect(res.status).toBe(500);
+    expect((await res.json()).failures[0].error).toBe("BackupDeliveryUncertainError");
+    expect(mockSendBackupEmail).not.toHaveBeenCalled();
+    expect(serviceClient.journalLog.some((op) => op.method === "delete")).toBe(false);
+  });
+
   it("takes over a stale undelivered claim so a crashed run does not lose the month (FF-10)", async () => {
     // Arrange: the holder claimed hours ago and never delivered.
     serviceClient = buildServiceClient(populatedSeeds, "user@example.com", {
@@ -568,8 +582,8 @@ describe("GET /api/cron/backup", () => {
 
     const res = await backupGet(cronRequest());
 
-    // Assert: reported as a failure, and the claim is released so the next run
-    // retries instead of the marker silently going missing.
+    // An accepted email with a failed completion marker must retain its claim.
+    expect(serviceClient.journalLog.some((op) => op.method === "delete")).toBe(false);
     const body = await res.json();
     expect(body.ok).toBe(false);
     expect(body.failed).toBe(1);

@@ -380,6 +380,30 @@ type TableOutcome =
   | { kind: "skipped"; name: string; reason: string }
   | { kind: "failed" };
 
+async function restoreLinkedAccounts(
+  service: SupabaseClient,
+  userId: string,
+  rows: readonly unknown[],
+  result: RestoreResult,
+): Promise<TableOutcome> {
+  const split = await splitRestorableAccounts(service, userId, rows);
+  if (split.error) return { kind: "failed" };
+  if (split.orphaned > 0) {
+    result.skipped.push({
+      name: "accounts (unlinked banks)",
+      reason: unlinkedBankReason(split.orphaned),
+    });
+  }
+  const outcome = await restoreParentTable(
+    service,
+    userId,
+    "accounts",
+    split.restorable,
+    "plaid_account_id",
+  );
+  return outcome.error ? { kind: "failed" } : { kind: "written", rowsWritten: outcome.rowsWritten };
+}
+
 /**
  * Restores one table with the strategy its shape demands. Split out of
  * `executeRestore` so the dispatch reads as a list of cases rather than one
@@ -414,22 +438,7 @@ async function restoreOneTable(
   }
 
   if (name === "accounts") {
-    const split = await splitRestorableAccounts(service, userId, rows);
-    if (split.error) return { kind: "failed" };
-    if (split.orphaned > 0) {
-      result.skipped.push({
-        name: "accounts (unlinked banks)",
-        reason: unlinkedBankReason(split.orphaned),
-      });
-    }
-    const outcome = await restoreParentTable(
-      service,
-      userId,
-      name,
-      split.restorable,
-      "plaid_account_id",
-    );
-    return outcome.error ? { kind: "failed" } : { kind: "written", rowsWritten: outcome.rowsWritten };
+    return restoreLinkedAccounts(service, userId, rows, result);
   }
 
   if (name === "manual_accounts") {
