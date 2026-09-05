@@ -33,6 +33,8 @@ export interface UserDataTableSpec {
    * converge with Plaid sync and satisfy cross-table foreign keys.
    */
   restoreKeys?: string;
+  /** Deterministic sorting column for paginated chunk queries. */
+  orderBy?: string;
 }
 
 function table(
@@ -41,6 +43,7 @@ function table(
   scope: TableScope = "user",
   gated = false,
   restoreKeys?: string,
+  orderBy?: string,
 ): UserDataTableSpec {
   return {
     key,
@@ -49,6 +52,7 @@ function table(
     scope,
     ...(gated ? { gated: true } : {}),
     ...(restoreKeys ? { restoreKeys } : {}),
+    orderBy: orderBy ?? (select.includes("created_at") ? "created_at" : "id"),
   };
 }
 
@@ -60,9 +64,9 @@ export const USER_DATA_TABLES: UserDataTableSpec[] = [
   table("goals", "name, target_amount, saved_amount, target_date, goal_type", "user", false, "id"),
   table("merchant_rules", "match_type, pattern, display_name, category, enabled, tags, amount_operator, amount_value, amount_max_value"),
   table("manual_accounts", "name, account_type, balance, include_in_net_worth", "user", false, "id"),
-  table("account_balance_snapshots", "account_id, manual_account_id, snapshot_date, current_balance, available_balance, iso_currency_code, captured_at"),
-  table("alert_preferences", "broken_bank, budget_exceeded, goal_reached, large_transaction, low_cash_forecast"),
-  table("ai_settings", "enabled"),
+  table("account_balance_snapshots", "account_id, manual_account_id, snapshot_date, current_balance, available_balance, iso_currency_code, captured_at", "user", false, undefined, "captured_at"),
+  table("alert_preferences", "broken_bank, budget_exceeded, goal_reached, large_transaction, low_cash_forecast", "user", false, undefined, "user_id"),
+  table("ai_settings", "enabled", "user", false, undefined, "user_id"),
   table("budget_periods", "budget_id, month, planned"),
   table("saved_reports", "name, report_type, filters, created_at, updated_at"),
   table("holdings", "account_id, manual_account_id, quantity, cost_basis, institution_price, institution_value, as_of, source, is_active", "user", true),
@@ -82,7 +86,7 @@ export const USER_DATA_TABLES: UserDataTableSpec[] = [
   table("milestones", "key, title, created_at"),
   table("goal_accounts", "goal_id, account_id, allocated_amount, use_entire_balance, created_at"),
   table("goal_progress_events", "goal_id, event_date, amount, event_type, created_at"),
-  table("advice_progress", "advice_id, task_id, content_version, completed_at"),
+  table("advice_progress", "advice_id, task_id, content_version, completed_at", "user", false, undefined, "completed_at"),
   table("category_overrides", "source_category, display_category, created_at"),
   table("shared_expenses", "description, amount, paid_by, owed_user_id, settled_at, created_at", "shared"),
   table("net_worth_snapshots", "snapshot_month, assets, liabilities, created_at"),
@@ -129,7 +133,12 @@ async function fetchPagedSpecRows(
     const from = page * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
     const builder = client.from(spec.table).select(select);
-    const query = applySpecScope(builder, spec.scope, userId) as unknown as {
+    const scoped = applySpecScope(builder, spec.scope, userId);
+    const ordered =
+      typeof (scoped as { order?: (col: string, opts: { ascending: boolean }) => unknown })?.order === "function" && spec.orderBy
+        ? (scoped as { order: (col: string, opts: { ascending: boolean }) => unknown }).order(spec.orderBy, { ascending: true })
+        : scoped;
+    const query = ordered as unknown as {
       range?: (from: number, to: number) => PromiseLike<{ data?: unknown; error?: unknown }>;
     } & PromiseLike<{ data?: unknown; error?: unknown }>;
 

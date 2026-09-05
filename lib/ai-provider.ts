@@ -227,15 +227,28 @@ export interface ExtractedReceiptData {
   line_items: string[];
 }
 
+export type ReceiptImageMediaType =
+  | "image/jpeg"
+  | "image/png"
+  | "image/gif"
+  | "image/webp";
+
 /**
  * Extract receipt data from an image: centralized in ai-provider.
  */
 export async function extractReceiptWithProvider(input: {
   fileBase64: string;
-  mediaType: string;
+  mediaType: ReceiptImageMediaType | string;
 }): Promise<{ extracted: ExtractedReceiptData | null; refusal?: boolean }> {
   const client = getAnthropicClient();
   const model = getAiModel();
+  const resolvedMediaType: ReceiptImageMediaType =
+    input.mediaType === "image/png" ||
+    input.mediaType === "image/gif" ||
+    input.mediaType === "image/webp"
+      ? input.mediaType
+      : "image/jpeg";
+
   const requestOptions: Anthropic.MessageCreateParams = {
     model,
     max_tokens: 1024,
@@ -251,7 +264,7 @@ export async function extractReceiptWithProvider(input: {
             type: "image",
             source: {
               type: "base64",
-              media_type: input.mediaType as "image/jpeg",
+              media_type: resolvedMediaType,
               data: input.fileBase64,
             },
           },

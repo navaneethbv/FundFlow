@@ -37,6 +37,45 @@ async function removeUserPlaidItems(userId: string): Promise<{ removed: number; 
   return { removed, failed };
 }
 
+async function listAllBucketFiles(
+  bucket: {
+    list?: (
+      path?: string,
+      options?: { limit?: number; offset?: number },
+    ) => Promise<{ data: Array<{ name: string }> | null; error: unknown }>;
+  },
+  folder: string,
+): Promise<Array<{ name: string }>> {
+  if (!bucket?.list) return [];
+  const files: Array<{ name: string }> = [];
+  const limit = 1000;
+  let offset = 0;
+  for (let iteration = 0; iteration < 100; iteration++) {
+    const { data, error } = await bucket.list(folder, { limit, offset });
+    if (error || !Array.isArray(data) || data.length === 0) break;
+    files.push(...data);
+    if (data.length < limit) break;
+    offset += data.length;
+  }
+  return files;
+}
+
+async function removeBucketPaths(
+  bucket: { remove: (paths: string[]) => Promise<{ error: unknown }> },
+  paths: string[],
+): Promise<number> {
+  const CHUNK_SIZE = 1000;
+  let removedCount = 0;
+  for (let i = 0; i < paths.length; i += CHUNK_SIZE) {
+    const chunk = paths.slice(i, i + CHUNK_SIZE);
+    const { error } = await bucket.remove(chunk);
+    if (!error) {
+      removedCount += chunk.length;
+    }
+  }
+  return removedCount;
+}
+
 async function cleanupAvatarStorage(
   service: ReturnType<typeof createServiceClient>,
   userId: string,
@@ -44,11 +83,10 @@ async function cleanupAvatarStorage(
   try {
     const avatarBucket = service.storage.from("avatars");
     if (!avatarBucket?.list || !avatarBucket?.remove) return 0;
-    const { data: avatarFiles } = await avatarBucket.list(userId);
-    if (!avatarFiles || avatarFiles.length === 0) return 0;
+    const avatarFiles = await listAllBucketFiles(avatarBucket, userId);
+    if (avatarFiles.length === 0) return 0;
     const paths = avatarFiles.map((f: { name: string }) => `${userId}/${f.name}`);
-    const { error: removeErr } = await avatarBucket.remove(paths);
-    return !removeErr ? paths.length : 0;
+    return await removeBucketPaths(avatarBucket, paths);
   } catch (err) {
     logError("account.delete.avatarCleanup", err);
     return 0;
@@ -89,13 +127,10 @@ async function cleanupReceiptStorage(
       .from("receipts")
       .select("storage_path")
       .eq("user_id", userId);
-    const receiptFilesResult = receiptBucket.list
-      ? await receiptBucket.list(userId)
-      : null;
-    const paths = collectReceiptPaths(receiptRows, receiptFilesResult?.data, userId);
+    const receiptFiles = await listAllBucketFiles(receiptBucket, userId);
+    const paths = collectReceiptPaths(receiptRows, receiptFiles, userId);
     if (paths.length === 0) return 0;
-    const { error: removeErr } = await receiptBucket.remove(paths);
-    return removeErr ? 0 : paths.length;
+    return await removeBucketPaths(receiptBucket, paths);
   } catch (err) {
     logError("account.delete.receiptCleanup", err);
     return 0;

@@ -72,6 +72,63 @@ interface BackupBatchResult {
   failures: { userId: string; error: string }[];
 }
 
+async function fetchAllAuditUserIds(
+  service: ReturnType<typeof createServiceClient>,
+  action: string,
+  sinceIso: string,
+): Promise<Set<string>> {
+  const userIds = new Set<string>();
+  const PAGE_SIZE = 1000;
+  for (let page = 0; ; page++) {
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    const builder = service
+      .from("audit_logs")
+      .select("user_id")
+      .eq("action", action)
+      .gte("created_at", sinceIso);
+    const ordered =
+      typeof (builder as { order?: unknown })?.order === "function"
+        ? (builder as { order: (col: string, opts: { ascending: boolean }) => unknown }).order("id", { ascending: true })
+        : builder;
+    const query =
+      typeof (ordered as { range?: unknown })?.range === "function"
+        ? await (ordered as { range: (f: number, t: number) => PromiseLike<{ data?: unknown; error?: unknown }> }).range(from, to)
+        : await (ordered as PromiseLike<{ data?: unknown; error?: unknown }>);
+    const rows = (query?.data ?? []) as Array<{ user_id?: string | null }>;
+    for (const r of rows) {
+      if (r?.user_id) userIds.add(r.user_id);
+    }
+    if (typeof (ordered as { range?: unknown })?.range !== "function" || rows.length < PAGE_SIZE) break;
+  }
+  return userIds;
+}
+
+async function fetchAllProfileIds(
+  service: ReturnType<typeof createServiceClient>,
+): Promise<Array<{ id: string }>> {
+  const profiles: Array<{ id: string }> = [];
+  const PAGE_SIZE = 1000;
+  for (let page = 0; ; page++) {
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    const builder = service.from("profiles").select("id");
+    const ordered =
+      typeof (builder as { order?: unknown })?.order === "function"
+        ? (builder as { order: (col: string, opts: { ascending: boolean }) => unknown }).order("id", { ascending: true })
+        : builder;
+    const query =
+      typeof (ordered as { range?: unknown })?.range === "function"
+        ? await (ordered as { range: (f: number, t: number) => PromiseLike<{ data?: unknown; error?: unknown }> }).range(from, to)
+        : await (ordered as PromiseLike<{ data?: unknown; error?: unknown }>);
+    if (query?.error) throw query.error;
+    const rows = (query?.data ?? []) as Array<{ id: string }>;
+    profiles.push(...rows);
+    if (typeof (ordered as { range?: unknown })?.range !== "function" || rows.length < PAGE_SIZE) break;
+  }
+  return profiles;
+}
+
 async function processUserBackups(
   service: ReturnType<typeof createServiceClient>,
   profiles: Array<{ id: string }>,
@@ -83,14 +140,10 @@ async function processUserBackups(
   let skipped = 0;
   const failures: { userId: string; error: string }[] = [];
 
-  const { data: recentAudits } = await service
-    .from("audit_logs")
-    .select("user_id")
-    .eq("action", "data_backup")
-    .gte("created_at", `${monthPrefix}-01T00:00:00Z`);
-
-  const alreadySentUsers = new Set(
-    (recentAudits ?? []).map((r) => r.user_id).filter(Boolean) as string[],
+  const alreadySentUsers = await fetchAllAuditUserIds(
+    service,
+    "data_backup",
+    `${monthPrefix}-01T00:00:00Z`,
   );
 
   for (const profile of profiles) {
@@ -134,14 +187,13 @@ export async function GET(request: NextRequest) {
 
   try {
     const service = createServiceClient();
-    const { data: profiles, error } = await service.from("profiles").select("id");
-    if (error) throw error;
+    const profiles = await fetchAllProfileIds(service);
 
     const today = new Date().toISOString().slice(0, 10);
-    const totalUsers = (profiles ?? []).length;
+    const totalUsers = profiles.length;
     const { sent, skipped, failures } = await processUserBackups(
       service,
-      (profiles ?? []) as Array<{ id: string }>,
+      profiles,
       today,
       backupKey,
     );
