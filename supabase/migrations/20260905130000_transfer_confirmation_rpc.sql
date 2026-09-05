@@ -63,7 +63,9 @@ begin
     raise exception 'transfer_transactions_not_owned' using errcode = '42501';
   end if;
 
-  if out_amount <= 0 or in_amount >= 0
+  if out_amount is null or in_amount is null or p_amount is null
+    or out_date is null or in_date is null
+    or out_amount <= 0 or in_amount >= 0
     or round(abs(out_amount) * 100) <> round(abs(in_amount) * 100)
     or p_amount <= 0
     or round(p_amount * 100) <> round(abs(out_amount) * 100) then
