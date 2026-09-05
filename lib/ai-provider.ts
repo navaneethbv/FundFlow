@@ -245,7 +245,7 @@ const KNOWN_IMAGE_TYPES: Record<string, ReceiptImageMediaType> = {
  */
 export async function extractReceiptWithProvider(input: {
   fileBase64: string;
-  mediaType: ReceiptImageMediaType | string;
+  mediaType: string;
 }): Promise<{ extracted: ExtractedReceiptData | null; refusal?: boolean }> {
   const client = getAnthropicClient();
   const model = getAiModel();
