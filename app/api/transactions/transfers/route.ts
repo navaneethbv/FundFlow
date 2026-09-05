@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { logError } from "@/lib/log";
 import {
   detectTransferPairs,
   filterReviewDecisions,
@@ -11,6 +12,7 @@ import {
 const WINDOW_DAYS = 7;
 const LOOKBACK_DAYS = 60;
 const PAGE_SIZE = 1_000;
+const MAX_BULK_TRANSFERS = 100;
 
 type PagedQueryResult = { data?: unknown; error?: unknown };
 
@@ -308,6 +310,57 @@ async function linkConfirmedTransfer(
   return null;
 }
 
+type BulkTransferFailure = {
+  subject_id: string | null;
+  error: string;
+};
+
+async function readLinkFailure(response: NextResponse): Promise<string> {
+  const body = await response.json().catch(() => null) as { error?: unknown } | null;
+  return typeof body?.error === "string" ? body.error : "Could not link transfer.";
+}
+
+async function linkBulkTransfers(
+  supabase: SupabaseClient,
+  userId: string,
+  transfers: unknown[],
+): Promise<{ linked: string[]; failures: BulkTransferFailure[] }> {
+  const linked: string[] = [];
+  const failures: BulkTransferFailure[] = [];
+
+  for (const candidate of transfers) {
+    const subjectId =
+      candidate && typeof candidate === "object" && !Array.isArray(candidate) &&
+      typeof (candidate as Record<string, unknown>).subject_id === "string"
+        ? (candidate as Record<string, unknown>).subject_id as string
+        : null;
+
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      failures.push({ subject_id: subjectId, error: "Each transfer must be an object." });
+      continue;
+    }
+
+    try {
+      const failure = await linkConfirmedTransfer(
+        supabase,
+        userId,
+        subjectId ?? "",
+        candidate as Record<string, unknown>,
+      );
+      if (failure) {
+        failures.push({ subject_id: subjectId, error: await readLinkFailure(failure) });
+      } else if (subjectId) {
+        linked.push(subjectId);
+      }
+    } catch (error) {
+      logError("transactions.transfers.bulk.item", error);
+      failures.push({ subject_id: subjectId, error: "Could not link transfer." });
+    }
+  }
+
+  return { linked, failures };
+}
+
 /** Record a transfer-pair decision; confirmed links and decisions commit atomically. */
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
@@ -315,10 +368,34 @@ export async function POST(request: NextRequest) {
   const { user, supabase } = auth;
 
   try {
-    if (!(await checkRateLimit(`transfers:${user.id}:write`, 30, 3600))) {
+    const body = await request.json().catch(() => null);
+    const transfers = body && typeof body === "object" && Array.isArray(body.transfers)
+      ? body.transfers as unknown[]
+      : null;
+    const isBulk = transfers !== null;
+    if (!(await checkRateLimit(
+      `transfers:${user.id}:${isBulk ? "bulk" : "write"}`,
+      isBulk ? 5 : 30,
+      3600,
+    ))) {
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
-    const body = await request.json().catch(() => null);
+
+    if (transfers !== null) {
+      if (body?.decision !== "confirmed") {
+        return badRequest("bulk transfer requests must use the confirmed decision");
+      }
+      if (transfers.length === 0 || transfers.length > MAX_BULK_TRANSFERS) {
+        return badRequest(`bulk transfer requests must contain between 1 and ${MAX_BULK_TRANSFERS} transfers`);
+      }
+
+      const result = await linkBulkTransfers(supabase, user.id, transfers);
+      return NextResponse.json(
+        { ok: result.failures.length === 0, ...result },
+        { status: result.failures.length > 0 ? 207 : 200 },
+      );
+    }
+
     const subjectId = body?.subject_id;
     const decision = body?.decision;
     if (typeof subjectId !== "string" || (decision !== "confirmed" && decision !== "dismissed")) {

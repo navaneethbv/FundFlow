@@ -31,6 +31,7 @@ export interface ReviewItemActionProps {
   confirmLabel: string;
   onConfirm: () => void;
   onDismiss: () => void;
+  disabled?: boolean;
 }
 
 export function ReviewItemActions({
@@ -39,14 +40,21 @@ export function ReviewItemActions({
   confirmLabel,
   onConfirm,
   onDismiss,
+  disabled = false,
 }: Readonly<ReviewItemActionProps>) {
   const isBusy = busyId === id;
   return (
     <span className="flex gap-2">
-      <Button size="sm" onClick={onConfirm} loading={isBusy}>
+      <Button size="sm" onClick={onConfirm} loading={isBusy} disabled={disabled}>
         {confirmLabel}
       </Button>
-      <Button size="sm" variant="secondary" onClick={onDismiss} loading={isBusy}>
+      <Button
+        size="sm"
+        variant="secondary"
+        onClick={onDismiss}
+        loading={isBusy}
+        disabled={disabled}
+      >
         Dismiss
       </Button>
     </span>
