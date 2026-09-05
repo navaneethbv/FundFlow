@@ -82,24 +82,18 @@ async function fetchAllAuditUserIds(
   for (let page = 0; ; page++) {
     const from = page * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
-    const builder = service
+    const query = service
       .from("audit_logs")
       .select("user_id")
       .eq("action", action)
-      .gte("created_at", sinceIso);
-    const ordered =
-      typeof (builder as { order?: unknown })?.order === "function"
-        ? (builder as { order: (col: string, opts: { ascending: boolean }) => unknown }).order("id", { ascending: true })
-        : builder;
-    const query =
-      typeof (ordered as { range?: unknown })?.range === "function"
-        ? await (ordered as { range: (f: number, t: number) => PromiseLike<{ data?: unknown; error?: unknown }> }).range(from, to)
-        : await (ordered as PromiseLike<{ data?: unknown; error?: unknown }>);
-    const rows = (query?.data ?? []) as Array<{ user_id?: string | null }>;
+      .gte("created_at", sinceIso)
+      .order("id", { ascending: true });
+    const res = await query.range(from, to);
+    const rows = (res?.data ?? []) as Array<{ user_id?: string | null }>;
     for (const r of rows) {
       if (r?.user_id) userIds.add(r.user_id);
     }
-    if (typeof (ordered as { range?: unknown })?.range !== "function" || rows.length < PAGE_SIZE) break;
+    if (rows.length < PAGE_SIZE) break;
   }
   return userIds;
 }
@@ -112,19 +106,12 @@ async function fetchAllProfileIds(
   for (let page = 0; ; page++) {
     const from = page * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
-    const builder = service.from("profiles").select("id");
-    const ordered =
-      typeof (builder as { order?: unknown })?.order === "function"
-        ? (builder as { order: (col: string, opts: { ascending: boolean }) => unknown }).order("id", { ascending: true })
-        : builder;
-    const query =
-      typeof (ordered as { range?: unknown })?.range === "function"
-        ? await (ordered as { range: (f: number, t: number) => PromiseLike<{ data?: unknown; error?: unknown }> }).range(from, to)
-        : await (ordered as PromiseLike<{ data?: unknown; error?: unknown }>);
-    if (query?.error) throw query.error;
-    const rows = (query?.data ?? []) as Array<{ id: string }>;
+    const query = service.from("profiles").select("id").order("id", { ascending: true });
+    const res = await query.range(from, to);
+    if (res?.error) throw res.error;
+    const rows = (res?.data ?? []) as Array<{ id: string }>;
     profiles.push(...rows);
-    if (typeof (ordered as { range?: unknown })?.range !== "function" || rows.length < PAGE_SIZE) break;
+    if (rows.length < PAGE_SIZE) break;
   }
   return profiles;
 }

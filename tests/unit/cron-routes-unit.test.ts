@@ -242,5 +242,32 @@ describe("Cron API Route Handlers Unit Tests", () => {
         expect.objectContaining({ failed: 1, total: 1, firstError: "run_crashed" }),
       );
     });
+
+    it("handles paginated audit logs and profiles, skipping already-backed-up users", async () => {
+      const db = {
+        ...clientStub({
+          profiles: { data: [{ id: "user-already-done" }, { id: "user-new" }] },
+          audit_logs: { data: [{ user_id: "user-already-done" }, { user_id: null }] },
+          accounts: { data: [{ name: "Checking" }] },
+        }),
+        auth: {
+          admin: {
+            getUserById: async () => ({
+              data: { user: { email: "user@example.com" } },
+              error: null,
+            }),
+          },
+        },
+      };
+      mockCreateServiceClient.mockReturnValue(db);
+
+      const req = new NextRequest("http://localhost/api/cron/backup", {
+        headers: { authorization: "Bearer test-cron-secret" },
+      });
+      const res = await cronBackupGet(req);
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json).toMatchObject({ ok: true, sent: 1, skipped: 1 });
+    });
   });
 });

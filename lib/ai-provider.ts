@@ -233,6 +233,13 @@ export type ReceiptImageMediaType =
   | "image/gif"
   | "image/webp";
 
+const KNOWN_IMAGE_TYPES: Record<string, ReceiptImageMediaType> = {
+  "image/jpeg": "image/jpeg",
+  "image/png": "image/png",
+  "image/gif": "image/gif",
+  "image/webp": "image/webp",
+};
+
 /**
  * Extract receipt data from an image: centralized in ai-provider.
  */
@@ -243,11 +250,7 @@ export async function extractReceiptWithProvider(input: {
   const client = getAnthropicClient();
   const model = getAiModel();
   const resolvedMediaType: ReceiptImageMediaType =
-    input.mediaType === "image/png" ||
-    input.mediaType === "image/gif" ||
-    input.mediaType === "image/webp"
-      ? input.mediaType
-      : "image/jpeg";
+    KNOWN_IMAGE_TYPES[input.mediaType] ?? "image/jpeg";
 
   const requestOptions: Anthropic.MessageCreateParams = {
     model,

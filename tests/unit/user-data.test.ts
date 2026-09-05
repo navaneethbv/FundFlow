@@ -81,6 +81,17 @@ describe("lib/user-data", () => {
     );
   });
 
+  it("paginates tables with more than 1,000 rows across multiple pages", async () => {
+    investmentsEnabled = false;
+    const manyAccounts = Array.from({ length: 1005 }, (_, i) => ({ id: `acc-${i}`, name: `Account ${i}` }));
+    const supabase = clientStub({
+      accounts: { data: manyAccounts },
+    });
+
+    const sections = await collectUserData(supabase as never, "u1");
+    expect(sections.accounts).toHaveLength(1005);
+  });
+
   it("counts rows across every section", () => {
     expect(
       countUserDataRows({

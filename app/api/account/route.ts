@@ -39,23 +39,23 @@ async function removeUserPlaidItems(userId: string): Promise<{ removed: number; 
 
 async function listAllBucketFiles(
   bucket: {
-    list?: (
+    list: (
       path?: string,
       options?: { limit?: number; offset?: number },
-    ) => Promise<{ data: Array<{ name: string }> | null; error: unknown }>;
+    ) => Promise<{ data: Array<{ name: string }> | null; error?: unknown }>;
   },
   folder: string,
 ): Promise<Array<{ name: string }>> {
-  if (!bucket?.list) return [];
   const files: Array<{ name: string }> = [];
   const limit = 1000;
   let offset = 0;
-  for (let iteration = 0; iteration < 100; iteration++) {
-    const { data, error } = await bucket.list(folder, { limit, offset });
-    if (error || !Array.isArray(data) || data.length === 0) break;
-    files.push(...data);
-    if (data.length < limit) break;
-    offset += data.length;
+  while (true) {
+    const { data } = await bucket.list(folder, { limit, offset });
+    const batch = data ?? [];
+    if (batch.length === 0) break;
+    files.push(...batch);
+    if (batch.length < limit) break;
+    offset += batch.length;
   }
   return files;
 }
@@ -64,14 +64,11 @@ async function removeBucketPaths(
   bucket: { remove: (paths: string[]) => Promise<{ error: unknown }> },
   paths: string[],
 ): Promise<number> {
-  const CHUNK_SIZE = 1000;
   let removedCount = 0;
-  for (let i = 0; i < paths.length; i += CHUNK_SIZE) {
-    const chunk = paths.slice(i, i + CHUNK_SIZE);
+  for (let i = 0; i < paths.length; i += 1000) {
+    const chunk = paths.slice(i, i + 1000);
     const { error } = await bucket.remove(chunk);
-    if (!error) {
-      removedCount += chunk.length;
-    }
+    if (!error) removedCount += chunk.length;
   }
   return removedCount;
 }
@@ -122,7 +119,7 @@ async function cleanupReceiptStorage(
 ): Promise<number> {
   try {
     const receiptBucket = service.storage.from("receipts");
-    if (!receiptBucket?.remove) return 0;
+    if (!receiptBucket?.list || !receiptBucket?.remove) return 0;
     const { data: receiptRows } = await service
       .from("receipts")
       .select("storage_path")

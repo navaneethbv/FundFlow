@@ -99,14 +99,18 @@ export const USER_DATA_TABLES: UserDataTableSpec[] = [
   table("life_events", "event_type, target_date, target_amount, notes", "user"),
 ];
 
+interface ScopedQueryBuilder {
+  eq(column: string, value: string): ScopedQueryBuilder;
+  or(filters: string): ScopedQueryBuilder;
+  order(column: string, options: { ascending: boolean }): ScopedQueryBuilder;
+  range(from: number, to: number): PromiseLike<{ data?: unknown; error?: unknown }>;
+}
+
 function applySpecScope(
-  builder: {
-    eq: (column: string, value: string) => unknown;
-    or: (filters: string) => unknown;
-  },
+  builder: ScopedQueryBuilder,
   scope: UserDataTableSpec["scope"],
   userId: string,
-) {
+): ScopedQueryBuilder {
   if (scope === "user") {
     return builder.eq("user_id", userId);
   }
@@ -132,24 +136,14 @@ async function fetchPagedSpecRows(
   for (let page = 0; ; page++) {
     const from = page * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
-    const builder = client.from(spec.table).select(select);
+    const builder = client.from(spec.table).select(select) as unknown as ScopedQueryBuilder;
     const scoped = applySpecScope(builder, spec.scope, userId);
-    const ordered =
-      typeof (scoped as { order?: (col: string, opts: { ascending: boolean }) => unknown })?.order === "function" && spec.orderBy
-        ? (scoped as { order: (col: string, opts: { ascending: boolean }) => unknown }).order(spec.orderBy, { ascending: true })
-        : scoped;
-    const query = ordered as unknown as {
-      range?: (from: number, to: number) => PromiseLike<{ data?: unknown; error?: unknown }>;
-    } & PromiseLike<{ data?: unknown; error?: unknown }>;
-
-    const result =
-      typeof query?.range === "function"
-        ? await query.range(from, to)
-        : await query;
+    const ordered = scoped.order(spec.orderBy ?? "id", { ascending: true });
+    const result = await ordered.range(from, to);
     if (result?.error) return { data: [], error: result.error };
     const batch = (result?.data ?? []) as unknown[];
     rows.push(...batch);
-    if (typeof query?.range !== "function" || batch.length < PAGE_SIZE) break;
+    if (batch.length < PAGE_SIZE) break;
   }
   return { data: rows, error: null };
 }

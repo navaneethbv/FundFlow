@@ -136,12 +136,17 @@ describe("Export API Routes", () => {
     ) {
       return {
         from: vi.fn((table: string) => ({
-          select: vi.fn(() => ({
-            eq: vi.fn().mockResolvedValue(seed(table)),
-            or: vi.fn().mockResolvedValue(seed(table)),
-            then: (resolve: (v: unknown) => unknown) =>
-              Promise.resolve(seed(table)).then(resolve),
-          })),
+          select: vi.fn(() => {
+            const chain = {
+              eq: vi.fn(() => chain),
+              or: vi.fn(() => chain),
+              order: vi.fn(() => chain),
+              range: vi.fn(() => Promise.resolve(seed(table))),
+              then: (resolve: (v: unknown) => unknown) =>
+                Promise.resolve(seed(table)).then(resolve),
+            };
+            return chain;
+          }),
         })),
       };
     }
@@ -187,12 +192,14 @@ describe("Export API Routes", () => {
             const chain = {
               eq: vi.fn((column: string, value: string) => {
                 eqCalls.push([table, column, value]);
-                return Promise.resolve(result);
+                return chain;
               }),
               or: vi.fn((filter: string) => {
                 orCalls.push([table, "or", filter]);
-                return Promise.resolve(result);
+                return chain;
               }),
+              order: vi.fn(() => chain),
+              range: vi.fn(() => Promise.resolve(result)),
               then: (resolve: (value: { data: never[] }) => unknown) =>
                 Promise.resolve(result).then(resolve),
             };
@@ -231,13 +238,21 @@ describe("Export API Routes", () => {
     it("fails the takeout when budget history cannot be read", async () => {
       const mockSupabase = {
         from: vi.fn((table: string) => ({
-          select: vi.fn(() => ({
-            eq: vi.fn().mockResolvedValue(
+          select: vi.fn(() => {
+            const result =
               table === "budget_periods"
                 ? { data: null, error: { code: "42501" } }
-                : { data: [], error: null },
-            ),
-          })),
+                : { data: [], error: null };
+            const chain = {
+              eq: vi.fn(() => chain),
+              or: vi.fn(() => chain),
+              order: vi.fn(() => chain),
+              range: vi.fn(() => Promise.resolve(result)),
+              then: (resolve: (v: unknown) => unknown) =>
+                Promise.resolve(result).then(resolve),
+            };
+            return chain;
+          }),
         })),
       };
       mockRequireUser.mockResolvedValue({

@@ -64,6 +64,7 @@ vi.mock("web-push", () => ({
 
 import { POST as askPost } from "@/app/api/ai/ask/route";
 import { POST as receiptPost } from "@/app/api/ai/receipt/route";
+import { extractReceiptWithProvider } from "@/lib/ai-provider";
 import { isPushConfigured, sendPushToUser } from "@/lib/push";
 import { getRecentTransactions } from "@/lib/recent-transactions";
 import { NextResponse, NextRequest } from "next/server";
@@ -328,6 +329,43 @@ describe("POST /api/ai/receipt", () => {
     expect(payload.matchedTransactionId).toBe("txn-1");
     // Line items are capped at 15.
     expect(payload.lineItems).toHaveLength(15);
+  });
+
+  it("extracts a PNG receipt image properly", async () => {
+    scanningUser();
+    mockMessagesCreate.mockResolvedValue(
+      textResponse(
+        JSON.stringify({
+          merchant: "Bookstore",
+          amount: 15.0,
+          date: "2026-07-02",
+          line_items: ["Book"],
+        }),
+      ),
+    );
+
+    const res = await receiptPost(receiptRequest(image("image/png")));
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as { merchant: string };
+    expect(payload.merchant).toBe("Bookstore");
+  });
+
+  it("defaults to image/jpeg when mediaType is unrecognized", async () => {
+    mockMessagesCreate.mockResolvedValue(
+      textResponse(
+        JSON.stringify({
+          merchant: "Store",
+          amount: 10.0,
+          date: "2026-07-02",
+          line_items: [],
+        }),
+      ),
+    );
+    const result = await extractReceiptWithProvider({
+      fileBase64: "dGVzdA==",
+      mediaType: "image/unknown",
+    });
+    expect(result.extracted?.merchant).toBe("Store");
   });
 
   it("returns no match when the extracted date is unusable", async () => {
