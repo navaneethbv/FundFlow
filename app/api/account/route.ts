@@ -37,58 +37,66 @@ async function removeUserPlaidItems(userId: string): Promise<{ removed: number; 
   return { removed, failed };
 }
 
+async function cleanupAvatarStorage(
+  service: ReturnType<typeof createServiceClient>,
+  userId: string,
+): Promise<number> {
+  try {
+    const avatarBucket = service.storage.from("avatars");
+    if (!avatarBucket?.list || !avatarBucket?.remove) return 0;
+    const { data: avatarFiles } = await avatarBucket.list(userId);
+    if (!avatarFiles || avatarFiles.length === 0) return 0;
+    const paths = avatarFiles.map((f: { name: string }) => `${userId}/${f.name}`);
+    const { error: removeErr } = await avatarBucket.remove(paths);
+    return !removeErr ? paths.length : 0;
+  } catch (err) {
+    logError("account.delete.avatarCleanup", err);
+    return 0;
+  }
+}
+
+async function cleanupReceiptStorage(
+  service: ReturnType<typeof createServiceClient>,
+  userId: string,
+): Promise<number> {
+  try {
+    const receiptBucket = service.storage.from("receipts");
+    if (!receiptBucket?.remove) return 0;
+    const { data: receiptRows } = await service
+      .from("receipts")
+      .select("storage_path")
+      .eq("user_id", userId);
+    const paths = new Set<string>();
+    if (Array.isArray(receiptRows)) {
+      for (const row of receiptRows) {
+        if (row.storage_path) paths.add(row.storage_path as string);
+      }
+    }
+    if (receiptBucket?.list) {
+      const { data: receiptFiles } = await receiptBucket.list(userId);
+      if (Array.isArray(receiptFiles)) {
+        for (const f of receiptFiles) {
+          paths.add(`${userId}/${f.name}`);
+        }
+      }
+    }
+    if (paths.size === 0) return 0;
+    const { error: removeErr } = await receiptBucket.remove(Array.from(paths));
+    return !removeErr ? paths.size : 0;
+  } catch (err) {
+    logError("account.delete.receiptCleanup", err);
+    return 0;
+  }
+}
+
 async function cleanupUserStorageObjects(
   service: ReturnType<typeof createServiceClient>,
   userId: string,
 ): Promise<number> {
-  let storageRemoved = 0;
   if (!service.storage?.from) return 0;
-
-  try {
-    const avatarBucket = service.storage.from("avatars");
-    if (avatarBucket?.list && avatarBucket?.remove) {
-      const { data: avatarFiles } = await avatarBucket.list(userId);
-      if (avatarFiles && avatarFiles.length > 0) {
-        const paths = avatarFiles.map((f: { name: string }) => `${userId}/${f.name}`);
-        const { error: removeErr } = await avatarBucket.remove(paths);
-        if (!removeErr) storageRemoved += paths.length;
-      }
-    }
-  } catch (err) {
-    logError("account.delete.avatarCleanup", err);
-  }
-
-  try {
-    const receiptBucket = service.storage.from("receipts");
-    if (receiptBucket?.remove) {
-      const { data: receiptRows } = await service
-        .from("receipts")
-        .select("storage_path")
-        .eq("user_id", userId);
-      const paths = new Set<string>();
-      if (Array.isArray(receiptRows)) {
-        for (const row of receiptRows) {
-          if (row.storage_path) paths.add(row.storage_path as string);
-        }
-      }
-      if (receiptBucket?.list) {
-        const { data: receiptFiles } = await receiptBucket.list(userId);
-        if (Array.isArray(receiptFiles)) {
-          for (const f of receiptFiles) {
-            paths.add(`${userId}/${f.name}`);
-          }
-        }
-      }
-      if (paths.size > 0) {
-        const { error: removeErr } = await receiptBucket.remove(Array.from(paths));
-        if (!removeErr) storageRemoved += paths.size;
-      }
-    }
-  } catch (err) {
-    logError("account.delete.receiptCleanup", err);
-  }
-
-  return storageRemoved;
+  const avatars = await cleanupAvatarStorage(service, userId);
+  const receipts = await cleanupReceiptStorage(service, userId);
+  return avatars + receipts;
 }
 
 export async function DELETE(request: NextRequest) {

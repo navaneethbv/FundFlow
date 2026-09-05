@@ -32,6 +32,9 @@ begin
 end;
 $$;
 
+revoke execute on function public.enforce_session_revocation_immutable() from public, anon;
+grant execute on function public.enforce_session_revocation_immutable() to authenticated, service_role;
+
 drop trigger if exists tr_enforce_session_revocation_immutable on public.user_session_records;
 create trigger tr_enforce_session_revocation_immutable
   before update or delete on public.user_session_records

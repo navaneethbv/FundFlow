@@ -779,6 +779,27 @@ describe("lib/plaid-service", () => {
     });
   });
 
+  it("rotateItemAccessToken handles claim error and release error safely", async () => {
+    mockServiceClient.rpc.mockResolvedValueOnce({ data: null, error: new Error("Claim RPC failed") });
+    const ok1 = await rotateItemAccessToken(dummyItem);
+    expect(ok1).toBe(false);
+    expect(mockLogError).toHaveBeenCalledWith("plaid-service.token-rotation-claim", expect.any(Error));
+
+    mockServiceClient.rpc
+      .mockResolvedValueOnce({ data: true, error: null })
+      .mockRejectedValueOnce(new Error("Release RPC threw"));
+    mockItemAccessTokenInvalidate.mockResolvedValueOnce({
+      data: { new_access_token: "rotated-token" },
+    });
+    const eq = vi.fn().mockResolvedValue({ error: null });
+    const update = vi.fn().mockReturnValue({ eq });
+    mockServiceClient.from.mockReturnValue({ update });
+
+    const ok2 = await rotateItemAccessToken(dummyItem);
+    expect(ok2).toBe(true);
+    expect(mockLogError).toHaveBeenCalledWith("plaid-service.token-rotation-release", expect.any(Error));
+  });
+
   it("rotateStaleItemTokens throws when the item lookup fails", async () => {
     const eqStatus = vi.fn().mockResolvedValue({ data: null, error: new Error("DB Error") });
     const eqUser = vi.fn().mockReturnValue({ eq: eqStatus });

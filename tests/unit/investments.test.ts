@@ -368,4 +368,37 @@ describe("buildInvestmentsPage", () => {
     expect(page.topMovers).toBeNull();
     expect(page.balanceHistory).toHaveLength(2);
   });
+
+  it("covers parseHoldingIdentity non-string securityName branch", () => {
+    expect(
+      normalizeManualHolding(
+        { accountSource: "plaid", accountId: "acc-1", securityName: 123 },
+        "2026-08-01",
+      ).ok,
+    ).toBe(false);
+  });
+
+  it("handles holdings for unlisted accounts without metadata in buildInvestmentAccountCoverage", () => {
+    const coverage = buildInvestmentAccountCoverage(
+      [],
+      [
+        {
+          id: "h-unlisted",
+          accountId: "unlisted-acct",
+          manualAccountId: null,
+          accountName: null as never,
+          securityName: "Stock",
+          ticker: "STK",
+          securityType: "equity",
+          quantity: 1,
+          price: 100,
+          value: 100,
+          source: null as never,
+          isActive: true,
+        },
+      ],
+    );
+    expect(coverage.accounts[0]?.name).toBe("Investment Account");
+    expect(coverage.accounts[0]?.source).toBe("plaid");
+  });
 });

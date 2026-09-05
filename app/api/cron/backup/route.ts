@@ -66,6 +66,55 @@ async function backupSingleUser(
   return true;
 }
 
+interface BackupBatchResult {
+  sent: number;
+  skipped: number;
+  failures: { userId: string; error: string }[];
+}
+
+async function processUserBackups(
+  service: ReturnType<typeof createServiceClient>,
+  profiles: Array<{ id: string }>,
+  today: string,
+  backupKey: string,
+): Promise<BackupBatchResult> {
+  const monthPrefix = today.slice(0, 7);
+  let sent = 0;
+  let skipped = 0;
+  const failures: { userId: string; error: string }[] = [];
+
+  const { data: recentAudits } = await service
+    .from("audit_logs")
+    .select("user_id")
+    .eq("action", "data_backup")
+    .gte("created_at", `${monthPrefix}-01T00:00:00Z`);
+
+  const alreadySentUsers = new Set(
+    (recentAudits ?? []).map((r) => r.user_id).filter(Boolean) as string[],
+  );
+
+  for (const profile of profiles) {
+    const userId = profile.id;
+    if (alreadySentUsers.has(userId)) {
+      skipped += 1;
+      continue;
+    }
+
+    try {
+      const wasSent = await backupSingleUser(service, userId, today, backupKey);
+      if (wasSent) sent += 1;
+    } catch (err) {
+      logError("cron.backup.user", err);
+      failures.push({
+        userId,
+        error: err instanceof Error ? err.name : "unknown_error",
+      });
+    }
+  }
+
+  return { sent, skipped, failures };
+}
+
 export async function GET(request: NextRequest) {
   const unauthorized = requireCronAuth(request);
   if (unauthorized) return unauthorized;
@@ -89,52 +138,24 @@ export async function GET(request: NextRequest) {
     if (error) throw error;
 
     const today = new Date().toISOString().slice(0, 10);
-    const monthPrefix = today.slice(0, 7);
-    let sent = 0;
-    let skipped = 0;
-    const failures: { userId: string; error: string }[] = [];
-
-    // Check delivery journal/audit log so retries don't re-send to users who already succeeded
-    const { data: recentAudits } = await service
-      .from("audit_logs")
-      .select("user_id")
-      .eq("action", "data_backup")
-      .gte("created_at", `${monthPrefix}-01T00:00:00Z`);
-
-    const alreadySentUsers = new Set(
-      (recentAudits ?? []).map((r) => r.user_id).filter(Boolean) as string[],
+    const totalUsers = (profiles ?? []).length;
+    const { sent, skipped, failures } = await processUserBackups(
+      service,
+      (profiles ?? []) as Array<{ id: string }>,
+      today,
+      backupKey,
     );
-
-
-    for (const profile of profiles ?? []) {
-      const userId = profile.id as string;
-      if (alreadySentUsers.has(userId)) {
-        skipped += 1;
-        continue;
-      }
-
-      try {
-        const wasSent = await backupSingleUser(service, userId, today, backupKey);
-        if (wasSent) sent += 1;
-      } catch (err) {
-        logError("cron.backup.user", err);
-        failures.push({
-          userId,
-          error: err instanceof Error ? err.name : "unknown_error",
-        });
-      }
-    }
 
     if (failures.length > 0) {
       await alertCronFailure("backup", {
         failed: failures.length,
-        total: (profiles ?? []).length,
+        total: totalUsers,
         firstError: failures[0].error,
       });
       return NextResponse.json(
         {
           ok: false,
-          users: (profiles ?? []).length,
+          users: totalUsers,
           sent,
           skipped,
           failed: failures.length,
@@ -146,7 +167,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      users: (profiles ?? []).length,
+      users: totalUsers,
       sent,
       skipped,
     });
