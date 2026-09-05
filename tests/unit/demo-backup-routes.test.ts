@@ -62,6 +62,7 @@ vi.mock("@/lib/supabase/service", () => ({
 
 import { POST as demoPost, DELETE as demoDelete } from "@/app/api/demo/route";
 import { GET as backupGet } from "@/app/api/cron/backup/route";
+import { countUserDataRows, countUserRecordRows } from "@/lib/user-data";
 import { NextResponse, NextRequest } from "next/server";
 
 const USER = "user-1";
@@ -443,5 +444,17 @@ describe("GET /api/cron/backup", () => {
     expect(body.sent).toBe(0);
     expect(body.skipped).toBe(1);
     expect(mockSendBackupEmail).not.toHaveBeenCalled();
+  });
+
+  it("accurately counts user data rows and separates financial records from preferences", () => {
+    const sections = {
+      transactions: [{ id: "t1" }, { id: "t2" }],
+      accounts: [{ id: "a1" }],
+      alert_preferences: [{ id: "p1" }],
+      ai_settings: [{ enabled: true }],
+    };
+    expect(countUserDataRows(sections)).toBe(5);
+    expect(countUserRecordRows(sections)).toBe(3);
+    expect(countUserRecordRows({})).toBe(0);
   });
 });

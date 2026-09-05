@@ -245,6 +245,36 @@ describe("Sinking Funds Mutation Validator Branches", () => {
     expect(parseSinkingFundMutation({ name: "Fund", targetAmount: 500, dueDate: "2026-12-31", cadence: "custom", customIntervalMonths: 0 })).toEqual({
       error: "customIntervalMonths must be an integer from 1 to 120",
     });
+    expect(parseSinkingFundMutation({ name: "a".repeat(121) })).toEqual({
+      error: "name must be between 1 and 120 characters",
+    });
+    expect(parseSinkingFundMutation({ name: "Fund", targetAmount: "invalid" as unknown as number })).toEqual({
+      error: "targetAmount must be a positive finite number",
+    });
+    expect(parseSinkingFundMutation({ name: "Fund", targetAmount: Infinity })).toEqual({
+      error: "targetAmount must be a positive finite number",
+    });
+    expect(parseSinkingFundMutation({ name: "Fund", targetAmount: NaN })).toEqual({
+      error: "targetAmount must be a positive finite number",
+    });
+    expect(parseSinkingFundMutation({ name: "Fund", targetAmount: 500, dueDate: 12345 as unknown as string })).toEqual({
+      error: "dueDate must be a valid YYYY-MM-DD date",
+    });
+    expect(parseSinkingFundMutation({ name: "Fund", targetAmount: 500, dueDate: "2026-02" })).toEqual({
+      error: "dueDate must be a valid YYYY-MM-DD date",
+    });
+    expect(parseSinkingFundMutation({ name: "Fund", targetAmount: 500, dueDate: "2026-12-31", cadence: 99 as unknown as string })).toEqual({
+      error: "cadence is not supported",
+    });
+    expect(parseSinkingFundMutation({ name: "Fund", targetAmount: 500, dueDate: "2026-12-31", cadence: "custom", customIntervalMonths: "5" as unknown as number })).toEqual({
+      error: "customIntervalMonths must be an integer from 1 to 120",
+    });
+    expect(parseSinkingFundMutation({ name: "Fund", targetAmount: 500, dueDate: "2026-12-31", cadence: "custom", customIntervalMonths: 2.5 })).toEqual({
+      error: "customIntervalMonths must be an integer from 1 to 120",
+    });
+    expect(parseSinkingFundMutation({ name: "Fund", targetAmount: 500, dueDate: "2026-12-31", cadence: "custom", customIntervalMonths: 121 })).toEqual({
+      error: "customIntervalMonths must be an integer from 1 to 120",
+    });
     expect(parseSinkingFundMutation({ name: "Fund", targetAmount: 500, dueDate: "2026-12-31", cadence: "annual", customIntervalMonths: 3 })).toEqual({
       error: "customIntervalMonths is only valid for custom cadence",
     });

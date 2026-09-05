@@ -160,7 +160,7 @@ export async function collectUserData(
 
   const sections: Record<string, unknown[]> = {};
   USER_DATA_TABLES.forEach((spec, index) => {
-    sections[spec.key] = (results[index].data ?? []) as unknown[];
+    sections[spec.key] = results[index].data;
   });
   return sections;
 }

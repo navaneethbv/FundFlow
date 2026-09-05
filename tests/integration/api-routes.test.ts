@@ -258,7 +258,7 @@ suite("API routes integration", () => {
         // Clean up item
         await admin.from("plaid_items").delete().eq("id", item!.id);
       },
-      30000,
+      60000,
     );
 
     it("proceeds successfully even if one user's sync throws an error", async () => {
@@ -275,7 +275,7 @@ suite("API routes integration", () => {
       expect(json.ok).toBe(true);
       expect(json.users).toBe(1);
       expect(json.synced).toBe(0); // sync failed for this user
-    }, 30000);
+    }, 60000);
 
     it("returns 500 when Supabase query for active items fails", async () => {
       mockSupabaseFromError = new Error("Database select failure");

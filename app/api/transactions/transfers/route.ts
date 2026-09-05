@@ -139,6 +139,69 @@ export async function GET() {
   }
 }
 
+type TransferRow = {
+  id: string;
+  amount?: number | string | null;
+  date?: string;
+  account_id?: string | null;
+  manual_account_id?: string | null;
+};
+
+function validateTransferPairProperties(outRow: TransferRow, inRow: TransferRow): string | null {
+  const outAcc = outRow.account_id ?? outRow.manual_account_id;
+  const inAcc = inRow.account_id ?? inRow.manual_account_id;
+  if (outAcc && inAcc && outAcc === inAcc) {
+    return "transfers must be between two different accounts";
+  }
+
+  if (outRow.date && inRow.date) {
+    const dayDiff = Math.abs(new Date(inRow.date).getTime() - new Date(outRow.date).getTime()) / 86_400_000;
+    if (dayDiff > WINDOW_DAYS) {
+      return `transactions must be within ${WINDOW_DAYS} days of each other`;
+    }
+  }
+
+  const outAmount = Number(outRow.amount);
+  const inAmount = Number(inRow.amount);
+  if (
+    !Number.isFinite(outAmount) ||
+    !Number.isFinite(inAmount) ||
+    outAmount <= 0 ||
+    inAmount >= 0 ||
+    Math.round(Math.abs(outAmount) * 100) !== Math.round(Math.abs(inAmount) * 100)
+  ) {
+    return "transactions do not form a valid transfer pair";
+  }
+
+  return null;
+}
+
+async function checkTransferAlreadyLinked(
+  linkedTable: ReturnType<SupabaseClient["from"]>,
+  userId: string,
+  outId: string,
+  inId: string,
+): Promise<string | null> {
+  if (typeof linkedTable?.select !== "function") return null;
+  try {
+    const { data: existingLinks } = await linkedTable
+      .select("out_transaction_id, in_transaction_id")
+      .eq("user_id", userId)
+      .or(`out_transaction_id.in.(${outId},${inId}),in_transaction_id.in.(${outId},${inId})`);
+    if (Array.isArray(existingLinks) && existingLinks.length > 0) {
+      const isSelfMatch = existingLinks.every(
+        (l) => l.out_transaction_id === outId && l.in_transaction_id === inId,
+      );
+      if (!isSelfMatch) {
+        return "one or both transactions are already linked to another transfer";
+      }
+    }
+  } catch {
+    // Proceed if .or() syntax is unsupported in partial test stub
+  }
+  return null;
+}
+
 async function linkConfirmedTransfer(
   supabase: SupabaseClient,
   userId: string,
@@ -156,7 +219,7 @@ async function linkConfirmedTransfer(
   if (subjectId !== transferSubjectId(outId, inId)) {
     return badRequest("subject_id does not match the pair");
   }
-  // Both sides of a link must be rows in the caller's own ledger.
+
   const { data: owned, error: verifyError } = await supabase
     .from("transactions")
     .select("id, amount, date, account_id, manual_account_id")
@@ -166,60 +229,21 @@ async function linkConfirmedTransfer(
   if ((owned ?? []).length !== 2) {
     return badRequest("both sides of a transfer must be your own transactions");
   }
-  const outRow = (owned as Array<{ id: string; amount?: number | string | null; date?: string; account_id?: string | null; manual_account_id?: string | null }>).find((r) => r.id === outId);
-  const inRow = (owned as Array<{ id: string; amount?: number | string | null; date?: string; account_id?: string | null; manual_account_id?: string | null }>).find((r) => r.id === inId);
+
+  const outRow = (owned as TransferRow[]).find((r) => r.id === outId);
+  const inRow = (owned as TransferRow[]).find((r) => r.id === inId);
   if (!outRow || !inRow) {
     return badRequest("both sides of a transfer must be your own transactions");
   }
 
-  // Enforce distinct accounts invariant
-  const outAcc = outRow.account_id ?? outRow.manual_account_id;
-  const inAcc = inRow.account_id ?? inRow.manual_account_id;
-  if (outAcc && inAcc && outAcc === inAcc) {
-    return badRequest("transfers must be between two different accounts");
-  }
-
-  // Enforce symmetric date window invariant
-  if (outRow.date && inRow.date) {
-    const dayDiff = Math.abs(new Date(inRow.date).getTime() - new Date(outRow.date).getTime()) / 86_400_000;
-    if (dayDiff > WINDOW_DAYS) {
-      return badRequest(`transactions must be within ${WINDOW_DAYS} days of each other`);
-    }
-  }
-
-  const outAmount = Number(outRow.amount);
-  const inAmount = Number(inRow.amount);
-  if (
-    !Number.isFinite(outAmount) ||
-    !Number.isFinite(inAmount) ||
-    outAmount <= 0 ||
-    inAmount >= 0 ||
-    Math.round(Math.abs(outAmount) * 100) !== Math.round(Math.abs(inAmount) * 100)
-  ) {
-    return badRequest("transactions do not form a valid transfer pair");
-  }
+  const validationError = validateTransferPairProperties(outRow, inRow);
+  if (validationError) return badRequest(validationError);
 
   const linkedTable = supabase.from("linked_transfers");
-  // Check one-use invariant if select is available on client stub
-  if (typeof linkedTable?.select === "function") {
-    try {
-      const { data: existingLinks } = await linkedTable
-        .select("out_transaction_id, in_transaction_id")
-        .eq("user_id", userId)
-        .or(`out_transaction_id.in.(${outId},${inId}),in_transaction_id.in.(${outId},${inId})`);
-      if (Array.isArray(existingLinks) && existingLinks.length > 0) {
-        const isSelfMatch = existingLinks.every(
-          (l) => l.out_transaction_id === outId && l.in_transaction_id === inId,
-        );
-        if (!isSelfMatch) {
-          return badRequest("one or both transactions are already linked to another transfer");
-        }
-      }
-    } catch {
-      // Proceed if .or() syntax is unsupported in partial test stub
-    }
-  }
+  const linkConflict = await checkTransferAlreadyLinked(linkedTable, userId, outId, inId);
+  if (linkConflict) return badRequest(linkConflict);
 
+  const outAmount = Number(outRow.amount);
   const { error: linkError } = await linkedTable.upsert(
     {
       user_id: userId,

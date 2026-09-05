@@ -220,4 +220,18 @@ describe("executeRestore — chunking and failure branches", () => {
     expect(result.tables[0]).toEqual({ name: "budgets", rowsWritten: 0 });
     expect(calls.some((call) => call.table === "budgets" && call.op === "delete")).toBe(true);
   });
+
+  it("handles non-object rows and missing archive sections safely", async () => {
+    const { service } = serviceStub();
+    const plan1 = buildRestorePlan({ budgets: [{ id: "b1" }] });
+    const res1 = await executeRestore(service as never, "user-123", plan1, {});
+    expect(res1.tables).toHaveLength(1);
+
+    const archive2 = {
+      budgets: [null as unknown as Record<string, unknown>, "primitive" as unknown as Record<string, unknown>],
+    };
+    const plan2 = buildRestorePlan(archive2);
+    const res2 = await executeRestore(service as never, "user-123", plan2, archive2);
+    expect(res2.tables).toHaveLength(1);
+  });
 });

@@ -167,6 +167,13 @@ describe("Sidebar collapse cookie persistence", () => {
     vi.unstubAllGlobals();
   });
 
+  it("handles undefined document gracefully without errors", () => {
+    vi.stubGlobal("document", undefined);
+    expect(() => writeSidebarCollapsedCookie(true)).not.toThrow();
+    expect(() => clearSidebarCollapsedCookie()).not.toThrow();
+    vi.unstubAllGlobals();
+  });
+
   it("SidebarShell persists the collapse choice through the shared helper", () => {
     const source = readFileSync("components/shell/SidebarShell.tsx", "utf8");
     expect(source).toContain("writeSidebarCollapsedCookie");

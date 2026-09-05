@@ -60,4 +60,20 @@ describe("checkRateLimit", () => {
     expect(result).toBe(true);
     expect(logErrorSpy).toHaveBeenCalled();
   });
+
+  it("fails closed (returns false) when failClosed is true on DB error", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: "Database offline" } });
+
+    const result = await checkRateLimit("key5", 5, 60, { failClosed: true });
+    expect(result).toBe(false);
+    expect(logErrorSpy).toHaveBeenCalled();
+  });
+
+  it("fails closed (returns false) when failClosed is true on throw", async () => {
+    mockRpc.mockRejectedValue(new Error("Network failure"));
+
+    const result = await checkRateLimit("key6", 5, 60, { failClosed: true });
+    expect(result).toBe(false);
+    expect(logErrorSpy).toHaveBeenCalled();
+  });
 });

@@ -49,4 +49,13 @@ describe("detectDuplicatePairs", () => {
     expect(result).toHaveLength(1);
     expect(result[0]!.subjectId).toBe("a:c");
   });
+
+  it("handles malformed date strings safely in parseDate", () => {
+    const malformed = [
+      { id: "m1", date: "", merchant: "Cafe", amount: 10, accountId: "acc-1", plaidItemId: "item-1", accountName: "Card 1" },
+      { id: "m2", date: "2026", merchant: "Cafe", amount: 10, accountId: "acc-2", plaidItemId: "item-2", accountName: "Card 2" },
+      { id: "m3", date: "2026-08", merchant: "Cafe", amount: 10, accountId: "acc-3", plaidItemId: "item-3", accountName: "Card 3" },
+    ];
+    expect(detectDuplicatePairs(malformed, [])).toBeDefined();
+  });
 });

@@ -24,6 +24,48 @@ export const maxDuration = 60;
  * user_id explicitly — RLS is not a backstop under the service client, so a
  * missing filter would cross-feed one user's data into another's backup.
  */
+async function backupSingleUser(
+  service: ReturnType<typeof createServiceClient>,
+  userId: string,
+  today: string,
+  backupKey: string,
+): Promise<boolean> {
+  const sections = await collectUserData(service, userId, { includeRestoreKeys: true });
+  if (countUserRecordRows(sections) === 0) {
+    return false;
+  }
+
+  const archive = buildBackupArchive(
+    {
+      backup_version: 1,
+      exported_at: today,
+      ...sections,
+    },
+    backupKey,
+    userId,
+  );
+
+  const { data: userData } = await service.auth.admin.getUserById(userId);
+  const email = userData?.user?.email;
+  if (!email) return false;
+
+  await sendBackupEmail(
+    email,
+    `fundflow-backup-${today}.json.enc`,
+    archive,
+    today,
+  );
+  await writeAudit({
+    userId,
+    action: "data_backup",
+    metadata: {
+      rows: countUserDataRows(sections),
+      date: today,
+    },
+  });
+  return true;
+}
+
 export async function GET(request: NextRequest) {
   const unauthorized = requireCronAuth(request);
   if (unauthorized) return unauthorized;
@@ -63,6 +105,7 @@ export async function GET(request: NextRequest) {
       (recentAudits ?? []).map((r) => r.user_id).filter(Boolean) as string[],
     );
 
+
     for (const profile of profiles ?? []) {
       const userId = profile.id as string;
       if (alreadySentUsers.has(userId)) {
@@ -71,54 +114,8 @@ export async function GET(request: NextRequest) {
       }
 
       try {
-        // ADDING A USER-OWNED TABLE? Add it once in lib/user-data.ts — the
-        // takeout route and this backup both read from that list, so neither
-        // can silently drop the user's own budgets, goals, rules, manual
-        // records, or annotations. The shared_expenses or() filter keeps one
-        // member's backup from carrying the whole household's expenses.
-        //
-        // Keep includeRestoreKeys: true for encrypted backup archives. Even though
-        // the in-app restore surface is gated off, these archives are user-bound and
-        // encrypted with backupEncKey. Retaining natural keys (id, manual_account_id,
-        // source, plaid_transaction_id, etc.) ensures archives generated now will be
-        // usable once the redesigned user-authored config restore lands, without
-        // compromising the privacy contract of unencrypted takeouts (which omit restoreKeys).
-        const sections = await collectUserData(service, userId, { includeRestoreKeys: true });
-        // Preference rows alone don't earn a monthly archive email: an account
-        // that only ever toggled a notification setting has nothing to restore.
-        if (countUserRecordRows(sections) === 0) {
-          continue;
-        }
-
-        const archive = buildBackupArchive(
-          {
-            backup_version: 1,
-            exported_at: today,
-            ...sections,
-          },
-          backupKey,
-          userId,
-        );
-
-        const { data: userData } = await service.auth.admin.getUserById(userId);
-        const email = userData?.user?.email;
-        if (!email) continue;
-
-        await sendBackupEmail(
-          email,
-          `fundflow-backup-${today}.json.enc`,
-          archive,
-          today,
-        );
-        await writeAudit({
-          userId,
-          action: "data_backup",
-          metadata: {
-            rows: countUserDataRows(sections),
-            date: today,
-          },
-        });
-        sent += 1;
+        const wasSent = await backupSingleUser(service, userId, today, backupKey);
+        if (wasSent) sent += 1;
       } catch (err) {
         logError("cron.backup.user", err);
         failures.push({

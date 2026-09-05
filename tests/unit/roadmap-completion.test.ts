@@ -14,6 +14,7 @@ import {
   buildAuditLogPage,
   buildDataTakeout,
   buildSessionList,
+  formatDeviceLabel,
   redactTakeoutSecrets,
 } from "@/lib/security-account";
 import { createDashboardCache } from "@/lib/dashboard-cache";
@@ -145,6 +146,18 @@ describe("roadmap completion helpers", () => {
       { id: "s2", label: "Chrome", current: false },
       { id: "s1", label: "Mobile Safari", current: true },
     ]);
+
+    expect(formatDeviceLabel(null)).toBe("Unknown device");
+    expect(formatDeviceLabel("   ")).toBe("Unknown device");
+    expect(formatDeviceLabel("CustomApp/1.0")).toBe("CustomApp/1.0");
+    expect(formatDeviceLabel("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1")).toBe("Safari on iPhone");
+    expect(formatDeviceLabel("Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1")).toBe("Safari on iPad");
+    expect(formatDeviceLabel("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0 Edg/120.0")).toBe("Edge on Windows");
+    expect(formatDeviceLabel("Mozilla/5.0 (Linux; Android 14) Chrome/120.0 Mobile Safari/537.36")).toBe("Chrome on Android");
+    expect(formatDeviceLabel("Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Firefox/120.0")).toBe("Firefox on Linux");
+    expect(formatDeviceLabel("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)")).toBe("Mac");
+    expect(formatDeviceLabel("Mozilla/5.0 Firefox/120.0")).toBe("Firefox");
+    expect(formatDeviceLabel("Mozilla/5.0 CustomToken/1.0; UnknownBrowser")).toBe("Mozilla/5.0 CustomToken/1.0; UnknownBrow");
 
     const cache = createDashboardCache<string>(60_000);
     await cache.set("u1", "dashboard", "one");

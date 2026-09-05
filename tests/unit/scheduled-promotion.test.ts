@@ -37,7 +37,7 @@ function serviceStub({
         return {
           upsert: (rows: unknown[]) => {
             calls.upserts.push(rows);
-            const data = upsertError ? null : (insertedRows ?? rows.map(() => ({ id: "1" })));
+            const data = upsertError ? null : (insertedRows !== undefined ? insertedRows : rows.map(() => ({ id: "1" })));
             return {
               select: () => Promise.resolve({ data, error: upsertError }),
               then: (resolve: (value: unknown) => unknown) => resolve({ data, error: upsertError }),
@@ -145,6 +145,12 @@ describe("promoteDueScheduledTransactions — remaining branches", () => {
     };
     const result = await promoteDueScheduledTransactions(service as never, "2026-09-02");
     expect(result).toEqual({ promoted: 0, failed: "db unavailable" });
+  });
+
+  it("handles null inserted result safely", async () => {
+    const { service } = serviceStub({ insertedRows: null as unknown as unknown[] });
+    const result = await promoteDueScheduledTransactions(service as never, "2026-09-02");
+    expect(result.promoted).toBe(0);
   });
 });
 

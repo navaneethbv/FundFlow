@@ -20,6 +20,77 @@ import { MAX_STEP_UP_ATTEMPTS_PER_HOUR, verifyStepUp } from "@/lib/step-up";
  * app/api/cron/backup/route.ts. Account balance snapshots cascade through
  * user_id and through both account_id and manual_account_id source records.
  */
+async function removeUserPlaidItems(userId: string): Promise<{ removed: number; failed: number }> {
+  const items = await listActiveItems(userId);
+  const plaid = getPlaidClient();
+  let removed = 0;
+  let failed = 0;
+  for (const item of items) {
+    try {
+      await plaid.itemRemove({ access_token: decryptItemToken(item) });
+      removed += 1;
+    } catch (error) {
+      failed += 1;
+      logError("account.delete.itemRemove", error);
+    }
+  }
+  return { removed, failed };
+}
+
+async function cleanupUserStorageObjects(
+  service: ReturnType<typeof createServiceClient>,
+  userId: string,
+): Promise<number> {
+  let storageRemoved = 0;
+  if (!service.storage?.from) return 0;
+
+  try {
+    const avatarBucket = service.storage.from("avatars");
+    if (avatarBucket?.list && avatarBucket?.remove) {
+      const { data: avatarFiles } = await avatarBucket.list(userId);
+      if (avatarFiles && avatarFiles.length > 0) {
+        const paths = avatarFiles.map((f: { name: string }) => `${userId}/${f.name}`);
+        const { error: removeErr } = await avatarBucket.remove(paths);
+        if (!removeErr) storageRemoved += paths.length;
+      }
+    }
+  } catch (err) {
+    logError("account.delete.avatarCleanup", err);
+  }
+
+  try {
+    const receiptBucket = service.storage.from("receipts");
+    if (receiptBucket?.remove) {
+      const { data: receiptRows } = await service
+        .from("receipts")
+        .select("storage_path")
+        .eq("user_id", userId);
+      const paths = new Set<string>();
+      if (Array.isArray(receiptRows)) {
+        for (const row of receiptRows) {
+          if (row.storage_path) paths.add(row.storage_path as string);
+        }
+      }
+      if (receiptBucket?.list) {
+        const { data: receiptFiles } = await receiptBucket.list(userId);
+        if (Array.isArray(receiptFiles)) {
+          for (const f of receiptFiles) {
+            paths.add(`${userId}/${f.name}`);
+          }
+        }
+      }
+      if (paths.size > 0) {
+        const { error: removeErr } = await receiptBucket.remove(Array.from(paths));
+        if (!removeErr) storageRemoved += paths.size;
+      }
+    }
+  } catch (err) {
+    logError("account.delete.receiptCleanup", err);
+  }
+
+  return storageRemoved;
+}
+
 export async function DELETE(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -38,12 +109,6 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
-    // Re-authentication step-up: a stolen session alone must never be able to
-    // permanently destroy the account. MFA users confirm with a fresh TOTP
-    // code; everyone else re-enters their password. The required method is
-    // decided here from the user's enrolled factors, never from the request
-    // body; otherwise an attacker holding a stolen session could downgrade an
-    // MFA-protected account to a password-only confirmation.
     const body = await request.json().catch(() => null);
     const code = body?.code as unknown;
     if (typeof code !== "string" || code.length === 0) {
@@ -63,73 +128,10 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Remove each bank connection at Plaid first (best effort).
-    const items = await listActiveItems(user.id);
-    const plaid = getPlaidClient();
-    let itemsRemoved = 0;
-    let itemsFailed = 0;
-    for (const item of items) {
-      try {
-        await plaid.itemRemove({ access_token: decryptItemToken(item) });
-        itemsRemoved += 1;
-      } catch (error) {
-        itemsFailed += 1;
-        logError("account.delete.itemRemove", error);
-      }
-    }
-
-    // Clean user-owned Storage objects before deleting the Auth identity.
-    // Supabase prevents deleting Auth users that own Storage objects.
+    const { removed: itemsRemoved, failed: itemsFailed } = await removeUserPlaidItems(user.id);
     const service = createServiceClient();
-    let storageRemoved = 0;
-    if (service.storage?.from) {
-      try {
-        const avatarBucket = service.storage.from("avatars");
-        if (avatarBucket?.list && avatarBucket?.remove) {
-          const { data: avatarFiles } = await avatarBucket.list(user.id);
-          if (avatarFiles && avatarFiles.length > 0) {
-            const paths = avatarFiles.map((f: { name: string }) => `${user.id}/${f.name}`);
-            const { error: removeErr } = await avatarBucket.remove(paths);
-            if (!removeErr) storageRemoved += paths.length;
-          }
-        }
-      } catch (err) {
-        logError("account.delete.avatarCleanup", err);
-      }
+    const storageRemoved = await cleanupUserStorageObjects(service, user.id);
 
-      try {
-        const receiptBucket = service.storage.from("receipts");
-        if (receiptBucket?.remove) {
-          const { data: receiptRows } = await service
-            .from("receipts")
-            .select("storage_path")
-            .eq("user_id", user.id);
-          const paths = new Set<string>();
-          if (Array.isArray(receiptRows)) {
-            for (const row of receiptRows) {
-              if (row.storage_path) paths.add(row.storage_path as string);
-            }
-          }
-          if (receiptBucket?.list) {
-            const { data: receiptFiles } = await receiptBucket.list(user.id);
-            if (Array.isArray(receiptFiles)) {
-              for (const f of receiptFiles) {
-                paths.add(`${user.id}/${f.name}`);
-              }
-            }
-          }
-          if (paths.size > 0) {
-            const { error: removeErr } = await receiptBucket.remove(Array.from(paths));
-            if (!removeErr) storageRemoved += paths.size;
-          }
-        }
-      } catch (err) {
-        logError("account.delete.receiptCleanup", err);
-      }
-    }
-
-    // Audit before deletion (audit_logs.user_id is ON DELETE SET NULL, so the
-    // record survives the cascade).
     await writeAudit({
       userId: user.id,
       action: "account_delete",

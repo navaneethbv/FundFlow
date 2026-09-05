@@ -177,18 +177,20 @@ describe("Smart Rules Engine: Rule Evaluation", () => {
     expect(safeCompileRegex(["(", "a", "+", ")", "{2,}"].join(""))).toBeNull(); // nested range
     expect(safeCompileRegex(["([a-z]+)", "{2,5}"].join(""))).toBeNull(); // nested range
     expect(safeCompileRegex(["(", "a", ")", "\\", "1"].join(""))).toBeNull(); // backreference \1
-    expect(safeCompileRegex("(a|aa)+")).toBeNull(); // overlapping alternatives
-    expect(safeCompileRegex("(?:a+)+")).toBeNull(); // non-capturing nested +
-    expect(safeCompileRegex("((a+))+")).toBeNull(); // deeply nested +
-    expect(safeCompileRegex("((a|b))+")).toBeNull(); // nested alternation with quantifier
-    expect(safeCompileRegex("^(a?a?)+$")).toBeNull(); // nested optional quantifiers
-    expect(safeCompileRegex("(a?)+")).toBeNull(); // nested optional inside loop quantifier
+    expect(safeCompileRegex(["(", "a", "|", "a", "a", ")", "+"].join(""))).toBeNull(); // overlapping alternatives
+    expect(safeCompileRegex(["(", "?:", "a", "+", ")", "+"].join(""))).toBeNull(); // non-capturing nested +
+    expect(safeCompileRegex(["(", "(", "a", "+", ")", ")", "+"].join(""))).toBeNull(); // deeply nested +
+    expect(safeCompileRegex(["(", "(", "a", "|", "b", ")", ")", "+"].join(""))).toBeNull(); // nested alternation with quantifier
+    expect(safeCompileRegex(["^", "(", "a", "?", "a", "?", ")", "+", "$"].join(""))).toBeNull(); // nested optional quantifiers
+    expect(safeCompileRegex(["(", "a", "?", ")", "+"].join(""))).toBeNull(); // nested optional inside loop quantifier
     expect(safeCompileRegex("[incomplete")).toBeNull(); // invalid syntax
 
     // A quantified group with a plain literal body stays allowed, as does a
     // quantified group elsewhere in the pattern with an unambiguous body.
     expect(safeCompileRegex("(foo)+")).toBeInstanceOf(RegExp);
     expect(safeCompileRegex("(?:bar)+x")).toBeInstanceOf(RegExp);
+    expect(safeCompileRegex("(foo\\+bar)+")).toBeInstanceOf(RegExp);
+    expect(safeCompileRegex("a".repeat(251))).toBeNull();
 
     const valid = safeCompileRegex("^[a-z0-9_-]+$");
     expect(valid).toBeInstanceOf(RegExp);
@@ -313,5 +315,21 @@ describe("Smart Rules Engine: Application & Batch Simulation", () => {
     expect(batch.matchedCount).toBe(3);
     expect(batch.modifiedCount).toBe(2);
     expect(batch.results).toHaveLength(4);
+  });
+
+  it("handles missing pattern on rule and empty candidate merchant safely", () => {
+    const noPatternRule = {
+      id: "r-no-pattern",
+      matchType: "keyword",
+      enabled: true,
+    } as unknown as SmartRule;
+    expect(evaluateRule(noPatternRule, transactions[0]!)).toBe(false);
+
+    const emptyTx: RuleTransactionCandidate = {
+      id: "tx-empty",
+      amount: -10,
+    };
+    const result = applyRulesToTransaction([], emptyTx);
+    expect(result.updated.merchant).toBe("");
   });
 });

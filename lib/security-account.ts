@@ -41,29 +41,33 @@ export function buildAuditLogPage(
   };
 }
 
+function detectOs(ua: string): string {
+  if (/iPhone/i.test(ua)) return "iPhone";
+  if (/iPad/i.test(ua)) return "iPad";
+  if (/Macintosh|Mac OS X/i.test(ua)) return "Mac";
+  if (/Windows/i.test(ua)) return "Windows";
+  if (/Android/i.test(ua)) return "Android";
+  if (/Linux/i.test(ua)) return "Linux";
+  return "";
+}
+
+function detectBrowser(ua: string): string {
+  if (/Edg\//i.test(ua)) return "Edge";
+  if (/Chrome\//i.test(ua) && !/Chromium|Edg\//i.test(ua)) return "Chrome";
+  if (/Safari\//i.test(ua) && !/Chrome|Chromium|Edg\//i.test(ua)) return "Safari";
+  if (/Firefox\//i.test(ua)) return "Firefox";
+  return "";
+}
+
 export function formatDeviceLabel(ua: string | null): string {
   if (!ua || ua.trim() === "") return "Unknown device";
-  if (!ua.includes("Mozilla/") && !ua.includes(";")) {
-    return ua.trim();
-  }
-  let os = "";
-  if (/Macintosh|Mac OS X/i.test(ua)) os = "Mac";
-  else if (/iPhone/i.test(ua)) os = "iPhone";
-  else if (/iPad/i.test(ua)) os = "iPad";
-  else if (/Windows/i.test(ua)) os = "Windows";
-  else if (/Android/i.test(ua)) os = "Android";
-  else if (/Linux/i.test(ua)) os = "Linux";
+  if (!ua.includes("Mozilla/") && !ua.includes(";")) return ua.trim();
 
-  let browser = "";
-  if (/Edg\//i.test(ua)) browser = "Edge";
-  else if (/Chrome\//i.test(ua) && !/Chromium|Edg\//i.test(ua)) browser = "Chrome";
-  else if (/Safari\//i.test(ua) && !/Chrome|Chromium|Edg\//i.test(ua)) browser = "Safari";
-  else if (/Firefox\//i.test(ua)) browser = "Firefox";
+  const os = detectOs(ua);
+  const browser = detectBrowser(ua);
 
   if (browser && os) return `${browser} on ${os}`;
-  if (browser) return browser;
-  if (os) return os;
-  return ua.slice(0, 40);
+  return browser || os || ua.slice(0, 40);
 }
 
 export function buildSessionList(
