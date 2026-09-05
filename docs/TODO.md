@@ -2,30 +2,95 @@
 
 Nice-to-have features and enhancements, deferred out of the initial build.
 
-## Current status (2026-09-04)
+## Current status (2026-09-05)
 
-Comprehensive review remediation completed across all 33 findings (FF-01 through FF-33, Packages A–J) on branch `codex/comprehensive-review-remediation`.
-All 438 test files (4,775 unit tests) pass 100%, next build succeeds for all 70 routes, and lint/typecheck/audit are clean.
+Comprehensive review remediation on branch `codex/comprehensive-review-remediation`, covering FF-01 through FF-33 from [`reviews/2026-09-04-comprehensive-review.md`](reviews/2026-09-04-comprehensive-review.md).
 
-Key resolved items:
-- Security & Access (FF-01, FF-02, FF-04): Cookie client queries `user_session_records` directly; service role isolated to revocation; fail-closed MFA assurance checking; fail-closed rate-limit option for sensitive endpoints.
-- Safety & Consent (FF-03, FF-06, FF-07, FF-29): Strict fail-closed AI double consent (`resolveAiConsent`); ReDoS-bounded regex rules; server-only AI provider routing (`lib/ai-provider.ts`) excluding transfers and loan payments from prompts.
-- Data Lifecycles (FF-05, FF-08, FF-09, FF-10): Storage object cleanup (avatars and receipts) during account deletion; chunked pagination for takeout and backup (`lib/user-data.ts`); full state capture for credit card bills, preferences, life events; backup deduplication.
-- Financial Accuracy (FF-11, FF-12, FF-13): Net worth calculation respects excluded accounts and throws on query errors; forecasting stepMonth conserves cash across income and expenses; un-clamped savings rate.
-- Transaction Quality & Depth (FF-14, FF-15, FF-16, FF-23): Symmetric transfer date window; pre-filtered linked transactions in transfer suggestions; account distinctness checks; year-bounded ledger and recap queries.
-- UI/UX Polish (FF-17 through FF-28): Dashboard investment coverage and holding notices; recurring stream badges and overdue tracking; budget guided setup state; goal pace evidence distinctions; human-readable session device labels; audit action descriptions.
-- Test Guards & Dependency Freshness (FF-30, FF-31, FF-32, FF-33): Production database guard in test setup; blocking audit in CI; minor dependency updates.
+A second review round on 2026-09-05 rejected the earlier "all 33 resolved" claim and named eleven findings that were partial or unfinished.
+Those are now addressed.
+This section records what is genuinely closed, what is closed with a stated limit, and what is deferred, rather than a single completion count.
+The distinction is the point: the previous version of this file asserted completion for work a reviewer could still reproduce a defect against.
 
-The linked migration ledger was checked during this documentation refresh.
-The four PR #137 migrations and the three PR #130 migrations are recorded as
-applied remotely.
-The PR #149-era local migrations `20260902220000_smart_rules_regex.sql`,
-`20260903010000_merchant_rules_tags.sql`, and
-`20260904000000_account_preferences_atomic.sql` are not recorded under those
-names remotely, while the remote ledger contains two different September 3
-entries that are not present locally.
-Treat that migration-history mismatch as an operational follow-up and do not
-claim those three migrations are deployed until the mapping is reconciled.
+### Closed
+
+- **FF-01, FF-04 Session identity and service-role isolation.**
+  Immutable revocation trigger on `user_session_records`; session reads use the cookie-bound client; the service role is confined to revocation.
+- **FF-02 MFA and revocation gates.**
+  `20260904120000` covered the core financial tables.
+  `20260905100000_mfa_gate_remaining_user_tables.sql` completes it for the 37 remaining user-data tables, including the three the second round flagged (`life_events`, `credit_card_bills`, `account_reconciliations`).
+  It rewrites each policy in place from `pg_policies`, so existing ownership predicates are preserved exactly rather than retyped.
+  `profiles`, `user_session_records` and `mfa_backup_codes` are deliberately excluded, and the reason is recorded in the migration: all three are read before a session can reach AAL2.
+- **FF-03, FF-29 AI consent and provider routing.**
+  Fail-closed double consent; `lib/ai-provider.ts` is the only place an Anthropic client is constructed.
+- **FF-06 Regex ReDoS.**
+  The old guard only inspected quantified *groups*, so `^a*a*a*a*a*a*!$` passed and then ran for seconds on a 280-character subject.
+  `lib/regex-safety.ts` replaces it with a restricted language: no ambiguous quantified group, no two adjacent loops that can match the same character, and at most three looping quantifiers in total.
+  A non-backtracking engine was not an option because `safeCompileRegex` is imported by a client component.
+- **FF-10 Backup deduplication.**
+  `public.backup_deliveries` is a real delivery journal keyed on `(user_id, period)`.
+  The claim is the insert, so concurrent runs are arbitrated by the primary key, and both the claim and the `delivered_at` completion check their returned error.
+  `writeAudit()` is no longer load-bearing for deduplication.
+- **FF-13 AI spending credits.**
+  Aggregation keeps the signed amount for canonically classified rows, so a $100 expense plus a $20 expense credit reports $80.
+- **FF-30 Test database guard.**
+  Approval is now positive: `TEST_SUPABASE_URL` must be set and must match the target, and the guard fires only for `tests/integration/`.
+  Silence is a refusal.
+- **FF-07 export copy**, **FF-26 duplicate import workflow**, and **FF-27 session and audit timestamps.**
+
+### Closed with a stated limit
+
+- **FF-09 Backup and restore fidelity.**
+  The registry now carries the annotation columns (`display_category`, `cash_flow_classification`, `cleared_at`), the provider keys an account reinsert needs (`plaid_account_id`, `plaid_item_id`), and receipt image bytes.
+  `accounts` and `manual_accounts` upsert on their natural keys instead of delete-then-insert, so a restore no longer cascades the ledger away before refilling it.
+  Two limits remain, both reported to the user rather than hidden.
+  First, receipt imagery is capped at 8 MiB per archive, because the archive is an email attachment; anything beyond the budget is listed in the archive's `receipt_assets_omitted` section and counted in the restore result.
+  Second, an account whose `plaid_items` row is gone cannot be reinserted, because `plaid_item_id` is a NOT NULL foreign key and `plaid_items` holds the encrypted access token so it is deliberately not archived.
+  The restore reports those accounts as skipped and tells the user to relink the bank first.
+  The restore endpoint itself remains behind `FEATURE_FLAG_DEFAULTS.backupRestore: false`; see the 2026-09-02 note below.
+- **FF-12 Forecasting.**
+  Debt defaults now count only the outflow leg of a loan payment, so a single payment recorded on both accounts is no longer doubled.
+  Starting balances honour `include_in_net_worth` and the accounts page's `excludedNetWorthIds`, keep a null balance as unknown instead of $0, and skip foreign-currency balances.
+  The limit: there is no FX rate in the app, so a non-USD balance is left out and named on the page rather than converted.
+  Fixing that properly needs a rate source, which is the same provisioning question as the benchmark comparison below.
+
+### Deferred, with the reason
+
+- **Benchmark comparison.**
+  Still blocked on a licensed market-data source.
+  That is legal exposure, not a missing feature.
+- **Restore redesign.**
+  See the 2026-09-02 note below.
+  The feature flag stays off until provider-synced tables are treated as a distinct non-restorable scope and multi-table restores run inside one Postgres transaction.
+- **Sonar coverage gate.**
+  Unchanged.
+  Unit coverage meets the 95% project threshold, but Sonar measures the whole tree including paths only the integration suite exercises, so its number stays below the gate.
+- **Integration tests in CI.**
+  CI still runs unit tests only, so a schema-breaking migration can show all-green.
+  This is a known gap, recorded here so nobody reads a green CI badge as schema verification.
+- **`/api/import/csv`.**
+  FF-26 removed the one-shot `ImportSection` from Settings, so this route now has no UI caller; `ImportReviewSection` uses `/api/import/preview` and `/api/import/commit`.
+  The route still works and is still tested, so it was left in place rather than deleted as part of a review-remediation branch.
+  Delete it, or give it a caller, as its own change.
+
+### Verification status
+
+Unit suite: 444 files, 4,900 tests, all passing.
+Branch coverage is 95.07% against the project's 95% gate; lint, typecheck, `next build` (70 routes) and the palette validator are clean.
+
+Not verified here, and not claimed: production exploit testing, a live restore from a real archive, and either new migration applied to the linked project.
+Neither migration was run against a real Postgres either (no Docker on this machine), so the `DO` block in the gate migration is reviewed but unexecuted.
+
+Both new migrations are **local only** and must be applied by hand, since there is no migration runner in CI:
+
+- `20260905100000_mfa_gate_remaining_user_tables.sql`
+- `20260905110000_backup_delivery_journal.sql`
+
+The backup cron writes to `public.backup_deliveries` on every run, so deploying the code before the second migration would fail every backup.
+
+The linked migration ledger was checked during an earlier documentation refresh.
+The four PR #137 migrations and the three PR #130 migrations are recorded as applied remotely.
+The PR #149-era local migrations `20260902220000_smart_rules_regex.sql`, `20260903010000_merchant_rules_tags.sql`, and `20260904000000_account_preferences_atomic.sql` are not recorded under those names remotely, while the remote ledger contains two different September 3 entries that are not present locally.
+Treat that migration-history mismatch as an operational follow-up and do not claim those three migrations are deployed until the mapping is reconciled.
 
 ## Added 2026-09-03: scheduled transactions cron per-user timezone promotion
 

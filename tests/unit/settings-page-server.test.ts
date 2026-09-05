@@ -139,10 +139,6 @@ vi.mock("@/components/settings/ExportSection", () => ({
   default: () => createElement("div", { "data-testid": "export-section" }),
 }));
 
-vi.mock("@/components/settings/ImportSection", () => ({
-  default: () => createElement("div", { "data-testid": "import-section" }),
-}));
-
 vi.mock("@/components/settings/ImportReviewSection", () => ({
   default: () => createElement("div", { "data-testid": "import-review-section" }),
 }));
@@ -329,7 +325,7 @@ describe("SettingsPage Server Component", () => {
       expectedActive: "data",
       expectedContent: [
         'data-testid="export-section"',
-        'data-testid="import-section"',
+        // FF-26: one import workflow. The review-based flow is the only one.
         'data-testid="import-review-section"',
         'data-testid="demo-data-section"',
         'data-testid="danger-zone"',

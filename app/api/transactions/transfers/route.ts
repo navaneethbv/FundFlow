@@ -231,22 +231,20 @@ async function checkTransferAlreadyLinked(
   inId: string,
 ): Promise<string | null> {
   if (typeof linkedTable?.select !== "function") return null;
-  try {
-    const { data: existingLinks, error } = await linkedTable
-      .select("out_transaction_id, in_transaction_id")
-      .eq("user_id", userId)
-      .or(`out_transaction_id.in.(${outId},${inId}),in_transaction_id.in.(${outId},${inId})`);
-    if (error) throw error;
-    if (Array.isArray(existingLinks) && existingLinks.length > 0) {
-      const isSelfMatch = existingLinks.every(
-        (l) => l.out_transaction_id === outId && l.in_transaction_id === inId,
-      );
-      if (!isSelfMatch) {
-        return "one or both transactions are already linked to another transfer";
-      }
+  const { data: existingLinks, error } = await linkedTable
+    .select("out_transaction_id, in_transaction_id")
+    .eq("user_id", userId)
+    .or(`out_transaction_id.in.(${outId},${inId}),in_transaction_id.in.(${outId},${inId})`);
+  // Let a query failure reach the route's error handler. Swallowing it here
+  // would report "not linked" for a check that never ran.
+  if (error) throw error;
+  if (Array.isArray(existingLinks) && existingLinks.length > 0) {
+    const isSelfMatch = existingLinks.every(
+      (l) => l.out_transaction_id === outId && l.in_transaction_id === inId,
+    );
+    if (!isSelfMatch) {
+      return "one or both transactions are already linked to another transfer";
     }
-  } catch (error) {
-    throw error;
   }
   return null;
 }

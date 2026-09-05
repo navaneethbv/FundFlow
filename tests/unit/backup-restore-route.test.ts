@@ -24,15 +24,19 @@ vi.mock("@/lib/env.server", () => ({
 }));
 
 const from = vi.fn();
+const uploadReceipt = vi.fn(async () => ({ error: null }));
 vi.mock("@/lib/supabase/service", () => ({
-  createServiceClient: () => ({ from }),
+  createServiceClient: () => ({
+    from,
+    storage: { from: () => ({ upload: uploadReceipt }) },
+  }),
 }));
 
 function thenable(data: unknown = null, error: unknown = null) {
   const builder: Record<string, unknown> = {
     then: (resolve: (value: unknown) => unknown) => resolve({ data, error }),
   };
-  for (const method of ["delete", "eq", "insert", "upsert"]) {
+  for (const method of ["delete", "eq", "insert", "select", "upsert"]) {
     builder[method] = () => builder;
   }
   return builder;
@@ -51,7 +55,9 @@ function formRequest(file: Buffer | null, fields: Record<string, string>): NextR
 }
 
 const PAYLOAD = {
-  accounts: [{ id: "acc-1", name: "Checking" }],
+  accounts: [
+    { id: "acc-1", name: "Checking", plaid_account_id: "plaid-acc-1", plaid_item_id: "item-1" },
+  ],
   goals: [],
 };
 

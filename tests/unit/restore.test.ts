@@ -6,7 +6,7 @@ import {
 } from "@/lib/restore";
 
 const ARCHIVE = {
-  accounts: [{ id: "acc-1", name: "Checking" }],
+  accounts: [{ id: "acc-1", name: "Checking", plaid_account_id: "plaid-acc-1", plaid_item_id: "item-1" }],
   transactions: [
     { id: "t1", plaid_transaction_id: "plaid-1", amount: 100, date: "2026-08-01" },
   ],
@@ -50,31 +50,52 @@ describe("buildRestorePlan", () => {
   });
 });
 
-function serviceStub() {
+const BUILDER_METHODS = ["delete", "eq", "insert", "select", "update", "upsert"] as const;
+
+/** Every archived account belongs to this still-linked Plaid item by default. */
+const LINKED_ITEM_ID = "item-1";
+
+function serviceStub(
+  tableData: Record<string, unknown[]> = { plaid_items: [{ id: LINKED_ITEM_ID }] },
+) {
   const calls: Array<{ table: string; op: string; args: unknown[] }> = [];
+  const uploads: Array<{ path: string; options: unknown }> = [];
   let failOn: string | null = null;
+  let uploadError: string | null = null;
+
+  const buildFor = (table: string): Record<string, unknown> => {
+    const builder: Record<string, unknown> = {};
+    const make = (op: string) => (...args: unknown[]) => {
+      calls.push({ table, op, args });
+      return buildFor(table);
+    };
+    for (const method of BUILDER_METHODS) builder[method] = make(method);
+    builder.then = (resolve: (value: unknown) => unknown) =>
+      resolve({
+        data: tableData[table] ?? null,
+        error: failOn === table ? { message: "boom" } : null,
+      });
+    return builder;
+  };
+
   const service = {
-    from: (table: string) => {
-      const make = (op: string) => (...args: unknown[]) => {
-        calls.push({ table, op, args });
-        const builder: Record<string, unknown> = {};
-        for (const method of ["delete", "eq", "insert", "update", "upsert"]) {
-          builder[method] = make(method);
-        }
-        builder.then = (resolve: (value: unknown) => unknown) =>
-          resolve({ data: null, error: failOn === table ? { message: "boom" } : null });
-        return builder;
-      };
-      const builder: Record<string, unknown> = {};
-      for (const method of ["delete", "eq", "insert", "update", "upsert"]) {
-        builder[method] = make(method);
-      }
-      builder.then = (resolve: (value: unknown) => unknown) =>
-        resolve({ data: null, error: failOn === table ? { message: "boom" } : null });
-      return builder;
+    from: (table: string) => buildFor(table),
+    storage: {
+      from: () => ({
+        upload: async (path: string, _body: unknown, options: unknown) => {
+          uploads.push({ path, options });
+          return { error: uploadError ? { message: uploadError } : null };
+        },
+      }),
     },
   };
-  return { service, calls, setFailOn: (table: string | null) => { failOn = table; } };
+  return {
+    service,
+    calls,
+    uploads,
+    setFailOn: (table: string | null) => { failOn = table; },
+    setUploadError: (message: string | null) => { uploadError = message; },
+  };
 }
 
 describe("executeRestore", () => {
@@ -86,21 +107,207 @@ describe("executeRestore", () => {
     const result = await executeRestore(service as never, "user-123", plan, ARCHIVE);
     expect(result.failedTable).toBeNull();
 
-    const insertIdx = (table: string, op = "insert") =>
+    const opIdx = (table: string, op: string) =>
       calls.findIndex((call) => call.table === table && call.op === op);
     // accounts (parent) written before transactions (child).
-    expect(insertIdx("accounts")).toBeLessThan(insertIdx("transactions", "upsert"));
+    expect(opIdx("accounts", "upsert")).toBeLessThan(opIdx("transactions", "upsert"));
 
-    const accountInsert = calls.find(
-      (call) => call.table === "accounts" && call.op === "insert",
+    const accountUpsert = calls.find(
+      (call) => call.table === "accounts" && call.op === "upsert",
     )!;
-    expect((accountInsert.args[0] as Array<Record<string, unknown>>)[0]!.user_id).toBe("user-123");
+    expect((accountUpsert.args[0] as Array<Record<string, unknown>>)[0]!.user_id).toBe("user-123");
 
     const deletes = calls.filter((call) => call.op === "delete");
     for (const del of deletes) {
       expect(del.args).toBeDefined();
     }
     expect(deletes.length).toBeGreaterThan(0);
+  });
+
+  it("never deletes accounts before reinserting them, which would cascade the ledger away (FF-09)", async () => {
+    const { service, calls } = serviceStub();
+    const plan = buildRestorePlan(ARCHIVE);
+
+    const result = await executeRestore(service as never, "user-123", plan, ARCHIVE);
+
+    expect(result.failedTable).toBeNull();
+    expect(calls.some((call) => call.table === "accounts" && call.op === "delete")).toBe(false);
+    const upsert = calls.find((call) => call.table === "accounts" && call.op === "upsert")!;
+    expect(upsert.args[1]).toEqual({ onConflict: "plaid_account_id" });
+    // The provider keys a reinsert needs are carried through, not stripped.
+    const row = (upsert.args[0] as Array<Record<string, unknown>>)[0]!;
+    expect(row.plaid_account_id).toBe("plaid-acc-1");
+    expect(row.plaid_item_id).toBe("item-1");
+  });
+
+  it("upserts manual_accounts on id rather than deleting the FK parent", async () => {
+    const archive = { manual_accounts: [{ id: "m1", name: "Cash" }] } as Record<string, unknown[]>;
+    const { service, calls } = serviceStub();
+    const plan = buildRestorePlan(archive);
+
+    await executeRestore(service as never, "user-123", plan, archive);
+
+    expect(calls.some((call) => call.table === "manual_accounts" && call.op === "delete")).toBe(false);
+    const upsert = calls.find((call) => call.table === "manual_accounts" && call.op === "upsert")!;
+    expect(upsert.args[1]).toEqual({ onConflict: "id" });
+  });
+
+  it("reports accounts whose Plaid item is gone instead of failing or dropping them", async () => {
+    // Arrange: the archive's account points at an item the user has unlinked.
+    const { service, calls } = serviceStub({ plaid_items: [] });
+    const plan = buildRestorePlan(ARCHIVE);
+
+    // Act
+    const result = await executeRestore(service as never, "user-123", plan, ARCHIVE);
+
+    // Assert: the run completes and says what it could not restore.
+    expect(result.failedTable).toBeNull();
+    expect(result.skipped).toContainEqual({
+      name: "accounts (unlinked banks)",
+      reason:
+        "1 account belongs to a Plaid connection this account no longer has; relink the bank, then restore again",
+    });
+    // Nothing was restorable, so nothing is written at all.
+    expect(calls.some((call) => call.table === "accounts" && call.op === "upsert")).toBe(false);
+    expect(result.tables).toContainEqual({ name: "accounts", rowsWritten: 0 });
+  });
+
+  it("writes archived receipt images back into storage and counts what was missing", async () => {
+    const archive = {
+      receipts: [{ id: "r1", storage_path: "user-123/r1.jpg" }],
+      receipt_assets: [
+        { storage_path: "user-123/r1.jpg", content_type: "image/jpeg", data_base64: "aGk=" },
+      ],
+      receipt_assets_omitted: [{ storage_path: "user-123/r2.jpg", reason: "budget_exceeded" }],
+    } as Record<string, unknown[]>;
+    const { service, uploads } = serviceStub();
+    const plan = buildRestorePlan(archive);
+
+    const result = await executeRestore(service as never, "user-123", plan, archive);
+
+    expect(uploads).toEqual([
+      { path: "user-123/r1.jpg", options: { contentType: "image/jpeg", upsert: true } },
+    ]);
+    expect(result.receiptAssetsRestored).toBe(1);
+    // The one the backup could not carry is still reported to the user.
+    expect(result.receiptAssetsMissing).toBe(1);
+  });
+
+  it("counts a failed image upload as missing rather than failing the restore", async () => {
+    const archive = {
+      receipt_assets: [
+        { storage_path: "user-123/r1.jpg", content_type: "image/jpeg", data_base64: "aGk=" },
+      ],
+    } as Record<string, unknown[]>;
+    const { service, setUploadError } = serviceStub();
+    setUploadError("storage down");
+    const plan = buildRestorePlan(archive);
+
+    const result = await executeRestore(service as never, "user-123", plan, archive);
+
+    expect(result.failedTable).toBeNull();
+    expect(result.receiptAssetsRestored).toBe(0);
+    expect(result.receiptAssetsMissing).toBe(1);
+  });
+
+  it("reports the failing parent table when an accounts upsert errors", async () => {
+    const { service, setFailOn } = serviceStub();
+    const plan = buildRestorePlan(ARCHIVE);
+    setFailOn("accounts");
+
+    const result = await executeRestore(service as never, "user-123", plan, ARCHIVE);
+
+    expect(result.failedTable).toBe("accounts");
+  });
+
+  it("reports the failing parent table when a manual_accounts upsert errors", async () => {
+    const archive = { manual_accounts: [{ id: "m1" }] } as Record<string, unknown[]>;
+    const { service, setFailOn } = serviceStub();
+    const plan = buildRestorePlan(archive);
+    setFailOn("manual_accounts");
+
+    const result = await executeRestore(service as never, "user-123", plan, archive);
+
+    expect(result.failedTable).toBe("manual_accounts");
+  });
+
+  it("fails the accounts table when the plaid_items lookup itself errors", async () => {
+    const { service, setFailOn } = serviceStub();
+    const plan = buildRestorePlan(ARCHIVE);
+    setFailOn("plaid_items");
+
+    const result = await executeRestore(service as never, "user-123", plan, ARCHIVE);
+
+    // A lookup that never ran must not be read as "no items exist".
+    expect(result.failedTable).toBe("accounts");
+  });
+
+  it("pluralises the unlinked-bank report for more than one account", async () => {
+    const archive = {
+      accounts: [
+        { id: "a1", plaid_account_id: "p1", plaid_item_id: "gone" },
+        { id: "a2", plaid_account_id: "p2", plaid_item_id: "gone" },
+      ],
+    } as Record<string, unknown[]>;
+    const { service } = serviceStub({ plaid_items: [] });
+    const plan = buildRestorePlan(archive);
+
+    const result = await executeRestore(service as never, "user-123", plan, archive);
+
+    expect(result.skipped[0]!.reason).toMatch(/^2 accounts belong/);
+  });
+
+  it("stamps user_id onto a non-object parent row instead of writing it through", async () => {
+    const archive = { manual_accounts: ["not an object"] } as unknown as Record<string, unknown[]>;
+    const { service, calls } = serviceStub();
+    const plan = buildRestorePlan(archive);
+
+    await executeRestore(service as never, "user-123", plan, archive);
+
+    const upsert = calls.find((call) => call.table === "manual_accounts" && call.op === "upsert")!;
+    expect(upsert.args[0]).toEqual([{ user_id: "user-123" }]);
+  });
+
+  it("counts a malformed receipt asset as missing rather than uploading garbage", async () => {
+    const archive = {
+      receipt_assets: [
+        { storage_path: 42, data_base64: "aGk=" },
+        { storage_path: "u/1.jpg" },
+        null,
+      ],
+    } as unknown as Record<string, unknown[]>;
+    const { service, uploads } = serviceStub();
+    const plan = buildRestorePlan(archive);
+
+    const result = await executeRestore(service as never, "user-123", plan, archive);
+
+    expect(uploads).toEqual([]);
+    expect(result.receiptAssetsMissing).toBe(3);
+  });
+
+  it("falls back to a generic content type when the archive did not record one", async () => {
+    const archive = {
+      receipt_assets: [{ storage_path: "u/1.bin", data_base64: "aGk=" }],
+    } as Record<string, unknown[]>;
+    const { service, uploads } = serviceStub();
+    const plan = buildRestorePlan(archive);
+
+    await executeRestore(service as never, "user-123", plan, archive);
+
+    expect(uploads[0]!.options).toEqual({
+      contentType: "application/octet-stream",
+      upsert: true,
+    });
+  });
+
+  it("does not report the receipt asset sections as unknown archive keys", () => {
+    const plan = buildRestorePlan({
+      receipt_assets: [],
+      receipt_assets_omitted: [],
+      future_table: [{ x: 1 }],
+    });
+    expect(plan.unknownKeys).toEqual(["future_table"]);
+    expect(plan.tables.map((t) => t.name)).not.toContain("receipt_assets");
   });
 
   it("skips shared/owner-scope tables instead of deleting other people's rows", async () => {

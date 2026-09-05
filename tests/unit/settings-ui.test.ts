@@ -9,7 +9,7 @@ describe("settings UI restyle", () => {
       "components/settings/BanksSection.tsx",
       "components/settings/BudgetsSection.tsx",
       "components/settings/MfaSection.tsx",
-      "components/settings/ImportSection.tsx",
+      "components/settings/ImportReviewSection.tsx",
       "components/settings/ExportSection.tsx",
       "components/settings/ReportsSection.tsx",
       "components/settings/DangerZone.tsx",

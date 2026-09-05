@@ -139,12 +139,17 @@ export function forecastNetWorth(
 export interface ForecastAccountRow {
   type: string | null;
   subtype: string | null;
-  balance: number;
+  /** Null when the provider has not reported a balance; never coerced to 0. */
+  balance: number | null;
+  isoCurrencyCode?: string | null;
+  /** False when the user excluded the account from net worth. */
+  includeInNetWorth?: boolean;
 }
 
 export interface ForecastManualAccountRow {
   accountType: string;
-  balance: number;
+  balance: number | null;
+  includeInNetWorth?: boolean;
 }
 
 export interface ForecastStartingState {
@@ -152,6 +157,30 @@ export interface ForecastStartingState {
   investments: number;
   liabilities: number;
 }
+
+/**
+ * What the starting point had to leave out, so the page can say so instead of
+ * quietly projecting from an incomplete balance sheet.
+ */
+export interface ForecastStartingGaps {
+  /** Accounts the user excluded from net worth (intentional, not a gap). */
+  excludedFromNetWorth: number;
+  /** Accounts whose balance the provider has not reported. */
+  unknownBalance: number;
+  /** Currency codes skipped because the projection has no FX rate. */
+  foreignCurrencies: string[];
+}
+
+export interface ForecastStartingSummary extends ForecastStartingState {
+  gaps: ForecastStartingGaps;
+}
+
+/**
+ * The projection compounds a single currency. Everything the app renders goes
+ * through `formatCurrency`, which is USD, so a foreign-currency balance summed
+ * in as if it were dollars would be wrong by the exchange rate.
+ */
+export const FORECAST_BASE_CURRENCY = "USD";
 
 function forecastAccountContribution(
   balance: number,
@@ -185,12 +214,28 @@ function forecastAccountContribution(
 export function computeForecastStartingState(
   accounts: ForecastAccountRow[],
   manualAccounts: ForecastManualAccountRow[],
-): ForecastStartingState {
+): ForecastStartingSummary {
   let cash = 0;
   let investments = 0;
   let liabilities = 0;
+  let excludedFromNetWorth = 0;
+  let unknownBalance = 0;
+  const foreignCurrencies = new Set<string>();
 
   for (const a of accounts) {
+    if (a.includeInNetWorth === false) {
+      excludedFromNetWorth += 1;
+      continue;
+    }
+    const currency = a.isoCurrencyCode?.toUpperCase();
+    if (currency && currency !== FORECAST_BASE_CURRENCY) {
+      foreignCurrencies.add(currency);
+      continue;
+    }
+    if (a.balance === null || a.balance === undefined || !Number.isFinite(a.balance)) {
+      unknownBalance += 1;
+      continue;
+    }
     const contribution = forecastAccountContribution(
       a.balance,
       groupKeyFor(a.type, a.subtype),
@@ -202,6 +247,14 @@ export function computeForecastStartingState(
     liabilities += contribution.liabilities;
   }
   for (const m of manualAccounts) {
+    if (m.includeInNetWorth === false) {
+      excludedFromNetWorth += 1;
+      continue;
+    }
+    if (m.balance === null || m.balance === undefined || !Number.isFinite(m.balance)) {
+      unknownBalance += 1;
+      continue;
+    }
     const contribution = forecastAccountContribution(
       m.balance,
       m.accountType,
@@ -212,7 +265,16 @@ export function computeForecastStartingState(
     liabilities += contribution.liabilities;
   }
 
-  return { cash: round2(cash), investments: round2(investments), liabilities: round2(liabilities) };
+  return {
+    cash: round2(cash),
+    investments: round2(investments),
+    liabilities: round2(liabilities),
+    gaps: {
+      excludedFromNetWorth,
+      unknownBalance,
+      foreignCurrencies: [...foreignCurrencies].sort((a, b) => a.localeCompare(b)),
+    },
+  };
 }
 
 export interface ForecastDefaults {
@@ -250,11 +312,16 @@ export function computeForecastDefaults(
   // Do not clamp negative savings to zero: spending deficits are real
   const monthlySavings = monthlyNet.length > 0 ? round2(medianOf(monthlyNet)) : 0;
 
+  // A loan payment lands twice in the canonical projection: money out of the
+  // funding account and money in to the loan account. Summing both legs by
+  // absolute value doubles the payment, so only the outflow leg counts here
+  // (Plaid's convention, which this codebase follows end to end: positive is
+  // money out).
   const monthlyDebtAmounts = months
     .map((month) =>
       (byMonth.get(month) ?? [])
-        .filter((t) => t.groupKey === "LOAN_PAYMENTS")
-        .reduce((sum, t) => sum + Math.abs(t.signedAmount), 0),
+        .filter((t) => t.groupKey === "LOAN_PAYMENTS" && t.signedAmount > 0)
+        .reduce((sum, t) => sum + t.signedAmount, 0),
     )
     .filter((amount) => amount > 0);
   const monthlyDebtPayment = monthlyDebtAmounts.length > 0 ? round2(medianOf(monthlyDebtAmounts)) : 0;
@@ -347,6 +414,95 @@ function checkMilestoneReached(
   return { reached: false, amount: 0 };
 }
 
+/** The debt-free, emergency-fund, net-worth and FIRE targets worth tracking. */
+function buildMilestoneTargets(
+  startingState: ForecastStartingState,
+  safeMonthlyExpenses: number | null,
+): ForecastMilestone[] {
+  const startingNetWorth =
+    startingState.cash + startingState.investments - startingState.liabilities;
+
+  const debtFree: ForecastMilestone[] =
+    startingState.liabilities > 0
+      ? [{
+          id: "debt-free",
+          name: "Debt Free (Zero Liabilities)",
+          targetAmount: 0,
+          type: "debt",
+          reachedMonth: null,
+          reachedAmount: null,
+          description: "Pay off all credit card and loan liabilities in full.",
+        }]
+      : [];
+
+  const emergency =
+    safeMonthlyExpenses !== null
+      ? buildEmergencyMilestones(startingState.cash, safeMonthlyExpenses)
+      : [];
+
+  const netWorth = NET_WORTH_MILESTONE_TARGETS
+    .filter((target) => startingNetWorth < target)
+    .map<ForecastMilestone>((target) => ({
+      id: `nw-${target}`,
+      name: formatNetWorthMilestoneName(target),
+      targetAmount: target,
+      type: "networth",
+      reachedMonth: null,
+      reachedAmount: null,
+      description: `Total assets minus liabilities reach $${target.toLocaleString()}.`,
+    }));
+
+  // Financial independence: the 4% safe-withdrawal rule, i.e. 25x annual spend.
+  const fireTarget =
+    safeMonthlyExpenses !== null ? round2(safeMonthlyExpenses * 12 * 25) : null;
+  const fire: ForecastMilestone[] =
+    fireTarget !== null && startingNetWorth < fireTarget
+      ? [{
+          id: "fire",
+          name: "Financial Independence (FIRE)",
+          targetAmount: fireTarget,
+          type: "fire",
+          reachedMonth: null,
+          reachedAmount: null,
+          description: `25x annual expenses ($${fireTarget.toLocaleString()}), using a 4% withdrawal rate as a rough planning assumption.`,
+        }]
+      : [];
+
+  return [...debtFree, ...emergency, ...netWorth, ...fire];
+}
+
+const NET_WORTH_MILESTONE_TARGETS = [50000, 100000, 250000, 500000, 1000000] as const;
+
+/**
+ * Steps the projection forward month by month and stamps each milestone with
+ * the first month it is reached. Returns new milestone objects rather than
+ * mutating the ones handed in.
+ */
+function resolveMilestoneMonths(
+  milestones: readonly ForecastMilestone[],
+  startingState: ForecastStartingState,
+  assumptions: ForecastAssumptions,
+): ForecastMilestone[] {
+  const resolved = milestones.map((milestone) => ({ ...milestone }));
+  let state: ForecastState = { ...startingState };
+
+  for (let month = 1; month <= assumptions.horizonMonths; month++) {
+    state = stepMonth(state, assumptions, assumptions.annualReturnPct);
+    const currentNetWorth = netWorthOf(state);
+
+    for (const milestone of resolved) {
+      if (milestone.reachedMonth !== null) continue;
+      const status = checkMilestoneReached(milestone, state, currentNetWorth);
+      if (status.reached) {
+        milestone.reachedMonth = month;
+        milestone.reachedAmount = status.amount;
+      }
+    }
+  }
+
+  return resolved;
+}
+
 /**
  * Evaluates key financial independence and wealth milestones over the projection horizon.
  */
@@ -355,77 +511,9 @@ export function computeForecastMilestones(
   assumptions: ForecastAssumptions,
   monthlyExpenses = 0,
 ): ForecastMilestone[] {
-  const milestones: ForecastMilestone[] = [];
+  // A near-zero expense figure would make the emergency-fund and FIRE targets
+  // meaninglessly small, so the floor keeps them honest.
   const safeMonthlyExpenses = monthlyExpenses > 0 ? Math.max(100, monthlyExpenses) : null;
-
-  // 1. Debt-Free milestone (if starting with liabilities)
-  if (startingState.liabilities > 0) {
-    milestones.push({
-      id: "debt-free",
-      name: "Debt Free (Zero Liabilities)",
-      targetAmount: 0,
-      type: "debt",
-      reachedMonth: null,
-      reachedAmount: null,
-      description: "Pay off all credit card and loan liabilities in full.",
-    });
-  }
-
-  // 2 & 3. Emergency Funds (3mo & 6mo)
-  if (safeMonthlyExpenses !== null) {
-    milestones.push(...buildEmergencyMilestones(startingState.cash, safeMonthlyExpenses));
-  }
-
-  // 4. Net Worth Milestones
-  const netWorthTargets = [50000, 100000, 250000, 500000, 1000000];
-  const startingNetWorth = startingState.cash + startingState.investments - startingState.liabilities;
-
-  for (const target of netWorthTargets) {
-    if (startingNetWorth < target) {
-      milestones.push({
-        id: `nw-${target}`,
-        name: formatNetWorthMilestoneName(target),
-        targetAmount: target,
-        type: "networth",
-        reachedMonth: null,
-        reachedAmount: null,
-        description: `Total assets minus liabilities reach $${target.toLocaleString()}.`,
-      });
-    }
-  }
-
-  // 5. Financial Independence (FIRE - 4% Safe Withdrawal Rule = 25x Annual Expenses)
-  if (safeMonthlyExpenses !== null) {
-    const fireTarget = round2(safeMonthlyExpenses * 12 * 25);
-    if (startingNetWorth < fireTarget) {
-      milestones.push({
-        id: "fire",
-        name: "Financial Independence (FIRE)",
-        targetAmount: fireTarget,
-        type: "fire",
-        reachedMonth: null,
-        reachedAmount: null,
-        description: `25x annual expenses ($${fireTarget.toLocaleString()}), using a 4% withdrawal rate as a rough planning assumption.`,
-      });
-    }
-  }
-
-  // Step through months to compute when each milestone is reached
-  let state: ForecastState = { ...startingState };
-
-  for (let month = 1; month <= assumptions.horizonMonths; month++) {
-    state = stepMonth(state, assumptions, assumptions.annualReturnPct);
-    const currentNW = netWorthOf(state);
-
-    for (const m of milestones) {
-      if (m.reachedMonth !== null) continue;
-      const status = checkMilestoneReached(m, state, currentNW);
-      if (status.reached) {
-        m.reachedMonth = month;
-        m.reachedAmount = status.amount;
-      }
-    }
-  }
-
-  return milestones;
+  const milestones = buildMilestoneTargets(startingState, safeMonthlyExpenses);
+  return resolveMilestoneMonths(milestones, startingState, assumptions);
 }

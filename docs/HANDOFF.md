@@ -1,11 +1,52 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-09-04. Read this first to resume.
+Last updated: 2026-09-05. Read this first to resume.
+
+## 2026-09-05: Second review round on PR #153
+
+Branch: `codex/comprehensive-review-remediation` (unchanged).
+
+The 2026-09-04 entry below claims all 33 findings were "fully resolved".
+A second review of the branch at `4ddf547` rejected that, reproducing defects against seven findings plus four unfinished follow-ups.
+Read the 2026-09-04 entry as the record of what each package touched, not as a statement of what shipped.
+[`TODO.md`](TODO.md) now carries the accurate closed / closed-with-a-limit / deferred split.
+
+What this round changed:
+
+1. **FF-02, MFA and revocation gates were incomplete.**
+   `life_events`, `credit_card_bills` and `account_reconciliations` still had owner-only policies, and a wider audit found 37 user-data tables in the same state.
+   `supabase/migrations/20260905100000_mfa_gate_remaining_user_tables.sql` rewrites each policy in place from `pg_policies`, ANDing the two gates onto the recorded predicate so no existing ownership check is retyped by hand.
+   `profiles`, `user_session_records` and `mfa_backup_codes` are excluded on purpose: all three are read before a session can reach AAL2.
+2. **FF-06, the regex guard only looked at groups.**
+   `^a*a*a*a*a*a*!$` has none, so it compiled and then ran for seconds.
+   New `lib/regex-safety.ts` defines a restricted language: no ambiguous quantified group, no two adjacent loops over a shared character, at most three loops.
+   RE2 and worker-thread timeouts were not options, because `safeCompileRegex` is imported by a client component.
+3. **FF-09, backups could not restore what they promised.**
+   Added the missing annotation columns, the account provider keys, and receipt image bytes.
+   `accounts` and `manual_accounts` now upsert instead of delete-then-insert, so a restore no longer cascades the ledger away before refilling it.
+   Both remaining limits (an 8 MiB image budget, and accounts whose Plaid item is gone) are reported in the archive and the restore result rather than hidden.
+4. **FF-10, backup deduplication was not durable.**
+   New `public.backup_deliveries` journal; the claim is the insert, so the primary key arbitrates concurrent runs, and both the claim and the completion check their errors.
+5. **The rest.**
+   FF-13 signed expense credits; FF-12 loan-payment double counting and net-worth-parity starting balances; FF-30 fail-closed test-database guard; FF-07 export copy; FF-26 one import workflow; FF-27 session and audit timestamps.
+6. **Three Sonar findings.**
+   `computeForecastMilestones` cognitive complexity, `table()`'s eight parameters, and a rethrow-only catch in the transfers route.
+
+Verification: 444 test files, 4,900 unit tests, all passing.
+Branch coverage is 95.07% against the 95% gate; lint, typecheck, `next build` (70 routes) and the palette validator are clean.
+
+**Not verified, and not claimed.**
+Neither new migration has been applied to the linked project, and neither was run against a real Postgres (no Docker on this machine), so the `DO` block in the gate migration is reviewed but unexecuted.
+Apply both by hand before deploying: the backup cron writes to `backup_deliveries` on every run, so shipping the code without `20260905110000` fails every backup.
+Production exploit testing and a live restore from a real archive were also not performed.
 
 ## 2026-09-04: Comprehensive review remediation (Packages A–J, FF-01 through FF-33)
 
 Branch: `codex/comprehensive-review-remediation`.
-All 33 findings identified in `docs/reviews/2026-09-04-comprehensive-review.md` and planned in `docs/reviews/2026-09-04-implementation-plan.md` have been fully resolved, verified, and regression tested.
+> **Superseded.** This section claimed all 33 findings were fully resolved. The 2026-09-05 review found seven of them
+> reproducible and four follow-ups unfinished; see the entry above. Kept for the record of what each package touched.
+
+All 33 findings identified in `docs/reviews/2026-09-04-comprehensive-review.md` and planned in `docs/reviews/2026-09-04-implementation-plan.md` were addressed in this round.
 
 Key architectural and behavioral updates:
 1. **Security & Session Enforcement**:

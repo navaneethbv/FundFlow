@@ -124,16 +124,32 @@ describe("roadmap completion helpers", () => {
     expect(
       buildAuditLogPage(
         [
-          { userId: "u1", action: "login", metadata: { ip: "127.0.0.1" } },
+          {
+            userId: "u1",
+            action: "login",
+            metadata: { ip: "127.0.0.1" },
+            createdAt: "2026-07-01T10:00:00Z",
+          },
           { userId: "u2", action: "login", metadata: {} },
         ],
         "u1",
         1,
       ),
     ).toEqual({
-      rows: [{ action: "login", metadata: { ip: "[redacted]" } }],
+      rows: [
+        {
+          action: "login",
+          createdAt: "2026-07-01T10:00:00Z",
+          metadata: { ip: "[redacted]" },
+        },
+      ],
       nextCursor: null,
     });
+
+    // A row with no timestamp still reports one explicitly, as null.
+    expect(
+      buildAuditLogPage([{ userId: "u1", action: "login", metadata: {} }], "u1", 1).rows,
+    ).toEqual([{ action: "login", createdAt: null, metadata: {} }]);
   });
 
   it("builds revocable session lists and isolates dashboard cache by user", async () => {
@@ -143,8 +159,8 @@ describe("roadmap completion helpers", () => {
         { id: "s2", current: false, userAgent: "Chrome", lastSeenAt: "2026-07-02T00:00:00Z" },
       ]),
     ).toEqual([
-      { id: "s2", label: "Chrome", current: false },
-      { id: "s1", label: "Mobile Safari", current: true },
+      { id: "s2", label: "Chrome", current: false, lastSeenAt: "2026-07-02T00:00:00Z" },
+      { id: "s1", label: "Mobile Safari", current: true, lastSeenAt: "2026-07-01T00:00:00Z" },
     ]);
 
     expect(formatDeviceLabel(null)).toBe("Unknown device");

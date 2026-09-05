@@ -21,7 +21,8 @@ import { writeAudit, getClientIp } from "@/lib/audit";
  * with a per-line-item summary block.
  *
  * Same privacy contract as the other exports — date / merchant / amount /
- * category only, no balances, account numbers, or provider identifiers — and
+ * category only, no balances, account numbers, or provider identifiers; the
+ * merchant column carries the user's own transaction text verbatim, and
  * the same `ai_export_enabled` gate, failing closed. Data only: this is not
  * tax advice. Session-only by design (no API-token path): the export's meaning
  * depends on tags a script has no way to intend.

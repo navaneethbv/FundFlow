@@ -170,6 +170,7 @@ describe("Cron API Route Handlers Unit Tests", () => {
       const db = {
         ...clientStub({
           profiles: { data: [{ id: "user-no-email" }] },
+          backup_deliveries: { data: [{ user_id: "user-no-email" }] },
         }),
         auth: {
           admin: {
@@ -195,6 +196,7 @@ describe("Cron API Route Handlers Unit Tests", () => {
       const db = {
         ...clientStub({
           profiles: { data: [{ id: "user-err" }] },
+          backup_deliveries: { data: [{ user_id: "user-err" }] },
           accounts: { error: new Error("Accounts query error") },
         }),
         auth: {
@@ -243,11 +245,12 @@ describe("Cron API Route Handlers Unit Tests", () => {
       );
     });
 
-    it("handles paginated audit logs and profiles, skipping already-backed-up users", async () => {
+    it("pages through every profile and claims each one in the delivery journal (FF-10)", async () => {
+      // Arrange: two profiles, both claimable this period.
       const db = {
         ...clientStub({
-          profiles: { data: [{ id: "user-already-done" }, { id: "user-new" }] },
-          audit_logs: { data: [{ user_id: "user-already-done" }, { user_id: null }] },
+          profiles: { data: [{ id: "user-a" }, { id: "user-b" }] },
+          backup_deliveries: { data: [{ user_id: "claimed" }] },
           accounts: { data: [{ name: "Checking" }] },
         }),
         auth: {
@@ -265,9 +268,15 @@ describe("Cron API Route Handlers Unit Tests", () => {
         headers: { authorization: "Bearer test-cron-secret" },
       });
       const res = await cronBackupGet(req);
+
       expect(res.status).toBe(200);
       const json = await res.json();
-      expect(json).toMatchObject({ ok: true, sent: 1, skipped: 1 });
+      expect(json).toMatchObject({ ok: true, users: 2, sent: 2, skipped: 0 });
+      // Dedup no longer reads audit_logs; the journal is the source of truth.
+      expect(db.callsOn("audit_logs")).toEqual([]);
+      expect(
+        db.callsOn("backup_deliveries").some(({ method }) => method === "upsert"),
+      ).toBe(true);
     });
   });
 });

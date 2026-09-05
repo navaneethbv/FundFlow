@@ -106,3 +106,25 @@ export function localDateKey(now = new Date()): string {
 export function localMonthKey(now = new Date()): string {
   return localDateKey(now).slice(0, 7);
 }
+
+const TIMESTAMP_UTC = new Intl.DateTimeFormat("en-US", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "UTC",
+});
+
+/**
+ * `"2026-07-28T09:00:00Z"` -> `"Jul 28, 2026, 9:00 AM UTC"`.
+ *
+ * Fixed to UTC on purpose. Security surfaces (the audit log, the session list)
+ * render inside client components whose initial HTML comes from the server, so
+ * a viewer-local or relative format would produce a different string on each
+ * side and a hydration mismatch. An explicit zone is also the right thing for a
+ * log someone reads to work out when something happened.
+ */
+export function formatTimestampUtc(value: string | null | undefined): string {
+  if (!value) return "Unknown time";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown time";
+  return `${TIMESTAMP_UTC.format(date)} UTC`;
+}

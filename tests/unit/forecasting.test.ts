@@ -184,6 +184,8 @@ describe("forecastNetWorth", () => {
 });
 
 describe("computeForecastStartingState", () => {
+  const noGaps = { excludedFromNetWorth: 0, unknownBalance: 0, foreignCurrencies: [] };
+
   it("buckets accounts into cash, investments, and liabilities using the accounts-page classification", () => {
     const state = computeForecastStartingState(
       [
@@ -193,7 +195,7 @@ describe("computeForecastStartingState", () => {
       ],
       [],
     );
-    expect(state).toEqual({ cash: 5000, investments: 20000, liabilities: 1500 });
+    expect(state).toEqual({ cash: 5000, investments: 20000, liabilities: 1500, gaps: noGaps });
   });
 
   it("treats a negative liability balance as a credit asset", () => {
@@ -201,7 +203,7 @@ describe("computeForecastStartingState", () => {
       [{ type: "loan", subtype: "student", balance: -1000 }],
       [],
     );
-    expect(state).toEqual({ cash: 1000, investments: 0, liabilities: 0 });
+    expect(state).toEqual({ cash: 1000, investments: 0, liabilities: 0, gaps: noGaps });
   });
 
   it("includes manual accounts alongside Plaid ones", () => {
@@ -213,7 +215,44 @@ describe("computeForecastStartingState", () => {
         { accountType: "debt", balance: 400 },
       ],
     );
-    expect(state).toEqual({ cash: 200, investments: 3000, liabilities: 400 });
+    expect(state).toEqual({ cash: 200, investments: 3000, liabilities: 400, gaps: noGaps });
+  });
+
+  it("skips accounts the user excluded from net worth, matching the net-worth view (FF-12)", () => {
+    const state = computeForecastStartingState(
+      [
+        { type: "depository", subtype: "checking", balance: 5000, includeInNetWorth: true },
+        { type: "depository", subtype: "savings", balance: 9000, includeInNetWorth: false },
+      ],
+      [{ accountType: "cash", balance: 300, includeInNetWorth: false }],
+    );
+    expect(state.cash).toBe(5000);
+    expect(state.gaps.excludedFromNetWorth).toBe(2);
+  });
+
+  it("reports an unreported balance instead of counting it as $0 (FF-12)", () => {
+    const state = computeForecastStartingState(
+      [
+        { type: "depository", subtype: "checking", balance: null },
+        { type: "depository", subtype: "checking", balance: 100 },
+      ],
+      [{ accountType: "cash", balance: null }],
+    );
+    expect(state.cash).toBe(100);
+    expect(state.gaps.unknownBalance).toBe(2);
+  });
+
+  it("leaves out a foreign-currency balance rather than summing it as dollars (FF-12)", () => {
+    const state = computeForecastStartingState(
+      [
+        { type: "depository", subtype: "checking", balance: 5000, isoCurrencyCode: "USD" },
+        { type: "depository", subtype: "checking", balance: 4000, isoCurrencyCode: "eur" },
+        { type: "depository", subtype: "checking", balance: 100, isoCurrencyCode: null },
+      ],
+      [],
+    );
+    expect(state.cash).toBe(5100);
+    expect(state.gaps.foreignCurrencies).toEqual(["EUR"]);
   });
 });
 
@@ -267,6 +306,22 @@ describe("computeForecastDefaults", () => {
       txn("2026-07", { signedAmount: 500, flow: "transfer", groupKey: "LOAN_PAYMENTS" }),
     ];
     expect(computeForecastDefaults(txns, months).monthlyDebtPayment).toBe(400);
+  });
+
+  it("counts only the outflow leg of a loan payment, not both postings (FF-12)", () => {
+    // Arrange: one $400 payment, recorded twice in the canonical projection -
+    // money out of checking and the matching money in to the loan account.
+    const months = ["2026-07"];
+    const txns = [
+      txn("2026-07", { signedAmount: 400, flow: "transfer", groupKey: "LOAN_PAYMENTS" }),
+      txn("2026-07", { signedAmount: -400, flow: "transfer", groupKey: "LOAN_PAYMENTS" }),
+    ];
+
+    // Act
+    const defaults = computeForecastDefaults(txns, months);
+
+    // Assert: $400, not the $800 that summing both legs by absolute value gave.
+    expect(defaults.monthlyDebtPayment).toBe(400);
   });
 
   it("ignores transactions outside the requested months", () => {

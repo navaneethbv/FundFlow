@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
         userId: row.user_id as string | null,
         action: row.action as string,
         metadata: (row.metadata ?? {}) as Record<string, unknown>,
+        createdAt: (row.created_at ?? null) as string | null,
       })),
       user.id,
       limit,

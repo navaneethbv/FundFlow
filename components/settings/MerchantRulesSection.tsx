@@ -75,7 +75,7 @@ export default function MerchantRulesSection({
       const compiled = safeCompileRegex(pattern);
       if (!compiled) {
         setError(
-          "Invalid or unsafe regular expression syntax (nested quantifiers disallowed, max 120 chars).",
+          "Invalid or unsafe regular expression: max 120 characters, no backreferences, at most 3 repeating quantifiers, and no two repeats (like a*a*) that can match the same characters back to back.",
         );
         return;
       }

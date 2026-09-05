@@ -4,6 +4,8 @@
  * category remapping, merchant renaming, and auto-tagging.
  */
 
+import { isRegexShapeSafe } from "@/lib/regex-safety";
+
 export type RuleMatchType = "merchant" | "keyword" | "account" | "regex";
 export type AmountOperator = "gt" | "lt" | "gte" | "lte" | "between" | "any";
 
@@ -31,96 +33,12 @@ export interface SmartRule {
 export const MAX_REGEX_PATTERN_LENGTH = 120;
 
 /**
- * Detects quantified groups whose body is itself ambiguous — a nested
- * quantifier or an alternation — the shapes that cause catastrophic
- * backtracking (ReDoS): ((a+))+, (a*)*, (a|b+)+, (a|aa)+, (a+){2,}.
- * Quantified groups with a plain literal body, e.g. (foo)+, are still allowed.
- *
- * Implemented with a balanced-parentheses stack scanner that tracks group
- * depth while ignoring escaped characters and bracketed character classes.
- * When a closing parenthesis is immediately followed by a quantifier, the
- * recorded body is checked for inner quantifiers or alternations at any nesting
- * depth, avoiding regex-on-regex backtracking risks.
- */
-const AMBIGUOUS_BODY_CHARS = new Set(["*", "+", "?", "{", "|"]);
-
-function isLoopQuantifier(char: string | undefined): boolean {
-  // Only looping quantifiers (*, +, {) can cause super-linear
-  // backtracking. A trailing ? makes the group optional (0-or-1) with
-  // no loop, so patterns like ^Uber(\s*Eats)?$ stay allowed.
-  return char === "*" || char === "+" || char === "{";
-}
-
-function hasAmbiguousQuantifiedBody(body: string): boolean {
-  let inClass = false;
-  let startIdx = 0;
-  if (body.startsWith("?:")) {
-    startIdx = 2;
-  }
-  for (let i = startIdx; i < body.length; i++) {
-    const char = body[i];
-    if (char === "\\") {
-      i++; // Skip escaped character
-      continue;
-    }
-    if (inClass) {
-      inClass = char !== "]";
-      continue;
-    }
-    if (char === "[") {
-      inClass = true;
-    } else if (AMBIGUOUS_BODY_CHARS.has(char)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function checkClosingGroup(pattern: string, openIdx: number, closeIdx: number): boolean {
-  if (!isLoopQuantifier(pattern[closeIdx + 1])) {
-    return false;
-  }
-  const body = pattern.slice(openIdx + 1, closeIdx);
-  return hasAmbiguousQuantifiedBody(body);
-}
-
-function hasAmbiguousQuantifiedGroup(pattern: string): boolean {
-  const stack: number[] = [];
-  let inCharClass = false;
-
-  for (let i = 0; i < pattern.length; i++) {
-    const char = pattern[i];
-
-    if (char === "\\") {
-      i++; // Skip escaped character
-      continue;
-    }
-
-    if (inCharClass) {
-      inCharClass = char !== "]";
-      continue;
-    }
-
-    if (char === "[") {
-      inCharClass = true;
-    } else if (char === "(") {
-      stack.push(i);
-    } else if (char === ")") {
-      const openIdx = stack.pop();
-      if (openIdx !== undefined && checkClosingGroup(pattern, openIdx, i)) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
-/**
  * Safely compiles a user-supplied regex pattern with ReDoS guards:
  * - Length restriction (<= 120 chars)
- * - Nested quantifier rejection (guards against exponential backtracking)
  * - Backreference rejection (guards against algorithmic complexity attacks)
+ * - Restricted pattern shape (`lib/regex-safety.ts`): no ambiguous quantified
+ *   group, no overlapping adjacent loops, and a hard cap on loop count, which
+ *   together bound worst-case matching cost.
  * Returns null if the pattern is invalid or unsafe.
  */
 export function safeCompileRegex(pattern: string): RegExp | null {
@@ -128,10 +46,10 @@ export function safeCompileRegex(pattern: string): RegExp | null {
   if (!trimmed || trimmed.length > MAX_REGEX_PATTERN_LENGTH) {
     return null;
   }
-  if (hasAmbiguousQuantifiedGroup(trimmed)) {
+  if (/\\[1-9]/.test(trimmed)) {
     return null;
   }
-  if (/\\[1-9]/.test(trimmed)) {
+  if (!isRegexShapeSafe(trimmed)) {
     return null;
   }
 

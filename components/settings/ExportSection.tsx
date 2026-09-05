@@ -49,9 +49,11 @@ export default function ExportSection({
   return (
     <Panel title="Export data" eyebrow="Downloads">
       <p className="mb-4 text-sm text-muted">
-        Download your transactions as CSV or JSON (merchant, amount, date,
-        category only - no account numbers or identifiers; feed them to any AI
-        tool you choose), or grab this week&apos;s summary as a PDF.
+        Download your transactions as CSV or JSON (date, merchant, amount and
+        category only - no balances, account numbers, masks or provider ids).
+        Merchant names are your own transaction text and are kept as-is, so read
+        the file before you hand it to an AI tool. Or grab this week&apos;s
+        summary as a PDF.
       </p>
 
       <label className="mb-4 flex items-center gap-2 text-sm">

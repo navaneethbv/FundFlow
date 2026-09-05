@@ -78,12 +78,16 @@ export function buildInsightPayload(rows: AggregateRow[]) {
     const month = row.month ?? "unknown";
     months.add(month);
     const category = row.category ?? "UNCATEGORIZED";
+    // Keep the signed amount. Plaid's convention is positive = money out, so a
+    // credit against an expense category (a refund, a returned charge) is
+    // negative and must reduce the total. Math.abs() here turned a $20 refund
+    // into $20 more spending, so a $100 charge plus a $20 refund reported $120.
     byMonthCategory.set(
       `${month}|${category}`,
-      (byMonthCategory.get(`${month}|${category}`) ?? 0) + Math.abs(amount),
+      (byMonthCategory.get(`${month}|${category}`) ?? 0) + amount,
     );
     if (row.merchant) {
-      byMerchant.set(row.merchant, (byMerchant.get(row.merchant) ?? 0) + Math.abs(amount));
+      byMerchant.set(row.merchant, (byMerchant.get(row.merchant) ?? 0) + amount);
     }
   }
 
@@ -93,16 +97,20 @@ export function buildInsightPayload(rows: AggregateRow[]) {
     [...months].sort((a, b) => a.localeCompare(b)).slice(-MAX_MONTHS),
   );
   return {
+    // A net-zero month/category or merchant carries no signal and would only
+    // invite the model to comment on a $0 line, so those are dropped. Net
+    // credits stay, as a negative, because they are real.
     monthly_category_spend: [...byMonthCategory.entries()]
       .map(([key, amount]) => {
         const [month, category] = key.split("|");
         return { month, category, amount: Math.round(amount * 100) / 100 };
       })
-      .filter((row) => keepMonths.has(row.month!)),
+      .filter((row) => keepMonths.has(row.month!) && row.amount !== 0),
     top_merchants: [...byMerchant.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, MAX_MERCHANTS)
-      .map(([merchant, amount]) => ({ merchant, amount: Math.round(amount * 100) / 100 })),
+      .map(([merchant, amount]) => ({ merchant, amount: Math.round(amount * 100) / 100 }))
+      .filter((row) => row.amount !== 0)
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, MAX_MERCHANTS),
   };
 }
 

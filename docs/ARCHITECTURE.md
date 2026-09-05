@@ -89,6 +89,18 @@ flowchart TB
   carry natural keys (ids, `plaid_transaction_id`) via the spec's
   `restoreKeys` - takeout does not, keeping its no-identifiers contract - so
   `transactions` upserts onto itself and converges with the next sync.
+  `accounts` and `manual_accounts` are foreign-key parents and are never
+  delete-then-inserted either: deleting an account cascades to the very
+  transactions the restore is about to write, so both upsert on their natural
+  key (`plaid_account_id` and `id`). An account whose `plaid_items` row is gone
+  cannot be reinserted at all - `plaid_item_id` is NOT NULL and `plaid_items`
+  is deliberately unarchived because it holds the encrypted access token - so
+  those rows are reported as skipped, never dropped in silence.
+  Receipt images travel in the backup-only `receipt_assets` section as base64
+  and are uploaded back into the `receipts` bucket; whatever the 8 MiB budget
+  or a failed download left behind is listed in `receipt_assets_omitted` and
+  counted in the restore result, so an archive always states its own
+  completeness.
   The route is currently disabled by default while provider-synced account
   restoration is redesigned; see `docs/TODO.md` for the active constraint.
 - `account-preferences.ts` - validates and persists account visibility and
@@ -178,6 +190,23 @@ flowchart TB
   the entered rate goes negative. Every projection surface must say
   "projection," never "prediction" or a confidence level this module doesn't
   compute.
+  `computeForecastStartingState` starts from the same balance sheet the
+  net-worth view uses: it honours `include_in_net_worth` and the accounts
+  page's `excludedNetWorthIds`, keeps an unreported balance as unknown rather
+  than $0, and leaves out non-USD balances because the app has no FX rate.
+  Each of those omissions is returned in `gaps` and shown on the page, so the
+  projection never starts from a silently incomplete balance sheet.
+  `computeForecastDefaults` counts only the outflow leg of a `LOAN_PAYMENTS`
+  posting; the projection records both legs, so summing absolute values doubled
+  every debt payment.
+- `regex-safety.ts` - the ReDoS guard behind `safeCompileRegex`. A backtracking
+  engine plus a length cap is not enough (`^a*a*a*a*a*a*!$` is 16 characters and
+  superexponential), and RE2 or a worker timeout is unavailable because
+  `safeCompileRegex` is imported by a client component. So user patterns are
+  restricted to a shape whose cost is bounded: no ambiguous quantified group,
+  no two adjacent loops matching a common character, at most three looping
+  quantifiers. Character sets are approximated conservatively, so an
+  unanalyzable atom can only cause a rejection, never a false accept.
 - `advice.ts` / `advice-content.ts` — `ADVICE_LIBRARY` is reviewed education
   content, not user data; `ALLOWED_SOURCE_HOSTS` is an enforcement allowlist
   (a security-review test, not documentation) restricting sources to neutral
@@ -304,6 +333,15 @@ Invariants:
   transient send failure can catch up. A send the provider rejects with a 5xx
   is permanent (`isPermanentDeliveryError`) and is not retried, otherwise an
   undeliverable address burns an attempt every hour until the period rolls.
+- The monthly backup cron deduplicates through `public.backup_deliveries`, a
+  cron-only journal keyed on `(user_id, period)`. The claim *is* the insert, so
+  the primary key arbitrates concurrent runs, and both the claim and the
+  `delivered_at` completion check their returned error. It replaced a dedup that
+  read `audit_logs` rows written by `writeAudit()` - which swallows both the
+  returned error and any exception - so a delivered backup could lose its marker
+  and be emailed again. A claim left undelivered for 30 minutes (longer than the
+  route's `maxDuration`) is treated as a crashed run and may be taken over; a
+  failed send releases its claim so the next run retries.
 - `/api/plaid/webhook` verifies the `plaid-verification` JWT outside sandbox:
   pinned `alg: ES256`, key via `webhookVerificationKeyGet`, signature checked
   with `dsaEncoding: "ieee-p1363"` (JWS raw r||s, not DER — omitting this

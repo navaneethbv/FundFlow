@@ -25,8 +25,12 @@ npm run test:watch  # vitest watch mode
 Run one file: `npx vitest run tests/unit/csv.test.ts`.
 
 Integration tests (`tests/integration/`) need `.env.local` plus applied
-migrations and auto-skip without them. They create throwaway users against the
-real Supabase project, so never point them at a database with real user data.
+migrations, and they create and delete throwaway users against a real Supabase
+project. Because that is destructive, `tests/setup.ts` denies by default: a run
+that reaches `tests/integration/` with a `SUPABASE_SECRET_KEY` present **fails**
+unless `TEST_SUPABASE_URL` is set and equals the URL under test. Point it at a
+throwaway project, never one holding real user data. Unit tests
+(`npm run test:unit`) are unaffected and need none of this.
 
 ## What this app is
 

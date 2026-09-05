@@ -3,11 +3,12 @@
 import { useState } from "react";
 import Button from "@/components/ui/Button";
 import Panel from "@/components/ui/Panel";
+import { formatTimestampUtc } from "@/lib/format-date";
 
 interface AuditRow {
   action: string;
   metadata: Record<string, unknown>;
-  createdAt?: string;
+  createdAt?: string | null;
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -110,11 +111,18 @@ export default function AuditLogSection({ initialRows }: Readonly<{ initialRows:
           {rows.slice(0, 5).map((row, index) => {
             const summary = formatMetadataSummary(row.metadata);
             return (
-              <li key={`${row.action}-${index}`} className="rounded-field bg-panel-2 p-3">
+              <li key={`${row.action}-${row.createdAt ?? index}`} className="rounded-field bg-panel-2 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-semibold text-foreground">{formatActionLabel(row.action)}</span>
                   <span className="text-xs text-muted font-mono">{row.action}</span>
                 </div>
+                <p className="mt-1 text-xs text-muted">
+                  {row.createdAt ? (
+                    <time dateTime={row.createdAt}>{formatTimestampUtc(row.createdAt)}</time>
+                  ) : (
+                    "Unknown time"
+                  )}
+                </p>
                 {summary && (
                   <p className="mt-1 text-xs text-muted">
                     {summary}

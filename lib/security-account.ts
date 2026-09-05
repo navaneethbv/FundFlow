@@ -17,8 +17,18 @@ export function buildDataTakeout(sections: Record<string, unknown[]>) {
   return redactTakeoutSecrets(sections);
 }
 
+/**
+ * An audit row without its timestamp cannot answer the only question the log
+ * exists to answer -- when did this happen -- so `createdAt` is carried through
+ * rather than dropped. It stays null only for a row that genuinely has none.
+ */
 export function buildAuditLogPage(
-  rows: { userId: string | null; action: string; metadata: Record<string, unknown> }[],
+  rows: {
+    userId: string | null;
+    action: string;
+    metadata: Record<string, unknown>;
+    createdAt?: string | null;
+  }[],
   userId: string,
   limit: number,
 ) {
@@ -27,6 +37,7 @@ export function buildAuditLogPage(
     .slice(0, limit)
     .map((row) => ({
       action: row.action,
+      createdAt: row.createdAt ?? null,
       metadata: Object.fromEntries(
         Object.entries(row.metadata).map(([key, value]) => [
           key,
@@ -70,6 +81,11 @@ export function formatDeviceLabel(ua: string | null): string {
   return browser || os || ua.slice(0, 40);
 }
 
+/**
+ * Sessions are sorted newest-first and keep `lastSeenAt`: "Chrome on Mac" three
+ * times over tells the user nothing about which one to revoke, and last-active
+ * is the field that distinguishes them.
+ */
 export function buildSessionList(
   sessions: { id: string; current: boolean; userAgent: string | null; lastSeenAt: string }[],
 ) {
@@ -79,5 +95,6 @@ export function buildSessionList(
       id: session.id,
       label: formatDeviceLabel(session.userAgent),
       current: session.current,
+      lastSeenAt: session.lastSeenAt,
     }));
 }

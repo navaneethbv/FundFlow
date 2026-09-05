@@ -3,9 +3,12 @@ import { serverEnv } from "@/lib/env.server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { buildBackupArchive } from "@/lib/backup";
 import {
+  collectReceiptAssets,
   collectUserData,
   countUserDataRows,
   countUserRecordRows,
+  RECEIPT_ASSETS_KEY,
+  RECEIPT_ASSETS_OMITTED_KEY,
 } from "@/lib/user-data";
 import { sendBackupEmail } from "@/lib/reporting";
 import { alertCronFailure } from "@/lib/cron-alert";
@@ -15,6 +18,12 @@ import { writeAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+/**
+ * How long a claim may sit undelivered before another run may take it over.
+ * Comfortably longer than `maxDuration`, so an in-flight send is never stolen.
+ */
+const STALE_CLAIM_MS = 30 * 60 * 1000;
 
 /**
  * Monthly encrypted backup (2.1): per user, serialize the full takeout
@@ -35,11 +44,17 @@ async function backupSingleUser(
     return false;
   }
 
+  // Receipt images ride along with their metadata rows so a restore returns the
+  // pictures too; whatever the budget leaves behind is named in the archive.
+  const receiptAssets = await collectReceiptAssets(service, sections.receipts ?? []);
+
   const archive = buildBackupArchive(
     {
-      backup_version: 1,
+      backup_version: 2,
       exported_at: today,
       ...sections,
+      [RECEIPT_ASSETS_KEY]: receiptAssets.assets,
+      [RECEIPT_ASSETS_OMITTED_KEY]: receiptAssets.omitted,
     },
     backupKey,
     userId,
@@ -55,12 +70,27 @@ async function backupSingleUser(
     archive,
     today,
   );
+
+  // The claim row already exists (see claimBackupDelivery); this is the
+  // completion half, and its error is checked because losing it is exactly how
+  // a delivered backup gets sent a second time.
+  const { error: completionError } = await service
+    .from("backup_deliveries")
+    .update({ delivered_at: new Date().toISOString(), rows_backed_up: countUserDataRows(sections) })
+    .eq("user_id", userId)
+    .eq("period", today.slice(0, 7));
+  if (completionError) {
+    throw new Error(`backup delivery marker failed to persist: ${completionError.message}`);
+  }
+
   await writeAudit({
     userId,
     action: "data_backup",
     metadata: {
       rows: countUserDataRows(sections),
       date: today,
+      receipt_assets: receiptAssets.assets.length,
+      receipt_assets_omitted: receiptAssets.omitted.length,
     },
   });
   return true;
@@ -72,31 +102,76 @@ interface BackupBatchResult {
   failures: { userId: string; error: string }[];
 }
 
-async function fetchAllAuditUserIds(
+type ClaimOutcome = "claimed" | "already_delivered" | "claimed_elsewhere";
+
+/**
+ * Atomically claim this user's backup for the period, or report who holds it.
+ *
+ * The insert is the claim: `backup_deliveries` is keyed on (user_id, period),
+ * so exactly one caller can create the row and a concurrent invocation gets
+ * nothing back from `ignoreDuplicates`. Every error is checked and rethrown,
+ * which is the point of the table -- the previous dedup read audit_logs rows
+ * written by writeAudit(), which swallows both the returned error and any
+ * exception, so a delivered backup could lose its marker and be resent.
+ *
+ * A claim with no `delivered_at` is a run that crashed between claiming and
+ * sending. Taking it over is the safe direction: at worst the user receives a
+ * duplicate archive, whereas leaving it would skip their backup forever.
+ */
+async function claimBackupDelivery(
   service: ReturnType<typeof createServiceClient>,
-  action: string,
-  sinceIso: string,
-): Promise<Set<string>> {
-  const userIds = new Set<string>();
-  const PAGE_SIZE = 1000;
-  for (let page = 0; ; page++) {
-    const from = page * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
-    const query = service
-      .from("audit_logs")
-      .select("user_id")
-      .eq("action", action)
-      .gte("created_at", sinceIso)
-      .order("id", { ascending: true });
-    const res = await query.range(from, to);
-    if (res?.error) throw res.error;
-    const rows = (res?.data ?? []) as Array<{ user_id?: string | null }>;
-    for (const r of rows) {
-      if (r?.user_id) userIds.add(r.user_id);
-    }
-    if (rows.length < PAGE_SIZE) break;
-  }
-  return userIds;
+  userId: string,
+  period: string,
+): Promise<ClaimOutcome> {
+  const { data: inserted, error: insertError } = await service
+    .from("backup_deliveries")
+    .upsert({ user_id: userId, period }, { onConflict: "user_id,period", ignoreDuplicates: true })
+    .select("user_id");
+  if (insertError) throw insertError;
+  if ((inserted ?? []).length > 0) return "claimed";
+
+  const { data: existing, error: readError } = await service
+    .from("backup_deliveries")
+    .select("delivered_at, claimed_at")
+    .eq("user_id", userId)
+    .eq("period", period)
+    .maybeSingle();
+  if (readError) throw readError;
+  if (existing?.delivered_at) return "already_delivered";
+
+  const claimedAt = Date.parse(String(existing?.claimed_at ?? ""));
+  const isStale =
+    Number.isFinite(claimedAt) && Date.now() - claimedAt > STALE_CLAIM_MS;
+  if (!isStale) return "claimed_elsewhere";
+
+  const { data: reclaimed, error: reclaimError } = await service
+    .from("backup_deliveries")
+    .update({ claimed_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .eq("period", period)
+    .is("delivered_at", null)
+    .lt("claimed_at", new Date(Date.now() - STALE_CLAIM_MS).toISOString())
+    .select("user_id");
+  if (reclaimError) throw reclaimError;
+  return (reclaimed ?? []).length > 0 ? "claimed" : "claimed_elsewhere";
+}
+
+/**
+ * Release a claim whose send failed, so the next run retries instead of the
+ * user silently missing a month.
+ */
+async function releaseBackupClaim(
+  service: ReturnType<typeof createServiceClient>,
+  userId: string,
+  period: string,
+): Promise<void> {
+  const { error } = await service
+    .from("backup_deliveries")
+    .delete()
+    .eq("user_id", userId)
+    .eq("period", period)
+    .is("delivered_at", null);
+  if (error) logError("cron.backup.release_claim", error);
 }
 
 async function fetchAllProfileIds(
@@ -123,29 +198,32 @@ async function processUserBackups(
   today: string,
   backupKey: string,
 ): Promise<BackupBatchResult> {
-  const monthPrefix = today.slice(0, 7);
+  const period = today.slice(0, 7);
   let sent = 0;
   let skipped = 0;
   const failures: { userId: string; error: string }[] = [];
 
-  const alreadySentUsers = await fetchAllAuditUserIds(
-    service,
-    "data_backup",
-    `${monthPrefix}-01T00:00:00Z`,
-  );
-
   for (const profile of profiles) {
     const userId = profile.id;
-    if (alreadySentUsers.has(userId)) {
-      skipped += 1;
-      continue;
-    }
-
+    let claimed = false;
     try {
+      const outcome = await claimBackupDelivery(service, userId, period);
+      if (outcome !== "claimed") {
+        skipped += 1;
+        continue;
+      }
+      claimed = true;
       const wasSent = await backupSingleUser(service, userId, today, backupKey);
-      if (wasSent) sent += 1;
+      if (wasSent) {
+        sent += 1;
+      } else {
+        // Nothing worth archiving, or no address to send to. Drop the claim so
+        // a later run reconsiders once the account has data.
+        await releaseBackupClaim(service, userId, period);
+      }
     } catch (err) {
       logError("cron.backup.user", err);
+      if (claimed) await releaseBackupClaim(service, userId, period);
       failures.push({
         userId,
         error: err instanceof Error ? err.name : "unknown_error",

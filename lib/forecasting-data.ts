@@ -4,7 +4,7 @@ import {
   computeForecastDefaults,
   computeForecastStartingState,
   type ForecastDefaults,
-  type ForecastStartingState,
+  type ForecastStartingSummary,
 } from "@/lib/forecasting";
 import { loadCanonicalProjection } from "@/lib/finance-query";
 
@@ -30,9 +30,23 @@ function trailingMonths(today: string, count: number): string[] {
 }
 
 export interface ForecastPageData {
-  startingState: ForecastStartingState;
+  startingState: ForecastStartingSummary;
   defaults: ForecastDefaults;
   monthlyExpenses: number;
+}
+
+/**
+ * The per-account net-worth exclusions the accounts page writes into
+ * `profiles.dashboard_prefs`. `lib/net-worth.ts` reads the same list; the
+ * forecast has to honour it too, or the projection starts from a balance sheet
+ * the user already told the app to stop counting.
+ */
+function readExcludedNetWorthIds(dashboardPrefs: unknown): Set<string> {
+  const accountsPage = (dashboardPrefs as Record<string, unknown> | null | undefined)
+    ?.accountsPage as { excludedNetWorthIds?: unknown } | undefined;
+  return Array.isArray(accountsPage?.excludedNetWorthIds)
+    ? new Set(accountsPage.excludedNetWorthIds.filter((id): id is string => typeof id === "string"))
+    : new Set<string>();
 }
 
 /**
@@ -47,9 +61,16 @@ export async function loadForecastPageData(
 ): Promise<ForecastPageData> {
   const months = trailingMonths(today, TRAILING_MONTHS);
 
-  const [accountsResult, manualResult, projection] = await Promise.all([
-    supabase.from("accounts").select("type, subtype, current_balance").eq("user_id", userId),
-    supabase.from("manual_accounts").select("account_type, balance").eq("user_id", userId),
+  const [accountsResult, manualResult, profileResult, projection] = await Promise.all([
+    supabase
+      .from("accounts")
+      .select("id, type, subtype, current_balance, iso_currency_code")
+      .eq("user_id", userId),
+    supabase
+      .from("manual_accounts")
+      .select("id, account_type, balance, include_in_net_worth")
+      .eq("user_id", userId),
+    supabase.from("profiles").select("dashboard_prefs").eq("id", userId).maybeSingle(),
     loadCanonicalProjection(supabase, {
       scope: { kind: "mine", ownerUserId: userId },
       window: { start: `${months[0]}-01`, endExclusive: dayAfter(today) },
@@ -57,16 +78,29 @@ export async function loadForecastPageData(
   ]);
   if (accountsResult.error) throw accountsResult.error;
   if (manualResult.error) throw manualResult.error;
+  if (profileResult.error) throw profileResult.error;
+
+  const excludedNetWorthIds = readExcludedNetWorthIds(
+    (profileResult.data as { dashboard_prefs?: unknown } | null)?.dashboard_prefs,
+  );
 
   const startingState = computeForecastStartingState(
     (accountsResult.data ?? []).map((a) => ({
       type: a.type as string | null,
       subtype: a.subtype as string | null,
-      balance: Number(a.current_balance ?? 0),
+      balance: a.current_balance === null || a.current_balance === undefined
+        ? null
+        : Number(a.current_balance),
+      isoCurrencyCode: (a.iso_currency_code ?? null) as string | null,
+      includeInNetWorth: !excludedNetWorthIds.has(a.id as string),
     })),
     (manualResult.data ?? []).map((a) => ({
       accountType: a.account_type as string,
-      balance: Number(a.balance ?? 0),
+      balance: a.balance === null || a.balance === undefined ? null : Number(a.balance),
+      // Only an explicit `false` excludes. Coercing an absent column to false
+      // would silently zero the whole starting point.
+      includeInNetWorth:
+        a.include_in_net_worth !== false && !excludedNetWorthIds.has(a.id as string),
     })),
   );
 

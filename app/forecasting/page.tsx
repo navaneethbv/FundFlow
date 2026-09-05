@@ -38,6 +38,20 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
     searchParams,
   ]);
   const assumptions = parseForecastAssumptions(params, defaults);
+  // Say what the balance sheet left out rather than projecting from a silently
+  // incomplete starting point (a zeroed unknown balance reads as a real $0).
+  const { gaps } = startingState;
+  const startingPointNotes = [
+    gaps.excludedFromNetWorth > 0
+      ? `${gaps.excludedFromNetWorth} account${gaps.excludedFromNetWorth === 1 ? "" : "s"} you excluded from net worth`
+      : null,
+    gaps.unknownBalance > 0
+      ? `${gaps.unknownBalance} account${gaps.unknownBalance === 1 ? "" : "s"} with no reported balance`
+      : null,
+    gaps.foreignCurrencies.length > 0
+      ? `balances in ${gaps.foreignCurrencies.join(", ")} (no exchange rate)`
+      : null,
+  ].filter((note): note is string => note !== null);
   const currentNetWorth = startingState.cash + startingState.investments - startingState.liabilities;
   const points = forecastNetWorth(startingState, assumptions);
   const milestones = computeForecastMilestones(startingState, assumptions, monthlyExpenses);
@@ -84,6 +98,11 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
           <p className="mt-3 text-sm text-muted">
             Net worth today: {" "}<span className="money font-semibold text-foreground">{formatCurrency(currentNetWorth)}</span>
           </p>
+          {startingPointNotes.length > 0 && (
+            <p className="mt-2 text-sm text-muted">
+              Not counted in this starting point: {startingPointNotes.join("; ")}.
+            </p>
+          )}
         </Panel>
 
         <Panel padding="lg">
