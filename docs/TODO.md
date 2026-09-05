@@ -30,6 +30,12 @@ Branch `codex/bulk-transfer-linking` adds per-row selection, select all, and bul
 The bulk endpoint is bounded at 100 pairs per request, processes up to eight pairs concurrently, validates each pair through the existing ownership and transfer checks, and returns partial failures so valid links are not hidden by one bad suggestion.
 The feature is verified locally and remains pending merge and deployment.
 
+### Savings-rate context follow-up in progress on 2026-09-05
+
+Dashboard savings rates retain their exact signed calculation while calling out denominator-sensitive periods and showing the recorded income and spending basis.
+The six-month savings series now shares the same signed and no-income behavior.
+Focused tests pass; the follow-up remains pending merge and deployment.
+
 ### Closed
 
 - **FF-01, FF-04 Session identity and service-role isolation.**

@@ -13,6 +13,13 @@ Validation passed with 4,909 unit tests, 95.04% branch coverage, lint, typecheck
 The full coverage command was not allowed to run its live integration files because `TEST_SUPABASE_URL` is not approved on this machine.
 This branch has not been deployed or exercised against production financial data.
 
+## 2026-09-05: Savings-rate denominator context
+
+The dashboard keeps the signed savings-rate calculation, but now flags a period where spending is more than ten times recorded income as denominator-sensitive.
+The card exposes the recorded income and spending amounts in its explanatory copy so a large negative percentage is not mistaken for a calculation failure.
+The six-month savings-rate series now uses the same shared signed calculation and returns no rate for months without an income denominator.
+Focused savings-rate tests pass; broader verification for this follow-up is pending.
+
 ## 2026-09-05: Third review of PR #153
 
 Reviewed head `6c69927` and reproduced two residual defects through request-handler regressions with isolated dependencies.

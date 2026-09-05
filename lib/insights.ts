@@ -7,6 +7,7 @@
  * no I/O, no Plaid calls. Amount sign follows Plaid: positive = money out.
  */
 import { addDays, advanceFrequency } from "@/lib/date-utils";
+import { computeSavingsRate } from "@/lib/finance-metrics";
 
 /**
  * Primary personal-finance categories treated as essential spending.
@@ -82,11 +83,11 @@ export interface MonthAmount {
 
 export interface SavingsRatePoint {
   month: string;
-  /** Whole-percent savings rate, floored at 0 (matches computeSavingsRate). */
-  rate: number;
+  /** Signed savings rate, or null when the month has no income denominator. */
+  rate: number | null;
 }
 
-/** Per-month savings rate (%): (income − spending) / income, floored at 0. */
+/** Per-month signed savings rate (%): (income − spending) / income. */
 export function computeSavingsRateSeries(
   income: MonthAmount[],
   spending: MonthAmount[],
@@ -94,9 +95,7 @@ export function computeSavingsRateSeries(
   const spendByMonth = new Map(spending.map((row) => [row.month, row.amount]));
   return income.map((row) => {
     const spent = spendByMonth.get(row.month) ?? 0;
-    const rate =
-      row.amount <= 0 ? 0 : Math.max(0, Math.round(((row.amount - spent) / row.amount) * 100));
-    return { month: row.month, rate };
+    return { month: row.month, rate: computeSavingsRate(row.amount, spent) };
   });
 }
 
