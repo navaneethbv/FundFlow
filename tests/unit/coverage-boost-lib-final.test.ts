@@ -129,13 +129,19 @@ describe("import barrel re-exports", () => {
     expect(typeof mint.looksLikeMintCsv).toBe("function");
     expect(typeof mint.parseMintCsv).toBe("function");
     expect(mint.MINT_FORMAT_SPEC).toBeDefined();
+    expect(mint.looksLikeMintCsv(["date", "description", "original description", "amount", "transaction type"])).toBe(true);
+    expect(mint.parseMintCsv("Date,Description,Amount,Transaction Type\n2026-08-01,Test,10,debit").rows).toHaveLength(1);
 
     expect(typeof monarch.looksLikeMonarchCsv).toBe("function");
     expect(typeof monarch.parseMonarchCsv).toBe("function");
     expect(monarch.MONARCH_FORMAT_SPEC).toBeDefined();
+    expect(monarch.looksLikeMonarchCsv(["date", "merchant", "original statement"])).toBe(true);
+    expect(monarch.parseMonarchCsv("Date,Merchant,Amount\n2026-08-01,Test,-10").rows).toHaveLength(1);
 
     expect(typeof ynab.looksLikeYnabCsv).toBe("function");
     expect(typeof ynab.parseYnabCsv).toBe("function");
     expect(ynab.YNAB_FORMAT_SPEC).toBeDefined();
+    expect(ynab.looksLikeYnabCsv(["payee", "outflow", "inflow"])).toBe(true);
+    expect(ynab.parseYnabCsv("Date,Payee,Outflow,Inflow\n2026-08-01,Test,10,0").rows).toHaveLength(1);
   });
 });

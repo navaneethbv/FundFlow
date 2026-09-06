@@ -18,10 +18,13 @@ function mockClient(opts: {
   accessToken?: string | null;
   revokedAt?: string | null;
   lookupError?: boolean;
+  dbError?: boolean;
+  sessionError?: boolean;
   noRow?: boolean;
 }): SupabaseClient {
   const maybeSingle = vi.fn(async () => {
     if (opts.lookupError) throw new Error("db down");
+    if (opts.dbError) return { data: null, error: new Error("db error") };
     if (opts.noRow) return { data: null, error: null };
     return { data: { revoked_at: opts.revokedAt ?? null }, error: null };
   });
@@ -32,11 +35,15 @@ function mockClient(opts: {
   };
   return {
     auth: {
-      getSession: vi.fn(async () => ({
-        data: {
-          session: opts.accessToken ? { access_token: opts.accessToken } : null,
-        },
-      })),
+      getSession: vi.fn(async () => {
+        if (opts.sessionError) return { data: null, error: new Error("session auth down") };
+        return {
+          data: {
+            session: opts.accessToken ? { access_token: opts.accessToken } : null,
+          },
+          error: null,
+        };
+      }),
     },
     from: vi.fn(() => chain),
   } as unknown as SupabaseClient;
@@ -76,5 +83,20 @@ describe("isSessionRevoked", () => {
       "session-revocation.lookup",
       expect.any(Error),
     );
+  });
+
+  it("throws when getSession returns an error", async () => {
+    const client = mockClient({
+      sessionError: true,
+    });
+    await expect(isSessionRevoked(client, "u1")).rejects.toThrow("session auth down");
+  });
+
+  it("throws when user_session_records query returns an error", async () => {
+    const client = mockClient({
+      accessToken: makeToken("s1"),
+      dbError: true,
+    });
+    await expect(isSessionRevoked(client, "u1")).rejects.toThrow("db error");
   });
 });
