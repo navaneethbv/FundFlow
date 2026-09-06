@@ -256,7 +256,7 @@ describe("getDashboardData", () => {
   it("handles empty database responses gracefully", async () => {
     const mockFrom = vi.fn(() => {
       const chain: Record<string, unknown> = {};
-      for (const m of ["select", "eq", "order", "limit", "gte", "lt", "in", "single"]) {
+      for (const m of ["select", "eq", "order", "limit", "gte", "lt", "in", "range", "single"]) {
         chain[m] = () => chain;
       }
       chain.then = (res: (v: unknown) => unknown) => res({ data: [] });

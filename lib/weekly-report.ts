@@ -1,4 +1,5 @@
 import { EXCLUDED_PFC } from "@/lib/dashboard";
+import { matchesBudgetCategory } from "@/lib/finance-domain";
 import {
   applyMerchantRules,
   type MerchantRule,
@@ -13,6 +14,8 @@ export interface WeeklyReportTransaction {
   merchantName: string | null;
   name: string | null;
   category: string | null;
+  /** Provider detailed category (pfc_detailed) for canonical budget matching. */
+  detailedCategory?: string | null;
   accountId: string;
   displayCategory?: string | null;
   cashFlowClassification?: "expense" | "income" | null;
@@ -272,16 +275,42 @@ export function buildWeeklyReportModel(
     },
   );
 
-  const categoryAmount = new Map(
-    categories.map((category) => [category.category, category.amount]),
-  );
   // A monthly review measures spend against the whole monthly limit; the
   // weekly cadence prorates it (`* 12 / 52`). Using the weekly number for a
   // month of spend marked every ordinary budget as ~4x over.
   const isMonthlyPeriod = input.period.kind === "monthly";
   const budgets = input.budgets
     .map((budget) => {
-      const spent = round2(categoryAmount.get(budget.category) ?? 0);
+      // Canonical matching (M-1): match each spend unit on both keys so a
+      // detailed budget and a group budget resolve the same rows, exactly
+      // as /budget and the dashboard envelopes do. Split parts carry only
+      // their own category: inheriting the parent's group would let a
+      // GIFTS part match a DINING budget through the shared parent.
+      const splitsByTxn = new Map<string, { category: string; amount: number }[]>();
+      for (const split of input.splits) {
+        const rows = splitsByTxn.get(split.transactionId) ?? [];
+        rows.push(split);
+        splitsByTxn.set(split.transactionId, rows);
+      }
+      let spent = 0;
+      for (const transaction of currentSpend) {
+        const parts = splitsByTxn.get(transaction.id);
+        if (parts && parts.length > 0) {
+          for (const part of parts) {
+            if (matchesBudgetCategory(budget.category, part.category)) {
+              spent += part.amount;
+            }
+          }
+        } else if (
+          matchesBudgetCategory(budget.category, {
+            categoryKey: transaction.detailedCategory ?? transaction.category,
+            groupKey: transaction.flowCategory,
+          })
+        ) {
+          spent += transaction.spendAmount;
+        }
+      }
+      spent = round2(spent);
       const allowance = round2(
         isMonthlyPeriod ? budget.monthlyLimit : (budget.monthlyLimit * 12) / 52,
       );

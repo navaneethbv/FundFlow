@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { addDays, parseDate } from "@/lib/date-utils";
+import { addDays, addMonths, parseDate } from "@/lib/date-utils";
 
 export const RECURRING_DETECTION_VERSION = 1;
 
@@ -120,16 +120,6 @@ function isIsoDate(value: string | null | undefined): value is string {
 
 function dayDifference(earlier: string, later: string): number {
   return Math.round((parseDate(later).getTime() - parseDate(earlier).getTime()) / 86_400_000);
-}
-
-function addMonthsClamped(value: string, months: number): string {
-  const date = parseDate(value);
-  const day = date.getUTCDate();
-  date.setUTCDate(1);
-  date.setUTCMonth(date.getUTCMonth() + months);
-  const lastDay = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
-  date.setUTCDate(Math.min(day, lastDay));
-  return date.toISOString().slice(0, 10);
 }
 
 function roundCents(value: number): number {
@@ -377,9 +367,9 @@ function nextDateForCadence(
     case "BIWEEKLY":
       return addDays(effectiveDate, 14);
     case "MONTHLY":
-      return addMonthsClamped(effectiveDate, 1);
+      return addMonths(effectiveDate, 1);
     case "QUARTERLY":
-      return addMonthsClamped(effectiveDate, 3);
+      return addMonths(effectiveDate, 3);
   }
 }
 

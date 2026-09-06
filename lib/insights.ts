@@ -6,7 +6,7 @@
  * Everything here is pure math over data the dashboard already loads —
  * no I/O, no Plaid calls. Amount sign follows Plaid: positive = money out.
  */
-import { addDays, advanceFrequency } from "@/lib/date-utils";
+import { addDays, addMonths, advanceFrequency } from "@/lib/date-utils";
 import { computeSavingsRate } from "@/lib/finance-metrics";
 
 /**
@@ -174,12 +174,29 @@ export function detectPaychecks(input: {
 
     let nextPayDate: string | null = null;
     if (lastPaidDate) {
-      let cursor = lastPaidDate;
-      // Bounded loop: even weekly cadence reaches any realistic asOf fast.
-      for (let i = 0; i < 400 && cursor < input.asOf; i++) {
-        cursor = advance(cursor, stream.frequency);
+      // Month-based cadences step from the deposit anchor with absolute
+      // offsets so a 01-31 payday advances 02-28 then 03-31 (M-2) instead
+      // of drifting to the 28th.
+      const monthsPerPayPeriod =
+        stream.frequency === "monthly" ? 1
+        : stream.frequency === "quarterly" ? 3
+        : stream.frequency === "yearly" ? 12
+        : null;
+      if (monthsPerPayPeriod !== null) {
+        let step = 0;
+        for (; step < 400 && addMonths(lastPaidDate, step * monthsPerPayPeriod) < input.asOf; step += 1) {
+          // advance stale anchor forward
+        }
+        const candidate = addMonths(lastPaidDate, step * monthsPerPayPeriod);
+        nextPayDate = step < 400 ? candidate : null;
+      } else {
+        let cursor = lastPaidDate;
+        // Bounded loop: even weekly cadence reaches any realistic asOf fast.
+        for (let i = 0; i < 400 && cursor < input.asOf; i++) {
+          cursor = advance(cursor, stream.frequency);
+        }
+        nextPayDate = cursor >= input.asOf ? cursor : null;
       }
-      nextPayDate = cursor >= input.asOf ? cursor : null;
     }
 
     return {

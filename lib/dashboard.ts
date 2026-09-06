@@ -32,7 +32,7 @@ import {
   type SafeToSpend,
   type SavingsRatePoint,
 } from "@/lib/insights";
-import { aggregateSpendWithSplits } from "@/lib/transaction-quality";
+import { aggregateSpendWithSplits, validateSplits } from "@/lib/transaction-quality";
 import { localMonthKey } from "@/lib/format-date";
 import { normalizeExternalDisplayText } from "@/lib/external-display-text";
 import {
@@ -662,6 +662,8 @@ interface DashboardOverrideRow {
 
 const DASHBOARD_OVERRIDE_CHUNK_SIZE = 250;
 const DASHBOARD_OVERRIDE_PAGE_SIZE = 1_000;
+/** PostgREST max_rows is 1,000: page the window read so totals never truncate. */
+const DASHBOARD_TXN_PAGE_SIZE = 1_000;
 
 async function loadDashboardOverrides(
   supabase: SupabaseClient,
@@ -701,6 +703,54 @@ async function loadDashboardOverrides(
 interface QueryResult<T> {
   data: T | null;
   error?: unknown;
+}
+
+/**
+ * Envelope spend rows keyed by (group, detailed) pair (M-1): each txn feeds
+ * exactly one pair bucket carrying both keys, so a detailed budget and a
+ * group budget resolve the same spend without double-counting it. Split
+ * parts keep only their detailed key (their group is unknown), matching the
+ * categoryBreakdown treatment they already get.
+ */
+function toEnvelopeSpendRows(
+  txns: Pick<TxnLite, "id" | "amount" | "pfc_primary" | "pfc_detailed">[],
+  splits: { transactionId: string; category: string; amount: number }[],
+): { category: string; amount: number; groupKey: string | null; categoryKey: string | null }[] {
+  const splitsByTxn = new Map<string, { transactionId: string; category: string; amount: number }[]>();
+  for (const split of splits) {
+    const rows = splitsByTxn.get(split.transactionId) ?? [];
+    rows.push(split);
+    splitsByTxn.set(split.transactionId, rows);
+  }
+  const byPair = new Map<string, { category: string; amount: number; groupKey: string | null; categoryKey: string | null }>();
+  const add = (groupKey: string | null, categoryKey: string | null, amount: number): void => {
+    const key = `${groupKey ?? ""}|${categoryKey ?? ""}`;
+    const existing = byPair.get(key);
+    if (existing) existing.amount = round2(existing.amount + amount);
+    else {
+      byPair.set(key, {
+        category: categoryKey ?? groupKey ?? "UNCATEGORIZED",
+        amount: round2(amount),
+        groupKey,
+        categoryKey,
+      });
+    }
+  };
+  for (const txn of txns) {
+    const rows = splitsByTxn.get(txn.id);
+    if (
+      rows &&
+      validateSplits(
+        { id: txn.id, amount: txn.amount, category: txn.pfc_primary ?? "UNCATEGORIZED" },
+        rows,
+      ).valid
+    ) {
+      for (const split of rows) add(null, split.category, split.amount);
+    } else {
+      add(txn.pfc_primary, txn.pfc_detailed, Math.abs(txn.amount));
+    }
+  }
+  return [...byPair.values()];
 }
 
 /**
@@ -762,24 +812,11 @@ export async function getDashboardData(
   // Transactions are then fetched BOUNDED to the 6-month window the dashboard
   // actually renders — with years of history (and a 2-minute auto re-render)
   // an unbounded select-all grows without limit.
-  const [
-    { data: accounts },
-    { data: streams },
-    { data: items },
-    { data: budgets },
-    { data: lastSyncJob },
-    { data: oldestTxn },
-    { data: merchantRules },
-    { data: snapshots },
-    { data: linkedRefunds },
-    { data: linkedTransfers },
-    { data: linkedDuplicates },
-    { data: categoryOverrideRows },
-    { data: sinkingFundRows },
-    { data: scheduledRows },
-    manualAccountsResult,
-    netWorthPrefsResult,
-  ] = await Promise.all([
+  //
+  // Every Stage-1 read is error-checked (A-5): a DB failure used to render a
+  // dashboard of zeros with no error. The linked_transfers fallback for a
+  // missing table lives inside its own query builder below.
+  const stage1 = await Promise.all([
     scopeUser(
       supabase
         .from("accounts")
@@ -904,6 +941,61 @@ export async function getDashboardData(
       : Promise.resolve({ data: null, error: null }),
   ]);
 
+  const [
+    accountsResult,
+    streamsResult,
+    itemsResult,
+    budgetsResult,
+    lastSyncJobResult,
+    oldestTxnResult,
+    merchantRulesResult,
+    snapshotsResult,
+    linkedRefundsResult,
+    linkedTransfers,
+    linkedDuplicatesResult,
+    categoryOverrideRowsResult,
+    sinkingFundRowsResult,
+    scheduledRowsResult,
+    manualAccountsResult,
+    netWorthPrefsResult,
+  ] = stage1;
+  for (const [name, result] of [
+    ["accounts", accountsResult],
+    ["recurring_streams", streamsResult],
+    ["plaid_items", itemsResult],
+    ["budgets", budgetsResult],
+    ["sync_jobs", lastSyncJobResult],
+    ["transactions_probe", oldestTxnResult],
+    ["merchant_rules", merchantRulesResult],
+    ["net_worth_snapshots", snapshotsResult],
+    ["linked_refunds", linkedRefundsResult],
+    ["linked_duplicates", linkedDuplicatesResult],
+    ["category_overrides", categoryOverrideRowsResult],
+    ["sinking_funds", sinkingFundRowsResult],
+    ["scheduled_transactions", scheduledRowsResult],
+  ] as const) {
+    if (result.error) {
+      throw result.error instanceof Error
+        ? new Error(`dashboard stage1 ${name}: ${result.error.message}`, { cause: result.error })
+        : result.error;
+    }
+  }
+  const accounts = accountsResult.data;
+  const streams = streamsResult.data;
+  const items = itemsResult.data;
+  const budgets = budgetsResult.data;
+  const lastSyncJob = lastSyncJobResult.data;
+  const oldestTxn = oldestTxnResult.data;
+  const merchantRules = merchantRulesResult.data;
+  const snapshots = snapshotsResult.data;
+  const linkedRefunds = linkedRefundsResult.data;
+  if (linkedTransfers.error) throw linkedTransfers.error;
+  const linkedTransfersRows = linkedTransfers.data;
+  const linkedDuplicates = linkedDuplicatesResult.data;
+  const categoryOverrideRows = categoryOverrideRowsResult.data;
+  const sinkingFundRows = sinkingFundRowsResult.data;
+  const scheduledRows = scheduledRowsResult.data;
+
   const allAccounts = ((accounts ?? []) as AccountSummary[]).map((account) => ({
     ...account,
     name: normalizeExternalDisplayText(account.name),
@@ -940,17 +1032,31 @@ export async function getDashboardData(
 
   // Stage 2: transactions for the rendered window only — the active month,
   // the five months before it (charts), including the pro-rated comparison.
+  // Paged with .range() (A-5): PostgREST silently truncates an unpaged read
+  // at max_rows (1,000), which produced wrong spend totals, envelopes, and
+  // cron alerts with no error once a ledger passed ~165 txns/month.
   const windowStart = `${addMonths(activeMonth, -5)}-01`;
   const windowEndExclusive = `${addMonths(activeMonth, 1)}-01`;
-  const { data: txns } = await scopeUser(
-    supabase
-      .from("transactions")
-      .select(
-        "id, date, amount, merchant_name, name, pfc_primary, pfc_detailed, account_id, user_id, plaid_transaction_id",
-      )
-      .gte("date", windowStart)
-      .lt("date", windowEndExclusive),
-  );
+  const txns: Array<Record<string, unknown>> = [];
+  for (let page = 0; ; page += 1) {
+    const from = page * DASHBOARD_TXN_PAGE_SIZE;
+    const result = await scopeUser(
+      supabase
+        .from("transactions")
+        .select(
+          "id, date, amount, merchant_name, name, pfc_primary, pfc_detailed, account_id, user_id, plaid_transaction_id",
+        )
+        .gte("date", windowStart)
+        .lt("date", windowEndExclusive)
+        .order("date")
+        .order("id")
+        .range(from, from + DASHBOARD_TXN_PAGE_SIZE - 1),
+    ) as { data: Array<Record<string, unknown>> | null; error: unknown };
+    if (result.error) throw result.error;
+    const batch = result.data ?? [];
+    txns.push(...batch);
+    if (batch.length < DASHBOARD_TXN_PAGE_SIZE) break;
+  }
 
   // Per-transaction classification overrides for the rendered window, so the
   // dashboard agrees with every other canonical surface about the same rows.
@@ -1011,7 +1117,7 @@ export async function getDashboardData(
       chargeTransactionId: row.charge_transaction_id,
       refundTransactionId: row.refund_transaction_id,
     })),
-    linkedTransfers: ((linkedTransfers ?? []) as Array<{
+    linkedTransfers: ((linkedTransfersRows ?? []) as Array<{
       out_transaction_id: string;
       in_transaction_id: string;
     }>).map((row) => ({
@@ -1163,16 +1269,21 @@ export async function getDashboardData(
     windowMonths: monthlySpending
       .map((m) => m.month)
       .filter((m) => m !== activeMonth),
-    currentSpend: categoryBreakdown.map((row) => ({
-      category: row.category,
-      amount: row.amount,
-    })),
-    previousSpend: [...categoryHistoryMap.entries()]
-      .map(([key, amount]) => {
-        const [month, category] = key.split("|");
-        return { month: month!, category: category!, amount: round2(amount) };
-      })
-      .filter((row) => row.month !== activeMonth),
+    currentSpend: toEnvelopeSpendRows(activeMonthSpend, splits),
+    previousSpend: [...(() => {
+      const byMonth = new Map<string, Pick<TxnLite, "id" | "amount" | "pfc_primary" | "pfc_detailed">[]>();
+      for (const txn of spendTxns) {
+        if (!isSpending(txn)) continue;
+        const month = monthKey(txn.date);
+        if (month === activeMonth) continue;
+        const rows = byMonth.get(month) ?? [];
+        rows.push(txn);
+        byMonth.set(month, rows);
+      }
+      return [...byMonth.entries()].flatMap(([month, rows]) =>
+        toEnvelopeSpendRows(rows, []).map((row) => ({ ...row, month })),
+      );
+    })()],
     dayOfMonth: activeDay,
     daysInMonth: activeDaysInMonth,
   });

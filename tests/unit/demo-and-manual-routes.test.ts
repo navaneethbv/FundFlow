@@ -12,10 +12,15 @@ import {
 import { clientStub } from "../fixtures/supabase-query";
 import * as http from "@/lib/http";
 import * as featureFlags from "@/lib/feature-flags";
+import * as rateLimit from "@/lib/rate-limit";
 
 describe("Demo Route Full Branches", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The demo loader is rate-limited (A-12); this file tests the guard and
+    // load branches, not the limiter, so allow every call. The 429 path is
+    // covered in coverage-boost-api-routes.test.ts.
+    vi.spyOn(rateLimit, "checkRateLimit").mockResolvedValue(true);
   });
 
   it("POST returns 401 when unauthorized", async () => {

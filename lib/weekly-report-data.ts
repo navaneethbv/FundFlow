@@ -40,7 +40,7 @@ async function fetchAllTransactions(
   for (let offset = 0; ; offset += PAGE_SIZE) {
     const { data, error } = await supabase
       .from("transactions")
-      .select("id, date, amount, merchant_name, name, pfc_primary, account_id")
+      .select("id, date, amount, merchant_name, name, pfc_primary, pfc_detailed, account_id")
       .eq("user_id", userId)
       .gte("date", period.previousStart)
       .lte("date", period.end)
@@ -178,6 +178,7 @@ export async function getWeeklyReportData(
       merchantName: transaction.merchant_name as string | null,
       name: transaction.name as string | null,
       category: transaction.pfc_primary as string | null,
+      detailedCategory: transaction.pfc_detailed as string | null,
       accountId: transaction.account_id as string,
       displayCategory: override?.displayCategory ?? null,
       cashFlowClassification: override?.cashFlowClassification ?? null,

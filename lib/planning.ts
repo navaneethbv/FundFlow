@@ -1,15 +1,36 @@
 import { createHash } from "node:crypto";
 import { classifyBalanceSheetAmount } from "@/lib/account-balance";
 import { formatCurrency } from "@/lib/format";
-import { addDays, advanceFrequency, isoDate, parseDate } from "@/lib/date-utils";
+import { matchesBudgetCategory } from "@/lib/finance-domain";
+import { addDays, addMonths, advanceFrequency, isoDate, parseDate } from "@/lib/date-utils";
 import { safeCompileRegex } from "@/lib/rules-engine";
 
 export type EnvelopeStatus = "over" | "at-risk" | "on-track";
 
+/**
+ * One spend observation for envelope matching. `category` is the legacy
+ * single key (whatever the caller grouped on); callers that know both
+ * granularities pass `groupKey` + `categoryKey` so a detailed budget and a
+ * group budget resolve the same spend (M-1). Each row must be an atomic
+ * spend unit (one txn or one non-overlapping aggregate): a budget counts a
+ * row once when EITHER key matches, so emitting the same spend as both a
+ * group row and a detailed row would double-count it.
+ */
+export interface BudgetSpendRow {
+  category: string;
+  amount: number;
+  groupKey?: string | null;
+  categoryKey?: string | null;
+}
+
+export interface BudgetPreviousSpendRow extends BudgetSpendRow {
+  month: string;
+}
+
 export interface BudgetEnvelopeInput {
   budgets: { category: string; monthlyLimit: number; rolloverEnabled?: boolean }[];
-  currentSpend: { category: string; amount: number }[];
-  previousSpend: { month: string; category: string; amount: number }[];
+  currentSpend: BudgetSpendRow[];
+  previousSpend: BudgetPreviousSpendRow[];
   /**
    * Prior months the rollover carry should span. Months absent from
    * previousSpend count as zero spend (full carry). Without this, rollover
@@ -179,29 +200,101 @@ function nextOccurrence(date: string, frequency: RecurringFrequency): string {
   return advanceFrequency(date, frequency);
 }
 
+/** Whole months per step for month-based cadences; null for day-based ones. */
+function monthsPerStep(frequency: RecurringFrequency): number | null {
+  if (frequency === "monthly") return 1;
+  if (frequency === "quarterly") return 3;
+  if (frequency === "yearly") return 12;
+  return null;
+}
+
+/**
+ * Every occurrence date of one recurring item in `[from, to]`, advancing a
+ * stale anchor forward instead of dropping it (M-4). Month-based cadences
+ * step from the anchor with absolute offsets (`addMonths(anchor, n * k)`)
+ * so a 01-31 anchor yields 02-28 then 03-31 rather than drifting to the
+ * 28th forever (M-2). Bounded so a corrupt anchor can never loop forever.
+ */
+export function expandRecurring(item: RecurringItem, from: string, to: string): string[] {
+  if (item.frequency === "once") {
+    return item.nextDate >= from && item.nextDate <= to ? [item.nextDate] : [];
+  }
+  const dates: string[] = [];
+  const months = monthsPerStep(item.frequency);
+  if (months !== null) {
+    let step = 0;
+    for (; step < 1200 && addMonths(item.nextDate, step * months) < from; step += 1) {
+      // advance stale anchor forward without emitting past occurrences
+    }
+    for (; step < 2400; step += 1) {
+      const date = addMonths(item.nextDate, step * months);
+      if (date > to) break;
+      if (date >= from) dates.push(date);
+    }
+    return dates;
+  }
+  let cursor = item.nextDate;
+  for (let i = 0; i < 500 && cursor < from; i += 1) {
+    cursor = nextOccurrence(cursor, item.frequency);
+  }
+  for (let i = 0; i < 1000 && cursor >= from && cursor <= to; i += 1) {
+    dates.push(cursor);
+    cursor = nextOccurrence(cursor, item.frequency);
+  }
+  return dates;
+}
+
 function normalize(value: string): string {
   return value.trim().toLowerCase();
 }
 
 export function buildBudgetEnvelopes(input: BudgetEnvelopeInput): BudgetEnvelope[] {
-  const currentSpend = new Map(input.currentSpend.map((row) => [row.category, row.amount]));
-  const previousByCategory = new Map<string, { month: string; amount: number }[]>();
-
-  for (const row of input.previousSpend) {
-    const rows = previousByCategory.get(row.category) ?? [];
-    rows.push(row);
-    previousByCategory.set(row.category, rows);
-  }
+  // Canonical matching (M-1): spend rows arrive keyed by whatever the caller
+  // grouped on (dashboard: pfc_primary group; budget page: detailed
+  // categoryKey), while budgets store the seeded category string. Exact map
+  // lookups disagree across surfaces; every budget sums the rows that match
+  // it under `matchesBudgetCategory` instead. Rows carrying both keys match
+  // on either; legacy single-key rows match by equality.
+  const rowMatches = (budgetCategory: string, row: BudgetSpendRow): boolean => {
+    if (row.categoryKey != null || row.groupKey != null) {
+      return matchesBudgetCategory(budgetCategory, {
+        categoryKey: row.categoryKey,
+        groupKey: row.groupKey,
+      });
+    }
+    return matchesBudgetCategory(budgetCategory, row.category);
+  };
+  const spendFor = (rows: BudgetSpendRow[], budgetCategory: string): number =>
+    round2(
+      rows
+        .filter((row) => rowMatches(budgetCategory, row))
+        .reduce((sum, row) => sum + row.amount, 0),
+    );
+  const previousByMonthAndCategory = input.previousSpend.map((row) => ({
+    month: row.month,
+    category: row.category,
+    amount: row.amount,
+    groupKey: row.groupKey,
+    categoryKey: row.categoryKey,
+  }));
 
   const day = Math.max(1, input.dayOfMonth);
   const days = Math.max(day, input.daysInMonth);
 
   return input.budgets.map((budget) => {
-    const spent = round2(currentSpend.get(budget.category) ?? 0);
+    const spent = spendFor(input.currentSpend, budget.category);
     const projectedSpend = round2((spent / day) * days);
-    const history = (previousByCategory.get(budget.category) ?? []).sort((a, b) =>
-      a.month.localeCompare(b.month),
-    );
+    // History aggregates every prior row matching this budget, summed per
+    // month: two rows keyed differently (group vs detailed) that both match
+    // must not double-count the month listing, so collapse to one per month.
+    const historyByMonth = new Map<string, number>();
+    for (const row of previousByMonthAndCategory) {
+      if (!rowMatches(budget.category, row)) continue;
+      historyByMonth.set(row.month, round2((historyByMonth.get(row.month) ?? 0) + row.amount));
+    }
+    const history = [...historyByMonth.entries()]
+      .map(([month, amount]) => ({ month, amount }))
+      .sort((a, b) => a.month.localeCompare(b.month));
     const lastMonthSpend = round2(history.at(-1)?.amount ?? 0);
     const lastThree = history.slice(-3);
     const threeMonthAverage = round2(
@@ -247,17 +340,15 @@ export function forecastCashFlow(input: ForecastInput): CashFlowForecast {
   const events: CashFlowForecast["events"] = [];
 
   for (const item of input.items) {
-    let cursor = item.nextDate;
-    while (cursor >= input.asOf && cursor <= endDate) {
+    for (const date of expandRecurring(item, input.asOf, endDate)) {
       const signed = item.itemType === "income" ? Math.abs(item.amount) : -Math.abs(item.amount);
       events.push({
-        date: cursor,
+        date,
         name: item.name,
         amount: signed,
         itemType: item.itemType,
         projectedBalance: 0,
       });
-      cursor = nextOccurrence(cursor, item.frequency);
     }
   }
 
@@ -286,15 +377,16 @@ export function groupRecurringByWeek(items: RecurringItem[], asOf: string, horiz
   const groups = new Map<string, Array<RecurringItem & { status: "expected" }>>();
 
   for (const item of items) {
-    if (item.nextDate < asOf || item.nextDate > endDate) continue;
-    const due = parseDate(item.nextDate);
-    const day = due.getUTCDay();
-    const weekStart = new Date(due);
-    weekStart.setUTCDate(due.getUTCDate() - ((day + 6) % 7));
-    const key = isoDate(weekStart);
-    const rows = groups.get(key) ?? [];
-    rows.push({ ...item, status: "expected" });
-    groups.set(key, rows);
+    for (const date of expandRecurring(item, asOf, endDate)) {
+      const due = parseDate(date);
+      const day = due.getUTCDay();
+      const weekStart = new Date(due);
+      weekStart.setUTCDate(due.getUTCDate() - ((day + 6) % 7));
+      const key = isoDate(weekStart);
+      const rows = groups.get(key) ?? [];
+      rows.push({ ...item, nextDate: date, status: "expected" });
+      groups.set(key, rows);
+    }
   }
 
   return [...groups.entries()]
@@ -330,12 +422,7 @@ export function groupRecurringByPeriod(
   const groups = new Map<string, Array<RecurringItem & { status: "expected" }>>();
 
   for (const item of items) {
-    let cursor = item.nextDate;
-    // Advance stale anchors forward without emitting past occurrences.
-    for (let i = 0; i < 500 && cursor < asOf; i++) {
-      cursor = nextOccurrence(cursor, item.frequency);
-    }
-    while (cursor >= asOf && cursor <= endDate) {
+    for (const cursor of expandRecurring(item, asOf, endDate)) {
       let key: string;
       if (grouping === "monthly") {
         key = `${cursor.slice(0, 7)}-01`;
@@ -348,7 +435,6 @@ export function groupRecurringByPeriod(
       const rows = groups.get(key) ?? [];
       rows.push({ ...item, nextDate: cursor, status: "expected" });
       groups.set(key, rows);
-      cursor = nextOccurrence(cursor, item.frequency);
     }
   }
 

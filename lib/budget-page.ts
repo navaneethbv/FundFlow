@@ -1,4 +1,4 @@
-import type { CanonicalFinanceTransaction } from "./finance-domain";
+import { matchesBudgetCategory, type CanonicalFinanceTransaction } from "./finance-domain";
 import { titleCase } from "./format";
 import type { FinanceWindow } from "./finance-query";
 import type { SinkingFundPlan } from "./insights";
@@ -289,34 +289,53 @@ function periodAmount(
   return period ? Number(period.planned) : undefined;
 }
 
+/**
+ * Spend/income aggregated by (group, detailed) pair (M-1): each txn feeds
+ * exactly one pair bucket carrying both keys, so `buildBudgetLines` can
+ * resolve a detailed budget and a group budget against the same rows via
+ * `matchesBudgetCategory` without double-counting either.
+ */
+export interface BudgetActualEntry {
+  categoryKey: string;
+  groupKey: string;
+  amount: number;
+}
+
 function actualsForMonth(
   txns: CanonicalFinanceTransaction[],
   month: string,
 ): {
-  income: Map<string, number>;
-  expenses: Map<string, number>;
+  income: BudgetActualEntry[];
+  expenses: BudgetActualEntry[];
 } {
-  const income = new Map<string, number>();
-  const expenses = new Map<string, number>();
+  const incomeByPair = new Map<string, BudgetActualEntry>();
+  const expensesByPair = new Map<string, BudgetActualEntry>();
   for (const transaction of txns) {
     if (transaction.date.slice(0, 7) !== month) continue;
-    const key = (transaction.categoryKey || "Uncategorized").toLowerCase();
+    const categoryKey = (transaction.categoryKey || "Uncategorized").toLowerCase();
+    const groupKey = (transaction.groupKey || "Uncategorized").toLowerCase();
+    const pairKey = `${groupKey}|${categoryKey}`;
     if (transaction.flow === "income") {
-      income.set(
-        key,
-        round2((income.get(key) ?? 0) + Math.abs(transaction.signedAmount)),
-      );
+      const existing = incomeByPair.get(pairKey);
+      if (existing) existing.amount = round2(existing.amount + Math.abs(transaction.signedAmount));
+      else incomeByPair.set(pairKey, { categoryKey, groupKey, amount: round2(Math.abs(transaction.signedAmount)) });
     }
     if (transaction.flow === "expense") {
-      expenses.set(
-        key,
-        round2(
-          (expenses.get(key) ?? 0) + Math.abs(transaction.signedAmount),
-        ),
-      );
+      const existing = expensesByPair.get(pairKey);
+      if (existing) existing.amount = round2(existing.amount + Math.abs(transaction.signedAmount));
+      else expensesByPair.set(pairKey, { categoryKey, groupKey, amount: round2(Math.abs(transaction.signedAmount)) });
     }
   }
-  return { income, expenses };
+  return { income: [...incomeByPair.values()], expenses: [...expensesByPair.values()] };
+}
+
+/** Sum of every pair entry a budget matches under the canonical matcher. */
+function matchingActual(entries: BudgetActualEntry[], budgetCategory: string): number {
+  let total = 0;
+  for (const entry of entries) {
+    if (matchesBudgetCategory(budgetCategory, entry)) total += entry.amount;
+  }
+  return round2(total);
 }
 
 function buildBudgetLines(
@@ -336,15 +355,27 @@ function buildBudgetLines(
     const group = budgetGroup(budget.group_name);
     const basePlanned = periodAmount(periods, budget.id, month) ?? Number(budget.monthly_limit);
     const previousPlanned = periodAmount(periods, budget.id, previousMonth) ?? Number(budget.monthly_limit);
+    // Canonical matching (M-1): actuals carry both the detailed categoryKey
+    // and the groupKey, but a budget may name either granularity. Sum every
+    // pair entry that matches under `matchesBudgetCategory` so /budget
+    // agrees with the dashboard envelopes and the weekly report.
     const rolloverCarry = budget.rollover_enabled && group !== "income"
-      ? round2(previousPlanned - (previous.expenses.get(category) ?? 0))
+      ? round2(previousPlanned - matchingActual(previous.expenses, budget.category))
       : 0;
     const planned = group === "income"
       ? round2(basePlanned)
       : Math.max(0, round2(basePlanned + rolloverCarry));
     const actual = group === "income"
-      ? current.income.get(category) ?? 0
-      : current.expenses.get(category) ?? 0;
+      ? matchingActual(current.income, budget.category)
+      : matchingActual(current.expenses, budget.category);
+    // A pair entry consumed by any budget never surfaces as an unbudgeted
+    // line: without this, spend claimed by a group budget would reappear as
+    // "unbudgeted" under its detailed key.
+    for (const entry of group === "income" ? current.income : current.expenses) {
+      if (matchesBudgetCategory(budget.category, entry)) {
+        processed.add(`${entry.groupKey}|${entry.categoryKey}`);
+      }
+    }
     processed.add(category);
     linesByGroup[group].push({
       budgetId: budget.id,
@@ -369,10 +400,18 @@ function buildBudgetLines(
 function addUnbudgetedLines(
   linesByGroup: Record<BudgetGroup, BudgetLine[]>,
   processed: Set<string>,
-  actuals: Map<string, number>,
+  actuals: BudgetActualEntry[],
   group: "income" | "flexible",
 ): void {
-  for (const [category, actual] of actuals) {
+  // Aggregate unconsumed pair entries by detailed key so one txn never
+  // produces both a budgeted line and an unbudgeted line.
+  const byDetailed = new Map<string, number>();
+  for (const entry of actuals) {
+    if (processed.has(`${entry.groupKey}|${entry.categoryKey}`)) continue;
+    if (processed.has(entry.categoryKey)) continue;
+    byDetailed.set(entry.categoryKey, round2((byDetailed.get(entry.categoryKey) ?? 0) + entry.amount));
+  }
+  for (const [category, actual] of byDetailed) {
     if (processed.has(category)) continue;
     const isIncome = group === "income";
     linesByGroup[group].push({

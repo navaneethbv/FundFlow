@@ -27,7 +27,7 @@ function paginatedTransactionsClient(
   const chain: Record<string, unknown> = {};
   Object.assign(chain, {
     select: (columns: string) => {
-      if (columns === "id, date, amount, merchant_name, name, pfc_primary, account_id") {
+      if (columns === "id, date, amount, merchant_name, name, pfc_primary, pfc_detailed, account_id") {
         chain._mode = "transactions";
       } else {
         chain._mode = "splits";

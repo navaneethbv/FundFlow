@@ -32,6 +32,25 @@ export const TRANSFER_GROUPS = new Set([
 export const UNCATEGORIZED = "UNCATEGORIZED";
 
 /**
+ * Single canonical matcher for budget categories across all surfaces
+ * (dashboard envelopes, budget page actuals, weekly reports).
+ * Matches case-insensitively against either categoryKey (detailed) or groupKey (primary).
+ */
+export function matchesBudgetCategory(
+  budgetCategory: string,
+  txn: { categoryKey?: string | null; groupKey?: string | null } | string,
+): boolean {
+  const target = budgetCategory.trim().toLowerCase();
+  if (typeof txn === "string") {
+    return txn.trim().toLowerCase() === target;
+  }
+  const categoryKey = (txn.categoryKey ?? "").trim().toLowerCase();
+  const groupKey = (txn.groupKey ?? "").trim().toLowerCase();
+  return categoryKey === target || groupKey === target;
+}
+
+
+/**
  * Normalizes a free-text import category into a `pfc_primary` code, refusing
  * to let it collide with a reserved transfer/loan code: a user category
  * literally named "Transfer Out" would otherwise get silently excluded from
