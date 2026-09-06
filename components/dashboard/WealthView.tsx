@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { DashboardData } from "@/lib/dashboard";
+import { accountDisplayLabel } from "@/lib/account-label";
 import { dashboardUrl } from "@/lib/drilldown";
 import { formatCurrency, formatMonth, titleCase } from "@/lib/format";
 import DivergingColumns from "@/components/charts/DivergingColumns";
@@ -193,8 +194,7 @@ export default function WealthView({
               >
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold">
-                    {account.name ?? "Checking"}
-                    {account.mask ? ` ${account.mask}` : ""}
+                    {accountDisplayLabel(account.name ?? "Checking", account.mask)}
                   </span>
                   <span className="block text-xs text-muted">
                     {titleCase(account.subtype ?? "Depository")}

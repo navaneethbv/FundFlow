@@ -1,12 +1,11 @@
 import {
   looksLikeYnabCsv as looksLikeYnabCsvImpl,
   parseYnabCsv as parseYnabCsvImpl,
-  YNAB_FORMAT_SPEC as YNAB_FORMAT_SPEC_IMPL,
   type DateOrder,
   type ImportParseResult,
 } from "./import";
 
-export const YNAB_FORMAT_SPEC = YNAB_FORMAT_SPEC_IMPL;
+export { YNAB_FORMAT_SPEC } from "./import";
 
 export function looksLikeYnabCsv(headerRow: string[]): boolean {
   return looksLikeYnabCsvImpl(headerRow);

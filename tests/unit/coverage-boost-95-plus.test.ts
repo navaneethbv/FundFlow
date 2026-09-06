@@ -191,7 +191,7 @@ describe("Branch coverage boost suite for 95%+ repository target", () => {
       expect(resOldAge.milestones.coastFireTarget).toBe(resOldAge.milestones.standardFireTarget);
       expect(resOldAge.savingsRatePct).toBe(0);
       expect(resOldAge.currentProgressPct).toBe(0);
-      expect(resOldAge.timeline.length).toBe(3);
+      expect(resOldAge.timeline).toHaveLength(3);
       expect(resOldAge.timeline[0].netWorthBase).toBe(0);
       expect(resOldAge.timeline[0].netWorthWithEvents).toBe(0);
     });
@@ -224,7 +224,7 @@ describe("Branch coverage boost suite for 95%+ repository target", () => {
       });
 
       const parsed = parseMonarchBudgets(invalidJson);
-      expect(parsed.rows.length).toBe(2);
+      expect(parsed.rows).toHaveLength(2);
       expect(parsed.rows[0].category).toBe("Good Category");
       expect(parsed.rows[0].group).toBe("custom");
       expect(parsed.rows[0].groupName).toBe("Custom Group");
@@ -234,7 +234,7 @@ describe("Branch coverage boost suite for 95%+ repository target", () => {
         { category: "Good Category", monthly_limit: 300, group_name: "Custom Group" },
         { category: "Unbudgeted In FundFlow", monthly_limit: 150, group_name: "Fixed" },
       ]);
-      expect(plan.conflicts.length).toBe(1);
+      expect(plan.conflicts).toHaveLength(1);
       expect(plan.conflicts[0].existingAmount).toBe(300);
       expect(plan.conflicts[0].incomingAmount).toBe(250);
       expect(plan.unbudgetedCategories).toContain("Unbudgeted In FundFlow");

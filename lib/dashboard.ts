@@ -55,6 +55,11 @@ import {
   type DashboardBudgetGroup,
 } from "@/lib/dashboard-budget-groups";
 import { toRecurringItem } from "@/lib/scheduled-transactions";
+import {
+  composeNetWorthAccounts,
+  readExcludedNetWorthIds,
+  type ManualBalanceRow,
+} from "@/lib/net-worth-inputs";
 /**
  * Aggregations for the dashboard. Runs with the caller's user-scoped Supabase
  * client, so RLS guarantees only the current user's rows are visible.
@@ -572,6 +577,18 @@ interface StreamRow {
   stream_type: string;
   plaid_item_id: string;
   predicted_next_date: string | null;
+  dismissed_at: string | null;
+  status: string | null;
+}
+
+/**
+ * The eligibility rule the Recurring page applies in `appendPlaidStream`
+ * (`lib/recurring-page.ts`). Dashboard reminders derive from the same streams,
+ * so a stream the user marked "Not recurring" must stop producing an overdue
+ * reminder here too - the two surfaces disagreed until this filter existed.
+ */
+function isEligibleStream(stream: StreamRow): boolean {
+  return !stream.dismissed_at && stream.status !== "TOMBSTONED";
 }
 
 /**
@@ -585,9 +602,10 @@ function buildStreamSummaries(
   subscriptions: DashboardData["subscriptions"];
   incomeStreams: DashboardData["incomeStreams"];
 } {
+  const eligible = streamRows.filter(isEligibleStream);
   const filtered = selectedItemDbId
-    ? streamRows.filter((s) => s.plaid_item_id === selectedItemDbId)
-    : streamRows;
+    ? eligible.filter((s) => s.plaid_item_id === selectedItemDbId)
+    : eligible;
   const label = (s: StreamRow) =>
     s.merchant_name?.trim() || s.description?.trim() || "Unknown";
   const byAmountDesc = <T extends { amount: number }>(rows: T[]) =>
@@ -716,6 +734,8 @@ export async function getDashboardData(
     { data: categoryOverrideRows },
     { data: sinkingFundRows },
     { data: scheduledRows },
+    manualAccountsResult,
+    netWorthPrefsResult,
   ] = await Promise.all([
     scopeUser(
       supabase
@@ -728,7 +748,9 @@ export async function getDashboardData(
     scopeUser(
       supabase
         .from("recurring_streams")
-        .select("merchant_name, description, average_amount, frequency, category, stream_type, is_active, plaid_item_id, predicted_next_date")
+        .select(
+          "merchant_name, description, average_amount, frequency, category, stream_type, is_active, plaid_item_id, predicted_next_date, dismissed_at, status",
+        )
         .eq("is_active", true),
     ),
     scopeUser(supabase.from("plaid_items").select("id, institution_name")),
@@ -824,6 +846,22 @@ export async function getDashboardData(
         .order("scheduled_date")
         .limit(100),
     ),
+    // Balance-sheet inputs beyond the connected accounts. Net worth has to
+    // agree with the Accounts page and with the stored monthly snapshot, and
+    // both of those count manual accounts and drop the user's exclusions.
+    scopeUser(
+      supabase
+        .from("manual_accounts")
+        .select("id, name, account_type, balance, include_in_net_worth"),
+    ),
+    // The exclusion list is always the caller's own preference row, even under
+    // household scope, so this filters on `id` instead of going through
+    // `scopeUser`. With no userId the RLS-bound client already sees only the
+    // caller's own profile.
+    (userId
+      ? supabase.from("profiles").select("dashboard_prefs").eq("id", userId)
+      : supabase.from("profiles").select("dashboard_prefs")
+    ).maybeSingle(),
   ]);
 
   const allAccounts = ((accounts ?? []) as AccountSummary[]).map((account) => ({
@@ -831,6 +869,18 @@ export async function getDashboardData(
     name: normalizeExternalDisplayText(account.name),
     official_name: normalizeExternalDisplayText(account.official_name),
   }));
+  // A failed balance-sheet read must not quietly become a smaller balance
+  // sheet: the live net-worth point overwrites a correctly composed stored
+  // snapshot, so an incomplete input is worse than an error.
+  if (manualAccountsResult.error) throw manualAccountsResult.error;
+  if (netWorthPrefsResult.error) throw netWorthPrefsResult.error;
+  const netWorthAccounts = composeNetWorthAccounts({
+    plaidAccounts: allAccounts,
+    manualAccounts: (manualAccountsResult.data ?? []) as ManualBalanceRow[],
+    excludedNetWorthIds: readExcludedNetWorthIds(
+      (netWorthPrefsResult.data as { dashboard_prefs?: unknown } | null)?.dashboard_prefs,
+    ),
+  });
   const lastSyncAt = (lastSyncJob?.updated_at as string | undefined) ?? null;
   const allItems = (items ?? []) as Array<{ id: string; institution_name: string | null }>;
   const allBudgets = (budgets ?? []) as Array<{
@@ -1286,13 +1336,7 @@ export async function getDashboardData(
     priorMerchantMedians,
     largeTransactionThreshold: 500,
   });
-  const netWorthSnapshot = computeNetWorthSnapshot(
-    allAccounts.map((account) => ({
-      name: account.name ?? "Account",
-      type: account.type,
-      balance: account.current_balance,
-    })),
-  );
+  const netWorthSnapshot = computeNetWorthSnapshot(netWorthAccounts);
 
   const netWorthHistory = allSnapshots.map((s) => {
     const assets = Number(s.assets ?? 0);
@@ -1308,8 +1352,10 @@ export async function getDashboardData(
   // The open month is a live observation, not a completed monthly snapshot.
   const currentPoint = { month: currentMonth, ...netWorthSnapshot };
   const currentIndex = netWorthHistory.findIndex((point) => point.month === currentMonth);
-  if (currentIndex >= 0 && allAccounts.length > 0) netWorthHistory[currentIndex] = currentPoint;
-  else if (currentIndex < 0 && allAccounts.length > 0) netWorthHistory.push(currentPoint);
+  // A manual-only user has no connected accounts and still has a balance sheet.
+  const hasBalanceSheet = netWorthAccounts.length > 0;
+  if (currentIndex >= 0 && hasBalanceSheet) netWorthHistory[currentIndex] = currentPoint;
+  else if (currentIndex < 0 && hasBalanceSheet) netWorthHistory.push(currentPoint);
   netWorthHistory.sort((a, b) => a.month.localeCompare(b.month));
 
   return {

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { AccountSummary } from "@/lib/dashboard";
+import { accountDisplayLabel } from "@/lib/account-label";
 import { cn } from "@/lib/cn";
 import { formatMinutesAgo } from "@/lib/format";
 import ConnectBankButton from "@/components/ConnectBankButton";
@@ -95,8 +96,10 @@ export default function DashboardToolbar({
                       : "border-panel-border text-muted hover:text-foreground",
                   )}
                 >
-                  {account.name ?? "Account"}
-                  {account.mask ? ` ${account.mask}` : ""}
+                  {/* Display only: the filter still matches on `account.id`,
+                      and provider names that already end in their own mask
+                      would otherwise print it twice. */}
+                  {accountDisplayLabel(account.name, account.mask)}
                 </Link>
               );
             })}

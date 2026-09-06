@@ -1,5 +1,11 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { computeNetWorthSnapshot } from "@/lib/planning";
+import {
+  composeNetWorthAccounts,
+  readExcludedNetWorthIds,
+  type ManualBalanceRow,
+  type PlaidBalanceRow,
+} from "@/lib/net-worth-inputs";
 
 /**
  * Computes the net worth (assets and liabilities) for a user and upserts
@@ -24,7 +30,6 @@ export async function writeNetWorthSnapshot(userId: string) {
   if (manualError) throw manualError;
 
   // 3. Respect user exclusions from preferences if configured
-  let excludedNetWorthIds = new Set<string>();
   const profileQuery = supabase
     .from("profiles")
     .select("dashboard_prefs")
@@ -35,29 +40,14 @@ export async function writeNetWorthSnapshot(userId: string) {
   const profile = profileResult.data as { dashboard_prefs?: unknown } | null | undefined;
   const profileError = profileResult.error;
   if (profileError) throw profileError;
-  const accountsPage = (profile?.dashboard_prefs as Record<string, unknown> | null)?.accountsPage as
-    | { excludedNetWorthIds?: string[] }
-    | undefined;
-  if (Array.isArray(accountsPage?.excludedNetWorthIds)) {
-    excludedNetWorthIds = new Set(accountsPage.excludedNetWorthIds);
-  }
+  const excludedNetWorthIds = readExcludedNetWorthIds(profile?.dashboard_prefs);
 
   // 4. Map to standard NetWorthAccount shape
-  const accounts = [
-    ...(plaidAccounts ?? []).map((a) => ({
-      name: a.name,
-      type: a.type,
-      subtype: a.subtype,
-      balance: a.current_balance !== null ? Number(a.current_balance) : null,
-      includeInNetWorth: !excludedNetWorthIds.has(a.id),
-    })),
-    ...(manualAccounts ?? []).map((a) => ({
-      name: a.name,
-      type: a.account_type,
-      balance: a.balance !== null ? Number(a.balance) : null,
-      includeInNetWorth: a.include_in_net_worth && !excludedNetWorthIds.has(a.id),
-    })),
-  ];
+  const accounts = composeNetWorthAccounts({
+    plaidAccounts: (plaidAccounts ?? []) as PlaidBalanceRow[],
+    manualAccounts: (manualAccounts ?? []) as ManualBalanceRow[],
+    excludedNetWorthIds,
+  });
 
   // 5. Compute snapshot
   const snapshot = computeNetWorthSnapshot(accounts);

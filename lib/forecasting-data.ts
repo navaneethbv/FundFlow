@@ -10,6 +10,7 @@ import { loadCanonicalProjection } from "@/lib/finance-query";
 
 import { financeTotals } from "@/lib/finance-domain";
 import { medianOf } from "@/lib/insights";
+import { readExcludedNetWorthIds } from "@/lib/net-worth-inputs";
 
 const TRAILING_MONTHS = 6;
 
@@ -33,20 +34,6 @@ export interface ForecastPageData {
   startingState: ForecastStartingSummary;
   defaults: ForecastDefaults;
   monthlyExpenses: number;
-}
-
-/**
- * The per-account net-worth exclusions the accounts page writes into
- * `profiles.dashboard_prefs`. `lib/net-worth.ts` reads the same list; the
- * forecast has to honour it too, or the projection starts from a balance sheet
- * the user already told the app to stop counting.
- */
-function readExcludedNetWorthIds(dashboardPrefs: unknown): Set<string> {
-  const accountsPage = (dashboardPrefs as Record<string, unknown> | null | undefined)
-    ?.accountsPage as { excludedNetWorthIds?: unknown } | undefined;
-  return Array.isArray(accountsPage?.excludedNetWorthIds)
-    ? new Set(accountsPage.excludedNetWorthIds.filter((id): id is string => typeof id === "string"))
-    : new Set<string>();
 }
 
 /**

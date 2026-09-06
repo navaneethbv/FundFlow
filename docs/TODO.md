@@ -2,12 +2,24 @@
 
 Nice-to-have features and enhancements, deferred out of the initial build.
 
-## UI audit follow-up (2026-09-05)
+## UI audit follow-up (2026-09-06)
 
 The [page-by-page UI audit](reviews/2026-09-05-ui-page-audit.md) documents 17 confirmed defects across all main authenticated pages and Settings sections.
-Local fixes and automated verification are recorded in the [implementation plan](plans/2026-09-05-ui-page-fixes.md) on `codex/ui-page-audit`.
-Browser URL policy blocked the resumed production inspection, so post-fix visual verification, login/signup/admin inspection, additional states, and recurring investigation A remain open.
+Local fixes and automated verification are recorded in the [implementation plan](plans/2026-09-05-ui-page-fixes.md) on `ui/page-audit` (remote `codex/ui-page-audit`, PR #157).
+
+The [PR #157 review](reviews/2026-09-06-pr157-review.md) found five remaining defects at head `61ec03c`.
+All five are now fixed with regression coverage: net-worth composition, dismissed recurring reminders, mobile holdings parity, the last two duplicated account labels, and the admin sync-job panel.
+The six Sonar annotations named in that review are also cleared.
 These fixes are not deployed.
+
+Still open from that review:
+
+- The signed-in preview pass at desktop and phone sizes, including unsaved dialogs and accessible controls.
+  It needs a preview sign-in the reviewing session cannot perform.
+- Full Dashboard/Recurring parity beyond dismissal.
+  Only the proven dismissed-stream case is closed; corrected amounts, manual items, transfer exclusions, linked payment matching, and month scope have not been compared between the two implementations.
+- `lib/budget-data.ts` still counts dismissed streams when it collects recurring categories for budget suggestions.
+  That surface suggests a category name rather than a due reminder, so it was left alone rather than widened into the same change.
 
 ## Current status (2026-09-05)
 

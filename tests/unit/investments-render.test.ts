@@ -90,6 +90,52 @@ describe("HoldingsTable", () => {
     expect(html.match(/data-money/g)?.length).toBeGreaterThanOrEqual(4);
   });
 
+  it("keeps price and quantity reachable on the mobile card, with the account name intact", () => {
+    const html = renderToStaticMarkup(
+      createElement(HoldingsTable, { page: page(), currency: "USD" }),
+    );
+    // Below the sm breakpoint the desktop table is hidden and there is no
+    // horizontal scroll, so the card has to carry every figure itself.
+    const mobile = html.slice(
+      html.indexOf("sm:hidden"),
+      html.indexOf("hidden overflow-x-auto"),
+    );
+
+    expect(mobile).toContain("Price");
+    expect(mobile).toContain("$250.00");
+    expect(mobile).toContain("Quantity");
+    expect(mobile).toContain("10");
+    expect(mobile).toContain("Brokerage");
+    // An ellipsis on the account name would eat the mask that tells two
+    // accounts at the same brokerage apart.
+    expect(mobile).not.toContain("truncate text-xs text-muted");
+  });
+
+  it("renders a dash for a holding with no price or quantity on the mobile card", () => {
+    const html = renderToStaticMarkup(
+      createElement(HoldingsTable, {
+        page: page({
+          byClass: [
+            {
+              label: "Funds",
+              holdings: [holding({ price: null, quantity: null })],
+              subtotal: 2500,
+            },
+          ],
+        }),
+        currency: "USD",
+      }),
+    );
+    const mobile = html.slice(
+      html.indexOf("sm:hidden"),
+      html.indexOf("hidden overflow-x-auto"),
+    );
+
+    expect(mobile).toContain("Price");
+    expect(mobile).toContain("Quantity");
+    expect(mobile.match(/—/g)?.length).toBeGreaterThanOrEqual(2);
+  });
+
   it("has an empty state when there are no holdings", () => {
     const html = renderToStaticMarkup(
       createElement(HoldingsTable, { page: page({ byClass: [] }), currency: "USD" }),

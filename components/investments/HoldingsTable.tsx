@@ -36,7 +36,8 @@ export default function HoldingsTable({
 
   return (
     <>
-      {/* Mobile cards: security + value + weight stay together without a 640px scroll region. */}
+      {/* Mobile cards: every column of the desktop table stays reachable
+          without a 640px scroll region. */}
       <div className="space-y-2 sm:hidden">
         {page.byClass.map((group) => (
           <Fragment key={group.label}>
@@ -57,13 +58,31 @@ export default function HoldingsTable({
                     {formatCurrency(h.value, currency)}
                   </span>
                 </div>
-                <div className="mt-2 flex items-center justify-between gap-3 text-xs text-muted">
-                  <span className="min-w-0 truncate">{h.accountName}</span>
-                  <span className="shrink-0 tabular-nums">
-                    {h.weightPct.toFixed(1)}% ·{" "}
+                {/* Wraps rather than truncates: the mask at the end of the
+                    account name is the only thing telling two accounts at the
+                    same brokerage apart, and an ellipsis eats exactly that. */}
+                <div className="mt-2 break-words text-xs text-muted">{h.accountName}</div>
+                {/* Every figure the desktop table gives a column head, labelled
+                    here instead — below the breakpoint there is no header row
+                    and no horizontal scroll to reach price and quantity. */}
+                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+                  <span>
+                    Price{" "}
+                    <span data-money className="tabular-nums">
+                      {h.price != null ? formatCurrency(h.price, currency) : "—"}
+                    </span>
+                  </span>
+                  <span>
+                    Quantity <span className="tabular-nums">{h.quantity ?? "—"}</span>
+                  </span>
+                  <span>
+                    Weight <span className="tabular-nums">{h.weightPct.toFixed(1)}%</span>
+                  </span>
+                  <span>
+                    Change{" "}
                     <span
                       data-money
-                      className={changeClassName(h.periodChangePct)}
+                      className={cn("tabular-nums", changeClassName(h.periodChangePct))}
                       style={{ color: changeColor(h.periodChangePct) ?? undefined }}
                     >
                       {changeLabel(h.periodChangePct)}

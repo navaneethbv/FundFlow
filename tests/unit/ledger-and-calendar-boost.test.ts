@@ -185,8 +185,9 @@ describe("Calendar Token Route Extra Branches", () => {
           return {
             select: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockResolvedValue({
-                  data: [
+                eq: vi.fn().mockReturnValue({
+                  is: vi.fn().mockResolvedValue({
+                    data: [
                     {
                       id: "s1",
                       merchant_name: null,
@@ -218,7 +219,8 @@ describe("Calendar Token Route Extra Branches", () => {
                       is_active: true,
                     },
                   ],
-                  error: null,
+                    error: null,
+                  }),
                 }),
               }),
             }),

@@ -57,7 +57,11 @@ export async function GET(
       .from("recurring_streams")
       .select("id, merchant_name, description, average_amount, last_amount, frequency, stream_type, is_active")
       .eq("user_id", row.user_id)
-      .eq("is_active", true);
+      .eq("is_active", true)
+      // A stream the user marked "Not recurring" must not keep publishing
+      // bills into their calendar app, the same rule the Recurring page and
+      // the Dashboard reminders apply.
+      .is("dismissed_at", null);
 
     const today = new Date().toISOString().slice(0, 10);
     const anchor = `${today.slice(0, 7)}-15`;

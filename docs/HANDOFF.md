@@ -1,6 +1,30 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-09-05. Read this first to resume.
+Last updated: 2026-09-06. Read this first to resume.
+
+## 2026-09-06: PR #157 review remediation
+
+Branch `ui/page-audit` (remote `codex/ui-page-audit`, unrenamed because it backs open PR #157).
+All five findings in the [PR #157 review](reviews/2026-09-06-pr157-review.md) are fixed at review head `61ec03c`, with regression coverage for each.
+
+Net worth (R1) now composes the same balance sheet everywhere.
+The new `lib/net-worth-inputs.ts` owns the rule, and `lib/dashboard.ts`, `lib/net-worth.ts`, and `lib/forecasting-data.ts` all read it instead of keeping three near-copies.
+The Dashboard loads `manual_accounts` and the caller's `dashboard_prefs` alongside `accounts`; a failed read of either throws rather than overwriting the stored snapshot with a smaller total, and a manual-only user now gets a live open-month point.
+
+Dismissed recurring streams (R3) no longer produce Dashboard reminders.
+`lib/dashboard.ts` applies the Recurring page's own eligibility rule, `dismissed_at` null and not `TOMBSTONED`, before deriving subscriptions, income streams, statuses, the bill calendar, and the cash-flow forecast.
+The same defect was live in the calendar feed, which was publishing dismissed streams into the user's calendar app; `app/api/calendar/[token]/route.ts` now filters them out too.
+
+The mobile holdings card (R2) carries labeled price, quantity, weight, and change, and the account name wraps rather than truncating so the mask survives.
+The last two duplicated account labels (R4) in `DashboardToolbar` and `WealthView` now use `accountDisplayLabel`; matching still keys on `account.id`.
+The admin sync-job panel (R5) selects `job_type` rather than the nonexistent `source`, separates query failure from a genuine empty state, formats timestamps through `formatTimestampUtc`, and maps `failed` to the danger tone.
+`last_error` was deliberately left out of that panel: the page is framed as a redacted operational view and that column carries arbitrary provider text.
+
+The six Sonar annotations from the reviewed head are cleared: direct re-exports in the three `lib/import-*.ts` files and `toHaveLength` in `tests/unit/coverage-boost-95-plus.test.ts`.
+
+Validation: 453 unit files and 5,036 tests pass, up from 449 and 5,015, with lint, typecheck, and the production build clean, and the graph updated.
+No migration was written or applied, and no production financial record, bank connection, or consent flag was touched.
+The signed-in preview pass at desktop and phone sizes is still open and needs the user to sign in to the preview themselves.
 
 ## 2026-09-05: UI page audit and local fixes
 
