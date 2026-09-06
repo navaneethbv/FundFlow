@@ -148,6 +148,29 @@ describe("dashboard net-worth composition", () => {
     ).rejects.toMatchObject({ message: "permission denied for table manual_accounts" });
   });
 
+  it("does not splice a household-wide live point into an owner-only snapshot history", async () => {
+    // Under household scope, accounts includes the partner's shared balance
+    // (RLS-visible), but net_worth_snapshots only ever holds the viewer's own
+    // history. Splicing a household-wide live point into that owner-only
+    // series produces a spurious month-over-month jump.
+    const data = await getDashboardData(
+      makeSupabase({
+        accounts: [
+          CONNECTED_CASH,
+          { ...CONNECTED_CASH, id: "a2", user_id: "user-2", name: "Partner Shared Checking", current_balance: 5000 },
+        ],
+        manual_accounts: [],
+        net_worth_snapshots: [{ snapshot_month: "2026-08-01", assets: 1000, liabilities: 0 }],
+      }),
+      undefined,
+      undefined,
+      "user-1",
+      { scope: "household" },
+    );
+
+    expect(data.netWorthHistory).toEqual([{ month: "2026-08", assets: 1000, liabilities: 0, netWorth: 1000 }]);
+  });
+
   it("surfaces a failed exclusion-preference read the same way", async () => {
     await expect(
       getDashboardData(

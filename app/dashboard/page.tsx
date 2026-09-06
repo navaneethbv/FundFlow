@@ -15,7 +15,7 @@ import { resolveDashboardView } from "@/components/dashboard/dashboard-view";
 import OverviewView from "@/components/dashboard/OverviewView";
 import DashboardViewTabs from "@/components/dashboard/DashboardViewTabs";
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import { computeNetWorth, resolveDashboardSavingsRate } from "@/components/dashboard/metrics";
+import { resolveDashboardSavingsRate } from "@/components/dashboard/metrics";
 import { getRecentTransactions } from "@/lib/recent-transactions";
 import { getDashboardData } from "@/lib/dashboard";
 import { getCachedDashboardData } from "@/lib/dashboard-cache";
@@ -113,7 +113,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
   const plaidItems = (items ?? []) as PlaidItem[];
   const hasBanks = plaidItems.length > 0;
   const brokenBanks = plaidItems.filter((item) => item.status === "error");
-  const netWorth = computeNetWorth(data.accounts);
+  const netWorth = data.netWorthSnapshot.netWorth;
   const savingsRateBasis = resolveDashboardSavingsRate({
     selectedMonth: data.selectedMonth,
     currentMonth: new Date().toISOString().slice(0, 7),

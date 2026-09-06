@@ -1374,12 +1374,17 @@ export async function getDashboardData(
   });
 
   // The open month is a live observation, not a completed monthly snapshot.
-  const currentPoint = { month: currentMonth, ...netWorthSnapshot };
-  const currentIndex = netWorthHistory.findIndex((point) => point.month === currentMonth);
-  // A manual-only user has no connected accounts and still has a balance sheet.
-  const hasBalanceSheet = netWorthAccounts.length > 0;
-  if (currentIndex >= 0 && hasBalanceSheet) netWorthHistory[currentIndex] = currentPoint;
-  else if (currentIndex < 0 && hasBalanceSheet) netWorthHistory.push(currentPoint);
+  // Under household scope `netWorthAccounts` includes the partner's shared
+  // balances (RLS-visible), but `net_worth_snapshots` only ever holds the
+  // viewer's own history, so splicing a household-wide live point in there
+  // would fabricate a month-over-month jump equal to the partner's balances.
+  const hasBalanceSheet = netWorthAccounts.length > 0; // A manual-only user still has a balance sheet.
+  if (options?.scope !== "household" && hasBalanceSheet) {
+    const currentPoint = { month: currentMonth, ...netWorthSnapshot };
+    const currentIndex = netWorthHistory.findIndex((point) => point.month === currentMonth);
+    if (currentIndex >= 0) netWorthHistory[currentIndex] = currentPoint;
+    else netWorthHistory.push(currentPoint);
+  }
   netWorthHistory.sort((a, b) => a.month.localeCompare(b.month));
 
   return {

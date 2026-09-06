@@ -54,4 +54,15 @@ describe("accountDisplayLabel", () => {
     expect(accountDisplayLabel(" ")).toBe("Account");
     expect(accountDisplayLabel(undefined)).toBe("Account");
   });
+
+  // Plaid does not guarantee a four-digit mask. A shorter or longer mask used
+  // to defeat the fixed four-digit strip and get appended a second time.
+  it("strips a mask of any length instead of only exactly four digits", () => {
+    expect(accountDisplayLabel("Visa (34)", "34")).toBe("Visa ••34");
+    expect(accountDisplayLabel("Card (...123)", "123")).toBe("Card ••123");
+    expect(accountDisplayLabel("Card ••123", "123")).toBe("Card ••123");
+    expect(accountDisplayLabel("Card 12345", "12345")).toBe("Card ••12345");
+    expect(accountDisplayLabel("Chase (1234)", "1234")).toBe("Chase ••1234");
+    expect(accountDisplayLabel(null, "12")).toBe("Account ••12");
+  });
 });
