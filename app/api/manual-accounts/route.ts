@@ -3,6 +3,7 @@ import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { createServiceClient } from "@/lib/supabase/service";
 import { tryWriteDailyAccountSnapshots } from "@/lib/account-history";
 import { getClientIp, writeAudit } from "@/lib/audit";
+import { invalidateDashboardCache } from "@/lib/dashboard-cache";
 
 const ACCOUNT_TYPES = new Set([
   "asset",
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest) {
     if (!account) throw new Error("Manual account create returned no row");
 
     await tryWriteDailyAccountSnapshots(user.id, "manual-accounts.create.snapshot");
+    invalidateDashboardCache(user.id);
     await writeAudit({
       userId: user.id,
       action: "manual_account_created",
@@ -134,6 +136,7 @@ export async function PATCH(request: NextRequest) {
     if (!account) throw new Error("Manual account update returned no row");
 
     await tryWriteDailyAccountSnapshots(user.id, "manual-accounts.update.snapshot");
+    invalidateDashboardCache(user.id);
     await writeAudit({
       userId: user.id,
       action: "manual_account_updated",
@@ -184,6 +187,7 @@ export async function DELETE(request: NextRequest) {
       .eq("user_id", user.id);
     if (error) throw error;
 
+    invalidateDashboardCache(user.id);
     await writeAudit({
       userId: user.id,
       action: "manual_account_deleted",

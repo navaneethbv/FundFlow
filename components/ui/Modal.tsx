@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { cn } from "@/lib/cn";
 
 export interface ModalProps {
@@ -34,16 +35,9 @@ export default function Modal({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const handleDialogKeyDown = useDialogFocus(dialogRef, open, onClose);
 
-  // Lock page scroll behind the overlay; without this the backdrop drifts
-  // on wheel/touch scroll and the previous scroll position is lost on close.
-  useEffect(() => {
-    if (!open) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [open]);
+  // Lock page scroll behind the overlay; using lock counter so nested/sibling
+  // overlays don't unlock early or drift scroll position.
+  useBodyScrollLock(open);
 
   if (!open) return null;
 

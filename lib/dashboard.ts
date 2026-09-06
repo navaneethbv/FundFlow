@@ -647,6 +647,11 @@ export interface DashboardOptions {
    * the RLS-bound user client — service-client callers must never pass it.
    */
   scope?: "mine" | "household";
+  /**
+   * When false, skips querying manual_accounts and profiles (balance sheet inputs).
+   * Defaults to true.
+   */
+  includeBalanceSheet?: boolean;
 }
 
 interface DashboardOverrideRow {
@@ -887,12 +892,16 @@ export async function getDashboardData(
     // Balance-sheet inputs beyond the connected accounts. Net worth has to
     // agree with the Accounts page and with the stored monthly snapshot, and
     // both of those count manual accounts and drop the user's exclusions.
-    scopeUser(
-      supabase
-        .from("manual_accounts")
-        .select("id, name, account_type, balance, include_in_net_worth"),
-    ),
-    ownProfilePrefsQuery(supabase, userId),
+    options?.includeBalanceSheet !== false
+      ? scopeUser(
+          supabase
+            .from("manual_accounts")
+            .select("id, name, account_type, balance, include_in_net_worth"),
+        )
+      : Promise.resolve({ data: [], error: null }),
+    options?.includeBalanceSheet !== false
+      ? ownProfilePrefsQuery(supabase, userId)
+      : Promise.resolve({ data: null, error: null }),
   ]);
 
   const allAccounts = ((accounts ?? []) as AccountSummary[]).map((account) => ({
@@ -900,11 +909,14 @@ export async function getDashboardData(
     name: normalizeExternalDisplayText(account.name),
     official_name: normalizeExternalDisplayText(account.official_name),
   }));
-  const netWorthAccounts = composeDashboardBalanceSheet(
-    allAccounts,
-    manualAccountsResult,
-    netWorthPrefsResult,
-  );
+  const netWorthAccounts =
+    options?.includeBalanceSheet !== false
+      ? composeDashboardBalanceSheet(
+          allAccounts,
+          manualAccountsResult,
+          netWorthPrefsResult,
+        )
+      : [];
   const lastSyncAt = (lastSyncJob?.updated_at as string | undefined) ?? null;
   const allItems = (items ?? []) as Array<{ id: string; institution_name: string | null }>;
   const allBudgets = (budgets ?? []) as Array<{
@@ -1378,7 +1390,7 @@ export async function getDashboardData(
   // balances (RLS-visible), but `net_worth_snapshots` only ever holds the
   // viewer's own history, so splicing a household-wide live point in there
   // would fabricate a month-over-month jump equal to the partner's balances.
-  const hasBalanceSheet = netWorthAccounts.length > 0; // A manual-only user still has a balance sheet.
+  const hasBalanceSheet = netWorthAccounts.some((account) => account.balance !== null);
   if (options?.scope !== "household" && hasBalanceSheet) {
     const currentPoint = { month: currentMonth, ...netWorthSnapshot };
     const currentIndex = netWorthHistory.findIndex((point) => point.month === currentMonth);

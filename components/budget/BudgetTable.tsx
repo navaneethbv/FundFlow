@@ -160,7 +160,9 @@ function RowMenu({
 
 /**
  * Planned-amount editing shared by the desktop row and its mobile card twin:
- * one state cell and one commit-on-blur rule, so the two cannot drift apart.
+ * one validation and commit-on-blur rule. Note: each rendered instance
+ * holds its own local draft state cell, so an uncommitted edit would not
+ * transfer across a responsive breakpoint change before blur.
  */
 function usePlannedAmount(
   line: BudgetLine,
@@ -303,7 +305,7 @@ function BudgetCard({
           <CategoryChip label={line.label} />
           {!line.budgetId && <Badge tone="warning" className="ml-2">Unbudgeted</Badge>}
         </span>
-        <RowMenu line={line} disabled={disabled} onUpdate={onUpdate} />
+        {line.budgetId ? <RowMenu line={line} disabled={disabled} onUpdate={onUpdate} /> : null}
       </div>
       <ProgressBar
         className="mt-2"

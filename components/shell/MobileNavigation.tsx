@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/cn";
 import type {
   AppShellActive,
@@ -12,6 +12,7 @@ import PrivacyToggle from "@/components/PrivacyToggle";
 import ThemeToggle from "@/components/ThemeToggle";
 import LogoutButton from "@/components/LogoutButton";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { LogoMark } from "@/components/ui/Logo";
 import LinkPendingIndicator from "@/components/ui/LinkPendingIndicator";
 import {
@@ -109,14 +110,7 @@ export default function MobileNavigation({
   const moreIsActive = !QUICK_KEYS.has(activeKey);
   const handleDialogKeyDown = useDialogFocus(dialogRef, open, () => setOpen(false));
 
-  useEffect(() => {
-    if (!open) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [open]);
+  useBodyScrollLock(open);
 
   return (
     <>

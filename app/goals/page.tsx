@@ -45,7 +45,7 @@ export default async function GoalsPage({ searchParams }: Readonly<PageProps>) {
 
   const [goals, data, { data: householdRows }, funded] = await Promise.all([
     getGoals(supabase),
-    getDashboardData(supabase),
+    getDashboardData(supabase, undefined, undefined, user?.id, { includeBalanceSheet: false }),
     supabase.from("households").select("id").limit(1),
     // Phase 7 reads two tables that only exist once the goals_v2 migration is
     // applied. With the flag off the page renders exactly as it did before,

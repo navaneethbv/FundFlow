@@ -63,6 +63,7 @@ export function dashboardScopeKey(
     options?.drill?.sub ?? "-",
     options?.drill?.merchant ?? "-",
     options?.scope ?? "mine",
+    options?.includeBalanceSheet === false ? "no-bs" : "bs",
   ].join(":");
 }
 

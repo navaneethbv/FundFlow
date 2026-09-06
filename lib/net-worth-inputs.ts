@@ -3,12 +3,12 @@ import type { NetWorthAccount } from "@/lib/planning";
 /**
  * Shared balance-sheet composition for net worth.
  *
- * Three surfaces answer "what is my net worth" - the stored monthly snapshot
- * (`lib/net-worth.ts`), the Dashboard's live open-month observation
- * (`lib/dashboard.ts`), and the forecast's starting state
- * (`lib/forecasting-data.ts`). They disagreed once, and the Dashboard reported
- * a number that omitted manual accounts and ignored the user's exclusions, so
- * the rules for which balances count live here in one place.
+ * Net worth balance inputs and exclusion rules are coordinated here: the
+ * stored monthly snapshot (`lib/net-worth.ts`) and the Dashboard's live
+ * open-month observation (`lib/dashboard.ts`) compose their balance sheets
+ * via `composeNetWorthAccounts`, while the forecast starting state
+ * (`lib/forecasting-data.ts`) reads `readExcludedNetWorthIds` from here so
+ * exclusions stay consistent across all surfaces.
  */
 
 /** A connected (Plaid) account row, as selected from `accounts`. */

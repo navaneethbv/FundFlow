@@ -5,9 +5,9 @@ Nice-to-have features and enhancements, deferred out of the initial build.
 ## UI audit follow-up (2026-09-06)
 
 The [page-by-page UI audit](reviews/2026-09-05-ui-page-audit.md) documents 17 confirmed defects across all main authenticated pages and Settings sections.
-Local fixes and automated verification are recorded in the [implementation plan](plans/2026-09-05-ui-page-fixes.md) on `ui/page-audit` (remote `codex/ui-page-audit`, PR #157).
+Local fixes and automated verification are recorded in the [implementation plan](superpowers/plans/2026-09-05-ui-page-fixes.md) on `ui/page-audit` (remote `codex/ui-page-audit`, PR #157).
 
-The [PR #157 review](reviews/2026-09-06-pr157-review.md) found five remaining defects at head `61ec03c`.
+The [PR #157 review](archive/2026-09-06-pr157-review.md) found five remaining defects at head `61ec03c`.
 All five are now fixed with regression coverage: net-worth composition, dismissed recurring reminders, mobile holdings parity, the last two duplicated account labels, and the admin sync-job panel.
 The six Sonar annotations named in that review are also cleared.
 These fixes are not deployed.

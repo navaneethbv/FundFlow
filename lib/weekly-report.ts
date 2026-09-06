@@ -256,6 +256,8 @@ export function buildWeeklyReportModel(
     },
     (plaidItemId) => plaidItemId === "other-bank" ? "Other bank" : (institutionById.get(plaidItemId) ?? "Other bank"),
   );
+  // Cards are grouped by accountId so two cards sharing a label remain
+  // distinct entries rather than merging balances across separate accounts.
   const cards = sumById(
     currentSpend.filter(
       (transaction) => accountById.get(transaction.accountId)?.type === "credit",

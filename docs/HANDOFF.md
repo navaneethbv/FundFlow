@@ -5,7 +5,7 @@ Last updated: 2026-09-06. Read this first to resume.
 ## 2026-09-06: PR #157 review remediation
 
 Branch `ui/page-audit` (remote `codex/ui-page-audit`, unrenamed because it backs open PR #157).
-All five findings in the [PR #157 review](reviews/2026-09-06-pr157-review.md) are fixed at review head `61ec03c`, with regression coverage for each.
+All five findings in the [PR #157 review](archive/2026-09-06-pr157-review.md) are fixed at review head `61ec03c`, with regression coverage for each.
 
 Net worth (R1) now composes the same balance sheet everywhere.
 The new `lib/net-worth-inputs.ts` owns the rule, and `lib/dashboard.ts`, `lib/net-worth.ts`, and `lib/forecasting-data.ts` all read it instead of keeping three near-copies.
@@ -28,7 +28,7 @@ The signed-in preview pass at desktop and phone sizes is still open and needs th
 
 ## 2026-09-05: UI page audit and local fixes
 
-Branch `codex/ui-page-audit` contains fixes for 17 confirmed UI findings, with a [coverage matrix and reproductions](reviews/2026-09-05-ui-page-audit.md) and [detailed implementation plan](plans/2026-09-05-ui-page-fixes.md).
+Branch `codex/ui-page-audit` contains fixes for 17 confirmed UI findings, with a [coverage matrix and reproductions](reviews/2026-09-05-ui-page-audit.md) and [detailed implementation plan](superpowers/plans/2026-09-05-ui-page-fixes.md).
 The changes cover shared dark-theme controls, settings layouts, mobile recurring rows, account labels, current net-worth history, funded goal review, investment freshness, and explicit AI consent.
 The full coverage run passed 4,947 unit and script tests, including 95.05% branch coverage; lint, typecheck, build, palette validation, and graph update passed.
 The browser URL security policy rejected further production-tab inspection during continuation.

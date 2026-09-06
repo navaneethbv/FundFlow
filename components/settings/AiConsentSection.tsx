@@ -28,12 +28,15 @@ export default function AiConsentSection({ initialEnabled, exportAllowed, provid
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ enabled }),
       });
-      if (!response.ok) throw new Error("Your AI preference could not be saved. Please try again.");
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error || "Your AI preference could not be saved. Please try again.");
+      }
       setSaved(enabled);
       setStatus(enabled ? "In-app AI enabled." : "In-app AI disabled.");
       router.refresh();
-    } catch {
-      setError("Your AI preference could not be saved. Please try again.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Your AI preference could not be saved. Please try again.");
     } finally {
       setBusy(false);
     }

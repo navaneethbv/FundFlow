@@ -55,13 +55,14 @@ export async function GET(
 
     const { data: streams } = await service
       .from("recurring_streams")
-      .select("id, merchant_name, description, average_amount, last_amount, frequency, stream_type, is_active")
+      .select("id, merchant_name, description, average_amount, last_amount, frequency, stream_type, is_active, status")
       .eq("user_id", row.user_id)
       .eq("is_active", true)
-      // A stream the user marked "Not recurring" must not keep publishing
+      // A stream the user marked "Not recurring" or tombstoned must not keep publishing
       // bills into their calendar app, the same rule the Recurring page and
       // the Dashboard reminders apply.
-      .is("dismissed_at", null);
+      .is("dismissed_at", null)
+      .or("status.is.null,status.neq.TOMBSTONED");
 
     const today = new Date().toISOString().slice(0, 10);
     const anchor = `${today.slice(0, 7)}-15`;

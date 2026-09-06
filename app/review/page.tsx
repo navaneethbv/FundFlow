@@ -52,7 +52,7 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
   } = await supabase.auth.getUser();
 
   const [data, goals] = await Promise.all([
-    getDashboardData(supabase, undefined, month),
+    getDashboardData(supabase, undefined, month, user?.id, { includeBalanceSheet: false }),
     user && isFeatureEnabled("goalsV2")
       ? loadGoalsPageData(supabase, user.id).then(({ goals }) => goals.map((goal) => ({
           id: goal.id, name: goal.name, remainingAmount: goal.remainingAmount,
