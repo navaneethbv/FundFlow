@@ -110,7 +110,7 @@ export default function FireSimulator({
               </span>
               <Badge tone="neutral">Basic</Badge>
             </div>
-            <div className="mt-2 text-xl font-bold font-mono">
+            <div data-money className="mt-2 text-xl font-bold font-mono">
               {formatCurrency(simulation.milestones.leanFireTarget)}
             </div>
             <p className="mt-1 text-xs text-muted">Essential expenses covered</p>
@@ -123,7 +123,7 @@ export default function FireSimulator({
               </span>
               <Badge tone="accent">25x Spend</Badge>
             </div>
-            <div className="mt-2 text-xl font-bold text-accent font-mono">
+            <div data-money className="mt-2 text-xl font-bold text-accent font-mono">
               {formatCurrency(simulation.milestones.standardFireTarget)}
             </div>
             <p className="mt-1 text-xs text-muted">
@@ -140,7 +140,7 @@ export default function FireSimulator({
               </span>
               <Badge tone="success">Abundant</Badge>
             </div>
-            <div className="mt-2 text-xl font-bold font-mono">
+            <div data-money className="mt-2 text-xl font-bold font-mono">
               {formatCurrency(simulation.milestones.fatFireTarget)}
             </div>
             <p className="mt-1 text-xs text-muted">High discretionary lifestyle</p>
@@ -157,9 +157,9 @@ export default function FireSimulator({
             <ProgressBar percent={simulation.currentProgressPct} tone="accent" ariaLabel="FIRE progress" />
           </div>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
-            <span>Net Worth: {formatCurrency(initialNetWorth)}</span>
+            <span>Net Worth: <span data-money>{formatCurrency(initialNetWorth)}</span></span>
             <span>Savings Rate: {simulation.savingsRatePct}%</span>
-            <span>Coast FIRE Target: {formatCurrency(simulation.milestones.coastFireTarget)}</span>
+            <span>Coast FIRE Target: <span data-money>{formatCurrency(simulation.milestones.coastFireTarget)}</span></span>
           </div>
         </div>
 
@@ -243,7 +243,7 @@ export default function FireSimulator({
               >
                 <span>{ev.name}</span>
                 <span className="font-mono text-muted">(Month {ev.monthOffset})</span>
-                <span className={ev.oneTimeCashFlow >= 0 ? "text-success font-bold" : "text-danger font-bold"}>
+                <span data-money className={ev.oneTimeCashFlow >= 0 ? "text-success font-bold" : "text-danger font-bold"}>
                   {ev.oneTimeCashFlow >= 0 ? "+" : ""}
                   {formatCurrency(ev.oneTimeCashFlow)}
                 </span>

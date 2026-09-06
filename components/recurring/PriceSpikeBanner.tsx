@@ -92,7 +92,9 @@ export default function PriceSpikeBanner({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Badge tone="danger">+{formatCurrency(totalImpact)}/yr</Badge>
+          <Badge tone="danger">
+            <span data-money>+{formatCurrency(totalImpact)}/yr</span>
+          </Badge>
           <Button
             variant="ghost"
             size="sm"
@@ -118,9 +120,9 @@ export default function PriceSpikeBanner({
                 <Badge tone="neutral">{alert.frequency}</Badge>
               </div>
               <div className="mt-0.5 text-muted">
-                <span className="line-through">{formatCurrency(alert.previousAmount)}</span>
+                <span data-money className="line-through">{formatCurrency(alert.previousAmount)}</span>
                 {" → "}
-                <span className="font-bold text-danger">
+                <span data-money className="font-bold text-danger">
                   {formatCurrency(alert.currentAmount)}
                 </span>
                 <span className="ml-1 text-[11px] font-semibold text-warning">
@@ -130,7 +132,7 @@ export default function PriceSpikeBanner({
             </div>
 
             <div className="flex items-center gap-3">
-              <span className="font-mono font-bold text-muted">
+              <span data-money className="font-mono font-bold text-muted">
                 +{formatCurrency(alert.annualizedImpact)}/yr
               </span>
               <Link

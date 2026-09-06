@@ -53,8 +53,8 @@ export default function ScopeChips({
       />
       {spendPerPerson && (
         <span className="text-xs font-semibold text-muted">
-          You {formatCurrency(spendPerPerson.mine)} · household{" "}
-          {formatCurrency(spendPerPerson.household)} this month
+          You <span data-money>{formatCurrency(spendPerPerson.mine)}</span> · household{" "}
+          <span data-money>{formatCurrency(spendPerPerson.household)}</span> this month
         </span>
       )}
     </div>

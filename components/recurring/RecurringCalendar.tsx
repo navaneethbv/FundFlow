@@ -167,7 +167,7 @@ export default function RecurringCalendar({
                           className="truncate rounded border border-panel-border bg-panel-2 px-1 py-0.5 text-xs"
                           title={`${occurrence.merchant} · ${occurrence.status}`}
                         >
-                          <span className={occurrenceTone(occurrence)}>
+                          <span data-money className={occurrenceTone(occurrence)}>
                             {occurrence.isIncome ? "+" : "−"}
                             {formatCurrency(Math.abs(occurrence.amount), currency)}
                             <span className="sr-only"> ({occurrence.status})</span>
@@ -213,7 +213,7 @@ export default function RecurringCalendar({
                   )}
                 </td>
                 <td className="px-3 py-2">{occurrence.isIncome ? "Income" : "Expense"}</td>
-                <td className="px-3 py-2 text-right tabular-nums">
+                <td data-money className="px-3 py-2 text-right tabular-nums">
                   {occurrence.isIncome ? "+" : "−"}{formatCurrency(Math.abs(occurrence.amount), currency)}
                 </td>
                 <td className="px-3 py-2">{titleCase(occurrence.status)}</td>

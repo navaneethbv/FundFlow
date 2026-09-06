@@ -243,6 +243,109 @@ function OccurrenceRowMenu({
   );
 }
 
+function OccurrenceCard({
+  occurrence,
+  currency,
+  today,
+  stream,
+  manualItem,
+  pending,
+  onReview,
+  onDismiss,
+  onRestore,
+  onCorrectAmount,
+  onToggleManualEnabled,
+  onDeleteManualItem,
+}: Readonly<{
+  occurrence: RecurringOccurrence;
+  currency: string;
+  today: string;
+  stream: RecurringStreamRow | undefined;
+  manualItem: ManualRecurringItemRow | undefined;
+  pending: boolean;
+  onReview: (id: string) => void;
+  onDismiss: (id: string) => void;
+  onRestore: (id: string) => void;
+  onCorrectAmount: (id: string, amount: number) => void;
+  onToggleManualEnabled: (id: string, enabled: boolean) => void;
+  onDeleteManualItem: (id: string) => void;
+}>) {
+  return (
+    <div className="rounded-field border border-panel-border bg-panel-2 p-3 space-y-2">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <MerchantAvatar
+            name={occurrence.merchant}
+            logoUrl={merchantLogoDataUri(occurrence.merchant)}
+            size={32}
+            className="shrink-0"
+          />
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold">{occurrence.merchant}</span>
+            <span className="text-xs text-muted">{occurrence.frequency}</span>
+            {occurrence.source === "inferred" && (
+              <span className="block text-xs text-muted">
+                {inferredSourceLabel(occurrence.evidenceCount)}
+              </span>
+            )}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="inline-flex items-center justify-end gap-1.5">
+            {occurrence.status === "complete" && (
+              <>
+                <CheckCircle2 aria-hidden className="h-4 w-4 text-success" />
+                <span className="sr-only">Complete</span>
+              </>
+            )}
+            <span
+              data-money
+              className="metric-value text-sm font-semibold"
+              style={{ color: occurrence.isIncome ? "var(--viz-pos)" : "var(--viz-neg)" }}
+            >
+              {occurrence.isIncome ? "+" : ""}
+              {formatCurrency(occurrence.amount, currency)}
+            </span>
+          </span>
+          <OccurrenceRowMenu
+            occurrence={occurrence}
+            stream={stream}
+            manualItem={manualItem}
+            pending={pending}
+            onReview={onReview}
+            onDismiss={onDismiss}
+            onRestore={onRestore}
+            onCorrectAmount={onCorrectAmount}
+            onToggleManualEnabled={onToggleManualEnabled}
+            onDeleteManualItem={onDeleteManualItem}
+          />
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted pt-1 border-t border-panel-border/50">
+        <span className="font-mono">
+          Due {formatDay(occurrence.dueDate)}
+          {occurrence.status === "overdue" && (
+            <span className="ml-1.5 font-semibold text-accent">
+              ({formatDueAnnotation(daysUntil(occurrence.dueDate, today))})
+            </span>
+          )}
+        </span>
+        <div className="flex items-center gap-3">
+          {occurrence.account && (
+            <span className="flex items-center gap-1.5">
+              <InstitutionAvatar name={occurrence.account} size={16} className="shrink-0" />
+              <span className="truncate max-w-[120px]">{occurrence.account}</span>
+            </span>
+          )}
+          {occurrence.category && (
+            <CategoryChip label={titleCase(occurrence.category)} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OccurrenceTableRow({
   occurrence,
   index,
@@ -273,7 +376,7 @@ function OccurrenceTableRow({
   onDeleteManualItem: (id: string) => void;
 }>) {
   return (
-    <tr className={`grid grid-cols-[minmax(0,1fr)_auto] items-center border-t border-panel-border sm:table-row${index % 2 === 1 ? " bg-panel-2" : ""}`}>
+    <tr className={`border-t border-panel-border${index % 2 === 1 ? " bg-panel-2" : ""}`}>
       <td className="min-w-0 px-4 py-3">
         <div className="flex items-center gap-3">
           <MerchantAvatar
@@ -293,15 +396,15 @@ function OccurrenceTableRow({
           </span>
         </div>
       </td>
-      <td className="col-start-1 row-start-2 px-4 py-2 text-sm font-mono sm:whitespace-nowrap sm:py-3">
-        <span className="text-muted sm:hidden">Due </span>{formatDay(occurrence.dueDate)}
+      <td className="px-4 py-3 text-sm font-mono whitespace-nowrap">
+        {formatDay(occurrence.dueDate)}
         {occurrence.status === "overdue" && (
           <span className="ml-1.5 text-xs font-semibold text-accent">
             ({formatDueAnnotation(daysUntil(occurrence.dueDate, today))})
           </span>
         )}
       </td>
-      <td className="col-start-1 min-w-0 px-4 py-2 sm:py-3">
+      <td className="min-w-0 px-4 py-3">
         {occurrence.account ? (
           <div className="flex items-center gap-2">
             <InstitutionAvatar name={occurrence.account} size={24} className="shrink-0" />
@@ -311,14 +414,14 @@ function OccurrenceTableRow({
           <span className="text-sm text-muted">—</span>
         )}
       </td>
-      <td className="col-start-1 min-w-0 px-4 py-2 sm:py-3">
+      <td className="min-w-0 px-4 py-3">
         {occurrence.category ? (
           <CategoryChip label={titleCase(occurrence.category)} />
         ) : (
           <span className="text-sm text-muted">—</span>
         )}
       </td>
-      <td className="col-start-2 row-start-1 px-4 py-3 text-right">
+      <td className="px-4 py-3 text-right">
         <span className="inline-flex items-center justify-end gap-1.5">
           {occurrence.status === "complete" && (
             <>
@@ -336,7 +439,7 @@ function OccurrenceTableRow({
           </span>
         </span>
       </td>
-      <td className="col-start-2 row-start-2 px-2 py-3 text-right">
+      <td className="px-2 py-3 text-right">
         <OccurrenceRowMenu
           occurrence={occurrence}
           stream={stream}
@@ -397,58 +500,80 @@ function OccurrenceTable({
   const total = occurrences.reduce((sum, occurrence) => sum + occurrence.amount, 0);
 
   return (
-    // `relative` is load-bearing, not decoration. The Actions column header is
-    // an `sr-only` span, which Tailwind implements as `position: absolute`. A
-    // static scroll container is not a containing block, so that span was
-    // positioned against the viewport instead and escaped the clip entirely —
-    // sitting at x=1013 on a 390px phone and giving the whole *page* 623px of
-    // horizontal scroll while the table itself scrolled correctly.
-    <div className="relative sm:overflow-x-auto">
-      <table className="block w-full text-sm sm:table sm:min-w-[720px]">
-        <thead className="hidden bg-panel-2 text-xs text-muted font-mono sm:table-header-group">
-          <tr>
-            <th scope="col" className="px-4 py-3 text-left">Merchant</th>
-            <th scope="col" className="px-4 py-3 text-left">Date</th>
-            <th scope="col" className="px-4 py-3 text-left">Payment Account</th>
-            <th scope="col" className="px-4 py-3 text-left">Category</th>
-            <th scope="col" className="px-4 py-3 text-right">Amount</th>
-            <th scope="col" className="px-2 py-3 text-right">
-              <span className="sr-only">Actions</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody className="block sm:table-row-group">
-          {occurrences.map((occurrence, index) => (
-            <OccurrenceTableRow
-              key={`${occurrence.sourceId}-${occurrence.dueDate}-${index}`}
-              occurrence={occurrence}
-              index={index}
-              currency={currency}
-              today={today}
-              stream={isPersistedStreamSource(occurrence.source) ? streamById.get(occurrence.sourceId) : undefined}
-              manualItem={occurrence.source === "manual" ? manualById.get(occurrence.sourceId) : undefined}
-              pending={pending}
-              onReview={onReview}
-              onDismiss={onDismiss}
-              onRestore={onRestore}
-              onCorrectAmount={onCorrectAmount}
-              onToggleManualEnabled={onToggleManualEnabled}
-              onDeleteManualItem={onDeleteManualItem}
-            />
-          ))}
-        </tbody>
-        <tfoot className="block sm:table-footer-group">
-          <tr className="flex items-center justify-between border-t border-panel-border bg-panel-2 font-semibold sm:table-row">
-            <td className="px-4 py-3" colSpan={4}>
-              {totalLabel} Total
-            </td>
-            <td data-money className="px-4 py-3 text-right">
-              {formatCurrency(total, currency)}
-            </td>
-            <td className="hidden px-2 py-3 sm:table-cell" />
-          </tr>
-        </tfoot>
-      </table>
+    <div>
+      {/* Mobile card twin: preserves semantics and avoids broken table display */}
+      <div className="space-y-2 sm:hidden">
+        {occurrences.map((occurrence, index) => (
+          <OccurrenceCard
+            key={`${occurrence.sourceId}-${occurrence.dueDate}-${index}`}
+            occurrence={occurrence}
+            currency={currency}
+            today={today}
+            stream={isPersistedStreamSource(occurrence.source) ? streamById.get(occurrence.sourceId) : undefined}
+            manualItem={occurrence.source === "manual" ? manualById.get(occurrence.sourceId) : undefined}
+            pending={pending}
+            onReview={onReview}
+            onDismiss={onDismiss}
+            onRestore={onRestore}
+            onCorrectAmount={onCorrectAmount}
+            onToggleManualEnabled={onToggleManualEnabled}
+            onDeleteManualItem={onDeleteManualItem}
+          />
+        ))}
+        <div className="flex items-center justify-between rounded-field border border-panel-border bg-panel-2 p-3 font-semibold text-sm">
+          <span>{totalLabel} Total</span>
+          <span data-money>{formatCurrency(total, currency)}</span>
+        </div>
+      </div>
+
+      {/* Desktop real table */}
+      <div className="hidden relative sm:block sm:overflow-x-auto">
+        <table className="w-full text-sm sm:min-w-[720px]">
+          <thead className="bg-panel-2 text-xs text-muted font-mono sm:table-header-group">
+            <tr>
+              <th scope="col" className="px-4 py-3 text-left">Merchant</th>
+              <th scope="col" className="px-4 py-3 text-left">Date</th>
+              <th scope="col" className="px-4 py-3 text-left">Payment Account</th>
+              <th scope="col" className="px-4 py-3 text-left">Category</th>
+              <th scope="col" className="px-4 py-3 text-right">Amount</th>
+              <th scope="col" className="px-2 py-3 text-right">
+                <span className="sr-only">Actions</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {occurrences.map((occurrence, index) => (
+              <OccurrenceTableRow
+                key={`${occurrence.sourceId}-${occurrence.dueDate}-${index}`}
+                occurrence={occurrence}
+                index={index}
+                currency={currency}
+                today={today}
+                stream={isPersistedStreamSource(occurrence.source) ? streamById.get(occurrence.sourceId) : undefined}
+                manualItem={occurrence.source === "manual" ? manualById.get(occurrence.sourceId) : undefined}
+                pending={pending}
+                onReview={onReview}
+                onDismiss={onDismiss}
+                onRestore={onRestore}
+                onCorrectAmount={onCorrectAmount}
+                onToggleManualEnabled={onToggleManualEnabled}
+                onDeleteManualItem={onDeleteManualItem}
+              />
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t border-panel-border bg-panel-2 font-semibold">
+              <td className="px-4 py-3" colSpan={4}>
+                {totalLabel} Total
+              </td>
+              <td data-money className="px-4 py-3 text-right">
+                {formatCurrency(total, currency)}
+              </td>
+              <td className="px-2 py-3" />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
     </div>
   );
 }

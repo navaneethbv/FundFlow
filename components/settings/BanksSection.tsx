@@ -9,6 +9,7 @@ import { formatDate, formatTimestampUtc } from "@/lib/format-date";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Panel from "@/components/ui/Panel";
+import FormMessage from "@/components/ui/FormMessage";
 import type { ItemCursorHealth } from "@/lib/cursor-health";
 import type { InstitutionSyncHealth, ProductSyncHealth, ProductSyncState } from "@/lib/sync-health";
 
@@ -128,9 +129,19 @@ export default function BanksSection({
   householdId?: string | null;
 }>) {
   const router = useRouter();
-  const [items, setItems] = useState<Item[]>(initialItems);
+  const [removedIds, setRemovedIds] = useState<Set<string>>(() => new Set());
+  const [shareOverrides, setShareOverrides] = useState<Record<string, string | null>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const items = initialItems
+    .filter((item) => !removedIds.has(item.id))
+    .map((item) => {
+      if (item.id in shareOverrides) {
+        return { ...item, shared_household_id: shareOverrides[item.id] };
+      }
+      return item;
+    });
 
   async function toggleShare(id: string, share: boolean) {
     if (share && !householdId) {
@@ -151,13 +162,10 @@ export default function BanksSection({
       setError(json?.error ?? "Could not update sharing.");
       return;
     }
-    setItems((list) =>
-      list.map((item) =>
-        item.id === id
-          ? { ...item, shared_household_id: share ? (json?.householdId ?? "shared") : null }
-          : item,
-      ),
-    );
+    setShareOverrides((prev) => ({
+      ...prev,
+      [id]: share ? (json?.householdId ?? "shared") : null,
+    }));
   }
 
   async function disconnect(id: string) {
@@ -174,7 +182,7 @@ export default function BanksSection({
         const json = await res.json().catch(() => ({}));
         throw new Error(json.error ?? "Disconnect failed");
       }
-      setItems((list) => list.filter((i) => i.id !== id));
+      setRemovedIds((prev) => new Set([...prev, id]));
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error");
@@ -266,7 +274,7 @@ export default function BanksSection({
           );})}
         </ul>
       )}
-      {error && <p className="text-sm text-danger">{error}</p>}
+      <FormMessage message={error} />
     </Panel>
   );
 }

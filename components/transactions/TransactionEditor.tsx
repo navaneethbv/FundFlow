@@ -92,18 +92,18 @@ function TransactionSplitSection({
               splitsBalanced ? "text-muted" : "text-danger",
             )}
           >
-            {formatCurrency(splitTotal, currency)} / {formatCurrency(target, currency)}
+            <span data-money>{formatCurrency(splitTotal, currency)}</span> / <span data-money>{formatCurrency(target, currency)}</span>
           </span>
         )}
       </div>
       {activeRows.length > 0 && (
         <div className="mb-3 space-y-1">
           <div className="flex justify-between text-xs font-semibold">
-            <span>Allocated: {formatCurrency(splitTotal, currency)}</span>
+            <span>Allocated: <span data-money>{formatCurrency(splitTotal, currency)}</span></span>
             <span className={splitsBalanced ? "text-success" : "text-warning font-bold"}>
               {splitsBalanced
                 ? "Balanced"
-                : `Remaining: ${formatCurrency(round2(target - splitTotal), currency)}`}
+                : <>Remaining: <span data-money>{formatCurrency(round2(target - splitTotal), currency)}</span></>}
             </span>
           </div>
           {/*
@@ -384,7 +384,7 @@ export default function TransactionEditor({
             <div className="mb-4">
               <p className="text-xs uppercase tracking-wider text-muted">
                 {transaction.amount < 0 ? "Money in" : "Money out"} ·{" "}
-                {formatCurrency(target, transaction.currency)}
+                <span data-money>{formatCurrency(target, transaction.currency)}</span>
               </p>
               <h2 id={`${idPrefix}title-${transaction.id}`} className="text-lg font-semibold">{transaction.merchant}</h2>
             </div>

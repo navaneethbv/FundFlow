@@ -8,6 +8,7 @@ import Button from "@/components/ui/Button";
 import Field from "@/components/ui/Field";
 import Input from "@/components/ui/Input";
 import Panel from "@/components/ui/Panel";
+import FormMessage from "@/components/ui/FormMessage";
 
 interface Budget {
   id: string;
@@ -39,6 +40,7 @@ export default function BudgetsSection({
   const [category, setCategory] = useState("");
   const [limit, setLimit] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   async function insertBudget(categoryValue: string, limitValue: number) {
     setError(null);
@@ -62,15 +64,21 @@ export default function BudgetsSection({
 
   async function add(e: React.SyntheticEvent) {
     e.preventDefault();
+    if (busy) return;
     setError(null);
     const parsed = Number(limit);
     if (!category.trim() || !Number.isFinite(parsed) || parsed < 0) {
       setError("Enter a category and a non-negative limit.");
       return;
     }
-    if (await insertBudget(category.trim(), parsed)) {
-      setCategory("");
-      setLimit("");
+    setBusy(true);
+    try {
+      if (await insertBudget(category.trim(), parsed)) {
+        setCategory("");
+        setLimit("");
+      }
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -192,7 +200,7 @@ export default function BudgetsSection({
             className="w-28"
           />
         </Field>
-        <Button type="submit" size="md">
+        <Button type="submit" size="md" loading={busy}>
           Add
         </Button>
       </form>
@@ -233,7 +241,7 @@ export default function BudgetsSection({
         </div>
       )}
 
-      {error && <p className="text-sm text-danger">{error}</p>}
+      <FormMessage message={error} />
     </Panel>
   );
 }

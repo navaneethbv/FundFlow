@@ -26,9 +26,6 @@ export default function GoalsSummary({
     <div className="space-y-4">
       {goals.slice(0, 3).map((goalSummary) => {
         const item = goalSummary;
-        const paceSuffix = item.monthlyPace
-          ? `, ${formatCurrency(item.monthlyPace)} needed monthly`
-          : "";
         return (
           <div key={item.id}>
             <div className="mb-1 flex items-baseline justify-between gap-3">
@@ -36,8 +33,8 @@ export default function GoalsSummary({
                 {item.name}
               </span>
               <span className="shrink-0 text-xs font-bold tabular-nums text-muted">
-                {formatCurrency(item.fundedAmount)} /{" "}
-                {formatCurrency(item.targetAmount)}
+                <span data-money>{formatCurrency(item.fundedAmount)}</span> /{" "}
+                <span data-money>{formatCurrency(item.targetAmount)}</span>
               </span>
             </div>
             <ProgressBar
@@ -48,7 +45,7 @@ export default function GoalsSummary({
             <p className="mt-1 text-xs text-muted">
               {item.complete
                 ? "Goal complete"
-                : `${formatCurrency(item.remainingAmount)} remaining${paceSuffix}`}
+                : <><span data-money>{formatCurrency(item.remainingAmount)}</span> remaining{item.monthlyPace ? <>, <span data-money>{formatCurrency(item.monthlyPace)}</span> needed monthly</> : ""}</>}
             </p>
           </div>
         );

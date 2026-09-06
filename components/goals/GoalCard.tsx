@@ -80,10 +80,10 @@ export default function GoalCard({
         </div>
 
         <p className="mt-3 text-2xl font-semibold tabular-nums">
-          {formatCurrency(goal.funded_amount, currency)}
+          <span data-money>{formatCurrency(goal.funded_amount, currency)}</span>
           <span className="text-sm font-normal text-muted">
             {" "}
-            of {formatCurrency(target, currency)}
+            of <span data-money>{formatCurrency(target, currency)}</span>
           </span>
         </p>
 
@@ -97,7 +97,7 @@ export default function GoalCard({
         <dl className="mt-4 space-y-1 text-sm">
           <div className="flex justify-between gap-3">
             <dt className="text-muted">Remaining</dt>
-            <dd className="tabular-nums">
+            <dd data-money className="tabular-nums">
               {formatCurrency(goal.remainingAmount, currency)}
             </dd>
           </div>
@@ -110,7 +110,7 @@ export default function GoalCard({
           {goal.est_monthly !== null && (
             <div className="flex justify-between gap-3">
               <dt className="text-muted">Needed each month</dt>
-              <dd className="tabular-nums">
+              <dd data-money className="tabular-nums">
                 {formatCurrency(goal.est_monthly, currency)}
               </dd>
             </div>
@@ -118,7 +118,7 @@ export default function GoalCard({
           {goal.monthly_contribution !== null && (
             <div className="flex justify-between gap-3">
               <dt className="text-muted">Planned each month</dt>
-              <dd className="tabular-nums">
+              <dd data-money className="tabular-nums">
                 {formatCurrency(goal.monthly_contribution, currency)}
               </dd>
             </div>
@@ -132,7 +132,7 @@ export default function GoalCard({
                   ? "Balance remaining"
                   : "Linked account balance"}
               </dt>
-              <dd className="tabular-nums">
+              <dd data-money className="tabular-nums">
                 {formatCurrency(goal.linkedAccountBalance, currency)}
               </dd>
             </div>

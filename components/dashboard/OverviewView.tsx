@@ -11,7 +11,7 @@ import {
 import { loadOverviewWidgetData } from "@/lib/dashboard-widgets-data";
 import type { AccountSummary } from "@/lib/dashboard";
 import { formatMonth } from "@/lib/format";
-import { localDateKey } from "@/lib/format-date";
+import { dateKeyInTimezone } from "@/lib/report-period";
 import type { GoalSummaryItem } from "@/lib/goal-summary";
 import { createClient } from "@/lib/supabase/server";
 import type { ComponentProps } from "react";
@@ -34,6 +34,7 @@ export default async function OverviewView({
   userId,
   household,
   month,
+  today: propToday,
   selectedAccountId,
   selectedLedgerAccountId,
   extraParams,
@@ -47,11 +48,12 @@ export default async function OverviewView({
   userId: string;
   household: boolean;
   month: string;
+  today?: string;
   selectedAccountId?: string;
   selectedLedgerAccountId?: string;
   extraParams?: Record<string, string | undefined>;
 }>) {
-  const today = localDateKey();
+  const today = propToday ?? dateKeyInTimezone(new Date(), null);
   const supabase = await createClient();
   const prefs = normalizeWidgetPrefs(prefsRaw);
   const monthLabel = formatMonth(month);

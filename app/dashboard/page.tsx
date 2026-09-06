@@ -25,7 +25,7 @@ import { loadGoalsPageData } from "@/lib/goals-data";
 import { loadLatestWeeklyDelivery } from "@/lib/weekly-delivery-history";
 import { toGoalSummaryItem, toLegacyGoalSummaryItem } from "@/lib/goal-summary";
 import { accountDisplayLabel } from "@/lib/account-label";
-import { normalizeReportTimezone } from "@/lib/report-period";
+import { dateKeyInTimezone, normalizeReportTimezone } from "@/lib/report-period";
 import { resolveDisplayName, greetingInTimezone } from "@/lib/greeting";
 import ScopeChips from "@/components/dashboard/ScopeChips";
 import type { DashboardPrefs } from "@/components/settings/DashboardPrefsSection";
@@ -205,6 +205,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
               userId={user?.id ?? ""}
               household={dashboardScope === "household"}
               month={data.selectedMonth}
+              today={dateKeyInTimezone(new Date(), profileRow?.timezone)}
               selectedAccountId={selectedAccountId}
               selectedLedgerAccountId={selectedLedgerAccountId}
               extraParams={extraParams}

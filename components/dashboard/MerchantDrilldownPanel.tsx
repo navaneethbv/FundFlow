@@ -34,7 +34,7 @@ export default function MerchantDrilldownPanel({
       }
       action={
         <span className="text-xs font-bold text-muted">
-          {formatCurrency(drill.total)} over 6 months
+          <span data-money>{formatCurrency(drill.total)}</span> over 6 months
         </span>
       }
     >
@@ -46,7 +46,7 @@ export default function MerchantDrilldownPanel({
           </div>
           <div className="min-w-0">
             <dt className="eyebrow">Average</dt>
-            <dd className="mt-1 break-words tabular-nums font-semibold">{formatCurrency(drill.average)}</dd>
+            <dd data-money className="mt-1 break-words tabular-nums font-semibold">{formatCurrency(drill.average)}</dd>
           </div>
           <div className="min-w-0">
             <dt className="eyebrow">Category</dt>

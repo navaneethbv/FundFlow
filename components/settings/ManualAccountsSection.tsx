@@ -7,6 +7,7 @@ import Field from "@/components/ui/Field";
 import Input from "@/components/ui/Input";
 import Panel from "@/components/ui/Panel";
 import Select from "@/components/ui/Select";
+import FormMessage from "@/components/ui/FormMessage";
 
 interface ManualAccount {
   id: string;
@@ -62,6 +63,7 @@ export default function ManualAccountsSection({
   const [balance, setBalance] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [toggleBusyId, setToggleBusyId] = useState<string | null>(null);
+  const [addBusy, setAddBusy] = useState(false);
 
   const includedTotal = accounts
     .filter((account) => account.include_in_net_worth)
@@ -69,6 +71,7 @@ export default function ManualAccountsSection({
 
   async function addAccount(event: React.SyntheticEvent) {
     event.preventDefault();
+    if (addBusy) return;
     setError(null);
     const parsedBalance = Number(balance);
     if (!name.trim() || !Number.isFinite(parsedBalance)) {
@@ -76,32 +79,37 @@ export default function ManualAccountsSection({
       return;
     }
 
-    const response = await fetch("/api/manual-accounts", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        name: name.trim(),
-        accountType,
-        balance: parsedBalance,
-      }),
-    });
-    const payload = (await response.json().catch(() => ({}))) as {
-      account?: ManualAccount;
-      error?: string;
-    };
-    if (!response.ok || !payload.account) {
-      setError(payload.error ?? "Could not add the account.");
-      return;
-    }
+    setAddBusy(true);
+    try {
+      const response = await fetch("/api/manual-accounts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          accountType,
+          balance: parsedBalance,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        account?: ManualAccount;
+        error?: string;
+      };
+      if (!response.ok || !payload.account) {
+        setError(payload.error ?? "Could not add the account.");
+        return;
+      }
 
-    const account = payload.account;
-    setAccounts((current) => [...current, account]);
-    setBalanceDrafts((current) => ({
-      ...current,
-      [account.id]: String(Number(account.balance)),
-    }));
-    setName("");
-    setBalance("");
+      const account = payload.account;
+      setAccounts((current) => [...current, account]);
+      setBalanceDrafts((current) => ({
+        ...current,
+        [account.id]: String(Number(account.balance)),
+      }));
+      setName("");
+      setBalance("");
+    } finally {
+      setAddBusy(false);
+    }
   }
 
   async function toggleInclusion(account: ManualAccount) {
@@ -250,9 +258,9 @@ export default function ManualAccountsSection({
         <Field label="Balance" htmlFor="manual-account-balance">
           <Input id="manual-account-balance" type="number" step="0.01" value={balance} onChange={(event) => setBalance(event.target.value)} placeholder="10000" />
         </Field>
-        <Button type="submit" className="self-end">Add account</Button>
+        <Button type="submit" loading={addBusy} className="self-end">Add account</Button>
       </form>
-      {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+      <FormMessage message={error} />
     </Panel>
   );
 }

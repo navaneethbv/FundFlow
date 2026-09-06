@@ -146,7 +146,7 @@ export default async function GoalsPage({ searchParams }: Readonly<PageProps>) {
                   className="flex flex-wrap items-center justify-between gap-2 border-t border-panel-border pt-2 first:border-t-0 first:pt-0"
                 >
                   <span className="text-sm font-semibold">{account.name}</span>
-                  <span className="tabular-nums text-sm text-muted">
+                  <span data-money className="tabular-nums text-sm text-muted">
                     {formatCurrency(account.currentBalance ?? 0, currency)}
                   </span>
                 </li>

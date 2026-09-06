@@ -1,13 +1,15 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Button from "@/components/ui/Button";
 import Field from "@/components/ui/Field";
+import FormMessage from "@/components/ui/FormMessage";
 import Input from "@/components/ui/Input";
 import Modal from "@/components/ui/Modal";
 import Select from "@/components/ui/Select";
 import { Plus } from "@/components/ui/icons";
+import { isoDate } from "@/lib/date-utils";
 import { localDateKey } from "@/lib/format-date";
 import type { AccountOption } from "@/lib/investments-data";
 
@@ -25,12 +27,18 @@ export default function AddManualHoldingForm({
   accounts,
 }: Readonly<{ accounts: AccountOption[] }>) {
   const router = useRouter();
+  const defaultDate = useSyncExternalStore(
+    () => () => undefined,
+    () => localDateKey(),
+    () => isoDate(new Date()),
+  );
   const [open, setOpen] = useState(false);
   const [securityName, setSecurityName] = useState("");
   const [accountKey, setAccountKey] = useState(accounts[0] ? `${accounts[0].source}:${accounts[0].id}` : "");
   const [quantity, setQuantity] = useState("");
   const [price, setPrice] = useState("");
-  const [asOf, setAsOf] = useState(() => localDateKey());
+  const [customAsOf, setCustomAsOf] = useState<string | null>(null);
+  const asOf = customAsOf ?? defaultDate;
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -123,11 +131,11 @@ export default function AddManualHoldingForm({
               type="date"
               value={asOf}
               max={localDateKey()}
-              onChange={(e) => setAsOf(e.target.value)}
+              onChange={(e) => setCustomAsOf(e.target.value)}
               required
             />
           </Field>
-          {error && <p className="text-sm text-danger">{error}</p>}
+          <FormMessage message={error} />
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
               Cancel

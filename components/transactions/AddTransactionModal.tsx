@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Button from "@/components/ui/Button";
 import Field from "@/components/ui/Field";
+import FormMessage from "@/components/ui/FormMessage";
 import Input from "@/components/ui/Input";
 import Modal from "@/components/ui/Modal";
 import Select from "@/components/ui/Select";
@@ -164,7 +165,7 @@ export default function AddTransactionModal({
           <Field label="Notes (optional)" htmlFor="add-txn-notes">
             <Input id="add-txn-notes" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={500} />
           </Field>
-          {error && <p className="text-sm text-danger">{error}</p>}
+          {error && <FormMessage message={error} className="text-sm" />}
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
               Cancel

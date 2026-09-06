@@ -6,7 +6,7 @@ import MilestonesPanel from "@/components/forecasting/MilestonesPanel";
 import Panel from "@/components/ui/Panel";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { formatCurrency } from "@/lib/format";
-import { localDateKey } from "@/lib/format-date";
+import { dateKeyInTimezone } from "@/lib/report-period";
 import { computeForecastMilestones, forecastNetWorth, parseForecastAssumptions } from "@/lib/forecasting";
 import type { ForecastStartingGaps } from "@/lib/forecasting";
 import LifeEventsPanel from "@/components/forecasting/LifeEventsPanel";
@@ -56,7 +56,13 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
   } = await supabase.auth.getUser();
   if (!user) notFound();
 
-  const today = localDateKey();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("timezone")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const today = dateKeyInTimezone(new Date(), profile?.timezone);
   const [{ startingState, defaults, monthlyExpenses }, params] = await Promise.all([
     loadForecastPageData(supabase, user.id, today),
     searchParams,
