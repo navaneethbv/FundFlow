@@ -19,7 +19,8 @@ export async function POST(request: NextRequest) {
     const { error } = await supabase
       .from("cancelled_subscriptions")
       .insert({ user_id: user.id, merchant });
-    if (error && !error.message.includes("duplicate")) throw error;
+    // Matched on the Postgres unique-violation code, not message text (A-13).
+    if (error && error.code !== "23505") throw error;
 
     return NextResponse.json({ ok: true });
   } catch (error) {

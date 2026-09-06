@@ -257,7 +257,7 @@ describe("GET /api/household/accept", () => {
           accepted_at: null,
         },
       },
-      household_members: { error: { message: "duplicate key value" } },
+      household_members: { error: { code: "23505", message: "duplicate key value" } },
     });
     mockRequireUser.mockResolvedValue({ user: { id: USER, email: OWNER_EMAIL } });
 

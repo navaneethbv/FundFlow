@@ -15,6 +15,8 @@ export interface DebtPlannerAccountInput {
   name: string;
   balance: number;
   apr: number | null;
+  /** Account type (credit, loan, ...): only cards get the assumed APR. */
+  type?: string | null;
 }
 
 export interface DebtPlannerAccount {
@@ -24,6 +26,12 @@ export interface DebtPlannerAccount {
   apr: number;
   aprAssumed: boolean;
   minimumPayment: number;
+  /**
+   * False for non-card liabilities with no APR (M-9): a 22% card rate and a
+   * 2% minimum on a mortgage fabricate a crisis, so these rows are listed
+   * but excluded from the payoff projection until an APR is set.
+   */
+  planned: boolean;
 }
 
 export interface DebtPlannerData {
@@ -70,6 +78,11 @@ export function buildDebtPlannerData(
       // also what `lib/dashboard.ts`'s planner does.
       const balance = round2(account.balance);
       const aprAssumed = account.apr === null;
+      const isCard = (account.type ?? "").toLowerCase() === "credit";
+      // The 22% assumption is a card rate (M-9). A mortgage or loan with no
+      // APR stays visible but unplanned: projecting it at 22% with a 2%
+      // minimum turns a 300k mortgage into a 6k/month emergency.
+      const planned = account.apr !== null || isCard;
       const apr = account.apr ?? ASSUMED_APR;
       return {
         id: account.id,
@@ -78,6 +91,7 @@ export function buildDebtPlannerData(
         apr,
         aprAssumed,
         minimumPayment: round2(Math.max(25, balance * 0.02)),
+        planned,
       };
     })
     .filter((account) => account.balance > 0);
@@ -97,7 +111,10 @@ export function buildDebtPlannerData(
   // `PayoffPlan.order` and `PayoffPlan.debts[].name`. Account names are not
   // unique (two cards can both be "Visa"), so the id goes in and the display
   // name is resolved from `debts` by the view. Do not pass `debt.name` here.
-  const planDebts = debts.map((debt) => ({
+  // Unplanned debts (M-9) are excluded: the projection covers only debts
+  // with a real or card-assumed APR.
+  const plannedDebts = debts.filter((debt) => debt.planned);
+  const planDebts = plannedDebts.map((debt) => ({
     name: debt.id,
     balance: debt.balance,
     apr: debt.apr,
@@ -108,7 +125,7 @@ export function buildDebtPlannerData(
     debts,
     totalBalance: round2(debts.reduce((sum, debt) => sum + debt.balance, 0)),
     totalMonthlyBudget: round2(
-      debts.reduce((sum, debt) => sum + debt.minimumPayment, 0)
+      plannedDebts.reduce((sum, debt) => sum + debt.minimumPayment, 0)
         + normalizedExtra,
     ),
     avalanche: buildPayoffPlan({
@@ -149,6 +166,7 @@ export async function loadDebtPlannerData(
       name: accountDisplayLabel(String(row.name ?? "Debt"), row.mask as string | null),
       balance: Number(row.current_balance ?? 0),
       apr: row.apr === null ? null : Number(row.apr),
+      type: String(row.type ?? ""),
     }));
 
   return buildDebtPlannerData(accounts, options.extraMonthly);

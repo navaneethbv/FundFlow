@@ -265,7 +265,7 @@ describe("/api/subscriptions/cancelled", () => {
     mockRequireUser.mockResolvedValue({
       user: { id: USER },
       supabase: clientStub({
-        cancelled_subscriptions: { error: { message: "duplicate key value" } },
+        cancelled_subscriptions: { error: { code: "23505", message: "duplicate key value" } },
       }),
     });
     const res = await cancelledPost(

@@ -263,10 +263,31 @@ export default function DebtPlannerView({
         </div>
       </Panel>
 
-      {data.debts.some((debt) => debt.aprAssumed) && (
+      {data.debts.some((debt) => !debt.planned) && (
+        <Panel tone="warning" title="Not in the projection: APR needed">
+          <p className="text-sm text-muted">
+            These balances are real, but a card-rate assumption would misstate
+            them, so they stay out of the payoff order until an APR is set.
+          </p>
+          <ul className="mt-3 space-y-2 text-sm">
+            {data.debts
+              .filter((debt) => !debt.planned)
+              .map((debt) => (
+                <li key={debt.id} className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 break-words font-semibold">{debt.name}</span>
+                  <span data-money className="shrink-0 font-semibold tabular-nums">
+                    {formatCurrency(debt.balance)}
+                  </span>
+                </li>
+              ))}
+          </ul>
+        </Panel>
+      )}
+
+      {data.debts.some((debt) => debt.aprAssumed && debt.planned) && (
         <Panel tone="warning" title="Replace assumed APRs for a more useful projection">
           <p className="text-sm text-muted">
-            FundFlow uses 22% only where an account has no APR.
+            FundFlow uses 22% only for cards with no APR set.
           </p>
           <Link
             href="/settings?section=institutions#card-aprs"

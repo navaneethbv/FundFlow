@@ -36,11 +36,13 @@ export async function POST(request: NextRequest) {
     }
 
     // RLS-visible only to the owner; also assert ownership explicitly.
-    const { data: household } = await supabase
+    // A failed read must 500 (A-13), never read as "not found".
+    const { data: household, error: householdError } = await supabase
       .from("households")
       .select("id, name, owner_user_id")
       .eq("id", body.householdId)
       .maybeSingle();
+    if (householdError) throw householdError;
     if (household?.owner_user_id !== user.id) {
       return NextResponse.json({ error: "Household not found" }, { status: 404 });
     }

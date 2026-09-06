@@ -38,7 +38,7 @@ describe("DebtPlannerView", () => {
 
   it("identifies each assumed APR and links to the APR settings section", () => {
     const data = buildDebtPlannerData(
-      [{ id: "card", name: "Card", balance: 1000, apr: null }],
+      [{ id: "card", name: "Card", balance: 1000, apr: null, type: "credit" }],
       0,
     );
     const html = renderToStaticMarkup(
@@ -51,6 +51,24 @@ describe("DebtPlannerView", () => {
 
     expect(html).toContain("22% assumed APR");
     expect(html).toContain("/settings?section=institutions#card-aprs");
+  });
+
+  it("lists a mortgage without APR as unplanned instead of projecting it at card rates", () => {
+    const data = buildDebtPlannerData(
+      [{ id: "mtg", name: "Mortgage", balance: 300000, apr: null, type: "loan" }],
+      0,
+    );
+    const html = renderToStaticMarkup(
+      createElement(DebtPlannerView, {
+        data,
+        strategy: "avalanche",
+        extraMonthly: 0,
+      }),
+    );
+
+    expect(html).toContain("Not in the projection: APR needed");
+    expect(html).toContain("Mortgage");
+    expect(html).not.toContain("22% assumed APR");
   });
 
   it("keeps two same-named debts as distinct rows", () => {

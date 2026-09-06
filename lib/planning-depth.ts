@@ -90,7 +90,9 @@ export function planDebtPayoff(
 
   const steps = order.map((debt, index) => {
     const directedPayment = (debt.minimumPayment ?? 0) + (index === 0 ? extraPayment : 0);
-    const monthlyInterest = Math.max(0, debt.apr ?? 0) / 12;
+    // APR is a percent (22 = 22%), exactly as buildPayoffPlan treats it:
+    // dividing by 12 alone bills 183% a month on a 22% card (M-7).
+    const monthlyInterest = Math.max(0, debt.apr ?? 0) / 100 / 12;
     const effectivePayment = Math.max(1, directedPayment - debt.balance * monthlyInterest);
     const months = Math.max(1, Math.ceil(debt.balance / effectivePayment));
     monthCursor += months;
@@ -134,6 +136,12 @@ export function buildPlanningDepthView(input: {
   accounts: PlanningDepthAccount[];
   monthlyIncome: number;
   monthlySpend: number;
+  /**
+   * Trailing-median monthly surplus (M-13). Month-to-date income minus
+   * expenses on the 2nd after payday suggests routing a full paycheck to
+   * debt; pass the median of complete months instead when known.
+   */
+  surplusOverride?: number;
   goals: {
     id: string;
     name: string;
@@ -142,7 +150,7 @@ export function buildPlanningDepthView(input: {
     monthsRemaining: number;
   }[];
 }) {
-  const surplus = round2(input.monthlyIncome - input.monthlySpend);
+  const surplus = round2(input.surplusOverride ?? (input.monthlyIncome - input.monthlySpend));
 
   const debts: DebtAccount[] = input.accounts
     .filter((account) => LIABILITY_TYPES.has(account.type ?? ""))

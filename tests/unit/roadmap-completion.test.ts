@@ -69,7 +69,7 @@ describe("roadmap completion helpers", () => {
     ];
 
     expect(detectRefundPairs(transactions, 7)).toEqual([
-      { chargeId: "charge", refundId: "refund", amount: 80 },
+      { chargeId: "charge", refundId: "refund", amount: 80, partial: false },
     ]);
     expect(
       filterReviewDecisions(
@@ -234,6 +234,8 @@ describe("roadmap completion helpers", () => {
       ],
       7,
     );
-    expect(pairs).toEqual([]);
+    // Different merchant never pairs; a smaller same-merchant refund
+    // surfaces as a bounded partial suggestion (M-8).
+    expect(pairs).toEqual([{ chargeId: "c1", refundId: "r2", amount: 100, partial: true }]);
   });
 });

@@ -70,7 +70,10 @@ async function sendDailyDigest(
         ? (todayNotifications ?? []).filter((notification) => notification.type === "broken_bank")
         : (todayNotifications ?? []);
     if (digestNotifications.length === 0) return;
-    const { data: userData } = await service.auth.admin.getUserById(userId);
+    // Checked (A-13): a failed user lookup must surface, never silently
+    // skip one user's digest while reporting success.
+    const { data: userData, error: userError } = await service.auth.admin.getUserById(userId);
+    if (userError) throw userError;
     const email = userData?.user?.email;
     if (!email) return;
     await sendDailyDigestEmail(

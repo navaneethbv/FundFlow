@@ -153,11 +153,14 @@ async function notifySyncedTransactions(
   userId: string,
   rows: ReturnType<typeof mapTransactionRow>[],
 ): Promise<void> {
-  const { data: alertPref } = await supabase
+  const { data: alertPref, error: alertPrefError } = await supabase
     .from("alert_preferences")
     .select("large_transaction_threshold")
     .eq("user_id", userId)
     .maybeSingle();
+  // A missing row falls back to 500; a failed read must throw (A-13),
+  // never silently alert against the default threshold.
+  if (alertPrefError) throw alertPrefError;
   const largeThreshold = Number(alertPref?.large_transaction_threshold ?? 500);
   for (const row of rows) {
     if (row.amount >= largeThreshold) {

@@ -69,6 +69,9 @@ export async function GET() {
       const [chargeId, refundId] = anomaly.subjectId.split(":");
       const charge = byId.get(chargeId!);
       const refund = byId.get(refundId!);
+      const pair = pairs.find(
+        (candidate) => candidate.chargeId === chargeId && candidate.refundId === refundId,
+      );
       return {
         subject_id: anomaly.subjectId,
         charge_id: chargeId,
@@ -77,6 +80,8 @@ export async function GET() {
         charge_date: charge?.date ?? null,
         refund_date: refund?.date ?? null,
         amount: charge?.amount ?? 0,
+        refund_amount: refund ? Math.abs(refund.amount) : 0,
+        partial: pair?.partial ?? false,
       };
     });
 

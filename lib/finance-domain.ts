@@ -156,6 +156,12 @@ function displayMerchant(row: RawFinanceTransaction): string {
 
 function flowFor(signedAmount: number, groupKey: string): FinanceFlow {
   if (TRANSFER_GROUPS.has(groupKey)) return "transfer";
+  // Expense credits (M-8): a negative row outside the INCOME group is money
+  // back against spending (refund, reimbursement, card credit), not earnings.
+  // Routing it to "income" inflates income and lists the retailer as an
+  // income source; as "expense" it nets against spend in every total, since
+  // financeTotals sums signed amounts on the expense side.
+  if (signedAmount < 0 && groupKey !== "INCOME") return "expense";
   return signedAmount > 0 ? "expense" : "income";
 }
 

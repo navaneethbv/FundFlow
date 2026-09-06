@@ -22,6 +22,11 @@ vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
 }));
 
+const mockWriteAudit = vi.fn();
+vi.mock("@/lib/audit", () => ({
+  writeAudit: (...args: unknown[]) => mockWriteAudit(...args),
+}));
+
 import { GET, POST } from "@/app/api/transactions/refunds/route";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -92,6 +97,8 @@ describe("Transactions Refunds API Route", () => {
             charge_date: null,
             refund_date: null,
             amount: 0,
+            refund_amount: 0,
+            partial: false,
           },
         ],
       });
@@ -207,6 +214,8 @@ describe("Transactions Refunds API Route", () => {
             charge_date: "2026-07-01",
             refund_date: "2026-07-03",
             amount: 50,
+            refund_amount: 50,
+            partial: false,
           },
         ],
       });
@@ -426,6 +435,10 @@ describe("Transactions Refunds API Route", () => {
         p_refund_id: "refund-1",
         p_amount: 50,
       });
+      // A-11: money-linking mutations are audited.
+      expect(mockWriteAudit).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: "u1", action: "refund_confirmed" }),
+      );
     });
 
     it("rejects a confirmed link when the transactions are not the caller's", async () => {

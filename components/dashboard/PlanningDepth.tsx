@@ -1,6 +1,7 @@
 import type { DashboardData } from "@/lib/dashboard";
 import type { GoalSummaryItem } from "@/lib/goal-summary";
 import { buildPlanningDepthView } from "@/lib/planning-depth";
+import { medianOf } from "@/lib/insights";
 import { formatCurrency } from "@/lib/format";
 import Panel from "@/components/ui/Panel";
 
@@ -23,6 +24,13 @@ export default function PlanningDepth({
   data,
   goals,
 }: Readonly<{ data: DashboardData; goals: GoalSummaryItem[] }>) {
+  // Debt funding from the trailing median of COMPLETE months (M-13): the
+  // series ends with the partial current month, which would suggest routing
+  // a full just-received paycheck to debt on the 2nd.
+  const incomeByMonth = new Map(data.monthlyIncome.map((row) => [row.month, row.amount]));
+  const completeNets = data.monthlySpending
+    .slice(0, -1)
+    .map((row) => (incomeByMonth.get(row.month) ?? 0) - row.amount);
   const view = buildPlanningDepthView({
     accounts: data.accounts.map((account) => ({
       name: account.name,
@@ -31,6 +39,7 @@ export default function PlanningDepth({
     })),
     monthlyIncome: data.currentMonthIncome,
     monthlySpend: data.currentMonthExpenses,
+    surplusOverride: completeNets.length > 0 ? Math.round(medianOf(completeNets) * 100) / 100 : undefined,
     goals: goals.map((goal) => ({
       id: goal.id,
       name: goal.name,

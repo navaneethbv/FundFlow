@@ -42,18 +42,19 @@ export async function GET(
     }
 
     const service = createServiceClient();
-    const { data: row } = await service
+    const { data: row, error: tokenError } = await service
       .from("calendar_tokens")
       .select("user_id, include_amounts")
       .eq("token_hash", tokenHash)
       .is("revoked_at", null)
       .gt("expires_at", new Date().toISOString())
       .maybeSingle();
+    if (tokenError) throw tokenError;
     if (!row) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const { data: streams } = await service
+    const { data: streams, error: streamsError } = await service
       .from("recurring_streams")
       .select("id, merchant_name, description, average_amount, last_amount, frequency, stream_type, is_active, status")
       .eq("user_id", row.user_id)
@@ -63,6 +64,7 @@ export async function GET(
       // the Dashboard reminders apply.
       .is("dismissed_at", null)
       .or("status.is.null,status.neq.TOMBSTONED");
+    if (streamsError) throw streamsError;
 
     const today = new Date().toISOString().slice(0, 10);
     const anchor = `${today.slice(0, 7)}-15`;

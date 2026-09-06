@@ -39,6 +39,8 @@ export interface WeeklyReportInput {
   merchantRules: MerchantRule[];
   splits: Array<{ transactionId: string; category: string; amount: number }>;
   linkedRefundTransactionIds: Set<string>;
+  /** Confirmed inter-account transfer halves: movement, never spend (M-5). */
+  linkedTransferTransactionIds?: Set<string>;
   duplicateTransactionIds: Set<string>;
 }
 
@@ -199,6 +201,7 @@ export function buildWeeklyReportModel(
   const usableForSpend = transactions.filter(
     (transaction) =>
       !input.linkedRefundTransactionIds.has(transaction.id) &&
+      !(input.linkedTransferTransactionIds?.has(transaction.id) ?? false) &&
       !input.duplicateTransactionIds.has(transaction.id),
   );
   const currentSpend = usableForSpend.filter(

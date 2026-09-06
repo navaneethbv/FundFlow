@@ -68,7 +68,7 @@ describe("coverage boost r6 n5: subscriptions/cancelled route", () => {
 
     it("tolerates a duplicate insert error (L22 true, includes side)", async () => {
       const supabase = clientStub({
-        cancelled_subscriptions: { data: null, error: { message: "duplicate key value violates unique constraint" } },
+        cancelled_subscriptions: { data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } },
       });
       mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase });
       const res = await cancelledPost(jsonRequest({ merchant: "Netflix" }));

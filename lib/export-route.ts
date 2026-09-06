@@ -37,11 +37,14 @@ export async function recordExport(input: {
 }): Promise<void> {
   const { request, userId, format, rowCount } = input;
   const service = createServiceClient();
-  await service.from("data_exports").insert({
+  // Checked (A-13): a silently dropped export journal row would claim an
+  // audit trail the database never recorded.
+  const { error } = await service.from("data_exports").insert({
     user_id: userId,
     format,
     row_count: rowCount,
   });
+  if (error) throw error;
   await writeAudit({
     userId,
     action: "data_export",

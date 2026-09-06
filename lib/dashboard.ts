@@ -1260,8 +1260,11 @@ export async function getDashboardData(
   const activeDay =
     isCurrentMonth ? today.getDate() : new Date(activeYear, activeMonthIndex + 1, 0).getDate();
   const activeDaysInMonth = new Date(activeYear, activeMonthIndex + 1, 0).getDate();
+  // Income-group budgets are not expense envelopes (M-12): the groups
+  // builder drops them, so the envelopes must never contain them either.
+  const expenseBudgets = allBudgets.filter((budget) => budget.group_name !== "income");
   const budgetEnvelopes = buildBudgetEnvelopes({
-    budgets: allBudgets.map((budget) => ({
+    budgets: expenseBudgets.map((budget) => ({
       category: budget.category,
       monthlyLimit: Number(budget.monthly_limit),
       rolloverEnabled: Boolean(budget.rollover_enabled),
@@ -1288,7 +1291,7 @@ export async function getDashboardData(
     daysInMonth: activeDaysInMonth,
   });
   const budgetGroups = buildDashboardBudgetGroups(
-    allBudgets.map((budget) => ({
+    expenseBudgets.map((budget) => ({
       category: budget.category,
       groupName: budget.group_name,
     })),
@@ -1325,11 +1328,28 @@ export async function getDashboardData(
       category: string | null;
     }>).map(toRecurringItem),
   ];
-  const cashBalance = allAccounts
-    .filter((account) => account.type === "depository")
-    .reduce((sum, account) => sum + Number(account.current_balance ?? 0), 0);
+  // Liquid cash in the forecast currency (M-10): null when any depository
+  // balance is unknown (a coerced 0 would fake runway and Safe-to-Spend),
+  // and non-USD balances are excluded rather than summed as dollars, the
+  // same partition lib/forecasting.ts applies.
+  const depositoryAccounts = allAccounts.filter((account) => account.type === "depository");
+  const cashBalance = depositoryAccounts.some(
+    (account) => account.current_balance === null || account.current_balance === undefined,
+  )
+    ? null
+    : round2(
+        depositoryAccounts
+          .filter((account) => {
+            const currency = account.iso_currency_code?.toUpperCase();
+            return !currency || currency === "USD";
+          })
+          .reduce((sum, account) => sum + Number(account.current_balance ?? 0), 0),
+      );
   const cashFlowForecast = forecastCashFlow({
-    startingBalance: cashBalance,
+    // The forecast needs a number: an unknown balance degrades to an
+    // explicitly zero-based projection while runway and Safe-to-Spend,
+    // which take `cashBalance` directly, honestly report unknown.
+    startingBalance: cashBalance ?? 0,
     asOf: monthDate(activeMonth, Math.min(activeDay, 28)),
     horizonDays: 30,
     items: recurringItems,

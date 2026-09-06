@@ -72,6 +72,7 @@ export async function getWeeklyReportData(
     rulesResult,
     refundsResult,
     duplicatesResult,
+    transfersResult,
     transactions,
   ] = await Promise.all([
     supabase
@@ -100,6 +101,10 @@ export async function getWeeklyReportData(
       .from("linked_duplicates")
       .select("excluded_transaction_id")
       .eq("user_id", userId),
+    supabase
+      .from("linked_transfers")
+      .select("out_transaction_id, in_transaction_id")
+      .eq("user_id", userId),
     fetchAllTransactions(supabase, userId, period),
   ]);
 
@@ -110,6 +115,7 @@ export async function getWeeklyReportData(
     ["merchant rules", rulesResult],
     ["linked refunds", refundsResult],
     ["linked duplicates", duplicatesResult],
+    ["linked transfers", transfersResult],
   ] as const) {
     throwIfError(result.error, `weekly report ${context}`);
   }
@@ -198,6 +204,14 @@ export async function getWeeklyReportData(
     linkedRefundTransactionIds.add(refund.charge_transaction_id as string);
     linkedRefundTransactionIds.add(refund.refund_transaction_id as string);
   }
+  // User-linked inter-account transfers are movement, not spend (M-5): both
+  // halves leave the spend set, exactly as the canonical projection treats
+  // them on every other surface.
+  const linkedTransferTransactionIds = new Set<string>();
+  for (const transfer of transfersResult.data ?? []) {
+    linkedTransferTransactionIds.add(transfer.out_transaction_id as string);
+    linkedTransferTransactionIds.add(transfer.in_transaction_id as string);
+  }
 
   return buildWeeklyReportModel({
     userId,
@@ -222,6 +236,7 @@ export async function getWeeklyReportData(
       })),
     ),
     linkedRefundTransactionIds,
+    linkedTransferTransactionIds,
     duplicateTransactionIds: new Set(
       (duplicatesResult.data ?? []).map(
         (duplicate) => duplicate.excluded_transaction_id as string,

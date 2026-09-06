@@ -83,14 +83,18 @@ export async function POST(request: NextRequest) {
       to.setUTCDate(to.getUTCDate() + 3);
       // Bounded by the same ±1% amount band the matcher applies, so the row
       // cap cannot page the true match out of an unordered result.
-      const { data: candidates } = await supabase
+      // Explicitly user-scoped with a checked error (A-13): a failed match
+      // read must 500, never silently skip matching.
+      const { data: candidates, error: candidatesError } = await supabase
         .from("transactions")
         .select("id, date, amount, merchant_name, name")
+        .eq("user_id", user.id)
         .gte("date", from.toISOString().slice(0, 10))
         .lte("date", to.toISOString().slice(0, 10))
         .or(receiptAmountBandFilter(extracted.amount))
         .order("date", { ascending: true })
         .limit(500);
+      if (candidatesError) throw candidatesError;
       matchedTransactionId = findReceiptCandidates(
         {
           merchant: extracted.merchant,

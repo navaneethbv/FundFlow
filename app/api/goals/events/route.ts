@@ -63,12 +63,14 @@ export async function POST(request: NextRequest) {
       ? eventDate
       : new Date().toISOString().slice(0, 10);
 
-    const { data: goal } = await supabase
+    // A failed ownership read must 500 (A-13), never read as "not found".
+    const { data: goal, error: goalError } = await supabase
       .from("goals")
       .select("id")
       .eq("id", goalId)
       .eq("user_id", user.id)
       .maybeSingle();
+    if (goalError) throw goalError;
     if (!goal) return NextResponse.json({ error: "Goal not found" }, { status: 404 });
 
     const { data, error } = await supabase

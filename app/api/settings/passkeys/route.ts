@@ -22,9 +22,11 @@ export async function POST(request: NextRequest) {
     // can perform, so the client runs them first. The server verifies the
     // passkey actually exists for this user before acknowledging anything, so
     // the UI can never report success for a passkey that is not there.
-    const { data: passkeys } = await service.auth.admin.passkey.listPasskeys({
+    // A failed listing must 500 (A-13), never read as "not found".
+    const { data: passkeys, error: passkeysError } = await service.auth.admin.passkey.listPasskeys({
       userId: auth.user.id,
     });
+    if (passkeysError) throw passkeysError;
     if (!(passkeys ?? []).some((passkey) => passkey.id === body.passkeyId)) {
       return badRequest("Passkey not found");
     }

@@ -239,12 +239,15 @@ export async function createNotification(
 ) {
   const supabase = createServiceClient();
 
-  // 1. Fetch user's alert preferences
-  const { data: prefs } = await supabase
+  // 1. Fetch user's alert preferences. A missing row (PGRST116) means
+  // "never configured" and gets defaults; any other failure must throw
+  // (A-13) rather than silently notifying against default prefs.
+  const { data: prefs, error: prefsError } = await supabase
     .from("alert_preferences")
     .select("*")
     .eq("user_id", userId)
     .single();
+  if (prefsError && (prefsError as { code?: string }).code !== "PGRST116") throw prefsError;
 
   const preferences = prefs || {
     broken_bank: true,

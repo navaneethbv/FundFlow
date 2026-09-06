@@ -58,6 +58,8 @@ export interface RecurringStreamRow {
   dismissedAt: string | null;
   userAmount: number | null;
   averageAmount: number | null;
+  /** Most recent charge amount: what price-spike detection compares (M-6). */
+  lastAmount: number | null;
   accountName: string | null;
   /**
    * Whether this stream belongs to the actual authenticated caller (not just
@@ -483,6 +485,7 @@ export async function loadRecurringData(
       dismissedAt: row.dismissed_at,
       userAmount: row.user_amount === null ? null : Number(row.user_amount),
       averageAmount: row.average_amount === null ? null : Number(row.average_amount),
+      lastAmount: row.last_amount === null ? null : Number(row.last_amount),
       accountName: row.account_id ? accountById.get(row.account_id)?.name ?? null : null,
       isOwn: row.user_id === input.userId,
       source: row.source === "inferred" ? "inferred" as const : "plaid" as const,

@@ -130,15 +130,17 @@ export async function POST(request: NextRequest) {
   if ("response" in parsedItemId) return parsedItemId.response;
 
   // Ownership is enforced by scoping the lookup to the authenticated user.
-  const item = await getItem(user.id, parsedItemId.itemId);
-  if (!item) {
-    return NextResponse.json(
-      { error: "Institution connection not found." },
-      { status: 404 },
-    );
-  }
-
+  // Inside try (A-13): a failed lookup must surface as a route error, not
+  // an unhandled rejection outside the handler's catch.
   try {
+    const item = await getItem(user.id, parsedItemId.itemId);
+    if (!item) {
+      return NextResponse.json(
+        { error: "Institution connection not found." },
+        { status: 404 },
+      );
+    }
+
     // Provider readiness: /item/get confirms the token is live before we spend
     // a bounded backfill against it.
     const readinessFailure = await providerReadinessFailure(item);

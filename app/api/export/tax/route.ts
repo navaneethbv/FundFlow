@@ -111,11 +111,12 @@ export async function GET(request: NextRequest) {
     const csv = summary.length > 0 ? `${detail}\r\n\r\n${summaryCsv}` : detail;
 
     const service = createServiceClient();
-    await service.from("data_exports").insert({
+    const { error: exportJournalError } = await service.from("data_exports").insert({
       user_id: user.id,
       format: "csv",
       row_count: rows.length,
     });
+    if (exportJournalError) throw exportJournalError;
     await writeAudit({
       userId: user.id,
       action: "data_export",

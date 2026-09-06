@@ -25,12 +25,13 @@ async function resolveGoal(
       ? body.goal_id.trim()
       : null;
   if (!goalProvided || !goalId) return { ok: true, goalProvided, goalId, linkedGoal: null };
-  const { data: goal } = await supabase
+  const { data: goal, error: goalError } = await supabase
     .from("goals")
     .select("id, spending_reduces")
     .eq("id", goalId)
     .eq("user_id", userId)
     .maybeSingle();
+  if (goalError) throw goalError;
   if (!goal) return { ok: false, response: badRequest("Goal not found") };
   return { ok: true, goalProvided, goalId, linkedGoal: goal as LinkedGoal };
 }
@@ -249,12 +250,13 @@ export async function POST(request: NextRequest) {
     // annotate-batch. Without it a member could attach splits to the owner's
     // transaction, and validate_transaction_split_total() sums splits across
     // users, which would permanently block the owner from splitting it.
-    const { data: txn } = await supabase
+    const { data: txn, error: txnError } = await supabase
       .from("transactions")
       .select("id, amount, date")
       .eq("id", transactionId)
       .eq("user_id", user.id)
       .maybeSingle();
+    if (txnError) throw txnError;
     if (!txn) return badRequest("Transaction not found");
     const absAmount = Math.abs(Number(txn.amount));
 
@@ -264,10 +266,9 @@ export async function POST(request: NextRequest) {
     if (!goalState.ok) return goalState.response;
     const { goalProvided, goalId, linkedGoal } = goalState;
 
-    // --- Note + tags ---
-    await saveAnnotation(supabase, user.id, transactionId, body);
-
-    // --- Splits ---
+    // --- Splits (validated before anything is written: an invalid split
+    // set used to 400 AFTER the annotation was already saved, keeping the
+    // note/tags while rejecting the splits) ---
     if (body?.splits !== undefined) {
       const splitResponse = await saveSplits(
         supabase,
@@ -278,6 +279,9 @@ export async function POST(request: NextRequest) {
       );
       if (splitResponse) return splitResponse;
     }
+
+    // --- Note + tags ---
+    await saveAnnotation(supabase, user.id, transactionId, body);
 
     // --- Goal progress event (Phase 7) ---
     // Only a `spending_reduces` goal turns a transaction into progress, and it

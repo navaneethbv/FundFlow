@@ -136,7 +136,8 @@ export async function POST(request: NextRequest) {
     // Ownership, not visibility: RLS also exposes a household member's shared
     // goals and accounts, and neither is writable by them. The database
     // function re-checks both, but failing here gives a 404 instead of a 500.
-    const [{ data: goal }, { data: account }] = await Promise.all([
+    // A failed read must 500 (A-13), never read as "not found".
+    const [{ data: goal, error: goalError }, { data: account, error: accountError }] = await Promise.all([
       supabase
         .from("goals")
         .select("id, goal_type, starting_balance, target_amount")
@@ -150,6 +151,8 @@ export async function POST(request: NextRequest) {
         .eq("user_id", user.id)
         .maybeSingle(),
     ]);
+    if (goalError) throw goalError;
+    if (accountError) throw accountError;
     if (!goal) return NextResponse.json({ error: "Goal not found" }, { status: 404 });
     if (!account) {
       return NextResponse.json({ error: "Account not found" }, { status: 404 });

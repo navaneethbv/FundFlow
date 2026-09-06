@@ -48,6 +48,7 @@ function stream(overrides: Partial<RecurringStreamRow> = {}): RecurringStreamRow
     dismissedAt: null,
     userAmount: null,
     averageAmount: 15.49,
+    lastAmount: 15.49,
     accountName: "Checking",
     isOwn: true,
     source: "plaid",
