@@ -321,7 +321,10 @@ function OccurrenceTableRow({
       <td className="col-start-2 row-start-1 px-4 py-3 text-right">
         <span className="inline-flex items-center justify-end gap-1.5">
           {occurrence.status === "complete" && (
-            <CheckCircle2 aria-hidden className="h-4 w-4 text-success" />
+            <>
+              <CheckCircle2 aria-hidden className="h-4 w-4 text-success" />
+              <span className="sr-only">Complete</span>
+            </>
           )}
           <span
             data-money

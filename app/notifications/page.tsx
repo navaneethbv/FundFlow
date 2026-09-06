@@ -127,8 +127,8 @@ export default async function NotificationsPage() {
                   key={`${delivery.periodStart}-${index}`}
                   className={`flex items-center justify-between gap-3 rounded-field p-3${index % 2 === 1 ? " bg-panel-2" : ""}`}
                 >
-                  <span>
-                    <span className="block font-semibold font-mono">
+                  <span className="min-w-0">
+                    <span className="block break-words font-semibold font-mono">
                       {formatDate(delivery.periodStart)} to{" "}
                       {formatDate(delivery.periodEnd)}
                     </span>
@@ -136,7 +136,7 @@ export default async function NotificationsPage() {
                       {deliveryDescription(delivery)}
                     </span>
                   </span>
-                  <Badge tone={deliveryStatusTone(delivery.status)}>
+                  <Badge tone={deliveryStatusTone(delivery.status)} className="shrink-0">
                     {titleCase(delivery.status)}
                   </Badge>
                 </div>

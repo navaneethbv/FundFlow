@@ -2,6 +2,7 @@ import {
   Children,
   cloneElement,
   isValidElement,
+  useId,
   type ReactElement,
 } from "react";
 import Label from "@/components/ui/Label";
@@ -97,8 +98,12 @@ export default function Field({
   error?: React.ReactNode;
   children?: React.ReactNode;
 }>) {
-  const errorId = htmlFor && error ? `${htmlFor}-error` : undefined;
-  const hintId = htmlFor && hint && !error ? `${htmlFor}-hint` : undefined;
+  // Hint/error ids fall back to a generated id when there is no htmlFor,
+  // so the control is still linked to its hint/error via aria-describedby.
+  const fallbackId = useId();
+  const baseId = htmlFor ?? fallbackId;
+  const errorId = error ? `${baseId}-error` : undefined;
+  const hintId = hint && !error ? `${baseId}-hint` : undefined;
   const describedBy = errorId ?? hintId;
 
   const enhancedChildren = describedBy || error

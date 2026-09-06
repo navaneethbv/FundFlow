@@ -79,6 +79,7 @@ function TransactionSplitSection({
   let splitBarColor = "bg-accent";
   if (splitTotal > target) splitBarColor = "bg-danger";
   if (splitsBalanced) splitBarColor = "bg-success";
+  const splitPercent = target > 0 ? Math.min(100, (splitTotal / target) * 100) : 0;
 
   return (
     <>
@@ -105,13 +106,20 @@ function TransactionSplitSection({
                 : `Remaining: ${formatCurrency(round2(target - splitTotal), currency)}`}
             </span>
           </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-panel-2">
+          <div
+            role="progressbar"
+            aria-label="Split allocation progress"
+            aria-valuenow={Math.round(splitPercent)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            className="h-1.5 w-full overflow-hidden rounded-full bg-panel-2"
+          >
             <div
               className={cn(
                 "h-full transition-all duration-200",
                 splitBarColor,
               )}
-              style={{ width: `${Math.min(100, (splitTotal / target) * 100)}%` }}
+              style={{ width: `${splitPercent}%` }}
             />
           </div>
         </div>

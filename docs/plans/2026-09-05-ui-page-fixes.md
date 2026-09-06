@@ -138,3 +138,102 @@ Full unit plus script coverage run: 448 files, 4,947 tests passed.
 Coverage: statements 97.99%, branches 95.06%, functions 98.22%, lines 99.04%; all 95% thresholds passed.
 ESLint, typecheck, production build, palette validation, and `git diff --check` passed.
 Dependency check (`npx npm-check-updates`): only major bumps remain (Vitest/coverage v5, ESLint 10, Nodemailer 10, Plaid 47, TypeScript 7); left unchanged pending separate compatibility review.
+
+### Independent review (2026-09-05, second pass)
+
+Re-verified all 17 findings against the branch diff rather than the execution
+record. Thirteen were correct as implemented. Five defects were found and
+fixed; four of them were surfaces the original pass missed, not regressions in
+what it changed.
+
+- UI-06, three unconverted surfaces. `app/dashboard/page.tsx` still built
+  account labels as `**<mask>` by hand, and `lib/dashboard.ts` did the same in
+  `spendPerCard` and `buildDebtSummary`. None sanitized the provider name or
+  stripped a mask the name already carried, so the audit's corrupted-text and
+  doubled-mask cases survived on Dashboard, Monitor spend-per-card, and the
+  Dashboard debt insight. The last one also disagreed with the Debt payoff
+  page, which `lib/debt-data.ts` had already fixed. All three now use
+  `accountDisplayLabel`. `buildDebtSummary` keeps its "Card" fallback for an
+  unnamed credit account rather than inheriting the helper's generic
+  "Account".
+- UI-11, badge copy still diverged. Monthly review re-derived the label with
+  `titleCase(badge)`, producing "On Track" and "At Risk" where `GoalCard`
+  renders "On track" and "At risk" for the same goal. The mapping is now a
+  single exported `GOAL_BADGE_LABEL` in `lib/goals-v2.ts` that both surfaces
+  read, which also removes the duplicated `no-pace` special case.
+- UI-03, three dialogs missed the primitive-level fix. `Modal.tsx` got
+  `text-foreground`, but `CommandPalette`, `GoalWizard`, and
+  `MobileNavigation` open their own `<dialog>` and still inherited the UA
+  `CanvasText`. The UI-04 `color-scheme` change happens to mask this today;
+  these no longer depend on it.
+- `BudgetsSection` used `titleCase(suggestion.category)` as a React key. The
+  key is back to the raw category, which is the stable identifier; only the
+  rendered text is title-cased. The insert action always used the raw value,
+  so no stored category was affected.
+
+Verified as correct without change: UI-01, UI-02, UI-04, UI-05, UI-07 (hour
+extraction returns 0 at midnight on this runtime, and an invalid stored
+timezone falls back rather than throwing), UI-08 (`currentMonth` is the real
+month, not the selected one, so completed months stay historical), UI-09,
+UI-10, UI-12 (`accounts.plaid_item_id` -> `plaid_items` is a real FK, so the
+embed resolves), UI-13, UI-14 (`ai_settings` carries the insert and update
+policies the cookie-bound upsert needs, both MFA- and revocation-gated),
+UI-15, UI-16, UI-17.
+
+Gates after the fixes: lint, `tsc --noEmit`, 447 unit files / 4,947 tests,
+448 files / 4,948 tests with scripts and coverage (statements 97.99%,
+branches 95.05%, functions 98.22%, lines 99.04%, all thresholds met),
+production build, and palette validation all passed. Browser verification of
+the changed layouts is still outstanding, exactly as recorded above.
+
+### Verification pass (2026-09-06, third pass)
+
+Re-reviewed the second pass against a running browser rather than against its
+own record, and closed out the browser verification it left open. Most of it
+held up; three items did not and were corrected.
+
+- **`ThemeToggle` lazy-init reverted.** Seeding `useState` from
+  `document.documentElement.dataset.theme` reads the DOM during the hydration
+  render, so a light-mode user's server HTML (`aria-label="Switch to light
+  mode"`, knob `translate-x-4`) disagreed with the first client render.
+  Reproduced on `/login` with `fundflow-theme=light`: React logged "A tree
+  hydrated but some attributes of the server rendered HTML didn't match the
+  client properties ... This won't be patched up", naming `<ThemeToggle>` and
+  diffing exactly those two attributes. Because React does not patch attribute
+  mismatches, the change did not even achieve its goal (the knob stayed in the
+  dark position) while adding a console error to every light-mode page load.
+  State is back to the SSR-safe `"dark"`; the existing deferred effect
+  corrects it a tick later. Re-checked after the revert: console clean, and
+  the toggle still settles to `translate-x-0` / "Switch to dark mode". The
+  token normalization in the same hunk was kept, because `--surface-border`
+  and `--panel-border` hold identical values in both themes: a rename, not a
+  re-skin.
+- **`Button` `size="sm"` height reverted.** `min-h-9` dropped every small
+  button to 36 px, under the 44 px minimum that `docs/QA.md` checks and that
+  `docs/superpowers/archive/specs/2026-08-02-monarch-visual-parity-design.md`
+  calls non-negotiable. No defect was filed about `sm` being too tall. If the
+  compact look is wanted later, the repo's own idiom is a breakpoint guard
+  (`min-h-11 sm:min-h-9`), which keeps phones at 44 px.
+- **Debt mobile card, two fixes.** Its privacy-blur hooks wrapped the labels
+  along with the numbers, so `data-privacy="blur"` left three unlabelled
+  smudges where the desktop table keeps its column heads; the hooks now wrap
+  the number only. The account name also used `truncate`, which ate the
+  trailing mask - the only thing telling two cards from the same bank apart -
+  so it wraps instead, matching the `truncate` -> `break-words` change this
+  same pass made on Wrapped and Monthly review.
+
+Checked and kept: `Field`'s `useId` fallback (every consumer is a client
+component, so the hook is legal, and the generated ids do land on the rendered
+hint/error nodes); the `Badge`/`var(--viz-neg)` removal (Badge's danger tone
+is a solid fill with a matched foreground, so the inline override was the
+contrast bug); `use-dialog-focus` holding Tab (correct trap behaviour, and
+`Modal` now carries the `tabIndex={-1}` it needs); `Modal`'s scroll lock
+(restores the prior value, so nested dialogs unwind correctly); and the
+`Tabs`, `BudgetsSection`, and `GOAL_BADGE_LABEL` key/copy fixes.
+
+Layouts were verified by rendering `BudgetTable`, `HoldingsTable`, and
+`DebtPlannerView` to static markup against the compiled stylesheet at 390 px
+and 320 px: no page-level horizontal overflow at either width, and the only
+clipped nodes are deliberate `truncate` and `sr-only`. Gates after the
+corrections: lint, `tsc --noEmit`, 447 files / 4,948 unit tests, production
+build, and palette validation all pass.

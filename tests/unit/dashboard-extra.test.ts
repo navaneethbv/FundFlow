@@ -848,6 +848,21 @@ describe("getDashboardData", () => {
           apr: null,
         },
         {
+          id: "acc-dupe",
+          // Provider name already carries the mask, and a corrupted byte.
+          name: "Sapphire\uFFFD Reserve ••4242",
+          official_name: null,
+          mask: "4242",
+          type: "credit",
+          subtype: "credit card",
+          current_balance: 900,
+          available_balance: 0,
+          credit_limit: 5000,
+          iso_currency_code: "USD",
+          plaid_item_id: "item-1",
+          apr: 25,
+        },
+        {
           id: "acc-3",
           name: "No Mask",
           official_name: null,
@@ -874,8 +889,14 @@ describe("getDashboardData", () => {
     );
 
     expect(data.insights.debt?.usesAssumedApr).toBe(true);
-    expect(data.insights.debt?.plan?.order).toEqual(["Card", "No Mask"]);
-    expect(data.creditAccounts).toHaveLength(3);
+    // UI-06: the dashboard debt summary must build the same display label the
+    // Debt payoff page does — one mask, sanitized text, never a doubled mask.
+    expect(data.insights.debt?.plan?.order).toEqual([
+      "Sapphire Reserve ••4242",
+      "Card",
+      "No Mask",
+    ]);
+    expect(data.creditAccounts).toHaveLength(4);
   });
 
   it("applies itemId and selectedAccountId filters and stale sync detection", async () => {

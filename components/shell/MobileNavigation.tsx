@@ -140,7 +140,7 @@ export default function MobileNavigation({
               )}
             >
               <NavIcon itemKey={item.key} />
-              <span className="max-w-full truncate">{item.label}</span>
+              <span className="max-w-full truncate" title={item.label}>{item.label}</span>
               <LinkPendingIndicator />
             </Link>
           );
@@ -179,7 +179,7 @@ export default function MobileNavigation({
             aria-modal="true"
             aria-label="All navigation"
             onKeyDown={handleDialogKeyDown}
-            className="animate-sheet-slide relative m-0 max-h-[85vh] w-full overflow-y-auto rounded-t-2xl border border-panel-border bg-panel p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-pop"
+            className="animate-sheet-slide relative m-0 max-h-[85vh] w-full overflow-y-auto rounded-t-2xl border border-panel-border bg-panel text-foreground p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-pop"
           >
             <div
               aria-hidden

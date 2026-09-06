@@ -515,7 +515,7 @@ export default function GoalWizard({
           aria-modal="true"
           aria-label="New goal"
           onKeyDown={handleDialogKeyDown}
-          className="fixed inset-0 z-50 m-0 flex flex-col overflow-y-auto border-0 bg-background p-0"
+          className="fixed inset-0 z-50 m-0 flex flex-col overflow-y-auto border-0 bg-background text-foreground p-0"
         >
           <div className="border-b border-panel-border">
             <div className="flex items-center justify-between gap-2 px-4 py-3 sm:px-6">

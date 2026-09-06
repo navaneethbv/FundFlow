@@ -11,6 +11,7 @@ import {
   type CashFlowForecast,
   type SpendingAnomaly,
 } from "@/lib/planning";
+import { accountDisplayLabel } from "@/lib/account-label";
 import { buildPayoffPlan, type PayoffPlan } from "@/lib/debt";
 import { buildRecurringStatuses } from "@/lib/planning-depth";
 import {
@@ -451,8 +452,9 @@ function buildDashboardSpendMetrics(input: DashboardSpendMetricsInput) {
   }
   const spendPerCard = [...cardSpendMap].map(([accountId, amount]) => {
     const account = accountById.get(accountId);
-    const mask = account?.mask ? ` ••${account.mask}` : "";
-    return { name: account ? `${account.name ?? "Account"}${mask}` : "Unknown Account", amount: round2(amount), accountId };
+    // Display only; the row is joined back on `accountId`, never on this text.
+    const name = account ? accountDisplayLabel(account.name, account.mask) : "Unknown Account";
+    return { name, amount: round2(amount), accountId };
   }).sort((a, b) => b.amount - a.amount);
   const spendPerBank = [...bankSpendMap].map(([itemId, amount]) => ({
     name: itemId ? allItems.find((item) => item.id === itemId)?.institution_name ?? "Other Bank" : "Unknown Bank",
@@ -519,9 +521,9 @@ function buildDebtSummary(allAccounts: readonly AccountSummary[]): DashboardData
   );
   if (debtAccounts.length === 0) return null;
   const debtInputs = debtAccounts.map((a) => {
-    const mask = a.mask ? ` ••${a.mask}` : "";
     return {
-      name: `${a.name ?? "Card"}${mask}`,
+      // Same label the Debt payoff page builds, so the two surfaces agree.
+      name: accountDisplayLabel(a.name ?? "Card", a.mask),
       balance: Number(a.current_balance),
       apr: a.apr ?? ASSUMED_APR,
     };

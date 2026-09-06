@@ -170,6 +170,7 @@ export default function RecurringCalendar({
                           <span className={occurrenceTone(occurrence)}>
                             {occurrence.isIncome ? "+" : "−"}
                             {formatCurrency(Math.abs(occurrence.amount), currency)}
+                            <span className="sr-only"> ({occurrence.status})</span>
                           </span>
                           <span className="block truncate text-muted">{occurrence.merchant}</span>
                         </li>

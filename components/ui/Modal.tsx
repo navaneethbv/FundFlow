@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { cn } from "@/lib/cn";
 
@@ -33,6 +33,17 @@ export default function Modal({
 }: Readonly<ModalProps>) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const handleDialogKeyDown = useDialogFocus(dialogRef, open, onClose);
+
+  // Lock page scroll behind the overlay; without this the backdrop drifts
+  // on wheel/touch scroll and the previous scroll position is lost on close.
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
 
   if (!open) return null;
 
@@ -71,8 +82,9 @@ export default function Modal({
         ref={dialogRef}
         aria-modal="true"
         aria-labelledby={titleId}
-        aria-label={!titleId ? ariaLabel : undefined}
+        aria-label={!titleId ? (ariaLabel ?? "Dialog") : undefined}
         onKeyDown={handleDialogKeyDown}
+        tabIndex={-1}
         className={cn(
           // Height is capped and scrolled here, not left to each caller: a
           // sheet is pinned to the bottom edge, so content taller than the

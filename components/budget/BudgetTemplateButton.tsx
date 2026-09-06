@@ -249,6 +249,7 @@ export default function BudgetTemplateButton({
           <div className="mt-2 flex gap-2">
             <input
               type="text"
+              aria-label="Template name"
               value={saveName}
               onChange={(event) => setSaveName(event.target.value)}
               placeholder="Template name"

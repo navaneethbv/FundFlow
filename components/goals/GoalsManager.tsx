@@ -353,15 +353,17 @@ export default function GoalsManager({
       )}
 
       <form onSubmit={add} className="flex flex-wrap items-end gap-2">
-        <Field label="Goal name">
+        <Field label="Goal name" htmlFor="goal-name">
           <Input
+            id="goal-name"
             placeholder="Emergency fund"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
         </Field>
-        <Field label="Target amount">
+        <Field label="Target amount" htmlFor="goal-target-amount">
           <Input
+            id="goal-target-amount"
             type="number"
             min="0"
             step="0.01"

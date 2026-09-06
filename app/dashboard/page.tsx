@@ -24,6 +24,7 @@ import { getGoals } from "@/lib/goals";
 import { loadGoalsPageData } from "@/lib/goals-data";
 import { loadLatestWeeklyDelivery } from "@/lib/weekly-delivery-history";
 import { toGoalSummaryItem, toLegacyGoalSummaryItem } from "@/lib/goal-summary";
+import { accountDisplayLabel } from "@/lib/account-label";
 import { normalizeReportTimezone } from "@/lib/report-period";
 import { resolveDisplayName, greetingInTimezone } from "@/lib/greeting";
 import ScopeChips from "@/components/dashboard/ScopeChips";
@@ -129,10 +130,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
     userId: dashboardScope === "household" ? undefined : user?.id,
   });
   const accountNames = new Map(
-    data.accounts.map((account) => {
-      const mask = account.mask ? ` **${account.mask}` : "";
-      return [account.id, `${account.name ?? "Account"}${mask}`];
-    }),
+    data.accounts.map((account) => [account.id, accountDisplayLabel(account.name, account.mask)] as const),
   );
   const scopeParam = dashboardScope === "household" ? "household" : undefined;
   const linkParams = { view: activeView, month: selectedMonth, accountId: selectedAccountId, itemId: selectedItemId, scope: scopeParam };

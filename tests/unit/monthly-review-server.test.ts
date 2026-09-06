@@ -15,6 +15,7 @@ vi.mock("@/components/shell/AppShell", () => ({ default: ({ children }: { childr
 vi.mock("@/components/review/ExportReportButton", () => ({ default: () => null }));
 
 import MonthlyReviewPage from "@/app/review/page";
+import { GOAL_BADGE_LABEL } from "@/lib/goals-v2";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -35,6 +36,19 @@ describe("Monthly review goal funding", () => {
     expect(html).toContain("No pace data");
     expect(html).toContain("Behind");
     expect(html).toContain("reflect current balances");
+  });
+  it("labels a badge with the same words the Goals page uses", async () => {
+    // The audit's UI-11: one goal must not read "On track" on Goals and
+    // "On Track" in Monthly review.
+    mocks.funded.mockResolvedValue({ goals: [
+      { id: "save", name: "Emergency reserve", remainingAmount: 10, badge: "on-track" },
+      { id: "risk", name: "New roof", remainingAmount: 20, badge: "at-risk" },
+    ] });
+    const html = renderToStaticMarkup(await MonthlyReviewPage({ searchParams: Promise.resolve({}) }));
+    expect(html).toContain(GOAL_BADGE_LABEL["on-track"]);
+    expect(html).toContain(GOAL_BADGE_LABEL["at-risk"]);
+    expect(html).not.toContain("On Track");
+    expect(html).not.toContain("At Risk");
   });
   it("retains the legacy deployment fallback without querying funded-goal tables", async () => {
     mocks.flag.mockReturnValue(false);

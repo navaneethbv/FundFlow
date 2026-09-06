@@ -206,7 +206,7 @@ export default function BudgetsSection({
           <ul className="space-y-2 text-sm">
             {openSuggestions.map((suggestion) => (
               <li
-                key={titleCase(suggestion.category)}
+                key={suggestion.category}
                 className="flex items-center justify-between gap-3 rounded-field border border-panel-border bg-panel-2 p-3"
               >
                 <span className="min-w-0">

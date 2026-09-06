@@ -89,7 +89,7 @@ describe("useDialogFocus", () => {
     expect(onEscape).not.toHaveBeenCalled();
   });
 
-  it("handles Tab when dialog has no controls or is null", () => {
+  it("holds Tab inside a dialog with no controls instead of leaking to the page", () => {
     const onEscape = vi.fn();
     const onKeyDownNull = useDialogFocus({ current: null }, true, onEscape);
     const event1 = {
@@ -98,14 +98,34 @@ describe("useDialogFocus", () => {
       preventDefault: vi.fn(),
     } as unknown as React.KeyboardEvent<HTMLDialogElement>;
     onKeyDownNull(event1);
-    expect(event1.preventDefault).not.toHaveBeenCalled();
+    expect(event1.preventDefault).toHaveBeenCalled();
 
     const fakeDialogEmpty = {
       querySelectorAll: vi.fn().mockReturnValue([]),
     } as unknown as HTMLDialogElement;
     const onKeyDownEmpty = useDialogFocus({ current: fakeDialogEmpty }, true, onEscape);
-    onKeyDownEmpty(event1);
-    expect(event1.preventDefault).not.toHaveBeenCalled();
+    const event2 = {
+      key: "Tab",
+      shiftKey: false,
+      preventDefault: vi.fn(),
+    } as unknown as React.KeyboardEvent<HTMLDialogElement>;
+    onKeyDownEmpty(event2);
+    expect(event2.preventDefault).toHaveBeenCalled();
+  });
+
+  it("focuses the dialog itself when it has no focusable children", () => {
+    const dialogFocus = vi.fn();
+    const fakeDialog = {
+      querySelector: vi.fn().mockReturnValue(null),
+      focus: dialogFocus,
+    } as unknown as HTMLDialogElement;
+    (globalThis as unknown as { document: { activeElement: HTMLElement | null } }).document = {
+      activeElement: null,
+    };
+    useDialogFocus({ current: fakeDialog }, true, vi.fn());
+    effectFn!();
+    expect(fakeDialog.querySelector).toHaveBeenCalled();
+    expect(dialogFocus).toHaveBeenCalled();
   });
 
   it("handles Tab and Shift+Tab wrapping around focusable controls", () => {

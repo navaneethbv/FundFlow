@@ -25,7 +25,11 @@ export function useDialogFocus(
   useEffect(() => {
     if (!open) return;
     previouslyFocused.current = document.activeElement as HTMLElement | null;
-    dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+    // A message-only dialog has no tabbable controls; focus the dialog
+    // itself (tabIndex={-1} in Modal) so keyboard context stays inside.
+    const firstControl = dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE);
+    if (firstControl) firstControl.focus();
+    else dialogRef.current?.focus();
     return () => {
       previouslyFocused.current?.focus();
     };
@@ -40,7 +44,12 @@ export function useDialogFocus(
       }
       if (event.key !== "Tab") return;
       const controls = dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE);
-      if (!controls || controls.length === 0) return;
+      // No tabbable controls: hold focus on the dialog itself rather than
+      // leaking Tab to the page behind the overlay.
+      if (!controls || controls.length === 0) {
+        event.preventDefault();
+        return;
+      }
       const first = controls[0];
       const last = controls[controls.length - 1];
       if (event.shiftKey && document.activeElement === first) {

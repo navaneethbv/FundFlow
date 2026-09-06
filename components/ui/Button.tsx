@@ -65,6 +65,7 @@ export default function Button({
       {...props}
     >
       {loading && <ButtonSpinner />}
+      {loading && <span className="sr-only">Loading…</span>}
       {children}
     </button>
   );

@@ -53,11 +53,11 @@ function Avatar({ name, logoUrl, size = 36, className }: Readonly<AvatarProps>) 
   if (logoUrl) {
     return (
       <span
-        className={cn("inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white p-1", className)}
+        className={cn("inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-panel-border bg-white p-1", className)}
         style={{ width: size, height: size }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element -- external/signed logo URL, not a static asset. */}
-        <img src={logoUrl} alt="" className="h-full w-full object-cover" />
+        <img src={logoUrl} alt="" className="h-full w-full object-contain" />
       </span>
     );
   }

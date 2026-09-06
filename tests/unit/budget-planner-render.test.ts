@@ -94,7 +94,7 @@ describe("BudgetTable", () => {
     expect(html).not.toContain(">Save<");
   });
 
-  it("colors the remaining amount with the money-direction tokens in both the over- and under-budget cases", () => {
+  it("signals the over-budget case with the danger badge and the under-budget case with the money-direction token", () => {
     const over = renderToStaticMarkup(
       createElement(BudgetTable, {
         section: section({
@@ -106,7 +106,10 @@ describe("BudgetTable", () => {
       }),
     );
     expect(over).toContain("-$100.00");
-    expect(over).toContain("var(--viz-neg)");
+    // The over-budget badge keeps the contrast-safe danger foreground; the
+    // viz-neg token (≈1.3:1 on the danger fill) must not override it.
+    expect(over).toContain("bg-danger");
+    expect(over).not.toContain("var(--viz-neg)");
 
     const under = renderToStaticMarkup(
       createElement(BudgetTable, {

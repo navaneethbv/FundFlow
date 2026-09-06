@@ -17,7 +17,7 @@ export default function Tabs({
     >
       {items.map((item) => (
         <Link
-          key={item.label}
+          key={item.href}
           href={item.href}
           prefetch={false}
           aria-current={item.active ? "page" : undefined}
