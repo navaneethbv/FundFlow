@@ -110,6 +110,7 @@ describe("Coverage Boost More Tests", () => {
             then: (resolve: (v: { data: unknown[] }) => unknown) => resolve({ data: [] }),
           };
         }),
+        rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
       } as never);
 
       vi.spyOn(http, "requireUser").mockResolvedValue({

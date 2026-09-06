@@ -26,6 +26,7 @@ const eslintConfig = defineConfig([
     // and their vendored mockups drowned the real output in ~29k problems.
     // `img/**` above does not cover them: it anchors at the repo root.
     ".worktrees/**",
+    ".claude/**",
   ]),
 ]);
 

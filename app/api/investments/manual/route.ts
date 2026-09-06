@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
       .from(table)
       .select("id")
       .eq("id", input.accountId)
+      .eq("user_id", user.id)
       .maybeSingle();
     if (accountError) throw accountError;
     if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });

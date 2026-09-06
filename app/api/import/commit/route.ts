@@ -7,6 +7,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { normalizeImportCategory } from "@/lib/finance-domain";
 import { refreshInferredRecurringForUser } from "@/lib/recurring-inference";
 import { logError } from "@/lib/log";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const UPSERT_CHUNK = 500;
 const QUERY_CHUNK = 500;
@@ -495,6 +496,14 @@ export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
   const { user, supabase } = auth;
+
+  const allowed = await checkRateLimit(`import-commit:${user.id}`, 10, 3600, { failClosed: true });
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Too many commits. Please wait a while." },
+      { status: 429 },
+    );
+  }
 
   try {
     const body = await request.json().catch(() => null);

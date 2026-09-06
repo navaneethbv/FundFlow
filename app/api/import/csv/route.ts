@@ -131,18 +131,29 @@ function parseUploadRequest(
   return { file, accountId, manualAccountId, positiveIsIncome, dateOrder };
 }
 
-/** Ownership check runs as the user — RLS hides other users' accounts. */
+/** Ownership check runs as the user — RLS hides other users' accounts, but household visibility allows reading partner accounts, so user_id is checked explicitly. */
 async function validateTargetOwnership(
   supabase: SupabaseClient,
+  userId: string,
   accountId: string | undefined,
   manualAccountId: string | undefined,
 ): Promise<NextResponse | null> {
   if (accountId) {
-    const { data: account } = await supabase.from("accounts").select("id").eq("id", accountId).maybeSingle();
+    const { data: account } = await supabase
+      .from("accounts")
+      .select("id")
+      .eq("id", accountId)
+      .eq("user_id", userId)
+      .maybeSingle();
     if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
     return null;
   }
-  const { data: account } = await supabase.from("manual_accounts").select("id").eq("id", manualAccountId).maybeSingle();
+  const { data: account } = await supabase
+    .from("manual_accounts")
+    .select("id")
+    .eq("id", manualAccountId)
+    .eq("user_id", userId)
+    .maybeSingle();
   if (!account) return NextResponse.json({ error: "Manual account not found" }, { status: 404 });
   return null;
 }
@@ -183,7 +194,7 @@ export async function POST(request: NextRequest) {
   if (auth instanceof NextResponse) return auth;
   const { user, supabase } = auth;
 
-  const allowed = await checkRateLimit(`import:${user.id}`, 5, 3600);
+  const allowed = await checkRateLimit(`import:${user.id}`, 5, 3600, { failClosed: true });
   if (!allowed) {
     return NextResponse.json(
       { error: "Too many imports. Please wait a while." },
@@ -199,7 +210,7 @@ export async function POST(request: NextRequest) {
     if ("error" in parsedRequest) return parsedRequest.error;
     const { file, accountId, manualAccountId, positiveIsIncome, dateOrder } = parsedRequest;
 
-    const targetError = await validateTargetOwnership(supabase, accountId, manualAccountId);
+    const targetError = await validateTargetOwnership(supabase, user.id, accountId, manualAccountId);
     if (targetError) return targetError;
 
     const text = await file.text();

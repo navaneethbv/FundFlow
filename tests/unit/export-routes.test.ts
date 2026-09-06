@@ -24,6 +24,7 @@ vi.mock("@/lib/audit", () => ({
 
 const mockServiceClient = {
   from: vi.fn<(...args: unknown[]) => unknown>(),
+  rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
 };
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => mockServiceClient,

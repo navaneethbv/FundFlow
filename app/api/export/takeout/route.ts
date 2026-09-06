@@ -3,6 +3,7 @@ import { buildDataTakeout } from "@/lib/security-account";
 import { collectUserData } from "@/lib/user-data";
 import { errorResponse, requireUser } from "@/lib/http";
 import { getClientIp, writeAudit } from "@/lib/audit";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 /**
  * Full data takeout. Reads run on the cookie-bound client, but RLS alone is no
@@ -23,6 +24,11 @@ export async function GET(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
   const { supabase, user } = auth;
+
+  const allowed = await checkRateLimit(`export-takeout:${user.id}`, 5, 3600, { failClosed: true });
+  if (!allowed) {
+    return NextResponse.json({ error: "Export rate limit exceeded. Please wait a while." }, { status: 429 });
+  }
 
   try {
     const sections = await collectUserData(supabase, user.id);

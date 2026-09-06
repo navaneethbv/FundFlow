@@ -133,13 +133,14 @@ describe("Coverage Boost API Routes", () => {
     });
 
     it("handles account not found in POST", async () => {
+      const queryBuilder = {
+        eq: vi.fn(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      };
+      queryBuilder.eq.mockReturnValue(queryBuilder);
       const mockSupabase = {
         from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-            }),
-          }),
+          select: vi.fn().mockReturnValue(queryBuilder),
         }),
       } as never;
 

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
 import { writeAudit, getClientIp, type AuditAction } from "@/lib/audit";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { verifyStepUp } from "@/lib/step-up";
 
 type MfaAction = "enroll" | "verify" | "unenroll";
 
@@ -131,6 +133,35 @@ export async function POST(req: NextRequest) {
       if (res.errorResponse) return res.errorResponse;
       mfaEnrolled = res.mfaEnrolled!;
     } else {
+      const allowed = await checkRateLimit(
+        `mfa-unenroll:${user.id}`,
+        5,
+        3600,
+        { failClosed: true },
+      );
+      if (!allowed) {
+        return NextResponse.json(
+          { error: "Too many attempts. Please wait a while." },
+          { status: 429 },
+        );
+      }
+
+      const verifiedFactors = await listVerifiedFactors(supabase);
+      const isVerifiedFactor = verifiedFactors.some((f) => f.id === factorId);
+      if (isVerifiedFactor) {
+        const code = body.code as unknown;
+        if (typeof code !== "string" || !code.trim()) {
+          return badRequest("A verification code is required to remove this authenticator.");
+        }
+        const stepUpOk = await verifyStepUp(supabase, user, code.trim(), factorId);
+        if (!stepUpOk) {
+          return NextResponse.json(
+            { error: "Invalid verification code" },
+            { status: 403 },
+          );
+        }
+      }
+
       const res = await handleMfaUnenroll(supabase, user.id, factorId);
       mfaEnrolled = res.mfaEnrolled;
     }

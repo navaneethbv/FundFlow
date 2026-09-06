@@ -15,11 +15,11 @@ interface Factor {
 
 const MAX_TOTP_FACTORS = 10;
 
-async function finalizeMfaAction(action: "enroll" | "verify" | "unenroll", factorId: string) {
+async function finalizeMfaAction(action: "enroll" | "verify" | "unenroll", factorId: string, code?: string) {
   const response = await fetch("/api/settings/mfa", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action, factorId }),
+    body: JSON.stringify({ action, factorId, ...(code ? { code } : {}) }),
   });
   if (!response.ok) {
     const json = await response.json().catch(() => ({}));
@@ -109,7 +109,7 @@ export default function MfaSection() {
       await finalizeMfaAction("enroll", enrolling.factorId);
       await finalizeMfaAction("verify", enrolling.factorId);
       if (replacementFactorId) {
-        await finalizeMfaAction("unenroll", replacementFactorId);
+        await finalizeMfaAction("unenroll", replacementFactorId, code);
       }
       setEnrolling(null);
       setReplacementFactorId(null);
@@ -147,11 +147,13 @@ export default function MfaSection() {
       ? "This is your final authenticator. Removing it disables second-factor protection. Continue?"
       : "Remove this authenticator?";
     if (!window.confirm(warning)) return;
+    const verificationCode = window.prompt("Enter your 6-digit authenticator code or account password to confirm removal:");
+    if (!verificationCode) return;
     setError(null);
     setStatus(null);
     setLoading(true);
     try {
-      await finalizeMfaAction("unenroll", factorId);
+      await finalizeMfaAction("unenroll", factorId, verificationCode.trim());
       setStatus("Authenticator removed.");
       await loadFactors();
     } catch (err) {

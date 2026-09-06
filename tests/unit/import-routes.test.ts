@@ -1863,16 +1863,18 @@ function serviceStubWith(
       const formDataWithAcc = new FormData();
       formDataWithAcc.set("file", file);
       formDataWithAcc.set("account_id", "a1");
+      const mockEq = vi.fn().mockReturnThis();
       const mockSupabaseNullAcc = {
         from: vi.fn().mockReturnValue({
           select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
+          eq: mockEq,
           maybeSingle: vi.fn().mockResolvedValue({ data: null }),
         }),
       };
       mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: mockSupabaseNullAcc });
       const resNullAcc = await csvPost({ formData: () => Promise.resolve(formDataWithAcc) } as unknown as NextRequest);
       expect(resNullAcc.status).toBe(404);
+      expect(mockEq).toHaveBeenCalledWith("user_id", "u1");
     });
   });
 });

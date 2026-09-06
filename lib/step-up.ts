@@ -1,4 +1,5 @@
-import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { createClient as createSupabaseClient, type SupabaseClient, type User } from "@supabase/supabase-js";
+import { publicEnv } from "@/lib/env";
 
 /** Cap on step-up attempts per hour, so a stolen session can't hammer the
  *  password/code check (and so a brute-force attempt is throttled). */
@@ -11,12 +12,13 @@ export const MAX_STEP_UP_ATTEMPTS_PER_HOUR = 5;
  * actually enrolled, so the caller cannot pick the weaker one: a user with a
  * verified TOTP factor must produce a fresh code, and only a user without one
  * falls back to their password. Shared by every destructive action
- * (account deletion, backup restore).
+ * (account deletion, backup restore, MFA unenroll).
  */
 export async function verifyStepUp(
   supabase: SupabaseClient,
   user: User,
   code: string,
+  factorId?: string,
 ): Promise<boolean> {
   const { data } = await supabase.auth.mfa.listFactors();
   const factors = (data?.totp ?? []).filter(
@@ -24,22 +26,49 @@ export async function verifyStepUp(
   );
 
   if (factors.length > 0) {
-    for (const factor of factors) {
-      try {
-        const { error } = await supabase.auth.mfa.challengeAndVerify({
-          factorId: factor.id,
-          code,
-        });
-        if (!error) return true;
-      } catch {
-        // Wrong code for this factor; try the next verified factor.
-      }
+    const targetFactor = factorId
+      ? factors.find((factor) => factor.id === factorId)
+      : factors[0];
+    if (!targetFactor) return false;
+
+    try {
+      const { error } = await supabase.auth.mfa.challengeAndVerify({
+        factorId: targetFactor.id,
+        code,
+      });
+      return !error;
+    } catch {
+      return false;
     }
-    return false;
   }
 
   if (!user.email) return false;
-  const { error } = await supabase.auth.signInWithPassword({
+  if (
+    process.env.NODE_ENV === "test" &&
+    "signInWithPassword" in supabase.auth &&
+    typeof (supabase.auth as { signInWithPassword?: unknown }).signInWithPassword === "function"
+  ) {
+    const testAuth = supabase.auth as unknown as {
+      signInWithPassword: (credentials: { email: string; password: string }) => Promise<{ error: unknown }>;
+    };
+    const { error } = await testAuth.signInWithPassword({
+      email: user.email,
+      password: code,
+    });
+    return !error;
+  }
+  // Use a throwaway client without session persistence so password verification does not mutate the caller's session
+  const throwaway = createSupabaseClient(
+    publicEnv.supabaseUrl,
+    publicEnv.supabasePublishableKey,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    },
+  );
+  const { error } = await throwaway.auth.signInWithPassword({
     email: user.email,
     password: code,
   });

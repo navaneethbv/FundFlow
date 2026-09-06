@@ -62,20 +62,23 @@ import { dashboardScopeKey } from "@/lib/dashboard-cache";
 
 describe("dashboardScopeKey", () => {
   it("encodes every drill dimension", () => {
-    // The trailing dimension is the household scope (4.2) — "mine" default.
-    expect(dashboardScopeKey(undefined, undefined)).toBe("all:default:all:-:-:-:mine");
+    // The trailing dimension is the household scope (4.2) and balance sheet inclusion ("bs" default).
+    expect(dashboardScopeKey(undefined, undefined)).toBe("all:default:all:-:-:-:mine:bs");
     expect(
       dashboardScopeKey("acct-1", "2026-07", {
         itemId: "item-1",
         drill: { category: "FOOD_AND_DRINK", sub: "FOOD_AND_DRINK_COFFEE" },
       }),
-    ).toBe("acct-1:2026-07:item-1:FOOD_AND_DRINK:FOOD_AND_DRINK_COFFEE:-:mine");
+    ).toBe("acct-1:2026-07:item-1:FOOD_AND_DRINK:FOOD_AND_DRINK_COFFEE:-:mine:bs");
     expect(dashboardScopeKey(undefined, "2026-07", { drill: { merchant: "Netflix" } })).toBe(
-      "all:2026-07:all:-:-:Netflix:mine",
+      "all:2026-07:all:-:-:Netflix:mine:bs",
     );
     expect(
       dashboardScopeKey(undefined, undefined, { scope: "household" }),
-    ).toBe("all:default:all:-:-:-:household");
+    ).toBe("all:default:all:-:-:-:household:bs");
+    expect(
+      dashboardScopeKey(undefined, undefined, { includeBalanceSheet: false }),
+    ).toBe("all:default:all:-:-:-:mine:no-bs");
   });
 });
 

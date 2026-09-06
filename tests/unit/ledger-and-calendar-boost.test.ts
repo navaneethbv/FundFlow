@@ -186,40 +186,42 @@ describe("Calendar Token Route Extra Branches", () => {
             select: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 eq: vi.fn().mockReturnValue({
-                  is: vi.fn().mockResolvedValue({
-                    data: [
-                    {
-                      id: "s1",
-                      merchant_name: null,
-                      description: null,
-                      average_amount: null,
-                      last_amount: null,
-                      frequency: "bi-weekly",
-                      stream_type: "inflow",
-                      is_active: true,
-                    },
-                    {
-                      id: "s2",
-                      merchant_name: "Taxes",
-                      description: "Quarterly Tax",
-                      average_amount: 500,
-                      last_amount: 500,
-                      frequency: "quarterly",
-                      stream_type: "outflow",
-                      is_active: true,
-                    },
-                    {
-                      id: "s3",
-                      merchant_name: "Annual Sub",
-                      description: "Annual Sub",
-                      average_amount: 100,
-                      last_amount: 100,
-                      frequency: "yearly",
-                      stream_type: "outflow",
-                      is_active: true,
-                    },
-                  ],
-                    error: null,
+                  is: vi.fn().mockReturnValue({
+                    or: vi.fn().mockResolvedValue({
+                      data: [
+                      {
+                        id: "s1",
+                        merchant_name: null,
+                        description: null,
+                        average_amount: null,
+                        last_amount: null,
+                        frequency: "bi-weekly",
+                        stream_type: "inflow",
+                        is_active: true,
+                      },
+                      {
+                        id: "s2",
+                        merchant_name: "Taxes",
+                        description: "Quarterly Tax",
+                        average_amount: 500,
+                        last_amount: 500,
+                        frequency: "quarterly",
+                        stream_type: "outflow",
+                        is_active: true,
+                      },
+                      {
+                        id: "s3",
+                        merchant_name: "Annual Sub",
+                        description: "Annual Sub",
+                        average_amount: 100,
+                        last_amount: 100,
+                        frequency: "yearly",
+                        stream_type: "outflow",
+                        is_active: true,
+                      },
+                    ],
+                      error: null,
+                    }),
                   }),
                 }),
               }),

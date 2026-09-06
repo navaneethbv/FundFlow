@@ -63,8 +63,8 @@ Focused tests pass; the follow-up remains pending merge and deployment.
   Immutable revocation trigger on `user_session_records`; session reads use the cookie-bound client; the service role is confined to revocation.
 - **FF-02 MFA and revocation gates.**
   `20260904120000` covered the core financial tables.
-  `20260905100000_mfa_gate_remaining_user_tables.sql` completes it for the 37 remaining user-data tables, including the three the second round flagged (`life_events`, `credit_card_bills`, `account_reconciliations`).
-  It rewrites each policy in place from `pg_policies`, so existing ownership predicates are preserved exactly rather than retyped.
+  `20260905100000_mfa_gate_remaining_user_tables.sql` completed it for the 37 remaining user-data tables, but its `'authenticated' = any(roles)` predicate missed 35 policies on public schema tables defaulting to the `{public}` role.
+  `20260906140000_gate_public_role_policies.sql` closes this with `roles && array['public', 'authenticated']::name[]`, and `scripts/check-rls.sql` enforces that no public table policy is left ungated or restricted only to `{public}`.
   `profiles`, `user_session_records` and `mfa_backup_codes` are deliberately excluded, and the reason is recorded in the migration: all three are read before a session can reach AAL2.
 - **FF-03, FF-29 AI consent and provider routing.**
   Fail-closed double consent; `lib/ai-provider.ts` is the only place an Anthropic client is constructed.

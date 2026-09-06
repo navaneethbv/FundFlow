@@ -16,6 +16,16 @@ vi.mock("@/lib/audit", () => ({
   getClientIp: () => "127.0.0.1",
 }));
 
+const mockCheckRateLimit = vi.fn().mockResolvedValue(true);
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
+}));
+
+const mockVerifyStepUp = vi.fn().mockResolvedValue(true);
+vi.mock("@/lib/step-up", () => ({
+  verifyStepUp: (...args: unknown[]) => mockVerifyStepUp(...args),
+}));
+
 import { POST } from "@/app/api/settings/mfa/route";
 
 const USER_ID = "user-123";
@@ -185,6 +195,48 @@ describe("POST /api/settings/mfa", () => {
     expect(mockWriteAudit).toHaveBeenCalledWith(
       expect.objectContaining({ action: "mfa_unenroll", metadata: { factorId: "f1" } }),
     );
+  });
+
+  it("enforces rate limit on unenroll", async () => {
+    mockCheckRateLimit.mockResolvedValueOnce(false);
+    mockRequireUser.mockResolvedValue({ user: { id: USER_ID }, supabase: clientStub() });
+
+    const res = await POST(request({ action: "unenroll", factorId: "f1" }));
+    expect(res.status).toBe(429);
+  });
+
+  it("requires verification code when unenrolling a verified factor", async () => {
+    const listFactors = vi.fn().mockResolvedValue({
+      data: { totp: [{ id: "f1", status: "verified" }] },
+      error: null,
+    });
+    const supabase = {
+      ...clientStub(),
+      auth: { mfa: { listFactors } },
+    };
+    mockRequireUser.mockResolvedValue({ user: { id: USER_ID }, supabase });
+
+    // Missing code
+    const resNoCode = await POST(request({ action: "unenroll", factorId: "f1" }));
+    expect(resNoCode.status).toBe(400);
+
+    // Invalid code (step up failed)
+    mockVerifyStepUp.mockResolvedValueOnce(false);
+    const resBadCode = await POST(request({ action: "unenroll", factorId: "f1", code: "000000" }));
+    expect(resBadCode.status).toBe(403);
+
+    // Valid code
+    mockVerifyStepUp.mockResolvedValueOnce(true);
+    const unenroll = vi.fn().mockResolvedValue({ error: null });
+    const userClient = clientStub({ profiles: { data: { id: USER_ID } } });
+    const supabaseSuccess = {
+      ...userClient,
+      auth: { mfa: { listFactors, unenroll } },
+    };
+    mockRequireUser.mockResolvedValue({ user: { id: USER_ID }, supabase: supabaseSuccess });
+    const resOk = await POST(request({ action: "unenroll", factorId: "f1", code: "123456" }));
+    expect(resOk.status).toBe(200);
+    expect(mockVerifyStepUp).toHaveBeenCalledWith(supabaseSuccess, expect.anything(), "123456", "f1");
   });
 
   it("returns 500 when Auth MFA listFactors or unenroll throws", async () => {

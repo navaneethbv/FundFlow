@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
   if (auth instanceof NextResponse) return auth;
   const { user, supabase } = auth;
 
-  const allowed = await checkRateLimit(`household-invite:${user.id}`, 5, 24 * 3600);
+  const allowed = await checkRateLimit(`household-invite:${user.id}`, 5, 24 * 3600, { failClosed: true });
   if (!allowed) {
     return NextResponse.json({ error: "Too many invites today." }, { status: 429 });
   }
