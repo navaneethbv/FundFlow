@@ -58,6 +58,7 @@ vi.mock("@/lib/plaid-service", () => ({
   upsertAccounts: (...args: unknown[]) => mockUpsertAccounts(...args),
   storeLinkToken: (...args: unknown[]) => mockStoreLinkToken(...args),
   consumeLinkToken: (...args: unknown[]) => mockConsumeLinkToken(...args),
+  setItemStatus: vi.fn().mockResolvedValue(undefined),
 }));
 
 const mockCheckRateLimit = vi.fn<(...args: unknown[]) => unknown>();

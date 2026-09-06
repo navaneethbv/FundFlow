@@ -1,12 +1,29 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getPlaidClient } from "@/lib/plaid";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
-import { listActiveItems, decryptItemToken } from "@/lib/plaid-service";
+import { listActiveItems, decryptItemToken, setItemStatus } from "@/lib/plaid-service";
 import { createServiceClient } from "@/lib/supabase/service";
 import { writeAudit, getClientIp } from "@/lib/audit";
 import { logError } from "@/lib/log";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { MAX_STEP_UP_ATTEMPTS_PER_HOUR, verifyStepUp } from "@/lib/step-up";
+
+function extractPlaidErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== "object") return null;
+  const resData = (error as { response?: { data?: { error_code?: unknown } } })?.response?.data;
+  if (typeof resData?.error_code === "string") {
+    return resData.error_code;
+  }
+  if ("error_code" in error && typeof (error as { error_code?: unknown }).error_code === "string") {
+    return (error as { error_code: string }).error_code;
+  }
+  const msg = (error as { message?: unknown }).message;
+  if (typeof msg === "string") {
+    if (msg.includes("ITEM_NOT_FOUND")) return "ITEM_NOT_FOUND";
+    if (msg.includes("INVALID_ACCESS_TOKEN")) return "INVALID_ACCESS_TOKEN";
+  }
+  return null;
+}
 
 /**
  * User-controlled account deletion. Removes all Plaid items at Plaid, then
@@ -28,10 +45,17 @@ async function removeUserPlaidItems(userId: string): Promise<{ removed: number; 
   for (const item of items) {
     try {
       await plaid.itemRemove({ access_token: decryptItemToken(item) });
+      await setItemStatus(userId, item.id, "disconnected").catch(() => {});
       removed += 1;
     } catch (error) {
-      failed += 1;
-      logError("account.delete.itemRemove", error);
+      const code = extractPlaidErrorCode(error);
+      if (code === "ITEM_NOT_FOUND" || code === "INVALID_ACCESS_TOKEN") {
+        await setItemStatus(userId, item.id, "disconnected").catch(() => {});
+        removed += 1;
+      } else {
+        failed += 1;
+        logError("account.delete.itemRemove", error);
+      }
     }
   }
   return { removed, failed };
@@ -220,6 +244,9 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    const service = createServiceClient();
+    const storageRemoved = await cleanupUserStorageObjects(service, user.id);
+
     const { removed: itemsRemoved, failed: itemsFailed } = await removeUserPlaidItems(user.id);
     if (itemsFailed > 0) {
       await writeAudit({
@@ -229,6 +256,7 @@ export async function DELETE(request: NextRequest) {
           reason: "plaid_cleanup_failed",
           items_removed: itemsRemoved,
           items_failed: itemsFailed,
+          storage_objects_removed: storageRemoved,
         },
         ip: getClientIp(request),
       });
@@ -237,8 +265,6 @@ export async function DELETE(request: NextRequest) {
         { status: 503 },
       );
     }
-    const service = createServiceClient();
-    const storageRemoved = await cleanupUserStorageObjects(service, user.id);
     // Deleting the auth user cascades to all user-owned rows.
     const { error } = await service.auth.admin.deleteUser(user.id);
     if (error) {

@@ -5,6 +5,10 @@ import { detectCardDesign } from "@/lib/card-design";
 import * as http from "@/lib/http";
 import { clientStub } from "../fixtures/supabase-query";
 
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: vi.fn().mockResolvedValue(true),
+}));
+
 describe("Coverage Boost More Tests", () => {
   beforeEach(() => {
     vi.clearAllMocks();

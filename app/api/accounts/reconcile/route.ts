@@ -34,12 +34,13 @@ async function loadOwnedAccount(
   ref: { source: "plaid" | "manual"; id: string },
 ): Promise<AccountInfo | null> {
   if (ref.source === "plaid") {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("accounts")
       .select("id, name, current_balance, type, subtype")
       .eq("id", ref.id)
       .eq("user_id", userId)
       .maybeSingle();
+    if (error) throw error;
     if (!data) return null;
     return {
       id: data.id,
@@ -49,12 +50,13 @@ async function loadOwnedAccount(
       source: "plaid",
     };
   }
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("manual_accounts")
     .select("id, name, balance")
     .eq("id", ref.id)
     .eq("user_id", userId)
     .maybeSingle();
+  if (error) throw error;
   if (!data) return null;
   return {
     id: data.id,
@@ -160,7 +162,7 @@ async function getReconcileSinceDate(
   accountColumn: string,
   accountId: string,
 ): Promise<string> {
-  const { data: lastStatement } = await supabase
+  const { data: lastStatement, error } = await supabase
     .from("account_reconciliations")
     .select("statement_date")
     .eq("user_id", userId)
@@ -168,6 +170,7 @@ async function getReconcileSinceDate(
     .order("statement_date", { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (error) throw error;
 
   return lastStatement?.statement_date
     ? (lastStatement.statement_date as string)
@@ -210,7 +213,7 @@ async function syncClearedStatus(
 
   // Un-clear in-scope rows the user unchecked this round.
   const sinceDate = await getReconcileSinceDate(supabase, userId, accountColumn, accountId);
-  const { data: txnRows } = await supabase
+  const { data: txnRows, error: txnError } = await supabase
     .from("transactions")
     .select("id")
     .eq("user_id", userId)
@@ -218,6 +221,7 @@ async function syncClearedStatus(
     .gte("date", sinceDate)
     .lte("date", statementDate)
     .limit(2000);
+  if (txnError) throw txnError;
   const inScopeIds = (txnRows ?? []).map((row) => row.id as string);
   const unmarkIds = inScopeIds.filter((id) => !clearedSet.has(id));
   if (unmarkIds.length > 0) {

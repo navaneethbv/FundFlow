@@ -104,7 +104,12 @@ export type AuditAction =
   | "profile_updated"
   | "avatar_updated"
   | "display_prefs_updated"
-  | "rules_batch_applied";
+  | "rules_batch_applied"
+  | "bulk_tag_applied"
+  | "transfer_confirmed"
+  | "transfer_dismissed"
+  | "refund_confirmed"
+  | "refund_dismissed";
 
 interface AuditParams {
   userId: string | null;

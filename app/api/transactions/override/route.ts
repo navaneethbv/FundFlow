@@ -124,12 +124,13 @@ export async function POST(request: NextRequest) {
 
     // Ownership, not visibility: RLS exposes household-shared transactions, so
     // scope the lookup explicitly to the caller.
-    const { data: txn } = await supabase
+    const { data: txn, error: txnError } = await supabase
       .from("transactions")
       .select("id, pfc_primary, pfc_detailed")
       .eq("id", transactionId)
       .eq("user_id", user.id)
       .maybeSingle();
+    if (txnError) throw txnError;
     if (!txn) return badRequest("Transaction not found");
 
     // Deliberate-confirmation gate: turning a provider transfer or loan
@@ -146,13 +147,23 @@ export async function POST(request: NextRequest) {
     const existingOverride = await loadExistingOverride(supabase, user.id, transactionId);
     const next = nextOverrideValues(displayCategory, cashFlowClassification, existingOverride);
 
+    const updatePayload: Record<string, unknown> = {
+      user_id: user.id,
+      transaction_id: transactionId,
+    };
+    if (displayCategory !== undefined) {
+      updatePayload.display_category = next.displayCategory;
+    } else if (existingOverride) {
+      updatePayload.display_category = existingOverride.display_category;
+    }
+    if (cashFlowClassification !== undefined) {
+      updatePayload.cash_flow_classification = next.cashFlowClassification;
+    } else if (existingOverride) {
+      updatePayload.cash_flow_classification = existingOverride.cash_flow_classification;
+    }
+
     const { error } = await supabase.from("transaction_annotations").upsert(
-      {
-        user_id: user.id,
-        transaction_id: transactionId,
-        display_category: next.displayCategory,
-        cash_flow_classification: next.cashFlowClassification,
-      },
+      updatePayload,
       { onConflict: "user_id,transaction_id" },
     );
     if (error) throw error;
@@ -180,12 +191,13 @@ async function loadExistingOverride(
   userId: string,
   transactionId: string,
 ): Promise<{ display_category: string | null; cash_flow_classification: CashFlowClassification | null } | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("transaction_annotations")
     .select("display_category, cash_flow_classification")
     .eq("user_id", userId)
     .eq("transaction_id", transactionId)
     .maybeSingle();
+  if (error) throw error;
   const row = data as
     | { display_category?: string | null; cash_flow_classification?: CashFlowClassification | null }
     | null;
@@ -212,12 +224,13 @@ export async function DELETE(request: NextRequest) {
       return badRequest("Invalid transaction_id");
     }
 
-    const { data: txn } = await supabase
+    const { data: txn, error: txnError } = await supabase
       .from("transactions")
       .select("id")
       .eq("id", transactionId)
       .eq("user_id", user.id)
       .maybeSingle();
+    if (txnError) throw txnError;
     if (!txn) return badRequest("Transaction not found");
 
     const { error } = await supabase

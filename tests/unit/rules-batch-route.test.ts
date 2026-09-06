@@ -109,6 +109,7 @@ function createMockBatchDb(options?: {
       if (table === "transaction_annotations") {
         return {
           select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
           in: vi.fn().mockResolvedValue({ data: annotations }),
           upsert: onUpsert,
         };

@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { logError } from "@/lib/log";
+import { writeAudit } from "@/lib/audit";
 import {
   detectTransferPairs,
   filterReviewDecisions,
@@ -412,6 +413,13 @@ async function handleBulkTransferRequest(
   }
 
   const result = await linkBulkTransfers(supabase, userId, transfers);
+  if (result.linked.length > 0) {
+    await writeAudit({
+      userId,
+      action: "transfer_confirmed",
+      metadata: { count: result.linked.length, bulk: true },
+    });
+  }
   return NextResponse.json(
     { ok: result.failures.length === 0, ...result },
     { status: result.failures.length > 0 ? 207 : 200 },
@@ -448,6 +456,12 @@ async function handleSingleTransferRequest(
       );
     if (decisionError) throw decisionError;
   }
+
+  await writeAudit({
+    userId,
+    action: decision === "confirmed" ? "transfer_confirmed" : "transfer_dismissed",
+    metadata: { subject_id: subjectId },
+  });
 
   return NextResponse.json({ ok: true });
 }

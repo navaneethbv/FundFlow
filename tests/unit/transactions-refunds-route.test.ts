@@ -323,16 +323,26 @@ describe("Transactions Refunds API Route", () => {
 
     it("returns 500 when linking the refund fails", async () => {
       const owned = vi.fn().mockReturnValue({
-        in: vi.fn().mockResolvedValue({ data: [{ id: "charge-1" }, { id: "refund-1" }], error: null }),
+        in: vi.fn().mockResolvedValue({
+          data: [
+            { id: "charge-1", amount: 50 },
+            { id: "refund-1", amount: -50 },
+          ],
+          error: null,
+        }),
       });
-      const linkUpsert = vi.fn().mockResolvedValue({ error: { message: "Link error" } });
-      const upsert = vi.fn().mockResolvedValue({ error: null });
+      const rpc = vi.fn().mockResolvedValue({ error: { message: "Link error" } });
+      const selectLinks = vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          or: vi.fn().mockResolvedValue({ data: [], error: null }),
+        }),
+      });
       mockRequireUser.mockResolvedValue({
         user: { id: "u1" },
         supabase: {
+          rpc,
           from: vi.fn().mockImplementation((table) => ({
-            select: vi.fn().mockReturnValue({ eq: owned }),
-            upsert: table === "linked_refunds" ? linkUpsert : upsert,
+            select: table === "linked_refunds" ? selectLinks : vi.fn().mockReturnValue({ eq: owned }),
           })),
         },
       });
@@ -367,18 +377,27 @@ describe("Transactions Refunds API Route", () => {
       );
     });
 
-    it("upserts decision and links refund if confirmed", async () => {
+    it("calls confirm_refund_link RPC if confirmed", async () => {
       const owned = vi.fn().mockReturnValue({
         in: vi.fn().mockResolvedValue({
-          data: [{ id: "charge-1" }, { id: "refund-1" }],
+          data: [
+            { id: "charge-1", amount: 50 },
+            { id: "refund-1", amount: -50 },
+          ],
           error: null,
         }),
       });
-      const mockSupabase = {
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({ eq: owned }),
-          upsert: vi.fn().mockResolvedValue({ error: null }),
+      const rpc = vi.fn().mockResolvedValue({ error: null });
+      const selectLinks = vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          or: vi.fn().mockResolvedValue({ data: [], error: null }),
         }),
+      });
+      const mockSupabase = {
+        rpc,
+        from: vi.fn().mockImplementation((table) => ({
+          select: table === "linked_refunds" ? selectLinks : vi.fn().mockReturnValue({ eq: owned }),
+        })),
       };
       mockRequireUser.mockResolvedValue({
         user: { id: "u1" },
@@ -400,10 +419,13 @@ describe("Transactions Refunds API Route", () => {
       const body = await res.json();
       expect(body).toEqual({ ok: true });
 
-      expect(mockSupabase.from).toHaveBeenCalledWith(
-        "transaction_review_decisions",
-      );
-      expect(mockSupabase.from).toHaveBeenCalledWith("linked_refunds");
+      expect(rpc).toHaveBeenCalledWith("confirm_refund_link", {
+        p_user_id: "u1",
+        p_subject_id: "charge-1:refund-1",
+        p_charge_id: "charge-1",
+        p_refund_id: "refund-1",
+        p_amount: 50,
+      });
     });
 
     it("rejects a confirmed link when the transactions are not the caller's", async () => {

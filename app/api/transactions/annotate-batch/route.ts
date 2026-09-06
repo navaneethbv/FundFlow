@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
 import { createServiceClient } from "@/lib/supabase/service";
+import { writeAudit } from "@/lib/audit";
 
 const MAX_BATCH = 100;
 
@@ -32,22 +33,24 @@ export async function POST(request: NextRequest) {
 
     // Ownership: only ids that are the caller's OWN rows survive this
     // filter (explicit user_id — shared household rows are excluded).
-    const { data: owned } = await supabase
+    const { data: owned, error: ownedError } = await supabase
       .from("transactions")
       .select("id")
       .in("id", ids)
       .eq("user_id", user.id);
+    if (ownedError) throw ownedError;
     const ownedIds = (owned ?? []).map((row) => row.id as string);
     if (ownedIds.length === 0) {
       return NextResponse.json({ updated: 0 });
     }
 
     const service = createServiceClient();
-    const { data: existing } = await service
+    const { data: existing, error: existingError } = await service
       .from("transaction_annotations")
       .select("transaction_id, note, tags")
       .eq("user_id", user.id)
       .in("transaction_id", ownedIds);
+    if (existingError) throw existingError;
     const existingById = new Map(
       (existing ?? []).map((row) => [row.transaction_id as string, row]),
     );
@@ -60,7 +63,7 @@ export async function POST(request: NextRequest) {
       return {
         user_id: user.id,
         transaction_id: transactionId,
-        note: (current?.note as string | null) ?? "",
+        note: (current?.note as string | undefined) ?? "",
         tags,
       };
     });
@@ -68,6 +71,12 @@ export async function POST(request: NextRequest) {
       .from("transaction_annotations")
       .upsert(upserts, { onConflict: "user_id,transaction_id" });
     if (error) throw error;
+
+    await writeAudit({
+      userId: user.id,
+      action: "bulk_tag_applied",
+      metadata: { tag, count: upserts.length },
+    });
 
     return NextResponse.json({ updated: upserts.length });
   } catch (error) {

@@ -819,4 +819,86 @@ describe("DELETE /api/account", () => {
     expect(res.status).toBe(500);
     expect(deleteUser).not.toHaveBeenCalled();
   });
+
+  it("treats ITEM_NOT_FOUND and INVALID_ACCESS_TOKEN as removed during Plaid item deletion", async () => {
+    const deleteUser = vi.fn().mockResolvedValue({ error: null });
+    const itemRemoveMock = vi
+      .fn()
+      .mockRejectedValueOnce({
+        response: { data: { error_code: "ITEM_NOT_FOUND" } },
+      })
+      .mockRejectedValueOnce({
+        message: "Plaid error: INVALID_ACCESS_TOKEN",
+      });
+
+    const plaidModule = await import("@/lib/plaid");
+    vi.spyOn(plaidModule, "getPlaidClient").mockReturnValue({
+      itemRemove: itemRemoveMock,
+    } as unknown as ReturnType<typeof plaidModule.getPlaidClient>);
+
+    const { encryptSecret } = await import("@/lib/crypto");
+    const token1 = encryptSecret("access-token-1");
+    const token2 = encryptSecret("access-token-2");
+
+    serviceClient = Object.assign(
+      clientStub({
+        rate_limit_hit: { data: true },
+        plaid_items: {
+          data: [
+            {
+              id: "item-1",
+              user_id: USER,
+              access_token_ciphertext: token1.ciphertext,
+              access_token_iv: token1.iv,
+              access_token_tag: token1.tag,
+              status: "active",
+            },
+            {
+              id: "item-2",
+              user_id: USER,
+              access_token_ciphertext: token2.ciphertext,
+              access_token_iv: token2.iv,
+              access_token_tag: token2.tag,
+              status: "active",
+            },
+          ],
+        },
+        receipts: { data: [] },
+      }),
+      {
+        auth: { admin: { deleteUser } },
+        storage: {
+          from: vi.fn(() => ({
+            list: vi.fn().mockResolvedValue({ data: [], error: null }),
+            remove: vi.fn().mockResolvedValue({ error: null }),
+          })),
+        },
+      },
+    );
+
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER, email: "user@example.com" },
+      supabase: {
+        auth: {
+          signInWithPassword: vi.fn().mockResolvedValue({ error: null }),
+          mfa: { listFactors: vi.fn().mockResolvedValue({ data: { totp: [] } }) },
+        },
+      },
+    });
+
+    const res = await accountDelete(del("http://localhost/api/account", { code: "secret" }));
+
+    expect(res.status).toBe(200);
+    expect(deleteUser).toHaveBeenCalledWith(USER);
+    expect(itemRemoveMock).toHaveBeenCalledTimes(2);
+    expect(mockWriteAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "account_delete",
+        metadata: expect.objectContaining({
+          items_removed: 2,
+          items_failed: 0,
+        }),
+      }),
+    );
+  });
 });
