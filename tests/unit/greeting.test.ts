@@ -57,4 +57,9 @@ describe("greetingInTimezone", () => {
   it("handles winter offset and noon boundaries", () => {
     expect(greetingInTimezone(new Date("2026-01-01T20:00:00Z"), "America/Los_Angeles")).toBe("afternoon");
   });
+  it("falls back to local hours when timezone is invalid", () => {
+    const now = new Date();
+    const expected = greetingWord(now.getHours());
+    expect(greetingInTimezone(now, "invalid/timezone_name")).toBe(expected);
+  });
 });

@@ -33,8 +33,16 @@ export function greetingWord(hour: number): "morning" | "afternoon" | "evening" 
 }
 
 export function greetingInTimezone(now: Date, timezone: string): ReturnType<typeof greetingWord> {
-  const hour = Number(new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone, hour: "numeric", hourCycle: "h23",
-  }).format(now));
-  return greetingWord(hour);
+  try {
+    const hour = Number(
+      new Intl.DateTimeFormat("en-US", {
+        timeZone: timezone,
+        hour: "numeric",
+        hourCycle: "h23",
+      }).format(now),
+    );
+    return greetingWord(hour);
+  } catch {
+    return greetingWord(now.getHours());
+  }
 }

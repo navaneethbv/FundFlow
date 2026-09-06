@@ -1,5 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { USER_DATA_TABLES } from "@/lib/user-data";
 
@@ -18,8 +17,6 @@ import { USER_DATA_TABLES } from "@/lib/user-data";
  * order columns, and the scope filter.
  */
 
-const MIGRATIONS_DIR = path.join(process.cwd(), "supabase", "migrations");
-
 /** Columns each scope filters on, mirroring `applySpecScope`. */
 const SCOPE_COLUMNS: Record<string, string[]> = {
   user: ["user_id"],
@@ -29,11 +26,10 @@ const SCOPE_COLUMNS: Record<string, string[]> = {
 };
 
 function readMigrationSql(): string {
-  return fs
-    .readdirSync(MIGRATIONS_DIR)
+  return readdirSync("supabase/migrations")
     .filter((file) => file.endsWith(".sql"))
     .sort()
-    .map((file) => fs.readFileSync(path.join(MIGRATIONS_DIR, file), "utf8"))
+    .map((file) => readFileSync(`supabase/migrations/${file}`, "utf8"))
     .join("\n")
     .replace(/--[^\n]*/g, "");
 }
