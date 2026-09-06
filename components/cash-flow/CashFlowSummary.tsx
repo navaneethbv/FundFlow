@@ -1,5 +1,8 @@
 import Panel from "@/components/ui/Panel";
-import type { PeriodCashFlow } from "@/lib/cash-flow";
+import type {
+  CashFlowSavingsRateBasis,
+  PeriodCashFlow,
+} from "@/lib/cash-flow";
 import { formatCurrency } from "@/lib/format";
 
 function formatPercent(value: number | null): string {
@@ -18,9 +21,15 @@ function savingsRateColor(value: number | null): string | undefined {
 export default function CashFlowSummary({
   period,
   currency,
+  savingsRateBasis = {
+    rate: period?.savingsRate ?? null,
+    period,
+    usesPriorCompletePeriod: false,
+  },
 }: Readonly<{
   period: PeriodCashFlow | null;
   currency: string;
+  savingsRateBasis?: CashFlowSavingsRateBasis;
 }>) {
   if (!period) {
     return (
@@ -32,7 +41,23 @@ export default function CashFlowSummary({
     );
   }
 
-  const metrics = [
+  let savingsRateValue = formatPercent(savingsRateBasis.rate);
+  let savingsRateDetail: string | undefined;
+  if (savingsRateBasis.usesPriorCompletePeriod) {
+    if (savingsRateBasis.period) {
+      savingsRateDetail = `Based on ${savingsRateBasis.period.label} (last complete period)`;
+    } else {
+      savingsRateValue = "Unavailable";
+      savingsRateDetail = "No complete period of data yet";
+    }
+  }
+
+  const metrics: Array<{
+    label: string;
+    value: string;
+    color: string | undefined;
+    detail?: string;
+  }> = [
     {
       label: "Income",
       value: formatCurrency(period.income, currency),
@@ -50,8 +75,9 @@ export default function CashFlowSummary({
     },
     {
       label: "Savings rate",
-      value: formatPercent(period.savingsRate),
-      color: savingsRateColor(period.savingsRate),
+      value: savingsRateValue,
+      color: savingsRateColor(savingsRateBasis.rate),
+      detail: savingsRateDetail,
     },
   ];
 
@@ -71,6 +97,11 @@ export default function CashFlowSummary({
             >
               {metric.value}
             </p>
+            {metric.detail && (
+              <p className="mt-1 text-xs font-medium text-muted">
+                {metric.detail}
+              </p>
+            )}
           </Panel>
         ))}
       </div>

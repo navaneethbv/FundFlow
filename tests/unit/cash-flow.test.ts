@@ -6,6 +6,7 @@ import {
   computePeriodCashFlow,
   filterCashFlowPeriod,
   partitionCashFlowByCurrency,
+  resolveCashFlowSavingsRate,
 } from "@/lib/cash-flow";
 
 function transaction(
@@ -117,6 +118,62 @@ describe("computePeriodCashFlow", () => {
         savingsRate: -25,
       },
     ]);
+  });
+});
+
+describe("resolveCashFlowSavingsRate", () => {
+  const periods = [
+    {
+      key: "2026-08",
+      label: "Aug 2026",
+      income: 5000,
+      expenses: 3000,
+      savings: 2000,
+      savingsRate: 40,
+    },
+    {
+      key: "2026-09",
+      label: "Sep 2026",
+      income: 14.34,
+      expenses: 6109.75,
+      savings: -6095.41,
+      savingsRate: -42506.35,
+    },
+  ];
+
+  it("uses the previous period for an active monthly selection", () => {
+    expect(
+      resolveCashFlowSavingsRate(periods, periods[1]!, "monthly", "2026-09"),
+    ).toEqual({
+      rate: 40,
+      period: periods[0],
+      usesPriorCompletePeriod: true,
+    });
+  });
+
+  it("keeps historical selections on their selected period", () => {
+    expect(
+      resolveCashFlowSavingsRate(periods, periods[0]!, "monthly", "2026-09"),
+    ).toEqual({
+      rate: 40,
+      period: periods[0],
+      usesPriorCompletePeriod: false,
+    });
+  });
+
+  it("does not fall back to an incomplete rate when no prior period exists", () => {
+    expect(
+      resolveCashFlowSavingsRate(
+        [periods[0]!],
+        periods[0]!,
+        "monthly",
+        "2026-08",
+      ),
+    ).toEqual({
+      rate: null,
+      period: null,
+      usesPriorCompletePeriod: true,
+    });
   });
 });
 

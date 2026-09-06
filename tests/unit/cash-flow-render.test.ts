@@ -174,6 +174,55 @@ describe("CashFlowSummary", () => {
     expect(html).toContain("-33.33%");
   });
 
+  it("uses the last complete period for an active-period savings rate", () => {
+    const html = renderToStaticMarkup(
+      createElement(CashFlowSummary, {
+        period: {
+          key: "2026-09",
+          label: "Sep 2026",
+          income: 14.34,
+          expenses: 6109.75,
+          savings: -6095.41,
+          savingsRate: -42506.35,
+        },
+        currency: "USD",
+        savingsRateBasis: {
+          rate: 40,
+          period: {
+            key: "2026-08",
+            label: "Aug 2026",
+            income: 5000,
+            expenses: 3000,
+            savings: 2000,
+            savingsRate: 40,
+          },
+          usesPriorCompletePeriod: true,
+        },
+      }),
+    );
+
+    expect(html).toContain("40%");
+    expect(html).toContain("Based on Aug 2026 (last complete period)");
+    expect(html).not.toContain("-42,506.35%");
+  });
+
+  it("explains when an active period has no complete period to use", () => {
+    const html = renderToStaticMarkup(
+      createElement(CashFlowSummary, {
+        period: periods[0]!,
+        currency: "USD",
+        savingsRateBasis: {
+          rate: null,
+          period: null,
+          usesPriorCompletePeriod: true,
+        },
+      }),
+    );
+
+    expect(html).toContain("Unavailable");
+    expect(html).toContain("No complete period of data yet");
+  });
+
   it("does not invent selected-period totals when no period exists", () => {
     const html = renderToStaticMarkup(
       createElement(CashFlowSummary, {
