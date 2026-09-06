@@ -56,6 +56,11 @@ function parseDate(value: string): number {
 }
 
 export function validateSplits(transaction: SplitTransaction, splits: TransactionSplit[]) {
+  // Summed as stored, not as magnitudes. `transaction_splits.amount` carries
+  // `check (amount > 0)`, so a non-positive split cannot come from the
+  // database. Normalizing with abs here would only let a negative split that
+  // arrived some other way pass validation silently instead of failing the
+  // total check.
   const total = splits
     .filter((split) => split.transactionId === transaction.id)
     .reduce((sum, split) => sum + split.amount, 0);

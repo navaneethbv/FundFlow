@@ -9,7 +9,7 @@ import { withUser } from "@/lib/authed-route";
 /** Mint/revoke personal read-only API tokens (6.1). Plaintext shown once. */
 export async function POST(request: NextRequest) {
   return withUser("tokens.create", async ({ user, supabase }) => {
-    const allowed = await checkRateLimit(`api-token-mint:${user.id}`, 5, 24 * 3600);
+    const allowed = await checkRateLimit(`api-token-mint:${user.id}`, 5, 24 * 3600, { failClosed: true });
     if (!allowed) {
       return NextResponse.json({ error: "Too many tokens created today." }, { status: 429 });
     }

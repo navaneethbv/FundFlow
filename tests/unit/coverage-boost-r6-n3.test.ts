@@ -26,6 +26,10 @@ const mockServiceClient = { from: vi.fn() };
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => mockServiceClient,
 }));
+vi.mock("@/lib/audit", () => ({
+  writeAudit: vi.fn(),
+  getClientIp: vi.fn(() => "127.0.0.1"),
+}));
 
 import { GET as sessionsGet, DELETE as sessionsDelete } from "@/app/api/settings/sessions/route";
 

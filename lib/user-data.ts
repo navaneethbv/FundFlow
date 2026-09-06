@@ -83,7 +83,7 @@ export const USER_DATA_TABLES: UserDataTableSpec[] = [
   table("transactions", "date, amount, iso_currency_code, name, merchant_name, pfc_primary, pfc_detailed, pending", { restoreKeys: "id, plaid_transaction_id, account_id, manual_account_id, source" }),
   table("budgets", "category, monthly_limit, rollover_enabled", { restoreKeys: "id" }),
   table("goals", "name, target_amount, saved_amount, target_date, goal_type", { restoreKeys: "id" }),
-  table("merchant_rules", "match_type, pattern, display_name, category, enabled, tags, amount_operator, amount_value, amount_max_value"),
+  table("merchant_rules", "match_type, pattern, display_name, category, enabled, tags"),
   table("manual_accounts", "name, account_type, balance, include_in_net_worth", { restoreKeys: "id" }),
   table("account_balance_snapshots", "account_id, manual_account_id, snapshot_date, current_balance, available_balance, iso_currency_code, captured_at", { orderBy: "captured_at" }),
   table("alert_preferences", "broken_bank, budget_exceeded, goal_reached, large_transaction, low_cash_forecast", { orderBy: "user_id", orderBySecondary: null }),

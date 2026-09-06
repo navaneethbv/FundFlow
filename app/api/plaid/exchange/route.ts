@@ -24,7 +24,8 @@ export async function POST(request: NextRequest) {
   const { user } = auth;
 
   // Rate limit the token exchange: 10 attempts / minute per user.
-  const allowed = await checkRateLimit(`exchange:${user.id}`, 10, 60);
+  // Fail closed: a limiter outage must not silently unthrottle exchanges.
+  const allowed = await checkRateLimit(`exchange:${user.id}`, 10, 60, { failClosed: true });
   if (!allowed) {
     return NextResponse.json(
       { error: "Too many requests. Please slow down." },

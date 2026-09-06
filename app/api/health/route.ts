@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { logError } from "@/lib/log";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +54,8 @@ export async function GET(): Promise<NextResponse> {
         },
       },
     );
-  } catch {
+  } catch (error) {
+    logError("health.check", error);
     return NextResponse.json(
       { ok: false, db: false },
       { status: 503 },

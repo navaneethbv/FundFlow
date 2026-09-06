@@ -139,18 +139,26 @@ function spendAmountOf(transaction: WeeklyReportTransaction): number {
     : transaction.amount;
 }
 
-function sumByName(
+/**
+ * Spend totals keyed by a stable id (account or institution) with
+ * the display string carried as a label. Two institutions or two cards
+ * sharing a display name must not collapse into one row.
+ */
+function sumById(
   transactions: WeeklyReportRow[],
-  getName: (transaction: WeeklyReportRow) => string | null,
+  getId: (transaction: WeeklyReportRow) => string | null,
+  getLabel: (id: string) => string,
 ): Array<{ name: string; amount: number }> {
   const totals = new Map<string, number>();
+  const labels = new Map<string, string>();
   for (const transaction of transactions) {
-    const name = getName(transaction);
-    if (!name) continue;
-    totals.set(name, (totals.get(name) ?? 0) + transaction.spendAmount);
+    const id = getId(transaction);
+    if (!id) continue;
+    if (!labels.has(id)) labels.set(id, getLabel(id));
+    totals.set(id, (totals.get(id) ?? 0) + transaction.spendAmount);
   }
   return [...totals.entries()]
-    .map(([name, amount]) => ({ name, amount: round2(amount) }))
+    .map(([id, amount]) => ({ name: labels.get(id) ?? "Other bank", amount: round2(amount) }))
     .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
 }
 
@@ -237,18 +245,24 @@ export function buildWeeklyReportModel(
     .sort((a, b) => b.amount - a.amount || a.merchant.localeCompare(b.merchant))
     .slice(0, 5);
 
-  const banks = sumByName(currentSpend, (transaction) => {
-    const account = accountById.get(transaction.accountId);
-    return account
-      ? (institutionById.get(account.plaidItemId) ?? "Other bank")
-      : "Other bank";
-  });
-  const cards = sumByName(
+  const banks = sumById(
+    currentSpend,
+    // Keyed by institution id so two banks sharing a display name stay
+    // separate rows. Anything unresolvable (missing account, unknown
+    // institution) shares the single "Other bank" bucket, as before.
+    (transaction) => {
+      const plaidItemId = accountById.get(transaction.accountId)?.plaidItemId;
+      return plaidItemId && institutionById.has(plaidItemId) ? plaidItemId : "other-bank";
+    },
+    (plaidItemId) => plaidItemId === "other-bank" ? "Other bank" : (institutionById.get(plaidItemId) ?? "Other bank"),
+  );
+  const cards = sumById(
     currentSpend.filter(
       (transaction) => accountById.get(transaction.accountId)?.type === "credit",
     ),
-    (transaction) => {
-      const account = accountById.get(transaction.accountId);
+    (transaction) => transaction.accountId,
+    (accountId) => {
+      const account = accountById.get(accountId);
       return formatCardLabel(
         account?.name,
         account ? (institutionById.get(account.plaidItemId) ?? null) : null,

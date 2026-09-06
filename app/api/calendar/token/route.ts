@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { badRequest } from "@/lib/http";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { requestAudits } from "@/lib/request-audit";
 import { withUser } from "@/lib/authed-route";
 
@@ -13,6 +14,11 @@ const TOKEN_TTL_MS = 180 * 24 * 60 * 60 * 1000; // 180 days
 
 export async function POST(request: NextRequest) {
   return withUser("calendar.token.create", async ({ user, supabase }) => {
+    // Feed tokens live 180 days: bound minting like API tokens so a stuck
+    // client loop cannot mint unbounded credentials. Fail closed.
+    if (!(await checkRateLimit(`calendar-token-mint:${user.id}`, 5, 24 * 3600, { failClosed: true }))) {
+      return NextResponse.json({ error: "Too many feed tokens created today." }, { status: 429 });
+    }
     const body = (await request.json().catch(() => ({}))) as {
       includeAmounts?: boolean;
     };

@@ -58,7 +58,7 @@ describe("coverage boost r6 n4: tokens route", () => {
       const res = await tokensPost(jsonRequest({ name: "CI" }));
       expect(res.status).toBe(429);
       await expect(res.json()).resolves.toEqual({ error: "Too many tokens created today." });
-      expect(mockCheckRateLimit).toHaveBeenCalledWith("api-token-mint:u1", 5, 24 * 3600);
+      expect(mockCheckRateLimit).toHaveBeenCalledWith("api-token-mint:u1", 5, 24 * 3600, { failClosed: true });
     });
 
     it("rejects when json() rejects (L17 catch arrow, L19 true)", async () => {

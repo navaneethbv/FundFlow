@@ -35,6 +35,7 @@ export async function GET() {
       supabase
         .from("transaction_review_decisions")
         .select("subject_id, decision")
+        .eq("user_id", user.id)
         .eq("kind", "refund"),
     ]);
 

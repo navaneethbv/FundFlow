@@ -48,14 +48,25 @@ describe("Transactions Refunds API Route", () => {
 
     it("returns placeholders when ledger data is missing", async () => {
       const mockSupabase = {
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              gte: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue({ data: null }),
+        from: vi.fn().mockImplementation((table) => {
+          if (table === "transaction_review_decisions") {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockResolvedValue({ data: null }),
+                }),
+              }),
+            };
+          }
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                gte: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue({ data: null }),
+                }),
               }),
             }),
-          }),
+          };
         }),
       };
       mockRequireUser.mockResolvedValue({
@@ -104,7 +115,9 @@ describe("Transactions Refunds API Route", () => {
           }
           return {
             select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockResolvedValue({ data: null }),
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ data: null }),
+            }),
           };
         }),
       };
@@ -158,9 +171,12 @@ describe("Transactions Refunds API Route", () => {
             };
           }
           if (table === "transaction_review_decisions") {
+            const decisionsEqUser = vi.fn().mockResolvedValue({ data: [] });
+            const decisionsEqKind = vi.fn().mockReturnValue({ eq: decisionsEqUser });
             return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockResolvedValue({ data: [] }),
+              select: vi.fn().mockReturnValue({ eq: decisionsEqKind }),
+              decisionsEqKind,
+              decisionsEqUser,
             };
           }
           return null as never;

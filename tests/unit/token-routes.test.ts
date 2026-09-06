@@ -74,6 +74,7 @@ describe("POST /api/tokens", () => {
       `api-token-mint:${USER}`,
       5,
       24 * 3600,
+      { failClosed: true },
     );
   });
 
@@ -158,6 +159,25 @@ describe("POST /api/tokens", () => {
 });
 
 describe("/api/calendar/token", () => {
+  it("429s once the daily mint limit is spent", async () => {
+    // Feed tokens live 180 days, so minting is capped like its API-token
+    // sibling and fails closed when the limiter itself is unavailable.
+    mockRequireUser.mockResolvedValue({ user: { id: USER }, supabase: clientStub() });
+    mockCheckRateLimit.mockResolvedValue(false);
+
+    const res = await calTokenPost(
+      body("http://localhost/api/calendar/token", "POST", {}),
+    );
+
+    expect(res.status).toBe(429);
+    expect(mockCheckRateLimit).toHaveBeenCalledWith(
+      `calendar-token-mint:${USER}`,
+      5,
+      24 * 3600,
+      { failClosed: true },
+    );
+  });
+
   it("returns the plaintext once and stores only its hash", async () => {
     const userClient = clientStub({
       calendar_tokens: { data: { id: "c1", include_amounts: false } },

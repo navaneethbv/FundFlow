@@ -386,7 +386,8 @@ describe("lib/plaid-service", () => {
     mockItemAccessTokenInvalidate.mockResolvedValueOnce({
       data: { new_access_token: "rotated-token" },
     });
-    const eq = vi.fn().mockResolvedValue({ error: null });
+    const eqInner = vi.fn().mockResolvedValue({ error: null });
+    const eq = vi.fn().mockReturnValue({ eq: eqInner });
     const update = vi.fn().mockReturnValue({ eq });
     mockServiceClient.from.mockReturnValue({ update });
 
@@ -404,6 +405,7 @@ describe("lib/plaid-service", () => {
       }),
     );
     expect(eq).toHaveBeenCalledWith("id", "item-db-1");
+    expect(eqInner).toHaveBeenCalledWith("user_id", "user-1");
   });
 
   it("rotateItemAccessToken logs and returns false when rotation fails", async () => {
@@ -432,7 +434,7 @@ describe("lib/plaid-service", () => {
     });
     const eqUser = vi.fn().mockReturnValue({ eq: eqStatus });
     const select = vi.fn().mockReturnValue({ eq: eqUser });
-    const updateEq = vi.fn().mockResolvedValue({ error: null });
+    const updateEq = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) });
     const update = vi.fn().mockReturnValue({ eq: updateEq });
     mockServiceClient.from.mockReturnValue({ select, update });
     mockItemAccessTokenInvalidate.mockResolvedValue({
@@ -712,7 +714,7 @@ describe("lib/plaid-service", () => {
     mockItemAccessTokenInvalidate.mockResolvedValueOnce({
       data: { new_access_token: "rotated-token" },
     });
-    const eq = vi.fn().mockResolvedValue({ error: null });
+    const eq = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) });
     mockServiceClient.from.mockReturnValue({ update: vi.fn().mockReturnValue({ eq }) });
 
     const ok = await rotateItemAccessToken(dummyItem);
@@ -745,8 +747,8 @@ describe("lib/plaid-service", () => {
     });
     const eq = vi
       .fn()
-      .mockResolvedValueOnce({ error: new Error("Update error") })
-      .mockResolvedValueOnce({ error: null });
+      .mockReturnValueOnce({ eq: vi.fn().mockResolvedValueOnce({ error: new Error("Update error") }) })
+      .mockReturnValueOnce({ eq: vi.fn().mockResolvedValueOnce({ error: null }) });
     const update = vi.fn().mockReturnValue({ eq });
     mockServiceClient.from.mockReturnValue({ update });
 
@@ -760,7 +762,7 @@ describe("lib/plaid-service", () => {
     mockItemAccessTokenInvalidate.mockResolvedValueOnce({
       data: { new_access_token: "rotated-token" },
     });
-    const eq = vi.fn().mockResolvedValue({ error: new Error("Update error") });
+    const eq = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: new Error("Update error") }) });
     const update = vi.fn().mockReturnValue({ eq });
     mockServiceClient.from.mockReturnValue({ update });
 
@@ -791,7 +793,7 @@ describe("lib/plaid-service", () => {
     mockItemAccessTokenInvalidate.mockResolvedValueOnce({
       data: { new_access_token: "rotated-token" },
     });
-    const eq = vi.fn().mockResolvedValue({ error: null });
+    const eq = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) });
     const update = vi.fn().mockReturnValue({ eq });
     mockServiceClient.from.mockReturnValue({ update });
 

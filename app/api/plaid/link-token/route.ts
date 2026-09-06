@@ -4,6 +4,7 @@ import type { LinkTokenCreateRequest } from "plaid";
 import { getPlaidClient } from "@/lib/plaid";
 import { serverEnv } from "@/lib/env.server";
 import { requireUser, errorResponse } from "@/lib/http";
+import { getClientIp, writeAudit } from "@/lib/audit";
 import { getItem, decryptItemToken, storeLinkToken } from "@/lib/plaid-service";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -21,8 +22,8 @@ export async function POST(request: NextRequest) {
   const { user } = auth;
 
   // Each Link token bills Plaid — bound so a stuck client loop can't run up
-  // the account's bill.
-  if (!(await checkRateLimit(`link-token:${user.id}`, 10, 60))) {
+  // the account's bill. Fail closed: a limiter outage must not unthrottle it.
+  if (!(await checkRateLimit(`link-token:${user.id}`, 10, 60, { failClosed: true }))) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
 
@@ -90,6 +91,13 @@ export async function POST(request: NextRequest) {
     // Persist a hashed, user-bound record of the link token so the exchange
     // step can verify the public token belongs to this user's Link session.
     await storeLinkToken(user.id, response.data.link_token, response.data.expiration ?? null);
+
+    await writeAudit({
+      userId: user.id,
+      action: "plaid_link_token_created",
+      metadata: { mode: itemId ? "update" : "create" },
+      ip: getClientIp(request),
+    });
 
     return NextResponse.json({ link_token: response.data.link_token });
   } catch (error) {

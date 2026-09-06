@@ -32,6 +32,7 @@ import {
   type SavingsRatePoint,
 } from "@/lib/insights";
 import { aggregateSpendWithSplits } from "@/lib/transaction-quality";
+import { localMonthKey } from "@/lib/format-date";
 import { normalizeExternalDisplayText } from "@/lib/external-display-text";
 import {
   fromTransactionRow,
@@ -680,7 +681,10 @@ export async function getDashboardData(
   options?: DashboardOptions,
 ): Promise<DashboardData> {
   const now = new Date();
-  const currentMonth = monthKey(now.toISOString().slice(0, 10));
+  // Local-day anchor: toISOString() is UTC and can sit in a different month
+  // near a boundary for users east of UTC, disagreeing with the local `today`
+  // used below for isCurrentMonth.
+  const currentMonth = localMonthKey(now);
 
   // Explicit user scoping. With the user-scoped client this is redundant (RLS
   // already limits rows), but this function is also called under the service

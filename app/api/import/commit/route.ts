@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
+import { getClientIp, writeAudit } from "@/lib/audit";
 import { makeImportId } from "@/lib/import";
 import { createServiceClient } from "@/lib/supabase/service";
 import { normalizeImportCategory } from "@/lib/finance-domain";
@@ -587,6 +588,13 @@ export async function POST(request: NextRequest) {
     // already durable at this point, so a detector failure is logged rather
     // than surfaced as a failed import.
     await refreshRecurringAfterConnectedImport(dbRows, user.id);
+
+    await writeAudit({
+      userId: user.id,
+      action: "data_import",
+      metadata: { batch_id: batchId, imported: dbRows.length },
+      ip: getClientIp(request),
+    });
 
     return NextResponse.json({ ok: true, imported: dbRows.length });
   } catch (error) {

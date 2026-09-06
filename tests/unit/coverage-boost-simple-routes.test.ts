@@ -26,6 +26,11 @@ vi.mock("@/lib/account-history", () => ({
   tryWriteDailyAccountSnapshots: (...args: unknown[]) => mockTrySnapshot(...(args as [unknown])),
 }));
 
+const mockCheckRateLimit = vi.fn<(...args: unknown[]) => Promise<boolean>>(async () => true);
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
+}));
+
 import { POST as calTokenPost, DELETE as calTokenDelete } from "@/app/api/calendar/token/route";
 import { POST as sfPost } from "@/app/api/sinking-funds/route";
 import { PATCH as sfPatch, DELETE as sfDelete } from "@/app/api/sinking-funds/[id]/route";
