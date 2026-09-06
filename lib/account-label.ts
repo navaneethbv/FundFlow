@@ -11,7 +11,9 @@ export function accountDisplayLabel(name: string | null | undefined, mask?: stri
   const base = mask && unwrapped.endsWith(mask)
     ? stripTrailingAccountMask(unwrapped, ".*•xX (")
     : clean;
-  return `${base || "Account"}${mask ? ` ••${mask}` : ""}`;
+  const display = base || "Account";
+  const maskSuffix = mask ? ` ••${mask}` : "";
+  return `${display}${maskSuffix}`;
 }
 
 function isLetter(value: string): boolean {

@@ -158,6 +158,29 @@ function RowMenu({
   );
 }
 
+/**
+ * Planned-amount editing shared by the desktop row and its mobile card twin:
+ * one state cell and one commit-on-blur rule, so the two cannot drift apart.
+ */
+function usePlannedAmount(
+  line: BudgetLine,
+  onUpdate: (line: BudgetLine, patch: BudgetLinePatch) => Promise<void>,
+) {
+  const [planned, setPlanned] = useState(String(line.basePlanned));
+
+  async function savePlanned() {
+    const result = validatePlannedAmount(planned, line.basePlanned);
+    if (!result.ok) {
+      setPlanned(String(line.basePlanned));
+      return;
+    }
+    if (!result.changed) return;
+    await onUpdate(line, { planned: result.value });
+  }
+
+  return { planned, setPlanned, savePlanned };
+}
+
 function BudgetRow({
   line,
   currency,
@@ -169,7 +192,7 @@ function BudgetRow({
   disabled: boolean;
   onUpdate: (line: BudgetLine, patch: BudgetLinePatch) => Promise<void>;
 }>) {
-  const [planned, setPlanned] = useState(String(line.basePlanned));
+  const { planned, setPlanned, savePlanned } = usePlannedAmount(line, onUpdate);
 
   if (!line.budgetId) {
     return (
@@ -192,16 +215,6 @@ function BudgetRow({
         <td className="px-4 py-3 text-xs text-muted">Create a budget to edit</td>
       </tr>
     );
-  }
-
-  async function savePlanned() {
-    const result = validatePlannedAmount(planned, line.basePlanned);
-    if (!result.ok) {
-      setPlanned(String(line.basePlanned));
-      return;
-    }
-    if (!result.changed) return;
-    await onUpdate(line, { planned: result.value });
   }
 
   const pct = line.planned > 0 ? Math.round((line.actual / line.planned) * 100) : 0;
@@ -278,17 +291,7 @@ function BudgetCard({
   disabled: boolean;
   onUpdate: (line: BudgetLine, patch: BudgetLinePatch) => Promise<void>;
 }>) {
-  const [planned, setPlanned] = useState(String(line.basePlanned));
-
-  async function savePlanned() {
-    const result = validatePlannedAmount(planned, line.basePlanned);
-    if (!result.ok) {
-      setPlanned(String(line.basePlanned));
-      return;
-    }
-    if (!result.changed) return;
-    await onUpdate(line, { planned: result.value });
-  }
+  const { planned, setPlanned, savePlanned } = usePlannedAmount(line, onUpdate);
 
   const pct = line.planned > 0 ? Math.round((line.actual / line.planned) * 100) : 0;
   const over = line.remaining < 0;

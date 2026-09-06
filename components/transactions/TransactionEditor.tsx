@@ -106,12 +106,14 @@ function TransactionSplitSection({
                 : `Remaining: ${formatCurrency(round2(target - splitTotal), currency)}`}
             </span>
           </div>
+          {/*
+            Decorative: the line above already states the allocated amount and
+            either "Balanced" or the exact remainder, which reads better aloud
+            than a percentage. Announcing both would duplicate it, so the bar is
+            hidden from assistive tech rather than carrying a progressbar role.
+          */}
           <div
-            role="progressbar"
-            aria-label="Split allocation progress"
-            aria-valuenow={Math.round(splitPercent)}
-            aria-valuemin={0}
-            aria-valuemax={100}
+            aria-hidden="true"
             className="h-1.5 w-full overflow-hidden rounded-full bg-panel-2"
           >
             <div

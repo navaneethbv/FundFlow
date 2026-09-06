@@ -15,7 +15,11 @@ interface CreditAccount {
 
 function aprLabel(account: CreditAccount): string {
   const label = accountDisplayLabel(account.name, account.mask);
-  return `APR for ${account.mask ? label.replace(`••${account.mask}`, `ending in ${account.mask}`) : label}`;
+  if (!account.mask) return `APR for ${label}`;
+  // Screen readers read "••1234" as punctuation, so the mask is spoken out.
+  const maskGlyphs = `••${account.mask}`;
+  const maskSpoken = `ending in ${account.mask}`;
+  return `APR for ${label.replace(maskGlyphs, maskSpoken)}`;
 }
 
 /**

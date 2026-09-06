@@ -49,14 +49,14 @@ export default function AiConsentSection({ initialEnabled, exportAllowed, provid
         </p>
         <label className="flex items-start gap-3">
           <input type="checkbox" checked={enabled} disabled={busy} onChange={(event) => setEnabled(event.target.checked)} className="mt-1 h-4 w-4" />
-          Allow in-app AI processing when I request it
+          <span>Allow in-app AI processing when I request it</span>
         </label>
         <p className="text-muted">Saving this preference does not generate insights or upload a receipt.</p>
         {!exportAllowed && <p className="text-muted">AI requests are also blocked by your independent <Link className="underline" href="/settings?section=data">data export preference</Link>.</p>}
         {!providerConfigured && <p className="text-muted">AI questions and receipt scanning are not configured on this deployment. Built-in insights remain available when consent permits.</p>}
         <Button loading={busy} disabled={enabled === saved} onClick={save}>Save AI preference</Button>
         {error && <p role="alert" className="text-danger">{error}</p>}
-        {status && <p role="status" className="text-success">{status}</p>}
+        {status && <output className="block text-success">{status}</output>}
       </div>
     </Panel>
   );
