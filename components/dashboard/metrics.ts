@@ -95,10 +95,13 @@ export function resolveDashboardSavingsRate(input: {
  * available; this flag only tells the UI to explain the small income base.
  */
 export function hasSmallSavingsRateBase(
-  income: number | null | undefined,
-  spending: number | null | undefined,
+  income: number | null = 0,
+  spending: number | null = 0,
 ): boolean {
-  const inc = income ?? 0;
-  const spend = spending ?? 0;
-  return inc > 0 && spend > inc * 10;
+  return (
+    income !== null &&
+    spending !== null &&
+    income > 0 &&
+    spending > income * 10
+  );
 }

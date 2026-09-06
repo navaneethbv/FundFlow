@@ -46,13 +46,55 @@ export function toggleTransferSelection(
 
 export function selectAllTransferSuggestions(
   pairs: ReadonlyArray<Pick<TransferPair, "subject_id">>,
-  selectAll: boolean,
 ): Set<string> {
-  return selectAll ? new Set(pairs.map((pair) => pair.subject_id)) : new Set();
+  return new Set(pairs.map((pair) => pair.subject_id));
+}
+
+export function clearTransferSelection(): Set<string> {
+  return new Set();
 }
 
 export function areTransferReviewActionsDisabled(busyIds: ReadonlySet<string>): boolean {
   return busyIds.size > 0;
+}
+
+type BulkTransferResponse = {
+  linked?: unknown;
+  failures?: unknown;
+  error?: unknown;
+};
+
+export function getBulkLinkErrorMessage(
+  status: number,
+  response: BulkTransferResponse | null,
+): string {
+  if (status === 429) return "Bulk linking is temporarily limited. Try again later.";
+  if (typeof response?.error === "string") return response.error;
+  return "Could not link selected transfers.";
+}
+
+export function getLinkedTransferIds(
+  response: BulkTransferResponse | null,
+  subjectIds: ReadonlySet<string>,
+): string[] {
+  if (!Array.isArray(response?.linked)) return [];
+  return response.linked.filter(
+    (subjectId): subjectId is string =>
+      typeof subjectId === "string" && subjectIds.has(subjectId),
+  );
+}
+
+export function getBulkFailureCount(response: BulkTransferResponse | null): number {
+  if (!Array.isArray(response?.failures)) return 0;
+  return response.failures.length;
+}
+
+export function formatBulkLinkResult(linkedCount: number, failureCount: number): string {
+  const suffix = linkedCount === 1 ? "" : "s";
+  return (
+    `${linkedCount} transfer${suffix} linked. ` +
+    `${failureCount} could not be linked. Review the remaining rows and try again.`
+  );
 }
 
 /**
@@ -176,34 +218,16 @@ export default function TransferReview() {
           })),
         }),
       });
-      const json = await res.json().catch(() => null) as {
-        linked?: unknown;
-        failures?: unknown;
-        error?: unknown;
-      } | null;
+      const json = (await res.json().catch(() => null)) as BulkTransferResponse | null;
       if (!res.ok) {
-        throw new Error(
-          res.status === 429
-            ? "Bulk linking is temporarily limited. Try again later."
-            : typeof json?.error === "string"
-              ? json.error
-              : "Could not link selected transfers.",
-        );
+        throw new Error(getBulkLinkErrorMessage(res.status, json));
       }
 
-      const linkedIds = Array.isArray(json?.linked)
-        ? json.linked.filter(
-          (subjectId): subjectId is string =>
-            typeof subjectId === "string" && subjectIds.has(subjectId),
-        )
-        : [];
-      const failureCount = Array.isArray(json?.failures) ? json.failures.length : 0;
+      const linkedIds = getLinkedTransferIds(json, subjectIds);
+      const failureCount = getBulkFailureCount(json);
       removePairs(new Set(linkedIds));
       if (failureCount > 0) {
-        setError(
-          `${linkedIds.length} transfer${linkedIds.length === 1 ? "" : "s"} linked. ` +
-          `${failureCount} could not be linked. Review the remaining rows and try again.`,
-        );
+        setError(formatBulkLinkResult(linkedIds.length, failureCount));
       }
       if (linkedIds.length > 0) router.refresh();
     } catch (err) {
@@ -215,6 +239,14 @@ export default function TransferReview() {
   }
 
   const { selectedCount, allSelected } = selectionState;
+
+  function toggleAllSelection() {
+    if (allSelected) {
+      setSelectedIds(clearTransferSelection());
+      return;
+    }
+    setSelectedIds(selectAllTransferSuggestions(pairs));
+  }
 
   if (!loaded || pairs.length === 0) return null;
 
@@ -252,13 +284,11 @@ export default function TransferReview() {
                 type="checkbox"
                 checked={allSelected}
                 disabled={actionsDisabled}
-                onChange={() => {
-                  setSelectedIds(selectAllTransferSuggestions(pairs, !allSelected));
-                }}
+                onChange={toggleAllSelection}
                 className="h-4 w-4 accent-accent"
                 aria-label="Select all transfer suggestions"
               />
-              Select all
+              <span>Select all</span>
             </label>
             <Button
               size="sm"

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import type { DashboardData } from "@/lib/dashboard";
 import { foldTail } from "@/lib/chart-utils";
 import { medianOf } from "@/lib/insights";
@@ -173,6 +174,499 @@ function BreakdownPanel({
   return null;
 }
 
+function formatSavingsRatePeriod(
+  month: string | null,
+  usesPriorCompleteMonth: boolean,
+): string | null {
+  if (!month) return null;
+  const label = formatMonth(month);
+  if (usesPriorCompleteMonth) return `${label} (last complete month)`;
+  return label;
+}
+
+function SavingsRateCard({
+  rate,
+  income,
+  spending,
+  month,
+  usesPriorCompleteMonth,
+}: Readonly<{
+  rate: number | null;
+  income: number;
+  spending: number;
+  month: string | null;
+  usesPriorCompleteMonth: boolean;
+}>) {
+  const hasSmallBase = hasSmallSavingsRateBase(income, spending);
+  const period = formatSavingsRatePeriod(month, usesPriorCompleteMonth);
+  let title: string | undefined;
+  if (hasSmallBase && rate !== null) {
+    title = `Calculated from ${formatCurrency(income)} of recorded income and ${formatCurrency(spending)} of spending in ${period ?? "the selected period"}.`;
+  }
+
+  let detail: ReactNode;
+  if (rate === null) {
+    detail = period
+      ? `No income recorded for ${period}`
+      : "Awaiting a complete month of data";
+  } else if (hasSmallBase) {
+    detail = (
+      <>
+        <Money amount={income} /> income and <Money amount={spending} /> spending
+        recorded in {period ?? "the selected period"}; the rate is highly sensitive
+        to income timing.
+      </>
+    );
+  } else if (period) {
+    detail = `Based on recorded income from ${period}`;
+  } else {
+    detail = "Awaiting a complete month of data";
+  }
+
+  let displayRate = "N/A";
+  if (rate !== null) displayRate = `${rate}%`;
+
+  return (
+    <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
+      <div className="flex h-11 items-start justify-between gap-2">
+        <h3 className="eyebrow">Savings rate</h3>
+        <RadialGauge value={rate ?? 0} />
+      </div>
+      <p
+        className={`metric-value mt-3 text-3xl${hasSmallBase ? " text-warning" : ""}`}
+        title={title}
+      >
+        {displayRate}
+      </p>
+      <p className={`mt-2 text-xs font-medium${hasSmallBase ? " text-warning" : " text-muted"}`}>
+        {detail}
+      </p>
+    </section>
+  );
+}
+
+function MonitorMetricTiles({
+  netWorth,
+  netWorthDelta,
+  previousMonth,
+  currentNet,
+  previousNet,
+  spendAmount,
+  spendDelta,
+  spendSeries,
+  cashFlowSeries,
+  savingsRate,
+  savingsRateIncome,
+  savingsRateSpending,
+  savingsRateMonth,
+  savingsRateUsesPriorCompleteMonth,
+}: Readonly<{
+  netWorth: number;
+  netWorthDelta: number | undefined;
+  previousMonth: string;
+  currentNet: number;
+  previousNet: number;
+  spendAmount: number;
+  spendDelta: number;
+  spendSeries: number[];
+  cashFlowSeries: number[];
+  savingsRate: number | null;
+  savingsRateIncome: number;
+  savingsRateSpending: number;
+  savingsRateMonth: string | null;
+  savingsRateUsesPriorCompleteMonth: boolean;
+}>) {
+  const periodLabel = savingsRateUsesPriorCompleteMonth
+    ? "Month-to-date"
+    : "Monthly";
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <StatTile
+        label="Net worth"
+        value={netWorth}
+        delta={netWorthDelta}
+        deltaVs={previousMonth}
+        chart={<AreaSparkline values={cashFlowSeries} />}
+      />
+      <StatTile
+        label={`${periodLabel} cash flow`}
+        value={currentNet}
+        delta={currentNet - previousNet}
+        deltaVs={previousMonth}
+        trend={cashFlowSeries}
+      />
+      <StatTile
+        label={`${periodLabel} spending`}
+        value={spendAmount}
+        delta={spendDelta}
+        deltaVs={previousMonth}
+        upIsGood={false}
+        chart={<MiniBars values={spendSeries} />}
+      />
+      <SavingsRateCard
+        rate={savingsRate}
+        income={savingsRateIncome}
+        spending={savingsRateSpending}
+        month={savingsRateMonth}
+        usesPriorCompleteMonth={savingsRateUsesPriorCompleteMonth}
+      />
+    </div>
+  );
+}
+
+type MonitorInsights = DashboardData["insights"];
+
+function medianOrNull(values: number[]): number | null {
+  if (values.length === 0) return null;
+  return medianOf(values);
+}
+
+function SafeToSpendTile({
+  safeToSpend,
+}: Readonly<Pick<MonitorInsights, "safeToSpend">>) {
+  let description: ReactNode;
+  if (!safeToSpend) {
+    description = "Connect a checking account to see what's spendable.";
+  } else if (safeToSpend.anchor === "paycheck") {
+    description = (
+      <>
+        After <Money amount={safeToSpend.upcomingBillsTotal} /> in bills before
+        your {formatDay(safeToSpend.horizonEnd)} paycheck
+      </>
+    );
+  } else {
+    description = (
+      <>
+        After <Money amount={safeToSpend.upcomingBillsTotal} /> in bills over the
+        next two weeks
+      </>
+    );
+  }
+
+  let value = "\u2014";
+  if (safeToSpend) value = formatCurrency(safeToSpend.amount);
+
+  return (
+    <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
+      <h3 className="eyebrow">Safe to spend</h3>
+      <p className="metric-value mt-3 text-3xl">{value}</p>
+      <p className="mt-2 text-xs font-medium text-muted">{description}</p>
+    </section>
+  );
+}
+
+function RunwayTile({
+  runwayMonths,
+  typicalEssentials,
+}: Readonly<{
+  runwayMonths: MonitorInsights["runwayMonths"];
+  typicalEssentials: number | null;
+}>) {
+  let description: ReactNode;
+  if (runwayMonths !== null && typicalEssentials !== null) {
+    description = (
+      <>
+        Cash on hand vs ~<Money amount={typicalEssentials} />{" "}/mo in essentials
+      </>
+    );
+  } else {
+    description = "Needs a full month of essential spending history.";
+  }
+
+  let value = "\u2014";
+  if (runwayMonths !== null) value = `${runwayMonths} mo`;
+
+  return (
+    <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
+      <h3 className="eyebrow">Emergency runway</h3>
+      <p className="metric-value mt-3 text-3xl">{value}</p>
+      <p className="mt-2 text-xs font-medium text-muted">{description}</p>
+    </section>
+  );
+}
+
+function PaycheckTile({
+  paycheck,
+}: Readonly<Pick<MonitorInsights, "paycheck">>) {
+  let value = "\u2014";
+  let description: ReactNode = "No recurring income detected yet.";
+  if (paycheck?.nextPayDate) {
+    value = formatDay(paycheck.nextPayDate);
+    description = (
+      <>
+        <Money amount={paycheck.amount} /> expected from {paycheck.name}
+      </>
+    );
+  }
+
+  return (
+    <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
+      <h3 className="eyebrow">Next paycheck</h3>
+      <p className="metric-value mt-3 text-3xl">{value}</p>
+      <p className="mt-2 text-xs font-medium text-muted">{description}</p>
+    </section>
+  );
+}
+
+function MonitorPlanningTiles({
+  insights,
+}: Readonly<{ insights: MonitorInsights }>) {
+  const completedEssentials = insights.essentialsSplit
+    .slice(0, -1)
+    .map((row) => row.essentials)
+    .filter((amount) => amount > 0);
+  const typicalEssentials = medianOrNull(completedEssentials);
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-3">
+      <SafeToSpendTile safeToSpend={insights.safeToSpend} />
+      <RunwayTile
+        runwayMonths={insights.runwayMonths}
+        typicalEssentials={typicalEssentials}
+      />
+      <PaycheckTile paycheck={insights.paycheck} />
+    </div>
+  );
+}
+
+function attentionToneClass(tone: AttentionItem["tone"]): string {
+  if (tone === "danger") return "text-xs font-bold text-danger";
+  return "text-xs font-bold text-warning";
+}
+
+function AttentionPanel({
+  items,
+}: Readonly<{ items: AttentionItem[] }>) {
+  let content: ReactNode;
+  if (items.length === 0) {
+    content = (
+      <div className="rounded-field border border-success/20 bg-success/[0.06] p-4">
+        <p className="text-sm font-semibold text-success">
+          Nothing needs attention right now.
+        </p>
+        <p className="mt-1 text-xs text-muted">
+          Bank health, cash outlook, budgets, and recurring activity look stable.
+        </p>
+      </div>
+    );
+  } else {
+    content = (
+      <div className="space-y-2">
+        {items.slice(0, 4).map((item) => (
+          <Link
+            key={item.label}
+            href={item.href}
+            className="block rounded-field border border-panel-border bg-panel-2 p-3 transition-colors hover:bg-panel-hover focus-visible:outline-2"
+          >
+            <span className={attentionToneClass(item.tone)}>{item.label}</span>
+            <span
+              data-money={item.hasAmount || undefined}
+              className="mt-1 block text-sm text-muted"
+            >
+              {item.detail}
+            </span>
+          </Link>
+        ))}
+      </div>
+    );
+  }
+
+  return <Panel title="Needs attention" className="xl:col-span-4">{content}</Panel>;
+}
+
+function MonitorTrendAndAttention({
+  monthLabels,
+  monthLinks,
+  spendSeries,
+  incomeSeries,
+  attentionItems,
+}: Readonly<{
+  monthLabels: string[];
+  monthLinks: string[];
+  spendSeries: number[];
+  incomeSeries: number[];
+  attentionItems: AttentionItem[];
+}>) {
+  return (
+    <div className="grid gap-5 xl:grid-cols-12">
+      <Panel
+        title="Spending versus income"
+        eyebrow="Six-month movement"
+        className="xl:col-span-8"
+      >
+        <TrendChart
+          labels={monthLabels}
+          links={monthLinks}
+          series={[
+            { name: "Spending", slot: 6, values: spendSeries },
+            { name: "Income", slot: 1, values: incomeSeries },
+          ]}
+        />
+      </Panel>
+      <AttentionPanel items={attentionItems} />
+    </div>
+  );
+}
+
+function RecentActivitySection({
+  hidden,
+  transactions,
+  merchantItems,
+  accountNames,
+  maxMerchant,
+}: Readonly<{
+  hidden: boolean;
+  transactions: RecentTransaction[];
+  merchantItems: Array<{ label: string; amount: number; href: string }>;
+  accountNames: Map<string, string>;
+  maxMerchant: number;
+}>) {
+  if (hidden || (transactions.length === 0 && merchantItems.length === 0)) {
+    return null;
+  }
+
+  return (
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-12">
+      {transactions.length > 0 && (
+        <Panel title="Recent activity" className="xl:col-span-8">
+          <RecentActivity
+            transactions={transactions}
+            accountNames={accountNames}
+          />
+        </Panel>
+      )}
+      {merchantItems.length > 0 && (
+        <Panel title="Top merchants" className="xl:col-span-4">
+          <BarList items={merchantItems.slice(0, 6)} max={maxMerchant} />
+        </Panel>
+      )}
+    </div>
+  );
+}
+
+type SubscriptionItem = DashboardData["subscriptions"][number];
+
+function RecurringStreamBody({
+  stream,
+}: Readonly<{ stream: SubscriptionItem }>) {
+  return (
+    <>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold leading-tight">
+          {stream.merchant}
+        </span>
+        <span className="mt-0.5 block text-xs text-muted">
+          {formatFrequency(stream.frequency)}
+        </span>
+      </span>
+      <span className="metric-value shrink-0 whitespace-nowrap text-sm">
+        {formatCurrency(stream.amount)}
+      </span>
+    </>
+  );
+}
+
+function RecurringStreamItem({
+  stream,
+  drillableMerchants,
+  linkParams,
+}: Readonly<{
+  stream: SubscriptionItem;
+  drillableMerchants: ReadonlySet<string>;
+  linkParams: DrillLinkParams;
+}>) {
+  const className =
+    "flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0";
+  const isDrillable = drillableMerchants.has(stream.merchant.trim().toLowerCase());
+
+  if (isDrillable) {
+    return (
+      <Link
+        key={`${stream.merchant}-${stream.amount}`}
+        href={dashboardUrl({ ...linkParams, merchant: stream.merchant })}
+        className={`${className} rounded-field hover:bg-panel-hover focus-visible:outline-2`}
+      >
+        <RecurringStreamBody stream={stream} />
+      </Link>
+    );
+  }
+
+  return (
+    <div key={`${stream.merchant}-${stream.amount}`} className={className}>
+      <RecurringStreamBody stream={stream} />
+    </div>
+  );
+}
+
+function RecurringStreamsPanel({
+  subscriptions,
+  drillableMerchants,
+  linkParams,
+}: Readonly<{
+  subscriptions: DashboardData["subscriptions"];
+  drillableMerchants: ReadonlySet<string>;
+  linkParams: DrillLinkParams;
+}>) {
+  if (subscriptions.length === 0) return null;
+
+  return (
+    <Panel title="Recurring streams" className="xl:col-span-5">
+      <div className="divide-y divide-panel-border">
+        {subscriptions
+          .slice(0, 6)
+          .map((stream) => (
+            <RecurringStreamItem
+              key={`${stream.merchant}-${stream.amount}`}
+              stream={stream}
+              drillableMerchants={drillableMerchants}
+              linkParams={linkParams}
+            />
+          ))}
+      </div>
+    </Panel>
+  );
+}
+
+function MonitorBreakdowns({
+  hidden,
+  data,
+  linkParams,
+  showAllCategories,
+  donutItems,
+  maxCategory,
+  drillableMerchants,
+}: Readonly<{
+  hidden: boolean;
+  data: DashboardData;
+  linkParams: DrillLinkParams;
+  showAllCategories: boolean;
+  donutItems: Array<{ label: string; amount: number; href: string }>;
+  maxCategory: number;
+  drillableMerchants: ReadonlySet<string>;
+}>) {
+  if (hidden || (donutItems.length === 0 && data.subscriptions.length === 0)) {
+    return null;
+  }
+
+  return (
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-12">
+      <BreakdownPanel
+        data={data}
+        linkParams={linkParams}
+        showAllCategories={showAllCategories}
+        donutItems={donutItems}
+        maxCategory={maxCategory}
+      />
+      <RecurringStreamsPanel
+        subscriptions={data.subscriptions}
+        drillableMerchants={drillableMerchants}
+        linkParams={linkParams}
+      />
+    </div>
+  );
+}
+
 export default function MonitorView({
   data,
   netWorth,
@@ -209,17 +703,6 @@ export default function MonitorView({
   const previousMonth = monthLabels.at(-2) ?? "last month";
   const currentNet = data.currentMonthIncome - data.currentMonthExpenses;
   const previousNet = (incomeSeries.at(-2) ?? 0) - (spendSeries.at(-2) ?? 0);
-  const isCurrentSelectedMonth = savingsRateUsesPriorCompleteMonth;
-  const savingsRateHasSmallBase = hasSmallSavingsRateBase(
-    savingsRateIncome,
-    savingsRateSpending,
-  );
-  const savingsRatePeriod = savingsRateMonth
-    ? `${formatMonth(savingsRateMonth)}${savingsRateUsesPriorCompleteMonth ? " (last complete month)" : ""}`
-    : null;
-  // Net-worth delta comes from the net-worth history series (assets minus
-  // liabilities per month), not from this month's cash flow: those are
-  // different numbers and the tile must report the change in what it displays.
   const netWorthDelta = netWorthDeltaFromHistory(netWorth, data.netWorthHistory);
   const maxMerchant = Math.max(1, ...data.merchantBreakdown.map((item) => item.amount));
   const merchantItems = data.merchantBreakdown.map((item) => ({
@@ -227,6 +710,9 @@ export default function MonitorView({
     amount: item.amount,
     href: dashboardUrl({ ...linkParams, merchant: item.merchant }),
   }));
+  const monthLinks = data.monthlySpending.map((month) =>
+    dashboardUrl({ ...linkParams, ...drillQuery, month: month.month }),
+  );
   const donutItems = foldTail(
     data.categoryBreakdown.map((category) => ({
       label: titleCase(category.category),
@@ -240,273 +726,55 @@ export default function MonitorView({
       href: dashboardUrl({ ...linkParams, category: OTHER_CATEGORY_KEY }),
     }),
   );
-  const showAllCategories = drillQuery.category === OTHER_CATEGORY_KEY;
   const maxCategory = Math.max(
     1,
     ...data.categoryBreakdown.map((category) => category.amount),
   );
   const drillableMerchants = new Set(data.drillableMerchants);
   const attentionItems = getAttentionItems(data);
-  const insights = data.insights;
-  const safeToSpend = insights.safeToSpend;
-  const paycheck = insights.paycheck;
-  const completedEssentials = insights.essentialsSplit
-    .slice(0, -1)
-    .map((row) => row.essentials)
-    .filter((amount) => amount > 0);
-  const typicalEssentials = completedEssentials.length
-    ? medianOf(completedEssentials)
-    : null;
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile
-          label="Net worth"
-          value={netWorth}
-          delta={netWorthDelta}
-          deltaVs={previousMonth}
-          chart={<AreaSparkline values={cashFlowSeries} />}
-        />
-        <StatTile
-          label={isCurrentSelectedMonth ? "Month-to-date cash flow" : "Monthly cash flow"}
-          value={currentNet}
-          delta={currentNet - previousNet}
-          deltaVs={previousMonth}
-          trend={cashFlowSeries}
-        />
-        <StatTile
-          label={isCurrentSelectedMonth ? "Month-to-date spending" : "Monthly spending"}
-          value={data.currentMonthExpenses}
-          delta={(spendSeries.at(-1) ?? 0) - (spendSeries.at(-2) ?? 0)}
-          deltaVs={previousMonth}
-          upIsGood={false}
-          chart={<MiniBars values={spendSeries} />}
-        />
-        {/* Hand-rolled rather than a StatTile because the value is a percent,
-            not currency — but it mirrors StatTile's structure exactly (eyebrow
-            h3, h-11 header row, same spacing) so it sits in the row instead of
-            beside it. */}
-        <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
-          <div className="flex h-11 items-start justify-between gap-2">
-            <h3 className="eyebrow">Savings rate</h3>
-            <RadialGauge value={savingsRate ?? 0} />
-          </div>
-          <p
-            className={`metric-value mt-3 text-3xl${savingsRateHasSmallBase ? " text-warning" : ""}`}
-            title={
-              savingsRateHasSmallBase && savingsRate !== null
-                ? `Calculated from ${formatCurrency(savingsRateIncome)} of recorded income and ${formatCurrency(savingsRateSpending)} of spending in ${savingsRatePeriod ?? "the selected period"}.`
-                : undefined
-            }
-          >
-            {savingsRate !== null ? `${savingsRate}%` : "N/A"}
-          </p>
-          <p className={`mt-2 text-xs font-medium${savingsRateHasSmallBase ? " text-warning" : " text-muted"}`}>
-            {savingsRate === null ? (
-              savingsRatePeriod
-                ? `No income recorded for ${savingsRatePeriod}`
-                : "Awaiting a complete month of data"
-            ) : savingsRateHasSmallBase ? (
-              <>
-                <Money amount={savingsRateIncome} /> income and{" "}
-                <Money amount={savingsRateSpending} /> spending recorded in{" "}
-                {savingsRatePeriod ?? "the selected period"}; the rate is highly sensitive to income timing.
-              </>
-            ) : (
-              savingsRatePeriod
-                ? `Based on recorded income from ${savingsRatePeriod}`
-                : "Awaiting a complete month of data"
-            )}
-          </p>
-        </section>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
-          <h3 className="eyebrow">Safe to spend</h3>
-          <p className="metric-value mt-3 text-3xl">
-            {safeToSpend ? formatCurrency(safeToSpend.amount) : "—"}
-          </p>
-          <p className="mt-2 text-xs font-medium text-muted">
-            {!safeToSpend &&
-              "Connect a checking account to see what's spendable."}
-            {safeToSpend && (
-              <>
-                After <Money amount={safeToSpend.upcomingBillsTotal} /> in bills{" "}
-                {safeToSpend.anchor === "paycheck"
-                  ? `before your ${formatDay(safeToSpend.horizonEnd)} paycheck`
-                  : "over the next two weeks"}
-              </>
-            )}
-          </p>
-        </section>
-        <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
-          <h3 className="eyebrow">Emergency runway</h3>
-          <p className="metric-value mt-3 text-3xl">
-            {insights.runwayMonths !== null ? `${insights.runwayMonths} mo` : "—"}
-          </p>
-          <p className="mt-2 text-xs font-medium text-muted">
-            {insights.runwayMonths !== null && typicalEssentials !== null ? (
-              <>
-                Cash on hand vs ~<Money amount={typicalEssentials} />
-                /mo in essentials
-              </>
-            ) : (
-              "Needs a full month of essential spending history."
-            )}
-          </p>
-        </section>
-        <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
-          <h3 className="eyebrow">Next paycheck</h3>
-          <p className="metric-value mt-3 text-3xl">
-            {paycheck?.nextPayDate ? formatDay(paycheck.nextPayDate) : "—"}
-          </p>
-          <p className="mt-2 text-xs font-medium text-muted">
-            {paycheck?.nextPayDate ? (
-              <>
-                <Money amount={paycheck.amount} /> expected from {paycheck.name}
-              </>
-            ) : (
-              "No recurring income detected yet."
-            )}
-          </p>
-        </section>
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-12">
-        <Panel
-          title="Spending versus income"
-          eyebrow="Six-month movement"
-          className="xl:col-span-8"
-        >
-          <TrendChart
-            labels={monthLabels}
-            links={data.monthlySpending.map((month) =>
-              dashboardUrl({ ...linkParams, ...drillQuery, month: month.month }),
-            )}
-            series={[
-              { name: "Spending", slot: 6, values: spendSeries },
-              { name: "Income", slot: 1, values: incomeSeries },
-            ]}
-          />
-        </Panel>
-        <Panel title="Needs attention" className="xl:col-span-4">
-          {attentionItems.length === 0 ? (
-            <div className="rounded-field border border-success/20 bg-success/[0.06] p-4">
-              <p className="text-sm font-semibold text-success">
-                Nothing needs attention right now.
-              </p>
-              <p className="mt-1 text-xs text-muted">
-                Bank health, cash outlook, budgets, and recurring activity look stable.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {attentionItems.slice(0, 4).map((item) => (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className="block rounded-field border border-panel-border bg-panel-2 p-3 transition-colors hover:bg-panel-hover focus-visible:outline-2"
-                >
-                  <span
-                    className={
-                      item.tone === "danger"
-                        ? "text-xs font-bold text-danger"
-                        : "text-xs font-bold text-warning"
-                    }
-                  >
-                    {item.label}
-                  </span>
-                  <span
-                    data-money={item.hasAmount || undefined}
-                    className="mt-1 block text-sm text-muted"
-                  >
-                    {item.detail}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </Panel>
-      </div>
-
-      {!prefs?.hideRecent && (recentTransactions.length > 0 || merchantItems.length > 0) && (
-        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-12">
-          {recentTransactions.length > 0 && (
-            <Panel title="Recent activity" className="xl:col-span-8">
-              <RecentActivity
-                transactions={recentTransactions}
-                accountNames={accountNames}
-              />
-            </Panel>
-          )}
-          {merchantItems.length > 0 && (
-            <Panel title="Top merchants" className="xl:col-span-4">
-              <BarList items={merchantItems.slice(0, 6)} max={maxMerchant} />
-            </Panel>
-          )}
-        </div>
-      )}
-
-      {!prefs?.hideBreakdowns && (donutItems.length > 0 || data.subscriptions.length > 0) && (
-        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-12">
-          <BreakdownPanel
-            data={data}
-            linkParams={linkParams}
-            showAllCategories={showAllCategories}
-            donutItems={donutItems}
-            maxCategory={maxCategory}
-          />
-          {data.subscriptions.length > 0 && (
-            <Panel title="Recurring streams" className="xl:col-span-5">
-              <div className="divide-y divide-panel-border">
-                {data.subscriptions.slice(0, 6).map((stream) => {
-                  const body = (
-                    <>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold leading-tight">
-                          {stream.merchant}
-                        </span>
-                        <span className="mt-0.5 block text-xs text-muted">
-                          {formatFrequency(stream.frequency)}
-                        </span>
-                      </span>
-                      <span className="metric-value shrink-0 whitespace-nowrap text-sm">
-                        {formatCurrency(stream.amount)}
-                      </span>
-                    </>
-                  );
-                  const className =
-                    "flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0";
-
-                  return drillableMerchants.has(
-                    stream.merchant.trim().toLowerCase(),
-                  ) ? (
-                    <Link
-                      key={`${stream.merchant}-${stream.amount}`}
-                      href={dashboardUrl({
-                        ...linkParams,
-                        merchant: stream.merchant,
-                      })}
-                      className={`${className} rounded-field hover:bg-panel-hover focus-visible:outline-2`}
-                    >
-                      {body}
-                    </Link>
-                  ) : (
-                    <div
-                      key={`${stream.merchant}-${stream.amount}`}
-                      className={className}
-                    >
-                      {body}
-                    </div>
-                  );
-                })}
-              </div>
-            </Panel>
-          )}
-        </div>
-      )}
+      <MonitorMetricTiles
+        netWorth={netWorth}
+        netWorthDelta={netWorthDelta}
+        previousMonth={previousMonth}
+        currentNet={currentNet}
+        previousNet={previousNet}
+        spendAmount={data.currentMonthExpenses}
+        spendDelta={(spendSeries.at(-1) ?? 0) - (spendSeries.at(-2) ?? 0)}
+        spendSeries={spendSeries}
+        cashFlowSeries={cashFlowSeries}
+        savingsRate={savingsRate}
+        savingsRateIncome={savingsRateIncome}
+        savingsRateSpending={savingsRateSpending}
+        savingsRateMonth={savingsRateMonth}
+        savingsRateUsesPriorCompleteMonth={savingsRateUsesPriorCompleteMonth}
+      />
+      <MonitorPlanningTiles insights={data.insights} />
+      <MonitorTrendAndAttention
+        monthLabels={monthLabels}
+        monthLinks={monthLinks}
+        spendSeries={spendSeries}
+        incomeSeries={incomeSeries}
+        attentionItems={attentionItems}
+      />
+      <RecentActivitySection
+        hidden={Boolean(prefs?.hideRecent)}
+        transactions={recentTransactions}
+        merchantItems={merchantItems}
+        accountNames={accountNames}
+        maxMerchant={maxMerchant}
+      />
+      <MonitorBreakdowns
+        hidden={Boolean(prefs?.hideBreakdowns)}
+        data={data}
+        linkParams={linkParams}
+        showAllCategories={drillQuery.category === OTHER_CATEGORY_KEY}
+        donutItems={donutItems}
+        maxCategory={maxCategory}
+        drillableMerchants={drillableMerchants}
+      />
     </div>
   );
 }

@@ -36,8 +36,8 @@ describe("insights wiring", () => {
     expect(monitorView).toContain("Next paycheck");
     expect(monitorView).toContain("data.insights");
     expect(monitorView).toContain("last complete month");
-    expect(monitorView).toContain("Month-to-date cash flow");
-    expect(monitorView).toContain("Month-to-date spending");
+    expect(monitorView).toContain("periodLabel");
+    expect(monitorView).toContain("Month-to-date");
   });
 
   it("monitor view keeps category-spike (info) anomalies out of the danger bucket", () => {

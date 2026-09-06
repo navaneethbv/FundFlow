@@ -31,6 +31,7 @@ describe("dashboard UI overhaul", () => {
     expect(hasSmallSavingsRateBase(0, 500)).toBe(false);
     expect(hasSmallSavingsRateBase(undefined, 500)).toBe(false);
     expect(hasSmallSavingsRateBase(10, undefined)).toBe(false);
+    expect(hasSmallSavingsRateBase(null, 500)).toBe(false);
   });
 
   it("uses the last complete month for the active month's savings rate", () => {
