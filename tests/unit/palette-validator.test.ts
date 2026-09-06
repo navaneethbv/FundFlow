@@ -143,7 +143,9 @@ describe("palette validator", () => {
 
   it("handles dark sRGB values below 0.04045 linear threshold", () => {
     const result = simulateCvd(hexToRgb("#010203"), "protanopia");
-    expect(result).toBeDefined();
+    expect(result.r).toBeGreaterThanOrEqual(0);
+    expect(result.g).toBeGreaterThanOrEqual(0);
+    expect(result.b).toBeGreaterThanOrEqual(0);
   });
 
   it("runs CLI validation on app/globals.css", async () => {

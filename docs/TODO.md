@@ -21,41 +21,18 @@ Still open from that review:
 - `lib/budget-data.ts` still counts dismissed streams when it collects recurring categories for budget suggestions.
   That surface suggests a category name rather than a due reminder, so it was left alone rather than widened into the same change.
 
-## Current status (2026-09-05)
+## Current status (2026-09-06)
 
-Comprehensive review remediation on branch `codex/comprehensive-review-remediation`, covering FF-01 through FF-33 from [`reviews/2026-09-04-comprehensive-review.md`](reviews/2026-09-04-comprehensive-review.md).
+State of `main` encompasses comprehensive review remediation (PR #153 `55bf767`), transfer linking follow-up (PR #154 `0f11da0`), bulk transfer review action (PR #155 `d2798f3`), and savings-rate context alignment (PR #156 `262c420`).
 
-A second review round on 2026-09-05 rejected the earlier "all 33 resolved" claim and named eleven findings that were partial or unfinished.
-Those are now addressed.
-This section records what is genuinely closed, what is closed with a stated limit, and what is deferred, rather than a single completion count.
-The distinction is the point: the previous version of this file asserted completion for work a reviewer could still reproduce a defect against.
+### Deployment prerequisite
+The linked migration ledger is maintained solely in this section: `20260904120000`, `20260905100000`, `20260905110000`, and `20260905120000` remain local-only until applied to remote. Older versions `20260902220000`, `20260903010000`, and `20260904000000` require content-based reconciliation. Migration `20260905130000` is recorded as applied remotely.
 
-### Deployment prerequisite verified on 2026-09-05
-
-The linked migration ledger still lists `20260904120000`, `20260905100000`, `20260905110000`, and `20260905120000` as local-only.
-The new send-boundary migration must be applied with the earlier hardening and delivery-journal migrations before deploying this branch.
-Older local-only versions `20260902220000`, `20260903010000`, and `20260904000000`, and remote-only versions `20260903171727` and `20260903171733`, still require content-based reconciliation.
-The transfer confirmation backfill migration `20260905130000` was applied to the linked project after this verification and recorded as applied.
-No other local-only migrations were applied during the third review.
-
-### Transfer linking follow-up verified on 2026-09-05
-
-PR #154 makes transfer subjects independent of posting direction and restores the atomic `confirm_transfer_link` RPC for environments where the transfer tables were deployed without the hardening migration.
-The linked project now has the RPC, its one-use transaction indexes, and the explicit null guards used by the migration.
-
-### Transfer review bulk action in progress on 2026-09-05
-
-Branch `codex/bulk-transfer-linking` adds per-row selection, select all, and bulk linking for transfer suggestions.
-The bulk endpoint is bounded at 100 pairs per request, processes up to eight pairs concurrently, validates each pair through the existing ownership and transfer checks, and returns partial failures so valid links are not hidden by one bad suggestion.
-The feature is verified locally and remains pending merge and deployment.
-
-### Savings-rate context follow-up in progress on 2026-09-05
-
-Dashboard savings rates retain their exact signed calculation while calling out denominator-sensitive periods and showing the recorded income and spending basis.
-When the active month is the current calendar month, the savings-rate card uses the most recent complete month and names that period explicitly.
-Cash-flow and spending tiles continue to show the active month on a month-to-date basis.
-The six-month savings series now shares the same signed and no-income behavior.
-Focused tests pass; the follow-up remains pending merge and deployment.
+### Merged into main
+- **PR #153 (Comprehensive remediation):** Merged as `55bf767`.
+- **PR #154 (Transfer linking atomic RPC):** Merged as `0f11da0`.
+- **PR #155 (Bulk transfer review action):** Merged as `d2798f3`.
+- **PR #156 (Savings-rate context follow-up):** Merged as `262c420`.
 
 ### Closed
 

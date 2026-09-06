@@ -16,6 +16,7 @@ import CumulativeCompareChart from "@/components/charts/CumulativeCompareChart";
 import DonutChart from "@/components/charts/DonutChart";
 import SankeyChart from "@/components/charts/SankeyChart";
 import TrendChart from "@/components/charts/TrendChart";
+import { renderToStaticMarkup } from "react-dom/server";
 
 /** Recursively invoke local function components (e.g. FlowTable) inside an
  * element tree so their bodies execute for branch coverage. Only functions
@@ -54,7 +55,9 @@ describe("CumulativeCompareChart branch boost", () => {
       monthLabel: "August",
       previousMonthLabel: "July",
     });
-    expect(el).toBeDefined();
+    const html = renderToStaticMarkup(el);
+    expect(html).toContain("August");
+    expect(html).toContain("July");
   });
 
   it("renders with mixed null/non-null values (forward-filled table)", () => {
@@ -67,7 +70,8 @@ describe("CumulativeCompareChart branch boost", () => {
       monthLabel: "August",
       previousMonthLabel: "July",
     });
-    expect(el).toBeDefined();
+    const html = renderToStaticMarkup(el);
+    expect(html).toContain("August");
   });
 });
 
@@ -80,7 +84,9 @@ describe("DonutChart branch boost", () => {
       ],
       centerLabel: "Spent",
     });
-    expect(el).toBeDefined();
+    const html = renderToStaticMarkup(el);
+    expect(html).toContain("Groceries");
+    expect(html).toContain("Spent");
   });
 
   it("renders a non-positive total (NaN) through the percent legend", () => {
@@ -91,7 +97,8 @@ describe("DonutChart branch boost", () => {
       ],
       centerLabel: "Spent",
     });
-    expect(el).toBeDefined();
+    const html = renderToStaticMarkup(el);
+    expect(html).toContain("NaN slice");
   });
 });
 
@@ -126,7 +133,8 @@ describe("SankeyChart branch boost", () => {
       ],
       maxNodesPerColumn: 3,
     });
-    expect(chart).toBeDefined();
+    const html = renderToStaticMarkup(chart);
+    expect(html).toContain("Fold + fallback flow");
     invokeComponents(chart, ["FlowTable"]);
   });
 
@@ -145,7 +153,8 @@ describe("SankeyChart branch boost", () => {
       nodes,
       links,
     });
-    expect(chart).toBeDefined();
+    const html = renderToStaticMarkup(chart);
+    expect(html).toContain("Eight groups");
     invokeComponents(chart, ["FlowTable"]);
   });
 });
@@ -159,7 +168,8 @@ describe("TrendChart branch boost", () => {
       ],
       labels: ["Jan", "Feb"],
     });
-    expect(el).toBeDefined();
+    const html = renderToStaticMarkup(el);
+    expect(html).toContain("Jan");
   });
 
   it("renders two converging series to nudge endpoint labels apart", () => {
@@ -170,7 +180,8 @@ describe("TrendChart branch boost", () => {
       ],
       labels: ["Jan", "Feb"],
     });
-    expect(el).toBeDefined();
+    const html = renderToStaticMarkup(el);
+    expect(html).toContain("Jan");
 
     const swapped = TrendChart({
       series: [
@@ -179,6 +190,7 @@ describe("TrendChart branch boost", () => {
       ],
       labels: ["Jan", "Feb"],
     });
-    expect(swapped).toBeDefined();
+    const htmlSwapped = renderToStaticMarkup(swapped);
+    expect(htmlSwapped).toContain("Jan");
   });
 });

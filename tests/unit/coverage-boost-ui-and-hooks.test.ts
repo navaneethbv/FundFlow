@@ -12,6 +12,8 @@ import {
   DEFAULT_DISPLAY_PREFS,
 } from "@/components/settings/settings-nav";
 
+import { renderToStaticMarkup } from "react-dom/server";
+
 describe("StatTile Branch Coverage", () => {
   it("renders flat delta (delta === 0)", () => {
     const tile = StatTile({
@@ -20,7 +22,9 @@ describe("StatTile Branch Coverage", () => {
       delta: 0,
       deltaVs: "last month",
     });
-    expect(tile).toBeDefined();
+    const html = renderToStaticMarkup(tile);
+    expect(html).toContain("Balance");
+    expect(html).toContain("5,000");
   });
 
   it("renders negative delta when upIsGood is true", () => {
@@ -31,7 +35,9 @@ describe("StatTile Branch Coverage", () => {
       deltaVs: "last quarter",
       upIsGood: true,
     });
-    expect(tile).toBeDefined();
+    const html = renderToStaticMarkup(tile);
+    expect(html).toContain("Savings");
+    expect(html).toContain("4,000");
   });
 
   it("renders positive delta when upIsGood is false", () => {
@@ -42,7 +48,9 @@ describe("StatTile Branch Coverage", () => {
       deltaVs: "target",
       upIsGood: false,
     });
-    expect(tile).toBeDefined();
+    const html = renderToStaticMarkup(tile);
+    expect(html).toContain("Expenses");
+    expect(html).toContain("2,000");
   });
 
   it("renders custom chart node", () => {
@@ -51,7 +59,8 @@ describe("StatTile Branch Coverage", () => {
       value: 100,
       chart: React.createElement("div", { id: "custom-chart" }, "Custom Chart"),
     });
-    expect(tile).toBeDefined();
+    const html = renderToStaticMarkup(tile);
+    expect(html).toContain("custom-chart");
   });
 });
 
@@ -69,7 +78,9 @@ describe("DivergingColumns Branch Coverage", () => {
         values: [100], // indices 1, 2, 3 undefined
       },
     });
-    expect(chartWithLine).toBeDefined();
+    const htmlWithLine = renderToStaticMarkup(chartWithLine);
+    expect(htmlWithLine).toContain("Jan");
+    expect(htmlWithLine).toContain("Income");
 
     const chartNoLine = DivergingColumns({
       labels: ["Jan"],
@@ -79,7 +90,8 @@ describe("DivergingColumns Branch Coverage", () => {
       downName: "Spend",
       links: [],
     });
-    expect(chartNoLine).toBeDefined();
+    const htmlNoLine = renderToStaticMarkup(chartNoLine);
+    expect(htmlNoLine).toContain("No data yet");
   });
 });
 
@@ -94,13 +106,16 @@ describe("TrendChart Branch Coverage", () => {
       links: ["/jan", undefined, "/mar"],
       valueFormatter: (v) => `$${v}`,
     });
-    expect(chart).toBeDefined();
+    const html = renderToStaticMarkup(chart);
+    expect(html).toContain("Checking");
+    expect(html).toContain("Savings");
 
     const singlePointChart = TrendChart({
       series: [{ name: "One", slot: 1, values: [100] }],
       labels: ["Jan"],
     });
-    expect(singlePointChart).toBeDefined();
+    const htmlSingle = renderToStaticMarkup(singlePointChart);
+    expect(htmlSingle).toContain("One");
   });
 });
 
@@ -114,13 +129,16 @@ describe("DonutChart Branch Coverage", () => {
       ],
       centerLabel: "Total Spend",
     });
-    expect(chart).toBeDefined();
+    const html = renderToStaticMarkup(chart);
+    expect(html).toContain("Groceries");
+    expect(html).toContain("Total Spend");
 
     const emptyChart = DonutChart({
       items: [{ label: "Zero", amount: 0 }],
       centerLabel: "None",
     });
-    expect(emptyChart).toBeDefined();
+    const htmlEmpty = renderToStaticMarkup(emptyChart);
+    expect(htmlEmpty).toContain("No data yet");
   });
 });
 
@@ -144,7 +162,9 @@ describe("SankeyChart Branch Coverage", () => {
         { source: "unknown_src", target: "orphan_group", value: 100 },
       ],
     });
-    expect(chart).toBeDefined();
+    const html = renderToStaticMarkup(chart);
+    expect(html).toContain("Flow");
+    expect(html).toContain("Salary");
 
     const zeroInFlow = SankeyChart({
       title: "Empty Flow",
@@ -154,7 +174,8 @@ describe("SankeyChart Branch Coverage", () => {
       ],
       links: [{ source: "n1", target: "n2", value: 0 }],
     });
-    expect(zeroInFlow).toBeDefined();
+    const htmlZero = renderToStaticMarkup(zeroInFlow);
+    expect(htmlZero).toContain("Empty Flow");
   });
 });
 

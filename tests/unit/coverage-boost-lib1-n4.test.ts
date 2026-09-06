@@ -11,7 +11,7 @@ describe("redactEmails letter/TLD branches", () => {
 
   it("scans past a non-letter in the domain position", () => {
     const out = redactEmails("relay refused user@example.9co.uk");
-    expect(typeof out).toBe("string");
+    expect(out).toBe("relay refused [redacted]");
   });
 
   it("does not treat a one-letter TLD as a valid domain end", () => {

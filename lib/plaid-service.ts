@@ -302,6 +302,7 @@ export async function consumeLinkToken(
     .from("plaid_link_tokens")
     .update({ consumed_at: new Date().toISOString() })
     .eq("id", data.id)
+    .eq("user_id", userId)
     .is("consumed_at", null)
     .select("id");
   if (updateError) throw updateError;

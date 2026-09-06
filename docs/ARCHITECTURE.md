@@ -42,6 +42,16 @@ flowchart TB
   `PLAID_TOKEN_ENC_KEY_PREVIOUS` (`decryptSecretDetailed` reports which key
   worked); the daily sync re-encrypts fallback-decrypted tokens. Also
   `safeEqual` for constant-time secret comparison (cron auth, webhook hash).
+- `session-revocation.ts` / `step-up.ts` — session revocation enforcement via
+  database lookup of active session ids; step-up verification and MFA assurance
+  levels protecting sensitive settings and actions.
+- `passkeys.ts` / `api-tokens.ts` — WebAuthn registration/verification and
+  scoped API token lifecycle management.
+- `rules-engine.ts` — rule matching and execution engine for transaction
+  categorization, tagging, and renaming.
+- `ai-gate.ts` — opt-in gate and token budgeting for in-app AI surfaces.
+- `backup.ts` / `user-data.ts` — encrypted user data export, packaging, and
+  registry of user-owned tables (`USER_DATA_TABLES`).
 - `plaid-service.ts` — item storage (encrypt/decrypt), account upserts, cursor,
   `decryptItemTokenAndUpgrade` (rotation), `getItemByPlaidItemId` (webhooks).
 - `sync.ts` — idempotent `/transactions/sync`: upsert on unique

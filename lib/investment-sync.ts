@@ -213,6 +213,7 @@ export async function syncInvestmentsForItem(
   const { data: existing, error: existingError } = await supabase
     .from("holdings")
     .select("id")
+    .eq("user_id", item.user_id)
     .in("account_id", itemAccountDbIds)
     .eq("source", "plaid")
     .eq("is_active", true);
@@ -224,6 +225,7 @@ export async function syncInvestmentsForItem(
     const { error: deactivateError } = await supabase
       .from("holdings")
       .update({ is_active: false })
+      .eq("user_id", item.user_id)
       .in("id", staleIds);
     if (deactivateError) throw deactivateError;
   }
@@ -368,6 +370,7 @@ export async function syncInvestmentTransactionsForItem(
     const { error: cancelError } = await supabase
       .from("investment_transactions")
       .update({ is_active: false })
+      .eq("user_id", item.user_id)
       .in("plaid_investment_transaction_id", cancelIds);
     if (cancelError) throw cancelError;
   }

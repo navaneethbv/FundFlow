@@ -24,8 +24,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Test
-        run: npm test
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Validate palette
+        run: npm run validate:palette
+
+      - name: Test (with coverage)
+        run: npm run test:coverage
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: build-placeholder
