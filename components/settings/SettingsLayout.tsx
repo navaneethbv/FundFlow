@@ -26,7 +26,7 @@ function SectionGroup({
   if (sections.length === 0) return null;
   return (
     <div className="overflow-hidden rounded-card border border-panel-border bg-panel">
-      <p className="eyebrow px-3 pt-3">{label}</p>
+      <p className="eyebrow px-5 pt-3">{label}</p>
       <nav aria-label={`${label} settings`} className="space-y-1 p-2">
         {sections.map((section) => (
           <Link

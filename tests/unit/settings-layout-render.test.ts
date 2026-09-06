@@ -27,6 +27,14 @@ describe("SettingsLayout", () => {
     expect(html).toContain("Tags");
   });
 
+  it("aligns group labels with their navigation links", () => {
+    const html = renderToStaticMarkup(
+      createElement(SettingsLayout, { active: "profile" }, "BODY"),
+    );
+    expect(html).toContain('<p class="eyebrow px-5 pt-3">Account</p>');
+    expect(html).toContain('<p class="eyebrow px-5 pt-3">Household</p>');
+  });
+
   it("puts Profile before Display in document order (Account group ordering preserved)", () => {
     const html = renderToStaticMarkup(
       createElement(SettingsLayout, { active: "profile" }, "BODY"),
