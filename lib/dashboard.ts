@@ -9,6 +9,7 @@ import {
   type BillPeriod,
   type BudgetEnvelope,
   type CashFlowForecast,
+  type NetWorthAccount,
   type SpendingAnomaly,
 } from "@/lib/planning";
 import { accountDisplayLabel } from "@/lib/account-label";
@@ -59,6 +60,7 @@ import {
   composeNetWorthAccounts,
   readExcludedNetWorthIds,
   type ManualBalanceRow,
+  type PlaidBalanceRow,
 } from "@/lib/net-worth-inputs";
 /**
  * Aggregations for the dashboard. Runs with the caller's user-scoped Supabase
@@ -691,6 +693,42 @@ async function loadDashboardOverrides(
   return chunkRows.flat();
 }
 
+interface QueryResult<T> {
+  data: T | null;
+  error?: unknown;
+}
+
+/**
+ * The caller's own preference row, which holds the Accounts page's net-worth
+ * exclusions. Always keyed on `id` even under household scope: the exclusion
+ * list belongs to the person looking, not to the rows they can see. Without a
+ * userId the RLS-bound client already sees only its own profile.
+ */
+function ownProfilePrefsQuery(supabase: SupabaseClient, userId: string | undefined) {
+  const query = supabase.from("profiles").select("dashboard_prefs");
+  return (userId ? query.eq("id", userId) : query).maybeSingle();
+}
+
+/**
+ * The dashboard's balance sheet, composed exactly as the stored snapshot and
+ * the Accounts page compose theirs. A failed input read throws: the live
+ * open-month value overwrites a correctly composed snapshot, so an incomplete
+ * balance sheet is worse than an error.
+ */
+function composeDashboardBalanceSheet(
+  plaidAccounts: readonly PlaidBalanceRow[],
+  manualAccountsResult: QueryResult<unknown>,
+  prefsResult: QueryResult<{ dashboard_prefs?: unknown }>,
+): NetWorthAccount[] {
+  if (manualAccountsResult.error) throw manualAccountsResult.error;
+  if (prefsResult.error) throw prefsResult.error;
+  return composeNetWorthAccounts({
+    plaidAccounts,
+    manualAccounts: (manualAccountsResult.data ?? []) as ManualBalanceRow[],
+    excludedNetWorthIds: readExcludedNetWorthIds(prefsResult.data?.dashboard_prefs),
+  });
+}
+
 export async function getDashboardData(
   supabase: SupabaseClient,
   selectedAccountId?: string,
@@ -854,14 +892,7 @@ export async function getDashboardData(
         .from("manual_accounts")
         .select("id, name, account_type, balance, include_in_net_worth"),
     ),
-    // The exclusion list is always the caller's own preference row, even under
-    // household scope, so this filters on `id` instead of going through
-    // `scopeUser`. With no userId the RLS-bound client already sees only the
-    // caller's own profile.
-    (userId
-      ? supabase.from("profiles").select("dashboard_prefs").eq("id", userId)
-      : supabase.from("profiles").select("dashboard_prefs")
-    ).maybeSingle(),
+    ownProfilePrefsQuery(supabase, userId),
   ]);
 
   const allAccounts = ((accounts ?? []) as AccountSummary[]).map((account) => ({
@@ -869,18 +900,11 @@ export async function getDashboardData(
     name: normalizeExternalDisplayText(account.name),
     official_name: normalizeExternalDisplayText(account.official_name),
   }));
-  // A failed balance-sheet read must not quietly become a smaller balance
-  // sheet: the live net-worth point overwrites a correctly composed stored
-  // snapshot, so an incomplete input is worse than an error.
-  if (manualAccountsResult.error) throw manualAccountsResult.error;
-  if (netWorthPrefsResult.error) throw netWorthPrefsResult.error;
-  const netWorthAccounts = composeNetWorthAccounts({
-    plaidAccounts: allAccounts,
-    manualAccounts: (manualAccountsResult.data ?? []) as ManualBalanceRow[],
-    excludedNetWorthIds: readExcludedNetWorthIds(
-      (netWorthPrefsResult.data as { dashboard_prefs?: unknown } | null)?.dashboard_prefs,
-    ),
-  });
+  const netWorthAccounts = composeDashboardBalanceSheet(
+    allAccounts,
+    manualAccountsResult,
+    netWorthPrefsResult,
+  );
   const lastSyncAt = (lastSyncJob?.updated_at as string | undefined) ?? null;
   const allItems = (items ?? []) as Array<{ id: string; institution_name: string | null }>;
   const allBudgets = (budgets ?? []) as Array<{
