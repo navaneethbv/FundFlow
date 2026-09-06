@@ -200,6 +200,9 @@ describe("investments-data", () => {
             {
               id: "acc-1",
               name: "Workplace 401k",
+              mask: "4321",
+              updated_at: "2026-08-01T12:00:00Z",
+              plaid_items: { institution_name: "Example Bank" },
               type: "investment",
               subtype: "401k",
               current_balance: "30000.25",
@@ -247,7 +250,9 @@ describe("investments-data", () => {
         },
         {
           id: "acc-1",
-          name: "Workplace 401k",
+          name: "Workplace 401k ••4321",
+          updatedAt: "2026-08-01T12:00:00Z",
+          institutionName: "Example Bank",
           source: "plaid",
           type: "investment",
           subtype: "401k",

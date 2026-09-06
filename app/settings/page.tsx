@@ -10,6 +10,8 @@ import ExportSection from "@/components/settings/ExportSection";
 import ReportsSection from "@/components/settings/ReportsSection";
 import ImportReviewSection from "@/components/settings/ImportReviewSection";
 import MonarchConfigImportSection from "@/components/settings/MonarchConfigImportSection";
+import AiConsentSection from "@/components/settings/AiConsentSection";
+import { isAiProviderConfigured } from "@/lib/ai-provider";
 import AiInsightsSection from "@/components/settings/AiInsightsSection";
 import BudgetsSection from "@/components/settings/BudgetsSection";
 import BanksSection from "@/components/settings/BanksSection";
@@ -256,7 +258,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
       })),
     );
     content = (
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid items-start gap-6 xl:grid-cols-2">
         <MfaSection />
         <PasskeysSection />
         <SessionsSection initialSessions={sessions} />
@@ -266,7 +268,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
       break;
     }
     case "integrations": {
-    const [{ data: aiSettings }, { data: calendarTokens }, { data: apiTokens }] = await Promise.all([
+    const [{ data: aiSettings }, { data: calendarTokens }, { data: apiTokens }, { data: aiProfile, error: aiProfileError }] = await Promise.all([
       supabase.from("ai_settings").select("enabled").eq("user_id", userId).maybeSingle(),
       supabase
         .from("calendar_tokens")
@@ -278,9 +280,11 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
         .select("id, name, created_at, last_used_at")
         .is("revoked_at", null)
         .order("created_at"),
+      supabase.from("profiles").select("ai_export_enabled").eq("id", userId).maybeSingle(),
     ]);
     content = (
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid items-start gap-6 xl:grid-cols-2">
+        <AiConsentSection initialEnabled={aiSettings?.enabled === true} exportAllowed={!aiProfileError && !!aiProfile && aiProfile.ai_export_enabled !== false} providerConfigured={isAiProviderConfigured()} />
         <CalendarFeedSection initialTokens={calendarTokens ?? []} />
         <ApiTokensSection
           initialTokens={
@@ -332,7 +336,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
     );
     content = (
       <>
-        <div className="grid gap-6 xl:grid-cols-2">
+        <div className="grid items-start gap-6 xl:grid-cols-2">
           <BanksSection
             initialItems={safeItems}
             healthByItem={healthByItem}
@@ -387,7 +391,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
     }).slice(0, 5);
     content = (
       <>
-        <div className="grid gap-6 xl:grid-cols-2">
+        <div className="grid items-start gap-6 xl:grid-cols-2">
           <BudgetsSection
             initialBudgets={budgets ?? []}
             suggestions={budgetSuggestions}
@@ -466,11 +470,11 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
           two doors to the same job, one of which silently skipped duplicate
           review.
         */}
-        <div className="grid gap-6 xl:grid-cols-2">
+        <div className="grid items-start gap-6 xl:grid-cols-2">
           <ExportSection initialEnabled={profile?.ai_export_enabled ?? true} />
           <ImportReviewSection accounts={importAccounts} />
         </div>
-        <div className="grid gap-6 xl:grid-cols-2">
+        <div className="grid items-start gap-6 xl:grid-cols-2">
           <ReceiptScanSection enabled={aiSettings?.enabled ?? false} />
         </div>
         <DemoDataSection hasBanks={(items ?? []).length > 0} />

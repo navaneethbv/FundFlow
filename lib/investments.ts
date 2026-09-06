@@ -36,6 +36,8 @@ export interface HoldingRow extends HoldingJoinRow {
 }
 
 export interface InvestmentAccountSummary {
+  institutionName?: string | null;
+  updatedAt?: string | null;
   id: string;
   name: string;
   source: "plaid" | "manual";

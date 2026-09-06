@@ -23,6 +23,28 @@ function makeSupabase(seeds: Record<string, unknown> = {}) {
 }
 
 describe("getDashboardData", () => {
+  it("replaces only the open month with live balances and preserves completed history", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-05T20:00:00Z"));
+    try {
+      const client = makeSupabase({
+        accounts: [{ id: "cash", name: "Cash", type: "depository", current_balance: 2000 }],
+        net_worth_snapshots: [
+          { snapshot_month: "2026-08-01", assets: 1000, liabilities: 100 },
+          { snapshot_month: "2026-09-01", assets: 1100, liabilities: 100 },
+        ],
+      });
+      const data = await getDashboardData(client as never, undefined, "2026-09", "owner");
+      expect(data.netWorthHistory).toEqual([
+        { month: "2026-08", assets: 1000, liabilities: 100, netWorth: 900 },
+        { month: "2026-09", assets: 2000, liabilities: 0, netWorth: 2000 },
+      ]);
+      expect(data.netWorthHistory.at(-1)?.netWorth).toBe(data.netWorthSnapshot.netWorth);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("loads full dashboard data with recurring stream matches and net worth snapshots", async () => {
     const mockFrom = vi.fn((table: string) => {
       const chain: Record<string, unknown> = {};
@@ -226,7 +248,8 @@ describe("getDashboardData", () => {
     );
 
     expect(data.accounts).toHaveLength(1);
-    expect(data.netWorthHistory).toHaveLength(1);
+    expect(data.netWorthHistory).toHaveLength(2);
+    expect(data.netWorthHistory.at(-1)).toEqual({ month: new Date().toISOString().slice(0, 7), ...data.netWorthSnapshot });
     expect(data.subscriptions.length).toBeGreaterThan(0);
   });
 
@@ -736,7 +759,7 @@ describe("getDashboardData", () => {
     expect(data.spendPerBank.some((b) => b.name === "Unknown Bank")).toBe(true);
     expect(data.spendPerBank.some((b) => b.name === "Other Bank")).toBe(true);
     expect(data.spendPerBank.some((b) => b.name === "Chase")).toBe(true);
-    expect(data.netWorthHistory).toEqual([
+    expect(data.netWorthHistory.slice(0, 2)).toEqual([
       { month: "2026-03", assets: 0, liabilities: 2000, netWorth: -2000 },
       { month: "2026-04", assets: 10000, liabilities: 0, netWorth: 10000 },
     ]);

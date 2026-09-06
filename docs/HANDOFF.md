@@ -2,6 +2,15 @@
 
 Last updated: 2026-09-05. Read this first to resume.
 
+## 2026-09-05: UI page audit and local fixes
+
+Branch `codex/ui-page-audit` contains fixes for 17 confirmed UI findings, with a [coverage matrix and reproductions](reviews/2026-09-05-ui-page-audit.md) and [detailed implementation plan](plans/2026-09-05-ui-page-fixes.md).
+The changes cover shared dark-theme controls, settings layouts, mobile recurring rows, account labels, current net-worth history, funded goal review, investment freshness, and explicit AI consent.
+The full coverage run passed 4,947 unit and script tests, including 95.05% branch coverage; lint, typecheck, build, palette validation, and graph update passed.
+The browser URL security policy rejected further production-tab inspection during continuation.
+Post-fix browser checks, login/signup/admin pages, additional states, and the exact recurring-widget mismatch remain unverified.
+No production financial records, bank settings, or consent were changed, and no deployment was made.
+
 ## 2026-09-05: Savings-rate period alignment
 
 The dashboard now uses the most recent complete month for the savings-rate card when the active month is the current calendar month.

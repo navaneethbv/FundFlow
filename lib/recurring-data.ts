@@ -1,3 +1,4 @@
+import { accountDisplayLabel } from "@/lib/account-label";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   parseFinancialScope,
@@ -96,6 +97,7 @@ interface ManualRecurringRawRow {
 
 interface AccountRow {
   id: string;
+  mask?: string | null;
   name: string | null;
   type: string | null;
   subtype: string | null;
@@ -321,7 +323,7 @@ export async function loadRecurringData(
     (from, to) => {
       let query = supabase
         .from("accounts")
-        .select("id,name,type,subtype,iso_currency_code")
+        .select("id,name,mask,type,subtype,iso_currency_code")
         .order("id")
         .range(from, to);
       if (userId) query = query.eq("user_id", userId);
@@ -381,7 +383,7 @@ export async function loadRecurringData(
     matchedByStreamId.set(row.recurring_stream_id, existing);
   }
 
-  const accountById = new Map(accountRows.map((row) => [row.id, row]));
+  const accountById = new Map(accountRows.map((row) => [row.id, { ...row, name: accountDisplayLabel(row.name, row.mask) }]));
 
   const streamInputs: RecurringStreamInput[] = streamRows.map((row) => {
     const account = row.account_id ? accountById.get(row.account_id) : undefined;

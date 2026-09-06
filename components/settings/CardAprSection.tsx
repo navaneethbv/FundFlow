@@ -1,5 +1,6 @@
 "use client";
 
+import { accountDisplayLabel } from "@/lib/account-label";
 import { useState } from "react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -13,9 +14,8 @@ interface CreditAccount {
 }
 
 function aprLabel(account: CreditAccount): string {
-  const accountName = account.name ?? "card";
-  const accountSuffix = account.mask ? `ending in ${account.mask}` : null;
-  return ["APR for", accountName, accountSuffix].filter(Boolean).join(" ");
+  const label = accountDisplayLabel(account.name, account.mask);
+  return `APR for ${account.mask ? label.replace(`••${account.mask}`, `ending in ${account.mask}`) : label}`;
 }
 
 /**
@@ -72,8 +72,7 @@ export default function CardAprSection({
         {accounts.map((account) => (
           <li key={account.id} className="flex flex-wrap items-center gap-3">
             <span className="min-w-0 flex-1 truncate font-semibold">
-              {account.name ?? "Card"}
-              {account.mask ? ` ••${account.mask}` : ""}
+              {accountDisplayLabel(account.name, account.mask)}
             </span>
             <Input
               id={`card-apr-${account.id}`}

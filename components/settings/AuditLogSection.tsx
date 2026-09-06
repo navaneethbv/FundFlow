@@ -31,6 +31,7 @@ const ACTION_LABELS: Record<string, string> = {
   account_delete: "Account deletion requested",
   receipt_scanned: "Receipt scanned",
   receipt_uploaded: "Receipt uploaded",
+  ai_consent_updated: "AI consent updated",
   ai_question: "Asked spending question",
   household_invite_sent: "Household invitation sent",
   household_invite_accepted: "Household invitation accepted",

@@ -3,6 +3,7 @@
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
 :root {
+  color-scheme: light dark;
   --background: #f6f5f3;
   --foreground: #222220;
   --surface: rgba(255, 255, 255, 0.86);
@@ -72,6 +73,7 @@
 }
 
 :root[data-theme="light"] {
+  color-scheme: light;
   --background: #f6f5f3;
   --foreground: #222220;
   --surface: rgba(255, 255, 255, 0.86);
@@ -166,6 +168,7 @@
 }
 
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --background: #191918;
   --foreground: #f2f1ee;
   --surface: rgba(34, 34, 33, 0.9);
@@ -234,6 +237,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --background: #191918;
     --foreground: #f2f1ee;
     --surface: rgba(34, 34, 33, 0.9);

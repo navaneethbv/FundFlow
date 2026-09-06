@@ -258,7 +258,8 @@ describe("RecurringList — Upcoming/Complete tables", () => {
         links: LINKS,
       }),
     );
-    expect(html).toContain('class="bg-panel-2 text-xs text-muted font-mono"');
+    expect(html).toMatch(/<thead[^>]*font-mono/);
+    expect(html).toContain("sm:table-header-group");
   });
 });
 

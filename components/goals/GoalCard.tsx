@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Badge from "@/components/ui/Badge";
 import ProgressBar, { type ProgressBarTone } from "@/components/ui/ProgressBar";
+import { formatDate } from "@/lib/format-date";
 import { formatCurrency } from "@/lib/format";
 import { goalImageAlt, goalImageFor } from "@/lib/goal-templates";
 import type { FundedGoal, GoalBadge } from "@/lib/goals-v2";
@@ -104,7 +105,7 @@ export default function GoalCard({
           {goal.target_date && (
             <div className="flex justify-between gap-3">
               <dt className="text-muted">Target date</dt>
-              <dd className="tabular-nums">{goal.target_date}</dd>
+              <dd className="tabular-nums">{formatDate(goal.target_date)}</dd>
             </div>
           )}
           {goal.est_monthly !== null && (

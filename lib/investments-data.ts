@@ -1,3 +1,4 @@
+import { accountDisplayLabel } from "@/lib/account-label";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
@@ -171,7 +172,7 @@ export async function loadInvestmentAccounts(
   const [plaidResult, manualResult] = await Promise.all([
     supabase
       .from("accounts")
-      .select("id, name, type, subtype, current_balance, iso_currency_code")
+      .select("id, name, mask, type, subtype, current_balance, iso_currency_code, updated_at, plaid_items(institution_name)")
       .eq("user_id", userId),
     supabase
       .from("manual_accounts")
@@ -202,7 +203,9 @@ export async function loadInvestmentAccounts(
     .filter((a) => isInvestment(a.type as string | null, a.subtype as string | null))
     .map((a) => ({
       id: a.id as string,
-      name: (a.name as string | null) ?? "Investment Account",
+      name: accountDisplayLabel(a.name as string | null, a.mask as string | null),
+      updatedAt: (a.updated_at as string | null) ?? null,
+      institutionName: (Array.isArray(a.plaid_items) ? a.plaid_items[0]?.institution_name : (a.plaid_items as { institution_name?: string | null } | null)?.institution_name) ?? null,
       source: "plaid" as const,
       type: (a.type as string | null) ?? null,
       subtype: (a.subtype as string | null) ?? null,

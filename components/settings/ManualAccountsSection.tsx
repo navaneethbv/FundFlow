@@ -250,7 +250,7 @@ export default function ManualAccountsSection({
         <Field label="Balance" htmlFor="manual-account-balance">
           <Input id="manual-account-balance" type="number" step="0.01" value={balance} onChange={(event) => setBalance(event.target.value)} placeholder="10000" />
         </Field>
-        <Button type="submit">Add account</Button>
+        <Button type="submit" className="self-end">Add account</Button>
       </form>
       {error && <p className="mt-3 text-sm text-danger">{error}</p>}
     </Panel>

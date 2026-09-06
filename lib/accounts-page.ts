@@ -2,7 +2,7 @@ import {
   classifyBalanceSheetAmount,
   netWorthContribution,
 } from "@/lib/account-balance";
-import { normalizeExternalDisplayText } from "@/lib/external-display-text";
+import { accountDisplayLabel } from "@/lib/account-label";
 
 export type AccountGroupKey =
   | "credit"
@@ -292,13 +292,11 @@ function buildAccountRow(
     value: values[index]!,
   }));
   const freshness = humanizeUpdatedAt(account.updatedAt, now);
-  const mask = account.mask ? ` (...${account.mask})` : "";
-  const cleanName = normalizeExternalDisplayText(account.name) ?? account.name;
   return {
     id: account.id,
     ownerUserId: account.ownerUserId,
     source: account.source,
-    name: `${cleanName}${mask}`,
+    name: accountDisplayLabel(account.name, account.mask),
     type: account.type,
     subtype: account.subtype,
     balance: account.currentBalance,

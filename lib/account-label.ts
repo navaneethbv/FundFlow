@@ -1,5 +1,17 @@
+import { normalizeExternalDisplayText } from "@/lib/external-display-text";
+
 function isDigit(value: string): boolean {
   return value >= "0" && value <= "9";
+}
+
+/** Display text only; never use this normalization for matching or identity. */
+export function accountDisplayLabel(name: string | null | undefined, mask?: string | null): string {
+  const clean = normalizeExternalDisplayText(name) ?? "";
+  const unwrapped = clean.endsWith(")") ? clean.slice(0, -1).trimEnd() : clean;
+  const base = mask && unwrapped.endsWith(mask)
+    ? stripTrailingAccountMask(unwrapped, ".*•xX (")
+    : clean;
+  return `${base || "Account"}${mask ? ` ••${mask}` : ""}`;
 }
 
 function isLetter(value: string): boolean {

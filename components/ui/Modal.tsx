@@ -80,7 +80,7 @@ export default function Modal({
           // that does not scroll, putting the first fields out of reach.
           // MobileNavigation's hand-rolled sheet caps the same way. Callers
           // that pass their own max-h/overflow still win via twMerge.
-          "relative m-0 max-h-[90vh] w-full max-w-md overflow-y-auto border border-panel-border bg-panel p-5 shadow-float sm:p-6",
+          "relative m-0 max-h-[90vh] w-full max-w-md overflow-y-auto border border-panel-border bg-panel text-foreground p-5 shadow-float sm:p-6",
           isSheet
             ? "rounded-t-card sm:rounded-card animate-sheet-slide sm:animate-modal-pop"
             : "rounded-card animate-modal-pop",

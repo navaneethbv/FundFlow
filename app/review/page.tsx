@@ -3,6 +3,8 @@ import PageHeader from "@/components/shell/PageHeader";
 import BarList from "@/components/dashboard/BarList";
 import ExportReportButton from "@/components/review/ExportReportButton";
 import Panel from "@/components/ui/Panel";
+import { isFeatureEnabled } from "@/lib/feature-flags";
+import { loadGoalsPageData } from "@/lib/goals-data";
 import { goalSummary, getGoals } from "@/lib/goals";
 import { getDashboardData } from "@/lib/dashboard";
 import { formatCurrency, formatMonth, gainLossColor, inflowMarker, titleCase } from "@/lib/format";
@@ -50,12 +52,20 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
 
   const [data, goals] = await Promise.all([
     getDashboardData(supabase, undefined, month),
-    getGoals(supabase),
+    user && isFeatureEnabled("goalsV2")
+      ? loadGoalsPageData(supabase, user.id).then(({ goals }) => goals.map((goal) => ({
+          id: goal.id, name: goal.name, remainingAmount: goal.remainingAmount,
+          status: goal.badge === "no-pace" ? "No pace data" : titleCase(goal.badge.replaceAll("-", " ")),
+        })))
+      : getGoals(supabase).then((goals) => goalSummary(goals).map((item) => ({
+          id: item.goal.id, name: item.goal.name, remainingAmount: item.remainingAmount,
+          status: item.status === "on-track" ? "Target date ahead" : titleCase(item.status.replaceAll("-", " ")),
+        }))),
   ]);
 
   const isCurrentMonth = data.selectedMonth === localMonthKey();
   const net = data.currentMonthIncome - data.currentMonthExpenses;
-  const goalsSummary = goalSummary(goals).slice(0, 4);
+  const goalsSummary = goals.slice(0, 4);
   const topCategories = data.categoryBreakdown.slice(0, 5).map((category) => ({
     label: titleCase(category.category),
     amount: category.amount,
@@ -132,12 +142,13 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <Panel title="Goals review" eyebrow="Pace">
+        <Panel title="Goals review" eyebrow="Current progress">
+          <p className="mb-3 text-xs text-muted">Goal funding and pace reflect current balances.</p>
           <div className="space-y-3 text-sm">
             {goalsSummary.map((goal) => (
-              <div key={goal.goal.id} className="flex justify-between gap-4 rounded-field bg-panel-2 p-3">
+              <div key={goal.id} className="flex justify-between gap-4 rounded-field bg-panel-2 p-3">
                 <span>
-                  <span className="block font-semibold">{goal.goal.name}</span>
+                  <span className="block font-semibold">{goal.name}</span>
                   <span className="block text-xs text-muted">{goal.status}</span>
                 </span>
                 <span data-money className="font-bold">

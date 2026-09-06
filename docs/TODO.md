@@ -2,6 +2,13 @@
 
 Nice-to-have features and enhancements, deferred out of the initial build.
 
+## UI audit follow-up (2026-09-05)
+
+The [page-by-page UI audit](reviews/2026-09-05-ui-page-audit.md) documents 17 confirmed defects across all main authenticated pages and Settings sections.
+Local fixes and automated verification are recorded in the [implementation plan](plans/2026-09-05-ui-page-fixes.md) on `codex/ui-page-audit`.
+Browser URL policy blocked the resumed production inspection, so post-fix visual verification, login/signup/admin inspection, additional states, and recurring investigation A remain open.
+These fixes are not deployed.
+
 ## Current status (2026-09-05)
 
 Comprehensive review remediation on branch `codex/comprehensive-review-remediation`, covering FF-01 through FF-33 from [`reviews/2026-09-04-comprehensive-review.md`](reviews/2026-09-04-comprehensive-review.md).

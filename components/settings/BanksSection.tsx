@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ReconnectBankButton from "@/components/settings/ReconnectBankButton";
 import RepairBankButton from "@/components/settings/RepairBankButton";
+import { formatDate, formatTimestampUtc } from "@/lib/format-date";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Panel from "@/components/ui/Panel";
@@ -91,7 +92,7 @@ function institutionNeedsAttention(health: InstitutionSyncHealth): boolean {
 function healthHelp(health: ProductSyncHealth): string {
   switch (health.state) {
     case "healthy":
-      return health.lastSuccessAt ? `Last successful sync: ${health.lastSuccessAt}.` : "Sync is current.";
+      return health.lastSuccessAt ? `Last successful sync: ${formatTimestampUtc(health.lastSuccessAt)}.` : "Sync is current.";
     case "stale":
       return "No successful sync completed in the last 48 hours.";
     case "repair_required":
@@ -195,7 +196,7 @@ export default function BanksSection({
             <li
               key={i.id}
               id={`institution-${i.id}`}
-              className="flex min-w-0 flex-col items-stretch gap-3 rounded-field border border-panel-border bg-panel-2 p-3 sm:flex-row sm:items-start sm:justify-between"
+              className="flex min-w-0 flex-col items-stretch gap-3 rounded-field border border-panel-border bg-panel-2 p-3"
             >
               <span className="min-w-0">
                 <span className="block break-words font-semibold">
@@ -206,12 +207,14 @@ export default function BanksSection({
                 )}
                 {health && (
                   <>
-                    <dl className="mt-3 grid max-w-sm gap-2">
+                    <dl className="mt-3 grid gap-3">
                       <HealthRow label="Transactions" health={health.transactions} />
                       <HealthRow label="Investments" health={health.investments} />
                     </dl>
                     <p className="mt-2 text-xs text-muted">
-                      Transaction coverage: {health.oldestTransactionDate ?? "not available"} to {health.newestTransactionDate ?? "not available"}.
+                      {health.oldestTransactionDate && health.newestTransactionDate
+                        ? `Transaction coverage: ${formatDate(health.oldestTransactionDate)} to ${formatDate(health.newestTransactionDate)}.`
+                        : "Transaction coverage not available."}
                     </p>
                     {historyGapMessage(health.cursor) && (
                       <output className="mt-2 block rounded-field border border-warning/30 bg-warning/10 p-2 text-xs text-foreground">

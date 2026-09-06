@@ -273,8 +273,8 @@ function OccurrenceTableRow({
   onDeleteManualItem: (id: string) => void;
 }>) {
   return (
-    <tr className={`border-t border-panel-border${index % 2 === 1 ? " bg-panel-2" : ""}`}>
-      <td className="px-4 py-3">
+    <tr className={`grid grid-cols-[minmax(0,1fr)_auto] items-center border-t border-panel-border sm:table-row${index % 2 === 1 ? " bg-panel-2" : ""}`}>
+      <td className="min-w-0 px-4 py-3">
         <div className="flex items-center gap-3">
           <MerchantAvatar
             name={occurrence.merchant}
@@ -293,15 +293,15 @@ function OccurrenceTableRow({
           </span>
         </div>
       </td>
-      <td className="px-4 py-3 text-sm whitespace-nowrap font-mono">
-        {formatDay(occurrence.dueDate)}
+      <td className="col-start-1 row-start-2 px-4 py-2 text-sm font-mono sm:whitespace-nowrap sm:py-3">
+        <span className="text-muted sm:hidden">Due </span>{formatDay(occurrence.dueDate)}
         {occurrence.status === "overdue" && (
           <span className="ml-1.5 text-xs font-semibold text-accent">
             ({formatDueAnnotation(daysUntil(occurrence.dueDate, today))})
           </span>
         )}
       </td>
-      <td className="px-4 py-3">
+      <td className="col-start-1 min-w-0 px-4 py-2 sm:py-3">
         {occurrence.account ? (
           <div className="flex items-center gap-2">
             <InstitutionAvatar name={occurrence.account} size={24} className="shrink-0" />
@@ -311,14 +311,14 @@ function OccurrenceTableRow({
           <span className="text-sm text-muted">—</span>
         )}
       </td>
-      <td className="px-4 py-3">
+      <td className="col-start-1 min-w-0 px-4 py-2 sm:py-3">
         {occurrence.category ? (
           <CategoryChip label={titleCase(occurrence.category)} />
         ) : (
           <span className="text-sm text-muted">—</span>
         )}
       </td>
-      <td className="px-4 py-3 text-right">
+      <td className="col-start-2 row-start-1 px-4 py-3 text-right">
         <span className="inline-flex items-center justify-end gap-1.5">
           {occurrence.status === "complete" && (
             <CheckCircle2 aria-hidden className="h-4 w-4 text-success" />
@@ -333,7 +333,7 @@ function OccurrenceTableRow({
           </span>
         </span>
       </td>
-      <td className="px-2 py-3 text-right">
+      <td className="col-start-2 row-start-2 px-2 py-3 text-right">
         <OccurrenceRowMenu
           occurrence={occurrence}
           stream={stream}
@@ -400,9 +400,9 @@ function OccurrenceTable({
     // positioned against the viewport instead and escaped the clip entirely —
     // sitting at x=1013 on a 390px phone and giving the whole *page* 623px of
     // horizontal scroll while the table itself scrolled correctly.
-    <div className="relative overflow-x-auto">
-      <table className="w-full min-w-[720px] text-sm">
-        <thead className="bg-panel-2 text-xs text-muted font-mono">
+    <div className="relative sm:overflow-x-auto">
+      <table className="block w-full text-sm sm:table sm:min-w-[720px]">
+        <thead className="hidden bg-panel-2 text-xs text-muted font-mono sm:table-header-group">
           <tr>
             <th scope="col" className="px-4 py-3 text-left">Merchant</th>
             <th scope="col" className="px-4 py-3 text-left">Date</th>
@@ -414,7 +414,7 @@ function OccurrenceTable({
             </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="block sm:table-row-group">
           {occurrences.map((occurrence, index) => (
             <OccurrenceTableRow
               key={`${occurrence.sourceId}-${occurrence.dueDate}-${index}`}
@@ -434,15 +434,15 @@ function OccurrenceTable({
             />
           ))}
         </tbody>
-        <tfoot>
-          <tr className="border-t border-panel-border bg-panel-2 font-semibold">
+        <tfoot className="block sm:table-footer-group">
+          <tr className="flex items-center justify-between border-t border-panel-border bg-panel-2 font-semibold sm:table-row">
             <td className="px-4 py-3" colSpan={4}>
               {totalLabel} Total
             </td>
             <td data-money className="px-4 py-3 text-right">
               {formatCurrency(total, currency)}
             </td>
-            <td className="px-2 py-3" />
+            <td className="hidden px-2 py-3 sm:table-cell" />
           </tr>
         </tfoot>
       </table>
@@ -472,7 +472,7 @@ function ManageRow({
   return (
     <li className="flex flex-wrap items-center justify-between gap-3 border-t border-panel-border py-3 first:border-t-0">
       <span className="min-w-0">
-        <span className="block truncate text-sm font-semibold">{stream.merchantName ?? stream.description ?? "Unknown"}</span>
+        <span className="block truncate text-sm font-semibold">{stream.merchantName?.trim() || stream.description?.trim() || "Unknown"}</span>
         <span className="text-xs text-muted">
           {stream.accountName ?? "Unlinked account"}
           {stream.dismissedAt ? " · Not recurring" : ""}

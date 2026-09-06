@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, titleCase } from "@/lib/format";
 import Button from "@/components/ui/Button";
 import Field from "@/components/ui/Field";
 import Input from "@/components/ui/Input";
@@ -174,20 +174,20 @@ export default function BudgetsSection({
       )}
 
       <form onSubmit={add} className="flex flex-wrap items-end gap-2">
-        <Field label="Category">
+        <Field label="Category" htmlFor="budget-category">
           <Input
-            placeholder="FOOD_AND_DRINK"
+            id="budget-category" placeholder="FOOD_AND_DRINK"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
           />
         </Field>
-        <Field label="Limit">
+        <Field label="Limit" htmlFor="budget-limit">
           <Input
             type="number"
             min="0"
             step="0.01"
             placeholder="500"
-            value={limit}
+            id="budget-limit" value={limit}
             onChange={(e) => setLimit(e.target.value)}
             className="w-28"
           />
@@ -206,12 +206,12 @@ export default function BudgetsSection({
           <ul className="space-y-2 text-sm">
             {openSuggestions.map((suggestion) => (
               <li
-                key={suggestion.category}
+                key={titleCase(suggestion.category)}
                 className="flex items-center justify-between gap-3 rounded-field border border-panel-border bg-panel-2 p-3"
               >
                 <span className="min-w-0">
                   <span className="block truncate font-semibold">
-                    {suggestion.category}
+                    {titleCase(suggestion.category)}
                   </span>
                   <span data-money className="block text-xs text-muted">
                     median {formatCurrency(suggestion.median)} over{" "}

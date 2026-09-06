@@ -133,8 +133,11 @@ export default function LifeEventsPanel({
         </h2>
         <p className="mb-4 text-sm text-muted">
           Base-case end: <span className="money">{formatCurrency(baseEnd, currency)}</span>{" "}
-          to <span className="money font-semibold text-foreground">{formatCurrency(adjustedEnd, currency)}</span>{" "}
-          after your life-event assumptions.
+          {events.length > 0 ? <>
+            before life events; <span className="money font-semibold text-foreground">{formatCurrency(adjustedEnd, currency)}</span> after life events.
+          </> : <>
+            with no life events applied.
+          </>}
         </p>
         <ForecastChart points={adjusted} currentNetWorth={currentNetWorth} />
       </PanelShell>

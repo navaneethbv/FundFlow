@@ -1,3 +1,4 @@
+import { accountDisplayLabel } from "@/lib/account-label";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   computeFundedGoals,
@@ -63,7 +64,7 @@ export async function loadGoalsPageData(
         .limit(DEPENDENCY_LIMIT),
       supabase
         .from("accounts")
-        .select("id,name,current_balance,type")
+        .select("id,name,mask,current_balance,type")
         .eq("user_id", userId)
         .order("name")
         .limit(DEPENDENCY_LIMIT),
@@ -77,6 +78,7 @@ export async function loadGoalsPageData(
   const rawAccounts = (accountsResult.data ?? []) as Array<{
     id: string;
     name: string | null;
+    mask?: string | null;
     current_balance: number | string | null;
     type: string | null;
   }>;
@@ -148,7 +150,7 @@ export async function loadGoalsPageData(
   return {
     goals: computeFundedGoals(goals, links, accounts, events, today),
     accounts,
-    accountNames: new Map(rawAccounts.map((row) => [row.id, row.name ?? "Account"])),
+    accountNames: new Map(rawAccounts.map((row) => [row.id, accountDisplayLabel(row.name, row.mask)])),
     linksByGoal,
   };
 }

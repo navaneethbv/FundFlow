@@ -1299,6 +1299,13 @@ export async function getDashboardData(
     };
   });
 
+  // The open month is a live observation, not a completed monthly snapshot.
+  const currentPoint = { month: currentMonth, ...netWorthSnapshot };
+  const currentIndex = netWorthHistory.findIndex((point) => point.month === currentMonth);
+  if (currentIndex >= 0 && allAccounts.length > 0) netWorthHistory[currentIndex] = currentPoint;
+  else if (currentIndex < 0 && allAccounts.length > 0) netWorthHistory.push(currentPoint);
+  netWorthHistory.sort((a, b) => a.month.localeCompare(b.month));
+
   return {
     accounts: allAccounts,
     creditAccounts: allAccounts.filter((a) => a.type === "credit"),

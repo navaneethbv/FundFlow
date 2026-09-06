@@ -24,7 +24,8 @@ import { getGoals } from "@/lib/goals";
 import { loadGoalsPageData } from "@/lib/goals-data";
 import { loadLatestWeeklyDelivery } from "@/lib/weekly-delivery-history";
 import { toGoalSummaryItem, toLegacyGoalSummaryItem } from "@/lib/goal-summary";
-import { resolveDisplayName, greetingWord } from "@/lib/greeting";
+import { normalizeReportTimezone } from "@/lib/report-period";
+import { resolveDisplayName, greetingInTimezone } from "@/lib/greeting";
 import ScopeChips from "@/components/dashboard/ScopeChips";
 import type { DashboardPrefs } from "@/components/settings/DashboardPrefsSection";
 import { firstSearchParam } from "@/lib/search-params";
@@ -97,7 +98,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
   const hasHousehold = (householdRows ?? []).length > 0;
   const { data: profileRow } = await supabase
     .from("profiles")
-    .select("dashboard_prefs, display_name, full_name")
+    .select("dashboard_prefs, display_name, full_name, timezone")
     .eq("id", user?.id ?? "")
     .maybeSingle();
   const dashboardPrefs = (profileRow?.dashboard_prefs ?? {}) as DashboardPrefs;
@@ -106,7 +107,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
     fullName: profileRow?.full_name as string | null,
     email: user?.email,
   });
-  const greeting = greetingWord(new Date().getHours());
+  const greeting = greetingInTimezone(new Date(), normalizeReportTimezone(profileRow?.timezone as string | null));
 
   const plaidItems = (items ?? []) as PlaidItem[];
   const hasBanks = plaidItems.length > 0;

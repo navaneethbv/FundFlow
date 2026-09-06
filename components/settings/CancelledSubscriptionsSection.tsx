@@ -73,9 +73,9 @@ export default function CancelledSubscriptionsSection({
       )}
 
       <form onSubmit={add} className="flex flex-wrap items-end gap-2">
-        <Field label="Merchant">
+        <Field label="Merchant" htmlFor="cancelled-merchant">
           <Input
-            placeholder="Netflix"
+            id="cancelled-merchant" placeholder="Netflix"
             value={merchant}
             onChange={(e) => setMerchant(e.target.value)}
           />

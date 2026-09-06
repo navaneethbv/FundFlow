@@ -25,9 +25,16 @@ export function resolveDisplayName({
   return "there";
 }
 
-/** `hour` is 0-23, the server's local wall-clock hour at render time. */
+/** `hour` is 0-23, the user's local wall-clock hour at render time. */
 export function greetingWord(hour: number): "morning" | "afternoon" | "evening" {
   if (hour < 12) return "morning";
   if (hour < 18) return "afternoon";
   return "evening";
+}
+
+export function greetingInTimezone(now: Date, timezone: string): ReturnType<typeof greetingWord> {
+  const hour = Number(new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone, hour: "numeric", hourCycle: "h23",
+  }).format(now));
+  return greetingWord(hour);
 }

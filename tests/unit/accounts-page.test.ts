@@ -127,7 +127,7 @@ describe("buildAccountsPageData", () => {
     );
 
     expect(data.groups.cash.rows[0]).toMatchObject({
-      name: "Checking (...1234)",
+      name: "Checking ••1234",
       balance: 1000,
     });
     expect(data.groups.credit.rows[0]?.balance).toBe(200);

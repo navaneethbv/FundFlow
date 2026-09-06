@@ -99,7 +99,7 @@ export default function NetWorthHero({
         {formatCurrency(netWorth, primaryCurrency)}
       </p>
       {monthChange && (
-        <p className="mt-1.5 text-sm font-semibold">
+        <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2 text-sm font-semibold">
           <span
             data-money
             className={monthChange.amount >= 0 ? "text-[var(--viz-pos)]" : "text-[var(--viz-neg)]"}

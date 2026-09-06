@@ -80,8 +80,8 @@ export default async function InvestmentsPage() {
     <Panel title="Sync status" eyebrow="Investments">
       <ul className="space-y-2 text-sm">
         {needsAttention.map((item) => (
-          <li key={item.plaidItemId} className="flex items-center justify-between gap-2">
-            <span className="min-w-0 truncate font-medium">{item.institutionName}</span>
+          <li key={item.plaidItemId} className="flex flex-wrap items-start justify-between gap-2">
+            <span className="min-w-0 break-words font-medium">{item.institutionName}</span>
             <span className="shrink-0 text-xs text-muted">
               {syncStatusLabel(item)}
             </span>
