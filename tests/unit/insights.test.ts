@@ -75,19 +75,28 @@ describe("computeSavingsRateSeries", () => {
     ]);
   });
 
-  it("floors the rate at zero when spending exceeds income", () => {
+  it("preserves a signed negative rate when spending exceeds income", () => {
     const income = [{ month: "2026-07", amount: 1000 }];
     const spending = [{ month: "2026-07", amount: 1500 }];
     expect(computeSavingsRateSeries(income, spending)).toEqual([
-      { month: "2026-07", rate: 0 },
+      { month: "2026-07", rate: -50 },
     ]);
   });
 
-  it("reports zero for months with no income", () => {
+  it("keeps the exact rate for a small income denominator", () => {
+    expect(
+      computeSavingsRateSeries(
+        [{ month: "2026-09", amount: 14.34 }],
+        [{ month: "2026-09", amount: 6109.75 }],
+      ),
+    ).toEqual([{ month: "2026-09", rate: -42506.35 }]);
+  });
+
+  it("reports no rate for months with no income", () => {
     const income = [{ month: "2026-07", amount: 0 }];
     const spending = [{ month: "2026-07", amount: 500 }];
     expect(computeSavingsRateSeries(income, spending)).toEqual([
-      { month: "2026-07", rate: 0 },
+      { month: "2026-07", rate: null },
     ]);
   });
 

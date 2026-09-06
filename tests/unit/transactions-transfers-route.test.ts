@@ -17,6 +17,9 @@ vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: vi.fn(async () => true) }))
 const OUT_ID = "11111111-1111-1111-1111-111111111101";
 const IN_ID = "11111111-1111-1111-1111-111111111102";
 const SUBJECT = `${OUT_ID}:${IN_ID}`;
+const OUT_ID_2 = "22222222-2222-2222-2222-222222222201";
+const IN_ID_2 = "22222222-2222-2222-2222-222222222202";
+const SUBJECT_2 = `${OUT_ID_2}:${IN_ID_2}`;
 const OUT_ID_AFTER_IN_ID = "ffffffff-ffff-ffff-ffff-ffffffffffff";
 const IN_ID_BEFORE_OUT_ID = "00000000-0000-0000-0000-000000000000";
 const DIRECTION_INDEPENDENT_SUBJECT = `${IN_ID_BEFORE_OUT_ID}:${OUT_ID_AFTER_IN_ID}`;
@@ -26,6 +29,22 @@ function thenable(data: unknown, error: unknown = null) {
     then: (resolve: (value: unknown) => unknown) => resolve({ data, error }),
   };
   for (const method of ["select", "eq", "gte", "order", "range", "limit", "upsert", "in", "or", "flat"]) {
+    builder[method] = () => builder;
+  }
+  return builder;
+}
+
+function ownedRowsThenable<T extends { id: string }>(rows: T[]) {
+  let requestedIds: string[] = [];
+  const builder: Record<string, unknown> = {
+    then: (resolve: (value: unknown) => unknown) =>
+      resolve({ data: rows.filter((row) => requestedIds.includes(row.id)), error: null }),
+    in: (_column: string, ids: string[]) => {
+      requestedIds = ids;
+      return builder;
+    },
+  };
+  for (const method of ["select", "eq", "gte", "order", "range"]) {
     builder[method] = () => builder;
   }
   return builder;
@@ -297,6 +316,104 @@ describe("POST /api/transactions/transfers", () => {
       }),
     );
     expect(res.status).toBe(429);
+  });
+
+  it("links a bounded bulk request while validating every pair", async () => {
+    vi.mocked(checkRateLimit).mockResolvedValue(true as never);
+    from.mockImplementation((table: string) => {
+      if (table === "transactions") {
+        return ownedRowsThenable([
+          { id: OUT_ID, date: "2026-09-01", amount: 500, account_id: "a1", manual_account_id: null },
+          { id: IN_ID, date: "2026-09-02", amount: -500, account_id: "a2", manual_account_id: null },
+          { id: OUT_ID_2, date: "2026-09-03", amount: 75, account_id: "a3", manual_account_id: null },
+          { id: IN_ID_2, date: "2026-09-04", amount: -75, account_id: "a4", manual_account_id: null },
+        ]);
+      }
+      if (table === "linked_transfers") return { select: () => thenable([]) };
+      throw new Error(`unexpected ${table}`);
+    });
+
+    const res = await POST(
+      new NextRequest("http://localhost/api/transactions/transfers", {
+        method: "POST",
+        body: JSON.stringify({
+          decision: "confirmed",
+          transfers: [
+            { subject_id: SUBJECT, out_id: OUT_ID, in_id: IN_ID },
+            { subject_id: SUBJECT_2, out_id: OUT_ID_2, in_id: IN_ID_2 },
+          ],
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      ok: true,
+      linked: [SUBJECT, SUBJECT_2],
+      failures: [],
+    });
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(checkRateLimit).toHaveBeenCalledWith("transfers:user-123:bulk", 5, 3600);
+  });
+
+  it("reports partial bulk failures without hiding successful links", async () => {
+    vi.mocked(checkRateLimit).mockResolvedValue(true as never);
+    mockOwnedTransferPair();
+
+    const res = await POST(
+      new NextRequest("http://localhost/api/transactions/transfers", {
+        method: "POST",
+        body: JSON.stringify({
+          decision: "confirmed",
+          transfers: [
+            { subject_id: SUBJECT, out_id: OUT_ID, in_id: IN_ID },
+            null,
+            { subject_id: "wrong-subject", out_id: OUT_ID, in_id: IN_ID },
+          ],
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(207);
+    await expect(res.json()).resolves.toEqual({
+      ok: false,
+      linked: [SUBJECT],
+      failures: [
+        { subject_id: null, error: "Each transfer must be an object." },
+        { subject_id: "wrong-subject", error: "subject_id does not match the pair" },
+      ],
+    });
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects empty or oversized bulk requests", async () => {
+    vi.mocked(checkRateLimit).mockResolvedValue(true as never);
+    const invalidDecision = await POST(
+      new NextRequest("http://localhost/api/transactions/transfers", {
+        method: "POST",
+        body: JSON.stringify({ decision: "dismissed", transfers: [null] }),
+      }),
+    );
+    expect(invalidDecision.status).toBe(400);
+
+    const empty = await POST(
+      new NextRequest("http://localhost/api/transactions/transfers", {
+        method: "POST",
+        body: JSON.stringify({ decision: "confirmed", transfers: [] }),
+      }),
+    );
+    expect(empty.status).toBe(400);
+
+    const oversized = await POST(
+      new NextRequest("http://localhost/api/transactions/transfers", {
+        method: "POST",
+        body: JSON.stringify({
+          decision: "confirmed",
+          transfers: Array.from({ length: 101 }, () => null),
+        }),
+      }),
+    );
+    expect(oversized.status).toBe(400);
   });
 
   it("returns the auth response when signed out", async () => {

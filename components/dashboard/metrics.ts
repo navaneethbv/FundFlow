@@ -38,3 +38,70 @@ export function computeSavingsRate(
 ): number | null {
   return sharedComputeSavingsRate(income, spending);
 }
+
+export type DashboardSavingsRateBasis = {
+  rate: number | null;
+  income: number;
+  spending: number;
+  month: string | null;
+  usesPriorCompleteMonth: boolean;
+};
+
+/**
+ * Resolve the period shown by the dashboard savings-rate card.
+ *
+ * The active calendar month is incomplete by definition, so its rate uses the
+ * preceding month while the active-month cash-flow tiles continue to show
+ * month-to-date values. Historical selections use their selected month.
+ */
+export function resolveDashboardSavingsRate(input: {
+  selectedMonth: string;
+  currentMonth: string;
+  monthlyIncome: { month: string; amount: number }[];
+  monthlySpending: { month: string; amount: number }[];
+}): DashboardSavingsRateBasis {
+  const selectedIndex = input.monthlyIncome.findIndex(
+    (row) => row.month === input.selectedMonth,
+  );
+  const usesPriorCompleteMonth = input.selectedMonth === input.currentMonth;
+  const basisIndex = selectedIndex - (usesPriorCompleteMonth ? 1 : 0);
+  const incomeRow = basisIndex >= 0 ? input.monthlyIncome[basisIndex] : undefined;
+
+  if (!incomeRow) {
+    return {
+      rate: null,
+      income: 0,
+      spending: 0,
+      month: null,
+      usesPriorCompleteMonth,
+    };
+  }
+
+  const income = incomeRow.amount;
+  const spending =
+    input.monthlySpending.find((row) => row.month === incomeRow.month)?.amount ?? 0;
+  return {
+    rate: computeSavingsRate(income, spending),
+    income,
+    spending,
+    month: incomeRow.month,
+    usesPriorCompleteMonth,
+  };
+}
+
+/**
+ * A dashboard rate is denominator-sensitive when spending is more than ten
+ * times the income recorded for the period. The exact signed rate remains
+ * available; this flag only tells the UI to explain the small income base.
+ */
+export function hasSmallSavingsRateBase(
+  income: number | null = 0,
+  spending: number | null = 0,
+): boolean {
+  return (
+    income !== null &&
+    spending !== null &&
+    income > 0 &&
+    spending > income * 10
+  );
+}

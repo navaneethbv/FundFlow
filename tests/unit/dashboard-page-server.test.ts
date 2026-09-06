@@ -109,6 +109,14 @@ const { mockDashboardData } = vi.hoisted(() => ({
     accounts: [{ id: "acc-1", name: "Checking", mask: "1234", type: "depository", current_balance: 1000 }],
     availableMonths: ["2026-08", "2026-09"],
     selectedMonth: "2026-09",
+    monthlyIncome: [
+      { month: "2026-08", amount: 5000 },
+      { month: "2026-09", amount: 14.34 },
+    ],
+    monthlySpending: [
+      { month: "2026-08", amount: 3000 },
+      { month: "2026-09", amount: 6109.75 },
+    ],
     currentMonthIncome: 5000,
     currentMonthExpenses: 3000,
     budgetEnvelopes: [{ id: "b1", status: "ok" }],
