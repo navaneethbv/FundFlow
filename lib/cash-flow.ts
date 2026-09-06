@@ -99,6 +99,46 @@ export function computePeriodCashFlow(
     });
 }
 
+export type CashFlowSavingsRateBasis = {
+  rate: number | null;
+  period: PeriodCashFlow | null;
+  usesPriorCompletePeriod: boolean;
+};
+
+export function resolveCashFlowSavingsRate(
+  periods: ReadonlyArray<PeriodCashFlow>,
+  selectedPeriod: PeriodCashFlow | null,
+  period: CashFlowPeriod,
+  currentMonth: string,
+): CashFlowSavingsRateBasis {
+  if (!selectedPeriod) {
+    return {
+      rate: null,
+      period: null,
+      usesPriorCompletePeriod: false,
+    };
+  }
+
+  const currentPeriodKey = cashFlowPeriodKey(`${currentMonth}-01`, period);
+  const usesPriorCompletePeriod = selectedPeriod.key === currentPeriodKey;
+  if (!usesPriorCompletePeriod) {
+    return {
+      rate: selectedPeriod.savingsRate,
+      period: selectedPeriod,
+      usesPriorCompletePeriod,
+    };
+  }
+
+  const selectedIndex = periods.findIndex((row) => row.key === selectedPeriod.key);
+  const basisPeriod = periods[selectedIndex - 1] ?? null;
+
+  return {
+    rate: basisPeriod?.savingsRate ?? null,
+    period: basisPeriod,
+    usesPriorCompletePeriod,
+  };
+}
+
 const BREAKDOWN_FIELD: Record<
   BreakdownDimension,
   (row: CanonicalFinanceTransaction) => string

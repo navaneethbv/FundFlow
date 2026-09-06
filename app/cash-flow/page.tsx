@@ -16,6 +16,7 @@ import {
   computePeriodCashFlow,
   filterCashFlowPeriod,
   partitionCashFlowByCurrency,
+  resolveCashFlowSavingsRate,
   type BreakdownDimension,
   type CashFlowPeriod,
 } from "@/lib/cash-flow";
@@ -133,6 +134,12 @@ export default async function CashFlowPage({
     periods.find((row) => row.key === requestedPeriod) ??
     periods.at(-1) ??
     null;
+  const savingsRateBasis = resolveCashFlowSavingsRate(
+    periods,
+    selectedPeriod,
+    period,
+    anchorMonth,
+  );
   const selectedRows = selectedPeriod
     ? filterCashFlowPeriod(
         selectedCurrencyRows,
@@ -230,6 +237,7 @@ export default async function CashFlowPage({
           <CashFlowSummary
             period={selectedPeriod}
             currency={selectedCurrency ?? UNKNOWN_CURRENCY}
+            savingsRateBasis={savingsRateBasis}
           />
 
           <Panel
