@@ -94,8 +94,9 @@ async function resolveLocalTransactionIds(
 ): Promise<Map<string, string>> {
   const byPlaidId = new Map<string, string>();
   for (let i = 0; i < plaidTransactionIds.length; i += 500) {
+    // The loop bound guarantees a non-empty chunk on every iteration: i only
+    // advances into the loop body while i < plaidTransactionIds.length.
     const chunk = plaidTransactionIds.slice(i, i + 500);
-    if (chunk.length === 0) continue;
     const { data, error } = await supabase
       .from("transactions")
       .select("id, plaid_transaction_id")

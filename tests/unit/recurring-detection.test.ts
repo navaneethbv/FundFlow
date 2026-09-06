@@ -222,6 +222,28 @@ describe("detectRecurringCandidates", () => {
     expect(result[0]!.transactionIds).toEqual(["txn-1", "txn-2", "txn-3"]);
   });
 
+  it("discards a lower-ranked candidate whose evidence overlaps a higher-ranked one", () => {
+    // Two older points 30 days apart, then a dense run of 9 weekly points
+    // (7-day gaps). The three oldest points (m1, m0, w0) independently
+    // satisfy monthly cadence (26-35 day gaps), and w0 is also the first
+    // point of the 9-point weekly run. Weekly wins on occurrence count
+    // (9 beats 3), so the monthly candidate must be discarded rather than
+    // double-counting w0's evidence.
+    const weekly = series(
+      ["2026-07-06", "2026-07-13", "2026-07-20", "2026-07-27", "2026-08-03", "2026-08-10", "2026-08-17", "2026-08-24", "2026-08-31"],
+      15.99,
+      { idPrefix: "w" },
+    );
+    const monthlyExtra = series(["2026-05-06", "2026-06-05"], 15.99, { idPrefix: "m" });
+    const result = detectRecurringCandidates([...monthlyExtra, ...weekly], "2026-08-31");
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ frequency: "WEEKLY", evidence: { occurrenceCount: 9 } });
+    // The overlapping monthly candidate never appears, and its evidence
+    // (m0, m1) is not silently absorbed into the surviving candidate either.
+    expect(result[0]!.transactionIds).toEqual(weekly.map((row) => row.id));
+  });
+
   it("clamps month-end predictions to the target month", () => {
     const result = detectRecurringCandidates(
       series(["2026-01-31", "2026-02-28", "2026-03-31"], 15.99),
@@ -239,6 +261,95 @@ describe("detectRecurringCandidates", () => {
   });
 });
 
+describe("sparse or missing optional metadata", () => {
+  it("qualifies a variable utility candidate whose rows carry null rawName, category, detailedCategory, and paymentChannel", () => {
+    const rows = series(["2026-05-15", "2026-06-15", "2026-07-15"], [80, 120, 100], {
+      merchant: "City Power",
+      category: "UTILITY",
+    });
+    // hasUtilityOrBillCategory uses .some() and stops at the first match, so
+    // the row carrying the real "UTILITY" category must come LAST: the
+    // earlier rows' null category/detailedCategory fallbacks only actually
+    // run if evaluation reaches them first.
+    rows[0] = { ...rows[0]!, rawName: null, category: null, detailedCategory: null };
+    rows[1] = { ...rows[1]!, paymentChannel: null };
+
+    const result = detectRecurringCandidates(rows, "2026-08-30");
+    expect(result[0]).toMatchObject({ amountPattern: "variable", merchantName: "City Power" });
+  });
+
+  it("computes the median of an even-length variable sequence", () => {
+    // Biweekly requires exactly 4 occurrences: an even count, exercising the
+    // even-length branch of the median calculation.
+    const rows = series(
+      ["2026-07-08", "2026-07-22", "2026-08-05", "2026-08-19"],
+      [80, 120, 100, 140],
+      { merchant: "Metered Gas", category: "UTILITY" },
+    );
+
+    const result = detectRecurringCandidates(rows, "2026-08-30");
+    expect(result[0]).toMatchObject({
+      frequency: "BIWEEKLY",
+      amountPattern: "variable",
+      // Sorted: 80, 100, 120, 140 -> median of the middle two is 110.
+      expectedAmount: 110,
+    });
+  });
+
+  it("falls back from an empty merchant to rawName for the newest occurrence's display name", () => {
+    // The normalized identity must stay the same across all three rows so
+    // they remain one group: only the newest row's raw merchant field goes
+    // empty, matching what Plaid sends when merchant_name is absent for one
+    // occurrence but the transaction name still carries the merchant.
+    const rows = series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99, { merchant: "Regular Co", rawName: "Regular Co" });
+    rows[2] = { ...rows[2]!, merchant: "" };
+
+    const result = detectRecurringCandidates(rows, "2026-08-30");
+    expect(result[0]).toMatchObject({ merchantName: "Regular Co" });
+  });
+
+  it("falls back to the merchant name for description when the newest occurrence has no rawName", () => {
+    const rows = series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99, { merchant: "Regular Co" });
+    rows[2] = { ...rows[2]!, rawName: null };
+
+    const result = detectRecurringCandidates(rows, "2026-08-30");
+    expect(result[0]).toMatchObject({ merchantName: "Regular Co", description: "Regular Co" });
+  });
+
+  it("falls through the category chain from the newest occurrence to the oldest occurrence's detailed category", () => {
+    const rows = series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99, { merchant: "Chain Co" });
+    rows[0] = { ...rows[0]!, category: null, detailedCategory: "ELECTRIC" };
+    rows[2] = { ...rows[2]!, category: null, detailedCategory: null };
+
+    const result = detectRecurringCandidates(rows, "2026-08-30");
+    expect(result[0]).toMatchObject({ category: "ELECTRIC" });
+  });
+
+  it("falls back to a null category when every occurrence's category fields are null", () => {
+    const rows = series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99, { merchant: "No Category Co" });
+    const nulled = rows.map((row) => ({ ...row, category: null, detailedCategory: null }));
+
+    const result = detectRecurringCandidates(nulled, "2026-08-30");
+    expect(result[0]).toMatchObject({ category: null });
+  });
+
+  it("falls back to an empty currency key when a row's currency is null", () => {
+    const rows = series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99, { merchant: "No Currency Co", currency: null });
+
+    const result = detectRecurringCandidates(rows, "2026-08-30");
+    expect(result[0]).toMatchObject({ merchantName: "No Currency Co" });
+  });
+
+  it("drops a row whose merchant and rawName are both empty instead of treating it as its own identity", () => {
+    const rows = series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99, { merchant: "Kept Co" });
+    const junk = { ...rows[0]!, id: "junk-1", merchant: "", rawName: null };
+
+    const result = detectRecurringCandidates([junk, ...rows], "2026-08-30");
+    expect(result).toHaveLength(1);
+    expect(result[0]!.transactionIds).not.toContain("junk-1");
+  });
+});
+
 describe("recurringIdentityKey", () => {
   it("hashes stable boundaries and cadence without exposing merchant text", () => {
     const key = recurringIdentityKey("user-1", "account-1", "outflow", "Acme Streaming", "MONTHLY");
@@ -246,5 +357,40 @@ describe("recurringIdentityKey", () => {
     expect(key).not.toContain("ACME");
     expect(key).toBe(recurringIdentityKey("user-1", "account-1", "outflow", "ACME STREAMING", "MONTHLY"));
     expect(key).not.toBe(recurringIdentityKey("user-1", "account-2", "outflow", "Acme Streaming", "MONTHLY"));
+  });
+
+  it("accepts the object form as an alternative to positional arguments", () => {
+    const positional = recurringIdentityKey("user-1", "account-1", "outflow", "Acme Streaming", "MONTHLY");
+    const objectForm = recurringIdentityKey({
+      userId: "user-1",
+      accountId: "account-1",
+      streamType: "outflow",
+      merchant: "Acme Streaming",
+      frequency: "MONTHLY",
+    });
+    expect(objectForm).toBe(positional);
+  });
+
+  it("falls back to safe defaults for a runtime caller that omits arguments", () => {
+    // recurringIdentityKey is exported for both TypeScript overloads above, but
+    // its underlying implementation signature accepts optional trailing
+    // arguments as a defensive guard against an untyped JS caller.
+    type LooseIdentityKey = (userId: string) => string;
+    const key = (recurringIdentityKey as unknown as LooseIdentityKey)("user-1");
+    expect(key).toBe(recurringIdentityKey("user-1", "", "outflow", "", "MONTHLY"));
+  });
+});
+
+describe("detectRecurringCandidates date validation", () => {
+  it("rejects an unparseable today value", () => {
+    expect(detectRecurringCandidates(series(["2026-07-15"], 15.99), "not-a-date")).toEqual([]);
+  });
+
+  it("drops a row with a malformed posted or authorized date instead of throwing", () => {
+    const rows = series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99);
+    const malformedPosted = { ...rows[0]!, id: "bad-posted", postedDate: "2026-13-99" };
+    const malformedAuthorized = { ...rows[1]!, id: "bad-authorized", authorizedDate: "not-a-date" };
+    const result = detectRecurringCandidates([malformedPosted, malformedAuthorized, ...rows], "2026-08-30");
+    expect(result[0]!.transactionIds).toEqual(rows.map((row) => row.id));
   });
 });

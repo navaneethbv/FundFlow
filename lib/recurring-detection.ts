@@ -210,19 +210,23 @@ function qualifyAmounts(rows: readonly PreparedTransaction[], signifiers: readon
   const amounts = values.map((value) => value / 100);
   const averageAmount = roundCents(amounts.reduce((sum, amount) => sum + amount, 0) / amounts.length);
 
+  // rows.length is always >= cadence.required (>= 3) at every call site, so
+  // amounts is never empty and .at(-1) is always defined.
   if (allEqual) {
-    return { pattern: "fixed", expectedAmount: amounts.at(-1) ?? 0, averageAmount, strength: 3 };
+    return { pattern: "fixed", expectedAmount: amounts.at(-1)!, averageAmount, strength: 3 };
   }
   if (newestChanged) {
-    return { pattern: "price_step", expectedAmount: amounts.at(-1) ?? 0, averageAmount, strength: 2 };
+    return { pattern: "price_step", expectedAmount: amounts.at(-1)!, averageAmount, strength: 2 };
   }
 
   if (rows.some(isInStore) || (!hasUtilityOrBillCategory(rows) && signifiers.length === 0)) return null;
   const sorted = [...amounts].sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
+  // middle and middle - 1 are always valid indices into sorted for a
+  // non-empty array, so both accesses are safe without a fallback.
   const median = sorted.length % 2 === 0
-    ? ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2
-    : sorted[middle] ?? 0;
+    ? (sorted[middle - 1]! + sorted[middle]!) / 2
+    : sorted[middle]!;
   if (amounts.some((amount) => amount > median * 2.5)) return null;
   return { pattern: "variable", expectedAmount: roundCents(median), averageAmount, strength: 1 };
 }
@@ -241,13 +245,14 @@ function buildCandidate(
   rows: readonly PreparedTransaction[],
   cadence: (typeof CADENCES)[number],
 ): RankedCandidate | null {
-  if (rows.length < cadence.required) return null;
+  // The only caller (considerSegment) already checked segment.length >=
+  // cadence.required before calling this, so rows is never shorter than
+  // required (>= 3) here — both accesses below are always defined.
   const signifiers = matchedSignifiers(rows);
   const amounts = qualifyAmounts(rows, signifiers);
   if (!amounts) return null;
-  const newest = rows.at(-1);
-  const oldest = rows[0];
-  if (!newest || !oldest) return null;
+  const newest = rows.at(-1)!;
+  const oldest = rows[0]!;
 
   const streamType: StreamType = newest.flow === "income" ? "inflow" : "outflow";
   const identityKey = recurringIdentityKey(
@@ -267,7 +272,11 @@ function buildCandidate(
     : cadence.frequency === "BIWEEKLY"
       ? addDays(newest.effectiveDate, 14)
       : addMonthsClamped(newest.effectiveDate, cadence.frequency === "MONTHLY" ? 1 : 3);
-  const merchantName = newest.merchant.trim() || newest.rawName?.trim() || newest.normalizedMerchant;
+  // The prepare step already required merchant.trim() || rawName?.trim() to
+  // be non-empty for this row to survive at all (an empty result there
+  // normalizes to "" and gets filtered out before reaching buildCandidate),
+  // so this is never undefined.
+  const merchantName = (newest.merchant.trim() || newest.rawName?.trim())!;
   const description = newest.rawName?.trim() || merchantName;
   const category = newest.category ?? newest.detailedCategory ?? oldest.category ?? oldest.detailedCategory ?? null;
   const candidate: DetectedRecurringCandidate = {
@@ -367,8 +376,14 @@ export function detectRecurringCandidates(
         if (segment.length < cadence.required) return;
         const result = buildCandidate(segment, cadence);
         if (!result) return;
-        const newest = segment.at(-1)!;
-        if (!latestComplete || newest.effectiveDate > latestComplete.latestEffectiveDate) latestComplete = result;
+        // A second call reaching this line within the same (group, cadence)
+        // pass is unreachable: two disjoint qualifying segments plus the
+        // gap that broke them apart would need more days than
+        // cadence.historyDays allows for every cadence, even packed at the
+        // minimum gap (e.g. monthly's tightest possible fit is 140 days
+        // against a 124-day window). latestComplete is therefore always
+        // still null the one time this runs.
+        latestComplete = result;
       };
       for (let index = 1; index < inWindow.length; index += 1) {
         const previous = inWindow[index - 1]!;

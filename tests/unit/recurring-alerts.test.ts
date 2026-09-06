@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PlaidItemRow } from "@/lib/types";
+import { normalizeRecurringMerchant, recurringIdentityKey } from "@/lib/recurring-detection";
 
 const mockRecurringGet = vi.fn();
 vi.mock("@/lib/plaid", () => ({
@@ -25,6 +26,7 @@ vi.mock("@/lib/log", () => ({ logError: vi.fn() }));
 // the price-hike/new-subscription notification diff, so those tables just
 // resolve to harmless empty results.
 let existingRows: Array<{ stream_id: string; last_amount: number | null }>;
+let existingInferredRows: Array<{ identity_key: string | null }> = [];
 const mockUpsert = vi.fn();
 const mockRpc = vi.fn();
 vi.mock("@/lib/supabase/service", () => ({
@@ -34,13 +36,18 @@ vi.mock("@/lib/supabase/service", () => ({
       switch (table) {
         case "recurring_streams":
           {
-            const response = Promise.resolve({ data: existingRows, error: null });
-            Object.assign(response, { eq: () => response });
+            const plaidResponse = Promise.resolve({ data: existingRows, error: null });
+            Object.assign(plaidResponse, { eq: () => plaidResponse });
+            const inferredResponse = Promise.resolve({ data: existingInferredRows, error: null });
           return {
             select: () => ({
               eq: () => ({
                 eq: () => ({
-                  eq: () => response,
+                  // The real query branches on the "source" filter value: the
+                  // plaid existing-streams read stops at this eq(); the
+                  // inferred-identity read chains one more eq("is_active").
+                  eq: (_column: string, value: string) =>
+                    value === "inferred" ? { eq: () => inferredResponse } : plaidResponse,
                 }),
               }),
             }),
@@ -53,7 +60,16 @@ vi.mock("@/lib/supabase/service", () => ({
           };
           }
         case "accounts":
-          return { select: () => ({ eq: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) }) };
+          return {
+            select: () => ({
+              eq: () => ({
+                eq: () => Promise.resolve({
+                  data: [{ id: "local-acct-1", plaid_account_id: "plaid-acct-1" }],
+                  error: null,
+                }),
+              }),
+            }),
+          };
         case "transactions":
           return {
             select: () => ({
@@ -79,7 +95,7 @@ const item = {
   user_id: "user-1",
 } as PlaidItemRow;
 
-function outflow(streamId: string, merchant: string, lastAmount: number) {
+function outflow(streamId: string, merchant: string, lastAmount: number, accountId = "plaid-acct-1") {
   return {
     stream_id: streamId,
     description: merchant,
@@ -90,8 +106,20 @@ function outflow(streamId: string, merchant: string, lastAmount: number) {
     status: "MATURE",
     personal_finance_category: { primary: "ENTERTAINMENT" },
     is_active: true,
+    account_id: accountId,
     transaction_ids: [],
   };
+}
+
+/** The same identity_key mapStreamRow computes for one of these outflow streams. */
+function outflowIdentity(merchant: string, accountId = "local-acct-1") {
+  return recurringIdentityKey(
+    "user-1",
+    accountId,
+    "outflow",
+    normalizeRecurringMerchant(merchant),
+    "MONTHLY",
+  );
 }
 
 describe("recurring stream alerts", () => {
@@ -105,6 +133,7 @@ describe("recurring stream alerts", () => {
       { stream_id: "s1", last_amount: 15.49 },
       { stream_id: "s2", last_amount: 9.99 },
     ];
+    existingInferredRows = [];
   });
 
   it("notifies on a price hike and on a new subscription", async () => {
@@ -150,6 +179,65 @@ describe("recurring stream alerts", () => {
     await refreshRecurringForItem(item);
 
     expect(mockRpc).toHaveBeenCalled();
+    expect(mockCreateNotification).not.toHaveBeenCalled();
+  });
+
+  it("dedupes two price hikes that share one merchant identity", async () => {
+    // Plaid gave the same merchant/account/cadence two separate stream ids;
+    // both existed before at a lower amount and both increased, but they
+    // resolve to one identity and must only notify once.
+    existingRows = [
+      { stream_id: "s1a", last_amount: 15.49 },
+      { stream_id: "s1b", last_amount: 15.49 },
+    ];
+    mockRecurringGet.mockResolvedValue({
+      data: {
+        inflow_streams: [],
+        outflow_streams: [
+          outflow("s1a", "Netflix", 17.99),
+          outflow("s1b", "Netflix", 17.99),
+        ],
+      },
+    });
+
+    await refreshRecurringForItem(item);
+
+    const hikes = mockCreateNotification.mock.calls.filter((call) => call[1] === "price_hike");
+    expect(hikes).toHaveLength(1);
+  });
+
+  it("dedupes two new subscriptions that share one merchant identity", async () => {
+    // Diff only runs once history exists (first-refresh seeding stays
+    // silent), so this needs at least one unrelated prior stream.
+    existingRows = [{ stream_id: "unrelated", last_amount: 5 }];
+    mockRecurringGet.mockResolvedValue({
+      data: {
+        inflow_streams: [],
+        outflow_streams: [
+          outflow("s9a", "Peacock", 7.99),
+          outflow("s9b", "Peacock", 7.99),
+        ],
+      },
+    });
+
+    await refreshRecurringForItem(item);
+
+    const fresh = mockCreateNotification.mock.calls.filter((call) => call[1] === "new_subscription");
+    expect(fresh).toHaveLength(1);
+  });
+
+  it("suppresses a new-subscription notification whose identity already exists as an inferred stream", async () => {
+    existingRows = [{ stream_id: "unrelated", last_amount: 5 }];
+    existingInferredRows = [{ identity_key: outflowIdentity("Peacock") }];
+    mockRecurringGet.mockResolvedValue({
+      data: {
+        inflow_streams: [],
+        outflow_streams: [outflow("s9", "Peacock", 7.99)],
+      },
+    });
+
+    await refreshRecurringForItem(item);
+
     expect(mockCreateNotification).not.toHaveBeenCalled();
   });
 
