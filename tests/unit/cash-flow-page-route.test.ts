@@ -38,6 +38,14 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: () => Promise.resolve(supabase),
 }));
 
+vi.mock("@/lib/format-date", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/lib/format-date")>();
+  return {
+    ...original,
+    localMonthKey: () => "2026-09",
+  };
+});
+
 function makeClient(householdIds: string[] = []) {
   return {
     ...clientStub({
@@ -202,5 +210,59 @@ describe("/cash-flow page", () => {
     expect(html).toContain("CA$1,000.00");
     expect(html).toContain(">CAD<");
     expect(html).toContain(">USD<");
+  });
+
+  it("uses the last complete period for the active savings rate", async () => {
+    loadSpy.mockResolvedValue({
+      transactions: [
+        transaction({
+          id: "aug-income",
+          date: "2026-08-01",
+          signedAmount: -5000,
+          flow: "income",
+          accountId: "account-usd",
+        }),
+        transaction({
+          id: "aug-expense",
+          date: "2026-08-02",
+          signedAmount: 3000,
+          flow: "expense",
+          accountId: "account-usd",
+        }),
+        transaction({
+          id: "sep-income",
+          date: "2026-09-01",
+          signedAmount: -14.34,
+          flow: "income",
+          accountId: "account-usd",
+        }),
+        transaction({
+          id: "sep-expense",
+          date: "2026-09-02",
+          signedAmount: 6109.75,
+          flow: "expense",
+          accountId: "account-usd",
+        }),
+      ],
+      currencyByAccountId: new Map([["account-usd", "USD"]]),
+      truncated: false,
+      lastSuccessfulSyncAt: "2026-09-05T10:00:00.000Z",
+      stale: false,
+    } satisfies CashFlowLoadResult);
+
+    const element = await CashFlowPage({
+      searchParams: Promise.resolve({
+        period: "monthly",
+        range: "24",
+        selected: "2026-09",
+      }),
+    });
+    const html = renderToStaticMarkup(element);
+
+    expect(html).toContain("$14.34");
+    expect(html).toContain("$6,109.75");
+    expect(html).toContain("40%");
+    expect(html).toContain("Based on Aug 2026 (last complete period)");
+    expect(html).not.toContain("-42,506.35%");
   });
 });
