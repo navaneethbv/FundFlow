@@ -121,10 +121,16 @@ export function resolveCashFlowSavingsRate(
 
   const currentPeriodKey = cashFlowPeriodKey(`${currentMonth}-01`, period);
   const usesPriorCompletePeriod = selectedPeriod.key === currentPeriodKey;
+  if (!usesPriorCompletePeriod) {
+    return {
+      rate: selectedPeriod.savingsRate,
+      period: selectedPeriod,
+      usesPriorCompletePeriod,
+    };
+  }
+
   const selectedIndex = periods.findIndex((row) => row.key === selectedPeriod.key);
-  const basisPeriod = usesPriorCompletePeriod
-    ? periods[selectedIndex - 1] ?? null
-    : selectedPeriod;
+  const basisPeriod = periods[selectedIndex - 1] ?? null;
 
   return {
     rate: basisPeriod?.savingsRate ?? null,
