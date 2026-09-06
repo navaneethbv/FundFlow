@@ -15,7 +15,7 @@ import { resolveDashboardView } from "@/components/dashboard/dashboard-view";
 import OverviewView from "@/components/dashboard/OverviewView";
 import DashboardViewTabs from "@/components/dashboard/DashboardViewTabs";
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import { computeNetWorth, computeSavingsRate } from "@/components/dashboard/metrics";
+import { computeNetWorth, resolveDashboardSavingsRate } from "@/components/dashboard/metrics";
 import { getRecentTransactions } from "@/lib/recent-transactions";
 import { getDashboardData } from "@/lib/dashboard";
 import { getCachedDashboardData } from "@/lib/dashboard-cache";
@@ -112,7 +112,12 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
   const hasBanks = plaidItems.length > 0;
   const brokenBanks = plaidItems.filter((item) => item.status === "error");
   const netWorth = computeNetWorth(data.accounts);
-  const savingsRate = computeSavingsRate(data.currentMonthIncome, data.currentMonthExpenses);
+  const savingsRateBasis = resolveDashboardSavingsRate({
+    selectedMonth: data.selectedMonth,
+    currentMonth: new Date().toISOString().slice(0, 7),
+    monthlyIncome: data.monthlyIncome,
+    monthlySpending: data.monthlySpending,
+  });
   const budgetRiskCount = data.budgetEnvelopes.filter(
     (budget) => budget.status === "over" || budget.status === "at-risk",
   ).length;
@@ -210,7 +215,11 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
             <MonitorView
               data={data}
               netWorth={netWorth}
-              savingsRate={savingsRate}
+              savingsRate={savingsRateBasis.rate}
+              savingsRateIncome={savingsRateBasis.income}
+              savingsRateSpending={savingsRateBasis.spending}
+              savingsRateMonth={savingsRateBasis.month}
+              savingsRateUsesPriorCompleteMonth={savingsRateBasis.usesPriorCompleteMonth}
               recentTransactions={recentTransactions}
               accountNames={accountNames}
               linkParams={linkParams}

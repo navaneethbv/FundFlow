@@ -5,6 +5,7 @@ import {
   computeSavingsRate,
   hasSmallSavingsRateBase,
   netWorthDeltaFromHistory,
+  resolveDashboardSavingsRate,
 } from "@/components/dashboard/metrics";
 
 describe("dashboard UI overhaul", () => {
@@ -30,6 +31,86 @@ describe("dashboard UI overhaul", () => {
     expect(hasSmallSavingsRateBase(0, 500)).toBe(false);
     expect(hasSmallSavingsRateBase(undefined, 500)).toBe(false);
     expect(hasSmallSavingsRateBase(10, undefined)).toBe(false);
+  });
+
+  it("uses the last complete month for the active month's savings rate", () => {
+    expect(
+      resolveDashboardSavingsRate({
+        selectedMonth: "2026-09",
+        currentMonth: "2026-09",
+        monthlyIncome: [
+          { month: "2026-08", amount: 5000 },
+          { month: "2026-09", amount: 14.34 },
+        ],
+        monthlySpending: [
+          { month: "2026-08", amount: 3000 },
+          { month: "2026-09", amount: 6109.75 },
+        ],
+      }),
+    ).toEqual({
+      rate: 40,
+      income: 5000,
+      spending: 3000,
+      month: "2026-08",
+      usesPriorCompleteMonth: true,
+    });
+  });
+
+  it("uses the selected month when it is complete and historical", () => {
+    expect(
+      resolveDashboardSavingsRate({
+        selectedMonth: "2026-08",
+        currentMonth: "2026-09",
+        monthlyIncome: [
+          { month: "2026-08", amount: 5000 },
+          { month: "2026-09", amount: 14.34 },
+        ],
+        monthlySpending: [
+          { month: "2026-08", amount: 3000 },
+          { month: "2026-09", amount: 6109.75 },
+        ],
+      }),
+    ).toEqual({
+      rate: 40,
+      income: 5000,
+      spending: 3000,
+      month: "2026-08",
+      usesPriorCompleteMonth: false,
+    });
+  });
+
+  it("returns an unavailable rate when no complete month is in the window", () => {
+    expect(
+      resolveDashboardSavingsRate({
+        selectedMonth: "2026-09",
+        currentMonth: "2026-09",
+        monthlyIncome: [{ month: "2026-09", amount: 14.34 }],
+        monthlySpending: [{ month: "2026-09", amount: 6109.75 }],
+      }),
+    ).toEqual({
+      rate: null,
+      income: 0,
+      spending: 0,
+      month: null,
+      usesPriorCompleteMonth: true,
+    });
+  });
+
+  it("treats a missing spending aggregate as zero for the resolved month", () => {
+    expect(
+      resolveDashboardSavingsRate({
+        selectedMonth: "2026-08",
+        currentMonth: "2026-09",
+        monthlyIncome: [{ month: "2026-08", amount: 5000 }],
+        monthlySpending: [],
+      }),
+    ).toEqual({
+      rate: 100,
+      income: 5000,
+      spending: 0,
+      month: "2026-08",
+      usesPriorCompleteMonth: false,
+    });
   });
 
   it("compares live net worth with the previous snapshot, not the current one", () => {

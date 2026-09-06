@@ -177,6 +177,10 @@ export default function MonitorView({
   data,
   netWorth,
   savingsRate,
+  savingsRateIncome,
+  savingsRateSpending,
+  savingsRateMonth,
+  savingsRateUsesPriorCompleteMonth,
   recentTransactions,
   accountNames,
   linkParams,
@@ -186,6 +190,10 @@ export default function MonitorView({
   data: DashboardData;
   netWorth: number;
   savingsRate: number | null;
+  savingsRateIncome: number;
+  savingsRateSpending: number;
+  savingsRateMonth: string | null;
+  savingsRateUsesPriorCompleteMonth: boolean;
   recentTransactions: RecentTransaction[];
   accountNames: Map<string, string>;
   linkParams: DrillLinkParams;
@@ -201,12 +209,14 @@ export default function MonitorView({
   const previousMonth = monthLabels.at(-2) ?? "last month";
   const currentNet = data.currentMonthIncome - data.currentMonthExpenses;
   const previousNet = (incomeSeries.at(-2) ?? 0) - (spendSeries.at(-2) ?? 0);
-  const isCurrentSelectedMonth =
-    data.selectedMonth === new Date().toISOString().slice(0, 7);
+  const isCurrentSelectedMonth = savingsRateUsesPriorCompleteMonth;
   const savingsRateHasSmallBase = hasSmallSavingsRateBase(
-    data.currentMonthIncome,
-    data.currentMonthExpenses,
+    savingsRateIncome,
+    savingsRateSpending,
   );
+  const savingsRatePeriod = savingsRateMonth
+    ? `${formatMonth(savingsRateMonth)}${savingsRateUsesPriorCompleteMonth ? " (last complete month)" : ""}`
+    : null;
   // Net-worth delta comes from the net-worth history series (assets minus
   // liabilities per month), not from this month's cash flow: those are
   // different numbers and the tile must report the change in what it displays.
@@ -259,14 +269,14 @@ export default function MonitorView({
           chart={<AreaSparkline values={cashFlowSeries} />}
         />
         <StatTile
-          label="Monthly cash flow"
+          label={isCurrentSelectedMonth ? "Month-to-date cash flow" : "Monthly cash flow"}
           value={currentNet}
           delta={currentNet - previousNet}
           deltaVs={previousMonth}
           trend={cashFlowSeries}
         />
         <StatTile
-          label="Monthly spending"
+          label={isCurrentSelectedMonth ? "Month-to-date spending" : "Monthly spending"}
           value={data.currentMonthExpenses}
           delta={(spendSeries.at(-1) ?? 0) - (spendSeries.at(-2) ?? 0)}
           deltaVs={previousMonth}
@@ -286,7 +296,7 @@ export default function MonitorView({
             className={`metric-value mt-3 text-3xl${savingsRateHasSmallBase ? " text-warning" : ""}`}
             title={
               savingsRateHasSmallBase && savingsRate !== null
-                ? `Calculated from ${formatCurrency(data.currentMonthIncome)} of recorded income and ${formatCurrency(data.currentMonthExpenses)} of spending.`
+                ? `Calculated from ${formatCurrency(savingsRateIncome)} of recorded income and ${formatCurrency(savingsRateSpending)} of spending in ${savingsRatePeriod ?? "the selected period"}.`
                 : undefined
             }
           >
@@ -294,15 +304,19 @@ export default function MonitorView({
           </p>
           <p className={`mt-2 text-xs font-medium${savingsRateHasSmallBase ? " text-warning" : " text-muted"}`}>
             {savingsRate === null ? (
-              "No income recorded this month"
+              savingsRatePeriod
+                ? `No income recorded for ${savingsRatePeriod}`
+                : "Awaiting a complete month of data"
             ) : savingsRateHasSmallBase ? (
               <>
-                <Money amount={data.currentMonthIncome} /> income and{" "}
-                <Money amount={data.currentMonthExpenses} /> spending recorded{" "}
-                {isCurrentSelectedMonth ? "month-to-date" : "for the selected month"}; the rate is highly sensitive to income timing.
+                <Money amount={savingsRateIncome} /> income and{" "}
+                <Money amount={savingsRateSpending} /> spending recorded in{" "}
+                {savingsRatePeriod ?? "the selected period"}; the rate is highly sensitive to income timing.
               </>
             ) : (
-              `Based on ${isCurrentSelectedMonth ? "month-to-date" : "the selected month's"} recorded income`
+              savingsRatePeriod
+                ? `Based on recorded income from ${savingsRatePeriod}`
+                : "Awaiting a complete month of data"
             )}
           </p>
         </section>

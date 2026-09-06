@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
  */
 describe("insights wiring", () => {
   const dashboard = readFileSync("lib/dashboard.ts", "utf8");
+  const dashboardPage = readFileSync("app/dashboard/page.tsx", "utf8");
   const monitorView = readFileSync("components/dashboard/MonitorView.tsx", "utf8");
 
   it("dashboard aggregation computes the new insight metrics", () => {
@@ -23,12 +24,20 @@ describe("insights wiring", () => {
     expect(dashboard).toContain("priorMerchantMedians");
   });
 
+  it("dashboard resolves the savings card against an explicit period basis", () => {
+    expect(dashboardPage).toContain("resolveDashboardSavingsRate");
+    expect(dashboardPage).toContain("savingsRateMonth");
+    expect(dashboardPage).toContain("savingsRateUsesPriorCompleteMonth");
+  });
+
   it("monitor view renders the safe-to-spend, runway, and paycheck tiles", () => {
     expect(monitorView).toContain("Safe to spend");
     expect(monitorView).toContain("Emergency runway");
     expect(monitorView).toContain("Next paycheck");
     expect(monitorView).toContain("data.insights");
-    expect(monitorView).toContain("month-to-date");
+    expect(monitorView).toContain("last complete month");
+    expect(monitorView).toContain("Month-to-date cash flow");
+    expect(monitorView).toContain("Month-to-date spending");
   });
 
   it("monitor view keeps category-spike (info) anomalies out of the danger bucket", () => {

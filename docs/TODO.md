@@ -33,6 +33,8 @@ The feature is verified locally and remains pending merge and deployment.
 ### Savings-rate context follow-up in progress on 2026-09-05
 
 Dashboard savings rates retain their exact signed calculation while calling out denominator-sensitive periods and showing the recorded income and spending basis.
+When the active month is the current calendar month, the savings-rate card uses the most recent complete month and names that period explicitly.
+Cash-flow and spending tiles continue to show the active month on a month-to-date basis.
 The six-month savings series now shares the same signed and no-income behavior.
 Focused tests pass; the follow-up remains pending merge and deployment.
 

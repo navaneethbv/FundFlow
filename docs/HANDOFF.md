@@ -2,6 +2,13 @@
 
 Last updated: 2026-09-05. Read this first to resume.
 
+## 2026-09-05: Savings-rate period alignment
+
+The dashboard now uses the most recent complete month for the savings-rate card when the active month is the current calendar month.
+Cash-flow and spending tiles remain month-to-date for the active month.
+The savings-rate card names the month used for its income and spending basis, and shows an unavailable state when no complete month is in the six-month window.
+Focused tests, the full unit suite, coverage, lint, typecheck, build, palette validation, graph update, and fresh remote checks pass.
+
 ## 2026-09-05: Bulk transfer review action
 
 Branch `codex/bulk-transfer-linking` adds explicit row selection, a select-all checkbox, and a `Link all transfers` action to the transfer review panel.
@@ -17,6 +24,7 @@ This branch has not been deployed or exercised against production financial data
 
 The dashboard keeps the signed savings-rate calculation, but now flags a period where spending is more than ten times recorded income as denominator-sensitive.
 The card exposes the recorded income and spending amounts in its explanatory copy so a large negative percentage is not mistaken for a calculation failure.
+The active calendar month now uses the most recent complete month for this card, while cash-flow and spending tiles remain month-to-date.
 The six-month savings-rate series now uses the same shared signed calculation and returns no rate for months without an income denominator.
 The focused and full unit suites, coverage, lint, typecheck, build, palette validation, graph update, and fresh remote checks all pass.
 The full coverage command still does not run live integration files because `TEST_SUPABASE_URL` is not approved on this machine.
