@@ -5,12 +5,12 @@ Nice-to-have features and enhancements, deferred out of the initial build.
 ## UI audit follow-up (2026-09-06)
 
 The [page-by-page UI audit](reviews/2026-09-05-ui-page-audit.md) documents 17 confirmed defects across all main authenticated pages and Settings sections.
-Local fixes and automated verification are recorded in the [implementation plan](superpowers/plans/2026-09-05-ui-page-fixes.md) on `ui/page-audit` (remote `codex/ui-page-audit`, PR #157).
+Local fixes and automated verification are recorded in the [implementation plan](superpowers/plans/2026-09-05-ui-page-fixes.md); the work shipped in PR #157, merged to `main` as `7caaa2c`.
 
 The [PR #157 review](archive/2026-09-06-pr157-review.md) found five remaining defects at head `61ec03c`.
-All five are now fixed with regression coverage: net-worth composition, dismissed recurring reminders, mobile holdings parity, the last two duplicated account labels, and the admin sync-job panel.
+All five were fixed with regression coverage before merge: net-worth composition, dismissed recurring reminders, mobile holdings parity, the last two duplicated account labels, and the admin sync-job panel.
 The six Sonar annotations named in that review are also cleared.
-These fixes are not deployed.
+PR #157 is merged; a production deployment and the signed-in preview pass below are still unverified.
 
 Still open from that review:
 
@@ -23,7 +23,7 @@ Still open from that review:
 
 ## Current status (2026-09-06)
 
-State of `main` encompasses comprehensive review remediation (PR #153 `55bf767`), transfer linking follow-up (PR #154 `0f11da0`), bulk transfer review action (PR #155 `d2798f3`), and savings-rate context alignment (PR #156 `262c420`).
+State of `main` encompasses comprehensive review remediation (PR #153 `55bf767`), transfer linking follow-up (PR #154 `e8d0b01`), bulk transfer review action (PR #155 `d2798f3`), savings-rate context alignment (PR #156 `262c420`), and the UI audit / financial-workflow review findings (PR #157 `7caaa2c`).
 
 ### Deployment prerequisite
 The linked migration ledger was verified with `supabase migration list --linked` on 2026-09-07.
@@ -35,9 +35,10 @@ Migration `20260905130000` is recorded as applied remotely.
 
 ### Merged into main
 - **PR #153 (Comprehensive remediation):** Merged as `55bf767`.
-- **PR #154 (Transfer linking atomic RPC):** Merged as `0f11da0`.
+- **PR #154 (Transfer linking atomic RPC):** Merged as `e8d0b01`.
 - **PR #155 (Bulk transfer review action):** Merged as `d2798f3`.
 - **PR #156 (Savings-rate context follow-up):** Merged as `262c420`.
+- **PR #157 (UI audit + financial-workflow review findings):** Merged as `7caaa2c`.
 
 ### Closed
 
@@ -104,8 +105,8 @@ Migration `20260905130000` is recorded as applied remotely.
 
 ### Verification status
 
-Unit suite: 444 files, 4,900 tests, all passing.
-Branch coverage is 95.07% against the project's 95% gate; lint, typecheck, `next build` (70 routes) and the palette validator are clean.
+Unit suite as of PR #157: 465 files, 5,146 tests, all passing.
+Coverage is 97.93% statements / 95.01% branches / 98.39% functions / 99.18% lines against the project's 95% branch gate; lint, typecheck, `next build`, the palette validator, and the dependency audit (zero vulnerabilities) are clean.
 
 Both migrations were applied to a clean Postgres by `.github/workflows/migration-check.yml`, so the gate migration's `DO` block is executed, not merely reviewed.
 `scripts/check-rls.sql` now also asserts FF-02 directly against the applied schema: every `authenticated` policy on a `public` table must carry both gates, with only the three auth-bootstrap tables excepted.

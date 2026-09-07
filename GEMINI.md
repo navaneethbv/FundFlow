@@ -27,6 +27,17 @@ When a default and this rule disagree, this rule wins.
 
 See `CLAUDE.md` and `AGENTS.md` for the full repository constitution.
 
+## Context management
+
+Kept above the `## graphify` block on purpose: that block is rewritten by
+`graphify <agent> install`, so anything placed inside it is lost on the next run.
+
+Once context usage approaches 80%, wrap up cleanly rather than working to the limit.
+Checkpoint progress, update `docs/HANDOFF.md`, and let the conversation compress so
+the next window resumes with intent intact.
+This CLI is pinned to compress at 0.8 via `model.compressionThreshold` in
+`~/.gemini/settings.json`; Claude Code and Codex auto-compact near the ceiling.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.

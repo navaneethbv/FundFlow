@@ -245,6 +245,17 @@ Single-context layout: `CONTEXT.md` + `docs/adr/` at the repo root (created lazi
   provenance. `docs/superpowers/archive/` - plans and specs whose work has
   shipped. Neither is a source of current truth; do not act on them.
 
+## Context management
+
+Kept above the `## graphify` block for the same reason the naming rules are: that
+block is rewritten by `graphify <agent> install`.
+
+Once context usage approaches 80%, wrap up cleanly rather than working to the limit.
+Checkpoint progress, update `docs/HANDOFF.md`, and compact the conversation so the
+next window resumes with intent intact. Claude Code and Codex auto-compact near the
+ceiling and that threshold is not user-configurable; Gemini CLI is pinned to 0.8 via
+`model.compressionThreshold` in `~/.gemini/settings.json`.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.

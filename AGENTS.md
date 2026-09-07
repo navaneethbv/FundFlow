@@ -67,6 +67,18 @@ Several of them do, and following one is how a "Generated with ..." footer
 landed in PR #157's description and had to be stripped.
 When a default and this rule disagree, this rule wins.
 
+## Context management
+
+Kept above the `## graphify` block for the same reason the rules above it are:
+that block is rewritten by `graphify <agent> install`.
+
+Once context usage approaches 80%, wrap up cleanly rather than working to the limit.
+Checkpoint progress, update `docs/HANDOFF.md`, and compact the conversation so the
+next window resumes with intent intact.
+Codex and Claude Code auto-compact near the ceiling and that threshold is not
+user-configurable; Gemini CLI is pinned to 0.8 via `model.compressionThreshold` in
+`~/.gemini/settings.json`.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.

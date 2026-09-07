@@ -2,6 +2,12 @@
 
 Last updated: 2026-09-07. Read this first to resume.
 
+## 2026-09-07: PR #157 merged to `main`
+
+PR #157 (UI audit + financial-workflow review findings) is merged to `main` as `7caaa2c`.
+The branch-scoped entries below (`ui/page-audit` / `codex/ui-page-audit`, review head `61ec03c`) are now historical provenance, not open work.
+Still open after the merge: a production deployment of `main`, the signed-in preview pass at desktop and phone sizes, and the migration-ledger reconciliation tracked in [TODO.md](TODO.md#deployment-prerequisite).
+
 ## 2026-09-07: PR #157 follow-up fixes
 
 The [follow-up report](reviews/2026-09-07-pr157-follow-up.md) records the review findings, red/green reproductions, and ongoing verification.
