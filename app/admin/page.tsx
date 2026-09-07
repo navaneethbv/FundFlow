@@ -5,6 +5,7 @@ import Panel from "@/components/ui/Panel";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { daysSince, hoursSince } from "@/lib/format";
+import { formatTimestampUtc } from "@/lib/format-date";
 
 export const dynamic = "force-dynamic";
 
@@ -14,10 +15,39 @@ function countValue(result: CountResult): number {
   return result.count ?? 0;
 }
 
+/**
+ * `sync_jobs.status` is `pending | running | done | failed` (0001_init.sql).
+ * The old `error` test matched nothing, so a failed job read as merely
+ * in-progress on the one page whose job is to show that it failed.
+ */
 function jobStatusTone(status: string): "success" | "danger" | "warning" {
   if (status === "done") return "success";
-  if (status === "error") return "danger";
+  if (status === "failed") return "danger";
   return "warning";
+}
+
+/**
+ * A panel that renders `data ?? []` cannot tell "nothing happened" from "the
+ * query failed", and an operational page that quietly shows the reassuring one
+ * is worse than no panel at all. This keeps the two states apart.
+ */
+function PanelState({
+  error,
+  isEmpty,
+  emptyLabel,
+}: Readonly<{ error: unknown; isEmpty: boolean; emptyLabel: string }>) {
+  if (error) {
+    return (
+      <p className="rounded-field bg-panel-2 p-3 text-sm text-danger">
+        Could not load this panel.{" "}
+        <span className="text-muted">
+          {(error as { message?: string })?.message ?? "Unknown error"}
+        </span>
+      </p>
+    );
+  }
+  if (isEmpty) return <p className="text-sm text-muted">{emptyLabel}</p>;
+  return null;
 }
 
 export const metadata = {
@@ -64,9 +94,12 @@ export default async function AdminObservabilityPage() {
     service.from("sync_jobs").select("id", { count: "exact", head: true }),
     service.from("audit_logs").select("id", { count: "exact", head: true }),
     service.from("notifications").select("id", { count: "exact", head: true }),
+    // `job_type` is the real descriptor (20260730210000_investments.sql);
+    // `source` has never existed on this table, and selecting it failed the
+    // whole query, which the page then rendered as an empty panel.
     service
       .from("sync_jobs")
-      .select("id, status, source, updated_at")
+      .select("id, status, job_type, updated_at")
       .order("updated_at", { ascending: false })
       .limit(6),
     service
@@ -149,11 +182,18 @@ export default async function AdminObservabilityPage() {
       <div className="grid gap-6 xl:grid-cols-3">
         <Panel title="Recent sync jobs" eyebrow="Status">
           <div className="space-y-3 text-sm">
+            <PanelState
+              error={recentSyncJobs.error}
+              isEmpty={(recentSyncJobs.data ?? []).length === 0}
+              emptyLabel="No sync jobs recorded yet."
+            />
             {(recentSyncJobs.data ?? []).map((job) => (
               <div key={job.id} className="flex justify-between gap-4 rounded-field bg-panel-2 p-3">
                 <span>
-                  <span className="block font-semibold">{job.source ?? "manual"}</span>
-                  <span className="block text-xs text-muted">{job.updated_at}</span>
+                  <span className="block font-semibold">{job.job_type ?? "transactions"}</span>
+                  <span className="block text-xs text-muted">
+                    {formatTimestampUtc(job.updated_at)}
+                  </span>
                 </span>
                 <Badge tone={jobStatusTone(job.status)}>
                   {job.status}
@@ -165,6 +205,11 @@ export default async function AdminObservabilityPage() {
 
         <Panel title="Bank health" eyebrow="Plaid items">
           <div className="space-y-3 text-sm">
+            <PanelState
+              error={bankHealth.error}
+              isEmpty={(bankHealth.data ?? []).length === 0}
+              emptyLabel="No banks connected yet."
+            />
             {(bankHealth.data ?? []).map((item) => (
               <div key={item.id} className="rounded-field bg-panel-2 p-3">
                 <div className="flex items-start justify-between gap-3">
@@ -181,10 +226,17 @@ export default async function AdminObservabilityPage() {
 
         <Panel title="Recent audit events" eyebrow="Redacted">
           <div className="space-y-3 text-sm">
+            <PanelState
+              error={recentAuditLogs.error}
+              isEmpty={(recentAuditLogs.data ?? []).length === 0}
+              emptyLabel="No audit events recorded yet."
+            />
             {(recentAuditLogs.data ?? []).map((event) => (
               <div key={event.id} className="rounded-field bg-panel-2 p-3">
                 <span className="block font-semibold">{event.action}</span>
-                <span className="block text-xs text-muted">{event.created_at}</span>
+                <span className="block text-xs text-muted">
+                  {formatTimestampUtc(event.created_at)}
+                </span>
               </div>
             ))}
           </div>

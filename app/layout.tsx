@@ -29,6 +29,11 @@ const themeScript = `
     const system = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     const theme = stored === "light" || stored === "dark" ? stored : system;
     document.documentElement.dataset.theme = theme;
+    // Restore privacy mode pre-paint too (F-6): without this, amounts flash
+    // unblurred on every reload for users who left blur on.
+    if (localStorage.getItem("fundflow-privacy") === "blur") {
+      document.documentElement.dataset.privacy = "blur";
+    }
   } catch {}
 })();
 `;

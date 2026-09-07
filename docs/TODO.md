@@ -2,41 +2,42 @@
 
 Nice-to-have features and enhancements, deferred out of the initial build.
 
-## Current status (2026-09-05)
+## UI audit follow-up (2026-09-06)
 
-Comprehensive review remediation on branch `codex/comprehensive-review-remediation`, covering FF-01 through FF-33 from [`reviews/2026-09-04-comprehensive-review.md`](reviews/2026-09-04-comprehensive-review.md).
+The [page-by-page UI audit](reviews/2026-09-05-ui-page-audit.md) documents 17 confirmed defects across all main authenticated pages and Settings sections.
+Local fixes and automated verification are recorded in the [implementation plan](superpowers/plans/2026-09-05-ui-page-fixes.md) on `ui/page-audit` (remote `codex/ui-page-audit`, PR #157).
 
-A second review round on 2026-09-05 rejected the earlier "all 33 resolved" claim and named eleven findings that were partial or unfinished.
-Those are now addressed.
-This section records what is genuinely closed, what is closed with a stated limit, and what is deferred, rather than a single completion count.
-The distinction is the point: the previous version of this file asserted completion for work a reviewer could still reproduce a defect against.
+The [PR #157 review](archive/2026-09-06-pr157-review.md) found five remaining defects at head `61ec03c`.
+All five are now fixed with regression coverage: net-worth composition, dismissed recurring reminders, mobile holdings parity, the last two duplicated account labels, and the admin sync-job panel.
+The six Sonar annotations named in that review are also cleared.
+These fixes are not deployed.
 
-### Deployment prerequisite verified on 2026-09-05
+Still open from that review:
 
-The linked migration ledger still lists `20260904120000`, `20260905100000`, `20260905110000`, and `20260905120000` as local-only.
-The new send-boundary migration must be applied with the earlier hardening and delivery-journal migrations before deploying this branch.
-Older local-only versions `20260902220000`, `20260903010000`, and `20260904000000`, and remote-only versions `20260903171727` and `20260903171733`, still require content-based reconciliation.
-The transfer confirmation backfill migration `20260905130000` was applied to the linked project after this verification and recorded as applied.
-No other local-only migrations were applied during the third review.
+- The signed-in preview pass at desktop and phone sizes, including unsaved dialogs and accessible controls.
+  It needs a preview sign-in the reviewing session cannot perform.
+- Signed-in acceptance of the shared Dashboard/Recurring inputs and occurrence model.
+  Corrected amounts, manual items, exact account filters, persisted payment links, and month expansion now share code and have local regression coverage in the [follow-up report](reviews/2026-09-07-pr157-follow-up.md).
+- `lib/budget-data.ts` still counts dismissed streams when it collects recurring categories for budget suggestions.
+  That surface suggests a category name rather than a due reminder, so it was left alone rather than widened into the same change.
 
-### Transfer linking follow-up verified on 2026-09-05
+## Current status (2026-09-06)
 
-PR #154 makes transfer subjects independent of posting direction and restores the atomic `confirm_transfer_link` RPC for environments where the transfer tables were deployed without the hardening migration.
-The linked project now has the RPC, its one-use transaction indexes, and the explicit null guards used by the migration.
+State of `main` encompasses comprehensive review remediation (PR #153 `55bf767`), transfer linking follow-up (PR #154 `0f11da0`), bulk transfer review action (PR #155 `d2798f3`), and savings-rate context alignment (PR #156 `262c420`).
 
-### Transfer review bulk action in progress on 2026-09-05
+### Deployment prerequisite
+The linked migration ledger was verified with `supabase migration list --linked` on 2026-09-07.
+Migrations `20260906140000` (public-role policy gate) and `20260906150000` (refund-link RPC) were applied and their effects checked against the live schema during the PR #157 follow-up.
+The connector-generated IDs `20260907030628` and `20260907030636` were replaced with those exact repository versions in migration history; the schema changes were retained.
+Versions `20260904120000`, `20260905100000`, `20260905110000`, and `20260905120000` remain local-only and require content-based reconciliation before any deployment claim.
+Older local versions `20260902220000`, `20260903010000`, and `20260904000000` also require reconciliation with the remote history, including `20260903171727` and `20260903171733`.
+Migration `20260905130000` is recorded as applied remotely.
 
-Branch `codex/bulk-transfer-linking` adds per-row selection, select all, and bulk linking for transfer suggestions.
-The bulk endpoint is bounded at 100 pairs per request, processes up to eight pairs concurrently, validates each pair through the existing ownership and transfer checks, and returns partial failures so valid links are not hidden by one bad suggestion.
-The feature is verified locally and remains pending merge and deployment.
-
-### Savings-rate context follow-up in progress on 2026-09-05
-
-Dashboard savings rates retain their exact signed calculation while calling out denominator-sensitive periods and showing the recorded income and spending basis.
-When the active month is the current calendar month, the savings-rate card uses the most recent complete month and names that period explicitly.
-Cash-flow and spending tiles continue to show the active month on a month-to-date basis.
-The six-month savings series now shares the same signed and no-income behavior.
-Focused tests pass; the follow-up remains pending merge and deployment.
+### Merged into main
+- **PR #153 (Comprehensive remediation):** Merged as `55bf767`.
+- **PR #154 (Transfer linking atomic RPC):** Merged as `0f11da0`.
+- **PR #155 (Bulk transfer review action):** Merged as `d2798f3`.
+- **PR #156 (Savings-rate context follow-up):** Merged as `262c420`.
 
 ### Closed
 
@@ -44,8 +45,8 @@ Focused tests pass; the follow-up remains pending merge and deployment.
   Immutable revocation trigger on `user_session_records`; session reads use the cookie-bound client; the service role is confined to revocation.
 - **FF-02 MFA and revocation gates.**
   `20260904120000` covered the core financial tables.
-  `20260905100000_mfa_gate_remaining_user_tables.sql` completes it for the 37 remaining user-data tables, including the three the second round flagged (`life_events`, `credit_card_bills`, `account_reconciliations`).
-  It rewrites each policy in place from `pg_policies`, so existing ownership predicates are preserved exactly rather than retyped.
+  `20260905100000_mfa_gate_remaining_user_tables.sql` completed it for the 37 remaining user-data tables, but its `'authenticated' = any(roles)` predicate missed 35 policies on public schema tables defaulting to the `{public}` role.
+  `20260906140000_gate_public_role_policies.sql` closes this with `roles && array['public', 'authenticated']::name[]`, and `scripts/check-rls.sql` enforces that no public table policy is left ungated or restricted only to `{public}`.
   `profiles`, `user_session_records` and `mfa_backup_codes` are deliberately excluded, and the reason is recorded in the migration: all three are read before a session can reach AAL2.
 - **FF-03, FF-29 AI consent and provider routing.**
   Fail-closed double consent; `lib/ai-provider.ts` is the only place an Anthropic client is constructed.

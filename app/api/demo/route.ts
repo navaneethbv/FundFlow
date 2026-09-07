@@ -8,6 +8,11 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { writeAudit } from "@/lib/audit";
 import { invalidateDashboardCache } from "@/lib/dashboard-cache";
 
+import { checkRateLimit } from "@/lib/rate-limit";
+
+const DEMO_RATE_LIMIT_MAX = 5;
+const DEMO_RATE_LIMIT_WINDOW = 3600;
+
 /**
  * Demo mode (7.4): load/clear a deterministic sample dataset so the app can
  * be shown or screenshotted with zero real numbers. Loading is refused
@@ -19,10 +24,23 @@ export async function POST() {
   if (auth instanceof NextResponse) return auth;
   const { user, supabase } = auth;
 
+  const allowed = await checkRateLimit(
+    `demo-load:${user.id}`,
+    DEMO_RATE_LIMIT_MAX,
+    DEMO_RATE_LIMIT_WINDOW,
+  );
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Too many demo requests. Please try again later." },
+      { status: 429 },
+    );
+  }
+
   try {
-    const { data: existingItems } = await supabase
+    const { data: existingItems, error: itemsError } = await supabase
       .from("plaid_items")
       .select("plaid_item_id");
+    if (itemsError) throw itemsError;
     const hasRealBank = (existingItems ?? []).some(
       (item) => !(item.plaid_item_id as string).startsWith("demo-"),
     );
@@ -40,11 +58,12 @@ export async function POST() {
 
     const service = createServiceClient();
     // Idempotent: clear any prior demo rows first (cascade), then insert.
-    await service
+    const { error: deleteError } = await service
       .from("plaid_items")
       .delete()
       .eq("user_id", user.id)
       .like("plaid_item_id", "demo-%");
+    if (deleteError) throw deleteError;
 
     const { data: itemRow, error: itemError } = await service
       .from("plaid_items")

@@ -2,6 +2,7 @@ import "server-only";
 import {
   createCipheriv,
   createDecipheriv,
+  createHash,
   randomBytes,
   timingSafeEqual,
 } from "node:crypto";
@@ -111,8 +112,9 @@ export function decryptSecret(payload: EncryptedPayload): string {
 
 /** Constant-time string comparison for secrets (e.g. cron token). */
 export function safeEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
+  // Hash both sides first so the comparison itself is fixed-length: comparing
+  // raw buffers leaks the expected length via the early length-mismatch exit.
+  const hashA = createHash("sha256").update(a).digest();
+  const hashB = createHash("sha256").update(b).digest();
+  return timingSafeEqual(hashA, hashB);
 }

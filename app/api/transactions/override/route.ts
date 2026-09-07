@@ -8,6 +8,11 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 type CashFlowClassification = "expense" | "income";
 
+type ExistingOverride = {
+  display_category: string | null;
+  cash_flow_classification: CashFlowClassification | null;
+};
+
 interface OverrideBody {
   transaction_id?: unknown;
   display_category?: unknown;
@@ -88,6 +93,67 @@ function nextOverrideValues(
  * an explicit `confirmed: true` — the UI only sends it after a deliberate
  * confirmation, and every create/update/delete is audited.
  */
+function parseAndValidateOverrideBody(body: OverrideBody | null): {
+  errorResponse?: NextResponse;
+  transactionId?: string;
+  displayCategory?: string | null;
+  cashFlowClassification?: CashFlowClassification | null;
+} {
+  const transactionId = body?.transaction_id;
+  if (typeof transactionId !== "string" || !UUID_REGEX.test(transactionId)) {
+    return { errorResponse: badRequest("Invalid transaction_id") };
+  }
+  const hasDisplayCategory = hasOverrideField(body, "display_category");
+  const hasClassification = hasOverrideField(body, "cash_flow_classification");
+  if (
+    hasDisplayCategory &&
+    body?.display_category !== null &&
+    typeof body?.display_category !== "string"
+  ) {
+    return { errorResponse: badRequest("display_category must be a string or null") };
+  }
+  if (
+    hasClassification &&
+    body?.cash_flow_classification !== null &&
+    body?.cash_flow_classification !== "expense" &&
+    body?.cash_flow_classification !== "income"
+  ) {
+    return { errorResponse: badRequest("cash_flow_classification must be expense, income, or null") };
+  }
+  const displayCategory = parseDisplayCategory(body, hasDisplayCategory);
+  const cashFlowClassification = parseCashFlowClassification(body, hasClassification);
+  if (displayCategory === undefined && cashFlowClassification === undefined) {
+    return { errorResponse: badRequest("Provide a display_category or cash_flow_classification") };
+  }
+
+  return { transactionId, displayCategory, cashFlowClassification };
+}
+
+function buildOverrideUpsertPayload(
+  userId: string,
+  transactionId: string,
+  displayCategory: string | null | undefined,
+  cashFlowClassification: CashFlowClassification | null | undefined,
+  existingOverride: ExistingOverride | null,
+  next: { displayCategory: string | null; cashFlowClassification: CashFlowClassification | null },
+): Record<string, unknown> {
+  const updatePayload: Record<string, unknown> = {
+    user_id: userId,
+    transaction_id: transactionId,
+  };
+  if (displayCategory !== undefined) {
+    updatePayload.display_category = next.displayCategory;
+  } else if (existingOverride) {
+    updatePayload.display_category = existingOverride.display_category;
+  }
+  if (cashFlowClassification !== undefined) {
+    updatePayload.cash_flow_classification = next.cashFlowClassification;
+  } else if (existingOverride) {
+    updatePayload.cash_flow_classification = existingOverride.cash_flow_classification;
+  }
+  return updatePayload;
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -95,41 +161,19 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = (await request.json().catch(() => null)) as OverrideBody | null;
-    const transactionId = body?.transaction_id;
-    if (typeof transactionId !== "string" || !UUID_REGEX.test(transactionId)) {
-      return badRequest("Invalid transaction_id");
-    }
-    const hasDisplayCategory = hasOverrideField(body, "display_category");
-    const hasClassification = hasOverrideField(body, "cash_flow_classification");
-    if (
-      hasDisplayCategory &&
-      body?.display_category !== null &&
-      typeof body?.display_category !== "string"
-    ) {
-      return badRequest("display_category must be a string or null");
-    }
-    if (
-      hasClassification &&
-      body?.cash_flow_classification !== null &&
-      body?.cash_flow_classification !== "expense" &&
-      body?.cash_flow_classification !== "income"
-    ) {
-      return badRequest("cash_flow_classification must be expense, income, or null");
-    }
-    const displayCategory = parseDisplayCategory(body, hasDisplayCategory);
-    const cashFlowClassification = parseCashFlowClassification(body, hasClassification);
-    if (displayCategory === undefined && cashFlowClassification === undefined) {
-      return badRequest("Provide a display_category or cash_flow_classification");
-    }
+    const validated = parseAndValidateOverrideBody(body);
+    if (validated.errorResponse) return validated.errorResponse;
+    const { transactionId, displayCategory, cashFlowClassification } = validated;
 
     // Ownership, not visibility: RLS exposes household-shared transactions, so
     // scope the lookup explicitly to the caller.
-    const { data: txn } = await supabase
+    const { data: txn, error: txnError } = await supabase
       .from("transactions")
       .select("id, pfc_primary, pfc_detailed")
-      .eq("id", transactionId)
+      .eq("id", transactionId!)
       .eq("user_id", user.id)
       .maybeSingle();
+    if (txnError) throw txnError;
     if (!txn) return badRequest("Transaction not found");
 
     // Deliberate-confirmation gate: turning a provider transfer or loan
@@ -143,16 +187,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const existingOverride = await loadExistingOverride(supabase, user.id, transactionId);
+    const existingOverride = await loadExistingOverride(supabase, user.id, transactionId!);
     const next = nextOverrideValues(displayCategory, cashFlowClassification, existingOverride);
+    const updatePayload = buildOverrideUpsertPayload(
+      user.id,
+      transactionId!,
+      displayCategory,
+      cashFlowClassification,
+      existingOverride,
+      next,
+    );
 
     const { error } = await supabase.from("transaction_annotations").upsert(
-      {
-        user_id: user.id,
-        transaction_id: transactionId,
-        display_category: next.displayCategory,
-        cash_flow_classification: next.cashFlowClassification,
-      },
+      updatePayload,
       { onConflict: "user_id,transaction_id" },
     );
     if (error) throw error;
@@ -180,12 +227,13 @@ async function loadExistingOverride(
   userId: string,
   transactionId: string,
 ): Promise<{ display_category: string | null; cash_flow_classification: CashFlowClassification | null } | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("transaction_annotations")
     .select("display_category, cash_flow_classification")
     .eq("user_id", userId)
     .eq("transaction_id", transactionId)
     .maybeSingle();
+  if (error) throw error;
   const row = data as
     | { display_category?: string | null; cash_flow_classification?: CashFlowClassification | null }
     | null;
@@ -212,12 +260,13 @@ export async function DELETE(request: NextRequest) {
       return badRequest("Invalid transaction_id");
     }
 
-    const { data: txn } = await supabase
+    const { data: txn, error: txnError } = await supabase
       .from("transactions")
       .select("id")
       .eq("id", transactionId)
       .eq("user_id", user.id)
       .maybeSingle();
+    if (txnError) throw txnError;
     if (!txn) return badRequest("Transaction not found");
 
     const { error } = await supabase

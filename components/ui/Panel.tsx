@@ -39,8 +39,8 @@ export default function Panel({
       {...props}
     >
       {(title || eyebrow || action) && (
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
+        <div className="mb-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:flex-wrap">
+          <div className="min-w-0 flex-1">
             {eyebrow && <p className="eyebrow">{eyebrow}</p>}
             {title && <h2 className="card-title">{title}</h2>}
           </div>

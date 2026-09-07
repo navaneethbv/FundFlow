@@ -53,6 +53,7 @@ const mockServiceClient = {
     tables[table] ??= queryStub(seeds[table] ?? []);
     return tables[table];
   }),
+  rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
 };
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => mockServiceClient,
@@ -88,7 +89,9 @@ describe("GET /api/export/csv?scope=tax — API-token path", () => {
     mockFetchPrivacySafeRows.mockResolvedValue({ allowed: true, rows: [] });
   });
 
-  const request = new NextRequest("http://localhost/api/export/csv?scope=tax");
+  const request = new NextRequest("http://localhost/api/export/csv?scope=tax", {
+    headers: { authorization: "Bearer test-api-token" },
+  });
 
   it("scopes the tax-tag lookup to the token's user", async () => {
     await csvGet(request);

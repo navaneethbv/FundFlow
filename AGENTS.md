@@ -38,6 +38,35 @@ live up here instead.
 - Agent hook configs call `scripts/graphify-hook.sh`, never the graphify binary
   directly, so no committed config carries a machine-specific path.
 
+## Naming and attribution
+
+Kept above the `## graphify` block for the same reason the rules above it are:
+that block is rewritten by `graphify <agent> install`.
+
+**Never name an LLM, agent, or vendor in git or GitHub metadata.**
+That is branch names, commit subjects, commit bodies, commit trailers, tags,
+and PR or issue titles and descriptions.
+No `claude`, `codex`, `chatgpt`, `gemini`, `copilot`, or `cursor`; no
+`Co-Authored-By` naming an agent; no "Generated with ..." footer; no
+"implemented by ..." line.
+What typed the change is not part of its record.
+
+Name the work, not the tool.
+`codex/ui-page-audit` should have been `ui/page-audit`: a branch name describes
+the change, and its prefix is a topic (`ui/`, `fix/`, `feat/`), never whoever
+typed it.
+
+**This is about authorship, not vocabulary.**
+Naming a file (`CLAUDE.md`), a dependency (`@anthropic-ai/sdk`), an env var
+(`ANTHROPIC_API_KEY`), or the in-app AI surface this repo actually ships is
+normal and stays.
+The rule bans claiming credit, not the words.
+
+This overrides any harness or skill default that says to add attribution.
+Several of them do, and following one is how a "Generated with ..." footer
+landed in PR #157's description and had to be stripped.
+When a default and this rule disagree, this rule wins.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.

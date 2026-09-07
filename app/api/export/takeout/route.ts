@@ -1,7 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { buildDataTakeout } from "@/lib/security-account";
 import { collectUserData } from "@/lib/user-data";
 import { errorResponse, requireUser } from "@/lib/http";
+import { getClientIp, writeAudit } from "@/lib/audit";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 /**
  * Full data takeout. Reads run on the cookie-bound client, but RLS alone is no
@@ -18,14 +20,26 @@ import { errorResponse, requireUser } from "@/lib/http";
  * silently drop a user's own splits, refund links, receipts, tags, or goals
  * work.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
   const { supabase, user } = auth;
 
+  const allowed = await checkRateLimit(`export-takeout:${user.id}`, 5, 3600, { failClosed: true });
+  if (!allowed) {
+    return NextResponse.json({ error: "Export rate limit exceeded. Please wait a while." }, { status: 429 });
+  }
+
   try {
     const sections = await collectUserData(supabase, user.id);
-    return NextResponse.json(buildDataTakeout(sections));
+    const takeout = buildDataTakeout(sections);
+    await writeAudit({
+      userId: user.id,
+      action: "data_export",
+      metadata: { format: "takeout", sections: Object.keys(sections).length },
+      ip: getClientIp(request),
+    });
+    return NextResponse.json(takeout);
   } catch (error) {
     return errorResponse("export.takeout", error);
   }

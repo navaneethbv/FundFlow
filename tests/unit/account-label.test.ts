@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { stripTrailingAccountMask } from "@/lib/account-label";
+import { accountDisplayLabel, stripTrailingAccountMask } from "@/lib/account-label";
 
 const EMAIL_MASK = "•*x";
 const PDF_MASK = "•*x-";
@@ -33,5 +33,36 @@ describe("stripTrailingAccountMask", () => {
   it("returns empty for a name that is nothing but a mask, so callers can fall back", () => {
     expect(stripTrailingAccountMask("1234", EMAIL_MASK)).toBe("");
     expect(stripTrailingAccountMask("••••1234", PDF_MASK)).toBe("");
+  });
+});
+
+
+describe("accountDisplayLabel", () => {
+  it("distinguishes identical names by the real mask", () => {
+    expect(accountDisplayLabel("CREDIT CARD", "1234")).toBe("CREDIT CARD ••1234");
+    expect(accountDisplayLabel("CREDIT CARD", "5678")).toBe("CREDIT CARD ••5678");
+  });
+  it.each(["Card ••1234", "Card (...1234)", "Card xx1234", "Card 1234"])("deduplicates %s", (name) => {
+    expect(accountDisplayLabel(name, "1234")).toBe("Card ••1234");
+  });
+  it("cleans replacement characters without changing raw input or unmatched year suffixes", () => {
+    const raw = "  Card \uFFFD\uFFFD (...1234)  ";
+    expect(accountDisplayLabel(raw, "1234")).toBe("Card ••1234");
+    expect(raw).toContain("\uFFFD");
+    expect(accountDisplayLabel("Plan 2024", "1234")).toBe("Plan 2024 ••1234");
+    expect(accountDisplayLabel(null, "1234")).toBe("Account ••1234");
+    expect(accountDisplayLabel(" ")).toBe("Account");
+    expect(accountDisplayLabel(undefined)).toBe("Account");
+  });
+
+  // Plaid does not guarantee a four-digit mask. A shorter or longer mask used
+  // to defeat the fixed four-digit strip and get appended a second time.
+  it("strips a mask of any length instead of only exactly four digits", () => {
+    expect(accountDisplayLabel("Visa (34)", "34")).toBe("Visa ••34");
+    expect(accountDisplayLabel("Card (...123)", "123")).toBe("Card ••123");
+    expect(accountDisplayLabel("Card ••123", "123")).toBe("Card ••123");
+    expect(accountDisplayLabel("Card 12345", "12345")).toBe("Card ••12345");
+    expect(accountDisplayLabel("Chase (1234)", "1234")).toBe("Chase ••1234");
+    expect(accountDisplayLabel(null, "12")).toBe("Account ••12");
   });
 });

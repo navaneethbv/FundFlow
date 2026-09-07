@@ -209,7 +209,7 @@ describe("GET /api/household/accept", () => {
       },
       household_members: {
         data: null,
-        error: { message: "duplicate key value violates unique constraint" },
+        error: { code: "23505", message: "duplicate key value violates unique constraint" },
       },
     });
     mockServiceClient.from.mockImplementation((table: string) =>

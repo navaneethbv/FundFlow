@@ -56,6 +56,11 @@ function parseDate(value: string): number {
 }
 
 export function validateSplits(transaction: SplitTransaction, splits: TransactionSplit[]) {
+  // Summed as stored, not as magnitudes. `transaction_splits.amount` carries
+  // `check (amount > 0)`, so a non-positive split cannot come from the
+  // database. Normalizing with abs here would only let a negative split that
+  // arrived some other way pass validation silently instead of failing the
+  // total check.
   const total = splits
     .filter((split) => split.transactionId === transaction.id)
     .reduce((sum, split) => sum + split.amount, 0);
@@ -86,7 +91,9 @@ export function aggregateSpendWithSplits(
         totals.set(split.category, (totals.get(split.category) ?? 0) + split.amount);
       }
     } else {
-      totals.set(transaction.category ?? "UNCATEGORIZED", (totals.get(transaction.category ?? "UNCATEGORIZED") ?? 0) + Math.abs(transaction.amount));
+      // Signed (M-8): expense credits (negative amounts) net against the
+      // category instead of inflating it via Math.abs.
+      totals.set(transaction.category ?? "UNCATEGORIZED", (totals.get(transaction.category ?? "UNCATEGORIZED") ?? 0) + transaction.amount);
     }
   }
 
@@ -96,7 +103,7 @@ export function aggregateSpendWithSplits(
 }
 
 export function detectRefundPairs(transactions: LedgerTransaction[], windowDays: number) {
-  const pairs: { chargeId: string; refundId: string; amount: number }[] = [];
+  const pairs: { chargeId: string; refundId: string; amount: number; partial: boolean }[] = [];
   const charges = transactions
     .filter((txn) => txn.amount > 0)
     .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
@@ -109,7 +116,11 @@ export function detectRefundPairs(transactions: LedgerTransaction[], windowDays:
       .filter((candidate) => {
         if (usedRefunds.has(candidate.id)) return false;
         if (normalize(candidate.merchant) !== normalize(charge.merchant)) return false;
-        if (round2(Math.abs(candidate.amount)) !== round2(charge.amount)) return false;
+        // Exact matches net in full; partial refunds (|refund| < charge)
+        // surface with an upper bound so review can confirm them without
+        // ever linking more than the charge (M-8). Unlinked partials still
+        // net correctly as expense credits in the canonical projection.
+        if (round2(Math.abs(candidate.amount)) > round2(charge.amount)) return false;
         const candidateDate = parseDate(candidate.date);
         const dayDiff = (candidateDate - chargeDate) / 86_400_000;
         return dayDiff >= 0 && dayDiff <= windowDays;
@@ -123,7 +134,13 @@ export function detectRefundPairs(transactions: LedgerTransaction[], windowDays:
     const refund = eligibleRefunds[0];
     if (!refund) continue;
     usedRefunds.add(refund.id);
-    pairs.push({ chargeId: charge.id, refundId: refund.id, amount: round2(charge.amount) });
+    const refundAbs = round2(Math.abs(refund.amount));
+    pairs.push({
+      chargeId: charge.id,
+      refundId: refund.id,
+      amount: round2(charge.amount),
+      partial: refundAbs < round2(charge.amount),
+    });
   }
 
   return pairs;

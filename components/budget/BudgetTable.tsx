@@ -158,6 +158,31 @@ function RowMenu({
   );
 }
 
+/**
+ * Planned-amount editing shared by the desktop row and its mobile card twin:
+ * one validation and commit-on-blur rule. Note: each rendered instance
+ * holds its own local draft state cell, so an uncommitted edit would not
+ * transfer across a responsive breakpoint change before blur.
+ */
+function usePlannedAmount(
+  line: BudgetLine,
+  onUpdate: (line: BudgetLine, patch: BudgetLinePatch) => Promise<void>,
+) {
+  const [planned, setPlanned] = useState(String(line.basePlanned));
+
+  async function savePlanned() {
+    const result = validatePlannedAmount(planned, line.basePlanned);
+    if (!result.ok) {
+      setPlanned(String(line.basePlanned));
+      return;
+    }
+    if (!result.changed) return;
+    await onUpdate(line, { planned: result.value });
+  }
+
+  return { planned, setPlanned, savePlanned };
+}
+
 function BudgetRow({
   line,
   currency,
@@ -169,7 +194,7 @@ function BudgetRow({
   disabled: boolean;
   onUpdate: (line: BudgetLine, patch: BudgetLinePatch) => Promise<void>;
 }>) {
-  const [planned, setPlanned] = useState(String(line.basePlanned));
+  const { planned, setPlanned, savePlanned } = usePlannedAmount(line, onUpdate);
 
   if (!line.budgetId) {
     return (
@@ -185,23 +210,13 @@ function BudgetRow({
           {formatCurrency(line.actual, currency)}
         </td>
         <td className="px-4 py-3 text-right">
-          <Badge tone="danger" data-money style={{ color: "var(--viz-neg)" }}>
+          <Badge tone="danger" data-money>
             {formatCurrency(line.remaining, currency)}
           </Badge>
         </td>
         <td className="px-4 py-3 text-xs text-muted">Create a budget to edit</td>
       </tr>
     );
-  }
-
-  async function savePlanned() {
-    const result = validatePlannedAmount(planned, line.basePlanned);
-    if (!result.ok) {
-      setPlanned(String(line.basePlanned));
-      return;
-    }
-    if (!result.changed) return;
-    await onUpdate(line, { planned: result.value });
   }
 
   const pct = line.planned > 0 ? Math.round((line.actual / line.planned) * 100) : 0;
@@ -245,7 +260,7 @@ function BudgetRow({
       </td>
       <td className="px-4 py-3 text-right align-top">
         {over ? (
-          <Badge tone="danger" data-money style={{ color: "var(--viz-neg)" }}>
+          <Badge tone="danger" data-money>
             {formatCurrency(line.remaining, currency)}
           </Badge>
         ) : (
@@ -258,6 +273,87 @@ function BudgetRow({
         <RowMenu line={line} disabled={disabled} onUpdate={onUpdate} />
       </td>
     </tr>
+  );
+}
+
+/**
+ * Mobile card twin of BudgetRow: category + planned input + actual +
+ * remaining stay together below `sm`, where the 640px table would force
+ * horizontal scrolling to edit a number. RowMenu is shared with desktop
+ * so group/rollover/sort controls are not lost on phones.
+ */
+function BudgetCard({
+  line,
+  currency,
+  disabled,
+  onUpdate,
+}: Readonly<{
+  line: BudgetLine;
+  currency: string;
+  disabled: boolean;
+  onUpdate: (line: BudgetLine, patch: BudgetLinePatch) => Promise<void>;
+}>) {
+  const { planned, setPlanned, savePlanned } = usePlannedAmount(line, onUpdate);
+
+  const pct = line.planned > 0 ? Math.round((line.actual / line.planned) * 100) : 0;
+  const over = line.remaining < 0;
+
+  return (
+    <div className="rounded-field border border-panel-border bg-panel-2 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="min-w-0">
+          <CategoryChip label={line.label} />
+          {!line.budgetId && <Badge tone="warning" className="ml-2">Unbudgeted</Badge>}
+        </span>
+        {line.budgetId ? <RowMenu line={line} disabled={disabled} onUpdate={onUpdate} /> : null}
+      </div>
+      <ProgressBar
+        className="mt-2"
+        size="sm"
+        percent={pct}
+        tone={over ? "danger" : "success"}
+        ariaLabel={`${line.label} spent`}
+      />
+      <div className="mt-2 flex items-end justify-between gap-3 text-sm">
+        {line.budgetId ? (
+          <label className="min-w-0 text-xs text-muted">
+            <span className="block">Planned</span>
+            <input
+              aria-label={`Planned amount for ${line.label}`}
+              type="number"
+              min="0"
+              step="0.01"
+              value={planned}
+              disabled={disabled}
+              onChange={(event) => setPlanned(event.target.value)}
+              onBlur={savePlanned}
+              className="mt-1 min-h-11 w-28 rounded-field border border-panel-border bg-panel px-2 text-left tabular-nums text-foreground focus:border-accent focus:outline-none"
+            />
+          </label>
+        ) : (
+          <span className="text-xs text-muted">Create a budget to edit</span>
+        )}
+        <span className="shrink-0 text-right">
+          <span className="block text-xs text-muted">
+            <span data-money>{formatCurrency(line.actual, currency)}</span> spent
+          </span>
+          {over ? (
+            <Badge tone="danger" data-money className="mt-1">
+              {formatCurrency(line.remaining, currency)}
+            </Badge>
+          ) : (
+            <span data-money className="mt-1 block font-semibold" style={{ color: "var(--viz-pos)" }}>
+              {formatCurrency(line.remaining, currency)}
+            </span>
+          )}
+        </span>
+      </div>
+      {line.rolloverCarry !== 0 && (
+        <p className="mt-1 text-xs text-muted">
+          {formatCurrency(line.rolloverCarry, currency)} carried from last month
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -294,35 +390,53 @@ export default function BudgetTable({
         </div>
       </div>
       {lines.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead className="bg-panel-2 text-xs text-muted">
-              <tr>
-                <th scope="col" className="px-4 py-3 text-left">Category</th>
-                <th scope="col" className="px-4 py-3 text-right">Planned</th>
-                <th scope="col" className="px-4 py-3 text-right">Actual</th>
-                <th scope="col" className="px-4 py-3 text-right">Remaining</th>
-                <th scope="col" aria-label="Plan controls" className="px-2 py-3 text-right" />
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((line) => (
-                <BudgetRow
-                  key={[
-                    line.budgetId ?? "unbudgeted",
-                    line.category,
-                    line.basePlanned,
-                    line.sortOrder,
-                  ].join(":")}
-                  line={line}
-                  currency={currency}
-                  disabled={disabled}
-                  onUpdate={onUpdate}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="space-y-2 p-3 sm:hidden">
+            {lines.map((line) => (
+              <BudgetCard
+                key={[
+                  line.budgetId ?? "unbudgeted",
+                  line.category,
+                  line.basePlanned,
+                  line.sortOrder,
+                ].join(":")}
+                line={line}
+                currency={currency}
+                disabled={disabled}
+                onUpdate={onUpdate}
+              />
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto sm:block">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead className="bg-panel-2 text-xs text-muted">
+                <tr>
+                  <th scope="col" className="px-4 py-3 text-left">Category</th>
+                  <th scope="col" className="px-4 py-3 text-right">Planned</th>
+                  <th scope="col" className="px-4 py-3 text-right">Actual</th>
+                  <th scope="col" className="px-4 py-3 text-right">Remaining</th>
+                  <th scope="col" aria-label="Plan controls" className="px-2 py-3 text-right" />
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((line) => (
+                  <BudgetRow
+                    key={[
+                      line.budgetId ?? "unbudgeted",
+                      line.category,
+                      line.basePlanned,
+                      line.sortOrder,
+                    ].join(":")}
+                    line={line}
+                    currency={currency}
+                    disabled={disabled}
+                    onUpdate={onUpdate}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       ) : (
         <p className="border-t border-panel-border px-5 py-6 text-sm text-muted">
           No categories in this section yet.

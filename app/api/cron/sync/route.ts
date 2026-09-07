@@ -70,7 +70,10 @@ async function sendDailyDigest(
         ? (todayNotifications ?? []).filter((notification) => notification.type === "broken_bank")
         : (todayNotifications ?? []);
     if (digestNotifications.length === 0) return;
-    const { data: userData } = await service.auth.admin.getUserById(userId);
+    // Checked (A-13): a failed user lookup must surface, never silently
+    // skip one user's digest while reporting success.
+    const { data: userData, error: userError } = await service.auth.admin.getUserById(userId);
+    if (userError) throw userError;
     const email = userData?.user?.email;
     if (!email) return;
     await sendDailyDigestEmail(
@@ -93,25 +96,58 @@ async function sendDailyDigest(
   }
 }
 
+/** PostgREST max_rows is 1,000: page so the integrity pass sees every row. */
+const CRON_TXN_PAGE_SIZE = 1_000;
+
+async function loadUserTransactions(
+  service: ReturnType<typeof createServiceClient>,
+  userId: string,
+): Promise<Array<{ id: string; accountId: string | null; plaidTransactionId: string | null; pending: boolean; date: string }>> {
+  const rows: Array<{ id: string; accountId: string | null; plaidTransactionId: string | null; pending: boolean; date: string }> = [];
+  for (let page = 0; ; page += 1) {
+    const from = page * CRON_TXN_PAGE_SIZE;
+    const { data, error } = await service
+      .from("transactions")
+      .select("id, account_id, plaid_transaction_id, pending, date")
+      .eq("user_id", userId)
+      .order("date")
+      .order("id")
+      .range(from, from + CRON_TXN_PAGE_SIZE - 1);
+    if (error) throw error;
+    const batch = (data ?? []).map((t) => ({
+      id: t.id as string,
+      accountId: t.account_id as string | null,
+      plaidTransactionId: t.plaid_transaction_id as string | null,
+      pending: Boolean(t.pending),
+      date: t.date as string,
+    }));
+    rows.push(...batch);
+    if (batch.length < CRON_TXN_PAGE_SIZE) return rows;
+  }
+}
+
 async function syncUser(
   service: ReturnType<typeof createServiceClient>,
   userId: string,
 ): Promise<void> {
   await syncAllForUser(userId);
   await runOptionalSync("cron.sync.token-rotation", () => rotateStaleItemTokens(userId));
+  // One clock per user for the whole run (M-11): daily snapshots, the
+  // net-worth month key, recurring inference, and notifications all share
+  // the viewer's profile-timezone day instead of each reading UTC.
+  let today = dateKeyInTimezone(new Date(), null);
+  try {
+    const { data: profile, error: profileError } = await service
+      .from("profiles")
+      .select("timezone")
+      .eq("id", userId)
+      .maybeSingle();
+    if (profileError) throw profileError;
+    today = dateKeyInTimezone(new Date(), profile?.timezone);
+  } catch (profileError) {
+    logError("cron.sync.profile-timezone", profileError);
+  }
   if (isFeatureEnabled("investmentsPage")) {
-    let today = dateKeyInTimezone(new Date(), null);
-    try {
-      const { data: profile, error: profileError } = await service
-        .from("profiles")
-        .select("timezone")
-        .eq("id", userId)
-        .maybeSingle();
-      if (profileError) throw profileError;
-      today = dateKeyInTimezone(new Date(), profile?.timezone);
-    } catch (profileError) {
-      logError("cron.sync.profile-timezone", profileError);
-    }
     await runOptionalSync("cron.sync.investments", () =>
       syncInvestmentsForUser(userId, today),
     );
@@ -121,12 +157,25 @@ async function syncUser(
       syncCreditCardLiabilitiesForUser(userId),
     );
   }
-  await writeDailyAccountSnapshots(userId);
-  await refreshRecurringForUser(userId);
-  await writeNetWorthSnapshot(userId);
-  await runOptionalSync("cron.sync.aprs", () => syncCardAprsForUser(userId));
-  await processNotificationsForUser(userId);
-  await sendDailyDigest(service, userId);
+  // Per-step isolation (A-10): each post-sync step runs wrapped so one
+  // failure no longer skips the rest of this user's run. Step failures are
+  // collected and reported in the 207 body by the caller.
+  const stepFailures: string[] = [];
+  const runUserStep = async (label: string, action: () => Promise<unknown>): Promise<void> => {
+    try {
+      await action();
+    } catch (error) {
+      logError(label, error);
+      stepFailures.push(`${label}: ${safeSyncError(error)}`);
+    }
+  };
+  await runUserStep("cron.sync.snapshots", () => writeDailyAccountSnapshots(userId, today));
+  await runUserStep("cron.sync.recurring", () => refreshRecurringForUser(userId, today));
+  await runUserStep("cron.sync.net-worth", () => writeNetWorthSnapshot(userId, today));
+  await runUserStep("cron.sync.aprs", () => syncCardAprsForUser(userId));
+  await runUserStep("cron.sync.notifications", () => processNotificationsForUser(userId, today));
+  await runUserStep("cron.sync.digest", () => sendDailyDigest(service, userId));
+  if (stepFailures.length > 0) throw new Error(stepFailures.join("; "));
 }
 
 async function syncUsers(
@@ -181,16 +230,13 @@ export async function GET(request: NextRequest) {
     try {
       const integrityFindings: string[] = [];
       for (const userId of userIds) {
-        const [{ data: jobs }, { data: txns }, { data: accts }] = await Promise.all([
+        const [{ data: jobs }, txns, { data: accts }] = await Promise.all([
           service
             .from("sync_jobs")
             .select("status, updated_at")
             .eq("user_id", userId)
             .eq("status", "running"),
-          service
-            .from("transactions")
-            .select("id, account_id, plaid_transaction_id, pending, date")
-            .eq("user_id", userId),
+          loadUserTransactions(service, userId),
           service.from("accounts").select("id").eq("user_id", userId),
         ]);
         const findings = runIntegrityChecks({
@@ -199,13 +245,7 @@ export async function GET(request: NextRequest) {
             status: j.status as string,
             updatedAt: j.updated_at as string,
           })),
-          transactions: (txns ?? []).map((t) => ({
-            id: t.id as string,
-            accountId: t.account_id as string | null,
-            plaidTransactionId: t.plaid_transaction_id as string | null,
-            pending: Boolean(t.pending),
-            date: t.date as string,
-          })),
+          transactions: txns,
           accountIds: (accts ?? []).map((a) => a.id as string),
         });
         for (const finding of findings) integrityFindings.push(finding.detail);
@@ -238,6 +278,12 @@ export async function GET(request: NextRequest) {
         total: userIds.length,
         firstError: failures[0],
       });
+      // 207, not 200 with ok:true (A-10): a partial sync must not read as
+      // success to the scheduler. Per-user detail rides in `failures`.
+      return NextResponse.json(
+        { ok: false, users: userIds.length, synced, failures },
+        { status: 207 },
+      );
     }
 
     return NextResponse.json({ ok: true, users: userIds.length, synced });

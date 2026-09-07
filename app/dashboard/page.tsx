@@ -15,7 +15,7 @@ import { resolveDashboardView } from "@/components/dashboard/dashboard-view";
 import OverviewView from "@/components/dashboard/OverviewView";
 import DashboardViewTabs from "@/components/dashboard/DashboardViewTabs";
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import { computeNetWorth, resolveDashboardSavingsRate } from "@/components/dashboard/metrics";
+import { resolveDashboardSavingsRate } from "@/components/dashboard/metrics";
 import { getRecentTransactions } from "@/lib/recent-transactions";
 import { getDashboardData } from "@/lib/dashboard";
 import { getCachedDashboardData } from "@/lib/dashboard-cache";
@@ -24,7 +24,9 @@ import { getGoals } from "@/lib/goals";
 import { loadGoalsPageData } from "@/lib/goals-data";
 import { loadLatestWeeklyDelivery } from "@/lib/weekly-delivery-history";
 import { toGoalSummaryItem, toLegacyGoalSummaryItem } from "@/lib/goal-summary";
-import { resolveDisplayName, greetingWord } from "@/lib/greeting";
+import { accountDisplayLabel } from "@/lib/account-label";
+import { normalizeReportTimezone } from "@/lib/report-period";
+import { resolveDisplayName, greetingInTimezone } from "@/lib/greeting";
 import ScopeChips from "@/components/dashboard/ScopeChips";
 import type { DashboardPrefs } from "@/components/settings/DashboardPrefsSection";
 import { firstSearchParam } from "@/lib/search-params";
@@ -97,7 +99,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
   const hasHousehold = (householdRows ?? []).length > 0;
   const { data: profileRow } = await supabase
     .from("profiles")
-    .select("dashboard_prefs, display_name, full_name")
+    .select("dashboard_prefs, display_name, full_name, timezone")
     .eq("id", user?.id ?? "")
     .maybeSingle();
   const dashboardPrefs = (profileRow?.dashboard_prefs ?? {}) as DashboardPrefs;
@@ -106,15 +108,15 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
     fullName: profileRow?.full_name as string | null,
     email: user?.email,
   });
-  const greeting = greetingWord(new Date().getHours());
+  const greeting = greetingInTimezone(new Date(), normalizeReportTimezone(profileRow?.timezone as string | null));
 
   const plaidItems = (items ?? []) as PlaidItem[];
   const hasBanks = plaidItems.length > 0;
   const brokenBanks = plaidItems.filter((item) => item.status === "error");
-  const netWorth = computeNetWorth(data.accounts);
+  const netWorth = data.netWorthSnapshot.netWorth;
   const savingsRateBasis = resolveDashboardSavingsRate({
     selectedMonth: data.selectedMonth,
-    currentMonth: new Date().toISOString().slice(0, 7),
+    currentMonth: data.today.slice(0, 7),
     monthlyIncome: data.monthlyIncome,
     monthlySpending: data.monthlySpending,
   });
@@ -128,10 +130,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
     userId: dashboardScope === "household" ? undefined : user?.id,
   });
   const accountNames = new Map(
-    data.accounts.map((account) => {
-      const mask = account.mask ? ` **${account.mask}` : "";
-      return [account.id, `${account.name ?? "Account"}${mask}`];
-    }),
+    data.accounts.map((account) => [account.id, accountDisplayLabel(account.name, account.mask)] as const),
   );
   const scopeParam = dashboardScope === "household" ? "household" : undefined;
   const linkParams = { view: activeView, month: selectedMonth, accountId: selectedAccountId, itemId: selectedItemId, scope: scopeParam };
@@ -206,6 +205,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
               userId={user?.id ?? ""}
               household={dashboardScope === "household"}
               month={data.selectedMonth}
+              today={data.today}
               selectedAccountId={selectedAccountId}
               selectedLedgerAccountId={selectedLedgerAccountId}
               extraParams={extraParams}

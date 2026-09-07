@@ -1,6 +1,61 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-09-05. Read this first to resume.
+Last updated: 2026-09-07. Read this first to resume.
+
+## 2026-09-07: PR #157 follow-up fixes
+
+The [follow-up report](reviews/2026-09-07-pr157-follow-up.md) records the review findings, red/green reproductions, and ongoing verification.
+The MFA helper rejects unavailable factor metadata and accepts a valid second authenticator for callers without explicit factor selection.
+Dashboard and Recurring now share persisted recurring inputs and occurrence expansion; corrected amounts, manual items, and linked payments no longer use separate Dashboard heuristics.
+The weekly-report complexity finding was addressed by extracting its cash-movement calculation.
+Deployment history and prerequisites are owned by [TODO.md](TODO.md#deployment-prerequisite).
+Preview OAuth sign-in still returns to production; inspecting the provider redirect settings requires the user's Supabase dashboard login.
+
+## 2026-09-07: implementation plan phases 0–5 (branch `ui/page-audit`)
+
+Phases 0–4 are implemented and committed on `ui/page-audit` (all for PR #157): Phase 0 (PR-1/12/13 + ride-alongs), Phase 1 (S-1 migration `20260906140000`, S-2 ownership scoping, S-5/S-7 slices), Phase 2A (write-path hardening + refund-link RPC `20260906150000`), Phase 2B (canonical budget matching, clamped month arithmetic, recurring expansion, paged reads, cron 207s), Phase 3 (weekly transfer exclusions, price-spike predicates, payoff math incl. unplanned non-card debts, expense credits, route error checks), Phase 4 (privacy-blur scanner test, viewer-day threading via `resolveViewerToday`, calendar/advice/goal/profile TZ handling). A parallel session landed the complementary frontend pass (`87651df`) and CI/test/docs pass (`7406cb4`: `typecheck` + `validate:palette` + coverage in CI, vitest env placeholders + `TZ: UTC` + `restoreMocks`, auth-callback and assertion-hygiene tests).
+Full gate green: lint, typecheck, palette, 461 unit files / 5,083 tests.
+Two Phase 2B/3 follow-ups fixed after the fact: demo-route limiter mocks and the calendar IP-keyed limiter test helper.
+
+Still manual (not done, never assumed):
+- T-1: no status check is required to merge to `main` (ruleset `18543151`); require `CI / lint-build-test` and `Migration smoke-check` in GitHub settings.
+- T-2: `supabase migration list --linked` re-verified 2026-09-07 (ledger in `TODO.md` is current, now including `20260906140000`/`20260906150000` as local-only); the eight local-only migrations remain unapplied, so the backup cron still fails on the linked project.
+- Signed-in preview pass (desktop + phone) is still open.
+- Plaid 47 / Nodemailer 10 / Vitest 5 majors deferred, each to its own PR.
+- Provider-id upsert conflict targets (`accounts`, `transactions`) still key on the globally-unique provider id; per-user targets need a migration with backfill review, so code now scopes the surrounding reads/writes instead.
+
+## 2026-09-06: PR #157 review remediation
+
+Branch `ui/page-audit` (remote `codex/ui-page-audit`, unrenamed because it backs open PR #157).
+All five findings in the [PR #157 review](archive/2026-09-06-pr157-review.md) are fixed at review head `61ec03c`, with regression coverage for each.
+
+Net worth (R1) now composes the same balance sheet everywhere.
+The new `lib/net-worth-inputs.ts` owns the rule, and `lib/dashboard.ts`, `lib/net-worth.ts`, and `lib/forecasting-data.ts` all read it instead of keeping three near-copies.
+The Dashboard loads `manual_accounts` and the caller's `dashboard_prefs` alongside `accounts`; a failed read of either throws rather than overwriting the stored snapshot with a smaller total, and a manual-only user now gets a live open-month point.
+
+Dismissed recurring streams (R3) no longer produce Dashboard reminders.
+`lib/dashboard.ts` applies the Recurring page's own eligibility rule, `dismissed_at` null and not `TOMBSTONED`, before deriving subscriptions, income streams, statuses, the bill calendar, and the cash-flow forecast.
+The same defect was live in the calendar feed, which was publishing dismissed streams into the user's calendar app; `app/api/calendar/[token]/route.ts` now filters them out too.
+
+The mobile holdings card (R2) carries labeled price, quantity, weight, and change, and the account name wraps rather than truncating so the mask survives.
+The last two duplicated account labels (R4) in `DashboardToolbar` and `WealthView` now use `accountDisplayLabel`; matching still keys on `account.id`.
+The admin sync-job panel (R5) selects `job_type` rather than the nonexistent `source`, separates query failure from a genuine empty state, formats timestamps through `formatTimestampUtc`, and maps `failed` to the danger tone.
+`last_error` was deliberately left out of that panel: the page is framed as a redacted operational view and that column carries arbitrary provider text.
+
+The six Sonar annotations from the reviewed head are cleared: direct re-exports in the three `lib/import-*.ts` files and `toHaveLength` in `tests/unit/coverage-boost-95-plus.test.ts`.
+
+Validation: 453 unit files and 5,036 tests pass, up from 449 and 5,015, with lint, typecheck, and the production build clean, and the graph updated.
+No migration was written or applied, and no production financial record, bank connection, or consent flag was touched.
+The signed-in preview pass at desktop and phone sizes is still open and needs the user to sign in to the preview themselves.
+
+## 2026-09-05: UI page audit and local fixes
+
+Branch `codex/ui-page-audit` contains fixes for 17 confirmed UI findings, with a [coverage matrix and reproductions](reviews/2026-09-05-ui-page-audit.md) and [detailed implementation plan](superpowers/plans/2026-09-05-ui-page-fixes.md).
+The changes cover shared dark-theme controls, settings layouts, mobile recurring rows, account labels, current net-worth history, funded goal review, investment freshness, and explicit AI consent.
+The full coverage run passed 4,947 unit and script tests, including 95.05% branch coverage; lint, typecheck, build, palette validation, and graph update passed.
+The browser URL security policy rejected further production-tab inspection during continuation.
+Post-fix browser checks, login/signup/admin pages, additional states, and the exact recurring-widget mismatch remain unverified.
+No production financial records, bank settings, or consent were changed, and no deployment was made.
 
 ## 2026-09-05: Savings-rate period alignment
 

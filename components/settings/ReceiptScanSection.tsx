@@ -96,7 +96,7 @@ export default function ReceiptScanSection({ enabled }: Readonly<{ enabled: bool
       {!enabled && (
         <p className="mb-3 text-xs text-warning">
           Enable AI insights in{" "}
-          <a href="/settings?tab=integrations" className="underline font-semibold">
+          <a href="/settings?section=integrations#ai-consent" className="underline font-semibold">
             Integrations
           </a>{" "}
           to use this.
@@ -129,7 +129,7 @@ export default function ReceiptScanSection({ enabled }: Readonly<{ enabled: bool
 
       {result && (
         <div className="mt-3 rounded-field border border-panel-border bg-panel-2 p-3 text-sm">
-          <p className="font-semibold">
+          <p data-money className="font-semibold">
             {result.merchant} — {formatCurrency(result.amount)} on {result.date}
           </p>
           {result.lineItems.length > 0 && (

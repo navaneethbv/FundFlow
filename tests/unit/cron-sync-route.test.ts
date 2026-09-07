@@ -96,6 +96,9 @@ describe("GET /api/cron/sync", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     investmentsFlag = true;
+    // Clear mock implementations too: a rejection set by one test must not
+    // leak into the next (clearAllMocks keeps implementations).
+    mockSyncAllForUser.mockResolvedValue(undefined);
   });
 
   it("returns 401 if secret does not match", async () => {
@@ -125,6 +128,8 @@ describe("GET /api/cron/sync", () => {
         gte: vi.fn().mockReturnThis(),
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
         maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         then: undefined as unknown as (onfulfilled: (value: { data: unknown[]; error: unknown }) => unknown) => unknown,
@@ -136,7 +141,7 @@ describe("GET /api/cron/sync", () => {
 
     const res = await GET(request);
     expect(res.status).toBe(200);
-    expect(mockRefreshRecurringForUser).toHaveBeenCalledWith("u1");
+    expect(mockRefreshRecurringForUser).toHaveBeenCalledWith("u1", expect.any(String));
     expect(mockRefreshRecurringForUser.mock.invocationCallOrder[0]).toBeLessThan(
       mockProcessNotificationsForUser.mock.invocationCallOrder[0],
     );
@@ -175,6 +180,8 @@ describe("GET /api/cron/sync", () => {
         gte: vi.fn().mockReturnThis(),
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
         then: undefined as unknown as (onfulfilled: (value: { data: unknown[]; error: unknown }) => unknown) => unknown,
       };
@@ -191,7 +198,7 @@ describe("GET /api/cron/sync", () => {
     const res = await GET(request);
     expect(res.status).toBe(200);
     expect(mockSyncAllForUser).toHaveBeenCalledWith("u1");
-    expect(mockWriteDailyAccountSnapshots).toHaveBeenCalledWith("u1");
+    expect(mockWriteDailyAccountSnapshots).toHaveBeenCalledWith("u1", expect.any(String));
     expect(mockSendDailyDigestEmail).toHaveBeenCalledWith(
       "u1@test.com",
       [{ type: "low_cash_forecast", title: "Low Cash", body: "Warning" }],
@@ -214,6 +221,8 @@ describe("GET /api/cron/sync", () => {
         gte: vi.fn().mockReturnThis(),
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
         maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         then: undefined as unknown as (onfulfilled: (value: { data: unknown[]; error: unknown }) => unknown) => unknown,
@@ -227,7 +236,7 @@ describe("GET /api/cron/sync", () => {
     expect(res.status).toBe(200);
     // Transaction sync, snapshots, and the digest pipeline all still ran.
     expect(mockSyncAllForUser).toHaveBeenCalledWith("u1");
-    expect(mockWriteDailyAccountSnapshots).toHaveBeenCalledWith("u1");
+    expect(mockWriteDailyAccountSnapshots).toHaveBeenCalledWith("u1", expect.any(String));
     expect(mockAlertCronFailure).not.toHaveBeenCalled();
     expect(mockLogError).toHaveBeenCalledWith("cron.sync.investments", expect.any(Error));
   });
@@ -246,6 +255,8 @@ describe("GET /api/cron/sync", () => {
         gte: vi.fn().mockReturnThis(),
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
         maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         then: undefined as unknown as (onfulfilled: (value: { data: unknown[]; error: unknown }) => unknown) => unknown,
@@ -288,6 +299,8 @@ describe("GET /api/cron/sync", () => {
         gte: vi.fn().mockReturnThis(),
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
         then: undefined as unknown as (onfulfilled: (value: { data: unknown[]; error: unknown }) => unknown) => unknown,
       };
@@ -304,7 +317,10 @@ describe("GET /api/cron/sync", () => {
     });
 
     const res = await GET(request);
-    expect(res.status).toBe(200);
+    // Partial sync reads as 207 with the per-user failure list, never 200
+    // ok:true (A-10).
+    expect(res.status).toBe(207);
+    expect(await res.json()).toMatchObject({ ok: false, users: 2, synced: 1 });
     expect(mockAlertCronFailure).toHaveBeenCalledWith("daily-sync", {
       failed: 1,
       total: 2,
@@ -341,6 +357,8 @@ describe("GET /api/cron/sync", () => {
         gte: vi.fn().mockReturnThis(),
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
         then: undefined as unknown as (onfulfilled: (value: { data: unknown[]; error: unknown }) => unknown) => unknown,
       };
@@ -359,7 +377,8 @@ describe("GET /api/cron/sync", () => {
     });
 
     const res = await GET(request);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(207);
+    expect(await res.json()).toMatchObject({ ok: false, users: 2, synced: 1 });
     expect(mockAlertCronFailure).toHaveBeenCalledWith("daily-sync", {
       failed: 1,
       total: 2,
@@ -396,6 +415,8 @@ describe("GET /api/cron/sync", () => {
         gte: vi.fn().mockReturnThis(),
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
         then: undefined as unknown as (onfulfilled: (value: { data: unknown[]; error: unknown }) => unknown) => unknown,
       };
@@ -454,6 +475,8 @@ describe("GET /api/cron/sync", () => {
         gte: vi.fn().mockReturnThis(),
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
         then: undefined as unknown as (onfulfilled: (value: { data: unknown[]; error: unknown }) => unknown) => unknown,
       };
@@ -503,6 +526,8 @@ describe("GET /api/cron/sync", () => {
         gte: vi.fn().mockReturnThis(),
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
         then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
@@ -561,6 +586,8 @@ describe("GET /api/cron/sync", () => {
         gte: vi.fn().mockReturnThis(),
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
         insert: mockInsert,
         then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
@@ -640,6 +667,8 @@ describe("GET /api/cron/sync", () => {
         gte: vi.fn().mockReturnThis(),
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
         then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
@@ -688,6 +717,8 @@ describe("GET /api/cron/sync", () => {
         gte: vi.fn().mockReturnThis(),
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
         then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
@@ -719,6 +750,8 @@ describe("GET /api/cron/sync", () => {
         gte: vi.fn().mockReturnThis(),
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
         then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
@@ -757,6 +790,8 @@ describe("GET /api/cron/sync", () => {
         gte: vi.fn().mockReturnThis(),
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
         then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
@@ -768,7 +803,8 @@ describe("GET /api/cron/sync", () => {
     mockSyncAllForUser.mockRejectedValue("Something failed");
 
     const res = await GET(request);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(207);
+    expect(await res.json()).toMatchObject({ ok: false, users: 1, synced: 0 });
     expect(mockAlertCronFailure).toHaveBeenCalledWith("daily-sync", {
       failed: 1,
       total: 1,
@@ -796,6 +832,8 @@ describe("GET /api/cron/sync", () => {
         gte: vi.fn().mockReturnThis(),
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
         then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };
@@ -837,6 +875,8 @@ describe("GET /api/cron/sync", () => {
         gte: vi.fn().mockReturnThis(),
         delete: vi.fn().mockReturnThis(),
         lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ error: null }),
         then: undefined as unknown as (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) => unknown,
       };

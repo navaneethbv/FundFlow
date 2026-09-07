@@ -136,7 +136,9 @@ describe("Subscription Price Spike Alerts", () => {
         averageAmount: 20.0,
         lastAmount: 30.0,
         frequency: "monthly",
-        status: "inactive",
+        // "inactive" is not a real status; inactivity reads as
+        // isActive/dismissedAt/TOMBSTONED (M-6).
+        isActive: false,
       },
       {
         id: "stream-zero",

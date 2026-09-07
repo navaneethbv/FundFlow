@@ -796,3 +796,34 @@ describe("POST /api/import/commit", () => {
     expect(res.status).toBe(500);
   });
 });
+
+describe("POST /api/transactions/annotate-batch read failures (A-1)", () => {
+  it("returns 500 when the ownership read fails", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: USER,
+      supabase: supabase({
+        transactions: () => ({ data: null, error: { message: "owned down" } }),
+      }),
+    });
+    const res = await annotateBatchPost(jsonRequest({ tag: "fun", transaction_ids: ["t1"] }));
+    expect(res.status).toBe(500);
+  });
+
+  it("returns 500 when the existing-annotations read fails instead of wiping notes", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: USER,
+      supabase: supabase({ transactions: () => ({ data: [{ id: "t1" }], error: null }) }),
+    });
+    serviceClient = {
+      from: vi.fn(() => ({
+        select: () => ({
+          eq: () => ({
+            in: () => Promise.resolve({ data: null, error: { message: "annotations down" } }),
+          }),
+        }),
+      })),
+    } as never;
+    const res = await annotateBatchPost(jsonRequest({ tag: "fun", transaction_ids: ["t1"] }));
+    expect(res.status).toBe(500);
+  });
+});

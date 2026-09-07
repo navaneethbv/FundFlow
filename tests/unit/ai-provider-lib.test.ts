@@ -181,6 +181,24 @@ describe("buildInsightPayload", () => {
     const serialized = JSON.stringify(payload);
     expect(serialized).not.toContain("2026-07-01");
   });
+
+  it("drops out-of-window merchants before ranking the top list", () => {
+    const rows = [
+      // Seven months of the same merchant: only the newest six may contribute.
+      ...Array.from({ length: 7 }, (_, i) => ({
+        month: `2026-${String(i + 1).padStart(2, "0")}`,
+        category: "FOOD",
+        merchant: "Old Favorite",
+        amount: 100,
+      })),
+      { month: "2026-07", category: "FOOD", merchant: "Newcomer", amount: 50 },
+    ];
+    const payload = buildInsightPayload(rows);
+    const favorite = payload.top_merchants.find((row) => row.merchant === "Old Favorite");
+    // Six kept months × 100, not seven: January's spend stays out of the payload.
+    expect(favorite?.amount).toBe(600);
+    expect(payload.top_merchants.find((row) => row.merchant === "Newcomer")?.amount).toBe(50);
+  });
 });
 
 describe("generateInsightsWithProvider", () => {

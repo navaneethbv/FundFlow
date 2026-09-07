@@ -7,12 +7,14 @@ export interface RecurringStatusInput {
     amount: number;
     itemType: "income" | "expense";
     nextDate: string;
+    accountId?: string;
   }[];
   transactions: {
     id: string;
     date: string;
     merchant: string;
     amount: number;
+    accountId?: string;
   }[];
 }
 
@@ -40,9 +42,24 @@ function daysBetween(a: string, b: string): number {
   return Math.floor((end - start) / 86_400_000);
 }
 
-export function buildRecurringStatuses(input: RecurringStatusInput) {
+export interface RecurringStatus {
+  id: string;
+  name: string;
+  amount: number;
+  itemType: "income" | "expense";
+  nextDate: string;
+  status: "late" | "expected" | "paid" | "unusual_amount";
+  transactionIds: string[];
+  reviewPrompt: string | null;
+}
+
+export function buildRecurringStatuses(input: RecurringStatusInput): RecurringStatus[] {
+  const matchedIds = new Set<string>();
   return input.items.map((item) => {
     const match = input.transactions.find((transaction) => {
+      if (matchedIds.has(transaction.id)) return false;
+      if (item.accountId && item.accountId !== transaction.accountId) return false;
+      if (item.itemType === "income" ? transaction.amount >= 0 : transaction.amount <= 0) return false;
       if (normalize(transaction.merchant) !== normalize(item.name)) return false;
       return Math.abs(daysBetween(item.nextDate, transaction.date)) <= 3;
     });
@@ -56,6 +73,7 @@ export function buildRecurringStatuses(input: RecurringStatusInput) {
       };
     }
 
+    matchedIds.add(match.id);
     const expected = Math.abs(item.amount);
     const actual = Math.abs(match.amount);
     const deltaPct = expected === 0 ? 0 : Math.abs(actual - expected) / expected;
@@ -90,7 +108,9 @@ export function planDebtPayoff(
 
   const steps = order.map((debt, index) => {
     const directedPayment = (debt.minimumPayment ?? 0) + (index === 0 ? extraPayment : 0);
-    const monthlyInterest = Math.max(0, debt.apr ?? 0) / 12;
+    // APR is a percent (22 = 22%), exactly as buildPayoffPlan treats it:
+    // dividing by 12 alone bills 183% a month on a 22% card (M-7).
+    const monthlyInterest = Math.max(0, debt.apr ?? 0) / 100 / 12;
     const effectivePayment = Math.max(1, directedPayment - debt.balance * monthlyInterest);
     const months = Math.max(1, Math.ceil(debt.balance / effectivePayment));
     monthCursor += months;
@@ -134,6 +154,12 @@ export function buildPlanningDepthView(input: {
   accounts: PlanningDepthAccount[];
   monthlyIncome: number;
   monthlySpend: number;
+  /**
+   * Trailing-median monthly surplus (M-13). Month-to-date income minus
+   * expenses on the 2nd after payday suggests routing a full paycheck to
+   * debt; pass the median of complete months instead when known.
+   */
+  surplusOverride?: number;
   goals: {
     id: string;
     name: string;
@@ -142,7 +168,7 @@ export function buildPlanningDepthView(input: {
     monthsRemaining: number;
   }[];
 }) {
-  const surplus = round2(input.monthlyIncome - input.monthlySpend);
+  const surplus = round2(input.surplusOverride ?? (input.monthlyIncome - input.monthlySpend));
 
   const debts: DebtAccount[] = input.accounts
     .filter((account) => LIABILITY_TYPES.has(account.type ?? ""))

@@ -14,6 +14,7 @@ import Button from "@/components/ui/Button";
 import Field from "@/components/ui/Field";
 import Input from "@/components/ui/Input";
 import Panel from "@/components/ui/Panel";
+import FormMessage from "@/components/ui/FormMessage";
 
 type GoalDraft = {
   name: string;
@@ -107,8 +108,8 @@ function GoalRow({
           )}
         </div>
         <p className="shrink-0 text-right text-sm font-bold tabular-nums">
-          {formatCurrency(goal.saved_amount)}
-          <span className="text-muted"> / {formatCurrency(goal.target_amount)}</span>
+          <span data-money>{formatCurrency(goal.saved_amount)}</span>
+          <span className="text-muted"> / <span data-money>{formatCurrency(goal.target_amount)}</span></span>
         </p>
       </div>
 
@@ -124,9 +125,9 @@ function GoalRow({
 
       <p className="mt-2 text-xs text-muted">
         This month: {inflowMarker(monthlyNet)}
-        {formatCurrency(monthlyNet)} saved.{" "}
+        <span data-money>{formatCurrency(monthlyNet)}</span> saved.{" "}
         {remainingAmount > 0
-          ? `${formatCurrency(remainingAmount)} remaining${paceSuffix}.`
+          ? <><span data-money>{formatCurrency(remainingAmount)}</span> remaining{paceSuffix}.</>
           : "This goal is fully funded."}
       </p>
 
@@ -216,7 +217,16 @@ export default function GoalsManager({
   householdId?: string | null;
 }>) {
   const supabase = createClient();
-  const [goals, setGoals] = useState<Goal[]>(initialGoals);
+  const [addedGoals, setAddedGoals] = useState<Goal[]>([]);
+  const [updatedGoals, setUpdatedGoals] = useState<Record<string, Partial<Goal>>>({});
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
+
+  const goals: Goal[] = [
+    ...initialGoals
+      .filter((g) => !deletedIds.has(g.id))
+      .map((g) => (updatedGoals[g.id] ? { ...g, ...updatedGoals[g.id] } : g)),
+    ...addedGoals.filter((g) => !deletedIds.has(g.id)),
+  ];
 
   async function toggleShare(id: string, share: boolean) {
     const nextValue = share ? householdId : null;
@@ -225,66 +235,80 @@ export default function GoalsManager({
       .update({ household_id: nextValue })
       .eq("id", id);
     if (shareError) return;
-    setGoals((rows) =>
-      rows.map((row) => (row.id === id ? { ...row, household_id: nextValue } : row)),
-    );
+    setUpdatedGoals((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], household_id: nextValue },
+    }));
   }
   const [name, setName] = useState("");
   const [target, setTarget] = useState("");
   const [targetDate, setTargetDate] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [addBusy, setAddBusy] = useState(false);
 
-  function restoreGoals(snapshot: Goal[], message: string) {
-    setGoals(snapshot);
+  // Rollback helper for optimistic goal updates
+  function restoreGoals(_snapshot: Goal[], message: string) {
     setError(message);
   }
 
   async function add(e: React.SyntheticEvent) {
     e.preventDefault();
+    if (addBusy) return;
     setError(null);
     const parsedTarget = Number(target);
     if (!name.trim() || !Number.isFinite(parsedTarget) || parsedTarget <= 0) {
       setError("Enter a name and a target amount greater than zero.");
       return;
     }
-    const { data: userData } = await supabase.auth.getUser();
-    const { data, error: insertError } = await supabase
-      .from("goals")
-      .insert({
-        user_id: userData.user?.id,
-        name: name.trim(),
-        target_amount: parsedTarget,
-        target_date: targetDate || null,
-      })
-      .select("id, name, target_amount, saved_amount, target_date")
-      .single();
-    if (insertError) {
-      setError(insertError.message);
-      return;
+    setAddBusy(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const { data, error: insertError } = await supabase
+        .from("goals")
+        .insert({
+          user_id: userData.user?.id,
+          name: name.trim(),
+          target_amount: parsedTarget,
+          target_date: targetDate || null,
+        })
+        .select("id, name, target_amount, saved_amount, target_date")
+        .single();
+      if (insertError) {
+        setError(insertError.message);
+        return;
+      }
+      setAddedGoals((g) => [...g, data as Goal]);
+      setName("");
+      setTarget("");
+      setTargetDate("");
+    } finally {
+      setAddBusy(false);
     }
-    setGoals((g) => [...g, data as Goal]);
-    setName("");
-    setTarget("");
-    setTargetDate("");
   }
 
   async function contribute(id: string, amount: number) {
     const goal = goals.find((g) => g.id === id);
     if (!goal) return;
-    const snapshot = goals;
-    const newTotal = Math.round((goal.saved_amount + amount) * 100) / 100;
-    setGoals((g) => g.map((x) => (x.id === id ? { ...x, saved_amount: newTotal } : x)));
+    const prevSaved = goal.saved_amount;
+    const newTotal = Math.round((prevSaved + amount) * 100) / 100;
+    setUpdatedGoals((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], saved_amount: newTotal },
+    }));
     const { error: updateError } = await supabase
       .from("goals")
       .update({ saved_amount: newTotal })
       .eq("id", id);
     if (updateError) {
-      restoreGoals(snapshot, updateError.message);
+      setUpdatedGoals((prev) => ({
+        ...prev,
+        [id]: { ...prev[id], saved_amount: prevSaved },
+      }));
+      restoreGoals([], updateError.message);
     }
   }
 
   async function updateGoal(id: string, draft: GoalDraft): Promise<boolean> {
-    const snapshot = goals;
     const parsedTarget = Number(draft.targetAmount);
     const parsedSaved = Number(draft.savedAmount);
     if (
@@ -297,27 +321,47 @@ export default function GoalsManager({
       setError("Enter a name, a positive target, and a saved amount of zero or more.");
       return false;
     }
+    const currentGoal = goals.find((g) => g.id === id);
+    const prevDraft: Partial<Goal> = currentGoal
+      ? {
+          name: currentGoal.name,
+          target_amount: currentGoal.target_amount,
+          saved_amount: currentGoal.saved_amount,
+          target_date: currentGoal.target_date,
+        }
+      : {};
     const nextGoal: Partial<Goal> = {
       name: draft.name.trim(),
       target_amount: Math.round(parsedTarget * 100) / 100,
       saved_amount: Math.round(parsedSaved * 100) / 100,
       target_date: draft.targetDate || null,
     };
-    setGoals((g) => g.map((x) => (x.id === id ? { ...x, ...nextGoal } : x)));
+    setUpdatedGoals((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], ...nextGoal },
+    }));
     const { error: updateError } = await supabase.from("goals").update(nextGoal).eq("id", id);
     if (updateError) {
-      restoreGoals(snapshot, updateError.message);
+      setUpdatedGoals((prev) => ({
+        ...prev,
+        [id]: { ...prev[id], ...prevDraft },
+      }));
+      setError(updateError.message);
       return false;
     }
     return true;
   }
 
   async function remove(id: string) {
-    const snapshot = goals;
-    setGoals((g) => g.filter((x) => x.id !== id));
+    setDeletedIds((prev) => new Set([...prev, id]));
     const { error: deleteError } = await supabase.from("goals").delete().eq("id", id);
     if (deleteError) {
-      restoreGoals(snapshot, deleteError.message);
+      setDeletedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      setError(deleteError.message);
     }
   }
 
@@ -353,15 +397,17 @@ export default function GoalsManager({
       )}
 
       <form onSubmit={add} className="flex flex-wrap items-end gap-2">
-        <Field label="Goal name">
+        <Field label="Goal name" htmlFor="goal-name">
           <Input
+            id="goal-name"
             placeholder="Emergency fund"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
         </Field>
-        <Field label="Target amount">
+        <Field label="Target amount" htmlFor="goal-target-amount">
           <Input
+            id="goal-target-amount"
             type="number"
             min="0"
             step="0.01"
@@ -379,12 +425,12 @@ export default function GoalsManager({
             onChange={(e) => setTargetDate(e.target.value)}
           />
         </Field>
-        <Button type="submit" size="md">
+        <Button type="submit" size="md" loading={addBusy}>
           Add goal
         </Button>
       </form>
 
-      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+      <FormMessage message={error} />
     </Panel>
   );
 }

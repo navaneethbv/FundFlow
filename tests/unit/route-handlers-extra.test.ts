@@ -230,18 +230,27 @@ describe("route handler edge cases", () => {
 
   describe("/api/transactions/refunds", () => {
     it("links refund on POST and unlinks on DELETE", async () => {
+      const mockSelect = {
+        eq: vi.fn().mockReturnValue({
+          in: vi.fn().mockResolvedValue({
+            data: [
+              { id: "txn-charge", amount: 100 },
+              { id: "txn-refund", amount: -50 },
+            ],
+            error: null,
+          }),
+          or: vi.fn().mockResolvedValue({
+            data: [],
+            error: null,
+          }),
+        }),
+      };
       const mockSupabase = {
         from: vi.fn().mockReturnValue({
           upsert: vi.fn().mockResolvedValue({ error: null }),
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              in: vi.fn().mockResolvedValue({
-                data: [{ id: "txn-charge" }, { id: "txn-refund" }],
-                error: null,
-              }),
-            }),
-          }),
+          select: vi.fn().mockReturnValue(mockSelect),
         }),
+        rpc: vi.fn().mockResolvedValue({ error: null }),
       } as never;
 
       vi.spyOn(http, "requireUser").mockResolvedValue({

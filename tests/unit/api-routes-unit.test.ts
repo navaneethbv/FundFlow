@@ -187,7 +187,7 @@ describe("API Route Handlers Unit Tests", () => {
       mockRequireUser.mockResolvedValue(
         NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
       );
-      const res = await exportTakeoutGet();
+      const res = await exportTakeoutGet(new NextRequest("http://localhost/api/export/takeout"));
       expect(res.status).toBe(401);
     });
 
@@ -213,7 +213,7 @@ describe("API Route Handlers Unit Tests", () => {
         user: { id: "user-1" },
         supabase: db,
       });
-      const res = await exportTakeoutGet();
+      const res = await exportTakeoutGet(new NextRequest("http://localhost/api/export/takeout"));
       expect(res.status).toBe(200);
     });
   });

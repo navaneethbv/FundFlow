@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Panel from "@/components/ui/Panel";
+import FormMessage from "@/components/ui/FormMessage";
+import { formatTimestampUtc } from "@/lib/format-date";
 
 export interface NotificationRow {
   id: string;
@@ -18,17 +20,27 @@ export interface NotificationRow {
 
 export default function NotificationFeed({ initialNotifications }: Readonly<{ initialNotifications: NotificationRow[] }>) {
   const supabase = createClient();
-  const [notifications, setNotifications] = useState(initialNotifications);
+  const [readOverrides, setReadOverrides] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+
+  const notifications = initialNotifications.map((notification) => {
+    if (notification.id in readOverrides) {
+      return { ...notification, read_at: readOverrides[notification.id] };
+    }
+    return notification;
+  });
 
   async function markRead(id: string) {
     setError(null);
     const readAt = new Date().toISOString();
-    const previous = notifications;
-    setNotifications((current) => current.map((item) => item.id === id ? { ...item, read_at: readAt } : item));
+    setReadOverrides((prev) => ({ ...prev, [id]: readAt }));
     const { error: updateError } = await supabase.from("notifications").update({ read_at: readAt }).eq("id", id);
     if (updateError) {
-      setNotifications(previous);
+      setReadOverrides((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
       setError(updateError.message);
     }
   }
@@ -48,7 +60,7 @@ export default function NotificationFeed({ initialNotifications }: Readonly<{ in
                 </div>
                 <p className="mt-1 text-sm leading-6 text-muted">{notification.body}</p>
                 <time className="mt-2 block text-xs text-muted" dateTime={notification.created_at}>
-                  {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(notification.created_at))}
+                  {formatTimestampUtc(notification.created_at)}
                 </time>
               </div>
               {!notification.read_at && (
@@ -64,7 +76,7 @@ export default function NotificationFeed({ initialNotifications }: Readonly<{ in
           </div>
         )}
       </div>
-      {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+      <FormMessage message={error} />
     </Panel>
   );
 }

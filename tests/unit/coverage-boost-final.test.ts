@@ -252,6 +252,9 @@ describe("Advice and Cron Weekly Extra Branches", () => {
     const req = new NextRequest("http://localhost/api/advice", { method: "PATCH" });
     expect((await advicePatch(req)).status).toBe(401);
 
+    const service = await import("@/lib/supabase/service");
+    vi.spyOn(service, "createServiceClient").mockReturnValue({} as never);
+
     vi.spyOn(http, "requireUser").mockResolvedValue({
       user: { id: "u-1" } as never,
       supabase: {} as never,

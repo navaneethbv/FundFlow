@@ -35,7 +35,10 @@ export default function CalendarFeedSection({
       body: JSON.stringify({ includeAmounts }),
     });
     if (!response.ok) {
-      setError("Could not create the feed. Try again.");
+      // Surface the server's own message: minting is capped per day, and
+      // "Try again" is actively wrong advice against a 429.
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      setError(body?.error ?? "Could not create the feed. Try again.");
       return;
     }
     const data = (await response.json()) as { token: string; row: TokenRow };

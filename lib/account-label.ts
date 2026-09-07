@@ -1,5 +1,25 @@
+import { normalizeExternalDisplayText } from "@/lib/external-display-text";
+
 function isDigit(value: string): boolean {
   return value >= "0" && value <= "9";
+}
+
+/** Display text only; never use this normalization for matching or identity. */
+export function accountDisplayLabel(name: string | null | undefined, mask?: string | null): string {
+  const clean = normalizeExternalDisplayText(name) ?? "";
+  const unwrapped = clean.endsWith(")") ? clean.slice(0, -1).trimEnd() : clean;
+  let base = clean;
+  if (mask && unwrapped.endsWith(mask)) {
+    const stripped = stripTrailingAccountMask(unwrapped, ".*•xX (", mask.length);
+    // Plaid does not guarantee a four-digit mask. If the strip did not
+    // actually consume the mask (a 2, 3, or 5+ digit mask that the old
+    // fixed-four-digit check let through unchanged), fall back to `clean`
+    // rather than appending the mask a second time.
+    base = stripped !== unwrapped ? stripped : clean;
+  }
+  const display = base || "Account";
+  const maskSuffix = mask ? ` ••${mask}` : "";
+  return `${display}${maskSuffix}`;
 }
 
 function isLetter(value: string): boolean {
@@ -11,8 +31,8 @@ function isWhitespace(value: string): boolean {
   return value.trim() === "";
 }
 
-function hasFourDigits(value: string): boolean {
-  if (value.length !== 4) return false;
+function hasDigits(value: string, count: number): boolean {
+  if (value.length !== count) return false;
   for (const character of value) {
     if (!isDigit(character)) return false;
   }
@@ -31,12 +51,12 @@ function hasFourDigits(value: string): boolean {
  * Returns "" for a name that is nothing but a mask, so each caller picks its
  * own fallback.
  */
-export function stripTrailingAccountMask(value: string, maskCharacters: string): string {
+export function stripTrailingAccountMask(value: string, maskCharacters: string, maskLength = 4): string {
   const trimmed = value.trim();
-  const digitsStart = trimmed.length - 4;
+  const digitsStart = trimmed.length - maskLength;
   if (
     digitsStart < 0 ||
-    !hasFourDigits(trimmed.slice(digitsStart))
+    !hasDigits(trimmed.slice(digitsStart), maskLength)
   ) {
     return trimmed;
   }

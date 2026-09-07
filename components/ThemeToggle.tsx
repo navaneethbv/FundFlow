@@ -29,6 +29,10 @@ export default function ThemeToggle({
 }: Readonly<{
   variant?: ThemeToggleVariant;
 }>) {
+  // Must match what the server renders. Reading the already-applied
+  // `data-theme` here instead would flip the label and knob on the very
+  // first client render and hydrate-mismatch every light-mode load; the
+  // effect below corrects the state one tick later.
   const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {
@@ -79,7 +83,7 @@ export default function ThemeToggle({
       type="button"
       onClick={toggleTheme}
       aria-label={`Switch to ${nextTheme} mode`}
-      className="inline-flex items-center gap-2 rounded-full border border-[var(--surface-border)] bg-black/[0.04] px-3 py-1.5 text-sm font-bold text-[var(--muted)] transition-all duration-150 hover:border-[var(--accent)] hover:text-[var(--foreground)] focus-visible:outline-2 dark:bg-white/[0.06]"
+      className="inline-flex items-center gap-2 rounded-full border border-panel-border bg-black/[0.04] px-3 py-1.5 text-sm font-bold text-muted transition-all duration-150 hover:border-accent/50 hover:text-foreground focus-visible:outline-2 dark:bg-white/[0.06]"
     >
       <span className="relative h-4 w-8 rounded-full bg-black/10 dark:bg-white/15">
         <span

@@ -224,4 +224,32 @@ describe("recordCursor* persistence", () => {
     expect(written).not.toHaveProperty("initial_history_incomplete");
     expect(written).not.toHaveProperty("cursor_reset_detected_at");
   });
+
+  it("records initial incomplete history and cursor reset on partial success if started without cursor", async () => {
+    const supabase = clientStub({});
+    await recordCursorPartialSuccess(supabase as never, {
+      userId: "user-1",
+      itemDbId: "item-1",
+      startedWithoutCursor: true,
+      priorSuccess: true,
+      nowIso: "2026-08-29T11:00:00.000Z",
+    });
+    const written = supabase.writtenTo("plaid_items") as Record<string, unknown>;
+    expect(written.last_sync_completed_pages).toBe(false);
+    expect(written.last_sync_success_at).toBe("2026-08-29T11:00:00.000Z");
+    expect(written.initial_history_incomplete).toBe(true);
+    expect(written.cursor_reset_detected_at).toBe("2026-08-29T11:00:00.000Z");
+  });
+
+  it("reports partial_page if lastSuccessAt is unparseable", () => {
+    expect(
+      deriveCursorHealth(
+        input({
+          lastAttemptAt: "2026-08-29T11:00:00.000Z",
+          lastSuccessAt: "invalid-date",
+          lastSyncCompletedPages: true,
+        }),
+      ).state,
+    ).toBe("partial_page");
+  });
 });

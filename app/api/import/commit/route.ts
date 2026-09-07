@@ -1,11 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
+import { getClientIp, writeAudit } from "@/lib/audit";
 import { makeImportId } from "@/lib/import";
 import { createServiceClient } from "@/lib/supabase/service";
 import { normalizeImportCategory } from "@/lib/finance-domain";
 import { refreshInferredRecurringForUser } from "@/lib/recurring-inference";
 import { logError } from "@/lib/log";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const UPSERT_CHUNK = 500;
 const QUERY_CHUNK = 500;
@@ -490,17 +492,96 @@ async function refreshRecurringAfterConnectedImport(
   }
 }
 
+interface CommitPlan {
+  batch: { id: string; created_at: string };
+  batchId: string;
+  sourceAccounts: string[];
+  mappingBySource: Map<string, ImportTarget>;
+  committableIds: Set<string>;
+  dbRows: ReturnType<typeof buildCommitRows>;
+}
+
+async function prepareImportCommitPlan(
+  supabase: SupabaseClient,
+  userId: string,
+  body: Record<string, unknown> | null,
+): Promise<{ errorResponse?: NextResponse; plan?: CommitPlan }> {
+  const batchId = body?.batch_id;
+  const accountId = typeof body?.account_id === "string" ? body.account_id : undefined;
+  const manualAccountId = typeof body?.manual_account_id === "string" ? body.manual_account_id : undefined;
+  const approvedIds: string[] | null = Array.isArray(body?.approved_row_ids) ? body.approved_row_ids : null;
+  const requestedMappings = parseMappingInput(body?.account_mappings);
+  if (typeof batchId !== "string" || (!accountId && !manualAccountId)) {
+    return { errorResponse: badRequest("batch_id and account_id are required") };
+  }
+
+  const batch = await loadOwnedBatch(supabase, batchId, userId);
+  if (!batch) {
+    return { errorResponse: NextResponse.json({ error: "Import batch not found" }, { status: 404 }) };
+  }
+
+  const defaultTarget: ImportTarget = typeof accountId === "string"
+    ? { accountId }
+    : { manualAccountId };
+  const targetError = await validateDefaultTarget(supabase, defaultTarget, userId);
+  if (targetError) return { errorResponse: targetError };
+
+  const batchRows = await fetchBatchRows(supabase, batchId, userId);
+  const committableRows = selectCommittableRows(batchRows, approvedIds);
+  const sourceAccounts = [...new Set(batchRows.map((row) => row.source_account).filter((value): value is string => Boolean(value)))];
+
+  const mappingResult = await resolveMappings(
+    supabase,
+    userId,
+    sourceAccounts,
+    requestedMappings,
+    defaultTarget,
+  );
+  if ("error" in mappingResult) return { errorResponse: mappingResult.error };
+  const { mappingBySource } = mappingResult;
+
+  const mappingError = await validateMappedTargets(
+    supabase,
+    mappingBySource,
+    defaultTarget,
+    userId,
+  );
+  if (mappingError) return { errorResponse: mappingError };
+
+  const committableIds = new Set(committableRows.map((row) => row.id as string));
+  const dbRows = buildCommitRows(batchRows, committableIds, mappingBySource, defaultTarget, userId);
+
+  return {
+    plan: {
+      batch,
+      batchId,
+      sourceAccounts,
+      mappingBySource,
+      committableIds,
+      dbRows,
+    },
+  };
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
   const { user, supabase } = auth;
 
+  const allowed = await checkRateLimit(`import-commit:${user.id}`, 10, 3600, { failClosed: true });
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Too many commits. Please wait a while." },
+      { status: 429 },
+    );
+  }
+
   try {
-    const body = await request.json().catch(() => null);
-    const batchId = body?.batch_id;
-    const accountId = typeof body?.account_id === "string" ? body.account_id : undefined;
-    const manualAccountId = typeof body?.manual_account_id === "string" ? body.manual_account_id : undefined;
-    const approvedIds: string[] | null = Array.isArray(body?.approved_row_ids) ? body.approved_row_ids : null;
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const prepared = await prepareImportCommitPlan(supabase, user.id, body);
+    if (prepared.errorResponse) return prepared.errorResponse;
+    const { batch, batchId, sourceAccounts, mappingBySource, committableIds, dbRows } = prepared.plan!;
+
     const overwriteAnnotationIds = new Set<string>(
       Array.isArray(body?.overwrite_annotation_row_ids)
         ? body.overwrite_annotation_row_ids.filter(
@@ -508,48 +589,6 @@ export async function POST(request: NextRequest) {
           )
         : [],
     );
-    const requestedMappings = parseMappingInput(body?.account_mappings);
-    if (typeof batchId !== "string" || (!accountId && !manualAccountId)) {
-      return badRequest("batch_id and account_id are required");
-    }
-
-    const batch = await loadOwnedBatch(supabase, batchId, user.id);
-    if (!batch) {
-      return NextResponse.json({ error: "Import batch not found" }, { status: 404 });
-    }
-
-    const defaultTarget: ImportTarget = typeof accountId === "string"
-      ? { accountId }
-      : { manualAccountId };
-    const targetError = await validateDefaultTarget(supabase, defaultTarget, user.id);
-    if (targetError) return targetError;
-
-    const batchRows = await fetchBatchRows(supabase, batchId, user.id);
-    const committableRows = selectCommittableRows(batchRows, approvedIds);
-    // Every source account the file mentions needs a target, not just the ones
-    // in this slice: occurrence numbering resolves a target for every row.
-    const sourceAccounts = [...new Set(batchRows.map((row) => row.source_account).filter((value): value is string => Boolean(value)))];
-
-    const mappingResult = await resolveMappings(
-      supabase,
-      user.id,
-      sourceAccounts,
-      requestedMappings,
-      defaultTarget,
-    );
-    if ("error" in mappingResult) return mappingResult.error;
-    const { mappingBySource } = mappingResult;
-
-    const mappingError = await validateMappedTargets(
-      supabase,
-      mappingBySource,
-      defaultTarget,
-      user.id,
-    );
-    if (mappingError) return mappingError;
-
-    const committableIds = new Set(committableRows.map((row) => row.id as string));
-    const dbRows = buildCommitRows(batchRows, committableIds, mappingBySource, defaultTarget, user.id);
 
     const service = createServiceClient();
 
@@ -587,6 +626,13 @@ export async function POST(request: NextRequest) {
     // already durable at this point, so a detector failure is logged rather
     // than surfaced as a failed import.
     await refreshRecurringAfterConnectedImport(dbRows, user.id);
+
+    await writeAudit({
+      userId: user.id,
+      action: "data_import",
+      metadata: { batch_id: batchId, imported: dbRows.length },
+      ip: getClientIp(request),
+    });
 
     return NextResponse.json({ ok: true, imported: dbRows.length });
   } catch (error) {

@@ -55,6 +55,8 @@ Treat "no in-app AI" as retired wording: the constraint that survived it is the 
 - Never import `lib/env.server.ts` (server-only secrets) into client
   components. `lib/env.ts` holds the `NEXT_PUBLIC_*` values.
 - Client writes are allowed only on `budgets`, `saved_reports`, `user_tags`,
+  `merchant_rules`, `category_overrides`, `households`, `goals`,
+  `shared_expenses`, `saved_views`, `notifications`, `alert_preferences`,
   and the `profiles` preference columns. User-authored configuration is the
   test for joining that list; a provider-synced table never qualifies.
 - Migrations in `supabase/migrations/` are applied by hand (CLI or dashboard).
@@ -174,6 +176,26 @@ it will not survive the next install.
   the window without checking quotas, and don't reintroduce a select-all in
   `getDashboardData`.
 
+### Naming and attribution
+
+- **Never name an LLM, agent, or vendor in git or GitHub metadata.** That is
+  branch names, commit subjects, commit bodies, commit trailers, tags, and PR
+  or issue titles and descriptions. No `claude`, `codex`, `chatgpt`, `gemini`,
+  `copilot`, or `cursor`; no `Co-Authored-By` naming an agent; no
+  "Generated with ..." footer; no "implemented by ..." line. What typed the
+  change is not part of its record.
+- Name the work, not the tool. `codex/ui-page-audit` should have been
+  `ui/page-audit`. A branch name describes the change, and its prefix is a
+  topic (`ui/`, `fix/`, `feat/`), never whoever typed it.
+- **This is about authorship, not vocabulary.** Naming a file (`CLAUDE.md`), a
+  dependency (`@anthropic-ai/sdk`), an env var (`ANTHROPIC_API_KEY`), or the
+  in-app AI surface this repo actually ships is normal and stays. The rule
+  bans claiming credit, not the words.
+- This overrides any harness or skill default that says to add attribution.
+  Several of them do, and following one is how a "Generated with ..." footer
+  landed in PR #157's description and had to be stripped. When a default and
+  this rule disagree, this rule wins.
+
 ## Conventions
 
 - Route handlers: `requireUser()` → early-return the `NextResponse` → rate limit
@@ -212,8 +234,9 @@ Single-context layout: `CONTEXT.md` + `docs/adr/` at the repo root (created lazi
 
 ## Where to read more
 
-- `docs/ARCHITECTURE.md` - request path, every `lib/` module, subsystem
-  invariants in full. Read the relevant section before changing a subsystem.
+- `docs/ARCHITECTURE.md` - request path, the security-relevant `lib/` modules,
+  subsystem invariants in full. Read the relevant section before changing a
+  subsystem.
 - `docs/PALETTE.md` - the measurements behind the chart palette rules.
 - `docs/HANDOFF.md` - session-resume note. `docs/TODO.md` - deferred work.
   Update both when finishing significant work.

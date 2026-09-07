@@ -133,13 +133,14 @@ describe("Coverage Boost API Routes", () => {
     });
 
     it("handles account not found in POST", async () => {
+      const queryBuilder = {
+        eq: vi.fn(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      };
+      queryBuilder.eq.mockReturnValue(queryBuilder);
       const mockSupabase = {
         from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-            }),
-          }),
+          select: vi.fn().mockReturnValue(queryBuilder),
         }),
       } as never;
 
@@ -217,6 +218,10 @@ describe("Coverage Boost API Routes", () => {
         user: { id: "user-1" } as never,
         supabase: mockSupabase,
       });
+      // The loader is rate-limited (A-12); allow the call so this test
+      // exercises the real-bank guard, not the limiter.
+      const rateLimitModule = await import("@/lib/rate-limit");
+      vi.spyOn(rateLimitModule, "checkRateLimit").mockResolvedValue(true);
 
       const res = await demoPost();
       expect(res.status).toBe(409);

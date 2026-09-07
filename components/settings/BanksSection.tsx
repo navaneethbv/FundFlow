@@ -5,9 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ReconnectBankButton from "@/components/settings/ReconnectBankButton";
 import RepairBankButton from "@/components/settings/RepairBankButton";
+import { formatDate, formatTimestampUtc } from "@/lib/format-date";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Panel from "@/components/ui/Panel";
+import FormMessage from "@/components/ui/FormMessage";
 import type { ItemCursorHealth } from "@/lib/cursor-health";
 import type { InstitutionSyncHealth, ProductSyncHealth, ProductSyncState } from "@/lib/sync-health";
 
@@ -91,7 +93,7 @@ function institutionNeedsAttention(health: InstitutionSyncHealth): boolean {
 function healthHelp(health: ProductSyncHealth): string {
   switch (health.state) {
     case "healthy":
-      return health.lastSuccessAt ? `Last successful sync: ${health.lastSuccessAt}.` : "Sync is current.";
+      return health.lastSuccessAt ? `Last successful sync: ${formatTimestampUtc(health.lastSuccessAt)}.` : "Sync is current.";
     case "stale":
       return "No successful sync completed in the last 48 hours.";
     case "repair_required":
@@ -127,9 +129,19 @@ export default function BanksSection({
   householdId?: string | null;
 }>) {
   const router = useRouter();
-  const [items, setItems] = useState<Item[]>(initialItems);
+  const [removedIds, setRemovedIds] = useState<Set<string>>(() => new Set());
+  const [shareOverrides, setShareOverrides] = useState<Record<string, string | null>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const items = initialItems
+    .filter((item) => !removedIds.has(item.id))
+    .map((item) => {
+      if (item.id in shareOverrides) {
+        return { ...item, shared_household_id: shareOverrides[item.id] };
+      }
+      return item;
+    });
 
   async function toggleShare(id: string, share: boolean) {
     if (share && !householdId) {
@@ -150,13 +162,10 @@ export default function BanksSection({
       setError(json?.error ?? "Could not update sharing.");
       return;
     }
-    setItems((list) =>
-      list.map((item) =>
-        item.id === id
-          ? { ...item, shared_household_id: share ? (json?.householdId ?? "shared") : null }
-          : item,
-      ),
-    );
+    setShareOverrides((prev) => ({
+      ...prev,
+      [id]: share ? (json?.householdId ?? "shared") : null,
+    }));
   }
 
   async function disconnect(id: string) {
@@ -173,7 +182,7 @@ export default function BanksSection({
         const json = await res.json().catch(() => ({}));
         throw new Error(json.error ?? "Disconnect failed");
       }
-      setItems((list) => list.filter((i) => i.id !== id));
+      setRemovedIds((prev) => new Set([...prev, id]));
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error");
@@ -195,7 +204,7 @@ export default function BanksSection({
             <li
               key={i.id}
               id={`institution-${i.id}`}
-              className="flex min-w-0 flex-col items-stretch gap-3 rounded-field border border-panel-border bg-panel-2 p-3 sm:flex-row sm:items-start sm:justify-between"
+              className="flex min-w-0 flex-col items-stretch gap-3 rounded-field border border-panel-border bg-panel-2 p-3"
             >
               <span className="min-w-0">
                 <span className="block break-words font-semibold">
@@ -206,12 +215,14 @@ export default function BanksSection({
                 )}
                 {health && (
                   <>
-                    <dl className="mt-3 grid max-w-sm gap-2">
+                    <dl className="mt-3 grid gap-3">
                       <HealthRow label="Transactions" health={health.transactions} />
                       <HealthRow label="Investments" health={health.investments} />
                     </dl>
                     <p className="mt-2 text-xs text-muted">
-                      Transaction coverage: {health.oldestTransactionDate ?? "not available"} to {health.newestTransactionDate ?? "not available"}.
+                      {health.oldestTransactionDate && health.newestTransactionDate
+                        ? `Transaction coverage: ${formatDate(health.oldestTransactionDate)} to ${formatDate(health.newestTransactionDate)}.`
+                        : "Transaction coverage not available."}
                     </p>
                     {historyGapMessage(health.cursor) && (
                       <output className="mt-2 block rounded-field border border-warning/30 bg-warning/10 p-2 text-xs text-foreground">
@@ -263,7 +274,7 @@ export default function BanksSection({
           );})}
         </ul>
       )}
-      {error && <p className="text-sm text-danger">{error}</p>}
+      <FormMessage message={error} />
     </Panel>
   );
 }

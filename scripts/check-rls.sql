@@ -144,13 +144,13 @@ BEGIN
     INTO ungated
   FROM pg_policies p
   WHERE p.schemaname = 'public'
-    AND 'authenticated' = ANY (p.roles)
+    AND p.roles && ARRAY['public', 'authenticated']::name[]
     AND p.tablename <> ALL (ARRAY['profiles', 'user_session_records', 'mfa_backup_codes'])
     AND NOT (
       coalesce(p.qual, '') || coalesce(p.with_check, '') ILIKE '%mfa_satisfied%'
     );
   IF ungated IS NOT NULL THEN
-    RAISE EXCEPTION 'Authenticated policies missing the MFA/revocation gate:%', ungated;
+    RAISE EXCEPTION 'Authenticated/public policies missing the MFA/revocation gate:%', ungated;
   END IF;
 END $$;
 
@@ -162,12 +162,28 @@ BEGIN
     INTO ungated
   FROM pg_policies p
   WHERE p.schemaname = 'public'
-    AND 'authenticated' = ANY (p.roles)
+    AND p.roles && ARRAY['public', 'authenticated']::name[]
     AND p.tablename <> ALL (ARRAY['profiles', 'user_session_records', 'mfa_backup_codes'])
     AND NOT (
       coalesce(p.qual, '') || coalesce(p.with_check, '') ILIKE '%session_not_revoked%'
     );
   IF ungated IS NOT NULL THEN
-    RAISE EXCEPTION 'Authenticated policies missing the session-revocation gate:%', ungated;
+    RAISE EXCEPTION 'Authenticated/public policies missing the session-revocation gate:%', ungated;
+  END IF;
+END $$;
+
+-- Assert that no policy on a public schema table has roles = '{public}' (must explicitly specify roles such as authenticated)
+DO $$
+DECLARE
+  public_only text;
+BEGIN
+  SELECT string_agg(format('%I.%I', p.tablename, p.policyname), E'\n  ' ORDER BY 1)
+    INTO public_only
+  FROM pg_policies p
+  WHERE p.schemaname = 'public'
+    AND p.roles = ARRAY['public']::name[]
+    AND p.tablename <> ALL (ARRAY['profiles', 'user_session_records', 'mfa_backup_codes']);
+  IF public_only IS NOT NULL THEN
+    RAISE EXCEPTION 'Policies on public schema explicitly targeting only {public} role:%', public_only;
   END IF;
 END $$;

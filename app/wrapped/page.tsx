@@ -196,7 +196,7 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
               {recap.largestPurchase && (
                 <div className="rounded-field bg-panel-2 p-3">
                   <span className="block text-xs text-muted">Largest purchase</span>
-                  <span className="mt-1 block truncate font-semibold">
+                  <span className="mt-1 block break-words font-semibold" title={recap.largestPurchase.merchant}>
                     {recap.largestPurchase.merchant}
                   </span>
                   <span data-money className="metric-value text-sm">

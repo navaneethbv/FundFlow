@@ -195,9 +195,12 @@ export default function ReceiptInbox({
                       key={candidate.transactionId}
                       className="flex items-center justify-between gap-3 rounded-field border border-panel-border bg-panel-2 p-3 text-sm"
                     >
-                      <span className="min-w-0 truncate">
-                        {candidate.merchant} · <span className="font-mono">{candidate.date}</span> ·{" "}
-                        <span data-money>{formatCurrency(Math.abs(candidate.amount))}</span>
+                      <span className="min-w-0 truncate">{candidate.merchant}</span>
+                      <span className="shrink-0 text-xs text-muted">
+                        <span className="font-mono">{candidate.date}</span> ·{" "}
+                        <span data-money className="font-semibold text-foreground">
+                          {formatCurrency(Math.abs(candidate.amount))}
+                        </span>
                       </span>
                       <Button
                         size="sm"

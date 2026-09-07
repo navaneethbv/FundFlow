@@ -9,6 +9,7 @@ import { getPasskeyAvailability, passkeyErrorMessage } from "@/lib/passkeys";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 import Button from "@/components/ui/Button";
 import Field from "@/components/ui/Field";
+import FormMessage from "@/components/ui/FormMessage";
 import Input from "@/components/ui/Input";
 import { ShieldCheck } from "@/components/ui/icons";
 
@@ -258,7 +259,7 @@ export default function LoginForm() {
         </form>
       )}
 
-      {error && <p className="text-sm text-danger">{error}</p>}
+      {error && <FormMessage message={error} className="text-sm" />}
 
       {!mfaRequired && <GoogleSignInButton />}
 

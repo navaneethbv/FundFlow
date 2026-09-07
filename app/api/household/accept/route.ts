@@ -47,13 +47,17 @@ export async function GET(request: NextRequest) {
       user_id: user.id,
       role: "member",
     });
-    // Unique violation = already a member; treat as success.
-    if (memberError && !memberError.message.includes("duplicate")) throw memberError;
+    // Unique violation = already a member; treat as success. Matched on the
+    // Postgres code, not the message text (A-13): message wording varies by
+    // layer and locale, "23505" does not.
+    if (memberError && memberError.code !== "23505") throw memberError;
 
-    await service
+    // Checked (A-13): an unchecked accept leaves the invite reusable.
+    const { error: acceptError } = await service
       .from("household_invites")
       .update({ accepted_at: new Date().toISOString() })
       .eq("id", invite.id);
+    if (acceptError) throw acceptError;
 
     await writeAudit({
       userId: user.id,

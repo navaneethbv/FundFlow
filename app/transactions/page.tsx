@@ -1,3 +1,4 @@
+import { accountDisplayLabel } from "@/lib/account-label";
 import { Fragment } from "react";
 import { createClient } from "@/lib/supabase/server";
 import AutoRefresh from "@/components/AutoRefresh";
@@ -388,13 +389,12 @@ function buildAccountLookups(
     accountLabelsById: new Map([
       ...accounts.map((a) => {
         const mask = accountText(a.mask, "");
-        const maskLabel = mask ? ` ••${mask}` : "";
-        return [a.id as string, `${accountText(a.name, "Account")}${maskLabel}`] as const;
+        return [a.id as string, accountDisplayLabel(accountText(a.name, "Account"), mask)] as const;
       }),
       ...manualAccounts.map((a) => [a.id as string, `${accountText(a.name, "Account")} (manual)`] as const),
     ]),
     accountOptions: [
-      ...accounts.map((a) => ({ id: a.id as string, name: accountText(a.name, "Account"), source: "plaid" as const })),
+      ...accounts.map((a) => ({ id: a.id as string, name: accountDisplayLabel(accountText(a.name, "Account"), accountText(a.mask, "")), source: "plaid" as const })),
       ...manualAccounts.map((a) => ({ id: a.id as string, name: accountText(a.name, "Account"), source: "manual" as const })),
     ],
   };

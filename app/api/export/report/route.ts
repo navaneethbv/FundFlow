@@ -52,11 +52,14 @@ export async function GET(request: NextRequest) {
     }
 
     if (!period) {
-      const { data: profile } = await service
+      // A failed prefs read must 500 (A-13), never silently fall back to the
+      // default timezone for someone else's report.
+      const { data: profile, error: profileError } = await service
         .from("profiles")
         .select("timezone")
         .eq("id", user.id)
         .maybeSingle();
+      if (profileError) throw profileError;
       const timezone = normalizeReportTimezone(
         profile?.timezone ?? DEFAULT_REPORT_TIMEZONE,
       );

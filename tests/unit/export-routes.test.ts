@@ -24,6 +24,7 @@ vi.mock("@/lib/audit", () => ({
 
 const mockServiceClient = {
   from: vi.fn<(...args: unknown[]) => unknown>(),
+  rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
 };
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => mockServiceClient,
@@ -153,7 +154,7 @@ describe("Export API Routes", () => {
 
     it("returns early if not authenticated", async () => {
       mockRequireUser.mockResolvedValue(new NextResponse("unauthorized", { status: 401 }));
-      const res = await takeoutGet();
+      const res = await takeoutGet(new NextRequest("http://localhost/api/export/takeout"));
       expect(res.status).toBe(401);
     });
 
@@ -212,7 +213,7 @@ describe("Export API Routes", () => {
         supabase: mockSupabase,
       });
 
-      const res = await takeoutGet();
+      const res = await takeoutGet(new NextRequest("http://localhost/api/export/takeout"));
       expect(res.status).toBe(200);
       for (const table of scopedTables) {
         expect(eqCalls).toContainEqual([table, "user_id", "u1"]);
@@ -260,7 +261,7 @@ describe("Export API Routes", () => {
         supabase: mockSupabase,
       });
 
-      const res = await takeoutGet();
+      const res = await takeoutGet(new NextRequest("http://localhost/api/export/takeout"));
 
       expect(res.status).toBe(500);
       expect(mockBuildDataTakeout).not.toHaveBeenCalled();
@@ -277,7 +278,7 @@ describe("Export API Routes", () => {
         supabase: mockSupabase,
       });
 
-      const res = await takeoutGet();
+      const res = await takeoutGet(new NextRequest("http://localhost/api/export/takeout"));
       expect(res.status).toBe(500);
     });
 
@@ -288,7 +289,7 @@ describe("Export API Routes", () => {
         supabase: takeoutClient(() => ({ data: [], error: null })),
       });
 
-      const res = await takeoutGet();
+      const res = await takeoutGet(new NextRequest("http://localhost/api/export/takeout"));
       expect(res.status).toBe(200);
       expect(mockBuildDataTakeout).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -307,7 +308,7 @@ describe("Export API Routes", () => {
         supabase: takeoutClient(() => ({ data: null, error: null })),
       });
 
-      const res = await takeoutGet();
+      const res = await takeoutGet(new NextRequest("http://localhost/api/export/takeout"));
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.takeout.accounts).toEqual([]);
@@ -326,7 +327,7 @@ describe("Export API Routes", () => {
         ),
       });
 
-      const res = await takeoutGet();
+      const res = await takeoutGet(new NextRequest("http://localhost/api/export/takeout"));
       expect(res.status).toBe(500);
       expect(mockBuildDataTakeout).not.toHaveBeenCalled();
     });

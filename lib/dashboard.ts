@@ -1,3 +1,5 @@
+import { loadRecurringInputs } from "@/lib/recurring-data";
+import { buildDashboardRecurring } from "@/lib/dashboard-recurring";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   buildBudgetEnvelopes,
@@ -9,10 +11,12 @@ import {
   type BillPeriod,
   type BudgetEnvelope,
   type CashFlowForecast,
+  type NetWorthAccount,
   type SpendingAnomaly,
 } from "@/lib/planning";
+import { accountDisplayLabel } from "@/lib/account-label";
 import { buildPayoffPlan, type PayoffPlan } from "@/lib/debt";
-import { buildRecurringStatuses } from "@/lib/planning-depth";
+import type { buildRecurringStatuses } from "@/lib/planning-depth";
 import {
   computeMerchantPriceDrift,
   computeRunwayMonths,
@@ -30,13 +34,15 @@ import {
   type SafeToSpend,
   type SavingsRatePoint,
 } from "@/lib/insights";
-import { aggregateSpendWithSplits } from "@/lib/transaction-quality";
+import { aggregateSpendWithSplits, validateSplits } from "@/lib/transaction-quality";
+import { localDateKey } from "@/lib/format-date";
 import { normalizeExternalDisplayText } from "@/lib/external-display-text";
 import {
   fromTransactionRow,
   projectFinanceTransactions,
   UNCATEGORIZED,
   type FinanceFlow,
+  type RawFinanceTransaction,
   type TransactionRow,
 } from "@/lib/finance-domain";
 import {
@@ -53,6 +59,12 @@ import {
   type DashboardBudgetGroup,
 } from "@/lib/dashboard-budget-groups";
 import { toRecurringItem } from "@/lib/scheduled-transactions";
+import {
+  composeNetWorthAccounts,
+  readExcludedNetWorthIds,
+  type ManualBalanceRow,
+  type PlaidBalanceRow,
+} from "@/lib/net-worth-inputs";
 /**
  * Aggregations for the dashboard. Runs with the caller's user-scoped Supabase
  * client, so RLS guarantees only the current user's rows are visible.
@@ -110,6 +122,8 @@ export interface DashboardData {
   }[];
   availableMonths: string[];
   selectedMonth: string;
+  /** Viewer's calendar day (YYYY-MM-DD) this load was keyed on (M-11). */
+  today: string;
   /** Completion time of the newest successful sync job, or null if none. */
   lastSyncAt: string | null;
   /** Whole minutes since lastSyncAt (null when never synced). */
@@ -451,8 +465,9 @@ function buildDashboardSpendMetrics(input: DashboardSpendMetricsInput) {
   }
   const spendPerCard = [...cardSpendMap].map(([accountId, amount]) => {
     const account = accountById.get(accountId);
-    const mask = account?.mask ? ` ••${account.mask}` : "";
-    return { name: account ? `${account.name ?? "Account"}${mask}` : "Unknown Account", amount: round2(amount), accountId };
+    // Display only; the row is joined back on `accountId`, never on this text.
+    const name = account ? accountDisplayLabel(account.name, account.mask) : "Unknown Account";
+    return { name, amount: round2(amount), accountId };
   }).sort((a, b) => b.amount - a.amount);
   const spendPerBank = [...bankSpendMap].map(([itemId, amount]) => ({
     name: itemId ? allItems.find((item) => item.id === itemId)?.institution_name ?? "Other Bank" : "Unknown Bank",
@@ -465,24 +480,6 @@ function buildDashboardSpendMetrics(input: DashboardSpendMetricsInput) {
     spendPerBank,
     cashFlow: { deposits: round2(cashFlowDeposits), withdrawals: round2(cashFlowWithdrawals), net: round2(cashFlowDeposits - cashFlowWithdrawals) },
   };
-}
-
-/**
- * Latest date among `txns` whose merchant matches `name`, or null. Recurring
- * streams carry no next-date column, so this anchors the expected date to the
- * stream's most recent real charge.
- */
-function latestMerchantMatchDate(
-  txns: ReadonlyArray<{ merchant: string; date: string }>,
-  name: string,
-): string | null {
-  const target = name.trim().toLowerCase();
-  let best: string | null = null;
-  for (const txn of txns) {
-    if (txn.merchant.trim().toLowerCase() !== target) continue;
-    if (!best || txn.date > best) best = txn.date;
-  }
-  return best;
 }
 
 /**
@@ -519,9 +516,9 @@ function buildDebtSummary(allAccounts: readonly AccountSummary[]): DashboardData
   );
   if (debtAccounts.length === 0) return null;
   const debtInputs = debtAccounts.map((a) => {
-    const mask = a.mask ? ` ••${a.mask}` : "";
     return {
-      name: `${a.name ?? "Card"}${mask}`,
+      // Same label the Debt payoff page builds, so the two surfaces agree.
+      name: accountDisplayLabel(a.name ?? "Card", a.mask),
       balance: Number(a.current_balance),
       apr: a.apr ?? ASSUMED_APR,
     };
@@ -560,60 +557,6 @@ function computePriorMerchantMedians(
     .map((entry) => ({ merchant: entry.name, amount: round2(medianOf(entry.amounts)) }));
 }
 
-interface StreamRow {
-  merchant_name: string | null;
-  description: string | null;
-  average_amount: number | null;
-  frequency: string | null;
-  category: string | null;
-  stream_type: string;
-  plaid_item_id: string;
-  predicted_next_date: string | null;
-}
-
-/**
- * Active recurring streams split into outflow (subscriptions) and inflow
- * (income), scoped to the selected account's bank when one is selected.
- */
-function buildStreamSummaries(
-  streamRows: readonly StreamRow[],
-  selectedItemDbId: string | undefined,
-): {
-  subscriptions: DashboardData["subscriptions"];
-  incomeStreams: DashboardData["incomeStreams"];
-} {
-  const filtered = selectedItemDbId
-    ? streamRows.filter((s) => s.plaid_item_id === selectedItemDbId)
-    : streamRows;
-  const label = (s: StreamRow) =>
-    s.merchant_name?.trim() || s.description?.trim() || "Unknown";
-  const byAmountDesc = <T extends { amount: number }>(rows: T[]) =>
-    rows.toSorted((a, b) => b.amount - a.amount);
-  return {
-    subscriptions: byAmountDesc(
-      filtered
-        .filter((s) => s.stream_type === "outflow")
-        .map((s) => ({
-          merchant: label(s),
-          amount: round2(Math.abs(s.average_amount ?? 0)),
-          frequency: s.frequency,
-          category: s.category,
-          predictedNextDate: s.predicted_next_date,
-        })),
-    ),
-    incomeStreams: byAmountDesc(
-      filtered
-        .filter((s) => s.stream_type === "inflow")
-        .map((s) => ({
-          merchant: label(s),
-          amount: round2(Math.abs(s.average_amount ?? 0)),
-          frequency: s.frequency,
-          predictedNextDate: s.predicted_next_date,
-        })),
-    ),
-  };
-}
-
 export interface DashboardOptions {
   itemId?: string;
   drill?: DrillParams;
@@ -624,6 +567,19 @@ export interface DashboardOptions {
    * the RLS-bound user client — service-client callers must never pass it.
    */
   scope?: "mine" | "household";
+  /**
+   * When false, skips querying manual_accounts and profiles (balance sheet inputs).
+   * Defaults to true.
+   */
+  includeBalanceSheet?: boolean;
+  /**
+   * Viewer's calendar day (YYYY-MM-DD) in their profile timezone (M-11).
+   * The open-month key, "current month" day counts, and the live net-worth
+   * point all derive from this instead of the server clock, so an evening
+   * session west of UTC no longer straddles two months. Defaults to the
+   * server-local day when the caller has no profile timezone handy.
+   */
+  today?: string;
 }
 
 interface DashboardOverrideRow {
@@ -634,6 +590,8 @@ interface DashboardOverrideRow {
 
 const DASHBOARD_OVERRIDE_CHUNK_SIZE = 250;
 const DASHBOARD_OVERRIDE_PAGE_SIZE = 1_000;
+/** PostgREST max_rows is 1,000: page the window read so totals never truncate. */
+const DASHBOARD_TXN_PAGE_SIZE = 1_000;
 
 async function loadDashboardOverrides(
   supabase: SupabaseClient,
@@ -670,6 +628,292 @@ async function loadDashboardOverrides(
   return chunkRows.flat();
 }
 
+interface QueryResult<T> {
+  data: T | null;
+  error?: unknown;
+}
+
+/**
+ * Envelope spend rows keyed by (group, detailed) pair (M-1): each txn feeds
+ * exactly one pair bucket carrying both keys, so a detailed budget and a
+ * group budget resolve the same spend without double-counting it. Split
+ * parts keep only their detailed key (their group is unknown), matching the
+ * categoryBreakdown treatment they already get.
+ */
+function toEnvelopeSpendRows(
+  txns: Pick<TxnLite, "id" | "amount" | "pfc_primary" | "pfc_detailed">[],
+  splits: { transactionId: string; category: string; amount: number }[],
+): { category: string; amount: number; groupKey: string | null; categoryKey: string | null }[] {
+  const splitsByTxn = new Map<string, { transactionId: string; category: string; amount: number }[]>();
+  for (const split of splits) {
+    const rows = splitsByTxn.get(split.transactionId) ?? [];
+    rows.push(split);
+    splitsByTxn.set(split.transactionId, rows);
+  }
+  const byPair = new Map<string, { category: string; amount: number; groupKey: string | null; categoryKey: string | null }>();
+  const add = (groupKey: string | null, categoryKey: string | null, amount: number): void => {
+    const key = `${groupKey ?? ""}|${categoryKey ?? ""}`;
+    const existing = byPair.get(key);
+    if (existing) existing.amount = round2(existing.amount + amount);
+    else {
+      byPair.set(key, {
+        category: categoryKey ?? groupKey ?? "UNCATEGORIZED",
+        amount: round2(amount),
+        groupKey,
+        categoryKey,
+      });
+    }
+  };
+  for (const txn of txns) {
+    const rows = splitsByTxn.get(txn.id);
+    if (
+      rows &&
+      validateSplits(
+        { id: txn.id, amount: txn.amount, category: txn.pfc_primary ?? "UNCATEGORIZED" },
+        rows,
+      ).valid
+    ) {
+      for (const split of rows) add(null, split.category, split.amount);
+    } else {
+      add(txn.pfc_primary, txn.pfc_detailed, Math.abs(txn.amount));
+    }
+  }
+  return [...byPair.values()];
+}
+
+/**
+ * The caller's own preference row, which holds the Accounts page's net-worth
+ * exclusions. Always keyed on `id` even under household scope: the exclusion
+ * list belongs to the person looking, not to the rows they can see. Without a
+ * userId the RLS-bound client already sees only its own profile.
+ */
+function ownProfilePrefsQuery(supabase: SupabaseClient, userId: string | undefined) {
+  const query = supabase.from("profiles").select("dashboard_prefs");
+  return (userId ? query.eq("id", userId) : query).maybeSingle();
+}
+
+/**
+ * The dashboard's balance sheet, composed exactly as the stored snapshot and
+ * the Accounts page compose theirs. A failed input read throws: the live
+ * open-month value overwrites a correctly composed snapshot, so an incomplete
+ * balance sheet is worse than an error.
+ */
+function composeDashboardBalanceSheet(
+  plaidAccounts: readonly PlaidBalanceRow[],
+  manualAccountsResult: QueryResult<unknown>,
+  prefsResult: QueryResult<{ dashboard_prefs?: unknown }>,
+): NetWorthAccount[] {
+  if (manualAccountsResult.error) throw manualAccountsResult.error;
+  if (prefsResult.error) throw prefsResult.error;
+  return composeNetWorthAccounts({
+    plaidAccounts,
+    manualAccounts: (manualAccountsResult.data ?? []) as ManualBalanceRow[],
+    excludedNetWorthIds: readExcludedNetWorthIds(prefsResult.data?.dashboard_prefs),
+  });
+}
+
+function assertStage1Success(
+  results: readonly [string, { error?: unknown }][],
+): void {
+  for (const [name, result] of results) {
+    if (result.error) {
+      throw result.error instanceof Error
+        ? new Error(`dashboard stage1 ${name}: ${result.error.message}`, { cause: result.error })
+        : result.error;
+    }
+  }
+}
+
+async function fetchWindowTransactions(
+  supabase: SupabaseClient,
+  activeMonth: string,
+  scopeUser: <T>(builder: T) => T,
+): Promise<Array<Record<string, unknown>>> {
+  const windowStart = `${addMonths(activeMonth, -5)}-01`;
+  const windowEndExclusive = `${addMonths(activeMonth, 1)}-01`;
+  const txns: Array<Record<string, unknown>> = [];
+  for (let page = 0; ; page += 1) {
+    const from = page * DASHBOARD_TXN_PAGE_SIZE;
+    const result = (await scopeUser(
+      supabase
+        .from("transactions")
+        .select(
+          "id, date, amount, merchant_name, name, pfc_primary, pfc_detailed, account_id, user_id, plaid_transaction_id",
+        )
+        .gte("date", windowStart)
+        .lt("date", windowEndExclusive)
+        .order("date")
+        .order("id")
+        .range(from, from + DASHBOARD_TXN_PAGE_SIZE - 1),
+    )) as { data: Array<Record<string, unknown>> | null; error: unknown };
+    if (result.error) throw result.error;
+    const batch = result.data ?? [];
+    txns.push(...batch);
+    if (batch.length < DASHBOARD_TXN_PAGE_SIZE) break;
+  }
+  return txns;
+}
+
+function buildProjectedTransactions(params: {
+  txns: Array<Record<string, unknown>>;
+  merchantRules: unknown[] | null;
+  categoryOverrideRows: unknown[] | null;
+  linkedRefunds: unknown[] | null;
+  linkedTransfersRows: unknown[] | null;
+  linkedDuplicates: unknown[] | null;
+  transactionOverrides: Array<{
+    transactionId: string;
+    displayCategory: string | null;
+    cashFlowClassification: "expense" | "income" | null;
+  }>;
+  allAccounts: AccountSummary[];
+}): { rawRows: RawFinanceTransaction[]; allTxnsRaw: TxnLite[] } {
+  const {
+    txns,
+    merchantRules,
+    categoryOverrideRows,
+    linkedRefunds,
+    linkedTransfersRows,
+    linkedDuplicates,
+    transactionOverrides,
+    allAccounts,
+  } = params;
+
+  const accountNamesById = new Map<string, string>();
+  for (const a of allAccounts) {
+    accountNamesById.set(a.id, a.name || "");
+  }
+
+  const rulesList = (merchantRules ?? []).map((r) => {
+    const rule = r as {
+      match_type: "merchant" | "keyword" | "account";
+      pattern: string;
+      display_name: string | null;
+      category: string | null;
+      enabled: boolean;
+    };
+    return {
+      matchType: rule.match_type,
+      pattern: rule.pattern,
+      displayName: rule.display_name,
+      category: rule.category,
+      enabled: rule.enabled,
+    };
+  });
+
+  const rawRows = ((txns ?? []) as unknown as TransactionRow[]).map(fromTransactionRow);
+  const rawById = new Map(rawRows.map((row) => [row.id, row]));
+
+  const canonicalTxns = projectFinanceTransactions({
+    rows: rawRows,
+    merchantRules: rulesList,
+    categoryOverrides: ((categoryOverrideRows ?? []) as Array<{
+      source_category: string;
+      display_category: string;
+    }>).map((row) => ({
+      sourceCategory: row.source_category,
+      displayCategory: row.display_category,
+    })),
+    splits: [],
+    linkedRefunds: ((linkedRefunds ?? []) as Array<{
+      charge_transaction_id: string;
+      refund_transaction_id: string;
+    }>).map((row) => ({
+      chargeTransactionId: row.charge_transaction_id,
+      refundTransactionId: row.refund_transaction_id,
+    })),
+    linkedTransfers: ((linkedTransfersRows ?? []) as Array<{
+      out_transaction_id: string;
+      in_transaction_id: string;
+    }>).map((row) => ({
+      outTransactionId: row.out_transaction_id,
+      inTransactionId: row.in_transaction_id,
+    })),
+    transactionOverrides,
+    excludedTransactionIds: new Set(
+      ((linkedDuplicates ?? []) as Array<{ excluded_transaction_id: string }>).map(
+        (row) => row.excluded_transaction_id,
+      ),
+    ),
+    accountNames: accountNamesById,
+  });
+
+  const allTxnsRaw: TxnLite[] = canonicalTxns.map((row) => {
+    const source = rawById.get(row.sourceTransactionId)!;
+    return {
+      id: row.id,
+      date: row.date,
+      amount: row.signedAmount,
+      merchant_name: row.merchant,
+      name: source.name,
+      pfc_primary: row.groupKey === UNCATEGORIZED ? null : row.groupKey,
+      pfc_detailed: source.pfcDetailed,
+      account_id: row.accountId ?? "",
+      user_id: source.userId,
+      flow: row.flow,
+    };
+  });
+
+  return { rawRows, allTxnsRaw };
+}
+
+function buildSafeToSpendUpcomingExpenses(
+  forecastEvents: Array<{ itemType: string; date: string; name: string; amount: number }>,
+  sinkingFundItems: Array<{ dueSoon: boolean; dueDate: string; name: string; targetAmount: number }>,
+  insightsAsOf: string,
+): Array<{ date: string; name: string; amount: number }> {
+  return [
+    ...forecastEvents
+      .filter((event) => event.itemType === "expense")
+      .map((event) => ({
+        date: event.date,
+        name: event.name,
+        amount: Math.abs(event.amount),
+      })),
+    ...sinkingFundItems
+      .filter((fund) => fund.dueSoon)
+      .map((fund) => ({
+        date: fund.dueDate < insightsAsOf ? insightsAsOf : fund.dueDate,
+        name: fund.name,
+        amount: fund.targetAmount,
+      })),
+  ];
+}
+
+function composeNetWorthHistoryWithLivePoint(params: {
+  snapshots: Array<{ snapshot_month: string; assets: number; liabilities: number }>;
+  netWorthSnapshot: { assets: number; liabilities: number; netWorth: number };
+  currentMonth: string;
+  hasBalanceSheet: boolean;
+  scope?: string;
+}): Array<{ month: string; assets: number; liabilities: number; netWorth: number }> {
+  const { snapshots, netWorthSnapshot, currentMonth, hasBalanceSheet, scope } = params;
+  const netWorthHistory = snapshots.map((s) => {
+    const assets = Number(s.assets ?? 0);
+    const liabilities = Number(s.liabilities ?? 0);
+    return {
+      month: s.snapshot_month.slice(0, 7),
+      assets,
+      liabilities,
+      netWorth: round2(assets - liabilities),
+    };
+  });
+
+  if (scope !== "household" && hasBalanceSheet) {
+    const currentPoint = { month: currentMonth, ...netWorthSnapshot };
+    const currentIndex = netWorthHistory.findIndex((point) => point.month === currentMonth);
+    if (currentIndex >= 0) netWorthHistory[currentIndex] = currentPoint;
+    else netWorthHistory.push(currentPoint);
+  }
+  netWorthHistory.sort((a, b) => a.month.localeCompare(b.month));
+  return netWorthHistory;
+}
+
+function getItemAccountIds(accounts: AccountSummary[], itemId?: string): Set<string> | null {
+  if (!itemId) return null;
+  return new Set(accounts.filter(account => account.plaid_item_id === itemId).map(account => account.id));
+}
+
 export async function getDashboardData(
   supabase: SupabaseClient,
   selectedAccountId?: string,
@@ -677,8 +921,11 @@ export async function getDashboardData(
   userId?: string,
   options?: DashboardOptions,
 ): Promise<DashboardData> {
-  const now = new Date();
-  const currentMonth = monthKey(now.toISOString().slice(0, 10));
+  // One clock for the whole load (M-11): the viewer's profile-timezone day
+  // when the caller knows it, else the server-local day. Every month key,
+  // day count, and the live net-worth point below derives from `today`.
+  const today = options?.today ?? localDateKey(new Date());
+  const currentMonth = today.slice(0, 7);
 
   // Explicit user scoping. With the user-scoped client this is redundant (RLS
   // already limits rows), but this function is also called under the service
@@ -695,22 +942,11 @@ export async function getDashboardData(
   // Transactions are then fetched BOUNDED to the 6-month window the dashboard
   // actually renders — with years of history (and a 2-minute auto re-render)
   // an unbounded select-all grows without limit.
-  const [
-    { data: accounts },
-    { data: streams },
-    { data: items },
-    { data: budgets },
-    { data: lastSyncJob },
-    { data: oldestTxn },
-    { data: merchantRules },
-    { data: snapshots },
-    { data: linkedRefunds },
-    { data: linkedTransfers },
-    { data: linkedDuplicates },
-    { data: categoryOverrideRows },
-    { data: sinkingFundRows },
-    { data: scheduledRows },
-  ] = await Promise.all([
+  //
+  // Every Stage-1 read is error-checked (A-5): a DB failure used to render a
+  // dashboard of zeros with no error. The linked_transfers fallback for a
+  // missing table lives inside its own query builder below.
+  const stage1 = await Promise.all([
     scopeUser(
       supabase
         .from("accounts")
@@ -719,12 +955,7 @@ export async function getDashboardData(
         )
         .order("name"),
     ),
-    scopeUser(
-      supabase
-        .from("recurring_streams")
-        .select("merchant_name, description, average_amount, frequency, category, stream_type, is_active, plaid_item_id, predicted_next_date")
-        .eq("is_active", true),
-    ),
+    loadRecurringInputs(supabase, applyUserScope ? userId : undefined),
     scopeUser(supabase.from("plaid_items").select("id, institution_name")),
     scopeUser(supabase.from("budgets").select("category, monthly_limit, group_name, rollover_enabled")),
     scopeUser(
@@ -818,13 +1049,81 @@ export async function getDashboardData(
         .order("scheduled_date")
         .limit(100),
     ),
+    // Balance-sheet inputs beyond the connected accounts. Net worth has to
+    // agree with the Accounts page and with the stored monthly snapshot, and
+    // both of those count manual accounts and drop the user's exclusions.
+    options?.includeBalanceSheet !== false
+      ? scopeUser(
+          supabase
+            .from("manual_accounts")
+            .select("id, name, account_type, balance, include_in_net_worth"),
+        )
+      : Promise.resolve({ data: [], error: null }),
+    options?.includeBalanceSheet !== false
+      ? ownProfilePrefsQuery(supabase, userId)
+      : Promise.resolve({ data: null, error: null }),
   ]);
+
+  const [
+    accountsResult,
+    recurringInputs,
+    itemsResult,
+    budgetsResult,
+    lastSyncJobResult,
+    oldestTxnResult,
+    merchantRulesResult,
+    snapshotsResult,
+    linkedRefundsResult,
+    linkedTransfers,
+    linkedDuplicatesResult,
+    categoryOverrideRowsResult,
+    sinkingFundRowsResult,
+    scheduledRowsResult,
+    manualAccountsResult,
+    netWorthPrefsResult,
+  ] = stage1;
+  assertStage1Success([
+    ["accounts", accountsResult],
+    ["plaid_items", itemsResult],
+    ["budgets", budgetsResult],
+    ["sync_jobs", lastSyncJobResult],
+    ["transactions_probe", oldestTxnResult],
+    ["merchant_rules", merchantRulesResult],
+    ["net_worth_snapshots", snapshotsResult],
+    ["linked_refunds", linkedRefundsResult],
+    ["linked_duplicates", linkedDuplicatesResult],
+    ["category_overrides", categoryOverrideRowsResult],
+    ["sinking_funds", sinkingFundRowsResult],
+    ["scheduled_transactions", scheduledRowsResult],
+  ]);
+  const accounts = accountsResult.data;
+  const items = itemsResult.data;
+  const budgets = budgetsResult.data;
+  const lastSyncJob = lastSyncJobResult.data;
+  const oldestTxn = oldestTxnResult.data;
+  const merchantRules = merchantRulesResult.data;
+  const snapshots = snapshotsResult.data;
+  const linkedRefunds = linkedRefundsResult.data;
+  if (linkedTransfers.error) throw linkedTransfers.error;
+  const linkedTransfersRows = linkedTransfers.data as unknown[] | null;
+  const linkedDuplicates = linkedDuplicatesResult.data;
+  const categoryOverrideRows = categoryOverrideRowsResult.data;
+  const sinkingFundRows = sinkingFundRowsResult.data;
+  const scheduledRows = scheduledRowsResult.data;
 
   const allAccounts = ((accounts ?? []) as AccountSummary[]).map((account) => ({
     ...account,
     name: normalizeExternalDisplayText(account.name),
     official_name: normalizeExternalDisplayText(account.official_name),
   }));
+  const netWorthAccounts =
+    options?.includeBalanceSheet !== false
+      ? composeDashboardBalanceSheet(
+          allAccounts,
+          manualAccountsResult,
+          netWorthPrefsResult,
+        )
+      : [];
   const lastSyncAt = (lastSyncJob?.updated_at as string | undefined) ?? null;
   const allItems = (items ?? []) as Array<{ id: string; institution_name: string | null }>;
   const allBudgets = (budgets ?? []) as Array<{
@@ -848,17 +1147,10 @@ export async function getDashboardData(
 
   // Stage 2: transactions for the rendered window only — the active month,
   // the five months before it (charts), including the pro-rated comparison.
-  const windowStart = `${addMonths(activeMonth, -5)}-01`;
-  const windowEndExclusive = `${addMonths(activeMonth, 1)}-01`;
-  const { data: txns } = await scopeUser(
-    supabase
-      .from("transactions")
-      .select(
-        "id, date, amount, merchant_name, name, pfc_primary, pfc_detailed, account_id, user_id, plaid_transaction_id",
-      )
-      .gte("date", windowStart)
-      .lt("date", windowEndExclusive),
-  );
+  // Paged with .range() (A-5): PostgREST silently truncates an unpaged read
+  // at max_rows (1,000), which produced wrong spend totals, envelopes, and
+  // cron alerts with no error once a ledger passed ~165 txns/month.
+  const txns = await fetchWindowTransactions(supabase, activeMonth, scopeUser);
 
   // Per-transaction classification overrides for the rendered window, so the
   // dashboard agrees with every other canonical surface about the same rows.
@@ -878,86 +1170,19 @@ export async function getDashboardData(
         : null,
   }));
 
-  const accountNamesById = new Map<string, string>();
-  for (const a of allAccounts) {
-    accountNamesById.set(a.id, a.name || "");
-  }
-
-  const rulesList = (merchantRules ?? []).map((r) => ({
-    matchType: r.match_type as "merchant" | "keyword" | "account",
-    pattern: r.pattern,
-    displayName: r.display_name,
-    category: r.category,
-    enabled: r.enabled,
-  }));
-
-  // Transaction meaning — merchant rules, category renames, refund netting and
-  // spend/income/transfer classification — is decided once by the canonical
-  // projection so every page agrees with this one.
-  //
-  // Splits are deliberately NOT passed here: the dashboard distributes them
-  // downstream over active-month spend only (see categoryBreakdown), and
-  // handing them to the projection as well would apply them twice.
-  const rawRows = ((txns ?? []) as unknown as TransactionRow[]).map(fromTransactionRow);
-  const rawById = new Map(rawRows.map((row) => [row.id, row]));
-
-  const canonicalTxns = projectFinanceTransactions({
-    rows: rawRows,
-    merchantRules: rulesList,
-    categoryOverrides: ((categoryOverrideRows ?? []) as Array<{
-      source_category: string;
-      display_category: string;
-    }>).map((row) => ({
-      sourceCategory: row.source_category,
-      displayCategory: row.display_category,
-    })),
-    splits: [],
-    linkedRefunds: ((linkedRefunds ?? []) as Array<{
-      charge_transaction_id: string;
-      refund_transaction_id: string;
-    }>).map((row) => ({
-      chargeTransactionId: row.charge_transaction_id,
-      refundTransactionId: row.refund_transaction_id,
-    })),
-    linkedTransfers: ((linkedTransfers ?? []) as Array<{
-      out_transaction_id: string;
-      in_transaction_id: string;
-    }>).map((row) => ({
-      outTransactionId: row.out_transaction_id,
-      inTransactionId: row.in_transaction_id,
-    })),
+  const { allTxnsRaw } = buildProjectedTransactions({
+    txns,
+    merchantRules,
+    categoryOverrideRows,
+    linkedRefunds,
+    linkedTransfersRows,
+    linkedDuplicates,
     transactionOverrides,
-    excludedTransactionIds: new Set(
-      ((linkedDuplicates ?? []) as Array<{ excluded_transaction_id: string }>)
-        .map((row) => row.excluded_transaction_id),
-    ),
-    accountNames: accountNamesById,
-  });
-
-  const allTxnsRaw: TxnLite[] = canonicalTxns.map((row) => {
-    const source = rawById.get(row.sourceTransactionId)!;
-    return {
-      id: row.id,
-      date: row.date,
-      amount: row.signedAmount,
-      merchant_name: row.merchant,
-      name: source.name,
-      pfc_primary: row.groupKey === UNCATEGORIZED ? null : row.groupKey,
-      pfc_detailed: source.pfcDetailed,
-      account_id: row.accountId ?? "",
-      user_id: source.userId,
-      flow: row.flow,
-    };
+    allAccounts,
   });
 
   // Filter transactions by selected account and/or bank (plaid item)
-  const itemAccountIds = options?.itemId
-    ? new Set(
-        allAccounts
-          .filter((a) => a.plaid_item_id === options.itemId)
-          .map((a) => a.id),
-      )
-    : null;
+  const itemAccountIds = getItemAccountIds(allAccounts, options?.itemId);
   const filteredTxns = allTxnsRaw.filter(
     (t) =>
       (!selectedAccountId || t.account_id === selectedAccountId) &&
@@ -1026,8 +1251,10 @@ export async function getDashboardData(
   // 1. Total Budget Limit calculation
   const totalBudget = allBudgets.reduce((acc, b) => acc + b.monthly_limit, 0);
 
-  const today = new Date();
-  const isCurrentMonth = today.getFullYear() === activeYear && today.getMonth() === activeMonthIndex;
+  // Day counts from the same `today` as the month key (M-11): parsing the
+  // YYYY-MM-DD string keeps every comparison in calendar space.
+  const todayDay = Number(today.slice(8, 10));
+  const isCurrentMonth = today.slice(0, 7) === activeMonth;
   const spendMetrics = buildDashboardSpendMetrics({
     spendTxns,
     allTxnsRaw,
@@ -1035,35 +1262,20 @@ export async function getDashboardData(
     allItems,
     activeMonth,
     lastMonthTargetDay:
-      isCurrentMonth ? today.getDate() : new Date(activeYear, activeMonthIndex + 1, 0).getDate(),
+      isCurrentMonth ? todayDay : new Date(activeYear, activeMonthIndex + 1, 0).getDate(),
     activeYear,
     activeMonthIndex,
   });
   const { lastMonthProratedSpent, spendPerCard, spendPerBank, cashFlow } = spendMetrics;
 
-  // Filter streams by selected account's plaid item if specified
-  const selectedAccountObj = allAccounts.find((a) => a.id === selectedAccountId);
-  const selectedItemDbId = selectedAccountObj?.plaid_item_id;
-
-  const recurringTxns = filteredTxns.map((t) => ({
-    id: t.id,
-    date: t.date,
-    merchant: extractMerchantName(t, ""),
-    amount: t.amount,
-  }));
-  const latestMatchDate = (name: string): string | null =>
-    latestMerchantMatchDate(recurringTxns, name);
-
-  const { subscriptions, incomeStreams } = buildStreamSummaries(
-    (streams ?? []) as StreamRow[],
-    selectedItemDbId,
-  );
-
   const activeDay =
-    isCurrentMonth ? today.getDate() : new Date(activeYear, activeMonthIndex + 1, 0).getDate();
+    isCurrentMonth ? todayDay : new Date(activeYear, activeMonthIndex + 1, 0).getDate();
   const activeDaysInMonth = new Date(activeYear, activeMonthIndex + 1, 0).getDate();
+  // Income-group budgets are not expense envelopes (M-12): the groups
+  // builder drops them, so the envelopes must never contain them either.
+  const expenseBudgets = allBudgets.filter((budget) => budget.group_name !== "income");
   const budgetEnvelopes = buildBudgetEnvelopes({
-    budgets: allBudgets.map((budget) => ({
+    budgets: expenseBudgets.map((budget) => ({
       category: budget.category,
       monthlyLimit: Number(budget.monthly_limit),
       rolloverEnabled: Boolean(budget.rollover_enabled),
@@ -1071,65 +1283,71 @@ export async function getDashboardData(
     windowMonths: monthlySpending
       .map((m) => m.month)
       .filter((m) => m !== activeMonth),
-    currentSpend: categoryBreakdown.map((row) => ({
-      category: row.category,
-      amount: row.amount,
-    })),
-    previousSpend: [...categoryHistoryMap.entries()]
-      .map(([key, amount]) => {
-        const [month, category] = key.split("|");
-        return { month: month!, category: category!, amount: round2(amount) };
-      })
-      .filter((row) => row.month !== activeMonth),
+    currentSpend: toEnvelopeSpendRows(activeMonthSpend, splits),
+    previousSpend: [...(() => {
+      const byMonth = new Map<string, Pick<TxnLite, "id" | "amount" | "pfc_primary" | "pfc_detailed">[]>();
+      for (const txn of spendTxns) {
+        if (!isSpending(txn)) continue;
+        const month = monthKey(txn.date);
+        if (month === activeMonth) continue;
+        const rows = byMonth.get(month) ?? [];
+        rows.push(txn);
+        byMonth.set(month, rows);
+      }
+      return [...byMonth.entries()].flatMap(([month, rows]) =>
+        toEnvelopeSpendRows(rows, []).map((row) => ({ ...row, month })),
+      );
+    })()],
     dayOfMonth: activeDay,
     daysInMonth: activeDaysInMonth,
   });
   const budgetGroups = buildDashboardBudgetGroups(
-    allBudgets.map((budget) => ({
+    expenseBudgets.map((budget) => ({
       category: budget.category,
       groupName: budget.group_name,
     })),
     budgetEnvelopes,
   );
 
-  const recurringItems = [
-    ...subscriptions.map((stream) => ({
-      name: stream.merchant,
-      amount: stream.amount,
-      frequency: normalizeFrequency(stream.frequency),
-      itemType: "expense" as const,
-      nextDate:
-        stream.predictedNextDate ??
-        latestMatchDate(stream.merchant) ??
-        monthDate(activeMonth, 15),
-      category: stream.category,
-    })),
-    ...incomeStreams.map((stream) => ({
-      name: stream.merchant,
-      amount: stream.amount,
-      frequency: normalizeFrequency(stream.frequency),
-      itemType: "income" as const,
-      nextDate:
-        stream.predictedNextDate ??
-        latestMatchDate(stream.merchant) ??
-        monthDate(activeMonth, 15),
-    })),
-    ...((scheduledRows ?? []) as Array<{
-      kind: string;
-      amount: number | string;
-      merchant: string;
-      scheduled_date: string;
-      category: string | null;
+  const allowedStreamIds = new Set(recurringInputs.streamRows
+    .filter(stream => (!selectedAccountId || stream.account_id === selectedAccountId)
+      && (!itemAccountIds || itemAccountIds.has(stream.account_id ?? "")))
+    .map(stream => stream.id));
+  const recurring = buildDashboardRecurring({
+    streams: recurringInputs.streamInputs.filter(stream => allowedStreamIds.has(stream.id)),
+    manualItems: selectedAccountId || options?.itemId ? [] : recurringInputs.manualInputs,
+    scheduled: ((scheduledRows ?? []) as Array<{
+      kind: string; amount: number | string; merchant: string; scheduled_date: string; category: string | null;
     }>).map(toRecurringItem),
-  ];
-  const cashBalance = allAccounts
-    .filter((account) => account.type === "depository")
-    .reduce((sum, account) => sum + Number(account.current_balance ?? 0), 0);
+    month: activeMonth,
+    today,
+  });
+  const { subscriptions, incomeStreams, recurringStatuses, items: recurringItems } = recurring;
+  // Liquid cash in the forecast currency (M-10): null when any depository
+  // balance is unknown (a coerced 0 would fake runway and Safe-to-Spend),
+  // and non-USD balances are excluded rather than summed as dollars, the
+  // same partition lib/forecasting.ts applies.
+  const depositoryAccounts = allAccounts.filter((account) => account.type === "depository");
+  const cashBalance = depositoryAccounts.some(
+    (account) => account.current_balance === null || account.current_balance === undefined,
+  )
+    ? null
+    : round2(
+        depositoryAccounts
+          .filter((account) => {
+            const currency = account.iso_currency_code?.toUpperCase();
+            return !currency || currency === "USD";
+          })
+          .reduce((sum, account) => sum + Number(account.current_balance ?? 0), 0),
+      );
   const cashFlowForecast = forecastCashFlow({
-    startingBalance: cashBalance,
-    asOf: monthDate(activeMonth, Math.min(activeDay, 28)),
+    // The forecast needs a number: an unknown balance degrades to an
+    // explicitly zero-based projection while runway and Safe-to-Spend,
+    // which take `cashBalance` directly, honestly report unknown.
+    startingBalance: cashBalance ?? 0,
+    asOf: monthDate(activeMonth, activeDay),
     horizonDays: 30,
-    items: recurringItems,
+    items: recurring.forecastItems,
     lowBalanceThreshold: 500,
   });
   const recurringWeeks = groupRecurringByWeek(recurringItems, monthDate(activeMonth, 1), 31);
@@ -1137,7 +1355,7 @@ export async function getDashboardData(
   // Financial-intelligence derivations — pure math over data already in
   // memory; no extra queries, no Plaid calls (the auto re-render multiplies
   // whatever this costs, so it must stay free).
-  const insightsAsOf = monthDate(activeMonth, Math.min(activeDay, 28));
+  const insightsAsOf = monthDate(activeMonth, activeDay);
   const essentialsSplit = splitEssentialsByMonth(
     spendTxns.filter(isSpending).map((t) => ({
       month: monthKey(t.date),
@@ -1194,40 +1412,13 @@ export async function getDashboardData(
     cashBalance,
     asOf: insightsAsOf,
     nextPayDate: paychecks.primary?.nextPayDate ?? null,
-    upcomingExpenses: [
-      ...cashFlowForecast.events
-        .filter((event) => event.itemType === "expense")
-        .map((event) => ({
-          date: event.date,
-          name: event.name,
-          amount: Math.abs(event.amount),
-        })),
-      ...sinkingFunds.items
-        .filter((fund) => fund.dueSoon)
-        .map((fund) => ({
-          date: fund.dueDate < insightsAsOf ? insightsAsOf : fund.dueDate,
-          name: fund.name,
-          amount: fund.targetAmount,
-        })),
-    ],
+    upcomingExpenses: buildSafeToSpendUpcomingExpenses(
+      cashFlowForecast.events,
+      sinkingFunds.items,
+      insightsAsOf,
+    ),
   });
 
-  // Recurring stream statuses match each stream to a real transaction so the
-  // dashboard can show paid / unusual amount / late instead of a flat
-  // "expected". Plaid's prediction wins when available, then existing
-  // transaction-based and mid-month fallbacks keep older stream rows useful.
-  const recurringStatuses = buildRecurringStatuses({
-    asOf: monthDate(activeMonth, Math.min(activeDay, 28)),
-    unusualAmountPct: 0.2,
-    items: recurringItems.map((item, index) => ({
-      id: `${index}`,
-      name: item.name,
-      amount: item.amount,
-      itemType: item.itemType,
-      nextDate: item.nextDate,
-    })),
-    transactions: recurringTxns,
-  });
   const priorCategoryAverages = [...categoryHistoryMap.entries()]
     .map(([key, amount]) => {
       const [month, category] = key.split("|");
@@ -1280,23 +1471,15 @@ export async function getDashboardData(
     priorMerchantMedians,
     largeTransactionThreshold: 500,
   });
-  const netWorthSnapshot = computeNetWorthSnapshot(
-    allAccounts.map((account) => ({
-      name: account.name ?? "Account",
-      type: account.type,
-      balance: account.current_balance,
-    })),
-  );
+  const netWorthSnapshot = computeNetWorthSnapshot(netWorthAccounts);
 
-  const netWorthHistory = allSnapshots.map((s) => {
-    const assets = Number(s.assets ?? 0);
-    const liabilities = Number(s.liabilities ?? 0);
-    return {
-      month: s.snapshot_month.slice(0, 7), // YYYY-MM
-      assets,
-      liabilities,
-      netWorth: round2(assets - liabilities),
-    };
+  const hasBalanceSheet = netWorthAccounts.some((account) => account.balance !== null);
+  const netWorthHistory = composeNetWorthHistoryWithLivePoint({
+    snapshots: allSnapshots,
+    netWorthSnapshot,
+    currentMonth,
+    hasBalanceSheet,
+    scope: options?.scope,
   });
 
   return {
@@ -1313,6 +1496,7 @@ export async function getDashboardData(
     incomeStreams,
     availableMonths,
     selectedMonth: activeMonth,
+    today,
     lastSyncAt,
     lastSyncAgoMinutes: lastSyncAt
       ? Math.max(0, Math.floor((Date.now() - new Date(lastSyncAt).getTime()) / 60000))

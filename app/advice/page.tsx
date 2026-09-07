@@ -10,6 +10,7 @@ import { buildAdviceView, type AdviceCategory, type AdviceItemProgress } from "@
 import { ADVICE_LIBRARY } from "@/lib/advice-content";
 import { loadAdvicePageData } from "@/lib/advice-data";
 import { isFeatureEnabled } from "@/lib/feature-flags";
+import { resolveViewerToday } from "@/lib/report-period";
 import { firstSearchParam } from "@/lib/search-params";
 import { createClient } from "@/lib/supabase/server";
 
@@ -67,8 +68,10 @@ export default async function AdvicePage({ searchParams }: Readonly<PageProps>) 
   } = await supabase.auth.getUser();
   if (!user) notFound();
 
-  const today = new Date().toISOString().slice(0, 10);
-  const { ctx, progress, priorities } = await loadAdvicePageData(supabase, user.id, today);
+  // Advice progress is day-sensitive: resolve today in the profile timezone
+  // (M-11) rather than UTC.
+  const viewerToday = await resolveViewerToday(supabase, user.id);
+  const { ctx, progress, priorities } = await loadAdvicePageData(supabase, user.id, viewerToday);
   const view = buildAdviceView(ADVICE_LIBRARY, progress, priorities, ctx);
 
   const completedTaskIdsFor = (adviceId: string) =>

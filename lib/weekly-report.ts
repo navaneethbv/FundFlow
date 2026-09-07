@@ -1,4 +1,5 @@
 import { EXCLUDED_PFC } from "@/lib/dashboard";
+import { matchesBudgetCategory } from "@/lib/finance-domain";
 import {
   applyMerchantRules,
   type MerchantRule,
@@ -13,6 +14,8 @@ export interface WeeklyReportTransaction {
   merchantName: string | null;
   name: string | null;
   category: string | null;
+  /** Provider detailed category (pfc_detailed) for canonical budget matching. */
+  detailedCategory?: string | null;
   accountId: string;
   displayCategory?: string | null;
   cashFlowClassification?: "expense" | "income" | null;
@@ -36,6 +39,8 @@ export interface WeeklyReportInput {
   merchantRules: MerchantRule[];
   splits: Array<{ transactionId: string; category: string; amount: number }>;
   linkedRefundTransactionIds: Set<string>;
+  /** Confirmed inter-account transfer halves: movement, never spend (M-5). */
+  linkedTransferTransactionIds?: Set<string>;
   duplicateTransactionIds: Set<string>;
 }
 
@@ -139,18 +144,26 @@ function spendAmountOf(transaction: WeeklyReportTransaction): number {
     : transaction.amount;
 }
 
-function sumByName(
+/**
+ * Spend totals keyed by a stable id (account or institution) with
+ * the display string carried as a label. Two institutions or two cards
+ * sharing a display name must not collapse into one row.
+ */
+function sumById(
   transactions: WeeklyReportRow[],
-  getName: (transaction: WeeklyReportRow) => string | null,
+  getId: (transaction: WeeklyReportRow) => string | null,
+  getLabel: (id: string) => string,
 ): Array<{ name: string; amount: number }> {
   const totals = new Map<string, number>();
+  const labels = new Map<string, string>();
   for (const transaction of transactions) {
-    const name = getName(transaction);
-    if (!name) continue;
-    totals.set(name, (totals.get(name) ?? 0) + transaction.spendAmount);
+    const id = getId(transaction);
+    if (!id) continue;
+    if (!labels.has(id)) labels.set(id, getLabel(id));
+    totals.set(id, (totals.get(id) ?? 0) + transaction.spendAmount);
   }
   return [...totals.entries()]
-    .map(([name, amount]) => ({ name, amount: round2(amount) }))
+    .map(([id, amount]) => ({ name: labels.get(id) ?? "Other bank", amount: round2(amount) }))
     .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
 }
 
@@ -188,6 +201,7 @@ export function buildWeeklyReportModel(
   const usableForSpend = transactions.filter(
     (transaction) =>
       !input.linkedRefundTransactionIds.has(transaction.id) &&
+      !(input.linkedTransferTransactionIds?.has(transaction.id) ?? false) &&
       !input.duplicateTransactionIds.has(transaction.id),
   );
   const currentSpend = usableForSpend.filter(
@@ -237,18 +251,26 @@ export function buildWeeklyReportModel(
     .sort((a, b) => b.amount - a.amount || a.merchant.localeCompare(b.merchant))
     .slice(0, 5);
 
-  const banks = sumByName(currentSpend, (transaction) => {
-    const account = accountById.get(transaction.accountId);
-    return account
-      ? (institutionById.get(account.plaidItemId) ?? "Other bank")
-      : "Other bank";
-  });
-  const cards = sumByName(
+  const banks = sumById(
+    currentSpend,
+    // Keyed by institution id so two banks sharing a display name stay
+    // separate rows. Anything unresolvable (missing account, unknown
+    // institution) shares the single "Other bank" bucket, as before.
+    (transaction) => {
+      const plaidItemId = accountById.get(transaction.accountId)?.plaidItemId;
+      return plaidItemId && institutionById.has(plaidItemId) ? plaidItemId : "other-bank";
+    },
+    (plaidItemId) => plaidItemId === "other-bank" ? "Other bank" : (institutionById.get(plaidItemId) ?? "Other bank"),
+  );
+  // Cards are grouped by accountId so two cards sharing a label remain
+  // distinct entries rather than merging balances across separate accounts.
+  const cards = sumById(
     currentSpend.filter(
       (transaction) => accountById.get(transaction.accountId)?.type === "credit",
     ),
-    (transaction) => {
-      const account = accountById.get(transaction.accountId);
+    (transaction) => transaction.accountId,
+    (accountId) => {
+      const account = accountById.get(accountId);
       return formatCardLabel(
         account?.name,
         account ? (institutionById.get(account.plaidItemId) ?? null) : null,
@@ -256,16 +278,42 @@ export function buildWeeklyReportModel(
     },
   );
 
-  const categoryAmount = new Map(
-    categories.map((category) => [category.category, category.amount]),
-  );
   // A monthly review measures spend against the whole monthly limit; the
   // weekly cadence prorates it (`* 12 / 52`). Using the weekly number for a
   // month of spend marked every ordinary budget as ~4x over.
   const isMonthlyPeriod = input.period.kind === "monthly";
+  const splitsByTxn = new Map<string, { category: string; amount: number }[]>();
+  for (const split of input.splits) {
+    const rows = splitsByTxn.get(split.transactionId) ?? [];
+    rows.push(split);
+    splitsByTxn.set(split.transactionId, rows);
+  }
+
+  function calculateBudgetSpent(budgetCategory: string): number {
+    let spent = 0;
+    for (const transaction of currentSpend) {
+      const parts = splitsByTxn.get(transaction.id);
+      if (parts && parts.length > 0) {
+        for (const part of parts) {
+          if (matchesBudgetCategory(budgetCategory, part.category)) {
+            spent += part.amount;
+          }
+        }
+      } else if (
+        matchesBudgetCategory(budgetCategory, {
+          categoryKey: transaction.detailedCategory ?? transaction.category,
+          groupKey: transaction.flowCategory,
+        })
+      ) {
+        spent += transaction.spendAmount;
+      }
+    }
+    return round2(spent);
+  }
+
   const budgets = input.budgets
     .map((budget) => {
-      const spent = round2(categoryAmount.get(budget.category) ?? 0);
+      const spent = calculateBudgetSpent(budget.category);
       const allowance = round2(
         isMonthlyPeriod ? budget.monthlyLimit : (budget.monthlyLimit * 12) / 52,
       );
@@ -285,26 +333,7 @@ export function buildWeeklyReportModel(
     })
     .sort((a, b) => b.percentage - a.percentage || a.category.localeCompare(b.category));
 
-  let inflows = 0;
-  let outflows = 0;
-  for (const transaction of transactions) {
-    if (
-      transaction.date < input.period.start ||
-      transaction.date > input.period.end ||
-      input.duplicateTransactionIds.has(transaction.id) ||
-      accountById.get(transaction.accountId)?.type !== "depository"
-    ) {
-      continue;
-    }
-    if (transaction.cashFlowClassification === "income") {
-      inflows += Math.abs(transaction.amount);
-    } else if (transaction.cashFlowClassification === "expense") {
-      outflows += Math.abs(transaction.amount);
-    } else {
-      if (transaction.amount < 0) inflows += Math.abs(transaction.amount);
-      if (transaction.amount > 0) outflows += transaction.amount;
-    }
-  }
+  const { inflows, outflows } = weeklyCashMovement(transactions, accountById, input);
 
   return {
     userId: input.userId,
@@ -326,4 +355,33 @@ export function buildWeeklyReportModel(
       net: round2(inflows - outflows),
     },
   };
+}
+
+function weeklyCashMovement(
+  transactions: WeeklyReportRow[],
+  accountById: Map<string, WeeklyReportInput["accounts"][number]>,
+  input: WeeklyReportInput,
+): { inflows: number; outflows: number } {
+  let inflows = 0;
+  let outflows = 0;
+  for (const transaction of transactions) {
+    if (
+      transaction.date < input.period.start ||
+      transaction.date > input.period.end ||
+      input.duplicateTransactionIds.has(transaction.id) ||
+      accountById.get(transaction.accountId)?.type !== "depository"
+    ) {
+      continue;
+    }
+    if (transaction.cashFlowClassification === "income") {
+      inflows += Math.abs(transaction.amount);
+    } else if (transaction.cashFlowClassification === "expense") {
+      outflows += Math.abs(transaction.amount);
+    } else {
+      if (transaction.amount < 0) inflows += Math.abs(transaction.amount);
+      if (transaction.amount > 0) outflows += transaction.amount;
+    }
+  }
+
+  return { inflows, outflows };
 }

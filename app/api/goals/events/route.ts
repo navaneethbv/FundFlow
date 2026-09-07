@@ -3,6 +3,7 @@ import { badRequest } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { requestAudits } from "@/lib/request-audit";
 import { isIsoDate } from "@/lib/reports";
+import { resolveViewerToday } from "@/lib/report-period";
 import { withUser } from "@/lib/authed-route";
 
 /**
@@ -59,16 +60,19 @@ export async function POST(request: NextRequest) {
         : "manual_contribution";
 
     const eventDate = body?.eventDate;
+    // Default event date follows the profile timezone (M-11), not UTC.
     const resolvedDate = isIsoDate(eventDate)
       ? eventDate
-      : new Date().toISOString().slice(0, 10);
+      : await resolveViewerToday(supabase, user.id);
 
-    const { data: goal } = await supabase
+    // A failed ownership read must 500 (A-13), never read as "not found".
+    const { data: goal, error: goalError } = await supabase
       .from("goals")
       .select("id")
       .eq("id", goalId)
       .eq("user_id", user.id)
       .maybeSingle();
+    if (goalError) throw goalError;
     if (!goal) return NextResponse.json({ error: "Goal not found" }, { status: 404 });
 
     const { data, error } = await supabase

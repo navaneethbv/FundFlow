@@ -22,6 +22,11 @@ vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
 }));
 
+const mockWriteAudit = vi.fn();
+vi.mock("@/lib/audit", () => ({
+  writeAudit: (...args: unknown[]) => mockWriteAudit(...args),
+}));
+
 import { GET, POST } from "@/app/api/transactions/refunds/route";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -48,14 +53,25 @@ describe("Transactions Refunds API Route", () => {
 
     it("returns placeholders when ledger data is missing", async () => {
       const mockSupabase = {
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              gte: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue({ data: null }),
+        from: vi.fn().mockImplementation((table) => {
+          if (table === "transaction_review_decisions") {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockResolvedValue({ data: null }),
+                }),
+              }),
+            };
+          }
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                gte: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue({ data: null }),
+                }),
               }),
             }),
-          }),
+          };
         }),
       };
       mockRequireUser.mockResolvedValue({
@@ -81,6 +97,8 @@ describe("Transactions Refunds API Route", () => {
             charge_date: null,
             refund_date: null,
             amount: 0,
+            refund_amount: 0,
+            partial: false,
           },
         ],
       });
@@ -104,7 +122,9 @@ describe("Transactions Refunds API Route", () => {
           }
           return {
             select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockResolvedValue({ data: null }),
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ data: null }),
+            }),
           };
         }),
       };
@@ -158,9 +178,12 @@ describe("Transactions Refunds API Route", () => {
             };
           }
           if (table === "transaction_review_decisions") {
+            const decisionsEqUser = vi.fn().mockResolvedValue({ data: [] });
+            const decisionsEqKind = vi.fn().mockReturnValue({ eq: decisionsEqUser });
             return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockResolvedValue({ data: [] }),
+              select: vi.fn().mockReturnValue({ eq: decisionsEqKind }),
+              decisionsEqKind,
+              decisionsEqUser,
             };
           }
           return null as never;
@@ -191,6 +214,8 @@ describe("Transactions Refunds API Route", () => {
             charge_date: "2026-07-01",
             refund_date: "2026-07-03",
             amount: 50,
+            refund_amount: 50,
+            partial: false,
           },
         ],
       });
@@ -307,16 +332,26 @@ describe("Transactions Refunds API Route", () => {
 
     it("returns 500 when linking the refund fails", async () => {
       const owned = vi.fn().mockReturnValue({
-        in: vi.fn().mockResolvedValue({ data: [{ id: "charge-1" }, { id: "refund-1" }], error: null }),
+        in: vi.fn().mockResolvedValue({
+          data: [
+            { id: "charge-1", amount: 50 },
+            { id: "refund-1", amount: -50 },
+          ],
+          error: null,
+        }),
       });
-      const linkUpsert = vi.fn().mockResolvedValue({ error: { message: "Link error" } });
-      const upsert = vi.fn().mockResolvedValue({ error: null });
+      const rpc = vi.fn().mockResolvedValue({ error: { message: "Link error" } });
+      const selectLinks = vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          or: vi.fn().mockResolvedValue({ data: [], error: null }),
+        }),
+      });
       mockRequireUser.mockResolvedValue({
         user: { id: "u1" },
         supabase: {
+          rpc,
           from: vi.fn().mockImplementation((table) => ({
-            select: vi.fn().mockReturnValue({ eq: owned }),
-            upsert: table === "linked_refunds" ? linkUpsert : upsert,
+            select: table === "linked_refunds" ? selectLinks : vi.fn().mockReturnValue({ eq: owned }),
           })),
         },
       });
@@ -351,18 +386,27 @@ describe("Transactions Refunds API Route", () => {
       );
     });
 
-    it("upserts decision and links refund if confirmed", async () => {
+    it("calls confirm_refund_link RPC if confirmed", async () => {
       const owned = vi.fn().mockReturnValue({
         in: vi.fn().mockResolvedValue({
-          data: [{ id: "charge-1" }, { id: "refund-1" }],
+          data: [
+            { id: "charge-1", amount: 50 },
+            { id: "refund-1", amount: -50 },
+          ],
           error: null,
         }),
       });
-      const mockSupabase = {
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({ eq: owned }),
-          upsert: vi.fn().mockResolvedValue({ error: null }),
+      const rpc = vi.fn().mockResolvedValue({ error: null });
+      const selectLinks = vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          or: vi.fn().mockResolvedValue({ data: [], error: null }),
         }),
+      });
+      const mockSupabase = {
+        rpc,
+        from: vi.fn().mockImplementation((table) => ({
+          select: table === "linked_refunds" ? selectLinks : vi.fn().mockReturnValue({ eq: owned }),
+        })),
       };
       mockRequireUser.mockResolvedValue({
         user: { id: "u1" },
@@ -384,10 +428,17 @@ describe("Transactions Refunds API Route", () => {
       const body = await res.json();
       expect(body).toEqual({ ok: true });
 
-      expect(mockSupabase.from).toHaveBeenCalledWith(
-        "transaction_review_decisions",
+      expect(rpc).toHaveBeenCalledWith("confirm_refund_link", {
+        p_user_id: "u1",
+        p_subject_id: "charge-1:refund-1",
+        p_charge_id: "charge-1",
+        p_refund_id: "refund-1",
+        p_amount: 50,
+      });
+      // A-11: money-linking mutations are audited.
+      expect(mockWriteAudit).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: "u1", action: "refund_confirmed" }),
       );
-      expect(mockSupabase.from).toHaveBeenCalledWith("linked_refunds");
     });
 
     it("rejects a confirmed link when the transactions are not the caller's", async () => {

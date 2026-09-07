@@ -28,12 +28,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Owner-only: plaid_items has no household select policy, so this
-    // lookup only resolves for the item's owner.
-    const { data: item } = await supabase
+    // lookup only resolves for the item's owner. A failed read must 500
+    // (A-13), never read as "not found".
+    const { data: item, error: itemError } = await supabase
       .from("plaid_items")
       .select("id")
       .eq("id", body.itemId)
       .maybeSingle();
+    if (itemError) throw itemError;
     if (!item) {
       return NextResponse.json({ error: "Bank not found" }, { status: 404 });
     }
@@ -43,11 +45,12 @@ export async function POST(request: NextRequest) {
       // Explicit target household, verified as a member by RLS: the
       // user-scoped client only resolves households the caller belongs to, so
       // this cannot pick an arbitrary one for a multi-household user.
-      const { data: household } = await supabase
+      const { data: household, error: householdError } = await supabase
         .from("households")
         .select("id")
         .eq("id", body.householdId)
         .maybeSingle();
+      if (householdError) throw householdError;
       if (!household) {
         return badRequest("You are not a member of that household");
       }

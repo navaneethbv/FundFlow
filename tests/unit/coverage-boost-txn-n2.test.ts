@@ -491,7 +491,7 @@ describe("GET /api/household/accept", () => {
       from: vi.fn((t: string) =>
         chainable(() => {
           if (t === "household_members")
-            return { error: { message: "duplicate key value violates" } };
+            return { error: { code: "23505", message: "duplicate key value violates" } };
           return {
             data: {
               id: "inv1",

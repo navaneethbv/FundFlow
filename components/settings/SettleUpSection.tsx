@@ -9,6 +9,7 @@ import Field from "@/components/ui/Field";
 import Input from "@/components/ui/Input";
 import Panel from "@/components/ui/Panel";
 import Select from "@/components/ui/Select";
+import FormMessage from "@/components/ui/FormMessage";
 
 export interface HouseholdMemberInfo {
   userId: string;
@@ -47,6 +48,7 @@ export default function SettleUpSection({
   const others = members.filter((member) => member.userId !== currentUserId);
   const [owedBy, setOwedBy] = useState(others[0]?.userId ?? "");
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const emailOf = (userId: string) =>
     members.find((member) => member.userId === userId)?.email ?? "partner";
@@ -62,30 +64,36 @@ export default function SettleUpSection({
 
   async function add(e: React.SyntheticEvent) {
     e.preventDefault();
+    if (busy) return;
     setError(null);
     const parsed = Number(amount);
     if (!description.trim() || !Number.isFinite(parsed) || parsed <= 0 || !owedBy) {
       setError("Enter a description, a positive amount, and who owes it.");
       return;
     }
-    const { data, error: insertError } = await supabase
-      .from("shared_expenses")
-      .insert({
-        household_id: householdId,
-        paid_by: currentUserId,
-        owed_user_id: owedBy,
-        description: description.trim(),
-        amount: parsed,
-      })
-      .select("id, paid_by, owed_user_id, description, amount, settled_at")
-      .single();
-    if (insertError) {
-      setError(insertError.message);
-      return;
+    setBusy(true);
+    try {
+      const { data, error: insertError } = await supabase
+        .from("shared_expenses")
+        .insert({
+          household_id: householdId,
+          paid_by: currentUserId,
+          owed_user_id: owedBy,
+          description: description.trim(),
+          amount: parsed,
+        })
+        .select("id, paid_by, owed_user_id, description, amount, settled_at")
+        .single();
+      if (insertError) {
+        setError(insertError.message);
+        return;
+      }
+      setExpenses((rows) => [...rows, data as ExpenseRow]);
+      setDescription("");
+      setAmount("");
+    } finally {
+      setBusy(false);
     }
-    setExpenses((rows) => [...rows, data as ExpenseRow]);
-    setDescription("");
-    setAmount("");
   }
 
   async function settleAll() {
@@ -167,7 +175,7 @@ export default function SettleUpSection({
               ))}
             </Select>
           </Field>
-          <Button type="submit" size="md">
+          <Button type="submit" size="md" loading={busy}>
             Add
           </Button>
         </form>
@@ -176,7 +184,7 @@ export default function SettleUpSection({
           Invite a partner above to start splitting expenses.
         </p>
       )}
-      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+      <FormMessage message={error} />
     </Panel>
   );
 }

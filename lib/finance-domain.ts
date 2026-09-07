@@ -32,6 +32,25 @@ export const TRANSFER_GROUPS = new Set([
 export const UNCATEGORIZED = "UNCATEGORIZED";
 
 /**
+ * Single canonical matcher for budget categories across all surfaces
+ * (dashboard envelopes, budget page actuals, weekly reports).
+ * Matches case-insensitively against either categoryKey (detailed) or groupKey (primary).
+ */
+export function matchesBudgetCategory(
+  budgetCategory: string,
+  txn: { categoryKey?: string | null; groupKey?: string | null } | string,
+): boolean {
+  const target = budgetCategory.trim().toLowerCase();
+  if (typeof txn === "string") {
+    return txn.trim().toLowerCase() === target;
+  }
+  const categoryKey = (txn.categoryKey ?? "").trim().toLowerCase();
+  const groupKey = (txn.groupKey ?? "").trim().toLowerCase();
+  return categoryKey === target || groupKey === target;
+}
+
+
+/**
  * Normalizes a free-text import category into a `pfc_primary` code, refusing
  * to let it collide with a reserved transfer/loan code: a user category
  * literally named "Transfer Out" would otherwise get silently excluded from
@@ -137,6 +156,12 @@ function displayMerchant(row: RawFinanceTransaction): string {
 
 function flowFor(signedAmount: number, groupKey: string): FinanceFlow {
   if (TRANSFER_GROUPS.has(groupKey)) return "transfer";
+  // Expense credits (M-8): a negative row outside the INCOME group is money
+  // back against spending (refund, reimbursement, card credit), not earnings.
+  // Routing it to "income" inflates income and lists the retailer as an
+  // income source; as "expense" it nets against spend in every total, since
+  // financeTotals sums signed amounts on the expense side.
+  if (signedAmount < 0 && groupKey !== "INCOME") return "expense";
   return signedAmount > 0 ? "expense" : "income";
 }
 

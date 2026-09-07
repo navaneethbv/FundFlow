@@ -355,7 +355,7 @@ describe("planning roadmap features", () => {
       ],
       transactions: [
         { id: "t1", date: "2026-07-15", merchant: "Electric", amount: 150 },
-        { id: "t2", date: "2026-07-15", merchant: "Bonus", amount: 700 },
+        { id: "t2", date: "2026-07-15", merchant: "Bonus", amount: -700 },
       ],
     });
 
@@ -427,7 +427,7 @@ describe("planning roadmap features", () => {
     });
   });
 
-  it("skips recurring items outside the grouping horizon", () => {
+  it("advances past anchors into the grouping horizon instead of dropping them", () => {
     const groups = groupRecurringByWeek(
       [
         { name: "Past", amount: 10, itemType: "expense", frequency: "weekly", nextDate: "2026-06-20" },
@@ -437,8 +437,12 @@ describe("planning roadmap features", () => {
       "2026-07-01",
       14,
     );
-    expect(groups).toHaveLength(1);
-    expect(groups[0]!.items.map((i) => i.name)).toEqual(["Due"]);
+    const names = groups.flatMap((group) => group.items.map((i) => i.name));
+    // "Past" (2026-06-20 weekly) advances to 07-04 and 07-11, both in
+    // horizon; "Future" stays outside and is skipped.
+    expect(names).toContain("Past");
+    expect(names).toContain("Due");
+    expect(names).not.toContain("Future");
   });
 
   it("sorts items within a week group by name when due the same day", () => {

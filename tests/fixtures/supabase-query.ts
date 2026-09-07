@@ -94,7 +94,8 @@ export function clientStub(seeds: Record<string, QueryResult> = {}) {
     rpc: vi.fn((fn: string, ...args: unknown[]) => {
       rpcCalls[fn] ??= [];
       rpcCalls[fn].push(args);
-      rpcs[fn] ??= queryStub(seeds[fn] ?? { data: null });
+      const defaultRpcResult = fn === "rate_limit_hit" ? { data: true } : { data: null };
+      rpcs[fn] ??= queryStub(seeds[fn] ?? defaultRpcResult);
       return rpcs[fn];
     }),
     storage,

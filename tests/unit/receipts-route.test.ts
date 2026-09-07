@@ -347,3 +347,45 @@ describe("DELETE /api/receipts/[id]", () => {
     expect(service.callsOn("receipts")).toEqual([]);
   });
 });
+
+describe("PATCH/DELETE /api/receipts/[id] failure branches", () => {
+  const ctx = { params: Promise.resolve({ id: "receipt-1" }) } as unknown as { params: Promise<{ id: string }> };
+  function req(body: unknown) {
+    return { json: () => Promise.resolve(body) } as unknown as NextRequest;
+  }
+
+  it("returns 500 when the attach transaction lookup fails", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({
+        receipts: { data: RECEIPT },
+        transactions: { data: null, error: { message: "txn down" } },
+      }),
+    });
+    const response = await PATCH(req({ action: "attach", transactionId: "t-1" }), ctx);
+    expect(response.status).toBe(500);
+  });
+
+  it("returns 500 when the service update returns no row", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({
+        receipts: { data: RECEIPT },
+        transactions: { data: { id: "t-1" } },
+      }),
+    });
+    service = makeService({ receipts: { data: null } });
+    const response = await PATCH(req({ action: "attach", transactionId: "t-1" }), ctx);
+    expect(response.status).toBe(500);
+  });
+
+  it("returns 500 when receipt storage removal fails on delete", async () => {
+    mockRequireUser.mockResolvedValue({
+      user: { id: USER_ID },
+      supabase: clientStub({ receipts: { data: RECEIPT } }),
+    });
+    service = makeService({}, { removeError: { message: "storage down" } });
+    const response = await DELETE(req({}), ctx);
+    expect(response.status).toBe(500);
+  });
+});

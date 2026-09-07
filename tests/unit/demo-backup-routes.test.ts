@@ -149,7 +149,10 @@ function buildServiceClient(
   email: string | null = "user@example.com",
   journal: JournalBehaviour = { claim: [{ user_id: USER }] },
 ) {
-  const base = clientStub(seeds);
+  const base = clientStub({
+    rate_limit_hit: { data: true },
+    ...seeds,
+  });
   const { journal: journalLog } = withDeliveryJournal(base, journal);
   return Object.assign(base, {
     journalLog,

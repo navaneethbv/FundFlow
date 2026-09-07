@@ -52,6 +52,7 @@ describe("detectRefundPairs", () => {
         chargeId: "txn-charge",
         refundId: "txn-refund",
         amount: 45.0,
+        partial: false,
       },
     ]);
   });

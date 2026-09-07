@@ -635,4 +635,26 @@ describe("notifications manager", () => {
     }, "Keyword");
     expect(notifBudget).toBeNull();
   });
+
+  it("catches and logs errors thrown during tryNotify in processNotificationsForUser", async () => {
+    mockGetDashboardData.mockResolvedValueOnce({
+      forecast: { lowBalanceRisk: true, lowestBalance: 50 },
+      budgetProgress: [],
+    });
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({ data: null, error: null }),
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+          }),
+        }),
+      }),
+      insert: vi.fn().mockImplementation(() => {
+        throw new Error("Failed to insert notification");
+      }),
+    });
+
+    await expect(processNotificationsForUser("user-1")).resolves.not.toThrow();
+  });
 });

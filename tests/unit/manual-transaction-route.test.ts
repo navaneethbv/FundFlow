@@ -73,9 +73,10 @@ describe("POST /api/transactions/manual", () => {
   });
 
   it("404s when the chosen account is not the caller's", async () => {
+    const userClient = clientStub({ manual_accounts: { data: null, error: null } });
     mockRequireUser.mockResolvedValue({
       user: { id: USER_ID },
-      supabase: clientStub({ manual_accounts: { data: null, error: null } }),
+      supabase: userClient,
     });
     const res = await POST(
       request("POST", {
@@ -87,6 +88,8 @@ describe("POST /api/transactions/manual", () => {
       }),
     );
     expect(res.status).toBe(404);
+    expect(userClient.scopedToUser("manual_accounts", USER_ID)).toBe(true);
+    expect(serviceClient.writtenTo("transactions")).toBeUndefined();
   });
 
   it("creates a manual transaction with the manual- prefix and source column", async () => {

@@ -469,6 +469,42 @@ describe("weekly report model edge cases and branch coverage", () => {
       { merchant: "Merchant C", amount: 100 },
     ]);
   });
+
+  it("keeps same-name institutions and cards on separate rows", () => {
+    const report = buildWeeklyReportModel({
+      userId: "user-1",
+      userEmail: "person@example.com",
+      period: {
+        start: "2026-07-06",
+        end: "2026-07-12",
+        previousStart: "2026-06-29",
+        previousEnd: "2026-07-05",
+      },
+      transactions: [
+        { id: "t1", date: "2026-07-08", amount: 100, merchantName: "A", name: "A", category: "FOOD", accountId: "acc-1" },
+        { id: "t2", date: "2026-07-08", amount: 200, merchantName: "B", name: "B", category: "FOOD", accountId: "acc-2" },
+      ],
+      accounts: [
+        { id: "acc-1", name: "Checking", type: "depository", plaidItemId: "item-1" },
+        { id: "acc-2", name: "Savings", type: "depository", plaidItemId: "item-2" },
+      ],
+      // Two distinct institutions sharing one display name.
+      institutions: [
+        { id: "item-1", name: "Same Bank" },
+        { id: "item-2", name: "Same Bank" },
+      ],
+      budgets: [],
+      merchantRules: [],
+      splits: [],
+      linkedRefundTransactionIds: new Set(),
+      duplicateTransactionIds: new Set(),
+    });
+
+    expect(report.banks).toEqual([
+      { name: "Same Bank", amount: 200 },
+      { name: "Same Bank", amount: 100 },
+    ]);
+  });
 });
 
 describe("getWeeklyReportData", () => {

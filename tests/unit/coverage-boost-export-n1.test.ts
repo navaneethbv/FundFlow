@@ -87,13 +87,20 @@ import { GET as reportCsvGet } from "@/app/api/export/report-csv/route";
 const TOKEN_USER = "11111111-1111-1111-1111-111111111111";
 
 function taxRequest() {
-  return new NextRequest("http://localhost/api/export/csv?scope=tax");
+  return new NextRequest("http://localhost/api/export/csv?scope=tax", {
+    headers: {
+      authorization: "Bearer fft_testtoken12345678901234567890",
+    },
+  });
 }
 
 describe("coverage-boost export routes (n1)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    serviceClient = clientStub({ data_exports: { error: null } });
+    serviceClient = clientStub({
+      data_exports: { error: null },
+      rate_limit_hit: { data: true, error: null },
+    });
     investmentsFlag = true;
     mockGetClientIp.mockReturnValue("127.0.0.1");
     mockGenerateWeeklyReportPdf.mockResolvedValue(Buffer.from("pdf-bytes"));
@@ -141,6 +148,7 @@ describe("coverage-boost export routes (n1)", () => {
       serviceClient = clientStub({
         transaction_annotations: { data: null },
         data_exports: { error: null },
+        rate_limit_hit: { data: true, error: null },
       });
       const res = await csvGet(taxRequest());
       expect(res.status).toBe(200);
@@ -156,6 +164,7 @@ describe("coverage-boost export routes (n1)", () => {
         transaction_annotations: { data: [{ transaction_id: "t1" }] },
         transactions: { data: null },
         data_exports: { error: null },
+        rate_limit_hit: { data: true, error: null },
       });
       const res = await csvGet(taxRequest());
       expect(res.status).toBe(200);

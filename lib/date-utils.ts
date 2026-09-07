@@ -17,7 +17,11 @@ export function addDays(value: string, days: number): string {
 
 export function addMonths(value: string, months: number): string {
   const date = parseDate(value);
+  const day = date.getUTCDate();
+  date.setUTCDate(1);
   date.setUTCMonth(date.getUTCMonth() + months);
+  const lastDay = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+  date.setUTCDate(Math.min(day, lastDay));
   return isoDate(date);
 }
 

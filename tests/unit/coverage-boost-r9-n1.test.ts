@@ -101,8 +101,11 @@ describe("coverage boost r9: validate_palette", () => {
 
   it("throws for an unknown CVD mode and accepts known modes (B@84)", () => {
     expect(() => simulateCvd(hexToRgb("#ff6b2e"), "not-a-mode")).toThrow("invalid_cvd_mode");
-    for (const mode of ["protanopia", "deuteranopia", "tritanopia"]) {
-      expect(simulateCvd(hexToRgb("#ff6b2e"), mode)).toBeDefined();
+    for (const mode of ["protanopia", "deuteranopia", "tritanopia"] as const) {
+      const res = simulateCvd(hexToRgb("#ff6b2e"), mode);
+      expect(res.r).toBeGreaterThanOrEqual(0);
+      expect(res.g).toBeGreaterThanOrEqual(0);
+      expect(res.b).toBeGreaterThanOrEqual(0);
     }
   });
 

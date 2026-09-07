@@ -4,6 +4,7 @@ import {
   type DashboardData,
   type DashboardOptions,
 } from "@/lib/dashboard";
+import { resolveViewerToday } from "@/lib/report-period";
 
 interface CacheRecord<T> {
   value: T;
@@ -63,6 +64,10 @@ export function dashboardScopeKey(
     options?.drill?.sub ?? "-",
     options?.drill?.merchant ?? "-",
     options?.scope ?? "mine",
+    options?.includeBalanceSheet === false ? "no-bs" : "bs",
+    // The open month derives from the viewer's day (M-11): without this, a
+    // cached load from before a month boundary serves the wrong "current".
+    options?.today ?? "server-day",
   ].join(":");
 }
 
@@ -73,10 +78,15 @@ export async function getCachedDashboardData(
   selectedMonth?: string,
   options?: DashboardOptions,
 ): Promise<DashboardData> {
-  const scope = dashboardScopeKey(selectedAccountId, selectedMonth, options);
+  // The viewer's day drives the open month (M-11). Resolve it before the
+  // scope key so a cached load from before a month boundary cannot serve
+  // the wrong "current".
+  const today = options?.today ?? (await resolveViewerToday(supabase, userId));
+  const datedOptions = { ...options, today };
+  const scope = dashboardScopeKey(selectedAccountId, selectedMonth, datedOptions);
   const cached = await dashboardCache.get(userId, scope);
   if (cached) return cached;
-  const data = await getDashboardData(supabase, selectedAccountId, selectedMonth, userId, options);
+  const data = await getDashboardData(supabase, selectedAccountId, selectedMonth, userId, datedOptions);
   await dashboardCache.set(userId, scope, data);
   return data;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/cn";
 import type {
   AppShellActive,
@@ -12,6 +12,7 @@ import PrivacyToggle from "@/components/PrivacyToggle";
 import ThemeToggle from "@/components/ThemeToggle";
 import LogoutButton from "@/components/LogoutButton";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { LogoMark } from "@/components/ui/Logo";
 import LinkPendingIndicator from "@/components/ui/LinkPendingIndicator";
 import {
@@ -109,14 +110,7 @@ export default function MobileNavigation({
   const moreIsActive = !QUICK_KEYS.has(activeKey);
   const handleDialogKeyDown = useDialogFocus(dialogRef, open, () => setOpen(false));
 
-  useEffect(() => {
-    if (!open) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [open]);
+  useBodyScrollLock(open);
 
   return (
     <>
@@ -140,7 +134,7 @@ export default function MobileNavigation({
               )}
             >
               <NavIcon itemKey={item.key} />
-              <span className="max-w-full truncate">{item.label}</span>
+              <span className="max-w-full truncate" title={item.label}>{item.label}</span>
               <LinkPendingIndicator />
             </Link>
           );
@@ -179,7 +173,7 @@ export default function MobileNavigation({
             aria-modal="true"
             aria-label="All navigation"
             onKeyDown={handleDialogKeyDown}
-            className="animate-sheet-slide relative m-0 max-h-[85vh] w-full overflow-y-auto rounded-t-2xl border border-panel-border bg-panel p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-pop"
+            className="animate-sheet-slide relative m-0 max-h-[85vh] w-full overflow-y-auto rounded-t-2xl border border-panel-border bg-panel text-foreground p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-pop"
           >
             <div
               aria-hidden

@@ -48,7 +48,7 @@ export async function requireOwnedItem(
     return { ok: false, response: badRequest("item_id is required") };
   }
 
-  if (!(await checkRateLimit(options.rateLimitKey(user.id), 10, 60))) {
+  if (!(await checkRateLimit(options.rateLimitKey(user.id), 10, 60, { failClosed: true }))) {
     return {
       ok: false,
       response: NextResponse.json({ error: "Too many requests" }, { status: 429 }),

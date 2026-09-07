@@ -33,21 +33,25 @@ export async function GET(request: NextRequest) {
     const scope = request.nextUrl.searchParams.get("scope");
     let exportRows = result.rows;
     if (scope === "tax") {
-      const { data: tagged } = await supabase
+      const { data: tagged, error: taggedError } = await supabase
         .from("transaction_annotations")
         .select("transaction_id")
         .eq("user_id", userId)
         .contains("tags", ["tax"]);
+      if (taggedError) throw taggedError;
       const ids = (tagged ?? []).map((r) => r.transaction_id as string);
-      const { data: taxTxns } = ids.length
-        ? await supabase
-            .from("transactions")
-            .select("date, amount, merchant_name, name, pfc_primary")
-            .eq("user_id", userId)
-            .in("id", ids)
-            .order("date")
-        : { data: [] as never[] };
-      exportRows = (taxTxns ?? []).map((t) => ({
+      let taxTxns: Array<{ date: unknown; amount: unknown; merchant_name: unknown; name: unknown; pfc_primary: unknown }> = [];
+      if (ids.length > 0) {
+        const { data, error: taxError } = await supabase
+          .from("transactions")
+          .select("date, amount, merchant_name, name, pfc_primary")
+          .eq("user_id", userId)
+          .in("id", ids)
+          .order("date");
+        if (taxError) throw taxError;
+        taxTxns = data ?? [];
+      }
+      exportRows = taxTxns.map((t) => ({
         date: t.date as string,
         merchant: (t.merchant_name ?? t.name ?? "Unknown") as string,
         amount: Number(t.amount),

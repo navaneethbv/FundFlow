@@ -58,6 +58,7 @@ vi.mock("@/lib/plaid-service", () => ({
   upsertAccounts: (...args: unknown[]) => mockUpsertAccounts(...args),
   storeLinkToken: (...args: unknown[]) => mockStoreLinkToken(...args),
   consumeLinkToken: (...args: unknown[]) => mockConsumeLinkToken(...args),
+  setItemStatus: vi.fn().mockResolvedValue(undefined),
 }));
 
 const mockCheckRateLimit = vi.fn<(...args: unknown[]) => unknown>();
@@ -252,6 +253,14 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
       });
       const res = await exchangePost(req);
       expect(res.status).toBe(429);
+      // Fails closed: a limiter outage must not silently unthrottle the
+      // exchange, which mints credentials against a billable Plaid call.
+      expect(mockCheckRateLimit).toHaveBeenCalledWith(
+        "exchange:user-1",
+        10,
+        60,
+        { failClosed: true },
+      );
     });
 
     it("returns 400 for invalid JSON or missing public_token", async () => {
@@ -359,6 +368,33 @@ describe("Direct Plaid & Account Routes Unit Tests", () => {
   });
 
   describe("POST /api/plaid/link-token", () => {
+    it("returns 429 when rate limited", async () => {
+      mockCheckRateLimit.mockResolvedValue(false);
+      const req = new NextRequest("http://localhost/api/plaid/link-token", { method: "POST" });
+      const res = await linkTokenPost(req);
+
+      expect(res.status).toBe(429);
+      // Each Link token bills Plaid, so the cap fails closed rather than
+      // letting a limiter outage hand a stuck client an unbounded budget.
+      expect(mockCheckRateLimit).toHaveBeenCalledWith(
+        "link-token:user-1",
+        10,
+        60,
+        { failClosed: true },
+      );
+      expect(mockLinkTokenCreate).not.toHaveBeenCalled();
+    });
+
+    it("records an audit entry when a link token is minted", async () => {
+      mockLinkTokenCreate.mockResolvedValue({ data: { link_token: "link-sandbox-123" } });
+      const req = new NextRequest("http://localhost/api/plaid/link-token", { method: "POST" });
+      await linkTokenPost(req);
+
+      expect(mockWriteAudit).toHaveBeenCalledWith(
+        expect.objectContaining({ action: "plaid_link_token_created" }),
+      );
+    });
+
     it("creates a link token in normal mode", async () => {
       mockLinkTokenCreate.mockResolvedValue({ data: { link_token: "link-sandbox-123" } });
       const req = new NextRequest("http://localhost/api/plaid/link-token", { method: "POST" });

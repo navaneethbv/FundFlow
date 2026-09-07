@@ -42,6 +42,16 @@ flowchart TB
   `PLAID_TOKEN_ENC_KEY_PREVIOUS` (`decryptSecretDetailed` reports which key
   worked); the daily sync re-encrypts fallback-decrypted tokens. Also
   `safeEqual` for constant-time secret comparison (cron auth, webhook hash).
+- `session-revocation.ts` / `step-up.ts` — session revocation enforcement via
+  database lookup of active session ids; step-up verification and MFA assurance
+  levels protecting sensitive settings and actions.
+- `passkeys.ts` / `api-tokens.ts` — WebAuthn registration/verification and
+  scoped API token lifecycle management.
+- `rules-engine.ts` — rule matching and execution engine for transaction
+  categorization, tagging, and renaming.
+- `ai-gate.ts` — opt-in gate and token budgeting for in-app AI surfaces.
+- `backup.ts` / `user-data.ts` — encrypted user data export, packaging, and
+  registry of user-owned tables (`USER_DATA_TABLES`).
 - `plaid-service.ts` — item storage (encrypt/decrypt), account upserts, cursor,
   `decryptItemTokenAndUpgrade` (rotation), `getItemByPlaidItemId` (webhooks).
 - `sync.ts` — idempotent `/transactions/sync`: upsert on unique
@@ -349,8 +359,10 @@ Invariants:
   (trusted via `strict-dynamic`) and its beacons hit the same-origin
   `/_vercel/insights/*` (covered by `connect-src 'self'`).
 - Every user table has RLS with owner-only `select` (client writes allowed only
-  on `budgets`, `saved_reports`, `user_tags`, and the `profiles` preference
-  columns — all four hold nothing but user-authored configuration, which is
+  on `budgets`, `saved_reports`, `user_tags`, `merchant_rules`,
+  `category_overrides`, `households`, `goals`, `shared_expenses`,
+  `saved_views`, `notifications`, `alert_preferences`, and the `profiles`
+  preference columns — all hold nothing but user-authored configuration, which is
   the test for joining that list; a provider-synced table never qualifies,
   see `20260730180000_recurring_streams_revert_client_write.sql`). Migrations
   live in `supabase/migrations/` and are applied via the Supabase CLI or
@@ -395,3 +407,11 @@ Invariants:
   fetches transactions **bounded to the 6-month render window** (oldest-date
   probe drives the month browser) — don't reintroduce a select-all, the
   2-minute auto re-render multiplies whatever this costs.
+
+## Shared recurring inputs
+
+`lib/recurring-data.ts` loads paged stream, manual-item, and persisted payment-link inputs for both Dashboard and Recurring.
+`lib/recurring-page.ts` expands occurrences by calendar month and consumes each linked payment once, while the loader validates payment owner, account, and sign.
+`lib/dashboard-recurring.ts` adapts these occurrences to Dashboard reminders and one-off forecast events, excluding completed payments from future cash requirements.
+An account or institution filter excludes unassigned manual recurring items.
+The current-month Dashboard includes next-week occurrences that cross into the next month.

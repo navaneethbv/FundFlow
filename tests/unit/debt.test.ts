@@ -155,8 +155,8 @@ describe("buildDebtPlannerData & loadDebtPlannerData", () => {
   it("builds debt planner data with assumed APR when APR is null", () => {
     const data = buildDebtPlannerData(
       [
-        { id: "a1", name: "Card 1", balance: 2000, apr: null },
-        { id: "a2", name: "Zero Balance", balance: 0, apr: 15 },
+        { id: "a1", name: "Card 1", balance: 2000, apr: null, type: "credit" },
+        { id: "a2", name: "Zero Balance", balance: 0, apr: 15, type: "credit" },
       ],
       100,
     );

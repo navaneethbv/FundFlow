@@ -22,6 +22,19 @@ import type { Goal } from "@/lib/goals";
 export type GoalType = "save_up" | "pay_down";
 export type GoalBadge = "on-track" | "at-risk" | "completed" | "behind" | "no-pace";
 
+/**
+ * The one place a badge is turned into words. Goals and Monthly review both
+ * render the same goal, so re-deriving the label (e.g. `titleCase`) is how the
+ * two surfaces drift into saying "On track" and "On Track" for one goal.
+ */
+export const GOAL_BADGE_LABEL: Record<GoalBadge, string> = {
+  completed: "Completed",
+  "on-track": "On track",
+  "at-risk": "At risk",
+  behind: "Behind",
+  "no-pace": "No pace data",
+};
+
 export interface GoalV2Row extends Goal {
   goal_type: GoalType;
   image_slug: string | null;

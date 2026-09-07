@@ -14,6 +14,11 @@ vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: () => Promise.resolve(true),
 }));
 
+vi.mock("@/lib/audit", () => ({
+  writeAudit: vi.fn(),
+  getClientIp: vi.fn(() => "127.0.0.1"),
+}));
+
 let serviceFrom: ReturnType<typeof vi.fn>;
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => ({ from: serviceFrom }),

@@ -28,12 +28,14 @@ export async function POST(request: NextRequest) {
     // Ownership, not visibility: RLS also exposes a household member's shared
     // accounts, and those are read-only. Without the explicit user_id the
     // service update below would silently match zero rows and still 200.
-    const { data: account } = await supabase
+    // A failed read must 500 (A-13), never read as "not found".
+    const { data: account, error: accountError } = await supabase
       .from("accounts")
       .select("id")
       .eq("id", body.accountId)
       .eq("user_id", user.id)
       .maybeSingle();
+    if (accountError) throw accountError;
     if (!account) {
       return NextResponse.json({ error: "Account not found" }, { status: 404 });
     }

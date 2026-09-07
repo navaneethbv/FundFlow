@@ -95,7 +95,7 @@ describe("refund netting in getDashboardData", () => {
     expect(categories.get("FOOD_AND_DRINK")).toBe(30);
   });
 
-  it("counts the charge as spend when the pair is not linked", async () => {
+  it("nets an unlinked refund as an expense credit instead of income", async () => {
     const supabase = makeSupabase({
       accounts: ACCOUNTS,
       transactions: TRANSACTIONS,
@@ -104,7 +104,9 @@ describe("refund netting in getDashboardData", () => {
     });
     const result = await getDashboardData(supabase);
     const categories = new Map(result.categoryBreakdown.map((r) => [r.category, r.amount]));
-    expect(categories.get("GENERAL_MERCHANDISE")).toBe(50);
+    // M-8: the 50 charge and its unlinked 50 refund net to zero spend, and
+    // the refund no longer inflates income elsewhere.
+    expect(categories.get("GENERAL_MERCHANDISE")).toBe(0);
     expect(categories.get("FOOD_AND_DRINK")).toBe(30);
   });
 });

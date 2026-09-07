@@ -14,6 +14,12 @@ export default defineConfig({
   test: {
     environment: "node",
     setupFiles: ["./tests/setup.ts"],
+    restoreMocks: true,
+    env: {
+      NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "build-placeholder",
+      TZ: "UTC",
+    },
     include: ["tests/**/*.test.ts", "scripts/**/*.test.ts"],
     // Integration tests hit a shared Supabase project (and its Auth rate limits),
     // so run test files sequentially to avoid cross-file interference.

@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { cn } from "@/lib/cn";
 
 export interface ModalProps {
@@ -33,6 +34,10 @@ export default function Modal({
 }: Readonly<ModalProps>) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const handleDialogKeyDown = useDialogFocus(dialogRef, open, onClose);
+
+  // Lock page scroll behind the overlay; using lock counter so nested/sibling
+  // overlays don't unlock early or drift scroll position.
+  useBodyScrollLock(open);
 
   if (!open) return null;
 
@@ -71,8 +76,9 @@ export default function Modal({
         ref={dialogRef}
         aria-modal="true"
         aria-labelledby={titleId}
-        aria-label={!titleId ? ariaLabel : undefined}
+        aria-label={!titleId ? (ariaLabel ?? "Dialog") : undefined}
         onKeyDown={handleDialogKeyDown}
+        tabIndex={-1}
         className={cn(
           // Height is capped and scrolled here, not left to each caller: a
           // sheet is pinned to the bottom edge, so content taller than the
@@ -80,7 +86,7 @@ export default function Modal({
           // that does not scroll, putting the first fields out of reach.
           // MobileNavigation's hand-rolled sheet caps the same way. Callers
           // that pass their own max-h/overflow still win via twMerge.
-          "relative m-0 max-h-[90vh] w-full max-w-md overflow-y-auto border border-panel-border bg-panel p-5 shadow-float sm:p-6",
+          "relative m-0 max-h-[90vh] w-full max-w-md overflow-y-auto border border-panel-border bg-panel text-foreground p-5 shadow-float sm:p-6",
           isSheet
             ? "rounded-t-card sm:rounded-card animate-sheet-slide sm:animate-modal-pop"
             : "rounded-card animate-modal-pop",

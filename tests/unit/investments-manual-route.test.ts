@@ -64,9 +64,10 @@ describe("POST /api/investments/manual", () => {
   });
 
   it("404s when the chosen account does not belong to the caller", async () => {
+    const userClient = authedRequestClient({ manual_accounts: { data: null, error: null } });
     mockRequireUser.mockResolvedValue({
       user: { id: USER_ID },
-      supabase: authedRequestClient({ manual_accounts: { data: null, error: null } }),
+      supabase: userClient,
     });
     const res = await POST(
       request("POST", {
@@ -79,6 +80,9 @@ describe("POST /api/investments/manual", () => {
       }),
     );
     expect(res.status).toBe(404);
+    expect(userClient.scopedToUser("manual_accounts", USER_ID)).toBe(true);
+    expect(serviceClient.writtenTo("securities")).toBeUndefined();
+    expect(serviceClient.writtenTo("holdings")).toBeUndefined();
   });
 
   it("creates a manual security, holding, and snapshot, and audits the action", async () => {

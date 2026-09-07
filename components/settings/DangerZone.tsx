@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import Button from "@/components/ui/Button";
 import Panel from "@/components/ui/Panel";
 import Field from "@/components/ui/Field";
+import FormMessage from "@/components/ui/FormMessage";
 import Input from "@/components/ui/Input";
 
 type StepUpMethod = "totp" | "password" | null;
@@ -171,7 +172,7 @@ export default function DangerZone() {
           </div>
         </form>
       )}
-      {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+      {error && <FormMessage message={error} className="mt-3 text-sm" />}
     </Panel>
   );
 }

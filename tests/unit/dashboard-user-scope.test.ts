@@ -16,6 +16,7 @@ function makeSupabase(eqCalls: Array<[string, string]>) {
     lt: () => chain,
     in: () => chain,
     limit: () => chain,
+    range: () => chain,
     eq: (column: string, value: string) => {
       eqCalls.push([column, value]);
       return chain;
@@ -51,6 +52,7 @@ describe("getDashboardData user scoping", () => {
       lt: () => chain,
       in: () => chain,
       limit: () => chain,
+      range: () => chain,
       eq: () => chain,
       maybeSingle: () => Promise.resolve({ data: null }),
       then: (resolve: (value: { data: unknown[]; error?: unknown }) => unknown) =>

@@ -34,8 +34,8 @@ describe("buildDebtPlannerData", () => {
   it("carries balances owed through and discloses each unknown APR", () => {
     const result = buildDebtPlannerData(
       [
-        { id: "card", name: "Travel card", balance: 2000, apr: 19.5 },
-        { id: "loan", name: "Student loan", balance: 5000, apr: null },
+        { id: "card", name: "Travel card", balance: 2000, apr: 19.5, type: "credit" },
+        { id: "loan", name: "Student loan", balance: 5000, apr: null, type: "loan" },
       ],
       100,
     );
@@ -48,6 +48,7 @@ describe("buildDebtPlannerData", () => {
         apr: 19.5,
         aprAssumed: false,
         minimumPayment: 40,
+        planned: true,
       },
       {
         id: "loan",
@@ -56,13 +57,15 @@ describe("buildDebtPlannerData", () => {
         apr: 22,
         aprAssumed: true,
         minimumPayment: 100,
+        // M-9: a loan with no APR is listed but stays out of the projection.
+        planned: false,
       },
     ]);
     expect(result.totalBalance).toBe(7000);
-    expect(result.totalMonthlyBudget).toBe(240);
+    expect(result.totalMonthlyBudget).toBe(140);
     // Plan identity is the account id, not the display name — see lib/debt-data.ts.
-    expect(result.avalanche?.order).toEqual(["loan", "card"]);
-    expect(result.snowball?.order).toEqual(["card", "loan"]);
+    expect(result.avalanche?.order).toEqual(["card"]);
+    expect(result.snowball?.order).toEqual(["card"]);
   });
 
   it("excludes an overpaid card instead of reading its credit as debt", () => {

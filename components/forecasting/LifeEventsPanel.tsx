@@ -3,6 +3,7 @@
 import { useState } from "react";
 import ForecastChart from "@/components/forecasting/ForecastChart";
 import Button from "@/components/ui/Button";
+import FormMessage from "@/components/ui/FormMessage";
 import { applyLifeEvents, parseLifeEvent, type ForecastPoint, type LifeEvent, type LifeEventType } from "@/lib/life-events";
 import { formatCurrency } from "@/lib/format";
 
@@ -133,8 +134,11 @@ export default function LifeEventsPanel({
         </h2>
         <p className="mb-4 text-sm text-muted">
           Base-case end: <span className="money">{formatCurrency(baseEnd, currency)}</span>{" "}
-          to <span className="money font-semibold text-foreground">{formatCurrency(adjustedEnd, currency)}</span>{" "}
-          after your life-event assumptions.
+          {events.length > 0 ? <>
+            before life events; <span className="money font-semibold text-foreground">{formatCurrency(adjustedEnd, currency)}</span> after life events.
+          </> : <>
+            with no life events applied.
+          </>}
         </p>
         <ForecastChart points={adjusted} currentNetWorth={currentNetWorth} />
       </PanelShell>
@@ -264,7 +268,7 @@ export default function LifeEventsPanel({
         </div>
       </div>
 
-      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+      <FormMessage message={error} />
       </PanelShell>
     </>
   );

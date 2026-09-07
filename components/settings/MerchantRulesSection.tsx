@@ -291,17 +291,17 @@ export default function MerchantRulesSection({
           </div>
           {batchResult && (
             <>
-              <div className="grid grid-cols-3 gap-2 rounded-field bg-panel-2 p-3 text-center">
+              <div className="grid grid-cols-1 gap-2 rounded-field bg-panel-2 p-3 text-center min-[420px]:grid-cols-3">
                 <div>
-                  <div className="text-lg font-bold">{batchResult.totalEvaluated}</div>
+                  <div className="text-lg font-bold tabular-nums">{batchResult.totalEvaluated}</div>
                   <div className="text-xs text-muted">Evaluated</div>
                 </div>
                 <div>
-                  <div className="text-lg font-bold text-accent">{batchResult.matchedCount}</div>
+                  <div className="text-lg font-bold tabular-nums text-accent">{batchResult.matchedCount}</div>
                   <div className="text-xs text-muted">Matched</div>
                 </div>
                 <div>
-                  <div className="text-lg font-bold text-success">{batchResult.modifiedCount}</div>
+                  <div className="text-lg font-bold tabular-nums text-success">{batchResult.modifiedCount}</div>
                   <div className="text-xs text-muted">Modified</div>
                 </div>
               </div>

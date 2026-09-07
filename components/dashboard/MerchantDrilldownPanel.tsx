@@ -34,23 +34,23 @@ export default function MerchantDrilldownPanel({
       }
       action={
         <span className="text-xs font-bold text-muted">
-          {formatCurrency(drill.total)} over 6 months
+          <span data-money>{formatCurrency(drill.total)}</span> over 6 months
         </span>
       }
     >
       <div className="space-y-5">
-        <dl className="grid grid-cols-3 gap-3 text-sm">
-          <div>
+        <dl className="grid grid-cols-1 gap-3 text-sm min-[480px]:grid-cols-3">
+          <div className="min-w-0">
             <dt className="eyebrow">Charges</dt>
             <dd className="mt-1 tabular-nums font-semibold">{drill.count}</dd>
           </div>
-          <div>
+          <div className="min-w-0">
             <dt className="eyebrow">Average</dt>
-            <dd className="mt-1 tabular-nums font-semibold">{formatCurrency(drill.average)}</dd>
+            <dd data-money className="mt-1 break-words tabular-nums font-semibold">{formatCurrency(drill.average)}</dd>
           </div>
-          <div>
+          <div className="min-w-0">
             <dt className="eyebrow">Category</dt>
-            <dd className="mt-1 font-semibold">
+            <dd className="mt-1 break-words font-semibold">
               {drill.dominantCategory ? (
                 <Link
                   href={dashboardUrl({ ...linkParams, category: drill.dominantCategory })}

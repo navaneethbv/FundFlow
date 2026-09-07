@@ -68,6 +68,12 @@ export async function promoteDueScheduledTransactions(
     .in(
       "id",
       due.map((row) => String(row.id)),
+    )
+    // User-scoped (S-4): the ids come from this run's own read, but the
+    // update must still be unable to touch rows outside that set's owners.
+    .in(
+      "user_id",
+      [...new Set(due.map((row) => String(row.user_id)))],
     );
   if (statusError) return { promoted, failed: statusError.message };
 

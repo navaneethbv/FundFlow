@@ -52,6 +52,7 @@ vi.mock("@/lib/supabase/service", () => ({
       }
       throw new Error(`unexpected table ${table}`);
     },
+    rpc: () => Promise.resolve({ data: true, error: null }),
   }),
 }));
 

@@ -16,7 +16,7 @@ export default function DrilldownTransactionList({
             <span className="block font-medium">{transaction.merchant}</span>
             <span className="block text-xs text-muted">{transaction.date}</span>
           </span>
-          <span className="tabular-nums font-semibold">{formatCurrency(transaction.amount)}</span>
+          <span data-money className="tabular-nums font-semibold">{formatCurrency(transaction.amount)}</span>
         </li>
       ))}
       {transactions.length === 0 && <li className="py-3 text-sm text-muted">{emptyLabel}</li>}

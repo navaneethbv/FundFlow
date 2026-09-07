@@ -14,6 +14,9 @@ vi.mock("@/lib/http", async () => {
 
 vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: vi.fn(async () => true) }));
 
+const mockWriteAudit = vi.fn(async (...args: never[]) => args);
+vi.mock("@/lib/audit", () => ({ writeAudit: (...args: never[]) => mockWriteAudit(...args) }));
+
 const OUT_ID = "11111111-1111-1111-1111-111111111101";
 const IN_ID = "11111111-1111-1111-1111-111111111102";
 const SUBJECT = `${OUT_ID}:${IN_ID}`;
@@ -165,6 +168,10 @@ describe("POST /api/transactions/transfers", () => {
       }),
     );
     expect(res.status).toBe(200);
+    // A-11: money-linking mutations are audited.
+    expect(mockWriteAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "transfer_confirmed" }),
+    );
   });
 
   it("uses a direction-independent subject when the outgoing UUID sorts after the incoming UUID", async () => {

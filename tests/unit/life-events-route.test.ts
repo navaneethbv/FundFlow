@@ -121,3 +121,27 @@ describe("life-events route error paths", () => {
     expect((await DELETE(jsonRequest({ id: "nope" }))).status).toBe(400);
   });
 });
+
+describe("life-events route error paths (PATCH/DELETE)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("surfaces PATCH database errors through errorResponse", async () => {
+    const supabase = clientStub({ life_events: { data: null, error: new Error("patch down") } });
+    mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase });
+    const res = await PATCH(
+      jsonRequest({ id: ID, type: "child", startMonth: 3, amount: 1200, durationMonths: 12 }),
+    );
+    expect(res.status).toBe(500);
+  });
+
+  it("surfaces DELETE database errors through errorResponse", async () => {
+    const supabase = clientStub({ life_events: { data: null, error: new Error("delete down") } });
+    mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase });
+    const res = await DELETE(
+      { json: () => Promise.resolve({ id: ID }) } as unknown as NextRequest,
+    );
+    expect(res.status).toBe(500);
+  });
+});

@@ -14,8 +14,10 @@ export type AuditAction =
   | "passkey_register"
   | "passkey_rename"
   | "passkey_delete"
+  | "session_revoked"
   | "plaid_connect"
   | "plaid_token_exchange"
+  | "plaid_link_token_created"
   | "plaid_disconnect"
   | "plaid_reconnect"
   | "plaid_repair"
@@ -40,6 +42,7 @@ export type AuditAction =
   | "receipt_restored"
   | "receipt_deleted"
   | "ai_question"
+  | "ai_consent_updated"
   | "household_share_changed"
   | "manual_account_created"
   | "manual_account_updated"
@@ -101,7 +104,12 @@ export type AuditAction =
   | "profile_updated"
   | "avatar_updated"
   | "display_prefs_updated"
-  | "rules_batch_applied";
+  | "rules_batch_applied"
+  | "bulk_tag_applied"
+  | "transfer_confirmed"
+  | "transfer_dismissed"
+  | "refund_confirmed"
+  | "refund_dismissed";
 
 interface AuditParams {
   userId: string | null;

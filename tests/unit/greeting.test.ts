@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveDisplayName, greetingWord } from "@/lib/greeting";
+import { resolveDisplayName, greetingWord, greetingInTimezone } from "@/lib/greeting";
 
 describe("resolveDisplayName", () => {
   it("prefers displayName over everything else", () => {
@@ -43,5 +43,23 @@ describe("greetingWord", () => {
   it("says evening from 6pm onward", () => {
     expect(greetingWord(18)).toBe("evening");
     expect(greetingWord(23)).toBe("evening");
+  });
+});
+
+
+describe("greetingInTimezone", () => {
+  it("keeps the Pacific evening across UTC midnight", () => {
+    const now = new Date("2026-09-06T03:00:00Z");
+    expect(greetingInTimezone(now, "America/Los_Angeles")).toBe("evening");
+    expect(greetingInTimezone(now, "UTC")).toBe("morning");
+    expect(greetingInTimezone(now, "Asia/Kolkata")).toBe("morning");
+  });
+  it("handles winter offset and noon boundaries", () => {
+    expect(greetingInTimezone(new Date("2026-01-01T20:00:00Z"), "America/Los_Angeles")).toBe("afternoon");
+  });
+  it("falls back to local hours when timezone is invalid", () => {
+    const now = new Date();
+    const expected = greetingWord(now.getHours());
+    expect(greetingInTimezone(now, "invalid/timezone_name")).toBe(expected);
   });
 });

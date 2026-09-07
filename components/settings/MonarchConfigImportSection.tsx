@@ -223,7 +223,7 @@ export default function MonarchConfigImportSection() {
                   {goalPlan.rows.map((row) => (
                     <li key={row.decisionKey} className="flex items-center justify-between gap-2">
                       <span className="min-w-0 truncate">{row.name}</span>
-                      <span className="min-w-0 truncate text-xs text-muted">
+                      <span data-money className="min-w-0 truncate text-xs text-muted">
                         {row.goalType}
                         {row.matchedGoalId && " · matches existing goal"}
                         {row.targetAmount !== null && ` · target ${formatCurrency(row.targetAmount)}`}

@@ -81,7 +81,7 @@ export default function CategoryDrilldownPanel({
         </span>
       }
       action={
-        <span className="text-xs font-bold text-muted">
+        <span data-money className="text-xs font-bold text-muted">
           {formatCurrency(drill.total)} · {deltaLabel}
         </span>
       }

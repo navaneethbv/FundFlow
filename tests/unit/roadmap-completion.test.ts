@@ -44,6 +44,23 @@ describe("roadmap completion helpers", () => {
     ]);
   });
 
+  it("rejects negative split amounts instead of normalizing them", () => {
+    // `transaction_splits.amount` is `check (amount > 0)`, so a negative split
+    // cannot come from the database. If one arrives some other way it must fail
+    // the total check rather than be silently absorbed as a magnitude, and
+    // aggregation must fall back to the transaction's own category.
+    const transaction = { id: "txn-neg", amount: 120, category: "GENERAL" };
+    const splits = [
+      { transactionId: "txn-neg", category: "FOOD", amount: -45 },
+      { transactionId: "txn-neg", category: "GIFTS", amount: -75 },
+    ];
+
+    expect(validateSplits(transaction, splits)).toEqual({ valid: false, difference: 240 });
+    expect(aggregateSpendWithSplits([transaction], splits)).toEqual([
+      { category: "GENERAL", amount: 120 },
+    ]);
+  });
+
   it("detects refund pairs and filters dismissed duplicate reviews", () => {
     const transactions = [
       { id: "charge", date: "2026-07-01", merchant: "Store", amount: 80 },
@@ -52,7 +69,7 @@ describe("roadmap completion helpers", () => {
     ];
 
     expect(detectRefundPairs(transactions, 7)).toEqual([
-      { chargeId: "charge", refundId: "refund", amount: 80 },
+      { chargeId: "charge", refundId: "refund", amount: 80, partial: false },
     ]);
     expect(
       filterReviewDecisions(
@@ -217,6 +234,8 @@ describe("roadmap completion helpers", () => {
       ],
       7,
     );
-    expect(pairs).toEqual([]);
+    // Different merchant never pairs; a smaller same-merchant refund
+    // surfaces as a bounded partial suggestion (M-8).
+    expect(pairs).toEqual([{ chargeId: "c1", refundId: "r2", amount: 100, partial: true }]);
   });
 });

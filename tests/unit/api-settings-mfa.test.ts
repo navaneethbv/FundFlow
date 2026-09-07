@@ -19,6 +19,16 @@ vi.mock("@/lib/audit", () => ({
   getClientIp: (...args: unknown[]) => mockGetClientIp(...args),
 }));
 
+const mockCheckRateLimit = vi.fn().mockResolvedValue(true);
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
+}));
+
+const mockVerifyStepUp = vi.fn().mockResolvedValue(true);
+vi.mock("@/lib/step-up", () => ({
+  verifyStepUp: (...args: unknown[]) => mockVerifyStepUp(...args),
+}));
+
 import { POST } from "@/app/api/settings/mfa/route";
 import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";

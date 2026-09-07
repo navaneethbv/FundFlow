@@ -109,6 +109,7 @@ function createMockBatchDb(options?: {
       if (table === "transaction_annotations") {
         return {
           select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
           in: vi.fn().mockResolvedValue({ data: annotations }),
           upsert: onUpsert,
         };
@@ -408,3 +409,48 @@ describe("POST /api/rules/batch", () => {
   });
 });
 
+
+describe("POST /api/rules/batch read failures", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function failingDb(table: string, error: unknown) {
+    const failure = { data: null, error };
+    return {
+      from: vi.fn((t: string) => {
+        if (t === table) {
+          const builder: Record<string, unknown> = {};
+          for (const m of ["select", "eq", "order", "limit", "in"]) {
+            builder[m] = () => builder;
+          }
+          builder.then = (resolve: (v: unknown) => unknown) => resolve(failure);
+          return builder;
+        }
+        return createMockBatchDb().from(t);
+      }),
+    };
+  }
+
+  it.each([
+    ["rules", "merchant_rules", "rules down"],
+    ["transactions", "transactions", "txns down"],
+    ["annotations", "transaction_annotations", "annotations down"],
+  ])("returns 500 when the %s read fails", async (_label, table, message) => {
+    mockRequireUser.mockResolvedValueOnce({
+      user: { id: "u-1" },
+      supabase: failingDb(table, { message }),
+    });
+    const res = await POST(createBatchRequest({ dryRun: true }));
+    expect(res.status).toBe(500);
+  });
+
+  it("short-circuits with zero counts when no rules are enabled", async () => {
+    const db = createMockBatchDb({ rules: [] });
+    mockRequireUser.mockResolvedValueOnce({ user: { id: "u-1" }, supabase: db });
+    const res = await POST(createBatchRequest({ dryRun: true }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ success: true, totalEvaluated: 0, matchedCount: 0 });
+  });
+});

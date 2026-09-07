@@ -1,4 +1,4 @@
-import { EXCLUDED_PFC } from "@/lib/dashboard";
+import { TRANSFER_GROUPS as EXCLUDED_PFC } from "@/lib/finance-domain";
 import { addDays, addMonths, parseDate } from "@/lib/date-utils";
 
 export type RecurringFrequency =
@@ -88,8 +88,31 @@ const MAX_STEPS = 600;
  * from `anchor` by stepping at `cadence`'s pace, in either direction. Used
  * for both Plaid streams (whose anchor is usually a future predicted date)
  * and manual items (whose anchor is a user-entered next-due date).
+ *
+ * Month-based cadences step from the anchor with absolute offsets
+ * (`addMonths(anchor, k * amount)`) so a 01-31 anchor yields 02-28 then
+ * 03-31 instead of drifting to the 28th forever (M-2).
  */
-export function occurrenceDatesInWindow(
+function monthOccurrencesInWindow(
+  anchor: string,
+  cadence: Cadence,
+  windowStart: string,
+  windowEndExclusive: string,
+): string[] {
+  const dates: string[] = [];
+  let back = 0;
+  while (back > -MAX_STEPS && addMonths(anchor, back * cadence.amount) >= windowStart) {
+    back -= 1;
+  }
+  for (let k = back; k < MAX_STEPS; k += 1) {
+    const date = addMonths(anchor, k * cadence.amount);
+    if (date >= windowEndExclusive) break;
+    if (date >= windowStart) dates.push(date);
+  }
+  return dates;
+}
+
+function nonMonthOccurrencesInWindow(
   anchor: string,
   cadence: Cadence,
   windowStart: string,
@@ -105,6 +128,18 @@ export function occurrenceDatesInWindow(
     if (cursor >= windowStart && cursor < windowEndExclusive) dates.push(cursor);
   }
   return dates;
+}
+
+export function occurrenceDatesInWindow(
+  anchor: string,
+  cadence: Cadence,
+  windowStart: string,
+  windowEndExclusive: string,
+): string[] {
+  if (cadence.unit === "months") {
+    return monthOccurrencesInWindow(anchor, cadence, windowStart, windowEndExclusive);
+  }
+  return nonMonthOccurrencesInWindow(anchor, cadence, windowStart, windowEndExclusive);
 }
 
 export function countUnreviewedStreams(
@@ -248,6 +283,7 @@ function appendPlaidStream(
   windowStart: string,
   windowEndExclusive: string,
   today: string,
+  usedTransactionIds: Set<string>,
 ): void {
   if (stream.dismissedAt || stream.status === "TOMBSTONED" || !stream.isActive) return;
   const anchor = stream.predictedNextDate ?? stream.lastDate ?? stream.firstDate;
@@ -257,10 +293,11 @@ function appendPlaidStream(
   const dueDates = occurrenceDatesInWindow(anchor, cadence, windowStart, windowEndExclusive);
   const amount = Math.abs(stream.userAmount ?? stream.averageAmount ?? stream.lastAmount ?? 0);
   const isIncome = stream.streamType === "inflow";
-  const availableMatches = [...stream.matchedTransactions];
+  const availableMatches = stream.matchedTransactions.filter((match) => !usedTransactionIds.has(match.id));
   for (const dueDate of dueDates) {
     const match = nearestMatch(dueDate, availableMatches, tolerance);
     if (match) {
+      usedTransactionIds.add(match.id);
       const consumedIndex = availableMatches.findIndex((candidate) => candidate.id === match.id);
       if (consumedIndex !== -1) availableMatches.splice(consumedIndex, 1);
     }
@@ -340,8 +377,9 @@ export function expandStreamsForMonth(
     creditCards: { paid: 0, remaining: 0 },
   };
 
+  const usedTransactionIds = new Set<string>();
   for (const stream of streams) {
-    appendPlaidStream(occurrences, totals, stream, windowStart, windowEndExclusive, today);
+    appendPlaidStream(occurrences, totals, stream, windowStart, windowEndExclusive, today, usedTransactionIds);
   }
   for (const item of manualItems) {
     appendManualItem(occurrences, totals, item, windowStart, windowEndExclusive, today);

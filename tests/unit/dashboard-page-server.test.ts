@@ -79,7 +79,8 @@ vi.mock("@/components/dashboard/OverviewView", () => ({
 }));
 
 vi.mock("@/components/dashboard/MonitorView", () => ({
-  default: () => createElement("div", { "data-testid": "monitor-view" }),
+  default: ({ netWorth }: { netWorth?: number }) =>
+    createElement("div", { "data-testid": "monitor-view", "data-net-worth": netWorth }),
 }));
 
 vi.mock("@/components/dashboard/PlanView", () => ({
@@ -107,8 +108,14 @@ vi.mock("@/components/dashboard/WealthView", () => ({
 const { mockDashboardData } = vi.hoisted(() => ({
   mockDashboardData: {
     accounts: [{ id: "acc-1", name: "Checking", mask: "1234", type: "depository", current_balance: 1000 }],
+    // Deliberately diverges from computeNetWorth(accounts) (which would be
+    // 1000): a manual asset makes the composed snapshot the only correct
+    // source for the Overview headline (PR-1 regression).
+    netWorthSnapshot: { assets: 401000, liabilities: 0, netWorth: 401000 },
     availableMonths: ["2026-08", "2026-09"],
     selectedMonth: "2026-09",
+    // The load day this snapshot was keyed on (M-11).
+    today: "2026-09-06",
     monthlyIncome: [
       { month: "2026-08", amount: 5000 },
       { month: "2026-09", amount: 14.34 },
@@ -223,6 +230,18 @@ describe("DashboardPage Server Component", () => {
     expect(html).toContain('data-testid="scope-chips"');
     expect(html).toContain("Good");
     expect(html).toContain("Alex");
+  });
+
+  it("feeds MonitorView the composed net-worth snapshot, not connected-accounts-only", async () => {
+    const element = await DashboardPage({
+      searchParams: Promise.resolve({ view: "monitor" }),
+    });
+    const html = renderToStaticMarkup(element);
+
+    // computeNetWorth(accounts) would be 1000 (connected checking only); the
+    // composed snapshot's 401000 includes the manual asset and must be what
+    // Monitor's net-worth delta is computed from (PR-1 regression).
+    expect(html).toContain('data-net-worth="401000"');
   });
 
   it("passes selectedLedgerAccountId and extraParams from searchParams to OverviewView", async () => {

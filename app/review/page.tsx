@@ -3,6 +3,9 @@ import PageHeader from "@/components/shell/PageHeader";
 import BarList from "@/components/dashboard/BarList";
 import ExportReportButton from "@/components/review/ExportReportButton";
 import Panel from "@/components/ui/Panel";
+import { isFeatureEnabled } from "@/lib/feature-flags";
+import { loadGoalsPageData } from "@/lib/goals-data";
+import { GOAL_BADGE_LABEL } from "@/lib/goals-v2";
 import { goalSummary, getGoals } from "@/lib/goals";
 import { getDashboardData } from "@/lib/dashboard";
 import { formatCurrency, formatMonth, gainLossColor, inflowMarker, titleCase } from "@/lib/format";
@@ -49,13 +52,21 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
   } = await supabase.auth.getUser();
 
   const [data, goals] = await Promise.all([
-    getDashboardData(supabase, undefined, month),
-    getGoals(supabase),
+    getDashboardData(supabase, undefined, month, user?.id, { includeBalanceSheet: false }),
+    user && isFeatureEnabled("goalsV2")
+      ? loadGoalsPageData(supabase, user.id).then(({ goals }) => goals.map((goal) => ({
+          id: goal.id, name: goal.name, remainingAmount: goal.remainingAmount,
+          status: GOAL_BADGE_LABEL[goal.badge],
+        })))
+      : getGoals(supabase).then((goals) => goalSummary(goals).map((item) => ({
+          id: item.goal.id, name: item.goal.name, remainingAmount: item.remainingAmount,
+          status: item.status === "on-track" ? "Target date ahead" : titleCase(item.status.replaceAll("-", " ")),
+        }))),
   ]);
 
   const isCurrentMonth = data.selectedMonth === localMonthKey();
   const net = data.currentMonthIncome - data.currentMonthExpenses;
-  const goalsSummary = goalSummary(goals).slice(0, 4);
+  const goalsSummary = goals.slice(0, 4);
   const topCategories = data.categoryBreakdown.slice(0, 5).map((category) => ({
     label: titleCase(category.category),
     amount: category.amount,
@@ -98,7 +109,7 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
         </Panel>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid items-start gap-6 xl:grid-cols-2">
         <Panel title="Top spending categories" eyebrow={isCurrentMonth ? "Month-to-date" : "This month"}>
           <BarList items={topCategories} max={topCategoryMax} />
         </Panel>
@@ -106,9 +117,9 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
           <div className="space-y-3 text-sm">
             {budgetIssues.map((budget) => (
               <div key={budget.category} className="rounded-field bg-panel-2 p-3">
-                <div className="flex justify-between gap-3 font-semibold">
-                  <span>{titleCase(budget.category)}</span>
-                  <span data-money style={{ color: "var(--viz-neg)" }}>
+                <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 font-semibold">
+                  <span className="min-w-0 break-words">{titleCase(budget.category)}</span>
+                  <span data-money className="shrink-0 whitespace-nowrap" style={{ color: "var(--viz-neg)" }}>
                     {formatCurrency(budget.projectedSpend)} projected
                   </span>
                 </div>
@@ -131,16 +142,17 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
         </Panel>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Panel title="Goals review" eyebrow="Pace">
+      <div className="grid items-start gap-6 xl:grid-cols-2">
+        <Panel title="Goals review" eyebrow="Current progress">
+          <p className="mb-3 text-xs text-muted">Goal funding and pace reflect current balances.</p>
           <div className="space-y-3 text-sm">
             {goalsSummary.map((goal) => (
-              <div key={goal.goal.id} className="flex justify-between gap-4 rounded-field bg-panel-2 p-3">
-                <span>
-                  <span className="block font-semibold">{goal.goal.name}</span>
+              <div key={goal.id} className="flex justify-between gap-4 rounded-field bg-panel-2 p-3">
+                <span className="min-w-0">
+                  <span className="block break-words font-semibold">{goal.name}</span>
                   <span className="block text-xs text-muted">{goal.status}</span>
                 </span>
-                <span data-money className="font-bold">
+                <span data-money className="shrink-0 whitespace-nowrap font-bold">
                   {formatCurrency(goal.remainingAmount)} left
                 </span>
               </div>

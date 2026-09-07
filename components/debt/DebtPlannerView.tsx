@@ -157,7 +157,43 @@ export default function DebtPlannerView({
           eyebrow={strategy === "avalanche" ? "Highest APR first" : "Smallest balance first"}
           title={`${strategy === "avalanche" ? "Avalanche" : "Snowball"} payoff order`}
         >
-          <div className="overflow-x-auto">
+          {/* Mobile cards: each debt's payoff facts stay together without a 40rem scroll region. */}
+          <div className="space-y-2 sm:hidden">
+            {selectedPlan.order.map((accountId, index) => {
+              const debt = debtById.get(accountId);
+              const result = resultById.get(accountId);
+              if (!debt || !result) return null;
+              return (
+                <div key={accountId} className="rounded-field border border-panel-border bg-panel-2 p-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    {/* Wraps rather than truncates: the mask is the only thing
+                        telling two cards from the same bank apart, and it sits
+                        at the end of the name where an ellipsis would eat it. */}
+                    <span className="min-w-0 break-words font-semibold">
+                      {index + 1}. {debt.name}
+                    </span>
+                    <span data-money className="shrink-0 font-semibold tabular-nums" style={{ color: "var(--viz-neg)" }}>
+                      {formatCurrency(debt.balance)}
+                    </span>
+                  </div>
+                  {debt.aprAssumed && (
+                    <span className="mt-1.5 inline-block rounded-full bg-warning/10 px-2 py-1 text-xs font-semibold text-warning">
+                      22% assumed APR
+                    </span>
+                  )}
+                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+                    {/* The blur hook wraps the number only; blurring the whole
+                        span would leave three unlabelled smudges in privacy
+                        mode, where the desktop table keeps its column heads. */}
+                    <span>APR <span className="money">{debt.apr.toFixed(2)}%</span></span>
+                    <span>Month {result.payoffMonth}</span>
+                    <span>Interest <span data-money>{formatCurrency(result.interestPaid)}</span></span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="hidden overflow-x-auto sm:block">
             <table className="w-full min-w-[40rem] text-left text-sm">
               <thead className="border-b border-panel-border text-xs uppercase tracking-wide text-muted font-mono">
                 <tr>
@@ -227,10 +263,31 @@ export default function DebtPlannerView({
         </div>
       </Panel>
 
-      {data.debts.some((debt) => debt.aprAssumed) && (
+      {data.debts.some((debt) => !debt.planned) && (
+        <Panel tone="warning" title="Not in the projection: APR needed">
+          <p className="text-sm text-muted">
+            These balances are real, but a card-rate assumption would misstate
+            them, so they stay out of the payoff order until an APR is set.
+          </p>
+          <ul className="mt-3 space-y-2 text-sm">
+            {data.debts
+              .filter((debt) => !debt.planned)
+              .map((debt) => (
+                <li key={debt.id} className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 break-words font-semibold">{debt.name}</span>
+                  <span data-money className="shrink-0 font-semibold tabular-nums">
+                    {formatCurrency(debt.balance)}
+                  </span>
+                </li>
+              ))}
+          </ul>
+        </Panel>
+      )}
+
+      {data.debts.some((debt) => debt.aprAssumed && debt.planned) && (
         <Panel tone="warning" title="Replace assumed APRs for a more useful projection">
           <p className="text-sm text-muted">
-            FundFlow uses 22% only where an account has no APR.
+            FundFlow uses 22% only for cards with no APR set.
           </p>
           <Link
             href="/settings?section=institutions#card-aprs"

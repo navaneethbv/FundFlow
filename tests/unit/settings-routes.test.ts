@@ -24,6 +24,10 @@ const mockServiceClient = {
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => mockServiceClient,
 }));
+vi.mock("@/lib/audit", () => ({
+  writeAudit: vi.fn(),
+  getClientIp: vi.fn(() => "127.0.0.1"),
+}));
 
 import { GET as auditGet } from "@/app/api/settings/audit/route";
 import {

@@ -53,7 +53,10 @@ const MAX_MONTHS = 6;
 /** Compact the export rows into bounded aggregates before they leave the app. */
 export function buildInsightPayload(rows: AggregateRow[]) {
   const byMonthCategory = new Map<string, number>();
-  const byMerchant = new Map<string, number>();
+  // Merchants accumulate per month so the 6-month window below can drop
+  // out-of-window spend before ranking; a global per-merchant total would
+  // smuggle dropped months back into the payload.
+  const byMonthMerchant = new Map<string, number>();
   const months = new Set<string>();
 
   for (const row of rows) {
@@ -87,7 +90,10 @@ export function buildInsightPayload(rows: AggregateRow[]) {
       (byMonthCategory.get(`${month}|${category}`) ?? 0) + amount,
     );
     if (row.merchant) {
-      byMerchant.set(row.merchant, (byMerchant.get(row.merchant) ?? 0) + amount);
+      byMonthMerchant.set(
+        `${month}|${row.merchant}`,
+        (byMonthMerchant.get(`${month}|${row.merchant}`) ?? 0) + amount,
+      );
     }
   }
 
@@ -96,6 +102,14 @@ export function buildInsightPayload(rows: AggregateRow[]) {
   const keepMonths = new Set(
     [...months].sort((a, b) => a.localeCompare(b)).slice(-MAX_MONTHS),
   );
+  const merchantTotals = new Map<string, number>();
+  for (const [key, amount] of byMonthMerchant) {
+    const separator = key.indexOf("|");
+    const month = key.slice(0, separator);
+    if (!keepMonths.has(month)) continue;
+    const merchant = key.slice(separator + 1);
+    merchantTotals.set(merchant, (merchantTotals.get(merchant) ?? 0) + amount);
+  }
   return {
     // A net-zero month/category or merchant carries no signal and would only
     // invite the model to comment on a $0 line, so those are dropped. Net
@@ -106,7 +120,7 @@ export function buildInsightPayload(rows: AggregateRow[]) {
         return { month, category, amount: Math.round(amount * 100) / 100 };
       })
       .filter((row) => keepMonths.has(row.month!) && row.amount !== 0),
-    top_merchants: [...byMerchant.entries()]
+    top_merchants: [...merchantTotals.entries()]
       .map(([merchant, amount]) => ({ merchant, amount: Math.round(amount * 100) / 100 }))
       .filter((row) => row.amount !== 0)
       .sort((a, b) => b.amount - a.amount)

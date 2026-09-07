@@ -29,6 +29,11 @@ import * as rateLimit from "@/lib/rate-limit";
 describe("More API Routes Boost Suite", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset the limiter spy fully (impl + once queue): a Once(false) queued
+    // by one test must never leak into the next, and the default is allow.
+    // clearAllMocks alone preserves both, which made failures order-dependent.
+    vi.spyOn(rateLimit, "checkRateLimit").mockReset();
+    vi.spyOn(rateLimit, "checkRateLimit").mockResolvedValue(true);
   });
 
   describe("Sinking Funds [id] Route", () => {

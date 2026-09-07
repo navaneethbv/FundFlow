@@ -40,7 +40,7 @@ async function fetchAllTransactions(
   for (let offset = 0; ; offset += PAGE_SIZE) {
     const { data, error } = await supabase
       .from("transactions")
-      .select("id, date, amount, merchant_name, name, pfc_primary, account_id")
+      .select("id, date, amount, merchant_name, name, pfc_primary, pfc_detailed, account_id")
       .eq("user_id", userId)
       .gte("date", period.previousStart)
       .lte("date", period.end)
@@ -72,6 +72,7 @@ export async function getWeeklyReportData(
     rulesResult,
     refundsResult,
     duplicatesResult,
+    transfersResult,
     transactions,
   ] = await Promise.all([
     supabase
@@ -100,6 +101,10 @@ export async function getWeeklyReportData(
       .from("linked_duplicates")
       .select("excluded_transaction_id")
       .eq("user_id", userId),
+    supabase
+      .from("linked_transfers")
+      .select("out_transaction_id, in_transaction_id")
+      .eq("user_id", userId),
     fetchAllTransactions(supabase, userId, period),
   ]);
 
@@ -110,6 +115,7 @@ export async function getWeeklyReportData(
     ["merchant rules", rulesResult],
     ["linked refunds", refundsResult],
     ["linked duplicates", duplicatesResult],
+    ["linked transfers", transfersResult],
   ] as const) {
     throwIfError(result.error, `weekly report ${context}`);
   }
@@ -178,6 +184,7 @@ export async function getWeeklyReportData(
       merchantName: transaction.merchant_name as string | null,
       name: transaction.name as string | null,
       category: transaction.pfc_primary as string | null,
+      detailedCategory: transaction.pfc_detailed as string | null,
       accountId: transaction.account_id as string,
       displayCategory: override?.displayCategory ?? null,
       cashFlowClassification: override?.cashFlowClassification ?? null,
@@ -196,6 +203,14 @@ export async function getWeeklyReportData(
   for (const refund of refundsResult.data ?? []) {
     linkedRefundTransactionIds.add(refund.charge_transaction_id as string);
     linkedRefundTransactionIds.add(refund.refund_transaction_id as string);
+  }
+  // User-linked inter-account transfers are movement, not spend (M-5): both
+  // halves leave the spend set, exactly as the canonical projection treats
+  // them on every other surface.
+  const linkedTransferTransactionIds = new Set<string>();
+  for (const transfer of transfersResult.data ?? []) {
+    linkedTransferTransactionIds.add(transfer.out_transaction_id as string);
+    linkedTransferTransactionIds.add(transfer.in_transaction_id as string);
   }
 
   return buildWeeklyReportModel({
@@ -221,6 +236,7 @@ export async function getWeeklyReportData(
       })),
     ),
     linkedRefundTransactionIds,
+    linkedTransferTransactionIds,
     duplicateTransactionIds: new Set(
       (duplicatesResult.data ?? []).map(
         (duplicate) => duplicate.excluded_transaction_id as string,

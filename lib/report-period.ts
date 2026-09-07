@@ -1,5 +1,7 @@
 export const DEFAULT_REPORT_TIMEZONE = "America/Los_Angeles";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 /**
  * Which cadence a report period represents. The on-demand export serves both:
  * the Review page asks for a `monthly` period, and the Monday cron plus the
@@ -77,6 +79,34 @@ function localDateTime(reference: Date, timezone: string): LocalDateTime {
 /** The calendar date containing `reference` in the user's configured timezone. */
 export function dateKeyInTimezone(reference: Date, timezone: string | null | undefined): string {
   return localDateTime(reference, normalizeReportTimezone(timezone)).date;
+}
+
+/**
+ * The viewer's calendar day in their profile timezone (M-11). One indexed
+ * row read; falls back to the UTC server day when the profile is missing or
+ * the read fails, so callers never have to branch. (A null timezone must NOT
+ * fall through to dateKeyInTimezone's report default — that answers "what
+ * day is it in Los Angeles", not "what day is it here".)
+ */
+export async function resolveViewerToday(
+  supabase: Pick<SupabaseClient, "from">,
+  userId: string | undefined,
+  reference = new Date(),
+): Promise<string> {
+  const fallback = dateKeyInTimezone(reference, "UTC");
+  try {
+    if (!userId) return fallback;
+    const { data } = await supabase
+      .from("profiles")
+      .select("timezone")
+      .eq("id", userId)
+      .maybeSingle();
+    const timezone = (data as { timezone?: string | null } | null)?.timezone;
+    if (!timezone) return fallback;
+    return dateKeyInTimezone(reference, timezone);
+  } catch {
+    return fallback;
+  }
 }
 
 function addDays(date: string, days: number): string {

@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { buildBillsCalendar, type CalendarBill } from "@/lib/ical";
 import { errorResponse } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { resolveViewerToday } from "@/lib/report-period";
 import { writeAudit } from "@/lib/audit";
 
 function normalizeFrequency(
@@ -42,24 +43,33 @@ export async function GET(
     }
 
     const service = createServiceClient();
-    const { data: row } = await service
+    const { data: row, error: tokenError } = await service
       .from("calendar_tokens")
       .select("user_id, include_amounts")
       .eq("token_hash", tokenHash)
       .is("revoked_at", null)
       .gt("expires_at", new Date().toISOString())
       .maybeSingle();
+    if (tokenError) throw tokenError;
     if (!row) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const { data: streams } = await service
+    const { data: streams, error: streamsError } = await service
       .from("recurring_streams")
-      .select("id, merchant_name, description, average_amount, last_amount, frequency, stream_type, is_active")
+      .select("id, merchant_name, description, average_amount, last_amount, frequency, stream_type, is_active, status")
       .eq("user_id", row.user_id)
-      .eq("is_active", true);
+      .eq("is_active", true)
+      // A stream the user marked "Not recurring" or tombstoned must not keep publishing
+      // bills into their calendar app, the same rule the Recurring page and
+      // the Dashboard reminders apply.
+      .is("dismissed_at", null)
+      .or("status.is.null,status.neq.TOMBSTONED");
+    if (streamsError) throw streamsError;
 
-    const today = new Date().toISOString().slice(0, 10);
+    // The anchor month follows the subscriber's profile timezone (M-11), not
+    // UTC: near a month boundary UTC can already be next month for them.
+    const today = await resolveViewerToday(service, row.user_id as string);
     const anchor = `${today.slice(0, 7)}-15`;
     const bills: CalendarBill[] = (streams ?? []).map((stream) => ({
       id: stream.id as string,

@@ -9,6 +9,7 @@ import {
   type PlaidResume,
 } from "@/lib/plaid-resume";
 import Button from "@/components/ui/Button";
+import FormMessage from "@/components/ui/FormMessage";
 import PlaidLinkLauncher from "@/components/PlaidLinkLauncher";
 
 export default function ConnectBankButton() {
@@ -176,7 +177,7 @@ export default function ConnectBankButton() {
       >
         {busy || linkToken ? "Opening..." : "Connect a bank"}
       </Button>
-      {error && <span className="text-xs text-danger">{error}</span>}
+      {error && <FormMessage message={error} className="text-xs" />}
     </div>
   );
 }

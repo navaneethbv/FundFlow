@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
   if (auth instanceof NextResponse) return auth;
 
   try {
-    const allowed = await checkRateLimit(`receipt-upload:${auth.user.id}`, 30, 3600);
+    const allowed = await checkRateLimit(`receipt-upload:${auth.user.id}`, 30, 3600, { failClosed: true });
     if (!allowed) {
       return NextResponse.json({ error: "Receipt upload limit reached." }, { status: 429 });
     }

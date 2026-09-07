@@ -302,6 +302,7 @@ export async function consumeLinkToken(
     .from("plaid_link_tokens")
     .update({ consumed_at: new Date().toISOString() })
     .eq("id", data.id)
+    .eq("user_id", userId)
     .is("consumed_at", null)
     .select("id");
   if (updateError) throw updateError;
@@ -433,7 +434,12 @@ async function rotateClaimedItemAccessToken(
         access_token_tag: enc.tag,
         access_token_rotated_at: new Date().toISOString(),
       })
-      .eq("id", item.id);
+      .eq("id", item.id)
+      // `id` is the primary key, so this is not what stops a cross-user write.
+      // The service client bypasses RLS, and the repo invariant is that every
+      // service-client query filters `user_id` explicitly, so scoping never
+      // depends on remembering which column happens to be unique. Keep it.
+      .eq("user_id", item.user_id);
     if (!error) return true;
     logError("plaid-service.token-rotation-persist", error);
   }

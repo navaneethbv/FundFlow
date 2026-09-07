@@ -1,3 +1,4 @@
+import { formatTimestampUtc } from "@/lib/format-date";
 import Panel from "@/components/ui/Panel";
 import { formatCurrency } from "@/lib/format";
 import type { InvestmentAccountCoverage } from "@/lib/investments";
@@ -36,14 +37,17 @@ export default function ConnectedAccounts({
           {coverage.accounts.map((acct) => (
             <li
               key={acct.id}
-              className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
+              className="flex flex-wrap items-start justify-between gap-3 py-3 first:pt-0 last:pb-0"
             >
               <div>
                 <p className="text-sm font-semibold">{acct.name}</p>
                 <p className="text-xs text-muted">
                   {acct.subtype ?? acct.type ?? "Investment account"} ·{" "}
-                  {acct.source === "plaid" ? "Connected bank" : "Manual account"}
+                  {acct.source === "plaid" ? (acct.institutionName ?? "Connected bank") : "Manual account"}
                 </p>
+                {acct.source === "plaid" && <p className="mt-1 text-xs text-muted">
+                  Balance updated: {formatTimestampUtc(acct.updatedAt)}
+                </p>}
               </div>
               <div className="text-right">
                 <p data-money className="metric-value text-sm">

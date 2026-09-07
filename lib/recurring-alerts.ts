@@ -12,6 +12,8 @@ export interface RecurringStreamCandidate {
   averageAmount?: number | null;
   frequency?: string | null;
   status?: string | null;
+  isActive?: boolean | null;
+  dismissedAt?: string | null;
 }
 
 export interface PriceSpikeAlert {
@@ -62,7 +64,11 @@ export function detectPriceSpikes(
   const alerts: PriceSpikeAlert[] = [];
 
   for (const s of streams) {
-    if (s.status === "inactive") continue;
+    // "inactive" is not a real status (MATURE | EARLY_DETECTION |
+    // TOMBSTONED | UNKNOWN): skip on the actual inactivity signals so a
+    // tombstoned stream never alerts and a user override never fabricates
+    // a hike against its own average.
+    if (s.isActive === false || s.dismissedAt || s.status === "TOMBSTONED") continue;
 
     const current = Math.abs(Number(s.lastAmount) || 0);
     const baseline = Math.abs(Number(s.averageAmount) || 0);

@@ -128,7 +128,7 @@ describe("requireOwnedItem", () => {
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected failure");
     expect(result.response.status).toBe(429);
-    expect(mockCheckRateLimit).toHaveBeenCalledWith("reconnect:u1", 10, 60);
+    expect(mockCheckRateLimit).toHaveBeenCalledWith("reconnect:u1", 10, 60, { failClosed: true });
     expect(mockGetItem).not.toHaveBeenCalled();
   });
 

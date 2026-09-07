@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { buildSessionList } from "@/lib/security-account";
 import { badRequest, currentSessionId, errorResponse, requireUser } from "@/lib/http";
 import { createServiceClient } from "@/lib/supabase/service";
+import { getClientIp, writeAudit } from "@/lib/audit";
 
 export async function GET() {
   const auth = await requireUser();
@@ -53,6 +54,13 @@ export async function DELETE(request: NextRequest) {
       .eq("user_id", user.id)
       .eq("id", sessionId);
     if (error) throw error;
+
+    await writeAudit({
+      userId: user.id,
+      action: "session_revoked",
+      metadata: { session_id: sessionId },
+      ip: getClientIp(request),
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

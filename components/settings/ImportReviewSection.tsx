@@ -1,5 +1,7 @@
 "use client";
 
+import { accountDisplayLabel } from "@/lib/account-label";
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
@@ -300,8 +302,7 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
               <Select value={accountId} onChange={(event) => setAccountId(event.target.value)}>
                 {accounts.map((account) => (
                   <option key={account.id} value={account.id}>
-                    {account.name ?? "Account"}{account.kind === "manual" ? " (manual)" : ""}
-                    {account.mask ? ` **${account.mask}` : ""}
+                    {accountDisplayLabel(account.name, account.mask)}{account.kind === "manual" ? " (manual)" : ""}
                   </option>
                 ))}
               </Select>
@@ -357,7 +358,7 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
                 <option value="">Choose account</option>
                 {accounts.map((account) => (
                   <option key={account.id} value={account.id}>
-                    {account.name ?? "Account"}{account.kind === "manual" ? " (manual)" : ""}{account.mask ? ` **${account.mask}` : ""}
+                    {accountDisplayLabel(account.name, account.mask)}{account.kind === "manual" ? " (manual)" : ""}
                   </option>
                 ))}
               </Select>

@@ -104,5 +104,17 @@ describe("repairResponseToUiState", () => {
   it("maps generic failure and network errors to a retryable error state", () => {
     expect(repairResponseToUiState({ ok: false, status: "generic_failure", message: "X" }).kind).toBe("error");
     expect(repairResponseToUiState(null).kind).toBe("error");
+    expect(repairResponseToUiState({ ok: false, status: "unknown" }).message).toBe("The repair could not be completed. Try again.");
+    expect(repairResponseToUiState({ ok: false } as unknown as import("@/lib/repair").RepairResponse).message).toBe("The repair could not be completed. Try again.");
+  });
+
+  it("uses default messages when status response has no explicit message", () => {
+    expect(repairResponseToUiState({ ok: false, status: "product_not_ready" }).kind).toBe("info");
+    expect(repairResponseToUiState({ ok: false, status: "consent_required" }).kind).toBe("needs_consent");
+    expect(repairResponseToUiState({ ok: false, status: "institution_login_required" }).kind).toBe("needs_login");
+    expect(repairResponseToUiState({ ok: false, status: "rate_limited" }).kind).toBe("rate_limited");
+    const incomplete = repairResponseToUiState({ ok: true, status: "backfill_incomplete" });
+    expect(incomplete.kind).toBe("backfill_incomplete");
+    expect(incomplete.message).toContain("0 of 0");
   });
 });

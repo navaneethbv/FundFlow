@@ -88,16 +88,16 @@ export default function CategoryOverridesSection({
       )}
 
       <form onSubmit={add} className="flex flex-wrap items-end gap-2">
-        <Field label="Plaid category">
+        <Field label="Plaid category" htmlFor="override-source">
           <Input
-            placeholder="FOOD_AND_DRINK"
+            id="override-source" placeholder="FOOD_AND_DRINK"
             value={source}
             onChange={(e) => setSource(e.target.value)}
           />
         </Field>
-        <Field label="Show as">
+        <Field label="Show as" htmlFor="override-display">
           <Input
-            placeholder="Eating out"
+            id="override-display" placeholder="Eating out"
             value={display}
             onChange={(e) => setDisplay(e.target.value)}
           />

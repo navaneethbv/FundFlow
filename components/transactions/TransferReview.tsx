@@ -322,7 +322,7 @@ export default function TransferReview() {
                     <span className="text-foreground">{pair.out_account_name || "Account A"}</span>
                     <span className="text-muted">→</span>
                     <span className="text-foreground">{pair.in_account_name || "Account B"}</span>
-                    <span className="font-semibold text-foreground">
+                    <span data-money className="font-semibold text-foreground">
                       {formatCurrency(pair.amount)}
                     </span>
                   </div>

@@ -88,10 +88,15 @@ async function fetchCandidateTransactions(
   const annotationsMap = new Map<string, string[]>();
 
   if (txnIds.length > 0) {
-    const { data: annotations } = await supabase
+    const { data: annotations, error: annotationsError } = await supabase
       .from("transaction_annotations")
       .select("transaction_id, tags")
+      .eq("user_id", userId)
       .in("transaction_id", txnIds);
+
+    if (annotationsError) {
+      return errorResponse("rules.batch.fetchAnnotations", annotationsError);
+    }
 
     const typedAnnotations = (annotations || []) as unknown as DbAnnotation[];
     for (const a of typedAnnotations) {

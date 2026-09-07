@@ -948,7 +948,7 @@ describe("lib/recurring", () => {
     expect(mock.streamsEqSource).toHaveBeenCalledWith("source", "plaid");
     expect(mock.updateEqSource).toHaveBeenCalledWith("source", "plaid");
     expect(mock.updateIn).toHaveBeenCalledWith("stream_id", ["gone-plaid"]);
-    expect(mockRefreshInferredRecurringForUser).toHaveBeenCalledWith("user-1");
+    expect(mockRefreshInferredRecurringForUser).toHaveBeenCalledWith("user-1", { today: expect.any(String) });
   });
 
   it("runs local inference after a Plaid item error while preserving provider rows", async () => {
@@ -969,7 +969,7 @@ describe("lib/recurring", () => {
       inferred: { active: 2, added: 1, deactivated: 0, deduplicated: 1, failed: 0 },
     });
     expect(mockServiceClient.from).not.toHaveBeenCalled();
-    expect(mockRefreshInferredRecurringForUser).toHaveBeenCalledWith("user-1");
+    expect(mockRefreshInferredRecurringForUser).toHaveBeenCalledWith("user-1", { today: expect.any(String) });
     expect(mockLogError).toHaveBeenCalledWith("recurring.item", expect.any(Error));
   });
 

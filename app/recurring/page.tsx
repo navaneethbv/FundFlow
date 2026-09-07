@@ -185,10 +185,15 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
               id: s.id,
               merchantName: s.merchantName,
               description: s.description,
-              lastAmount: s.userAmount ?? s.averageAmount,
+              // Last real charge vs the trailing average: the user override
+              // is a display preference, not a charge, so it must never
+              // seed the "current" side of a hike comparison (M-6).
+              lastAmount: s.lastAmount ?? s.averageAmount,
               averageAmount: s.averageAmount,
               frequency: s.frequency,
               status: s.status,
+              isActive: s.isActive,
+              dismissedAt: s.dismissedAt,
             })),
           )}
         />

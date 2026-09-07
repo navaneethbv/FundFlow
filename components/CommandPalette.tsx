@@ -105,7 +105,7 @@ export default function CommandPalette({ items }: Readonly<{ items: Command[] }>
         aria-modal="true"
         aria-label="Command palette"
         onKeyDown={handleDialogKeyDown}
-        className="relative m-0 w-full max-w-lg rounded-card border border-panel-border bg-panel shadow-card"
+        className="relative m-0 w-full max-w-lg rounded-card border border-panel-border bg-panel text-foreground shadow-card"
       >
         <div className="flex items-center gap-2 border-b border-panel-border px-4 py-3">
           <Search aria-hidden className="h-4 w-4 text-muted" />

@@ -239,12 +239,15 @@ export async function createNotification(
 ) {
   const supabase = createServiceClient();
 
-  // 1. Fetch user's alert preferences
-  const { data: prefs } = await supabase
+  // 1. Fetch user's alert preferences. A missing row (PGRST116) means
+  // "never configured" and gets defaults; any other failure must throw
+  // (A-13) rather than silently notifying against default prefs.
+  const { data: prefs, error: prefsError } = await supabase
     .from("alert_preferences")
     .select("*")
     .eq("user_id", userId)
     .single();
+  if (prefsError && (prefsError as { code?: string }).code !== "PGRST116") throw prefsError;
 
   const preferences = prefs || {
     broken_bank: true,
@@ -264,11 +267,12 @@ export async function createNotification(
 /**
  * Runs planning checks for the user and generates notifications for budget exceed,
  * low cash forecast, goal reached, and broken bank connections.
+ *
+ * `today` is the viewer's calendar day in their profile timezone (M-11).
  */
-export async function processNotificationsForUser(userId: string) {
+export async function processNotificationsForUser(userId: string, today = new Date().toISOString().slice(0, 10)) {
   const supabase = createServiceClient();
-  const currentMonth = new Date().toISOString().slice(0, 7);
-  const today = new Date().toISOString().slice(0, 10);
+  const currentMonth = today.slice(0, 7);
 
   const tryNotify: TryNotify = (type, details, subjectKey) =>
     createNotification(userId, type, details, subjectKey, "exact").catch((error) =>

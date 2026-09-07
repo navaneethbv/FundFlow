@@ -79,6 +79,7 @@ function TransactionSplitSection({
   let splitBarColor = "bg-accent";
   if (splitTotal > target) splitBarColor = "bg-danger";
   if (splitsBalanced) splitBarColor = "bg-success";
+  const splitPercent = target > 0 ? Math.min(100, (splitTotal / target) * 100) : 0;
 
   return (
     <>
@@ -91,27 +92,36 @@ function TransactionSplitSection({
               splitsBalanced ? "text-muted" : "text-danger",
             )}
           >
-            {formatCurrency(splitTotal, currency)} / {formatCurrency(target, currency)}
+            <span data-money>{formatCurrency(splitTotal, currency)}</span> / <span data-money>{formatCurrency(target, currency)}</span>
           </span>
         )}
       </div>
       {activeRows.length > 0 && (
         <div className="mb-3 space-y-1">
           <div className="flex justify-between text-xs font-semibold">
-            <span>Allocated: {formatCurrency(splitTotal, currency)}</span>
+            <span>Allocated: <span data-money>{formatCurrency(splitTotal, currency)}</span></span>
             <span className={splitsBalanced ? "text-success" : "text-warning font-bold"}>
               {splitsBalanced
                 ? "Balanced"
-                : `Remaining: ${formatCurrency(round2(target - splitTotal), currency)}`}
+                : <>Remaining: <span data-money>{formatCurrency(round2(target - splitTotal), currency)}</span></>}
             </span>
           </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-panel-2">
+          {/*
+            Decorative: the line above already states the allocated amount and
+            either "Balanced" or the exact remainder, which reads better aloud
+            than a percentage. Announcing both would duplicate it, so the bar is
+            hidden from assistive tech rather than carrying a progressbar role.
+          */}
+          <div
+            aria-hidden="true"
+            className="h-1.5 w-full overflow-hidden rounded-full bg-panel-2"
+          >
             <div
               className={cn(
                 "h-full transition-all duration-200",
                 splitBarColor,
               )}
-              style={{ width: `${Math.min(100, (splitTotal / target) * 100)}%` }}
+              style={{ width: `${splitPercent}%` }}
             />
           </div>
         </div>
@@ -374,7 +384,7 @@ export default function TransactionEditor({
             <div className="mb-4">
               <p className="text-xs uppercase tracking-wider text-muted">
                 {transaction.amount < 0 ? "Money in" : "Money out"} ·{" "}
-                {formatCurrency(target, transaction.currency)}
+                <span data-money>{formatCurrency(target, transaction.currency)}</span>
               </p>
               <h2 id={`${idPrefix}title-${transaction.id}`} className="text-lg font-semibold">{transaction.merchant}</h2>
             </div>

@@ -234,7 +234,7 @@ export async function POST(request: NextRequest) {
   if (auth instanceof NextResponse) return auth;
   const { user, supabase } = auth;
 
-  const allowed = await checkRateLimit(`import-preview:${user.id}`, 10, 3600);
+  const allowed = await checkRateLimit(`import-preview:${user.id}`, 10, 3600, { failClosed: true });
   if (!allowed) {
     return NextResponse.json(
       { error: "Too many previews. Please wait a while." },

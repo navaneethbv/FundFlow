@@ -1,9 +1,10 @@
 import Image from "next/image";
 import Badge from "@/components/ui/Badge";
 import ProgressBar, { type ProgressBarTone } from "@/components/ui/ProgressBar";
+import { formatDate } from "@/lib/format-date";
 import { formatCurrency } from "@/lib/format";
 import { goalImageAlt, goalImageFor } from "@/lib/goal-templates";
-import type { FundedGoal, GoalBadge } from "@/lib/goals-v2";
+import { GOAL_BADGE_LABEL, type FundedGoal, type GoalBadge } from "@/lib/goals-v2";
 
 /**
  * A goal as an image card: illustration, progress bar, badge, and where the
@@ -17,12 +18,12 @@ import type { FundedGoal, GoalBadge } from "@/lib/goals-v2";
 // Monarch tints both On track and Completed green (a lighter tint for
 // On track) — Badge only has one green tone, so both map to "success"; the
 // label text (not just color) is what actually distinguishes them.
-const BADGE_COPY: Record<GoalBadge, { label: string; tone: "success" | "warning" | "danger" | "neutral" }> = {
-  completed: { label: "Completed", tone: "success" },
-  "on-track": { label: "On track", tone: "success" },
-  "at-risk": { label: "At risk", tone: "warning" },
-  behind: { label: "Behind", tone: "danger" },
-  "no-pace": { label: "No pace data", tone: "neutral" },
+const BADGE_TONE: Record<GoalBadge, "success" | "warning" | "danger" | "neutral"> = {
+  completed: "success",
+  "on-track": "success",
+  "at-risk": "warning",
+  behind: "danger",
+  "no-pace": "neutral",
 };
 
 const BAR_TONE: Record<GoalBadge, ProgressBarTone> = {
@@ -50,7 +51,6 @@ export default function GoalCard({
   priorityImage?: boolean;
 }>) {
   const image = goalImageFor(goal.image_slug);
-  const badge = BADGE_COPY[goal.badge];
   const target = goal.funded_amount + goal.remainingAmount;
 
   return (
@@ -74,16 +74,16 @@ export default function GoalCard({
         <div className="flex flex-wrap items-start justify-between gap-2">
           <h2 className="text-base font-semibold">{goal.name}</h2>
           <span className="flex items-center gap-1">
-            <Badge tone={badge.tone}>{badge.label}</Badge>
+            <Badge tone={BADGE_TONE[goal.badge]}>{GOAL_BADGE_LABEL[goal.badge]}</Badge>
             {menu}
           </span>
         </div>
 
         <p className="mt-3 text-2xl font-semibold tabular-nums">
-          {formatCurrency(goal.funded_amount, currency)}
+          <span data-money>{formatCurrency(goal.funded_amount, currency)}</span>
           <span className="text-sm font-normal text-muted">
             {" "}
-            of {formatCurrency(target, currency)}
+            of <span data-money>{formatCurrency(target, currency)}</span>
           </span>
         </p>
 
@@ -97,20 +97,20 @@ export default function GoalCard({
         <dl className="mt-4 space-y-1 text-sm">
           <div className="flex justify-between gap-3">
             <dt className="text-muted">Remaining</dt>
-            <dd className="tabular-nums">
+            <dd data-money className="tabular-nums">
               {formatCurrency(goal.remainingAmount, currency)}
             </dd>
           </div>
           {goal.target_date && (
             <div className="flex justify-between gap-3">
               <dt className="text-muted">Target date</dt>
-              <dd className="tabular-nums">{goal.target_date}</dd>
+              <dd className="tabular-nums">{formatDate(goal.target_date)}</dd>
             </div>
           )}
           {goal.est_monthly !== null && (
             <div className="flex justify-between gap-3">
               <dt className="text-muted">Needed each month</dt>
-              <dd className="tabular-nums">
+              <dd data-money className="tabular-nums">
                 {formatCurrency(goal.est_monthly, currency)}
               </dd>
             </div>
@@ -118,7 +118,7 @@ export default function GoalCard({
           {goal.monthly_contribution !== null && (
             <div className="flex justify-between gap-3">
               <dt className="text-muted">Planned each month</dt>
-              <dd className="tabular-nums">
+              <dd data-money className="tabular-nums">
                 {formatCurrency(goal.monthly_contribution, currency)}
               </dd>
             </div>
@@ -132,7 +132,7 @@ export default function GoalCard({
                   ? "Balance remaining"
                   : "Linked account balance"}
               </dt>
-              <dd className="tabular-nums">
+              <dd data-money className="tabular-nums">
                 {formatCurrency(goal.linkedAccountBalance, currency)}
               </dd>
             </div>
