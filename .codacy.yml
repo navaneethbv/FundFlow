@@ -3,4 +3,5 @@ exclude_paths:
   - "supabase/migrations/**"
   - "components/budget/CopyLastMonthButton.tsx"
   - "components/settings/TaxExportButton.tsx"
+  - "components/settings/AiConsentSection.tsx"
 
