@@ -25,7 +25,7 @@ import { loadGoalsPageData } from "@/lib/goals-data";
 import { loadLatestWeeklyDelivery } from "@/lib/weekly-delivery-history";
 import { toGoalSummaryItem, toLegacyGoalSummaryItem } from "@/lib/goal-summary";
 import { accountDisplayLabel } from "@/lib/account-label";
-import { dateKeyInTimezone, normalizeReportTimezone } from "@/lib/report-period";
+import { normalizeReportTimezone } from "@/lib/report-period";
 import { resolveDisplayName, greetingInTimezone } from "@/lib/greeting";
 import ScopeChips from "@/components/dashboard/ScopeChips";
 import type { DashboardPrefs } from "@/components/settings/DashboardPrefsSection";
@@ -116,7 +116,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
   const netWorth = data.netWorthSnapshot.netWorth;
   const savingsRateBasis = resolveDashboardSavingsRate({
     selectedMonth: data.selectedMonth,
-    currentMonth: new Date().toISOString().slice(0, 7),
+    currentMonth: data.today.slice(0, 7),
     monthlyIncome: data.monthlyIncome,
     monthlySpending: data.monthlySpending,
   });
@@ -205,7 +205,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
               userId={user?.id ?? ""}
               household={dashboardScope === "household"}
               month={data.selectedMonth}
-              today={dateKeyInTimezone(new Date(), profileRow?.timezone)}
+              today={data.today}
               selectedAccountId={selectedAccountId}
               selectedLedgerAccountId={selectedLedgerAccountId}
               extraParams={extraParams}

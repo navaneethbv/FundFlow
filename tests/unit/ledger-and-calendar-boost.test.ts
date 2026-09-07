@@ -2,7 +2,11 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 import { parseLedgerQuery, ledgerQueryEntries, ledgerHref } from "@/lib/ledger-query";
 import { GET as calendarGet } from "@/app/api/calendar/[token]/route";
-import * as rateLimit from "@/lib/rate-limit";
+
+const mockCheckRateLimit = vi.fn(async (...args: never[]) => args);
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: (...args: never[]) => mockCheckRateLimit(...args),
+}));
 
 describe("Ledger Query Full Branches", () => {
   it("parses ledger search params with all filter keys and invalid values", () => {
@@ -148,18 +152,19 @@ describe("Calendar Token Route Extra Branches", () => {
   });
 
   it("handles short token or rate limit exceeded", async () => {
+    mockCheckRateLimit.mockResolvedValue(true);
     const req = new NextRequest("http://localhost/api/calendar/short");
     const resShort = await calendarGet(req, { params: Promise.resolve({ token: "short" }) });
     expect(resShort.status).toBe(404);
 
-    vi.spyOn(rateLimit, "checkRateLimit").mockResolvedValue(false);
+    mockCheckRateLimit.mockResolvedValue(false);
     const validToken = "a".repeat(32);
     const resRateLimit = await calendarGet(req, { params: Promise.resolve({ token: validToken }) });
     expect(resRateLimit.status).toBe(429);
   });
 
   it("renders calendar feed with quarterly, yearly, and biweekly recurring streams", async () => {
-    vi.spyOn(rateLimit, "checkRateLimit").mockResolvedValue(true);
+    mockCheckRateLimit.mockResolvedValue(true);
 
     const validToken = "b".repeat(32);
     const service = await import("@/lib/supabase/service");

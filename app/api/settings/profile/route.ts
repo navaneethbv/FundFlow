@@ -4,6 +4,7 @@ import { getClientIp, writeAudit } from "@/lib/audit";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { validateProfilePatch } from "@/lib/profile";
+import { resolveViewerToday } from "@/lib/report-period";
 
 /** Gated the same as the Settings UI: these columns don't exist until
  *  20260730250000_profile_and_tags.sql is applied. */
@@ -29,7 +30,8 @@ async function patchProfile(
   body: { kind?: unknown },
   request: NextRequest,
 ) {
-  const today = new Date().toISOString().slice(0, 10);
+  // Birthday "not in the future" is judged in the profile timezone (M-11).
+  const today = await resolveViewerToday(supabase, userId);
   const result = validateProfilePatch(body, today);
   if (!result.ok) return badRequest(result.error);
   const update: Record<string, string | null> = {};

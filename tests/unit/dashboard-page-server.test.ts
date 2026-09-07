@@ -114,6 +114,8 @@ const { mockDashboardData } = vi.hoisted(() => ({
     netWorthSnapshot: { assets: 401000, liabilities: 0, netWorth: 401000 },
     availableMonths: ["2026-08", "2026-09"],
     selectedMonth: "2026-09",
+    // The load day this snapshot was keyed on (M-11).
+    today: "2026-09-06",
     monthlyIncome: [
       { month: "2026-08", amount: 5000 },
       { month: "2026-09", amount: 14.34 },

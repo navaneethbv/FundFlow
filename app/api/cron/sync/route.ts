@@ -132,19 +132,22 @@ async function syncUser(
 ): Promise<void> {
   await syncAllForUser(userId);
   await runOptionalSync("cron.sync.token-rotation", () => rotateStaleItemTokens(userId));
+  // One clock per user for the whole run (M-11): daily snapshots, the
+  // net-worth month key, recurring inference, and notifications all share
+  // the viewer's profile-timezone day instead of each reading UTC.
+  let today = dateKeyInTimezone(new Date(), null);
+  try {
+    const { data: profile, error: profileError } = await service
+      .from("profiles")
+      .select("timezone")
+      .eq("id", userId)
+      .maybeSingle();
+    if (profileError) throw profileError;
+    today = dateKeyInTimezone(new Date(), profile?.timezone);
+  } catch (profileError) {
+    logError("cron.sync.profile-timezone", profileError);
+  }
   if (isFeatureEnabled("investmentsPage")) {
-    let today = dateKeyInTimezone(new Date(), null);
-    try {
-      const { data: profile, error: profileError } = await service
-        .from("profiles")
-        .select("timezone")
-        .eq("id", userId)
-        .maybeSingle();
-      if (profileError) throw profileError;
-      today = dateKeyInTimezone(new Date(), profile?.timezone);
-    } catch (profileError) {
-      logError("cron.sync.profile-timezone", profileError);
-    }
     await runOptionalSync("cron.sync.investments", () =>
       syncInvestmentsForUser(userId, today),
     );
@@ -166,11 +169,11 @@ async function syncUser(
       stepFailures.push(`${label}: ${safeSyncError(error)}`);
     }
   };
-  await runUserStep("cron.sync.snapshots", () => writeDailyAccountSnapshots(userId));
-  await runUserStep("cron.sync.recurring", () => refreshRecurringForUser(userId));
-  await runUserStep("cron.sync.net-worth", () => writeNetWorthSnapshot(userId));
+  await runUserStep("cron.sync.snapshots", () => writeDailyAccountSnapshots(userId, today));
+  await runUserStep("cron.sync.recurring", () => refreshRecurringForUser(userId, today));
+  await runUserStep("cron.sync.net-worth", () => writeNetWorthSnapshot(userId, today));
   await runUserStep("cron.sync.aprs", () => syncCardAprsForUser(userId));
-  await runUserStep("cron.sync.notifications", () => processNotificationsForUser(userId));
+  await runUserStep("cron.sync.notifications", () => processNotificationsForUser(userId, today));
   await runUserStep("cron.sync.digest", () => sendDailyDigest(service, userId));
   if (stepFailures.length > 0) throw new Error(stepFailures.join("; "));
 }

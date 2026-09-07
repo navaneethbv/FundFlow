@@ -26,7 +26,7 @@ export default function WidgetShell({
   children,
 }: Readonly<{
   title: string;
-  /** Inline muted value shown next to the title, e.g. "$13,928.05 this month". */
+  /** Inline muted value shown next to the title, e.g. "$13,928.05 this month". Always a money figure, hence the blur hook. */
   value?: string;
   action?: React.ReactNode;
   error?: string | null;
@@ -45,7 +45,7 @@ export default function WidgetShell({
       title={
         <span className="flex flex-wrap items-baseline gap-1.5">
           <span>{title}</span>
-          {value && <span className="text-sm font-normal text-muted">{value}</span>}
+          {value && <span data-money className="text-sm font-normal text-muted">{value}</span>}
         </span>
       }
       action={action}

@@ -267,11 +267,12 @@ export async function createNotification(
 /**
  * Runs planning checks for the user and generates notifications for budget exceed,
  * low cash forecast, goal reached, and broken bank connections.
+ *
+ * `today` is the viewer's calendar day in their profile timezone (M-11).
  */
-export async function processNotificationsForUser(userId: string) {
+export async function processNotificationsForUser(userId: string, today = new Date().toISOString().slice(0, 10)) {
   const supabase = createServiceClient();
-  const currentMonth = new Date().toISOString().slice(0, 7);
-  const today = new Date().toISOString().slice(0, 10);
+  const currentMonth = today.slice(0, 7);
 
   const tryNotify: TryNotify = (type, details, subjectKey) =>
     createNotification(userId, type, details, subjectKey, "exact").catch((error) =>

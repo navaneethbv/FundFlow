@@ -549,7 +549,8 @@ describe("lib/plaid-service", () => {
       .fn()
       .mockResolvedValue({ data: [{ id: "lt-1" }], error: null });
     const updateIs = vi.fn().mockReturnValue({ select: updateSelect });
-    const updateEq = vi.fn().mockReturnValue({ is: updateIs });
+    const updateEqUser = vi.fn().mockReturnValue({ is: updateIs });
+    const updateEq = vi.fn().mockReturnValue({ eq: updateEqUser });
     const update = vi.fn().mockReturnValue({ eq: updateEq });
     const maybeSingle = vi.fn().mockResolvedValue({
       data: { id: "lt-1", expires_at: null, consumed_at: null },
@@ -600,7 +601,8 @@ describe("lib/plaid-service", () => {
     });
     const updateSelect = vi.fn().mockResolvedValue({ data: [], error: null });
     const updateIs = vi.fn().mockReturnValue({ select: updateSelect });
-    const updateEq = vi.fn().mockReturnValue({ is: updateIs });
+    const updateEqUser = vi.fn().mockReturnValue({ is: updateIs });
+    const updateEq = vi.fn().mockReturnValue({ eq: updateEqUser });
     const update = vi.fn().mockReturnValue({ eq: updateEq });
     const eqHash = vi.fn().mockReturnValue({ maybeSingle });
     const eqUser = vi.fn().mockReturnValue({ eq: eqHash });
@@ -637,7 +639,8 @@ describe("lib/plaid-service", () => {
       .fn()
       .mockResolvedValue({ data: [{ id: "lt-1" }], error: null });
     const updateIs = vi.fn().mockReturnValue({ select: updateSelect });
-    const updateEq = vi.fn().mockReturnValue({ is: updateIs });
+    const updateEqUser = vi.fn().mockReturnValue({ is: updateIs });
+    const updateEq = vi.fn().mockReturnValue({ eq: updateEqUser });
     const update = vi.fn().mockReturnValue({ eq: updateEq });
     const eqHash = vi.fn().mockReturnValue({ maybeSingle });
     const eqUser = vi.fn().mockReturnValue({ eq: eqHash });
@@ -667,7 +670,8 @@ describe("lib/plaid-service", () => {
       .fn()
       .mockResolvedValue({ data: null, error: new Error("Consume error") });
     const updateIs = vi.fn().mockReturnValue({ select: updateSelect });
-    const updateEq = vi.fn().mockReturnValue({ is: updateIs });
+    const updateEqUser = vi.fn().mockReturnValue({ is: updateIs });
+    const updateEq = vi.fn().mockReturnValue({ eq: updateEqUser });
     const update = vi.fn().mockReturnValue({ eq: updateEq });
     const eqHash = vi.fn().mockReturnValue({ maybeSingle });
     const eqUser = vi.fn().mockReturnValue({ eq: eqHash });

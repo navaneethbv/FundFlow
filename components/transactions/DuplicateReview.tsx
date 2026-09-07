@@ -193,7 +193,7 @@ export default function DuplicateReview({
                   />
                   <span>
                     <span className="block font-semibold">{transaction.merchant}</span>
-                    <span className="block text-xs text-muted">
+                    <span data-money className="block text-xs text-muted">
                       {transaction.accountName} · {transaction.date} · {formatCurrency(transaction.amount)}
                     </span>
                     <span className="mt-1 block text-xs font-semibold text-accent">Keep this transaction</span>

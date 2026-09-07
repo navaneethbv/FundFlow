@@ -60,10 +60,15 @@ describe("coverage-boost-plaid-n2", () => {
   });
 
   describe("GET /api/calendar/[token]", () => {
+    // The feed keys its not-found limiter on client IP (S-6), so the
+    // request stub must carry headers.
     const feed = (token: string) =>
-      calendarFeedGet({} as Request, {
-        params: Promise.resolve({ token }),
-      });
+      calendarFeedGet(
+        { headers: { get: () => null } } as unknown as Request,
+        {
+          params: Promise.resolve({ token }),
+        },
+      );
 
     it("returns 404 for a token shorter than 20 chars", async () => {
       const res = await feed("short");

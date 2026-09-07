@@ -33,7 +33,7 @@ import {
   type SavingsRatePoint,
 } from "@/lib/insights";
 import { aggregateSpendWithSplits, validateSplits } from "@/lib/transaction-quality";
-import { localMonthKey } from "@/lib/format-date";
+import { localDateKey } from "@/lib/format-date";
 import { normalizeExternalDisplayText } from "@/lib/external-display-text";
 import {
   fromTransactionRow,
@@ -119,6 +119,8 @@ export interface DashboardData {
   }[];
   availableMonths: string[];
   selectedMonth: string;
+  /** Viewer's calendar day (YYYY-MM-DD) this load was keyed on (M-11). */
+  today: string;
   /** Completion time of the newest successful sync job, or null if none. */
   lastSyncAt: string | null;
   /** Whole minutes since lastSyncAt (null when never synced). */
@@ -652,6 +654,14 @@ export interface DashboardOptions {
    * Defaults to true.
    */
   includeBalanceSheet?: boolean;
+  /**
+   * Viewer's calendar day (YYYY-MM-DD) in their profile timezone (M-11).
+   * The open-month key, "current month" day counts, and the live net-worth
+   * point all derive from this instead of the server clock, so an evening
+   * session west of UTC no longer straddles two months. Defaults to the
+   * server-local day when the caller has no profile timezone handy.
+   */
+  today?: string;
 }
 
 interface DashboardOverrideRow {
@@ -791,11 +801,11 @@ export async function getDashboardData(
   userId?: string,
   options?: DashboardOptions,
 ): Promise<DashboardData> {
-  const now = new Date();
-  // Local-day anchor: toISOString() is UTC and can sit in a different month
-  // near a boundary for users east of UTC, disagreeing with the local `today`
-  // used below for isCurrentMonth.
-  const currentMonth = localMonthKey(now);
+  // One clock for the whole load (M-11): the viewer's profile-timezone day
+  // when the caller knows it, else the server-local day. Every month key,
+  // day count, and the live net-worth point below derives from `today`.
+  const today = options?.today ?? localDateKey(new Date());
+  const currentMonth = today.slice(0, 7);
 
   // Explicit user scoping. With the user-scoped client this is redundant (RLS
   // already limits rows), but this function is also called under the service
@@ -1224,8 +1234,10 @@ export async function getDashboardData(
   // 1. Total Budget Limit calculation
   const totalBudget = allBudgets.reduce((acc, b) => acc + b.monthly_limit, 0);
 
-  const today = new Date();
-  const isCurrentMonth = today.getFullYear() === activeYear && today.getMonth() === activeMonthIndex;
+  // Day counts from the same `today` as the month key (M-11): parsing the
+  // YYYY-MM-DD string keeps every comparison in calendar space.
+  const todayDay = Number(today.slice(8, 10));
+  const isCurrentMonth = today.slice(0, 7) === activeMonth;
   const spendMetrics = buildDashboardSpendMetrics({
     spendTxns,
     allTxnsRaw,
@@ -1233,7 +1245,7 @@ export async function getDashboardData(
     allItems,
     activeMonth,
     lastMonthTargetDay:
-      isCurrentMonth ? today.getDate() : new Date(activeYear, activeMonthIndex + 1, 0).getDate(),
+      isCurrentMonth ? todayDay : new Date(activeYear, activeMonthIndex + 1, 0).getDate(),
     activeYear,
     activeMonthIndex,
   });
@@ -1258,7 +1270,7 @@ export async function getDashboardData(
   );
 
   const activeDay =
-    isCurrentMonth ? today.getDate() : new Date(activeYear, activeMonthIndex + 1, 0).getDate();
+    isCurrentMonth ? todayDay : new Date(activeYear, activeMonthIndex + 1, 0).getDate();
   const activeDaysInMonth = new Date(activeYear, activeMonthIndex + 1, 0).getDate();
   // Income-group budgets are not expense envelopes (M-12): the groups
   // builder drops them, so the envelopes must never contain them either.
@@ -1544,6 +1556,7 @@ export async function getDashboardData(
     incomeStreams,
     availableMonths,
     selectedMonth: activeMonth,
+    today,
     lastSyncAt,
     lastSyncAgoMinutes: lastSyncAt
       ? Math.max(0, Math.floor((Date.now() - new Date(lastSyncAt).getTime()) / 60000))

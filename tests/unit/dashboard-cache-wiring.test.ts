@@ -62,23 +62,27 @@ import { dashboardScopeKey } from "@/lib/dashboard-cache";
 
 describe("dashboardScopeKey", () => {
   it("encodes every drill dimension", () => {
-    // The trailing dimension is the household scope (4.2) and balance sheet inclusion ("bs" default).
-    expect(dashboardScopeKey(undefined, undefined)).toBe("all:default:all:-:-:-:mine:bs");
+    // The trailing dimensions are the household scope (4.2), balance sheet
+    // inclusion ("bs" default), and the viewer day (M-11).
+    expect(dashboardScopeKey(undefined, undefined)).toBe("all:default:all:-:-:-:mine:bs:server-day");
     expect(
       dashboardScopeKey("acct-1", "2026-07", {
         itemId: "item-1",
         drill: { category: "FOOD_AND_DRINK", sub: "FOOD_AND_DRINK_COFFEE" },
       }),
-    ).toBe("acct-1:2026-07:item-1:FOOD_AND_DRINK:FOOD_AND_DRINK_COFFEE:-:mine:bs");
+    ).toBe("acct-1:2026-07:item-1:FOOD_AND_DRINK:FOOD_AND_DRINK_COFFEE:-:mine:bs:server-day");
     expect(dashboardScopeKey(undefined, "2026-07", { drill: { merchant: "Netflix" } })).toBe(
-      "all:2026-07:all:-:-:Netflix:mine:bs",
+      "all:2026-07:all:-:-:Netflix:mine:bs:server-day",
     );
     expect(
       dashboardScopeKey(undefined, undefined, { scope: "household" }),
-    ).toBe("all:default:all:-:-:-:household:bs");
+    ).toBe("all:default:all:-:-:-:household:bs:server-day");
     expect(
       dashboardScopeKey(undefined, undefined, { includeBalanceSheet: false }),
-    ).toBe("all:default:all:-:-:-:mine:no-bs");
+    ).toBe("all:default:all:-:-:-:mine:no-bs:server-day");
+    expect(dashboardScopeKey(undefined, undefined, { today: "2026-09-30" })).toBe(
+      "all:default:all:-:-:-:mine:bs:2026-09-30",
+    );
   });
 });
 

@@ -280,7 +280,7 @@ export async function refreshRecurringForItem(item: PlaidItemRow): Promise<numbe
 }
 
 /** Refresh recurring streams for all active items of a user. */
-export async function refreshRecurringForUser(userId: string): Promise<RecurringRefreshResult> {
+export async function refreshRecurringForUser(userId: string, today = new Date().toISOString().slice(0, 10)): Promise<RecurringRefreshResult> {
   const items = await listActiveItems(userId);
   let plaid = 0;
   for (const item of items) {
@@ -292,7 +292,7 @@ export async function refreshRecurringForUser(userId: string): Promise<Recurring
   }
   let inferred = EMPTY_INFERRED_REFRESH;
   try {
-    inferred = await refreshInferredRecurringForUser(userId);
+    inferred = await refreshInferredRecurringForUser(userId, { today });
   } catch (error) {
     logError("recurring.inference", error);
   }

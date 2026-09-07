@@ -141,7 +141,7 @@ describe("GET /api/cron/sync", () => {
 
     const res = await GET(request);
     expect(res.status).toBe(200);
-    expect(mockRefreshRecurringForUser).toHaveBeenCalledWith("u1");
+    expect(mockRefreshRecurringForUser).toHaveBeenCalledWith("u1", expect.any(String));
     expect(mockRefreshRecurringForUser.mock.invocationCallOrder[0]).toBeLessThan(
       mockProcessNotificationsForUser.mock.invocationCallOrder[0],
     );
@@ -198,7 +198,7 @@ describe("GET /api/cron/sync", () => {
     const res = await GET(request);
     expect(res.status).toBe(200);
     expect(mockSyncAllForUser).toHaveBeenCalledWith("u1");
-    expect(mockWriteDailyAccountSnapshots).toHaveBeenCalledWith("u1");
+    expect(mockWriteDailyAccountSnapshots).toHaveBeenCalledWith("u1", expect.any(String));
     expect(mockSendDailyDigestEmail).toHaveBeenCalledWith(
       "u1@test.com",
       [{ type: "low_cash_forecast", title: "Low Cash", body: "Warning" }],
@@ -236,7 +236,7 @@ describe("GET /api/cron/sync", () => {
     expect(res.status).toBe(200);
     // Transaction sync, snapshots, and the digest pipeline all still ran.
     expect(mockSyncAllForUser).toHaveBeenCalledWith("u1");
-    expect(mockWriteDailyAccountSnapshots).toHaveBeenCalledWith("u1");
+    expect(mockWriteDailyAccountSnapshots).toHaveBeenCalledWith("u1", expect.any(String));
     expect(mockAlertCronFailure).not.toHaveBeenCalled();
     expect(mockLogError).toHaveBeenCalledWith("cron.sync.investments", expect.any(Error));
   });

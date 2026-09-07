@@ -129,4 +129,30 @@ describe("writeNetWorthSnapshot", () => {
 
     await expect(writeNetWorthSnapshot("user-3")).rejects.toThrow("DB Error");
   });
+
+  it("keys the snapshot month from the caller's day, not the server clock", async () => {
+    const upsert = vi.fn().mockReturnThis();
+    mockSupabase.from.mockImplementation((table: string) => {
+      if (table === "net_worth_snapshots") {
+        return {
+          upsert,
+          select: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({ data: { id: "s" }, error: null }),
+        };
+      }
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ data: [] }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      };
+    });
+
+    // M-11: a viewer whose profile day is still September stores September,
+    // even when the server has crossed into October.
+    await writeNetWorthSnapshot("user-1", "2026-09-30");
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ snapshot_month: "2026-09-01" }),
+      expect.anything(),
+    );
+  });
 });

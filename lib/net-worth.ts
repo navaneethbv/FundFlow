@@ -10,10 +10,14 @@ import {
 /**
  * Computes the net worth (assets and liabilities) for a user and upserts
  * a snapshot record into the `net_worth_snapshots` table for the current month.
+ *
+ * `today` is the viewer's calendar day in their profile timezone (M-11): the
+ * stored row and the dashboard's live point must key the same month, or the
+ * history splices a foreign total next to own-only months.
  */
-export async function writeNetWorthSnapshot(userId: string) {
+export async function writeNetWorthSnapshot(userId: string, today = new Date().toISOString().slice(0, 10)) {
   const supabase = createServiceClient();
-  const currentMonthDate = `${new Date().toISOString().slice(0, 7)}-01`; // YYYY-MM-01
+  const currentMonthDate = `${today.slice(0, 7)}-01`; // YYYY-MM-01
 
   // 1. Fetch Plaid accounts
   const { data: plaidAccounts, error: plaidError } = await supabase

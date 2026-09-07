@@ -79,12 +79,15 @@ function tableStub(overrides: Record<string, unknown> = {}) {
     error: null,
   });
   const holdingsUpsert = vi.fn().mockReturnValue({ select: holdingsUpsertSelect });
-  const holdingsSelectEqEq = vi.fn().mockResolvedValue({ data: [{ id: "holding-db-1" }], error: null });
-  const holdingsSelectEq1 = vi.fn().mockReturnValue({ eq: holdingsSelectEqEq });
-  const holdingsSelectIn = vi.fn().mockReturnValue({ eq: holdingsSelectEq1 });
-  const holdingsSelect = vi.fn().mockReturnValue({ in: holdingsSelectIn });
+  const holdingsSelectTail = vi.fn().mockResolvedValue({ data: [{ id: "holding-db-1" }], error: null });
+  const holdingsSelectEqSource = vi.fn().mockReturnValue({ eq: holdingsSelectTail });
+  const holdingsSelectIn = vi.fn().mockReturnValue({ eq: holdingsSelectEqSource });
+  const holdingsSelectEqUser = vi.fn().mockReturnValue({ in: holdingsSelectIn });
+  const holdingsSelect = vi.fn().mockReturnValue({ eq: holdingsSelectEqUser });
   const holdingsUpdateIn = vi.fn().mockResolvedValue({ error: null });
-  const holdingsUpdate = vi.fn().mockReturnValue({ in: holdingsUpdateIn });
+  const holdingsUpdate = vi.fn().mockReturnValue({
+    eq: vi.fn().mockReturnValue({ in: holdingsUpdateIn }),
+  });
 
   const snapshotsUpsert = vi.fn().mockResolvedValue({ error: null });
 
@@ -182,14 +185,18 @@ describe("syncInvestmentsForItem", () => {
       data: { accounts: [{ account_id: "plaid-acc-1" }], holdings: [], securities: [] },
     });
     const holdingsUpdateIn = vi.fn().mockResolvedValue({ error: null });
-    const holdingsUpdate = vi.fn().mockReturnValue({ in: holdingsUpdateIn });
+    const holdingsUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({ in: holdingsUpdateIn }),
+    });
     const { tables } = tableStub({
       holdings: {
         upsert: vi.fn().mockReturnValue({ select: vi.fn().mockResolvedValue({ data: [], error: null }) }),
         select: vi.fn().mockReturnValue({
-          in: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({ data: [{ id: "stale-holding" }], error: null }),
+          eq: vi.fn().mockReturnValue({
+            in: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ data: [{ id: "stale-holding" }], error: null }),
+              }),
             }),
           }),
         }),
@@ -403,14 +410,16 @@ describe("syncInvestmentsForItem", () => {
     });
     const holdingsUpsert = vi.fn().mockReturnValue({ select: holdingsUpsertSelect });
     const holdingsSelect = vi.fn().mockReturnValue({
-      in: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+      eq: vi.fn().mockReturnValue({
+        in: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+          }),
         }),
       }),
     });
     const holdingsUpdate = vi.fn().mockReturnValue({
-      in: vi.fn().mockResolvedValue({ error: null }),
+      eq: vi.fn().mockReturnValue({ in: vi.fn().mockResolvedValue({ error: null }) }),
     });
     const snapshotsUpsert = vi.fn().mockResolvedValue({ error: null });
     const { tables } = tableStub({
@@ -482,13 +491,17 @@ describe("syncInvestmentsForItem", () => {
       holdings: {
         upsert: holdingsUpsert,
         select: vi.fn().mockReturnValue({
-          in: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+          eq: vi.fn().mockReturnValue({
+            in: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+              }),
             }),
           }),
         }),
-        update: vi.fn().mockReturnValue({ in: vi.fn().mockResolvedValue({ error: null }) }),
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({ in: vi.fn().mockResolvedValue({ error: null }) }),
+        }),
       },
     });
     mockServiceClient.from.mockImplementation((table: string) => {
@@ -530,10 +543,11 @@ describe("syncInvestmentsForItem", () => {
     mockInvestmentsHoldingsGet.mockResolvedValueOnce({
       data: { accounts: [{ account_id: "plaid-acc-1" }], holdings: [], securities: [] },
     });
-    const holdingsSelectEqEq = vi.fn().mockResolvedValue({ data: null, error: new Error("Existing error") });
-    const holdingsSelectEq1 = vi.fn().mockReturnValue({ eq: holdingsSelectEqEq });
-    const holdingsSelectIn = vi.fn().mockReturnValue({ eq: holdingsSelectEq1 });
-    const holdingsSelect = vi.fn().mockReturnValue({ in: holdingsSelectIn });
+    const holdingsSelectTail = vi.fn().mockResolvedValue({ data: null, error: new Error("Existing error") });
+    const holdingsSelectEqSource = vi.fn().mockReturnValue({ eq: holdingsSelectTail });
+    const holdingsSelectIn = vi.fn().mockReturnValue({ eq: holdingsSelectEqSource });
+    const holdingsSelectEqUser = vi.fn().mockReturnValue({ in: holdingsSelectIn });
+    const holdingsSelect = vi.fn().mockReturnValue({ eq: holdingsSelectEqUser });
     const { tables } = tableStub({ holdings: { select: holdingsSelect } });
     mockServiceClient.from.mockImplementation((table: string) => {
       if (!(table in tables)) throw new Error(`Unexpected table ${table}`);
@@ -547,12 +561,15 @@ describe("syncInvestmentsForItem", () => {
     mockInvestmentsHoldingsGet.mockResolvedValueOnce({
       data: { accounts: [{ account_id: "plaid-acc-1" }], holdings: [], securities: [] },
     });
-    const holdingsSelectEqEq = vi.fn().mockResolvedValue({ data: null, error: null });
-    const holdingsSelectEq1 = vi.fn().mockReturnValue({ eq: holdingsSelectEqEq });
-    const holdingsSelectIn = vi.fn().mockReturnValue({ eq: holdingsSelectEq1 });
-    const holdingsSelect = vi.fn().mockReturnValue({ in: holdingsSelectIn });
+    const holdingsSelectTail = vi.fn().mockResolvedValue({ data: null, error: null });
+    const holdingsSelectEqSource = vi.fn().mockReturnValue({ eq: holdingsSelectTail });
+    const holdingsSelectIn = vi.fn().mockReturnValue({ eq: holdingsSelectEqSource });
+    const holdingsSelectEqUser = vi.fn().mockReturnValue({ in: holdingsSelectIn });
+    const holdingsSelect = vi.fn().mockReturnValue({ eq: holdingsSelectEqUser });
     const holdingsUpdateIn = vi.fn();
-    const holdingsUpdate = vi.fn().mockReturnValue({ in: holdingsUpdateIn });
+    const holdingsUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({ in: holdingsUpdateIn }),
+    });
     const { tables } = tableStub({
       holdings: { select: holdingsSelect, update: holdingsUpdate },
     });
@@ -572,12 +589,15 @@ describe("syncInvestmentsForItem", () => {
     });
     const holdingsUpsertSelect = vi.fn().mockResolvedValue({ data: [], error: null });
     const holdingsUpsert = vi.fn().mockReturnValue({ select: holdingsUpsertSelect });
-    const holdingsSelectEqEq = vi.fn().mockResolvedValue({ data: [{ id: "stale-holding" }], error: null });
-    const holdingsSelectEq1 = vi.fn().mockReturnValue({ eq: holdingsSelectEqEq });
-    const holdingsSelectIn = vi.fn().mockReturnValue({ eq: holdingsSelectEq1 });
-    const holdingsSelect = vi.fn().mockReturnValue({ in: holdingsSelectIn });
+    const holdingsSelectTail = vi.fn().mockResolvedValue({ data: [{ id: "stale-holding" }], error: null });
+    const holdingsSelectEqSource = vi.fn().mockReturnValue({ eq: holdingsSelectTail });
+    const holdingsSelectIn = vi.fn().mockReturnValue({ eq: holdingsSelectEqSource });
+    const holdingsSelectEqUser = vi.fn().mockReturnValue({ in: holdingsSelectIn });
+    const holdingsSelect = vi.fn().mockReturnValue({ eq: holdingsSelectEqUser });
     const holdingsUpdateIn = vi.fn().mockResolvedValue({ error: new Error("Deactivate error") });
-    const holdingsUpdate = vi.fn().mockReturnValue({ in: holdingsUpdateIn });
+    const holdingsUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({ in: holdingsUpdateIn }),
+    });
     const { tables } = tableStub({
       holdings: { upsert: holdingsUpsert, select: holdingsSelect, update: holdingsUpdate },
     });
@@ -767,7 +787,9 @@ describe("syncInvestmentTransactionsForItem", () => {
     });
     const upsert = vi.fn().mockResolvedValue({ error: null });
     const updateIn = vi.fn().mockResolvedValue({ error: null });
-    const update = vi.fn().mockReturnValue({ in: updateIn });
+    const update = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({ in: updateIn }),
+    });
     mockServiceClient.from.mockImplementation((table: string) => {
       if (table === "accounts") return { select: () => accountsSelectQuery };
       if (table === "securities") return { select: () => ({ in: vi.fn().mockResolvedValue({ data: [], error: null }) }) };
@@ -1018,7 +1040,9 @@ describe("syncInvestmentTransactionsForItem", () => {
     const securitiesSelectIn = vi.fn().mockResolvedValue({ data: null, error: null });
     const upsert = vi.fn().mockResolvedValue({ error: null });
     const updateIn = vi.fn().mockResolvedValue({ error: new Error("Cancel error") });
-    const update = vi.fn().mockReturnValue({ in: updateIn });
+    const update = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({ in: updateIn }),
+    });
     mockServiceClient.from.mockImplementation((table: string) => {
       if (table === "accounts") return { select: () => accountsSelectQuery };
       if (table === "securities") return { select: () => ({ in: securitiesSelectIn }) };

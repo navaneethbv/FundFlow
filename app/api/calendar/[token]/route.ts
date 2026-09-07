@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { buildBillsCalendar, type CalendarBill } from "@/lib/ical";
 import { errorResponse } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { resolveViewerToday } from "@/lib/report-period";
 import { writeAudit } from "@/lib/audit";
 
 function normalizeFrequency(
@@ -25,23 +26,21 @@ function normalizeFrequency(
  * scoped to the token row's user_id explicitly.
  */
 export async function GET(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ token: string }> },
 ) {
   try {
-    const clientIp =
-      request.headers.get("x-real-ip") ||
-      request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
-      "anonymous";
-
     const { token } = await params;
     if (!token || token.length < 20) {
-      if (!(await checkRateLimit(`calendar-feed-notfound:${clientIp}`, 60, 3600))) {
-        return NextResponse.json({ error: "Too many requests" }, { status: 429 });
-      }
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     const tokenHash = createHash("sha256").update(token).digest("hex");
+
+    // The capability token is the only credential, so the feed is rate-limited
+    // by token to blunt brute-force / token-harvesting scans.
+    if (!(await checkRateLimit(`calendar-feed:${tokenHash}`, 60, 3600))) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
 
     const service = createServiceClient();
     const { data: row, error: tokenError } = await service
@@ -53,16 +52,7 @@ export async function GET(
       .maybeSingle();
     if (tokenError) throw tokenError;
     if (!row) {
-      // Key the not-found path on client IP to protect against unauthenticated write amplification
-      if (!(await checkRateLimit(`calendar-feed-notfound:${clientIp}`, 60, 3600))) {
-        return NextResponse.json({ error: "Too many requests" }, { status: 429 });
-      }
       return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
-    // Once token is resolved, rate limit per valid capability token
-    if (!(await checkRateLimit(`calendar-feed:${tokenHash}`, 60, 3600))) {
-      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
 
     const { data: streams, error: streamsError } = await service
@@ -77,7 +67,9 @@ export async function GET(
       .or("status.is.null,status.neq.TOMBSTONED");
     if (streamsError) throw streamsError;
 
-    const today = new Date().toISOString().slice(0, 10);
+    // The anchor month follows the subscriber's profile timezone (M-11), not
+    // UTC: near a month boundary UTC can already be next month for them.
+    const today = await resolveViewerToday(service, row.user_id as string);
     const anchor = `${today.slice(0, 7)}-15`;
     const bills: CalendarBill[] = (streams ?? []).map((stream) => ({
       id: stream.id as string,

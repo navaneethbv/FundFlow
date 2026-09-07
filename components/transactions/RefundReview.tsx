@@ -80,7 +80,7 @@ export default function RefundReview() {
         >
           <span>
             <span className="block font-semibold">{pair.merchant}</span>
-            <span className="block text-xs text-muted">
+            <span data-money className="block text-xs text-muted">
               Charged {pair.charge_date}, refunded {pair.refund_date} · {formatCurrency(pair.amount)}
             </span>
           </span>
