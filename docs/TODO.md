@@ -26,7 +26,7 @@ Still open from that review:
 State of `main` encompasses comprehensive review remediation (PR #153 `55bf767`), transfer linking follow-up (PR #154 `0f11da0`), bulk transfer review action (PR #155 `d2798f3`), and savings-rate context alignment (PR #156 `262c420`).
 
 ### Deployment prerequisite
-The linked migration ledger is maintained solely in this section: `20260904120000`, `20260905100000`, `20260905110000`, and `20260905120000` remain local-only until applied to remote. Older versions `20260902220000`, `20260903010000`, and `20260904000000` require content-based reconciliation. Migration `20260905130000` is recorded as applied remotely.
+The linked migration ledger is maintained solely in this section (verified live via `supabase migration list --linked` on 2026-09-07): `20260904120000`, `20260905100000`, `20260905110000`, `20260905120000`, `20260906140000` (public-role policy gate), and `20260906150000` (refund-link RPC) remain local-only until applied to remote. Older versions `20260902220000`, `20260903010000`, and `20260904000000` require content-based reconciliation. Migration `20260905130000` is recorded as applied remotely.
 
 ### Merged into main
 - **PR #153 (Comprehensive remediation):** Merged as `55bf767`.

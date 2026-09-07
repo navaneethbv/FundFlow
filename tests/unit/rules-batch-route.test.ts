@@ -409,3 +409,62 @@ describe("POST /api/rules/batch", () => {
   });
 });
 
+
+describe("POST /api/rules/batch read failures", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function failingDb(table: string, error: unknown) {
+    const failure = { data: null, error };
+    return {
+      from: vi.fn((t: string) => {
+        if (t === table) {
+          const builder: Record<string, unknown> = {};
+          for (const m of ["select", "eq", "order", "limit", "in"]) {
+            builder[m] = () => builder;
+          }
+          builder.then = (resolve: (v: unknown) => unknown) => resolve(failure);
+          return builder;
+        }
+        return createMockBatchDb().from(t);
+      }),
+    };
+  }
+
+  it("returns 500 when the rules read fails", async () => {
+    mockRequireUser.mockResolvedValueOnce({
+      user: { id: "u-1" },
+      supabase: failingDb("merchant_rules", { message: "rules down" }),
+    });
+    const res = await POST(createBatchRequest({ dryRun: true }));
+    expect(res.status).toBe(500);
+  });
+
+  it("returns 500 when the transactions read fails", async () => {
+    mockRequireUser.mockResolvedValueOnce({
+      user: { id: "u-1" },
+      supabase: failingDb("transactions", { message: "txns down" }),
+    });
+    const res = await POST(createBatchRequest({ dryRun: true }));
+    expect(res.status).toBe(500);
+  });
+
+  it("returns 500 when the annotations read fails", async () => {
+    mockRequireUser.mockResolvedValueOnce({
+      user: { id: "u-1" },
+      supabase: failingDb("transaction_annotations", { message: "annotations down" }),
+    });
+    const res = await POST(createBatchRequest({ dryRun: true }));
+    expect(res.status).toBe(500);
+  });
+
+  it("short-circuits with zero counts when no rules are enabled", async () => {
+    const db = createMockBatchDb({ rules: [] });
+    mockRequireUser.mockResolvedValueOnce({ user: { id: "u-1" }, supabase: db });
+    const res = await POST(createBatchRequest({ dryRun: true }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ success: true, totalEvaluated: 0, matchedCount: 0 });
+  });
+});

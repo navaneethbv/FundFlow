@@ -223,6 +223,12 @@ describe("A-5 paged dashboard reads", () => {
         if (table === "transactions") {
           return resolve({ data: rows.slice(from, to + 1), error: null });
         }
+        if (table === "linked_transfers") {
+          return resolve({
+            data: [{ out_transaction_id: "txn-0", in_transaction_id: "txn-1" }],
+            error: null,
+          });
+        }
         if (table === "accounts") {
           return resolve({
             data: [{ id: "acc-1", name: "Checking", type: "depository", current_balance: 5000, plaid_item_id: "item-1" }],
@@ -240,7 +246,9 @@ describe("A-5 paged dashboard reads", () => {
       "user-1",
     );
     const food = data.categoryBreakdown.find((row) => row.category === "FOOD_AND_DRINK");
-    expect(food?.amount).toBe(1200);
+    // 1,200 rows paged in full, minus the two seeded as a linked transfer
+    // pair (which also exercises the transfer-row mapping).
+    expect(food?.amount).toBe(1198);
   });
 
   it("throws instead of rendering zeros when a Stage-1 read fails", async () => {

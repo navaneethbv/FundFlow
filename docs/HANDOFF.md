@@ -1,6 +1,19 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-09-06. Read this first to resume.
+Last updated: 2026-09-07. Read this first to resume.
+
+## 2026-09-07: implementation plan phases 0–5 (branch `ui/page-audit`)
+
+Phases 0–4 are implemented and committed on `ui/page-audit` (all for PR #157): Phase 0 (PR-1/12/13 + ride-alongs), Phase 1 (S-1 migration `20260906140000`, S-2 ownership scoping, S-5/S-7 slices), Phase 2A (write-path hardening + refund-link RPC `20260906150000`), Phase 2B (canonical budget matching, clamped month arithmetic, recurring expansion, paged reads, cron 207s), Phase 3 (weekly transfer exclusions, price-spike predicates, payoff math incl. unplanned non-card debts, expense credits, route error checks), Phase 4 (privacy-blur scanner test, viewer-day threading via `resolveViewerToday`, calendar/advice/goal/profile TZ handling). A parallel session landed the complementary frontend pass (`87651df`) and CI/test/docs pass (`7406cb4`: `typecheck` + `validate:palette` + coverage in CI, vitest env placeholders + `TZ: UTC` + `restoreMocks`, auth-callback and assertion-hygiene tests).
+Full gate green: lint, typecheck, palette, 461 unit files / 5,083 tests.
+Two Phase 2B/3 follow-ups fixed after the fact: demo-route limiter mocks and the calendar IP-keyed limiter test helper.
+
+Still manual (not done, never assumed):
+- T-1: no status check is required to merge to `main` (ruleset `18543151`); require `CI / lint-build-test` and `Migration smoke-check` in GitHub settings.
+- T-2: `supabase migration list --linked` re-verified 2026-09-07 (ledger in `TODO.md` is current, now including `20260906140000`/`20260906150000` as local-only); the eight local-only migrations remain unapplied, so the backup cron still fails on the linked project.
+- Signed-in preview pass (desktop + phone) is still open.
+- Plaid 47 / Nodemailer 10 / Vitest 5 majors deferred, each to its own PR.
+- Provider-id upsert conflict targets (`accounts`, `transactions`) still key on the globally-unique provider id; per-user targets need a migration with backfill review, so code now scopes the surrounding reads/writes instead.
 
 ## 2026-09-06: PR #157 review remediation
 

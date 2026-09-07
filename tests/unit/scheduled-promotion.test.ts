@@ -20,7 +20,7 @@ function serviceStub({
   statusError = null,
   insertedRows,
 }: { due?: unknown[]; upsertError?: unknown; statusError?: unknown; insertedRows?: unknown[] } = {}) {
-  const calls = { upserts: [] as unknown[][], statusUpdates: [] as unknown[] };
+  const calls = { upserts: [] as unknown[][], statusUpdates: [] as unknown[], statusScopes: [] as unknown[][] };
   const service = {
     from: vi.fn((table: string) => {
       if (table === "scheduled_transactions") {
@@ -28,8 +28,16 @@ function serviceStub({
           select: () => chain,
           update: (values: unknown) => {
             calls.statusUpdates.push(values);
-            // The write path awaits .in(...), not the builder itself.
-            return { in: () => Promise.resolve({ data: null, error: statusError }) };
+            // The write path awaits .in("id", …).in("user_id", …) — the
+            // second scoping call (S-4) — not the builder itself.
+            const second = { in: (...args: unknown[]) => {
+              calls.statusScopes.push(args);
+              return Promise.resolve({ data: null, error: statusError });
+            } };
+            return { in: (...args: unknown[]) => {
+              calls.statusScopes.push(args);
+              return second;
+            } };
           },
         };
       }
@@ -76,6 +84,8 @@ describe("promoteDueScheduledTransactions", () => {
       source: "manual",
     });
     expect(calls.statusUpdates).toEqual([{ status: "promoted" }]);
+    // S-4: the promoted-marking update is scoped to the due rows' owners.
+    expect(calls.statusScopes).toContainEqual(["user_id", ["user-123"]]);
   });
 
   it("is a no-op when nothing is due", async () => {

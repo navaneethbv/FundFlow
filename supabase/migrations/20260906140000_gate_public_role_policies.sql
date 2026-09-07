@@ -93,7 +93,7 @@ begin
       end if;
 
       execute format(
-        'alter policy %I on public.%I%s',
+        'alter policy %I on public.%I to authenticated%s',
         pol.policyname,
         target,
         clauses

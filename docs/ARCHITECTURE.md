@@ -359,8 +359,10 @@ Invariants:
   (trusted via `strict-dynamic`) and its beacons hit the same-origin
   `/_vercel/insights/*` (covered by `connect-src 'self'`).
 - Every user table has RLS with owner-only `select` (client writes allowed only
-  on `budgets`, `saved_reports`, `user_tags`, and the `profiles` preference
-  columns — all four hold nothing but user-authored configuration, which is
+  on `budgets`, `saved_reports`, `user_tags`, `merchant_rules`,
+  `category_overrides`, `households`, `goals`, `shared_expenses`,
+  `saved_views`, `notifications`, `alert_preferences`, and the `profiles`
+  preference columns — all hold nothing but user-authored configuration, which is
   the test for joining that list; a provider-synced table never qualifies,
   see `20260730180000_recurring_streams_revert_client_write.sql`). Migrations
   live in `supabase/migrations/` and are applied via the Supabase CLI or

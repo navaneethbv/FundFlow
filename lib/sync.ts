@@ -548,16 +548,20 @@ async function recordJobStart(
 
 async function recordJobEnd(
   jobId: string | null,
+  userId: string,
   status: "done" | "failed",
   lastError: string | null = null,
 ): Promise<void> {
   if (!jobId) return;
   try {
     const supabase = createServiceClient();
+    // User-scoped (S-4): the job id is minted in this same run, but the
+    // update must still be unable to touch another user's row.
     const { error } = await supabase
       .from("sync_jobs")
       .update({ status, last_error: lastError })
-      .eq("id", jobId);
+      .eq("id", jobId)
+      .eq("user_id", userId);
     if (error) throw error;
   } catch (error) {
     logError("sync.job-record", error);
@@ -576,14 +580,14 @@ export async function syncAllForUser(userId: string): Promise<SyncResult> {
       total.added += result.added;
       total.modified += result.modified;
       total.removed += result.removed;
-      await recordJobEnd(jobId, "done");
+      await recordJobEnd(jobId, userId, "done");
     } catch (error) {
       logError("sync.item", error);
       // Keep the real Plaid code (e.g. ITEM_LOGIN_REQUIRED) so Settings can
       // offer the right fix (reconnect) instead of a generic failure.
       const code = plaidErrorCode(error) ?? "sync_failed";
       await setItemStatus(item.user_id, item.id, "error", code).catch(() => {});
-      await recordJobEnd(jobId, "failed", code);
+      await recordJobEnd(jobId, userId, "failed", code);
 
       // Emit broken bank/sync failure notification
       await createNotification(

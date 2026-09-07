@@ -59,7 +59,9 @@ describe("syncAllForUser error isolation & sync job tracking", () => {
         }),
       }),
       update: vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({ error: new Error("Job Update Error") }),
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ error: new Error("Job Update Error") }),
+        }),
       }),
     });
 

@@ -235,3 +235,46 @@ describe("POST /api/plaid/repair", () => {
     expect(body).toMatchObject({ ok: true, status: "repaired" });
   });
 });
+
+describe("POST /api/plaid/repair failure branches", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRequireUser.mockResolvedValue({ user: { id: "user-1" } });
+    mockCheckRateLimit.mockResolvedValue(true);
+    mockSetItemStatus.mockResolvedValue(undefined);
+    mockItemGet.mockResolvedValue({ data: { item: { item_id: "plaid-item-1" } } });
+    mockGetItem.mockResolvedValue(item);
+    mockBackfillItemTransactions.mockResolvedValue({
+      pagesCompleted: 3,
+      maxPages: 8,
+      completed: true,
+      added: 4,
+      modified: 1,
+      removed: 0,
+    });
+  });
+
+  it("returns 400 for an unparseable JSON body", async () => {
+    const res = await POST({ json: () => Promise.reject(new Error("bad json")) } as unknown as NextRequest);
+    expect(res.status).toBe(400);
+    expect(mockBadRequest).toHaveBeenCalledWith("Invalid JSON body");
+  });
+
+  it("still reports consent_required when the status write fails", async () => {
+    mockItemGet.mockRejectedValue({
+      response: { data: { error_code: "ADDITIONAL_CONSENT_REQUIRED" } },
+    });
+    mockSetItemStatus.mockRejectedValueOnce(new Error("status down"));
+    const res = await POST(jsonRequest({ itemId: "item-1" }));
+    const body = await res.json();
+    expect(body.status).toBe("consent_required");
+    expect(mockLogError).toHaveBeenCalledWith("plaid.repair.status", expect.anything());
+  });
+
+  it("returns 409 when a sync is already in progress", async () => {
+    const { ItemSyncInProgressError } = await import("@/lib/sync");
+    mockBackfillItemTransactions.mockRejectedValueOnce(new ItemSyncInProgressError());
+    const res = await POST(jsonRequest({ itemId: "item-1" }));
+    expect(res.status).toBe(409);
+  });
+});

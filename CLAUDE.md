@@ -55,6 +55,8 @@ Treat "no in-app AI" as retired wording: the constraint that survived it is the 
 - Never import `lib/env.server.ts` (server-only secrets) into client
   components. `lib/env.ts` holds the `NEXT_PUBLIC_*` values.
 - Client writes are allowed only on `budgets`, `saved_reports`, `user_tags`,
+  `merchant_rules`, `category_overrides`, `households`, `goals`,
+  `shared_expenses`, `saved_views`, `notifications`, `alert_preferences`,
   and the `profiles` preference columns. User-authored configuration is the
   test for joining that list; a provider-synced table never qualifies.
 - Migrations in `supabase/migrations/` are applied by hand (CLI or dashboard).
@@ -232,8 +234,9 @@ Single-context layout: `CONTEXT.md` + `docs/adr/` at the repo root (created lazi
 
 ## Where to read more
 
-- `docs/ARCHITECTURE.md` - request path, every `lib/` module, subsystem
-  invariants in full. Read the relevant section before changing a subsystem.
+- `docs/ARCHITECTURE.md` - request path, the security-relevant `lib/` modules,
+  subsystem invariants in full. Read the relevant section before changing a
+  subsystem.
 - `docs/PALETTE.md` - the measurements behind the chart palette rules.
 - `docs/HANDOFF.md` - session-resume note. `docs/TODO.md` - deferred work.
   Update both when finishing significant work.

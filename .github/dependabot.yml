@@ -24,6 +24,13 @@ updates:
       # once eslint-plugin-react ships ESLint 10 support.
       - dependency-name: "eslint"
         versions: ["10.x"]
+  # Exact pins in package.json (no caret) are deliberate, not drift:
+  # - react / react-dom 19.2.8 must move as a pair with next 16's peer range;
+  #   bump them together or not at all.
+  # - sharp 0.35.4 ships prebuilt binaries for this toolchain; a minor bump
+  #   re-downloads the toolchain and has broken node-link in the past.
+  # Deferred majors (evaluate each in its own PR with lint + typecheck +
+  # unit suites as the gate): plaid 47, nodemailer 10, vitest 5.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

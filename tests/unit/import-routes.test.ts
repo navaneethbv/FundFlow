@@ -1901,3 +1901,102 @@ describe("import commit target validation edges", () => {
     expect(mockRefreshInferredRecurringForUser).not.toHaveBeenCalled();
   });
 });
+
+describe("POST /api/import/csv format dispatch and target checks", () => {
+  function authedCsv(file: File, fields: Record<string, string> = {}) {
+    const mockSupabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
+      }),
+    };
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: mockSupabase });
+    mockCheckRateLimit.mockResolvedValue(true);
+    const formData = new FormData();
+    formData.set("file", file);
+    for (const [key, value] of Object.entries(fields)) formData.set(key, value);
+    return {
+      formData: () => Promise.resolve(formData),
+    } as unknown as NextRequest;
+  }
+
+  function parsedRows() {
+    return {
+      rows: [{ date: "2026-06-15", merchant: "Store", amount: 10, category: "Food" }],
+      errors: [],
+    };
+  }
+
+  beforeEach(() => {
+    mockDetectSourceFormat.mockReturnValue("csv");
+    mockParseImportCsv.mockReturnValue(parsedRows());
+    mockServiceClient.from.mockReturnValue({
+      select: () => ({
+        eq: () => ({
+          eq: () => ({
+            not: () => ({
+              order: () => ({
+                limit: () => ({
+                  maybeSingle: () => Promise.resolve({ data: null }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
+      upsert: vi.fn().mockResolvedValue({ error: null }),
+    });
+  });
+
+  it("dispatches monarch files to the monarch parser", async () => {
+    mockDetectSourceFormat.mockReturnValue("monarch");
+    mockParseMonarchCsv.mockReturnValue(parsedRows());
+    const res = await csvPost(authedCsv(new File(["a,b"], "m.csv", { type: "text/csv" }), { account_id: "a1" }));
+    expect(res.status).toBe(200);
+    expect(mockParseMonarchCsv).toHaveBeenCalled();
+  });
+
+  it("dispatches ynab files to the ynab parser", async () => {
+    mockDetectSourceFormat.mockReturnValue("ynab");
+    mockParseYnabCsv.mockReturnValue(parsedRows());
+    const res = await csvPost(authedCsv(new File(["a,b"], "y.csv", { type: "text/csv" }), { account_id: "a1" }));
+    expect(res.status).toBe(200);
+    expect(mockParseYnabCsv).toHaveBeenCalled();
+  });
+
+  it("rejects ambiguous ynab dates until a format is chosen", async () => {
+    mockDetectSourceFormat.mockReturnValue("ynab");
+    mockParseYnabCsv.mockReturnValue({ rows: [], errors: [], requiresDateOrder: true });
+    const res = await csvPost(authedCsv(new File(["a,b"], "y.csv", { type: "text/csv" }), { account_id: "a1" }));
+    expect(res.status).toBe(400);
+    expect(mockBadRequest).toHaveBeenCalledWith(
+      "YNAB dates are ambiguous. Choose a date format and upload again.",
+    );
+  });
+
+  it("returns 404 for an unknown manual account", async () => {
+    const mockSupabase = {
+      from: vi.fn((table: string) => {
+        if (table === "manual_accounts") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
+        };
+      }),
+    };
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: mockSupabase });
+    const formData = new FormData();
+    formData.set("file", new File(["2026-07-01,Store,10.00"], "s.csv", { type: "text/csv" }));
+    formData.set("manual_account_id", "m9");
+    const res = await csvPost({ formData: () => Promise.resolve(formData) } as unknown as NextRequest);
+    expect(res.status).toBe(404);
+  });
+});

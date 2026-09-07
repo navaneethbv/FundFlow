@@ -8,6 +8,12 @@ export const dynamic = "force-dynamic";
  * Unauthenticated health check for uptime monitoring and readiness diagnostics.
  * Returns booleans, sync freshness, and latency metrics — never sensitive user data.
  * `degraded` means the app is up but no sync has succeeded in 48h (mirrors the dashboard stale banner).
+ *
+ * The service client here is deliberate (S-8), not a scope omission:
+ * uptime monitors carry no session, so the check must bypass RLS. What leaks
+ * is bounded by construction — a single aggregate `updated_at` (platform-wide
+ * sync freshness) with no user, account, or amount data. No per-user rows
+ * are ever selected on this path.
  */
 export async function GET(): Promise<NextResponse> {
   const startedAt = Date.now();
