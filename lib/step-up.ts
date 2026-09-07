@@ -43,18 +43,18 @@ export async function verifyStepUp(
   }
 
   if (!user.email) return false;
-  const authRecord = supabase.auth as unknown as Record<string, unknown>;
-  const authMethodName = ["signIn", "With", "Password"].join("");
-  if (
-    process.env.NODE_ENV === "test" &&
-    typeof authRecord[authMethodName] === "function"
-  ) {
-    const testAuthFn = authRecord[authMethodName] as (credentials: Record<string, string>) => Promise<{ error: unknown }>;
-    const { error } = await testAuthFn({
-      email: user.email,
-      password: code,
-    });
-    return !error;
+  if (process.env.NODE_ENV === "test") {
+    // In test environment, the mock client provides signInWithPassword directly on auth
+    const auth = supabase.auth as unknown as {
+      signInWithPassword?: (credentials: { email: string; password: string }) => Promise<{ error: unknown }>;
+    };
+    if (typeof auth.signInWithPassword === "function") {
+      const { error } = await auth.signInWithPassword({
+        email: user.email,
+        password: code,
+      });
+      return !error;
+    }
   }
   // Use a throwaway client without session persistence so password verification does not mutate the caller's session
   const throwaway = createSupabaseClient(
