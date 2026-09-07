@@ -36,13 +36,14 @@ export function buildDashboardRecurring(input: {
   const nextWeekEnd = addDays(input.today, 7);
   const monthOccurrences = occurrences.filter(row => row.dueDate.startsWith(input.month)
     || (input.month === input.today.slice(0, 7) && row.dueDate >= input.today && row.dueDate <= nextWeekEnd));
+  const reminderStatuses = { complete: "paid", overdue: "late", upcoming: "expected" } as const;
   const recurringStatuses: DashboardData["recurringStatuses"] = monthOccurrences.map(row => ({
     id: `${row.source}:${row.sourceId}:${row.dueDate}`,
     name: row.merchant,
     amount: row.amount,
     itemType: row.isIncome ? "income" : "expense",
     nextDate: row.dueDate,
-    status: row.status === "complete" ? "paid" : row.status === "overdue" ? "late" : "expected",
+    status: reminderStatuses[row.status],
     transactionIds: row.matchedTransactionId ? [row.matchedTransactionId] : [],
     reviewPrompt: null,
   }));

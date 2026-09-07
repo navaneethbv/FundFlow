@@ -909,6 +909,11 @@ function composeNetWorthHistoryWithLivePoint(params: {
   return netWorthHistory;
 }
 
+function getItemAccountIds(accounts: AccountSummary[], itemId?: string): Set<string> | null {
+  if (!itemId) return null;
+  return new Set(accounts.filter(account => account.plaid_item_id === itemId).map(account => account.id));
+}
+
 export async function getDashboardData(
   supabase: SupabaseClient,
   selectedAccountId?: string,
@@ -1177,13 +1182,7 @@ export async function getDashboardData(
   });
 
   // Filter transactions by selected account and/or bank (plaid item)
-  const itemAccountIds = options?.itemId
-    ? new Set(
-        allAccounts
-          .filter((a) => a.plaid_item_id === options.itemId)
-          .map((a) => a.id),
-      )
-    : null;
+  const itemAccountIds = getItemAccountIds(allAccounts, options?.itemId);
   const filteredTxns = allTxnsRaw.filter(
     (t) =>
       (!selectedAccountId || t.account_id === selectedAccountId) &&

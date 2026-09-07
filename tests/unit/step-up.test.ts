@@ -56,8 +56,9 @@ describe("destructive action step-up", () => {
   });
 
   it("uses a separate password client only after a successful empty-factor lookup", async () => {
+    const credential = crypto.randomUUID();
     listFactors.mockResolvedValue({ data: { totp: [] }, error: null });
-    expect(await verifyStepUp(client, user, "password")).toBe(true);
-    expect(password).toHaveBeenCalledExactlyOnceWith({ email: user.email, password: "password" });
+    expect(await verifyStepUp(client, user, credential)).toBe(true);
+    expect(password).toHaveBeenCalledExactlyOnceWith({ email: user.email, password: credential });
   });
 });
