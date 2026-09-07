@@ -5,6 +5,11 @@ import { config } from "dotenv";
 // Load local env for tests (encryption key, Supabase keys for integration).
 config({ path: ".env.local" });
 
+// Ensure a valid 32-byte fallback key in test environments (like CI) where .env.local is not present
+if (!process.env.PLAID_TOKEN_ENC_KEY) {
+  process.env.PLAID_TOKEN_ENC_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+}
+
 /**
  * Environment variable naming the one Supabase project integration tests are
  * allowed to touch. Integration tests create and delete throwaway users, so

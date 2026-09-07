@@ -836,6 +836,9 @@ describe("DELETE /api/account", () => {
       itemRemove: itemRemoveMock,
     } as unknown as ReturnType<typeof plaidModule.getPlaidClient>);
 
+    if (!process.env.PLAID_TOKEN_ENC_KEY) {
+      process.env.PLAID_TOKEN_ENC_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    }
     const { encryptSecret } = await import("@/lib/crypto");
     const token1 = encryptSecret("access-token-1");
     const token2 = encryptSecret("access-token-2");
