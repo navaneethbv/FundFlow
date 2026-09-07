@@ -2,6 +2,15 @@
 
 Last updated: 2026-09-07. Read this first to resume.
 
+## 2026-09-07: PR #157 follow-up fixes
+
+The [follow-up report](reviews/2026-09-07-pr157-follow-up.md) records the review findings, red/green reproductions, and ongoing verification.
+The MFA helper rejects unavailable factor metadata and accepts a valid second authenticator for callers without explicit factor selection.
+Dashboard and Recurring now share persisted recurring inputs and occurrence expansion; corrected amounts, manual items, and linked payments no longer use separate Dashboard heuristics.
+The weekly-report complexity finding was addressed by extracting its cash-movement calculation.
+Deployment history and prerequisites are owned by [TODO.md](TODO.md#deployment-prerequisite).
+Preview OAuth sign-in still returns to production; inspecting the provider redirect settings requires the user's Supabase dashboard login.
+
 ## 2026-09-07: implementation plan phases 0–5 (branch `ui/page-audit`)
 
 Phases 0–4 are implemented and committed on `ui/page-audit` (all for PR #157): Phase 0 (PR-1/12/13 + ride-alongs), Phase 1 (S-1 migration `20260906140000`, S-2 ownership scoping, S-5/S-7 slices), Phase 2A (write-path hardening + refund-link RPC `20260906150000`), Phase 2B (canonical budget matching, clamped month arithmetic, recurring expansion, paged reads, cron 207s), Phase 3 (weekly transfer exclusions, price-spike predicates, payoff math incl. unplanned non-card debts, expense credits, route error checks), Phase 4 (privacy-blur scanner test, viewer-day threading via `resolveViewerToday`, calendar/advice/goal/profile TZ handling). A parallel session landed the complementary frontend pass (`87651df`) and CI/test/docs pass (`7406cb4`: `typecheck` + `validate:palette` + coverage in CI, vitest env placeholders + `TZ: UTC` + `restoreMocks`, auth-callback and assertion-hygiene tests).

@@ -333,26 +333,7 @@ export function buildWeeklyReportModel(
     })
     .sort((a, b) => b.percentage - a.percentage || a.category.localeCompare(b.category));
 
-  let inflows = 0;
-  let outflows = 0;
-  for (const transaction of transactions) {
-    if (
-      transaction.date < input.period.start ||
-      transaction.date > input.period.end ||
-      input.duplicateTransactionIds.has(transaction.id) ||
-      accountById.get(transaction.accountId)?.type !== "depository"
-    ) {
-      continue;
-    }
-    if (transaction.cashFlowClassification === "income") {
-      inflows += Math.abs(transaction.amount);
-    } else if (transaction.cashFlowClassification === "expense") {
-      outflows += Math.abs(transaction.amount);
-    } else {
-      if (transaction.amount < 0) inflows += Math.abs(transaction.amount);
-      if (transaction.amount > 0) outflows += transaction.amount;
-    }
-  }
+  const { inflows, outflows } = weeklyCashMovement(transactions, accountById, input);
 
   return {
     userId: input.userId,
@@ -374,4 +355,33 @@ export function buildWeeklyReportModel(
       net: round2(inflows - outflows),
     },
   };
+}
+
+function weeklyCashMovement(
+  transactions: WeeklyReportRow[],
+  accountById: Map<string, WeeklyReportInput["accounts"][number]>,
+  input: WeeklyReportInput,
+): { inflows: number; outflows: number } {
+  let inflows = 0;
+  let outflows = 0;
+  for (const transaction of transactions) {
+    if (
+      transaction.date < input.period.start ||
+      transaction.date > input.period.end ||
+      input.duplicateTransactionIds.has(transaction.id) ||
+      accountById.get(transaction.accountId)?.type !== "depository"
+    ) {
+      continue;
+    }
+    if (transaction.cashFlowClassification === "income") {
+      inflows += Math.abs(transaction.amount);
+    } else if (transaction.cashFlowClassification === "expense") {
+      outflows += Math.abs(transaction.amount);
+    } else {
+      if (transaction.amount < 0) inflows += Math.abs(transaction.amount);
+      if (transaction.amount > 0) outflows += transaction.amount;
+    }
+  }
+
+  return { inflows, outflows };
 }

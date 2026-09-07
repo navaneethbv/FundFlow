@@ -20,26 +20,17 @@ export async function verifyStepUp(
   code: string,
   factorId?: string,
 ): Promise<boolean> {
-  const { data } = await supabase.auth.mfa.listFactors();
-  const factors = (data?.totp ?? []).filter(
+  const { data, error: factorError } = await supabase.auth.mfa.listFactors();
+  if (factorError || !Array.isArray(data?.totp)) return false;
+  const factors = data.totp.filter(
     (factor) => factor.status === "verified",
   );
 
-  if (factors.length > 0) {
-    const targetFactor = factorId
-      ? factors.find((factor) => factor.id === factorId)
-      : factors[0];
-    if (!targetFactor) return false;
-
-    try {
-      const { error } = await supabase.auth.mfa.challengeAndVerify({
-        factorId: targetFactor.id,
-        code,
-      });
-      return !error;
-    } catch {
-      return false;
-    }
+  if (factorId || factors.length > 0) {
+    const candidates = factorId
+      ? factors.filter((factor) => factor.id === factorId)
+      : factors;
+    return verifyTotpFactors(supabase, candidates, code);
   }
 
   if (!user.email) return false;
@@ -72,4 +63,24 @@ export async function verifyStepUp(
     password: code,
   });
   return !error;
+}
+
+/** A selected factor is mandatory; unselected callers accept any enrolled factor. */
+async function verifyTotpFactors(
+  supabase: SupabaseClient,
+  factors: readonly { id: string }[],
+  code: string,
+): Promise<boolean> {
+  for (const factor of factors) {
+    try {
+      const { error } = await supabase.auth.mfa.challengeAndVerify({
+        factorId: factor.id,
+        code,
+      });
+      if (!error) return true;
+    } catch {
+      // A code for another enrolled factor may still be valid.
+    }
+  }
+  return false;
 }

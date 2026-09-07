@@ -252,18 +252,18 @@ describe("A-5 paged dashboard reads", () => {
   });
 
   it("throws instead of rendering zeros when a Stage-1 read fails", async () => {
-    const mockFrom = vi.fn(() => {
+    const mockFrom = vi.fn((table: string) => {
       const chain: Record<string, unknown> = {};
       for (const m of ["select", "eq", "order", "limit", "gte", "lt", "in", "range", "single"]) {
         chain[m] = () => chain;
       }
       chain.maybeSingle = () => Promise.resolve({ data: null, error: null });
       chain.then = (resolve: (v: unknown) => unknown) =>
-        resolve({ data: null, error: { message: "db down" } });
+        resolve({ data: null, error: table === "accounts" ? { message: "db down" } : null });
       return chain;
     });
     await expect(
       getDashboardData({ from: mockFrom } as never, undefined, "2026-09", "user-1"),
-    ).rejects.toMatchObject({ message: "db down" });
+    ).rejects.toThrow("recurring_query_failed:accounts");
   });
 });

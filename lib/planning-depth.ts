@@ -7,12 +7,14 @@ export interface RecurringStatusInput {
     amount: number;
     itemType: "income" | "expense";
     nextDate: string;
+    accountId?: string;
   }[];
   transactions: {
     id: string;
     date: string;
     merchant: string;
     amount: number;
+    accountId?: string;
   }[];
 }
 
@@ -40,9 +42,24 @@ function daysBetween(a: string, b: string): number {
   return Math.floor((end - start) / 86_400_000);
 }
 
-export function buildRecurringStatuses(input: RecurringStatusInput) {
+export interface RecurringStatus {
+  id: string;
+  name: string;
+  amount: number;
+  itemType: "income" | "expense";
+  nextDate: string;
+  status: "late" | "expected" | "paid" | "unusual_amount";
+  transactionIds: string[];
+  reviewPrompt: string | null;
+}
+
+export function buildRecurringStatuses(input: RecurringStatusInput): RecurringStatus[] {
+  const matchedIds = new Set<string>();
   return input.items.map((item) => {
     const match = input.transactions.find((transaction) => {
+      if (matchedIds.has(transaction.id)) return false;
+      if (item.accountId && item.accountId !== transaction.accountId) return false;
+      if (item.itemType === "income" ? transaction.amount >= 0 : transaction.amount <= 0) return false;
       if (normalize(transaction.merchant) !== normalize(item.name)) return false;
       return Math.abs(daysBetween(item.nextDate, transaction.date)) <= 3;
     });
@@ -56,6 +73,7 @@ export function buildRecurringStatuses(input: RecurringStatusInput) {
       };
     }
 
+    matchedIds.add(match.id);
     const expected = Math.abs(item.amount);
     const actual = Math.abs(match.amount);
     const deltaPct = expected === 0 ? 0 : Math.abs(actual - expected) / expected;

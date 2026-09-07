@@ -407,3 +407,11 @@ Invariants:
   fetches transactions **bounded to the 6-month render window** (oldest-date
   probe drives the month browser) — don't reintroduce a select-all, the
   2-minute auto re-render multiplies whatever this costs.
+
+## Shared recurring inputs
+
+`lib/recurring-data.ts` loads paged stream, manual-item, and persisted payment-link inputs for both Dashboard and Recurring.
+`lib/recurring-page.ts` expands occurrences by calendar month and consumes each linked payment once, while the loader validates payment owner, account, and sign.
+`lib/dashboard-recurring.ts` adapts these occurrences to Dashboard reminders and one-off forecast events, excluding completed payments from future cash requirements.
+An account or institution filter excludes unassigned manual recurring items.
+The current-month Dashboard includes next-week occurrences that cross into the next month.

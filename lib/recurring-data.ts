@@ -42,6 +42,7 @@ type RecurringStreamRawRow = {
   last_date: string | null;
   predicted_next_date: string | null;
   account_id: string | null;
+  plaid_item_id?: string;
   category: string | null;
   source?: string | null;
   detection_evidence?: unknown;
@@ -114,6 +115,9 @@ interface JoinRow {
 interface TransactionDateRow {
   id: string;
   date: string;
+  amount: number | string;
+  account_id: string;
+  user_id: string;
 }
 
 interface SyncRow {
@@ -254,20 +258,20 @@ async function loadTransactionDates(
   supabase: SupabaseClient,
   transactionIds: string[],
   userId: string | undefined,
-): Promise<Map<string, string>> {
-  const dates = new Map<string, string>();
+): Promise<Map<string, TransactionDateRow>> {
+  const dates = new Map<string, TransactionDateRow>();
   for (let i = 0; i < transactionIds.length; i += 500) {
     const chunk = transactionIds.slice(i, i + 500);
     let query = supabase
       .from("transactions")
-      .select("id,date")
+      .select("id,date,amount,account_id,user_id")
       .in("id", chunk)
       .order("id")
       .range(0, chunk.length - 1);
     if (userId) query = query.eq("user_id", userId);
     const result = await query;
     assertRecurringQuery("transactions", result);
-    for (const row of (result.data ?? []) as TransactionDateRow[]) dates.set(row.id, row.date);
+    for (const row of (result.data ?? []) as TransactionDateRow[]) dates.set(row.id, row);
   }
   return dates;
 }
@@ -295,12 +299,118 @@ export async function loadRecurringData(
   });
   const userId = scopeQueryUserId(scope);
 
+  let syncQuery = supabase
+    .from("sync_jobs")
+    .select("updated_at")
+    .eq("status", "done")
+    .eq("job_type", "transactions")
+    .order("updated_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(1);
+  if (userId) syncQuery = syncQuery.eq("user_id", userId);
+
+  const billsPromise = loadPagedRows<{
+    account_id: string;
+    statement_balance: number | string | null;
+    minimum_payment: number | string | null;
+    due_date: string | null;
+  }>(
+    (from, to) => {
+      let query = supabase
+        .from("credit_card_bills")
+        .select("account_id, statement_balance, minimum_payment, due_date")
+        .order("account_id")
+        .range(from, to);
+      if (userId) query = query.eq("user_id", userId);
+      return query;
+    },
+    "credit_card_bills",
+  );
+
+  const [inputs, syncResult, billRows] = await Promise.all([
+    loadRecurringInputs(supabase, userId),
+    syncQuery.maybeSingle(),
+    billsPromise,
+  ]);
+  assertRecurringQuery("sync_jobs", syncResult);
+  const { streamRows, accountRows, accountById, streamInputs, manualInputs } = inputs;
+
+  const lastSuccessfulSyncAt =
+    ((syncResult.data as SyncRow | null)?.updated_at as string | undefined) ?? null;
+
+  // Household scope's queries above are unscoped by design (RLS does the
+  // filtering so household members can see each other's shared streams), so
+  // `streamInputs`/`streamRows` can include other members' rows. The review
+  // banner must only ever count the actual caller's own unreviewable
+  // streams — the same rows the sidebar badge counts — otherwise the banner
+  // and badge disagree, and confirming a co-owner's stream from the All tab
+  // would 404 against `PATCH /api/recurring`, which is always scoped to the
+  // real caller.
+  const ownerStreamIds = new Set(
+    streamRows.filter((row) => row.user_id === input.userId).map((row) => row.id),
+  );
+  const ownerScopedInputs = streamInputs.filter((streamInput) => ownerStreamIds.has(streamInput.id));
+
+  // Real credit-card bills populate the credit-card bucket; without bill
+  // data the bucket stays empty (card purchases remain Expenses).
+  const creditBills: CreditCardBill[] = billRows.map((bill) => ({
+    accountId: bill.account_id,
+    statementBalance: bill.statement_balance == null ? null : Number(bill.statement_balance),
+    minimumPayment: bill.minimum_payment == null ? null : Number(bill.minimum_payment),
+    dueDate: bill.due_date,
+  }));
+  const creditCardBucket = buildCreditCardBucket(creditBills, input.anchorMonth);
+  const today = input.today ?? localDateKey(input.now ?? new Date());
+
+  const expanded = expandStreamsForMonth(
+    streamInputs,
+    manualInputs,
+    input.anchorMonth,
+    today,
+  );
+
+  return {
+    view: {
+      ...expanded,
+      totals: { ...expanded.totals, creditCards: creditCardBucket },
+      reviewCount: countUnreviewedStreams(ownerScopedInputs),
+    },
+    scope,
+    visibleHouseholdIds,
+    allStreams: streamRows.map((row) => ({
+      id: row.id,
+      merchantName: row.merchant_name,
+      description: row.description,
+      streamType: row.stream_type,
+      status: KNOWN_STATUSES.has(row.status ?? "") ? (row.status as RecurringStreamStatus) : "UNKNOWN",
+      isActive: row.is_active,
+      reviewedAt: row.reviewed_at,
+      dismissedAt: row.dismissed_at,
+      userAmount: row.user_amount == null ? null : Number(row.user_amount),
+      averageAmount: row.average_amount == null ? null : Number(row.average_amount),
+      lastAmount: row.last_amount == null ? null : Number(row.last_amount),
+      accountName: row.account_id ? accountById.get(row.account_id)?.name ?? null : null,
+      isOwn: row.user_id === input.userId,
+      source: row.source === "inferred" ? "inferred" as const : "plaid" as const,
+      detectionEvidence: parseDetectionEvidence(row.detection_evidence),
+      frequency: row.frequency,
+    })),
+    manualItems: manualInputs,
+    stale: isStale(lastSuccessfulSyncAt, input.now ?? new Date()),
+    currency: dominantCurrency(accountRows),
+  };
+}
+
+/** Shared persisted inputs for the Dashboard and Recurring page.
+ * An omitted userId is only valid with the cookie-bound, RLS-scoped client.
+ */
+export async function loadRecurringInputs(supabase: SupabaseClient, userId: string | undefined) {
   const streamsPromise = loadPagedRows<RecurringStreamRawRow>(
     (from, to) => {
       let query = supabase
         .from("recurring_streams")
         .select(
-          "id,user_id,merchant_name,description,stream_type,status,is_active,reviewed_at,dismissed_at,user_amount,average_amount,last_amount,frequency,first_date,last_date,predicted_next_date,account_id,category,source,detection_evidence",
+          "id,user_id,merchant_name,description,stream_type,status,is_active,reviewed_at,dismissed_at,user_amount,average_amount,last_amount,frequency,first_date,last_date,predicted_next_date,account_id,plaid_item_id,category,source,detection_evidence",
         )
         .order("id")
         .range(from, to);
@@ -333,42 +443,9 @@ export async function loadRecurringData(
     },
     "accounts",
   );
-  let syncQuery = supabase
-    .from("sync_jobs")
-    .select("updated_at")
-    .eq("status", "done")
-    .eq("job_type", "transactions")
-    .order("updated_at", { ascending: false })
-    .order("id", { ascending: false })
-    .limit(1);
-  if (userId) syncQuery = syncQuery.eq("user_id", userId);
-
-  const billsPromise = loadPagedRows<{
-    account_id: string;
-    statement_balance: number | string | null;
-    minimum_payment: number | string | null;
-    due_date: string | null;
-  }>(
-    (from, to) => {
-      let query = supabase
-        .from("credit_card_bills")
-        .select("account_id, statement_balance, minimum_payment, due_date")
-        .order("account_id")
-        .range(from, to);
-      if (userId) query = query.eq("user_id", userId);
-      return query;
-    },
-    "credit_card_bills",
-  );
-
-  const [streamRows, manualRows, accountRows, syncResult, billRows] = await Promise.all([
-    streamsPromise,
-    manualPromise,
-    accountsPromise,
-    syncQuery.maybeSingle(),
-    billsPromise,
+  const [streamRows, manualRows, accountRows] = await Promise.all([
+    streamsPromise, manualPromise, accountsPromise,
   ]);
-  assertRecurringQuery("sync_jobs", syncResult);
   const streamIds = streamRows.map((row) => row.id);
 
   const joinRows = await loadJoinRows(supabase, streamIds, userId);
@@ -376,10 +453,13 @@ export async function loadRecurringData(
   const transactionIds = [...new Set(joinRows.map((row) => row.transaction_id))];
   const transactionDatesById = await loadTransactionDates(supabase, transactionIds, userId);
 
+  const streamById = new Map(streamRows.map(row => [row.id, row]));
   const matchedByStreamId = new Map<string, { id: string; date: string }[]>();
   for (const row of joinRows) {
-    const date = transactionDatesById.get(row.transaction_id);
-    if (!date) continue;
+    const transaction = transactionDatesById.get(row.transaction_id);
+    const stream = streamById.get(row.recurring_stream_id);
+    if (!isStreamPayment(stream, transaction)) continue;
+    const date = transaction!.date;
     const existing = matchedByStreamId.get(row.recurring_stream_id) ?? [];
     existing.push({ id: row.transaction_id, date });
     matchedByStreamId.set(row.recurring_stream_id, existing);
@@ -400,9 +480,9 @@ export async function loadRecurringData(
       streamType: row.stream_type,
       merchantName: row.merchant_name,
       description: row.description,
-      averageAmount: row.average_amount === null ? null : Number(row.average_amount),
-      lastAmount: row.last_amount === null ? null : Number(row.last_amount),
-      userAmount: row.user_amount === null ? null : Number(row.user_amount),
+      averageAmount: row.average_amount == null ? null : Number(row.average_amount),
+      lastAmount: row.last_amount == null ? null : Number(row.last_amount),
+      userAmount: row.user_amount == null ? null : Number(row.user_amount),
       frequency,
       status,
       isActive: row.is_active,
@@ -432,68 +512,12 @@ export async function loadRecurringData(
     enabled: row.enabled,
   }));
 
-  const lastSuccessfulSyncAt =
-    ((syncResult.data as SyncRow | null)?.updated_at as string | undefined) ?? null;
+  return { streamRows, accountRows, accountById, streamInputs, manualInputs };
+}
 
-  // Household scope's queries above are unscoped by design (RLS does the
-  // filtering so household members can see each other's shared streams), so
-  // `streamInputs`/`streamRows` can include other members' rows. The review
-  // banner must only ever count the actual caller's own unreviewable
-  // streams — the same rows the sidebar badge counts — otherwise the banner
-  // and badge disagree, and confirming a co-owner's stream from the All tab
-  // would 404 against `PATCH /api/recurring`, which is always scoped to the
-  // real caller.
-  const ownerStreamIds = new Set(
-    streamRows.filter((row) => row.user_id === input.userId).map((row) => row.id),
-  );
-  const ownerScopedInputs = streamInputs.filter((streamInput) => ownerStreamIds.has(streamInput.id));
-
-  // Real credit-card bills populate the credit-card bucket; without bill
-  // data the bucket stays empty (card purchases remain Expenses).
-  const creditBills: CreditCardBill[] = billRows.map((bill) => ({
-    accountId: bill.account_id,
-    statementBalance: bill.statement_balance === null ? null : Number(bill.statement_balance),
-    minimumPayment: bill.minimum_payment === null ? null : Number(bill.minimum_payment),
-    dueDate: bill.due_date,
-  }));
-  const creditCardBucket = buildCreditCardBucket(creditBills, input.anchorMonth);
-  const today = input.today ?? localDateKey(input.now ?? new Date());
-
-  const expanded = expandStreamsForMonth(
-    streamInputs,
-    manualInputs,
-    input.anchorMonth,
-    today,
-  );
-
-  return {
-    view: {
-      ...expanded,
-      totals: { ...expanded.totals, creditCards: creditCardBucket },
-      reviewCount: countUnreviewedStreams(ownerScopedInputs),
-    },
-    scope,
-    visibleHouseholdIds,
-    allStreams: streamRows.map((row) => ({
-      id: row.id,
-      merchantName: row.merchant_name,
-      description: row.description,
-      streamType: row.stream_type,
-      status: KNOWN_STATUSES.has(row.status ?? "") ? (row.status as RecurringStreamStatus) : "UNKNOWN",
-      isActive: row.is_active,
-      reviewedAt: row.reviewed_at,
-      dismissedAt: row.dismissed_at,
-      userAmount: row.user_amount === null ? null : Number(row.user_amount),
-      averageAmount: row.average_amount === null ? null : Number(row.average_amount),
-      lastAmount: row.last_amount === null ? null : Number(row.last_amount),
-      accountName: row.account_id ? accountById.get(row.account_id)?.name ?? null : null,
-      isOwn: row.user_id === input.userId,
-      source: row.source === "inferred" ? "inferred" as const : "plaid" as const,
-      detectionEvidence: parseDetectionEvidence(row.detection_evidence),
-      frequency: row.frequency,
-    })),
-    manualItems: manualInputs,
-    stale: isStale(lastSuccessfulSyncAt, input.now ?? new Date()),
-    currency: dominantCurrency(accountRows),
-  };
+function isStreamPayment(stream: RecurringStreamRawRow | undefined, transaction: TransactionDateRow | undefined): boolean {
+  if (!stream || !transaction) return false;
+  if (transaction.user_id !== stream.user_id || transaction.account_id !== stream.account_id) return false;
+  const amount = Number(transaction.amount);
+  return Number.isFinite(amount) && (stream.stream_type === "inflow" ? amount < 0 : amount > 0);
 }

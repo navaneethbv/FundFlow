@@ -355,7 +355,7 @@ describe("planning roadmap features", () => {
       ],
       transactions: [
         { id: "t1", date: "2026-07-15", merchant: "Electric", amount: 150 },
-        { id: "t2", date: "2026-07-15", merchant: "Bonus", amount: 700 },
+        { id: "t2", date: "2026-07-15", merchant: "Bonus", amount: -700 },
       ],
     });
 

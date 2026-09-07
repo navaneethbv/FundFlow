@@ -222,7 +222,7 @@ describe("planning-depth", () => {
       transactions: [
         { id: "t1", date: "2026-07-02", merchant: "Rent", amount: 1300 },
         { id: "t3", date: "2026-07-01", merchant: "Coffee", amount: 5 },
-        { id: "t4", date: "2026-07-03", merchant: "Salary", amount: 5000 },
+        { id: "t4", date: "2026-07-03", merchant: "Salary", amount: -5000 },
       ],
     });
     const byId = Object.fromEntries(statuses.map((s) => [s.id, s]));

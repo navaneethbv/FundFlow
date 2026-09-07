@@ -1,4 +1,4 @@
-import { EXCLUDED_PFC } from "@/lib/dashboard";
+import { TRANSFER_GROUPS as EXCLUDED_PFC } from "@/lib/finance-domain";
 import { addDays, addMonths, parseDate } from "@/lib/date-utils";
 
 export type RecurringFrequency =
@@ -283,6 +283,7 @@ function appendPlaidStream(
   windowStart: string,
   windowEndExclusive: string,
   today: string,
+  usedTransactionIds: Set<string>,
 ): void {
   if (stream.dismissedAt || stream.status === "TOMBSTONED" || !stream.isActive) return;
   const anchor = stream.predictedNextDate ?? stream.lastDate ?? stream.firstDate;
@@ -292,10 +293,11 @@ function appendPlaidStream(
   const dueDates = occurrenceDatesInWindow(anchor, cadence, windowStart, windowEndExclusive);
   const amount = Math.abs(stream.userAmount ?? stream.averageAmount ?? stream.lastAmount ?? 0);
   const isIncome = stream.streamType === "inflow";
-  const availableMatches = [...stream.matchedTransactions];
+  const availableMatches = stream.matchedTransactions.filter((match) => !usedTransactionIds.has(match.id));
   for (const dueDate of dueDates) {
     const match = nearestMatch(dueDate, availableMatches, tolerance);
     if (match) {
+      usedTransactionIds.add(match.id);
       const consumedIndex = availableMatches.findIndex((candidate) => candidate.id === match.id);
       if (consumedIndex !== -1) availableMatches.splice(consumedIndex, 1);
     }
@@ -375,8 +377,9 @@ export function expandStreamsForMonth(
     creditCards: { paid: 0, remaining: 0 },
   };
 
+  const usedTransactionIds = new Set<string>();
   for (const stream of streams) {
-    appendPlaidStream(occurrences, totals, stream, windowStart, windowEndExclusive, today);
+    appendPlaidStream(occurrences, totals, stream, windowStart, windowEndExclusive, today, usedTransactionIds);
   }
   for (const item of manualItems) {
     appendManualItem(occurrences, totals, item, windowStart, windowEndExclusive, today);

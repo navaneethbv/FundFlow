@@ -768,7 +768,8 @@ describe("getDashboardData", () => {
     expect(data.insights.debt).not.toBeNull();
     expect(data.insights.debt?.usesAssumedApr).toBe(true);
     expect(data.insights.debt?.plan?.order).toEqual(["Card ••1111"]);
-    expect(data.recurringStatuses.some((s) => s.name === "Coffee" && s.status === "paid")).toBe(true);
+    // No persisted anchor or payment link: do not invent a paid occurrence.
+    expect(data.recurringStatuses.some((s) => s.name === "Coffee")).toBe(false);
   });
 
   it("keeps spendPerPerson null in household scope when only the user's rows exist", async () => {
@@ -967,6 +968,8 @@ describe("getDashboardData", () => {
       ],
       recurring_streams: [
         {
+          id: "netflix-stream",
+          account_id: "acc-1",
           merchant_name: "Netflix",
           description: "Netflix",
           average_amount: 15.99,
@@ -977,6 +980,8 @@ describe("getDashboardData", () => {
           plaid_item_id: "item-1",
         },
         {
+          id: "hulu-stream",
+          account_id: "acc-2",
           merchant_name: "Hulu",
           description: "Hulu",
           average_amount: 12,

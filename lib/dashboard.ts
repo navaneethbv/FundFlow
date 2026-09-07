@@ -1,3 +1,5 @@
+import { loadRecurringInputs } from "@/lib/recurring-data";
+import { buildDashboardRecurring } from "@/lib/dashboard-recurring";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   buildBudgetEnvelopes,
@@ -14,7 +16,7 @@ import {
 } from "@/lib/planning";
 import { accountDisplayLabel } from "@/lib/account-label";
 import { buildPayoffPlan, type PayoffPlan } from "@/lib/debt";
-import { buildRecurringStatuses } from "@/lib/planning-depth";
+import type { buildRecurringStatuses } from "@/lib/planning-depth";
 import {
   computeMerchantPriceDrift,
   computeRunwayMonths,
@@ -481,24 +483,6 @@ function buildDashboardSpendMetrics(input: DashboardSpendMetricsInput) {
 }
 
 /**
- * Latest date among `txns` whose merchant matches `name`, or null. Recurring
- * streams carry no next-date column, so this anchors the expected date to the
- * stream's most recent real charge.
- */
-function latestMerchantMatchDate(
-  txns: ReadonlyArray<{ merchant: string; date: string }>,
-  name: string,
-): string | null {
-  const target = name.trim().toLowerCase();
-  let best: string | null = null;
-  for (const txn of txns) {
-    if (txn.merchant.trim().toLowerCase() !== target) continue;
-    if (!best || txn.date > best) best = txn.date;
-  }
-  return best;
-}
-
-/**
  * Per-person attribution (4.3). Only meaningful in household scope, where the
  * window can contain a partner's shared rows; null everywhere else, and null
  * when nothing in the active month came from anyone but the caller.
@@ -571,73 +555,6 @@ function computePriorMerchantMedians(
   return [...amountsByMerchant.values()]
     .filter((entry) => entry.amounts.length >= 2)
     .map((entry) => ({ merchant: entry.name, amount: round2(medianOf(entry.amounts)) }));
-}
-
-interface StreamRow {
-  merchant_name: string | null;
-  description: string | null;
-  average_amount: number | null;
-  frequency: string | null;
-  category: string | null;
-  stream_type: string;
-  plaid_item_id: string;
-  predicted_next_date: string | null;
-  dismissed_at: string | null;
-  status: string | null;
-}
-
-/**
- * The eligibility rule the Recurring page applies in `appendPlaidStream`
- * (`lib/recurring-page.ts`). Dashboard reminders derive from the same streams,
- * so a stream the user marked "Not recurring" must stop producing an overdue
- * reminder here too - the two surfaces disagreed until this filter existed.
- */
-function isEligibleStream(stream: StreamRow): boolean {
-  return !stream.dismissed_at && stream.status !== "TOMBSTONED";
-}
-
-/**
- * Active recurring streams split into outflow (subscriptions) and inflow
- * (income), scoped to the selected account's bank when one is selected.
- */
-function buildStreamSummaries(
-  streamRows: readonly StreamRow[],
-  selectedItemDbId: string | undefined,
-): {
-  subscriptions: DashboardData["subscriptions"];
-  incomeStreams: DashboardData["incomeStreams"];
-} {
-  const eligible = streamRows.filter(isEligibleStream);
-  const filtered = selectedItemDbId
-    ? eligible.filter((s) => s.plaid_item_id === selectedItemDbId)
-    : eligible;
-  const label = (s: StreamRow) =>
-    s.merchant_name?.trim() || s.description?.trim() || "Unknown";
-  const byAmountDesc = <T extends { amount: number }>(rows: T[]) =>
-    rows.toSorted((a, b) => b.amount - a.amount);
-  return {
-    subscriptions: byAmountDesc(
-      filtered
-        .filter((s) => s.stream_type === "outflow")
-        .map((s) => ({
-          merchant: label(s),
-          amount: round2(Math.abs(s.average_amount ?? 0)),
-          frequency: s.frequency,
-          category: s.category,
-          predictedNextDate: s.predicted_next_date,
-        })),
-    ),
-    incomeStreams: byAmountDesc(
-      filtered
-        .filter((s) => s.stream_type === "inflow")
-        .map((s) => ({
-          merchant: label(s),
-          amount: round2(Math.abs(s.average_amount ?? 0)),
-          frequency: s.frequency,
-          predictedNextDate: s.predicted_next_date,
-        })),
-    ),
-  };
 }
 
 export interface DashboardOptions {
@@ -1033,14 +950,7 @@ export async function getDashboardData(
         )
         .order("name"),
     ),
-    scopeUser(
-      supabase
-        .from("recurring_streams")
-        .select(
-          "merchant_name, description, average_amount, frequency, category, stream_type, is_active, plaid_item_id, predicted_next_date, dismissed_at, status",
-        )
-        .eq("is_active", true),
-    ),
+    loadRecurringInputs(supabase, applyUserScope ? userId : undefined),
     scopeUser(supabase.from("plaid_items").select("id, institution_name")),
     scopeUser(supabase.from("budgets").select("category, monthly_limit, group_name, rollover_enabled")),
     scopeUser(
@@ -1151,7 +1061,7 @@ export async function getDashboardData(
 
   const [
     accountsResult,
-    streamsResult,
+    recurringInputs,
     itemsResult,
     budgetsResult,
     lastSyncJobResult,
@@ -1169,7 +1079,6 @@ export async function getDashboardData(
   ] = stage1;
   assertStage1Success([
     ["accounts", accountsResult],
-    ["recurring_streams", streamsResult],
     ["plaid_items", itemsResult],
     ["budgets", budgetsResult],
     ["sync_jobs", lastSyncJobResult],
@@ -1183,7 +1092,6 @@ export async function getDashboardData(
     ["scheduled_transactions", scheduledRowsResult],
   ]);
   const accounts = accountsResult.data;
-  const streams = streamsResult.data;
   const items = itemsResult.data;
   const budgets = budgetsResult.data;
   const lastSyncJob = lastSyncJobResult.data;
@@ -1361,24 +1269,6 @@ export async function getDashboardData(
   });
   const { lastMonthProratedSpent, spendPerCard, spendPerBank, cashFlow } = spendMetrics;
 
-  // Filter streams by selected account's plaid item if specified
-  const selectedAccountObj = allAccounts.find((a) => a.id === selectedAccountId);
-  const selectedItemDbId = selectedAccountObj?.plaid_item_id;
-
-  const recurringTxns = filteredTxns.map((t) => ({
-    id: t.id,
-    date: t.date,
-    merchant: extractMerchantName(t, ""),
-    amount: t.amount,
-  }));
-  const latestMatchDate = (name: string): string | null =>
-    latestMerchantMatchDate(recurringTxns, name);
-
-  const { subscriptions, incomeStreams } = buildStreamSummaries(
-    (streams ?? []) as StreamRow[],
-    selectedItemDbId,
-  );
-
   const activeDay =
     isCurrentMonth ? todayDay : new Date(activeYear, activeMonthIndex + 1, 0).getDate();
   const activeDaysInMonth = new Date(activeYear, activeMonthIndex + 1, 0).getDate();
@@ -1420,36 +1310,20 @@ export async function getDashboardData(
     budgetEnvelopes,
   );
 
-  const recurringItems = [
-    ...subscriptions.map((stream) => ({
-      name: stream.merchant,
-      amount: stream.amount,
-      frequency: normalizeFrequency(stream.frequency),
-      itemType: "expense" as const,
-      nextDate:
-        stream.predictedNextDate ??
-        latestMatchDate(stream.merchant) ??
-        monthDate(activeMonth, 15),
-      category: stream.category,
-    })),
-    ...incomeStreams.map((stream) => ({
-      name: stream.merchant,
-      amount: stream.amount,
-      frequency: normalizeFrequency(stream.frequency),
-      itemType: "income" as const,
-      nextDate:
-        stream.predictedNextDate ??
-        latestMatchDate(stream.merchant) ??
-        monthDate(activeMonth, 15),
-    })),
-    ...((scheduledRows ?? []) as Array<{
-      kind: string;
-      amount: number | string;
-      merchant: string;
-      scheduled_date: string;
-      category: string | null;
+  const allowedStreamIds = new Set(recurringInputs.streamRows
+    .filter(stream => (!selectedAccountId || stream.account_id === selectedAccountId)
+      && (!itemAccountIds || itemAccountIds.has(stream.account_id ?? "")))
+    .map(stream => stream.id));
+  const recurring = buildDashboardRecurring({
+    streams: recurringInputs.streamInputs.filter(stream => allowedStreamIds.has(stream.id)),
+    manualItems: selectedAccountId || options?.itemId ? [] : recurringInputs.manualInputs,
+    scheduled: ((scheduledRows ?? []) as Array<{
+      kind: string; amount: number | string; merchant: string; scheduled_date: string; category: string | null;
     }>).map(toRecurringItem),
-  ];
+    month: activeMonth,
+    today,
+  });
+  const { subscriptions, incomeStreams, recurringStatuses, items: recurringItems } = recurring;
   // Liquid cash in the forecast currency (M-10): null when any depository
   // balance is unknown (a coerced 0 would fake runway and Safe-to-Spend),
   // and non-USD balances are excluded rather than summed as dollars, the
@@ -1472,9 +1346,9 @@ export async function getDashboardData(
     // explicitly zero-based projection while runway and Safe-to-Spend,
     // which take `cashBalance` directly, honestly report unknown.
     startingBalance: cashBalance ?? 0,
-    asOf: monthDate(activeMonth, Math.min(activeDay, 28)),
+    asOf: monthDate(activeMonth, activeDay),
     horizonDays: 30,
-    items: recurringItems,
+    items: recurring.forecastItems,
     lowBalanceThreshold: 500,
   });
   const recurringWeeks = groupRecurringByWeek(recurringItems, monthDate(activeMonth, 1), 31);
@@ -1482,7 +1356,7 @@ export async function getDashboardData(
   // Financial-intelligence derivations — pure math over data already in
   // memory; no extra queries, no Plaid calls (the auto re-render multiplies
   // whatever this costs, so it must stay free).
-  const insightsAsOf = monthDate(activeMonth, Math.min(activeDay, 28));
+  const insightsAsOf = monthDate(activeMonth, activeDay);
   const essentialsSplit = splitEssentialsByMonth(
     spendTxns.filter(isSpending).map((t) => ({
       month: monthKey(t.date),
@@ -1546,22 +1420,6 @@ export async function getDashboardData(
     ),
   });
 
-  // Recurring stream statuses match each stream to a real transaction so the
-  // dashboard can show paid / unusual amount / late instead of a flat
-  // "expected". Plaid's prediction wins when available, then existing
-  // transaction-based and mid-month fallbacks keep older stream rows useful.
-  const recurringStatuses = buildRecurringStatuses({
-    asOf: monthDate(activeMonth, Math.min(activeDay, 28)),
-    unusualAmountPct: 0.2,
-    items: recurringItems.map((item, index) => ({
-      id: `${index}`,
-      name: item.name,
-      amount: item.amount,
-      itemType: item.itemType,
-      nextDate: item.nextDate,
-    })),
-    transactions: recurringTxns,
-  });
   const priorCategoryAverages = [...categoryHistoryMap.entries()]
     .map(([key, amount]) => {
       const [month, category] = key.split("|");

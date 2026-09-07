@@ -122,7 +122,7 @@ export default function RecurringWidget({
 
             return (
               <li
-                key={`${item.name}-${item.nextDate}`}
+                key={item.id ?? `${item.name}-${item.nextDate}`}
                 className="flex items-center gap-3 text-sm"
               >
                 <MerchantAvatar

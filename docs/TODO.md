@@ -16,8 +16,8 @@ Still open from that review:
 
 - The signed-in preview pass at desktop and phone sizes, including unsaved dialogs and accessible controls.
   It needs a preview sign-in the reviewing session cannot perform.
-- Full Dashboard/Recurring parity beyond dismissal.
-  Only the proven dismissed-stream case is closed; corrected amounts, manual items, transfer exclusions, linked payment matching, and month scope have not been compared between the two implementations.
+- Signed-in acceptance of the shared Dashboard/Recurring inputs and occurrence model.
+  Corrected amounts, manual items, exact account filters, persisted payment links, and month expansion now share code and have local regression coverage in the [follow-up report](reviews/2026-09-07-pr157-follow-up.md).
 - `lib/budget-data.ts` still counts dismissed streams when it collects recurring categories for budget suggestions.
   That surface suggests a category name rather than a due reminder, so it was left alone rather than widened into the same change.
 
@@ -26,7 +26,12 @@ Still open from that review:
 State of `main` encompasses comprehensive review remediation (PR #153 `55bf767`), transfer linking follow-up (PR #154 `0f11da0`), bulk transfer review action (PR #155 `d2798f3`), and savings-rate context alignment (PR #156 `262c420`).
 
 ### Deployment prerequisite
-The linked migration ledger is maintained solely in this section (verified live via `supabase migration list --linked` on 2026-09-07): `20260904120000`, `20260905100000`, `20260905110000`, `20260905120000`, `20260906140000` (public-role policy gate), and `20260906150000` (refund-link RPC) remain local-only until applied to remote. Older versions `20260902220000`, `20260903010000`, and `20260904000000` require content-based reconciliation. Migration `20260905130000` is recorded as applied remotely.
+The linked migration ledger was verified with `supabase migration list --linked` on 2026-09-07.
+Migrations `20260906140000` (public-role policy gate) and `20260906150000` (refund-link RPC) were applied and their effects checked against the live schema during the PR #157 follow-up.
+The connector-generated IDs `20260907030628` and `20260907030636` were replaced with those exact repository versions in migration history; the schema changes were retained.
+Versions `20260904120000`, `20260905100000`, `20260905110000`, and `20260905120000` remain local-only and require content-based reconciliation before any deployment claim.
+Older local versions `20260902220000`, `20260903010000`, and `20260904000000` also require reconciliation with the remote history, including `20260903171727` and `20260903171733`.
+Migration `20260905130000` is recorded as applied remotely.
 
 ### Merged into main
 - **PR #153 (Comprehensive remediation):** Merged as `55bf767`.
