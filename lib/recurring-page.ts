@@ -93,25 +93,31 @@ const MAX_STEPS = 600;
  * (`addMonths(anchor, k * amount)`) so a 01-31 anchor yields 02-28 then
  * 03-31 instead of drifting to the 28th forever (M-2).
  */
-export function occurrenceDatesInWindow(
+function monthOccurrencesInWindow(
   anchor: string,
   cadence: Cadence,
   windowStart: string,
   windowEndExclusive: string,
 ): string[] {
-  if (cadence.unit === "months") {
-    const dates: string[] = [];
-    let back = 0;
-    for (; back > -MAX_STEPS && addMonths(anchor, back * cadence.amount) >= windowStart; back -= 1) {
-      // walk back past the window start
-    }
-    for (let k = back; k < MAX_STEPS; k += 1) {
-      const date = addMonths(anchor, k * cadence.amount);
-      if (date >= windowEndExclusive) break;
-      if (date >= windowStart) dates.push(date);
-    }
-    return dates;
+  const dates: string[] = [];
+  let back = 0;
+  while (back > -MAX_STEPS && addMonths(anchor, back * cadence.amount) >= windowStart) {
+    back -= 1;
   }
+  for (let k = back; k < MAX_STEPS; k += 1) {
+    const date = addMonths(anchor, k * cadence.amount);
+    if (date >= windowEndExclusive) break;
+    if (date >= windowStart) dates.push(date);
+  }
+  return dates;
+}
+
+function nonMonthOccurrencesInWindow(
+  anchor: string,
+  cadence: Cadence,
+  windowStart: string,
+  windowEndExclusive: string,
+): string[] {
   let cursor = anchor;
   for (let i = 0; i < MAX_STEPS && cursor >= windowStart; i++) {
     cursor = step(cursor, cadence, -1);
@@ -122,6 +128,18 @@ export function occurrenceDatesInWindow(
     if (cursor >= windowStart && cursor < windowEndExclusive) dates.push(cursor);
   }
   return dates;
+}
+
+export function occurrenceDatesInWindow(
+  anchor: string,
+  cadence: Cadence,
+  windowStart: string,
+  windowEndExclusive: string,
+): string[] {
+  if (cadence.unit === "months") {
+    return monthOccurrencesInWindow(anchor, cadence, windowStart, windowEndExclusive);
+  }
+  return nonMonthOccurrencesInWindow(anchor, cadence, windowStart, windowEndExclusive);
 }
 
 export function countUnreviewedStreams(

@@ -25,7 +25,6 @@ export default function FormMessage({
     return (
       <output
         id={id}
-        role="status"
         className={cn("block text-xs text-muted", className)}
       >
         {message}

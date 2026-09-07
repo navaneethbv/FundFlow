@@ -338,6 +338,44 @@ function matchingActual(entries: BudgetActualEntry[], budgetCategory: string): n
   return round2(total);
 }
 
+interface BudgetCalcContext {
+  month: string;
+  previousMonth: string;
+  periods: BudgetPeriodRecord[];
+  current: ReturnType<typeof actualsForMonth>;
+  previous: ReturnType<typeof actualsForMonth>;
+}
+
+function calculateBudgetLine(budget: BudgetRecord, ctx: BudgetCalcContext): BudgetLine {
+  const group = budgetGroup(budget.group_name);
+  const basePlanned = periodAmount(ctx.periods, budget.id, ctx.month) ?? Number(budget.monthly_limit);
+  const previousPlanned = periodAmount(ctx.periods, budget.id, ctx.previousMonth) ?? Number(budget.monthly_limit);
+  const rolloverCarry = budget.rollover_enabled && group !== "income"
+    ? round2(previousPlanned - matchingActual(ctx.previous.expenses, budget.category))
+    : 0;
+  const planned = group === "income"
+    ? round2(basePlanned)
+    : Math.max(0, round2(basePlanned + rolloverCarry));
+  const actual = group === "income"
+    ? matchingActual(ctx.current.income, budget.category)
+    : matchingActual(ctx.current.expenses, budget.category);
+
+  return {
+    budgetId: budget.id,
+    category: budget.category,
+    label: titleCase(budget.category),
+    basePlanned: round2(basePlanned),
+    planned,
+    actual: round2(actual),
+    remaining: round2(group === "income" ? actual - planned : planned - actual),
+    budgeted: true,
+    group,
+    rolloverEnabled: Boolean(budget.rollover_enabled),
+    rolloverCarry,
+    sortOrder: Number(budget.sort_order ?? 0),
+  };
+}
+
 function buildBudgetLines(
   budgets: BudgetRecord[],
   periods: BudgetPeriodRecord[],
@@ -350,47 +388,18 @@ function buildBudgetLines(
   const linesByGroup: Record<BudgetGroup, BudgetLine[]> = {
     income: [], fixed: [], flexible: [], non_monthly: [],
   };
+  const ctx: BudgetCalcContext = { month, previousMonth, periods, current, previous };
+
   for (const budget of budgets) {
-    const category = budget.category.toLowerCase();
-    const group = budgetGroup(budget.group_name);
-    const basePlanned = periodAmount(periods, budget.id, month) ?? Number(budget.monthly_limit);
-    const previousPlanned = periodAmount(periods, budget.id, previousMonth) ?? Number(budget.monthly_limit);
-    // Canonical matching (M-1): actuals carry both the detailed categoryKey
-    // and the groupKey, but a budget may name either granularity. Sum every
-    // pair entry that matches under `matchesBudgetCategory` so /budget
-    // agrees with the dashboard envelopes and the weekly report.
-    const rolloverCarry = budget.rollover_enabled && group !== "income"
-      ? round2(previousPlanned - matchingActual(previous.expenses, budget.category))
-      : 0;
-    const planned = group === "income"
-      ? round2(basePlanned)
-      : Math.max(0, round2(basePlanned + rolloverCarry));
-    const actual = group === "income"
-      ? matchingActual(current.income, budget.category)
-      : matchingActual(current.expenses, budget.category);
-    // A pair entry consumed by any budget never surfaces as an unbudgeted
-    // line: without this, spend claimed by a group budget would reappear as
-    // "unbudgeted" under its detailed key.
-    for (const entry of group === "income" ? current.income : current.expenses) {
+    const line = calculateBudgetLine(budget, ctx);
+    const candidateEntries = line.group === "income" ? current.income : current.expenses;
+    for (const entry of candidateEntries) {
       if (matchesBudgetCategory(budget.category, entry)) {
         processed.add(`${entry.groupKey}|${entry.categoryKey}`);
       }
     }
-    processed.add(category);
-    linesByGroup[group].push({
-      budgetId: budget.id,
-      category: budget.category,
-      label: titleCase(budget.category),
-      basePlanned: round2(basePlanned),
-      planned,
-      actual: round2(actual),
-      remaining: round2(group === "income" ? actual - planned : planned - actual),
-      budgeted: true,
-      group,
-      rolloverEnabled: Boolean(budget.rollover_enabled),
-      rolloverCarry,
-      sortOrder: Number(budget.sort_order ?? 0),
-    });
+    processed.add(budget.category.toLowerCase());
+    linesByGroup[line.group].push(line);
   }
   addUnbudgetedLines(linesByGroup, processed, current.expenses, "flexible");
   addUnbudgetedLines(linesByGroup, processed, current.income, "income");

@@ -208,6 +208,43 @@ function monthsPerStep(frequency: RecurringFrequency): number | null {
   return null;
 }
 
+function expandMonthBasedRecurring(
+  nextDate: string,
+  months: number,
+  from: string,
+  to: string,
+): string[] {
+  const dates: string[] = [];
+  let step = 0;
+  while (step < 1200 && addMonths(nextDate, step * months) < from) {
+    step += 1;
+  }
+  for (; step < 2400; step += 1) {
+    const date = addMonths(nextDate, step * months);
+    if (date > to) break;
+    if (date >= from) dates.push(date);
+  }
+  return dates;
+}
+
+function expandDayBasedRecurring(
+  nextDate: string,
+  frequency: RecurringFrequency,
+  from: string,
+  to: string,
+): string[] {
+  const dates: string[] = [];
+  let cursor = nextDate;
+  for (let i = 0; i < 500 && cursor < from; i += 1) {
+    cursor = nextOccurrence(cursor, frequency);
+  }
+  for (let i = 0; i < 1000 && cursor >= from && cursor <= to; i += 1) {
+    dates.push(cursor);
+    cursor = nextOccurrence(cursor, frequency);
+  }
+  return dates;
+}
+
 /**
  * Every occurrence date of one recurring item in `[from, to]`, advancing a
  * stale anchor forward instead of dropping it (M-4). Month-based cadences
@@ -219,29 +256,11 @@ export function expandRecurring(item: RecurringItem, from: string, to: string): 
   if (item.frequency === "once") {
     return item.nextDate >= from && item.nextDate <= to ? [item.nextDate] : [];
   }
-  const dates: string[] = [];
   const months = monthsPerStep(item.frequency);
   if (months !== null) {
-    let step = 0;
-    for (; step < 1200 && addMonths(item.nextDate, step * months) < from; step += 1) {
-      // advance stale anchor forward without emitting past occurrences
-    }
-    for (; step < 2400; step += 1) {
-      const date = addMonths(item.nextDate, step * months);
-      if (date > to) break;
-      if (date >= from) dates.push(date);
-    }
-    return dates;
+    return expandMonthBasedRecurring(item.nextDate, months, from, to);
   }
-  let cursor = item.nextDate;
-  for (let i = 0; i < 500 && cursor < from; i += 1) {
-    cursor = nextOccurrence(cursor, item.frequency);
-  }
-  for (let i = 0; i < 1000 && cursor >= from && cursor <= to; i += 1) {
-    dates.push(cursor);
-    cursor = nextOccurrence(cursor, item.frequency);
-  }
-  return dates;
+  return expandDayBasedRecurring(item.nextDate, item.frequency, from, to);
 }
 
 function normalize(value: string): string {

@@ -39,7 +39,7 @@ export default function AllocationView({
             key={group.label}
             style={{
               width: `${(group.amount / page.total) * 100}%`,
-              backgroundColor: SLOT_COLORS[i] ?? SLOT_COLORS[SLOT_COLORS.length - 1],
+              backgroundColor: SLOT_COLORS[i] ?? SLOT_COLORS.at(-1),
             }}
             title={`${group.label}: ${formatCurrency(group.amount, currency)}`}
           />
@@ -51,7 +51,7 @@ export default function AllocationView({
             <span className="flex items-center gap-2">
               <span
                 className="inline-block h-2.5 w-2.5 rounded-full"
-                style={{ backgroundColor: SLOT_COLORS[i] ?? SLOT_COLORS[SLOT_COLORS.length - 1] }}
+                style={{ backgroundColor: SLOT_COLORS[i] ?? SLOT_COLORS.at(-1) }}
                 aria-hidden
               />
               {group.label}

@@ -153,6 +153,21 @@ function normalizeName(value: string): string {
   return value.trim().toLowerCase();
 }
 
+function cadenceMonths(frequency: string): number | null {
+  if (frequency === "monthly") return 1;
+  if (frequency === "quarterly") return 3;
+  if (frequency === "yearly") return 12;
+  return null;
+}
+
+function advanceAnchorMonths(lastPaidDate: string, months: number, asOf: string): string | null {
+  let step = 0;
+  while (step < 400 && addMonths(lastPaidDate, step * months) < asOf) {
+    step += 1;
+  }
+  return step < 400 ? addMonths(lastPaidDate, step * months) : null;
+}
+
 function computeNextPayDate(
   stream: IncomeStreamInput,
   lastPaidDate: string | null,
@@ -163,18 +178,9 @@ function computeNextPayDate(
   // Month-based cadences step from the deposit anchor with absolute
   // offsets so a 01-31 payday advances 02-28 then 03-31 (M-2) instead
   // of drifting to the 28th.
-  const monthsPerPayPeriod =
-    stream.frequency === "monthly" ? 1
-    : stream.frequency === "quarterly" ? 3
-    : stream.frequency === "yearly" ? 12
-    : null;
-
+  const monthsPerPayPeriod = cadenceMonths(stream.frequency);
   if (monthsPerPayPeriod !== null) {
-    let step = 0;
-    for (; step < 400 && addMonths(lastPaidDate, step * monthsPerPayPeriod) < asOf; step += 1) {
-      // advance stale anchor forward
-    }
-    return step < 400 ? addMonths(lastPaidDate, step * monthsPerPayPeriod) : null;
+    return advanceAnchorMonths(lastPaidDate, monthsPerPayPeriod, asOf);
   }
 
   let cursor = lastPaidDate;

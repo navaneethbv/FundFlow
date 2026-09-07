@@ -432,28 +432,14 @@ describe("POST /api/rules/batch read failures", () => {
     };
   }
 
-  it("returns 500 when the rules read fails", async () => {
+  it.each([
+    ["rules", "merchant_rules", "rules down"],
+    ["transactions", "transactions", "txns down"],
+    ["annotations", "transaction_annotations", "annotations down"],
+  ])("returns 500 when the %s read fails", async (_label, table, message) => {
     mockRequireUser.mockResolvedValueOnce({
       user: { id: "u-1" },
-      supabase: failingDb("merchant_rules", { message: "rules down" }),
-    });
-    const res = await POST(createBatchRequest({ dryRun: true }));
-    expect(res.status).toBe(500);
-  });
-
-  it("returns 500 when the transactions read fails", async () => {
-    mockRequireUser.mockResolvedValueOnce({
-      user: { id: "u-1" },
-      supabase: failingDb("transactions", { message: "txns down" }),
-    });
-    const res = await POST(createBatchRequest({ dryRun: true }));
-    expect(res.status).toBe(500);
-  });
-
-  it("returns 500 when the annotations read fails", async () => {
-    mockRequireUser.mockResolvedValueOnce({
-      user: { id: "u-1" },
-      supabase: failingDb("transaction_annotations", { message: "annotations down" }),
+      supabase: failingDb(table, { message }),
     });
     const res = await POST(createBatchRequest({ dryRun: true }));
     expect(res.status).toBe(500);

@@ -40,6 +40,7 @@ import {
   projectFinanceTransactions,
   UNCATEGORIZED,
   type FinanceFlow,
+  type RawFinanceTransaction,
   type TransactionRow,
 } from "@/lib/finance-domain";
 import {
@@ -794,6 +795,203 @@ function composeDashboardBalanceSheet(
   });
 }
 
+function assertStage1Success(
+  results: readonly [string, { error?: unknown }][],
+): void {
+  for (const [name, result] of results) {
+    if (result.error) {
+      throw result.error instanceof Error
+        ? new Error(`dashboard stage1 ${name}: ${result.error.message}`, { cause: result.error })
+        : result.error;
+    }
+  }
+}
+
+async function fetchWindowTransactions(
+  supabase: SupabaseClient,
+  activeMonth: string,
+  scopeUser: <T>(builder: T) => T,
+): Promise<Array<Record<string, unknown>>> {
+  const windowStart = `${addMonths(activeMonth, -5)}-01`;
+  const windowEndExclusive = `${addMonths(activeMonth, 1)}-01`;
+  const txns: Array<Record<string, unknown>> = [];
+  for (let page = 0; ; page += 1) {
+    const from = page * DASHBOARD_TXN_PAGE_SIZE;
+    const result = (await scopeUser(
+      supabase
+        .from("transactions")
+        .select(
+          "id, date, amount, merchant_name, name, pfc_primary, pfc_detailed, account_id, user_id, plaid_transaction_id",
+        )
+        .gte("date", windowStart)
+        .lt("date", windowEndExclusive)
+        .order("date")
+        .order("id")
+        .range(from, from + DASHBOARD_TXN_PAGE_SIZE - 1),
+    )) as { data: Array<Record<string, unknown>> | null; error: unknown };
+    if (result.error) throw result.error;
+    const batch = result.data ?? [];
+    txns.push(...batch);
+    if (batch.length < DASHBOARD_TXN_PAGE_SIZE) break;
+  }
+  return txns;
+}
+
+function buildProjectedTransactions(params: {
+  txns: Array<Record<string, unknown>>;
+  merchantRules: unknown[] | null;
+  categoryOverrideRows: unknown[] | null;
+  linkedRefunds: unknown[] | null;
+  linkedTransfersRows: unknown[] | null;
+  linkedDuplicates: unknown[] | null;
+  transactionOverrides: Array<{
+    transactionId: string;
+    displayCategory: string | null;
+    cashFlowClassification: "expense" | "income" | null;
+  }>;
+  allAccounts: AccountSummary[];
+}): { rawRows: RawFinanceTransaction[]; allTxnsRaw: TxnLite[] } {
+  const {
+    txns,
+    merchantRules,
+    categoryOverrideRows,
+    linkedRefunds,
+    linkedTransfersRows,
+    linkedDuplicates,
+    transactionOverrides,
+    allAccounts,
+  } = params;
+
+  const accountNamesById = new Map<string, string>();
+  for (const a of allAccounts) {
+    accountNamesById.set(a.id, a.name || "");
+  }
+
+  const rulesList = (merchantRules ?? []).map((r) => {
+    const rule = r as {
+      match_type: "merchant" | "keyword" | "account";
+      pattern: string;
+      display_name: string | null;
+      category: string | null;
+      enabled: boolean;
+    };
+    return {
+      matchType: rule.match_type,
+      pattern: rule.pattern,
+      displayName: rule.display_name,
+      category: rule.category,
+      enabled: rule.enabled,
+    };
+  });
+
+  const rawRows = ((txns ?? []) as unknown as TransactionRow[]).map(fromTransactionRow);
+  const rawById = new Map(rawRows.map((row) => [row.id, row]));
+
+  const canonicalTxns = projectFinanceTransactions({
+    rows: rawRows,
+    merchantRules: rulesList,
+    categoryOverrides: ((categoryOverrideRows ?? []) as Array<{
+      source_category: string;
+      display_category: string;
+    }>).map((row) => ({
+      sourceCategory: row.source_category,
+      displayCategory: row.display_category,
+    })),
+    splits: [],
+    linkedRefunds: ((linkedRefunds ?? []) as Array<{
+      charge_transaction_id: string;
+      refund_transaction_id: string;
+    }>).map((row) => ({
+      chargeTransactionId: row.charge_transaction_id,
+      refundTransactionId: row.refund_transaction_id,
+    })),
+    linkedTransfers: ((linkedTransfersRows ?? []) as Array<{
+      out_transaction_id: string;
+      in_transaction_id: string;
+    }>).map((row) => ({
+      outTransactionId: row.out_transaction_id,
+      inTransactionId: row.in_transaction_id,
+    })),
+    transactionOverrides,
+    excludedTransactionIds: new Set(
+      ((linkedDuplicates ?? []) as Array<{ excluded_transaction_id: string }>).map(
+        (row) => row.excluded_transaction_id,
+      ),
+    ),
+    accountNames: accountNamesById,
+  });
+
+  const allTxnsRaw: TxnLite[] = canonicalTxns.map((row) => {
+    const source = rawById.get(row.sourceTransactionId)!;
+    return {
+      id: row.id,
+      date: row.date,
+      amount: row.signedAmount,
+      merchant_name: row.merchant,
+      name: source.name,
+      pfc_primary: row.groupKey === UNCATEGORIZED ? null : row.groupKey,
+      pfc_detailed: source.pfcDetailed,
+      account_id: row.accountId ?? "",
+      user_id: source.userId,
+      flow: row.flow,
+    };
+  });
+
+  return { rawRows, allTxnsRaw };
+}
+
+function buildSafeToSpendUpcomingExpenses(
+  forecastEvents: Array<{ itemType: string; date: string; name: string; amount: number }>,
+  sinkingFundItems: Array<{ dueSoon: boolean; dueDate: string; name: string; targetAmount: number }>,
+  insightsAsOf: string,
+): Array<{ date: string; name: string; amount: number }> {
+  return [
+    ...forecastEvents
+      .filter((event) => event.itemType === "expense")
+      .map((event) => ({
+        date: event.date,
+        name: event.name,
+        amount: Math.abs(event.amount),
+      })),
+    ...sinkingFundItems
+      .filter((fund) => fund.dueSoon)
+      .map((fund) => ({
+        date: fund.dueDate < insightsAsOf ? insightsAsOf : fund.dueDate,
+        name: fund.name,
+        amount: fund.targetAmount,
+      })),
+  ];
+}
+
+function composeNetWorthHistoryWithLivePoint(params: {
+  snapshots: Array<{ snapshot_month: string; assets: number; liabilities: number }>;
+  netWorthSnapshot: { assets: number; liabilities: number; netWorth: number };
+  currentMonth: string;
+  hasBalanceSheet: boolean;
+  scope?: string;
+}): Array<{ month: string; assets: number; liabilities: number; netWorth: number }> {
+  const { snapshots, netWorthSnapshot, currentMonth, hasBalanceSheet, scope } = params;
+  const netWorthHistory = snapshots.map((s) => {
+    const assets = Number(s.assets ?? 0);
+    const liabilities = Number(s.liabilities ?? 0);
+    return {
+      month: s.snapshot_month.slice(0, 7),
+      assets,
+      liabilities,
+      netWorth: round2(assets - liabilities),
+    };
+  });
+
+  if (scope !== "household" && hasBalanceSheet) {
+    const currentPoint = { month: currentMonth, ...netWorthSnapshot };
+    const currentIndex = netWorthHistory.findIndex((point) => point.month === currentMonth);
+    if (currentIndex >= 0) netWorthHistory[currentIndex] = currentPoint;
+    else netWorthHistory.push(currentPoint);
+  }
+  netWorthHistory.sort((a, b) => a.month.localeCompare(b.month));
+  return netWorthHistory;
+}
+
 export async function getDashboardData(
   supabase: SupabaseClient,
   selectedAccountId?: string,
@@ -969,7 +1167,7 @@ export async function getDashboardData(
     manualAccountsResult,
     netWorthPrefsResult,
   ] = stage1;
-  for (const [name, result] of [
+  assertStage1Success([
     ["accounts", accountsResult],
     ["recurring_streams", streamsResult],
     ["plaid_items", itemsResult],
@@ -983,13 +1181,7 @@ export async function getDashboardData(
     ["category_overrides", categoryOverrideRowsResult],
     ["sinking_funds", sinkingFundRowsResult],
     ["scheduled_transactions", scheduledRowsResult],
-  ] as const) {
-    if (result.error) {
-      throw result.error instanceof Error
-        ? new Error(`dashboard stage1 ${name}: ${result.error.message}`, { cause: result.error })
-        : result.error;
-    }
-  }
+  ]);
   const accounts = accountsResult.data;
   const streams = streamsResult.data;
   const items = itemsResult.data;
@@ -1000,7 +1192,7 @@ export async function getDashboardData(
   const snapshots = snapshotsResult.data;
   const linkedRefunds = linkedRefundsResult.data;
   if (linkedTransfers.error) throw linkedTransfers.error;
-  const linkedTransfersRows = linkedTransfers.data;
+  const linkedTransfersRows = linkedTransfers.data as unknown[] | null;
   const linkedDuplicates = linkedDuplicatesResult.data;
   const categoryOverrideRows = categoryOverrideRowsResult.data;
   const sinkingFundRows = sinkingFundRowsResult.data;
@@ -1045,28 +1237,7 @@ export async function getDashboardData(
   // Paged with .range() (A-5): PostgREST silently truncates an unpaged read
   // at max_rows (1,000), which produced wrong spend totals, envelopes, and
   // cron alerts with no error once a ledger passed ~165 txns/month.
-  const windowStart = `${addMonths(activeMonth, -5)}-01`;
-  const windowEndExclusive = `${addMonths(activeMonth, 1)}-01`;
-  const txns: Array<Record<string, unknown>> = [];
-  for (let page = 0; ; page += 1) {
-    const from = page * DASHBOARD_TXN_PAGE_SIZE;
-    const result = await scopeUser(
-      supabase
-        .from("transactions")
-        .select(
-          "id, date, amount, merchant_name, name, pfc_primary, pfc_detailed, account_id, user_id, plaid_transaction_id",
-        )
-        .gte("date", windowStart)
-        .lt("date", windowEndExclusive)
-        .order("date")
-        .order("id")
-        .range(from, from + DASHBOARD_TXN_PAGE_SIZE - 1),
-    ) as { data: Array<Record<string, unknown>> | null; error: unknown };
-    if (result.error) throw result.error;
-    const batch = result.data ?? [];
-    txns.push(...batch);
-    if (batch.length < DASHBOARD_TXN_PAGE_SIZE) break;
-  }
+  const txns = await fetchWindowTransactions(supabase, activeMonth, scopeUser);
 
   // Per-transaction classification overrides for the rendered window, so the
   // dashboard agrees with every other canonical surface about the same rows.
@@ -1086,76 +1257,15 @@ export async function getDashboardData(
         : null,
   }));
 
-  const accountNamesById = new Map<string, string>();
-  for (const a of allAccounts) {
-    accountNamesById.set(a.id, a.name || "");
-  }
-
-  const rulesList = (merchantRules ?? []).map((r) => ({
-    matchType: r.match_type as "merchant" | "keyword" | "account",
-    pattern: r.pattern,
-    displayName: r.display_name,
-    category: r.category,
-    enabled: r.enabled,
-  }));
-
-  // Transaction meaning — merchant rules, category renames, refund netting and
-  // spend/income/transfer classification — is decided once by the canonical
-  // projection so every page agrees with this one.
-  //
-  // Splits are deliberately NOT passed here: the dashboard distributes them
-  // downstream over active-month spend only (see categoryBreakdown), and
-  // handing them to the projection as well would apply them twice.
-  const rawRows = ((txns ?? []) as unknown as TransactionRow[]).map(fromTransactionRow);
-  const rawById = new Map(rawRows.map((row) => [row.id, row]));
-
-  const canonicalTxns = projectFinanceTransactions({
-    rows: rawRows,
-    merchantRules: rulesList,
-    categoryOverrides: ((categoryOverrideRows ?? []) as Array<{
-      source_category: string;
-      display_category: string;
-    }>).map((row) => ({
-      sourceCategory: row.source_category,
-      displayCategory: row.display_category,
-    })),
-    splits: [],
-    linkedRefunds: ((linkedRefunds ?? []) as Array<{
-      charge_transaction_id: string;
-      refund_transaction_id: string;
-    }>).map((row) => ({
-      chargeTransactionId: row.charge_transaction_id,
-      refundTransactionId: row.refund_transaction_id,
-    })),
-    linkedTransfers: ((linkedTransfersRows ?? []) as Array<{
-      out_transaction_id: string;
-      in_transaction_id: string;
-    }>).map((row) => ({
-      outTransactionId: row.out_transaction_id,
-      inTransactionId: row.in_transaction_id,
-    })),
+  const { allTxnsRaw } = buildProjectedTransactions({
+    txns,
+    merchantRules,
+    categoryOverrideRows,
+    linkedRefunds,
+    linkedTransfersRows,
+    linkedDuplicates,
     transactionOverrides,
-    excludedTransactionIds: new Set(
-      ((linkedDuplicates ?? []) as Array<{ excluded_transaction_id: string }>)
-        .map((row) => row.excluded_transaction_id),
-    ),
-    accountNames: accountNamesById,
-  });
-
-  const allTxnsRaw: TxnLite[] = canonicalTxns.map((row) => {
-    const source = rawById.get(row.sourceTransactionId)!;
-    return {
-      id: row.id,
-      date: row.date,
-      amount: row.signedAmount,
-      merchant_name: row.merchant,
-      name: source.name,
-      pfc_primary: row.groupKey === UNCATEGORIZED ? null : row.groupKey,
-      pfc_detailed: source.pfcDetailed,
-      account_id: row.accountId ?? "",
-      user_id: source.userId,
-      flow: row.flow,
-    };
+    allAccounts,
   });
 
   // Filter transactions by selected account and/or bank (plaid item)
@@ -1429,22 +1539,11 @@ export async function getDashboardData(
     cashBalance,
     asOf: insightsAsOf,
     nextPayDate: paychecks.primary?.nextPayDate ?? null,
-    upcomingExpenses: [
-      ...cashFlowForecast.events
-        .filter((event) => event.itemType === "expense")
-        .map((event) => ({
-          date: event.date,
-          name: event.name,
-          amount: Math.abs(event.amount),
-        })),
-      ...sinkingFunds.items
-        .filter((fund) => fund.dueSoon)
-        .map((fund) => ({
-          date: fund.dueDate < insightsAsOf ? insightsAsOf : fund.dueDate,
-          name: fund.name,
-          amount: fund.targetAmount,
-        })),
-    ],
+    upcomingExpenses: buildSafeToSpendUpcomingExpenses(
+      cashFlowForecast.events,
+      sinkingFunds.items,
+      insightsAsOf,
+    ),
   });
 
   // Recurring stream statuses match each stream to a real transaction so the
@@ -1517,30 +1616,14 @@ export async function getDashboardData(
   });
   const netWorthSnapshot = computeNetWorthSnapshot(netWorthAccounts);
 
-  const netWorthHistory = allSnapshots.map((s) => {
-    const assets = Number(s.assets ?? 0);
-    const liabilities = Number(s.liabilities ?? 0);
-    return {
-      month: s.snapshot_month.slice(0, 7), // YYYY-MM
-      assets,
-      liabilities,
-      netWorth: round2(assets - liabilities),
-    };
-  });
-
-  // The open month is a live observation, not a completed monthly snapshot.
-  // Under household scope `netWorthAccounts` includes the partner's shared
-  // balances (RLS-visible), but `net_worth_snapshots` only ever holds the
-  // viewer's own history, so splicing a household-wide live point in there
-  // would fabricate a month-over-month jump equal to the partner's balances.
   const hasBalanceSheet = netWorthAccounts.some((account) => account.balance !== null);
-  if (options?.scope !== "household" && hasBalanceSheet) {
-    const currentPoint = { month: currentMonth, ...netWorthSnapshot };
-    const currentIndex = netWorthHistory.findIndex((point) => point.month === currentMonth);
-    if (currentIndex >= 0) netWorthHistory[currentIndex] = currentPoint;
-    else netWorthHistory.push(currentPoint);
-  }
-  netWorthHistory.sort((a, b) => a.month.localeCompare(b.month));
+  const netWorthHistory = composeNetWorthHistoryWithLivePoint({
+    snapshots: allSnapshots,
+    netWorthSnapshot,
+    currentMonth,
+    hasBalanceSheet,
+    scope: options?.scope,
+  });
 
   return {
     accounts: allAccounts,
