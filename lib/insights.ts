@@ -153,10 +153,45 @@ function normalizeName(value: string): string {
   return value.trim().toLowerCase();
 }
 
+function computeNextPayDate(
+  stream: IncomeStreamInput,
+  lastPaidDate: string | null,
+  asOf: string,
+): string | null {
+  if (!lastPaidDate) return null;
+
+  // Month-based cadences step from the deposit anchor with absolute
+  // offsets so a 01-31 payday advances 02-28 then 03-31 (M-2) instead
+  // of drifting to the 28th.
+  const monthsPerPayPeriod =
+    stream.frequency === "monthly" ? 1
+    : stream.frequency === "quarterly" ? 3
+    : stream.frequency === "yearly" ? 12
+    : null;
+
+  if (monthsPerPayPeriod !== null) {
+    let step = 0;
+    for (; step < 400 && addMonths(lastPaidDate, step * monthsPerPayPeriod) < asOf; step += 1) {
+      // advance stale anchor forward
+    }
+    return step < 400 ? addMonths(lastPaidDate, step * monthsPerPayPeriod) : null;
+  }
+
+  let cursor = lastPaidDate;
+  // Bounded loop: even weekly cadence reaches any realistic asOf fast.
+  for (let i = 0; i < 400 && cursor < asOf; i++) {
+    cursor = advance(cursor, stream.frequency);
+  }
+  return cursor >= asOf ? cursor : null;
+}
+
 /**
- * Matches income streams to real deposits to infer each stream's last pay
- * date and next expected pay date. The primary paycheck is the largest
- * stream whose next date is known — unanchored streams are reported but
+ * Identify recurring paychecks from recent income history.
+ *
+ * Estimates the next arrival date and amount from the most frequent cadence.
+ * The primary paycheck anchors the Safe-to-Spend horizon: spending between
+ * now and the next expected paycheck is safe if the net balance stays above
+ * recurring bills in that window. Irregular or unconfirmed income streams are
  * never trusted to drive Safe-to-Spend.
  */
 export function detectPaychecks(input: {
@@ -172,32 +207,7 @@ export function detectPaychecks(input: {
       if (!lastPaidDate || txn.date > lastPaidDate) lastPaidDate = txn.date;
     }
 
-    let nextPayDate: string | null = null;
-    if (lastPaidDate) {
-      // Month-based cadences step from the deposit anchor with absolute
-      // offsets so a 01-31 payday advances 02-28 then 03-31 (M-2) instead
-      // of drifting to the 28th.
-      const monthsPerPayPeriod =
-        stream.frequency === "monthly" ? 1
-        : stream.frequency === "quarterly" ? 3
-        : stream.frequency === "yearly" ? 12
-        : null;
-      if (monthsPerPayPeriod !== null) {
-        let step = 0;
-        for (; step < 400 && addMonths(lastPaidDate, step * monthsPerPayPeriod) < input.asOf; step += 1) {
-          // advance stale anchor forward
-        }
-        const candidate = addMonths(lastPaidDate, step * monthsPerPayPeriod);
-        nextPayDate = step < 400 ? candidate : null;
-      } else {
-        let cursor = lastPaidDate;
-        // Bounded loop: even weekly cadence reaches any realistic asOf fast.
-        for (let i = 0; i < 400 && cursor < input.asOf; i++) {
-          cursor = advance(cursor, stream.frequency);
-        }
-        nextPayDate = cursor >= input.asOf ? cursor : null;
-      }
-    }
+    const nextPayDate = computeNextPayDate(stream, lastPaidDate, input.asOf);
 
     return {
       name: stream.name,

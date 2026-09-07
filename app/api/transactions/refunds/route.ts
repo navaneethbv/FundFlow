@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { detectRefundPairs, filterReviewDecisions } from "@/lib/transaction-quality";
@@ -91,6 +92,136 @@ export async function GET() {
   }
 }
 
+interface RefundLinkParams {
+  subjectId: string;
+  chargeId: string;
+  refundId: string;
+  rawAmount: number | undefined;
+}
+
+function validateRefundLinkInput(
+  body: { charge_id?: unknown; refund_id?: unknown; amount?: unknown } | null,
+  subjectId: string,
+): { errorResponse?: NextResponse; params?: RefundLinkParams } {
+  const chargeId = body?.charge_id;
+  const refundId = body?.refund_id;
+  const rawAmount = body?.amount !== undefined ? Number(body.amount) : undefined;
+  if (
+    typeof chargeId !== "string" ||
+    typeof refundId !== "string" ||
+    (rawAmount !== undefined && !Number.isFinite(rawAmount))
+  ) {
+    return { errorResponse: badRequest("charge_id, refund_id, and amount are required to link a refund") };
+  }
+  if (chargeId === refundId) {
+    return { errorResponse: badRequest("a refund link requires two different transactions") };
+  }
+  if (subjectId !== `${chargeId}:${refundId}`) {
+    return { errorResponse: badRequest("subject_id does not match the charge and refund") };
+  }
+  return { params: { subjectId, chargeId, refundId, rawAmount } };
+}
+
+async function verifyRefundTransactions(
+  supabase: SupabaseClient,
+  userId: string,
+  chargeId: string,
+  refundId: string,
+  rawAmount: number | undefined,
+): Promise<{ errorResponse?: NextResponse; targetAmount?: number }> {
+  const { data: ownedData, error: verifyError } = await supabase
+    .from("transactions")
+    .select("id, amount")
+    .eq("user_id", userId)
+    .in("id", [chargeId, refundId]);
+  if (verifyError) throw verifyError;
+  const owned = (ownedData ?? []) as Array<{ id: string; amount: number }>;
+  if (owned.length !== 2) {
+    return { errorResponse: badRequest("charge and refund must both be your own transactions") };
+  }
+
+  const chargeRow = owned.find((r) => r.id === chargeId);
+  const refundRow = owned.find((r) => r.id === refundId);
+  const chargeAmount = Number(chargeRow?.amount);
+  const refundAmount = Number(refundRow?.amount);
+
+  if (
+    !Number.isFinite(chargeAmount) ||
+    !Number.isFinite(refundAmount) ||
+    chargeAmount <= 0 ||
+    refundAmount >= 0
+  ) {
+    return { errorResponse: badRequest("charge must be positive and refund must be negative") };
+  }
+
+  const targetAmount = rawAmount !== undefined ? Math.abs(rawAmount) : Math.abs(chargeAmount);
+  if (
+    Math.round(targetAmount * 100) > Math.round(chargeAmount * 100) ||
+    Math.round(targetAmount * 100) > Math.round(Math.abs(refundAmount) * 100)
+  ) {
+    return { errorResponse: badRequest("refund amount exceeds the charge or refund transaction total") };
+  }
+
+  return { targetAmount };
+}
+
+async function checkExistingRefundConflict(
+  supabase: SupabaseClient,
+  userId: string,
+  chargeId: string,
+  refundId: string,
+): Promise<boolean> {
+  const { data: existingLinks, error: linkCheckError } = await supabase
+    .from("linked_refunds")
+    .select("charge_transaction_id, refund_transaction_id")
+    .eq("user_id", userId)
+    .or(
+      `charge_transaction_id.in.(${chargeId},${refundId}),refund_transaction_id.in.(${chargeId},${refundId})`,
+    );
+  if (linkCheckError) throw linkCheckError;
+  if (Array.isArray(existingLinks) && existingLinks.length > 0) {
+    const isSelfMatch = existingLinks.every(
+      (l) => l.charge_transaction_id === chargeId && l.refund_transaction_id === refundId,
+    );
+    return !isSelfMatch;
+  }
+  return false;
+}
+
+async function executeRefundLink(
+  supabase: SupabaseClient,
+  userId: string,
+  params: RefundLinkParams,
+): Promise<NextResponse | null> {
+  const { subjectId, chargeId, refundId, rawAmount } = params;
+  const verified = await verifyRefundTransactions(supabase, userId, chargeId, refundId, rawAmount);
+  if (verified.errorResponse) return verified.errorResponse;
+
+  const hasConflict = await checkExistingRefundConflict(supabase, userId, chargeId, refundId);
+  if (hasConflict) {
+    return NextResponse.json(
+      { error: "one or both transactions are already linked to another refund" },
+      { status: 409 },
+    );
+  }
+
+  const { error: rpcError } = await supabase.rpc("confirm_refund_link", {
+    p_user_id: userId,
+    p_subject_id: subjectId,
+    p_charge_id: chargeId,
+    p_refund_id: refundId,
+    p_amount: Math.round(verified.targetAmount! * 100) / 100,
+  });
+  if (rpcError?.message?.includes("refund_link_conflict")) {
+    return NextResponse.json(
+      { error: "one or both transactions are already linked to another refund" },
+      { status: 409 },
+    );
+  }
+  if (rpcError) throw rpcError;
+  return null;
+}
+
 /** Record a refund-pair decision; a linked pair also nets out via linked_refunds. */
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
@@ -109,94 +240,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (decision === "confirmed") {
-      const chargeId = body?.charge_id;
-      const refundId = body?.refund_id;
-      const rawAmount = body?.amount !== undefined ? Number(body.amount) : undefined;
-      if (
-        typeof chargeId !== "string" ||
-        typeof refundId !== "string" ||
-        (rawAmount !== undefined && !Number.isFinite(rawAmount))
-      ) {
-        return badRequest("charge_id, refund_id, and amount are required to link a refund");
-      }
-      if (chargeId === refundId) {
-        return badRequest("a refund link requires two different transactions");
-      }
-      if (subjectId !== `${chargeId}:${refundId}`) {
-        return badRequest("subject_id does not match the charge and refund");
-      }
-
-      // Both sides of a link must be rows in the caller's own ledger — an
-      // arbitrary transaction_id would forge a netting link against someone
-      // else's money.
-      const { data: owned, error: verifyError } = await supabase
-        .from("transactions")
-        .select("id, amount")
-        .eq("user_id", user.id)
-        .in("id", [chargeId, refundId]);
-      if (verifyError) throw verifyError;
-      if ((owned ?? []).length !== 2) {
-        return badRequest("charge and refund must both be your own transactions");
-      }
-
-      const chargeRow = owned?.find((r) => r.id === chargeId);
-      const refundRow = owned?.find((r) => r.id === refundId);
-      const chargeAmount = Number(chargeRow?.amount);
-      const refundAmount = Number(refundRow?.amount);
-
-      if (
-        !Number.isFinite(chargeAmount) ||
-        !Number.isFinite(refundAmount) ||
-        chargeAmount <= 0 ||
-        refundAmount >= 0
-      ) {
-        return badRequest("charge must be positive and refund must be negative");
-      }
-
-      // Check amount matching if client supplied an amount
-      const targetAmount = rawAmount !== undefined ? Math.abs(rawAmount) : Math.abs(chargeAmount);
-      if (
-        Math.round(targetAmount * 100) > Math.round(chargeAmount * 100) ||
-        Math.round(targetAmount * 100) > Math.round(Math.abs(refundAmount) * 100)
-      ) {
-        return badRequest("refund amount exceeds the charge or refund transaction total");
-      }
-
-      // Check if either transaction is already linked to another refund
-      const { data: existingLinks, error: linkCheckError } = await supabase
-        .from("linked_refunds")
-        .select("charge_transaction_id, refund_transaction_id")
-        .eq("user_id", user.id)
-        .or(
-          `charge_transaction_id.in.(${chargeId},${refundId}),refund_transaction_id.in.(${chargeId},${refundId})`,
-        );
-      if (linkCheckError) throw linkCheckError;
-      if (Array.isArray(existingLinks) && existingLinks.length > 0) {
-        const isSelfMatch = existingLinks.every(
-          (l) => l.charge_transaction_id === chargeId && l.refund_transaction_id === refundId,
-        );
-        if (!isSelfMatch) {
-          return NextResponse.json(
-            { error: "one or both transactions are already linked to another refund" },
-            { status: 409 },
-          );
-        }
-      }
-
-      const { error: rpcError } = await supabase.rpc("confirm_refund_link", {
-        p_user_id: user.id,
-        p_subject_id: subjectId,
-        p_charge_id: chargeId,
-        p_refund_id: refundId,
-        p_amount: Math.round(targetAmount * 100) / 100,
-      });
-      if (rpcError?.message?.includes("refund_link_conflict")) {
-        return NextResponse.json(
-          { error: "one or both transactions are already linked to another refund" },
-          { status: 409 },
-        );
-      }
-      if (rpcError) throw rpcError;
+      const validated = validateRefundLinkInput(body, subjectId);
+      if (validated.errorResponse) return validated.errorResponse;
+      const errorResp = await executeRefundLink(supabase, user.id, validated.params!);
+      if (errorResp) return errorResp;
     } else {
       const { error: decisionError } = await supabase
         .from("transaction_review_decisions")
