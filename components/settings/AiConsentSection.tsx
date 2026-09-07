@@ -42,6 +42,10 @@ export default function AiConsentSection({ initialEnabled, exportAllowed, provid
     }
   }
 
+  function handleToggle(event: React.ChangeEvent<HTMLInputElement>) {
+    setEnabled(event.target.checked);
+  }
+
   return (
     <Panel id="ai-consent" title="In-app AI" eyebrow="Consent" className="xl:col-span-2">
       <div className="max-w-2xl space-y-4 text-sm">
@@ -55,9 +59,7 @@ export default function AiConsentSection({ initialEnabled, exportAllowed, provid
             type="checkbox"
             checked={enabled}
             disabled={busy}
-            onChange={(event) => {
-              setEnabled(event.target.checked);
-            }}
+            onChange={handleToggle}
             className="mt-1 h-4 w-4"
           />
           <span>Allow in-app AI processing when I request it</span>

@@ -39,9 +39,7 @@ export default function LifeEventsPanel({
   currency,
   initialEvents,
 }: Readonly<Props>) {
-  const [addedEvents, setAddedEvents] = useState<LifeEvent[]>([]);
-  const [updatedEvents, setUpdatedEvents] = useState<Record<string, LifeEvent>>({});
-  const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
+  const [events, setEvents] = useState<LifeEvent[]>(initialEvents);
   const [type, setType] = useState<LifeEventType>("home_purchase");
   const [startMonth, setStartMonth] = useState("1");
   const [amount, setAmount] = useState("");
@@ -49,17 +47,6 @@ export default function LifeEventsPanel({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const events: LifeEvent[] = [
-    ...initialEvents
-      .filter((e) => !e.id || !deletedIds.has(e.id))
-      .map((e) => {
-        if (!e.id) return e;
-        const updated = updatedEvents[e.id];
-        return updated ?? e;
-      }),
-    ...addedEvents.filter((e) => !e.id || !deletedIds.has(e.id)),
-  ];
 
   const adjusted = applyLifeEvents(basePoints, events, monthlySavings);
   const baseEnd = basePoints.at(-1)?.base ?? 0;
@@ -109,11 +96,9 @@ export default function LifeEventsPanel({
       if (!res.ok) throw new Error(json?.error ?? "Could not save the event.");
       const savedEvent = json?.event;
       if (savedEvent) {
-        if (editingId) {
-          setUpdatedEvents((prev) => ({ ...prev, [editingId]: savedEvent }));
-        } else {
-          setAddedEvents((prev) => [...prev, savedEvent]);
-        }
+        setEvents((current) => editingId
+          ? current.map((event) => event.id === editingId ? savedEvent : event)
+          : [...current, savedEvent]);
       }
       resetForm();
     } catch (err) {
@@ -133,7 +118,7 @@ export default function LifeEventsPanel({
         body: JSON.stringify({ id }),
       });
       if (!res.ok) throw new Error("Could not remove the event.");
-      setDeletedIds((prev) => new Set([...prev, id]));
+      setEvents((current) => current.filter((event) => event.id !== id));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not remove the event.");
     } finally {
