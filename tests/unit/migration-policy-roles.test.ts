@@ -1,10 +1,10 @@
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest";
-import fs from "fs";
-import path from "path";
+
+const MIGRATIONS_DIR = "supabase/migrations";
 
 describe("Migration policy role declarations (S-1)", () => {
-  const migrationsDir = path.resolve(process.cwd(), "supabase/migrations");
-  const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith(".sql"));
+  const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql"));
 
   // Excluded bootstrap tables that are read before AAL2
   const bootstrapTables = ["profiles", "user_session_records", "mfa_backup_codes"];
@@ -13,7 +13,7 @@ describe("Migration policy role declarations (S-1)", () => {
     const violations: Array<{ file: string; line: number; text: string }> = [];
 
     for (const file of files) {
-      const content = fs.readFileSync(path.join(migrationsDir, file), "utf-8");
+      const content = readFileSync(`${MIGRATIONS_DIR}/${file}`, "utf8");
       const lines = content.split("\n");
 
       lines.forEach((line, index) => {
@@ -46,13 +46,12 @@ describe("Migration policy role declarations (S-1)", () => {
     // Historical migrations created policies before S-1 policy hardening.
     // The requirement is that the latest migration gates them, and no new migrations create bare policies.
     // We assert that the latest policy-role migration exists and is valid.
-    expect(fs.existsSync(path.join(migrationsDir, "20260906140000_gate_public_role_policies.sql"))).toBe(true);
+    const hardeningSql = readFileSync("supabase/migrations/20260906140000_gate_public_role_policies.sql", "utf8");
+    expect(hardeningSql).toBeTruthy();
   });
 
   it("verifies 20260906140000_gate_public_role_policies.sql uses the roles overlap operator", () => {
-    const migrationPath = path.join(migrationsDir, "20260906140000_gate_public_role_policies.sql");
-    expect(fs.existsSync(migrationPath)).toBe(true);
-    const sql = fs.readFileSync(migrationPath, "utf-8");
+    const sql = readFileSync("supabase/migrations/20260906140000_gate_public_role_policies.sql", "utf8");
     expect(sql).toContain("roles && array['public', 'authenticated']::name[]");
     expect(sql).toContain("mfa_satisfied");
     expect(sql).toContain("session_not_revoked");

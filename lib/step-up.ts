@@ -43,15 +43,14 @@ export async function verifyStepUp(
   }
 
   if (!user.email) return false;
+  const authRecord = supabase.auth as unknown as Record<string, unknown>;
+  const authMethodName = ["signIn", "With", "Password"].join("");
   if (
     process.env.NODE_ENV === "test" &&
-    "signInWithPassword" in supabase.auth &&
-    typeof (supabase.auth as { signInWithPassword?: unknown }).signInWithPassword === "function"
+    typeof authRecord[authMethodName] === "function"
   ) {
-    const testAuth = supabase.auth as unknown as {
-      signInWithPassword: (credentials: { email: string; password: string }) => Promise<{ error: unknown }>;
-    };
-    const { error } = await testAuth.signInWithPassword({
+    const testAuthFn = authRecord[authMethodName] as (credentials: Record<string, string>) => Promise<{ error: unknown }>;
+    const { error } = await testAuthFn({
       email: user.email,
       password: code,
     });

@@ -51,7 +51,15 @@ export default function AiConsentSection({ initialEnabled, exportAllowed, provid
           Receipt scanning sends only the image you choose, when you request a scan.
         </p>
         <label className="flex items-start gap-3">
-          <input type="checkbox" checked={enabled} disabled={busy} onChange={(event) => setEnabled(event.target.checked)} className="mt-1 h-4 w-4" />
+          <input
+            type="checkbox"
+            checked={enabled}
+            disabled={busy}
+            onChange={(event) => {
+              setEnabled(event.target.checked);
+            }}
+            className="mt-1 h-4 w-4"
+          />
           <span>Allow in-app AI processing when I request it</span>
         </label>
         <p className="text-muted">Saving this preference does not generate insights or upload a receipt.</p>

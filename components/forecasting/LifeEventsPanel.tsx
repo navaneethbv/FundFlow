@@ -53,7 +53,11 @@ export default function LifeEventsPanel({
   const events: LifeEvent[] = [
     ...initialEvents
       .filter((e) => !e.id || !deletedIds.has(e.id))
-      .map((e) => (e.id && updatedEvents[e.id] ? updatedEvents[e.id]! : e)),
+      .map((e) => {
+        if (!e.id) return e;
+        const updated = updatedEvents[e.id];
+        return updated ?? e;
+      }),
     ...addedEvents.filter((e) => !e.id || !deletedIds.has(e.id)),
   ];
 
