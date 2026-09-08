@@ -6,6 +6,7 @@ import {
   type ManualBalanceRow,
   type PlaidBalanceRow,
 } from "@/lib/net-worth-inputs";
+import { dedupeRelinkedAccounts } from "@/lib/relinked-accounts";
 
 /**
  * Computes the net worth (assets and liabilities) for a user and upserts
@@ -22,7 +23,7 @@ export async function writeNetWorthSnapshot(userId: string, today = new Date().t
   // 1. Fetch Plaid accounts
   const { data: plaidAccounts, error: plaidError } = await supabase
     .from("accounts")
-    .select("id, name, type, subtype, current_balance")
+    .select("id, plaid_item_id, name, mask, type, subtype, current_balance, iso_currency_code, updated_at")
     .eq("user_id", userId);
   if (plaidError) throw plaidError;
 
@@ -48,7 +49,14 @@ export async function writeNetWorthSnapshot(userId: string, today = new Date().t
 
   // 4. Map to standard NetWorthAccount shape
   const accounts = composeNetWorthAccounts({
-    plaidAccounts: (plaidAccounts ?? []) as PlaidBalanceRow[],
+    plaidAccounts: dedupeRelinkedAccounts(
+      (plaidAccounts ?? []) as Array<PlaidBalanceRow & {
+        plaid_item_id: string;
+        mask: string | null;
+        iso_currency_code: string | null;
+        updated_at: string | null;
+      }>,
+    ),
     manualAccounts: (manualAccounts ?? []) as ManualBalanceRow[],
     excludedNetWorthIds,
   });

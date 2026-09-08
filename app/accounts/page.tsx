@@ -35,6 +35,7 @@ import {
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { firstSearchParam } from "@/lib/search-params";
 import { createClient } from "@/lib/supabase/server";
+import { dedupeRelinkedAccounts } from "@/lib/relinked-accounts";
 
 export const dynamic = "force-dynamic";
 
@@ -240,7 +241,9 @@ export default async function AccountsPage({
       },
     ]),
   );
-  const plaidAccounts = (accountsResult.data ?? []) as PlaidAccountRow[];
+  const plaidAccounts = dedupeRelinkedAccounts(
+    (accountsResult.data ?? []) as PlaidAccountRow[],
+  );
   const manualAccounts = (manualResult.data ?? []) as ManualAccountRow[];
   const accounts: UnifiedAccountSummary[] = [
     ...plaidAccounts.map((account) => ({

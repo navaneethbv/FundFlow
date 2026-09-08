@@ -8,10 +8,12 @@ import {
   scopeQueryUserId,
 } from "@/lib/financial-scope";
 import { errorResponse, requireUser } from "@/lib/http";
+import { dedupeRelinkedAccounts } from "@/lib/relinked-accounts";
 
 type PlaidCsvRow = {
   id: string;
   user_id: string;
+  plaid_item_id: string;
   name: string | null;
   mask: string | null;
   type: string | null;
@@ -76,7 +78,7 @@ export async function GET(request: NextRequest) {
     let plaidQuery = supabase
       .from("accounts")
       .select(
-        "id,user_id,name,mask,type,subtype,current_balance,iso_currency_code,updated_at",
+        "id,user_id,plaid_item_id,name,mask,type,subtype,current_balance,iso_currency_code,updated_at",
       )
       .order("name");
     let manualQuery = supabase
@@ -106,7 +108,7 @@ export async function GET(request: NextRequest) {
     const hiddenIds = hiddenAccountIds(profileResult.data?.dashboard_prefs);
 
     const rows = [
-      ...((plaidResult.data ?? []) as PlaidCsvRow[])
+      ...dedupeRelinkedAccounts((plaidResult.data ?? []) as PlaidCsvRow[])
         .filter((account) => !hiddenIds.has(account.id))
         .map((account) => {
         const name = `${account.name?.trim() || "Account"}${

@@ -4,6 +4,7 @@ import { groupKeyFor } from "@/lib/accounts-page";
 import type { AdviceContext, AdviceProfileAnswers } from "@/lib/advice";
 import { loadCanonicalProjection } from "@/lib/finance-query";
 import { ESSENTIAL_PFC_PRIMARY, computeRunwayMonths } from "@/lib/insights";
+import { dedupeRelinkedAccounts } from "@/lib/relinked-accounts";
 
 function dayAfter(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00Z`);
@@ -31,7 +32,7 @@ export async function loadAdvicePageData(
 ): Promise<AdvicePageData> {
   const [accountsResult, manualResult, budgetsResult, goalsResult, profileResult, progressResult, projection] =
     await Promise.all([
-      supabase.from("accounts").select("type, subtype, current_balance").eq("user_id", userId),
+      supabase.from("accounts").select("id, plaid_item_id, name, mask, type, subtype, current_balance, iso_currency_code, updated_at").eq("user_id", userId),
       supabase.from("manual_accounts").select("account_type").eq("user_id", userId),
       supabase.from("budgets").select("id").eq("user_id", userId).limit(1),
       supabase.from("goals").select("id").eq("user_id", userId).limit(1),
@@ -49,7 +50,7 @@ export async function loadAdvicePageData(
   if (profileResult.error) throw profileResult.error;
   if (progressResult.error) throw progressResult.error;
 
-  const accounts = accountsResult.data ?? [];
+  const accounts = dedupeRelinkedAccounts(accountsResult.data ?? []);
   const cash = accounts
     .filter((a) => groupKeyFor(a.type as string | null, a.subtype as string | null) === "cash")
     .reduce((sum, a) => sum + Number(a.current_balance ?? 0), 0);

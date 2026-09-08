@@ -7,6 +7,7 @@ import type {
   InvestmentAccountSummary,
   InvestmentTransactionRow,
 } from "@/lib/investments";
+import { dedupeRelinkedAccounts } from "@/lib/relinked-accounts";
 
 interface HoldingQueryRow {
   id: string;
@@ -172,7 +173,7 @@ export async function loadInvestmentAccounts(
   const [plaidResult, manualResult] = await Promise.all([
     supabase
       .from("accounts")
-      .select("id, name, mask, type, subtype, current_balance, iso_currency_code, updated_at, plaid_items(institution_name)")
+      .select("id, plaid_item_id, name, mask, type, subtype, current_balance, iso_currency_code, updated_at, plaid_items(institution_name)")
       .eq("user_id", userId),
     supabase
       .from("manual_accounts")
@@ -199,7 +200,7 @@ export async function loadInvestmentAccounts(
     );
   };
 
-  const plaidAccounts = (plaidResult.data ?? [])
+  const plaidAccounts = dedupeRelinkedAccounts(plaidResult.data ?? [])
     .filter((a) => isInvestment(a.type as string | null, a.subtype as string | null))
     .map((a) => ({
       id: a.id as string,

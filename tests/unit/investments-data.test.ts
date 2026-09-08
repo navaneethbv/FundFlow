@@ -193,6 +193,31 @@ describe("investments-data", () => {
   });
 
   describe("loadInvestmentAccounts", () => {
+    it("does not count a stale duplicate Item in the investment total", async () => {
+      const identity = {
+        type: "investment",
+        subtype: "401k",
+        iso_currency_code: "USD",
+        plaid_items: { institution_name: "Fidelity" },
+      };
+      const supabase = clientStub({
+        accounts: {
+          data: [
+            { ...identity, id: "ibm-old", plaid_item_id: "old", name: "IBM 401(K) PLAN", mask: "2940", current_balance: 22730.61, updated_at: "2026-07-08T00:00:00Z" },
+            { ...identity, id: "paypal-old", plaid_item_id: "old", name: "PAYPAL 401(K) SAVINGS PLAN", mask: "7538", current_balance: 21692.43, updated_at: "2026-07-08T00:00:00Z" },
+            { ...identity, id: "ibm-current", plaid_item_id: "current", name: "IBM 401(K) PLAN", mask: "2940", current_balance: 23179.16, updated_at: "2026-09-07T23:30:00Z" },
+            { ...identity, id: "paypal-current", plaid_item_id: "current", name: "PAYPAL 401(K) SAVINGS PLAN", mask: "7538", current_balance: 22060.84, updated_at: "2026-09-07T23:30:00Z" },
+          ],
+        },
+        manual_accounts: { data: [] },
+      });
+
+      const accounts = await loadInvestmentAccounts(supabase as never, "user-1");
+
+      expect(accounts.map((row) => row.id)).toEqual(["ibm-current", "paypal-current"]);
+      expect(accounts.reduce((sum, row) => sum + (row.balance ?? 0), 0)).toBe(45240);
+    });
+
     it("maps the real Plaid and manual account schemas", async () => {
       const supabase = clientStub({
         accounts: {

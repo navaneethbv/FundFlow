@@ -1,5 +1,6 @@
 import { accountDisplayLabel } from "@/lib/account-label";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { dedupeRelinkedAccounts } from "@/lib/relinked-accounts";
 import {
   computeFundedGoals,
   type AccountBalanceRow,
@@ -64,7 +65,7 @@ export async function loadGoalsPageData(
         .limit(DEPENDENCY_LIMIT),
       supabase
         .from("accounts")
-        .select("id,name,mask,current_balance,type")
+        .select("id,plaid_item_id,name,mask,current_balance,type,subtype,iso_currency_code,updated_at")
         .eq("user_id", userId)
         .order("name")
         .limit(DEPENDENCY_LIMIT),
@@ -75,13 +76,17 @@ export async function loadGoalsPageData(
   assertGoalsQuery("goal_progress_events", eventsResult);
   assertGoalsQuery("accounts", accountsResult);
 
-  const rawAccounts = (accountsResult.data ?? []) as Array<{
+  const rawAccounts = dedupeRelinkedAccounts((accountsResult.data ?? []) as Array<{
     id: string;
+    plaid_item_id: string;
     name: string | null;
     mask?: string | null;
     current_balance: number | string | null;
     type: string | null;
-  }>;
+    subtype: string | null;
+    iso_currency_code: string | null;
+    updated_at: string | null;
+  }>);
   const accounts: AccountBalanceRow[] = rawAccounts.map((row) => ({
     id: row.id,
     // Postgres numeric arrives as a string through PostgREST; Number() here
