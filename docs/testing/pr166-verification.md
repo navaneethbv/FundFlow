@@ -44,7 +44,8 @@ Financial-write assertions also verify review initialization for successful manu
 
 Three real two-session contention tests passed: opposing review actions, review blocked behind a material source update, and a batch blocked behind duplicate exclusion.
 These tests wait for the lock holder to reach its barrier, then verify the rejected request and persisted state.
-Migration CI now executes this suite against its freshly reset Supabase stack.
+Migration CI now executes this suite and the PostgreSQL benchmark against its freshly reset Supabase stack.
+The benchmark fixture is excluded from Codacy's SQL Server linter because its dialect-specific recommendation is invalid PostgreSQL; actual database execution remains mandatory.
 
 ## Loader and performance evidence
 

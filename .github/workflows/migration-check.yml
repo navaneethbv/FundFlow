@@ -9,6 +9,7 @@ on:
       - "scripts/check-financial-writes.sql"
       - "scripts/check-transaction-review.sql"
       - "tests/integration/transaction-review-locks.test.ts"
+      - "tests/fixtures/transaction-review-benchmark.sql"
 
 permissions:
   contents: read
@@ -42,6 +43,9 @@ jobs:
 
       - name: Verify transaction review states and atomic permissions
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-transaction-review.sql
+
+      - name: Verify PostgreSQL review benchmark queries
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/fixtures/transaction-review-benchmark.sql
 
       - uses: actions/setup-node@v7
         with:
