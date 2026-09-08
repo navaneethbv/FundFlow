@@ -2,6 +2,15 @@
 
 Last updated: 2026-09-07. Read this first to resume.
 
+## 2026-09-07: transaction review implementation plan
+
+The user chose transaction review from the feature-gap shortlist and requested a detailed plan.
+The [transaction review plan](superpowers/plans/2026-09-07-transaction-review-implementation-plan.md) is based on merged PR #165 at `74efddd` and current source inspection.
+It keeps review separate from reconciliation and specialized candidate decisions, with independent persistent state, source-change reopening, whole-result filtering, and atomic selected-row writes.
+Only planning documents changed; no application code or migration was created or applied for this feature.
+The user subsequently confirmed all existing transactions should enter review, so the plan now uses two states and an all-history backfill.
+Current planning status is tracked in [TODO.md](TODO.md#transaction-review-plan-2026-09-07).
+
 ## 2026-09-07: linked migrations applied and history reconciled
 
 The user authorized applying the pending migrations before merging the application fixes.

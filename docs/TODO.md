@@ -2,6 +2,13 @@
 
 Nice-to-have features and enhancements, deferred out of the initial build.
 
+## Transaction review plan (2026-09-07)
+
+The user selected persistent transaction review for detailed planning.
+The [implementation plan](superpowers/plans/2026-09-07-transaction-review-implementation-plan.md) defines the first release, state lifecycle, database and API contracts, file-level work packages, acceptance tests, and rollout.
+Status: planned, not implemented.
+The user confirmed that all existing and new transactions must enter review; pending entries become actionable after posting.
+
 ## Repository review follow-up (2026-09-07)
 
 The [repository review and implementation record](reviews/2026-09-07-repository-opportunities.md) records ten findings and their completed local fixes.
