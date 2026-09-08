@@ -139,4 +139,73 @@ test.describe("persistent transaction review", () => {
     );
     expect(overflow).toBeLessThanOrEqual(1);
   });
+
+  test("invalidates selection when background refresh changes a selected version", async ({ page, admin, account, seed }) => {
+    await seedLedger(admin, account, seed);
+    await signIn(page, account);
+    await page.goto("/transactions?review=needs_review");
+    await page.getByRole("row", { name: /Review Alpha/ }).getByRole("checkbox").check();
+    const { error } = await admin.from("transactions").update({ amount: 99 }).eq("user_id", account.id).eq("merchant_name", "Review Alpha");
+    expect(error).toBeNull();
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await expect(page.getByText("1 selected", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("status")).toContainText("Review the updated entries");
+  });
+
+  test("recovers the last page and retains an immediate reverse action", async ({ page, admin, account, seed }) => {
+    const { checkingId } = await seed.linkedAccounts();
+    const { error } = await admin.from("transactions").insert(Array.from({ length: 51 }, (_, i) => ({
+      user_id: account.id, account_id: checkingId, plaid_transaction_id: `review-pages-${account.stamp}-${i}`,
+      date: `${MONTH}-05`, amount: i + 1, name: `Page entry ${i}`, pending: false,
+    })));
+    expect(error).toBeNull();
+    await signIn(page, account);
+    await page.goto(`/transactions?review=needs_review&month=${MONTH}&page=2`);
+    await page.getByRole("button", { name: "Mark transaction as reviewed", exact: true }).click();
+    await expect(page).not.toHaveURL(/page=2/);
+    await expect(page).toHaveURL(new RegExp(`month=${MONTH}`));
+    await expect(page.getByRole("button", { name: "Review again", exact: true })).toBeEnabled();
+    await page.getByRole("button", { name: "Review again", exact: true }).click();
+    await expect(page.getByLabel("Global review queue count")).toContainText("51 transactions");
+  });
+
+  test("finishes and reverses the queue on a phone with accessible feedback", async ({ page, admin, account, seed }) => {
+    await seedLedger(admin, account, seed);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signIn(page, account);
+    await page.goto("/transactions?review=needs_review");
+    await page.getByRole("checkbox", { name: "Select all eligible transactions on this page" }).check();
+    const mark = page.getByRole("button", { name: "Mark 4 selected as reviewed", exact: true });
+    for (const control of [mark, page.getByRole("button", { name: "Mark as needs review", exact: true }), page.getByRole("button", { name: "Cancel", exact: true })]) {
+      const bounds = await control.boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+    }
+    await mark.click();
+    await expect(page.getByRole("heading", { name: "You're all caught up" })).toBeVisible();
+    await expect(page.locator("#transaction-review-heading")).toBeFocused();
+    await expect(page.getByRole("status")).toContainText("4 transactions marked as reviewed");
+    await page.getByRole("button", { name: "Review again", exact: true }).click();
+    await expect(page.getByLabel("Global review queue count")).toContainText("4 transactions");
+  });
+
+  test("reconciles a lost committed response without replaying or offering a blind reverse", async ({ page, admin, account, seed }) => {
+    await seedLedger(admin, account, seed);
+    await signIn(page, account);
+    await page.goto("/transactions?review=needs_review");
+    let writes = 0;
+    await page.route("**/api/transactions/review", async (route) => {
+      writes++;
+      const response = await route.fetch();
+      expect(response.ok()).toBe(true);
+      await route.abort("failed");
+    });
+    await page.getByRole("row", { name: /Review Alpha/ }).getByRole("button", { name: "Mark transaction as reviewed" }).click();
+    await expect(page.getByRole("row", { name: /Review Alpha/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Review again", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("row", { name: /Review Beta/ }).getByRole("button", { name: "Mark transaction as reviewed" })).toBeEnabled();
+    expect(writes).toBe(1);
+  });
+
 });

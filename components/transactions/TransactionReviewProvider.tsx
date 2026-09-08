@@ -3,6 +3,9 @@
 import {
   createContext,
   useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
   useContext,
   useMemo,
   useState,
@@ -38,23 +41,61 @@ interface TransactionReviewContextValue {
   ) => Promise<boolean>;
   lastResult: TransactionReviewResult | null;
   resetResult: () => void;
+  refreshReview: () => void;
+  updateScope: (scope: ReviewScope) => void;
 }
 
 const TransactionReviewContext = createContext<TransactionReviewContextValue | null>(
   null,
 );
 
-export function TransactionReviewProvider({
-  children,
-}: Readonly<{
-  children: ReactNode;
-}>) {
+interface ReviewScope {
+  selectionScope: string;
+  revision: string;
+  authoritative: boolean;
+  ownerId: string;
+}
+
+export function TransactionReviewProvider({ children }: Readonly<{ children: ReactNode }>) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [scope, setScope] = useState<ReviewScope>({ selectionScope: "", revision: "", authoritative: false, ownerId: "" });
+  const { revision } = scope;
+  const [awaitingRevision, setAwaitingRevision] = useState<string | null>(null);
+  const focusAfterRefresh = useRef(false);
+  const requestInFlight = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<TransactionReviewResult | null>(null);
+
+  const updateScope = useCallback((next: ReviewScope) => {
+    // A layout effect publishes each server result before the browser can act
+    // on its controls. IDs cannot retain selection across version changes.
+    if (scope.selectionScope !== next.selectionScope) {
+      setSelectedIds(new Set());
+      if (selectedIds.size > 0) setStatusMessage("These transactions changed. Review the updated entries before trying again.");
+    }
+    if (scope.ownerId !== next.ownerId) {
+      setLastResult(null);
+      setStatusMessage(null);
+    }
+    if (next.authoritative && awaitingRevision !== null && awaitingRevision !== next.revision) setAwaitingRevision(null);
+    setScope(next);
+  }, [scope, selectedIds.size, awaitingRevision]);
+
+  useEffect(() => {
+    if (!focusAfterRefresh.current || isPending || awaitingRevision !== null) return;
+    focusAfterRefresh.current = false;
+    const next = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-review-action]"))
+      .find((button) => !button.disabled && button.getClientRects().length > 0);
+    (next ?? document.getElementById("transaction-review-heading"))?.focus();
+  }, [revision, isPending, awaitingRevision]);
+
+  const refreshReview = useCallback(() => {
+    setAwaitingRevision(revision);
+    startTransition(() => router.refresh());
+  }, [revision, router]);
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -88,7 +129,9 @@ export function TransactionReviewProvider({
       items: Array<{ id: string; version: string }>,
       targetStatus: TransactionReviewStatus,
     ): Promise<boolean> => {
-      if (items.length === 0) return false;
+      if (items.length === 0 || requestInFlight.current || awaitingRevision !== null || isPending || !scope.authoritative) return false;
+      requestInFlight.current = true;
+      setLastResult(null);
 
       setIsSubmitting(true);
       setStatusMessage(
@@ -118,17 +161,13 @@ export function TransactionReviewProvider({
                 "These transactions changed. Review the updated entries before trying again.",
             );
             clearSelection();
-            startTransition(() => {
-              router.refresh();
-            });
+            refreshReview();
             return false;
           }
           if (res.status === 404) {
             setStatusMessage("One or more selected transactions are unavailable.");
             clearSelection();
-            startTransition(() => {
-              router.refresh();
-            });
+            refreshReview();
             return false;
           }
           setStatusMessage(body.error || "Failed to update review status.");
@@ -146,21 +185,20 @@ export function TransactionReviewProvider({
             : `${countText} marked as needs review.`,
         );
 
-        startTransition(() => {
-          router.refresh();
-        });
+        focusAfterRefresh.current = true;
+        refreshReview();
         return true;
       } catch {
         setStatusMessage("Network error updating review status. Refreshing...");
-        startTransition(() => {
-          router.refresh();
-        });
+        clearSelection();
+        refreshReview();
         return false;
       } finally {
+        requestInFlight.current = false;
         setIsSubmitting(false);
       }
     },
-    [router, clearSelection],
+    [clearSelection, refreshReview, awaitingRevision, isPending, scope.authoritative],
   );
 
   const resetResult = useCallback(() => {
@@ -173,11 +211,13 @@ export function TransactionReviewProvider({
       toggleSelect,
       selectShown,
       clearSelection,
-      isSubmitting: isSubmitting || isPending,
+      isSubmitting: isSubmitting || isPending || awaitingRevision !== null || !scope.authoritative,
       statusMessage,
       submitReview,
       lastResult,
       resetResult,
+      refreshReview,
+      updateScope,
     }),
     [
       selectedIds,
@@ -186,10 +226,14 @@ export function TransactionReviewProvider({
       clearSelection,
       isSubmitting,
       isPending,
+      awaitingRevision,
+      scope.authoritative,
       statusMessage,
       submitReview,
       lastResult,
       resetResult,
+      refreshReview,
+      updateScope,
     ],
   );
 
@@ -210,9 +254,23 @@ const DEFAULT_REVIEW_CONTEXT: TransactionReviewContextValue = {
   clearSelection: () => {},
   submitReview: async () => false,
   resetResult: () => {},
+  refreshReview: () => {},
+  updateScope: () => {},
 };
 
 export function useTransactionReview(): TransactionReviewContextValue {
   const ctx = useContext(TransactionReviewContext);
   return ctx ?? DEFAULT_REVIEW_CONTEXT;
+}
+
+/** Bridges each server-rendered page into the persistent layout context. */
+export function TransactionReviewScope(props: Readonly<ReviewScope>) {
+  const { updateScope } = useTransactionReview();
+  const update = useRef(updateScope);
+  useLayoutEffect(() => { update.current = updateScope; });
+  const { selectionScope, revision, authoritative, ownerId } = props;
+  useLayoutEffect(() => {
+    update.current({ selectionScope, revision, authoritative, ownerId });
+  }, [selectionScope, revision, authoritative, ownerId]);
+  return null;
 }

@@ -57,10 +57,9 @@ function makeRequest(
   if (options.contentLength !== undefined) {
     headers.set("content-length", String(options.contentLength));
   }
-  return {
-    text: () => Promise.resolve(text),
-    headers,
-  } as unknown as NextRequest;
+  return new NextRequest("http://localhost/api/transactions/review", {
+    method: "PATCH", headers, body: text,
+  });
 }
 
 describe("PATCH /api/transactions/review", () => {
@@ -287,5 +286,37 @@ describe("PATCH /api/transactions/review", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toBe("Invalid review request");
+  });
+});
+
+
+describe("bounded review request streams", () => {
+  it("counts UTF-8 bytes and cancels an oversized stream without reading its tail", async () => {
+    featureEnabled = true;
+    currentUser = { id: "user-1" };
+    rateLimitAllowed = true;
+    const cancel = vi.fn();
+    let pulls = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) { pulls++; controller.enqueue(new TextEncoder().encode("é".repeat(17000))); },
+      cancel,
+    }, { highWaterMark: 0 });
+    const request = new NextRequest("http://localhost/api/transactions/review", {
+      method: "PATCH", body: stream, duplex: "half",
+      headers: { "content-length": "1" },
+    } as ConstructorParameters<typeof NextRequest>[1]);
+    const response = await PATCH(request);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Payload exceeds maximum size" });
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(pulls).toBe(1);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+  it("handles a missing body and an invalid UTF-8 stream without a write", async () => {
+    featureEnabled = true; currentUser = { id: "user-1" }; rateLimitAllowed = true;
+    for (const body of [null, new Uint8Array([255])]) {
+      const response = await PATCH(new NextRequest("http://localhost/api/transactions/review", { method: "PATCH", body }));
+      expect(response.status).toBe(400);
+    }
   });
 });

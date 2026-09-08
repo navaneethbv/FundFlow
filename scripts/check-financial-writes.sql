@@ -164,5 +164,15 @@ do $$ declare v_id uuid; begin
   assert exists(select 1 from public.goal_progress_events where transaction_id=v_id and amount=-10), 'Goal progress missing';
   assert exists(select 1 from public.transaction_annotations where transaction_id=v_id and note='Goal note' and goal_id='66000000-0000-0000-0000-000000000001'), 'Goal annotation missing';
 end $$;
+-- All successful producer RPCs, including reconciliation adjustments, must
+-- initialize review in the same transaction as the financial record.
+do $$ begin
+  assert not exists (
+    select 1 from public.transactions t left join public.transaction_review_states r
+      on r.transaction_id=t.id and r.user_id=t.user_id
+    where t.user_id in ('11000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000002')
+      and (r.transaction_id is null or r.status <> 'needs_review')
+  ), 'Financial producer RPC omitted review initialization';
+end $$;
 rollback;
 select 'Financial write contracts passed (fixtures rolled back)' as verification;

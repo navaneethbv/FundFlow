@@ -8,6 +8,7 @@ on:
       - "scripts/check-rls.sql"
       - "scripts/check-financial-writes.sql"
       - "scripts/check-transaction-review.sql"
+      - "tests/integration/transaction-review-locks.test.ts"
 
 permissions:
   contents: read
@@ -41,6 +42,19 @@ jobs:
 
       - name: Verify transaction review states and atomic permissions
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-transaction-review.sql
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install transaction contention test dependencies
+        run: npm ci
+
+      - name: Verify transaction review under real row contention
+        run: npx vitest run tests/integration/transaction-review-locks.test.ts
+        env:
+          TEST_TRANSACTION_REVIEW_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
 
       - name: Stop Supabase local stack
         if: always()

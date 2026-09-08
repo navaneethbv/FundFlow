@@ -1,5 +1,6 @@
 import { accountDisplayLabel } from "@/lib/account-label";
 import { Fragment } from "react";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import AutoRefresh from "@/components/AutoRefresh";
 import AppShell from "@/components/shell/AppShell";
@@ -56,12 +57,13 @@ import {
 } from "@/lib/ledger-projection";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import {
-  TransactionReviewProvider,
+  TransactionReviewScope,
 } from "@/components/transactions/TransactionReviewProvider";
 import {
   TransactionReviewCheckbox,
   TransactionReviewRowAction,
   TransactionReviewBulkStrip,
+  TransactionReviewFeedback,
 } from "@/components/transactions/TransactionReviewControls";
 import { TransactionReviewStatusBadge } from "@/components/transactions/TransactionReviewStatus";
 import { isEligibleForReview } from "@/lib/transaction-review";
@@ -652,7 +654,7 @@ function LedgerTableRow({
                   Excluded duplicate
                 </Badge>
               )}
-              {reviewEnabled && reviewStatus && (
+              {reviewEnabled && (reviewStatus || reviewStateMissing) && (
                 <span className="ml-2">
                   <TransactionReviewStatusBadge
                     status={reviewStatus}
@@ -791,7 +793,8 @@ function buildLedgerCardRows(
 
 export default async function TransactionsPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
-  const state = parseLedgerQuery(params);
+  const transactionReviewEnabled = isFeatureEnabled("transactionReview");
+  const state = parseLedgerQuery(transactionReviewEnabled ? params : { ...params, review: "all" });
   const { month, accountId, q, page, category, sub, merchant, flow, accountType } = state;
   const visibleColumns = state.columns;
   const columnsAreDefault = !state.columnsSubmitted;
@@ -800,7 +803,6 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   // is already live, so this must default to the pre-Phase-12 query shape
   // rather than 500ing every visit on an unmigrated deployment.
   const transactionsParityEnabled = isFeatureEnabled("transactionsParity");
-  const transactionReviewEnabled = isFeatureEnabled("transactionReview");
 
   const supabase = await createClient();
   // The ledger has no household scope selector, so every query below is the
@@ -812,7 +814,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   } = await supabase.auth.getUser();
   const ownerId = user?.id ?? "";
 
-  const [savedViewsResult, needsReviewCountResult] = await Promise.all([
+  const [savedViewsResult, needsReviewCountResult, missingReviewResult] = await Promise.all([
     supabase
       .from("saved_views")
       .select("id, name, params")
@@ -826,13 +828,18 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
           .eq("review_status", "needs_review")
           .eq("review_eligible", true)
       : Promise.resolve({ count: null, error: null }),
+    transactionReviewEnabled
+      ? supabase.from("transaction_review_ledger").select("id", { count: "exact", head: true })
+          .eq("user_id", ownerId).eq("review_state_missing", true)
+      : Promise.resolve({ count: 0, error: null }),
   ]);
   const savedViews = ((savedViewsResult.data ?? []) as Array<{
     id: string;
     name: string;
     params: Record<string, string>;
   }>);
-  const needsReviewGlobalCount = needsReviewCountResult.count;
+  const reviewIntegrityFailed = Boolean(missingReviewResult.error) || (missingReviewResult.count ?? 0) > 0;
+  const needsReviewGlobalCount = reviewIntegrityFailed ? null : needsReviewCountResult.count;
 
   // Fetch accounts and rules first to allow type-based filtration.
   const [accountsResult, manualAccountsResult, merchantRulesResult, goalRowsResult] = await Promise.all([
@@ -853,12 +860,17 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   const setupResults = [
     savedViewsResult.error,
     needsReviewCountResult.error,
+    missingReviewResult.error,
     accountsResult.error,
     manualAccountsResult.error,
     merchantRulesResult.error,
     goalRowsResult.error,
   ].map((error) => ({ error }));
   let ledgerError = transactionSetupError(setupResults);
+  if (reviewIntegrityFailed) {
+    console.error("Transaction review state incomplete", { code: missingReviewResult.error?.code ?? "REVIEW_STATE_MISSING", count: missingReviewResult.count });
+    ledgerError = "We couldn't verify transaction review status. Refresh the page to try again.";
+  }
 
   const rulesList = (merchantRules ?? []).map((r) => ({
     matchType: r.match_type as "merchant" | "keyword" | "account",
@@ -921,6 +933,9 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   const { rows, total, filterOptions } = ledgerRows;
   ledgerError = ledgerRows.ledgerError;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (!ledgerError && state.page > totalPages) {
+    redirect(ledgerHref(ledgerQueryEntries(state), { page: totalPages > 1 ? String(totalPages) : null }, { resetPage: false }));
+  }
 
   // User annotations (note/tags) and category splits for the visible rows.
   // `transaction_splits` is readable for any transaction the caller can see,
@@ -968,13 +983,16 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   const columnsFormParams = Object.fromEntries(
     queryEntries.filter(([key]) => key !== "page" && key !== "col" && key !== "colsSubmitted"),
   ) as Record<string, string>;
-  const hasCommittedFilters = hasActiveLedgerFilters(state);
+  const hasCommittedFilters = hasActiveLedgerFilters({ ...state, review: "all" });
+  const reviewSelectionScope = JSON.stringify([queryEntries, rows.map((row) => [row.id, row.review_version, row.review_eligible, row.review_state_missing])]);
   const showEmptyLedger = !ledgerError && rows.length === 0;
   const showLedgerRows = !ledgerError && rows.length > 0;
 
   return (
     <AppShell active="transactions" email={user?.email}>
+        <TransactionReviewScope selectionScope={reviewSelectionScope} revision={crypto.randomUUID()} authoritative={!ledgerError} ownerId={ownerId} />
         <AutoRefresh />
+
 
         <PageHeader
           title="Transactions"
@@ -1017,6 +1035,13 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
           />
         </Panel>
 
+        {transactionReviewEnabled && (
+          <>
+            <h2 id="transaction-review-heading" tabIndex={-1} className="text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">Transaction review</h2>
+            <TransactionReviewFeedback />
+          </>
+        )}
+
         {!ledgerError && (
           <p className="text-xs text-muted">
             {total.toLocaleString()} transaction{total === 1 ? "" : "s"}
@@ -1028,13 +1053,14 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
         {ledgerError && (
           <Panel tone="danger" role="alert" title="Transactions unavailable">
             <p className="text-sm text-muted">{ledgerError}</p>
+            <ButtonLink href={ledgerHref(queryEntries, {}, { resetPage: false })} variant="secondary">Retry</ButtonLink>
           </Panel>
         )}
         {showEmptyLedger && (
           <EmptyState
             title={
               transactionReviewEnabled && state.review === "needs_review"
-                ? hasCommittedFilters
+                ? needsReviewGlobalCount !== 0
                   ? "No transactions need review with these filters"
                   : "You're all caught up"
                 : transactionReviewEnabled && state.review === "reviewed"
@@ -1045,7 +1071,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
             }
             description={
               transactionReviewEnabled && state.review === "needs_review"
-                ? hasCommittedFilters
+                ? needsReviewGlobalCount !== 0
                   ? "Try changing or clearing the filters."
                   : "Every posted transaction has been reviewed."
                 : hasCommittedFilters
@@ -1055,7 +1081,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
           />
         )}
         {showLedgerRows && (
-          <TransactionReviewProvider key={`${JSON.stringify(queryEntries)}|p${state.page}`}>
+
             <Panel padding="none" className="overflow-hidden">
               {transactionReviewEnabled && (
                 <TransactionReviewBulkStrip
@@ -1139,7 +1165,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                 </table>
               </div>
             </Panel>
-          </TransactionReviewProvider>
+
         )}
 
         {totalPages > 1 && (

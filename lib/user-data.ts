@@ -98,7 +98,7 @@ export const USER_DATA_TABLES: UserDataTableSpec[] = [
   table("transaction_annotations", "transaction_id, note, tags, display_category, cash_flow_classification, cleared_at, created_at, updated_at"),
   table("linked_refunds", "charge_transaction_id, refund_transaction_id, amount, created_at"),
   table("linked_duplicates", "subject_id, kept_transaction_id, excluded_transaction_id, created_at"),
-  table("transaction_review_states", "transaction_id, status, version, reviewed_at, created_at, updated_at", {
+  table("transaction_review_states", "transaction_id, status, version::text, reviewed_at, created_at, updated_at", {
     orderBy: "transaction_id",
     orderBySecondary: null,
   }),
@@ -193,11 +193,19 @@ export async function collectUserData(
 ): Promise<Record<string, unknown[]>> {
   const investmentsEnabled = isFeatureEnabled("investmentsPage");
 
-  const queries = USER_DATA_TABLES.map((spec) => {
+  const queries = USER_DATA_TABLES.map(async (spec) => {
     if (spec.gated && !investmentsEnabled) {
       return Promise.resolve({ data: [], error: null });
     }
-    return fetchPagedSpecRows(client, spec, userId, options);
+    const result = await fetchPagedSpecRows(client, spec, userId, options);
+    // Preserve existing records during UI rollback. Only an absent relation
+    // before rollout may be omitted, and only while the feature is disabled.
+    const code = (result.error as { code?: string } | null)?.code;
+    if (spec.table === "transaction_review_states" && !isFeatureEnabled("transactionReview") &&
+        (code === "42P01" || code === "PGRST205")) {
+      return { data: [], error: null };
+    }
+    return result;
   });
 
   const results = await Promise.all(queries);

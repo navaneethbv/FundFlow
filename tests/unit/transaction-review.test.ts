@@ -25,16 +25,11 @@ describe("lib/transaction-review", () => {
       }
     });
 
-    it("accepts numeric expected_version and converts to string", () => {
-      const payload = {
-        status: "reviewed",
-        items: [{ transaction_id: validUuid1, expected_version: 5 }],
-      };
-      const result = validateReviewBatchPayload(payload);
-      expect(result.valid).toBe(true);
-      if (result.valid && result.data) {
-        expect(result.data.items[0].expected_version).toBe("5");
+    it("requires a decimal string within the PostgreSQL bigint range", () => {
+      for (const version of [5, "9223372036854775808", "9".repeat(100), " 1", "1 "]) {
+        expect(validateReviewBatchPayload({ status: "reviewed", items: [{ transaction_id: validUuid1, expected_version: version }] }).valid).toBe(false);
       }
+      expect(validateReviewBatchPayload({ status: "reviewed", items: [{ transaction_id: validUuid1, expected_version: "9223372036854775807" }] }).valid).toBe(true);
     });
 
     it("accepts a valid bulk reopen payload", () => {

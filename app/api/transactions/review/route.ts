@@ -42,10 +42,7 @@ function rpcErrorResponse(error: { code?: string; message?: string }): NextRespo
   return null;
 }
 
-export async function PATCH(request: NextRequest) {
-  if (!isFeatureEnabled("transactionReview")) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
+async function handlePatch(request: NextRequest) {
 
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -64,22 +61,12 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
-  // Payload byte limit check
-  const contentLength = request.headers.get("content-length");
-  if (contentLength && Number.parseInt(contentLength, 10) > MAX_PAYLOAD_BYTES) {
-    return badRequest("Payload exceeds maximum size");
+  if (!isFeatureEnabled("transactionReview")) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  let body: unknown;
-  try {
-    const rawText = await request.text();
-    if (rawText.length > MAX_PAYLOAD_BYTES) {
-      return badRequest("Payload exceeds maximum size");
-    }
-    body = JSON.parse(rawText);
-  } catch {
-    return badRequest("Invalid JSON payload");
-  }
+  const body = await readReviewBody(request);
+  if (body instanceof NextResponse) return body;
 
   const validation = validateReviewBatchPayload(body);
   if (!validation.valid) {
@@ -138,4 +125,42 @@ export async function PATCH(request: NextRequest) {
   } catch (error) {
     return errorResponse("api.transactions.review", error);
   }
+}
+
+async function readReviewBody(request: NextRequest): Promise<unknown> {
+  const length = Number(request.headers.get("content-length"));
+  if (length > MAX_PAYLOAD_BYTES) return badRequest("Payload exceeds maximum size");
+  const reader = request.body?.getReader();
+  if (!reader) return badRequest("Invalid JSON payload");
+  let bytes = 0;
+  let text = "";
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > MAX_PAYLOAD_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        return badRequest("Payload exceeds maximum size");
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    return JSON.parse(text + decoder.decode());
+  } catch {
+    return badRequest("Invalid JSON payload");
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  let response: NextResponse;
+  try {
+    response = await handlePatch(request);
+  } catch (error) {
+    response = errorResponse("api.transactions.review", error);
+  }
+  response.headers.set("Cache-Control", "no-store");
+  return response;
 }

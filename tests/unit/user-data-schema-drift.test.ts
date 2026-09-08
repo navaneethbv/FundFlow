@@ -104,7 +104,7 @@ function buildSchema(sql: string): Map<string, Set<string>> {
 function splitColumnList(list: string | undefined): string[] {
   return (list ?? "")
     .split(",")
-    .map((column) => column.trim())
+    .map((column) => column.trim().split("::")[0])
     .filter(Boolean);
 }
 

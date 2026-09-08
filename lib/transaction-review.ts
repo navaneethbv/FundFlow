@@ -47,14 +47,6 @@ type ItemResult =
   | { ok: true; item: TransactionReviewItem }
   | { ok: false; error: string };
 
-function normalizeExpectedVersion(value: unknown): string {
-  if (typeof value === "string") return value.trim();
-  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
-    return String(value);
-  }
-  return "";
-}
-
 function validateReviewItem(raw: unknown): ItemResult {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return { ok: false, error: "Each item must be an object" };
@@ -69,13 +61,14 @@ function validateReviewItem(raw: unknown): ItemResult {
   }
 
   const txId =
-    typeof it.transaction_id === "string" ? it.transaction_id.trim() : "";
+    typeof it.transaction_id === "string" ? it.transaction_id.trim().toLowerCase() : "";
   if (!UUID_RE.test(txId)) {
     return { ok: false, error: `Invalid transaction_id: "${txId}"` };
   }
 
-  const expectedVersion = normalizeExpectedVersion(it.expected_version);
-  if (!VERSION_RE.test(expectedVersion)) {
+  const expectedVersion = it.expected_version;
+  if (typeof expectedVersion !== "string" || expectedVersion.length > 19 ||
+      !VERSION_RE.test(expectedVersion) || BigInt(expectedVersion) > BigInt("9223372036854775807")) {
     return { ok: false, error: `Invalid expected_version for transaction ${txId}` };
   }
 

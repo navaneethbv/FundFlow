@@ -197,4 +197,86 @@ begin
   assert v_rev.version = 3, 'Non-material update must not change version';
 end $$;
 
+-- Full null-safe material-fact matrix, precision, annotation independence,
+-- import/upsert replay, and persisted rollback checks.
+reset role;
+insert into public.plaid_items(id,user_id,plaid_item_id,access_token_ciphertext,access_token_iv,access_token_tag)
+values ('99000000-0000-0000-0000-000000000001','55000000-0000-0000-0000-000000000001','review-matrix-item','local','local','local');
+insert into public.accounts(id,user_id,plaid_item_id,plaid_account_id)
+values ('99000000-0000-0000-0000-000000000002','55000000-0000-0000-0000-000000000001','99000000-0000-0000-0000-000000000001','review-matrix-account');
+do $$
+declare
+  assignment text;
+  before_version bigint;
+  tx constant uuid := '77000000-0000-0000-0000-000000000001';
+  owner constant uuid := '55000000-0000-0000-0000-000000000001';
+  snapshot jsonb;
+begin
+  foreach assignment in array array[
+    'amount=66', 'date=''2026-09-10''',
+    'account_id=''99000000-0000-0000-0000-000000000002'',manual_account_id=null',
+    'account_id=null,manual_account_id=''66000000-0000-0000-0000-000000000001''',
+    'iso_currency_code=''USD''', 'iso_currency_code=null',
+    'merchant_name=null', 'merchant_name=''Changed merchant''',
+    'name=''Changed name''', 'pfc_primary=null', 'pfc_primary=''GENERAL_MERCHANDISE''',
+    'pfc_detailed=''GENERAL_MERCHANDISE_OTHER''', 'pfc_detailed=null',
+    'pending=true', 'pending=false', 'source=''import''', 'source=''manual'''
+  ] loop
+    update public.transaction_review_states set status='reviewed',reviewed_at=now() where transaction_id=tx;
+    select version into before_version from public.transaction_review_states where transaction_id=tx;
+    execute format('update public.transactions set %s where id=$1',assignment) using tx;
+    assert exists(select 1 from public.transaction_review_states where transaction_id=tx and status='needs_review' and reviewed_at is null and version=before_version+1), assignment;
+  end loop;
+
+  -- Decimal strings survive values greater than Number.MAX_SAFE_INTEGER.
+  update public.transaction_review_states set version=9007199254740993,status='reviewed',reviewed_at=now() where transaction_id=tx;
+  assert (select review_version from public.transaction_review_ledger where id=tx)='9007199254740993';
+  assert (select pg_typeof(review_version)::text from public.transaction_review_ledger limit 1)='text';
+  select to_jsonb(r) into snapshot from public.transaction_review_states r where transaction_id=tx;
+  insert into public.transaction_annotations(user_id,transaction_id,note,tags) values(owner,tx,'Review stays independent',array['test']);
+  update public.transaction_annotations set note=null,tags='{}',display_category='TRAVEL' where transaction_id=tx;
+  delete from public.transaction_annotations where transaction_id=tx;
+  assert (select to_jsonb(r) from public.transaction_review_states r where transaction_id=tx)=snapshot;
+
+  -- Identical source upsert does not reopen or invalidate review.
+  insert into public.transactions(id,user_id,manual_account_id,plaid_transaction_id,date,amount,name,source,pending)
+    select id,user_id,manual_account_id,plaid_transaction_id,date,amount,name,source,pending from public.transactions where id=tx
+    on conflict(plaid_transaction_id) do update set amount=excluded.amount,date=excluded.date,name=excluded.name,updated_at=now();
+  assert (select to_jsonb(r) from public.transaction_review_states r where transaction_id=tx)=snapshot;
+
+  -- A missing review record aborts the parent write; it is visible as missing.
+  delete from public.transaction_review_states where transaction_id=tx;
+  assert (select review_state_missing from public.transaction_review_ledger where id=tx);
+  begin
+    update public.transactions set amount=999 where id=tx;
+    raise exception 'missing-state source update accepted';
+  exception when raise_exception then
+    if sqlerrm='missing-state source update accepted' then raise; end if;
+  end;
+  assert (select amount from public.transactions where id=tx)=66;
+  insert into public.transaction_review_states(transaction_id,user_id,status) values(tx,owner,'needs_review');
+end $$;
+
+-- Revoked sessions cannot read either owner state or its ledger projection.
+insert into public.user_session_records(user_id,session_id,revoked_at)
+values ('55000000-0000-0000-0000-000000000001','review-revoked',now());
+select set_config('request.jwt.claims','{"sub":"55000000-0000-0000-0000-000000000001","aal":"aal2","role":"authenticated","session_id":"review-revoked"}',true);
+set local role authenticated;
+do $$ begin
+  assert (select count(*) from public.transaction_review_states)=0;
+  assert (select count(*) from public.transaction_review_ledger)=0;
+end $$;
+reset role;
+
+-- Deleting an owner account cascades state while retaining the other owner.
+delete from public.manual_accounts where id='66000000-0000-0000-0000-000000000001';
+do $$ begin
+  assert not exists(select 1 from public.transaction_review_states where user_id='55000000-0000-0000-0000-000000000001');
+  assert exists(select 1 from public.transaction_review_states where user_id='55000000-0000-0000-0000-000000000002');
+end $$;
+delete from auth.users where id='55000000-0000-0000-0000-000000000002';
+do $$ begin
+  assert not exists(select 1 from public.transaction_review_states where user_id='55000000-0000-0000-0000-000000000002');
+end $$;
+
 rollback;

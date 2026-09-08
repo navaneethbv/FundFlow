@@ -39,6 +39,7 @@ export function TransactionReviewRowAction({
   return (
     <Button
       id={buttonId}
+      data-review-action
       variant="secondary"
       size="sm"
       disabled={isSubmitting}
@@ -112,7 +113,6 @@ export function TransactionReviewBulkStrip({
     clearSelection,
     submitReview,
     isSubmitting,
-    statusMessage,
   } = useTransactionReview();
 
   const selectedEligible = eligibleRows.filter((row) =>
@@ -159,7 +159,7 @@ export function TransactionReviewBulkStrip({
       </div>
 
       {selectedCount > 0 && (
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Button
             id="bulk-mark-reviewed-btn"
             size="sm"
@@ -188,14 +188,25 @@ export function TransactionReviewBulkStrip({
         </div>
       )}
 
-      {statusMessage && (
-        <output
-          className="text-xs text-muted w-full mt-1"
-          aria-live="polite"
-        >
-          {statusMessage}
-        </output>
+
+    </div>
+  );
+}
+
+/** Stays mounted when the queue becomes empty, preserving announcements and reversal. */
+export function TransactionReviewFeedback() {
+  const { statusMessage, lastResult, submitReview, isSubmitting, refreshReview } = useTransactionReview();
+  const reversible = lastResult?.items.filter((item) => item.status === "reviewed") ?? [];
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <output aria-live="polite" className="text-sm text-muted">{statusMessage}</output>
+      {reversible.length > 0 && (
+        <Button variant="secondary" size="sm" disabled={isSubmitting}
+          onClick={() => void submitReview(reversible.map((item) => ({ id: item.transaction_id, version: item.version })), "needs_review")}>
+          Review again
+        </Button>
       )}
+      {isSubmitting && <Button variant="ghost" size="sm" onClick={refreshReview}>Refresh status</Button>}
     </div>
   );
 }

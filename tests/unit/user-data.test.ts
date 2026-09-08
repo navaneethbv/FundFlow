@@ -305,3 +305,35 @@ describe("collectReceiptAssets", () => {
     expect(count).toBe(3);
   });
 });
+
+
+describe("transaction review archive compatibility", () => {
+  it("omits only an absent review relation while the feature is off", async () => {
+    investmentsEnabled = false;
+    for (const code of ["42P01", "PGRST205"]) {
+      const client = clientStub({ transaction_review_states: { error: { code } } });
+      const result = await collectUserData(client as never, "owner");
+      expect(result.transaction_review_states).toEqual([]);
+    }
+  });
+  it("keeps more than one page of owner review records during a UI rollback", async () => {
+    investmentsEnabled = false;
+    const rows = Array.from({ length: 1205 }, (_, i) => ({ transaction_id: String(i), status: "reviewed", version: "9007199254740993" }));
+    const client = clientStub({ transaction_review_states: { data: rows } });
+    const result = await collectUserData(client as never, "owner");
+    expect(result.transaction_review_states).toEqual(rows);
+    expect(client.scopedToUser("transaction_review_states", "owner")).toBe(true);
+    expect(client.callsOn("transaction_review_states").filter((call) => call.method === "order").every((call) => call.args[0] === "transaction_id")).toBe(true);
+  });
+  it("does not mask missing schema when enabled, permission errors, or unrelated failures", async () => {
+    investmentsEnabled = true;
+    let error = { code: "42P01" };
+    await expect(collectUserData(clientStub({ transaction_review_states: { error } }) as never, "owner")).rejects.toEqual(error);
+    investmentsEnabled = false;
+    error = { code: "42501" };
+    await expect(collectUserData(clientStub({ transaction_review_states: { error } }) as never, "owner")).rejects.toEqual(error);
+    error = { code: "42P01" };
+    await expect(collectUserData(clientStub({ transactions: { error } }) as never, "owner")).rejects.toEqual(error);
+    investmentsEnabled = true;
+  });
+});
