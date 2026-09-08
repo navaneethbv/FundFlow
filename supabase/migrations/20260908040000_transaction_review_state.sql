@@ -232,6 +232,15 @@ left join public.transaction_review_states r
 revoke all on public.transaction_review_ledger from anon;
 grant select on public.transaction_review_ledger to authenticated;
 
+-- `security_invoker = true` evaluates the underlying-table privileges as the
+-- calling role, so the authenticated role needs an explicit SELECT on the
+-- source tables. `transaction_review_states` (above) and `linked_duplicates`
+-- (20260809194242) are already granted; `public.transactions` relied on the
+-- project-level default privilege, which is not reproduced on a clean local
+-- stack (the same divergence PR #165 hit). Grant it explicitly. RLS on
+-- `public.transactions` is unchanged and still filters every row.
+grant select on public.transactions to authenticated;
+
 -- 6. Atomic mutation RPC: public.set_transaction_review_state_atomic
 create or replace function public.set_transaction_review_state_atomic(
   p_user_id uuid,
