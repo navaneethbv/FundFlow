@@ -868,14 +868,14 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   const manualAccounts = manualAccountsResult.data ?? [];
   const merchantRules = merchantRulesResult.data ?? [];
   const goalRows = goalRowsResult.data ?? [];
-  const setupResults = [
+  const setupResults = [...reviewSummary.queryErrors, ...[
     savedViewsResult.error,
 
     accountsResult.error,
     manualAccountsResult.error,
     merchantRulesResult.error,
     goalRowsResult.error,
-  ].map((error) => ({ error })).concat(reviewSummary.queryErrors);
+  ].map((error) => ({ error }))];
   let ledgerError = reviewSummary.integrityError || transactionSetupError(setupResults);
 
 
