@@ -10,6 +10,38 @@ import {
   type TransactionReviewResult,
 } from "@/lib/transaction-review";
 
+/**
+ * Map a Postgres error from the atomic RPC to an HTTP response. Returns null
+ * for an error the route should treat as unexpected (500).
+ */
+function rpcErrorResponse(error: { code?: string; message?: string }): NextResponse | null {
+  // transaction_not_found: missing, foreign, or deleted id. One 404, no id disclosed.
+  if (error.code === "P0002") {
+    return NextResponse.json(
+      { error: "One or more selected transactions are unavailable" },
+      { status: 404 },
+    );
+  }
+
+  // Stale version, newly pending entry, or new exclusion.
+  if (error.code === "40001" || error.message?.includes("REVIEW_STATE_CHANGED")) {
+    return NextResponse.json(
+      {
+        error: "These transactions changed. Review the updated entries before trying again.",
+        code: "REVIEW_STATE_CHANGED",
+      },
+      { status: 409 },
+    );
+  }
+
+  // Validation failure raised by the plpgsql checks.
+  if (error.code === "22023") {
+    return badRequest(error.message ?? "Invalid review request");
+  }
+
+  return null;
+}
+
 export async function PATCH(request: NextRequest) {
   if (!isFeatureEnabled("transactionReview")) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -68,30 +100,8 @@ export async function PATCH(request: NextRequest) {
     );
 
     if (error) {
-      // 404: transaction_not_found (missing, foreign, deleted)
-      if (error.code === "P0002") {
-        return NextResponse.json(
-          { error: "One or more selected transactions are unavailable" },
-          { status: 404 },
-        );
-      }
-
-      // 409: REVIEW_STATE_CHANGED (stale version, pending, or excluded duplicate)
-      if (error.code === "40001" || error.message?.includes("REVIEW_STATE_CHANGED")) {
-        return NextResponse.json(
-          {
-            error: "These transactions changed. Review the updated entries before trying again.",
-            code: "REVIEW_STATE_CHANGED",
-          },
-          { status: 409 },
-        );
-      }
-
-      // 400: validation failure from plpgsql check
-      if (error.code === "22023") {
-        return badRequest(error.message);
-      }
-
+      const mapped = rpcErrorResponse(error);
+      if (mapped) return mapped;
       throw error;
     }
 
