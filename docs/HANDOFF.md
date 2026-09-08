@@ -2,6 +2,19 @@
 
 Last updated: 2026-09-07. Read this first to resume.
 
+## 2026-09-07: relinked investment account duplication fixed locally
+
+The authenticated production dashboard showed two distinct IDs for each of the IBM 401(k) and PayPal 401(k) accounts after the same Plaid Item was connected twice.
+The displayed $89,663.04 investment total included both the stale and current account sets.
+Branch `fix/relinked-account-dedup` now recognizes a duplicate only when two Items owned by the same user expose the same complete, unambiguous account set and one set is uniquely fresher.
+Ambiguous single-account matches, missing masks, partial sets, tied timestamps, and matching household-member accounts remain visible.
+The shared rule covers Dashboard, Investments, Accounts, net-worth snapshots, forecasting, debt planning, goals, advice, and account exports.
+The production-shaped regression keeps the two current rows and computes $45,240.00.
+No stored account, transaction, holding, or user preference is deleted or rewritten.
+The [TDD evidence](testing/relinked-account-dedup.tdd.md) records the RED and GREEN checks and the coverage result.
+Final validation passed 469 unit files and 5,170 tests, 95.06% branch coverage, typecheck, lint, the production build, and the graph refresh.
+The branch is not pushed, merged, or deployed, so production still shows the duplicate until delivery is completed.
+
 ## 2026-09-07: linked migrations applied and history reconciled
 
 The user authorized applying the pending migrations before merging the application fixes.

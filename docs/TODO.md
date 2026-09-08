@@ -2,6 +2,12 @@
 
 Nice-to-have features and enhancements, deferred out of the initial build.
 
+## Relinked account deduplication (2026-09-07)
+
+Branch `fix/relinked-account-dedup` fixes the production-visible duplicate IBM and PayPal investment accounts without deleting stored history.
+The code and regression coverage are complete locally.
+Push, review, merge, deployment, and a read-only signed-in production verification remain open.
+
 ## Repository review follow-up (2026-09-07)
 
 The [repository review and implementation record](reviews/2026-09-07-repository-opportunities.md) records ten findings and their completed local fixes.
