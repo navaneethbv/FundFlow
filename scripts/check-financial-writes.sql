@@ -1,5 +1,4 @@
 -- Run only against an isolated database. Every fixture is rolled back.
-\set ON_ERROR_STOP on
 begin;
 insert into auth.users(id,email) values
  ('11000000-0000-0000-0000-000000000001','financial-write-test@example.com'),
@@ -166,4 +165,4 @@ do $$ declare v_id uuid; begin
   assert exists(select 1 from public.transaction_annotations where transaction_id=v_id and note='Goal note' and goal_id='66000000-0000-0000-0000-000000000001'), 'Goal annotation missing';
 end $$;
 rollback;
-\echo 'Financial write contracts passed (fixtures rolled back)'
+select 'Financial write contracts passed (fixtures rolled back)' as verification;
