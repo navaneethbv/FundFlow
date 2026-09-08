@@ -230,6 +230,15 @@ flowchart TB
   `lib/finance-domain.ts`'s `fromTransactionRow` derives provenance from this
   prefix, not the newer `source` column, because the prefix is already relied
   on by the sync overlap guard.
+- `transaction-review.ts` — persistent transaction review models and validation.
+  State is stored in `public.transaction_review_states` and mutated atomically via
+  `public.set_transaction_review_state_atomic` using compare-and-set version tokens.
+  Source triggers initialize all transactions to `needs_review` and automatically reopen
+  entries with incremented versions whenever material bank facts change. Direct and
+  projected ledger paths read `public.transaction_review_ledger` with `security_invoker = true`.
+  The Transactions layout owns the persistent review context; each server page publishes a query/row/version signature before controls can act.
+  Review versions are decimal text across the SQL view, API, client and archives.
+  Independent owner-wide queue and integrity queries distinguish zero remaining work from missing state.
 - `ledger-columns.ts` — which optional ledger columns are visible, persisted
   as a repeated `col` GET param plus a `colsSubmitted` marker (distinguishing
   "every column explicitly unchecked" from "the menu was never touched," an

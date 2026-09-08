@@ -10,8 +10,10 @@ import {
   collectReceiptAssets,
   collectUserData,
   countUserDataRows,
+  countUserRecordRows,
   RECEIPT_ASSET_BUDGET_BYTES,
   USER_DATA_TABLES,
+  type UserDataTableSpec,
 } from "@/lib/user-data";
 
 describe("lib/user-data", () => {
@@ -258,5 +260,80 @@ describe("collectReceiptAssets", () => {
 
   it("keeps the default budget inside what an email attachment can carry", () => {
     expect(RECEIPT_ASSET_BUDGET_BYTES).toBeLessThanOrEqual(10 * 1024 * 1024);
+  });
+
+  it("defaults primary and secondary order when omitted from spec", async () => {
+    const supabase = clientStub({ test_table: { data: [{ id: "1" }] } });
+    const spec: UserDataTableSpec = {
+      key: "test_spec",
+      table: "test_table",
+      select: "id",
+      scope: "user",
+      orderBy: undefined,
+      orderBySecondary: undefined,
+    };
+    USER_DATA_TABLES.push(spec);
+    try {
+      const data = await collectUserData(supabase as never, "u1");
+      expect(data.test_spec).toEqual([{ id: "1" }]);
+    } finally {
+      USER_DATA_TABLES.pop();
+    }
+  });
+
+  it("appends restoreKeys when includeRestoreKeys option is true", async () => {
+    const supabase = clientStub({
+      accounts: { data: [{ name: "Checking", id: "acc-1" }] },
+    });
+    const data = await collectUserData(supabase as never, "u1", {
+      includeRestoreKeys: true,
+    });
+    expect(data.accounts).toEqual([{ name: "Checking", id: "acc-1" }]);
+    const selectCall = supabase.callsOn("accounts").find((c) => c.method === "select");
+    expect(selectCall?.args[0]).toContain("plaid_account_id");
+  });
+
+  it("counts user record rows excluding preferences sections", () => {
+    const count = countUserRecordRows({
+      accounts: [{ id: "1" }, { id: "2" }],
+      account_preferences: [{ id: "p1" }],
+      ai_settings: [{ enabled: true }],
+      alert_preferences: [{ id: "a1" }],
+      budgets: [{ id: "b1" }],
+    });
+    // accounts (2) + budgets (1) = 3; account_preferences, ai_settings, alert_preferences excluded
+    expect(count).toBe(3);
+  });
+});
+
+
+describe("transaction review archive compatibility", () => {
+  it("omits only an absent review relation while the feature is off", async () => {
+    investmentsEnabled = false;
+    for (const code of ["42P01", "PGRST205"]) {
+      const client = clientStub({ transaction_review_states: { error: { code } } });
+      const result = await collectUserData(client as never, "owner");
+      expect(result.transaction_review_states).toEqual([]);
+    }
+  });
+  it("keeps more than one page of owner review records during a UI rollback", async () => {
+    investmentsEnabled = false;
+    const rows = Array.from({ length: 1205 }, (_, i) => ({ transaction_id: String(i), status: "reviewed", version: "9007199254740993" }));
+    const client = clientStub({ transaction_review_states: { data: rows } });
+    const result = await collectUserData(client as never, "owner");
+    expect(result.transaction_review_states).toEqual(rows);
+    expect(client.scopedToUser("transaction_review_states", "owner")).toBe(true);
+    expect(client.callsOn("transaction_review_states").filter((call) => call.method === "order").every((call) => call.args[0] === "transaction_id")).toBe(true);
+  });
+  it("does not mask missing schema when enabled, permission errors, or unrelated failures", async () => {
+    investmentsEnabled = true;
+    let error = { code: "42P01" };
+    await expect(collectUserData(clientStub({ transaction_review_states: { error } }) as never, "owner")).rejects.toEqual(error);
+    investmentsEnabled = false;
+    error = { code: "42501" };
+    await expect(collectUserData(clientStub({ transaction_review_states: { error } }) as never, "owner")).rejects.toEqual(error);
+    error = { code: "42P01" };
+    await expect(collectUserData(clientStub({ transactions: { error } }) as never, "owner")).rejects.toEqual(error);
+    investmentsEnabled = true;
   });
 });

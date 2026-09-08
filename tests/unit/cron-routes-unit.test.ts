@@ -2,7 +2,7 @@ vi.mock("@/lib/maintenance-users", () => ({ loadMaintenanceUsers: async (_servic
 vi.mock("@/lib/scheduled-promotion", () => ({ promoteDueScheduledTransactions: vi.fn(async () => ({ promoted: 0, failed: null })) }));
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
-import { clientStub } from "../fixtures/supabase-query";
+import { clientStub, queryStub } from "../fixtures/supabase-query";
 
 const mockSyncAllForUser = vi.fn().mockResolvedValue({ added: 1, modified: 0, removed: 0 });
 const mockSyncInvestmentsForUser = vi.fn().mockResolvedValue(0);
@@ -279,6 +279,47 @@ describe("Cron API Route Handlers Unit Tests", () => {
       expect(
         db.callsOn("backup_deliveries").some(({ method }) => method === "upsert"),
       ).toBe(true);
+    });
+
+    it("handles user lookup errors and release claim failures", async () => {
+      const baseDb = clientStub({
+        profiles: { data: [{ id: "user-err2" }] },
+        accounts: { data: [{ name: "Checking", user_id: "user-err2" }] },
+      });
+      const db = {
+        ...baseDb,
+        from: vi.fn((table: string) => {
+          if (table === "backup_deliveries") {
+            const stub = queryStub({ data: [{ user_id: "user-err2" }] });
+            const origThen = stub.then;
+            stub.then = (resolve) => {
+              const hasDelete = stub.calls.some((c) => c.method === "delete");
+              if (hasDelete) {
+                return resolve({ data: null, error: new Error("delete error on release") });
+              }
+              return origThen(resolve);
+            };
+            return stub;
+          }
+          return baseDb.from(table);
+        }),
+        auth: {
+          admin: {
+            getUserById: async () => ({
+              data: null,
+              error: new Error("auth admin lookup failed"),
+            }),
+          },
+        },
+      };
+      mockCreateServiceClient.mockReturnValue(db);
+
+      const req = new NextRequest("http://localhost/api/cron/backup", {
+        headers: { authorization: "Bearer test-cron-secret" },
+      });
+      const res = await cronBackupGet(req);
+      expect(res.status).toBe(500);
+      expect(mockAlertCronFailure).toHaveBeenCalled();
     });
   });
 });

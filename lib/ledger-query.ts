@@ -16,6 +16,8 @@ export const LEDGER_SORT_FIELDS = [
 export type LedgerSortField = (typeof LEDGER_SORT_FIELDS)[number];
 export type LedgerSortDirection = "asc" | "desc";
 
+export type LedgerReviewFilter = "all" | "needs_review" | "reviewed";
+
 export interface LedgerRawSearchParams {
   month?: string | string[];
   year?: string | string[];
@@ -31,6 +33,7 @@ export interface LedgerRawSearchParams {
   direction?: string | string[];
   col?: string | string[];
   colsSubmitted?: string | string[];
+  review?: string | string[];
 }
 
 export interface LedgerFilters {
@@ -43,6 +46,7 @@ export interface LedgerFilters {
   merchant: string;
   flow: "" | "in" | "out";
   accountType: "" | "depository" | "credit";
+  review: LedgerReviewFilter;
 }
 
 export interface LedgerQueryState extends LedgerFilters {
@@ -74,6 +78,7 @@ const FILTER_KEYS = [
   "merchant",
   "flow",
   "accountType",
+  "review",
 ] as const satisfies readonly (keyof LedgerFilters)[];
 
 export function sanitizeLedgerSearch(value: string): string {
@@ -95,6 +100,7 @@ export function parseLedgerQuery(
   const subValue = firstSearchParamOrEmpty(raw.sub);
   const flowValue = firstSearchParamOrEmpty(raw.flow);
   const accountTypeValue = firstSearchParamOrEmpty(raw.accountType);
+  const reviewValue = firstSearchParamOrEmpty(raw.review);
 
   return {
     q: sanitizeLedgerSearch(firstSearchParamOrEmpty(raw.q)),
@@ -109,6 +115,10 @@ export function parseLedgerQuery(
       accountTypeValue === "depository" || accountTypeValue === "credit"
         ? accountTypeValue
         : "",
+    review:
+      reviewValue === "needs_review" || reviewValue === "reviewed"
+        ? reviewValue
+        : "all",
     sort: LEDGER_SORT_FIELDS.includes(sortValue as LedgerSortField)
       ? (sortValue as LedgerSortField)
       : "date",
@@ -132,6 +142,7 @@ export function ledgerQueryEntries(
 
   for (const key of FILTER_KEYS) {
     const value = state[key];
+    if (key === "review" && value === "all") continue;
     if (value) entries.push([key, value]);
   }
   if (state.sort !== "date") entries.push(["sort", state.sort]);
@@ -178,7 +189,11 @@ export function savedLedgerViewParams(
   const params: Record<string, string> = {};
   for (const key of FILTER_KEYS) {
     const value = state[key];
-    if (value) params[key] = value;
+    if (key === "review") {
+      if (value && value !== "all") params[key] = value;
+    } else if (value) {
+      params[key] = value;
+    }
   }
   if (state.sort !== "date") {
     params.sort = state.sort;
@@ -190,5 +205,8 @@ export function savedLedgerViewParams(
 }
 
 export function hasActiveLedgerFilters(filters: LedgerFilters): boolean {
-  return FILTER_KEYS.some((key) => Boolean(filters[key]));
+  return FILTER_KEYS.some((key) => {
+    if (key === "review") return filters.review !== "all";
+    return Boolean(filters[key]);
+  });
 }

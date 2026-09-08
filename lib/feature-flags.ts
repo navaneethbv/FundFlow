@@ -86,6 +86,11 @@ export const FEATURE_FLAG_DEFAULTS = {
    * Only user-authored config should be restorable in-app.
    */
   backupRestore: false,
+  /**
+   * Persistent transaction review (PR #166).
+   * Off by default until migration is deployed and acceptance tests pass.
+   */
+  transactionReview: false,
 } as const;
 
 export type FeatureFlag = keyof typeof FEATURE_FLAG_DEFAULTS;

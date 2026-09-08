@@ -57,6 +57,8 @@ export type AuditAction =
   | "budget_template_deleted"
   | "budget_template_applied"
   | "account_reconciled"
+  | "transaction_reviewed"
+  | "transaction_review_reopened"
   | "data_restore"
   | "data_restore_dry_run"
   | "data_restore_failed"

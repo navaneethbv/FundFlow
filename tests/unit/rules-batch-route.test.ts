@@ -453,4 +453,69 @@ describe("POST /api/rules/batch read failures", () => {
     const body = await res.json();
     expect(body).toMatchObject({ success: true, totalEvaluated: 0, matchedCount: 0 });
   });
+
+  it("handles tag-only rule updates without merchant changes and handles null amounts/tags", async () => {
+    const mockUpsert = vi.fn().mockResolvedValue({ error: null });
+    const mockSupabase = createMockBatchDb({
+      rules: [
+        {
+          id: "r1",
+          match_type: "keyword",
+          pattern: "Target",
+          tags: ["store"],
+          enabled: true,
+        },
+      ],
+      transactions: [
+        {
+          id: "tx-1",
+          merchant: "Target Store",
+          name: "TARGET",
+          amount: 0,
+          pfc_primary: "GENERAL",
+        },
+      ],
+      annotations: [
+        { transaction_id: "tx-1", tags: null },
+      ],
+      onUpsert: mockUpsert,
+    });
+
+    mockRequireUser.mockResolvedValueOnce({
+      user: { id: "u-1" },
+      supabase: mockSupabase,
+    });
+
+    const res = await POST(createBatchRequest({ dryRun: false }));
+    expect(res.status).toBe(200);
+    expect(mockUpsert).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          transaction_id: "tx-1",
+          tags: ["store"],
+        }),
+      ],
+      { onConflict: "user_id,transaction_id" },
+    );
+    // Merchant did not change
+    expect(mockServiceUpdate).not.toHaveBeenCalled();
+  });
+
+  it("handles null data arrays from database tables gracefully", async () => {
+    const db = {
+      from: vi.fn(() => {
+        const builder: Record<string, unknown> = {};
+        for (const m of ["select", "eq", "order", "limit", "in"]) {
+          builder[m] = () => builder;
+        }
+        builder.then = (resolve: (v: unknown) => unknown) => resolve({ data: null, error: null });
+        return builder;
+      }),
+    };
+    mockRequireUser.mockResolvedValueOnce({ user: { id: "u-1" }, supabase: db });
+    const res = await POST(createBatchRequest({ dryRun: true }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+  });
 });

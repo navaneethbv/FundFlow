@@ -485,4 +485,73 @@ describe("executeRestore — chunking and failure branches", () => {
     const res2 = await executeRestore(service as never, "user-123", plan2, archive2);
     expect(res2.tables).toHaveLength(1);
   });
+
+  it("skips transaction_review_states because review state is verified against live transactions", async () => {
+    const { service } = serviceStub();
+    const archive = {
+      transaction_review_states: [{ transaction_id: "tx-1", status: "reviewed" }],
+    };
+    const plan = buildRestorePlan(archive);
+    const result = await executeRestore(service as never, "user-123", plan, archive);
+    expect(result.skipped).toContainEqual({
+      name: "transaction_review_states",
+      reason: "review state is verified against live transactions and not restorable in-app",
+    });
+  });
+
+  it("handles profile preferences edge cases: empty rows, null row, null dashboard_prefs, and update error", async () => {
+    const { service } = serviceStub();
+
+    // 1. Empty rows
+    const planEmpty = buildRestorePlan({ account_preferences: [] });
+    const resEmpty = await executeRestore(service as never, "user-123", planEmpty, { account_preferences: [] });
+    expect(resEmpty.tables).toEqual([{ name: "account_preferences", rowsWritten: 0 }]);
+
+    // 2. Null record in rows
+    const planNull = buildRestorePlan({ account_preferences: [null] });
+    const resNull = await executeRestore(service as never, "user-123", planNull, { account_preferences: [null] });
+    expect(resNull.failedTable).toBe("account_preferences");
+
+    // 3. Null dashboard_prefs defaults to {}
+    const planDefault = buildRestorePlan({ account_preferences: [{ dashboard_prefs: null }] });
+    const resDefault = await executeRestore(service as never, "user-123", planDefault, { account_preferences: [{ dashboard_prefs: null }] });
+    expect(resDefault.tables).toEqual([{ name: "account_preferences", rowsWritten: 1 }]);
+
+    // 4. Update error on profiles table
+    const failingProfile = {
+      from: vi.fn(() => ({
+        update: () => ({
+          eq: () => Promise.resolve({ data: null, error: { message: "profiles update error" } }),
+        }),
+      })),
+    };
+    const resFail = await executeRestore(failingProfile as never, "user-123", planDefault, { account_preferences: [{ dashboard_prefs: {} }] });
+    expect(resFail.failedTable).toBe("account_preferences");
+  });
+
+  it("handles null data from plaid_items safely", async () => {
+    const customService = {
+      from: vi.fn((table: string) => {
+        if (table === "plaid_items") {
+          return {
+            select: () => ({
+              eq: () => Promise.resolve({ data: null, error: null }),
+            }),
+          };
+        }
+        return {
+          delete: () => ({ eq: () => Promise.resolve({ data: null, error: null }) }),
+          upsert: () => Promise.resolve({ data: null, error: null }),
+          insert: () => Promise.resolve({ data: null, error: null }),
+          select: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }),
+        };
+      }),
+    };
+    const archive = {
+      accounts: [{ name: "Checking", plaid_account_id: "plaid-1", plaid_item_id: "item-1" }],
+    };
+    const plan = buildRestorePlan(archive);
+    const result = await executeRestore(customService as never, "user-123", plan, archive);
+    expect(result.tables).toEqual([{ name: "accounts", rowsWritten: 0 }]);
+  });
 });

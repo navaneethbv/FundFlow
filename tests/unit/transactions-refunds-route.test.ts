@@ -502,5 +502,207 @@ describe("Transactions Refunds API Route", () => {
       );
       expect(mockSupabase.from).not.toHaveBeenCalledWith("linked_refunds");
     });
+
+    it("rejects when charge_id equals refund_id or subject_id is mismatched", async () => {
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: { from: vi.fn() },
+      });
+
+      // chargeId === refundId
+      const res1 = await POST({
+        json: () =>
+          Promise.resolve({
+            subject_id: "c1:c1",
+            decision: "confirmed",
+            charge_id: "c1",
+            refund_id: "c1",
+            amount: 50,
+          }),
+      } as unknown as NextRequest);
+      expect(res1.status).toBe(400);
+
+      // mismatched subject_id
+      const res2 = await POST({
+        json: () =>
+          Promise.resolve({
+            subject_id: "wrong-subject",
+            decision: "confirmed",
+            charge_id: "c1",
+            refund_id: "r1",
+            amount: 50,
+          }),
+      } as unknown as NextRequest);
+      expect(res2.status).toBe(400);
+    });
+
+    it("rejects non-positive charge or non-negative refund or excessive amount", async () => {
+      const owned = (data: unknown[]) => ({
+        in: vi.fn().mockResolvedValue({ data }),
+      });
+      const mockSupabase = {
+        from: vi.fn().mockImplementation((table) => {
+          if (table === "transactions") {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue(
+                  owned([
+                    { id: "c1", amount: -50 }, // negative charge (invalid)
+                    { id: "r1", amount: 50 },  // positive refund (invalid)
+                  ]),
+                ),
+              }),
+            };
+          }
+          return { select: vi.fn() };
+        }),
+      };
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: mockSupabase,
+      });
+
+      const res = await POST({
+        json: () =>
+          Promise.resolve({
+            subject_id: "c1:r1",
+            decision: "confirmed",
+            charge_id: "c1",
+            refund_id: "r1",
+            amount: 50,
+          }),
+      } as unknown as NextRequest);
+      expect(res.status).toBe(400);
+
+      // Excessive amount
+      const mockSupabase2 = {
+        from: vi.fn().mockImplementation((table) => {
+          if (table === "transactions") {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue(
+                  owned([
+                    { id: "c1", amount: 50 },
+                    { id: "r1", amount: -50 },
+                  ]),
+                ),
+              }),
+            };
+          }
+          return { select: vi.fn() };
+        }),
+      };
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: mockSupabase2,
+      });
+
+      const resExcess = await POST({
+        json: () =>
+          Promise.resolve({
+            subject_id: "c1:r1",
+            decision: "confirmed",
+            charge_id: "c1",
+            refund_id: "r1",
+            amount: 100, // exceeds 50
+          }),
+      } as unknown as NextRequest);
+      expect(resExcess.status).toBe(400);
+    });
+
+    it("returns 409 conflict when existing refund links exist or rpc reports conflict", async () => {
+      const owned = (data: unknown[]) => ({
+        in: vi.fn().mockResolvedValue({ data }),
+      });
+      const mockSupabase = {
+        from: vi.fn().mockImplementation((table) => {
+          if (table === "transactions") {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue(
+                  owned([
+                    { id: "c1", amount: 50 },
+                    { id: "r1", amount: -50 },
+                  ]),
+                ),
+              }),
+            };
+          }
+          if (table === "linked_refunds") {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  or: vi.fn().mockResolvedValue({
+                    data: [{ charge_transaction_id: "c1", refund_transaction_id: "other" }],
+                  }),
+                }),
+              }),
+            };
+          }
+          return { select: vi.fn() };
+        }),
+      };
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: mockSupabase,
+      });
+
+      const resConflict = await POST({
+        json: () =>
+          Promise.resolve({
+            subject_id: "c1:r1",
+            decision: "confirmed",
+            charge_id: "c1",
+            refund_id: "r1",
+          }),
+      } as unknown as NextRequest);
+      expect(resConflict.status).toBe(409);
+
+      // RPC conflict branch
+      const mockSupabaseRpcConflict = {
+        from: vi.fn().mockImplementation((table) => {
+          if (table === "transactions") {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue(
+                  owned([
+                    { id: "c1", amount: 50 },
+                    { id: "r1", amount: -50 },
+                  ]),
+                ),
+              }),
+            };
+          }
+          if (table === "linked_refunds") {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  or: vi.fn().mockResolvedValue({ data: [] }),
+                }),
+              }),
+            };
+          }
+          return { select: vi.fn() };
+        }),
+        rpc: vi.fn().mockResolvedValue({
+          error: { message: "refund_link_conflict: already linked" },
+        }),
+      };
+      mockRequireUser.mockResolvedValue({
+        user: { id: "u1" },
+        supabase: mockSupabaseRpcConflict,
+      });
+
+      const resRpcConflict = await POST({
+        json: () =>
+          Promise.resolve({
+            subject_id: "c1:r1",
+            decision: "confirmed",
+            charge_id: "c1",
+            refund_id: "r1",
+          }),
+      } as unknown as NextRequest);
+      expect(resRpcConflict.status).toBe(409);
+    });
   });
 });

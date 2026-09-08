@@ -11,6 +11,25 @@ const secretKey = process.env.SUPABASE_SECRET_KEY;
 
 export const hasLiveCredentials = Boolean(url && publishableKey && secretKey);
 
+/**
+ * A credentialed E2E run creates and deletes live users and financial rows, so
+ * it must only ever touch a throwaway project. `TEST_SUPABASE_URL` is the same
+ * opt-in gate the vitest integration suite uses (tests/setup.ts): it must be
+ * set and must equal the URL under test. Specs that mutate data gate on
+ * `runLiveE2E` rather than credentials alone.
+ */
+function normalizeUrl(value: string): string {
+  return value.trim().replace(/\/+$/, "").toLowerCase();
+}
+
+export const isApprovedIsolatedTarget = Boolean(
+  process.env.TEST_SUPABASE_URL &&
+    url &&
+    normalizeUrl(process.env.TEST_SUPABASE_URL) === normalizeUrl(url),
+);
+
+export const runLiveE2E = hasLiveCredentials && isApprovedIsolatedTarget;
+
 export interface UserAccount {
   id: string;
   email: string;

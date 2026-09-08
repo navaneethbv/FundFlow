@@ -28,4 +28,14 @@ describe("TableToolbar", () => {
     expect(html).toContain("Edit multiple");
     expect(html).not.toContain("Columns");
   });
+
+  it("renders reviewControls when provided", () => {
+    const html = renderToStaticMarkup(
+      createElement(TableToolbar, {
+        bulkTagBar: createElement("div", null, "BULK_TAG_BAR_CONTENT"),
+        reviewControls: createElement("div", null, "REVIEW_CONTROLS_CONTENT"),
+      }),
+    );
+    expect(html).toContain("REVIEW_CONTROLS_CONTENT");
+  });
 });

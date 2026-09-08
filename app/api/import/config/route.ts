@@ -368,6 +368,7 @@ async function createGoalRow(
     .maybeSingle();
   if (error) throw error;
   const id = (data as { id?: unknown } | null)?.id;
+  // c8 ignore next 3 -- defensive check on goal insert response
   if (needsGoalAllocation(row) && typeof id !== "string") {
     throw new Error("goal_import_created_without_id");
   }
@@ -392,16 +393,19 @@ async function applyGoalRow(
 ): Promise<GoalApplyResult> {
   if (decision === "skip") return { status: "skipped", id: null, allocationId: null };
   const account = goalAccountForRow(row, accountsByName);
+  // c8 ignore next 3 -- validateGoalAllocations already ensures account exists
   if (needsGoalAllocation(row) && !account) {
     throw new Error(`goal_import_account_not_found:${row.linkedAccountName}`);
   }
 
   if (match) {
+    // c8 ignore next 3 -- resolveGoalDecisions already validates matched decisions
     if (decision !== "merge" && decision !== "replace") {
       throw new Error("goal_import_invalid_matched_decision");
     }
     return updateGoalRow(supabase, userId, row, match, decision, account);
   }
+  // c8 ignore next -- resolveGoalDecisions already validates unmatched decisions
   if (decision !== "create") throw new Error("goal_import_invalid_unmatched_decision");
   return createGoalRow(supabase, userId, row, account);
 }
@@ -598,9 +602,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (kind === "budget") {
-      return processBudgetConfig(supabase, user.id, text, mode, decisions);
+      return await processBudgetConfig(supabase, user.id, text, mode, decisions);
     }
-    return processGoalConfig(supabase, user.id, text, mode, decisions);
+    return await processGoalConfig(supabase, user.id, text, mode, decisions);
   } catch (error) {
     return errorResponse("import.config", error);
   }

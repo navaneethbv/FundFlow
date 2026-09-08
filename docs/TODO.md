@@ -2,6 +2,15 @@
 
 Nice-to-have features and enhancements, deferred out of the initial build.
 
+## Transaction review (2026-09-07)
+
+Persistent transaction review is implemented in PR #166 behind `transactionReview: false`.
+The [review](reviews/2026-09-08-pr166-review.md) identified six correctness and completion gaps; their fixes and actual test evidence are recorded in the [verification record](testing/pr166-verification.md).
+The implementation includes persistent state, atomic selected-row writes, source-change reopening, full-scope filtering, stale-selection invalidation, page recovery, immediate reversal, missing-state errors and pre-migration archive compatibility.
+Both `20260908040000_transaction_review_state.sql` and `20260908050000_transaction_review_version_text.sql` are required before enablement.
+Remaining release gates: exact-head hosted checks and merge, verified live migration/application deployment, isolated full Supabase Auth browser acceptance, and read-only production desktop/phone inspection.
+Local PostgreSQL/PostgREST/browser-shim verification does not replace full Auth acceptance.
+
 ## Relinked account deduplication (2026-09-07)
 
 Branch `fix/relinked-account-dedup` fixes the production-visible duplicate IBM and PayPal investment accounts without deleting stored history.

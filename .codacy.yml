@@ -1,5 +1,7 @@
 ---
 exclude_paths:
+  # PostgreSQL fixture, executed by migration CI; TSQLLint assumes SQL Server.
+  - "tests/fixtures/transaction-review-benchmark.sql"
   - "supabase/migrations/**"
   - "components/budget/CopyLastMonthButton.tsx"
   - "components/settings/TaxExportButton.tsx"

@@ -789,4 +789,66 @@ describe("POST /api/transactions/transfers — validation branches", () => {
       error: "One of these transactions is already linked to another transfer.",
     });
   });
+
+  it("handles bulk transfers with 0 linked and failures", async () => {
+    from.mockImplementation(() => thenable([]));
+    const res = await post({
+      decision: "confirmed",
+      transfers: [
+        { subject_id: "s1", out_id: "bad", in_id: "bad" },
+      ],
+    });
+    expect(res.status).toBe(207);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.linked).toEqual([]);
+    expect(body.failures).toHaveLength(1);
+  });
+
+  it("rejects non-object bulk transfer item", async () => {
+    const res = await post({
+      decision: "confirmed",
+      transfers: [null],
+    });
+    expect(res.status).toBe(207);
+    const body = await res.json();
+    expect(body.failures[0].error).toContain("Each transfer must be an object");
+  });
+
+  it("handles unexpected error in linkBulkTransferCandidate", async () => {
+    from.mockImplementation(() => {
+      throw new Error("unexpected db explosion");
+    });
+    const res = await post({
+      decision: "confirmed",
+      transfers: [{ subject_id: SUBJECT, out_id: OUT_ID, in_id: IN_ID }],
+    });
+    expect(res.status).toBe(207);
+    const body = await res.json();
+    expect(body.failures[0].error).toBe("Could not link transfer.");
+  });
+
+  it("allows confirming when existingLinks is a self match", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "transactions") {
+        return thenable([
+          { id: OUT_ID, date: "2026-09-01", amount: 500, account_id: "a1", manual_account_id: null },
+          { id: IN_ID, date: "2026-09-02", amount: -500, account_id: "a2", manual_account_id: null },
+        ]);
+      }
+      if (table === "linked_transfers") {
+        return thenable([{ out_transaction_id: OUT_ID, in_transaction_id: IN_ID }]);
+      }
+      return thenable([]);
+    });
+    rpc.mockResolvedValue({ data: { ok: true }, error: null });
+
+    const res = await post({
+      subject_id: SUBJECT,
+      decision: "confirmed",
+      out_id: OUT_ID,
+      in_id: IN_ID,
+    });
+    expect(res.status).toBe(200);
+  });
 });
