@@ -11,6 +11,7 @@ import { loadCanonicalProjection } from "@/lib/finance-query";
 import { financeTotals } from "@/lib/finance-domain";
 import { medianOf } from "@/lib/insights";
 import { readExcludedNetWorthIds } from "@/lib/net-worth-inputs";
+import { dedupeRelinkedAccounts } from "@/lib/relinked-accounts";
 
 const TRAILING_MONTHS = 6;
 
@@ -51,7 +52,7 @@ export async function loadForecastPageData(
   const [accountsResult, manualResult, profileResult, projection] = await Promise.all([
     supabase
       .from("accounts")
-      .select("id, type, subtype, current_balance, iso_currency_code")
+      .select("id, plaid_item_id, name, mask, type, subtype, current_balance, iso_currency_code, updated_at")
       .eq("user_id", userId),
     supabase
       .from("manual_accounts")
@@ -72,7 +73,7 @@ export async function loadForecastPageData(
   );
 
   const startingState = computeForecastStartingState(
-    (accountsResult.data ?? []).map((a) => ({
+    dedupeRelinkedAccounts(accountsResult.data ?? []).map((a) => ({
       type: a.type as string | null,
       subtype: a.subtype as string | null,
       balance: a.current_balance === null || a.current_balance === undefined

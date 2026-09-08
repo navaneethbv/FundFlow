@@ -10,6 +10,12 @@ Includes database migration `20260908040000_transaction_review_state.sql`, regre
 Status: implemented and reviewed against the plan, shipped in PR #166 behind `transactionReview: false`.
 Remaining before enable: apply the migration to the live project (verify with `supabase migration list --linked`), then run the isolated full-Auth browser journey with the flag on before flipping the default.
 
+## Relinked account deduplication (2026-09-07)
+
+Branch `fix/relinked-account-dedup` fixes the production-visible duplicate IBM and PayPal investment accounts without deleting stored history.
+The code and regression coverage are complete locally.
+Push, review, merge, deployment, and a read-only signed-in production verification remain open.
+
 ## Repository review follow-up (2026-09-07)
 
 The [repository review and implementation record](reviews/2026-09-07-repository-opportunities.md) records ten findings and their completed local fixes.

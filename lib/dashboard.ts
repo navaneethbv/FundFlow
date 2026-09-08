@@ -65,6 +65,7 @@ import {
   type ManualBalanceRow,
   type PlaidBalanceRow,
 } from "@/lib/net-worth-inputs";
+import { dedupeRelinkedAccounts } from "@/lib/relinked-accounts";
 /**
  * Aggregations for the dashboard. Runs with the caller's user-scoped Supabase
  * client, so RLS guarantees only the current user's rows are visible.
@@ -93,6 +94,7 @@ export interface AccountSummary {
   credit_limit: number | null;
   iso_currency_code: string | null;
   plaid_item_id: string;
+  updated_at?: string | null;
   /** User-entered APR for the debt planner (Plaid doesn't provide it). */
   apr: number | null;
 }
@@ -951,7 +953,7 @@ export async function getDashboardData(
       supabase
         .from("accounts")
         .select(
-          "id, user_id, name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code, plaid_item_id, apr",
+          "id, user_id, name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code, plaid_item_id, apr, updated_at",
         )
         .order("name"),
     ),
@@ -1111,11 +1113,13 @@ export async function getDashboardData(
   const sinkingFundRows = sinkingFundRowsResult.data;
   const scheduledRows = scheduledRowsResult.data;
 
-  const allAccounts = ((accounts ?? []) as AccountSummary[]).map((account) => ({
-    ...account,
-    name: normalizeExternalDisplayText(account.name),
-    official_name: normalizeExternalDisplayText(account.official_name),
-  }));
+  const allAccounts = dedupeRelinkedAccounts(
+    ((accounts ?? []) as AccountSummary[]).map((account) => ({
+      ...account,
+      name: normalizeExternalDisplayText(account.name),
+      official_name: normalizeExternalDisplayText(account.official_name),
+    })),
+  );
   const netWorthAccounts =
     options?.includeBalanceSheet !== false
       ? composeDashboardBalanceSheet(

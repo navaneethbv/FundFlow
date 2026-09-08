@@ -1,5 +1,6 @@
 import "server-only";
 import { accountDisplayLabel } from "@/lib/account-label";
+import { dedupeRelinkedAccounts } from "@/lib/relinked-accounts";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildPayoffPlan, type PayoffPlan } from "@/lib/debt";
 import {
@@ -148,7 +149,7 @@ export async function loadDebtPlannerData(
   const userId = scopeQueryUserId(options.scope);
   let query = supabase
     .from("accounts")
-    .select("id,user_id,name,mask,type,subtype,current_balance,apr")
+    .select("id,user_id,plaid_item_id,name,mask,type,subtype,current_balance,iso_currency_code,updated_at,apr")
     .order("name")
     .limit(5000);
   if (userId) query = query.eq("user_id", userId);
@@ -159,7 +160,7 @@ export async function loadDebtPlannerData(
     throw new Error(`debt_accounts_query_failed${suffix}`);
   }
 
-  const accounts = (data ?? [])
+  const accounts = dedupeRelinkedAccounts(data ?? [])
     .filter((row) => LIABILITY_TYPES.has(String(row.type ?? "").toLowerCase()))
     .map((row) => ({
       id: String(row.id),
