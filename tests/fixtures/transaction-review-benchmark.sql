@@ -19,16 +19,16 @@ analyze transaction_review_states;
 analyze linked_duplicates;
 select set_config('request.jwt.claims','{"sub":"aa000000-0000-0000-0000-000000000001","role":"authenticated","aal":"aal1"}',true);
 set local role authenticated;
-\echo BASELINE_DATE
+select 'BASELINE_DATE';
 explain(analyze,buffers,format json) select id,date,amount,name from transactions where user_id='aa000000-0000-0000-0000-000000000001' order by date desc,id asc limit 51;
-\echo REVIEW_DATE
+select 'REVIEW_DATE';
 explain(analyze,buffers,format json) select id,date,amount,name,review_status,review_version,review_eligible from transaction_review_ledger where user_id='aa000000-0000-0000-0000-000000000001' order by date desc,id asc limit 51;
-\echo NEEDS_REVIEW_DATE
+select 'NEEDS_REVIEW_DATE';
 explain(analyze,buffers,format json) select id,date,amount,name,review_status,review_version,review_eligible from transaction_review_ledger where user_id='aa000000-0000-0000-0000-000000000001' and review_status='needs_review' and review_eligible order by date desc,id asc limit 51;
-\echo OWNER_COUNT
+select 'OWNER_COUNT';
 explain(analyze,buffers,format json) select count(*) from transaction_review_ledger where user_id='aa000000-0000-0000-0000-000000000001' and review_status='needs_review' and review_eligible;
-\echo MISSING_COUNT
+select 'MISSING_COUNT';
 explain(analyze,buffers,format json) select count(*) from transaction_review_ledger where user_id='aa000000-0000-0000-0000-000000000001' and review_state_missing;
-\echo PROJECTION_SCAN_CHUNK
+select 'PROJECTION_SCAN_CHUNK';
 explain(analyze,buffers,format json) select id,date,amount,name,merchant_name,pfc_primary,pfc_detailed,account_id,manual_account_id,review_status,review_version,review_eligible from transaction_review_ledger where user_id='aa000000-0000-0000-0000-000000000001' and review_status='needs_review' and review_eligible order by date desc,id asc limit 1000;
 rollback;
