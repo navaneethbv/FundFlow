@@ -3,6 +3,7 @@ import { dedupeRelinkedAccounts } from "@/lib/relinked-accounts";
 
 interface AccountRow {
   id: string;
+  user_id?: string;
   plaid_item_id: string;
   name: string | null;
   mask: string | null;
@@ -97,5 +98,16 @@ describe("dedupeRelinkedAccounts", () => {
 
     expect(dedupeRelinkedAccounts(missingMask)).toEqual(missingMask);
     expect(dedupeRelinkedAccounts(tied)).toEqual(tied);
+  });
+
+  it("never collapses matching account sets owned by different household members", () => {
+    const rows = [
+      account({ id: "owner-a-1", user_id: "owner-a", plaid_item_id: "item-a" }),
+      account({ id: "owner-a-2", user_id: "owner-a", plaid_item_id: "item-a", name: "Savings", mask: "1111" }),
+      account({ id: "owner-b-1", user_id: "owner-b", plaid_item_id: "item-b", updated_at: "2026-09-07T23:30:00Z" }),
+      account({ id: "owner-b-2", user_id: "owner-b", plaid_item_id: "item-b", name: "Savings", mask: "1111", updated_at: "2026-09-07T23:30:00Z" }),
+    ];
+
+    expect(dedupeRelinkedAccounts(rows)).toEqual(rows);
   });
 });

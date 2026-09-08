@@ -5,6 +5,7 @@
  */
 export interface RelinkedAccountIdentity {
   id: string;
+  user_id?: string | null;
   plaid_item_id: string;
   name?: string | null;
   mask?: string | null;
@@ -44,10 +45,12 @@ function itemSnapshot<T extends RelinkedAccountIdentity>(
 ): ItemSnapshot<T> {
   const fingerprints = rows.map(accountFingerprint);
   const uniqueFingerprints = new Set(fingerprints);
+  const owners = new Set(rows.map((row) => row.user_id ?? ""));
   const timestamps = rows.map((row) => Date.parse(row.updated_at ?? ""));
   const validTimestamps = timestamps.filter(Number.isFinite);
   const isSafeCompleteSet =
     rows.length >= 2 &&
+    owners.size === 1 &&
     !fingerprints.includes(null) &&
     uniqueFingerprints.size === rows.length;
 
@@ -55,7 +58,7 @@ function itemSnapshot<T extends RelinkedAccountIdentity>(
     itemId,
     rows,
     signature: isSafeCompleteSet
-      ? JSON.stringify([...uniqueFingerprints].sort())
+      ? JSON.stringify([[...owners][0], [...uniqueFingerprints].sort()])
       : null,
     freshness:
       validTimestamps.length === rows.length
