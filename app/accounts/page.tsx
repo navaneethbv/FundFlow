@@ -1,3 +1,4 @@
+import { accountDisplayLabel } from "@/lib/account-label";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import AppShell from "@/components/shell/AppShell";
@@ -333,7 +334,7 @@ export default async function AccountsPage({
   // Reconcile is the caller's own ledger; household-shared rows are excluded.
   const reconcileAccounts = accounts
     .filter((account) => account.ownerUserId === user.id)
-    .map((account) => ({ ref: `${account.source}:${account.id}`, name: account.name }));
+    .map((account) => ({ ref: `${account.source}:${account.id}`, name: accountDisplayLabel(account.name, account.mask) }));
   const exportHref = `/api/export/accounts-csv${
     firstSearchParam(params.scope)
       ? `?scope=${encodeURIComponent(firstSearchParam(params.scope)!)}`

@@ -6,6 +6,7 @@ on:
       - ".github/workflows/migration-check.yml"
       - "supabase/migrations/**"
       - "scripts/check-rls.sql"
+      - "scripts/check-financial-writes.sql"
 
 permissions:
   contents: read
@@ -33,6 +34,9 @@ jobs:
 
       - name: Assert RLS on every public table
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-rls.sql
+
+      - name: Verify atomic financial writes and reconciliation permissions
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-financial-writes.sql
 
       - name: Stop Supabase local stack
         if: always()

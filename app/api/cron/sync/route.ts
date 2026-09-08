@@ -17,6 +17,7 @@ import { alertCronFailure } from "@/lib/cron-alert";
 import { writeDailyAccountSnapshots } from "@/lib/account-history";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { dateKeyInTimezone } from "@/lib/report-period";
+import { loadMaintenanceUsers } from "@/lib/maintenance-users";
 import { promoteDueScheduledTransactions } from "@/lib/scheduled-promotion";
 
 export const dynamic = "force-dynamic";
@@ -129,9 +130,13 @@ async function loadUserTransactions(
 async function syncUser(
   service: ReturnType<typeof createServiceClient>,
   userId: string,
-): Promise<void> {
-  await syncAllForUser(userId);
-  await runOptionalSync("cron.sync.token-rotation", () => rotateStaleItemTokens(userId));
+  hasBank: boolean,
+): Promise<string[]> {
+  const stepFailures: string[] = [];
+  if (hasBank) {
+    try { await syncAllForUser(userId); } catch (error) { logError("cron.sync.bank", error); stepFailures.push(safeSyncError(error)); }
+    await runOptionalSync("cron.sync.token-rotation", () => rotateStaleItemTokens(userId));
+  }
   // One clock per user for the whole run (M-11): daily snapshots, the
   // net-worth month key, recurring inference, and notifications all share
   // the viewer's profile-timezone day instead of each reading UTC.
@@ -147,12 +152,12 @@ async function syncUser(
   } catch (profileError) {
     logError("cron.sync.profile-timezone", profileError);
   }
-  if (isFeatureEnabled("investmentsPage")) {
+  if (hasBank && isFeatureEnabled("investmentsPage")) {
     await runOptionalSync("cron.sync.investments", () =>
       syncInvestmentsForUser(userId, today),
     );
   }
-  if (isFeatureEnabled("liabilitiesSync")) {
+  if (hasBank && isFeatureEnabled("liabilitiesSync")) {
     await runOptionalSync("cron.sync.liabilities", () =>
       syncCreditCardLiabilitiesForUser(userId),
     );
@@ -160,7 +165,6 @@ async function syncUser(
   // Per-step isolation (A-10): each post-sync step runs wrapped so one
   // failure no longer skips the rest of this user's run. Step failures are
   // collected and reported in the 207 body by the caller.
-  const stepFailures: string[] = [];
   const runUserStep = async (label: string, action: () => Promise<unknown>): Promise<void> => {
     try {
       await action();
@@ -169,25 +173,34 @@ async function syncUser(
       stepFailures.push(`${label}: ${safeSyncError(error)}`);
     }
   };
+  await runUserStep("cron.sync.scheduled-promotion", async () => {
+    const result = await promoteDueScheduledTransactions(service, today, userId);
+    if (result.failed !== null) {
+      logError("cron.sync.scheduled-promotion.result", result.failed);
+      throw new Error("SCHEDULED_PROMOTION_FAILED");
+    }
+  });
   await runUserStep("cron.sync.snapshots", () => writeDailyAccountSnapshots(userId, today));
   await runUserStep("cron.sync.recurring", () => refreshRecurringForUser(userId, today));
   await runUserStep("cron.sync.net-worth", () => writeNetWorthSnapshot(userId, today));
   await runUserStep("cron.sync.aprs", () => syncCardAprsForUser(userId));
   await runUserStep("cron.sync.notifications", () => processNotificationsForUser(userId, today));
   await runUserStep("cron.sync.digest", () => sendDailyDigest(service, userId));
-  if (stepFailures.length > 0) throw new Error(stepFailures.join("; "));
+  return stepFailures;
 }
 
 async function syncUsers(
   service: ReturnType<typeof createServiceClient>,
   userIds: string[],
+  bankUserIds: Set<string>,
 ): Promise<{ synced: number; failures: string[] }> {
   let synced = 0;
   const failures: string[] = [];
   for (const userId of userIds) {
     try {
-      await syncUser(service, userId);
-      synced += 1;
+      const userFailures = await syncUser(service, userId, bankUserIds.has(userId));
+      if (userFailures.length) failures.push(userFailures.join("; "));
+      else synced += 1;
     } catch (error) {
       logError("cron.sync.user", error);
       failures.push(safeSyncError(error));
@@ -197,7 +210,7 @@ async function syncUsers(
 }
 
 /**
- * Scheduled daily sync for every user with active bank connections.
+ * Daily maintenance for all users, with bank sync for active connections.
  * Protected by CRON_SECRET: Vercel Cron sends "Authorization: Bearer <secret>"
  * when the CRON_SECRET env var is set.
  */
@@ -213,16 +226,9 @@ export async function GET(request: NextRequest) {
       .eq("status", "active");
     if (error) throw error;
 
-    const userIds = [...new Set((data ?? []).map((r) => r.user_id as string))];
-
-    const { synced, failures } = await syncUsers(service, userIds);
-
-    // Scheduled-transaction promotion runs for everyone (manual-only users
-    // have no plaid_items row, so it cannot ride the per-user loop). Best
-    // effort: a failure is logged, never blocks the sync.
-    await runOptionalSync("cron.sync.scheduled-promotion", () =>
-      promoteDueScheduledTransactions(service, dateKeyInTimezone(new Date(), null)),
-    );
+    const bankUserIds = new Set((data ?? []).map((r) => r.user_id as string));
+    const userIds = await loadMaintenanceUsers(service, bankUserIds);
+    const { synced, failures } = await syncUsers(service, userIds, bankUserIds);
 
     // Data-integrity pass (2.3, best-effort): stuck jobs, orphaned
     // transactions, duplicate Plaid ids. Bounded queries per user; findings

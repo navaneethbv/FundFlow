@@ -164,3 +164,10 @@ describe("promoteDueScheduledTransactions — remaining branches", () => {
   });
 });
 
+
+it("scopes due reads to the maintenance user's identity", async () => {
+  const { clientStub } = await import("../fixtures/supabase-query");
+  const service = clientStub({ scheduled_transactions: { data: [] } });
+  expect(await promoteDueScheduledTransactions(service as never, "2026-09-07", "owner")).toEqual({ promoted: 0, failed: null });
+  expect(service.scopedToUser("scheduled_transactions", "owner")).toBe(true);
+});

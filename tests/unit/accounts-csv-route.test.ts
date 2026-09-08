@@ -90,6 +90,20 @@ describe("GET /api/export/accounts-csv", () => {
     });
   });
 
+  it("preserves signed overpayments and balances for linked and manual liabilities", async () => {
+    const userClient = clientStub({
+      profiles: { data: { ai_export_enabled: true } }, households: { data: [] },
+      accounts: { data: [{ id: "card", user_id: USER_ID, name: "Overpaid card", type: "credit", subtype: "credit card", current_balance: -50, updated_at: "2026-09-07T00:00:00Z", iso_currency_code: "USD" }] },
+      manual_accounts: { data: [{ id: "loan", user_id: USER_ID, name: "Manual debt", account_type: "liability", balance: -25, updated_at: "2026-09-07T00:00:00Z" }] },
+    });
+    mockRequireUser.mockResolvedValue({ user: { id: USER_ID }, supabase: userClient });
+    const response = await GET(new NextRequest("http://localhost/api/export/accounts-csv"));
+    expect(response.status).toBe(200);
+    const csv = await response.text();
+    expect(csv).toContain("credit,Overpaid card,credit card,-50,USD,");
+    expect(csv).toContain("loan,Manual debt,liability,-25,USD,");
+  });
+
   it("uses RLS-visible rows without a user filter for household scope", async () => {
     const userClient = clientStub({
       profiles: { data: { ai_export_enabled: true } },

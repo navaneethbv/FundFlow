@@ -559,20 +559,16 @@ describe("POST /api/transactions/manual", () => {
 
   it("creates a plaid-source transaction (line 48 plaid, line 49 null)", async () => {
     mockNormalizeManualTxn.mockReturnValue(plaidValue);
-    const insertChain = {
-      insert: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { id: "txn1" }, error: null }),
-    };
+    const rpc = vi.fn().mockResolvedValue({ data: "txn1", error: null });
     mockRequireUser.mockResolvedValue({
       user: USER,
       supabase: supabase({ accounts: () => ({ data: { id: "a1" }, error: null }) }),
     });
-    serviceClient = { from: vi.fn(() => insertChain) } as never;
+    serviceClient = { rpc } as never;
     const res = await manualPost(jsonRequest({}));
     expect(res.status).toBe(201);
-    expect(insertChain.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ account_id: "a1", manual_account_id: null }),
+    expect(rpc).toHaveBeenCalledWith("create_manual_transaction_atomic",
+      expect.objectContaining({ p_account_id: "a1", p_source: "plaid" }),
     );
     expect(mockWriteAudit).toHaveBeenCalledWith(
       expect.objectContaining({ action: "manual_transaction_created" }),
@@ -587,35 +583,27 @@ describe("POST /api/transactions/manual", () => {
         account: { source: "manual", id: "ma1" },
       },
     });
-    const insertChain = {
-      insert: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { id: "txn2" }, error: null }),
-    };
+    const rpc = vi.fn().mockResolvedValue({ data: "txn1", error: null });
     mockRequireUser.mockResolvedValue({
       user: USER,
       supabase: supabase({ manual_accounts: () => ({ data: { id: "ma1" }, error: null }) }),
     });
-    serviceClient = { from: vi.fn(() => insertChain) } as never;
+    serviceClient = { rpc } as never;
     const res = await manualPost(jsonRequest({}));
     expect(res.status).toBe(201);
-    expect(insertChain.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ account_id: null, manual_account_id: "ma1" }),
+    expect(rpc).toHaveBeenCalledWith("create_manual_transaction_atomic",
+      expect.objectContaining({ p_account_id: "ma1", p_source: "manual" }),
     );
   });
 
   it("returns 500 when the service insert errors (line 61)", async () => {
     mockNormalizeManualTxn.mockReturnValue(plaidValue);
-    const insertChain = {
-      insert: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: new Error("insert fail") }),
-    };
+    const rpc = vi.fn().mockResolvedValue({ data: null, error: new Error("write failed") });
     mockRequireUser.mockResolvedValue({
       user: USER,
       supabase: supabase({ accounts: () => ({ data: { id: "a1" }, error: null }) }),
     });
-    serviceClient = { from: vi.fn(() => insertChain) } as never;
+    serviceClient = { rpc } as never;
     const res = await manualPost(jsonRequest({}));
     expect(res.status).toBe(500);
   });

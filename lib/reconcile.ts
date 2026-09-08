@@ -6,11 +6,10 @@
  * accounts (spending increases what you owe), −1 for assets. Cleared and
  * outstanding sums are direction-adjusted, so they read as balance changes.
  *
- * The book balance is the account's current ledger balance (provider balance
- * for Plaid accounts, the stored balance for manual ones). The difference is
- * book − statement; a nonzero difference is not an error, it is the signal
- * that some transaction is missing, duplicated, or mis-dated — the workflow's
- * job is to make it attributable.
+ * bookBalance is the opening cleared balance, never the current provider balance.
+ * A previous verified statement supplies it, or the user enters an opening
+ * end-of-day balance for the first statement. Outstanding movements stay out
+ * of the cleared statement balance and carry forward into the next period.
  */
 
 export interface ReconcileTransaction {
@@ -23,7 +22,7 @@ export interface ReconcileTransaction {
 
 export interface ReconcileInput {
   direction: 1 | -1;
-  /** The account's current book balance. */
+  /** The verified opening cleared balance, before this statement working set. */
   bookBalance: number;
   /** The statement's ending balance, entered by the user. */
   statementBalance: number;
@@ -37,7 +36,7 @@ export interface ReconcileResult {
   clearedTotal: number;
   /** Direction-adjusted sum of outstanding (uncleared) transactions on or before the statement date. */
   outstandingTotal: number;
-  /** bookBalance − statementBalance. */
+  /** Opening balance plus cleared movements minus statement balance. */
   difference: number;
   /** Counts of cleared / outstanding in-scope transactions. */
   clearedCount: number;
@@ -69,7 +68,7 @@ export function computeReconciliation(input: ReconcileInput): ReconcileResult {
     }
   }
 
-  const difference = round2(input.bookBalance - input.statementBalance);
+  const difference = round2(input.bookBalance + clearedTotal - input.statementBalance);
   return {
     clearedTotal: round2(clearedTotal),
     outstandingTotal: round2(outstandingTotal),
@@ -84,7 +83,7 @@ export function parseAccountRef(
   value: unknown,
 ): { source: "plaid" | "manual"; id: string } | null {
   if (typeof value !== "string") return null;
-  const [source, id] = value.split(":");
-  if ((source === "plaid" || source === "manual") && id) return { source, id };
+  const [source, id, extra] = value.split(":");
+  if ((source === "plaid" || source === "manual") && id && extra === undefined) return { source, id };
   return null;
 }
