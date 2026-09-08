@@ -1,5 +1,5 @@
 import "server-only";
-import nodemailer from "nodemailer";
+import nodemailer, { type SMTPSentMessageInfo } from "nodemailer";
 import {
   renderDailyDigestEmail,
   renderWeeklyReportEmail,
@@ -42,7 +42,7 @@ async function createMailTransport() {
   };
 }
 
-function logDevelopmentPreview(info: Awaited<ReturnType<ReturnType<typeof nodemailer.createTransport>["sendMail"]>>) {
+function logDevelopmentPreview(info: SMTPSentMessageInfo) {
   const previewUrl = nodemailer.getTestMessageUrl(info);
   if (previewUrl) console.log(`[nodemailer] Development email preview: ${previewUrl}`);
 }
