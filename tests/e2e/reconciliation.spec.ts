@@ -5,6 +5,7 @@ const isolatedUrl = process.env.TEST_SUPABASE_URL;
 const runIsolated = Boolean(isolatedUrl && isolatedUrl === process.env.NEXT_PUBLIC_SUPABASE_URL);
 
 test.describe("statement reconciliation", () => {
+  // Skipped without explicit isolation because these fixtures modify financial records.
   test.skip(!runIsolated, "Set TEST_SUPABASE_URL to the same isolated project used by the local app");
   test("clears an actual statement and carries outstanding activity to the next period", async ({ authenticatedPage: page, admin, account }) => {
     const { data: cash, error } = await admin.from("manual_accounts").insert({ user_id: account.id, name: "Statement cash", account_type: "cash", balance: 123 }).select("id").single();

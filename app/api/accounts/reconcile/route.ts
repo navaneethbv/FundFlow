@@ -42,7 +42,11 @@ export async function GET(request: NextRequest) {
       opening_date: params.get("opening_date"), opening_balance: openingBalance === null ? null : Number(openingBalance) });
     if (!input) return badRequest("Invalid statement or opening balance");
     const { data, error } = await auth.supabase.rpc("get_reconciliation_preview", input);
-    if (error) { const response = rpcError(error); if (response) return response; throw error; }
+    if (error) {
+      const response = rpcError(error);
+      if (response) return response;
+      throw error;
+    }
     if (!data) throw new Error("Reconciliation preview unavailable");
     return NextResponse.json(data);
   } catch (error) { return errorResponse("accounts.reconcile.read", error); }
@@ -68,7 +72,11 @@ export async function POST(request: NextRequest) {
       p_cleared_ids: body.cleared_ids, p_revision: body.revision, p_request_id: body.request_id,
       p_create_adjustment: body.create_adjustment,
     });
-    if (error) { const response = rpcError(error); if (response) return response; throw error; }
+    if (error) {
+      const response = rpcError(error);
+      if (response) return response;
+      throw error;
+    }
     if (!data) throw new Error("Reconciliation save unavailable");
     invalidateDashboardCache(auth.user.id);
     await writeAudit({ userId: auth.user.id, action: "account_reconciled", metadata: {

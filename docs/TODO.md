@@ -34,9 +34,9 @@ State of `main` encompasses comprehensive review remediation (PR #153 `55bf767`)
 ### Deployment prerequisite
 
 Database prerequisites are complete as of 2026-09-07 on the linked FundFlow project.
-`supabase migration list --linked` reports 83 matching local/remote versions with no mismatches.
+`supabase migration list --linked` reports 84 matching local/remote versions with no mismatches.
 The two September 3 remote IDs were mapped to `20260902220000` and `20260903010000` only after exact stored-SQL comparison and schema verification.
-Seven missing versions were applied: `20260904000000`, `20260904120000`, `20260905100000`, `20260905110000`, `20260905120000`, `20260908010000`, and `20260908020000`.
+Eight missing versions were applied: `20260904000000`, `20260904120000`, `20260905100000`, `20260905110000`, `20260905120000`, `20260908010000`, `20260908020000`, and `20260908030000`.
 Live read-only RLS assertions and RPC authorization checks pass; six deployed function definitions match the fresh local database exactly.
 The reconciliation migration retains a column-limited, owner/MFA/revocation-gated legacy insert path so the deployed form remains compatible until the application merge.
 Legacy records cannot supply a verified basis or retry result, and clients cannot update or delete statement history.

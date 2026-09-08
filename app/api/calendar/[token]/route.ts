@@ -12,7 +12,7 @@ import { writeAudit } from "@/lib/audit";
 
 /**
  * iCal feed of upcoming recurring bills and paychecks behind a revocable
- * capability URL (the token is the only credential — calendar apps can't do
+ * capability URL (the token is the only credential, calendar apps can't do
  * cookie auth). Amounts appear only when the token was minted with them.
  * The service client is required here (no session), so every query is
  * scoped to the token row's user_id explicitly.
@@ -49,28 +49,7 @@ export async function GET(
 
     const today = await resolveViewerToday(service, row.user_id as string);
     const end = addDays(today, 60);
-    const { streamInputs, manualInputs } = await loadRecurringInputs(service, row.user_id as string);
-    const bills: CalendarBill[] = [];
-    for (let month = `${today.slice(0, 7)}-01`; month <= end; month = addMonths(month, 1)) {
-      const { occurrences } = expandStreamsForMonth(streamInputs, manualInputs, month.slice(0, 7), today);
-      for (const occurrence of occurrences) {
-        bills.push({ id: `${occurrence.source}-${occurrence.sourceId}`, name: occurrence.merchant,
-          amount: occurrence.amount, itemType: occurrence.isIncome ? "income" : "expense",
-          frequency: "once", nextDate: occurrence.dueDate });
-      }
-    }
-    // Scheduled entries are a separate source and must also be explicitly owner-scoped.
-    for (let offset = 0; ; offset += 500) {
-      const { data: scheduled, error } = await service.from("scheduled_transactions")
-        .select("id,merchant,amount,kind,scheduled_date").eq("user_id", row.user_id)
-        .eq("status", "scheduled").gte("scheduled_date", today).lte("scheduled_date", end)
-        .order("id").range(offset, offset + 499);
-      if (error) throw error;
-      for (const entry of scheduled ?? []) bills.push({ id: `scheduled-${entry.id}`, name: entry.merchant,
-        amount: Math.abs(Number(entry.amount)), itemType: entry.kind === "credit" ? "income" : "expense",
-        frequency: "once", nextDate: entry.scheduled_date });
-      if ((scheduled ?? []).length < 500) break;
-    }
+    const bills = await loadCalendarBills(service, row.user_id, today, end);
 
     const ics = buildBillsCalendar({
       bills,
@@ -95,4 +74,42 @@ export async function GET(
   } catch (error) {
     return errorResponse("calendar.feed", error);
   }
+}
+
+async function loadCalendarBills(
+  service: ReturnType<typeof createServiceClient>, userId: string, today: string, end: string,
+): Promise<CalendarBill[]> {
+  const { streamInputs, manualInputs } = await loadRecurringInputs(service, userId);
+  const bills: CalendarBill[] = [];
+  for (let month = `${today.slice(0, 7)}-01`; month <= end; month = addMonths(month, 1)) {
+    const { occurrences } = expandStreamsForMonth(streamInputs, manualInputs, month.slice(0, 7), today);
+    for (const occurrence of occurrences) {
+      bills.push({ id: `${occurrence.source}-${occurrence.sourceId}`, name: occurrence.merchant,
+        amount: occurrence.amount, itemType: occurrence.isIncome ? "income" : "expense",
+        frequency: "once", nextDate: occurrence.dueDate });
+    }
+  }
+  bills.push(...await loadScheduledBills(service, userId, today, end));
+
+  return bills;
+}
+
+async function loadScheduledBills(
+  service: ReturnType<typeof createServiceClient>, userId: string, today: string, end: string,
+): Promise<CalendarBill[]> {
+  const bills: CalendarBill[] = [];
+  // Scheduled entries are a separate source and must also be explicitly owner-scoped.
+  for (let offset = 0; ; offset += 500) {
+    const { data: scheduled, error } = await service.from("scheduled_transactions")
+      .select("id,merchant,amount,kind,scheduled_date").eq("user_id", userId)
+      .eq("status", "scheduled").gte("scheduled_date", today).lte("scheduled_date", end)
+      .order("id").range(offset, offset + 499);
+    if (error) throw error;
+    for (const entry of scheduled ?? []) bills.push({ id: `scheduled-${entry.id}`, name: entry.merchant,
+      amount: Math.abs(Number(entry.amount)), itemType: entry.kind === "credit" ? "income" : "expense",
+      frequency: "once", nextDate: entry.scheduled_date });
+    if ((scheduled ?? []).length < 500) break;
+  }
+
+  return bills;
 }

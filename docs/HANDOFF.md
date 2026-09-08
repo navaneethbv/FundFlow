@@ -5,8 +5,11 @@ Last updated: 2026-09-07. Read this first to resume.
 ## 2026-09-07: linked migrations applied and history reconciled
 
 The user authorized applying the pending migrations before merging the application fixes.
-Two historical version IDs were corrected after exact stored-SQL comparison, and all seven missing migrations were applied through the linked CLI.
-The ledger now matches all 83 local versions.
+Two historical version IDs were corrected after exact stored-SQL comparison, and all eight missing migrations were applied through the linked CLI.
+The ledger now matches all 84 local versions.
+PR [#165](https://github.com/navaneethbv/FundFlow/pull/165) contains the fixes.
+Its clean-stack check exposed an absent account lookup grant, reproduced locally with default grants removed and fixed through an additional explicit column-grant migration.
+The follow-up also separates calendar loading and reconciliation rendering responsibilities and addresses the reported lint findings.
 Live RLS assertions and read-only authorization probes pass, and deployed RPC/trigger definitions match the locally tested database.
 The schema rollout preserves the old form's limited legacy insert while denying any client-created verified basis or retry result.
 A fresh local migration run verifies that compatibility path, cross-user rejection, rollback, stale saves, MFA, revocation, and atomic note/goal writes.

@@ -22,7 +22,7 @@ interface PreviewResponse {
   transactions: ReconcileTransaction[];
 }
 
-export default function ReconcilePanel({ accounts }: Readonly<{ accounts: ReconcileAccountOption[] }>) {
+function useReconciliation(accounts: ReconcileAccountOption[]) {
   const [open, setOpen] = useState(false);
   const [accountRef, setAccountRef] = useState(accounts[0]?.ref ?? "");
   const [statementDate, setStatementDate] = useState(localDateKey());
@@ -48,6 +48,14 @@ export default function ReconcilePanel({ accounts }: Readonly<{ accounts: Reconc
   }
   function changeSelection(next: Set<string>) {
     setClearedIds(next);
+    requestId.current = crypto.randomUUID();
+  }
+  function changeStatementBalance(value: string) {
+    setStatementBalance(value);
+    requestId.current = crypto.randomUUID();
+  }
+  function changeAdjustment(value: boolean) {
+    setCreateAdjustment(value);
     requestId.current = crypto.randomUUID();
   }
   async function loadPreview() {
@@ -102,7 +110,9 @@ export default function ReconcilePanel({ accounts }: Readonly<{ accounts: Reconc
         if (response.status === 409) setPreview(null);
         throw new Error(data.error ?? "Could not save the statement. You can retry this save safely.");
       }
-      setSaved(`Statement reconciled.${data.adjustment_amount ? ` Adjustment recorded: ${formatCurrency(Math.abs(data.adjustment_amount))}.` : ""}`);
+      const adjustmentMessage = data.adjustment_amount
+        ? ` Adjustment recorded: ${formatCurrency(Math.abs(data.adjustment_amount))}.` : "";
+      setSaved(`Statement reconciled.${adjustmentMessage}`);
       setPreview(null);
       setNeedsOpening(false);
       setOpeningDate("");
@@ -115,6 +125,19 @@ export default function ReconcilePanel({ accounts }: Readonly<{ accounts: Reconc
     invalidate();
     setOpen(false);
   }
+
+  return { open, setOpen, accountRef, setAccountRef, statementDate, setStatementDate,
+    statementBalance, setStatementBalance, openingDate, setOpeningDate, openingBalance, setOpeningBalance,
+    needsOpening, setNeedsOpening, preview, clearedIds, busy, error, saved, createAdjustment,
+    changeAdjustment, changeStatementBalance, invalidate, changeSelection, loadPreview, totals, save, close };
+}
+
+export default function ReconcilePanel({ accounts }: Readonly<{ accounts: ReconcileAccountOption[] }>) {
+  const model = useReconciliation(accounts);
+  const { open, setOpen, accountRef, setAccountRef, statementDate, setStatementDate,
+    statementBalance, setStatementBalance, openingDate, setOpeningDate, openingBalance, setOpeningBalance,
+    needsOpening, setNeedsOpening, preview, busy, error, saved,
+    changeStatementBalance, invalidate, loadPreview, close } = model;
 
   return <>
     <Button variant="secondary" onClick={() => setOpen(true)}>Reconcile an account</Button>
@@ -131,7 +154,7 @@ export default function ReconcilePanel({ accounts }: Readonly<{ accounts: Reconc
           <Input id="reconcile-date" type="date" value={statementDate} disabled={busy} onChange={e => { invalidate(); setStatementDate(e.target.value); }} />
         </Field>
         <Field label="Statement ending balance" htmlFor="reconcile-balance">
-          <Input id="reconcile-balance" type="number" step="0.01" value={statementBalance} disabled={busy} onChange={e => { setStatementBalance(e.target.value); requestId.current = crypto.randomUUID(); }} />
+          <Input id="reconcile-balance" type="number" step="0.01" value={statementBalance} disabled={busy} onChange={e => { changeStatementBalance(e.target.value); }} />
         </Field>
       </div>
       {needsOpening && <fieldset className="mt-4 rounded-card border border-panel-border p-4">
@@ -143,14 +166,25 @@ export default function ReconcilePanel({ accounts }: Readonly<{ accounts: Reconc
         </div>
       </fieldset>}
       {error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}
-      {saved && <p role="status" className="mt-3 text-sm">{saved}</p>}
+      {saved && <output className="mt-3 block text-sm">{saved}</output>}
       <Button className="mt-4" variant="secondary" disabled={busy || !accountRef || !statementDate || (needsOpening && (!openingDate || openingBalance === ""))} loading={busy} onClick={() => void loadPreview()}>{preview ? "Reload" : "Load transactions"}</Button>
-      {preview && <>
+      <ReconcileResults model={model} />
+    </Modal>
+  </>;
+}
+
+function ReconcileResults({ model }: Readonly<{ model: ReturnType<typeof useReconciliation> }>) {
+  const { preview, clearedIds, busy, changeSelection, totals, createAdjustment, changeAdjustment,
+    close, save } = model;
+  if (!preview) return null;
+  return <>
         <p className="my-3 text-sm">Opening cleared balance: {formatCurrency(preview.openingBalance)} as of {preview.openingDate}. Older outstanding entries carry forward.</p>
         <ul className="max-h-72 divide-y divide-panel-border overflow-y-auto rounded-card border border-panel-border">
           {preview.transactions.map(row => <li key={row.id} className="flex items-start justify-between gap-3 p-3 text-sm">
             <label className="flex min-w-0 items-start gap-3"><input type="checkbox" checked={clearedIds.has(row.id)} disabled={busy} onChange={() => {
-              const next = new Set(clearedIds); if (next.has(row.id)) next.delete(row.id); else next.add(row.id); changeSelection(next);
+              const next = new Set(clearedIds);
+              if (next.has(row.id)) { next.delete(row.id); } else { next.add(row.id); }
+              changeSelection(next);
             }} /><span className="min-w-0 break-words">{row.merchant}<span className="block text-xs text-muted">{row.date}</span></span></label>
             <span data-money className="money shrink-0">{formatCurrency(row.amount)}</span>
           </li>)}
@@ -159,10 +193,8 @@ export default function ReconcilePanel({ accounts }: Readonly<{ accounts: Reconc
         {totals && <div className="mt-4 space-y-2 text-sm" aria-live="polite">
           <p>Cleared: {formatCurrency(totals.clearedTotal)} ({totals.clearedCount}) · Outstanding: {formatCurrency(totals.outstandingTotal)} ({totals.outstandingCount})</p>
           <p className="font-semibold">Difference from statement: {formatCurrency(totals.difference)}</p>
-          {!totals.balanced && <label className="flex items-start gap-2"><input type="checkbox" disabled={busy} checked={createAdjustment} onChange={e => { setCreateAdjustment(e.target.checked); requestId.current = crypto.randomUUID(); }} /><span>Record an explicit balance adjustment of {formatCurrency(Math.abs(totals.difference))}. Only do this after reviewing missing or incorrect entries.</span></label>}
+          {!totals.balanced && <label className="flex items-start gap-2"><input type="checkbox" disabled={busy} checked={createAdjustment} onChange={e => { changeAdjustment(e.target.checked); }} /><span>Record an explicit balance adjustment of {formatCurrency(Math.abs(totals.difference))}. Only do this after reviewing missing or incorrect entries.</span></label>}
         </div>}
         <div className="mt-5 flex justify-end gap-3"><Button variant="ghost" disabled={busy} onClick={close}>Close</Button><Button disabled={busy || !totals || (!totals.balanced && !createAdjustment)} loading={busy} onClick={() => void save()}>Save reconciliation</Button></div>
-      </>}
-    </Modal>
   </>;
 }

@@ -48,9 +48,9 @@ Browser verification used the real local Next.js app, PostgREST, application rou
 This verifies the financial workflow, not hosted Supabase Auth or deployment configuration.
 The durable `tests/e2e/reconciliation.spec.ts` journey requires explicitly matching isolated `TEST_SUPABASE_URL` and app database configuration; that full Supabase Auth fixture suite was not run in this environment.
 
-The user-authorized database rollout applied the two new migrations and five missing predecessors on 2026-09-07.
+The user-authorized database rollout applied the two new atomic-write migrations, a follow-up ownership lookup grant, and five missing predecessors on 2026-09-07.
 Two already-applied migrations were mapped to the repository versions after exact stored-SQL comparison.
-The live ledger matches all 83 local versions, live RLS and authorization checks pass, and deployed function definitions match the isolated database.
+The live ledger matches all 84 local versions, live RLS and authorization checks pass, and deployed function definitions match the isolated database.
 [TODO.md](../TODO.md#deployment-prerequisite) owns the current rollout state.
 Dependency maintenance updates Supabase JS to 2.116.0 and Lucide to 1.42.0.
 ESLint 10 is outside the installed `eslint-plugin-react` 7.37.5 peer range, and TypeScript 7 is outside the installed `@typescript-eslint/parser` 8.67.0 range (`>=4.8.4 <6.1.0`), so those majors remain deferred.
