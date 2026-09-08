@@ -37,6 +37,7 @@ describe("normalizeRecurringMerchant", () => {
   it("normalizes punctuation, compatibility characters, and noisy reference suffixes", () => {
     expect(normalizeRecurringMerchant("  Ａcme\u2122   REF 123456  ")).toBe("ACME");
     expect(normalizeRecurringMerchant("Acme * ID 9876")).toBe("ACME");
+    expect(normalizeRecurringMerchant("Acme XX12AB")).toBe("ACME XX12AB");
   });
 
   it("keeps meaningful merchant words and rejects no identity", () => {
@@ -443,5 +444,88 @@ describe("recurringIdentityKey overloads and display fallbacks", () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ amountPattern: "variable", expectedAmount: 100 });
     expect(result[0]!.evidence.matchedSignifiers).toContain("AUTOPAY");
+  });
+
+  it("handles recurringIdentityKey positional defaults", () => {
+    const key = recurringIdentityKey("user-1");
+    expect(key).toContain("recurring-v1:");
+  });
+
+  it("returns empty array when today is invalid iso date", () => {
+    expect(detectRecurringCandidates([], "not-a-date")).toEqual([]);
+    expect(detectRecurringCandidates([], "2026-99-99")).toEqual([]);
+  });
+
+  it("filters out invalid transactions, future dates, and invalid amounts", () => {
+    const validRows = series(["2026-05-15", "2026-06-15", "2026-07-15"], 20);
+    const invalidRows: RecurringDetectionTransaction[] = [
+      { ...validRows[0]!, id: "" },
+      { ...validRows[0]!, id: "no-user", userId: "" },
+      { ...validRows[0]!, id: "no-item", plaidItemId: "" },
+      { ...validRows[0]!, id: "no-acc", accountId: "" },
+      { ...validRows[0]!, id: "no-flow", flow: undefined as unknown as "expense" },
+      { ...validRows[0]!, id: "bad-date", postedDate: "2026-13-40" },
+      { ...validRows[0]!, id: "bad-auth", authorizedDate: "invalid" },
+      { ...validRows[0]!, id: "future-date", postedDate: "2026-09-01" },
+      { ...validRows[0]!, id: "zero-amt", amount: 0 },
+      { ...validRows[0]!, id: "nan-amt", amount: Number.NaN },
+      { ...validRows[0]!, id: "bad-merch", merchant: "***", rawName: null },
+      validRows[0]!, // duplicate id
+      ...validRows,
+    ];
+
+    const result = detectRecurringCandidates(invalidRows, "2026-08-30");
+    expect(result).toHaveLength(1);
+  });
+
+  it("falls back to oldest detailed category and null category when all null", () => {
+    const rows = series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99).map((row, index) => {
+      if (index === 0) return { ...row, category: null, detailedCategory: "OLD_DETAILED" };
+      return { ...row, category: null, detailedCategory: null };
+    });
+    const result = detectRecurringCandidates(rows, "2026-08-30");
+    expect(result[0]!.category).toBe("OLD_DETAILED");
+
+    const allNullRows = series(["2026-05-15", "2026-06-15", "2026-07-15"], 15.99).map((row) => ({
+      ...row,
+      category: null,
+      detailedCategory: null,
+    }));
+    const nullCatResult = detectRecurringCandidates(allNullRows, "2026-08-30");
+    expect(nullCatResult[0]!.category).toBeNull();
+  });
+
+  it("calculates median for even length variable amount series and rejects outliers", () => {
+    // 4 elements (even): 90, 100, 110, 120 -> median = 105
+    const evenRows = series(["2026-04-15", "2026-05-15", "2026-06-15", "2026-07-15"], [90, 100, 110, 120], {
+      merchant: "City Power Electric AUTOPAY",
+      category: "UTILITIES",
+    });
+    const evenResult = detectRecurringCandidates(evenRows, "2026-07-20");
+    expect(evenResult).toHaveLength(1);
+    expect(evenResult[0]!.expectedAmount).toBe(105);
+
+    // Outlier: amount > median * 2.5
+    const outlierRows = series(["2026-05-15", "2026-06-15", "2026-07-15"], [50, 60, 200], {
+      merchant: "City Power Electric AUTOPAY",
+      category: "UTILITIES",
+    });
+    expect(detectRecurringCandidates(outlierRows, "2026-08-30")).toEqual([]);
+  });
+
+  it("exercises candidate tie-breaking", () => {
+    // Multiple candidates with same occurrenceCount but differing cadenceDeviation or strength
+    const fixedMonthly = series(["2026-05-15", "2026-06-15", "2026-07-15"], 50, {
+      merchant: "Alpha Monthly",
+      idPrefix: "a",
+    });
+    const variableMonthly = series(["2026-05-14", "2026-06-16", "2026-07-15"], [48, 52, 50], {
+      merchant: "Beta Utilities AUTOPAY",
+      category: "UTILITIES",
+      idPrefix: "b",
+    });
+    const result = detectRecurringCandidates([...fixedMonthly, ...variableMonthly], "2026-08-30");
+    expect(result).toHaveLength(2);
+    expect(result[0]!.merchantName).toBe("Alpha Monthly");
   });
 });

@@ -268,4 +268,24 @@ describe("PATCH /api/transactions/review", () => {
       }),
     );
   });
+
+  it("handles Postgres error 22023 with fallback message when error.message is missing", async () => {
+    mockRpcResult = {
+      data: null,
+      error: { code: "22023", message: null },
+    };
+    const req = makeRequest({
+      status: "reviewed",
+      items: [
+        {
+          transaction_id: "11111111-1111-4111-8111-111111111111",
+          expected_version: "1",
+        },
+      ],
+    });
+    const res = await PATCH(req);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("Invalid review request");
+  });
 });

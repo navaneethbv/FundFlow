@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextResponse, type NextRequest } from "next/server";
-import { clientStub } from "../fixtures/supabase-query";
+import { clientStub, queryStub } from "../fixtures/supabase-query";
 
 const mockRequireUser = vi.fn<(...args: unknown[]) => unknown>();
 const mockWriteAudit = vi.fn<(...args: unknown[]) => unknown>();
@@ -515,5 +515,71 @@ describe("POST /api/import/config", () => {
       target_date: null,
       monthly_contribution: null,
     });
+  });
+
+  it("applies an allocated goal during creation", async () => {
+    const allocatedGoalJson = JSON.stringify({
+      goals: [{
+        id: "goal-alloc-1",
+        name: "New Savings Goal",
+        type: "save_up",
+        target_amount: 5000,
+        account_name: "Savings",
+        use_entire_balance: true,
+      }],
+    });
+    const baseDb = clientStub({
+      accounts: { data: [{ id: "acc-savings", name: "Savings", type: "depository", current_balance: 2000 }] },
+      set_goal_allocation: { data: "alloc-new-1" },
+    });
+    const supabase = {
+      ...baseDb,
+      from: vi.fn((table: string) => {
+        if (table === "goals") {
+          const stub = queryStub({ data: [] });
+          const origThen = stub.then;
+          stub.then = (resolve: (val: unknown) => unknown) => {
+            const hasInsert = stub.calls.some((c) => c.method === "insert");
+            if (hasInsert) {
+              return resolve({ data: { id: "g-created-1" }, error: null });
+            }
+            return origThen(resolve);
+          };
+          return stub;
+        }
+        return baseDb.from(table);
+      }),
+    };
+    mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase });
+
+    const res = await POST(jsonRequest({
+      kind: "goal",
+      text: allocatedGoalJson,
+      mode: "apply",
+      decisions: { "goal:0": "create" },
+    }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ ok: true, created: 1 });
+    expect(mockWriteAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          allocation_ids: ["alloc-new-1"],
+        }),
+      }),
+    );
+  });
+
+  it("returns 500 when goal config query crashes", async () => {
+    const supabase = clientStub({
+      goals: { error: new Error("goals table crashed") },
+    });
+    mockRequireUser.mockResolvedValue({ user: { id: "user-1" }, supabase });
+    const res = await POST(jsonRequest({
+      kind: "goal",
+      text: MONARCH_GOALS,
+      mode: "preview",
+    }));
+    expect(res.status).toBe(500);
   });
 });

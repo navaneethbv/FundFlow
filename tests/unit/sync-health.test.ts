@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildAccountReconciliation,
   deriveProductSyncHealth,
+  isHistoryComplete,
   loadInstitutionObservability,
 } from "@/lib/sync-health";
 import { clientStub } from "../fixtures/supabase-query";
@@ -424,5 +426,153 @@ describe("loadInstitutionObservability", () => {
       "account_reconciliation_aggregates",
       "account_reconciliation_aggregates",
     ]);
+  });
+
+  it("evaluates isHistoryComplete across all branch conditions", () => {
+    // 1. No lastAttemptAt -> true
+    expect(isHistoryComplete({
+      plaidItemId: "i1",
+      state: "healthy",
+      lastAttemptAt: null,
+      lastSuccessAt: null,
+      lastSyncCompletedPages: true,
+      initialHistoryIncomplete: false,
+      cursorResetDetectedAt: null,
+      safeErrorCode: null,
+    })).toBe(true);
+
+    // 2. Fully healthy -> true
+    expect(isHistoryComplete({
+      plaidItemId: "i1",
+      state: "healthy",
+      lastAttemptAt: "2026-08-29T10:00:00Z",
+      lastSuccessAt: "2026-08-29T10:00:00Z",
+      lastSyncCompletedPages: true,
+      initialHistoryIncomplete: false,
+      cursorResetDetectedAt: null,
+      safeErrorCode: null,
+    })).toBe(true);
+
+    // 3. Failing state -> false
+    expect(isHistoryComplete({
+      plaidItemId: "i1",
+      state: "failed",
+      lastAttemptAt: "2026-08-29T10:00:00Z",
+      lastSuccessAt: "2026-08-29T10:00:00Z",
+      lastSyncCompletedPages: true,
+      initialHistoryIncomplete: false,
+      cursorResetDetectedAt: null,
+      safeErrorCode: null,
+    })).toBe(false);
+
+    // 4. Incomplete pages -> false
+    expect(isHistoryComplete({
+      plaidItemId: "i1",
+      state: "healthy",
+      lastAttemptAt: "2026-08-29T10:00:00Z",
+      lastSuccessAt: "2026-08-29T10:00:00Z",
+      lastSyncCompletedPages: false,
+      initialHistoryIncomplete: false,
+      cursorResetDetectedAt: null,
+      safeErrorCode: null,
+    })).toBe(false);
+
+    // 5. Initial history incomplete -> false
+    expect(isHistoryComplete({
+      plaidItemId: "i1",
+      state: "healthy",
+      lastAttemptAt: "2026-08-29T10:00:00Z",
+      lastSuccessAt: "2026-08-29T10:00:00Z",
+      lastSyncCompletedPages: true,
+      initialHistoryIncomplete: true,
+      cursorResetDetectedAt: null,
+      safeErrorCode: null,
+    })).toBe(false);
+
+    // 6. Reset detected -> false
+    expect(isHistoryComplete({
+      plaidItemId: "i1",
+      state: "healthy",
+      lastAttemptAt: "2026-08-29T10:00:00Z",
+      lastSuccessAt: "2026-08-29T10:00:00Z",
+      lastSyncCompletedPages: true,
+      initialHistoryIncomplete: false,
+      cursorResetDetectedAt: "2026-08-29T09:00:00Z",
+      safeErrorCode: null,
+    })).toBe(false);
+  });
+
+  it("evaluates buildAccountReconciliation for liability, balanced, and missing states", () => {
+    // 1. Missing current balance
+    const recMissing = buildAccountReconciliation({
+      account: {
+        id: "a1",
+        plaidItemId: "i1",
+        name: "Test",
+        mask: "1234",
+        type: "depository",
+        subtype: "checking",
+        currentBalance: null,
+        updatedAt: null,
+      },
+      anchor: null,
+      transactionTotalCents: 0,
+      historyComplete: true,
+      coverage: { oldest: null, newest: null },
+    });
+    expect(recMissing.state).toBe("missing_balance");
+
+    // 2. Incomplete history
+    const recIncomplete = buildAccountReconciliation({
+      account: {
+        id: "a1",
+        plaidItemId: "i1",
+        name: "Test",
+        mask: "1234",
+        type: "depository",
+        subtype: "checking",
+        currentBalance: 100,
+        updatedAt: null,
+      },
+      anchor: { snapshotDate: "2026-08-01", currentBalance: 100 },
+      transactionTotalCents: 0,
+      historyComplete: false,
+      coverage: { oldest: null, newest: null },
+    });
+    expect(recIncomplete.state).toBe("incomplete_history");
+
+    // 3. Liability balanced: credit card with anchor 500, +200 transactions (500 + 200 = 700)
+    const recLiability = buildAccountReconciliation({
+      account: {
+        id: "a1",
+        plaidItemId: "i1",
+        name: "Credit Card",
+        mask: "1234",
+        type: "credit",
+        subtype: "credit card",
+        currentBalance: 700,
+        updatedAt: null,
+      },
+      anchor: { snapshotDate: "2026-08-01", currentBalance: 500 },
+      transactionTotalCents: 20000,
+      historyComplete: true,
+      coverage: { oldest: null, newest: null },
+    });
+    expect(recLiability.state).toBe("balanced");
+    expect(recLiability.difference).toBe(0);
+  });
+
+  it("throws when RPC returns an error other than PGRST202", async () => {
+    const supabase = queryableSupabase({ accounts: [], sync_jobs: [] });
+    supabase.rpc = (() => ({
+      range: () => Promise.resolve({
+        data: null,
+        error: { code: "42883", message: "undefined function" },
+      }),
+    })) as unknown as typeof supabase.rpc;
+
+    await expect(
+      loadInstitutionObservability(supabase as never, "user-1", [], NOW),
+    ).rejects.toEqual(expect.objectContaining({ code: "42883" }));
   });
 });

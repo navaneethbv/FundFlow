@@ -82,8 +82,8 @@ export async function PATCH(request: NextRequest) {
   }
 
   const validation = validateReviewBatchPayload(body);
-  if (!validation.valid || !validation.data) {
-    return badRequest(validation.error ?? "Invalid review payload");
+  if (!validation.valid) {
+    return badRequest(validation.error);
   }
 
   const { status, items } = validation.data;

@@ -275,4 +275,160 @@ describe("transaction override route", () => {
     // The immutable provider row is never written.
     expect(supabase.callsOn("transactions").some((c) => c.method === "update" || c.method === "upsert")).toBe(false);
   });
+
+  it("returns 401 on DELETE when unauthenticated", async () => {
+    currentUser = null;
+    const res = await DELETE(jsonRequest({ transaction_id: "11111111-1111-4111-8111-111111111111" }));
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects DELETE with invalid or missing transaction_id or unparseable json", async () => {
+    const res1 = await DELETE(jsonRequest({}));
+    expect(res1.status).toBe(400);
+    const res2 = await DELETE(jsonRequest({ transaction_id: "not-a-uuid" }));
+    expect(res2.status).toBe(400);
+    const badReq = { json: () => Promise.reject(new Error("bad json")) } as unknown as NextRequest;
+    const res3 = await DELETE(badReq);
+    expect(res3.status).toBe(400);
+  });
+
+  it("returns 400 on DELETE when transaction is not found", async () => {
+    seeded({ transactions: { data: null } });
+    const res = await DELETE(jsonRequest({ transaction_id: "11111111-1111-4111-8111-111111111111" }));
+    expect(res.status).toBe(400);
+  });
+
+  it("handles DELETE database errors", async () => {
+    seeded({ transactions: { error: new Error("db failure") } });
+    const res1 = await DELETE(jsonRequest({ transaction_id: "11111111-1111-4111-8111-111111111111" }));
+    expect(res1.status).toBe(500);
+
+    seeded({
+      transactions: { data: { id: "11111111-1111-4111-8111-111111111111" } },
+      transaction_annotations: { error: new Error("update failure") },
+    });
+    const res2 = await DELETE(jsonRequest({ transaction_id: "11111111-1111-4111-8111-111111111111" }));
+    expect(res2.status).toBe(500);
+  });
+
+  it("rejects POST with unparseable json", async () => {
+    const badReq = { json: () => Promise.reject(new Error("bad json")) } as unknown as NextRequest;
+    const res = await POST(badReq);
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects POST when neither field is provided", async () => {
+    const res = await POST(jsonRequest({ transaction_id: "11111111-1111-4111-8111-111111111111" }));
+    expect(res.status).toBe(400);
+  });
+
+  it("parses empty or whitespace display_category as null", async () => {
+    seeded({
+      transactions: { data: { id: "11111111-1111-4111-8111-111111111111" } },
+    });
+    const res = await POST(jsonRequest({
+      transaction_id: "11111111-1111-4111-8111-111111111111",
+      display_category: "   ",
+    }));
+    expect(res.status).toBe(200);
+  });
+
+  it("handles POST transaction lookup failure or not found", async () => {
+    seeded({ transactions: { error: new Error("lookup error") } });
+    const res1 = await POST(jsonRequest({
+      transaction_id: "11111111-1111-4111-8111-111111111111",
+      display_category: "Food",
+    }));
+    expect(res1.status).toBe(500);
+
+    seeded({ transactions: { data: null } });
+    const res2 = await POST(jsonRequest({
+      transaction_id: "11111111-1111-4111-8111-111111111111",
+      display_category: "Food",
+    }));
+    expect(res2.status).toBe(400);
+  });
+
+  it("handles POST upsert failure or existing override failure", async () => {
+    seeded({
+      transactions: { data: { id: "11111111-1111-4111-8111-111111111111" } },
+      transaction_annotations: { error: new Error("upsert error") },
+    });
+    const res = await POST(jsonRequest({
+      transaction_id: "11111111-1111-4111-8111-111111111111",
+      display_category: "Food",
+    }));
+    expect(res.status).toBe(500);
+  });
+
+  it("checks pfc_detailed when pfc_primary is missing for transfer confirmation", async () => {
+    seeded({
+      transactions: {
+        data: {
+          id: "11111111-1111-4111-8111-111111111111",
+          pfc_primary: null,
+          pfc_detailed: "TRANSFER_IN",
+        },
+      },
+    });
+    const res = await POST(jsonRequest({
+      transaction_id: "11111111-1111-4111-8111-111111111111",
+      cash_flow_classification: "expense",
+    }));
+    expect(res.status).toBe(400);
+  });
+
+  it("preserves existing cash_flow_classification when updating display_category", async () => {
+    const supabase = seeded({
+      transactions: {
+        data: { id: "11111111-1111-4111-8111-111111111111" },
+      },
+      transaction_annotations: {
+        data: { display_category: "FOOD", cash_flow_classification: "income" },
+      },
+    });
+    const res = await POST(jsonRequest({
+      transaction_id: "11111111-1111-4111-8111-111111111111",
+      display_category: "DINING",
+    }));
+    expect(res.status).toBe(200);
+    expect(supabase.writtenTo("transaction_annotations")).toMatchObject({
+      display_category: "DINING",
+      cash_flow_classification: "income",
+    });
+  });
+
+  it("handles null display_category and null classification in payload and existing override", async () => {
+    // 1. Existing override with null fields
+    const supabase = seeded({
+      transactions: {
+        data: {
+          id: "11111111-1111-4111-8111-111111111111",
+          pfc_primary: null,
+          pfc_detailed: null,
+        },
+      },
+      transaction_annotations: {
+        data: { display_category: null, cash_flow_classification: null },
+      },
+    });
+
+    const res1 = await POST(jsonRequest({
+      transaction_id: "11111111-1111-4111-8111-111111111111",
+      cash_flow_classification: "income",
+    }));
+    expect(res1.status).toBe(200);
+    expect(supabase.writtenTo("transaction_annotations")).toMatchObject({
+      display_category: null,
+      cash_flow_classification: "income",
+    });
+
+    // 2. Explicit null fields in payload
+    const res2 = await POST(jsonRequest({
+      transaction_id: "11111111-1111-4111-8111-111111111111",
+      display_category: null,
+      cash_flow_classification: null,
+    }));
+    expect(res2.status).toBe(200);
+  });
 });

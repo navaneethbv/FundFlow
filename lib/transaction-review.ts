@@ -82,11 +82,13 @@ function validateReviewItem(raw: unknown): ItemResult {
   return { ok: true, item: { transaction_id: txId, expected_version: expectedVersion } };
 }
 
-export function validateReviewBatchPayload(raw: unknown): {
-  valid: boolean;
-  error?: string;
-  data?: TransactionReviewBatchPayload;
-} {
+export type ReviewBatchValidationResult =
+  | { valid: true; data: TransactionReviewBatchPayload }
+  | { valid: false; error: string };
+
+export function validateReviewBatchPayload(
+  raw: unknown,
+): ReviewBatchValidationResult {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return { valid: false, error: "Payload must be a JSON object" };
   }

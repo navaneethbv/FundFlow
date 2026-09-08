@@ -10,8 +10,10 @@ import {
   collectReceiptAssets,
   collectUserData,
   countUserDataRows,
+  countUserRecordRows,
   RECEIPT_ASSET_BUDGET_BYTES,
   USER_DATA_TABLES,
+  type UserDataTableSpec,
 } from "@/lib/user-data";
 
 describe("lib/user-data", () => {
@@ -258,5 +260,48 @@ describe("collectReceiptAssets", () => {
 
   it("keeps the default budget inside what an email attachment can carry", () => {
     expect(RECEIPT_ASSET_BUDGET_BYTES).toBeLessThanOrEqual(10 * 1024 * 1024);
+  });
+
+  it("defaults primary and secondary order when omitted from spec", async () => {
+    const supabase = clientStub({ test_table: { data: [{ id: "1" }] } });
+    const spec: UserDataTableSpec = {
+      key: "test_spec",
+      table: "test_table",
+      select: "id",
+      scope: "user",
+      orderBy: undefined,
+      orderBySecondary: undefined,
+    };
+    USER_DATA_TABLES.push(spec);
+    try {
+      const data = await collectUserData(supabase as never, "u1");
+      expect(data.test_spec).toEqual([{ id: "1" }]);
+    } finally {
+      USER_DATA_TABLES.pop();
+    }
+  });
+
+  it("appends restoreKeys when includeRestoreKeys option is true", async () => {
+    const supabase = clientStub({
+      accounts: { data: [{ name: "Checking", id: "acc-1" }] },
+    });
+    const data = await collectUserData(supabase as never, "u1", {
+      includeRestoreKeys: true,
+    });
+    expect(data.accounts).toEqual([{ name: "Checking", id: "acc-1" }]);
+    const selectCall = supabase.callsOn("accounts").find((c) => c.method === "select");
+    expect(selectCall?.args[0]).toContain("plaid_account_id");
+  });
+
+  it("counts user record rows excluding preferences sections", () => {
+    const count = countUserRecordRows({
+      accounts: [{ id: "1" }, { id: "2" }],
+      account_preferences: [{ id: "p1" }],
+      ai_settings: [{ enabled: true }],
+      alert_preferences: [{ id: "a1" }],
+      budgets: [{ id: "b1" }],
+    });
+    // accounts (2) + budgets (1) = 3; account_preferences, ai_settings, alert_preferences excluded
+    expect(count).toBe(3);
   });
 });

@@ -21,6 +21,7 @@ describe("parseLedgerQuery", () => {
       sort: "drop table",
       direction: "sideways",
       month: "2026-99",
+      year: "202",
       accountId: "not-a-uuid",
       category: "food;delete",
       flow: "sideways",
@@ -32,12 +33,18 @@ describe("parseLedgerQuery", () => {
       sort: "date",
       direction: "desc",
       month: "",
+      year: "",
       accountId: "",
       category: "",
       flow: "",
       accountType: "",
       page: 1,
     });
+
+    const validState = parseLedgerQuery({
+      year: "2026",
+    });
+    expect(validState.year).toBe("2026");
   });
 
   it("sanitizes PostgREST search syntax from search and merchant values", () => {
@@ -155,5 +162,8 @@ describe("savedLedgerViewParams", () => {
 
     expect(savedLedgerViewParams(state)).toEqual({});
     expect(hasActiveLedgerFilters(state)).toBe(false);
+
+    const ascDateState = parseLedgerQuery({ sort: "date", direction: "asc" });
+    expect(savedLedgerViewParams(ascDateState)).toEqual({ direction: "asc" });
   });
 });

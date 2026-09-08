@@ -81,7 +81,9 @@ describe("lib/transaction-review", () => {
       };
       const result = validateReviewBatchPayload(payload);
       expect(result.valid).toBe(false);
-      expect(result.error).toMatch(/Unexpected field: user_id/);
+      if (!result.valid) {
+        expect(result.error).toMatch(/Unexpected field: user_id/);
+      }
     });
 
     it("rejects unexpected fields on an item", () => {
@@ -93,7 +95,9 @@ describe("lib/transaction-review", () => {
       };
       const result = validateReviewBatchPayload(payload);
       expect(result.valid).toBe(false);
-      expect(result.error).toMatch(/Unexpected field on item: reviewed_at/);
+      if (!result.valid) {
+        expect(result.error).toMatch(/Unexpected field on item: reviewed_at/);
+      }
     });
 
     it("rejects non-integer, zero, and negative numeric expected_version", () => {
@@ -103,7 +107,9 @@ describe("lib/transaction-review", () => {
           items: [{ transaction_id: validUuid1, expected_version: bad }],
         });
         expect(result.valid).toBe(false);
-        expect(result.error).toMatch(/Invalid expected_version/);
+        if (!result.valid) {
+          expect(result.error).toMatch(/Invalid expected_version/);
+        }
       }
     });
 
@@ -113,7 +119,9 @@ describe("lib/transaction-review", () => {
         items: ["not-an-object"],
       });
       expect(result.valid).toBe(false);
-      expect(result.error).toMatch(/Each item must be an object/);
+      if (!result.valid) {
+        expect(result.error).toMatch(/Each item must be an object/);
+      }
     });
 
     it("rejects invalid transaction_id format", () => {
@@ -123,7 +131,19 @@ describe("lib/transaction-review", () => {
       };
       const result = validateReviewBatchPayload(payload);
       expect(result.valid).toBe(false);
-      expect(result.error).toMatch(/Invalid transaction_id/);
+      if (!result.valid) {
+        expect(result.error).toMatch(/Invalid transaction_id/);
+      }
+
+      // Non-string transaction_id (e.g. number or null)
+      const numResult = validateReviewBatchPayload({
+        status: "reviewed",
+        items: [{ transaction_id: 12345, expected_version: "1" }],
+      });
+      expect(numResult.valid).toBe(false);
+      if (!numResult.valid) {
+        expect(numResult.error).toMatch(/Invalid transaction_id/);
+      }
     });
 
     it("rejects invalid expected_version values", () => {
@@ -156,7 +176,9 @@ describe("lib/transaction-review", () => {
       };
       const result = validateReviewBatchPayload(payload);
       expect(result.valid).toBe(false);
-      expect(result.error).toMatch(/Duplicate transaction_id/);
+      if (!result.valid) {
+        expect(result.error).toMatch(/Duplicate transaction_id/);
+      }
     });
 
     it("rejects batch sizes larger than MAX_REVIEW_BATCH_SIZE", () => {
@@ -170,7 +192,9 @@ describe("lib/transaction-review", () => {
       };
       const result = validateReviewBatchPayload(payload);
       expect(result.valid).toBe(false);
-      expect(result.error).toMatch(/Batch cannot exceed/);
+      if (!result.valid) {
+        expect(result.error).toMatch(/Batch cannot exceed/);
+      }
     });
   });
 
