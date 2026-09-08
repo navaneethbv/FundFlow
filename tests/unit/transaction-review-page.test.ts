@@ -98,4 +98,16 @@ describe("transaction review page contract", () => {
       rules = [];
     }
   });
+  it("bounds the 10000-row default loader to chunked queries, not per-row reads", async () => {
+    records = fixture(10000);
+    await Page({ searchParams: Promise.resolve({}) });
+    // Page query plus 11 facet chunks (including the empty sentinel) and
+    // the independent owner queue/integrity counts.
+    expect(calls.filter((table) => table === "transaction_review_ledger")).toHaveLength(14);
+    calls.length = 0;
+    enabled = false;
+    await Page({ searchParams: Promise.resolve({}) });
+    expect(calls.filter((table) => table === "transactions")).toHaveLength(12);
+  });
+
 });

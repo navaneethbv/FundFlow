@@ -292,7 +292,7 @@ describe("Cron API Route Handlers Unit Tests", () => {
           if (table === "backup_deliveries") {
             const stub = queryStub({ data: [{ user_id: "user-err2" }] });
             const origThen = stub.then;
-            stub.then = (resolve: (val: unknown) => unknown) => {
+            stub.then = (resolve) => {
               const hasDelete = stub.calls.some((c) => c.method === "delete");
               if (hasDelete) {
                 return resolve({ data: null, error: new Error("delete error on release") });

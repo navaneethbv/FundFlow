@@ -52,3 +52,8 @@ grant select on public.transaction_review_ledger to authenticated;
 -- `public.transactions` is unchanged and still filters every row.
 grant select on public.transactions to authenticated;
 
+
+-- Independent of database-specific default privileges.
+revoke insert, update, delete on public.transaction_review_ledger from authenticated;
+grant select on public.transaction_review_ledger to service_role;
+grant select, insert, update, delete on public.transaction_review_states to service_role;

@@ -2,6 +2,15 @@
 
 Last updated: 2026-09-08. Read this first to resume.
 
+## 2026-09-08: PR #166 review remediation
+
+The user requested fixes and a push after the [plan-conformance review](reviews/2026-09-08-pr166-review.md).
+Work was isolated from the changing main checkout and incorporates the incoming coverage commit `6c4d125`.
+All six review findings have implementation fixes; the [verification record](testing/pr166-verification.md) owns the detailed behavior, regression evidence, performance measurements and remaining gates.
+The feature remains disabled, and no production schema or records were changed.
+The new additive text-version migration must accompany the original review migration before enablement.
+Full Supabase Auth and production read-only acceptance remain distinct from the successful local browser-shim and PostgreSQL checks.
+
 ## 2026-09-08: persistent transaction review implementation
 
 The user requested implementation of the approved [transaction review plan](superpowers/plans/2026-09-07-transaction-review-implementation-plan.md).

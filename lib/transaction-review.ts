@@ -25,7 +25,7 @@ export interface TransactionReviewResult {
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const VERSION_RE = /^[1-9][0-9]*$/;
+const VERSION_RE = /^[1-9]\d*$/;
 
 export const MAX_REVIEW_BATCH_SIZE = 100;
 export const MAX_PAYLOAD_BYTES = 32 * 1024; // 32 KiB

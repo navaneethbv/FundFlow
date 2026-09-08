@@ -257,6 +257,28 @@ begin
   insert into public.transaction_review_states(transaction_id,user_id,status) values(tx,owner,'needs_review');
 end $$;
 
+-- Inject failure on the second child update and verify the first update rolls back.
+create function private.review_test_reject_second() returns trigger language plpgsql set search_path='' as $$
+begin raise exception 'review test write failure'; end $$;
+create trigger review_test_reject_second before update on public.transaction_review_states
+for each row when (new.transaction_id='77000000-0000-0000-0000-000000000002')
+execute function private.review_test_reject_second();
+do $$ begin
+  begin
+    perform public.set_transaction_review_state_atomic(
+      '55000000-0000-0000-0000-000000000001','reviewed',
+      '[{"transaction_id":"77000000-0000-0000-0000-000000000001","expected_version":"1"},{"transaction_id":"77000000-0000-0000-0000-000000000002","expected_version":"1"}]');
+    raise exception 'fault-injected batch accepted';
+  exception when raise_exception then
+    if sqlerrm <> 'review test write failure' then raise; end if;
+  end;
+  assert (select count(*) from public.transaction_review_states where transaction_id in
+    ('77000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000002')
+    and status='needs_review' and version=1)=2, 'Fault left a partially reviewed batch';
+end $$;
+drop trigger review_test_reject_second on public.transaction_review_states;
+drop function private.review_test_reject_second();
+
 -- Revoked sessions cannot read either owner state or its ledger projection.
 insert into public.user_session_records(user_id,session_id,revoked_at)
 values ('55000000-0000-0000-0000-000000000001','review-revoked',now());

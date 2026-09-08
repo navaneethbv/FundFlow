@@ -236,6 +236,9 @@ flowchart TB
   Source triggers initialize all transactions to `needs_review` and automatically reopen
   entries with incremented versions whenever material bank facts change. Direct and
   projected ledger paths read `public.transaction_review_ledger` with `security_invoker = true`.
+  The Transactions layout owns the persistent review context; each server page publishes a query/row/version signature before controls can act.
+  Review versions are decimal text across the SQL view, API, client and archives.
+  Independent owner-wide queue and integrity queries distinguish zero remaining work from missing state.
 - `ledger-columns.ts` — which optional ledger columns are visible, persisted
   as a repeated `col` GET param plus a `colsSubmitted` marker (distinguishing
   "every column explicitly unchecked" from "the menu was never touched," an

@@ -5,6 +5,7 @@ import {
   expect,
   type UserAccount,
 } from "./fixtures/authenticated";
+import AxeBuilder from "@axe-core/playwright";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FinanceSeed } from "./fixtures/seed";
 
@@ -182,6 +183,8 @@ test.describe("persistent transaction review", () => {
       expect(bounds!.x).toBeGreaterThanOrEqual(0);
       expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
     }
+    const accessibility = await new AxeBuilder({ page }).include("main").withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+    expect(accessibility.violations).toEqual([]);
     await mark.click();
     await expect(page.getByRole("heading", { name: "You're all caught up" })).toBeVisible();
     await expect(page.locator("#transaction-review-heading")).toBeFocused();

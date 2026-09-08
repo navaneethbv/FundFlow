@@ -45,6 +45,84 @@ function filterCount(filters: LedgerFilters): number {
   ].filter(Boolean).length;
 }
 
+function filterChips(committed: LedgerFilters, options: LedgerFilterOptions) {
+  const accountLabel = options.accounts.find((option) => option.value === committed.accountId)?.label;
+  const subLabel = committed.sub
+    ? Object.values(options.subcategoriesByCategory)
+        .flat()
+        .find((option) => option.value === committed.sub)?.label
+    : undefined;
+  const chips: Array<{ key: keyof LedgerFilters; label: string; removeLabel: string }> = [
+    committed.q && { key: "q", label: `Search: ${committed.q}`, removeLabel: `Remove search filter ${committed.q}` },
+    committed.month && {
+      key: "month",
+      label: formatMonth(committed.month),
+      removeLabel: `Remove date filter ${formatMonth(committed.month)}`,
+    },
+    committed.accountId && {
+      key: "accountId",
+      label: accountLabel ?? "Account",
+      removeLabel: `Remove account filter ${accountLabel ?? "Account"}`,
+    },
+    committed.category && {
+      key: "category",
+      label: titleCase(committed.category),
+      removeLabel: `Remove category filter ${titleCase(committed.category)}`,
+    },
+    committed.sub && {
+      key: "sub",
+      label: subLabel ?? titleCase(committed.sub),
+      removeLabel: `Remove subcategory filter ${subLabel ?? titleCase(committed.sub)}`,
+    },
+    committed.merchant && {
+      key: "merchant",
+      label: committed.merchant,
+      removeLabel: `Remove merchant filter ${committed.merchant}`,
+    },
+    committed.flow && {
+      key: "flow",
+      label: committed.flow === "in" ? "Money in" : "Money out",
+      removeLabel: `Remove ${committed.flow === "in" ? "money in" : "money out"} filter`,
+    },
+    committed.accountType && {
+      key: "accountType",
+      label: titleCase(committed.accountType),
+      removeLabel: `Remove account type filter ${titleCase(committed.accountType)}`,
+    },
+  ].filter((chip): chip is { key: keyof LedgerFilters; label: string; removeLabel: string } => Boolean(chip));
+
+  return chips;
+}
+
+function ReviewViews({ current, count, pending, navigate }: Readonly<{
+  current: LedgerFilters["review"];
+  count?: number | null;
+  pending: boolean;
+  navigate: (patch: LedgerQueryPatch, action: string) => void;
+}>) {
+  const views = [
+    { value: "all", id: "all", label: "All" },
+    { value: "needs_review", id: "needs-review", label: "Needs review" },
+    { value: "reviewed", id: "reviewed", label: "Reviewed" },
+  ] as const;
+  const suffix = count === 1 ? "" : "s";
+  const summary = count === 0 ? "You're all caught up across all accounts." : `${count?.toLocaleString()} transaction${suffix} need review across all dates and accounts.`;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-panel-border pb-3">
+      <nav aria-label="Transaction review views" className="inline-flex rounded-full border border-panel-border bg-panel-2 p-1 text-xs font-semibold shadow-sm">
+        {views.map((view) => (
+          <button key={view.value} type="button" id={`review-view-${view.id}`} aria-current={current === view.value ? "page" : undefined}
+            disabled={pending} onClick={() => navigate({ review: view.value === "all" ? null : view.value }, `view-${view.id}`)}
+            className={`rounded-full px-3 py-1.5 transition-colors ${current === view.value ? "bg-panel text-foreground shadow-sm" : "text-muted hover:text-foreground"}`}>
+            {view.label}
+          </button>
+        ))}
+      </nav>
+      {typeof count === "number" && <p className="text-xs text-muted" aria-label="Global review queue count">{summary}</p>}
+    </div>
+  );
+}
+
 export default function TransactionQueryControls({
   committed,
   entries,
@@ -128,50 +206,7 @@ export default function TransactionQueryControls({
     ? (options.subcategoriesByCategory[filterDraft.category] ?? [])
     : [];
   const activeFilters = filterCount(committed);
-  const accountLabel = options.accounts.find((option) => option.value === committed.accountId)?.label;
-  const subLabel = committed.sub
-    ? Object.values(options.subcategoriesByCategory)
-        .flat()
-        .find((option) => option.value === committed.sub)?.label
-    : undefined;
-  const chips: Array<{ key: keyof LedgerFilters; label: string; removeLabel: string }> = [
-    committed.q && { key: "q", label: `Search: ${committed.q}`, removeLabel: `Remove search filter ${committed.q}` },
-    committed.month && {
-      key: "month",
-      label: formatMonth(committed.month),
-      removeLabel: `Remove date filter ${formatMonth(committed.month)}`,
-    },
-    committed.accountId && {
-      key: "accountId",
-      label: accountLabel ?? "Account",
-      removeLabel: `Remove account filter ${accountLabel ?? "Account"}`,
-    },
-    committed.category && {
-      key: "category",
-      label: titleCase(committed.category),
-      removeLabel: `Remove category filter ${titleCase(committed.category)}`,
-    },
-    committed.sub && {
-      key: "sub",
-      label: subLabel ?? titleCase(committed.sub),
-      removeLabel: `Remove subcategory filter ${subLabel ?? titleCase(committed.sub)}`,
-    },
-    committed.merchant && {
-      key: "merchant",
-      label: committed.merchant,
-      removeLabel: `Remove merchant filter ${committed.merchant}`,
-    },
-    committed.flow && {
-      key: "flow",
-      label: committed.flow === "in" ? "Money in" : "Money out",
-      removeLabel: `Remove ${committed.flow === "in" ? "money in" : "money out"} filter`,
-    },
-    committed.accountType && {
-      key: "accountType",
-      label: titleCase(committed.accountType),
-      removeLabel: `Remove account type filter ${titleCase(committed.accountType)}`,
-    },
-  ].filter((chip): chip is { key: keyof LedgerFilters; label: string; removeLabel: string } => Boolean(chip));
+  const chips = filterChips(committed, options);
 
   function removeChip(key: keyof LedgerFilters) {
     const patch: LedgerQueryPatch = { [key]: null };
@@ -179,66 +214,11 @@ export default function TransactionQueryControls({
     navigate(patch, `remove-${key}`);
   }
 
-  const reviewFilter = committed.review || "all";
 
   return (
     <div className="space-y-3">
       {reviewEnabled && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-panel-border pb-3">
-          <nav aria-label="Transaction review views" className="inline-flex rounded-full border border-panel-border bg-panel-2 p-1 text-xs font-semibold shadow-sm">
-            <button
-              type="button"
-              id="review-view-all"
-              aria-current={reviewFilter === "all" ? "page" : undefined}
-              disabled={isPending}
-              onClick={() => navigate({ review: null }, "view-all")}
-              className={`rounded-full px-3 py-1.5 transition-colors ${
-                reviewFilter === "all"
-                  ? "bg-panel text-foreground shadow-sm"
-                  : "text-muted hover:text-foreground"
-              }`}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              id="review-view-needs-review"
-              aria-current={reviewFilter === "needs_review" ? "page" : undefined}
-              disabled={isPending}
-              onClick={() => navigate({ review: "needs_review" }, "view-needs-review")}
-              className={`rounded-full px-3 py-1.5 transition-colors ${
-                reviewFilter === "needs_review"
-                  ? "bg-panel text-foreground shadow-sm"
-                  : "text-muted hover:text-foreground"
-              }`}
-            >
-              Needs review
-            </button>
-            <button
-              type="button"
-              id="review-view-reviewed"
-              aria-current={reviewFilter === "reviewed" ? "page" : undefined}
-              disabled={isPending}
-              onClick={() => navigate({ review: "reviewed" }, "view-reviewed")}
-              className={`rounded-full px-3 py-1.5 transition-colors ${
-                reviewFilter === "reviewed"
-                  ? "bg-panel text-foreground shadow-sm"
-                  : "text-muted hover:text-foreground"
-              }`}
-            >
-              Reviewed
-            </button>
-          </nav>
-          {typeof needsReviewGlobalCount === "number" && (
-            <p className="text-xs text-muted" aria-label="Global review queue count">
-              {needsReviewGlobalCount === 0
-                ? "You're all caught up across all accounts."
-                : `${needsReviewGlobalCount.toLocaleString()} transaction${
-                    needsReviewGlobalCount === 1 ? "" : "s"
-                  } need review across all dates and accounts.`}
-            </p>
-          )}
-        </div>
+        <ReviewViews current={committed.review} count={needsReviewGlobalCount} pending={isPending} navigate={navigate} />
       )}
 
       <div className="flex flex-wrap items-center gap-2">

@@ -148,6 +148,7 @@ async function readReviewBody(request: NextRequest): Promise<unknown> {
     }
     return JSON.parse(text + decoder.decode());
   } catch {
+    await reader.cancel().catch(() => undefined);
     return badRequest("Invalid JSON payload");
   } finally {
     reader.releaseLock();

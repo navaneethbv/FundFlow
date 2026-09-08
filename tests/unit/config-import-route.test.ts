@@ -538,7 +538,7 @@ describe("POST /api/import/config", () => {
         if (table === "goals") {
           const stub = queryStub({ data: [] });
           const origThen = stub.then;
-          stub.then = (resolve: (val: unknown) => unknown) => {
+          stub.then = (resolve) => {
             const hasInsert = stub.calls.some((c) => c.method === "insert");
             if (hasInsert) {
               return resolve({ data: { id: "g-created-1" }, error: null });

@@ -142,11 +142,8 @@ export function ledgerQueryEntries(
 
   for (const key of FILTER_KEYS) {
     const value = state[key];
-    if (key === "review") {
-      if (value && value !== "all") entries.push([key, value]);
-    } else if (value) {
-      entries.push([key, value]);
-    }
+    if (key === "review" && value === "all") continue;
+    if (value) entries.push([key, value]);
   }
   if (state.sort !== "date") entries.push(["sort", state.sort]);
   if (state.direction !== "desc") {

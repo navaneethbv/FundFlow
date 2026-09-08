@@ -35,6 +35,7 @@ import {
   parseLedgerQuery,
   savedLedgerViewParams,
   type LedgerRawSearchParams,
+  type LedgerReviewFilter,
 } from "@/lib/ledger-query";
 import {
   collectLedgerChunks,
@@ -67,7 +68,6 @@ import {
 } from "@/components/transactions/TransactionReviewControls";
 import { TransactionReviewStatusBadge } from "@/components/transactions/TransactionReviewStatus";
 import { isEligibleForReview } from "@/lib/transaction-review";
-import type { LedgerReviewFilter } from "@/lib/ledger-query";
 
 /**
  * Whether a ledger row can be reviewed. The `transaction_review_ledger` view
@@ -161,12 +161,8 @@ function buildLedgerFilterQuery(
     .select(columns, count ? { count: "exact" } : undefined)
     .eq("user_id", filters.ownerId);
 
-  if (filters.transactionReviewEnabled) {
-    if (filters.reviewFilter === "needs_review") {
-      query = query.eq("review_status", "needs_review").eq("review_eligible", true);
-    } else if (filters.reviewFilter === "reviewed") {
-      query = query.eq("review_status", "reviewed").eq("review_eligible", true);
-    }
+  if (filters.transactionReviewEnabled && filters.reviewFilter !== "all") {
+    query = query.eq("review_status", filters.reviewFilter).eq("review_eligible", true);
   }
 
   if (filters.bounds) {
@@ -791,6 +787,33 @@ function buildLedgerCardRows(
   });
 }
 
+async function loadReviewSummary(supabase: TransactionsSupabase, ownerId: string, enabled: boolean) {
+  if (!enabled) return { count: null, integrityError: "", queryErrors: [] as Array<{ error: { code?: string } | null }> };
+  const [queue, missing] = await Promise.all([
+    supabase.from("transaction_review_ledger").select("id", { count: "exact", head: true })
+      .eq("user_id", ownerId).eq("review_status", "needs_review").eq("review_eligible", true),
+    supabase.from("transaction_review_ledger").select("id", { count: "exact", head: true })
+      .eq("user_id", ownerId).eq("review_state_missing", true),
+  ]);
+  const incomplete = Boolean(missing.error) || (missing.count ?? 0) > 0;
+  if (incomplete) console.error("Transaction review state incomplete", { code: missing.error?.code ?? "REVIEW_STATE_MISSING", count: missing.count });
+  return {
+    count: incomplete || queue.error ? null : queue.count,
+    integrityError: incomplete ? "We couldn't verify transaction review status. Refresh the page to try again." : "",
+    queryErrors: [{ error: queue.error }, { error: missing.error }],
+  };
+}
+
+function ledgerEmptyMessage(review: LedgerReviewFilter, globalCount: number | null, filtered: boolean) {
+  if (review === "needs_review") {
+    if (globalCount === 0) return { title: "You're all caught up", description: "Every posted transaction has been reviewed." };
+    return { title: "No transactions need review with these filters", description: "Try changing or clearing the filters." };
+  }
+  if (review === "reviewed") return { title: "No reviewed transactions match these filters", description: "Review an entry or change the filters." };
+  if (filtered) return { title: "No transactions match these filters", description: "Try changing or clearing the filters." };
+  return { title: "No transactions yet", description: "Connect an account or add a transaction to begin." };
+}
+
 export default async function TransactionsPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
   const transactionReviewEnabled = isFeatureEnabled("transactionReview");
@@ -814,32 +837,20 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   } = await supabase.auth.getUser();
   const ownerId = user?.id ?? "";
 
-  const [savedViewsResult, needsReviewCountResult, missingReviewResult] = await Promise.all([
+  const [savedViewsResult, reviewSummary] = await Promise.all([
     supabase
       .from("saved_views")
       .select("id, name, params")
       .eq("user_id", ownerId)
       .order("created_at"),
-    transactionReviewEnabled
-      ? supabase
-          .from("transaction_review_ledger")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", ownerId)
-          .eq("review_status", "needs_review")
-          .eq("review_eligible", true)
-      : Promise.resolve({ count: null, error: null }),
-    transactionReviewEnabled
-      ? supabase.from("transaction_review_ledger").select("id", { count: "exact", head: true })
-          .eq("user_id", ownerId).eq("review_state_missing", true)
-      : Promise.resolve({ count: 0, error: null }),
+    loadReviewSummary(supabase, ownerId, transactionReviewEnabled),
   ]);
   const savedViews = ((savedViewsResult.data ?? []) as Array<{
     id: string;
     name: string;
     params: Record<string, string>;
   }>);
-  const reviewIntegrityFailed = Boolean(missingReviewResult.error) || (missingReviewResult.count ?? 0) > 0;
-  const needsReviewGlobalCount = reviewIntegrityFailed ? null : needsReviewCountResult.count;
+  const needsReviewGlobalCount = reviewSummary.count;
 
   // Fetch accounts and rules first to allow type-based filtration.
   const [accountsResult, manualAccountsResult, merchantRulesResult, goalRowsResult] = await Promise.all([
@@ -859,18 +870,14 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   const goalRows = goalRowsResult.data ?? [];
   const setupResults = [
     savedViewsResult.error,
-    needsReviewCountResult.error,
-    missingReviewResult.error,
+
     accountsResult.error,
     manualAccountsResult.error,
     merchantRulesResult.error,
     goalRowsResult.error,
-  ].map((error) => ({ error }));
-  let ledgerError = transactionSetupError(setupResults);
-  if (reviewIntegrityFailed) {
-    console.error("Transaction review state incomplete", { code: missingReviewResult.error?.code ?? "REVIEW_STATE_MISSING", count: missingReviewResult.count });
-    ledgerError = "We couldn't verify transaction review status. Refresh the page to try again.";
-  }
+  ].map((error) => ({ error })).concat(reviewSummary.queryErrors);
+  let ledgerError = reviewSummary.integrityError || transactionSetupError(setupResults);
+
 
   const rulesList = (merchantRules ?? []).map((r) => ({
     matchType: r.match_type as "merchant" | "keyword" | "account",
@@ -1058,26 +1065,8 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
         )}
         {showEmptyLedger && (
           <EmptyState
-            title={
-              transactionReviewEnabled && state.review === "needs_review"
-                ? needsReviewGlobalCount !== 0
-                  ? "No transactions need review with these filters"
-                  : "You're all caught up"
-                : transactionReviewEnabled && state.review === "reviewed"
-                  ? "No reviewed transactions match these filters"
-                  : hasCommittedFilters
-                    ? "No transactions match these filters"
-                    : "No transactions yet"
-            }
-            description={
-              transactionReviewEnabled && state.review === "needs_review"
-                ? needsReviewGlobalCount !== 0
-                  ? "Try changing or clearing the filters."
-                  : "Every posted transaction has been reviewed."
-                : hasCommittedFilters
-                  ? "Try changing or clearing the filters."
-                  : "Connect an account or add a transaction to begin."
-            }
+            {...ledgerEmptyMessage(state.review, needsReviewGlobalCount, hasCommittedFilters)}
+            action={hasCommittedFilters && <ButtonLink href="/transactions" variant="secondary">Clear filters</ButtonLink>}
           />
         )}
         {showLedgerRows && (

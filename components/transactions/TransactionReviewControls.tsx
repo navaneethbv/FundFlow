@@ -39,7 +39,7 @@ export function TransactionReviewRowAction({
   return (
     <Button
       id={buttonId}
-      data-review-action
+      data-review-action={id}
       variant="secondary"
       size="sm"
       disabled={isSubmitting}

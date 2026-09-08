@@ -4,11 +4,12 @@ Nice-to-have features and enhancements, deferred out of the initial build.
 
 ## Transaction review (2026-09-07)
 
-Persistent transaction review feature implemented per the [implementation plan](superpowers/plans/2026-09-07-transaction-review-implementation-plan.md).
-All existing and new transactions enter review with backfill to `needs_review`; pending entries become actionable after posting.
-Includes database migration `20260908040000_transaction_review_state.sql`, regression harness `scripts/check-transaction-review.sql`, atomic RPC `set_transaction_review_state_atomic`, PATCH route `/api/transactions/review`, URL/saved view state, responsive UI controls on desktop & mobile, export registration, unit + integration (`tests/integration/transaction-review-concurrency.test.ts`) + e2e (`tests/e2e/transaction-review.spec.ts`) suites.
-Status: implemented and reviewed against the plan, shipped in PR #166 behind `transactionReview: false`.
-Remaining before enable: apply the migration to the live project (verify with `supabase migration list --linked`), then run the isolated full-Auth browser journey with the flag on before flipping the default.
+Persistent transaction review is implemented in PR #166 behind `transactionReview: false`.
+The [review](reviews/2026-09-08-pr166-review.md) identified six correctness and completion gaps; their fixes and actual test evidence are recorded in the [verification record](testing/pr166-verification.md).
+The implementation includes persistent state, atomic selected-row writes, source-change reopening, full-scope filtering, stale-selection invalidation, page recovery, immediate reversal, missing-state errors and pre-migration archive compatibility.
+Both `20260908040000_transaction_review_state.sql` and `20260908050000_transaction_review_version_text.sql` are required before enablement.
+Remaining release gates: exact-head hosted checks and merge, verified live migration/application deployment, isolated full Supabase Auth browser acceptance, and read-only production desktop/phone inspection.
+Local PostgreSQL/PostgREST/browser-shim verification does not replace full Auth acceptance.
 
 ## Relinked account deduplication (2026-09-07)
 

@@ -63,7 +63,7 @@ export function TransactionReviewProvider({ children }: Readonly<{ children: Rea
   const [scope, setScope] = useState<ReviewScope>({ selectionScope: "", revision: "", authoritative: false, ownerId: "" });
   const { revision } = scope;
   const [awaitingRevision, setAwaitingRevision] = useState<string | null>(null);
-  const focusAfterRefresh = useRef(false);
+  const focusAfterRefresh = useRef<string[] | null>(null);
   const requestInFlight = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -86,9 +86,11 @@ export function TransactionReviewProvider({ children }: Readonly<{ children: Rea
 
   useEffect(() => {
     if (!focusAfterRefresh.current || isPending || awaitingRevision !== null) return;
-    focusAfterRefresh.current = false;
-    const next = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-review-action]"))
-      .find((button) => !button.disabled && button.getClientRects().length > 0);
+    const candidates = focusAfterRefresh.current;
+    focusAfterRefresh.current = null;
+    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-review-action]"))
+      .filter((button) => !button.disabled && button.getClientRects().length > 0);
+    const next = candidates.map((id) => buttons.find((button) => button.dataset.reviewAction === id)).find(Boolean) ?? buttons[0];
     (next ?? document.getElementById("transaction-review-heading"))?.focus();
   }, [revision, isPending, awaitingRevision]);
 
@@ -131,6 +133,11 @@ export function TransactionReviewProvider({ children }: Readonly<{ children: Rea
     ): Promise<boolean> => {
       if (items.length === 0 || requestInFlight.current || awaitingRevision !== null || isPending || !scope.authoritative) return false;
       requestInFlight.current = true;
+      const visibleIds = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-review-action]"))
+        .filter((button) => button.getClientRects().length > 0).map((button) => button.dataset.reviewAction!);
+      const index = visibleIds.indexOf(items[0].id);
+      const nextIds = [...visibleIds.slice(index + 1), ...visibleIds.slice(0, index)]
+        .filter((id) => !items.some((item) => item.id === id));
       setLastResult(null);
 
       setIsSubmitting(true);
@@ -185,7 +192,7 @@ export function TransactionReviewProvider({ children }: Readonly<{ children: Rea
             : `${countText} marked as needs review.`,
         );
 
-        focusAfterRefresh.current = true;
+        focusAfterRefresh.current = nextIds;
         refreshReview();
         return true;
       } catch {
