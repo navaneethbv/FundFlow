@@ -58,7 +58,7 @@ function itemSnapshot<T extends RelinkedAccountIdentity>(
     itemId,
     rows,
     signature: isSafeCompleteSet
-      ? JSON.stringify([[...owners][0], [...uniqueFingerprints].sort()])
+      ? JSON.stringify([[...owners][0], [...uniqueFingerprints].sort((a, b) => (a ?? "").localeCompare(b ?? ""))])
       : null,
     freshness:
       validTimestamps.length === rows.length
