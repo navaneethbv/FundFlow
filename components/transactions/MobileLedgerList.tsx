@@ -6,6 +6,11 @@ import { merchantLogoDataUri } from "@/lib/merchant-logos";
 import { formatCurrency, roundsToZero, titleCase } from "@/lib/format";
 import { formatDate } from "@/lib/format-date";
 import { ledgerZebraBands, type LedgerDayGroup } from "@/lib/ledger-data";
+import {
+  TransactionReviewCheckbox,
+  TransactionReviewRowAction,
+} from "@/components/transactions/TransactionReviewControls";
+import { TransactionReviewStatusBadge } from "@/components/transactions/TransactionReviewStatus";
 
 export interface LedgerCardRow {
   id: string;
@@ -23,6 +28,11 @@ export interface LedgerCardRow {
   categoryOptions: string[];
   providerCategory?: string | null;
   override?: { displayCategory: string | null; cashFlowClassification: "expense" | "income" | null } | null;
+  reviewStatus?: "needs_review" | "reviewed" | null;
+  reviewVersion?: string | null;
+  reviewedAt?: string | null;
+  reviewEligible?: boolean;
+  reviewStateMissing?: boolean;
 }
 
 /**
@@ -72,9 +82,11 @@ function DayHeader({
 export default function MobileLedgerList({
   rows,
   dayGroups = null,
+  reviewEnabled = false,
 }: Readonly<{
   rows: LedgerCardRow[];
   dayGroups?: Map<string, LedgerDayGroup> | null;
+  reviewEnabled?: boolean;
 }>) {
   const grouped = dayGroups !== null;
   // Banding restarts inside each day so the stripes line up with the groups
@@ -94,6 +106,18 @@ export default function MobileLedgerList({
           <Fragment key={row.id}>
             {startsDay && group && <DayHeader group={group} currency={row.currency} />}
             <li className={`flex items-start gap-3 px-4 py-3${striped ? " bg-panel-2" : ""}`}>
+              {reviewEnabled && (
+                <div className="pt-1">
+                  <TransactionReviewCheckbox
+                    id={row.id}
+                    eligible={row.reviewEligible}
+                    date={row.date}
+                    merchant={row.merchant}
+                    accountLabel={row.accountLabel}
+                    prefix="mobile"
+                  />
+                </div>
+              )}
               <MerchantAvatar
                 name={row.merchant}
                 logoUrl={merchantLogoDataUri(row.merchant)}
@@ -105,6 +129,14 @@ export default function MobileLedgerList({
                   <span className="truncate font-medium">{row.merchant}</span>
                   {row.pending && <Badge tone="warning">pending</Badge>}
                   {row.excludedDuplicate && <Badge tone="warning">Excluded duplicate</Badge>}
+                  {reviewEnabled && row.reviewStatus && (
+                    <TransactionReviewStatusBadge
+                      status={row.reviewStatus}
+                      pending={row.pending}
+                      excludedDuplicate={row.excludedDuplicate}
+                      missing={row.reviewStateMissing}
+                    />
+                  )}
                 </p>
                 <p className="mt-0.5 text-xs text-muted">
                   {!grouped && (
@@ -125,6 +157,17 @@ export default function MobileLedgerList({
                     ))}
                     {row.note && <span className="text-xs text-muted">{row.note}</span>}
                   </p>
+                )}
+                {reviewEnabled && row.reviewEligible && (
+                  <div className="mt-2">
+                    <TransactionReviewRowAction
+                      id={row.id}
+                      version={row.reviewVersion}
+                      status={row.reviewStatus}
+                      eligible={row.reviewEligible}
+                      prefix="mobile"
+                    />
+                  </div>
                 )}
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1">

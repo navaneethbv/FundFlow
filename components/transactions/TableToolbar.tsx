@@ -18,7 +18,13 @@ export default function TableToolbar({
   bulkTagBar,
   columnsMenu,
   sortMenu,
-}: Readonly<{ bulkTagBar: React.ReactNode; columnsMenu?: React.ReactNode; sortMenu?: React.ReactNode }>) {
+  reviewControls,
+}: Readonly<{
+  bulkTagBar: React.ReactNode;
+  columnsMenu?: React.ReactNode;
+  sortMenu?: React.ReactNode;
+  reviewControls?: React.ReactNode;
+}>) {
   const [open, setOpen] = useState<Panel>("none");
 
   function toggle(panel: Panel) {
@@ -36,16 +42,21 @@ export default function TableToolbar({
 
   return (
     <div className="border-b border-panel-border px-4 py-2 sm:px-5">
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        {sortMenu}
-        <button type="button" onClick={() => toggle("edit")} className={triggerClass("edit")}>
-          Edit multiple
-        </button>
-        {columnsMenu && (
-          <button type="button" onClick={() => toggle("columns")} className={triggerClass("columns")}>
-            Columns
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          {reviewControls}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {sortMenu}
+          <button type="button" onClick={() => toggle("edit")} className={triggerClass("edit")}>
+            Edit multiple
           </button>
-        )}
+          {columnsMenu && (
+            <button type="button" onClick={() => toggle("columns")} className={triggerClass("columns")}>
+              Columns
+            </button>
+          )}
+        </div>
       </div>
       {open === "edit" && <div className="mt-3">{bulkTagBar}</div>}
       {open === "columns" && columnsMenu && <div className="mt-3">{columnsMenu}</div>}

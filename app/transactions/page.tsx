@@ -55,6 +55,34 @@ import {
   type LedgerProjectionSourceRow,
 } from "@/lib/ledger-projection";
 import { isFeatureEnabled } from "@/lib/feature-flags";
+import {
+  TransactionReviewProvider,
+} from "@/components/transactions/TransactionReviewProvider";
+import {
+  TransactionReviewCheckbox,
+  TransactionReviewRowAction,
+  TransactionReviewBulkStrip,
+} from "@/components/transactions/TransactionReviewControls";
+import { TransactionReviewStatusBadge } from "@/components/transactions/TransactionReviewStatus";
+import { isEligibleForReview } from "@/lib/transaction-review";
+import type { LedgerReviewFilter } from "@/lib/ledger-query";
+
+/**
+ * Whether a ledger row can be reviewed. The `transaction_review_ledger` view
+ * already computes `review_eligible`; the pending/excluded fallback only
+ * matters when review is disabled and those columns are absent.
+ */
+function reviewRowEligible(
+  row: Pick<LedgerProjectionSourceRow, "pending" | "review_eligible" | "review_state_missing">,
+  isExcluded: boolean,
+): boolean {
+  return isEligibleForReview({
+    pending: row.pending,
+    excludedDuplicate: isExcluded,
+    review_eligible: row.review_eligible,
+    review_state_missing: row.review_state_missing,
+  });
+}
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +109,8 @@ type LedgerChunkFilters = {
   flow: "" | "in" | "out";
   accountType: "" | "depository" | "credit";
   transactionsParityEnabled: boolean;
+  transactionReviewEnabled: boolean;
+  reviewFilter: LedgerReviewFilter;
   typedIds: string[];
   missingAccountId: string;
 };
@@ -120,10 +150,23 @@ function buildLedgerFilterQuery(
   filters: LedgerChunkFilters,
   count = false,
 ) {
+  const sourceTable = filters.transactionReviewEnabled
+    ? "transaction_review_ledger"
+    : "transactions";
+
   let query = supabase
-    .from("transactions")
+    .from(sourceTable)
     .select(columns, count ? { count: "exact" } : undefined)
     .eq("user_id", filters.ownerId);
+
+  if (filters.transactionReviewEnabled) {
+    if (filters.reviewFilter === "needs_review") {
+      query = query.eq("review_status", "needs_review").eq("review_eligible", true);
+    } else if (filters.reviewFilter === "reviewed") {
+      query = query.eq("review_status", "reviewed").eq("review_eligible", true);
+    }
+  }
+
   if (filters.bounds) {
     query = query
       .gte("date", filters.bounds.start)
@@ -488,6 +531,11 @@ interface LedgerTableRowProps {
   categoryOptions: string[];
   providerCategory?: string | null;
   override?: { displayCategory: string | null; cashFlowClassification: "expense" | "income" | null } | null;
+  reviewEnabled?: boolean;
+  reviewStatus?: "needs_review" | "reviewed" | null;
+  reviewVersion?: string | null;
+  reviewEligible?: boolean;
+  reviewStateMissing?: boolean;
 }
 
 /**
@@ -510,9 +558,16 @@ function LedgerTableRow({
   categoryOptions,
   providerCategory = null,
   override = null,
+  reviewEnabled = false,
+  reviewStatus = null,
+  reviewVersion = null,
+  reviewEligible = false,
+  reviewStateMissing = false,
 }: Readonly<LedgerTableRowProps>) {
   const columnCount =
-    4 + (visibleColumns.has("category") ? 1 : 0) + (visibleColumns.has("account") ? 1 : 0);
+    (reviewEnabled ? 5 : 4) +
+    (visibleColumns.has("category") ? 1 : 0) +
+    (visibleColumns.has("account") ? 1 : 0);
   const hasAnnotations = Boolean(note) || tags.length > 0 || splits.length > 0 || cleared;
   const merchant = row.merchant || "Unknown";
   const currency = row.iso_currency_code ?? "USD";
@@ -555,6 +610,18 @@ function LedgerTableRow({
           zebraBand % 2 === 1 ? " bg-panel-2" : ""
         }`}
       >
+        {reviewEnabled && (
+          <td className="w-10 px-3 py-3 align-top text-center">
+            <TransactionReviewCheckbox
+              id={row.id}
+              eligible={reviewEligible}
+              date={row.date}
+              merchant={merchant}
+              accountLabel={row.accountLabel}
+              prefix="desktop"
+            />
+          </td>
+        )}
         <td className="whitespace-nowrap px-4 py-3 align-top text-muted font-mono">
           <span className={grouped && !isNewDay ? "sr-only" : undefined}>
             {formatDate(row.date)}
@@ -584,6 +651,16 @@ function LedgerTableRow({
                 <Badge tone="warning" className="ml-2">
                   Excluded duplicate
                 </Badge>
+              )}
+              {reviewEnabled && reviewStatus && (
+                <span className="ml-2">
+                  <TransactionReviewStatusBadge
+                    status={reviewStatus}
+                    pending={row.pending}
+                    excludedDuplicate={excludedDuplicate}
+                    missing={reviewStateMissing}
+                  />
+                </span>
               )}
               {visibleColumns.has("source") && row.source === "manual" && (
                 <Badge tone="accent" className="ml-2">
@@ -620,16 +697,27 @@ function LedgerTableRow({
           {amountDisplay}
         </td>
         <td className="px-2 py-3 text-right align-top">
-          <TransactionEditor
-            transaction={{ id: row.id, merchant, amount: row.amount, currency }}
-            note={note}
-            tags={tags}
-            splits={splits}
-            categories={categoryOptions}
-            providerCategory={providerCategory}
-            override={override}
-            cleared={cleared}
-          />
+          <div className="flex items-center justify-end gap-1.5">
+            {reviewEnabled && reviewEligible && (
+              <TransactionReviewRowAction
+                id={row.id}
+                version={reviewVersion}
+                status={reviewStatus}
+                eligible={reviewEligible}
+                prefix="desktop"
+              />
+            )}
+            <TransactionEditor
+              transaction={{ id: row.id, merchant, amount: row.amount, currency }}
+              note={note}
+              tags={tags}
+              splits={splits}
+              categories={categoryOptions}
+              providerCategory={providerCategory}
+              override={override}
+              cleared={cleared}
+            />
+          </div>
         </td>
       </tr>
     </Fragment>
@@ -672,6 +760,9 @@ function buildLedgerCardRows(
 ): LedgerCardRow[] {
   return rows.map((t) => {
     const ann = details.annById.get(t.id);
+    const isExcluded = details.excludedDuplicateIds.has(t.id);
+    const eligible = reviewRowEligible(t, isExcluded);
+
     return {
       id: t.id,
       date: t.date,
@@ -681,7 +772,7 @@ function buildLedgerCardRows(
       amount: t.amount,
       currency: t.iso_currency_code ?? "USD",
       pending: t.pending,
-      excludedDuplicate: details.excludedDuplicateIds.has(t.id),
+      excludedDuplicate: isExcluded,
       note: ann?.note ?? null,
       tags: ann?.tags ?? [],
       splits: details.splitsById.get(t.id) ?? [],
@@ -689,6 +780,11 @@ function buildLedgerCardRows(
       providerCategory: t.pfc_primary ?? t.pfc_detailed,
       override: details.overridesById.get(t.id) ?? null,
       cleared: ann?.cleared ?? false,
+      reviewStatus: t.review_status ?? null,
+      reviewVersion: t.review_version != null ? String(t.review_version) : null,
+      reviewedAt: t.reviewed_at ?? null,
+      reviewEligible: eligible,
+      reviewStateMissing: Boolean(t.review_state_missing),
     };
   });
 }
@@ -704,6 +800,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   // is already live, so this must default to the pre-Phase-12 query shape
   // rather than 500ing every visit on an unmigrated deployment.
   const transactionsParityEnabled = isFeatureEnabled("transactionsParity");
+  const transactionReviewEnabled = isFeatureEnabled("transactionReview");
 
   const supabase = await createClient();
   // The ledger has no household scope selector, so every query below is the
@@ -714,16 +811,28 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     data: { user },
   } = await supabase.auth.getUser();
   const ownerId = user?.id ?? "";
-  const savedViewsResult = await supabase
-    .from("saved_views")
-    .select("id, name, params")
-    .eq("user_id", ownerId)
-    .order("created_at");
+
+  const [savedViewsResult, needsReviewCountResult] = await Promise.all([
+    supabase
+      .from("saved_views")
+      .select("id, name, params")
+      .eq("user_id", ownerId)
+      .order("created_at"),
+    transactionReviewEnabled
+      ? supabase
+          .from("transaction_review_ledger")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", ownerId)
+          .eq("review_status", "needs_review")
+          .eq("review_eligible", true)
+      : Promise.resolve({ count: null, error: null }),
+  ]);
   const savedViews = ((savedViewsResult.data ?? []) as Array<{
     id: string;
     name: string;
     params: Record<string, string>;
   }>);
+  const needsReviewGlobalCount = needsReviewCountResult.count;
 
   // Fetch accounts and rules first to allow type-based filtration.
   const [accountsResult, manualAccountsResult, merchantRulesResult, goalRowsResult] = await Promise.all([
@@ -743,6 +852,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   const goalRows = goalRowsResult.data ?? [];
   const setupResults = [
     savedViewsResult.error,
+    needsReviewCountResult.error,
     accountsResult.error,
     manualAccountsResult.error,
     merchantRulesResult.error,
@@ -766,13 +876,14 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   // Merchant rules recategorize/rename rows in-app, so a `category`/`merchant`
   // filter can't be expressed in SQL once such rules exist. In that case fetch
   // the rule-independent scope and filter on the rules-applied values instead.
-  const baseColumns = "id, date, amount, iso_currency_code, merchant_name, name, pfc_primary, pfc_detailed, pending, account_id";
-  // Typed `: string` rather than left as a literal union: supabase-js parses
-  // a literal `.select()` string at the type level to infer the row shape,
-  // and a computed union of two literals defeats that parser (ParserError).
-  // Widening to `string` falls back to the untyped overload instead, which
-  // is what every downstream `as string`/`?? null` read already expects.
-  const columns: string = transactionsParityEnabled ? `${baseColumns}, manual_account_id, source` : baseColumns;
+  let baseColumns = "id, date, amount, iso_currency_code, merchant_name, name, pfc_primary, pfc_detailed, pending, account_id";
+  if (transactionsParityEnabled) {
+    baseColumns = `${baseColumns}, manual_account_id, source`;
+  }
+  if (transactionReviewEnabled) {
+    baseColumns = `${baseColumns}, review_status, review_version, reviewed_at, review_eligible, review_state_missing`;
+  }
+  const columns: string = baseColumns;
   const bounds = resolveDateBounds(month, state.year);
   const typedIds = accountType
     ? accounts.filter((account) => account.type === accountType).map((account) => account.id as string)
@@ -786,6 +897,8 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     flow,
     accountType,
     transactionsParityEnabled,
+    transactionReviewEnabled,
+    reviewFilter: state.review,
     typedIds,
     missingAccountId,
   };
@@ -896,9 +1009,11 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
         <Panel>
           <TransactionQueryControls
             key={JSON.stringify(queryEntries)}
-            committed={{ q, month, accountId, category, sub, merchant, flow, accountType }}
+            committed={{ q, month, accountId, category, sub, merchant, flow, accountType, review: state.review }}
             entries={queryEntries}
             options={filterOptions}
+            reviewEnabled={transactionReviewEnabled}
+            needsReviewGlobalCount={needsReviewGlobalCount}
           />
         </Panel>
 
@@ -917,73 +1032,114 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
         )}
         {showEmptyLedger && (
           <EmptyState
-            title={hasCommittedFilters ? "No transactions match these filters" : "No transactions yet"}
+            title={
+              transactionReviewEnabled && state.review === "needs_review"
+                ? hasCommittedFilters
+                  ? "No transactions need review with these filters"
+                  : "You're all caught up"
+                : transactionReviewEnabled && state.review === "reviewed"
+                  ? "No reviewed transactions match these filters"
+                  : hasCommittedFilters
+                    ? "No transactions match these filters"
+                    : "No transactions yet"
+            }
             description={
-              hasCommittedFilters
-                ? "Try changing or clearing the filters."
-                : "Connect an account or add a transaction to begin."
+              transactionReviewEnabled && state.review === "needs_review"
+                ? hasCommittedFilters
+                  ? "Try changing or clearing the filters."
+                  : "Every posted transaction has been reviewed."
+                : hasCommittedFilters
+                  ? "Try changing or clearing the filters."
+                  : "Connect an account or add a transaction to begin."
             }
           />
         )}
         {showLedgerRows && (
-          <Panel padding="none" className="overflow-hidden">
-            <TableToolbar
-              bulkTagBar={<BulkTagBar transactionIds={rows.map((t) => t.id)} />}
-              sortMenu={<TransactionSortMenu key="sort" field={state.sort} direction={state.direction} entries={queryEntries} />}
-              columnsMenu={
-                transactionsParityEnabled ? (
-                  <ColumnsMenu visible={visibleColumns} isDefault={columnsAreDefault} otherParams={columnsFormParams} />
-                ) : undefined
-              }
-            />
-            <div className="sm:hidden">
-              <MobileLedgerList
-                rows={cardRows}
-                dayGroups={showDayGroups ? dayGroups : null}
+          <TransactionReviewProvider key={`${JSON.stringify(queryEntries)}|p${state.page}`}>
+            <Panel padding="none" className="overflow-hidden">
+              {transactionReviewEnabled && (
+                <TransactionReviewBulkStrip
+                  eligibleRows={rows
+                    .filter((t) => reviewRowEligible(t, excludedDuplicateIds.has(t.id)))
+                    .map((t) => ({
+                      id: t.id,
+                      version: t.review_version != null ? String(t.review_version) : "1",
+                    }))}
+                />
+              )}
+              <TableToolbar
+                bulkTagBar={<BulkTagBar transactionIds={rows.map((t) => t.id)} />}
+                sortMenu={<TransactionSortMenu key="sort" field={state.sort} direction={state.direction} entries={queryEntries} />}
+                columnsMenu={
+                  transactionsParityEnabled ? (
+                    <ColumnsMenu visible={visibleColumns} isDefault={columnsAreDefault} otherParams={columnsFormParams} />
+                  ) : undefined
+                }
               />
-            </div>
-            <div className="hidden overflow-x-auto sm:block">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 z-10 bg-panel-2">
-                  <tr className="border-b border-panel-border text-left text-xs uppercase tracking-wider text-muted font-mono">
-                    <th className="px-4 py-3 font-semibold">Date</th>
-                    <th className="px-4 py-3 font-semibold">Merchant</th>
-                    {visibleColumns.has("category") && (
-                      <th className="hidden px-4 py-3 font-semibold sm:table-cell">Category</th>
-                    )}
-                    {visibleColumns.has("account") && (
-                      <th className="hidden px-4 py-3 font-semibold md:table-cell">Account</th>
-                    )}
-                    <th className="px-4 py-3 text-right font-semibold">Amount</th>
-                    <th className="px-4 py-3 text-right font-semibold">
-                      <span className="sr-only">Notes and splits</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="tabular-nums">
-                  {rows.map((t, index) => (
-                    <LedgerTableRow
-                      key={t.id}
-                      row={t}
-                      zebraBand={zebraBands[index]!}
-                      isNewDay={showDayGroups && (index === 0 || rows[index - 1]!.date !== t.date)}
-                      grouped={showDayGroups}
-                      dayGroup={dayGroups.get(t.date)}
-                      visibleColumns={visibleColumns}
-                      excludedDuplicate={excludedDuplicateIds.has(t.id)}
-                      note={annById.get(t.id)?.note ?? null}
-                      tags={annById.get(t.id)?.tags ?? []}
-                      cleared={annById.get(t.id)?.cleared ?? false}
-                      splits={splitsById.get(t.id) ?? []}
-                      categoryOptions={categoryOptions}
-                      providerCategory={t.pfc_primary ?? t.pfc_detailed}
-                      override={overridesById.get(t.id) ?? null}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Panel>
+              <div className="sm:hidden">
+                <MobileLedgerList
+                  rows={cardRows}
+                  dayGroups={showDayGroups ? dayGroups : null}
+                  reviewEnabled={transactionReviewEnabled}
+                />
+              </div>
+              <div className="hidden overflow-x-auto sm:block">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 z-10 bg-panel-2">
+                    <tr className="border-b border-panel-border text-left text-xs uppercase tracking-wider text-muted font-mono">
+                      {transactionReviewEnabled && (
+                        <th className="w-10 px-3 py-3 text-center">
+                          <span className="sr-only">Select</span>
+                        </th>
+                      )}
+                      <th className="px-4 py-3 font-semibold">Date</th>
+                      <th className="px-4 py-3 font-semibold">Merchant</th>
+                      {visibleColumns.has("category") && (
+                        <th className="hidden px-4 py-3 font-semibold sm:table-cell">Category</th>
+                      )}
+                      {visibleColumns.has("account") && (
+                        <th className="hidden px-4 py-3 font-semibold md:table-cell">Account</th>
+                      )}
+                      <th className="px-4 py-3 text-right font-semibold">Amount</th>
+                      <th className="px-4 py-3 text-right font-semibold">
+                        <span className="sr-only">Notes and splits</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="tabular-nums">
+                    {rows.map((t, index) => {
+                      const isExcluded = excludedDuplicateIds.has(t.id);
+                      const eligible = reviewRowEligible(t, isExcluded);
+                      return (
+                        <LedgerTableRow
+                          key={t.id}
+                          row={t}
+                          zebraBand={zebraBands[index]!}
+                          isNewDay={showDayGroups && (index === 0 || rows[index - 1]!.date !== t.date)}
+                          grouped={showDayGroups}
+                          dayGroup={dayGroups.get(t.date)}
+                          visibleColumns={visibleColumns}
+                          excludedDuplicate={isExcluded}
+                          note={annById.get(t.id)?.note ?? null}
+                          tags={annById.get(t.id)?.tags ?? []}
+                          cleared={annById.get(t.id)?.cleared ?? false}
+                          splits={splitsById.get(t.id) ?? []}
+                          categoryOptions={categoryOptions}
+                          providerCategory={t.pfc_primary ?? t.pfc_detailed}
+                          override={overridesById.get(t.id) ?? null}
+                          reviewEnabled={transactionReviewEnabled}
+                          reviewStatus={t.review_status ?? null}
+                          reviewVersion={t.review_version != null ? String(t.review_version) : null}
+                          reviewEligible={eligible}
+                          reviewStateMissing={Boolean(t.review_state_missing)}
+                        />
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Panel>
+          </TransactionReviewProvider>
         )}
 
         {totalPages > 1 && (

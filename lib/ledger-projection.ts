@@ -26,6 +26,11 @@ export interface LedgerProjectionSourceRow extends LedgerDisplaySourceRow {
   pfc_detailed: string | null;
   pending: boolean;
   source?: "plaid" | "import" | "manual";
+  review_status?: "needs_review" | "reviewed" | null;
+  review_version?: number | string | null;
+  reviewed_at?: string | null;
+  review_eligible?: boolean | null;
+  review_state_missing?: boolean | null;
 }
 
 export interface LedgerDisplayRow {

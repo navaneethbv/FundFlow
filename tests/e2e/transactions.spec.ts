@@ -1,13 +1,16 @@
 import { expect, test, type Page } from "@playwright/test";
 import { loadEnvConfig } from "@next/env";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { runLiveE2E } from "./fixtures/authenticated";
 
 loadEnvConfig(process.cwd());
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
-const RUN = Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY && SUPABASE_SECRET_KEY);
+// Credentials alone are not enough: this spec mutates live data, so it only
+// runs when TEST_SUPABASE_URL explicitly approves the URL under test as an
+// isolated throwaway project.
+const RUN = runLiveE2E;
 const stamp = Date.now();
 const email = `transactions-e2e-${stamp}@example.com`;
 const password = "TransactionsE2E-Password-123!";

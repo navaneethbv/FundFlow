@@ -431,6 +431,14 @@ async function restoreOneTable(
     };
   }
 
+  if (name === "transaction_review_states") {
+    return {
+      kind: "skipped",
+      name,
+      reason: "review state is verified against live transactions and not restorable in-app",
+    };
+  }
+
   if (name === "transactions") {
     const outcome = await restoreTransactions(service, userId, rows);
     result.regeneratedIds += outcome.regenerated;

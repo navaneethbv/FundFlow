@@ -98,6 +98,10 @@ export const USER_DATA_TABLES: UserDataTableSpec[] = [
   table("transaction_annotations", "transaction_id, note, tags, display_category, cash_flow_classification, cleared_at, created_at, updated_at"),
   table("linked_refunds", "charge_transaction_id, refund_transaction_id, amount, created_at"),
   table("linked_duplicates", "subject_id, kept_transaction_id, excluded_transaction_id, created_at"),
+  table("transaction_review_states", "transaction_id, status, version, reviewed_at, created_at, updated_at", {
+    orderBy: "transaction_id",
+    orderBySecondary: null,
+  }),
   table("receipts", "transaction_id, storage_path, merchant, purchase_date, total, status, created_at", { restoreKeys: "id" }),
   table("user_tags", "name, color_slot, created_at"),
   table("sinking_funds", "name, target_amount, due_date, created_at"),

@@ -28,6 +28,7 @@ const CLEAR_FILTERS: LedgerQueryPatch = {
   merchant: null,
   flow: null,
   accountType: null,
+  review: null,
 };
 
 const triggerClasses =
@@ -48,10 +49,14 @@ export default function TransactionQueryControls({
   committed,
   entries,
   options,
+  reviewEnabled = false,
+  needsReviewGlobalCount,
 }: Readonly<{
   committed: LedgerFilters;
   entries: LedgerQueryEntry[];
   options: LedgerFilterOptions;
+  reviewEnabled?: boolean;
+  needsReviewGlobalCount?: number | null;
 }>) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -174,8 +179,68 @@ export default function TransactionQueryControls({
     navigate(patch, `remove-${key}`);
   }
 
+  const reviewFilter = committed.review || "all";
+
   return (
     <div className="space-y-3">
+      {reviewEnabled && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-panel-border pb-3">
+          <nav aria-label="Transaction review views" className="inline-flex rounded-full border border-panel-border bg-panel-2 p-1 text-xs font-semibold shadow-sm">
+            <button
+              type="button"
+              id="review-view-all"
+              aria-current={reviewFilter === "all" ? "page" : undefined}
+              disabled={isPending}
+              onClick={() => navigate({ review: null }, "view-all")}
+              className={`rounded-full px-3 py-1.5 transition-colors ${
+                reviewFilter === "all"
+                  ? "bg-panel text-foreground shadow-sm"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              id="review-view-needs-review"
+              aria-current={reviewFilter === "needs_review" ? "page" : undefined}
+              disabled={isPending}
+              onClick={() => navigate({ review: "needs_review" }, "view-needs-review")}
+              className={`rounded-full px-3 py-1.5 transition-colors ${
+                reviewFilter === "needs_review"
+                  ? "bg-panel text-foreground shadow-sm"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              Needs review
+            </button>
+            <button
+              type="button"
+              id="review-view-reviewed"
+              aria-current={reviewFilter === "reviewed" ? "page" : undefined}
+              disabled={isPending}
+              onClick={() => navigate({ review: "reviewed" }, "view-reviewed")}
+              className={`rounded-full px-3 py-1.5 transition-colors ${
+                reviewFilter === "reviewed"
+                  ? "bg-panel text-foreground shadow-sm"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              Reviewed
+            </button>
+          </nav>
+          {typeof needsReviewGlobalCount === "number" && (
+            <p className="text-xs text-muted" aria-label="Global review queue count">
+              {needsReviewGlobalCount === 0
+                ? "You're all caught up across all accounts."
+                : `${needsReviewGlobalCount.toLocaleString()} transaction${
+                    needsReviewGlobalCount === 1 ? "" : "s"
+                  } need review across all dates and accounts.`}
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         <form
           className="flex min-w-64 flex-1 items-center gap-2"

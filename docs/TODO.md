@@ -2,12 +2,13 @@
 
 Nice-to-have features and enhancements, deferred out of the initial build.
 
-## Transaction review plan (2026-09-07)
+## Transaction review (2026-09-07)
 
-The user selected persistent transaction review for detailed planning.
-The [implementation plan](superpowers/plans/2026-09-07-transaction-review-implementation-plan.md) defines the first release, state lifecycle, database and API contracts, file-level work packages, acceptance tests, and rollout.
-Status: planned, not implemented.
-The user confirmed that all existing and new transactions must enter review; pending entries become actionable after posting.
+Persistent transaction review feature implemented per the [implementation plan](superpowers/plans/2026-09-07-transaction-review-implementation-plan.md).
+All existing and new transactions enter review with backfill to `needs_review`; pending entries become actionable after posting.
+Includes database migration `20260908040000_transaction_review_state.sql`, regression harness `scripts/check-transaction-review.sql`, atomic RPC `set_transaction_review_state_atomic`, PATCH route `/api/transactions/review`, URL/saved view state, responsive UI controls on desktop & mobile, export registration, unit + integration (`tests/integration/transaction-review-concurrency.test.ts`) + e2e (`tests/e2e/transaction-review.spec.ts`) suites.
+Status: implemented and reviewed against the plan, shipped in PR #166 behind `transactionReview: false`.
+Remaining before enable: apply the migration to the live project (verify with `supabase migration list --linked`), then run the isolated full-Auth browser journey with the flag on before flipping the default.
 
 ## Repository review follow-up (2026-09-07)
 

@@ -7,6 +7,7 @@ on:
       - "supabase/migrations/**"
       - "scripts/check-rls.sql"
       - "scripts/check-financial-writes.sql"
+      - "scripts/check-transaction-review.sql"
 
 permissions:
   contents: read
@@ -37,6 +38,9 @@ jobs:
 
       - name: Verify atomic financial writes and reconciliation permissions
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-financial-writes.sql
+
+      - name: Verify transaction review states and atomic permissions
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-transaction-review.sql
 
       - name: Stop Supabase local stack
         if: always()

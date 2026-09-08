@@ -172,4 +172,46 @@ describe("MobileLedgerList", () => {
       expect(html).toContain("var(--viz-pos)");
     });
   });
+
+  describe("with review enabled", () => {
+    it("renders review checkbox, status badge, and action button when reviewEnabled is true", () => {
+      const html = renderToStaticMarkup(
+        React.createElement(MobileLedgerList, {
+          rows: [
+            {
+              ...baseRow,
+              id: "review-row-1",
+              reviewStatus: "needs_review",
+              reviewVersion: "1",
+              reviewEligible: true,
+            },
+          ],
+          reviewEnabled: true,
+        }),
+      );
+      expect(html).toContain('id="mobile-select-txn-review-row-1"');
+      expect(html).toContain("Needs review");
+      expect(html).toContain("Mark reviewed");
+    });
+
+    it("omits review checkbox and badge when reviewEnabled is false or omitted", () => {
+      const html = renderToStaticMarkup(
+        React.createElement(MobileLedgerList, {
+          rows: [
+            {
+              ...baseRow,
+              id: "review-row-1",
+              reviewStatus: "needs_review",
+              reviewVersion: "1",
+              reviewEligible: true,
+            },
+          ],
+          reviewEnabled: false,
+        }),
+      );
+      expect(html).not.toContain('id="mobile-select-txn-review-row-1"');
+      expect(html).not.toContain("Needs review");
+      expect(html).not.toContain("Mark reviewed");
+    });
+  });
 });

@@ -1,6 +1,46 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-09-07. Read this first to resume.
+Last updated: 2026-09-08. Read this first to resume.
+
+## 2026-09-08: persistent transaction review implementation
+
+The user requested implementation of the approved [transaction review plan](superpowers/plans/2026-09-07-transaction-review-implementation-plan.md).
+Implemented, reviewed against the plan, and folded into PR #166 on branch `docs/transaction-review-plan` (the plan and its implementation ship together).
+- **Database (`supabase/migrations/20260908040000_transaction_review_state.sql`):**
+  - Created `transaction_review_states` table with composite foreign key `(user_id, transaction_id)`, unique constraint, check constraints (`status IN ('needs_review', 'reviewed')`, `version > 0`, `reviewed_at` non-null iff reviewed), and RLS gating on `user_id = auth.uid()` plus `private.session_not_revoked()` and `private.mfa_satisfied()`.
+  - Added insert and update triggers (private, `SECURITY DEFINER`, empty search path, no callable grant) that initialize every inserted transaction to `needs_review` and reopen with an incremented version when a material fact tuple changes (`amount`, `date`, `account_id`, `manual_account_id`, `iso_currency_code`, `merchant_name`, `name`, `pfc_primary`, `pfc_detailed`, `pending`, `source`); timestamp-only updates are preserved, and a material change with no review row rolls the source write back.
+  - Backfilled all existing transactions into `needs_review` under a bounded `lock_timeout`, then asserted every transaction has exactly one owner-matching review row before commit.
+  - Created `transaction_review_ledger` view with `security_invoker = true`.
+  - Created atomic RPC `set_transaction_review_state_atomic` with strict compare-and-set versioning, batch validation, conflict handling (`40001` / `REVIEW_STATE_CHANGED`), and audit payload return.
+  - Added SQL test harness `scripts/check-transaction-review.sql` and registered it in `.github/workflows/migration-check.yml`.
+- **API & Audit:**
+  - Added `transactionReview` flag in `lib/feature-flags.ts` (default: `false`).
+  - Registered `transaction_reviewed` and `transaction_review_reopened` audit actions in `lib/audit.ts`.
+  - Created validation and helper module `lib/transaction-review.ts`.
+  - Created route handler `app/api/transactions/review/route.ts` with feature gating, authentication, 120/hr rate limiting, byte size enforcement, payload schema validation, error code mapping (404 for P0002, 409 for 40001/REVIEW_STATE_CHANGED, 400 for 22023), audit logging, and `Cache-Control: no-store`.
+- **Ledger Query & Projection:**
+  - Updated `lib/ledger-query.ts` to parse, serialize, and preserve `review` query parameter (`all`, `needs_review`, `reviewed`).
+  - Extended `lib/ledger-projection.ts` and `components/transactions/MobileLedgerList.tsx` interfaces with review state and eligibility fields.
+- **UI Components:**
+  - Created `components/transactions/TransactionReviewProvider.tsx`, `TransactionReviewStatus.tsx`, and `TransactionReviewControls.tsx`.
+  - Updated `components/transactions/TableToolbar.tsx`, `components/transactions/TransactionQueryControls.tsx`, `components/transactions/MobileLedgerList.tsx`, and `app/transactions/page.tsx` for desktop and mobile review actions, bulk operations, review status filtering tabs, and global review queue summary counter.
+- **Lifecycle & Governance:**
+  - Registered `transaction_review_states` in `USER_DATA_TABLES` (`lib/user-data.ts`) with deterministic `transaction_id` ordering.
+  - Added explicit skip guard in `lib/restore.ts`.
+  - Re-exported `Check` and `RotateCcw` in `components/ui/icons.tsx`.
+  - Updated `docs/ARCHITECTURE.md` and `docs/TODO.md`.
+- **Verification:**
+  - Added unit suites `tests/unit/transaction-review.test.ts`, `tests/unit/transaction-review-route.test.ts`, `tests/unit/transaction-review-ledger.test.ts`, and `tests/unit/transaction-review-render.test.ts`; updated `tests/unit/mobile-ledger-list.test.ts`, `tests/unit/table-toolbar-render.test.ts`, and `tests/unit/transaction-query-controls-render.test.ts`.
+  - Added `tests/integration/transaction-review-concurrency.test.ts` (compare-and-set under real row contention, material-change reopen, cross-user rejection, cascade) and `tests/e2e/transaction-review.spec.ts` (review/persist/reopen, bulk, stale-selection clear, 390px), both self-skipping without an approved `TEST_SUPABASE_URL`.
+  - `scripts/check-transaction-review.sql` now also asserts anon and MFA-insufficient denial; `tests/e2e/transactions.spec.ts` gating tightened to require the isolated-target opt-in.
+  - Local gate green: `tsc --noEmit`, `npm run lint`, `npm run validate:palette`, `npm run build`, `npm audit --audit-level=high`, and the unit coverage gate (95% branches).
+
+### Review-remediation notes (against the plan)
+
+- The two source triggers were missing their `REVOKE` and would have failed `scripts/check-rls.sql` in `migration-check` CI; fixed.
+- Bulk selection now resets on view/sort/filter/page navigation via a `key` on `TransactionReviewProvider` (plan §4.3 / AC-12).
+- `validateReviewBatchPayload` now rejects unexpected top-level and per-item fields (plan §7.1).
+- Feature stays flag-off (`transactionReview: false`) until the migration is applied to the live project and browser acceptance runs per plan §12.
 
 ## 2026-09-07: transaction review implementation plan
 
