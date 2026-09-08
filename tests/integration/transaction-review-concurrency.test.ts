@@ -29,6 +29,7 @@ suite("transaction review concurrency and lifecycle", () => {
   });
 
   const stamp = Date.now();
+  let txSeq = 0;
   const userA = { email: `review-conc-a-${stamp}@example.com`, password: "Password123!" };
   const userB = { email: `review-conc-b-${stamp}@example.com`, password: "Password123!" };
 
@@ -67,7 +68,7 @@ suite("transaction review concurrency and lifecycle", () => {
       .insert({
         user_id: userId,
         manual_account_id: accountId,
-        plaid_transaction_id: `review-conc-${stamp}-${Math.random().toString(36).slice(2)}`,
+        plaid_transaction_id: `review-conc-${stamp}-${(txSeq += 1)}`,
         date: "2026-09-01",
         amount: 50,
         name: "Coffee",
