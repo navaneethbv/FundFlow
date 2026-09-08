@@ -16,7 +16,7 @@ export interface CalendarBill {
   name: string;
   amount: number;
   itemType: "income" | "expense";
-  frequency: "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
+  frequency: "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly" | "once";
   nextDate: string;
 }
 
@@ -99,6 +99,7 @@ function appendBillEvents(
         "END:VEVENT",
       );
     }
+    if (bill.frequency === "once") break;
     cursor = advance(cursor, bill.frequency);
   }
 }

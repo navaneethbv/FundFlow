@@ -5,18 +5,10 @@ import { buildBillsCalendar, type CalendarBill } from "@/lib/ical";
 import { errorResponse } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { resolveViewerToday } from "@/lib/report-period";
+import { loadRecurringInputs } from "@/lib/recurring-data";
+import { expandStreamsForMonth } from "@/lib/recurring-page";
+import { addDays, addMonths } from "@/lib/date-utils";
 import { writeAudit } from "@/lib/audit";
-
-function normalizeFrequency(
-  frequency: string | null,
-): CalendarBill["frequency"] {
-  const value = (frequency ?? "").toLowerCase();
-  if (value.includes("week") && value.includes("bi")) return "biweekly";
-  if (value.includes("week")) return "weekly";
-  if (value.includes("quarter")) return "quarterly";
-  if (value.includes("year")) return "yearly";
-  return "monthly";
-}
 
 /**
  * iCal feed of upcoming recurring bills and paychecks behind a revocable
@@ -55,30 +47,30 @@ export async function GET(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const { data: streams, error: streamsError } = await service
-      .from("recurring_streams")
-      .select("id, merchant_name, description, average_amount, last_amount, frequency, stream_type, is_active, status")
-      .eq("user_id", row.user_id)
-      .eq("is_active", true)
-      // A stream the user marked "Not recurring" or tombstoned must not keep publishing
-      // bills into their calendar app, the same rule the Recurring page and
-      // the Dashboard reminders apply.
-      .is("dismissed_at", null)
-      .or("status.is.null,status.neq.TOMBSTONED");
-    if (streamsError) throw streamsError;
-
-    // The anchor month follows the subscriber's profile timezone (M-11), not
-    // UTC: near a month boundary UTC can already be next month for them.
     const today = await resolveViewerToday(service, row.user_id as string);
-    const anchor = `${today.slice(0, 7)}-15`;
-    const bills: CalendarBill[] = (streams ?? []).map((stream) => ({
-      id: stream.id as string,
-      name: stream.merchant_name ?? stream.description ?? "Recurring",
-      amount: Math.abs(Number(stream.last_amount ?? stream.average_amount ?? 0)),
-      itemType: stream.stream_type === "inflow" ? "income" : "expense",
-      frequency: normalizeFrequency(stream.frequency),
-      nextDate: anchor,
-    }));
+    const end = addDays(today, 60);
+    const { streamInputs, manualInputs } = await loadRecurringInputs(service, row.user_id as string);
+    const bills: CalendarBill[] = [];
+    for (let month = `${today.slice(0, 7)}-01`; month <= end; month = addMonths(month, 1)) {
+      const { occurrences } = expandStreamsForMonth(streamInputs, manualInputs, month.slice(0, 7), today);
+      for (const occurrence of occurrences) {
+        bills.push({ id: `${occurrence.source}-${occurrence.sourceId}`, name: occurrence.merchant,
+          amount: occurrence.amount, itemType: occurrence.isIncome ? "income" : "expense",
+          frequency: "once", nextDate: occurrence.dueDate });
+      }
+    }
+    // Scheduled entries are a separate source and must also be explicitly owner-scoped.
+    for (let offset = 0; ; offset += 500) {
+      const { data: scheduled, error } = await service.from("scheduled_transactions")
+        .select("id,merchant,amount,kind,scheduled_date").eq("user_id", row.user_id)
+        .eq("status", "scheduled").gte("scheduled_date", today).lte("scheduled_date", end)
+        .order("id").range(offset, offset + 499);
+      if (error) throw error;
+      for (const entry of scheduled ?? []) bills.push({ id: `scheduled-${entry.id}`, name: entry.merchant,
+        amount: Math.abs(Number(entry.amount)), itemType: entry.kind === "credit" ? "income" : "expense",
+        frequency: "once", nextDate: entry.scheduled_date });
+      if ((scheduled ?? []).length < 500) break;
+    }
 
     const ics = buildBillsCalendar({
       bills,

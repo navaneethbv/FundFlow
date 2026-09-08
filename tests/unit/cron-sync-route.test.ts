@@ -1,3 +1,5 @@
+vi.mock("@/lib/maintenance-users", () => ({ loadMaintenanceUsers: async (_service: unknown, bankUsers: Set<string>) => [...bankUsers] }));
+vi.mock("@/lib/scheduled-promotion", () => ({ promoteDueScheduledTransactions: vi.fn(async () => ({ promoted: 0, failed: null })) }));
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockSyncAllForUser = vi.fn();

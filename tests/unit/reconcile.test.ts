@@ -25,14 +25,14 @@ describe("computeReconciliation", () => {
     expect(result.outstandingTotal).toBe(-20);
     expect(result.clearedCount).toBe(2);
     expect(result.outstandingCount).toBe(1);
-    expect(result.difference).toBe(-80); // book 1850 - statement 1930
+    expect(result.difference).toBe(1870); // opening 1850 + cleared 1950 - statement 1930
     expect(result.balanced).toBe(false);
   });
 
   it("reads as balanced at zero difference", () => {
     const result = computeReconciliation({
       direction: -1,
-      bookBalance: 1930,
+      bookBalance: -20,
       statementBalance: 1930,
       statementDate: "2026-08-31",
       transactions: TXNS,
@@ -72,6 +72,7 @@ describe("parseAccountRef", () => {
   });
 
   it("rejects malformed references", () => {
+    expect(parseAccountRef("manual:m1:extra")).toBeNull();
     expect(parseAccountRef("cash:m1")).toBeNull();
     expect(parseAccountRef("plaid:")).toBeNull();
     expect(parseAccountRef(null)).toBeNull();

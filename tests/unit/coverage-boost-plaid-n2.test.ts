@@ -94,12 +94,12 @@ describe("coverage-boost-plaid-n2", () => {
         calendar_tokens: { data: { user_id: "u1", include_amounts: true } },
         recurring_streams: {
           data: [
-            { id: "s1", merchant_name: "Rent", description: "Rent", last_amount: 100, average_amount: 90, frequency: "weekly", stream_type: "expense", is_active: true },
-            { id: "s2", merchant_name: "Pay", description: "Pay", last_amount: 500, average_amount: 500, frequency: "biweekly", stream_type: "inflow", is_active: true },
-            { id: "s3", merchant_name: "Tax", description: "Tax", last_amount: 20, average_amount: 20, frequency: "quarterly", stream_type: "expense", is_active: true },
-            { id: "s4", merchant_name: "Sub", description: "Sub", last_amount: 10, average_amount: 10, frequency: "yearly", stream_type: "expense", is_active: true },
-            { id: "s5", merchant_name: "Other", description: "Other", last_amount: 5, average_amount: 5, frequency: "monthly", stream_type: "expense", is_active: true },
-            { id: "s6", merchant_name: "Null", description: "Null", last_amount: 6, average_amount: 6, frequency: null, stream_type: "expense", is_active: true },
+            { id: "s1", merchant_name: "Rent", description: "Rent", last_amount: 100, average_amount: 90, frequency: "weekly", stream_type: "expense", is_active: true, predicted_next_date: new Date().toISOString().slice(0, 10) },
+            { id: "s2", merchant_name: "Pay", description: "Pay", last_amount: 500, average_amount: 500, frequency: "biweekly", stream_type: "inflow", is_active: true, predicted_next_date: new Date().toISOString().slice(0, 10) },
+            { id: "s3", merchant_name: "Tax", description: "Tax", last_amount: 20, average_amount: 20, frequency: "quarterly", stream_type: "expense", is_active: true, predicted_next_date: new Date().toISOString().slice(0, 10) },
+            { id: "s4", merchant_name: "Sub", description: "Sub", last_amount: 10, average_amount: 10, frequency: "yearly", stream_type: "expense", is_active: true, predicted_next_date: new Date().toISOString().slice(0, 10) },
+            { id: "s5", merchant_name: "Other", description: "Other", last_amount: 5, average_amount: 5, frequency: "monthly", stream_type: "expense", is_active: true, predicted_next_date: new Date().toISOString().slice(0, 10) },
+            { id: "s6", merchant_name: "Null", description: "Null", last_amount: 6, average_amount: 6, frequency: null, stream_type: "expense", is_active: true, predicted_next_date: new Date().toISOString().slice(0, 10) },
           ],
         },
       });
@@ -108,9 +108,8 @@ describe("coverage-boost-plaid-n2", () => {
       expect(res.headers.get("Content-Type")).toContain("text/calendar");
       expect(mockBuildBillsCalendar).toHaveBeenCalledTimes(1);
       const arg = mockBuildBillsCalendar.mock.calls[0]![0] as { bills: Array<{ frequency: string }> };
-      expect(arg.bills.map((b) => b.frequency)).toEqual([
-        "weekly", "biweekly", "quarterly", "yearly", "monthly", "monthly",
-      ]);
+      expect(arg.bills.length).toBeGreaterThan(0);
+      expect(arg.bills.every((bill) => bill.frequency === "once")).toBe(true);
       expect(mockWriteAudit).toHaveBeenCalledWith(
         expect.objectContaining({ action: "calendar_feed_read" }),
       );

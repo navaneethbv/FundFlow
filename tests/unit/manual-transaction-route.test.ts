@@ -49,6 +49,7 @@ beforeEach(() => {
   flagEnabled = true;
   serviceClient = clientStub({
     transactions: { data: { id: "txn-1" }, error: null },
+    create_manual_transaction_atomic: { data: "txn-1", error: null },
   });
 });
 
@@ -92,7 +93,7 @@ describe("POST /api/transactions/manual", () => {
     expect(serviceClient.writtenTo("transactions")).toBeUndefined();
   });
 
-  it("creates a manual transaction with the manual- prefix and source column", async () => {
+  it("passes the owned account and amount to the atomic writer", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: USER_ID },
       supabase: clientStub({ manual_accounts: { data: { id: "man-1" }, error: null } }),
@@ -107,15 +108,13 @@ describe("POST /api/transactions/manual", () => {
       }),
     );
     expect(res.status).toBe(201);
-    const written = serviceClient.writtenTo("transactions") as Record<string, unknown>;
+    const written = serviceClient.callsOnRpc("create_manual_transaction_atomic")[0][0] as Record<string, unknown>;
     expect(written).toMatchObject({
-      user_id: USER_ID,
-      manual_account_id: "man-1",
-      account_id: null,
-      amount: 10,
-      source: "manual",
+      p_user_id: USER_ID,
+      p_account_id: "man-1",
+      p_amount: 10,
+      p_source: "manual",
     });
-    expect(written.plaid_transaction_id).toMatch(/^manual-/);
     expect(mockWriteAudit).toHaveBeenCalledWith(
       expect.objectContaining({ action: "manual_transaction_created" }),
     );
@@ -136,11 +135,11 @@ describe("POST /api/transactions/manual", () => {
         account: { source: "manual", id: "man-1" },
       }),
     );
-    const written = serviceClient.writtenTo("transactions") as Record<string, unknown>;
-    expect(written.amount).toBe(-10);
+    const written = serviceClient.callsOnRpc("create_manual_transaction_atomic")[0][0] as Record<string, unknown>;
+    expect(written.p_amount).toBe(-10);
   });
 
-  it("reuses the Phase 7 annotate route to link a goal or attach notes", async () => {
+  it("atomically includes goal and note metadata", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: USER_ID },
       supabase: clientStub({ manual_accounts: { data: { id: "man-1" }, error: null } }),
@@ -156,10 +155,8 @@ describe("POST /api/transactions/manual", () => {
         notes: "for the trip",
       }),
     );
-    expect(mockAnnotatePost).toHaveBeenCalledTimes(1);
-    const [linkRequest] = mockAnnotatePost.mock.calls[0] as [NextRequest];
-    const linkBody = await linkRequest.json();
-    expect(linkBody).toMatchObject({ transaction_id: "txn-1", goal_id: "goal-1", note: "for the trip" });
+    expect(mockAnnotatePost).not.toHaveBeenCalled();
+    expect(serviceClient.callsOnRpc("create_manual_transaction_atomic")[0][0]).toMatchObject({ p_goal_id: "goal-1", p_note: "for the trip" });
   });
 });
 

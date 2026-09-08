@@ -29,8 +29,9 @@ export interface PromotionResult {
 export async function promoteDueScheduledTransactions(
   service: SupabaseClient,
   today: string,
+  userId?: string,
 ): Promise<PromotionResult> {
-  const { data, error } = await service
+  let query = service
     .from("scheduled_transactions")
     .select(
       "id, user_id, kind, amount, merchant, scheduled_date, category, account_id, manual_account_id, status",
@@ -39,6 +40,8 @@ export async function promoteDueScheduledTransactions(
     .lte("scheduled_date", today)
     .order("scheduled_date")
     .limit(PROMOTE_BATCH);
+  if (userId) query = query.eq("user_id", userId);
+  const { data, error } = await query;
   if (error) return { promoted: 0, failed: error.message };
   const due = (data ?? []).filter(
     (row) =>

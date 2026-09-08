@@ -192,6 +192,7 @@ describe("Manual Transactions Route Full Branches", () => {
 
     const service = await import("@/lib/supabase/service");
     vi.spyOn(service, "createServiceClient").mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: "tx-new", error: null }),
       from: vi.fn().mockReturnValue({
         insert: vi.fn().mockReturnValue({
           select: vi.fn().mockReturnValue({
@@ -252,6 +253,7 @@ describe("Manual Transactions Route Full Branches", () => {
 
     const service = await import("@/lib/supabase/service");
     vi.spyOn(service, "createServiceClient").mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: "tx-new", error: null }),
       from: vi.fn().mockReturnValue({
         insert: vi.fn().mockReturnValue({
           select: vi.fn().mockReturnValue({
@@ -301,6 +303,7 @@ describe("Manual Investments Route Full Branches", () => {
 
     const service = await import("@/lib/supabase/service");
     vi.spyOn(service, "createServiceClient").mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: "tx-new", error: null }),
       from: vi.fn().mockImplementation((table: string) => {
         if (table === "securities") {
           return {
@@ -356,6 +359,7 @@ describe("Manual Investments Route Full Branches", () => {
 
     const service = await import("@/lib/supabase/service");
     vi.spyOn(service, "createServiceClient").mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: "tx-new", error: null }),
       from: vi.fn().mockImplementation((table: string) => {
         if (table === "holdings") {
           return {

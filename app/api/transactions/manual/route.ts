@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { POST as annotatePost } from "@/app/api/transactions/annotate/route";
 import { getClientIp, writeAudit } from "@/lib/audit";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
@@ -41,47 +40,23 @@ export async function POST(request: NextRequest) {
     if (accountError) throw accountError;
     if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
 
-    const service = createServiceClient();
-    const { data: txn, error } = await service
-      .from("transactions")
-      .insert({
-        user_id: user.id,
-        account_id: input.account.source === "plaid" ? input.account.id : null,
-        manual_account_id: input.account.source === "manual" ? input.account.id : null,
-        plaid_transaction_id: `manual-${crypto.randomUUID()}`,
-        amount: input.signedAmount,
-        date: input.date,
-        name: input.merchant,
-        merchant_name: input.merchant,
-        pfc_primary: input.category,
-        source: "manual",
-        pending: false,
-      })
-      .select("id")
-      .single();
+    const { data: transactionId, error } = await createServiceClient().rpc("create_manual_transaction_atomic", {
+      p_user_id: user.id, p_source: input.account.source, p_account_id: input.account.id,
+      p_amount: input.signedAmount, p_date: input.date, p_merchant: input.merchant,
+      p_category: input.category, p_note: input.notes, p_goal_id: input.goalId,
+    });
+    if (error?.code === "22023") return badRequest(error.message);
     if (error) throw error;
-
-    if (input.goalId || input.notes) {
-      const linkRequest = new NextRequest("https://internal/api/transactions/annotate", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          transaction_id: txn.id,
-          note: input.notes,
-          goal_id: input.goalId,
-        }),
-      });
-      await annotatePost(linkRequest);
-    }
+    if (!transactionId) throw new Error("Manual transaction creation returned no id");
 
     await writeAudit({
       userId: user.id,
       action: "manual_transaction_created",
-      metadata: { transaction_id: txn.id },
+      metadata: { transaction_id: transactionId },
       ip: getClientIp(request),
     });
 
-    return NextResponse.json({ id: txn.id }, { status: 201 });
+    return NextResponse.json({ id: transactionId }, { status: 201 });
   } catch (error) {
     return errorResponse("transactions.manual.create", error);
   }

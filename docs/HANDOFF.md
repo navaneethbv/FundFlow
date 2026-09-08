@@ -2,6 +2,29 @@
 
 Last updated: 2026-09-07. Read this first to resume.
 
+## 2026-09-07: linked migrations applied and history reconciled
+
+The user authorized applying the pending migrations before merging the application fixes.
+Two historical version IDs were corrected after exact stored-SQL comparison, and all seven missing migrations were applied through the linked CLI.
+The ledger now matches all 83 local versions.
+Live RLS assertions and read-only authorization probes pass, and deployed RPC/trigger definitions match the locally tested database.
+The schema rollout preserves the old form's limited legacy insert while denying any client-created verified basis or retry result.
+A fresh local migration run verifies that compatibility path, cross-user rejection, rollback, stale saves, MFA, revocation, and atomic note/goal writes.
+The CLI's optional local catalog-cache refresh warned that Docker was unavailable after the successful push; remote SQL and ledger checks independently confirmed deployment.
+Current rollout status is maintained in [TODO.md](TODO.md#deployment-prerequisite).
+The app merge and deployment remain for the user.
+
+## 2026-09-07: repository review fixes implemented locally
+
+The [repository review and implementation record](reviews/2026-09-07-repository-opportunities.md) records fixes for all ten findings at `ef831c3`.
+Reconciliation now uses verified opening balances, cleared activity, atomic writes, stale-preview checks, idempotent retries, and correct liability signs.
+Manual-entry metadata is atomic; calendars share recurring occurrences; signed exports and manual-only daily maintenance are corrected.
+Local verification: 468 unit files / 5,165 tests, 95.07% branch coverage, lint, typecheck, production build, palette validation, zero audit vulnerabilities, fresh-database migration and RLS checks, fault-injected financial writes, and local browser saves at desktop and phone widths.
+The browser used an isolated database and a test-only auth response, not production writes or hosted Auth verification.
+The subsequent migration rollout above completes the database prerequisites for these routes.
+Supabase JS and Lucide received minor updates; the three proposed features were not implemented.
+This implementation entry predates the migration rollout and pull-request handoff recorded above.
+
 ## 2026-09-07: PR #157 merged to `main`
 
 PR #157 (UI audit + financial-workflow review findings) is merged to `main` as `7caaa2c`.

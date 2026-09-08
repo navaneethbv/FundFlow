@@ -1,3 +1,4 @@
+import { clientStub } from "../fixtures/supabase-query";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 import { parseLedgerQuery, ledgerQueryEntries, ledgerHref } from "@/lib/ledger-query";
@@ -168,82 +169,22 @@ describe("Calendar Token Route Extra Branches", () => {
 
     const validToken = "b".repeat(32);
     const service = await import("@/lib/supabase/service");
-    vi.spyOn(service, "createServiceClient").mockReturnValue({
-      from: vi.fn().mockImplementation((table: string) => {
-        if (table === "calendar_tokens") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                is: vi.fn().mockReturnValue({
-                  gt: vi.fn().mockReturnValue({
-                    maybeSingle: vi.fn().mockResolvedValue({
-                      data: { user_id: "u-1", include_amounts: true },
-                      error: null,
-                    }),
-                  }),
-                }),
-              }),
-            }),
-          };
-        }
-        if (table === "recurring_streams") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  is: vi.fn().mockReturnValue({
-                    or: vi.fn().mockResolvedValue({
-                      data: [
-                      {
-                        id: "s1",
-                        merchant_name: null,
-                        description: null,
-                        average_amount: null,
-                        last_amount: null,
-                        frequency: "bi-weekly",
-                        stream_type: "inflow",
-                        is_active: true,
-                      },
-                      {
-                        id: "s2",
-                        merchant_name: "Taxes",
-                        description: "Quarterly Tax",
-                        average_amount: 500,
-                        last_amount: 500,
-                        frequency: "quarterly",
-                        stream_type: "outflow",
-                        is_active: true,
-                      },
-                      {
-                        id: "s3",
-                        merchant_name: "Annual Sub",
-                        description: "Annual Sub",
-                        average_amount: 100,
-                        last_amount: 100,
-                        frequency: "yearly",
-                        stream_type: "outflow",
-                        is_active: true,
-                      },
-                    ],
-                      error: null,
-                    }),
-                  }),
-                }),
-              }),
-            }),
-          };
-        }
-        return {
-          insert: vi.fn().mockResolvedValue({ error: null }),
-        };
-      }),
-    } as never);
+    vi.spyOn(service, "createServiceClient").mockReturnValue(clientStub({
+      calendar_tokens: { data: { user_id: "u-1", include_amounts: true } },
+      recurring_streams: { data: [
+        { id: "s1", merchant_name: "Paycheck", average_amount: 500, frequency: "BIWEEKLY", stream_type: "inflow", is_active: true, predicted_next_date: new Date().toISOString().slice(0, 10) },
+        { id: "s2", merchant_name: "Taxes", average_amount: 500, frequency: "QUARTERLY", stream_type: "outflow", is_active: true, predicted_next_date: new Date().toISOString().slice(0, 10) },
+        { id: "s3", merchant_name: "Annual Sub", average_amount: 100, frequency: "ANNUALLY", stream_type: "outflow", is_active: true, predicted_next_date: new Date().toISOString().slice(0, 10) },
+      ] },
+    }) as never);
 
     const req = new NextRequest(`http://localhost/api/calendar/${validToken}`);
     const res = await calendarGet(req, { params: Promise.resolve({ token: validToken }) });
     expect(res.status).toBe(200);
     const text = await res.text();
     expect(text).toContain("BEGIN:VCALENDAR");
-    expect(text).toContain("Recurring");
+    expect(text).toContain("Paycheck");
+    expect(text).toContain("Taxes");
+    expect(text).toContain("Annual Sub");
   });
 });

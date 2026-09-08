@@ -415,3 +415,22 @@ Invariants:
 `lib/dashboard-recurring.ts` adapts these occurrences to Dashboard reminders and one-off forecast events, excluding completed payments from future cash requirements.
 An account or institution filter excludes unassigned manual recurring items.
 The current-month Dashboard includes next-week occurrences that cross into the next month.
+
+## Verified statement reconciliation and atomic manual entries
+
+`GET /api/accounts/reconcile` uses the caller-bound `get_reconciliation_preview` RPC, with ownership, MFA, and revocation checks inside the database.
+The preview starts from an explicit end-of-day opening balance for a first statement, or the last statement with a verified `basis` for subsequent statements.
+Cleared transaction deltas determine the difference; the live account balance is not part of the statement calculation.
+Outstanding transactions carry forward from the original opening date.
+The service-only `save_reconciliation_atomic` RPC validates a revision, locks account and transaction inputs, and commits annotations, an optional explicit adjustment, and the statement record as one transaction.
+A user-scoped request UUID and canonical request payload provide retry safety.
+Legacy statements remain historical records and do not become verified anchors automatically.
+During schema-first rollout, authenticated clients retain only the old insert columns behind owner, MFA, and revocation checks; they cannot insert a verified basis or retry result, nor update/delete statement history.
+
+The service-only `create_manual_transaction_atomic` RPC persists a new manual transaction together with its requested note, owner-validated goal link, and any spending-related goal progress.
+Neither route invokes another HTTP handler to perform dependent writes.
+Both RPCs explicitly verify ownership despite using a service client.
+
+Subscribed calendars load the same persisted recurring inputs and expand the same occurrences as the Recurring page, with owner-scoped scheduled entries included as single events.
+Daily maintenance discovers every profile, including manual-only users, and promotes each user's due entries before snapshots and recurring processing.
+Promotion failures are reported in the existing partial-failure response and alert path.

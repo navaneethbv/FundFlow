@@ -2,6 +2,12 @@
 
 Nice-to-have features and enhancements, deferred out of the initial build.
 
+## Repository review follow-up (2026-09-07)
+
+The [repository review and implementation record](reviews/2026-09-07-repository-opportunities.md) records ten findings and their completed local fixes.
+The database rollout is complete; remaining work is merging and deploying the route/UI changes and running the isolated full Supabase Auth browser journey.
+Recovery center, unified review inbox, and explanations for totals remain feature proposals rather than shipped behavior.
+
 ## UI audit follow-up (2026-09-06)
 
 The [page-by-page UI audit](reviews/2026-09-05-ui-page-audit.md) documents 17 confirmed defects across all main authenticated pages and Settings sections.
@@ -26,12 +32,15 @@ Still open from that review:
 State of `main` encompasses comprehensive review remediation (PR #153 `55bf767`), transfer linking follow-up (PR #154 `e8d0b01`), bulk transfer review action (PR #155 `d2798f3`), savings-rate context alignment (PR #156 `262c420`), and the UI audit / financial-workflow review findings (PR #157 `7caaa2c`).
 
 ### Deployment prerequisite
-The linked migration ledger was verified with `supabase migration list --linked` on 2026-09-07.
-Migrations `20260906140000` (public-role policy gate) and `20260906150000` (refund-link RPC) were applied and their effects checked against the live schema during the PR #157 follow-up.
-The connector-generated IDs `20260907030628` and `20260907030636` were replaced with those exact repository versions in migration history; the schema changes were retained.
-Versions `20260904120000`, `20260905100000`, `20260905110000`, and `20260905120000` remain local-only and require content-based reconciliation before any deployment claim.
-Older local versions `20260902220000`, `20260903010000`, and `20260904000000` also require reconciliation with the remote history, including `20260903171727` and `20260903171733`.
-Migration `20260905130000` is recorded as applied remotely.
+
+Database prerequisites are complete as of 2026-09-07 on the linked FundFlow project.
+`supabase migration list --linked` reports 83 matching local/remote versions with no mismatches.
+The two September 3 remote IDs were mapped to `20260902220000` and `20260903010000` only after exact stored-SQL comparison and schema verification.
+Seven missing versions were applied: `20260904000000`, `20260904120000`, `20260905100000`, `20260905110000`, `20260905120000`, `20260908010000`, and `20260908020000`.
+Live read-only RLS assertions and RPC authorization checks pass; six deployed function definitions match the fresh local database exactly.
+The reconciliation migration retains a column-limited, owner/MFA/revocation-gated legacy insert path so the deployed form remains compatible until the application merge.
+Legacy records cannot supply a verified basis or retry result, and clients cannot update or delete statement history.
+The application changes still need to be merged and deployed; hosted financial-write smoke tests were not run against production data.
 
 ### Merged into main
 - **PR #153 (Comprehensive remediation):** Merged as `55bf767`.
@@ -114,23 +123,15 @@ That makes the invariant ongoing rather than a one-time fix, since the next migr
 
 Not verified here, and not claimed: production exploit testing and a live restore from a real archive.
 
-The remaining local-only migrations must be applied by hand, since there is no migration runner in CI:
+The database deployment and migration-history status are maintained in [Deployment prerequisite](#deployment-prerequisite).
+The backup delivery journal and its send boundary are now present in the linked database.
+No live backup email or archive restore was triggered during verification.
 
-- `20260905100000_mfa_gate_remaining_user_tables.sql`
-- `20260905110000_backup_delivery_journal.sql`
-- `20260905120000_backup_send_boundary.sql`
+## Scheduled transactions per-user timezone promotion
 
-The backup cron writes to `public.backup_deliveries` on every run, so deploying the code before the second migration would fail every backup.
-
-The linked migration ledger was checked during an earlier documentation refresh.
-The four PR #137 migrations and the three PR #130 migrations are recorded as applied remotely.
-The PR #149-era local migrations `20260902220000_smart_rules_regex.sql`, `20260903010000_merchant_rules_tags.sql`, and `20260904000000_account_preferences_atomic.sql` are not recorded under those names remotely, while the remote ledger contains two different September 3 entries that are not present locally.
-Treat that migration-history mismatch as an operational follow-up and do not claim those three migrations are deployed until the mapping is reconciled.
-
-## Added 2026-09-03: scheduled transactions cron per-user timezone promotion
-
-`promoteDueScheduledTransactions(service, dateKeyInTimezone(new Date(), null))` in `app/api/cron/sync/route.ts` promotes due scheduled transactions on the default `America/Los_Angeles` date for all users rather than resolving each user's configured `profiles.timezone`.
-For the current 1-2 user deployment (both LA-based), this is harmless and consistent. If the app scales to users across divergent timezones, the promotion cron should group or iterate users by their profile timezone so transactions promote on each user's local day rollover.
+Implemented in the repository-review fixes: daily maintenance promotes each user's due entries using their profile timezone before snapshots and recurring refresh.
+The manual-only user discovery path also receives this maintenance.
+Application deployment remains pending the review-fix merge.
 
 ## Added 2026-09-02: backup restore redesign
 

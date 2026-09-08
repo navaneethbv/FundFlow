@@ -36,16 +36,6 @@ function numeric(value: number | string | null): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function displayBalance(
-  type: string | null,
-  subtype: string | null,
-  value: number | null,
-): number | null {
-  if (value === null) return null;
-  const group = groupKeyFor(type, subtype);
-  return group === "credit" || group === "loan" ? Math.abs(value) : value;
-}
-
 /** The `/accounts` hidden-account preference, defensively parsed. */
 function hiddenAccountIds(dashboardPrefs: unknown): Set<string> {
   if (!dashboardPrefs || typeof dashboardPrefs !== "object") return new Set();
@@ -126,11 +116,7 @@ export async function GET(request: NextRequest) {
           group: groupKeyFor(account.type, account.subtype),
           name,
           subtype: account.subtype,
-          balance: displayBalance(
-            account.type,
-            account.subtype,
-            numeric(account.current_balance),
-          ),
+          balance: numeric(account.current_balance),
           currency: account.iso_currency_code?.toUpperCase() || "USD",
           asOf: account.updated_at.slice(0, 10),
         };
@@ -141,11 +127,7 @@ export async function GET(request: NextRequest) {
           group: groupKeyFor(account.account_type, null),
           name: account.name,
           subtype: account.account_type,
-          balance: displayBalance(
-            account.account_type,
-            null,
-            numeric(account.balance),
-          ),
+          balance: numeric(account.balance),
           currency: "USD",
           asOf: account.updated_at.slice(0, 10),
         })),
