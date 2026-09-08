@@ -84,23 +84,20 @@ end $$;
 
 reset role;
 
--- Test 2b: anonymous role sees nothing through the table or the view
-set local role anon;
+-- Test 2b: the anon role holds no privilege on the table, view, or RPC
 do $$
-declare
-  v_count integer;
 begin
-  select count(*) into v_count from public.transaction_review_states;
-  assert v_count = 0, 'anon must not read transaction_review_states';
-  select count(*) into v_count from public.transaction_review_ledger;
-  assert v_count = 0, 'anon must not read transaction_review_ledger';
-  begin
-    perform public.set_transaction_review_state_atomic(
-      '55000000-0000-0000-0000-000000000001', 'reviewed', '[]'::jsonb);
-    raise exception 'anon executed the atomic RPC';
-  exception when insufficient_privilege then null; end;
+  assert not has_table_privilege('anon', 'public.transaction_review_states', 'SELECT'),
+    'anon must not hold SELECT on transaction_review_states';
+  assert not has_table_privilege('anon', 'public.transaction_review_ledger', 'SELECT'),
+    'anon must not hold SELECT on transaction_review_ledger';
+  assert not has_function_privilege('anon',
+    'public.set_transaction_review_state_atomic(uuid, text, jsonb)', 'EXECUTE'),
+    'anon must not hold EXECUTE on the atomic RPC';
+  assert not has_function_privilege('authenticated',
+    'public.set_transaction_review_state_atomic(uuid, text, jsonb)', 'EXECUTE'),
+    'authenticated must not hold EXECUTE on the atomic RPC';
 end $$;
-reset role;
 
 -- Test 2c: an aal1 session for a user WITH a verified factor is MFA-insufficient
 -- and must be denied even though user_id = auth.uid() holds.
