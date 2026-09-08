@@ -19,6 +19,8 @@ import type { FinanceSeed } from "./fixtures/seed";
  * user, matching the rest of the e2e suite.
  */
 test.describe("persistent transaction review", () => {
+  // Skipped without an approved isolated target because these tests create and
+  // delete users and financial records; running them on production is unsafe.
   test.skip(
     !runLiveE2E,
     "Approved isolated Supabase target (TEST_SUPABASE_URL) and credentials are required",

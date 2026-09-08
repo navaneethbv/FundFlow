@@ -195,7 +195,7 @@ export async function collectUserData(
 
   const queries = USER_DATA_TABLES.map(async (spec) => {
     if (spec.gated && !investmentsEnabled) {
-      return Promise.resolve({ data: [], error: null });
+      return { data: [], error: null };
     }
     const result = await fetchPagedSpecRows(client, spec, userId, options);
     // Preserve existing records during UI rollback. Only an absent relation

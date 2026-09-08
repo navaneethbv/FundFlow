@@ -263,7 +263,7 @@ function qualifyAmounts(rows: readonly PreparedTransaction[], signifiers: readon
   const averageAmount = roundCents(amounts.reduce((sum, amount) => sum + amount, 0) / amounts.length);
 
   if (allEqual) {
-    return { pattern: "fixed", expectedAmount: amounts[amounts.length - 1]!, averageAmount, strength: 3 };
+    return { pattern: "fixed", expectedAmount: amounts.at(-1)!, averageAmount, strength: 3 };
   }
   if (priceStepAmount !== null) {
     return { pattern: "price_step", expectedAmount: priceStepAmount, averageAmount, strength: 2 };
