@@ -41,6 +41,7 @@ export default defineConfig({
         "components/dashboard/LedgerStrip.tsx",
         "components/accounts/AccountGroup.tsx",
         "components/accounts/NetWorthHero.tsx",
+        "components/shell/nav-model.ts",
       ],
       exclude: [
         "lib/types.ts",
@@ -53,10 +54,10 @@ export default defineConfig({
         "**/graphify-out/**",
       ],
       thresholds: {
-        statements: 95,
-        branches: 95,
-        functions: 95,
-        lines: 95,
+        statements: 96,
+        branches: 96,
+        functions: 96,
+        lines: 98,
       },
     },
   },
