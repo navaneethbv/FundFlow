@@ -13,7 +13,6 @@ import {
   loadHoldingSnapshots,
   loadInvestmentTransactions,
   loadHoldingAccountOptions,
-  loadInvestmentAccounts,
   loadInvestmentSyncStatus,
 } from "@/lib/investments-data";
 import {
@@ -22,7 +21,6 @@ import {
 import { getDashboardData } from "@/lib/dashboard";
 import type { PlaidItemRow } from "@/lib/types";
 import * as plaidService from "@/lib/plaid-service";
-import * as plaidModule from "@/lib/plaid";
 
 describe("Sync and Investments Coverage Boost", () => {
   describe("lib/sync-health.ts", () => {
