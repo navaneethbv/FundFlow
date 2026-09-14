@@ -31,7 +31,7 @@
     "plaid": "^47.0.0",
     "re2js": "^2.8.6",
     "react": "19.2.8",
-    "react-dom": "19.2.8",
+    "react-dom": "19.3.0",
     "react-plaid-link": "^5.0.0",
     "server-only": "^0.0.1",
     "sharp": "0.35.4",
