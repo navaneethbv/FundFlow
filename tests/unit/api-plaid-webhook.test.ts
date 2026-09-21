@@ -59,6 +59,41 @@ describe("POST /api/plaid/webhook", () => {
     status: "active",
   };
 
+  it("rejects an oversized declared body before processing it", async () => {
+    const req = new NextRequest("http://localhost/api/plaid/webhook", {
+      method: "POST",
+      body: "{}",
+      headers: { "content-length": String(256 * 1024 + 1) },
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(413);
+    await expect(res.json()).resolves.toEqual({
+      error: "Webhook payload exceeds maximum size",
+    });
+    expect(mockGetItemByPlaidItemId).not.toHaveBeenCalled();
+  });
+
+  it("rejects an oversized streamed body when content-length is absent", async () => {
+    const oversized = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(256 * 1024));
+        controller.enqueue(new Uint8Array([1]));
+        controller.close();
+      },
+    });
+    const req = new NextRequest("http://localhost/api/plaid/webhook", {
+      method: "POST",
+      body: oversized,
+      // Required by Node's Request implementation for a streaming body.
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+
+    const res = await POST(req);
+    expect(res.status).toBe(413);
+    expect(mockGetItemByPlaidItemId).not.toHaveBeenCalled();
+  });
+
   it("handles TRANSACTIONS SYNC_UPDATES_AVAILABLE webhook", async () => {
     mockGetItemByPlaidItemId.mockResolvedValue(sampleItem);
     mockSyncItemTransactions.mockResolvedValue({ added: 1, modified: 0, removed: 0 });

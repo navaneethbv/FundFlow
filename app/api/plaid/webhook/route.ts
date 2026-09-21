@@ -13,6 +13,47 @@ import { isFeatureEnabled } from "@/lib/feature-flags";
 
 export const dynamic = "force-dynamic";
 
+// Plaid webhook payloads are small JSON documents. Bound the unauthenticated
+// request body before signature verification so an attacker cannot make a
+// serverless invocation buffer an arbitrarily large body in memory.
+const MAX_WEBHOOK_BYTES = 256 * 1024;
+
+function payloadTooLarge(): NextResponse {
+  return NextResponse.json(
+    { error: "Webhook payload exceeds maximum size" },
+    { status: 413 },
+  );
+}
+
+async function readWebhookBody(req: NextRequest): Promise<string | NextResponse> {
+  const declaredLength = Number(req.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_WEBHOOK_BYTES) {
+    return payloadTooLarge();
+  }
+
+  const reader = req.body?.getReader();
+  if (!reader) return "";
+
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let bytes = 0;
+  let body = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > MAX_WEBHOOK_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        return payloadTooLarge();
+      }
+      body += decoder.decode(value, { stream: true });
+    }
+    return body + decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 /**
  * Verification keys cached by kid (Plaid's documented recommendation) so
  * steady-state webhooks cost zero extra Plaid calls. Keys marked expired are
@@ -208,7 +249,8 @@ async function handleItemWebhook(body: {
  */
 export async function POST(req: NextRequest) {
   try {
-    const bodyText = await req.text();
+    const bodyText = await readWebhookBody(req);
+    if (bodyText instanceof NextResponse) return bodyText;
     const isVerified = await verifyPlaidWebhook(req, bodyText);
     if (!isVerified) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
