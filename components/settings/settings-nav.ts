@@ -5,6 +5,7 @@
  * "profile" rather than 404ing, since Settings is a control center people
  * bookmark and share links into.
  */
+import { DEFAULT_PALETTE, isPaletteId } from "@/lib/themes";
 export type SettingsSection =
   | "profile"
   | "display"
@@ -59,6 +60,10 @@ export interface DisplayPrefs {
   density: DensityPreference;
   defaultPrivacyBlur: boolean;
   reducedMotion: ReducedMotionPreference;
+  /** Palette id from `LIGHT_PALETTES`, used whenever light mode is showing. */
+  lightPalette: string;
+  /** Palette id from `DARK_PALETTES`, used whenever dark mode is showing. */
+  darkPalette: string;
 }
 
 export const DEFAULT_DISPLAY_PREFS: DisplayPrefs = {
@@ -66,6 +71,8 @@ export const DEFAULT_DISPLAY_PREFS: DisplayPrefs = {
   density: "comfortable",
   defaultPrivacyBlur: false,
   reducedMotion: "system",
+  lightPalette: DEFAULT_PALETTE.light,
+  darkPalette: DEFAULT_PALETTE.dark,
 };
 
 const THEMES = new Set<ThemePreference>(["system", "light", "dark"]);
@@ -109,6 +116,14 @@ export function validateDisplayPrefsPatch(body: unknown): DisplayPrefsPatchResul
     }
     patch.reducedMotion = b.reducedMotion as ReducedMotionPreference;
   }
+  if (b.lightPalette !== undefined) {
+    if (!isPaletteId("light", b.lightPalette)) return { ok: false, error: "invalid lightPalette" };
+    patch.lightPalette = b.lightPalette;
+  }
+  if (b.darkPalette !== undefined) {
+    if (!isPaletteId("dark", b.darkPalette)) return { ok: false, error: "invalid darkPalette" };
+    patch.darkPalette = b.darkPalette;
+  }
 
   return { ok: true, value: patch };
 }
@@ -126,5 +141,7 @@ export function parseDisplayPrefs(raw: unknown): DisplayPrefs {
     reducedMotion: MOTIONS.has(r.reducedMotion as ReducedMotionPreference)
       ? (r.reducedMotion as ReducedMotionPreference)
       : DEFAULT_DISPLAY_PREFS.reducedMotion,
+    lightPalette: isPaletteId("light", r.lightPalette) ? r.lightPalette : DEFAULT_DISPLAY_PREFS.lightPalette,
+    darkPalette: isPaletteId("dark", r.darkPalette) ? r.darkPalette : DEFAULT_DISPLAY_PREFS.darkPalette,
   };
 }

@@ -147,12 +147,21 @@ const FOLDED_GROUP_KEY = "__FOLDED_GROUPS__";
 const FOLDED_CATEGORY_KEY = "__FOLDED_CATEGORIES__";
 const FOLDED_INCOME_KEY = "__FOLDED_INCOME__";
 
+/** A category under this share of its group folds even inside the top three. */
+export const SANKEY_MIN_CATEGORY_SHARE = 0.08;
+
 function groupCategoryRows(categories: LabeledTotals): RankedEntry[] {
-  return foldTail(ranked(categories), SANKEY_MAX_CATEGORIES_PER_GROUP, (amount) => ({
-    key: FOLDED_CATEGORY_KEY,
-    display: "Smaller categories",
-    amount,
-  }));
+  const rows = ranked(categories);
+  const total = rows.reduce((sum, row) => sum + row.amount, 0);
+  const large = (row: RankedEntry) => row.amount >= total * SANKEY_MIN_CATEGORY_SHARE;
+  // Everything already fits: leave it alone rather than renaming a lone tail.
+  if (rows.length <= SANKEY_MAX_CATEGORIES_PER_GROUP && rows.slice(1).every(large)) return rows;
+  // Ranked descending, so the kept rows are a prefix; the largest always stays.
+  const kept = rows
+    .slice(0, SANKEY_MAX_CATEGORIES_PER_GROUP - 1)
+    .filter((row, index) => index === 0 || large(row));
+  const folded = rows.slice(kept.length).reduce((sum, row) => sum + row.amount, 0);
+  return [...kept, { key: FOLDED_CATEGORY_KEY, display: "Smaller categories", amount: folded }];
 }
 
 function buildSankeyNodes(

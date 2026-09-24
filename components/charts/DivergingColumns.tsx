@@ -41,7 +41,8 @@ export default function DivergingColumns({
   const svgLabel = hasLinks ? undefined : ariaLabel;
   const W = 560;
   const H = 260;
-  const PAD = { top: 16, right: 16, bottom: 26, left: 46 };
+  // 58px left: "-$400.0K" at fontSize 10 needs ~50px plus the 6px gap.
+  const PAD = { top: 16, right: 16, bottom: 26, left: 58 };
   const plotW = W - PAD.left - PAD.right;
   const plotH = H - PAD.top - PAD.bottom;
 

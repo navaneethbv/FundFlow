@@ -901,3 +901,27 @@ describe("buildCashFlowSankeyData at volume", () => {
     expect(groupTotal).toBeCloseTo(spend, 2);
   });
 });
+
+describe("buildCashFlowSankeyData small categories", () => {
+  it("folds a category under 8% of its group even when it ranks in the top three", () => {
+    const rows = [
+      txn({ flow: "income", signedAmount: -10_000, groupKey: "INCOME", categoryKey: "INCOME_WAGES" }),
+      txn({ groupKey: "TRAVEL", categoryKey: "TRAVEL_FLIGHTS", signedAmount: 900 }),
+      txn({ groupKey: "TRAVEL", categoryKey: "TRAVEL_LODGING", signedAmount: 60 }),
+      txn({ groupKey: "TRAVEL", categoryKey: "TRAVEL_TAXIS", signedAmount: 40 }),
+    ];
+    const cats = buildCashFlowSankeyData(rows).nodes.filter((n) => n.id.startsWith("cat:"));
+    expect(cats.map((n) => n.label)).toEqual(["Flights", "Smaller categories"]);
+    expect(cats[1]!.value).toBe(100);
+  });
+
+  it("leaves a group alone when every category is large enough to read", () => {
+    const rows = [
+      txn({ flow: "income", signedAmount: -10_000, groupKey: "INCOME", categoryKey: "INCOME_WAGES" }),
+      txn({ groupKey: "TRAVEL", categoryKey: "TRAVEL_FLIGHTS", signedAmount: 600 }),
+      txn({ groupKey: "TRAVEL", categoryKey: "TRAVEL_LODGING", signedAmount: 400 }),
+    ];
+    const cats = buildCashFlowSankeyData(rows).nodes.filter((n) => n.id.startsWith("cat:"));
+    expect(cats.map((n) => n.label)).toEqual(["Flights", "Lodging"]);
+  });
+});

@@ -330,10 +330,30 @@ body {
 }
 
 body {
-  background: var(--background);
+  /* A soft glow of the palette's accent at the top of every page, so each
+     palette reads as a whole mood rather than a recoloured button. Mixed from
+     tokens, so all twenty palettes get it for free; `fixed` keeps it still
+     behind scrolling content. */
+  background:
+    radial-gradient(1100px 520px at 100% -180px, color-mix(in srgb, var(--accent-strong) 14%, transparent), transparent 70%),
+    radial-gradient(760px 440px at -10% -120px, color-mix(in srgb, var(--accent-strong) 7%, transparent), transparent 70%),
+    var(--background);
+  background-attachment: fixed;
   color: var(--foreground);
   font-family: var(--font-geist-sans, Arial), Helvetica, sans-serif;
   min-height: 100vh;
+}
+
+/* Display preferences (DisplayPrefsApplier). Compact scales the rem-based
+   spacing and type together instead of restyling every component. */
+:root[data-density="compact"] {
+  font-size: 93.75%;
+}
+
+/* Brand gradient fill for primary actions and the logo mark. */
+.bg-brand {
+  background-color: var(--accent-strong);
+  background-image: var(--accent-gradient);
 }
 
 /* Type roles: quiet uppercase section labels and headline numerals. */
@@ -354,9 +374,10 @@ body {
 /* Slim page-header title (replaces the eyebrow + .display pattern as pages
    migrate to PageHeader) and a card's own title, one step down in size. */
 .page-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-size: 1.5rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 .card-title {
@@ -567,6 +588,16 @@ a {
 
 .animate-shimmer {
   animation: shimmer-wave 2s infinite ease-in-out;
+}
+
+/* The saved "Reduce" preference, for people whose OS setting is off. */
+:root[data-motion="reduce"] *,
+:root[data-motion="reduce"] ::before,
+:root[data-motion="reduce"] ::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
