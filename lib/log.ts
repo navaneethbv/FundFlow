@@ -31,8 +31,23 @@ export function redact(value: unknown): unknown {
   return value;
 }
 
+/**
+ * A readable message for any thrown value. Supabase/PostgREST errors are
+ * plain `{ message, code, details, hint }` objects, not `Error`s, and
+ * `String()` turned every one of them into "[object Object]". Only `message`
+ * and `code` are used: `details` can echo row values (a unique-violation key).
+ */
+export function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
+    const code = "code" in error && typeof error.code === "string" && error.code ? ` (${error.code})` : "";
+    return `${error.message}${code}`;
+  }
+  return String(error);
+}
+
 export function logError(context: string, error: unknown): void {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = errorMessage(error);
   const stack = error instanceof Error ? error.stack : undefined;
   // Message/stack only. No request bodies, no Plaid payloads.
   console.error(`[${context}] ${message}`, stack ? `\n${stack}` : "");

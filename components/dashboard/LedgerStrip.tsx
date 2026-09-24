@@ -182,7 +182,10 @@ export default function LedgerStrip({
       <span>{monthLabel}</span>
       <span aria-hidden="true">&middot;</span>
       {hasPicker ? (
-        <DropdownButton label={accountLabel} items={accountItems} align="left" />
+        // The eyebrow's wide tracking and caps are for labels, not a control.
+        <span className="normal-case tracking-normal">
+          <DropdownButton label={accountLabel} items={accountItems} align="left" />
+        </span>
       ) : (
         <span>{accountLabel}</span>
       )}
@@ -265,6 +268,9 @@ export default function LedgerStrip({
                   data-ledger-day={day.date}
                   role="img"
                   aria-label={daySummary(day, currency)}
+                  // A busy day's label names only its largest entry; the
+                  // hover summary carries the full count and totals.
+                  title={daySummary(day, currency)}
                   className="absolute inset-y-0"
                   style={{ left: `${left.toFixed(4)}%` }}
                 >

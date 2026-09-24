@@ -129,6 +129,8 @@ describe("titleCase", () => {
     expect(titleCase("RENT_AND_UTILITIES")).toBe("Rent and Utilities");
     expect(titleCase("the_basics")).toBe("The Basics");
     expect(titleCase("TRANSFER_IN")).toBe("Transfer In");
+    expect(titleCase("roth ira")).toBe("Roth IRA");
+    expect(titleCase("hsa")).toBe("HSA");
   });
 
   it("handles a mix of spaces and underscores", () => {

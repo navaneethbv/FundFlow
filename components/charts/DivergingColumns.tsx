@@ -62,6 +62,13 @@ export default function DivergingColumns({
   const band = plotW / labels.length;
   const colW = Math.min(24, band * 0.5);
   const xMid = (i: number) => PAD.left + band * i + band / 2;
+  // Thin the period labels to what fits: twelve "Nov 2025" labels in a 498px
+  // plot ran together into one unreadable string. ~5.6px per character at
+  // fontSize 10, plus a gap; counted back from the latest period so the
+  // current one is always labelled. Every bar keeps its tooltip and table row.
+  const longestLabel = Math.max(...labels.map((label) => label.length));
+  const labelEvery = Math.max(1, Math.ceil((longestLabel * 5.6 + 8) / band));
+  const showsLabel = (i: number) => (labels.length - 1 - i) % labelEvery === 0;
 
   // Column with a 4px rounded data-end, square at the baseline.
   function column(i: number, value: number, direction: "up" | "down"): string {
@@ -153,9 +160,11 @@ export default function DivergingColumns({
           <g key={l}>
             <path d={column(i, up[i] ?? 0, "up")} fill="var(--viz-pos)" />
             <path d={column(i, down[i] ?? 0, "down")} fill="var(--viz-neg)" />
-            <text x={xMid(i)} y={H - 8} textAnchor="middle" fontSize={10} fill="var(--viz-muted)">
-              {l}
-            </text>
+            {showsLabel(i) && (
+              <text x={xMid(i)} y={H - 8} textAnchor="middle" fontSize={10} fill="var(--viz-muted)">
+                {l}
+              </text>
+            )}
             {links?.[i] ? (
               <a
                 href={links[i]}

@@ -64,8 +64,8 @@ function HistoryChart({ summary }: Readonly<{ summary: Summary }>) {
       </svg>
       {firstDate && lastDate && (
         <div className="flex justify-between px-1 text-xs text-muted tabular-nums">
-          <span>{firstDate}</span>
-          <span>{lastDate}</span>
+          <span>{formatDate(firstDate)}</span>
+          <span>{formatDate(lastDate)}</span>
         </div>
       )}
     </div>

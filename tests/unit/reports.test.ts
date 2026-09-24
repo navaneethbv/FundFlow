@@ -5,6 +5,8 @@ import {
   applyReportSort,
   buildCashFlowSankeyData,
   defaultReportFilters,
+  SANKEY_MAX_CATEGORIES_PER_GROUP,
+  SANKEY_MAX_GROUPS,
   endExclusiveFor,
   isIsoDate,
   parseReportFilters,
@@ -871,5 +873,31 @@ describe("applyReportFilters extra branches", () => {
       expense(500, "FOOD", "RESTAURANT"),
     ]);
     expect(zeroSankey.nodes.length).toBeGreaterThan(0);
+  });
+});
+
+describe("buildCashFlowSankeyData at volume", () => {
+  it("folds groups and categories so the node count does not grow with the data", () => {
+    const rows: CanonicalFinanceTransaction[] = [txn({ flow: "income", signedAmount: -500_000, groupKey: "INCOME", categoryKey: "INCOME_WAGES" })];
+    for (let g = 0; g < 15; g += 1) {
+      for (let c = 0; c < 12; c += 1) {
+        rows.push(txn({ groupKey: `GROUP_${g}`, categoryKey: `GROUP_${g}_CAT_${c}`, signedAmount: 10 + g * 7 + c }));
+      }
+    }
+    const { nodes, links } = buildCashFlowSankeyData(rows);
+    const groups = nodes.filter((n) => n.id.startsWith("grp:") && n.id !== "grp:__net__");
+    expect(groups).toHaveLength(SANKEY_MAX_GROUPS);
+    expect(groups.at(-1)?.label).toBe("Everything else");
+    const perGroup = new Map<string, number>();
+    for (const n of nodes.filter((n) => n.id.startsWith("cat:"))) {
+      const group = n.id.slice(4).split("::")[0]!;
+      perGroup.set(group, (perGroup.get(group) ?? 0) + 1);
+    }
+    for (const count of perGroup.values()) expect(count).toBeLessThanOrEqual(SANKEY_MAX_CATEGORIES_PER_GROUP);
+
+    // Folding moves value between nodes but never loses it.
+    const spend = rows.filter((r) => r.flow === "expense").reduce((sum, r) => sum + r.signedAmount, 0);
+    const groupTotal = links.filter((l) => l.target.startsWith("grp:") && l.target !== "grp:__net__").reduce((sum, l) => sum + l.value, 0);
+    expect(groupTotal).toBeCloseTo(spend, 2);
   });
 });

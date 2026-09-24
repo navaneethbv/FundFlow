@@ -636,3 +636,21 @@ describe("CumulativeCompareChart", () => {
     ).toContain("No spending yet.");
   });
 });
+
+describe("DivergingColumns period labels at volume", () => {
+  it("thins twelve month labels so they cannot run together, keeping the latest", () => {
+    const labels = ["Oct 2025", "Nov 2025", "Dec 2025", "Jan 2026", "Feb 2026", "Mar 2026", "Apr 2026", "May 2026", "Jun 2026", "Jul 2026", "Aug 2026", "Sep 2026"];
+    const html = renderToStaticMarkup(
+      createElement(DivergingColumns, {
+        labels,
+        up: labels.map(() => 100),
+        down: labels.map(() => 80),
+        upName: "Income",
+        downName: "Expenses",
+      }),
+    );
+    const drawn = labels.filter((label) => html.includes(`>${label}</text>`));
+    expect(drawn.length).toBeLessThan(labels.length);
+    expect(drawn).toContain("Sep 2026");
+  });
+});

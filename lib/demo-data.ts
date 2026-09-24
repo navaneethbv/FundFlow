@@ -82,6 +82,10 @@ export function buildDemoDataset(input: {
   let seed = 0;
   for (const char of input.userId) seed = (seed * 31 + char.codePointAt(0)!) >>> 0;
   const random = mulberry32(seed || 42);
+  // `transactions.plaid_transaction_id` is unique across ALL users, so every
+  // id carries the user id, like the item and account ids below. Unscoped
+  // ids made a second user's demo load fail with a unique violation.
+  const idSuffix = input.userId;
 
   const transactions: DemoDataset["transactions"] = [];
   const [year, month] = input.today.split("-").map(Number);
@@ -93,7 +97,7 @@ export function buildDemoDataset(input: {
     // Paycheck twice a month into checking (negative = money in).
     for (const payDay of ["05", "20"]) {
       transactions.push({
-        plaid_transaction_id: `demo-pay-${ym}-${payDay}`,
+        plaid_transaction_id: `demo-pay-${ym}-${payDay}-${idSuffix}`,
         accountIndex: 0,
         date: `${ym}-${payDay}`,
         amount: -2450,
@@ -106,7 +110,7 @@ export function buildDemoDataset(input: {
 
     // Rent from checking.
     transactions.push({
-      plaid_transaction_id: `demo-rent-${ym}`,
+      plaid_transaction_id: `demo-rent-${ym}-${idSuffix}`,
       accountIndex: 0,
       date: `${ym}-01`,
       amount: 1650,
@@ -138,7 +142,7 @@ export function buildDemoDataset(input: {
       // data.
       const day = onChecking && i < BUSY_DAY_ENTRIES ? BUSY_DAY : randomDay;
       transactions.push({
-        plaid_transaction_id: `demo-txn-${ym}-${i}`,
+        plaid_transaction_id: `demo-txn-${ym}-${i}-${idSuffix}`,
         accountIndex: onChecking ? 0 : 1,
         date: `${ym}-${day}`,
         amount,
@@ -176,7 +180,13 @@ export function buildDemoDataset(input: {
         iso_currency_code: "USD",
       },
     ],
-    transactions,
+    // The current month draws days 1-28 like every other month, which put
+    // "recent" demo purchases in the future (Sep 28 on Sep 24). Nothing a
+    // bank reports is dated after today, so those land on today instead;
+    // clamping rather than dropping keeps the month's ledger density.
+    transactions: transactions.map((txn) =>
+      txn.date > input.today ? { ...txn, date: input.today } : txn,
+    ),
   };
 }
 

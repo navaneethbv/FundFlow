@@ -53,6 +53,15 @@ export function validatePlannedAmount(
  * a `<input type="number">` rather than a list of click targets —
  * forcing an ill-fitting shape onto the shared primitive.
  */
+/** "$" for USD: the prefix shown beside an editable amount. */
+function currencySymbol(currency: string): string {
+  return (
+    new Intl.NumberFormat("en-US", { style: "currency", currency, currencyDisplay: "narrowSymbol" })
+      .formatToParts(0)
+      .find((part) => part.type === "currency")?.value ?? currency
+  );
+}
+
 function RowMenu({
   line,
   disabled,
@@ -243,17 +252,24 @@ function BudgetRow({
         {/* Quiet inline input, auto-saves on blur — no separate Save
             button. Optimistic update + rollback still happens in the
             parent's onUpdate, same as before. */}
-        <input
-          aria-label={`Planned amount for ${line.label}`}
-          type="number"
-          min="0"
-          step="0.01"
-          value={planned}
-          disabled={disabled}
-          onChange={(event) => setPlanned(event.target.value)}
-          onBlur={savePlanned}
-          className="min-h-11 w-24 rounded-field border border-transparent bg-transparent px-2 text-right transition-colors hover:border-panel-border focus:border-accent focus:bg-panel-2 focus:outline-none"
-        />
+        {/* The negative margin lines the 44px input's text up with the
+            plain-text cells beside it, which sit at the row's top padding. */}
+        <span className="-my-3 inline-flex items-center justify-end gap-0.5 tabular-nums">
+          <span aria-hidden className="text-muted">
+            {currencySymbol(currency)}
+          </span>
+          <input
+            aria-label={`Planned amount for ${line.label}`}
+            type="number"
+            min="0"
+            step="0.01"
+            value={planned}
+            disabled={disabled}
+            onChange={(event) => setPlanned(event.target.value)}
+            onBlur={savePlanned}
+            className="min-h-11 w-24 rounded-field border border-transparent bg-transparent px-2 text-right tabular-nums transition-colors hover:border-panel-border focus:border-accent focus:bg-panel-2 focus:outline-none"
+          />
+        </span>
       </td>
       <td className="px-4 py-3 text-right align-top text-muted">
         {formatCurrency(line.actual, currency)}

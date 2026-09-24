@@ -44,13 +44,16 @@ export default function AccountRow({
       >
         <AreaSparkline values={row.spark} />
       </div>
-      <div
-        className={row.sparkLong.length < 2 ? "hidden min-h-11 sm:block" : "min-h-11"}
-        role="img"
-        aria-label={`${row.name} full-history trend`}
-      >
-        <AreaSparkline values={row.sparkLong} />
-      </div>
+      {/* The page loads only the selected range, so at the default 30 days
+          the "full history" series is the same 30 points and drew the same
+          curve twice. It earns its column only when it covers more. */}
+      {row.sparkLong.length > row.spark.length ? (
+        <div className="min-h-11" role="img" aria-label={`${row.name} full-history trend`}>
+          <AreaSparkline values={row.sparkLong} />
+        </div>
+      ) : (
+        <div aria-hidden className="hidden min-h-11 sm:block" />
+      )}
       <div className="text-left sm:text-right">
         <p data-money className="metric-value text-sm">
           {row.balance === null
