@@ -104,7 +104,7 @@ export default async function NotificationsPage() {
         initialTimezone={profile?.timezone ?? DEFAULT_REPORT_TIMEZONE}
       />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
         <NotificationFeed
           initialNotifications={(notifications ?? []) as NotificationRow[]}
         />
@@ -128,11 +128,11 @@ export default async function NotificationsPage() {
                   className={`flex items-center justify-between gap-3 rounded-field p-3${index % 2 === 1 ? " bg-panel-2" : ""}`}
                 >
                   <span className="min-w-0">
-                    <span className="block break-words font-semibold font-mono">
+                    <span className="block break-words font-semibold tabular-nums">
                       {formatDate(delivery.periodStart)} to{" "}
                       {formatDate(delivery.periodEnd)}
                     </span>
-                    <span className="block text-xs text-muted font-mono">
+                    <span className="block text-xs text-muted tabular-nums">
                       {deliveryDescription(delivery)}
                     </span>
                   </span>

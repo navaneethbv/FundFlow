@@ -172,7 +172,7 @@ function YearTable({
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] text-sm">
           <thead className="text-xs text-muted">
-            <tr className="font-mono">
+            <tr className="tabular-nums">
               <th scope="col" className="py-3 text-left">Month</th>
               <th scope="col" className="py-3 text-right">Planned</th>
               <th scope="col" className="py-3 text-right">Actual</th>
@@ -182,7 +182,7 @@ function YearTable({
           <tbody>
             {view.months.map((month) => (
               <tr key={month.month} className="border-t border-panel-border">
-                <th scope="row" className="py-3 text-left font-semibold font-mono">
+                <th scope="row" className="py-3 text-left font-semibold tabular-nums">
                   {formatMonth(month.month)}
                 </th>
                 <td className="py-3 text-right">
@@ -227,7 +227,7 @@ function DecadeTable({
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] text-sm">
             <thead className="text-xs text-muted">
-              <tr className="font-mono">
+              <tr className="tabular-nums">
                 <th scope="col" className="py-3 text-left">Year</th>
                 <th scope="col" className="py-3 text-right">Planned</th>
                 <th scope="col" className="py-3 text-right">Actual</th>
@@ -237,7 +237,7 @@ function DecadeTable({
             <tbody>
               {view.years.map((year) => (
                 <tr key={year.year} className="border-t border-panel-border">
-                  <th scope="row" className="py-3 text-left font-semibold font-mono">
+                  <th scope="row" className="py-3 text-left font-semibold tabular-nums">
                     {year.year}
                   </th>
                   <td className="py-3 text-right">

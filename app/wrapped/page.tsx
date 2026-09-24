@@ -74,8 +74,8 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
                 aria-current={chip === year ? "true" : undefined}
                 className={
                   chip === year
-                    ? "inline-flex min-h-11 items-center rounded-field bg-accent-soft px-2.5 text-accent font-mono"
-                    : "inline-flex min-h-11 items-center rounded-field px-2.5 text-muted transition-colors hover:bg-panel-hover hover:text-foreground font-mono"
+                    ? "inline-flex min-h-11 items-center rounded-field bg-accent-soft px-2.5 text-accent tabular-nums"
+                    : "inline-flex min-h-11 items-center rounded-field px-2.5 text-muted transition-colors hover:bg-panel-hover hover:text-foreground tabular-nums"
                 }
               >
                 {chip}
@@ -174,7 +174,7 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
               {recap.biggestMonth && (
                 <div className="rounded-field bg-panel-2 p-3">
                   <span className="block text-xs text-muted">Your biggest month</span>
-                  <span className="mt-1 block font-semibold font-mono">
+                  <span className="mt-1 block font-semibold tabular-nums">
                     {formatMonth(recap.biggestMonth.month)}
                   </span>
                   <span data-money className="metric-value text-sm">
@@ -185,7 +185,7 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
               {recap.quietestMonth && (
                 <div className="rounded-field bg-panel-2 p-3">
                   <span className="block text-xs text-muted">Your quietest month</span>
-                  <span className="mt-1 block font-semibold font-mono">
+                  <span className="mt-1 block font-semibold tabular-nums">
                     {formatMonth(recap.quietestMonth.month)}
                   </span>
                   <span data-money className="metric-value text-sm">
@@ -202,7 +202,7 @@ export default async function WrappedPage({ searchParams }: Readonly<PageProps>)
                   <span data-money className="metric-value text-sm">
                     {formatCurrency(recap.largestPurchase.amount)}
                   </span>
-                  <span className="block text-xs text-muted font-mono">
+                  <span className="block text-xs text-muted tabular-nums">
                     {formatDate(recap.largestPurchase.date)}
                   </span>
                 </div>

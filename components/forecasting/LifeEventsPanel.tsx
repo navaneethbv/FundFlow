@@ -129,7 +129,7 @@ export default function LifeEventsPanel({
   return (
     <>
       <PanelShell>
-        <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-muted">
+        <h2 className="mb-1 card-title">
           Net worth projection
         </h2>
         <p className="mb-4 text-sm text-muted">
@@ -144,7 +144,7 @@ export default function LifeEventsPanel({
       </PanelShell>
 
       <PanelShell>
-      <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-muted">
+      <h2 className="mb-1 card-title">
         Life events
       </h2>
       <p className="mb-4 text-sm text-muted">

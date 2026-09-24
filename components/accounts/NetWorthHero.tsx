@@ -1,6 +1,7 @@
 import Panel from "@/components/ui/Panel";
 import { linePath } from "@/lib/chart-utils";
 import { formatCurrency } from "@/lib/format";
+import { formatDate } from "@/lib/format-date";
 import type { AccountsPageData, CurrencyTotal } from "@/lib/accounts-page";
 
 type Summary = AccountsPageData["summary"];
@@ -62,7 +63,7 @@ function HistoryChart({ summary }: Readonly<{ summary: Summary }>) {
         })}
       </svg>
       {firstDate && lastDate && (
-        <div className="flex justify-between px-1 text-xs text-muted font-mono">
+        <div className="flex justify-between px-1 text-xs text-muted tabular-nums">
           <span>{firstDate}</span>
           <span>{lastDate}</span>
         </div>
@@ -120,7 +121,7 @@ export default function NetWorthHero({
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-panel-border text-muted font-mono">
+              <tr className="border-b border-panel-border text-muted tabular-nums">
                 <th className="px-2 py-2 font-semibold">Date</th>
                 <th className="px-2 py-2 font-semibold">Currency</th>
                 <th className="px-2 py-2 text-right font-semibold">Net worth</th>
@@ -130,8 +131,8 @@ export default function NetWorthHero({
               {Object.entries(summary.netWorthSeries).flatMap(([currency, series]) =>
                 series.map((point) => (
                   <tr key={`${currency}-${point.date}`} className="border-b border-panel-border/70">
-                    <td className="px-2 py-2 font-mono">{point.date}</td>
-                    <td className="px-2 py-2 font-mono">{currency}</td>
+                    <td className="px-2 py-2 tabular-nums">{formatDate(point.date)}</td>
+                    <td className="px-2 py-2 tabular-nums">{currency}</td>
                     <td data-money className="px-2 py-2 text-right tabular-nums">
                       {formatCurrency(point.value, currency)}
                     </td>
@@ -144,7 +145,7 @@ export default function NetWorthHero({
       </details>
       {historyStartsOn && (
         <p className="mt-4 text-xs text-muted">
-          Daily balance history starts on {historyStartsOn}. Earlier history is
+          Daily balance history starts on {formatDate(historyStartsOn)}. Earlier history is
           unavailable.
         </p>
       )}

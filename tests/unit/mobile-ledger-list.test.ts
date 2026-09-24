@@ -41,7 +41,7 @@ describe("MobileLedgerList", () => {
     const html = render([baseRow]);
     expect(html).toContain("Blue Bottle");
     expect(html).toContain("-$6.50");
-    expect(html).toContain("Food And Drink");
+    expect(html).toContain("Food and Drink");
     expect(html).toContain("Checking ••1234");
   });
 
@@ -98,7 +98,7 @@ describe("MobileLedgerList", () => {
 
   it("sets the date in the mono face when day grouping is off", () => {
     const html = render([baseRow]);
-    expect(html).toContain(`<span class="font-mono">${formatDate(baseRow.date)}</span>`);
+    expect(html).toContain(`<span class="tabular-nums">${formatDate(baseRow.date)}</span>`);
   });
 
   it("zebra-stripes odd-indexed rows when day grouping is off", () => {

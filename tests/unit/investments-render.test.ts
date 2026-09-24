@@ -235,7 +235,7 @@ describe("AddManualHoldingForm — closed trigger and modal shell", () => {
     const html = renderToStaticMarkup(
       createElement(AddManualHoldingForm, { accounts: [] }),
     );
-    expect(html).toContain("Add Holding");
+    expect(html).toContain("Add holding");
     expect(html).not.toContain('role="dialog"');
   });
 

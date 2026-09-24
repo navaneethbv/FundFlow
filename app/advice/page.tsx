@@ -102,7 +102,7 @@ export default async function AdvicePage({ searchParams }: Readonly<PageProps>) 
           <div className="min-w-0 space-y-6">
             {prioritized.active.length > 0 && (
               <section>
-                <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Recommended priorities</h2>
+                <h2 className="mb-3 card-title">Recommended priorities</h2>
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                   {prioritized.active.map((item) => (
                     <AdviceCard
@@ -136,7 +136,7 @@ export default async function AdvicePage({ searchParams }: Readonly<PageProps>) 
             )}
 
             <section>
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Essential advice</h2>
+              <h2 className="mb-3 card-title">Essential advice</h2>
               {essential.active.length === 0 && essential.completed.length === 0 ? (
                 <Panel padding="lg">
                   <p className="text-sm text-muted">Nothing left here — check Prioritized above.</p>

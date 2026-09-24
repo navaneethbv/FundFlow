@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import RouteErrorView from "@/components/shell/RouteErrorView";
 
 export default function CashFlowError({
   error,
@@ -9,27 +9,14 @@ export default function CashFlowError({
   error: Error & { digest?: string };
   retry: () => void;
 }>) {
-  useEffect(() => {
-    console.error("Cash flow error boundary caught", error.digest ?? error.message);
-  }, [error]);
-
   return (
-    <main id="main-content" tabIndex={-1} className="mx-auto max-w-xl px-4 py-16 text-center">
-      <p className="eyebrow">Cash Flow</p>
-      <h1 className="display mt-2 text-3xl">
-        Cash Flow is temporarily unavailable
-      </h1>
-      <p className="mt-3 text-sm leading-6 text-muted">
-        Your financial data was not changed.
-        Try loading this view again.
-      </p>
-      <button
-        type="button"
-        onClick={retry}
-        className="mt-6 min-h-11 rounded-field bg-accent px-4 py-2 text-sm font-bold text-accent-foreground focus-visible:outline-2"
-      >
-        Try again
-      </button>
-    </main>
+    <RouteErrorView
+      context="Cash flow"
+      eyebrow="Cash Flow"
+      title="Cash Flow is temporarily unavailable"
+      message="Your financial data was not changed. Try loading this view again."
+      error={error}
+      retry={retry}
+    />
   );
 }

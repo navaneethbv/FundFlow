@@ -1,6 +1,6 @@
 import AreaSparkline from "@/components/charts/AreaSparkline";
 import { InstitutionAvatar } from "@/components/ui/Avatar";
-import { formatCurrency, gainLossColor, inflowMarker } from "@/lib/format";
+import { formatCurrency, gainLossColor, inflowMarker, titleCase } from "@/lib/format";
 import type { AccountsPageRow } from "@/lib/accounts-page";
 
 function formatChange(row: AccountsPageRow): string | null {
@@ -29,7 +29,7 @@ export default function AccountRow({
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{row.name}</p>
           <p className="mt-1 text-xs text-muted">
-            {row.subtype ?? row.type ?? "Manual account"}
+            {titleCase(row.subtype ?? row.type) || "Manual account"}
           </p>
         </div>
       </div>

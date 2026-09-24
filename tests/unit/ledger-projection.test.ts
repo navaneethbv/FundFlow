@@ -269,7 +269,7 @@ describe("buildLedgerFilterOptions", () => {
     expect(options.merchants).toEqual(["Blue Bottle", "Safeway"]);
     expect(options.categories).toContainEqual({
       value: "FOOD_AND_DRINK",
-      label: "Food And Drink",
+      label: "Food and Drink",
     });
     expect(options.subcategoriesByCategory.FOOD_AND_DRINK).toEqual([
       { value: "FOOD_AND_DRINK_COFFEE", label: "Coffee" },
@@ -334,7 +334,7 @@ describe("toLedgerFacetRow", () => {
     expect(options.merchants).toEqual(["Safeway", "SQ *BlueBottle Coffee"]);
     expect(options.categories).toContainEqual({
       value: "FOOD_AND_DRINK",
-      label: "Food And Drink",
+      label: "Food and Drink",
     });
     expect(options.subcategoriesByCategory.FOOD_AND_DRINK).toEqual([
       { value: "FOOD_AND_DRINK_COFFEE", label: "Coffee" },

@@ -77,7 +77,7 @@ export default function AdvicePriorities({
       <ol className="space-y-2">
         {priorities.map((id, index) => (
           <li key={id} className="flex min-w-0 items-center justify-between gap-2 text-sm">
-            <span className="min-w-0 truncate">{titleOf(id)}</span>
+            <span className="min-w-0 leading-snug">{titleOf(id)}</span>
             <span className="flex shrink-0 items-center gap-1">
               <button
                 type="button"
@@ -122,12 +122,13 @@ export default function AdvicePriorities({
           <p className="mb-2 text-sm font-semibold">Pin a topic</p>
           <ul className="space-y-1">
             {unprioritized.map((topic) => (
-              <li key={topic.id} className="flex min-w-0 items-center justify-between gap-2 text-sm">
-                <span className="min-w-0 truncate">{topic.title}</span>
+              <li key={topic.id} className="flex min-w-0 items-center justify-between gap-3 text-sm">
+                <span className="min-w-0 leading-snug">{topic.title}</span>
                 <Button
                   type="button"
                   size="sm"
                   variant="secondary"
+                  className="shrink-0"
                   onClick={() => {
                     pin(topic.id);
                   }}

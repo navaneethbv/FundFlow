@@ -92,14 +92,13 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
   return (
     <AppShell active="forecasting" email={user.email}>
       <div className="space-y-6">
-        <PageHeader title="Forecasting" />
-        <p className="text-sm text-muted">
-          A projection, not a prediction — three scenarios compounding your own assumptions forward.
-          Nothing here is a guarantee or a statistical forecast.
-        </p>
+        <PageHeader
+          title="Forecasting"
+          description="A projection, not a prediction: three scenarios compounding your own assumptions forward. Nothing here is a guarantee or a statistical forecast."
+        />
 
         <Panel padding="lg">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Starting point</h2>
+          <h2 className="mb-3 card-title">Starting point</h2>
           <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-3">
             <div>
               <dt className="text-xs text-muted">Cash</dt>

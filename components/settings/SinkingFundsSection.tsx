@@ -187,7 +187,7 @@ export default function SinkingFundsSection({
                       {fund.cadence === "custom" && ` (${fund.custom_interval_months} months)`}
                     </p>
                     <p className="mt-1 text-xs text-muted">
-                      Next due <span className="font-mono">{plan.dueDate}</span>,{" "}
+                      Next due <span className="tabular-nums">{plan.dueDate}</span>,{" "}
                       <span data-money>{formatCurrency(plan.monthlySetAside)}</span> monthly
                     </p>
                   </div>

@@ -583,7 +583,7 @@ function LedgerTableRow({
           <th
             scope="row"
             colSpan={columnCount - 2}
-            className="px-4 py-1.5 text-left font-mono text-xs font-semibold text-muted"
+            className="px-4 py-1.5 text-left tabular-nums text-xs font-semibold text-muted"
           >
             {formatDate(row.date)}
           </th>
@@ -620,8 +620,9 @@ function LedgerTableRow({
             />
           </td>
         )}
-        <td className="whitespace-nowrap px-4 py-3 align-top text-muted font-mono">
-          <span className={grouped && !isNewDay ? "sr-only" : undefined}>
+        <td className="whitespace-nowrap px-4 py-3 align-top text-muted tabular-nums">
+          {/* The day header row already shows this date; keep it for screen readers. */}
+          <span className={grouped ? "sr-only" : undefined}>
             {formatDate(row.date)}
           </span>
         </td>
@@ -1101,7 +1102,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
               <div className="hidden overflow-x-auto sm:block">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 z-10 bg-panel-2">
-                    <tr className="border-b border-panel-border text-left text-xs uppercase tracking-wider text-muted font-mono">
+                    <tr className="border-b border-panel-border text-left text-xs uppercase tracking-wider text-muted tabular-nums">
                       {transactionReviewEnabled && (
                         <th className="w-10 px-3 py-3 text-center">
                           <span className="sr-only">Select</span>

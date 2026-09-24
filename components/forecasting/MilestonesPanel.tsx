@@ -4,9 +4,17 @@ import { formatCurrency } from "@/lib/format";
 const BADGE_COLOR_MAP: Record<string, string> = {
   // Solid semantic fills with foreground tokens: guaranteed AA on every card
   // surface, unlike a tinted /10 background.
-  fire: "bg-danger text-danger-foreground",
-  debt: "bg-danger text-danger-foreground",
+  // Milestones are goals, not alarms, so none of them wears danger red.
+  fire: "bg-accent text-accent-foreground",
+  debt: "bg-warning text-warning-foreground",
   emergency: "bg-success text-success-foreground",
+};
+
+const BADGE_LABELS: Record<ForecastMilestone["type"], string> = {
+  debt: "Debt",
+  emergency: "Emergency fund",
+  networth: "Net worth",
+  fire: "FIRE",
 };
 
 function getBadgeColor(type: string): string {
@@ -38,7 +46,7 @@ export default function MilestonesPanel({
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
+        <h2 className="card-title">
           Projected Milestones & Horizon
         </h2>
         <span className="text-xs text-muted">
@@ -62,7 +70,7 @@ export default function MilestonesPanel({
                   <span
                     className={`inline-block rounded px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${getBadgeColor(m.type)}`}
                   >
-                    {m.type}
+                    {BADGE_LABELS[m.type] ?? m.type}
                   </span>
                   {isReachedNow && (
                     <span className="inline-flex items-center gap-1 text-xs font-bold text-success">

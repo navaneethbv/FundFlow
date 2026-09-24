@@ -172,7 +172,7 @@ describe("TrendChart", () => {
 
 describe("DonutChart", () => {
   const items = [
-    { label: "Food And Drink", amount: 420 },
+    { label: "Food and Drink", amount: 420 },
     { label: "Travel", amount: 260 },
     { label: "Shops", amount: 180 },
     { label: "Other", amount: 90 },
@@ -253,7 +253,7 @@ describe("chart link affordances", () => {
     const html = renderToStaticMarkup(
       createElement(DonutChart, {
         items: [
-          { label: "Food And Drink", amount: 420, href: "/dashboard?category=FOOD_AND_DRINK" },
+          { label: "Food and Drink", amount: 420, href: "/dashboard?category=FOOD_AND_DRINK" },
           { label: "Travel", amount: 260 },
         ],
         centerLabel: "spent",

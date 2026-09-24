@@ -163,7 +163,7 @@ export default function ReceiptInbox({
             >
               <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
                 <p className="text-muted">
-                  <span className="font-mono">{receipt.purchase_date ?? "Date unknown"}</span>
+                  <span className="tabular-nums">{receipt.purchase_date ?? "Date unknown"}</span>
                   {receipt.total !== null && (
                     <>
                       {" · "}
@@ -197,7 +197,7 @@ export default function ReceiptInbox({
                     >
                       <span className="min-w-0 truncate">{candidate.merchant}</span>
                       <span className="shrink-0 text-xs text-muted">
-                        <span className="font-mono">{candidate.date}</span> ·{" "}
+                        <span className="tabular-nums">{candidate.date}</span> ·{" "}
                         <span data-money className="font-semibold text-foreground">
                           {formatCurrency(Math.abs(candidate.amount))}
                         </span>

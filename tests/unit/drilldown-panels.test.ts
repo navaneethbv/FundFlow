@@ -46,7 +46,7 @@ describe("CategoryDrilldownPanel", () => {
   it("renders breadcrumb with a link back to all categories", () => {
     expect(html).toContain("All categories");
     expect(html).toContain('href="/dashboard?tab=overview&amp;month=2026-07"');
-    expect(html).toContain("Food And Drink");
+    expect(html).toContain("Food and Drink");
   });
 
   it("links subcategories to sub drills", () => {

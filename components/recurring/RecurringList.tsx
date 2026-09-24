@@ -322,7 +322,7 @@ function OccurrenceCard({
         </div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted pt-1 border-t border-panel-border/50">
-        <span className="font-mono">
+        <span className="tabular-nums">
           Due {formatDay(occurrence.dueDate)}
           {occurrence.status === "overdue" && (
             <span className="ml-1.5 font-semibold text-accent">
@@ -396,7 +396,7 @@ function OccurrenceTableRow({
           </span>
         </div>
       </td>
-      <td className="px-4 py-3 text-sm font-mono whitespace-nowrap">
+      <td className="px-4 py-3 text-sm tabular-nums whitespace-nowrap">
         {formatDay(occurrence.dueDate)}
         {occurrence.status === "overdue" && (
           <span className="ml-1.5 text-xs font-semibold text-accent">
@@ -529,7 +529,7 @@ function OccurrenceTable({
       {/* Desktop real table */}
       <div className="hidden relative sm:block sm:overflow-x-auto">
         <table className="w-full text-sm sm:min-w-[720px]">
-          <thead className="bg-panel-2 text-xs text-muted font-mono sm:table-header-group">
+          <thead className="bg-panel-2 text-xs text-muted tabular-nums sm:table-header-group">
             <tr>
               <th scope="col" className="px-4 py-3 text-left">Merchant</th>
               <th scope="col" className="px-4 py-3 text-left">Date</th>
@@ -680,7 +680,7 @@ function ManualItemRow({
       <span className="min-w-0">
         <span className="block truncate text-sm font-semibold">{item.name}</span>
         <span className="text-xs text-muted">
-          <span className="font-mono">{formatDay(item.nextDate)}</span> ·{" "}
+          <span className="tabular-nums">{formatDay(item.nextDate)}</span> ·{" "}
           {manualFrequencyLabel(item.frequency)} ·{" "}
           <span
             data-money

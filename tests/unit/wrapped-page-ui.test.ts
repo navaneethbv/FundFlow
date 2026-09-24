@@ -5,15 +5,15 @@ describe("wrapped page UI", () => {
   const wrapped = readFileSync("app/wrapped/page.tsx", "utf8");
 
   it("sets the year chips in the mono face", () => {
-    expect(wrapped).toMatch(/inline-flex min-h-11 items-center rounded-field bg-accent-soft px-2\.5 text-accent font-mono/);
-    expect(wrapped).toMatch(/inline-flex min-h-11 items-center rounded-field px-2\.5 text-muted transition-colors hover:bg-panel-hover hover:text-foreground font-mono/);
+    expect(wrapped).toMatch(/inline-flex min-h-11 items-center rounded-field bg-accent-soft px-2\.5 text-accent tabular-nums/);
+    expect(wrapped).toMatch(/inline-flex min-h-11 items-center rounded-field px-2\.5 text-muted transition-colors hover:bg-panel-hover hover:text-foreground tabular-nums/);
   });
 
   it("sets the highlight-card month and date labels in the mono face", () => {
-    const monoMonthSpans = wrapped.match(/className="mt-1 block font-semibold font-mono"/g) ?? [];
-    expect(monoMonthSpans).toHaveLength(2); // biggestMonth, quietestMonth
+    const tabularMonthSpans = wrapped.match(/className="mt-1 block font-semibold tabular-nums"/g) ?? [];
+    expect(tabularMonthSpans).toHaveLength(2); // biggestMonth, quietestMonth
     expect(wrapped).toContain('className="mt-1 block break-words font-semibold"');
-    expect(wrapped).toContain('className="block text-xs text-muted font-mono"');
+    expect(wrapped).toContain('className="block text-xs text-muted tabular-nums"');
   });
 
   it("carries the highlight-card money figures inside the privacy-blur hook", () => {

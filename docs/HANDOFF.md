@@ -1,6 +1,18 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-09-08. Read this first to resume.
+Last updated: 2026-09-24. Read this first to resume.
+
+## 2026-09-24: repository review and UI polish
+
+The user asked for a bug/consistency review and a page-by-page UI pass.
+Every authenticated page was rendered against a local `supabase start` stack with the demo dataset, at 1440px and 390px in both themes.
+- **Local stack sign-in (bug).** The CSP hardcoded `https://` for the Supabase host, so a plain-http loopback URL (the `supabase start` path `docker-compose.selfhost.yml` documents) could never sign in. `supabaseConnectSources()` in `proxy.ts` now allows http/ws for loopback hosts only and omits `upgrade-insecure-requests` there; hosted projects are unchanged.
+- **414 on `.in()` lists (bug).** 250-UUID chunks built ~9.3KB request lines, over the 8KB nginx/Kong default in front of a self-hosted or local stack, so Cash Flow, Budget, Forecasting, Advice, Wrapped, and Goals/Dashboard failed there. `lib/postgrest-limits.ts` owns one `IN_FILTER_CHUNK_SIZE` (150) used by every URL `.in()` list. The dashboard's month split read was unchunked and ignored its error (silently dropping splits from category totals); it is now chunked and throws. The scheduled-promotion status update is chunked too.
+- **Forecast axis (bug).** Ticks were nice steps offset from the raw minimum ($4K / -$6K / -$16K); `niceTickRange()` puts every tick on a round multiple and always includes zero.
+- **Review prompts.** Duplicate-charge and large-transaction messages now name the amount and day; separate days used to render as identical repeated lines.
+- **UI consistency.** Dates and table headers no longer use Geist Mono (tabular sans figures instead); `titleCase` keeps joining words lowercase ("Food and Drink"); shared `RouteErrorView` for all four error boundaries; tighter sidebar so all nav fits at 900px; lone "Mine" scope switch hidden without a household (Budget, Recurring, matching Debt); Title Case page names (Debt Payoff, Receipt Inbox); sentence-case buttons; formatted dates instead of raw ISO/month keys; milestone badges read "Net worth"/"Emergency fund" without danger red; share percentages at one decimal; capped chart width so axis text no longer doubles in size; 404 page, admin header, login dividers.
+- Dependencies: patch/minor bumps applied. ESLint 10 and TypeScript 7 majors skipped (toolchain risk, `eslint-config-next` pairing).
+
 
 ## 2026-09-08: PR #166 review remediation
 

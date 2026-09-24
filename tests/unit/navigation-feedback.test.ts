@@ -12,7 +12,7 @@ describe("navigation feedback", () => {
     for (const [route, label] of [
       ["goals", "Goals"],
       ["investments", "Investments"],
-      ["debt", "Debt payoff"],
+      ["debt", "Debt Payoff"],
       ["forecasting", "Forecasting"],
       ["advice", "Advice"],
       ["notifications", "Notifications"],

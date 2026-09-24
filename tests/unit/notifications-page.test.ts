@@ -43,6 +43,6 @@ describe("notifications center", () => {
     // The map stays `(deliveries ?? []).map(...)`; the change is the index arg.
     expect(source).toContain("(delivery, index) =>");
     expect(source).toContain('index % 2 === 1 ? " bg-panel-2" : ""');
-    expect(source).toContain("font-mono");
+    expect(source).toContain("tabular-nums");
   });
 });

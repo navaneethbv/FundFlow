@@ -44,7 +44,7 @@ function NavLink({
         "inline-flex items-center gap-3 rounded-field text-sm font-semibold transition-colors duration-150 focus-visible:outline-2",
         compact
           ? "min-h-11 shrink-0 px-3 py-2"
-          : "w-full px-3 py-2.5 md:justify-center md:px-0 lg:justify-start lg:px-3 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0",
+          : "w-full px-3 py-2 md:justify-center md:px-0 lg:justify-start lg:px-3 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0",
         isActive
           ? "bg-accent-soft text-accent"
           : "text-muted hover:bg-panel-hover hover:text-foreground",
@@ -170,7 +170,7 @@ export default async function AppSidebar({
         />
       }
     >
-      <nav aria-label="Primary" className="space-y-1">
+      <nav aria-label="Primary" className="space-y-0.5">
         {primaryItems.map((item) => (
           <NavLink key={item.key} item={item} active={active} />
         ))}

@@ -111,7 +111,7 @@ describe("buildCashFlowSankeyData with income above spending", () => {
   });
 
   it("splits each expense group into its categories", () => {
-    const rent = nodes.find((node) => node.label === "Rent And Utilities")!;
+    const rent = nodes.find((node) => node.label === "Rent and Utilities")!;
     const outOfRent = linkTotal(links, (link) => link.source === rent.id);
     expect(outOfRent).toBeCloseTo(1200);
     expect(nodes.filter((node) => node.column === 3)).toHaveLength(2);
@@ -274,7 +274,7 @@ describe("buildCashFlowSankeyData exclusions", () => {
 
     // The category sheds its parent's prefix; the group keeps its own name.
     expect(labels).toContain("Salary");
-    expect(labels).toContain("Rent And Utilities");
+    expect(labels).toContain("Rent and Utilities");
     expect(labels).toContain("Rent");
     expect(labels.some((text) => text.includes("_"))).toBe(false);
   });

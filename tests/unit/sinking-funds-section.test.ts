@@ -41,7 +41,7 @@ describe("SinkingFundsSection", () => {
         }],
       }),
     );
-    expect(html).toContain('<span class="font-mono">');
+    expect(html).toContain('<span class="tabular-nums">');
     expect(html).toContain("data-money");
   });
 });

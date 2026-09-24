@@ -105,7 +105,9 @@ export default function DivergingColumns({
 
       <svg
         viewBox={`0 0 ${W} ${H}`}
-        className="w-full h-auto"
+        // The viewBox is fixed, so text scales with the rendered width. The cap
+        // keeps a full-width card from blowing 10px axis labels up to ~20px.
+        className="block h-auto w-full max-w-[760px]"
         role={svgRole}
         aria-label={svgLabel}
       >

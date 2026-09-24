@@ -17,7 +17,12 @@ describe("root error boundary", () => {
     expect(source).toContain('"use client"');
     expect(source).toContain("retry");
     expect(source).not.toContain("reset");
-    expect(source).toContain("Try again");
+    // The shared view owns the buttons, so every boundary offers the same
+    // retry plus a way out to the dashboard.
+    expect(source).toContain("RouteErrorView");
+    const view = readFileSync("components/shell/RouteErrorView.tsx", "utf8");
+    expect(view).toContain("Try again");
+    expect(view).toContain('href="/dashboard"');
   });
 
   it("uses the re-fetching recovery prop in every touched route boundary", () => {
@@ -29,6 +34,7 @@ describe("root error boundary", () => {
       const source = readFileSync(file, "utf8");
       expect(source, file).toContain("retry");
       expect(source, file).not.toContain("reset");
+      expect(source, file).toContain("RouteErrorView");
     }
   });
 

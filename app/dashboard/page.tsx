@@ -141,7 +141,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
       {hasBanks && <AutoRefresh />}
 
       <PageHeader
-        title={`Good ${greeting}, ${greetingName}!`}
+        title={`Good ${greeting}, ${greetingName}`}
         actions={<DashboardHeaderActions activeView={activeView} prefsRaw={profileRow?.dashboard_prefs} />}
       />
 

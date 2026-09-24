@@ -5,6 +5,9 @@ import type {
 } from "@/lib/cash-flow";
 import { formatCurrency, titleCase } from "@/lib/format";
 
+/** One decimal at most, so a column of shares reads evenly (44.6%, 11.6%). */
+const shareFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
+
 export default function BreakdownBars({
   title,
   rows,
@@ -45,13 +48,13 @@ export default function BreakdownBars({
               <div className="mb-1.5 flex justify-between gap-4 text-sm">
                 <span className="font-medium">{label}</span>
                 <span data-money className="tabular-nums font-semibold">
-                  {formatCurrency(row.amount, currency)} ({row.pct}%)
+                  {formatCurrency(row.amount, currency)} ({shareFormat.format(row.pct)}%)
                 </span>
               </div>
               <progress
                 value={Math.max(0, Math.min(100, row.pct))}
                 max={100}
-                aria-label={`${label}, ${row.pct}% of ${title.toLowerCase()}`}
+                aria-label={`${label}, ${shareFormat.format(row.pct)}% of ${title.toLowerCase()}`}
                 // `appearance-none` is load-bearing: without it Blink/WebKit
                 // paint their own track and ignore `bg-panel-hover` and the
                 // radius. It also drops `accent-color`, so the fill is painted
@@ -86,7 +89,7 @@ export default function BreakdownBars({
                   <td data-money className="py-2 pr-3">
                     {formatCurrency(row.amount, currency)}
                   </td>
-                  <td className="py-2">{row.pct}%</td>
+                  <td className="py-2">{shareFormat.format(row.pct)}%</td>
                 </tr>
               ))}
             </tbody>
