@@ -13,6 +13,10 @@ Every authenticated page was rendered against a local `supabase start` stack wit
 - **UI consistency.** Dates and table headers no longer use Geist Mono (tabular sans figures instead); `titleCase` keeps joining words lowercase ("Food and Drink"); shared `RouteErrorView` for all four error boundaries; tighter sidebar so all nav fits at 900px; lone "Mine" scope switch hidden without a household (Budget, Recurring, matching Debt); Title Case page names (Debt Payoff, Receipt Inbox); sentence-case buttons; formatted dates instead of raw ISO/month keys; milestone badges read "Net worth"/"Emergency fund" without danger red; share percentages at one decimal; capped chart width so axis text no longer doubles in size; 404 page, admin header, login dividers.
 - Dependencies: patch/minor bumps applied. ESLint 10 and TypeScript 7 majors skipped (toolchain risk, `eslint-config-next` pairing).
 
+Follow-up the same day: a high-volume pass (23k-transaction user) and ten light plus ten dark colour palettes.
+The [review record](reviews/2026-09-24-ui-volume-and-themes.md) owns the details: bugs, volume findings, palette design and guard rails, and what is left.
+Settings → Display preferences were saved but never applied; they now are.
+
 
 ## 2026-09-08: PR #166 review remediation
 
