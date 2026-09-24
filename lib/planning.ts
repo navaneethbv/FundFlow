@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { classifyBalanceSheetAmount } from "@/lib/account-balance";
 import { formatCurrency } from "@/lib/format";
+import { formatDate } from "@/lib/format-date";
 import { matchesBudgetCategory } from "@/lib/finance-domain";
 import { addDays, addMonths, advanceFrequency, isoDate, parseDate } from "@/lib/date-utils";
 import { safeCompileRegex } from "@/lib/rules-engine";
@@ -556,7 +557,7 @@ export function detectSpendingAnomalies(input: SpendingAnomalyInput): SpendingAn
         kind: "large-transaction",
         transactionId: transaction.id,
         severity: "warning",
-        message: `${transaction.merchant} is larger than usual review threshold.`,
+        message: `${transaction.merchant} charged ${formatCurrency(transaction.amount)}, above your ${formatCurrency(input.largeTransactionThreshold)} review threshold.`,
       });
     }
 
@@ -582,7 +583,9 @@ export function detectSpendingAnomalies(input: SpendingAnomalyInput): SpendingAn
         kind: "duplicate-charge",
         transactionId: transaction.id,
         severity: "warning",
-        message: `${transaction.merchant} appears more than once with the same date and amount.`,
+        // Name the day and amount: without them, duplicates on different days
+        // rendered as identical lines on the review page.
+        message: `${transaction.merchant} charged ${formatCurrency(transaction.amount)} more than once on ${formatDate(transaction.date)}.`,
       });
     }
     seen.add(duplicateKey);

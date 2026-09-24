@@ -24,6 +24,24 @@ export function niceTicks(maxValue: number, tickCount = 4): number[] {
   return ticks;
 }
 
+/**
+ * Round ticks covering [minValue, maxValue], for axes that can go negative.
+ * Every tick is a multiple of one nice step, so zero is always a tick when the
+ * range crosses it. Offsetting `niceTicks(max - min)` by `min` instead labels
+ * the axis at arbitrary values like -$6K / -$16K and never marks zero.
+ */
+export function niceTickRange(minValue: number, maxValue: number, tickCount = 4): number[] {
+  const low = Math.min(minValue, maxValue, 0);
+  const high = Math.max(minValue, maxValue, 0);
+  if (!Number.isFinite(low) || !Number.isFinite(high) || high - low <= 0) return [0];
+  const step = niceTicks(high - low, tickCount)[1] ?? high - low;
+  const first = Math.floor(low / step);
+  const last = Math.ceil(high / step);
+  const ticks: number[] = [];
+  for (let i = first; i <= last; i += 1) ticks.push(Math.round(i * step * 100) / 100 || 0);
+  return ticks;
+}
+
 /** $1.2K / $340 / $2.1M — compact money for labels and tiles. */
 export function compactCurrency(value: number): string {
   const sign = value < 0 ? "-" : "";
