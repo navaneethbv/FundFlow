@@ -18,6 +18,7 @@ import { parseYnabCsv } from "@/lib/import-ynab";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { IN_FILTER_CHUNK_SIZE } from "@/lib/postgrest-limits";
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_ROWS = 20_000;
@@ -133,11 +134,11 @@ async function resolveSourceAccountMappings(
 ): Promise<Record<string, { account_id?: string; manual_account_id?: string }>> {
   if (sourceAccounts.length === 0) return {};
   const mappings: Array<Record<string, unknown>> = [];
-  for (let index = 0; index < sourceAccounts.length; index += DATABASE_CHUNK_SIZE) {
+  for (let index = 0; index < sourceAccounts.length; index += IN_FILTER_CHUNK_SIZE) {
     const { data, error } = await supabase
       .from("import_source_account_mappings")
       .select("source_account, account_id, manual_account_id")
-      .in("source_account", sourceAccounts.slice(index, index + DATABASE_CHUNK_SIZE))
+      .in("source_account", sourceAccounts.slice(index, index + IN_FILTER_CHUNK_SIZE))
       .eq("user_id", userId);
     if (error) throw error;
     mappings.push(...((data ?? []) as Array<Record<string, unknown>>));

@@ -20,6 +20,7 @@ import {
   isUndeliverableRecipient,
   UNDELIVERABLE_RECIPIENT_CODE,
 } from "@/lib/delivery-error";
+import { IN_FILTER_CHUNK_SIZE } from "@/lib/postgrest-limits";
 
 export type WeeklyRunResult = {
   users: number;
@@ -38,7 +39,7 @@ type WeeklyDeliveryOutcome = {
 type WeeklyProfile = { id: string; timezone: string | null };
 
 const PROFILE_PAGE_SIZE = 1_000;
-const PROFILE_ID_CHUNK_SIZE = 500;
+const PROFILE_ID_CHUNK_SIZE = IN_FILTER_CHUNK_SIZE;
 
 async function loadWeeklyProfiles(
   service: ReturnType<typeof createServiceClient>,

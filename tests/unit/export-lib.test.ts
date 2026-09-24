@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fetchPrivacySafeRows, isExportAllowed } from "@/lib/export";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { IN_FILTER_CHUNK_SIZE } from "@/lib/postgrest-limits";
 
 type ExportSeed = {
   data: unknown;
@@ -199,8 +200,10 @@ describe("lib/export", () => {
       const annotationChunks = client.calls.transaction_annotations.filter(
         (call) => call.method === "in" && call.args[0] === "transaction_id",
       );
-      expect(annotationChunks).toHaveLength(3);
-      expect(annotationChunks.every((call) => (call.args[1] as unknown[]).length <= 250)).toBe(true);
+      expect(annotationChunks).toHaveLength(4);
+      expect(
+        annotationChunks.every((call) => (call.args[1] as unknown[]).length <= IN_FILTER_CHUNK_SIZE),
+      ).toBe(true);
     });
 
     it.each(["transaction_annotations", "merchant_rules", "category_overrides"])(

@@ -8,9 +8,11 @@ import { normalizeImportCategory } from "@/lib/finance-domain";
 import { refreshInferredRecurringForUser } from "@/lib/recurring-inference";
 import { logError } from "@/lib/log";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { IN_FILTER_CHUNK_SIZE } from "@/lib/postgrest-limits";
 
 const UPSERT_CHUNK = 500;
-const QUERY_CHUNK = 500;
+/** `.in()` lists travel in the URL; see `IN_FILTER_CHUNK_SIZE`. */
+const QUERY_CHUNK = IN_FILTER_CHUNK_SIZE;
 const BATCH_PAGE_SIZE = 1_000;
 
 type ImportTarget = { accountId?: string; manualAccountId?: string };
@@ -404,7 +406,7 @@ async function persistSourceAccountMappings(
       manual_account_id: target.manualAccountId ?? null,
     };
   });
-  for (const mappingRowChunk of chunks(mappingRows)) {
+  for (const mappingRowChunk of chunks(mappingRows, UPSERT_CHUNK)) {
     const { error } = await service
       .from("import_source_account_mappings")
       .upsert(mappingRowChunk, { onConflict: "user_id,source_account" });
@@ -470,7 +472,7 @@ async function persistTransactionAnnotations(
       }))
       .filter((row) => row.transaction_id);
     if (annotationRows.length > 0) {
-      for (const annotationRowChunk of chunks(annotationRows)) {
+      for (const annotationRowChunk of chunks(annotationRows, UPSERT_CHUNK)) {
         const { error } = await service
           .from("transaction_annotations")
           .upsert(annotationRowChunk, { onConflict: "user_id,transaction_id" });

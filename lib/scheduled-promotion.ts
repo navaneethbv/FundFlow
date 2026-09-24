@@ -4,6 +4,7 @@ import {
   isDue,
   toPromotedTransactionRow,
 } from "@/lib/scheduled-transactions";
+import { chunkValues } from "@/lib/postgrest-limits";
 
 /**
  * Cron-side promotion of due scheduled transactions into the ledger.
@@ -65,20 +66,24 @@ export async function promoteDueScheduledTransactions(
     promoted += inserted?.length ?? 0;
   }
 
-  const { error: statusError } = await service
-    .from("scheduled_transactions")
-    .update({ status: "promoted" })
-    .in(
-      "id",
-      due.map((row) => String(row.id)),
-    )
-    // User-scoped (S-4): the ids come from this run's own read, but the
-    // update must still be unable to touch rows outside that set's owners.
-    .in(
-      "user_id",
-      [...new Set(due.map((row) => String(row.user_id)))],
-    );
-  if (statusError) return { promoted, failed: statusError.message };
+  // Chunked: a full PROMOTE_BATCH of ids in one `.in()` list overruns the
+  // request line (see IN_FILTER_CHUNK_SIZE).
+  for (const dueChunk of chunkValues(due)) {
+    const { error: statusError } = await service
+      .from("scheduled_transactions")
+      .update({ status: "promoted" })
+      .in(
+        "id",
+        dueChunk.map((row) => String(row.id)),
+      )
+      // User-scoped (S-4): the ids come from this run's own read, but the
+      // update must still be unable to touch rows outside that set's owners.
+      .in(
+        "user_id",
+        [...new Set(dueChunk.map((row) => String(row.user_id)))],
+      );
+    if (statusError) return { promoted, failed: statusError.message };
+  }
 
   return { promoted, failed: null };
 }
