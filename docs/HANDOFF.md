@@ -17,6 +17,18 @@ Follow-up the same day: a high-volume pass (23k-transaction user) and ten light 
 The [review record](reviews/2026-09-24-ui-volume-and-themes.md) owns the details: bugs, volume findings, palette design and guard rails, and what is left.
 Settings → Display preferences were saved but never applied; they now are.
 
+## 2026-09-21: unauthenticated webhook body limit
+
+A security review found that `/api/plaid/webhook` buffered the complete request
+body before signature verification. The route now rejects declared and streamed
+bodies above 256 KiB with HTTP 413, before parsing, signature-key lookup, or any
+item-scoped work. Regression tests cover both `Content-Length` and chunked-body
+bypasses. The focused webhook suites and typecheck passed. The dependency
+freshness and vulnerability registry checks were unavailable because this
+environment received HTTP 403 from npm; the full unit run and lint process were
+terminated by the environment without diagnostics, and `graphify` was not
+installed.
+Before merging PR #181, the full unit suite, lint, typecheck, and hosted CI passed.
 
 ## 2026-09-08: PR #166 review remediation
 
