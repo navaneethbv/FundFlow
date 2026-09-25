@@ -4,24 +4,24 @@ import { resolveDisplayName, greetingWord, greetingInTimezone } from "@/lib/gree
 describe("resolveDisplayName", () => {
   it("prefers displayName over everything else", () => {
     expect(
-      resolveDisplayName({ displayName: "Nav", fullName: "Navaneeth Rao", email: "nav@example.com" }),
-    ).toBe("Nav");
+      resolveDisplayName({ displayName: "Alex", fullName: "Alex Morgan", email: "alex@example.com" }),
+    ).toBe("Alex");
   });
 
   it("falls back to fullName when displayName is absent", () => {
-    expect(resolveDisplayName({ fullName: "Navaneeth Rao", email: "nav@example.com" })).toBe(
-      "Navaneeth Rao",
+    expect(resolveDisplayName({ fullName: "Alex Morgan", email: "alex@example.com" })).toBe(
+      "Alex Morgan",
     );
   });
 
   it("falls back to the local part of the email when both names are absent", () => {
-    expect(resolveDisplayName({ email: "nav@example.com" })).toBe("nav");
+    expect(resolveDisplayName({ email: "alex@example.com" })).toBe("alex");
   });
 
   it("treats blank strings the same as absent", () => {
     expect(
-      resolveDisplayName({ displayName: "   ", fullName: "", email: "nav@example.com" }),
-    ).toBe("nav");
+      resolveDisplayName({ displayName: "   ", fullName: "", email: "alex@example.com" }),
+    ).toBe("alex");
   });
 
   it("falls back to a generic greeting when nothing is available", () => {
