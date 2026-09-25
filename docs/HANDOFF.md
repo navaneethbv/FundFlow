@@ -106,7 +106,7 @@ The branch is not pushed, merged, or deployed, so production still shows the dup
 The user authorized applying the pending migrations before merging the application fixes.
 Two historical version IDs were corrected after exact stored-SQL comparison, and all eight missing migrations were applied through the linked CLI.
 The ledger now matches all 84 local versions.
-PR [#165](https://github.com/navaneethbv/FundFlow/pull/165) contains the fixes.
+PR #165 contains the fixes.
 Its clean-stack check exposed an absent account lookup grant, reproduced locally with default grants removed and fixed through an additional explicit column-grant migration.
 The follow-up also separates calendar loading and reconciliation rendering responsibilities and addresses the reported lint findings.
 Live RLS assertions and read-only authorization probes pass, and deployed RPC/trigger definitions match the locally tested database.
