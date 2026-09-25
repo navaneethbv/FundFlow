@@ -1,6 +1,18 @@
 # FundFlow — Session Handoff
 
-Last updated: 2026-09-08. Read this first to resume.
+Last updated: 2026-09-21. Read this first to resume.
+
+## 2026-09-21: unauthenticated webhook body limit
+
+A security review found that `/api/plaid/webhook` buffered the complete request
+body before signature verification. The route now rejects declared and streamed
+bodies above 256 KiB with HTTP 413, before parsing, signature-key lookup, or any
+item-scoped work. Regression tests cover both `Content-Length` and chunked-body
+bypasses. The focused webhook suites and typecheck passed. The dependency
+freshness and vulnerability registry checks were unavailable because this
+environment received HTTP 403 from npm; the full unit run and lint process were
+terminated by the environment without diagnostics, and `graphify` was not
+installed.
 
 ## 2026-09-08: PR #166 review remediation
 
