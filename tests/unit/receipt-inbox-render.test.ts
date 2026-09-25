@@ -90,7 +90,7 @@ describe("ReceiptInbox", () => {
       ],
     }));
 
-    expect(html).toContain('<span class="font-mono">2026-08-09</span>');
+    expect(html).toContain('<span class="tabular-nums">2026-08-09</span>');
     // react-dom/server serializes a bare boolean attribute as data-money="true".
     expect(html).toContain('<span data-money="true">$24.50</span>');
   });

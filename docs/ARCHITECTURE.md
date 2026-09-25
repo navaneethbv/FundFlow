@@ -73,6 +73,18 @@ flowchart TB
   extend its exception list to make a re-step pass.** The measurements behind
   all of this, and why seven slots is a ceiling rather than a preference, are
   in `docs/PALETTE.md`; read it before touching the palette.
+- `themes.ts` — the ten light and ten dark colour palettes (UI chrome only),
+  the one source of truth for the CSS the root layout injects, the Settings →
+  Display swatches, and `tests/unit/themes.test.ts`. The mode (`data-theme`)
+  still chooses light or dark; `data-palette-light` / `data-palette-dark` on
+  `<html>` choose each mode's palette, applied pre-paint from localStorage and
+  reconciled with `profiles.display_prefs` by `DisplayPrefsApplier`, so the
+  choice follows the user across devices. A palette may change background,
+  panels, borders and the accent family only, **never** a `--viz-*` slot or a
+  success/danger/warning token. The test holds every palette to the contrast
+  the default already clears: AA for text and button labels (both gradient
+  stops), and no chart slot weaker against its panel than on the default.
+  Add a palette there, never as hand-written CSS.
 - `dashboard-widgets.ts` — Phase 8 widget registry and prefs. Layout lives in
   the existing client-writable `profiles.dashboard_prefs` JSON (no migration),
   shared with `sidebarCollapsed` and the legacy hide flags — so every writer

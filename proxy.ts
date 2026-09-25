@@ -17,15 +17,32 @@ function isPublicPage(pathname: string): boolean {
   );
 }
 
-function supabaseHost(): string {
-  return new URL(publicEnv.supabaseUrl).host;
+const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/**
+ * The Supabase origins the browser may reach. Always https/wss, except a
+ * plain-http loopback URL (the `supabase start` local stack that
+ * docker-compose.selfhost.yml documents): forcing https there made every
+ * browser auth call a CSP violation, so local sign-in could never succeed.
+ * A non-loopback http URL still gets https, as before.
+ */
+export function supabaseConnectSources(supabaseUrl = publicEnv.supabaseUrl): {
+  sources: string;
+  insecureLoopback: boolean;
+} {
+  const url = new URL(supabaseUrl);
+  const insecureLoopback =
+    url.protocol === "http:" && LOOPBACK_HOSTNAMES.has(url.hostname);
+  return insecureLoopback
+    ? { sources: `http://${url.host} ws://${url.host}`, insecureLoopback }
+    : { sources: `https://${url.host} wss://${url.host}`, insecureLoopback };
 }
 
 export function buildCsp(
   nonce: string,
   isDev = process.env.NODE_ENV === "development",
 ): string {
-  const host = supabaseHost();
+  const supabase = supabaseConnectSources();
   return [
     `default-src 'self'`,
     // Nonce + strict-dynamic lets Next's scripts run and load Plaid Link.
@@ -36,13 +53,15 @@ export function buildCsp(
     `style-src 'self' 'unsafe-inline'`,
     `img-src 'self' data: https:`,
     `font-src 'self' data:`,
-    `connect-src 'self' https://*.plaid.com https://${host} wss://${host}`,
+    `connect-src 'self' https://*.plaid.com ${supabase.sources}`,
     `frame-src https://*.plaid.com`,
     `object-src 'none'`,
     `base-uri 'self'`,
     `form-action 'self'`,
     `frame-ancestors 'none'`,
-    `upgrade-insecure-requests`,
+    // Upgrading would rewrite the loopback http Supabase URL to https, which
+    // the local stack does not serve.
+    ...(supabase.insecureLoopback ? [] : [`upgrade-insecure-requests`]),
   ].join("; ");
 }
 

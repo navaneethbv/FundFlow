@@ -6,6 +6,8 @@ import Field from "@/components/ui/Field";
 import Panel from "@/components/ui/Panel";
 import Select from "@/components/ui/Select";
 import ThemeToggle from "@/components/ThemeToggle";
+import PalettePicker from "@/components/settings/PalettePicker";
+import { applyPalette } from "@/lib/theme-client";
 import type { DisplayPrefs } from "@/components/settings/settings-nav";
 
 /**
@@ -18,6 +20,28 @@ export default function DisplaySection({ initialPrefs }: Readonly<{ initialPrefs
   const [prefs, setPrefs] = useState(initialPrefs);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+
+  function applyThemePreference(theme: DisplayPrefs["theme"]) {
+    const resolved =
+      theme === "system"
+        ? window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light"
+        : theme;
+    document.documentElement.dataset.theme = resolved;
+    try {
+      if (theme === "system") localStorage.removeItem("fundflow-theme");
+      else localStorage.setItem("fundflow-theme", theme);
+    } catch {
+      // Applies for this page even when storage is blocked.
+    }
+  }
+
+  function choosePalette(mode: "light" | "dark", id: string) {
+    // Paint first, then persist: the preview is the point of the picker.
+    applyPalette(mode, id);
+    void update(mode === "light" ? { lightPalette: id } : { darkPalette: id });
+  }
 
   async function update(patch: Partial<DisplayPrefs>) {
     setBusy(true);
@@ -46,13 +70,36 @@ export default function DisplaySection({ initialPrefs }: Readonly<{ initialPrefs
 
   return (
     <Panel title="Display" eyebrow="Appearance">
-      <div className="space-y-3">
+      <div className="space-y-6">
+        <div className="space-y-5">
+          <p className="text-sm text-muted">
+            Pick a palette for each mode. Light and dark keep their own choice, and it follows you to
+            every device you sign in on.
+          </p>
+          <PalettePicker
+            mode="light"
+            value={prefs.lightPalette}
+            onChange={(id) => choosePalette("light", id)}
+            disabled={busy}
+          />
+          <PalettePicker
+            mode="dark"
+            value={prefs.darkPalette}
+            onChange={(id) => choosePalette("dark", id)}
+            disabled={busy}
+          />
+        </div>
+        <div className="space-y-3 border-t border-panel-border pt-5">
         <Field label="Theme" htmlFor="display-theme">
           <div className="flex items-center gap-3">
             <Select
               id="display-theme"
               value={prefs.theme}
-              onChange={(e) => update({ theme: e.target.value as DisplayPrefs["theme"] })}
+              onChange={(e) => {
+                const theme = e.target.value as DisplayPrefs["theme"];
+                applyThemePreference(theme);
+                void update({ theme });
+              }}
               disabled={busy}
               className="max-w-40"
             >
@@ -98,6 +145,7 @@ export default function DisplaySection({ initialPrefs }: Readonly<{ initialPrefs
           />
           {" "}Blur amounts by default when a session starts
         </label>
+        </div>
         {status && <p className="text-xs text-success">{status}</p>}
       </div>
     </Panel>

@@ -71,7 +71,7 @@ describe("RegisterRow", () => {
 
   it("sets the date in the mono face", () => {
     const html = renderRow();
-    expect(html).toContain('class="block text-xs text-muted font-mono"');
+    expect(html).toContain('class="block text-xs text-muted tabular-nums"');
   });
 
   it("carries the amount inside the privacy-blur hook", () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getWeeklyReportData } from "@/lib/weekly-report-data";
 import { clientStub } from "../fixtures/supabase-query";
+import { IN_FILTER_CHUNK_SIZE } from "@/lib/postgrest-limits";
 
 /**
  * A Supabase client whose `transactions` table serves `range` windows from a
@@ -106,11 +107,10 @@ describe("getWeeklyReportData", () => {
   it("chunks split lookups so no in() call receives the whole set or overruns the request line", async () => {
     const { supabase, splitInArgs } = paginatedTransactionsClient(1001);
     await getWeeklyReportData(supabase as never, "user-1", period);
-    expect(splitInArgs).toHaveLength(5);
-    expect(splitInArgs.map((chunk) => chunk.length)).toEqual([250, 250, 250, 250, 1]);
-    for (const chunk of splitInArgs) {
-      expect(chunk.length).toBeLessThanOrEqual(250);
-    }
+    expect(splitInArgs.map((chunk) => chunk.length)).toEqual([
+      ...Array.from({ length: 6 }, () => IN_FILTER_CHUNK_SIZE),
+      1001 - 6 * IN_FILTER_CHUNK_SIZE,
+    ]);
   });
 
   it("propagates a failed split chunk with context", async () => {

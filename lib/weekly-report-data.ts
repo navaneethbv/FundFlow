@@ -1,4 +1,5 @@
 import "server-only";
+import { IN_FILTER_CHUNK_SIZE } from "@/lib/postgrest-limits";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MerchantRule } from "@/lib/planning";
 import type { WeeklyReportPeriod } from "@/lib/report-period";
@@ -19,9 +20,9 @@ function throwIfError(error: { message?: string } | null, context: string): void
 const PAGE_SIZE = 1000;
 
 /** Chunk size for the `transaction_splits` `.in()` list: PostgREST builds the
- *  list into the request URL, and the whole period's ids at once overruns it
- *  (500 ids ≈ 18KB overflows Node's 16KB header limit). */
-const SPLIT_CHUNK_SIZE = 250;
+ *  list into the request URL, and the whole period's ids at once overruns it.
+ *  See `IN_FILTER_CHUNK_SIZE` for the budget. */
+const SPLIT_CHUNK_SIZE = IN_FILTER_CHUNK_SIZE;
 
 function chunks<T>(values: T[], size: number): T[][] {
   const result: T[][] = [];

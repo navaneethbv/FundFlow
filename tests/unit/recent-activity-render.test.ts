@@ -75,7 +75,7 @@ describe("RecentActivity", () => {
         accountNames: new Map([["acct-1", "Demo Checking **0001"]]),
       }),
     );
-    expect(html).toContain("Food And Drink");
+    expect(html).toContain("Food and Drink");
     expect(html).toContain("Demo Checking");
   });
 });

@@ -10,6 +10,8 @@ import { Eye, EyeOff } from "@/components/ui/icons";
  * data still reaches the browser; this is a glance shield, not a lock.
  */
 const STORAGE_KEY = "fundflow-privacy";
+/** Fired by DisplayPrefsApplier when a session starts blurred by default. */
+export const PRIVACY_CHANGE_EVENT = "fundflow-privacy-change";
 
 function applyPrivacy(blurred: boolean) {
   document.documentElement.dataset.privacy = blurred ? "blur" : "";
@@ -21,14 +23,17 @@ export default function PrivacyToggle() {
 
   useEffect(() => {
     let active = true;
-    Promise.resolve().then(() => {
+    const sync = () => {
       if (!active) return;
       const stored = localStorage.getItem(STORAGE_KEY) === "blur";
       document.documentElement.dataset.privacy = stored ? "blur" : "";
       setBlurred(stored);
-    });
+    };
+    Promise.resolve().then(sync);
+    window.addEventListener(PRIVACY_CHANGE_EVENT, sync);
     return () => {
       active = false;
+      window.removeEventListener(PRIVACY_CHANGE_EVENT, sync);
     };
   }, []);
 

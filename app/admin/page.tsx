@@ -69,6 +69,7 @@ export default async function AdminObservabilityPage() {
   if (profile?.role !== "admin") {
     return (
       <AppShell active="settings" email={user?.email}>
+        <PageHeader title="Observability" />
         <Panel title="Admin access required" tone="warning">
           <p className="text-sm text-muted">This observability dashboard is limited to admin users.</p>
         </Panel>

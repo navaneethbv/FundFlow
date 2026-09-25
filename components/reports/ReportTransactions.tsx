@@ -63,7 +63,7 @@ function DayHeaderRow({
       <th
         scope="row"
         colSpan={COLUMN_COUNT - 1}
-        className="py-1.5 pr-3 text-left font-mono text-xs font-semibold text-muted"
+        className="py-1.5 pr-3 text-left tabular-nums text-xs font-semibold text-muted"
       >
         {formatDate(group.date)}
       </th>
@@ -133,7 +133,7 @@ export default function ReportTransactions({
               : "Transactions matching the current report filters."}
           </caption>
           <thead>
-            <tr className="text-left font-mono text-muted">
+            <tr className="text-left tabular-nums text-muted">
               <th scope="col" className="py-2 pr-3 font-medium">Date</th>
               <th scope="col" className="py-2 pr-3 font-medium">Merchant</th>
               <th scope="col" className="py-2 pr-3 font-medium">Category</th>
@@ -157,7 +157,7 @@ export default function ReportTransactions({
                       striped && "bg-panel-2",
                     )}
                   >
-                    <td className="py-2 pr-3 whitespace-nowrap font-mono text-muted">
+                    <td className="py-2 pr-3 whitespace-nowrap tabular-nums text-muted">
                       {formatDate(row.date)}
                     </td>
                     <td className="py-2 pr-3">

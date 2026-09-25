@@ -178,11 +178,14 @@ export default function LedgerStrip({
   const hasPicker = accountItems.length > 0;
 
   const eyebrowRow = (
-    <div className="eyebrow font-mono mb-4 flex flex-wrap items-center gap-x-2 gap-y-1">
+    <div className="eyebrow tabular-nums mb-4 flex flex-wrap items-center gap-x-2 gap-y-1">
       <span>{monthLabel}</span>
       <span aria-hidden="true">&middot;</span>
       {hasPicker ? (
-        <DropdownButton label={accountLabel} items={accountItems} align="left" />
+        // The eyebrow's wide tracking and caps are for labels, not a control.
+        <span className="normal-case tracking-normal">
+          <DropdownButton label={accountLabel} items={accountItems} align="left" />
+        </span>
       ) : (
         <span>{accountLabel}</span>
       )}
@@ -265,6 +268,9 @@ export default function LedgerStrip({
                   data-ledger-day={day.date}
                   role="img"
                   aria-label={daySummary(day, currency)}
+                  // A busy day's label names only its largest entry; the
+                  // hover summary carries the full count and totals.
+                  title={daySummary(day, currency)}
                   className="absolute inset-y-0"
                   style={{ left: `${left.toFixed(4)}%` }}
                 >
@@ -305,7 +311,7 @@ export default function LedgerStrip({
           </div>
         </div>
         <div className="flex items-baseline justify-between gap-3 border-t border-dashed border-panel-border pt-3 lg:w-28 lg:flex-col lg:items-end lg:justify-center lg:border-t-0 lg:border-l lg:pt-0 lg:pl-4 lg:text-right">
-          <span className="eyebrow font-mono">
+          <span className="eyebrow tabular-nums">
             {isCurrentMonth(month) ? "Today" : "Month end"}
           </span>
           <Money

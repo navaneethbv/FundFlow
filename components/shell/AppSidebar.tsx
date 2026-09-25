@@ -13,6 +13,8 @@ import { createClient } from "@/lib/supabase/server";
 import { countUnreviewedStreams } from "@/lib/recurring-page";
 import { resolveDisplayName } from "@/lib/greeting";
 import type { DashboardPrefs } from "@/components/settings/DashboardPrefsSection";
+import DisplayPrefsApplier from "@/components/shell/DisplayPrefsApplier";
+import { parseDisplayPrefs, type DisplayPrefs } from "@/components/settings/settings-nav";
 
 export type { AppShellActive };
 
@@ -44,9 +46,14 @@ function NavLink({
         "inline-flex items-center gap-3 rounded-field text-sm font-semibold transition-colors duration-150 focus-visible:outline-2",
         compact
           ? "min-h-11 shrink-0 px-3 py-2"
-          : "w-full px-3 py-2.5 md:justify-center md:px-0 lg:justify-start lg:px-3 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0",
+          : "w-full px-3 py-2 md:justify-center md:px-0 lg:justify-start lg:px-3 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0",
         isActive
-          ? "bg-accent-soft text-accent"
+          ? cn(
+              "bg-accent-soft text-accent",
+              // Brand-coloured edge marker on the expanded rail.
+              !compact &&
+                "relative lg:before:absolute lg:before:inset-y-2 lg:before:left-0 lg:before:w-[3px] lg:before:rounded-full lg:before:bg-accent-strong group-data-[collapsed=true]/sidebar:before:hidden",
+            )
           : "text-muted hover:bg-panel-hover hover:text-foreground",
       )}
     >
@@ -90,6 +97,7 @@ export default async function AppSidebar({
   let displayName = resolveDisplayName({ email });
   let avatarUrl: string | null = null;
   let unreviewedRecurringCount = 0;
+  let displayPrefs: DisplayPrefs | null = null;
 
   // A loading.tsx fallback (RouteSkeleton) mounts this same shell so
   // navigation never unmounts the frame, but it must paint instantly — so it
@@ -106,10 +114,11 @@ export default async function AppSidebar({
     if (user) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("dashboard_prefs, display_name, full_name, avatar_path")
+        .select("dashboard_prefs, display_prefs, display_name, full_name, avatar_path")
         .eq("id", user.id)
         .maybeSingle();
       const dashboardPrefs = (profile?.dashboard_prefs ?? {}) as DashboardPrefs;
+      displayPrefs = parseDisplayPrefs(profile?.display_prefs);
       if (typeof dashboardPrefs.sidebarCollapsed === "boolean") {
         initialCollapsed = dashboardPrefs.sidebarCollapsed === true;
       }
@@ -148,45 +157,48 @@ export default async function AppSidebar({
     item.key === "recurring" ? unreviewedRecurringCount : undefined;
 
   return (
-    <SidebarShell
-      initialCollapsed={initialCollapsed}
-      utilityIcons={<SidebarUtilityIcons />}
-      bottomBlock={
-        <div className="space-y-1">
-          <AskAiLowerRailLink />
-          <UserMenu displayName={displayName} email={email} avatarUrl={avatarUrl} />
-        </div>
-      }
-      mobileNav={
-        <MobileNavigation
-          active={active}
-          items={enabledItems.map((item) => ({
-            key: item.key,
-            label: item.label,
-            href: item.href,
-            category: item.category,
-            badge: badgeFor(item),
-          }))}
-        />
-      }
-    >
-      <nav aria-label="Primary" className="space-y-1">
-        {primaryItems.map((item) => (
-          <NavLink key={item.key} item={item} active={active} />
-        ))}
-        <p className="hidden px-3 pb-1 pt-4 text-[0.65rem] font-bold uppercase tracking-[0.16em] text-muted lg:block group-data-[collapsed=true]/sidebar:hidden">
-          Planning
-        </p>
-        {planningItems.map((item) => (
-          <NavLink key={item.key} item={item} active={active} badge={badgeFor(item)} />
-        ))}
-        <p className="hidden px-3 pb-1 pt-4 text-[0.65rem] font-bold uppercase tracking-[0.16em] text-muted lg:block group-data-[collapsed=true]/sidebar:hidden">
-          Manage
-        </p>
-        {manageItems.map((item) => (
-          <NavLink key={item.key} item={item} active={active} />
-        ))}
-      </nav>
-    </SidebarShell>
+    <>
+      {displayPrefs && <DisplayPrefsApplier prefs={displayPrefs} />}
+      <SidebarShell
+        initialCollapsed={initialCollapsed}
+        utilityIcons={<SidebarUtilityIcons />}
+        bottomBlock={
+          <div className="space-y-1">
+            <AskAiLowerRailLink />
+            <UserMenu displayName={displayName} email={email} avatarUrl={avatarUrl} />
+          </div>
+        }
+        mobileNav={
+          <MobileNavigation
+            active={active}
+            items={enabledItems.map((item) => ({
+              key: item.key,
+              label: item.label,
+              href: item.href,
+              category: item.category,
+              badge: badgeFor(item),
+            }))}
+          />
+        }
+      >
+        <nav aria-label="Primary" className="space-y-0.5">
+          {primaryItems.map((item) => (
+            <NavLink key={item.key} item={item} active={active} />
+          ))}
+          <p className="hidden px-3 pb-1 pt-4 text-[0.65rem] font-bold uppercase tracking-[0.16em] text-muted lg:block group-data-[collapsed=true]/sidebar:hidden">
+            Planning
+          </p>
+          {planningItems.map((item) => (
+            <NavLink key={item.key} item={item} active={active} badge={badgeFor(item)} />
+          ))}
+          <p className="hidden px-3 pb-1 pt-4 text-[0.65rem] font-bold uppercase tracking-[0.16em] text-muted lg:block group-data-[collapsed=true]/sidebar:hidden">
+            Manage
+          </p>
+          {manageItems.map((item) => (
+            <NavLink key={item.key} item={item} active={active} />
+          ))}
+        </nav>
+      </SidebarShell>
+    </>
   );
 }

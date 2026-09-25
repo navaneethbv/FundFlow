@@ -36,7 +36,7 @@ function scopeHref(
 }
 
 export const metadata = {
-  title: "Debt payoff",
+  title: "Debt Payoff",
 };
 
 export default async function DebtPage({ searchParams }: Readonly<PageProps>) {
@@ -68,7 +68,7 @@ export default async function DebtPage({ searchParams }: Readonly<PageProps>) {
     <AppShell active="debt" email={user.email}>
       <div className="space-y-6">
         <PageHeader
-          title="Debt payoff"
+          title="Debt Payoff"
           actions={
             visibleHouseholdIds.length > 0 ? (
               <SegmentedControl

@@ -132,7 +132,7 @@ describe("Accounts page components", () => {
     );
 
     expect(html).toContain(
-      "Daily balance history starts on 2026-07-29. Earlier history is unavailable.",
+      "Daily balance history starts on Jul 29, 2026. Earlier history is unavailable.",
     );
     expect(html).toContain("View daily balance table");
     expect(html).toContain("<table");

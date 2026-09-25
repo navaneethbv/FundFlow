@@ -3,6 +3,7 @@ import type { BreakdownDimension } from "@/lib/cash-flow";
 import type { SankeyLink, SankeyNode } from "@/lib/sankey";
 import { subcategoryLabel } from "@/lib/drilldown";
 import { titleCase } from "@/lib/format";
+import { foldTail } from "@/lib/chart-utils";
 import { firstSearchParam } from "@/lib/search-params";
 
 /**
@@ -131,6 +132,38 @@ function collectSankeyTotals(txns: CanonicalFinanceTransaction[]): {
   return { incomeByCategory, expenseByGroup, expenseByGroupCategory };
 }
 
+/**
+ * Tail folding for the Sankey. Unbounded, a busy year drew every expense
+ * group and every category inside it: a dozen groups and a pile of hairline,
+ * unlabelled category slivers beneath them. Groups keep the seven colour
+ * slots the chart has; each group keeps its three largest categories; the
+ * rest of each level folds into one node, so the diagram's size no longer
+ * grows with transaction volume.
+ */
+export const SANKEY_MAX_GROUPS = 8;
+export const SANKEY_MAX_CATEGORIES_PER_GROUP = 4;
+export const SANKEY_MAX_INCOME_SOURCES = 5;
+const FOLDED_GROUP_KEY = "__FOLDED_GROUPS__";
+const FOLDED_CATEGORY_KEY = "__FOLDED_CATEGORIES__";
+const FOLDED_INCOME_KEY = "__FOLDED_INCOME__";
+
+/** A category under this share of its group folds even inside the top three. */
+export const SANKEY_MIN_CATEGORY_SHARE = 0.08;
+
+function groupCategoryRows(categories: LabeledTotals): RankedEntry[] {
+  const rows = ranked(categories);
+  const total = rows.reduce((sum, row) => sum + row.amount, 0);
+  const large = (row: RankedEntry) => row.amount >= total * SANKEY_MIN_CATEGORY_SHARE;
+  // Everything already fits: leave it alone rather than renaming a lone tail.
+  if (rows.length <= SANKEY_MAX_CATEGORIES_PER_GROUP && rows.slice(1).every(large)) return rows;
+  // Ranked descending, so the kept rows are a prefix; the largest always stays.
+  const kept = rows
+    .slice(0, SANKEY_MAX_CATEGORIES_PER_GROUP - 1)
+    .filter((row, index) => index === 0 || large(row));
+  const folded = rows.slice(kept.length).reduce((sum, row) => sum + row.amount, 0);
+  return [...kept, { key: FOLDED_CATEGORY_KEY, display: "Smaller categories", amount: folded }];
+}
+
 function buildSankeyNodes(
   incomeRows: RankedEntry[],
   groupRows: RankedEntry[],
@@ -172,7 +205,7 @@ function buildSankeyNodes(
   for (const group of groupRows) {
     const categories = expenseByGroupCategory.get(group.key);
     if (!categories) continue;
-    for (const entry of ranked(categories)) nodes.push({
+    for (const entry of groupCategoryRows(categories)) nodes.push({
       id: `cat:${group.key}::${entry.key}`,
       label: entry.display,
       value: round2(entry.amount),
@@ -204,7 +237,7 @@ function buildSankeyLinks(
   for (const group of groupRows) {
     const categories = expenseByGroupCategory.get(group.key);
     if (!categories) continue;
-    for (const entry of ranked(categories)) links.push({
+    for (const entry of groupCategoryRows(categories)) links.push({
       source: `grp:${group.key}`,
       target: `cat:${group.key}::${entry.key}`,
       value: round2(entry.amount),
@@ -228,8 +261,18 @@ export function buildCashFlowSankeyData(
 ): { nodes: SankeyNode[]; links: SankeyLink[] } {
   const { incomeByCategory, expenseByGroup, expenseByGroupCategory } = collectSankeyTotals(txns);
 
-  const incomeRows = ranked(incomeByCategory);
-  const groupRows = ranked(expenseByGroup);
+  const incomeRows = foldTail(ranked(incomeByCategory), SANKEY_MAX_INCOME_SOURCES, (amount) => ({
+    key: FOLDED_INCOME_KEY,
+    display: "Other income",
+    amount,
+  }));
+  // A folded group carries no category breakdown: it has no entry in
+  // `expenseByGroupCategory`, so it ends in the group column.
+  const groupRows = foldTail(ranked(expenseByGroup), SANKEY_MAX_GROUPS, (amount) => ({
+    key: FOLDED_GROUP_KEY,
+    display: "Everything else",
+    amount,
+  }));
   const totalIncome = round2(
     incomeRows.reduce((sum, entry) => sum + entry.amount, 0),
   );

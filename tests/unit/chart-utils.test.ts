@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  niceTickRange,
   niceTicks,
   compactCurrency,
   linePath,
@@ -110,5 +111,25 @@ describe("foldTail", () => {
 
   it("leaves short lists untouched", () => {
     expect(foldTail(ranked.slice(0, 3), 6, (amount) => ({ label: "Other", amount }))).toHaveLength(3);
+  });
+});
+
+describe("niceTickRange", () => {
+  it("lands every tick on a round multiple and includes zero across a negative range", () => {
+    // The forecasting axis once read $4K / -$6K / -$16K / -$26K.
+    const ticks = niceTickRange(-26_018.47, 3_580.25);
+    expect(ticks).toContain(0);
+    expect(ticks[0]).toBeLessThanOrEqual(-26_018.47);
+    expect(ticks.at(-1)).toBeGreaterThanOrEqual(3_580.25);
+    const step = ticks[1]! - ticks[0]!;
+    for (const tick of ticks) expect(Math.abs(tick % step)).toBe(0);
+  });
+
+  it("keeps an all-positive range anchored at zero", () => {
+    expect(niceTickRange(120, 970)).toEqual([0, 250, 500, 750, 1000]);
+  });
+
+  it("returns a single zero tick for an empty range", () => {
+    expect(niceTickRange(0, 0)).toEqual([0]);
   });
 });

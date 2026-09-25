@@ -135,7 +135,14 @@ describe("coverage boost r6 n1: settings/profile route", () => {
       const body = await res.json();
       expect(body).toEqual({
         ok: true,
-        prefs: { theme: "dark", density: "compact", defaultPrivacyBlur: false, reducedMotion: "system" },
+        prefs: {
+          theme: "dark",
+          density: "compact",
+          defaultPrivacyBlur: false,
+          reducedMotion: "system",
+          lightPalette: "ember",
+          darkPalette: "ember",
+        },
       });
       expect(mockWriteAudit).toHaveBeenCalledWith(
         expect.objectContaining({ userId: "u1", action: "display_prefs_updated", metadata: { fields: ["theme"] } }),

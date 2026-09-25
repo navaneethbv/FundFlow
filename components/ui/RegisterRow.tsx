@@ -74,7 +74,7 @@ export default function RegisterRow({
           {amountPrefix(amount)}
           {formatCurrency(Math.abs(amount), currency)}
         </span>
-        <span className="block text-xs text-muted font-mono">{formatDate(date)}</span>
+        <span className="block text-xs text-muted tabular-nums">{formatDate(date)}</span>
       </span>
       {trailing}
     </li>

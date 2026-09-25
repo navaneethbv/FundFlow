@@ -5,7 +5,7 @@ import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { needsMfaStepUp } from "@/lib/mfa";
 import { notifyNewDeviceLogin } from "@/lib/login-alert";
-import { logError } from "@/lib/log";
+import { errorMessage, logError } from "@/lib/log";
 import { decodeSessionId } from "@/lib/session-token";
 import { safeEqual } from "@/lib/crypto";
 import { serverEnv } from "@/lib/env.server";
@@ -127,8 +127,7 @@ export function errorResponse(
   logError(context, error);
   let message: string;
   if (isProd) message = "Something went wrong. Please try again.";
-  else if (error instanceof Error) message = error.message;
-  else message = String(error);
+  else message = errorMessage(error);
   return NextResponse.json({ error: message }, { status });
 }
 

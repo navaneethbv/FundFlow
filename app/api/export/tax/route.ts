@@ -12,6 +12,7 @@ import { toTaxCsv } from "@/lib/export-formats";
 import { toCsv } from "@/lib/csv";
 import { createServiceClient } from "@/lib/supabase/service";
 import { writeAudit, getClientIp } from "@/lib/audit";
+import { IN_FILTER_CHUNK_SIZE } from "@/lib/postgrest-limits";
 
 /**
  * The yearly tax export: every transaction in a calendar year the user tagged
@@ -34,7 +35,7 @@ import { writeAudit, getClientIp } from "@/lib/audit";
  */
 
 const YEAR_REGEX = /^\d{4}$/;
-const ANNOTATION_CHUNK_SIZE = 250;
+const ANNOTATION_CHUNK_SIZE = IN_FILTER_CHUNK_SIZE;
 
 export async function GET(request: NextRequest) {
   const auth = await requireUser();

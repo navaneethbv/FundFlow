@@ -9,6 +9,7 @@ const EXTRA_COMMANDS = [
   { label: "Plan view", href: dashboardUrl({ view: "plan" }), hint: "Budgets, bills, debt" },
   { label: "Wealth view", href: dashboardUrl({ view: "wealth" }), hint: "Net worth and breakdowns" },
   { label: "Review", href: "/review", hint: "Monthly review" },
+  { label: "Color themes", href: "/settings?section=display", hint: "Ten light and ten dark palettes" },
   { label: "Export CSV", href: "/api/export/csv", hint: "Privacy-safe download" },
   { label: "Export QIF", href: "/api/export/qif", hint: "Quicken/GnuCash download" },
   { label: "Tax CSV", href: "/api/export/csv?scope=tax", hint: "Tax-tagged download" },

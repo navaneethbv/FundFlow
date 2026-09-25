@@ -121,8 +121,16 @@ describe("titleCase", () => {
   });
 
   it("converts snake_case words to space-separated title case", () => {
-    expect(titleCase("FOOD_AND_DRINK")).toBe("Food And Drink");
+    expect(titleCase("FOOD_AND_DRINK")).toBe("Food and Drink");
     expect(titleCase("some_random_category_name")).toBe("Some Random Category Name");
+  });
+
+  it("keeps joining words lowercase except at the start, and leaves Plaid directions capitalized", () => {
+    expect(titleCase("RENT_AND_UTILITIES")).toBe("Rent and Utilities");
+    expect(titleCase("the_basics")).toBe("The Basics");
+    expect(titleCase("TRANSFER_IN")).toBe("Transfer In");
+    expect(titleCase("roth ira")).toBe("Roth IRA");
+    expect(titleCase("hsa")).toBe("HSA");
   });
 
   it("handles a mix of spaces and underscores", () => {

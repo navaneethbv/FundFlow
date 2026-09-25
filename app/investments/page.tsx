@@ -113,7 +113,7 @@ export default async function InvestmentsPage() {
       <EmptyState
         headingLevel={2}
         title="No investment accounts yet"
-        description="Connect a brokerage through Settings → Banks, or add a manual holding once you have an account to attach it to."
+        description="Connect a brokerage through Settings → Institutions, or add a manual holding once you have an account to attach it to."
       />
     );
   } else if (!hasHoldings) {

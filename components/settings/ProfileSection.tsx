@@ -160,7 +160,7 @@ export default function ProfileSection({
         {status && <p className="text-sm text-success">{status}</p>}
         <div className="pt-1">
           <Button type="submit" size="md" disabled={busy}>
-            {busy ? "Saving…" : "Update Profile"}
+            {busy ? "Saving…" : "Update profile"}
           </Button>
         </div>
       </form>

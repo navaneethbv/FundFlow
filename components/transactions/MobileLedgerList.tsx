@@ -60,7 +60,7 @@ function DayHeader({
       data-ledger-day-header={group.date}
       className="flex items-center justify-between gap-3 bg-panel/60 px-4 py-1.5 text-xs font-semibold text-muted"
     >
-      <span className="font-mono">{formatDate(group.date)}</span>
+      <span className="tabular-nums">{formatDate(group.date)}</span>
       {group.showNet && (
         <span data-money className="font-normal" style={amountColor(group.net)}>
           {signedAmount(group.net, currency)} net
@@ -165,7 +165,7 @@ function LedgerCard({
         <p className="mt-0.5 text-xs text-muted">
           {!grouped && (
             <>
-              <span className="font-mono">{formatDate(row.date)}</span>
+              <span className="tabular-nums">{formatDate(row.date)}</span>
               {" · "}
             </>
           )}

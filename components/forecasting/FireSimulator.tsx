@@ -110,7 +110,7 @@ export default function FireSimulator({
               </span>
               <Badge tone="neutral">Basic</Badge>
             </div>
-            <div data-money className="mt-2 text-xl font-bold font-mono">
+            <div data-money className="mt-2 text-xl font-bold tabular-nums">
               {formatCurrency(simulation.milestones.leanFireTarget)}
             </div>
             <p className="mt-1 text-xs text-muted">Essential expenses covered</p>
@@ -123,7 +123,7 @@ export default function FireSimulator({
               </span>
               <Badge tone="accent">25x Spend</Badge>
             </div>
-            <div data-money className="mt-2 text-xl font-bold text-accent font-mono">
+            <div data-money className="mt-2 text-xl font-bold text-accent tabular-nums">
               {formatCurrency(simulation.milestones.standardFireTarget)}
             </div>
             <p className="mt-1 text-xs text-muted">
@@ -140,7 +140,7 @@ export default function FireSimulator({
               </span>
               <Badge tone="success">Abundant</Badge>
             </div>
-            <div data-money className="mt-2 text-xl font-bold font-mono">
+            <div data-money className="mt-2 text-xl font-bold tabular-nums">
               {formatCurrency(simulation.milestones.fatFireTarget)}
             </div>
             <p className="mt-1 text-xs text-muted">High discretionary lifestyle</p>
@@ -242,7 +242,7 @@ export default function FireSimulator({
                 className="flex items-center gap-2 rounded-field bg-panel-2 px-3 py-1.5 text-xs font-medium"
               >
                 <span>{ev.name}</span>
-                <span className="font-mono text-muted">(Month {ev.monthOffset})</span>
+                <span className="tabular-nums text-muted">(Month {ev.monthOffset})</span>
                 <span data-money className={ev.oneTimeCashFlow >= 0 ? "text-success font-bold" : "text-danger font-bold"}>
                   {ev.oneTimeCashFlow >= 0 ? "+" : ""}
                   {formatCurrency(ev.oneTimeCashFlow)}

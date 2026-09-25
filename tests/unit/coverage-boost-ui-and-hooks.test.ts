@@ -224,6 +224,8 @@ describe("Settings Nav Validation Branches", () => {
       theme: "light",
       density: "compact",
       defaultPrivacyBlur: false,
+      lightPalette: "ember",
+      darkPalette: "ember",
       reducedMotion: "system",
     });
   });

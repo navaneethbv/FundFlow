@@ -77,7 +77,7 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
   return (
     <AppShell active="reports" email={user?.email}>
       <PageHeader
-        title={`${formatMonth(data.selectedMonth)} review${isCurrentMonth ? " (Month-to-date)" : ""}`}
+        title={`${formatMonth(data.selectedMonth)} review${isCurrentMonth ? ", month to date" : ""}`}
         actions={<ExportReportButton month={data.selectedMonth} />}
       />
       <p className="max-w-2xl text-sm text-muted">

@@ -2,7 +2,7 @@ import AreaSparkline from "@/components/charts/AreaSparkline";
 import WidgetShell from "@/components/dashboard/widgets/WidgetShell";
 import Badge from "@/components/ui/Badge";
 import DropdownButton from "@/components/ui/DropdownButton";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatMonth } from "@/lib/format";
 
 export interface NetWorthPoint {
   month: string;
@@ -44,7 +44,7 @@ export default function NetWorthWidget({
       </p>
       {latest?.month && (
         <p className="mt-1 text-xs text-muted">
-          As of {latest.month}
+          As of {formatMonth(latest.month)}
         </p>
       )}
       {change !== null && (

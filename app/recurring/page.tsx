@@ -117,25 +117,25 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
         title="Recurring"
         actions={
           <>
-            <SegmentedControl
-              ariaLabel="Financial scope"
-              items={[
-                {
-                  label: "Mine",
-                  href: recurringHref({ ...baseLink, tab, scope: undefined }),
-                  active: loaded.scope.kind === "mine",
-                },
-                ...(loaded.visibleHouseholdIds[0]
-                  ? [
-                      {
-                        label: "Household",
-                        href: recurringHref({ ...baseLink, tab, scope: loaded.visibleHouseholdIds[0] }),
-                        active: loaded.scope.kind === "household",
-                      },
-                    ]
-                  : []),
-              ]}
-            />
+            {/* A lone "Mine" option is not a choice; show the scope switch only
+                when a household exists, as Debt Payoff does. */}
+            {loaded.visibleHouseholdIds[0] && (
+              <SegmentedControl
+                ariaLabel="Financial scope"
+                items={[
+                  {
+                    label: "Mine",
+                    href: recurringHref({ ...baseLink, tab, scope: undefined }),
+                    active: loaded.scope.kind === "mine",
+                  },
+                  {
+                    label: "Household",
+                    href: recurringHref({ ...baseLink, tab, scope: loaded.visibleHouseholdIds[0] }),
+                    active: loaded.scope.kind === "household",
+                  },
+                ]}
+              />
+            )}
             <ButtonLink href={links.manage} variant="primary">
               Manage recurring
             </ButtonLink>

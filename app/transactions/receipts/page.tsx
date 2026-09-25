@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Receipt inbox",
+  title: "Receipt Inbox",
 };
 
 export default async function ReceiptsPage() {
@@ -25,13 +25,11 @@ export default async function ReceiptsPage() {
 
   return (
     <AppShell active="transactions" email={user.email}>
-      <div className="space-y-6">
-        <PageHeader
-          title="Receipt inbox"
-          actions={<ButtonLink href="/transactions">Back to transactions</ButtonLink>}
-        />
-        <ReceiptInbox initialReceipts={receipts} />
-      </div>
+      <PageHeader
+        title="Receipt Inbox"
+        actions={<ButtonLink href="/transactions">Back to transactions</ButtonLink>}
+      />
+      <ReceiptInbox initialReceipts={receipts} />
     </AppShell>
   );
 }

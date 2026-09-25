@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fromTransactionRow, type RawFinanceTransaction, type TransactionRow } from "@/lib/finance-domain";
 import { scopeQueryUserId, type FinancialScope } from "@/lib/financial-scope";
+import { IN_FILTER_CHUNK_SIZE } from "@/lib/postgrest-limits";
 
 /**
  * Bounded, column-explicit reads for the canonical projection.
@@ -236,10 +237,9 @@ export const DEPENDENCY_CONCURRENCY = 6;
 /**
  * `transaction_splits` reads chunked transaction ids: PostgREST builds an
  * `in.(...)` list into the URL, and the whole page's ids at once overruns the
- * request line. The chunk is sized so a 36-char UUID list stays comfortably
- * under Node's 16KB header limit (500 ids ≈ 18KB overflowed undici).
+ * request line. See `IN_FILTER_CHUNK_SIZE` for the budget.
  */
-const SPLIT_CHUNK_SIZE = 250;
+const SPLIT_CHUNK_SIZE = IN_FILTER_CHUNK_SIZE;
 
 function buildSplitChunkQueries(
   supabase: SupabaseClient,

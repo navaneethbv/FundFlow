@@ -37,7 +37,7 @@ describe("transactions UI restyle", () => {
 
     expect(source).toContain("colSpan={columnCount - 2}");
     expect(source).toContain("dayGroup?.showNet");
-    expect(source).toContain('grouped && !isNewDay ? "sr-only"');
+    expect(source).toContain('grouped ? "sr-only"');
   });
 
   it("uses group-local zebra bands for the desktop register", () => {

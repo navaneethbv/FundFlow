@@ -186,8 +186,8 @@ describe("DebtPlannerView", () => {
         extraMonthly: 50,
       }),
     );
-    expect(html).toContain('class="border-b border-panel-border text-xs uppercase tracking-wide text-muted font-mono"');
-    expect(html).toContain('class="text-xs font-semibold uppercase tracking-wide text-muted font-mono"');
+    expect(html).toContain('class="border-b border-panel-border text-xs uppercase tracking-wide text-muted tabular-nums"');
+    expect(html).toContain('class="text-xs font-semibold uppercase tracking-wide text-muted tabular-nums"');
   });
 });
 

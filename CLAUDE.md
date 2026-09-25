@@ -169,6 +169,10 @@ it will not survive the next install.
   both must stay green. Re-step with the validator, never by eye, and never
   extend its exception list to make a re-step pass. See `docs/PALETTE.md`.
 - Every chart ships direct labels or a table twin. Text never wears series color.
+- UI colour palettes live in `lib/themes.ts` and restyle chrome only (surfaces,
+  borders, accent). They never override a `--viz-*` slot or a semantic token;
+  `tests/unit/themes.test.ts` fails any palette that weakens text or chart
+  contrast against its own panel.
 
 ### Plaid frugality
 

@@ -173,25 +173,25 @@ export default async function BudgetPage({
         >
           Next
         </Link>
-        <SegmentedControl
-          ariaLabel="Financial scope"
-          items={[
-            {
-              label: "Mine",
-              href: budgetHref({ ...baseLink, scope: undefined }),
-              active: loaded.scope.kind === "mine",
-            },
-            ...(loaded.visibleHouseholdIds[0]
-              ? [
-                  {
-                    label: "Household",
-                    href: budgetHref({ ...baseLink, scope: loaded.visibleHouseholdIds[0] }),
-                    active: loaded.scope.kind === "household",
-                  },
-                ]
-              : []),
-          ]}
-        />
+        {/* A lone "Mine" option is not a choice; show the scope switch only
+            when a household exists, as Debt Payoff does. */}
+        {loaded.visibleHouseholdIds[0] && (
+          <SegmentedControl
+            ariaLabel="Financial scope"
+            items={[
+              {
+                label: "Mine",
+                href: budgetHref({ ...baseLink, scope: undefined }),
+                active: loaded.scope.kind === "mine",
+              },
+              {
+                label: "Household",
+                href: budgetHref({ ...baseLink, scope: loaded.visibleHouseholdIds[0] }),
+                active: loaded.scope.kind === "household",
+              },
+            ]}
+          />
+        )}
         {loaded.currencies.length > 1 && (
           <SegmentedControl
             ariaLabel="Currency"

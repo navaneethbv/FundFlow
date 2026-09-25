@@ -66,6 +66,8 @@ import {
   type PlaidBalanceRow,
 } from "@/lib/net-worth-inputs";
 import { dedupeRelinkedAccounts } from "@/lib/relinked-accounts";
+import { chunkValues, IN_FILTER_CHUNK_SIZE } from "@/lib/postgrest-limits";
+
 /**
  * Aggregations for the dashboard. Runs with the caller's user-scoped Supabase
  * client, so RLS guarantees only the current user's rows are visible.
@@ -590,7 +592,7 @@ interface DashboardOverrideRow {
   cash_flow_classification: "expense" | "income" | null;
 }
 
-const DASHBOARD_OVERRIDE_CHUNK_SIZE = 250;
+const DASHBOARD_OVERRIDE_CHUNK_SIZE = IN_FILTER_CHUNK_SIZE;
 const DASHBOARD_OVERRIDE_PAGE_SIZE = 1_000;
 /** PostgREST max_rows is 1,000: page the window read so totals never truncate. */
 const DASHBOARD_TXN_PAGE_SIZE = 1_000;
@@ -1219,16 +1221,22 @@ export async function getDashboardData(
   // amount, its spend is distributed across the split categories instead of its
   // single Plaid category. Whole-transaction category is used when there are no
   // (valid) splits, so this is a no-op until a user adds splits.
-  const activeSpendIds = activeMonthSpend.map((t) => t.id);
-  const { data: splitRows } = activeSpendIds.length
-    ? await scopeUser(
+  // Chunked like the override read: a busy month's ids in one `.in()` list
+  // overran the request line, and the ignored error then silently dropped
+  // every split from the category totals.
+  const splitChunks = await Promise.all(
+    chunkValues(activeMonthSpend.map((t) => t.id)).map(async (ids) => {
+      const { data, error } = await scopeUser(
         supabase
           .from("transaction_splits")
           .select("transaction_id, category, amount")
-          .in("transaction_id", activeSpendIds),
-      )
-    : { data: [] as Array<{ transaction_id: string; category: string; amount: number }> };
-  const splits = (splitRows ?? []).map((s) => ({
+          .in("transaction_id", ids),
+      );
+      if (error) throw error;
+      return (data ?? []) as Array<{ transaction_id: string; category: string; amount: number }>;
+    }),
+  );
+  const splits = splitChunks.flat().map((s) => ({
     transactionId: s.transaction_id as string,
     category: s.category as string,
     amount: Number(s.amount),

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { redact, logError } from "@/lib/log";
+import { errorMessage, redact, logError } from "@/lib/log";
 
 describe("redact", () => {
   it("does not modify primitive values that are not sensitive", () => {
@@ -114,5 +114,21 @@ describe("logError", () => {
 
     expect(arg1).toBe("[another-context] custom string error");
     expect(arg2).toBe("");
+  });
+});
+
+describe("errorMessage", () => {
+  it("reads a PostgREST error object instead of printing [object Object]", () => {
+    expect(
+      errorMessage({ message: "duplicate key value", code: "23505", details: "Key (email)=(a@b.c) exists" }),
+    ).toBe("duplicate key value (23505)");
+  });
+
+  it("never includes PostgREST details, which can echo row values", () => {
+    expect(errorMessage({ message: "x", details: "Key (email)=(a@b.c)" })).not.toContain("a@b.c");
+  });
+
+  it("falls back to String() for primitives", () => {
+    expect(errorMessage("plain")).toBe("plain");
   });
 });

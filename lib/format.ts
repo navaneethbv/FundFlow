@@ -65,12 +65,20 @@ export function formatCurrency(
   }
 }
 
+/** Joining words that stay lowercase inside a label ("Food and Drink"). */
+const TITLE_CASE_MINOR_WORDS = new Set(["a", "an", "and", "for", "of", "or", "the"]);
+/** Account-type initialisms that read wrong title-cased ("Ira", "Hsa"). */
+const TITLE_CASE_ACRONYMS = new Set(["ira", "hsa", "fsa", "cd", "atm", "ach", "401k", "403b", "529", "ugma", "utma"]);
+
 export function titleCase(value: string | null | undefined): string {
   if (!value) return "";
   return value
     .toLowerCase()
     .split(/[_\s]+/)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .map((w, index) => {
+      if (TITLE_CASE_ACRONYMS.has(w)) return w.toUpperCase();
+      return index > 0 && TITLE_CASE_MINOR_WORDS.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1);
+    })
     .join(" ");
 }
 

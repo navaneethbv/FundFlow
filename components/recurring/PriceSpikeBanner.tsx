@@ -132,7 +132,7 @@ export default function PriceSpikeBanner({
             </div>
 
             <div className="flex items-center gap-3">
-              <span data-money className="font-mono font-bold text-muted">
+              <span data-money className="tabular-nums font-bold text-muted">
                 +{formatCurrency(alert.annualizedImpact)}/yr
               </span>
               <Link

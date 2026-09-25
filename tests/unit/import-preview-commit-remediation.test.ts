@@ -49,6 +49,13 @@ vi.mock("@/lib/supabase/service", () => ({
 
 import { POST as previewPost } from "@/app/api/import/preview/route";
 import { POST as commitPost } from "@/app/api/import/commit/route";
+import { IN_FILTER_CHUNK_SIZE } from "@/lib/postgrest-limits";
+
+/** `.in()` list lengths for 1,001 ids: URL lists chunk tighter than bodies. */
+const IN_CHUNKS_1001 = [
+  ...Array.from({ length: 6 }, () => IN_FILTER_CHUNK_SIZE),
+  1001 - 6 * IN_FILTER_CHUNK_SIZE,
+];
 
 type QueryState = {
   eq: Array<[string, unknown]>;
@@ -445,7 +452,7 @@ describe("import preview and commit remediation", () => {
     const mappedAccountQueries = authQueries.filter(
       ({ table, query }) => table === "accounts" && query.state.in.length > 0,
     );
-    expect(mappedAccountQueries.map(({ query }) => query.state.in[0]![1].length)).toEqual([500, 500, 1]);
+    expect(mappedAccountQueries.map(({ query }) => query.state.in[0]![1].length)).toEqual(IN_CHUNKS_1001);
     for (const { query } of mappedAccountQueries) {
       expect(query.state.eq).toContainEqual(["user_id", "user-1"]);
     }
@@ -463,7 +470,7 @@ describe("import preview and commit remediation", () => {
     const persistedMappingQueries = authQueries.filter(
       ({ table }) => table === "import_source_account_mappings",
     );
-    expect(persistedMappingQueries.map(({ query }) => query.state.in[0]![1].length)).toEqual([500, 500, 1]);
+    expect(persistedMappingQueries.map(({ query }) => query.state.in[0]![1].length)).toEqual(IN_CHUNKS_1001);
     for (const { query } of persistedMappingQueries) {
       expect(query.state.eq).toContainEqual(["user_id", "user-1"]);
     }
@@ -483,7 +490,7 @@ describe("import preview and commit remediation", () => {
     const transactionSelects = serviceQueries.filter(
       ({ table, operation }) => table === "transactions" && operation === "select",
     );
-    expect(transactionSelects.map(({ query }) => query.state.in[0]![1].length)).toEqual([500, 500, 1, 500, 500, 1]);
+    expect(transactionSelects.map(({ query }) => query.state.in[0]![1].length)).toEqual([...IN_CHUNKS_1001, ...IN_CHUNKS_1001]);
     for (const { query } of transactionSelects) {
       expect(query.state.eq).toContainEqual(["user_id", "user-1"]);
     }
@@ -491,7 +498,7 @@ describe("import preview and commit remediation", () => {
     const rowStatusUpdates = serviceQueries.filter(
       ({ table, operation }) => table === "import_review_rows" && operation === "update",
     );
-    expect(rowStatusUpdates.map(({ query }) => query.state.in[0]![1].length)).toEqual([500, 500, 1]);
+    expect(rowStatusUpdates.map(({ query }) => query.state.in[0]![1].length)).toEqual(IN_CHUNKS_1001);
     for (const { query } of rowStatusUpdates) {
       expect(query.state.eq).toContainEqual(["user_id", "user-1"]);
     }

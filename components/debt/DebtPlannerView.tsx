@@ -112,7 +112,7 @@ export default function DebtPlannerView({
           directly under a dl, and axe flags the section-only structure. */}
       <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="min-w-0 rounded-card border border-panel-border bg-panel p-5 shadow-card">
-          <dt className="text-xs font-semibold uppercase tracking-wide text-muted font-mono">
+          <dt className="text-xs font-semibold uppercase tracking-wide text-muted tabular-nums">
             Total balance
           </dt>
           <dd data-money className="metric-value mt-1 text-2xl font-bold" style={{ color: "var(--viz-neg)" }}>
@@ -120,7 +120,7 @@ export default function DebtPlannerView({
           </dd>
         </div>
         <div className="min-w-0 rounded-card border border-panel-border bg-panel p-5 shadow-card">
-          <dt className="text-xs font-semibold uppercase tracking-wide text-muted font-mono">
+          <dt className="text-xs font-semibold uppercase tracking-wide text-muted tabular-nums">
             Monthly budget
           </dt>
           <dd data-money className="metric-value mt-1 text-2xl font-bold" style={{ color: "var(--viz-neg)" }}>
@@ -128,7 +128,7 @@ export default function DebtPlannerView({
           </dd>
         </div>
         <div className="min-w-0 rounded-card border border-panel-border bg-panel p-5 shadow-card">
-          <dt className="text-xs font-semibold uppercase tracking-wide text-muted font-mono">
+          <dt className="text-xs font-semibold uppercase tracking-wide text-muted tabular-nums">
             Debt-free projection
           </dt>
           <dd className="metric-value mt-1 text-2xl font-bold">
@@ -136,7 +136,7 @@ export default function DebtPlannerView({
           </dd>
         </div>
         <div className="min-w-0 rounded-card border border-panel-border bg-panel p-5 shadow-card">
-          <dt className="text-xs font-semibold uppercase tracking-wide text-muted font-mono">
+          <dt className="text-xs font-semibold uppercase tracking-wide text-muted tabular-nums">
             Total projected interest
           </dt>
           <dd data-money className="metric-value mt-1 text-2xl font-bold" style={{ color: "var(--viz-neg)" }}>
@@ -195,7 +195,7 @@ export default function DebtPlannerView({
           </div>
           <div className="hidden overflow-x-auto sm:block">
             <table className="w-full min-w-[40rem] text-left text-sm">
-              <thead className="border-b border-panel-border text-xs uppercase tracking-wide text-muted font-mono">
+              <thead className="border-b border-panel-border text-xs uppercase tracking-wide text-muted tabular-nums">
                 <tr>
                   <th className="px-3 py-3">Priority</th>
                   <th className="px-3 py-3">Debt</th>

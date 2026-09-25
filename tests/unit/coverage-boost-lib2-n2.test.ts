@@ -177,7 +177,7 @@ describe("ledger-projection", () => {
     );
     expect(options.accounts.map((a) => a.label)).toEqual(["A Account", "B Account"]);
     expect(options.categories).toContainEqual({ value: "UNCATEGORIZED", label: "Uncategorized" });
-    expect(options.categories).toContainEqual({ value: "FOOD_AND_DRINK", label: "Food And Drink" });
+    expect(options.categories).toContainEqual({ value: "FOOD_AND_DRINK", label: "Food and Drink" });
     expect(options.subcategoriesByCategory.FOOD_AND_DRINK).toEqual([{ value: "COFFEE", label: "Coffee" }]);
     expect(options.merchants).toEqual(["blue bottle", "Uber"]);
   });

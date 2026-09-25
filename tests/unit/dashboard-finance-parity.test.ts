@@ -8,6 +8,7 @@ import {
   type TransactionRow,
 } from "@/lib/finance-domain";
 import type { TransactionSplit } from "@/lib/transaction-quality";
+import { IN_FILTER_CHUNK_SIZE } from "@/lib/postgrest-limits";
 
 type Row = Record<string, unknown>;
 
@@ -276,8 +277,8 @@ describe("dashboard / canonical projection parity", () => {
     const annotationFilters = many.inFilters.filter(
       ({ table }) => table === "transaction_annotations",
     );
-    expect(annotationFilters).toHaveLength(3);
-    expect(annotationFilters.every(({ values }) => values.length <= 250)).toBe(true);
+    expect(annotationFilters).toHaveLength(4);
+    expect(annotationFilters.every(({ values }) => values.length <= IN_FILTER_CHUNK_SIZE)).toBe(true);
   });
   it("reports the same month expenses as financeTotals", async () => {
     const data = await getDashboardData(supabase(), undefined, "2026-07", "user-1");

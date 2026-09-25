@@ -1,4 +1,4 @@
-import { compactCurrency, linePath, niceTicks } from "@/lib/chart-utils";
+import { compactCurrency, linePath, niceTickRange } from "@/lib/chart-utils";
 import { formatCurrency } from "@/lib/format";
 import type { ForecastPoint } from "@/lib/forecasting";
 
@@ -36,16 +36,15 @@ export default function ForecastChart({
     : SERIES;
 
   const allValues = [currentNetWorth, ...points.flatMap((p) => [p.conservative, p.base, p.optimistic])];
-  const maxValue = Math.max(...allValues, 0);
-  const minValue = Math.min(...allValues, 0);
-  const ticks = niceTicks(maxValue - minValue);
-  const maxTick = (ticks.at(-1) || 1) + minValue;
+  const ticks = niceTickRange(Math.min(...allValues), Math.max(...allValues));
+  const minTick = ticks[0] ?? 0;
+  const maxTick = ticks.at(-1) ?? 1;
 
   const plotWidth = WIDTH - PAD_LEFT - PAD_RIGHT;
   const plotHeight = HEIGHT - PAD_TOP - PAD_BOTTOM;
   const xFor = (i: number) => PAD_LEFT + (i / points.length) * plotWidth;
   const yFor = (value: number) =>
-    PAD_TOP + plotHeight - ((value - minValue) / (maxTick - minValue || 1)) * plotHeight;
+    PAD_TOP + plotHeight - ((value - minTick) / (maxTick - minTick || 1)) * plotHeight;
 
   return (
     <div>
@@ -57,14 +56,21 @@ export default function ForecastChart({
           </span>
         ))}
       </div>
-      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-auto w-full" role="img" aria-label="Net worth projection">
+      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="block h-auto w-full max-w-[760px]" role="img" aria-label="Net worth projection">
         {ticks.map((t) => {
-          const y = yFor(t + minValue);
+          const y = yFor(t);
           return (
             <g key={t}>
-              <line x1={PAD_LEFT} x2={WIDTH - PAD_RIGHT} y1={y} y2={y} stroke="var(--panel-border)" strokeWidth={1} />
+              <line
+                x1={PAD_LEFT}
+                x2={WIDTH - PAD_RIGHT}
+                y1={y}
+                y2={y}
+                stroke={t === 0 ? "var(--viz-axis)" : "var(--viz-grid)"}
+                strokeWidth={1}
+              />
               <text x={4} y={y + 4} fontSize={10} fill="var(--muted)" className="money">
-                {compactCurrency(t + minValue)}
+                {compactCurrency(t)}
               </text>
             </g>
           );

@@ -45,8 +45,21 @@ describe("parseDisplayPrefs", () => {
   });
 
   it("parses a fully valid stored preference set", () => {
-    const stored = { theme: "dark", density: "compact", defaultPrivacyBlur: true, reducedMotion: "reduce" };
+    const stored = {
+      theme: "dark",
+      density: "compact",
+      defaultPrivacyBlur: true,
+      reducedMotion: "reduce",
+      lightPalette: "ocean",
+      darkPalette: "midnight",
+    };
     expect(parseDisplayPrefs(stored)).toEqual(stored);
+  });
+
+  it("falls back to the default palette for an id from the other mode or unknown", () => {
+    const parsed = parseDisplayPrefs({ lightPalette: "midnight", darkPalette: "not-a-palette" });
+    expect(parsed.lightPalette).toBe("ember");
+    expect(parsed.darkPalette).toBe("ember");
   });
 
   it("falls back per-field for an invalid value instead of rejecting the whole object", () => {
@@ -57,6 +70,13 @@ describe("parseDisplayPrefs", () => {
 });
 
 describe("validateDisplayPrefsPatch", () => {
+  it("accepts a palette id only for its own mode", () => {
+    expect(validateDisplayPrefsPatch({ lightPalette: "sakura" })).toEqual({ ok: true, value: { lightPalette: "sakura" } });
+    expect(validateDisplayPrefsPatch({ darkPalette: "obsidian" })).toEqual({ ok: true, value: { darkPalette: "obsidian" } });
+    expect(validateDisplayPrefsPatch({ lightPalette: "obsidian" }).ok).toBe(false);
+    expect(validateDisplayPrefsPatch({ darkPalette: 7 }).ok).toBe(false);
+  });
+
   it("accepts an empty patch", () => {
     expect(validateDisplayPrefsPatch({})).toEqual({ ok: true, value: {} });
   });

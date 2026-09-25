@@ -6,9 +6,10 @@ import {
   type FinanceFlow,
   type TransactionRow,
 } from "@/lib/finance-domain";
+import { IN_FILTER_CHUNK_SIZE } from "@/lib/postgrest-limits";
 
 const PAGE_SIZE = 1_000;
-const ANNOTATION_CHUNK_SIZE = 250;
+const ANNOTATION_CHUNK_SIZE = IN_FILTER_CHUNK_SIZE;
 const DEPENDENCY_CONCURRENCY = 6;
 
 type ExportQueryResult = { data?: unknown; error?: unknown };

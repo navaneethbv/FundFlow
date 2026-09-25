@@ -61,6 +61,8 @@ describe("Settings control labels", () => {
           density: "comfortable",
           reducedMotion: "system",
           defaultPrivacyBlur: false,
+          lightPalette: "ember",
+          darkPalette: "ember",
         },
       }),
     );

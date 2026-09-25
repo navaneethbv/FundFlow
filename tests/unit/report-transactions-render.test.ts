@@ -39,12 +39,12 @@ describe("ReportTransactions", () => {
   it("formats the date through the app's date formatter, in the mono face", () => {
     const html = render([row({ date: "2026-08-23" })]);
     expect(html).toContain(formatDate("2026-08-23"));
-    expect(html).toContain("font-mono");
+    expect(html).toContain("tabular-nums");
   });
 
   it("humanizes the category instead of printing the raw enum", () => {
     const html = render([row({ categoryKey: "RENT_AND_UTILITIES" })]);
-    expect(html).toContain("Rent And Utilities");
+    expect(html).toContain("Rent and Utilities");
     expect(html).not.toContain("RENT_AND_UTILITIES");
   });
 

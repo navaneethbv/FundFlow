@@ -151,3 +151,21 @@ describe("buildDemoDataset", () => {
     ).toThrow("Demo account ids did not match the inserted accounts.");
   });
 });
+
+describe("demo transaction ids across users", () => {
+  it("never collide, because plaid_transaction_id is globally unique", () => {
+    const a = buildDemoDataset({ userId: "user-a", today: "2026-09-24" });
+    const b = buildDemoDataset({ userId: "user-b", today: "2026-09-24" });
+    const idsA = new Set(a.transactions.map((t) => t.plaid_transaction_id));
+    expect(b.transactions.some((t) => idsA.has(t.plaid_transaction_id))).toBe(false);
+    expect(idsA.size).toBe(a.transactions.length);
+  });
+});
+
+describe("demo transaction dates", () => {
+  it("never dates a transaction after today", () => {
+    const { transactions } = buildDemoDataset({ userId: "user-a", today: "2026-09-10" });
+    expect(transactions.length).toBeGreaterThan(0);
+    expect(transactions.every((t) => t.date <= "2026-09-10")).toBe(true);
+  });
+});

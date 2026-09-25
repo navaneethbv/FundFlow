@@ -30,6 +30,16 @@ function row(partial: Partial<AccountsPageRow> = {}): AccountsPageRow {
 }
 
 describe("AccountRow", () => {
+  it("draws the full-history trend only when it covers more than the 30-day one", () => {
+    const same = renderToStaticMarkup(
+      createElement(AccountRow, { row: row({ spark: [1, 2, 3], sparkLong: [1, 2, 3] }) }),
+    );
+    expect(same).toContain("30-day trend");
+    expect(same).not.toContain("full-history trend");
+    const longer = renderToStaticMarkup(createElement(AccountRow, { row: row() }));
+    expect(longer).toContain("full-history trend");
+  });
+
   it("renders the balance in the proportional money face, not mono", () => {
     const html = renderToStaticMarkup(createElement(AccountRow, { row: row() }));
     expect(html).toContain("metric-value");

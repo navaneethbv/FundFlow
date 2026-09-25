@@ -8,6 +8,7 @@ import {
 } from "@/lib/finance-query";
 import type { FinancialScope } from "@/lib/financial-scope";
 import { clientStub } from "../fixtures/supabase-query";
+import { IN_FILTER_CHUNK_SIZE } from "@/lib/postgrest-limits";
 
 const MINE: FinancialScope = { kind: "mine", ownerUserId: "user-1" };
 const HOUSEHOLD: FinancialScope = { kind: "household", householdId: "hh-1" };
@@ -485,10 +486,12 @@ describe("loadCanonicalProjection", () => {
     const splitChunks = supabase
       .callsOn("transaction_splits")
       .filter(({ method }) => method === "in");
-    expect(splitChunks).toHaveLength(3);
-    expect(splitChunks[0]?.args[1]).toHaveLength(250);
-    expect(splitChunks[1]?.args[1]).toHaveLength(250);
-    expect(splitChunks[2]?.args[1]).toHaveLength(1);
+    expect(splitChunks.map(({ args }) => (args[1] as unknown[]).length)).toEqual([
+      IN_FILTER_CHUNK_SIZE,
+      IN_FILTER_CHUNK_SIZE,
+      IN_FILTER_CHUNK_SIZE,
+      501 - 3 * IN_FILTER_CHUNK_SIZE,
+    ]);
   });
 
   it("pages every growing projection dependency instead of silently truncating it", async () => {

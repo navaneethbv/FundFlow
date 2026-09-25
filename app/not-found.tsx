@@ -7,8 +7,11 @@ export default async function NotFound() {
   await connection();
 
   return (
-    <AuthShell title="404" subtitle="The page you requested does not exist.">
-      <ButtonLink href="/dashboard" className="w-full">
+    <AuthShell
+      title="Page not found"
+      subtitle="The page you requested does not exist or has moved. Error 404."
+    >
+      <ButtonLink href="/dashboard" variant="primary" className="w-full">
         Back to dashboard
       </ButtonLink>
     </AuthShell>
