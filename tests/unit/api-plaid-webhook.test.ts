@@ -224,6 +224,21 @@ describe("POST /api/plaid/webhook", () => {
     expect(mockSyncInv).toHaveBeenCalledWith(sampleItem);
   });
 
+  it("rejects an unsigned body with invalid UTF-8 as unauthenticated", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    process.env.PLAID_ENV = "production";
+
+    const req = new NextRequest("http://localhost/api/plaid/webhook", {
+      method: "POST",
+      body: new Uint8Array([0x7b, 0xff, 0xfe, 0x7d]),
+    });
+
+    const res = await POST(req);
+    expect(mockErrorResponse).not.toHaveBeenCalled();
+    expect(res.status).toBe(401);
+    expect(mockGetItemByPlaidItemId).not.toHaveBeenCalled();
+  });
+
   it("returns 401 when signature verification fails in production mode", async () => {
     vi.stubEnv("NODE_ENV", "production");
     process.env.PLAID_ENV = "production";

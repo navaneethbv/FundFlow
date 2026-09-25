@@ -34,7 +34,10 @@ async function readWebhookBody(req: NextRequest): Promise<string | NextResponse>
   const reader = req.body?.getReader();
   if (!reader) return "";
 
-  const decoder = new TextDecoder("utf-8", { fatal: true });
+  // Decode leniently, like `req.text()`: malformed bytes from an
+  // unauthenticated sender then fail signature verification (401) instead of
+  // throwing into the 500 error path.
+  const decoder = new TextDecoder("utf-8");
   let bytes = 0;
   let body = "";
   try {
