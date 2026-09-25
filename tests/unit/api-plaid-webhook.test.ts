@@ -87,7 +87,7 @@ describe("POST /api/plaid/webhook", () => {
       body: oversized,
       // Required by Node's Request implementation for a streaming body.
       duplex: "half",
-    } as RequestInit & { duplex: "half" });
+    } as ConstructorParameters<typeof NextRequest>[1]);
 
     const res = await POST(req);
     expect(res.status).toBe(413);
