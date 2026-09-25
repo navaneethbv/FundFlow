@@ -945,7 +945,7 @@ Record:
 - Full gate counts.
 - Manual visual evidence status.
 - Phase 1 remains deferred until more production pages exist.
-- Branch-ruleset finding: user `8563761` is an `always` bypass actor and can direct-push `main`.
+- Branch-ruleset finding: the repository owner is an `always` bypass actor and can direct-push `main`.
 - Recommended ruleset remediation: change that actor to pull-request-only bypass or remove it after confirming another recovery path.
 
 - [ ] **Step 7: Commit final evidence**

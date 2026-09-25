@@ -879,7 +879,7 @@ After this branch is delivered, expand and build Phase 3 (Cash Flow) test-first.
 Continue carrying the five Phase 0 finance-domain invariants from the parity plan into every transaction-derived page.
 
 The protected-main anomaly is explained.
-Repository ruleset `Protect main` lists user `8563761` as an `always` bypass actor, and GitHub reports that the current user can always bypass it.
+Repository ruleset `Protect main` lists the repository owner as an `always` bypass actor, and GitHub reports that the current user can always bypass it.
 That is why direct commit `8d2dcea` landed even though the push also printed `Cannot update this protected ref`.
 Change that actor to pull-request-only bypass, or remove it after confirming another recovery path.
 No repository rule was mutated during this phase.
