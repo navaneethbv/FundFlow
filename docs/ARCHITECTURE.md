@@ -37,6 +37,10 @@ flowchart TB
 
 ## Key modules in `lib/`
 
+- `request-body.ts` bounds actual incoming bytes before JSON or multipart parsing and returns 413 for oversized envelopes.
+  AI questions and active image/CSV uploads use it with endpoint-specific limits documented in the [September 26 review](reviews/2026-09-26-security-ui-memory.md).
+- `dashboard-cache.ts` retains at most 32 scopes per process with least-recently-used eviction and activity-driven expiration.
+  JSON tuple keys distinguish missing filters from literal values and preserve user isolation.
 - `crypto.ts` — AES-256-GCM for Plaid access tokens at rest (key:
   `PLAID_TOKEN_ENC_KEY`, 32 bytes base64). Rotation: decryption falls back to
   `PLAID_TOKEN_ENC_KEY_PREVIOUS` (`decryptSecretDetailed` reports which key

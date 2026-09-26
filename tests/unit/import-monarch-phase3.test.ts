@@ -26,7 +26,7 @@ vi.mock("@/lib/supabase/service", () => ({
 
 import { POST as previewPost } from "@/app/api/import/preview/route";
 import { POST as commitPost } from "@/app/api/import/commit/route";
-import type { NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 
 const MONARCH_HEADER = ["Date", "Merchant", "Category", "Account", "Original Statement", "Notes", "Amount", "Tags"];
 const headerLine = MONARCH_HEADER.map((h) => `"${h}"`).join(",");
@@ -42,7 +42,7 @@ function monarchCsv(): File {
 function formRequest(file: File): NextRequest {
   const form = new FormData();
   form.append("file", file);
-  return { formData: () => Promise.resolve(form) } as unknown as NextRequest;
+  return new NextRequest("https://example.test/upload", { method: "POST", body: form });
 }
 
 describe("Monarch import conflicts, idempotency, and authorization", () => {

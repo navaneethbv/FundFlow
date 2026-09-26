@@ -188,20 +188,16 @@ describe("Import API Routes", () => {
   describe("POST /api/import/preview", () => {
     it("returns bad request if form data parsing fails", async () => {
       mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
-      const request = {
-        formData: () => Promise.reject(new Error("Form fail")),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: "invalid form" });
       const res = await previewPost(request);
       expect(res.status).toBe(400);
-      expect(mockBadRequest).toHaveBeenCalledWith("Expected multipart form data");
+      await expect(res.json()).resolves.toEqual({ error: "Invalid request body" });
     });
 
     it("returns bad request if file is missing", async () => {
       mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
       const formData = new FormData();
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
       const res = await previewPost(request);
       expect(res.status).toBe(400);
       expect(mockBadRequest).toHaveBeenCalledWith("file is required");
@@ -212,9 +208,7 @@ describe("Import API Routes", () => {
       const file = new File(["col1,col2"], "empty.csv", { type: "text/csv" });
       const formData = new FormData();
       formData.set("file", file);
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockParseImportCsv.mockReturnValue({ rows: [], errors: ["No rows"] });
       mockGetCsvColumns.mockReturnValue({
@@ -245,9 +239,7 @@ describe("Import API Routes", () => {
       const formData = new FormData();
       formData.set("file", file);
       formData.set("column_map", "{}");
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockGetCsvColumns.mockReturnValue({
         headers: ["a", "b"],
@@ -331,9 +323,7 @@ describe("Import API Routes", () => {
       });
       const formData = new FormData();
       formData.set("file", file);
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockDetectSourceFormat.mockReturnValue("ofx");
       mockParseOfx.mockReturnValue([
@@ -428,9 +418,7 @@ describe("Import API Routes", () => {
       );
       const formData = new FormData();
       formData.set("file", file);
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockDetectSourceFormat.mockReturnValue("mint");
       mockParseMintCsv.mockReturnValue({
@@ -491,9 +479,7 @@ describe("Import API Routes", () => {
       const formData = new FormData();
       formData.set("file", file);
       formData.set("column_map", "{}");
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockGetCsvColumns.mockReturnValue({ headers: ["a", "b"], sample: ["1", "2"] });
       mockNormalizeColumnMap.mockReturnValue(null);
@@ -507,9 +493,7 @@ describe("Import API Routes", () => {
       const file = new File([""], "empty.csv", { type: "text/csv" });
       const formData = new FormData();
       formData.set("file", file);
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockParseImportCsv.mockReturnValue({ rows: [], errors: ["No importable rows found"] });
       mockGetCsvColumns.mockReturnValue(null);
@@ -524,9 +508,7 @@ describe("Import API Routes", () => {
       const file = new File(["2026-07-01,Store,10.00"], "statement.csv", { type: "text/csv" });
       const formData = new FormData();
       formData.set("file", file);
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockParseImportCsv.mockReturnValue({
         rows: [{ date: "2026-07-01", merchant: "Store", amount: 10 }],
@@ -563,13 +545,10 @@ describe("Import API Routes", () => {
 
     it("returns bad request when the file is too large", async () => {
       mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
-      const file = new File([""], "big.csv", { type: "text/csv" });
-      Object.defineProperty(file, "size", { value: 3 * 1024 * 1024 });
+      const file = new File([new Uint8Array(2 * 1024 * 1024 + 1)], "big.csv", { type: "text/csv" });
       const formData = new FormData();
       formData.set("file", file);
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       const res = await previewPost(request);
       expect(res.status).toBe(400);
@@ -582,9 +561,7 @@ describe("Import API Routes", () => {
       const formData = new FormData();
       formData.set("file", file);
       formData.set("column_map", "{}");
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockGetCsvColumns.mockReturnValue(null);
 
@@ -600,9 +577,7 @@ describe("Import API Routes", () => {
       const file = new File(["data"], "huge.csv", { type: "text/csv" });
       const formData = new FormData();
       formData.set("file", file);
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockParseImportCsv.mockReturnValue({
         rows: Array.from({ length: 20_001 }, (_, i) => ({
@@ -627,9 +602,7 @@ describe("Import API Routes", () => {
       });
       const formData = new FormData();
       formData.set("file", file);
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockDetectSourceFormat.mockReturnValue("ofx");
       mockParseOfx.mockReturnValue([]);
@@ -647,9 +620,7 @@ describe("Import API Routes", () => {
       const formData = new FormData();
       formData.set("file", file);
       formData.set("column_map", "{}");
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockGetCsvColumns.mockReturnValue({ headers: ["a", "b"], sample: ["1", "2"] });
       mockNormalizeColumnMap.mockReturnValue({
@@ -681,9 +652,7 @@ describe("Import API Routes", () => {
       });
       const formData = new FormData();
       formData.set("file", file);
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       // The file spans all three existing dates, so every fixture row falls
       // inside the date window the preview now reads.
@@ -731,18 +700,16 @@ describe("Import API Routes", () => {
       );
     });
 
-    it("defaults the file name and rejects flagged rows", async () => {
+    it("preserves the file name and rejects flagged rows", async () => {
       const mockSupabase = previewSupabase();
       mockRequireUser.mockResolvedValue({
         user: { id: "u1" },
         supabase: mockSupabase,
       });
-      const file = new File(["2026-07-01,Store,10.00"], "", { type: "text/csv" });
+      const file = new File(["2026-07-01,Store,10.00"], "statement.csv", { type: "text/csv" });
       const formData = new FormData();
       formData.set("file", file);
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockParseImportCsv.mockReturnValue({
         rows: [{ date: "2026-07-01", merchant: "Store", amount: 10 }],
@@ -802,9 +769,7 @@ describe("Import API Routes", () => {
       const file = new File(["2026-07-01,Store,10.00"], "statement.csv", { type: "text/csv" });
       const formData = new FormData();
       formData.set("file", file);
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockParseImportCsv.mockReturnValue({
         rows: [{ date: "2026-07-01", merchant: "Store", amount: 10 }],
@@ -837,9 +802,7 @@ describe("Import API Routes", () => {
       const file = new File(["2026-07-01,Store,10.00"], "statement.csv", { type: "text/csv" });
       const formData = new FormData();
       formData.set("file", file);
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockParseImportCsv.mockReturnValue({
         rows: [{ date: "2026-07-01", merchant: "Store", amount: 10 }],
@@ -873,9 +836,7 @@ describe("Import API Routes", () => {
       const file = new File(["2026-07-01,Store,10.00"], "statement.csv", { type: "text/csv" });
       const formData = new FormData();
       formData.set("file", file);
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockParseImportCsv.mockReturnValue({
         rows: [{ date: "2026-07-01", merchant: "Store", amount: 10 }],
@@ -1243,14 +1204,11 @@ function serviceStubWith(
     it("returns bad request if file too large", async () => {
       mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
       mockCheckRateLimit.mockResolvedValue(true);
-      const file = new File([""], "too-large.csv", { type: "text/csv" });
-      Object.defineProperty(file, "size", { value: 5 * 1024 * 1024 });
+      const file = new File([new Uint8Array(2 * 1024 * 1024 + 1)], "too-large.csv", { type: "text/csv" });
       const formData = new FormData();
       formData.set("file", file);
       formData.set("account_id", "a1");
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       const res = await csvPost(request);
       expect(res.status).toBe(400);
@@ -1268,15 +1226,11 @@ function serviceStubWith(
           }),
         },
       });
-      const request = {
-        formData: () => Promise.reject(new Error("Form fail")),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: "invalid form" });
 
       const res = await csvPost(request);
       expect(res.status).toBe(400);
-      expect(mockBadRequest).toHaveBeenCalledWith(
-        "Expected multipart form data",
-      );
+      await expect(res.json()).resolves.toEqual({ error: "Invalid request body" });
     });
 
     it("returns bad request when the file is missing", async () => {
@@ -1292,9 +1246,7 @@ function serviceStubWith(
       });
       const formData = new FormData();
       formData.set("account_id", "a1");
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       const res = await csvPost(request);
       expect(res.status).toBe(400);
@@ -1314,9 +1266,7 @@ function serviceStubWith(
       });
       const formData = new FormData();
       formData.set("file", new File(["2026-07-01,Store,10.00"], "statement.csv", { type: "text/csv" }));
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       const res = await csvPost(request);
       expect(res.status).toBe(400);
@@ -1342,9 +1292,7 @@ function serviceStubWith(
       const formData = new FormData();
       formData.set("file", file);
       formData.set("account_id", "a1");
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockParseImportCsv.mockReturnValue({
         rows: [
@@ -1423,9 +1371,7 @@ function serviceStubWith(
       const formData = new FormData();
       formData.set("file", file);
       formData.set("account_id", "a1");
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockDetectSourceFormat.mockReturnValue("ofx");
       mockParseOfx.mockReturnValue([
@@ -1498,9 +1444,7 @@ function serviceStubWith(
       const formData = new FormData();
       formData.set("file", file);
       formData.set("account_id", "a1");
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockDetectSourceFormat.mockReturnValue("mint");
       mockParseMintCsv.mockReturnValue({
@@ -1570,7 +1514,7 @@ function serviceStubWith(
       const formData = new FormData();
       formData.set("file", new File(["mint"], "mint.csv", { type: "text/csv" }));
       formData.set("account_id", "a1");
-      const request = { formData: () => Promise.resolve(formData) } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       const boundary = {
         select: vi.fn().mockReturnThis(),
@@ -1610,9 +1554,7 @@ function serviceStubWith(
       const formData = new FormData();
       formData.set("file", file);
       formData.set("account_id", "a1");
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockParseImportCsv.mockReturnValue({
         rows: [{ date: "2026-06-15", merchant: "Store", amount: 10 }],
@@ -1668,9 +1610,7 @@ function serviceStubWith(
       const formData = new FormData();
       formData.set("file", new File(["bad"], "x.csv", { type: "text/csv" }));
       formData.set("account_id", "a1");
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockParseImportCsv.mockReturnValue({ rows: [], errors: ["Line 1: malformed"] });
 
@@ -1693,9 +1633,7 @@ function serviceStubWith(
       const formData = new FormData();
       formData.set("file", new File(["bad"], "x.csv", { type: "text/csv" }));
       formData.set("account_id", "a1");
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockParseImportCsv.mockReturnValue({ rows: [], errors: [] });
 
@@ -1718,9 +1656,7 @@ function serviceStubWith(
       const formData = new FormData();
       formData.set("file", new File(["data"], "huge.csv", { type: "text/csv" }));
       formData.set("account_id", "a1");
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockParseImportCsv.mockReturnValue({
         rows: Array.from({ length: 20_001 }, (_, i) => ({
@@ -1752,9 +1688,7 @@ function serviceStubWith(
       const formData = new FormData();
       formData.set("file", new File(["2026-06-15,Store,10.00"], "s.csv", { type: "text/csv" }));
       formData.set("account_id", "a1");
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockParseImportCsv.mockReturnValue({
         rows: [{ date: "2026-06-15", merchant: "Store", amount: 10 }],
@@ -1803,9 +1737,7 @@ function serviceStubWith(
       const formData = new FormData();
       formData.set("file", new File(["data"], "big.csv", { type: "text/csv" }));
       formData.set("account_id", "a1");
-      const request = {
-        formData: () => Promise.resolve(formData),
-      } as unknown as NextRequest;
+      const request = new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 
       mockParseImportCsv.mockReturnValue({
         rows: Array.from({ length: 501 }, (_, i) => ({
@@ -1857,7 +1789,7 @@ function serviceStubWith(
       const file = new File(["2026-07-01,Store,10.00"], "statement.csv", { type: "text/csv" });
       const formDataMissingAcc = new FormData();
       formDataMissingAcc.set("file", file);
-      const resNoAcc = await csvPost({ formData: () => Promise.resolve(formDataMissingAcc) } as unknown as NextRequest);
+      const resNoAcc = await csvPost(new NextRequest("https://example.test/upload", { method: "POST", body: formDataMissingAcc }));
       expect(resNoAcc.status).toBe(400);
 
       const formDataWithAcc = new FormData();
@@ -1872,7 +1804,7 @@ function serviceStubWith(
         }),
       };
       mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: mockSupabaseNullAcc });
-      const resNullAcc = await csvPost({ formData: () => Promise.resolve(formDataWithAcc) } as unknown as NextRequest);
+      const resNullAcc = await csvPost(new NextRequest("https://example.test/upload", { method: "POST", body: formDataWithAcc }));
       expect(resNullAcc.status).toBe(404);
       expect(mockEq).toHaveBeenCalledWith("user_id", "u1");
     });
@@ -1916,9 +1848,7 @@ describe("POST /api/import/csv format dispatch and target checks", () => {
     const formData = new FormData();
     formData.set("file", file);
     for (const [key, value] of Object.entries(fields)) formData.set(key, value);
-    return {
-      formData: () => Promise.resolve(formData),
-    } as unknown as NextRequest;
+    return new NextRequest("https://example.test/upload", { method: "POST", body: formData });
   }
 
   function parsedRows() {
@@ -1996,7 +1926,7 @@ describe("POST /api/import/csv format dispatch and target checks", () => {
     const formData = new FormData();
     formData.set("file", new File(["2026-07-01,Store,10.00"], "s.csv", { type: "text/csv" }));
     formData.set("manual_account_id", "m9");
-    const res = await csvPost({ formData: () => Promise.resolve(formData) } as unknown as NextRequest);
+    const res = await csvPost(new NextRequest("https://example.test/upload", { method: "POST", body: formData }));
     expect(res.status).toBe(404);
   });
 });

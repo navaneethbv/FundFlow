@@ -47,10 +47,7 @@ function makeJsonReq(body: unknown): NextRequest {
 }
 
 function makeFormReq(formData: FormData): NextRequest {
-  return {
-    formData: () => Promise.resolve(formData),
-    headers: new Headers(),
-  } as unknown as NextRequest;
+  return new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 }
 
 describe("Import and Config Routes Coverage Boost", () => {
