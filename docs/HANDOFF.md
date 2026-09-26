@@ -8,7 +8,7 @@ The user requested a repository review and fixes covering security, UI, shortcom
 Work started from a clean `test/expand-code-coverage` checkout at `66f96bf`; publication uses `fix/security-ui-memory` rebased onto current `main` at `c3e7828`.
 The [review and verification record](reviews/2026-09-26-security-ui-memory.md) owns the findings, API limits, memory measurements, checks, and remaining acceptance limits.
 Implemented bounded request parsing, bounded dashboard retention and unambiguous cache keys, AI input/quota fixes, command-palette keyboard visibility, enforced isolated browser-test targets, deterministic scheduling tests, and patch dependency refreshes.
-Local verification passed: 5,358 tests, the unchanged coverage gates (96.19 percent branches), six component browser checks, six signed-out production-build smoke checks, lint, typecheck, production build, palette validation, and dependency audit with zero vulnerabilities.
+Local verification passed: 5,390 tests, the unchanged coverage gates (96.18 percent branches), six component browser checks, six signed-out production-build smoke checks, lint, typecheck, production build, palette validation, and dependency audit with zero vulnerabilities.
 Database integration and authenticated acceptance were not run against live data; the review record states the skips and required isolated environment.
 No migrations or live-data writes were performed.
 The user authorized a pull request; hosted checks and deployment remain separate from local validation.

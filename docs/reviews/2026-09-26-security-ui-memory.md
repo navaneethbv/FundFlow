@@ -2,6 +2,7 @@
 
 Reviewed the clean local `test/expand-code-coverage` checkout at `66f96bf`.
 Publication uses `fix/security-ui-memory`, rebased onto current `main` at `c3e7828`.
+[PR #184](https://github.com/navaneethbv/FundFlow/pull/184) contains the changes; hosted checks are pending.
 This is a focused source and behavior review, not a claim that every route or production workflow has been audited.
 
 ## Confirmed findings and changes
@@ -71,9 +72,9 @@ The dependency audit reports zero vulnerabilities.
 - The component fixture renders the actual component and generated application CSS with synthetic commands and a navigation stub; it does not prove authenticated server rendering or full Supabase Auth behavior.
 - Six signed-out browser smoke tests pass against a local production build, covering login routing, security headers, and API/export authentication walls.
 - Both a standalone browser suite and a shared-fixture suite were deliberately run with synthetic credentials and no approved target; both refused before creating a privileged client.
-- Final CI-style coverage run: `SUPABASE_SECRET_KEY= npm run test:coverage` passed 5,358 tests across 483 files, with 22 integration files and three individual tests skipped.
+- Final CI-style coverage run after rebasing onto `c3e7828`: `SUPABASE_SECRET_KEY= npm run test:coverage` passed 5,390 tests across 485 files, with 22 integration files and three individual tests skipped.
   The service credential was explicitly empty so this run could not exercise the live database suites.
-- Coverage passed the unchanged repository thresholds: 98.52 percent statements, 96.19 percent branches, 98.67 percent functions, and 99.63 percent lines.
+- Coverage passed the unchanged repository thresholds: 98.47 percent statements, 96.18 percent branches, 98.57 percent functions, and 99.60 percent lines.
 - Final `npm run lint`, `npm run typecheck`, and `npm run build` passed with Next.js 16.3.6.
 - `npm run validate:palette` passed with its existing documented exceptions unchanged, `npm audit --audit-level=high` reported zero vulnerabilities, and `git diff --check` passed.
 - Inspected the rendered phone command-palette screenshot after the fix; the selected row is visible and the input remains focused.
