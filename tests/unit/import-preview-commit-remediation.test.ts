@@ -113,7 +113,7 @@ function queryBuilder(
 function previewRequest(fileName = "statement.csv") {
   const formData = new FormData();
   formData.set("file", new File(["data"], fileName, { type: "text/csv" }));
-  return { formData: () => Promise.resolve(formData) } as unknown as NextRequest;
+  return new NextRequest("https://example.test/upload", { method: "POST", body: formData });
 }
 
 describe("import preview and commit remediation", () => {

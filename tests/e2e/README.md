@@ -3,6 +3,20 @@
 Browser end-to-end tests (Playwright). Specs are `*.spec.ts` so the vitest
 unit runner (`tests/**/*.test.ts`) never collides with them.
 
+## Isolated component checks
+
+`npm run test:ui` renders the real command palette with application CSS and synthetic commands in Chromium.
+It requires no application server or database credentials.
+The checks cover keyboard visibility, focus, filtering, navigation, responsive overflow, and automated accessibility in both themes.
+The dedicated configuration is `playwright.ui.config.ts` and the tests live in `tests/browser/`.
+
+## Database safety
+
+Every suite that creates users or financial rows requires `TEST_SUPABASE_URL` to match the configured `NEXT_PUBLIC_SUPABASE_URL` for an approved disposable project.
+The shared fixture and standalone suites enforce this before constructing privileged clients, even if a suite only checks whether credentials exist.
+Missing approval, a different target, or a designated production target causes a refusal.
+Credentials alone are not authorization to run destructive acceptance tests.
+
 ## Running
 
 ```bash

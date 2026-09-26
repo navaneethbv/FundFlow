@@ -9,6 +9,10 @@ on:
       - "proxy.ts"
       - "package.json"
       - "playwright.config.ts"
+      - "playwright.ui.config.ts"
+      - "tests/browser/**"
+      - "tests/safe-test-database.ts"
+      - ".github/workflows/e2e.yml"
       - "tests/e2e/**"
 
 permissions:
@@ -29,6 +33,9 @@ jobs:
 
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
+
+      - name: Run isolated component browser checks
+        run: npm run test:ui
 
       - name: Build
         run: npm run build

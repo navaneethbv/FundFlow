@@ -1,6 +1,7 @@
 import { test as base, expect, type Page } from "@playwright/test";
 import { loadEnvConfig } from "@next/env";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { assertSafeTestDatabase } from "../../safe-test-database";
 import { FinanceSeed } from "./seed";
 
 loadEnvConfig(process.cwd());
@@ -47,6 +48,7 @@ interface AuthenticatedFixtures {
 export const test = base.extend<AuthenticatedFixtures>({
   admin: async ({}, provide) => {
     if (!hasLiveCredentials) throw new Error("Live Supabase credentials are required");
+    assertSafeTestDatabase(url);
     const admin = createClient(url!, secretKey!, {
       auth: { persistSession: false, autoRefreshToken: false },
     });

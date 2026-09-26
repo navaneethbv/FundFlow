@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "validate:palette": "node scripts/validate_palette.js app/globals.css",
-    "backfill:institution-logos": "node --env-file=.env.local --experimental-strip-types scripts/backfill-institution-logos.ts"
+    "backfill:institution-logos": "node --env-file=.env.local --experimental-strip-types scripts/backfill-institution-logos.ts",
+    "test:ui": "playwright test --config playwright.ui.config.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
@@ -47,13 +48,13 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/web-push": "^3.6.4",
-    "@vitest/coverage-v8": "^5.0.1",
+    "@vitest/coverage-v8": "^5.0.2",
     "dotenv": "^18.0.3",
     "eslint": "^9",
     "eslint-config-next": "^16.3.6",
     "tailwindcss": "^4.3.3",
     "typescript": "^6",
-    "vitest": "^5.0.1"
+    "vitest": "^5.0.2"
   },
   "overrides": {
     "postcss": "^8.5.23",

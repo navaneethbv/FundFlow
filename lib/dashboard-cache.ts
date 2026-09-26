@@ -7,44 +7,59 @@ import {
 import { resolveViewerToday } from "@/lib/report-period";
 
 interface CacheRecord<T> {
+  userId: string;
   value: T;
   expiresAt: number;
 }
 
 function cacheKeyFor(userId: string, scope: string) {
-  return `${userId}:${scope}`;
+  return JSON.stringify([userId, scope]);
 }
+
+// A fixed entry ceiling bounds retention even when every request uses a new filter.
+const MAX_DASHBOARD_SCOPES = 32;
 
 export function createDashboardCache<T>(ttlMs: number) {
   const records = new Map<string, CacheRecord<T>>();
 
+  function pruneExpired() {
+    const now = Date.now();
+    for (const [key, record] of records) {
+      if (record.expiresAt <= now) records.delete(key);
+    }
+  }
+
   return {
     async get(userId: string, scope: string): Promise<T | null> {
-      const record = records.get(cacheKeyFor(userId, scope));
+      pruneExpired();
+      const key = cacheKeyFor(userId, scope);
+      const record = records.get(key);
       if (!record) return null;
-      if (record.expiresAt <= Date.now()) {
-        records.delete(cacheKeyFor(userId, scope));
-        return null;
-      }
+      // Map insertion order tracks recency without a second collection.
+      records.delete(key);
+      records.set(key, record);
       return record.value;
     },
     async set(userId: string, scope: string, value: T): Promise<void> {
-      records.set(cacheKeyFor(userId, scope), {
-        value,
-        expiresAt: Date.now() + ttlMs,
-      });
+      pruneExpired();
+      const key = cacheKeyFor(userId, scope);
+      records.delete(key);
+      if (records.size >= MAX_DASHBOARD_SCOPES) {
+        records.delete(records.keys().next().value!);
+      }
+      records.set(key, { userId, value, expiresAt: Date.now() + ttlMs });
     },
     invalidateUser(userId: string): void {
-      for (const cacheKey of records.keys()) {
-        if (cacheKey.startsWith(`${userId}:`)) records.delete(cacheKey);
+      for (const [key, record] of records) {
+        if (record.userId === userId) records.delete(key);
       }
     },
   };
 }
 
 // Process-local dashboard cache. Keyed strictly by user id + render scope, so a
-// warm serverless instance skips recomputing the full aggregation on the
-// 2-minute AutoRefresh re-render. The TTL is short because budgets and goals are
+// warm serverless instance can reuse aggregation during rapid revisits. The
+// 45-second TTL expires before the normal 2-minute AutoRefresh. Budgets and goals are
 // written straight from the browser (no server route to invalidate on); sync
 // completion invalidates explicitly. Only ever populated with a user-scoped
 // (RLS-bound) client, so one user's cache can never be served to another.
@@ -56,19 +71,19 @@ export function dashboardScopeKey(
   selectedMonth?: string,
   options?: DashboardOptions,
 ): string {
-  return [
-    selectedAccountId ?? "all",
-    selectedMonth ?? "default",
-    options?.itemId ?? "all",
-    options?.drill?.category ?? "-",
-    options?.drill?.sub ?? "-",
-    options?.drill?.merchant ?? "-",
+  return JSON.stringify([
+    selectedAccountId ?? null,
+    selectedMonth ?? null,
+    options?.itemId ?? null,
+    options?.drill?.category ?? null,
+    options?.drill?.sub ?? null,
+    options?.drill?.merchant ?? null,
     options?.scope ?? "mine",
     options?.includeBalanceSheet === false ? "no-bs" : "bs",
     // The open month derives from the viewer's day (M-11): without this, a
     // cached load from before a month boundary serves the wrong "current".
     options?.today ?? "server-day",
-  ].join(":");
+  ]);
 }
 
 export async function getCachedDashboardData(

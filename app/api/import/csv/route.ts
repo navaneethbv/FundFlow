@@ -1,3 +1,4 @@
+import { readFormBody } from "@/lib/request-body";
 import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
@@ -203,8 +204,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const form = await request.formData().catch(() => null);
-    if (!form) return badRequest("Expected multipart form data");
+    const form = await readFormBody(request, MAX_FILE_BYTES + 1024 * 1024);
+    if (form instanceof NextResponse) return form;
 
     const parsedRequest = parseUploadRequest(form);
     if ("error" in parsedRequest) return parsedRequest.error;
