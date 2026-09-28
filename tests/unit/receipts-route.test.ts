@@ -389,3 +389,18 @@ describe("PATCH/DELETE /api/receipts/[id] failure branches", () => {
     expect(response.status).toBe(500);
   });
 });
+
+
+it("rejects oversized multipart before image decoding or storage writes", async () => {
+  const form = new FormData();
+  form.set("file", new File(["small image"], "receipt.png", { type: "image/png" }));
+  form.set("padding", "x".repeat(6 * 1024 * 1024));
+  const encoded = new Request("http://localhost/api/receipts", { method: "POST", body: form });
+  const request = new NextRequest(encoded.url, {
+    method: "POST", body: await encoded.arrayBuffer(), headers: encoded.headers,
+  });
+  const response = await POST(request);
+  expect(response.status).toBe(413);
+  expect(mockNormalize).not.toHaveBeenCalled();
+  expect(service.upload).not.toHaveBeenCalled();
+});

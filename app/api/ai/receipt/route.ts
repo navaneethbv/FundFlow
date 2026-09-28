@@ -7,6 +7,7 @@ import {
 } from "@/lib/ai-provider";
 import { resolveAiConsent } from "@/lib/ai-gate";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
+import { readFormBody } from "@/lib/request-body";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { writeAudit, getClientIp } from "@/lib/audit";
 import { findReceiptCandidates, receiptAmountBandFilter } from "@/lib/receipts";
@@ -109,7 +110,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Daily scan limit reached." }, { status: 429 });
     }
 
-    const form = await request.formData().catch(() => null);
+    // Include multipart metadata while retaining the separate 5 MiB file limit.
+    const form = await readFormBody(request, 6 * 1024 * 1024);
+    if (form instanceof NextResponse) return form;
     const file = form?.get("file");
     if (!(file instanceof File)) return badRequest("file is required");
     if (file.size > MAX_IMAGE_BYTES) return badRequest("Image too large (5 MB max)");

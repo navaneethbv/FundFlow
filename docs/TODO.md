@@ -2,6 +2,13 @@
 
 Nice-to-have features and enhancements, deferred out of the initial build.
 
+## Security, UI, and memory review (2026-09-26)
+
+Local implementation and verification are tracked in the [review record](reviews/2026-09-26-security-ui-memory.md).
+Remaining acceptance includes an authenticated browser journey against an approved disposable Supabase target.
+The disabled restore redesign must include an archive envelope limit before enablement.
+Other JSON handlers can adopt the bounded parser incrementally with endpoint-specific limits and compatibility tests.
+
 ## Transaction review (2026-09-07)
 
 Persistent transaction review is implemented in PR #166 behind `transactionReview: false`.

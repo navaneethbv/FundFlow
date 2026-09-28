@@ -7,6 +7,7 @@ import {
 import { resolveAiConsent } from "@/lib/ai-gate";
 import { fetchPrivacySafeRows, recentHistoryStart } from "@/lib/export";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
+import { readJsonBody } from "@/lib/request-body";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { writeAudit, getClientIp } from "@/lib/audit";
 
@@ -28,8 +29,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = (await request.json().catch(() => null)) as { question?: string } | null;
-    const question = body?.question?.trim();
+    const body = await readJsonBody(request, 4 * 1024);
+    if (body instanceof NextResponse) return body;
+    const question = body && typeof body === "object" && "question" in body &&
+      typeof body.question === "string" ? body.question.trim() : null;
     if (!question || question.length > 300) {
       return badRequest("A question of up to 300 characters is required");
     }
@@ -48,6 +51,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const allowed = await checkRateLimit(`ai-ask:${user.id}`, 10, 24 * 3600, {
+      failClosed: true,
+    });
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Daily question limit reached." },
+        { status: 429 },
+      );
+    }
+
     const exportResult = await fetchPrivacySafeRows(supabase, user.id, {
       startDate: recentHistoryStart(),
       includeFlow: true,
@@ -56,16 +69,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Enable AI insights in Settings first." },
         { status: 403 },
-      );
-    }
-
-    const allowed = await checkRateLimit(`ai-ask:${user.id}`, 10, 24 * 3600, {
-      failClosed: true,
-    });
-    if (!allowed) {
-      return NextResponse.json(
-        { error: "Daily question limit reached." },
-        { status: 429 },
       );
     }
 

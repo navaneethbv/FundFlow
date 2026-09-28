@@ -1,3 +1,4 @@
+import { readFormBody } from "@/lib/request-body";
 import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildImportReview } from "@/lib/planning";
@@ -244,8 +245,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const form = await request.formData().catch(() => null);
-    if (!form) return badRequest("Expected multipart form data");
+    const form = await readFormBody(request, MAX_FILE_BYTES + 1024 * 1024);
+    if (form instanceof NextResponse) return form;
 
     const file = form.get("file");
     const positiveIsIncome = form.get("positive_is_income") !== "false";

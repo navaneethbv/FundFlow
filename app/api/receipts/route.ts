@@ -10,6 +10,7 @@ import {
   type ReceiptRow,
 } from "@/lib/receipt-data";
 import { normalizeReceiptImage } from "@/lib/receipt-image";
+import { readFormBody } from "@/lib/request-body";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -61,7 +62,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Receipt upload limit reached." }, { status: 429 });
     }
 
-    const form = await request.formData().catch(() => null);
+    // Include multipart metadata while retaining the separate 5 MiB file limit.
+    const form = await readFormBody(request, 6 * 1024 * 1024);
+    if (form instanceof NextResponse) return form;
     const parsedForm = parseReceiptUploadForm(form);
     if (parsedForm.errorResponse) return parsedForm.errorResponse;
     const { file, merchant, purchaseDate, total } = parsedForm;

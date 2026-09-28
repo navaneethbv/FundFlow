@@ -85,6 +85,12 @@ export default function CommandPalette({ items }: Readonly<{ items: Command[] }>
     if (open) inputRef.current?.focus();
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    dialogRef.current?.querySelector('[aria-selected="true"]')
+      ?.scrollIntoView({ block: "nearest" });
+  }, [open, selected, matches]);
+
   if (!open) return null;
 
   return (
@@ -124,7 +130,7 @@ export default function CommandPalette({ items }: Readonly<{ items: Command[] }>
             onKeyDown={(event) => {
               if (event.key === "ArrowDown") {
                 event.preventDefault();
-                setSelected((current) => Math.min(current + 1, matches.length - 1));
+                setSelected((current) => Math.max(0, Math.min(current + 1, matches.length - 1)));
               } else if (event.key === "ArrowUp") {
                 event.preventDefault();
                 setSelected((current) => Math.max(current - 1, 0));

@@ -128,11 +128,26 @@ describe("POST /api/ai/ask", () => {
 
   it.each([
     ["blank", "   "],
+    ["a number", 42],
+    ["an object", {}],
+    ["an array", []],
     ["over 300 characters", "x".repeat(301)],
   ])("rejects a question that is %s", async (_label, question) => {
     mockRequireUser.mockResolvedValue({ user: { id: USER }, supabase: clientStub() });
     const res = await askPost(askRequest(question));
     expect(res.status).toBe(400);
+  });
+
+  it("rejects an oversized JSON envelope before loading financial rows", async () => {
+    consentingUser();
+    const request = new NextRequest("http://localhost/api/ai/ask", {
+      method: "POST",
+      body: JSON.stringify({ question: "How much?", padding: "x".repeat(4096) }),
+      headers: { "content-type": "application/json" },
+    });
+    expect((await askPost(request)).status).toBe(413);
+    expect(mockFetchRows).not.toHaveBeenCalled();
+    expect(mockMessagesCreate).not.toHaveBeenCalled();
   });
 
   it("403s when the AI setting is off", async () => {
@@ -205,6 +220,7 @@ describe("POST /api/ai/ask", () => {
       { failClosed: true },
     );
     expect(mockMessagesCreate).not.toHaveBeenCalled();
+    expect(mockFetchRows).not.toHaveBeenCalled();
   });
 
   it("answers from aggregates and never sends raw rows", async () => {
@@ -694,4 +710,18 @@ describe("POST /api/ai/insights", () => {
       sendPushToUser("user-1", { title: "title", body: "body" }),
     ).resolves.not.toThrow();
   });
+});
+
+
+it("rejects an oversized receipt envelope before contacting the provider", async () => {
+  consentingUser();
+  const form = new FormData();
+  form.set("file", new File(["small image"], "receipt.png", { type: "image/png" }));
+  form.set("padding", "x".repeat(6 * 1024 * 1024));
+  const encoded = new Request("http://localhost/api/ai/receipt", { method: "POST", body: form });
+  const request = new NextRequest(encoded.url, {
+    method: "POST", body: await encoded.arrayBuffer(), headers: encoded.headers,
+  });
+  expect((await receiptPost(request)).status).toBe(413);
+  expect(mockMessagesCreate).not.toHaveBeenCalled();
 });

@@ -1,8 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
 import { POST } from "@/app/api/scheduled-transactions/route";
 import { writeAudit } from "@/lib/audit";
 import { requireUser } from "@/lib/http";
+
+// Scheduling fixtures are relative to this date, never the machine's wall clock.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-09-03T12:00:00Z"));
+});
+afterEach(() => vi.useRealTimers());
 
 const from = vi.fn();
 

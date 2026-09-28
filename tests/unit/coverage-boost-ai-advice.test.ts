@@ -80,20 +80,19 @@ function authed(supabase: unknown) {
 }
 
 function jsonRequest(url: string, method: string, body: unknown, reject = false) {
-  return {
-    url,
+  return new NextRequest(new URL(url, "https://x.local"), {
     method,
-    json: () => (reject ? Promise.reject(new Error("boom")) : Promise.resolve(body)),
-  } as unknown as NextRequest;
+    body: reject ? "invalid-json" : JSON.stringify(body),
+    headers: { "content-type": "application/json" },
+  });
 }
 
 function formRequest(parts: [string, unknown][], reject = false) {
   const form = new FormData();
   for (const [key, value] of parts) form.set(key, value as Blob);
-  return {
-    url: "https://x.local",
-    formData: () => (reject ? Promise.reject(new Error("boom")) : Promise.resolve(form)),
-  } as unknown as NextRequest;
+  return new NextRequest("https://x.local", {
+    method: "POST", body: reject ? "invalid-form" : form,
+  });
 }
 
 beforeEach(() => {

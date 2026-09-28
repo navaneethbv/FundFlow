@@ -54,11 +54,8 @@ function rejectingJsonRequest() {
   return { url: "https://x.local", json: () => Promise.reject(new Error("json fail")) } as unknown as NextRequest;
 }
 
-function formRequest(formData: FormData | (() => Promise<FormData>)) {
-  return {
-    url: "https://x.local",
-    formData: typeof formData === "function" ? formData : async () => formData,
-  } as unknown as NextRequest;
+function formRequest(formData: FormData | string) {
+  return new NextRequest("https://x.local", { method: "POST", body: formData });
 }
 
 const png = new File(["fake-png-bytes"], "avatar.png", { type: "image/png" });
@@ -194,9 +191,9 @@ describe("coverage boost r6 n1: settings/profile route", () => {
 
     it("rejects when formData rejects (L126 catch arrow, L128 true)", async () => {
       mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: supabaseWith({ data: null, error: null }) });
-      const res = await profilePost(formRequest(() => Promise.reject(new Error("form fail"))));
+      const res = await profilePost(formRequest("invalid-form"));
       expect(res.status).toBe(400);
-      expect(mockBadRequest).toHaveBeenCalledWith("file is required");
+      await expect(res.json()).resolves.toEqual({ error: "Invalid request body" });
     });
 
     it("rejects a missing file (L127)", async () => {
@@ -209,8 +206,7 @@ describe("coverage boost r6 n1: settings/profile route", () => {
 
     it("rejects an oversized file (L129 true, B@129)", async () => {
       mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: supabaseWith({ data: null, error: null }) });
-      const big = new File(["x"], "big.png", { type: "image/png" });
-      Object.defineProperty(big, "size", { value: 3 * 1024 * 1024 + 1 });
+      const big = new File([new Uint8Array(3 * 1024 * 1024 + 1)], "big.png", { type: "image/png" });
       const form = new FormData();
       form.set("file", big);
       const res = await profilePost(formRequest(form));
@@ -238,7 +234,8 @@ describe("coverage boost r6 n1: settings/profile route", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body).toEqual({ ok: true, path: "u1/avatar.png" });
-      expect(upload).toHaveBeenCalledWith("u1/avatar.png", png, { contentType: "image/png", upsert: true });
+      expect(upload).toHaveBeenCalledWith("u1/avatar.png", expect.any(File), { contentType: "image/png", upsert: true });
+      await expect((upload.mock.calls[0]![1] as File).text()).resolves.toBe("fake-png-bytes");
       expect(mockWriteAudit).toHaveBeenCalledWith(
         expect.objectContaining({ userId: "u1", action: "avatar_updated", metadata: {} }),
       );

@@ -64,24 +64,24 @@ describe("dashboardScopeKey", () => {
   it("encodes every drill dimension", () => {
     // The trailing dimensions are the household scope (4.2), balance sheet
     // inclusion ("bs" default), and the viewer day (M-11).
-    expect(dashboardScopeKey(undefined, undefined)).toBe("all:default:all:-:-:-:mine:bs:server-day");
+    expect(dashboardScopeKey(undefined, undefined)).toBe(JSON.stringify([null, null, null, null, null, null, "mine", "bs", "server-day"]));
     expect(
       dashboardScopeKey("acct-1", "2026-07", {
         itemId: "item-1",
         drill: { category: "FOOD_AND_DRINK", sub: "FOOD_AND_DRINK_COFFEE" },
       }),
-    ).toBe("acct-1:2026-07:item-1:FOOD_AND_DRINK:FOOD_AND_DRINK_COFFEE:-:mine:bs:server-day");
+    ).toBe(JSON.stringify(["acct-1", "2026-07", "item-1", "FOOD_AND_DRINK", "FOOD_AND_DRINK_COFFEE", null, "mine", "bs", "server-day"]));
     expect(dashboardScopeKey(undefined, "2026-07", { drill: { merchant: "Netflix" } })).toBe(
-      "all:2026-07:all:-:-:Netflix:mine:bs:server-day",
+      JSON.stringify([null, "2026-07", null, null, null, "Netflix", "mine", "bs", "server-day"]),
     );
     expect(
       dashboardScopeKey(undefined, undefined, { scope: "household" }),
-    ).toBe("all:default:all:-:-:-:household:bs:server-day");
+    ).toBe(JSON.stringify([null, null, null, null, null, null, "household", "bs", "server-day"]));
     expect(
       dashboardScopeKey(undefined, undefined, { includeBalanceSheet: false }),
-    ).toBe("all:default:all:-:-:-:mine:no-bs:server-day");
+    ).toBe(JSON.stringify([null, null, null, null, null, null, "mine", "no-bs", "server-day"]));
     expect(dashboardScopeKey(undefined, undefined, { today: "2026-09-30" })).toBe(
-      "all:default:all:-:-:-:mine:bs:2026-09-30",
+      JSON.stringify([null, null, null, null, null, null, "mine", "bs", "2026-09-30"]),
     );
   });
 });
@@ -95,5 +95,28 @@ describe("createDashboardCache expiration", () => {
     await new Promise((res) => setTimeout(res, 5));
     const val = await cache.get("user-exp", "scope-1");
     expect(val).toBeNull();
+  });
+});
+
+
+describe("dashboard cache retention and scope identity", () => {
+  it("bounds retained scopes and keeps recently read entries", async () => {
+    const cache = createDashboardCache<string>(60_000);
+    for (let i = 0; i < 32; i++) await cache.set("owner", String(i), String(i));
+    await cache.get("owner", "0");
+    await cache.set("owner", "32", "32");
+    expect(await cache.get("owner", "1")).toBeNull();
+    expect(await cache.get("owner", "0")).toBe("0");
+    expect(await cache.get("owner", "32")).toBe("32");
+  });
+
+  it("keeps literal separators distinct across drill dimensions", () => {
+    expect(dashboardScopeKey(undefined, undefined, { drill: { category: "a:b", sub: "c" } }))
+      .not.toBe(dashboardScopeKey(undefined, undefined, { drill: { category: "a", sub: "b:c" } }));
+  });
+
+  it("keeps a literal placeholder distinct from an absent merchant", () => {
+    expect(dashboardScopeKey(undefined, undefined, { drill: { merchant: "-" } }))
+      .not.toBe(dashboardScopeKey(undefined, undefined));
   });
 });

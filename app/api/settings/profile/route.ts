@@ -1,3 +1,4 @@
+import { readFormBody } from "@/lib/request-body";
 import { NextResponse, type NextRequest } from "next/server";
 import { validateDisplayPrefsPatch, parseDisplayPrefs } from "@/components/settings/settings-nav";
 import { getClientIp, writeAudit } from "@/lib/audit";
@@ -125,7 +126,8 @@ export async function POST(request: NextRequest) {
   const { user, supabase } = auth;
 
   try {
-    const form = await request.formData().catch(() => null);
+    const form = await readFormBody(request, MAX_AVATAR_BYTES + 1024 * 1024);
+    if (form instanceof NextResponse) return form;
     const file = form?.get("file");
     if (!(file instanceof File)) return badRequest("file is required");
     if (file.size > MAX_AVATAR_BYTES) return badRequest("Image too large (3 MB max)");

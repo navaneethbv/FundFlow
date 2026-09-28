@@ -1,3 +1,4 @@
+import { assertSafeTestDatabase } from "../safe-test-database";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { loadEnvConfig } from "@next/env";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -28,6 +29,7 @@ test.describe.serial("accounts page", () => {
   let memberId = "";
 
   test.beforeAll(async () => {
+    assertSafeTestDatabase(SUPABASE_URL);
     admin = createClient(SUPABASE_URL!, SUPABASE_SECRET_KEY!, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
