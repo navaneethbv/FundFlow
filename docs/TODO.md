@@ -1,5 +1,11 @@
 # FundFlow — Future Todos
 
+## Reference adoption 1.3: import wizard
+
+Implementation branch `ui/import-wizard` depends on PR #195 and is the third branch in this stack.
+Keep `importWizard` off until the deferred authenticated mobile/desktop keyboard journey is verified against a disposable Supabase target.
+The item adds no migration; earlier saved-layout migration requirements still apply when their flags are enabled.
+
 ## Reference adoption 1.2: import diagnostics
 
 Implemented on `feat/import-preflight`, stacked on saved-layout PR #194, behind default-off `importPreflight` and its `importProfiles` prerequisite.

@@ -10,6 +10,7 @@ describe("feature flags", () => {
   it("keeps saved import layouts off by default", () => {
     expect(isFeatureEnabled("importProfiles", {})).toBe(false);
     expect(isFeatureEnabled("importPreflight", {})).toBe(false);
+    expect(isFeatureEnabled("importWizard", {})).toBe(false);
   });
   it("ships Accounts, Cash Flow, and Budget by default", () => {
     expect(isFeatureEnabled("accountsPage", {})).toBe(true);

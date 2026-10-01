@@ -12,6 +12,8 @@
 
 /** Every known flag and its shipped default. */
 export const FEATURE_FLAG_DEFAULTS = {
+  /** File drop, visible import steps, and keyboard focus transitions. */
+  importWizard: false,
   /** Read-only CSV diagnostics; requires importProfiles. */
   importPreflight: false,
   /** Saved CSV layouts; requires the import-profiles migration and acceptance. */

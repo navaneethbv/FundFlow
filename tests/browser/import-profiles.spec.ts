@@ -24,7 +24,7 @@ test.beforeAll(async () => {
           import { createElement } from "react";
           import { createRoot } from "react-dom/client";
           import ImportReviewSection from ${JSON.stringify(path.join(root, "components/settings/ImportReviewSection.tsx"))};
-          createRoot(document.getElementById("root")).render(createElement(ImportReviewSection, { profilesEnabled: !location.search.includes("off"), diagnosticsEnabled: !location.search.includes("off"), accounts: [{ id: "account", name: "Test bank", mask: null, kind: "account" }] }));
+          createRoot(document.getElementById("root")).render(createElement(ImportReviewSection, { wizardEnabled: !location.search.includes("off"), profilesEnabled: !location.search.includes("off"), diagnosticsEnabled: !location.search.includes("off"), accounts: [{ id: "account", name: "Test bank", mask: null, kind: "account" }] }));
         `;
       },
     }],
@@ -42,10 +42,16 @@ for (const width of [375, 1440]) {
       let submitted: unknown;
       let previews = 0;
       let preflights = 0;
+      let mappedRequest = "";
       await page.route("http://fundflow.test/**", async route => {
         const url = route.request().url();
         if (url.endsWith("/api/import/preflight")) {
           preflights++;
+          if (preflights === 4) {
+            await route.fulfill({ json: { needs_mapping: true, headers: ["When", "What", "Money"], sample: [["2026-02-01", "Next", "2"]], diagnostics: null } });
+            return;
+          }
+          if (preflights === 5) mappedRequest = route.request().postData() ?? "";
           await route.fulfill({ json: { diagnostics: {
             delimiter: "comma", headerRow: 2, totalRows: 1, validRows: preflights === 1 ? 0 : 1,
             signConvention: "positive_deposits", signBasis: "selected", inflowRows: 0, outflowRows: 1,
@@ -66,11 +72,27 @@ for (const width of [375, 1440]) {
       });
       await page.goto("http://fundflow.test/");
       await page.addScriptTag({ content: script });
-      await page.getByLabel("Statement file").setInputFiles({ name: "bank.csv", mimeType: "text/csv", buffer: Buffer.from("Bank statement\nDate,Description,Amount\n31/01/2026,Cafe,-12.50") });
+      await expect(page.getByLabel("Import steps").locator('[aria-current="step"]')).toHaveText("1. Choose file");
+      if (width === 375) {
+        await page.evaluate(() => {
+          const transfer = new DataTransfer();
+          transfer.items.add(new File(["Bank statement\nDate,Description,Amount\n31/01/2026,Cafe,-12.50"], "bank.csv", { type: "text/csv" }));
+          window.dispatchEvent(new DragEvent("dragover", { dataTransfer: transfer, cancelable: true }));
+        });
+        await expect(page.getByText("Drop one statement file to begin review")).toBeVisible();
+        await page.evaluate(() => {
+          const transfer = new DataTransfer();
+          transfer.items.add(new File(["Bank statement\nDate,Description,Amount\n31/01/2026,Cafe,-12.50"], "bank.csv", { type: "text/csv" }));
+          window.dispatchEvent(new DragEvent("drop", { dataTransfer: transfer, cancelable: true }));
+        });
+        await expect(page.getByLabel("Statement file")).toBeFocused();
+      } else await page.getByLabel("Statement file").setInputFiles({ name: "bank.csv", mimeType: "text/csv", buffer: Buffer.from("Bank statement\nDate,Description,Amount\n31/01/2026,Cafe,-12.50") });
+      await expect(page.getByLabel("Import steps").locator('[aria-current="step"]')).toHaveText("2. Map and check");
       await page.getByRole("button", { name: "Preview file" }).focus();
       await page.keyboard.press("Enter");
       await expect(page.getByText("No transactions have been staged.", { exact: false })).toBeVisible();
       expect(previews).toBe(0);
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
       await page.getByLabel("Date format").selectOption("dmy");
       await page.getByRole("button", { name: "Preview file" }).focus();
       await page.keyboard.press("Enter");
@@ -84,6 +106,8 @@ for (const width of [375, 1440]) {
       await page.keyboard.press("Tab");
       await page.keyboard.press("Enter");
       await expect(page.getByText("Applied saved layout: Bank layout")).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Review selected transactions" })).toBeFocused();
+      await expect(page.getByLabel("Import steps").locator('[aria-current="step"]')).toHaveText("3. Review");
       await expect(page.getByLabel("Date format")).toHaveValue("dmy");
       await expect(page.getByLabel("Leading rows to skip")).toHaveValue("1");
       await page.getByLabel("Save layout as (optional)").fill("New layout");
@@ -95,13 +119,43 @@ for (const width of [375, 1440]) {
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
       await page.screenshot({ path: testInfo.outputPath("import-layout-review.png"), fullPage: true });
       await page.keyboard.press("Enter");
-      await expect(page.getByText("Imported 1 transaction.")).toBeVisible();
+      await expect(page.getByText("Imported 1 transaction.")).toBeFocused();
+      await expect(page.getByLabel("Import steps").locator('[aria-current="step"]')).toHaveText("4. Complete");
       await expect(page.getByRole("status").filter({ hasText: "Saved this layout" })).toBeVisible();
       expect(submitted).toMatchObject({ batch_id: "batch", account_id: "account", approved_row_ids: ["row"], save_profile_name: "New layout" });
+      await page.getByLabel("Statement file").setInputFiles({ name: "next.csv", mimeType: "text/csv", buffer: Buffer.from("Date,Description,Amount\n2026-02-01,Next,2") });
+      await expect(page.getByText("Imported 1 transaction.")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Import 1 selected" })).toHaveCount(0);
+      await expect(page.getByLabel("Import steps").locator('[aria-current="step"]')).toHaveText("2. Map and check");
+      await page.getByRole("button", { name: "Preview file" }).focus();
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("heading", { name: "Map file columns" })).toBeFocused();
+      await page.getByRole("combobox", { name: "Date column", exact: true }).selectOption("0");
+      await page.getByRole("combobox", { name: "Description column", exact: true }).selectOption("1");
+      await page.getByRole("combobox", { name: "Amount column", exact: true }).selectOption("2");
+      await page.getByRole("button", { name: "Preview with this mapping" }).focus();
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("heading", { name: "Review selected transactions" })).toBeFocused();
+      expect(mappedRequest).toContain('name="column_map"');
+      expect(mappedRequest).toContain('"date":0,"description":1,"amount":2');
+      await page.getByLabel("Positive amounts are deposits").uncheck();
+      await expect(page.getByRole("button", { name: "Import 1 selected" })).toHaveCount(0);
+      await expect(page.getByLabel("Import steps").locator('[aria-current="step"]')).toHaveText("2. Map and check");
+      await page.getByLabel("Statement file").setInputFiles([]);
+      await expect(page.getByRole("button", { name: "Import 1 selected" })).toHaveCount(0);
+      await expect(page.getByLabel("Import steps").locator('[aria-current="step"]')).toHaveText("1. Choose file");
       await page.goto("http://fundflow.test/?off");
       await page.addScriptTag({ content: script });
       await expect(page.getByLabel("Statement file")).toBeVisible();
       await expect(page.getByRole("combobox", { name: "Saved layout", exact: true })).toHaveCount(0);
+      await expect(page.getByLabel("Import steps")).toHaveCount(0);
+      expect(await page.evaluate(() => {
+        const transfer = new DataTransfer();
+        transfer.items.add(new File(["ignored"], "off.csv", { type: "text/csv" }));
+        const event = new DragEvent("drop", { dataTransfer: transfer, cancelable: true });
+        window.dispatchEvent(event);
+        return event.defaultPrevented;
+      })).toBe(false);
     });
   }
 }

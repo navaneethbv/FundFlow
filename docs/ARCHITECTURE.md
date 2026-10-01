@@ -479,3 +479,12 @@ Duplicate rows remain warnings because identical purchases can be legitimate; ot
 `POST /api/import/preflight` uses cookie authentication, a fail-closed per-user rate limit, bounded multipart/file sizes, and count-only audit metadata.
 Responses cap detailed issues at 100 while retaining the full issue count, and files over 20,000 data records are refused rather than truncated.
 Dedicated OFX and application-export validation remains with the existing specialized preview parsers.
+
+## Import wizard interactions (reference adoption 1.3)
+
+`importWizard`, default off, enhances the existing Settings Data import surface without adding a second parser or commit path.
+`components/settings/ImportWizard.tsx` scopes file-drop listeners to the mounted import screen, ignores non-file or already-handled drags, prevents navigation during busy imports, and removes listeners on unmount or disablement.
+The existing native file input remains keyboard-accessible, using the shared Input primitive's standard React 19 ref prop.
+`ImportReviewSection.tsx` reuses existing column mapping and parsed-row review, displays four steps, and focuses mapping, review, and completion when those stages become available.
+Choosing or clearing a file resets the previous batch, selection, layout settings and diagnostic state before another commit is possible.
+Changing date, sign, layout, or leading-row settings invalidates the current preview and requires another review; controls are disabled during wizard requests.

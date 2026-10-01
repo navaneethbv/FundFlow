@@ -2,6 +2,29 @@
 
 Last updated: 2026-10-01. Read this first to resume.
 
+## 2026-10-01: reference adoption 1.3, import wizard
+
+Current worktree `/private/tmp/fundflow-import-wizard`, branch `ui/import-wizard`, based on PR #195 (`feat/import-preflight`) at `2cf0f7d`.
+This is the third branch in the saved-layout/import stack; do not add a fourth dependent branch before earlier PRs merge.
+PR #194 passed all hosted checks at `6820c96`; all emitted #195 checks passed at `2cf0f7d`.
+The pinned personal-finance-tracker dropzone, mapping wizard, and preview were read for interaction behavior.
+FundFlow already implements column naming, samples, date/sign settings, duplicate review, and explicit commit in `ImportReviewSection.tsx`; those surfaces are reused.
+
+New default-off `importWizard` adds a page-wide file drop listener only while the Data import section is mounted, native keyboard file selection, four visible steps, focus transitions to mapping/review/completion, and stale-preview clearing when files or parsing settings change.
+`components/settings/ImportWizard.tsx` contains the scoped drop hook and progress list.
+`components/ui/Input.tsx` accepts the standard React 19 input ref prop so the shared primitive supports dropped-file selection and focus.
+No route or migration is added by this item.
+
+A browser test first failed on the absent progress indicator before implementation.
+Initial four browser fixtures passed for mobile/desktop and both themes; expanded fixtures now exercise drop, manual mapping focus, replacement/cleared files, sign explanation, and off-state event behavior.
+Full coverage passed 495 suites / 5,509 tests at 98.46% statements, 96.10% branches, 98.60% functions, and 99.57% lines.
+Final expanded browser fixtures, lint, and typecheck passed; logs are `/private/tmp/fundflow-wizard-{browser,lint,types}.log`.
+The browser checks cover mapping/review/completion focus, drop and keyboard file selection, clearing stale batches after file/sign changes, disabled-feature event behavior, overflow, and axe checks including diagnostic errors.
+The signed-in journey remains deferred with owner approval; these are isolated component fixtures with mocked HTTP.
+
+Next: finish verification, update the graph, review the diff, open a draft PR against `feat/import-preflight` using an explicit source/destination push refspec, record the item in the canonical plan on PR #192, then work on item 1.4 from an appropriately shallow base.
+Preserve all existing worktrees and the primary checkout's original dirty files.
+
 ## 2026-10-01: reference adoption 1.2, import diagnostics
 
 Current worktree `/private/tmp/fundflow-import-preflight`, branch `feat/import-preflight`, based on saved-layout PR #194 at `6820c96`.
