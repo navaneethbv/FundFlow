@@ -10,7 +10,8 @@ insert into public.api_tokens (user_id, name, token_hash) values
   ('19000000-0000-0000-0000-000000000001', 'owner', 'review-owner-token'),
   ('19000000-0000-0000-0000-000000000002', 'other', 'review-other-token');
 insert into public.calendar_tokens (user_id, token_hash) values
-  ('19000000-0000-0000-0000-000000000001', 'review-calendar-token');
+  ('19000000-0000-0000-0000-000000000001', 'review-calendar-token'),
+  ('19000000-0000-0000-0000-000000000002', 'review-other-calendar-token');
 
 do $$ begin
   assert not has_table_privilege('authenticated', 'public.api_tokens', 'INSERT'), 'Mint bypasses step-up';
@@ -21,10 +22,30 @@ do $$ begin
   assert (select expires_at = now() + interval '90 days' from public.api_tokens where token_hash = 'review-owner-token'), 'Wrong expiry default';
 end $$;
 
--- A single-device logout preserves integrations while another session exists.
+-- Logging out one device preserves both integrations while another session exists.
 delete from auth.sessions where id = '29000000-0000-0000-0000-000000000001';
 do $$ begin
-  assert (select revoked_at is null from public.api_tokens where token_hash = 'review-owner-token'), 'Single-device logout revoked integrations';
+  assert (select revoked_at is null from public.api_tokens where token_hash = 'review-owner-token'), 'Single-device logout revoked API token';
+  assert (select revoked_at is null from public.calendar_tokens where token_hash = 'review-calendar-token'), 'Single-device logout revoked calendar token';
+end $$;
+
+-- Ordinary Logout defaults to global scope; final-session cleanup must also be harmless.
+-- There is only one session left, covering logout on a user's sole device.
+delete from auth.sessions where user_id = '19000000-0000-0000-0000-000000000001';
+do $$ begin
+  assert not exists (select 1 from auth.sessions where user_id = '19000000-0000-0000-0000-000000000001'), 'Logout left a session';
+  assert (select revoked_at is null from public.api_tokens where token_hash = 'review-owner-token'), 'Final-session logout revoked API token';
+  assert (select revoked_at is null from public.calendar_tokens where token_hash = 'review-calendar-token'), 'Final-session logout revoked calendar token';
+end $$;
+
+-- Deleting multiple sessions in one statement also preserves both integrations.
+insert into auth.sessions (id, user_id, created_at, updated_at) values
+  ('29000000-0000-0000-0000-000000000001', '19000000-0000-0000-0000-000000000001', now(), now()),
+  ('29000000-0000-0000-0000-000000000002', '19000000-0000-0000-0000-000000000001', now(), now());
+delete from auth.sessions where user_id = '19000000-0000-0000-0000-000000000001';
+do $$ begin
+  assert (select revoked_at is null from public.api_tokens where token_hash = 'review-owner-token'), 'All-session logout revoked API token';
+  assert (select revoked_at is null from public.calendar_tokens where token_hash = 'review-calendar-token'), 'All-session logout revoked calendar token';
 end $$;
 
 -- Credential changes revoke both kinds of capability without touching other users.
@@ -32,7 +53,8 @@ update auth.users set encrypted_password = 'changed-test-hash' where id = '19000
 do $$ begin
   assert (select revoked_at is not null from public.api_tokens where token_hash = 'review-owner-token'), 'Password change retained API token';
   assert (select revoked_at is not null from public.calendar_tokens where token_hash = 'review-calendar-token'), 'Password change retained calendar token';
-  assert (select revoked_at is null from public.api_tokens where token_hash = 'review-other-token'), 'Revoked another user';
+  assert (select revoked_at is null from public.api_tokens where token_hash = 'review-other-token'), 'Revoked another user API token';
+  assert (select revoked_at is null from public.calendar_tokens where token_hash = 'review-other-calendar-token'), 'Revoked another user calendar token';
   begin
     update public.api_tokens set revoked_at = null where token_hash = 'review-owner-token';
     raise exception 'Revoked token was reactivated';
@@ -42,19 +64,17 @@ do $$ begin
 end $$;
 
 insert into public.api_tokens (user_id, name, token_hash) values
- ('19000000-0000-0000-0000-000000000001', 'global-signout', 'review-global-token');
-delete from auth.sessions where user_id = '19000000-0000-0000-0000-000000000001';
-do $$ begin
-  assert (select revoked_at is not null from public.api_tokens where token_hash = 'review-global-token'), 'Global sign-out retained token';
-end $$;
-
-insert into public.api_tokens (user_id, name, token_hash) values
  ('19000000-0000-0000-0000-000000000001', 'mfa-reset', 'review-mfa-token');
+insert into public.calendar_tokens (user_id, token_hash) values
+ ('19000000-0000-0000-0000-000000000001', 'review-mfa-calendar-token');
 insert into auth.mfa_factors (id,user_id,friendly_name,factor_type,status,created_at,updated_at,secret) values
  ('39000000-0000-0000-0000-000000000001','19000000-0000-0000-0000-000000000001','Fixture','totp','verified',now(),now(),'fixture');
 delete from auth.mfa_factors where id = '39000000-0000-0000-0000-000000000001';
 do $$ begin
-  assert (select revoked_at is not null from public.api_tokens where token_hash = 'review-mfa-token'), 'MFA reset retained token';
+  assert (select revoked_at is not null from public.api_tokens where token_hash = 'review-mfa-token'), 'MFA reset retained API token';
+  assert (select revoked_at is not null from public.calendar_tokens where token_hash = 'review-mfa-calendar-token'), 'MFA reset retained calendar token';
+  assert (select revoked_at is null from public.api_tokens where token_hash = 'review-other-token'), 'MFA reset revoked another user API token';
+  assert (select revoked_at is null from public.calendar_tokens where token_hash = 'review-other-calendar-token'), 'MFA reset revoked another user calendar token';
 end $$;
 
 -- PostgREST can infer the full unique index and retries do not replace content.

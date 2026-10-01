@@ -5,8 +5,9 @@ revoke insert, update on public.api_tokens from authenticated;
 grant update (revoked_at) on public.api_tokens to authenticated;
 
 -- Credential lifecycle events can happen directly through Supabase Auth.
--- Database triggers therefore also cover password resets and global sign-out
--- performed outside this application's UI.
+-- Database triggers cover password changes and verified MFA factor removal
+-- performed outside this application's UI. Sign-out and session cleanup must
+-- preserve integration tokens, even when no sessions remain.
 create function private.revoke_export_tokens_on_auth_change()
 returns trigger language plpgsql security definer set search_path = '' as $$
 declare owner_id uuid;
@@ -14,10 +15,6 @@ begin
   if TG_TABLE_NAME = 'users' then
     if NEW.encrypted_password is not distinct from OLD.encrypted_password then return NEW; end if;
     owner_id := NEW.id;
-  elsif TG_TABLE_NAME = 'sessions' then
-    owner_id := OLD.user_id;
-    -- A single-device logout does not revoke unrelated integrations.
-    if exists (select 1 from auth.sessions where user_id = owner_id) then return OLD; end if;
   else
     owner_id := OLD.user_id;
     if OLD.status <> 'verified' then return OLD; end if;
@@ -30,8 +27,6 @@ end;
 $$;
 revoke all on function private.revoke_export_tokens_on_auth_change() from public, anon, authenticated;
 create trigger revoke_export_tokens_on_password_change after update of encrypted_password on auth.users
-for each row execute function private.revoke_export_tokens_on_auth_change();
-create trigger revoke_export_tokens_on_global_signout after delete on auth.sessions
 for each row execute function private.revoke_export_tokens_on_auth_change();
 create trigger revoke_export_tokens_on_mfa_reset after delete on auth.mfa_factors
 for each row execute function private.revoke_export_tokens_on_auth_change();

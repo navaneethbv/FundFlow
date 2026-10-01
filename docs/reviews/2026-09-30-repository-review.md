@@ -125,12 +125,14 @@ Both unit failures and the audit failure are gates `ci.yml` runs (`test:coverage
 - `requireUser()` upserts `user_session_records.last_seen_at` on every authenticated API request, which is a write per request and grows one row per session forever.
 - **Fix:** a documented retention policy per table, a daily prune in the cron, and throttle the `last_seen_at` write (skip when the stored value is under 5 minutes old).
 
-### P2-4 Personal API tokens never expire and survive "sign out everywhere"
+### P2-4 Personal API tokens never expire or react to credential changes
 
-- `api_tokens` has no `expires_at` (`supabase/migrations/20260723150000_bucket_features.sql:85`), and nothing revokes API or calendar tokens on password change, MFA reset, or session revocation.
+- `api_tokens` has no `expires_at` (`supabase/migrations/20260723150000_bucket_features.sql:85`), and nothing revokes API or calendar tokens on password change or verified MFA factor removal.
 - Minting a token, which grants the full privacy-safe export indefinitely, does not require MFA step-up the way account deletion and restore do.
 - `verifyApiToken` (`lib/api-tokens.ts:41`) ignores the query error, so a transient database failure reads as "invalid token" rather than 503.
-- **Fix:** add `expires_at` with a default (for example 90 days) and show it in Settings, revoke all tokens when the user revokes all sessions or changes the password, require step-up to mint, and surface lookup errors as 503.
+- **Fix:** add `expires_at` with a default (for example 90 days) and show it in Settings, revoke API/calendar tokens on password change or verified MFA factor removal, preserve explicit per-token revoke in Settings, require step-up to mint, and surface lookup errors as 503.
+  Sign-out and Auth session cleanup must preserve integration tokens, including when the final session is deleted.
+  A dedicated "revoke all integrations" or "sign out of all devices" action does not exist yet and remains deferred.
 
 ### P2-5 Open signup on a single-household deployment
 
@@ -218,7 +220,7 @@ These statuses describe local code, not a deployment.
 | P2-1 | Fixed locally. Both automatic and manual Plaid limits fail closed; automatic requests return the existing skipped response. |
 | P2-2 | Partly not reproduced, partly fixed. The cron already pruned counters and sync jobs. Invalid calendar tokens now consume a hashed client-IP budget; only verified tokens create per-token counters. Global counters expire after two days. |
 | P2-3 | Fixed locally with deliberate retention exceptions. Owner-scoped daily pruning retains audit logs for 365 days, exports for 90 days, completed sync jobs for 30 days, inactive non-revoked sessions for 90 days, and window-deduped notifications for 90 days. Revoked session records and exact notification subjects remain durable because deleting them would remove security or replay barriers. |
-| P2-4 | Implemented locally, pending schema verification and rollout. API tokens expire after 90 days, minting requires fresh step-up, client inserts are denied, and only revocation is client-writable. Lookup failures return 503. Auth password changes, final-session deletion/global sign-out, and verified MFA factor removal revoke API/calendar tokens through database triggers. Revocation cannot be undone. Existing tokens receive a 90-day migration grace period. |
+| P2-4 | Implemented locally, PostgreSQL smoke checks passed; full Auth acceptance and rollout pending. API tokens expire after 90 days, minting requires fresh step-up, client inserts are denied, and only revocation is client-writable. Lookup failures return 503. Auth password changes and verified MFA factor removal revoke API/calendar tokens through database triggers. Tokens also become unusable on expiry or explicit per-token revoke in Settings; sign-out and session cleanup do not revoke them. A dedicated "revoke all integrations" or "sign out of all devices" action is deferred. Revocation cannot be undone. Existing tokens receive a 90-day migration grace period. |
 | P2-5 | Deferred by explicit user decision. Local Supabase configuration permits signup and sets a six-character minimum password. No allowlist hook is enabled. Production Auth configuration was not inspected or changed. |
 | P2-6 | Fixed locally. GET opens a confirmation page; a same-origin POST accepts. Password, passkey, MFA, and OAuth login preserve a validated local return path. Invite lookup errors surface instead of appearing as invalid links. |
 | P2-7 | Implemented locally, pending schema verification. The membership helper moves to the unexposed private schema while policy dependencies retain its OID and execute permission. |
@@ -242,10 +244,13 @@ Apply and verify these migrations in a disposable environment before any deploym
 - `20261001052000_api_token_lifecycle.sql`
 
 The new rollback-only `scripts/check-review-remediation.sql` is wired into migration CI for token permissions, lifecycle revocation, private helper placement, and notification conflict inference.
-It has not been run locally.
+The sign-out regression follow-up replayed all 89 migrations on clean local PostgreSQL 17.11 with minimal Auth/Storage schema stand-ins, then passed both RLS and lifecycle scripts with `ON_ERROR_STOP=1`.
+The new final-session assertion failed against the original migration before the fix.
+Real Supabase Auth acceptance remains unverified; see [the latest handoff](../HANDOFF.md#2026-09-30-preserve-integration-tokens-across-sign-out).
 The token trigger behavior and RLS must pass the migration smoke workflow and real Auth lifecycle acceptance before rollout.
-No migrations, production settings, live financial writes, pushes, PRs, or deployments were performed in this session.
-No approved disposable Supabase target or local Docker stack was available, so database integration and `scripts/check-rls.sql` remain unverified.
+No live migrations, production settings, live financial writes, pushes, PRs, or deployments were performed in this session.
+No approved disposable Supabase target or local Docker stack was available, so full Auth integration remains unverified.
+The local PostgreSQL RLS and lifecycle checks above passed during the follow-up.
 
 ### Local verification
 
@@ -257,9 +262,10 @@ Five Chromium checks passed: token form keyboard interaction, expiry display, ov
 The token UI checks use the actual component with synthetic responses; they do not establish authenticated persistence or Supabase Auth behavior.
 Signed-in confirmation-page and token lifecycle acceptance remain blocked on the disposable Auth environment.
 
-The production build is blocked in this execution environment: Turbopack reports `creating new process -> binding to a port -> Operation not permitted (os error 1)` even after escalation.
-The webpack diagnostic fallback also fails because `node:crypto` from the existing `lib/planning.ts` dependency chain reaches a client bundle.
-The normal development server compiles the login page successfully.
+The original remediation run could not build in its execution environment: Turbopack reported `creating new process -> binding to a port -> Operation not permitted (os error 1)` even after escalation.
+The webpack diagnostic fallback also failed because `node:crypto` from the existing `lib/planning.ts` dependency chain reaches a client bundle.
+The normal development server compiled the login page successfully.
+The sign-out regression follow-up subsequently passed `npm run build` with Turbopack; the earlier environment blocker no longer applies to this checkout.
 Final gate results are recorded in `docs/HANDOFF.md`.
 
 ## Hand-off prompt
