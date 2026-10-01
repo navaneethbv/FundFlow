@@ -91,6 +91,19 @@ function transaction(index: number) {
 }
 
 describe("lib/export", () => {
+  it("never exports the provider raw descriptor, even when returned by a query", async () => {
+    const client = pagedExportClient({
+      profiles: { data: [{ ai_export_enabled: true }] },
+      transactions: { data: [{ ...transaction(0), original_description: "PRIVATE-DESCRIPTOR-731" }] },
+    });
+    const result = await fetchPrivacySafeRows(client as unknown as SupabaseClient, "user-1");
+    expect(result.allowed).toBe(true);
+    if (!result.allowed) throw new Error("Fixture unexpectedly denied");
+    expect(result.rows).toEqual([{ date: "2026-07-01", merchant: "Merchant 0", amount: 1, category: "FOOD_AND_DRINK" }]);
+    expect(JSON.stringify(result)).not.toContain("PRIVATE-DESCRIPTOR-731");
+    expect(client.calls.transactions.find(call => call.method === "select")?.args[0]).not.toContain("original_description");
+  });
+
   let mockSupabase: Partial<SupabaseClient>;
 
   beforeEach(() => {

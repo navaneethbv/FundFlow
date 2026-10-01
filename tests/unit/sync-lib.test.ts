@@ -80,7 +80,7 @@ describe("lib/sync", () => {
   };
 
   describe("syncItemTransactions", () => {
-    it("fetches pages from Plaid, upserts transactions, handles large txns and cancelled subscriptions, and updates cursor", async () => {
+    it.each(["BANK-ONLY-DESCRIPTOR-731", undefined])("syncs a page with optional raw descriptor %s and preserves existing notifications", async (originalDescription) => {
       mockTransactionsSync.mockResolvedValueOnce({
         data: {
           added: [
@@ -91,6 +91,7 @@ describe("lib/sync", () => {
               date: "2026-07-28",
               merchant_name: "Netflix",
               name: "NETFLIX.COM",
+              original_description: originalDescription,
               personal_finance_category: { primary: "ENTERTAINMENT" },
             },
           ],
@@ -156,6 +157,13 @@ describe("lib/sync", () => {
         "txn-1",
         "exact",
       );
+      expect(mockTransactionsSync).toHaveBeenCalledWith({
+        access_token: "access-token-123", cursor: "cursor-0",
+        options: { include_original_description: true },
+      });
+      expect(upsertTxns).toHaveBeenCalledWith([
+        expect.objectContaining({ original_description: originalDescription ?? null }),
+      ], { onConflict: "plaid_transaction_id" });
       expect(mockCompleteItemCursor).toHaveBeenCalledWith("user-1", "item-db-1", "cursor-next");
       expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", null);
     });
@@ -375,6 +383,7 @@ describe("lib/sync", () => {
       expect(mockTransactionsSync).toHaveBeenCalledWith({
         access_token: "access-token-123",
         cursor: "cursor-0",
+        options: { include_original_description: true },
       });
       expect(mockCompleteItemCursor).not.toHaveBeenCalled();
     });
