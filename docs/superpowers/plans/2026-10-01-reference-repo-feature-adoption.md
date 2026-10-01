@@ -308,8 +308,8 @@ No dependency changes are included in feature PRs.
 
 | Item | Status | PR / evidence |
 | --- | --- | --- |
-| 0.1 | Implemented; local build blocked, browser/integration deferred | `scripts/check-pending-carryover.sql` |
-| 0.2 | Not started |  |
+| 0.1 | Draft PR; hosted checks running, browser/integration deferred | [#192](https://github.com/navaneethbv/FundFlow/pull/192) |
+| 0.2 | Not reproduced; skipped per verification rule | Unique holding key rejects duplicate-security rollups |
 | 0.3 | Not started |  |
 | 1.1 | Not started |  |
 | 1.2 | Not started |  |
@@ -377,7 +377,7 @@ No dependency changes are included in feature PRs.
 
 ### 0.1 decisions and evidence
 
-Reproduced against the existing schema with `scripts/check-pending-carryover.sql -v legacy=true`: pending note, tags and classification override disappeared after deletion.
+Reproduced against the existing schema with `scripts/check-pending-carryover.sql` with `fundflow.test_legacy_sync=on`: pending note, tags and classification override disappeared after deletion.
 Plaid documents that pending removal and posted addition can arrive on separate pages of the same update: [transaction states](https://plaid.com/docs/transactions/transactions-data/).
 The original implementation queues removal ids on the owning item across routine and bounded repair pages, resetting them when an invalidated cursor chain restarts.
 `finish_transaction_sync_page` moves annotations, splits, receipts, recurring associations and goal event links before deleting, in one transaction, scoped to both user and item.
@@ -395,3 +395,12 @@ Hosted build verification is pending; no production rollout is authorized.
 Recovery record: the first attempted branch push unintentionally updated main and triggered production deployment.
 With explicit owner approval, production was rolled back and corrective PR #191 restored main after green checks; its administrator exception was limited to that corrective PR.
 Item 0.1 is reintroduced on `fix/pending-annotation-preservation` from restored main, using a non-tracking branch and verified explicit push refspecs.
+
+### 0.2 verification
+
+Read Tallyo's pinned `server-rs/src/wealth/adapters/plaid_dedupe.rs` and FundFlow's `lib/investment-sync.ts`.
+The reference condition requires multiple rows for the same account/security, including a rollup.
+FundFlow upserts on `(account_id, security_id, source)`, protected by `20260810140000_holdings_upsert_conflict.sql`.
+An original synthetic 3-unit / 9-unit / 12-unit rollup batch in isolated PostgreSQL fails with SQLSTATE 21000 and persists no partial holdings.
+The reported double-counting hypothesis was not reproduced, so no heuristic row deletion is added.
+A separate possible sync-rejection case remains for verified provider lot/rollup payloads; handling it would require conservative lot aggregation and a real representative fixture.

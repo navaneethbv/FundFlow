@@ -50,7 +50,7 @@ jobs:
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-transaction-review.sql
 
       - name: Verify pending annotation carryover
-        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -v legacy=false -f scripts/check-pending-carryover.sql
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-pending-carryover.sql
 
       - name: Verify PostgreSQL review benchmark queries
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/fixtures/transaction-review-benchmark.sql

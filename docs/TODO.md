@@ -2,6 +2,10 @@
 
 ## Reference adoption program: pending verification
 
+Item 0.2 did not reproduce double counting: the same-security lot/rollup batch fails atomically on the existing holdings unique key.
+If a real provider sends this shape, investigate the resulting sync rejection with a representative sanitized fixture before adding lot aggregation or heuristic rollup removal.
+
+
 - Item 0.1 local build blocked by Turbopack worker-port permissions; Webpack fallback fails on an existing `node:crypto` client import through `lib/planning.ts`.
   Hosted build evidence is still required.
 - Item 0.1: migration `20261001100000_pending_annotation_carryover.sql` is unapplied to production.

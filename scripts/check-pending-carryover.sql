@@ -16,17 +16,20 @@ insert into public.transaction_splits(user_id,transaction_id,category,amount) va
 update public.transaction_review_states set version=7 where transaction_id='54000000-0000-0000-0000-000000000001';
 
 -- Plaid removes the pending row on an earlier page than its replacement.
-\if :legacy
+do $$ begin
+ if current_setting('fundflow.test_legacy_sync', true)='on' then
  delete from public.transactions where user_id='51000000-0000-0000-0000-000000000001' and plaid_transaction_id='fixture-pending';
-\else
- select public.finish_transaction_sync_page('51000000-0000-0000-0000-000000000001','52000000-0000-0000-0000-000000000001',array['fixture-pending'],false,true);
-\endif
+else
+ perform public.finish_transaction_sync_page('51000000-0000-0000-0000-000000000001','52000000-0000-0000-0000-000000000001',array['fixture-pending'],false,true);
+end if;
+end $$;
 insert into public.transactions(id,user_id,account_id,plaid_transaction_id,pending_transaction_id,amount,date,pending)
  values ('54000000-0000-0000-0000-000000000002','51000000-0000-0000-0000-000000000001','53000000-0000-0000-0000-000000000001','fixture-posted','fixture-pending',40,'2026-10-02',false);
-\if :legacy
-\else
- select public.finish_transaction_sync_page('51000000-0000-0000-0000-000000000001','52000000-0000-0000-0000-000000000001',array[]::text[],true,false);
-\endif
+do $$ begin
+ if current_setting('fundflow.test_legacy_sync', true) is distinct from 'on' then
+ perform public.finish_transaction_sync_page('51000000-0000-0000-0000-000000000001','52000000-0000-0000-0000-000000000001',array[]::text[],true,false);
+end if;
+end $$;
 
 do $$ begin
  assert exists (select 1 from public.transaction_annotations where transaction_id='54000000-0000-0000-0000-000000000002' and note='Trip meal' and tags=array['trip'] and display_category='Dining' and cash_flow_classification='expense'), 'Pending annotation, tags and override were lost';
