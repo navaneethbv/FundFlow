@@ -1,5 +1,13 @@
 # FundFlow — Future Todos
 
+## Reference adoption 1.2: import diagnostics
+
+Implemented on `feat/import-preflight`, stacked on saved-layout PR #194, behind default-off `importPreflight` and its `importProfiles` prerequisite.
+The bank CSV diagnostics path validates without staging; OFX, Mint, Monarch, and YNAB continue through their dedicated preview validation.
+No new migration is added by 1.2.
+Before enablement, perform the deferred signed-in mobile/desktop import journey against a disposable Supabase target, including malformed files, manual mapping, saved-profile reuse, and keyboard navigation.
+Local synthetic fixtures do not replace this acceptance.
+
 ## Reference adoption 1.1: saved import layouts
 
 Implemented on `feat/import-profiles` behind `importProfiles: false`.

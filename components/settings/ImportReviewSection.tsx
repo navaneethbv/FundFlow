@@ -1,5 +1,7 @@
 "use client";
 
+import ImportDiagnostics from "@/components/settings/ImportDiagnostics";
+import type { ImportPreflight } from "@/lib/import-preflight";
 import { accountDisplayLabel } from "@/lib/account-label";
 
 import { useState } from "react";
@@ -64,11 +66,12 @@ function uniqueKeys(values: readonly unknown[], prefix: string): string[] {
  * unchecked by default so the safe path never re-imports duplicates. When
  * columns can't be auto-detected, a manual column-mapping step is offered.
  */
-export default function ImportReviewSection({ accounts, profilesEnabled = false }: Readonly<{ accounts: AccountOption[]; profilesEnabled?: boolean }>) {
+export default function ImportReviewSection({ accounts, profilesEnabled = false, diagnosticsEnabled = false }: Readonly<{ accounts: AccountOption[]; profilesEnabled?: boolean; diagnosticsEnabled?: boolean }>) {
   const router = useRouter();
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const [positiveIsIncome, setPositiveIsIncome] = useState(true);
   const [dateOrder, setDateOrder] = useState<"auto" | "mdy" | "dmy" | "ymd">("auto");
+  const [diagnostics, setDiagnostics] = useState<ImportPreflight | null>(null);
   const [skipRows, setSkipRows] = useState(0);
   const [profileId, setProfileId] = useState("");
   const [profileChoices, setProfileChoices] = useState<Array<{ id: string; name: string }>>([]);
@@ -130,6 +133,24 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false 
     return form;
   }
 
+  async function checkFile(form: FormData): Promise<boolean> {
+    if (!diagnosticsEnabled) return true;
+    setDiagnostics(null);
+    const response = await fetch("/api/import/preflight", { method: "POST", body: form });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error ?? "File check failed");
+    if (result.needs_profile_choice) {
+      applyProfilePreview(result);
+      return false;
+    }
+    setDiagnostics(result.diagnostics ?? null);
+    if (result.needs_mapping) {
+      setMapping({ headers: result.headers ?? [], sample: result.sample ?? [] });
+      return false;
+    }
+    return result.diagnostics?.canPreview !== false;
+  }
+
   async function runPreview(file: File, columnMap?: Record<string, number | null>) {
     setBusy(true);
     setError(null);
@@ -141,6 +162,7 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false 
     setProfileNotice(null);
     try {
       const form = previewForm(file, columnMap);
+      if (!await checkFile(form)) return;
       const res = await fetch("/api/import/preview", { method: "POST", body: form });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error ?? "Preview failed");
@@ -354,7 +376,7 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false 
             accept=".csv,.ofx,.qfx,text/csv,application/x-ofx"
             required
             className="max-w-xs"
-            onChange={(event) => setPendingFile(event.target.files?.[0] ?? null)}
+            onChange={(event) => { setPendingFile(event.target.files?.[0] ?? null); setDiagnostics(null); }}
           />
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2">
@@ -421,6 +443,8 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false 
           </Button>
         </form>
       )}
+
+      {diagnosticsEnabled && diagnostics && <ImportDiagnostics report={diagnostics} />}
 
       {sourceAccounts.length > 0 && (
         <div className="mt-4 space-y-3 rounded-field border border-panel-border bg-panel-2 p-3 text-sm">

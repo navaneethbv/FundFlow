@@ -469,3 +469,13 @@ Preview snapshots the validated layout on `import_review_batches.layout_profile`
 After a durable import, the service-only `save_committed_import_profile` RPC requires a committed owner batch with committed rows, serializes the 100-profile owner quota, and refuses duplicate names.
 `import_profiles` permits only authenticated owner reads with MFA and session-revocation gates; no authenticated writes or RPC execution are granted.
 The profile feature does not change specialized application-export parsers or outbound financial data.
+
+## Bank CSV preflight (reference adoption 1.2)
+
+`importPreflight`, default off and dependent on `importProfiles`, adds a read-only check before the Settings import preview stages rows.
+`lib/import-preflight.ts` reports physical file lines for malformed dates, ambiguous date order, unsafe number formats, oversized amounts, mismatched row widths, competing debit/credit fields, and duplicate normalized transactions.
+It detects delimiters and possible leading headers without rewriting the source file or silently changing conventions.
+Duplicate rows remain warnings because identical purchases can be legitimate; other errors require correction before this UI proceeds.
+`POST /api/import/preflight` uses cookie authentication, a fail-closed per-user rate limit, bounded multipart/file sizes, and count-only audit metadata.
+Responses cap detailed issues at 100 while retaining the full issue count, and files over 20,000 data records are refused rather than truncated.
+Dedicated OFX and application-export validation remains with the existing specialized preview parsers.

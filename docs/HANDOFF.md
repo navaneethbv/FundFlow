@@ -2,6 +2,30 @@
 
 Last updated: 2026-10-01. Read this first to resume.
 
+## 2026-10-01: reference adoption 1.2, import diagnostics
+
+Current worktree `/private/tmp/fundflow-import-preflight`, branch `feat/import-preflight`, based on saved-layout PR #194 at `6820c96`.
+Open the PR against `feat/import-profiles`, documenting the dependency; no merge is authorized.
+PR #194 passed all hosted checks, including build, migrations, security and quality gates, at that exact base.
+Its temporary reference source is `/private/tmp/fundflow-reference-pft`; this item reads Sure's preflight behavior from `/private/tmp/fundflow-reference-sure` at the plan pin, without copying code or text.
+
+New `lib/import-preflight.ts` reports bank CSV delimiter/header problems, physical row positions, invalid or ambiguous dates, numeric format/range problems, competing debit/credit amounts, malformed quoting, and duplicate normalized rows.
+`POST /api/import/preflight` is cookie-authenticated, rate-limited, body-bounded, and audited with counts only; it stages no financial data and accepts no API tokens.
+Both `importPreflight` and its `importProfiles` prerequisite must be enabled; both stay off by default.
+Settings checks CSV files before preview staging and shows a keyboard-accessible diagnostic table; dedicated OFX/application-export parsers keep their existing validation path.
+No new migration is needed for 1.2.
+
+Validation: lint, typecheck, all 495 unit suites / 5,509 tests, and four Chromium fixtures at 375px/1440px in both themes passed.
+Final coverage: 98.46% statements, 96.10% branches, 98.60% functions, and 99.57% lines.
+The final focused run passed 35 tests, including the encoded multipart body still asserting 413 after a File-serializer race invalidated an earlier run.
+Only `/private/tmp/fundflow-preflight-coverage-verified.log` records the accepted full run; the earlier `coverage-final` log contains the invalidated serializer rejection.
+The diagnostic/API edge suite covers physical line numbers, quoted and escaped newlines, amount grouping and range, duplicate warnings, row limits, disabled flags, authentication, rate limiting, and body bounds.
+Signed-in browser journeys and full Supabase integration remain deferred with owner approval; no production credentials or database are used.
+
+Next: commit and push only `HEAD:refs/heads/feat/import-preflight` after a dry run, open a draft PR against `feat/import-profiles`, verify hosted checks, and record 1.2 in the canonical plan on PR #192.
+Then continue 1.3, keeping the stack at most three branches deep.
+The user's dirty primary checkout remains preserved; never reset, clean, stash, or overwrite it.
+
 ## 2026-10-01: reference adoption 1.1, saved import layouts
 
 Worktree `/private/tmp/fundflow-import-profiles`, branch `feat/import-profiles`, based on restored main `a19a0a6`.

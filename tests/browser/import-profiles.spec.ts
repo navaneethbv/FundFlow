@@ -24,7 +24,7 @@ test.beforeAll(async () => {
           import { createElement } from "react";
           import { createRoot } from "react-dom/client";
           import ImportReviewSection from ${JSON.stringify(path.join(root, "components/settings/ImportReviewSection.tsx"))};
-          createRoot(document.getElementById("root")).render(createElement(ImportReviewSection, { profilesEnabled: !location.search.includes("off"), accounts: [{ id: "account", name: "Test bank", mask: null, kind: "account" }] }));
+          createRoot(document.getElementById("root")).render(createElement(ImportReviewSection, { profilesEnabled: !location.search.includes("off"), diagnosticsEnabled: !location.search.includes("off"), accounts: [{ id: "account", name: "Test bank", mask: null, kind: "account" }] }));
         `;
       },
     }],
@@ -41,9 +41,18 @@ for (const width of [375, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       let submitted: unknown;
       let previews = 0;
+      let preflights = 0;
       await page.route("http://fundflow.test/**", async route => {
         const url = route.request().url();
-        if (url.endsWith("/api/import/preview")) {
+        if (url.endsWith("/api/import/preflight")) {
+          preflights++;
+          await route.fulfill({ json: { diagnostics: {
+            delimiter: "comma", headerRow: 2, totalRows: 1, validRows: preflights === 1 ? 0 : 1,
+            signConvention: "positive_deposits", signBasis: "selected", inflowRows: 0, outflowRows: 1,
+            issues: preflights === 1 ? [{ code: "ambiguous_date", row: 3, severity: "error", message: "Choose an explicit date format." }] : [],
+            issueCount: preflights === 1 ? 1 : 0, truncated: false, canPreview: preflights > 1,
+          } } });
+        } else if (url.endsWith("/api/import/preview")) {
           previews++;
           await route.fulfill({ json: previews === 1 ? { needs_profile_choice: true, profiles: [{ id: "bank", name: "Bank layout" }, { id: "other", name: "Other layout" }] } : {
             batch_id: "batch", can_save_profile: true, applied_profile: { id: "bank", name: "Bank layout" },
@@ -58,6 +67,11 @@ for (const width of [375, 1440]) {
       await page.goto("http://fundflow.test/");
       await page.addScriptTag({ content: script });
       await page.getByLabel("Statement file").setInputFiles({ name: "bank.csv", mimeType: "text/csv", buffer: Buffer.from("Bank statement\nDate,Description,Amount\n31/01/2026,Cafe,-12.50") });
+      await page.getByRole("button", { name: "Preview file" }).focus();
+      await page.keyboard.press("Enter");
+      await expect(page.getByText("No transactions have been staged.", { exact: false })).toBeVisible();
+      expect(previews).toBe(0);
+      await page.getByLabel("Date format").selectOption("dmy");
       await page.getByRole("button", { name: "Preview file" }).focus();
       await page.keyboard.press("Enter");
       await expect(page.getByText("Several layouts match.", { exact: false })).toBeVisible();
@@ -82,7 +96,7 @@ for (const width of [375, 1440]) {
       await page.screenshot({ path: testInfo.outputPath("import-layout-review.png"), fullPage: true });
       await page.keyboard.press("Enter");
       await expect(page.getByText("Imported 1 transaction.")).toBeVisible();
-      await expect(page.getByRole("status")).toContainText("Saved this layout");
+      await expect(page.getByRole("status").filter({ hasText: "Saved this layout" })).toBeVisible();
       expect(submitted).toMatchObject({ batch_id: "batch", account_id: "account", approved_row_ids: ["row"], save_profile_name: "New layout" });
       await page.goto("http://fundflow.test/?off");
       await page.addScriptTag({ content: script });
