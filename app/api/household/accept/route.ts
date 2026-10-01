@@ -11,7 +11,7 @@ import { writeAudit, getClientIp } from "@/lib/audit";
  * pass the owner-only RLS insert policy) with every value derived from the
  * validated invite row, never from request input.
  */
-export async function GET(request: NextRequest) {
+export function GET(request: NextRequest) {
   const url = new URL("/household/accept", request.url);
   url.searchParams.set("token", request.nextUrl.searchParams.get("token") ?? "");
   return NextResponse.redirect(url);

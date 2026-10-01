@@ -153,7 +153,7 @@ describe("Routes and Domain Coverage Boost", () => {
       expect(res.status).toBe(207);
       const json = await res.json();
       expect(json.ok).toBe(false);
-      expect(json.failures.length).toBe(2);
+      expect(json.failures).toHaveLength(2);
     });
   });
 
@@ -178,7 +178,7 @@ describe("Routes and Domain Coverage Boost", () => {
       const res = await lifeEventsGet();
       expect(res.status).toBe(200);
       const json = await res.json();
-      expect(json.events.length).toBe(1);
+      expect(json.events).toHaveLength(1);
       expect(json.events[0].type).toBe("child");
     });
 
@@ -364,7 +364,7 @@ describe("Routes and Domain Coverage Boost", () => {
         ],
       });
 
-      expect(res.timeline.length).toBe(13);
+      expect(res.timeline).toHaveLength(13);
       expect(res.timeline[3]!.netWorthWithEvents).toBeDefined();
     });
   });

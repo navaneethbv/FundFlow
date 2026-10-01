@@ -15,6 +15,11 @@ import type { DisplayPrefs } from "@/components/settings/settings-nav";
  * ThemeToggle in the top bar stays — this is the persisted default it and
  * every fresh session start from, not a replacement for it.
  */
+function resolveTheme(theme: DisplayPrefs["theme"]): "light" | "dark" {
+  if (theme !== "system") return theme;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
 export default function DisplaySection({ initialPrefs }: Readonly<{ initialPrefs: DisplayPrefs }>) {
   const router = useRouter();
   const [prefs, setPrefs] = useState(initialPrefs);
@@ -22,13 +27,7 @@ export default function DisplaySection({ initialPrefs }: Readonly<{ initialPrefs
   const [status, setStatus] = useState<string | null>(null);
 
   function applyThemePreference(theme: DisplayPrefs["theme"]) {
-    const resolved =
-      theme === "system"
-        ? window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light"
-        : theme;
-    document.documentElement.dataset.theme = resolved;
+    document.documentElement.dataset.theme = resolveTheme(theme);
     try {
       if (theme === "system") localStorage.removeItem("fundflow-theme");
       else localStorage.setItem("fundflow-theme", theme);

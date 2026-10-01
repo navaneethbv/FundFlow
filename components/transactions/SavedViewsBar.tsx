@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Button from "@/components/ui/Button";
 
@@ -28,6 +28,12 @@ export default function SavedViewsBar({
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const nameInput = useRef<HTMLInputElement>(null);
+
+  // Move focus only when the user opens the name field, not on page load.
+  useEffect(() => {
+    if (saving) nameInput.current?.focus();
+  }, [saving]);
 
   const hasFilters = Object.keys(currentParams).length > 0;
 
@@ -90,8 +96,8 @@ export default function SavedViewsBar({
         (saving ? (
           <form onSubmit={save} className="inline-flex items-center gap-1">
             <input
+              ref={nameInput}
               aria-label="Saved view name"
-              autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="View name"

@@ -299,7 +299,7 @@ describe("Sync and Investments Coverage Boost", () => {
 
       const res = dedupeRelinkedAccounts(accountsWithEqualFreshness);
       // Neither suppressed because freshness is equal
-      expect(res.length).toBe(4);
+      expect(res).toHaveLength(4);
 
       // Account missing mask or name -> accountFingerprint returns null -> signature is null
       const invalidAccount = [
