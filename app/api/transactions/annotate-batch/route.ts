@@ -1,3 +1,4 @@
+import { invalidateDashboardCache } from "@/lib/dashboard-cache";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -72,6 +73,7 @@ export async function POST(request: NextRequest) {
       .upsert(upserts, { onConflict: "user_id,transaction_id" });
     if (error) throw error;
 
+    invalidateDashboardCache(user.id);
     await writeAudit({
       userId: user.id,
       action: "bulk_tag_applied",

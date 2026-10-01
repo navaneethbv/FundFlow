@@ -1,3 +1,4 @@
+import { invalidateDashboardCache } from "@/lib/dashboard-cache";
 import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
@@ -309,6 +310,7 @@ async function linkConfirmedTransfer(
     );
   }
   if (linkError) throw linkError;
+  invalidateDashboardCache(userId);
   return null;
 }
 
@@ -463,6 +465,7 @@ async function handleSingleTransferRequest(
     metadata: { subject_id: subjectId },
   });
 
+  invalidateDashboardCache(userId);
   return NextResponse.json({ ok: true });
 }
 

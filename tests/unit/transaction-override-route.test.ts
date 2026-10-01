@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const mockInvalidate = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/dashboard-cache", () => ({ invalidateDashboardCache: mockInvalidate }));
 import { NextResponse } from "next/server";
 import { clientStub } from "../fixtures/supabase-query";
 
@@ -168,6 +171,7 @@ describe("transaction override route", () => {
         }),
       }),
     );
+    expect(mockInvalidate).toHaveBeenCalledWith(expect.any(String));
   });
 
   it("audits an update when the transaction already has an override", async () => {

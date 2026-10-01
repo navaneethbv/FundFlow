@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const mockInvalidate = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/dashboard-cache", () => ({ invalidateDashboardCache: mockInvalidate }));
 import { NextRequest, NextResponse } from "next/server";
 
 let featureEnabled = true;
@@ -231,6 +234,7 @@ describe("PATCH /api/transactions/review", () => {
       },
       ip: "127.0.0.1",
     });
+    expect(mockInvalidate).toHaveBeenCalledWith(expect.any(String));
   });
 
   it("records transaction_review_reopened audit action when reopening", async () => {

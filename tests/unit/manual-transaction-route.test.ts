@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mockInvalidate = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/dashboard-cache", () => ({ invalidateDashboardCache: mockInvalidate }));
 import { NextRequest, NextResponse } from "next/server";
 import { clientStub } from "../fixtures/supabase-query";
 
@@ -119,6 +122,7 @@ describe("POST /api/transactions/manual", () => {
       expect.objectContaining({ action: "manual_transaction_created" }),
     );
     expect(mockAnnotatePost).not.toHaveBeenCalled();
+    expect(mockInvalidate).toHaveBeenCalledWith(expect.any(String));
   });
 
   it("stores a credit as a negative signed amount", async () => {

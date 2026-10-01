@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const mockInvalidate = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/dashboard-cache", () => ({ invalidateDashboardCache: mockInvalidate }));
+
 /**
  * Recording mock of the RLS-scoped Supabase client. Every builder method is
  * chainable and awaitable; select().eq().maybeSingle() returns the owned
@@ -69,6 +72,7 @@ describe("POST /api/transactions/annotate", () => {
       column: "user_id",
       value: "u1",
     });
+    expect(mockInvalidate).toHaveBeenCalledWith(expect.any(String));
   });
 
   it("rejects splits that do not sum to the transaction amount", async () => {

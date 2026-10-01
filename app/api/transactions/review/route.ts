@@ -1,3 +1,4 @@
+import { invalidateDashboardCache } from "@/lib/dashboard-cache";
 import { NextRequest, NextResponse } from "next/server";
 import { getClientIp, writeAudit } from "@/lib/audit";
 import { isFeatureEnabled } from "@/lib/feature-flags";
@@ -93,6 +94,7 @@ async function handlePatch(request: NextRequest) {
     }
 
     const result = data as TransactionReviewResult;
+    invalidateDashboardCache(user.id);
 
     // Record audit: only counts and status, no personal transaction payload
     const auditAction =
