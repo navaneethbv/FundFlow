@@ -151,37 +151,58 @@ export async function syncItemTransactions(
   }
 }
 
-async function notifySyncedTransactions(
-  supabase: ReturnType<typeof createServiceClient>,
-  userId: string,
-  rows: ReturnType<typeof mapTransactionRow>[],
-): Promise<void> {
-  const { data: alertPref, error: alertPrefError } = await supabase
-    .from("alert_preferences").select("*").eq("user_id", userId).maybeSingle();
-  if (alertPrefError) throw alertPrefError;
-  let timezone = "UTC";
+type SyncedRow = ReturnType<typeof mapTransactionRow>;
+type ServiceClient = ReturnType<typeof createServiceClient>;
+
+/** The viewer's timezone for alert windows; a failed read falls back to UTC. */
+async function loadAlertTimezone(supabase: ServiceClient, userId: string): Promise<string> {
   try {
     const { data, error } = await supabase.from("profiles").select("timezone").eq("id", userId).maybeSingle();
     if (error) throw error;
-    timezone = data?.timezone || "UTC";
+    return data?.timezone || "UTC";
   } catch (error) {
     logError("sync.alert-timezone", error);
+    return "UTC";
   }
-  const today = dateKeyInTimezone(new Date(), timezone);
+}
+
+function largeTransactionCandidates(
+  rows: SyncedRow[],
+  threshold: number,
+  today: string,
+): NotificationCandidate[] {
   const oldest = addDays(today, -6);
-  const largeThreshold = Number(alertPref?.large_transaction_threshold ?? 500);
-  const candidates: NotificationCandidate[] = [];
-  for (const row of rows) {
-    if (row.amount < largeThreshold || row.date < oldest || row.date > today) continue;
-    candidates.push({
-      type: "large_transaction",
-      subjectKey: row.pending_transaction_id ?? row.plaid_transaction_id,
-      details: {
-        title: `Large transaction: ${row.merchant_name || row.name || "Unknown"}`,
-        body: `A transaction of ${formatCurrency(row.amount)} was recorded at ${row.merchant_name || row.name || "Unknown"} on ${row.date}.`,
-      },
+  return rows
+    .filter((row) => row.amount >= threshold && row.date >= oldest && row.date <= today)
+    .map((row) => {
+      const merchant = row.merchant_name || row.name || "Unknown";
+      return {
+        type: "large_transaction",
+        subjectKey: row.pending_transaction_id ?? row.plaid_transaction_id,
+        details: {
+          title: `Large transaction: ${merchant}`,
+          body: `A transaction of ${formatCurrency(row.amount)} was recorded at ${merchant} on ${row.date}.`,
+        },
+      };
     });
-  }
+}
+
+/**
+ * An authorization preceding cancellation must not alert just because its
+ * pending charge posts later. Date-only data cannot order same-day events.
+ */
+function isChargeAfterCancellation(row: SyncedRow, cancelledOn: string | undefined, today: string): boolean {
+  if (!cancelledOn || row.pending || row.amount <= 0 || row.date > today) return false;
+  return (row.authorized_date ?? row.date) > cancelledOn;
+}
+
+async function cancellationCandidates(
+  supabase: ServiceClient,
+  userId: string,
+  rows: SyncedRow[],
+  timezone: string,
+  today: string,
+): Promise<NotificationCandidate[]> {
   try {
     const { data: cancelledRows, error } = await supabase
       .from("cancelled_subscriptions").select("merchant, created_at").eq("user_id", userId);
@@ -191,13 +212,10 @@ async function notifySyncedTransactions(
       const date = dateKeyInTimezone(new Date(row.created_at), timezone);
       cancelled.set((row.merchant as string).trim().toLowerCase(), date);
     }
+    const candidates: NotificationCandidate[] = [];
     for (const row of rows) {
       const merchant = (row.merchant_name || row.name || "").trim();
-      const cancelledOn = cancelled.get(merchant.toLowerCase());
-      // An authorization preceding cancellation must not alert just because
-      // its pending charge posts later. Date-only data cannot order same-day events.
-      if (!cancelledOn || row.pending || row.amount <= 0 || row.date > today ||
-          (row.authorized_date ?? row.date) <= cancelledOn) continue;
+      if (!isChargeAfterCancellation(row, cancelled.get(merchant.toLowerCase()), today)) continue;
       candidates.push({
         type: "cancellation_watch", subjectKey: row.plaid_transaction_id,
         details: {
@@ -206,9 +224,28 @@ async function notifySyncedTransactions(
         },
       });
     }
+    return candidates;
   } catch (watchError) {
     logError("sync.cancellation_watch", watchError);
+    return [];
   }
+}
+
+async function notifySyncedTransactions(
+  supabase: ServiceClient,
+  userId: string,
+  rows: SyncedRow[],
+): Promise<void> {
+  const { data: alertPref, error: alertPrefError } = await supabase
+    .from("alert_preferences").select("*").eq("user_id", userId).maybeSingle();
+  if (alertPrefError) throw alertPrefError;
+  const timezone = await loadAlertTimezone(supabase, userId);
+  const today = dateKeyInTimezone(new Date(), timezone);
+  const largeThreshold = Number(alertPref?.large_transaction_threshold ?? 500);
+  const candidates = [
+    ...largeTransactionCandidates(rows, largeThreshold, today),
+    ...await cancellationCandidates(supabase, userId, rows, timezone, today),
+  ];
   await createNotificationsBatch(userId, candidates, alertPref).catch((error) =>
     logError("sync.transaction_notifications", error),
   );
