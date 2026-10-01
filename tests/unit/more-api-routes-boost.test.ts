@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
 import { PATCH as sinkingFundPatch, DELETE as sinkingFundDelete } from "@/app/api/sinking-funds/[id]/route";
-import { GET as householdAcceptGet } from "@/app/api/household/accept/route";
+import { POST as householdAcceptGet } from "@/app/api/household/accept/route";
 import { POST as householdInvitePost } from "@/app/api/household/invite/route";
 import { GET as settingsAuditGet } from "@/app/api/settings/audit/route";
 import { POST as subCancelledPost, DELETE as subCancelledDelete } from "@/app/api/subscriptions/cancelled/route";
@@ -82,9 +82,9 @@ describe("More API Routes Boost Suite", () => {
         supabase: clientStub() as never,
       });
 
-      const reqShortToken = new NextRequest("http://localhost/api/household/accept?token=short");
+      const reqShortToken = new NextRequest("http://localhost/api/household/accept?token=short", { method: "POST", headers: { origin: "http://localhost" } });
       const resShort = await householdAcceptGet(reqShortToken);
-      expect(resShort.status).toBe(307);
+      expect(resShort.status).toBe(303);
     });
 
     it("handles household invite POST authorization, rate limit, validation, and email dispatch", async () => {
@@ -301,9 +301,11 @@ describe("More API Routes Boost Suite", () => {
       });
       expect((await tokensPost(reqPostBad)).status).toBe(400);
 
+      vi.spyOn(await import("@/lib/supabase/service"), "createServiceClient").mockReturnValue(client as never);
+      vi.spyOn(await import("@/lib/step-up"), "verifyStepUp").mockResolvedValue(true);
       const reqPostGood = new NextRequest("http://localhost/api/tokens", {
         method: "POST",
-        body: JSON.stringify({ name: "CI Token" }),
+        body: JSON.stringify({ name: "CI Token", code: "proof" }),
       });
       expect((await tokensPost(reqPostGood)).status).toBe(200);
 

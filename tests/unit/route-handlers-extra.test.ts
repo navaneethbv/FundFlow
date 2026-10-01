@@ -152,9 +152,10 @@ describe("route handler edge cases", () => {
         supabase: mockSupabase,
       });
 
+      vi.spyOn(await import("@/lib/supabase/service"), "createServiceClient").mockReturnValue(mockSupabase);
       const postReq = new NextRequest("http://localhost/api/tokens", {
         method: "POST",
-        body: JSON.stringify({ name: "My Token" }),
+        body: JSON.stringify({ name: "My Token", code: "proof" }),
       });
       const postRes = await tokensPost(postReq);
       expect(postRes.status).toBe(200);
@@ -290,3 +291,5 @@ describe("route handler edge cases", () => {
     });
   });
 });
+
+vi.mock("@/lib/step-up", () => ({ verifyStepUp: async () => true }));

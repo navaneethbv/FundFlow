@@ -38,18 +38,21 @@ export async function verifyApiToken(
   if (!token.startsWith(API_TOKEN_PREFIX) || token.length < 30) return null;
 
   const service = createServiceClient();
-  const { data: row } = await service
+  const { data: row, error } = await service
     .from("api_tokens")
     .select("id, user_id")
     .eq("token_hash", hashApiToken(token))
     .is("revoked_at", null)
+    .gt("expires_at", new Date().toISOString())
     .maybeSingle();
+  if (error) throw error;
   if (!row) return null;
 
   await service
     .from("api_tokens")
     .update({ last_used_at: new Date().toISOString() })
     .eq("id", row.id)
+    .eq("user_id", row.user_id)
     .then(() => undefined, () => undefined);
 
   return row.user_id as string;

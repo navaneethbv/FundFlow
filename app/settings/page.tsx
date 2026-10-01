@@ -277,7 +277,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
         .order("created_at"),
       supabase
         .from("api_tokens")
-        .select("id, name, created_at, last_used_at")
+        .select("id, name, created_at, last_used_at, expires_at")
         .is("revoked_at", null)
         .order("created_at"),
       supabase.from("profiles").select("ai_export_enabled").eq("id", userId).maybeSingle(),
@@ -288,7 +288,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
         <CalendarFeedSection initialTokens={calendarTokens ?? []} />
         <ApiTokensSection
           initialTokens={
-            (apiTokens ?? []) as Array<{ id: string; name: string; created_at: string; last_used_at: string | null }>
+            (apiTokens ?? []) as Array<{ id: string; name: string; created_at: string; expires_at: string; last_used_at: string | null }>
           }
         />
         <AiInsightsSection enabled={aiSettings?.enabled ?? false} />

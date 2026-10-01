@@ -22,7 +22,10 @@ export async function resolveExportContext(
     if (!allowed) {
       return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
     }
-    const userId = await verifyApiToken(authHeader);
+    let userId: string | null;
+    try { userId = await verifyApiToken(authHeader); } catch (error) {
+      return errorResponse("export.token-lookup", error, 503);
+    }
     if (!userId) return auth;
     return { userId, supabase: createServiceClient() };
   }

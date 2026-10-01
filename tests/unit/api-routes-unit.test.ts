@@ -227,9 +227,10 @@ describe("API Route Handlers Unit Tests", () => {
         user: { id: "user-1" },
         supabase: db,
       });
+      vi.spyOn(await import("@/lib/supabase/service"), "createServiceClient").mockReturnValue(db as never);
       const req = new NextRequest("http://localhost/api/tokens", {
         method: "POST",
-        body: JSON.stringify({ name: "My Token" }),
+        body: JSON.stringify({ name: "My Token", code: "proof" }),
       });
       const res = await tokenPost(req);
       expect(res.status).toBe(200);
@@ -245,7 +246,7 @@ describe("API Route Handlers Unit Tests", () => {
       mockCheckRateLimit.mockResolvedValue(false);
       const req = new NextRequest("http://localhost/api/tokens", {
         method: "POST",
-        body: JSON.stringify({ name: "My Token" }),
+        body: JSON.stringify({ name: "My Token", code: "proof" }),
       });
       const res = await tokenPost(req);
       expect(res.status).toBe(429);
@@ -541,3 +542,5 @@ describe("API Route Handlers Unit Tests", () => {
     });
   });
 });
+
+vi.mock("@/lib/step-up", () => ({ verifyStepUp: async () => true }));
