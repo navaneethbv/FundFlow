@@ -1,6 +1,34 @@
-# FundFlow — Session Handoff
+# FundFlow Session Handoff
 
-Last updated: 2026-09-26. Read this first to resume.
+Last updated: 2026-09-30. Read this first to resume.
+
+## 2026-09-30: repository review remediation, local only
+
+The [review and finding status](reviews/2026-09-30-repository-review.md#implementation-status-2026-09-30-local-work) records every fixed, deferred, and not-reproduced item.
+Work remains on `fix/security-ui-memory`, starting at `b86d84b`, in focused local commits.
+No push, PR, deployment, live migration, or production Auth configuration change was performed.
+The user explicitly deferred the signup allowlist hook; local signup remains enabled and production signup configuration is unverified.
+
+Implemented deterministic and future-clock CI tests, patched dependencies, first-sync and pending/posting alert protections, cancellation-date checks, batched notification writes, iOS detection and session-owned login alerts, dashboard invalidation, viewer-date reporting, operational retention, fail-closed Plaid/calendar budgets, bounded provider calls, token expiry and fresh step-up, confirmed household acceptance, and validated login return paths.
+Small model/payload and feature documentation updates are included.
+Revoked session records and exact alert dedupe subjects deliberately survive retention to preserve security and replay barriers.
+
+Local verification: 5,424 coverage tests passed; the unchanged coverage gates passed at 98.43 percent statements, 96.11 percent branches, 98.57 percent functions, and 99.57 percent lines.
+The 2030 clock run passed all 5,423 unit tests; 23 focused tests also passed after the final notification database-column mapping fix.
+Lint, TypeScript, palette validation, and dependency audit passed; the audit reports zero vulnerabilities.
+Five Chromium checks passed, covering the token component at 375/1440 pixels in both themes with keyboard and accessibility checks, plus the real signed-out invitation redirect.
+The component checks use synthetic responses and do not prove authenticated persistence.
+
+Production build verification is blocked: Turbopack reports `creating new process -> binding to a port -> Operation not permitted (os error 1)` even after escalation.
+The webpack fallback reports an existing `node:crypto` import from the planning dependency chain reaching a client bundle.
+The development server compiled the login page successfully.
+No approved disposable Supabase target or local Docker stack was available, so database integration, RLS, real Auth lifecycle, and authenticated confirmation-page acceptance remain unverified.
+The new rollback-only `scripts/check-review-remediation.sql` is wired into migration CI but has not run locally.
+
+Before deployment, validate all three `2026100105*` migrations against a disposable database, including `scripts/check-rls.sql`, the new lifecycle smoke script, and real Auth password/MFA/global-signout behavior.
+Have the owner apply the validated migrations before dependent application code.
+Hosted checks have not run for these local commits.
+Credit utilization, external error monitoring, broader integration coverage, and the larger P3 findings remain follow-ups described in the review and TODO.
 
 ## 2026-09-26: local security, UI, and memory improvements
 

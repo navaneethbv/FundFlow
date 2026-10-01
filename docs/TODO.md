@@ -1,5 +1,14 @@
 # FundFlow — Future Todos
 
+## September 30 review remediation
+
+Local implementation and per-finding status are recorded in [the review](reviews/2026-09-30-repository-review.md#implementation-status-2026-09-30-local-work).
+Before rollout, verify all three new migrations, RLS, Auth token revocation triggers, notification replay behavior, and signed-in flows against an approved disposable Supabase project.
+The production build remains blocked by the execution environment's Turbopack worker-port restriction.
+The owner explicitly deferred the signup allowlist; production signup settings remain unverified.
+No production migrations or deployment have been performed.
+
+
 Nice-to-have features and enhancements, deferred out of the initial build.
 
 ## Security, UI, and memory review (2026-09-26)
