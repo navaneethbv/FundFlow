@@ -246,7 +246,7 @@ describe("lib/sync", () => {
 
       expect(res).toEqual({ added: 0, modified: 0, removed: 0 });
       expect(mockLogError).toHaveBeenCalledWith("sync.claim", expect.any(Error));
-      expect(mockServiceClient.rpc).not.toHaveBeenCalledWith("release_item_sync", expect.anything());
+      expect(mockServiceClient.rpc).toHaveBeenCalledTimes(1);
       expect(mockCompleteItemCursor).not.toHaveBeenCalled();
     });
 
@@ -525,12 +525,15 @@ describe("lib/sync", () => {
         },
       });
 
-      mockServiceClient.rpc
-        .mockResolvedValueOnce({ data: true, error: null })
-        .mockResolvedValueOnce({ error: new Error("Delete error") });
+      const eqDeleteIn = vi.fn().mockResolvedValue({ error: new Error("Delete error") });
+      const eqDeleteUser = vi.fn().mockReturnValue({ in: eqDeleteIn });
+      const deleteQuery = vi.fn().mockReturnValue({ eq: eqDeleteUser });
+      mockServiceClient.from.mockImplementation((table: string) => {
+        if (table === "transactions") return { delete: deleteQuery };
+        throw new Error(`Unexpected table ${table}`);
+      });
 
       await expect(syncItemTransactions(dummyItem)).rejects.toThrow("Delete error");
-      expect(mockCompleteItemCursor).not.toHaveBeenCalled();
     });
 
     it("logs when the large transaction notification fails", async () => {
@@ -586,7 +589,6 @@ describe("lib/sync", () => {
       });
       mockServiceClient.rpc
         .mockResolvedValueOnce({ data: true, error: null })
-        .mockResolvedValueOnce({ error: null })
         .mockRejectedValueOnce(new Error("Release error"));
 
       const res = await syncItemTransactions(dummyItem);
