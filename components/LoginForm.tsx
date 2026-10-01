@@ -64,12 +64,14 @@ export default function LoginForm() {
 
   useEffect(() => {
     let active = true;
-    (async () => {
+    void (async () => {
       const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
       if (active && data && needsMfaStepUp(data.currentLevel, data.nextLevel)) {
         setMfaRequired(true);
       }
-    })();
+    })().catch(() => {
+      // Pre-detection only; sign-in re-checks the level and the proxy enforces it.
+    });
     return () => {
       active = false;
     };
