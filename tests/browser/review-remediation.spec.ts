@@ -76,10 +76,3 @@ for (const width of [375, 1440]) {
     });
   }
 }
-
-test("signed-out invitation preserves its return path on the real login page", async ({ page }) => {
-  await page.goto("http://localhost:4317/household/accept?token=local-synthetic-invitation");
-  await expect(page).toHaveURL(/\/login\?next=/);
-  expect(new URL(page.url()).searchParams.get("next")).toBe("/household/accept?token=local-synthetic-invitation");
-  await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
-});

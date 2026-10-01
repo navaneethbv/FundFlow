@@ -39,6 +39,13 @@ test("unauthenticated dashboard visit redirects to login", async ({ page }) => {
   await expect(page).toHaveURL(/\/login/);
 });
 
+test("signed-out invitation preserves its return path on the login page", async ({ page }) => {
+  await page.goto("/household/accept?token=local-synthetic-invitation");
+  await expect(page).toHaveURL(/\/login\?next=/);
+  expect(new URL(page.url()).searchParams.get("next")).toBe("/household/accept?token=local-synthetic-invitation");
+  await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
+});
+
 test("mutating API rejects unauthenticated callers", async ({ request }) => {
   const response = await request.post("/api/plaid/sync", {
     data: { source: "e2e-smoke" },
