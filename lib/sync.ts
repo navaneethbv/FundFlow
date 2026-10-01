@@ -265,6 +265,7 @@ async function applyTransactionPage(
   supabase: ReturnType<typeof createServiceClient>,
   data: TransactionSyncPage,
   notify: boolean,
+  restart: boolean,
 ): Promise<SyncResult> {
   await upsertAccounts(item.user_id, item.id, data.accounts);
   const accountMap = await getAccountIdMap(item.user_id);
@@ -283,20 +284,22 @@ async function applyTransactionPage(
       .from("transactions")
       .upsert(upsertRows, { onConflict: "plaid_transaction_id" });
     if (error) throw error;
-    if (notify) {
-      await notifySyncedTransactions(supabase, item.user_id, upsertRows);
-    }
   }
   const removedIds = data.removed
     .map((row) => row.transaction_id)
     .filter((id): id is string => Boolean(id));
-  if (removedIds.length > 0) {
-    const { error } = await supabase
-      .from("transactions")
-      .delete()
-      .eq("user_id", item.user_id)
-      .in("plaid_transaction_id", removedIds);
-    if (error) throw error;
+  // Queue removals until the full update chain has delivered replacements.
+  // The RPC carries user edits and deletes the pending rows atomically.
+  const { error: finishError } = await supabase.rpc("finish_transaction_sync_page", {
+    p_user_id: item.user_id,
+    p_item_id: item.id,
+    p_removed_ids: removedIds,
+    p_complete: !data.has_more,
+    p_restart: restart,
+  });
+  if (finishError) throw finishError;
+  if (notify && upsertRows.length > 0) {
+    await notifySyncedTransactions(supabase, item.user_id, upsertRows);
   }
   return {
     added: data.added.length,
@@ -419,7 +422,9 @@ async function runTransactionSyncLoop(
         cursor,
       });
       const data = response.data as TransactionSyncPage;
-      const pageResult = await applyTransactionPage(item, supabase, data, options.notify);
+      const pageResult = await applyTransactionPage(
+        item, supabase, data, options.notify, pagesCompleted === 0 && startCursor === committedCursor,
+      );
       result.added += pageResult.added;
       result.modified += pageResult.modified;
       result.removed += pageResult.removed;
