@@ -48,11 +48,18 @@ function uniqueKeys(values: readonly unknown[], prefix: string): string[] {
  * unchecked by default so the safe path never re-imports duplicates. When
  * columns can't be auto-detected, a manual column-mapping step is offered.
  */
-export default function ImportReviewSection({ accounts }: Readonly<{ accounts: AccountOption[] }>) {
+export default function ImportReviewSection({ accounts, profilesEnabled = false }: Readonly<{ accounts: AccountOption[]; profilesEnabled?: boolean }>) {
   const router = useRouter();
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const [positiveIsIncome, setPositiveIsIncome] = useState(true);
   const [dateOrder, setDateOrder] = useState<"auto" | "mdy" | "dmy" | "ymd">("auto");
+  const [skipRows, setSkipRows] = useState(0);
+  const [profileId, setProfileId] = useState("");
+  const [profileChoices, setProfileChoices] = useState<Array<{ id: string; name: string }>>([]);
+  const [canSaveProfile, setCanSaveProfile] = useState(false);
+  const [profileName, setProfileName] = useState("");
+  const [appliedProfile, setAppliedProfile] = useState<string | null>(null);
+  const [profileNotice, setProfileNotice] = useState<string | null>(null);
   const [dateFormatRequired, setDateFormatRequired] = useState(false);
   const [sourceAccounts, setSourceAccounts] = useState<string[]>([]);
   const [sourceAccountTargets, setSourceAccountTargets] = useState<Record<string, string>>({});
@@ -80,15 +87,39 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
     setBusy(true);
     setError(null);
     setAnnotationConflicts([]);
+    setRows([]);
+    setBatchId(null);
+    setCanSaveProfile(false);
+    setAppliedProfile(null);
+    setProfileNotice(null);
     try {
       const form = new FormData();
       form.set("file", file);
       form.set("positive_is_income", String(positiveIsIncome));
       if (dateOrder !== "auto") form.set("date_order", dateOrder);
+      if (profilesEnabled) {
+        form.set("skip_rows", String(skipRows));
+        if (profileId) form.set("profile_id", profileId);
+      }
       if (columnMap) form.set("column_map", JSON.stringify(columnMap));
       const res = await fetch("/api/import/preview", { method: "POST", body: form });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error ?? "Preview failed");
+      if (profilesEnabled && json.needs_profile_choice) {
+        setProfileChoices(json.profiles ?? []);
+        setMapping(null);
+        return;
+      }
+      setProfileChoices(json.applied_profile ? [json.applied_profile] : []);
+      if (profilesEnabled) {
+        setCanSaveProfile(json.can_save_profile === true);
+        setAppliedProfile(json.applied_profile?.name ?? null);
+        if (json.profile_settings) {
+          setDateOrder(json.profile_settings.dateOrder);
+          setPositiveIsIncome(json.profile_settings.positiveIsIncome);
+          setSkipRows(json.profile_settings.skipRows);
+        }
+      }
       if (json.needs_date_format) {
         setDateFormatRequired(true);
         setRows([]);
@@ -195,6 +226,7 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           batch_id: batchId,
+          ...(profilesEnabled && canSaveProfile && profileName.trim() ? { save_profile_name: profileName.trim() } : {}),
           ...(selectedAccount.kind === "manual" ? { manual_account_id: selectedAccount.id } : { account_id: selectedAccount.id }),
           account_mappings: sourceMappings,
           approved_row_ids: [...approvedRowIds],
@@ -214,6 +246,8 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
       }
       if (!res.ok) throw new Error(json.error ?? "Import failed");
       setCommitted(json.imported ?? 0);
+      setProfileNotice(json.profile_warning ?? (json.profile_saved ? "Saved this layout for future files with the same columns." : null));
+      setProfileName("");
       setRows([]);
       setBatchId(null);
       setSelected(new Set());
@@ -291,6 +325,7 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
           <Input
             type="file"
             name="file"
+            aria-label="Statement file"
             accept=".csv,.ofx,.qfx,text/csv,application/x-ofx"
             required
             className="max-w-xs"
@@ -333,6 +368,24 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
               </select>
             </label>
           </div>
+          {profilesEnabled && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="flex flex-col gap-1">
+                Saved layout
+                <Select value={profileId} onChange={event => setProfileId(event.target.value)}>
+                  <option value="">Match automatically</option>
+                  <option value="manual">Use current settings</option>
+                  {profileChoices.map(profile => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+                </Select>
+              </label>
+              <label className="flex flex-col gap-1">
+                Leading rows to skip
+                <Input type="number" min={0} max={20} step={1} value={skipRows} onChange={event => setSkipRows(Number(event.target.value))} />
+              </label>
+              <p className="text-muted sm:col-span-2">Saved layouts include the date format, amount signs, and columns. Every file is reviewed before import.</p>
+              {profileChoices.length > 1 && <p role="status" className="sm:col-span-2">Several layouts match. Choose a saved layout or use your settings, then preview again.</p>}
+            </div>
+          )}
           {dateFormatRequired && (
             <p className="text-sm text-warning">
               The file contains ambiguous dates. Choose the source date format, then preview again.
@@ -456,11 +509,23 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
 
       {rows.length > 0 && (
         <div className="mt-4 space-y-3">
+          {profilesEnabled && (
+            <div className="space-y-2 text-sm">
+              {appliedProfile && <p role="status">Applied saved layout: {appliedProfile}</p>}
+              {canSaveProfile ? (
+                <label className="flex max-w-sm flex-col gap-1">
+                  Save layout as (optional)
+                  <Input value={profileName} maxLength={80} onChange={event => setProfileName(event.target.value)} aria-describedby="import-layout-help" />
+                  <span id="import-layout-help" className="text-muted">Saved only after a successful import. Use a different name for each layout.</span>
+                </label>
+              ) : <p className="text-muted">To save a bank CSV layout, choose an explicit date format and preview again.</p>}
+            </div>
+          )}
           <div className="max-h-72 overflow-auto rounded-field border border-panel-border">
             <table className="w-full text-left text-xs">
               <thead className="sticky top-0 bg-panel-2 text-muted">
                 <tr>
-                  <th className="p-2"> </th>
+                  <th className="p-2"><span className="sr-only">Include</span></th>
                   <th className="p-2">Date</th>
                   <th className="p-2">Description</th>
                   <th className="p-2 text-right">Amount</th>
@@ -473,6 +538,7 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
                     <td className="p-2">
                       <input
                         type="checkbox"
+                        aria-label={`Import ${row.description} on ${row.date}`}
                         checked={selected.has(row.id)}
                         onChange={() => toggle(row.id)}
                       />
@@ -541,6 +607,7 @@ export default function ImportReviewSection({ accounts }: Readonly<{ accounts: A
           Imported {committed} transaction{committed === 1 ? "" : "s"}.
         </p>
       )}
+      {profileNotice && <p role="status" className="mt-3 text-sm text-muted">{profileNotice}</p>}
       {error && <p className="mt-3 text-sm text-danger">{error}</p>}
     </Panel>
   );

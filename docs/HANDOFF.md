@@ -1,6 +1,31 @@
 # FundFlow Session Handoff
 
-Last updated: 2026-09-30. Read this first to resume.
+Last updated: 2026-10-01. Read this first to resume.
+
+## 2026-10-01: reference adoption 1.1, saved import layouts
+
+Worktree `/private/tmp/fundflow-import-profiles`, branch `feat/import-profiles`, based on restored main `a19a0a6`.
+The owner-authorized corrective PR #191 is merged; feature PRs #192 and #193 remain separate and unmerged.
+Always push an explicit `HEAD:refs/heads/<topic>` refspec after a dry run.
+An earlier upstream-tracking push accidentally updated main; the rollback and PR #191 restored it, and its administrator exception applies to #191 only.
+
+`lib/import-profiles.ts` validates ordered normalized header signatures, column positions, date order, amount conventions, and up to 20 logical leading records.
+`lib/import-profile-preview.ts` reads profiles through the cookie client with an explicit owner filter, auto-selects a unique match, and asks the user to resolve multiple matches.
+Existing specialized OFX/Mint/Monarch/YNAB importers retain their semantics.
+The preview route stores a layout snapshot; the commit route saves it through a service-only owner-scoped RPC after a durable import, reporting a warning if saving fails.
+Settings exposes layout choice and optional naming only under the default-off `importProfiles` flag.
+The additive migration grants authenticated SELECT with ownership, MFA, and revocation gates, with no client write grants.
+
+Validation: lint and typecheck passed; the full unit coverage run passed 492 suites / 5,472 tests before two additional route integration unit cases also passed.
+Coverage was 98.44% statements, 96.09% branches, 98.59% functions, and 99.57% lines.
+The migration, committed-only save, empty-import refusal, name/quota guards, owner isolation, and `scripts/check-rls.sql` passed on isolated local PostgreSQL with Auth/Storage stand-ins.
+All four browser fixtures passed; they use mocked HTTP responses and no app server or database; they test the real component at 375px and 1440px in both themes, keyboard interaction, overflow, and axe checks.
+The signed-in journey and full Supabase integration remain deferred with owner approval.
+Local production builds remain blocked by the previously documented sandbox worker-port and existing Webpack client-crypto issue; hosted CI is the build gate, as authorized.
+No production migration, flag flip, or feature merge was performed for this item.
+
+Next: open the focused draft PR, record its number in the canonical plan on `fix/pending-annotation-preservation`, and continue item 1.2.
+The untracked plan/report/prompt copies in this worktree are reference copies; do not commit them into this independent PR.
 
 ## 2026-09-30: preserve integration tokens across sign-out
 

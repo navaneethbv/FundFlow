@@ -1,5 +1,15 @@
 # FundFlow — Future Todos
 
+## Reference adoption 1.1: saved import layouts
+
+Implemented on `feat/import-profiles` behind `importProfiles: false`.
+Migration `20261001120000_import_profiles.sql` is unapplied to production.
+Before enabling, run the signed-in import/save/reuse journey on an approved disposable Supabase target at 375px and desktop, including keyboard use.
+The owner approved deferring that journey and full Supabase integration while no disposable target exists.
+Local synthetic browser fixtures and isolated PostgreSQL checks do not replace that acceptance.
+Saved layout configuration is not yet included in backup/restore; include it in that subsystem before claiming a complete configuration backup.
+No dependency updates accompany this feature: the startup freshness check reported newer simple-icons, sharp, ESLint, and TypeScript releases for separate review.
+
 ## September 30 review remediation
 
 Local implementation and per-finding status are recorded in [the review](reviews/2026-09-30-repository-review.md#implementation-status-2026-09-30-local-work).
