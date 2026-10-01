@@ -117,6 +117,19 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false 
     return false;
   }
 
+  function previewForm(file: File, columnMap?: Record<string, number | null>): FormData {
+    const form = new FormData();
+    form.set("file", file);
+    form.set("positive_is_income", String(positiveIsIncome));
+    if (dateOrder !== "auto") form.set("date_order", dateOrder);
+    if (profilesEnabled) {
+      form.set("skip_rows", String(skipRows));
+      if (profileId) form.set("profile_id", profileId);
+    }
+    if (columnMap) form.set("column_map", JSON.stringify(columnMap));
+    return form;
+  }
+
   async function runPreview(file: File, columnMap?: Record<string, number | null>) {
     setBusy(true);
     setError(null);
@@ -127,15 +140,7 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false 
     setAppliedProfile(null);
     setProfileNotice(null);
     try {
-      const form = new FormData();
-      form.set("file", file);
-      form.set("positive_is_income", String(positiveIsIncome));
-      if (dateOrder !== "auto") form.set("date_order", dateOrder);
-      if (profilesEnabled) {
-        form.set("skip_rows", String(skipRows));
-        if (profileId) form.set("profile_id", profileId);
-      }
-      if (columnMap) form.set("column_map", JSON.stringify(columnMap));
+      const form = previewForm(file, columnMap);
       const res = await fetch("/api/import/preview", { method: "POST", body: form });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error ?? "Preview failed");
@@ -403,7 +408,7 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false 
                 <Input type="number" min={0} max={20} step={1} value={skipRows} onChange={event => setSkipRows(Number(event.target.value))} />
               </label>
               <p className="text-muted sm:col-span-2">Saved layouts include the date format, amount signs, and columns. Every file is reviewed before import.</p>
-              {profileChoices.length > 1 && <p role="status" className="sm:col-span-2">Several layouts match. Choose a saved layout or use your settings, then preview again.</p>}
+              {profileChoices.length > 1 && <output className="block sm:col-span-2">Several layouts match. Choose a saved layout or use your settings, then preview again.</output>}
             </div>
           )}
           {dateFormatRequired && (
@@ -531,7 +536,7 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false 
         <div className="mt-4 space-y-3">
           {profilesEnabled && (
             <div className="space-y-2 text-sm">
-              {appliedProfile && <p role="status">Applied saved layout: {appliedProfile}</p>}
+              {appliedProfile && <output className="block">Applied saved layout: {appliedProfile}</output>}
               {canSaveProfile ? (
                 <label className="flex max-w-sm flex-col gap-1">
                   Save layout as (optional)
@@ -627,7 +632,7 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false 
           Imported {committed} transaction{committed === 1 ? "" : "s"}.
         </p>
       )}
-      {profileNotice && <p role="status" className="mt-3 text-sm text-muted">{profileNotice}</p>}
+      {profileNotice && <output className="mt-3 block text-sm text-muted">{profileNotice}</output>}
       {error && <p className="mt-3 text-sm text-danger">{error}</p>}
     </Panel>
   );

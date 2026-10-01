@@ -6,7 +6,7 @@ import { isFeatureEnabled } from "@/lib/feature-flags";
 import { detectColumns, detectSourceFormat, getCsvColumns, type DateOrder } from "@/lib/import";
 import { createImportLayout, matchImportProfiles, normalizeImportLayout, stripImportPreamble, type ImportLayout, type ImportProfile } from "@/lib/import-profiles";
 
-interface PreparedLayout {
+export interface PreparedLayout {
   text: string;
   layout?: ImportLayout;
   profile?: { id: string; name: string };
@@ -21,7 +21,8 @@ async function selectSavedProfile(supabase: SupabaseClient, userId: string, text
     return layout ? [{ id: row.id as string, name: row.name as string, layout }] : [];
   });
   const matches = matchImportProfiles(text, profiles);
-  const selected = profileId ? matches.find(row => row.id === profileId) : matches.length === 1 ? matches[0] : undefined;
+  let selected = matches.length === 1 ? matches[0] : undefined;
+  if (profileId) selected = matches.find(row => row.id === profileId);
   if (profileId && !selected) return { text, response: badRequest("Saved layout does not match this file") };
   if (selected) return { text, layout: selected.layout, profile: { id: selected.id, name: selected.name } };
   if (matches.length > 1) return {
@@ -34,7 +35,7 @@ async function selectSavedProfile(supabase: SupabaseClient, userId: string, text
 function prepareManualLayout(text: string, preparedText: string, form: FormData, skipRows: number): PreparedLayout {
   const header = getCsvColumns(preparedText);
   const dateOrderRaw = form.get("date_order");
-  const dateOrder = ["mdy", "dmy", "ymd"].includes(String(dateOrderRaw)) ? dateOrderRaw as DateOrder : undefined;
+  const dateOrder = typeof dateOrderRaw === "string" && ["mdy", "dmy", "ymd"].includes(dateOrderRaw) ? dateOrderRaw as DateOrder : undefined;
   const mapping = form.get("column_map");
   let columns: unknown;
   try { columns = typeof mapping === "string" ? JSON.parse(mapping) : header && detectColumns(header.headers); }
