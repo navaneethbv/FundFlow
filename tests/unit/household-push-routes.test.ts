@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const mockInvalidate = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/dashboard-cache", () => ({ invalidateDashboardCache: mockInvalidate }));
 import { createHash } from "node:crypto";
 import { clientStub } from "../fixtures/supabase-query";
 
@@ -38,7 +41,7 @@ vi.mock("@/lib/supabase/service", () => ({
 }));
 
 import { POST as invitePost } from "@/app/api/household/invite/route";
-import { GET as acceptGet } from "@/app/api/household/accept/route";
+import { POST as acceptGet } from "@/app/api/household/accept/route";
 import {
   POST as pushPost,
   DELETE as pushDelete,
@@ -137,14 +140,14 @@ describe("POST /api/household/invite", () => {
   });
 });
 
-describe("GET /api/household/accept", () => {
+describe("POST /api/household/accept", () => {
   const url = "http://localhost/api/household/accept?token=";
   const token = "t".repeat(40);
   const tokenHash = createHash("sha256").update(token).digest("hex");
   const future = () => new Date(Date.now() + 3600_000).toISOString();
 
   function get(t: string) {
-    return new NextRequest(`${url}${t}`);
+    return new NextRequest(`${url}${t}`, { method: "POST", headers: { origin: "http://localhost" } });
   }
 
   it("redirects to login when not signed in", async () => {
@@ -152,7 +155,7 @@ describe("GET /api/household/accept", () => {
       NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     );
     const res = await acceptGet(get(token));
-    expect(res.status).toBe(307);
+    expect(res.status).toBe(303);
     expect(res.headers.get("location")).toContain("/login");
   });
 
@@ -384,6 +387,7 @@ describe("POST /api/transactions/annotate-batch", () => {
       transaction_id: "mine",
       tags: ["tax"],
     });
+    expect(mockInvalidate).toHaveBeenCalledWith(expect.any(String));
   });
 
   it("normalizes the tag and merges it into existing tags, keeping the note", async () => {

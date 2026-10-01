@@ -1,5 +1,6 @@
 "use client";
 
+import { safeReturnPath } from "@/lib/return-path";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { buttonVariants } from "@/components/ui/Button";
@@ -10,7 +11,7 @@ import { buttonVariants } from "@/components/ui/Button";
  * email-confirmation flow uses. Requires the Google provider to be enabled
  * in the Supabase dashboard (see README "Google sign-in").
  */
-export default function GoogleSignInButton() {
+export default function GoogleSignInButton({ returnPath = "/dashboard" }: Readonly<{ returnPath?: string }>) {
   const supabase = createClient();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -20,7 +21,7 @@ export default function GoogleSignInButton() {
     setLoading(true);
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(safeReturnPath(returnPath))}` },
     });
     if (oauthError) {
       // On success the browser navigates away; we only get here on failure.

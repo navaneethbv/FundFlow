@@ -1,3 +1,4 @@
+import { safeReturnPath } from "@/lib/return-path";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { publicEnv } from "@/lib/env";
@@ -187,6 +188,8 @@ export async function proxy(request: NextRequest) {
   if ((!user || mfaPending || sessionRevoked) && !isApi && !isPublicPage(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    url.search = "";
+    url.searchParams.set("next", safeReturnPath(request.nextUrl.pathname + request.nextUrl.search));
     const redirect = NextResponse.redirect(url);
     // signOut() queued its cookie clears on `response`; carry every pending
     // cookie onto the redirect or the revoked session keeps its auth cookies.
@@ -199,7 +202,9 @@ export async function proxy(request: NextRequest) {
   // must be allowed on /login, or this would redirect-loop with the above.)
   if (user && !mfaPending && (pathname === "/login" || pathname === "/signup")) {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    const destination = new URL(safeReturnPath(request.nextUrl.searchParams.get("next")), request.url);
+    url.pathname = destination.pathname;
+    url.search = destination.search;
     const redirect = NextResponse.redirect(url);
     applySecurityHeaders(redirect, csp);
     return redirect;
