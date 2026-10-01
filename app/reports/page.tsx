@@ -1,3 +1,4 @@
+import { resolveViewerToday } from "@/lib/report-period";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import AppShell from "@/components/shell/AppShell";
@@ -113,7 +114,7 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
     user.id,
     params.scope,
   );
-  const anchorMonth = new Date().toISOString().slice(0, 7);
+  const anchorMonth = (await resolveViewerToday(supabase, user.id)).slice(0, 7);
   const filters: ReportFilters = {
     ...reportFiltersFromSearchParams(params, defaultReportFilters(anchorMonth)),
     scope: serializeFinancialScope(scope) ?? null,

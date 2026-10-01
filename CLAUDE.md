@@ -154,6 +154,10 @@ it will not survive the next install.
 
 - Amount sign follows Plaid: **positive = money out**, negative = money in.
 - Dates are `YYYY-MM-DD` strings end to end; month keys are `YYYY-MM`.
+- Viewer-relative today/month values use `resolveViewerToday` on the server or
+  `localDateKey`/`localMonthKey` in the browser.
+  Do not derive viewer dates with `toISOString().slice(0, 7|10)`; reserve UTC
+  conversion for explicit UTC boundaries in date utilities.
 - Every spend total must apply `EXCLUDED_PFC` (`dashboard.ts`), or credit-card
   payments get double-counted.
 - Anything that joins a computed result back to its source rows keys on the id,

@@ -1,3 +1,4 @@
+import { resolveViewerToday } from "@/lib/report-period";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireUser, errorResponse } from "@/lib/http";
 import { toCsv } from "@/lib/csv";
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
       user.id,
       request.nextUrl.searchParams.get("scope") ?? undefined,
     );
-    const anchorMonth = new Date().toISOString().slice(0, 7);
+    const anchorMonth = (await resolveViewerToday(supabase, user.id)).slice(0, 7);
     const filters = {
       ...reportFiltersFromSearchParams(
         {

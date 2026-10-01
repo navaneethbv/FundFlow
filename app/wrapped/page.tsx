@@ -1,3 +1,4 @@
+import { resolveViewerToday } from "@/lib/report-period";
 import Link from "next/link";
 import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
@@ -37,15 +38,15 @@ export const metadata = {
 export default async function WrappedPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
   const rawYear = firstSearchParam(params.year);
-  const currentYear = new Date().getFullYear();
-  const year =
-    rawYear && /^\d{4}$/.test(rawYear) ? rawYear : String(currentYear);
-  const asOfDate = new Date().toISOString().slice(0, 10);
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  const asOfDate = await resolveViewerToday(supabase, user?.id);
+  const currentYear = Number(asOfDate.slice(0, 4));
+  const year = rawYear && /^\d{4}$/.test(rawYear) ? rawYear : String(currentYear);
 
   // "The user's own ledger" is an explicit owner scope: RLS also exposes a
   // household member's shared transactions, and this recap is personal.
