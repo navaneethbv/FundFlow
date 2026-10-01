@@ -32,7 +32,7 @@ vi.mock("@/lib/ical", () => ({
 
 const mockWriteAudit = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/audit", () => ({
-  writeAudit: (...args: unknown[]) => mockWriteAudit(...args),
+  getClientIp: () => "127.0.0.1", writeAudit: (...args: unknown[]) => mockWriteAudit(...args),
 }));
 
 const mockCalendarTokenCreated = vi.fn<(...args: unknown[]) => unknown>();

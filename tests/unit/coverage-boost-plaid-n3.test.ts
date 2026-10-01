@@ -457,7 +457,7 @@ describe("coverage-boost-plaid-n3", () => {
       });
       expect(mockWriteAudit).not.toHaveBeenCalled();
       expect(mockRefreshRecurringForUser).not.toHaveBeenCalled();
-      expect(mockCheckRateLimit).toHaveBeenCalledWith("autosync:user-1", 1, 1800);
+      expect(mockCheckRateLimit).toHaveBeenCalledWith("autosync:user-1", 1, 1800, { failClosed: true });
     });
 
     it("skips when the auto window is closed", async () => {

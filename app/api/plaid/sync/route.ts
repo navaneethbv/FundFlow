@@ -55,13 +55,14 @@ export async function POST(request: NextRequest) {
       `autosync:${user.id}`,
       1,
       AUTO_SYNC_WINDOW_SECONDS,
+      { failClosed: true },
     );
     if (!windowOpen) {
       return NextResponse.json({ ok: true, skipped: true });
     }
   }
 
-  const allowed = await checkRateLimit(`sync:${user.id}`, 6, 60);
+  const allowed = await checkRateLimit(`sync:${user.id}`, 6, 60, { failClosed: true });
   if (!allowed) {
     return NextResponse.json(
       { error: "Too many refreshes. Please wait a moment." },

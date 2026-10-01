@@ -151,7 +151,7 @@ export async function writeAudit({
  * keep audit_logs forensically sound. On Vercel the edge sets both
  * `x-real-ip` and `x-vercel-forwarded-for` and strips client-set copies.
  */
-export function getClientIp(request: NextRequest): string | null {
+export function getClientIp(request: Pick<NextRequest, "headers">): string | null {
   const realIp = request.headers.get("x-real-ip");
   if (realIp) return realIp;
   const vercelForwarded = request.headers.get("x-vercel-forwarded-for");
