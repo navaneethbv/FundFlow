@@ -14,9 +14,11 @@ import {
 } from "@/lib/plaid-service";
 import type { PlaidItemRow } from "@/lib/types";
 import { logError } from "@/lib/log";
-import { createNotification } from "@/lib/notifications";
+import { createNotification, createNotificationsBatch, type NotificationCandidate } from "@/lib/notifications";
 import { invalidateDashboardCache } from "@/lib/dashboard-cache";
 import { formatCurrency } from "@/lib/format";
+import { addDays } from "@/lib/date-utils";
+import { dateKeyInTimezone } from "@/lib/report-period";
 import {
   recordCursorAttempt,
   recordCursorSuccess,
@@ -49,6 +51,7 @@ function mapTransactionRow(
     user_id: userId,
     account_id: accountDbId,
     plaid_transaction_id: txn.transaction_id,
+    pending_transaction_id: txn.pending_transaction_id ?? null,
     amount: txn.amount,
     iso_currency_code: txn.iso_currency_code ?? null,
     date: txn.date,
@@ -154,52 +157,61 @@ async function notifySyncedTransactions(
   rows: ReturnType<typeof mapTransactionRow>[],
 ): Promise<void> {
   const { data: alertPref, error: alertPrefError } = await supabase
-    .from("alert_preferences")
-    .select("large_transaction_threshold")
-    .eq("user_id", userId)
-    .maybeSingle();
-  // A missing row falls back to 500; a failed read must throw (A-13),
-  // never silently alert against the default threshold.
+    .from("alert_preferences").select("*").eq("user_id", userId).maybeSingle();
   if (alertPrefError) throw alertPrefError;
+  let timezone = "UTC";
+  try {
+    const { data, error } = await supabase.from("profiles").select("timezone").eq("id", userId).maybeSingle();
+    if (error) throw error;
+    timezone = data?.timezone || "UTC";
+  } catch (error) {
+    logError("sync.alert-timezone", error);
+  }
+  const today = dateKeyInTimezone(new Date(), timezone);
+  const oldest = addDays(today, -6);
   const largeThreshold = Number(alertPref?.large_transaction_threshold ?? 500);
+  const candidates: NotificationCandidate[] = [];
   for (const row of rows) {
-    if (row.amount >= largeThreshold) {
-      await createNotification(
-        userId,
-        "large_transaction",
-        {
-          title: `Large transaction: ${row.merchant_name || row.name || "Unknown"}`,
-          body: `A transaction of ${formatCurrency(row.amount)} was recorded at ${row.merchant_name || row.name || "Unknown"} on ${row.date}.`,
-        },
-        row.plaid_transaction_id,
-        "exact",
-      ).catch((err) => logError("sync.large_txn_notification", err));
-    }
+    if (row.amount < largeThreshold || row.date < oldest || row.date > today) continue;
+    candidates.push({
+      type: "large_transaction",
+      subjectKey: row.pending_transaction_id ?? row.plaid_transaction_id,
+      details: {
+        title: `Large transaction: ${row.merchant_name || row.name || "Unknown"}`,
+        body: `A transaction of ${formatCurrency(row.amount)} was recorded at ${row.merchant_name || row.name || "Unknown"} on ${row.date}.`,
+      },
+    });
   }
   try {
-    const { data: cancelledRows } = await supabase
-      .from("cancelled_subscriptions")
-      .select("merchant")
-      .eq("user_id", userId);
-    const cancelled = new Set(
-      (cancelledRows ?? []).map((row) => (row.merchant as string).trim().toLowerCase()),
-    );
+    const { data: cancelledRows, error } = await supabase
+      .from("cancelled_subscriptions").select("merchant, created_at").eq("user_id", userId);
+    if (error) throw error;
+    const cancelled = new Map<string, string>();
+    for (const row of cancelledRows ?? []) {
+      const date = dateKeyInTimezone(new Date(row.created_at), timezone);
+      cancelled.set((row.merchant as string).trim().toLowerCase(), date);
+    }
     for (const row of rows) {
       const merchant = (row.merchant_name || row.name || "").trim();
-      if (!merchant || row.amount <= 0 || !cancelled.has(merchant.toLowerCase())) continue;
-      await createNotification(
-        userId,
-        "cancellation_watch",
-        {
+      const cancelledOn = cancelled.get(merchant.toLowerCase());
+      // An authorization preceding cancellation must not alert just because
+      // its pending charge posts later. Date-only data cannot order same-day events.
+      if (!cancelledOn || row.pending || row.amount <= 0 || row.date > today ||
+          (row.authorized_date ?? row.date) <= cancelledOn) continue;
+      candidates.push({
+        type: "cancellation_watch", subjectKey: row.plaid_transaction_id,
+        details: {
           title: `Charged after cancellation: ${merchant}`,
           body: `${merchant} charged ${formatCurrency(row.amount)} on ${row.date} after you marked it cancelled. Dispute or re-cancel.`,
         },
-        merchant,
-      ).catch((err) => logError("sync.cancellation_watch", err));
+      });
     }
   } catch (watchError) {
     logError("sync.cancellation_watch", watchError);
   }
+  await createNotificationsBatch(userId, candidates, alertPref).catch((error) =>
+    logError("sync.transaction_notifications", error),
+  );
 }
 
 interface TransactionSyncPage {
@@ -400,7 +412,7 @@ async function syncItemTransactionsInner(
 ): Promise<{ result: SyncResult; completed: boolean }> {
   const { result, completed } = await runTransactionSyncLoop(item, supabase, {
     maxPages: null,
-    notify: true,
+    notify: Boolean(item.sync_cursor),
     mode: "routine",
   });
   return { result, completed };
