@@ -1,3 +1,4 @@
+import { invalidateDashboardCache } from "@/lib/dashboard-cache";
 import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
@@ -627,6 +628,7 @@ export async function POST(request: NextRequest) {
     // never can: inference is scoped to connected Plaid accounts. The commit is
     // already durable at this point, so a detector failure is logged rather
     // than surfaced as a failed import.
+    invalidateDashboardCache(user.id);
     await refreshRecurringAfterConnectedImport(dbRows, user.id);
 
     await writeAudit({

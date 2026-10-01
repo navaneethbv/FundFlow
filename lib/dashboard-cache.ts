@@ -59,11 +59,11 @@ export function createDashboardCache<T>(ttlMs: number) {
 
 // Process-local dashboard cache. Keyed strictly by user id + render scope, so a
 // warm serverless instance can reuse aggregation during rapid revisits. The
-// 45-second TTL expires before the normal 2-minute AutoRefresh. Budgets and goals are
+// 5-second TTL bounds cross-instance staleness after writes. Budgets and goals are
 // written straight from the browser (no server route to invalidate on); sync
 // completion invalidates explicitly. Only ever populated with a user-scoped
 // (RLS-bound) client, so one user's cache can never be served to another.
-const DASHBOARD_TTL_MS = 45_000;
+const DASHBOARD_TTL_MS = 5_000;
 const dashboardCache = createDashboardCache<DashboardData>(DASHBOARD_TTL_MS);
 
 export function dashboardScopeKey(

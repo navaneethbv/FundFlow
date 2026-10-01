@@ -46,7 +46,7 @@ describe("components/shell/nav-model.ts", () => {
   });
 
   it("exposes utility items with defined icons and actions", () => {
-    expect(UTILITY_ITEMS.length).toBe(3);
+    expect(UTILITY_ITEMS).toHaveLength(3);
     const actions = UTILITY_ITEMS.map((u) => u.action);
     expect(actions).toEqual(["search", "notifications", "settings"]);
     for (const item of UTILITY_ITEMS) {

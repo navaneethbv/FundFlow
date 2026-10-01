@@ -11,35 +11,47 @@ import { writeAudit, getClientIp } from "@/lib/audit";
  * pass the owner-only RLS insert policy) with every value derived from the
  * validated invite row, never from request input.
  */
-export async function GET(request: NextRequest) {
+export function GET(request: NextRequest) {
+  const url = new URL("/household/accept", request.url);
+  url.searchParams.set("token", request.nextUrl.searchParams.get("token") ?? "");
+  return NextResponse.redirect(url);
+}
+
+export async function POST(request: NextRequest) {
+  if (request.headers.get("origin") !== request.nextUrl.origin) {
+    return NextResponse.json({ error: "Same-origin confirmation required" }, { status: 403 });
+  }
   const auth = await requireUser();
   if (auth instanceof NextResponse) {
-    // Not signed in: bounce to login; the user can re-open the link after.
-    return NextResponse.redirect(new URL("/login", request.url));
+    if (auth.status !== 401) return auth;
+    const login = new URL("/login", request.url);
+    login.searchParams.set("next", `/household/accept?token=${encodeURIComponent(request.nextUrl.searchParams.get("token") ?? "")}`);
+    return NextResponse.redirect(login, 303);
   }
   const { user } = auth;
 
   try {
     const token = request.nextUrl.searchParams.get("token") ?? "";
-    if (token.length < 20) {
-      return NextResponse.redirect(new URL("/settings?invite=invalid", request.url));
+    if (token.length < 20 || token.length > 256) {
+      return NextResponse.redirect(new URL("/settings?invite=invalid", request.url), 303);
     }
     const tokenHash = createHash("sha256").update(token).digest("hex");
 
     const service = createServiceClient();
-    const { data: invite } = await service
+    const { data: invite, error: inviteError } = await service
       .from("household_invites")
       .select("id, household_id, email, expires_at, accepted_at")
       .eq("token_hash", tokenHash)
       .maybeSingle();
 
+    if (inviteError) throw inviteError;
     if (
       !invite ||
       invite.accepted_at ||
       new Date(invite.expires_at as string).getTime() < Date.now() ||
       (user.email ?? "").toLowerCase() !== (invite.email as string).toLowerCase()
     ) {
-      return NextResponse.redirect(new URL("/settings?invite=invalid", request.url));
+      return NextResponse.redirect(new URL("/settings?invite=invalid", request.url), 303);
     }
 
     const { error: memberError } = await service.from("household_members").insert({
@@ -66,7 +78,7 @@ export async function GET(request: NextRequest) {
       ip: getClientIp(request),
     });
 
-    return NextResponse.redirect(new URL("/settings?invite=accepted", request.url));
+    return NextResponse.redirect(new URL("/settings?invite=accepted", request.url), 303);
   } catch (error) {
     return errorResponse("household.accept", error);
   }

@@ -8,7 +8,7 @@ import { resolveViewerToday } from "@/lib/report-period";
 import { loadRecurringInputs } from "@/lib/recurring-data";
 import { expandStreamsForMonth } from "@/lib/recurring-page";
 import { addDays, addMonths } from "@/lib/date-utils";
-import { writeAudit } from "@/lib/audit";
+import { writeAudit, getClientIp } from "@/lib/audit";
 
 /**
  * iCal feed of upcoming recurring bills and paychecks behind a revocable
@@ -18,7 +18,7 @@ import { writeAudit } from "@/lib/audit";
  * scoped to the token row's user_id explicitly.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ token: string }> },
 ) {
   try {
@@ -28,9 +28,9 @@ export async function GET(
     }
     const tokenHash = createHash("sha256").update(token).digest("hex");
 
-    // The capability token is the only credential, so the feed is rate-limited
-    // by token to blunt brute-force / token-harvesting scans.
-    if (!(await checkRateLimit(`calendar-feed:${tokenHash}`, 60, 3600))) {
+    // Invalid guesses share the caller's IP budget, never a token-derived row.
+    const ipHash = createHash("sha256").update(getClientIp(request) ?? "unknown").digest("hex");
+    if (!(await checkRateLimit(`calendar-ip:${ipHash}`, 60, 3600, { failClosed: true }))) {
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
 
@@ -45,6 +45,10 @@ export async function GET(
     if (tokenError) throw tokenError;
     if (!row) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    if (!(await checkRateLimit(`calendar-feed:${tokenHash}`, 60, 3600, { failClosed: true }))) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
 
     const today = await resolveViewerToday(service, row.user_id as string);

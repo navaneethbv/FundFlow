@@ -3,7 +3,7 @@ import { clientStub } from "../fixtures/supabase-query";
 let service = clientStub();
 vi.mock("@/lib/supabase/service", () => ({ createServiceClient: () => service }));
 vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: async () => true }));
-vi.mock("@/lib/audit", () => ({ writeAudit: async () => undefined }));
+vi.mock("@/lib/audit", () => ({ getClientIp: () => "127.0.0.1", writeAudit: async () => undefined }));
 import { GET } from "@/app/api/calendar/[token]/route";
 const stream = { id: "stream", merchant_name: "Gym", stream_type: "outflow", status: "MATURE", is_active: true,
   frequency: "MONTHLY", predicted_next_date: "2026-09-22", average_amount: 40, last_amount: 42, user_amount: 51.25 };

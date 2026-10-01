@@ -137,6 +137,9 @@ describe("lib/reporting", () => {
     );
 
     expect(mocks.mockCreateTransport).toHaveBeenCalledWith({
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 30_000,
       host: "smtp.custom.com",
       port: 465,
       secure: true,

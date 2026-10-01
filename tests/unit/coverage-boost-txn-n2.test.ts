@@ -55,7 +55,7 @@ import {
   PATCH as recurringManualPatch,
   DELETE as recurringManualDelete,
 } from "@/app/api/recurring/manual/route";
-import { GET as householdAcceptGet } from "@/app/api/household/accept/route";
+import { POST as householdAcceptGet } from "@/app/api/household/accept/route";
 import { POST as householdInvitePost } from "@/app/api/household/invite/route";
 
 const USER = { id: "u1", email: "me@example.com" };
@@ -396,24 +396,27 @@ describe("DELETE /api/recurring/manual", () => {
   });
 });
 
-describe("GET /api/household/accept", () => {
+describe("POST /api/household/accept", () => {
   const TOKEN = "abcdefghijklmnopqrst"; // >= 20 chars
-  const futureExpiry = new Date(Date.now() + 100000).toISOString();
+  let futureExpiry: string;
+  beforeEach(() => {
+    futureExpiry = new Date(Date.now() + 100000).toISOString();
+  });
 
   it("redirects to login when not signed in (line 16-18)", async () => {
     mockRequireUser.mockResolvedValue(new NextResponse("x", { status: 401 }));
     const res = await householdAcceptGet(
-      new NextRequest(`http://localhost/api/household/accept?token=${TOKEN}`),
+      new NextRequest(`http://localhost/api/household/accept?token=${TOKEN}`, { method: "POST", headers: { origin: "http://localhost" } }),
     );
-    expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe("http://localhost/login");
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe(`http://localhost/login?next=${encodeURIComponent("/household/accept?token=" + TOKEN)}`);
   });
 
   it("redirects to invalid for a short token (line 23)", async () => {
     const res = await householdAcceptGet(
-      new NextRequest("http://localhost/api/household/accept?token=short"),
+      new NextRequest("http://localhost/api/household/accept?token=short", { method: "POST", headers: { origin: "http://localhost" } }),
     );
-    expect(res.status).toBe(307);
+    expect(res.status).toBe(303);
     expect(res.headers.get("location")).toBe(
       "http://localhost/settings?invite=invalid",
     );
@@ -422,9 +425,9 @@ describe("GET /api/household/accept", () => {
   it("redirects to invalid when the invite is missing (line 40)", async () => {
     serviceClient = { from: vi.fn((t: string) => chainable(() => (t === "household_members" ? { error: null } : { data: null, error: null }))) };
     const res = await householdAcceptGet(
-      new NextRequest(`http://localhost/api/household/accept?token=${TOKEN}`),
+      new NextRequest(`http://localhost/api/household/accept?token=${TOKEN}`, { method: "POST", headers: { origin: "http://localhost" } }),
     );
-    expect(res.status).toBe(307);
+    expect(res.status).toBe(303);
     expect(res.headers.get("location")).toBe(
       "http://localhost/settings?invite=invalid",
     );
@@ -449,7 +452,7 @@ describe("GET /api/household/accept", () => {
       ),
     };
     const res = await householdAcceptGet(
-      new NextRequest(`http://localhost/api/household/accept?token=${TOKEN}`),
+      new NextRequest(`http://localhost/api/household/accept?token=${TOKEN}`, { method: "POST", headers: { origin: "http://localhost" } }),
     );
     expect(res.headers.get("location")).toBe(
       "http://localhost/settings?invite=invalid",
@@ -475,9 +478,9 @@ describe("GET /api/household/accept", () => {
       ),
     };
     const res = await householdAcceptGet(
-      new NextRequest(`http://localhost/api/household/accept?token=${TOKEN}`),
+      new NextRequest(`http://localhost/api/household/accept?token=${TOKEN}`, { method: "POST", headers: { origin: "http://localhost" } }),
     );
-    expect(res.status).toBe(307);
+    expect(res.status).toBe(303);
     expect(res.headers.get("location")).toBe(
       "http://localhost/settings?invite=accepted",
     );
@@ -506,7 +509,7 @@ describe("GET /api/household/accept", () => {
       ),
     };
     const res = await householdAcceptGet(
-      new NextRequest(`http://localhost/api/household/accept?token=${TOKEN}`),
+      new NextRequest(`http://localhost/api/household/accept?token=${TOKEN}`, { method: "POST", headers: { origin: "http://localhost" } }),
     );
     expect(res.headers.get("location")).toBe(
       "http://localhost/settings?invite=accepted",
@@ -532,7 +535,7 @@ describe("GET /api/household/accept", () => {
       ),
     };
     const res = await householdAcceptGet(
-      new NextRequest(`http://localhost/api/household/accept?token=${TOKEN}`),
+      new NextRequest(`http://localhost/api/household/accept?token=${TOKEN}`, { method: "POST", headers: { origin: "http://localhost" } }),
     );
     expect(res.status).toBe(500);
     expect(mockErrorResponse).toHaveBeenCalledWith(

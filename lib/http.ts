@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { needsMfaStepUp } from "@/lib/mfa";
+import { recordSession } from "@/lib/session-record";
 import { notifyNewDeviceLogin } from "@/lib/login-alert";
 import { errorMessage, logError } from "@/lib/log";
 import { decodeSessionId } from "@/lib/session-token";
@@ -81,29 +82,12 @@ export async function requireUser(): Promise<AuthedContext | NextResponse> {
       } catch {
         // headers() is unavailable outside a request scope (e.g. unit tests).
       }
-      const { data: record, error: recordError } = await supabase
-        .from("user_session_records")
-        .upsert(
-          {
-            user_id: user.id,
-            session_id: sessionId,
-            user_agent: userAgent,
-            last_seen_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id,session_id" },
-        )
-        .select("revoked_at, created_at")
-        .maybeSingle();
-      if (recordError) throw recordError;
-      if (record?.revoked_at) {
+      const record = await recordSession(supabase, user.id, sessionId, userAgent);
+      if (record.revoked) {
         return NextResponse.json({ error: "Session revoked" }, { status: 401 });
       }
-      // New-device login alert (7.1): only when this upsert CREATED the
-      // record (created_at is fresh). Fire-and-forget; never blocks.
-      if (
-        record?.created_at &&
-        Date.now() - new Date(record.created_at as string).getTime() < 15_000
-      ) {
+      // Only the request that inserted the row owns the alert.
+      if (record.created) {
         void notifyNewDeviceLogin(user.id, user.email, userAgent);
       }
     }

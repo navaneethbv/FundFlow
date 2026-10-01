@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const mockInvalidate = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/dashboard-cache", () => ({ invalidateDashboardCache: mockInvalidate }));
+
 const mockRequireUser = vi.fn();
 const mockErrorResponse = vi.fn();
 const mockBadRequest = vi.fn((msg) => new Response(msg, { status: 400 }));
@@ -439,6 +442,7 @@ describe("Transactions Refunds API Route", () => {
       expect(mockWriteAudit).toHaveBeenCalledWith(
         expect.objectContaining({ userId: "u1", action: "refund_confirmed" }),
       );
+      expect(mockInvalidate).toHaveBeenCalledWith(expect.any(String));
     });
 
     it("rejects a confirmed link when the transactions are not the caller's", async () => {

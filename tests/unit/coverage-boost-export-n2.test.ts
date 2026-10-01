@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+let tokenService: unknown;
+vi.mock("@/lib/step-up", () => ({ verifyStepUp: async () => true }));
 import { NextRequest, NextResponse } from "next/server";
 import { clientStub, queryStub, type QueryResult } from "../fixtures/supabase-query";
 
@@ -14,7 +17,7 @@ const mockBadRequest = vi.fn<(...args: unknown[]) => unknown>(
   (msg: unknown) => NextResponse.json({ error: String(msg) }, { status: 400 }),
 );
 vi.mock("@/lib/http", () => ({
-  requireUser: () => mockRequireUser(),
+  requireUser: async () => { const result = await mockRequireUser(); tokenService = (result as { supabase?: unknown })?.supabase; return result; },
   errorResponse: (...args: unknown[]) => mockErrorResponse(...args),
   badRequest: (...args: unknown[]) => mockBadRequest(...args),
 }));
@@ -54,7 +57,7 @@ const filters = {
 function jsonReq(url: string, method: string, payload: unknown) {
   return new NextRequest(url, {
     method,
-    body: JSON.stringify(payload),
+    body: JSON.stringify(url.includes("/api/tokens") ? { code: "proof", ...(payload as object) } : payload),
     headers: { "content-type": "application/json" },
   });
 }
@@ -243,3 +246,4 @@ describe("coverage-boost export routes (n2)", () => {
     });
   });
 });
+vi.mock("@/lib/supabase/service", () => ({ createServiceClient: () => tokenService }));

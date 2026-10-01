@@ -132,12 +132,12 @@ describe("http requireUser session recording", () => {
     return await import("@/lib/http");
   }
 
-  it("records the session and alerts for a freshly-created record", async () => {
+  it("does not alert again for a recently created existing record", async () => {
     holder.client = makeClient({ revoked_at: null, created_at: new Date().toISOString() });
     const { requireUser } = await loadHttp();
     const result = await requireUser();
     expect(result).not.toBeInstanceOf(Response);
-    expect(mockNotify).toHaveBeenCalled();
+    expect(mockNotify).not.toHaveBeenCalled();
   });
 
   it("skips the new-device alert for a record that is not freshly created", async () => {

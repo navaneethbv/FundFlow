@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const mockInvalidate = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/dashboard-cache", () => ({ invalidateDashboardCache: mockInvalidate }));
+
 const mockRequireUser = vi.fn<(...args: unknown[]) => unknown>();
 const mockErrorResponse = vi.fn<(...args: unknown[]) => unknown>(
   (_context: unknown, error: unknown) => NextResponse.json({ error: String(error) }, { status: 500 }),
@@ -989,6 +992,7 @@ function serviceStubWith(
       const body = await res.json();
       expect(body).toEqual({ ok: true, imported: 1 });
       expect(mockRefreshInferredRecurringForUser).toHaveBeenCalledWith("u1");
+      expect(mockInvalidate).toHaveBeenCalledWith(expect.any(String));
     });
 
     it("skips inference when every committed row targets a manual account", async () => {

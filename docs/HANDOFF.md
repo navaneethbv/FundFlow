@@ -1,6 +1,63 @@
-# FundFlow — Session Handoff
+# FundFlow Session Handoff
 
-Last updated: 2026-09-26. Read this first to resume.
+Last updated: 2026-09-30. Read this first to resume.
+
+## 2026-09-30: preserve integration tokens across sign-out
+
+Fixed the P2-4 logout regression on `fix/security-ui-memory` from `9f4e117`.
+Before editing, `supabase migration list --linked` succeeded and showed empty remote entries for all three `2026100105*` migrations, plus the two `2026090804*`/`2026090805*` transaction-review migrations.
+This agreed with the prior local-only handoff; no other applied environment was identified.
+Edited the unapplied `20261001052000_api_token_lifecycle.sql` in place, removing only the `auth.sessions` deletion trigger and its function branch.
+Password-change and verified-MFA-removal triggers, expiry, grants, and no-reactivation protections are unchanged.
+API/calendar tokens survive sign-out and expired-session cleanup, including deletion of the final session.
+They become unusable on password change, verified MFA factor removal, expiry, or explicit per-token revoke in Settings.
+Logout behavior is unchanged, including its default global scope.
+A dedicated "revoke all integrations" or "sign out of all devices" action does not exist yet and remains deferred in TODO.
+
+The SQL regression covers one-device, final-session, and all-session deletion for both token types, plus password/MFA revocation and other-user isolation.
+It failed against the original migration with `Final-session logout revoked API token`.
+All 89 migrations, including the corrected lifecycle migration, then applied to a fresh local PostgreSQL 17.11 database with minimal Auth/Storage schema stand-ins.
+Both `scripts/check-rls.sql` and `scripts/check-review-remediation.sql` passed with `ON_ERROR_STOP=1`; the lifecycle fixtures rolled back.
+The workflow still runs the lifecycle script immediately after the RLS script.
+This is database-level evidence, not real Supabase Auth or Storage service acceptance; Docker is unavailable.
+
+Verification logs are in `/tmp/fundflow-token-signout-check/`.
+Lint, `npx tsc --noEmit`, the production Turbopack build, palette validation, and `npm audit --audit-level=high` passed; audit reported `found 0 vulnerabilities`.
+`SUPABASE_SECRET_KEY= npm run test:unit` and `TEST_SYSTEM_TIME=2030-01-15T12:00:00Z npm run test:unit` each passed 490 files and 5,423 tests.
+`SUPABASE_SECRET_KEY= npx vitest run tests/unit scripts --coverage` passed 491 files and 5,424 tests, with unchanged gates: 98.43% statements, 96.11% branches, 98.57% functions, and 99.57% lines.
+Dependency freshness found minor icon updates, a sharp patch, and ESLint/TypeScript majors; all remain outside this focused regression fix.
+No integration tests, pushes, deployments, or live migration writes were performed.
+
+Remaining: apply the three `2026100105*` migrations to an approved disposable full Supabase environment and run real Auth password-change, verified-MFA-removal, and logout checks.
+Hosted checks and production rollout remain unverified and unauthorized in this task.
+
+## 2026-09-30: repository review remediation, local only
+
+The [review and finding status](reviews/2026-09-30-repository-review.md#implementation-status-2026-09-30-local-work) records every fixed, deferred, and not-reproduced item.
+Work remains on `fix/security-ui-memory`, starting at `b86d84b`, in focused local commits.
+No push, PR, deployment, live migration, or production Auth configuration change was performed.
+The user explicitly deferred the signup allowlist hook; local signup remains enabled and production signup configuration is unverified.
+
+Implemented deterministic and future-clock CI tests, patched dependencies, first-sync and pending/posting alert protections, cancellation-date checks, batched notification writes, iOS detection and session-owned login alerts, dashboard invalidation, viewer-date reporting, operational retention, fail-closed Plaid/calendar budgets, bounded provider calls, token expiry and fresh step-up, confirmed household acceptance, and validated login return paths.
+Small model/payload and feature documentation updates are included.
+Revoked session records and exact alert dedupe subjects deliberately survive retention to preserve security and replay barriers.
+
+Local verification: 5,424 coverage tests passed; the unchanged coverage gates passed at 98.43 percent statements, 96.11 percent branches, 98.57 percent functions, and 99.57 percent lines.
+The 2030 clock run passed all 5,423 unit tests; 23 focused tests also passed after the final notification database-column mapping fix.
+Lint, TypeScript, palette validation, and dependency audit passed; the audit reports zero vulnerabilities.
+Five Chromium checks passed, covering the token component at 375/1440 pixels in both themes with keyboard and accessibility checks, plus the real signed-out invitation redirect.
+The component checks use synthetic responses and do not prove authenticated persistence.
+
+Production build verification is blocked: Turbopack reports `creating new process -> binding to a port -> Operation not permitted (os error 1)` even after escalation.
+The webpack fallback reports an existing `node:crypto` import from the planning dependency chain reaching a client bundle.
+The development server compiled the login page successfully.
+No approved disposable Supabase target or local Docker stack was available, so database integration, RLS, real Auth lifecycle, and authenticated confirmation-page acceptance remain unverified.
+The new rollback-only `scripts/check-review-remediation.sql` is wired into migration CI but has not run locally.
+
+Before deployment, validate all three `2026100105*` migrations against a disposable database, including `scripts/check-rls.sql`, the new lifecycle smoke script, and real Auth password/MFA/logout behavior (password changes and verified MFA removal revoke tokens; logout preserves them).
+Have the owner apply the validated migrations before dependent application code.
+Hosted checks have not run for these local commits.
+Credit utilization, external error monitoring, broader integration coverage, and the larger P3 findings remain follow-ups described in the review and TODO.
 
 ## 2026-09-26: local security, UI, and memory improvements
 

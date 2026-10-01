@@ -1,3 +1,4 @@
+import { invalidateDashboardCache } from "@/lib/dashboard-cache";
 import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
@@ -260,6 +261,7 @@ export async function POST(request: NextRequest) {
       metadata: { subject_id: subjectId },
     });
 
+    invalidateDashboardCache(user.id);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return errorResponse("transactions.refunds.post", error);

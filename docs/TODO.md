@@ -1,5 +1,18 @@
 # FundFlow — Future Todos
 
+## September 30 review remediation
+
+Local implementation and per-finding status are recorded in [the review](reviews/2026-09-30-repository-review.md#implementation-status-2026-09-30-local-work).
+Before rollout, apply all three `2026100105*` migrations to an approved disposable Supabase project and verify RLS, notification replay behavior, and real Auth password-change, verified-MFA-removal, and logout flows.
+API/calendar tokens must survive sign-out and session cleanup; password changes, verified MFA factor removal, expiry, and explicit per-token revoke in Settings make them unusable.
+A dedicated "revoke all integrations" or "sign out of all devices" action does not exist yet and is deferred; this fix does not add either action.
+The existing Logout call retains its default global scope; the deferred item is a dedicated, explicit action.
+The follow-up production Turbopack build passed; all 89 migrations and both RLS/lifecycle SQL checks also passed on clean local PostgreSQL with Auth/Storage schema stand-ins.
+That database-only verification does not replace full Supabase Auth acceptance; see [the latest handoff](HANDOFF.md#2026-09-30-preserve-integration-tokens-across-sign-out).
+The owner explicitly deferred the signup allowlist; production signup settings remain unverified.
+No production migrations or deployment have been performed.
+
+
 Nice-to-have features and enhancements, deferred out of the initial build.
 
 ## Security, UI, and memory review (2026-09-26)

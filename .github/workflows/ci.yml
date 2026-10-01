@@ -37,6 +37,11 @@ jobs:
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: build-placeholder
           PLAID_TOKEN_ENC_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 
+      - name: Test with future clock
+        run: npm run test:unit
+        env:
+          TEST_SYSTEM_TIME: "2030-01-15T12:00:00Z"
+
       - name: Build
         run: npm run build
         env:

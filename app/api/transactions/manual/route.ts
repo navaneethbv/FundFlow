@@ -1,3 +1,4 @@
+import { invalidateDashboardCache } from "@/lib/dashboard-cache";
 import { NextRequest, NextResponse } from "next/server";
 import { getClientIp, writeAudit } from "@/lib/audit";
 import { isFeatureEnabled } from "@/lib/feature-flags";
@@ -56,6 +57,7 @@ export async function POST(request: NextRequest) {
       ip: getClientIp(request),
     });
 
+    invalidateDashboardCache(user.id);
     return NextResponse.json({ id: transactionId }, { status: 201 });
   } catch (error) {
     return errorResponse("transactions.manual.create", error);
@@ -100,6 +102,7 @@ export async function DELETE(request: NextRequest) {
       ip: getClientIp(request),
     });
 
+    invalidateDashboardCache(user.id);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return errorResponse("transactions.manual.delete", error);

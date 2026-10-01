@@ -10,6 +10,7 @@ interface TokenRow {
   id: string;
   name: string;
   created_at: string;
+  expires_at: string;
   last_used_at: string | null;
 }
 
@@ -24,6 +25,7 @@ export default function ApiTokensSection({
 }>) {
   const [tokens, setTokens] = useState(initialTokens);
   const [name, setName] = useState("");
+  const [code, setCode] = useState("");
   const [minted, setMinted] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +36,7 @@ export default function ApiTokensSection({
     const response = await fetch("/api/tokens", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim() }),
+      body: JSON.stringify({ name: name.trim(), code }),
     });
     if (!response.ok) {
       const data = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -45,6 +47,7 @@ export default function ApiTokensSection({
     setTokens((rows) => [...rows, { ...data.row, last_used_at: null }]);
     setMinted(data.token);
     setName("");
+    setCode("");
   }
 
   async function revoke(id: string) {
@@ -68,7 +71,7 @@ export default function ApiTokensSection({
         <code className="text-xs">Authorization: Bearer fft_…</code> against{" "}
         <code className="text-xs">/api/export/csv</code> or{" "}
         <code className="text-xs">/api/export/json</code>. Same privacy
-        contract as the downloads — never balances or account numbers.
+        contract as the downloads, never balances or account numbers.
       </p>
 
       {tokens.length > 0 && (
@@ -79,7 +82,7 @@ export default function ApiTokensSection({
                 <span className="font-semibold">{token.name}</span>
                 <span className="text-xs text-muted">
                   {" "}
-                  · created {token.created_at.slice(0, 10)}
+                  · expires {token.expires_at.slice(0, 10)}
                   {token.last_used_at
                     ? ` · last used ${token.last_used_at.slice(0, 10)}`
                     : " · never used"}
@@ -103,6 +106,9 @@ export default function ApiTokensSection({
             required
           />
         </Field>
+        <Field label="Authenticator code, or password if MFA is off" htmlFor="api-token-proof">
+          <Input id="api-token-proof" type="password" autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} required />
+        </Field>
         <Button type="submit" size="md">
           Create token
         </Button>
@@ -111,7 +117,7 @@ export default function ApiTokensSection({
       {minted && (
         <div className="mt-3 rounded-field border border-panel-border bg-panel-2 p-3">
           <p className="text-xs font-semibold text-muted">
-            Copy this token now — it won&apos;t be shown again:
+            Copy this token now; it won&apos;t be shown again:
           </p>
           <code className="mt-1 block break-all text-xs">{minted}</code>
         </div>

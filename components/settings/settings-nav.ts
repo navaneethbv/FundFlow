@@ -94,39 +94,28 @@ export function validateDisplayPrefsPatch(body: unknown): DisplayPrefsPatchResul
     return { ok: false, error: "display prefs must be an object" };
   }
   const b = body as Record<string, unknown>;
-  const patch: DisplayPrefsPatch = {};
+  const patch: Record<string, unknown> = {};
 
-  if (b.theme !== undefined) {
-    if (!THEMES.has(b.theme as ThemePreference)) return { ok: false, error: "invalid theme" };
-    patch.theme = b.theme as ThemePreference;
-  }
-  if (b.density !== undefined) {
-    if (!DENSITIES.has(b.density as DensityPreference)) return { ok: false, error: "invalid density" };
-    patch.density = b.density as DensityPreference;
-  }
-  if (b.defaultPrivacyBlur !== undefined) {
-    if (typeof b.defaultPrivacyBlur !== "boolean") {
-      return { ok: false, error: "defaultPrivacyBlur must be a boolean" };
-    }
-    patch.defaultPrivacyBlur = b.defaultPrivacyBlur;
-  }
-  if (b.reducedMotion !== undefined) {
-    if (!MOTIONS.has(b.reducedMotion as ReducedMotionPreference)) {
-      return { ok: false, error: "invalid reducedMotion" };
-    }
-    patch.reducedMotion = b.reducedMotion as ReducedMotionPreference;
-  }
-  if (b.lightPalette !== undefined) {
-    if (!isPaletteId("light", b.lightPalette)) return { ok: false, error: "invalid lightPalette" };
-    patch.lightPalette = b.lightPalette;
-  }
-  if (b.darkPalette !== undefined) {
-    if (!isPaletteId("dark", b.darkPalette)) return { ok: false, error: "invalid darkPalette" };
-    patch.darkPalette = b.darkPalette;
+  // Checked in this order so the first invalid field names the error.
+  for (const [key, isValid, error] of DISPLAY_PREF_VALIDATORS) {
+    if (b[key] === undefined) continue;
+    if (!isValid(b[key])) return { ok: false, error };
+    patch[key] = b[key];
   }
 
-  return { ok: true, value: patch };
+  return { ok: true, value: patch as DisplayPrefsPatch };
 }
+
+const DISPLAY_PREF_VALIDATORS: ReadonlyArray<
+  readonly [keyof DisplayPrefsPatch, (value: unknown) => boolean, string]
+> = [
+  ["theme", (value) => THEMES.has(value as ThemePreference), "invalid theme"],
+  ["density", (value) => DENSITIES.has(value as DensityPreference), "invalid density"],
+  ["defaultPrivacyBlur", (value) => typeof value === "boolean", "defaultPrivacyBlur must be a boolean"],
+  ["reducedMotion", (value) => MOTIONS.has(value as ReducedMotionPreference), "invalid reducedMotion"],
+  ["lightPalette", (value) => isPaletteId("light", value), "invalid lightPalette"],
+  ["darkPalette", (value) => isPaletteId("dark", value), "invalid darkPalette"],
+];
 
 /** Defensive parse of the `profiles.display_prefs` JSON — never throws on bad data. */
 export function parseDisplayPrefs(raw: unknown): DisplayPrefs {

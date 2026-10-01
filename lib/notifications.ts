@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/service";
-import { buildNotification, shouldSendAlert, type AlertType } from "@/lib/planning";
+import { buildNotification, shouldSendAlert, type AlertType, type AlertPreferences } from "@/lib/planning";
 import { getDashboardData } from "@/lib/dashboard";
 import { getGoals } from "@/lib/goals";
 import { detectNetWorthMilestones } from "@/lib/insights";
@@ -202,6 +202,11 @@ async function notificationExists(
   );
 }
 
+function notificationRow(type: AlertType, details: NotificationDetails) {
+  const shape = buildNotification(type, details);
+  return { type: shape.type, severity: shape.severity, title: shape.title, body: shape.body, read_at: null };
+}
+
 async function insertNotification(
   supabase: ReturnType<typeof createServiceClient>,
   userId: string,
@@ -210,7 +215,7 @@ async function insertNotification(
   subjectKey: string | undefined,
   dedupe: NotificationDedupe,
 ) {
-  const shape = buildNotification(type, details);
+  const shape = notificationRow(type, details);
   const { data: inserted, error: insertError } = await supabase
     .from("notifications")
     .insert({
@@ -262,6 +267,39 @@ export async function createNotification(
     return null;
   }
   return insertNotification(supabase, userId, type, details, subjectKey, dedupe);
+}
+
+export interface NotificationCandidate {
+  type: AlertType;
+  subjectKey: string;
+  details: NotificationDetails;
+}
+
+/** One preference snapshot and one conflict-safe insert for a sync page. */
+export async function createNotificationsBatch(
+  userId: string,
+  candidates: NotificationCandidate[],
+  prefs: AlertPreferences | null,
+) {
+  const preferences = prefs ?? { large_transaction: false };
+  const unique = new Map<string, NotificationCandidate>();
+  for (const candidate of candidates) {
+    if (shouldSendAlert(candidate.type, preferences)) {
+      unique.set(JSON.stringify([candidate.type, candidate.subjectKey]), candidate);
+    }
+  }
+  if (!unique.size) return [];
+  const rows = [...unique.values()].map(({ type, subjectKey, details }) => ({
+    user_id: userId, ...notificationRow(type, details), subject_key: subjectKey,
+  }));
+  const { data, error } = await createServiceClient().from("notifications")
+    .upsert(rows, { onConflict: "user_id,type,subject_key", ignoreDuplicates: true })
+    .select();
+  if (error) throw error;
+  for (const row of data ?? []) {
+    void sendPushToUser(userId, { title: row.title, body: row.body });
+  }
+  return data ?? [];
 }
 
 /**

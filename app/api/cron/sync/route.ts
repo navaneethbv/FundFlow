@@ -1,3 +1,4 @@
+import { pruneOperationalData } from "@/lib/operational-retention";
 import { NextResponse, type NextRequest } from "next/server";
 import { serverEnv } from "@/lib/env.server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -86,12 +87,8 @@ async function sendDailyDigest(
   } catch (error) {
     logError("cron.sync.digest", error);
     if (error instanceof Error && error.message.includes("SMTP is not configured")) {
-      await service.from("notifications").insert({
-        user_id: userId,
-        type: "broken_bank",
-        severity: "danger",
-        title: "Daily digest email skipped",
-        body: "We could not send your daily digest email because SMTP is not configured in production settings.",
+      await alertCronFailure("digest-delivery", {
+        failed: 1, total: 1, firstError: "SMTP_NOT_CONFIGURED",
       });
     }
   }
@@ -186,6 +183,7 @@ async function syncUser(
   await runUserStep("cron.sync.aprs", () => syncCardAprsForUser(userId));
   await runUserStep("cron.sync.notifications", () => processNotificationsForUser(userId, today));
   await runUserStep("cron.sync.digest", () => sendDailyDigest(service, userId));
+  await runUserStep("cron.sync.retention", () => pruneOperationalData(service, userId));
   return stepFailures;
 }
 
@@ -193,10 +191,17 @@ async function syncUsers(
   service: ReturnType<typeof createServiceClient>,
   userIds: string[],
   bankUserIds: Set<string>,
-): Promise<{ synced: number; failures: string[] }> {
+  deadline: number,
+): Promise<{ synced: number; failures: string[]; skipped: number }> {
   let synced = 0;
   const failures: string[] = [];
+  let skipped = 0;
   for (const userId of userIds) {
+    if (Date.now() >= deadline) {
+      skipped = userIds.length - userIds.indexOf(userId);
+      failures.push(`DEADLINE_EXCEEDED: ${skipped} users skipped`);
+      break;
+    }
     try {
       const userFailures = await syncUser(service, userId, bankUserIds.has(userId));
       if (userFailures.length) failures.push(userFailures.join("; "));
@@ -206,7 +211,7 @@ async function syncUsers(
       failures.push(safeSyncError(error));
     }
   }
-  return { synced, failures };
+  return { synced, failures, skipped };
 }
 
 /**
@@ -218,6 +223,7 @@ export async function GET(request: NextRequest) {
   const unauthorized = requireCronAuth(request);
   if (unauthorized) return unauthorized;
 
+  const deadline = Date.now() + (maxDuration - 45) * 1000;
   try {
     const service = createServiceClient();
     const { data, error } = await service
@@ -228,7 +234,7 @@ export async function GET(request: NextRequest) {
 
     const bankUserIds = new Set((data ?? []).map((r) => r.user_id as string));
     const userIds = await loadMaintenanceUsers(service, bankUserIds);
-    const { synced, failures } = await syncUsers(service, userIds, bankUserIds);
+    const { synced, failures, skipped } = await syncUsers(service, userIds, bankUserIds, deadline);
 
     // Data-integrity pass (2.3, best-effort): stuck jobs, orphaned
     // transactions, duplicate Plaid ids. Bounded queries per user; findings
@@ -236,6 +242,7 @@ export async function GET(request: NextRequest) {
     try {
       const integrityFindings: string[] = [];
       for (const userId of userIds) {
+        if (Date.now() >= deadline) break;
         const [{ data: jobs }, txns, { data: accts }] = await Promise.all([
           service
             .from("sync_jobs")
@@ -267,16 +274,11 @@ export async function GET(request: NextRequest) {
       logError("cron.sync.integrity", integrityErr);
     }
 
-    // Housekeeping (best-effort): drop sync_jobs history older than 30 days
-    // and rate-limit windows that closed more than a day ago.
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
-    const oneDayAgo = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-    const [jobsPrune, countersPrune] = await Promise.all([
-      service.from("sync_jobs").delete().lt("created_at", thirtyDaysAgo),
-      service.from("rate_limit_counters").delete().lt("window_start", oneDayAgo),
-    ]);
-    if (jobsPrune.error) logError("cron.sync.prune.jobs", jobsPrune.error);
-    if (countersPrune.error) logError("cron.sync.prune.counters", countersPrune.error);
+    // Global counters contain no owner data; expired windows need no tombstones.
+    const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    const { error: countersError } = await service.from("rate_limit_counters")
+      .delete().lt("window_start", twoDaysAgo);
+    if (countersError) logError("cron.sync.prune.counters", countersError);
 
     if (failures.length > 0) {
       await alertCronFailure("daily-sync", {
@@ -287,12 +289,12 @@ export async function GET(request: NextRequest) {
       // 207, not 200 with ok:true (A-10): a partial sync must not read as
       // success to the scheduler. Per-user detail rides in `failures`.
       return NextResponse.json(
-        { ok: false, users: userIds.length, synced, failures },
+        { ok: false, users: userIds.length, synced, failures, skipped },
         { status: 207 },
       );
     }
 
-    return NextResponse.json({ ok: true, users: userIds.length, synced });
+    return NextResponse.json({ ok: true, users: userIds.length, synced, skipped });
   } catch (error) {
     await alertCronFailure("daily-sync", {
       failed: 1,

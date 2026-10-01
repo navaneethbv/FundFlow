@@ -1,3 +1,4 @@
+import { invalidateDashboardCache } from "@/lib/dashboard-cache";
 import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
@@ -306,6 +307,7 @@ export async function POST(req: NextRequest) {
       },
     );
 
+    invalidateDashboardCache(user.id);
     await writeAudit({
       userId: user.id,
       action: "rules_batch_applied",

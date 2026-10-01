@@ -2,7 +2,7 @@ import Panel from "@/components/ui/Panel";
 import Money from "@/components/ui/Money";
 import DropdownButton, { type DropdownItem } from "@/components/ui/DropdownButton";
 import { formatCurrency, roundsToZero } from "@/lib/format";
-import { formatDate } from "@/lib/format-date";
+import { formatDate, localMonthKey } from "@/lib/format-date";
 import {
   buildLedgerStripDays,
   ledgerDaysInMonth,
@@ -83,7 +83,7 @@ function stemHeight(value: number, maxGross: number): number {
 }
 
 function isCurrentMonth(month: string): boolean {
-  return month === new Date().toISOString().slice(0, 7);
+  return month === localMonthKey();
 }
 
 function signedAmount(amount: number, currency: string): string {

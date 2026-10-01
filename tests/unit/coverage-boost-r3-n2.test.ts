@@ -143,7 +143,7 @@ describe("POST /api/plaid/sync (r3-n2)", () => {
       removed: 0,
       recurring_streams: 3,
     });
-    expect(mockCheckRateLimit).toHaveBeenCalledWith("sync:user-1", 6, 60);
+    expect(mockCheckRateLimit).toHaveBeenCalledWith("sync:user-1", 6, 60, { failClosed: true });
     expect(mockRefreshRecurringForUser).toHaveBeenCalledWith("user-1");
     expect(mockWriteAudit).toHaveBeenCalledWith(
       expect.objectContaining({

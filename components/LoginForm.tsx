@@ -1,5 +1,6 @@
 "use client";
 
+import { safeReturnPath } from "@/lib/return-path";
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -24,6 +25,7 @@ const CALLBACK_ERRORS: Record<string, string> = {
 export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const returnPath = safeReturnPath(searchParams.get("next"));
   const [supabase] = useState(createClient);
 
   const [email, setEmail] = useState("");
@@ -62,12 +64,14 @@ export default function LoginForm() {
 
   useEffect(() => {
     let active = true;
-    (async () => {
+    void (async () => {
       const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
       if (active && data && needsMfaStepUp(data.currentLevel, data.nextLevel)) {
         setMfaRequired(true);
       }
-    })();
+    })().catch(() => {
+      // Pre-detection only; sign-in re-checks the level and the proxy enforces it.
+    });
     return () => {
       active = false;
     };
@@ -98,7 +102,7 @@ export default function LoginForm() {
 
       const done = await completeIfMfaRequired();
       if (done) {
-        router.push("/dashboard");
+        router.push(returnPath);
         router.refresh();
       }
     } catch (err) {
@@ -117,7 +121,7 @@ export default function LoginForm() {
       if (signInError) throw signInError;
       const done = await completeIfMfaRequired();
       if (done) {
-        router.push("/dashboard");
+        router.push(returnPath);
         router.refresh();
       }
     } catch (err) {
@@ -146,7 +150,7 @@ export default function LoginForm() {
       });
       if (verify.error) throw verify.error;
 
-      router.push("/dashboard");
+      router.push(returnPath);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Verification failed");
@@ -261,7 +265,7 @@ export default function LoginForm() {
 
       {error && <FormMessage message={error} className="text-sm" />}
 
-      {!mfaRequired && <GoogleSignInButton />}
+      {!mfaRequired && <GoogleSignInButton returnPath={returnPath} />}
 
       <p className="text-sm text-muted">
         No account?{" "}

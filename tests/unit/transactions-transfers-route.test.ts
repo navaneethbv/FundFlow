@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mockInvalidate = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/dashboard-cache", () => ({ invalidateDashboardCache: mockInvalidate }));
 import { NextRequest, NextResponse } from "next/server";
 import { GET, POST } from "@/app/api/transactions/transfers/route";
 import { requireUser } from "@/lib/http";
@@ -172,6 +175,7 @@ describe("POST /api/transactions/transfers", () => {
     expect(mockWriteAudit).toHaveBeenCalledWith(
       expect.objectContaining({ action: "transfer_confirmed" }),
     );
+    expect(mockInvalidate).toHaveBeenCalledWith(expect.any(String));
   });
 
   it("uses a direction-independent subject when the outgoing UUID sorts after the incoming UUID", async () => {

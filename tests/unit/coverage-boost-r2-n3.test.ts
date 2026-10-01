@@ -24,17 +24,17 @@ vi.mock("@/lib/audit", () => ({
   getClientIp: (...args: unknown[]) => mockGetClientIp(...args),
 }));
 
-import { GET } from "@/app/api/household/accept/route";
+import { POST as GET } from "@/app/api/household/accept/route";
 
 const TOKEN = "a".repeat(32);
 
 function acceptReq(token?: string): NextRequest {
   const search = new URLSearchParams();
   if (token !== undefined) search.set("token", token);
-  return new NextRequest(`https://x.local/api/household/accept?${search.toString()}`);
+  return new NextRequest(`https://x.local/api/household/accept?${search.toString()}`, { method: "POST", headers: { origin: "https://x.local" } });
 }
 
-describe("GET /api/household/accept", () => {
+describe("POST /api/household/accept", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -42,20 +42,20 @@ describe("GET /api/household/accept", () => {
   it("redirects to login when not signed in", async () => {
     mockRequireUser.mockResolvedValue(new NextResponse("unauthorized", { status: 401 }));
     const res = await GET(acceptReq(TOKEN));
-    expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe("https://x.local/login");
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe(`https://x.local/login?next=${encodeURIComponent("/household/accept?token=" + TOKEN)}`);
   });
 
   it("redirects to invalid when the token is missing or too short", async () => {
     mockRequireUser.mockResolvedValue({ user: { id: "u1", email: "a@b.com" } });
     const resMissing = await GET(acceptReq(undefined));
-    expect(resMissing.status).toBe(307);
+    expect(resMissing.status).toBe(303);
     expect(resMissing.headers.get("location")).toBe(
       "https://x.local/settings?invite=invalid",
     );
 
     const resShort = await GET(acceptReq("short"));
-    expect(resShort.status).toBe(307);
+    expect(resShort.status).toBe(303);
   });
 
   it("redirects to invalid when no invite matches the token hash", async () => {
@@ -64,7 +64,7 @@ describe("GET /api/household/accept", () => {
     );
     mockRequireUser.mockResolvedValue({ user: { id: "u1", email: "a@b.com" } });
     const res = await GET(acceptReq(TOKEN));
-    expect(res.status).toBe(307);
+    expect(res.status).toBe(303);
     expect(res.headers.get("location")).toBe(
       "https://x.local/settings?invite=invalid",
     );
@@ -87,7 +87,7 @@ describe("GET /api/household/accept", () => {
     );
     mockRequireUser.mockResolvedValue({ user: { id: "u1", email: "a@b.com" } });
     const res = await GET(acceptReq(TOKEN));
-    expect(res.status).toBe(307);
+    expect(res.status).toBe(303);
     expect(res.headers.get("location")).toBe(
       "https://x.local/settings?invite=invalid",
     );
@@ -110,7 +110,7 @@ describe("GET /api/household/accept", () => {
     );
     mockRequireUser.mockResolvedValue({ user: { id: "u1", email: "a@b.com" } });
     const res = await GET(acceptReq(TOKEN));
-    expect(res.status).toBe(307);
+    expect(res.status).toBe(303);
   });
 
   it("redirects to invalid when the signup email does not match the invite", async () => {
@@ -130,7 +130,7 @@ describe("GET /api/household/accept", () => {
     );
     mockRequireUser.mockResolvedValue({ user: { id: "u1", email: "a@b.com" } });
     const res = await GET(acceptReq(TOKEN));
-    expect(res.status).toBe(307);
+    expect(res.status).toBe(303);
   });
 
   it("redirects to invalid when the user has no email at all", async () => {
@@ -150,7 +150,7 @@ describe("GET /api/household/accept", () => {
     );
     mockRequireUser.mockResolvedValue({ user: { id: "u1", email: null } });
     const res = await GET(acceptReq(TOKEN));
-    expect(res.status).toBe(307);
+    expect(res.status).toBe(303);
     expect(res.headers.get("location")).toBe(
       "https://x.local/settings?invite=invalid",
     );
@@ -177,7 +177,7 @@ describe("GET /api/household/accept", () => {
       user: { id: "u1", email: "a@b.com" },
     });
     const res = await GET(acceptReq(TOKEN));
-    expect(res.status).toBe(307);
+    expect(res.status).toBe(303);
     expect(res.headers.get("location")).toBe(
       "https://x.local/settings?invite=accepted",
     );
@@ -217,7 +217,7 @@ describe("GET /api/household/accept", () => {
     );
     mockRequireUser.mockResolvedValue({ user: { id: "u1", email: "a@b.com" } });
     const res = await GET(acceptReq(TOKEN));
-    expect(res.status).toBe(307);
+    expect(res.status).toBe(303);
     expect(res.headers.get("location")).toBe(
       "https://x.local/settings?invite=accepted",
     );

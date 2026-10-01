@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+let tokenService: unknown;
+vi.mock("@/lib/step-up", () => ({ verifyStepUp: async () => true }));
 import { createHash } from "node:crypto";
 import { clientStub } from "../fixtures/supabase-query";
 
 const mockRequireUser = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/lib/http", () => ({
-  requireUser: () => mockRequireUser(),
+  requireUser: async () => { const result = await mockRequireUser(); tokenService = (result as { supabase?: unknown })?.supabase; return result; },
   badRequest: (msg: unknown) =>
     Response.json({ error: String(msg) }, { status: 400 }),
   errorResponse: (_context: unknown, error: unknown) => {
@@ -25,7 +28,7 @@ vi.mock("@/lib/audit", () => ({
 
 let serviceClient = clientStub();
 vi.mock("@/lib/supabase/service", () => ({
-  createServiceClient: () => serviceClient,
+  createServiceClient: () => tokenService ?? serviceClient,
 }));
 
 import { POST as tokensPost, DELETE as tokensDelete } from "@/app/api/tokens/route";
@@ -41,7 +44,7 @@ const USER = "user-1";
 function body(url: string, method: string, payload: unknown) {
   return new NextRequest(url, {
     method,
-    body: JSON.stringify(payload),
+    body: JSON.stringify(url.includes("/api/tokens") ? { code: "proof", ...(payload as object) } : payload),
     headers: { "content-type": "application/json" },
   });
 }
@@ -50,6 +53,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockCheckRateLimit.mockResolvedValue(true);
   serviceClient = clientStub();
+  tokenService = undefined;
 });
 
 describe("POST /api/tokens", () => {

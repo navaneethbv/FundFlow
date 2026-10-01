@@ -88,8 +88,10 @@ describe("verifyApiToken", () => {
       const builder = original(table) as Record<string, unknown>;
       builder.update = () => ({
         eq: () => ({
+          eq: () => ({
           then: (_res: unknown, reject: (e: unknown) => unknown) =>
             reject(new Error("stamp failed")),
+          }),
         }),
       });
       return builder;
@@ -98,4 +100,11 @@ describe("verifyApiToken", () => {
 
     await expect(verifyApiToken(`Bearer ${VALID}`)).resolves.toBe("user-1");
   });
+});
+
+
+it("surfaces token lookup outages and filters expired credentials", async () => {
+  serviceClient = clientStub({ api_tokens: { error: new Error("offline") } });
+  await expect(verifyApiToken(`Bearer ${VALID}`)).rejects.toThrow("offline");
+  expect(serviceClient.callsOn("api_tokens")).toContainEqual(expect.objectContaining({ method: "gt", args: ["expires_at", expect.any(String)] }));
 });

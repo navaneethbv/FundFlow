@@ -1,9 +1,21 @@
-import { beforeAll, expect } from "vitest";
+import { afterEach, beforeAll, beforeEach, expect, vi } from "vitest";
 import path from "node:path";
 import { config } from "dotenv";
 
 // Load local env for tests (encryption key, Supabase keys for integration).
 config({ path: ".env.local" });
+
+// Exercise unpinned clocks in CI while leaving timer scheduling real.
+// Individual tests can still choose their own explicit scenario clock.
+if (process.env.TEST_SYSTEM_TIME) {
+  const clock = new Date(process.env.TEST_SYSTEM_TIME);
+  if (!Number.isFinite(clock.getTime())) throw new Error("Invalid TEST_SYSTEM_TIME");
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(clock);
+  });
+  afterEach(() => vi.useRealTimers());
+}
 
 // Ensure a valid 32-byte fallback key in test environments (like CI) where .env.local is not present
 if (!process.env.PLAID_TOKEN_ENC_KEY) {

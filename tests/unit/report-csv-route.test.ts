@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { GET } from "@/app/api/export/report-csv/route";
 import { writeAudit } from "@/lib/audit";
@@ -66,6 +66,18 @@ describe("report CSV export route", () => {
       currencyByAccountId: new Map([["acct-1", "USD"]]),
       truncated: false,
     });
+  });
+
+  afterEach(() => vi.useRealTimers());
+  it("keeps September defaults on the last US evening after UTC rollover", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-01T02:00:00Z"));
+    vi.mocked(requireUser).mockResolvedValue({
+      user: { id: "user-1" },
+      supabase: clientStub({ profiles: { data: { timezone: "America/Los_Angeles" } } }),
+    } as never);
+    expect((await GET(get(""))).status).toBe(200);
+    expect(vi.mocked(loadReportData).mock.calls[0]?.[1]?.filters).toEqual(expect.objectContaining({ start: "2026-09-01", end: "2026-09-30" }));
   });
 
   it("403s when the profile has export disabled", async () => {

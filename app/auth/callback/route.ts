@@ -1,3 +1,4 @@
+import { safeReturnPath } from "@/lib/return-path";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/log";
@@ -19,5 +20,5 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login?error=confirmation_failed`);
   }
 
-  return NextResponse.redirect(`${origin}/dashboard`);
+  return NextResponse.redirect(new URL(safeReturnPath(request.nextUrl.searchParams.get("next")), origin));
 }

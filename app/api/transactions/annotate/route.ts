@@ -1,3 +1,4 @@
+import { invalidateDashboardCache } from "@/lib/dashboard-cache";
 import { NextResponse, type NextRequest } from "next/server";
 import { badRequest, errorResponse, requireUser, type AuthedContext } from "@/lib/http";
 import { validateSplits } from "@/lib/transaction-quality";
@@ -297,6 +298,7 @@ export async function POST(request: NextRequest) {
       request,
     });
 
+    invalidateDashboardCache(user.id);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return errorResponse("transactions.annotate", error);

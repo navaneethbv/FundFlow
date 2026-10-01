@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const mockTransactionsSync = vi.fn();
 vi.mock("@/lib/plaid", () => ({
@@ -38,6 +38,9 @@ vi.mock("@/lib/plaid-service", () => ({
 const mockCreateNotification = vi.fn().mockResolvedValue(undefined);
 vi.mock("@/lib/notifications", () => ({
   createNotification: (...args: unknown[]) => mockCreateNotification(...args),
+  createNotificationsBatch: async (userId: string, candidates: Array<{ type: string; details: unknown; subjectKey: string }>) => {
+    for (const candidate of candidates) await mockCreateNotification(userId, candidate.type, candidate.details, candidate.subjectKey, "exact");
+  },
 }));
 
 const mockInvalidateDashboardCache = vi.fn();
@@ -56,7 +59,11 @@ import type { PlaidItemRow } from "@/lib/types";
 describe("lib/sync", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-07-29T12:00:00Z"));
   });
+
+  afterEach(() => vi.useRealTimers());
 
   const dummyItem: PlaidItemRow = {
     id: "item-db-1",
@@ -105,7 +112,7 @@ describe("lib/sync", () => {
       const selectAlert = vi.fn().mockReturnValue({ eq: eqAlertUser });
 
       const eqCancelledUser = vi.fn().mockResolvedValue({
-        data: [{ merchant: "Netflix" }],
+        data: [{ merchant: "Netflix", created_at: "2026-07-26T12:00:00Z" }],
       });
       const selectCancelled = vi.fn().mockReturnValue({ eq: eqCancelledUser });
 
@@ -146,7 +153,8 @@ describe("lib/sync", () => {
         "user-1",
         "cancellation_watch",
         expect.objectContaining({ title: expect.stringContaining("Netflix") }),
-        "Netflix",
+        "txn-1",
+        "exact",
       );
       expect(mockCompleteItemCursor).toHaveBeenCalledWith("user-1", "item-db-1", "cursor-next");
       expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", null);
@@ -426,7 +434,7 @@ describe("lib/sync", () => {
       const maybeSingleAlert = vi.fn().mockResolvedValue({ data: null });
       const eqAlertUser = vi.fn().mockReturnValue({ maybeSingle: maybeSingleAlert });
       const selectAlert = vi.fn().mockReturnValue({ eq: eqAlertUser });
-      const eqCancelledUser = vi.fn().mockResolvedValue({ data: [{ merchant: "NETFLIX" }] });
+      const eqCancelledUser = vi.fn().mockResolvedValue({ data: [{ merchant: "NETFLIX", created_at: "2026-07-26T12:00:00Z" }] });
       const selectCancelled = vi.fn().mockReturnValue({ eq: eqCancelledUser });
 
       mockServiceClient.from.mockImplementation((table: string) => {
@@ -565,7 +573,7 @@ describe("lib/sync", () => {
 
       await syncItemTransactions(dummyItem);
 
-      expect(mockLogError).toHaveBeenCalledWith("sync.large_txn_notification", expect.any(Error));
+      expect(mockLogError).toHaveBeenCalledWith("sync.transaction_notifications", expect.any(Error));
     });
 
     it("logs when releasing the item claim fails", async () => {
@@ -653,7 +661,7 @@ describe("lib/sync", () => {
       const maybeSingleAlert = vi.fn().mockResolvedValue({ data: null });
       const eqAlertUser = vi.fn().mockReturnValue({ maybeSingle: maybeSingleAlert });
       const selectAlert = vi.fn().mockReturnValue({ eq: eqAlertUser });
-      const eqCancelledUser = vi.fn().mockResolvedValue({ data: [{ merchant: "Netflix" }] });
+      const eqCancelledUser = vi.fn().mockResolvedValue({ data: [{ merchant: "Netflix", created_at: "2026-07-26T12:00:00Z" }] });
       const selectCancelled = vi.fn().mockReturnValue({ eq: eqCancelledUser });
 
       mockServiceClient.from.mockImplementation((table: string) => {
@@ -665,7 +673,7 @@ describe("lib/sync", () => {
 
       await syncItemTransactions(dummyItem);
 
-      expect(mockLogError).toHaveBeenCalledWith("sync.cancellation_watch", expect.any(Error));
+      expect(mockLogError).toHaveBeenCalledWith("sync.transaction_notifications", expect.any(Error));
     });
   });
 

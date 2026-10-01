@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const mockInvalidate = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/dashboard-cache", () => ({ invalidateDashboardCache: mockInvalidate }));
 import { POST } from "@/app/api/rules/batch/route";
 import { NextRequest } from "next/server";
 
@@ -246,6 +249,7 @@ describe("POST /api/rules/batch", () => {
       expect.objectContaining({ merchant_name: "Target Supercenter" }),
     );
     expect(mockServiceIn).toHaveBeenCalledWith("id", ["tx-1"]);
+    expect(mockInvalidate).toHaveBeenCalledWith(expect.any(String));
   });
 
   it("propagates annotation write failure and records audit trail with failed_table", async () => {

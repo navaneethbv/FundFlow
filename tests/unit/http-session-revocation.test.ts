@@ -11,9 +11,10 @@ const mockGetUser = vi.fn();
 const mockGetAal = vi.fn();
 const mockGetSession = vi.fn();
 const mockMaybeSingle = vi.fn();
-const mockSelect = vi.fn(() => ({ maybeSingle: mockMaybeSingle }));
+const mockSelect = vi.fn(() => chain);
+const chain = { select: mockSelect, eq: () => chain, maybeSingle: mockMaybeSingle };
 const mockUpsert = vi.fn(() => ({ select: mockSelect }));
-const mockFrom = vi.fn(() => ({ upsert: mockUpsert }));
+const mockFrom = vi.fn(() => ({ upsert: mockUpsert, select: mockSelect }));
 
 const mockSupabaseClient = {
   auth: {
@@ -55,10 +56,7 @@ describe("requireUser session revocation", () => {
     const result = await requireUser();
     expect(result).not.toBeInstanceOf(Response);
     expect(mockFrom).toHaveBeenCalledWith("user_session_records");
-    expect(mockUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({ user_id: "user-1", session_id: "sess-1" }),
-      { onConflict: "user_id,session_id" },
-    );
+    expect(mockUpsert).not.toHaveBeenCalled();
   });
 
   it("returns temporary unavailability if session recording throws", async () => {

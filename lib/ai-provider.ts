@@ -1,7 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { serverEnv } from "@/lib/env.server";
-import type { FinanceFlow } from "@/lib/finance-domain";
+import { TRANSFER_GROUPS, type FinanceFlow } from "@/lib/finance-domain";
 
 /**
  * Real AI provider integration: a server-only Anthropic client behind the
@@ -14,15 +14,15 @@ import type { FinanceFlow } from "@/lib/finance-domain";
  * summaries — the feature degrades, never breaks.
  */
 
-export const DEFAULT_AI_MODEL = "claude-sonnet-4-6";
+export const DEFAULT_AI_MODEL = "claude-sonnet-5-5";
 
 export function getAiModel(): string {
   return process.env.AI_INSIGHTS_MODEL ?? DEFAULT_AI_MODEL;
 }
 
 function supportsAdaptiveThinking(model: string): boolean {
-  return ["sonnet-4-6", "sonnet-5", "opus-4-6", "opus-4-7", "opus-4-8", "opus-5"]
-    .some((modelId) => model.includes(modelId));
+  // Explicit supported families and versions, with optional dated API IDs.
+  return /^claude-(?:sonnet-(?:4-6|5(?:-5)?)|opus-(?:4-[678]|5(?:-5)?))(?:-\d{8})?$/.test(model);
 }
 
 function getAnthropicClient(): Anthropic {
@@ -66,14 +66,7 @@ export function buildInsightPayload(rows: AggregateRow[]) {
     if (row.flow ? row.flow !== "expense" : amount <= 0) continue;
     const catUpper = (row.category ?? "").toUpperCase();
     if (
-      [
-        "TRANSFER",
-        "TRANSFER_IN",
-        "TRANSFER_OUT",
-        "LOAN_PAYMENTS",
-        "LOAN_DISBURSEMENTS",
-        "RECONCILE_ADJUSTMENT",
-      ].includes(catUpper) ||
+      (catUpper === "TRANSFER" || TRANSFER_GROUPS.has(catUpper)) ||
       row.flow === "transfer"
     ) {
       continue;

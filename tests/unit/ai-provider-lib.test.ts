@@ -415,3 +415,15 @@ describe("syncCardAprsForUser", () => {
     expect(mockLogError).toHaveBeenCalledWith("liabilities.item", expect.anything());
   });
 });
+
+
+describe("real iOS user agents", () => {
+  it.each([
+    ["Version/18.0 Mobile/15E148 Safari/604.1", "Safari"],
+    ["CriOS/130.0.6723.90 Mobile/15E148 Safari/604.1", "Chrome"],
+    ["FxiOS/132.0 Mobile/15E148 Safari/605.1.15", "Firefox"],
+    ["EdgiOS/130.0.2849.68 Mobile/15E148 Safari/605.1.15", "Edge"],
+  ])("identifies %s on iOS", (browser, label) => {
+    expect(summarizeUserAgent(`Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) ${browser}`)).toBe(`${label} on iOS`);
+  });
+});

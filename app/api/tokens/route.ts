@@ -1,3 +1,5 @@
+import { verifyStepUp } from "@/lib/step-up";
+import { createServiceClient } from "@/lib/supabase/service";
 import { randomBytes } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { badRequest } from "@/lib/http";
@@ -14,15 +16,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Too many tokens created today." }, { status: 429 });
     }
 
-    const body = (await request.json().catch(() => ({}))) as { name?: string };
-    const name = body.name?.trim();
+    const body = (await request.json().catch(() => ({}))) as { name?: string; code?: string; factorId?: string };
+    const name = typeof body.name === "string" ? body.name.trim() : "";
     if (!name || name.length > 80) return badRequest("A token name (≤80 chars) is required");
 
+    if (typeof body.code !== "string" || !await verifyStepUp(supabase, user, body.code, body.factorId)) {
+      return NextResponse.json({ error: "Reauthentication required" }, { status: 403 });
+    }
+    const expiresAt = new Date(Date.now() + 90 * 86_400_000).toISOString();
     const token = `${API_TOKEN_PREFIX}${randomBytes(32).toString("base64url")}`;
-    const { data, error } = await supabase
+    const { data, error } = await createServiceClient()
       .from("api_tokens")
-      .insert({ user_id: user.id, name, token_hash: hashApiToken(token) })
-      .select("id, name, created_at")
+      .insert({ user_id: user.id, name, token_hash: hashApiToken(token), expires_at: expiresAt })
+      .select("id, name, created_at, expires_at")
       .single();
     if (error) throw error;
 

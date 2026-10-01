@@ -7,7 +7,7 @@ Features are ranked by how much of a hole they leave in a real deployment.
 Multi-currency is explicitly out of scope and deliberately not listed.
 
 **Update (2026-09-04): every implementation item below has shipped or has an
-explicit current status.** Migration import remains missing, and backup restore
+explicit current status.** Migration import is implemented; backup restore
 is implemented but disabled by default until its provider-synced data model is
 redesigned. The status lines record where and how; the list is kept as the
 design record for each feature, and the two owner-action items and out-of-scope
@@ -275,43 +275,12 @@ data out, and this closes the loop by letting them put it back.
 
 ## 6. Migration import from other personal finance apps
 
-**Status: missing. Statement import only.**
+**Status: implemented for transaction imports.**
 
-`lib/import.ts`, `lib/import-ofx.ts`, and the Import flow
-(`components/settings/ImportSection.tsx`, `/api/import/preview`,
-`/api/import/commit`) ingest raw bank-statement CSV, OFX, and QFX. There is no
-import path for the export files that users actually have sitting in their
-inbox: Mint's CSV export, Monarch's CSV export, or YNAB's exports. Every one of
-those is a different column shape with its own conventions (Mint uses a
-"Transaction Type" column, Monarch uses "Transaction Date"/"Amount" with
-separate debit and credit semantics, YNAB splits into "Outflow"/"Inflow").
-
-### Why it is a must-have
-The app's import story is "bring your bank statements". But the people most
-likely to need FundFlow are people leaving Mint (which shut down) or Monarch.
-For them, the natural entry point is their old app's full export, not a pile
-of per-bank statements. A migration import that maps those exports to the
-existing review-and-commit pipeline turns the hardest part of switching apps
-into a ten-minute task.
-
-### What is needed
-- Sniffers for Mint, Monarch, and YNAB export formats that normalize into the
-  existing import-row contract (same as OFX/QFX already feed the preview
-  pipeline, per `docs/superpowers/archive/specs/2026-08-09-deferred-features-design.md`).
-- Account mapping: each source account maps to a FundFlow account (or creates a
-  manual account), with the deterministic `import-<hash>` id convention so
-  re-imports are idempotent and the Plaid-overlap guard still applies.
-- Budget/goal/rule imports are out of scope for v1; transactions only, with the
-  UI saying so.
-
-### Acceptance criteria
-- A Mint CSV, a Monarch CSV, and a YNAB export each preview and commit through
-  the existing review queue without manual column mapping.
-- Re-importing the same file does not duplicate (idempotency preserved).
-- Source account mappings are persisted so a second import lands in the same
-  accounts.
-
----
+`lib/import-mint.ts`, `lib/import-monarch.ts`, and `lib/import-ynab.ts` normalize supported exports into the staged `/api/import/preview` and `/api/import/commit` flow.
+Account mapping, review, and deterministic import identifiers use the existing import pipeline.
+Budget, goal, and rule migration remain outside that transaction-import contract.
+See `docs/TODO.md` for current follow-up work instead of this historical feature proposal.
 
 ## 7. Tax-ready categorization and export
 
