@@ -40,7 +40,7 @@ function makeSupabase(streams: unknown[]): SupabaseClient {
 }
 
 async function dashboard(streams: unknown[]) {
-  return getDashboardData(makeSupabase(streams), undefined, "2026-09", "user-1");
+  return getDashboardData(makeSupabase(streams), undefined, "2026-09", "user-1", { today: "2026-09-15" });
 }
 
 describe("dashboard recurring dismissal", () => {

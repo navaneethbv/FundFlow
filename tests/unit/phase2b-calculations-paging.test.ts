@@ -244,6 +244,7 @@ describe("A-5 paged dashboard reads", () => {
       undefined,
       "2026-09",
       "user-1",
+      { today: "2026-09-15" },
     );
     const food = data.categoryBreakdown.find((row) => row.category === "FOOD_AND_DRINK");
     // 1,200 rows paged in full, minus the two seeded as a linked transfer

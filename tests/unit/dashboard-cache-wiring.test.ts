@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const { mockGetDashboardData } = vi.hoisted(() => ({ mockGetDashboardData: vi.fn() }));
 
@@ -89,10 +89,13 @@ describe("dashboardScopeKey", () => {
 import { createDashboardCache } from "@/lib/dashboard-cache";
 
 describe("createDashboardCache expiration", () => {
+  afterEach(() => vi.useRealTimers());
   it("deletes expired records when accessed after TTL", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-15T12:00:00Z"));
     const cache = createDashboardCache<string>(1);
     await cache.set("user-exp", "scope-1", "val-1");
-    await new Promise((res) => setTimeout(res, 5));
+    vi.setSystemTime(new Date("2026-09-15T12:00:00.005Z"));
     const val = await cache.get("user-exp", "scope-1");
     expect(val).toBeNull();
   });

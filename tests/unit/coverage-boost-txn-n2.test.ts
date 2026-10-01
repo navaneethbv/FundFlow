@@ -398,7 +398,10 @@ describe("DELETE /api/recurring/manual", () => {
 
 describe("GET /api/household/accept", () => {
   const TOKEN = "abcdefghijklmnopqrst"; // >= 20 chars
-  const futureExpiry = new Date(Date.now() + 100000).toISOString();
+  let futureExpiry: string;
+  beforeEach(() => {
+    futureExpiry = new Date(Date.now() + 100000).toISOString();
+  });
 
   it("redirects to login when not signed in (line 16-18)", async () => {
     mockRequireUser.mockResolvedValue(new NextResponse("x", { status: 401 }));

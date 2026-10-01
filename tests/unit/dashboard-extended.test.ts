@@ -254,7 +254,7 @@ describe("lib/dashboard extended features", () => {
       "acc-1",
       "2026-07",
       "user-1",
-      { scope: "mine" },
+      { scope: "mine", today: "2026-07-15" },
     );
 
     expect(data).toBeDefined();
