@@ -1,26 +1,6 @@
 # FundFlow Session Handoff
 
-## 2026-10-01: reference adoption program, item 0.1
-
-Implementation worktree: `/private/tmp/fundflow-pending-annotations`, branch `fix/pending-annotation-carryover`, based on `origin/main` at `7860817`.
-The primary checkout's unrelated uncommitted backup incident edits remain untouched.
-The plan, comparison report and implementation prompt are included with this branch so future clones can resume.
-Item 0.1 reproduces annotation loss and queues provider removals until the complete update chain arrives.
-An owner/item-scoped service-only RPC carries annotations and related state before deleting pending rows atomically; conflicts refuse without losing data.
-See the plan's execution checklist for review-state semantics and deferred program items.
-The owner selected Option B: signed-in browser and full Supabase integration acceptance are deferred until an isolated target is supplied.
-Verification: all 490 unit suites / 5,423 tests passed; coverage gates passed (98.43% statements, 96.10% branches, 98.58% functions, 99.57% lines).
-Lint, type checking, palette validation, the rollback-only pending carryover SQL regression and `scripts/check-rls.sql` passed.
-The regression first failed against the old deletion behavior with `Pending annotation, tags and override were lost`.
-Local production build is not verified: Turbopack cannot bind its worker port in the execution environment; the Webpack fallback fails on the unchanged `node:crypto` import from `lib/planning.ts` into `WhatIfPanel`.
-An initial test run using a symlinked dependency directory was invalidated by module identity failures; all reported passing tests are from the clean copied dependency directory.
-`graphify update .` completed; SQL extraction reported its optional parser missing.
-Next: obtain approval to use hosted build checks, open the reviewable draft PR, then continue 0.2 and 0.3.
-No production migrations, deployments, flags or merges were performed.
-Temporary Sure reference clone: `/private/tmp/fundflow-reference-sure`, pinned to `97fa8a2eda5df778abcccb2a08a643d8004907c4`.
-Keep it until the program ends; do not delete implementation worktrees or reset the primary checkout.
-
-Last updated: 2026-10-01. Read this first to resume.
+Last updated: 2026-09-30. Read this first to resume.
 
 ## 2026-09-30: preserve integration tokens across sign-out
 

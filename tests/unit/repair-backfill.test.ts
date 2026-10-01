@@ -175,13 +175,10 @@ describe("backfillItemTransactions (bounded repair backfill)", () => {
       "item-db-1",
       "cursor-final",
     );
-    expect(mockServiceClient.rpc).toHaveBeenCalledWith("finish_transaction_sync_page", {
-      p_user_id: "user-1", p_item_id: "item-db-1", p_removed_ids: ["txn-old"],
-      p_complete: true, p_restart: true,
-    });
+    expect(eqDeleteIn).toHaveBeenCalledWith("plaid_transaction_id", ["txn-old"]);
   });
 
-  it("queues tombstones across bounded pages until their posted replacements arrive", async () => {
+  it("applies explicit Plaid tombstones even on a bounded run but never sweeps absent rows", async () => {
     mockTransactionsSync
       .mockResolvedValueOnce({
         data: {
@@ -216,15 +213,9 @@ describe("backfillItemTransactions (bounded repair backfill)", () => {
     const result = await backfillItemTransactions(dummyItem, { maxPages: 2 });
 
     expect(result.completed).toBe(false);
-    expect(deleteQuery).not.toHaveBeenCalled();
-    expect(mockServiceClient.rpc).toHaveBeenCalledWith("finish_transaction_sync_page", {
-      p_user_id: "user-1", p_item_id: "item-db-1", p_removed_ids: ["txn-removed"],
-      p_complete: false, p_restart: true,
-    });
-    expect(mockServiceClient.rpc).toHaveBeenCalledWith("finish_transaction_sync_page", {
-      p_user_id: "user-1", p_item_id: "item-db-1", p_removed_ids: [],
-      p_complete: false, p_restart: false,
-    });
+    expect(eqDeleteIn).toHaveBeenCalledWith("plaid_transaction_id", ["txn-removed"]);
+    // The delete is scoped to the owning user.
+    expect(eqDeleteUser).toHaveBeenCalledWith("user_id", "user-1");
   });
 
   it("upserts by plaid_transaction_id so retries stay idempotent", async () => {
