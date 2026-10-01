@@ -40,19 +40,18 @@ export async function notifyNewDeviceLogin(
   }
 }
 
-// Order matters: Edge UAs also contain "Chrome", and iPadOS reports "Macintosh",
-// so the more specific pattern must come first. First match wins.
+// Real iOS UAs contain "like Mac OS X". Specific device/browser tokens win.
 const OS_PATTERNS: [RegExp, string][] = [
   [/Windows/i, "Windows"],
+  [/iPhone|iPad|iPod/i, "iOS"],
   [/Macintosh|Mac OS/i, "macOS"],
-  [/iPhone|iPad/i, "iOS"],
   [/Android/i, "Android"],
   [/Linux/i, "Linux"],
 ];
 const BROWSER_PATTERNS: [RegExp, string][] = [
-  [/Edg\//i, "Edge"],
-  [/Chrome\//i, "Chrome"],
-  [/Firefox\//i, "Firefox"],
+  [/Edg\/|EdgiOS\//i, "Edge"],
+  [/Chrome\/|CriOS\//i, "Chrome"],
+  [/Firefox\/|FxiOS\//i, "Firefox"],
   [/Safari\//i, "Safari"],
 ];
 
