@@ -311,9 +311,9 @@ No dependency changes are included in feature PRs.
 | 0.1 | Draft PR; hosted checks passed, browser/integration deferred | [#192](https://github.com/navaneethbv/FundFlow/pull/192) |
 | 0.2 | Not reproduced; skipped per verification rule | Unique holding key rejects duplicate-security rollups |
 | 0.3 | Draft PR; hosted checks passed | [#193](https://github.com/navaneethbv/FundFlow/pull/193) |
-| 1.1 | Draft PR; local checks and component browser fixtures passed, hosted checks running | [#194](https://github.com/navaneethbv/FundFlow/pull/194) |
-| 1.2 | Design in progress; depends on 1.1 | Structured diagnostics before staging |
-| 1.3 | Not started |  |
+| 1.1 | Draft PR; local and hosted checks passed, signed-in acceptance deferred | [#194](https://github.com/navaneethbv/FundFlow/pull/194) |
+| 1.2 | Draft PR; local and hosted checks passed; depends on 1.1 | [#195](https://github.com/navaneethbv/FundFlow/pull/195) |
+| 1.3 | Implementation in progress; existing mapping and preview reused | `/private/tmp/fundflow-import-wizard`, based on #195 |
 | 1.4 | Not started |  |
 | 1.5 | Not started |  |
 | 2.1 | Not started |  |
@@ -416,3 +416,14 @@ PR #194 is independent of the defect PRs and keeps `importProfiles` off.
 Local coverage, lint, typecheck, isolated SQL/RLS checks, and four Chromium component journeys at 375px/1440px in both themes passed.
 Those browser fixtures mock HTTP; signed-in acceptance remains deferred as approved.
 Migration `20261001120000_import_profiles.sql` is unapplied to production.
+
+### Items 1.2 and 1.3 evidence
+
+PR #194 passed all hosted checks at `6820c96` and remains unmerged.
+Item 1.2 is PR #195, based on #194; all emitted hosted checks passed at `2cf0f7d`, including build/unit coverage, Sonar, Codacy, preview, and smoke tests.
+Local item 1.2 verification passed 495 suites / 5,509 tests, the coverage gates, lint/types, and four Chromium fixtures in both themes at 375px and 1440px.
+Its readonly endpoint and UI require default-off `importPreflight` and the saved-layout prerequisite; it adds no migration.
+
+For 1.3, column naming, sample rows, date/sign configuration, duplicate review, and explicit commit already exist in `components/settings/ImportReviewSection.tsx` and are reused.
+The remaining implementation adds scoped file drop, visible steps, keyboard focus transitions, and stale-preview clearing behind `importWizard: false`.
+The #194 -> #195 -> wizard stack is three branches deep; do not extend it until a base merges.
