@@ -13,6 +13,36 @@ interface PreparedLayout {
   response?: NextResponse;
 }
 
+async function selectSavedProfile(supabase: SupabaseClient, userId: string, text: string, profileId: string | null): Promise<PreparedLayout> {
+  const { data, error } = await supabase.from("import_profiles").select("id, name, layout").eq("user_id", userId).limit(100);
+  if (error) throw error;
+  const profiles: ImportProfile[] = (data ?? []).flatMap(row => {
+    const layout = normalizeImportLayout(row.layout);
+    return layout ? [{ id: row.id as string, name: row.name as string, layout }] : [];
+  });
+  const matches = matchImportProfiles(text, profiles);
+  const selected = profileId ? matches.find(row => row.id === profileId) : matches.length === 1 ? matches[0] : undefined;
+  if (profileId && !selected) return { text, response: badRequest("Saved layout does not match this file") };
+  if (selected) return { text, layout: selected.layout, profile: { id: selected.id, name: selected.name } };
+  if (matches.length > 1) return {
+    text,
+    response: NextResponse.json({ needs_profile_choice: true, profiles: matches.map(({ id, name }) => ({ id, name })) }),
+  };
+  return { text };
+}
+
+function prepareManualLayout(text: string, preparedText: string, form: FormData, skipRows: number): PreparedLayout {
+  const header = getCsvColumns(preparedText);
+  const dateOrderRaw = form.get("date_order");
+  const dateOrder = ["mdy", "dmy", "ymd"].includes(String(dateOrderRaw)) ? dateOrderRaw as DateOrder : undefined;
+  const mapping = form.get("column_map");
+  let columns: unknown;
+  try { columns = typeof mapping === "string" ? JSON.parse(mapping) : header && detectColumns(header.headers); }
+  catch { return { text, response: badRequest("Invalid column mapping") }; }
+  const layout = createImportLayout(text, { columns, dateOrder, positiveIsIncome: form.get("positive_is_income") !== "false", skipRows });
+  return { text: preparedText, ...(layout ? { layout } : {}) };
+}
+
 export async function prepareImportProfile(supabase: SupabaseClient, userId: string, text: string, form: FormData): Promise<PreparedLayout> {
   if (!isFeatureEnabled("importProfiles")) {
     return form.has("profile_id") || form.has("skip_rows")
@@ -27,28 +57,8 @@ export async function prepareImportProfile(supabase: SupabaseClient, userId: str
   // Dedicated app/OFX importers retain their account, notes, and sign semantics.
   if (detectSourceFormat(text) !== "csv" || detectSourceFormat(preparedText) !== "csv") return { text: preparedText };
   if (profileId !== "manual" && !form.has("column_map")) {
-    const { data, error } = await supabase.from("import_profiles").select("id, name, layout").eq("user_id", userId).limit(100);
-    if (error) throw error;
-    const profiles: ImportProfile[] = (data ?? []).flatMap(row => {
-      const layout = normalizeImportLayout(row.layout);
-      return layout ? [{ id: row.id as string, name: row.name as string, layout }] : [];
-    });
-    const matches = matchImportProfiles(text, profiles);
-    const selected = typeof profileId === "string" ? matches.find(row => row.id === profileId) : matches.length === 1 ? matches[0] : undefined;
-    if (profileId && !selected) return { text, response: badRequest("Saved layout does not match this file") };
-    if (selected) return { text, layout: selected.layout, profile: { id: selected.id, name: selected.name } };
-    if (matches.length > 1) return {
-      text,
-      response: NextResponse.json({ needs_profile_choice: true, profiles: matches.map(({ id, name }) => ({ id, name })) }),
-    };
+    const selected = await selectSavedProfile(supabase, userId, text, profileId);
+    if (selected.layout || selected.response) return selected;
   }
-  const header = getCsvColumns(preparedText);
-  const dateOrderRaw = form.get("date_order");
-  const dateOrder = ["mdy", "dmy", "ymd"].includes(String(dateOrderRaw)) ? dateOrderRaw as DateOrder : undefined;
-  const mapping = form.get("column_map");
-  let columns: unknown;
-  try { columns = typeof mapping === "string" ? JSON.parse(mapping) : header && detectColumns(header.headers); }
-  catch { return { text, response: badRequest("Invalid column mapping") }; }
-  const layout = createImportLayout(text, { columns, dateOrder, positiveIsIncome: form.get("positive_is_income") !== "false", skipRows });
-  return { text: preparedText, ...(layout ? { layout } : {}) };
+  return prepareManualLayout(text, preparedText, form, skipRows);
 }

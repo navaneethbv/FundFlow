@@ -567,6 +567,27 @@ async function prepareImportCommitPlan(
   };
 }
 
+function requestedProfileName(value: unknown): string | NextResponse | undefined {
+  if (value === undefined) return undefined;
+  if (!isFeatureEnabled("importProfiles")) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (typeof value !== "string" || value.trim().length < 1 || value.trim().length > 80) return badRequest("Layout name must be 1 to 80 characters");
+  return value.trim();
+}
+
+async function saveImportProfile(service: SupabaseClient, userId: string, batchId: string, profileName: string | undefined): Promise<{ profile_saved?: boolean; profile_warning?: string }> {
+  if (profileName === undefined) return {};
+  try {
+    const { error } = await service.rpc("save_committed_import_profile", {
+      p_user_id: userId, p_batch_id: batchId, p_name: profileName,
+    });
+    if (error) throw error;
+    return { profile_saved: true };
+  } catch (error) {
+    logError("import.profile-save", error);
+    return { profile_warning: "Transactions imported, but the layout was not saved. Use a new layout name and an explicit date format. Saved layouts are limited to 100." };
+  }
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -582,9 +603,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
-    const profileName = body?.save_profile_name;
-    if (profileName !== undefined && !isFeatureEnabled("importProfiles")) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    if (profileName !== undefined && (typeof profileName !== "string" || profileName.trim().length < 1 || profileName.trim().length > 80)) return badRequest("Layout name must be 1 to 80 characters");
+    const profileName = requestedProfileName(body?.save_profile_name);
+    if (profileName instanceof NextResponse) return profileName;
     const prepared = await prepareImportCommitPlan(supabase, user.id, body);
     if (prepared.errorResponse) return prepared.errorResponse;
     const { batch, batchId, sourceAccounts, mappingBySource, committableIds, dbRows } = prepared.plan!;
@@ -635,32 +655,16 @@ export async function POST(request: NextRequest) {
     invalidateDashboardCache(user.id);
     await refreshRecurringAfterConnectedImport(dbRows, user.id);
 
-    let profileSaved = false;
-    let profileWarning: string | undefined;
-    if (isFeatureEnabled("importProfiles") && typeof profileName === "string") {
-      try {
-        const { error: profileError } = await service.rpc("save_committed_import_profile", {
-          p_user_id: user.id, p_batch_id: batchId, p_name: profileName.trim(),
-        });
-        if (profileError) throw profileError;
-        profileSaved = true;
-      } catch (profileError) {
-        logError("import.profile-save", profileError);
-        profileWarning = "Transactions imported, but the layout was not saved. Use a new layout name and an explicit date format. Saved layouts are limited to 100.";
-      }
-    }
+    const profileResult = await saveImportProfile(service, user.id, batchId, profileName);
     await writeAudit({
       userId: user.id,
       action: "data_import",
       metadata: { batch_id: batchId, imported: dbRows.length,
-        ...(typeof profileName === "string" ? { profile_saved: profileSaved } : {}),
+        ...(typeof profileName === "string" ? { profile_saved: profileResult.profile_saved === true } : {}),
       },
       ip: getClientIp(request),
     });
-    return NextResponse.json({ ok: true, imported: dbRows.length,
-      ...(profileSaved ? { profile_saved: true } : {}),
-      ...(profileWarning ? { profile_warning: profileWarning } : {}),
-    });
+    return NextResponse.json({ ok: true, imported: dbRows.length, ...profileResult });
   } catch (error) {
     return errorResponse("import.commit", error);
   }

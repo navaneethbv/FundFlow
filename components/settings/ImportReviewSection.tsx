@@ -32,6 +32,22 @@ interface MappingState {
   sample: string[][];
 }
 
+interface ProfilePreview {
+  needs_profile_choice?: boolean;
+  profiles?: Array<{ id: string; name: string }>;
+  can_save_profile?: boolean;
+  applied_profile?: { id: string; name: string } | null;
+  profile_settings?: { dateOrder: "mdy" | "dmy" | "ymd"; positiveIsIncome: boolean; skipRows: number } | null;
+}
+
+function profileSaveRequest(enabled: boolean, canSave: boolean, name: string) {
+  return enabled && canSave && name.trim() ? { save_profile_name: name.trim() } : {};
+}
+
+function profileCommitNotice(result: { profile_warning?: string; profile_saved?: boolean }): string | null {
+  return result.profile_warning ?? (result.profile_saved ? "Saved this layout for future files with the same columns." : null);
+}
+
 function uniqueKeys(values: readonly unknown[], prefix: string): string[] {
   const counts = new Map<string, number>();
   return values.map((value) => {
@@ -83,6 +99,24 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false 
   const [mapCredit, setMapCredit] = useState("");
   const [mapCategory, setMapCategory] = useState("");
 
+  function applyProfilePreview(json: ProfilePreview): boolean {
+    if (!profilesEnabled) return false;
+    if (json.needs_profile_choice) {
+      setProfileChoices(json.profiles ?? []);
+      setMapping(null);
+      return true;
+    }
+    setProfileChoices(json.applied_profile ? [json.applied_profile] : []);
+    setCanSaveProfile(json.can_save_profile === true);
+    setAppliedProfile(json.applied_profile?.name ?? null);
+    if (json.profile_settings) {
+      setDateOrder(json.profile_settings.dateOrder);
+      setPositiveIsIncome(json.profile_settings.positiveIsIncome);
+      setSkipRows(json.profile_settings.skipRows);
+    }
+    return false;
+  }
+
   async function runPreview(file: File, columnMap?: Record<string, number | null>) {
     setBusy(true);
     setError(null);
@@ -105,21 +139,7 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false 
       const res = await fetch("/api/import/preview", { method: "POST", body: form });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error ?? "Preview failed");
-      if (profilesEnabled && json.needs_profile_choice) {
-        setProfileChoices(json.profiles ?? []);
-        setMapping(null);
-        return;
-      }
-      setProfileChoices(json.applied_profile ? [json.applied_profile] : []);
-      if (profilesEnabled) {
-        setCanSaveProfile(json.can_save_profile === true);
-        setAppliedProfile(json.applied_profile?.name ?? null);
-        if (json.profile_settings) {
-          setDateOrder(json.profile_settings.dateOrder);
-          setPositiveIsIncome(json.profile_settings.positiveIsIncome);
-          setSkipRows(json.profile_settings.skipRows);
-        }
-      }
+      if (applyProfilePreview(json)) return;
       if (json.needs_date_format) {
         setDateFormatRequired(true);
         setRows([]);
@@ -226,7 +246,7 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false 
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           batch_id: batchId,
-          ...(profilesEnabled && canSaveProfile && profileName.trim() ? { save_profile_name: profileName.trim() } : {}),
+          ...profileSaveRequest(profilesEnabled, canSaveProfile, profileName),
           ...(selectedAccount.kind === "manual" ? { manual_account_id: selectedAccount.id } : { account_id: selectedAccount.id }),
           account_mappings: sourceMappings,
           approved_row_ids: [...approvedRowIds],
@@ -246,7 +266,7 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false 
       }
       if (!res.ok) throw new Error(json.error ?? "Import failed");
       setCommitted(json.imported ?? 0);
-      setProfileNotice(json.profile_warning ?? (json.profile_saved ? "Saved this layout for future files with the same columns." : null));
+      setProfileNotice(profileCommitNotice(json));
       setProfileName("");
       setRows([]);
       setBatchId(null);
