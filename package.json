@@ -18,7 +18,7 @@
     "test:ui": "playwright test --config playwright.ui.config.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.128.0",
+    "@anthropic-ai/sdk": "^0.131.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
     "@types/nodemailer": "^8.0.2",
