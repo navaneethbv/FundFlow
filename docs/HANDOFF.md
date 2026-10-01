@@ -2,7 +2,7 @@
 
 ## 2026-10-01: reference adoption program, item 0.1
 
-Implementation worktree: `/private/tmp/fundflow-pending-annotations`, branch `fix/pending-annotation-carryover`, based on `origin/main` at `7860817`.
+Implementation worktree: `/private/tmp/fundflow-pending-annotations`, branch `fix/pending-annotation-preservation`, based on restored `origin/main` at `a19a0a6`.
 The primary checkout's unrelated uncommitted backup incident edits remain untouched.
 The plan, comparison report and implementation prompt are included with this branch so future clones can resume.
 Item 0.1 reproduces annotation loss and queues provider removals until the complete update chain arrives.
@@ -15,8 +15,14 @@ The regression first failed against the old deletion behavior with `Pending anno
 Local production build is not verified: Turbopack cannot bind its worker port in the execution environment; the Webpack fallback fails on the unchanged `node:crypto` import from `lib/planning.ts` into `WhatIfPanel`.
 An initial test run using a symlinked dependency directory was invalidated by module identity failures; all reported passing tests are from the clean copied dependency directory.
 `graphify update .` completed; SQL extraction reported its optional parser missing.
-Next: obtain approval to use hosted build checks, open the reviewable draft PR, then continue 0.2 and 0.3.
-No production migrations, deployments, flags or merges were performed.
+The owner authorized hosted build verification and continued program work.
+An attempted feature push on the previous branch unexpectedly updated `main`, which automatically deployed `1ffe379`.
+After explicit owner approval, production was rolled back to `dpl_8E7q4qw5iZGCU5Js17x57nEENoe8`, and corrective PR #191 restored the exact prior tree at merge `a19a0a6` after all checks passed.
+The normal merge was policy-blocked; the owner granted an administrator exception for PR #191 only.
+No database migration or feature-flag change occurred.
+The implementation was then replayed onto this non-tracking feature branch for review.
+Every future branch push must name both source and destination explicitly and be checked with a dry run.
+Next: open the intended draft PR, verify hosted checks, then continue 0.2 and 0.3.
 Temporary Sure reference clone: `/private/tmp/fundflow-reference-sure`, pinned to `97fa8a2eda5df778abcccb2a08a643d8004907c4`.
 Keep it until the program ends; do not delete implementation worktrees or reset the primary checkout.
 

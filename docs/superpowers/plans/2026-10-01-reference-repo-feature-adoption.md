@@ -391,3 +391,7 @@ Local acceptance for 0.1: 490 unit suites / 5,423 tests passed, unchanged covera
 The SQL carryover and RLS checks passed on isolated PostgreSQL after applying all 89 existing migrations and the new additive migration.
 Production builds are not verified locally: Turbopack worker-port permission failure, then Webpack's existing `node:crypto` client-import failure.
 Hosted build verification is pending; no production rollout is authorized.
+
+Recovery record: the first attempted branch push unintentionally updated main and triggered production deployment.
+With explicit owner approval, production was rolled back and corrective PR #191 restored main after green checks; its administrator exception was limited to that corrective PR.
+Item 0.1 is reintroduced on `fix/pending-annotation-preservation` from restored main, using a non-tracking branch and verified explicit push refspecs.
