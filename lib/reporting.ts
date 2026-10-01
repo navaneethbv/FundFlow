@@ -17,6 +17,9 @@ async function createMailTransport() {
     return {
       hostConfigured: true,
       transporter: nodemailer.createTransport({
+        connectionTimeout: 10_000,
+        greetingTimeout: 10_000,
+        socketTimeout: 30_000,
         host,
         port,
         secure: port === 465,
@@ -34,6 +37,9 @@ async function createMailTransport() {
   return {
     hostConfigured: false,
     transporter: nodemailer.createTransport({
+        connectionTimeout: 10_000,
+        greetingTimeout: 10_000,
+        socketTimeout: 30_000,
       host: "smtp.ethereal.email",
       port: 465,
       secure: true,

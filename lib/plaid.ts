@@ -18,6 +18,7 @@ export function getPlaidClient(): PlaidApi {
   const configuration = new Configuration({
     basePath,
     baseOptions: {
+      timeout: 30_000,
       headers: {
         "PLAID-CLIENT-ID": serverEnv.plaidClientId,
         "PLAID-SECRET": serverEnv.plaidSecret,

@@ -553,7 +553,7 @@ describe("GET /api/cron/sync", () => {
     );
   });
 
-  it("logs digest errors and inserts notification on SMTP configuration error in prod settings", async () => {
+  it("reports SMTP misconfiguration through the admin rail without polluting user feeds", async () => {
     mockSafeEqual.mockReturnValue(true);
     const request = new NextRequest("http://localhost/api/cron/sync", {
       headers: { authorization: "Bearer test-secret" },
@@ -608,12 +608,9 @@ describe("GET /api/cron/sync", () => {
     const res = await GET(request);
     expect(res.status).toBe(200);
     expect(mockLogError).toHaveBeenCalledWith("cron.sync.digest", expect.any(Error));
-    expect(mockInsert).toHaveBeenCalledWith({
-      user_id: "u1",
-      type: "broken_bank",
-      severity: "danger",
-      title: "Daily digest email skipped",
-      body: "We could not send your daily digest email because SMTP is not configured in production settings.",
+    expect(mockInsert).not.toHaveBeenCalled();
+    expect(mockAlertCronFailure).toHaveBeenCalledWith("digest-delivery", {
+      failed: 1, total: 1, firstError: "SMTP_NOT_CONFIGURED",
     });
   });
 
@@ -771,7 +768,7 @@ describe("GET /api/cron/sync", () => {
 
     const res = await GET(request);
     expect(res.status).toBe(200);
-    expect(mockLogError).toHaveBeenCalledWith("cron.sync.prune.jobs", expect.any(Error));
+    // Per-user job pruning is covered by operational-retention.test.ts.
     expect(mockLogError).toHaveBeenCalledWith("cron.sync.prune.counters", expect.any(Error));
   });
 
@@ -896,4 +893,19 @@ describe("GET /api/cron/sync", () => {
     expect(res.status).toBe(200);
     expect(mockSendDailyDigestEmail).not.toHaveBeenCalled();
   });
+});
+
+vi.mock("@/lib/operational-retention", () => ({ pruneOperationalData: async () => {} }));
+
+it("does not start another user once the cron deadline is reached", async () => {
+  mockSafeEqual.mockReturnValue(true);
+  mockSyncAllForUser.mockClear();
+  const { clientStub } = await import("../fixtures/supabase-query");
+  const db = clientStub({ plaid_items: { data: [{ user_id: "one" }, { user_id: "two" }] } });
+  mockServiceClient.from.mockImplementation(db.from);
+  vi.spyOn(Date, "now").mockReturnValueOnce(0).mockReturnValue(300_000);
+  const result = await GET(new NextRequest("http://localhost/api/cron/sync", { headers: { authorization: "Bearer test-secret" } }));
+  expect(result.status).toBe(207);
+  expect(await result.json()).toEqual(expect.objectContaining({ synced: 0, skipped: 2 }));
+  expect(mockSyncAllForUser).not.toHaveBeenCalled();
 });
