@@ -308,11 +308,11 @@ No dependency changes are included in feature PRs.
 
 | Item | Status | PR / evidence |
 | --- | --- | --- |
-| 0.1 | Draft PR; hosted checks running, browser/integration deferred | [#192](https://github.com/navaneethbv/FundFlow/pull/192) |
+| 0.1 | Draft PR; hosted checks passed, browser/integration deferred | [#192](https://github.com/navaneethbv/FundFlow/pull/192) |
 | 0.2 | Not reproduced; skipped per verification rule | Unique holding key rejects duplicate-security rollups |
-| 0.3 | Not started |  |
-| 1.1 | Not started |  |
-| 1.2 | Not started |  |
+| 0.3 | Draft PR; hosted checks passed | [#193](https://github.com/navaneethbv/FundFlow/pull/193) |
+| 1.1 | Draft PR; local checks and component browser fixtures passed, hosted checks running | [#194](https://github.com/navaneethbv/FundFlow/pull/194) |
+| 1.2 | Design in progress; depends on 1.1 | Structured diagnostics before staging |
 | 1.3 | Not started |  |
 | 1.4 | Not started |  |
 | 1.5 | Not started |  |
@@ -404,3 +404,15 @@ FundFlow upserts on `(account_id, security_id, source)`, protected by `202608101
 An original synthetic 3-unit / 9-unit / 12-unit rollup batch in isolated PostgreSQL fails with SQLSTATE 21000 and persists no partial holdings.
 The reported double-counting hypothesis was not reproduced, so no heuristic row deletion is added.
 A separate possible sync-rejection case remains for verified provider lot/rollup payloads; handling it would require conservative lot aggregation and a real representative fixture.
+
+### Items 0.3 and 1.1 evidence
+
+Item 0.3 requests and stores the original provider descriptor while leaving export and AI allowlists unchanged.
+PR #193 passed hosted build/unit coverage, migration smoke, CodeQL, Sonar, Codacy, and preview checks at `155934c`.
+Its migration `20261001110000_transaction_original_description.sql` remains unapplied to production.
+
+Item 1.1 stores an owner layout only after a committed import and reuses normalized ordered headers, positional columns, sign convention, explicit date order, and skipped logical records.
+PR #194 is independent of the defect PRs and keeps `importProfiles` off.
+Local coverage, lint, typecheck, isolated SQL/RLS checks, and four Chromium component journeys at 375px/1440px in both themes passed.
+Those browser fixtures mock HTTP; signed-in acceptance remains deferred as approved.
+Migration `20261001120000_import_profiles.sql` is unapplied to production.

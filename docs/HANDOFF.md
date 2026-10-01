@@ -22,7 +22,10 @@ The normal merge was policy-blocked; the owner granted an administrator exceptio
 No database migration or feature-flag change occurred.
 The implementation was then replayed onto this non-tracking feature branch for review.
 Every future branch push must name both source and destination explicitly and be checked with a dry run.
-Next: open the intended draft PR, verify hosted checks, then continue 0.2 and 0.3.
+PR #192 hosted checks passed at `43fe6bc`; PR #193 hosted checks passed at `155934c`.
+Item 0.2 was not reproduced and was skipped with evidence in the plan.
+Item 1.1 is draft PR #194 from `/private/tmp/fundflow-import-profiles`, branch `feat/import-profiles`, with hosted checks pending.
+Next: item 1.2 import diagnostics, stacked on the saved-layout branch, while preserving all default-off flags and deferred signed-in acceptance.
 Temporary Sure reference clone: `/private/tmp/fundflow-reference-sure`, pinned to `97fa8a2eda5df778abcccb2a08a643d8004907c4`.
 Keep it until the program ends; do not delete implementation worktrees or reset the primary checkout.
 
