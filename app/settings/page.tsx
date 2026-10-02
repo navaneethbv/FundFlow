@@ -508,13 +508,17 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
     }
   }
 
+  const hiddenSections: SettingsSection[] = settingsIaReady
+    ? (isFeatureEnabled("membershipTermsEntry") ? [] : ["membership"])
+    : [...migrationDependentSections, "membership"];
+
   return (
     <AppShell active="settings" email={user?.email}>
       <div className="space-y-6">
         <PageHeader title="Settings" />
         <SettingsLayout
           active={active}
-          hiddenSections={settingsIaReady ? (isFeatureEnabled("membershipTermsEntry") ? [] : ["membership"]) : [...migrationDependentSections, "membership"]}
+          hiddenSections={hiddenSections}
         >
           {content}
         </SettingsLayout>

@@ -154,7 +154,7 @@ export function calculateCardValue({ terms, spend, asOf }: CardValueInput): Card
   const rows = spend.filter((row) => row.date >= window.start && row.date < window.end);
   const eligibleRows = rows.filter((row) => row.flow === "expense" && !TRANSFER_GROUPS.has((row.category ?? "").toUpperCase()));
   const eligibleSpend = round2(eligibleRows.reduce((sum, row) => sum + row.amount, 0));
-  const observedDates = eligibleRows.map((row) => row.date).sort();
+  const observedDates = eligibleRows.map((row) => row.date).sort((a, b) => a.localeCompare(b));
   const windowDays = Math.max(1, Math.round((Date.parse(`${window.end}T12:00:00Z`) - Date.parse(`${window.start}T12:00:00Z`)) / 86_400_000));
   const observedDays = observedDates.length === 0 ? 0 : Math.max(1, Math.round((Date.parse(`${observedDates.at(-1)}T12:00:00Z`) - Date.parse(`${observedDates[0]}T12:00:00Z`)) / 86_400_000) + 1);
   const historyCoverage = clamp(round2(observedDays / windowDays), 0, 1);
@@ -204,38 +204,118 @@ export function calculateCardValue({ terms, spend, asOf }: CardValueInput): Card
   };
 }
 
-export function validateCardValueTerms(value: unknown): { ok: true; value: CardValueTerms[] } | { ok: false; error: string } {
+type ValidationResult<T> = { ok: true; value: T } | { ok: false; error: string };
+
+function parseRewardTier(value: unknown): RewardTier | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<RewardTier>;
+  const valid = typeof candidate.id === "string" && candidate.id.trim().length > 0
+    && typeof candidate.label === "string" && candidate.label.trim().length > 0
+    && typeof candidate.rate === "number" && Number.isFinite(candidate.rate)
+    && candidate.rate >= 0 && candidate.rate <= 1
+    && (candidate.cap === null || typeof candidate.cap === "number");
+  if (!valid) return null;
+  return {
+    id: candidate.id!.slice(0, 80),
+    label: candidate.label!.trim().slice(0, 120),
+    rate: candidate.rate!,
+    cap: candidate.cap ?? null,
+    eligibleCategories: Array.isArray(candidate.eligibleCategories)
+      ? candidate.eligibleCategories.filter((entry): entry is string => typeof entry === "string").slice(0, 30)
+      : [],
+  };
+}
+
+function parseRewardTiers(value: unknown): ValidationResult<RewardTier[]> {
+  if (!Array.isArray(value)) return { ok: false, error: "invalid card benefit lists" };
+  const tiers = value.slice(0, 20).map(parseRewardTier);
+  return tiers.includes(null)
+    ? { ok: false, error: "invalid reward tier" }
+    : { ok: true, value: tiers as RewardTier[] };
+}
+
+function parseStatementCredit(value: unknown): StatementCredit | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<StatementCredit>;
+  const valid = typeof candidate.id === "string" && candidate.id.trim().length > 0
+    && typeof candidate.label === "string" && candidate.label.trim().length > 0
+    && typeof candidate.amount === "number" && Number.isFinite(candidate.amount) && candidate.amount >= 0;
+  if (!valid) return null;
+  return {
+    id: candidate.id!.slice(0, 80),
+    label: candidate.label!.trim().slice(0, 120),
+    amount: candidate.amount!,
+    eligibleCategories: Array.isArray(candidate.eligibleCategories)
+      ? candidate.eligibleCategories.filter((entry): entry is string => typeof entry === "string").slice(0, 30)
+      : [],
+    expiresAfterMonths: typeof candidate.expiresAfterMonths === "number"
+      ? Math.max(0, Math.floor(candidate.expiresAfterMonths))
+      : null,
+  };
+}
+
+function parseStatementCredits(value: unknown): ValidationResult<StatementCredit[]> {
+  if (!Array.isArray(value)) return { ok: false, error: "invalid card benefit lists" };
+  const credits = value.slice(0, 20).map(parseStatementCredit);
+  return credits.includes(null)
+    ? { ok: false, error: "invalid statement credit" }
+    : { ok: true, value: credits as StatementCredit[] };
+}
+
+function parseSubjectivePerk(value: unknown): SubjectivePerk | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<SubjectivePerk>;
+  const valid = typeof candidate.id === "string" && candidate.id.trim().length > 0
+    && typeof candidate.label === "string" && candidate.label.trim().length > 0
+    && [candidate.low, candidate.base, candidate.high].every((amount) => typeof amount === "number" && Number.isFinite(amount) && amount >= 0);
+  if (!valid) return null;
+  return {
+    id: candidate.id!.slice(0, 80),
+    label: candidate.label!.trim().slice(0, 120),
+    low: candidate.low!,
+    base: candidate.base!,
+    high: candidate.high!,
+    membershipOnly: candidate.membershipOnly === true,
+  };
+}
+
+function parseSubjectivePerks(value: unknown): ValidationResult<SubjectivePerk[]> {
+  if (!Array.isArray(value)) return { ok: false, error: "invalid card benefit lists" };
+  const perks = value.slice(0, 20).map(parseSubjectivePerk);
+  return perks.includes(null)
+    ? { ok: false, error: "invalid subjective perk" }
+    : { ok: true, value: perks as SubjectivePerk[] };
+}
+
+export function validateCardValueTerms(value: unknown): ValidationResult<CardValueTerms[]> {
   if (!Array.isArray(value) || value.length > 50) return { ok: false, error: "terms must be an array of at most 50 cards" };
   const terms: CardValueTerms[] = [];
   for (const item of value) {
     if (!item || typeof item !== "object" || Array.isArray(item)) return { ok: false, error: "invalid card terms" };
     const row = item as Partial<CardValueTerms>;
-    if (typeof row.id !== "string" || row.id.trim().length === 0 || typeof row.membershipName !== "string" || row.membershipName.trim().length === 0 || typeof row.cardName !== "string" || row.cardName.trim().length === 0 || !validDate(row.anniversaryDate ?? "") || !validDate(row.confirmedOn ?? "")) return { ok: false, error: "invalid card identity or dates" };
+    const validIdentity = typeof row.id === "string" && row.id.trim().length > 0
+      && typeof row.membershipName === "string" && row.membershipName.trim().length > 0
+      && typeof row.cardName === "string" && row.cardName.trim().length > 0
+      && validDate(row.anniversaryDate ?? "") && validDate(row.confirmedOn ?? "");
+    if (!validIdentity) return { ok: false, error: "invalid card identity or dates" };
     if (![row.annualFee, row.baselineAnnualFee].every((amount) => typeof amount === "number" && Number.isFinite(amount) && amount >= 0)) return { ok: false, error: "invalid card fee" };
-    if (!Array.isArray(row.rewardTiers) || !Array.isArray(row.statementCredits) || !Array.isArray(row.perks)) return { ok: false, error: "invalid card benefit lists" };
-    const rewardTiers = row.rewardTiers.slice(0, 20).map((tier) => {
-      if (!tier || typeof tier !== "object") return null;
-      const candidate = tier as Partial<RewardTier>;
-      if (typeof candidate.id !== "string" || candidate.id.trim().length === 0 || typeof candidate.label !== "string" || candidate.label.trim().length === 0 || typeof candidate.rate !== "number" || !Number.isFinite(candidate.rate) || candidate.rate < 0 || candidate.rate > 1 || (candidate.cap !== null && typeof candidate.cap !== "number")) return null;
-      return { id: candidate.id.slice(0, 80), label: candidate.label.trim().slice(0, 120), rate: candidate.rate, cap: candidate.cap ?? null, eligibleCategories: Array.isArray(candidate.eligibleCategories) ? candidate.eligibleCategories.filter((entry): entry is string => typeof entry === "string").slice(0, 30) : [] };
-    });
-    if (rewardTiers.some((tier) => tier === null)) return { ok: false, error: "invalid reward tier" };
-    const statementCredits = row.statementCredits.slice(0, 20).map((credit) => {
-      if (!credit || typeof credit !== "object") return null;
-      const candidate = credit as Partial<StatementCredit>;
-      if (typeof candidate.id !== "string" || candidate.id.trim().length === 0 || typeof candidate.label !== "string" || candidate.label.trim().length === 0 || typeof candidate.amount !== "number" || !Number.isFinite(candidate.amount) || candidate.amount < 0) return null;
-      return { id: candidate.id.slice(0, 80), label: candidate.label.trim().slice(0, 120), amount: candidate.amount, eligibleCategories: Array.isArray(candidate.eligibleCategories) ? candidate.eligibleCategories.filter((entry): entry is string => typeof entry === "string").slice(0, 30) : [], expiresAfterMonths: typeof candidate.expiresAfterMonths === "number" ? Math.max(0, Math.floor(candidate.expiresAfterMonths)) : null };
-    });
-    if (statementCredits.some((credit) => credit === null)) return { ok: false, error: "invalid statement credit" };
-    const perks = row.perks.slice(0, 20).map((perk) => {
-      if (!perk || typeof perk !== "object") return null;
-      const candidate = perk as Partial<SubjectivePerk>;
-      if (typeof candidate.id !== "string" || candidate.id.trim().length === 0 || typeof candidate.label !== "string" || candidate.label.trim().length === 0 || ![candidate.low, candidate.base, candidate.high].every((amount) => typeof amount === "number" && Number.isFinite(amount) && amount >= 0)) return null;
-      return { id: candidate.id.slice(0, 80), label: candidate.label.trim().slice(0, 120), low: candidate.low!, base: candidate.base!, high: candidate.high!, membershipOnly: candidate.membershipOnly === true };
-    });
-    if (perks.some((perk) => perk === null)) return { ok: false, error: "invalid subjective perk" };
+    const rewardTiers = parseRewardTiers(row.rewardTiers);
+    if (!rewardTiers.ok) return rewardTiers;
+    const statementCredits = parseStatementCredits(row.statementCredits);
+    if (!statementCredits.ok) return statementCredits;
+    const perks = parseSubjectivePerks(row.perks);
+    if (!perks.ok) return perks;
     terms.push({
-      id: row.id.slice(0, 80), membershipName: row.membershipName.trim().slice(0, 120), cardName: row.cardName.trim().slice(0, 120), annualFee: row.annualFee!, baselineAnnualFee: row.baselineAnnualFee!, anniversaryDate: row.anniversaryDate!, confirmedOn: row.confirmedOn!, rewardTiers: rewardTiers as RewardTier[], statementCredits: statementCredits as StatementCredit[], perks: perks as SubjectivePerk[],
+      id: row.id!.slice(0, 80),
+      membershipName: row.membershipName!.trim().slice(0, 120),
+      cardName: row.cardName!.trim().slice(0, 120),
+      annualFee: row.annualFee!,
+      baselineAnnualFee: row.baselineAnnualFee!,
+      anniversaryDate: row.anniversaryDate!,
+      confirmedOn: row.confirmedOn!,
+      rewardTiers: rewardTiers.value,
+      statementCredits: statementCredits.value,
+      perks: perks.value,
     });
   }
   return { ok: true, value: terms };

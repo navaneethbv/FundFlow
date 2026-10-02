@@ -134,7 +134,7 @@ export default function MembershipCardValueSection({
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button type="button" onClick={save} disabled={pending} className="min-h-11 rounded-field bg-accent px-4 text-sm font-semibold text-accent-foreground">Save terms</button>
-          {message && <span role="status" className="text-sm text-muted">{message}</span>}
+          {message && <output aria-live="polite" className="text-sm text-muted">{message}</output>}
         </div>
       </Panel>
       {result && (

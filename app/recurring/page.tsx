@@ -74,6 +74,174 @@ export const metadata = {
   title: "Recurring",
 };
 
+type RecurringView = "calendar" | "list" | "paycheck";
+type RecurringLoadedData = Awaited<ReturnType<typeof loadRecurringData>>;
+
+function resolveView(rawView: string | undefined, paycheckViewEnabled: boolean): RecurringView {
+  if (paycheckViewEnabled && rawView === "paycheck") return "paycheck";
+  if (rawView === "calendar") return "calendar";
+  return "list";
+}
+
+function panelTitle(view: RecurringView): string {
+  if (view === "calendar") return "Recurring calendar";
+  if (view === "paycheck") return "Paycheck view";
+  return "Occurrences";
+}
+
+function RecurringPanelContent({
+  view,
+  paycheckPlan,
+  month,
+  today,
+  currency,
+  occurrences,
+  streams,
+  manualItems,
+  tab,
+  links,
+  subscriptionCatalogEnabled,
+}: Readonly<{
+  view: RecurringView;
+  paycheckPlan: Awaited<ReturnType<typeof loadPaycheckPlan>> | null;
+  month: string;
+  today: string;
+  currency: string;
+  occurrences: RecurringLoadedData["view"]["occurrences"];
+  streams: RecurringLoadedData["allStreams"];
+  manualItems: RecurringLoadedData["manualItems"];
+  tab: RecurringTab;
+  links: Record<RecurringTab, string>;
+  subscriptionCatalogEnabled: boolean;
+}>) {
+  if (view === "paycheck") {
+    if (!paycheckPlan?.configured) return <p>Confirm a payday and take-home amount before planning pay periods.</p>;
+    if (paycheckPlan.currencyUnsupported) return <p>This paycheck view supports USD accounts only.</p>;
+    return <PaycheckPlan periods={paycheckPlan.periods} cash={paycheckPlan.cash} />;
+  }
+  if (view === "calendar") {
+    return <RecurringCalendar month={month} today={today} currency={currency} occurrences={occurrences} />;
+  }
+  return (
+    <RecurringList
+      occurrences={occurrences}
+      streams={streams}
+      manualItems={manualItems}
+      currency={currency}
+      today={today}
+      tab={tab}
+      links={links}
+      subscriptionCatalogEnabled={subscriptionCatalogEnabled}
+    />
+  );
+}
+
+function RecurringSurface({
+  userEmail,
+  loaded,
+  month,
+  currentMonth,
+  today,
+  tab,
+  view,
+  links,
+  baseLink,
+  paycheckViewEnabled,
+  paycheckPlan,
+  billsViewsEnabled,
+  priceHistoryEnabled,
+  priceChanges,
+}: Readonly<{
+  userEmail: string | undefined;
+  loaded: RecurringLoadedData;
+  month: string;
+  currentMonth: string;
+  today: string;
+  tab: RecurringTab;
+  view: RecurringView;
+  links: Record<RecurringTab, string>;
+  baseLink: { month: string; scope?: string };
+  paycheckViewEnabled: boolean;
+  paycheckPlan: Awaited<ReturnType<typeof loadPaycheckPlan>> | null;
+  billsViewsEnabled: boolean;
+  priceHistoryEnabled: boolean;
+  priceChanges: PriceChangeHistoryRow[];
+}>) {
+  return (
+    <AppShell active="recurring" email={userEmail}>
+      <PageHeader
+        title="Recurring"
+        actions={
+          <>
+            {loaded.visibleHouseholdIds[0] && (
+              <SegmentedControl
+                ariaLabel="Financial scope"
+                items={[
+                  { label: "Mine", href: recurringHref({ ...baseLink, tab, scope: undefined }), active: loaded.scope.kind === "mine" },
+                  { label: "Household", href: recurringHref({ ...baseLink, tab, scope: loaded.visibleHouseholdIds[0] }), active: loaded.scope.kind === "household" },
+                ]}
+              />
+            )}
+            {isFeatureEnabled("paycheckPlanner") && <ButtonLink href="/recurring/paychecks">Paycheck plan</ButtonLink>}
+            {isFeatureEnabled("paydaySettings") && <ButtonLink href="/settings/payday">Confirm payday</ButtonLink>}
+            <ButtonLink href={links.manage} variant="primary">Manage recurring</ButtonLink>
+          </>
+        }
+      />
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        <Link href={recurringHref({ ...baseLink, tab, view, month: shiftMonth(month, -1) })} aria-label="Previous month" className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-panel-border bg-panel"><ChevronLeft aria-hidden className="h-4 w-4" /></Link>
+        <span className="min-w-[7rem] text-center text-sm font-bold">{formatMonth(month)}</span>
+        <Link href={recurringHref({ ...baseLink, tab, view, month: shiftMonth(month, 1) })} aria-label="Next month" className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-panel-border bg-panel"><ChevronRight aria-hidden className="h-4 w-4" /></Link>
+        {month !== currentMonth && <Link href={recurringHref({ ...baseLink, tab, view, month: currentMonth })} className="inline-flex min-h-11 items-center rounded-field border border-panel-border bg-panel px-4 text-sm font-semibold">Today</Link>}
+      </div>
+      <div className="mt-6 space-y-4">
+        {loaded.stale && <Panel tone="warning"><p className="text-sm font-semibold">Recurring data may be stale.</p><p className="mt-1 text-sm text-muted">Refresh connected accounts before relying on this month.</p></Panel>}
+        <ReviewBanner reviewCount={loaded.view.reviewCount} reviewHref={links.manage} />
+        <PriceSpikeBanner
+          initialAlerts={detectPriceSpikes(loaded.allStreams.map((stream) => ({
+            id: stream.id,
+            merchantName: stream.merchantName,
+            description: stream.description,
+            lastAmount: stream.lastAmount ?? stream.averageAmount,
+            averageAmount: stream.averageAmount,
+            frequency: stream.frequency,
+            status: stream.status,
+            isActive: stream.isActive,
+            dismissedAt: stream.dismissedAt,
+          })))}
+          historyEnabled={priceHistoryEnabled}
+        />
+        {priceHistoryEnabled && <PriceChangeHistory rows={priceChanges} streamNames={new Map(loaded.allStreams.map((stream) => [stream.id, stream.merchantName ?? stream.description ?? "Recurring charge"]))} currency={loaded.currency} />}
+        <MonthSummary totals={loaded.view.totals} currency={loaded.currency} />
+        {billsViewsEnabled && <MonthPulse occurrences={loaded.view.occurrences} currency={loaded.currency} />}
+        <Panel
+          title={panelTitle(view)}
+          eyebrow="This month"
+          action={<SegmentedControl ariaLabel="Occurrences view" items={[
+            { label: "List", href: recurringHref({ ...baseLink, tab, view: "list" }), active: view === "list" },
+            { label: "Calendar", href: recurringHref({ ...baseLink, tab, view: "calendar" }), active: view === "calendar" },
+            ...(paycheckViewEnabled ? [{ label: "Paycheck", href: recurringHref({ ...baseLink, tab, view: "paycheck" }), active: view === "paycheck" }] : []),
+          ]} />}
+        >
+          <RecurringPanelContent
+            view={view}
+            paycheckPlan={paycheckPlan}
+            month={month}
+            today={today}
+            currency={loaded.currency}
+            occurrences={loaded.view.occurrences}
+            streams={loaded.allStreams}
+            manualItems={loaded.manualItems}
+            tab={tab}
+            links={links}
+            subscriptionCatalogEnabled={isFeatureEnabled("subscriptionCatalog")}
+          />
+        </Panel>
+      </div>
+    </AppShell>
+  );
+}
+
 export default async function RecurringPage({ searchParams }: Readonly<PageProps>) {
   if (!isFeatureEnabled("recurringPage")) notFound();
 
@@ -102,11 +270,7 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
   const billsViewsEnabled = isFeatureEnabled("billsViews");
   const paycheckViewEnabled = billsViewsEnabled && isFeatureEnabled("paycheckPlanner") && isFeatureEnabled("paydaySettings");
   const rawView = firstSearchParam(params.view);
-  const view = paycheckViewEnabled && rawView === "paycheck"
-    ? "paycheck"
-    : rawView === "calendar"
-      ? "calendar"
-      : "list";
+  const view = resolveView(rawView, paycheckViewEnabled);
 
   const loaded = await loadRecurringData(supabase, {
     userId: user.id,
@@ -130,151 +294,5 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
     : { data: [] as PriceChangeHistoryRow[], error: null };
   if (priceChanges.error) logError("recurring.price-change-history", priceChanges.error);
 
-  return (
-    <AppShell active="recurring" email={user.email}>
-      <PageHeader
-        title="Recurring"
-        actions={
-          <>
-            {/* A lone "Mine" option is not a choice; show the scope switch only
-                when a household exists, as Debt Payoff does. */}
-            {loaded.visibleHouseholdIds[0] && (
-              <SegmentedControl
-                ariaLabel="Financial scope"
-                items={[
-                  {
-                    label: "Mine",
-                    href: recurringHref({ ...baseLink, tab, scope: undefined }),
-                    active: loaded.scope.kind === "mine",
-                  },
-                  {
-                    label: "Household",
-                    href: recurringHref({ ...baseLink, tab, scope: loaded.visibleHouseholdIds[0] }),
-                    active: loaded.scope.kind === "household",
-                  },
-                ]}
-              />
-            )}
-            {isFeatureEnabled("paycheckPlanner") && <ButtonLink href="/recurring/paychecks">Paycheck plan</ButtonLink>}
-            {isFeatureEnabled("paydaySettings") && <ButtonLink href="/settings/payday">Confirm payday</ButtonLink>}
-            <ButtonLink href={links.manage} variant="primary">
-              Manage recurring
-            </ButtonLink>
-          </>
-        }
-      />
-
-      <div className="mt-5 flex flex-wrap items-center gap-2">
-        <Link
-          href={recurringHref({ ...baseLink, tab, view, month: shiftMonth(month, -1) })}
-          aria-label="Previous month"
-          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-panel-border bg-panel"
-        >
-          <ChevronLeft aria-hidden className="h-4 w-4" />
-        </Link>
-        <span className="min-w-[7rem] text-center text-sm font-bold">{formatMonth(month)}</span>
-        <Link
-          href={recurringHref({ ...baseLink, tab, view, month: shiftMonth(month, 1) })}
-          aria-label="Next month"
-          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-panel-border bg-panel"
-        >
-          <ChevronRight aria-hidden className="h-4 w-4" />
-        </Link>
-        {month !== currentMonth && (
-          <Link
-            href={recurringHref({ ...baseLink, tab, view, month: currentMonth })}
-            className="inline-flex min-h-11 items-center rounded-field border border-panel-border bg-panel px-4 text-sm font-semibold"
-          >
-            Today
-          </Link>
-        )}
-      </div>
-
-      <div className="mt-6 space-y-4">
-        {loaded.stale && (
-          <Panel tone="warning">
-            <p className="text-sm font-semibold">Recurring data may be stale.</p>
-            <p className="mt-1 text-sm text-muted">Refresh connected accounts before relying on this month.</p>
-          </Panel>
-        )}
-
-        <ReviewBanner reviewCount={loaded.view.reviewCount} reviewHref={links.manage} />
-
-        <PriceSpikeBanner
-          initialAlerts={detectPriceSpikes(
-            loaded.allStreams.map((s) => ({
-              id: s.id,
-              merchantName: s.merchantName,
-              description: s.description,
-              // Last real charge vs the trailing average: the user override
-              // is a display preference, not a charge, so it must never
-              // seed the "current" side of a hike comparison (M-6).
-              lastAmount: s.lastAmount ?? s.averageAmount,
-              averageAmount: s.averageAmount,
-              frequency: s.frequency,
-              status: s.status,
-              isActive: s.isActive,
-              dismissedAt: s.dismissedAt,
-            })),
-          )}
-          historyEnabled={isFeatureEnabled("recurringPriceHistory")}
-        />
-        {isFeatureEnabled("recurringPriceHistory") && <PriceChangeHistory rows={(priceChanges.data ?? []) as PriceChangeHistoryRow[]} streamNames={new Map(loaded.allStreams.map((stream) => [stream.id, stream.merchantName ?? stream.description ?? "Recurring charge"]))} currency={loaded.currency} />}
-
-        <MonthSummary totals={loaded.view.totals} currency={loaded.currency} />
-        {billsViewsEnabled && <MonthPulse occurrences={loaded.view.occurrences} currency={loaded.currency} />}
-
-        <Panel
-          title={view === "calendar" ? "Recurring calendar" : view === "paycheck" ? "Paycheck view" : "Occurrences"}
-          eyebrow="This month"
-          action={
-            <SegmentedControl
-              ariaLabel="Occurrences view"
-              items={[
-                {
-                  label: "List",
-                  href: recurringHref({ ...baseLink, tab, view: "list" }),
-                  active: view === "list",
-                },
-                {
-                  label: "Calendar",
-                  href: recurringHref({ ...baseLink, tab, view: "calendar" }),
-                  active: view === "calendar",
-                },
-                ...(paycheckViewEnabled ? [{
-                  label: "Paycheck",
-                  href: recurringHref({ ...baseLink, tab, view: "paycheck" }),
-                  active: view === "paycheck",
-                }] : []),
-              ]}
-            />
-          }
-        >
-          {view === "paycheck" ? (
-            paycheckPlan?.configured ? (
-              paycheckPlan.currencyUnsupported ? <p>This paycheck view supports USD accounts only.</p> : <PaycheckPlan periods={paycheckPlan.periods} cash={paycheckPlan.cash} />
-            ) : <p>Confirm a payday and take-home amount before planning pay periods.</p>
-          ) : view === "calendar" ? (
-            <RecurringCalendar
-              month={month}
-              today={today}
-              currency={loaded.currency}
-              occurrences={loaded.view.occurrences}
-            />
-          ) : (
-            <RecurringList
-              occurrences={loaded.view.occurrences}
-              streams={loaded.allStreams}
-              manualItems={loaded.manualItems}
-              currency={loaded.currency}
-              today={today}
-              tab={tab}
-              links={links}
-              subscriptionCatalogEnabled={isFeatureEnabled("subscriptionCatalog")}
-            />
-          )}
-        </Panel>
-      </div>
-    </AppShell>
-  );
+  return <RecurringSurface userEmail={user.email} loaded={loaded} month={month} currentMonth={currentMonth} today={today} tab={tab} view={view} links={links} baseLink={baseLink} paycheckViewEnabled={paycheckViewEnabled} paycheckPlan={paycheckPlan} billsViewsEnabled={billsViewsEnabled} priceHistoryEnabled={isFeatureEnabled("recurringPriceHistory")} priceChanges={(priceChanges.data ?? []) as PriceChangeHistoryRow[]} />;
 }
