@@ -87,6 +87,7 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false,
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ruleWarning, setRuleWarning] = useState<string | null>(null);
   const [committed, setCommitted] = useState<number | null>(null);
   /** Review-row ids the server refused to overwrite; empty when there are none. */
   const [annotationConflicts, setAnnotationConflicts] = useState<string[]>([]);
@@ -347,6 +348,7 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false,
       }
       if (!res.ok) throw new Error(json.error ?? "Import failed");
       setCommitted(json.imported ?? 0);
+      setRuleWarning(typeof json.rule_warning === "string" ? json.rule_warning : null);
       setProfileNotice(profileCommitNotice(json));
       setProfileName("");
       setRows([]);
@@ -727,6 +729,7 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false,
           Imported {committed} transaction{committed === 1 ? "" : "s"}.
         </output>
       )}
+      {ruleWarning && <p role="alert" className="mt-3 text-sm text-warning">{ruleWarning}</p>}
       {profileNotice && <output className="mt-3 block text-sm text-muted">{profileNotice}</output>}
       {error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}
     </Panel>

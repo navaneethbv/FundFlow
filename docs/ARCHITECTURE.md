@@ -53,6 +53,16 @@ flowchart TB
   scoped API token lifecycle management.
 - `rules-engine.ts` — rule matching and execution engine for transaction
   categorization, tagging, and renaming.
+- `rule-conditions.ts`, `compound-rule-service.ts`, and `rule-run-history.ts` —
+  bounded AND/OR rule evaluation, service-only atomic effect materialization,
+  and owner-scoped run/provenance journals. The compound rule migration keeps
+  provider facts and user annotations separate from rule effects; all new
+  entry points are default-off feature flags.
+- `insight-generators.ts` and `insight-generation.ts` — eight explained,
+  canonical USD-only insight signals with explicit per-type opt-in and an
+  in-app notification journal. They do not widen push, email, or AI payloads.
+- `rule-ledger.ts` — bounded annotation reads that attach rule effects to the
+  projected ledger only when compound rules are enabled.
 - `ai-gate.ts` — opt-in gate and token budgeting for in-app AI surfaces.
 - `backup.ts` / `user-data.ts` — encrypted user data export, packaging, and
   registry of user-owned tables (`USER_DATA_TABLES`).

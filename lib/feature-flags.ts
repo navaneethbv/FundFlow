@@ -24,6 +24,12 @@ export const FEATURE_FLAG_DEFAULTS = {
    * Plaid Liabilities is a separately billed provider call.
    * Keep the daily cron call opt-in until quota and product access are approved.
    */
+  insightGenerators: false,
+  insightsFeed: false,
+  compoundRules: false,
+  ruleRunHistory: false,
+  ruleSuggestions: false,
+  transactionDetails: false,
   liabilitiesSync: false,
   accountsPage: true,
   cashFlowPage: true,

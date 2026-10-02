@@ -1,3 +1,4 @@
+import { isFeatureEnabled } from "@/lib/feature-flags";
 import { Fragment } from "react";
 import Badge from "@/components/ui/Badge";
 import TransactionEditor from "@/components/transactions/TransactionEditor";
@@ -203,6 +204,9 @@ function LedgerCard({
           {signedAmount(row.amount, row.currency)}
         </span>
         <TransactionEditor
+          detailsEnabled={isFeatureEnabled("transactionDetails")}
+          suggestionsEnabled={isFeatureEnabled("ruleSuggestions") && isFeatureEnabled("compoundRules")}
+          ruleHistoryEnabled={isFeatureEnabled("ruleRunHistory")}
           idPrefix="mobile-"
           transaction={{
             id: row.id,

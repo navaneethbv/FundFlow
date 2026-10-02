@@ -1,3 +1,4 @@
+import { INSIGHT_TYPES } from "@/lib/insight-types";
 import { pruneOperationalData } from "@/lib/operational-retention";
 import { NextResponse, type NextRequest } from "next/server";
 import { serverEnv } from "@/lib/env.server";
@@ -70,7 +71,7 @@ async function sendDailyDigest(
     const digestNotifications =
       profile?.daily_digest_email_enabled === false
         ? (todayNotifications ?? []).filter((notification) => notification.type === "broken_bank")
-        : (todayNotifications ?? []);
+        : (todayNotifications ?? []).filter(notification => notification.type !== "rule_match" && !(INSIGHT_TYPES as readonly string[]).includes(notification.type));
     if (digestNotifications.length === 0) return;
     // Checked (A-13): a failed user lookup must surface, never silently
     // skip one user's digest while reporting success.

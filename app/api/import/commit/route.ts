@@ -1,3 +1,4 @@
+import { processRuleAutomation } from "@/lib/compound-rule-service";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { invalidateDashboardCache } from "@/lib/dashboard-cache";
 import { NextResponse, type NextRequest } from "next/server";
@@ -673,7 +674,14 @@ export async function POST(request: NextRequest) {
       },
       ip: getClientIp(request),
     });
-    return NextResponse.json({ ok: true, imported: dbRows.length, ...profileResult });
+    let ruleWarning: string | undefined;
+    try {
+      await processRuleAutomation(supabase, service, user.id, "import", dbRows.map(row => row.plaid_transaction_id));
+    } catch (error) {
+      logError("import.rule-automation", error);
+      ruleWarning = "Import committed, but rules did not finish. Check rule history and apply rules again.";
+    }
+    return NextResponse.json({ ok: true, imported: dbRows.length, ...profileResult, ...(ruleWarning ? { rule_warning: ruleWarning } : {}) });
   } catch (error) {
     return errorResponse("import.commit", error);
   }

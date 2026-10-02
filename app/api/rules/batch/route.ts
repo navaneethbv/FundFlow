@@ -1,3 +1,5 @@
+import { beginLegacyRuleRuns, finishLegacyRuleRuns } from "@/lib/rule-run-history";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 import { invalidateDashboardCache } from "@/lib/dashboard-cache";
 import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -282,7 +284,9 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  let historyRuns: { id: string; rule_id: string }[] = [];
   try {
+    if (isFeatureEnabled("ruleRunHistory")) historyRuns = await beginLegacyRuleRuns(createServiceClient(), user.id, rulesToRun, simulation);
     const clientIp = getClientIp(req);
     await writeAudit({
       userId: user.id,
@@ -307,6 +311,7 @@ export async function POST(req: NextRequest) {
       },
     );
 
+    if (historyRuns.length) await finishLegacyRuleRuns(createServiceClient(), user.id, historyRuns, simulation, "success");
     invalidateDashboardCache(user.id);
     await writeAudit({
       userId: user.id,
@@ -329,6 +334,10 @@ export async function POST(req: NextRequest) {
       appliedCount,
     });
   } catch (error) {
+    if (historyRuns.length) {
+      try { await finishLegacyRuleRuns(createServiceClient(), user.id, historyRuns, simulation, "failed"); }
+      catch (historyError) { return errorResponse("rules.batch.history", new AggregateError([error, historyError])); }
+    }
     return errorResponse("rules.batch.post", error);
   }
 }

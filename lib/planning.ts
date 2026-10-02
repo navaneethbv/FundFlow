@@ -480,7 +480,7 @@ export function groupRecurringByPeriod(
 }
 
 function matchesRule(transaction: CleanupTransaction, rule: MerchantRule): boolean {
-  if (!rule.enabled) return false;
+  if (!rule.enabled || String(rule.matchType) === "compound") return false;
 
   // Amount range filters (if specified)
   if (typeof transaction.amount === "number") {

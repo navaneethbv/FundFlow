@@ -1,5 +1,47 @@
 # FundFlow Session Handoff
 
+## 2026-10-01: Group 3 implementation complete locally
+
+Group 3 is complete in `/private/tmp/fundflow-insights-rules` on `feat/insights-rules-ledger`, based on PR #198's `feat/import-foundation` branch.
+The batch contains items 4.1, 4.2, 5.1, 5.2, 5.3, and 6.1 in one pending PR.
+It has not been committed, pushed, merged, deployed, or applied to production yet.
+
+The implementation adds eight opt-in insight generators and an explained priority feed, bounded compound rules with preserved legacy behavior, service-only atomic effects with run history and provenance, recategorization rule suggestions, and the desktop detail pane/mobile sheet.
+Rule effects are carried through canonical projections, dashboard/export/weekly-report paths, and the ledger while preserving provider facts and manual overrides.
+Six flags remain off: `insightGenerators`, `insightsFeed`, `compoundRules`, `ruleRunHistory`, `ruleSuggestions`, and `transactionDetails`.
+The unapplied migrations are `20261001170000_insight_preferences.sql` and `20261001180000_compound_rules.sql`.
+
+Verification completed: lint, TypeScript, 502 unit files with 5,638 tests, coverage at 98.41% statements, 96.07% branches, 98.66% functions and 99.53% lines, placeholder-environment production build, four responsive Playwright journeys at 375px and 1440px in light and dark themes, axe and no-overflow checks, palette validation, graph refresh, and local PostgreSQL migration/RLS/rule-effect regressions.
+The browser fixture screenshots were inspected at both widths.
+Full signed-in Supabase browser and integration acceptance remains deferred because no disposable target or Docker stack exists; the owner approved that exception.
+
+Next step: commit the grouped changes, perform the explicit refspec dry-run push, open one PR against `feat/import-foundation`, then wait for exact-head hosted checks and Sonar review.
+Do not merge, apply migrations, deploy, or flip flags without renewed authorization.
+
+## 2026-10-01: group 3 implementation in progress
+
+Worktree `/private/tmp/fundflow-insights-rules`, branch `feat/insights-rules-ledger`, based on PR #198 at `a2eef7e` for raw descriptors and import hooks.
+No group 3 commits, push, PR, merge, deployment, or production database changes yet.
+The primary checkout's unrelated uncommitted work is preserved.
+Group scope is 4.1, 4.2, 5.1, 5.2, 5.3, 6.1 in one PR.
+Contracts and checklist: `docs/superpowers/specs/2026-10-01-insights-rules-ledger.md`.
+
+Implemented locally: eight pure insight generators, opt-in preferences and priority feed; bounded compound rule evaluator/editor; service-only atomic rule materialization and history; manual-category rule suggestions; responsive transaction details.
+All six flags default off.
+Two unapplied migrations are `20261001170000_insight_preferences.sql` and `20261001180000_compound_rules.sql`.
+Rule effects are separate annotation JSON, preserving provider facts and user-authored overrides.
+SQL checks passed on fresh local PostgreSQL `adoption_group3_v2` at localhost:55439 using Auth/Storage stand-ins.
+The SQL regression proves owner isolation, preserved annotations, forbidden direct writes, and stale-write refusal.
+Original rule fixtures are run against both legacy and converted-group evaluators.
+Focused route/service/generator suites passed except an async error-boundary issue fixed with `return await saveRule` and awaiting its rerun.
+
+Next: finish cross-surface effect verification, browser fixtures at 375px/desktop with keyboard, coverage and full local checks, graph refresh, self-review, then one PR targeting `feat/import-foundation` with six checklist items.
+Full signed-in Supabase journeys remain deferred by owner authorization; never load primary `.env.local` into tests.
+Current logs: `/private/tmp/group3-*.log`.
+Reference clones remain `/private/tmp/fundflow-reference-*` until the entire program ends.
+Push only with verified explicit `HEAD:refs/heads/feat/insights-rules-ledger` refspec, first dry run.
+
+
 ## 2026-10-01: PR #198 scanner follow-up
 
 The five actionable findings are refactored: explicit CSV scanner advancement, extracted preview date-order parsing, derived optional profile name instead of boolean-selector arguments, and export setup before tests.

@@ -1,5 +1,6 @@
 "use client";
 
+import RuleSuggestion from "@/components/transactions/RuleSuggestion";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
@@ -9,11 +10,13 @@ import { TRANSFER_GROUPS } from "@/lib/finance-domain";
 type CashFlowClassification = "expense" | "income";
 
 export interface TransactionOverride {
+  ruleActions?: import("@/lib/rule-actions").RuleActions;
   displayCategory: string | null;
   cashFlowClassification: CashFlowClassification | null;
 }
 
 interface Props {
+  suggestionsEnabled?: boolean;
   transactionId: string;
   /** Raw provider primary category (e.g. TRANSFER_OUT); shown as immutable fact. */
   providerCategory: string | null;
@@ -34,12 +37,15 @@ function isProviderTransfer(providerCategory: string | null): boolean {
  * to tick an explicit confirmation box.
  */
 export default function TransactionOverrideControl({
+  suggestionsEnabled = false,
   transactionId,
   providerCategory,
   initialOverride,
   categories,
 }: Readonly<Props>) {
   const router = useRouter();
+  const [suggestedCategory, setSuggestedCategory] = useState<string | null>(null);
+  const [savedCategory, setSavedCategory] = useState(initialOverride.displayCategory ?? "");
   const [displayCategory, setDisplayCategory] = useState(
     initialOverride.displayCategory ?? "",
   );
@@ -77,6 +83,8 @@ export default function TransactionOverrideControl({
       });
       const json = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) throw new Error(json?.error ?? "Could not save the override.");
+      if (suggestionsEnabled && displayCategory.trim() && displayCategory.trim() !== savedCategory) setSuggestedCategory(displayCategory.trim());
+      setSavedCategory(displayCategory.trim());
       setHasOverride(Boolean(displayCategory.trim() || classification));
       setMessage({ kind: "success", text: "Override saved." });
       setConfirmed(false);
@@ -211,6 +219,7 @@ export default function TransactionOverrideControl({
           Save classification
         </Button>
       </div>
+      {suggestedCategory && <RuleSuggestion transactionId={transactionId} category={suggestedCategory} onClose={() => { setSuggestedCategory(null); document.getElementById(inputId("display"))?.focus(); }} />}
     </fieldset>
   );
 }

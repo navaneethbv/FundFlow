@@ -9,7 +9,7 @@ let featureFlagMap: Record<string, boolean> = {
 };
 
 vi.mock("@/lib/feature-flags", () => ({
-  isFeatureEnabled: (flag: string) => featureFlagMap[flag] ?? true,
+  isFeatureEnabled: (flag: string) => (flag === "compoundRules" || flag === "ruleRunHistory") ? false : (featureFlagMap[flag] ?? true),
 }));
 
 vi.mock("@/components/shell/AppShell", () => ({

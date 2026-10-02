@@ -1,3 +1,4 @@
+import type { RuleActions } from "@/lib/rule-actions";
 import { applyMerchantRules, type MerchantRule } from "@/lib/planning";
 import { buildCategoryOverrideMap, overrideCategory, type CategoryOverrideRow } from "@/lib/insights";
 import { validateSplits, type TransactionSplit } from "@/lib/transaction-quality";
@@ -133,6 +134,7 @@ export interface TransactionOverride {
   transactionId: string;
   displayCategory: string | null;
   cashFlowClassification: "expense" | "income" | null;
+  ruleActions?: RuleActions;
 }
 
 export interface ProjectFinanceInput {
@@ -234,21 +236,23 @@ export function projectFinanceTransactions(
   rowsToProject.forEach((row, index) => {
     const clean = cleaned[index]!;
     const override = overridesByTransaction.get(row.id);
+    const actions = override?.ruleActions;
+    if (actions?.exclude) return;
     // The transfer/flow decision always comes from the provider classification
     // (after merchant rules + global overrides). A display-category relabel
     // changes how the row groups, but never silently turns a provider transfer
     // into spending or income — only an explicit cash-flow classification can.
     const flowGroupKey = overrideCategory(overrides, clean.category) ?? UNCATEGORIZED;
-    const groupKey = override?.displayCategory ?? flowGroupKey;
+    const groupKey = override?.displayCategory ?? actions?.category ?? flowGroupKey;
     const flow = nettedIds.has(row.id)
       ? "transfer"
-      : override?.cashFlowClassification ?? flowFor(row.amount, flowGroupKey);
+      : override?.cashFlowClassification ?? (actions?.transfer ? "transfer" : flowFor(row.amount, flowGroupKey));
 
     const base = {
       sourceTransactionId: row.id,
       date: row.date,
       flow,
-      merchant: clean.merchant,
+      merchant: actions?.displayName ?? clean.merchant,
       groupKey,
       accountId: row.accountId,
       manualAccountId: row.manualAccountId,
@@ -276,7 +280,7 @@ export function projectFinanceTransactions(
       ...base,
       id: row.id,
       signedAmount: row.amount,
-      categoryKey: override?.displayCategory ?? row.pfcDetailed ?? groupKey,
+      categoryKey: override?.displayCategory ?? actions?.category ?? row.pfcDetailed ?? groupKey,
     });
   });
 

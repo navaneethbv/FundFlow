@@ -1,3 +1,4 @@
+import { compileConditions, evaluateConditions, validateConditions, conditionWork, RULE_BATCH_WORK_LIMIT, type RuleCondition } from "@/lib/rule-conditions";
 /**
  * Core smart transaction rules engine.
  * Supports regex matching, keyword/merchant matching, amount condition filters,
@@ -25,6 +26,9 @@ export interface SmartRule {
   category?: string | null;
   tags?: string[];
   enabled?: boolean;
+  conditions?: RuleCondition | null;
+  compiledConditions?: (tx: RuleTransactionCandidate) => boolean;
+  actions?: { exclude?: boolean; transfer?: boolean; notify?: boolean };
   compiledRegex?: Pick<RegExp, "test"> | null;
 }
 
@@ -70,6 +74,10 @@ export interface RuleTransactionCandidate {
   merchant?: string | null;
   name?: string | null;
   accountName?: string | null;
+  accountId?: string | null;
+  descriptor?: string | null;
+  notes?: string | null;
+  type?: string | null;
   amount: number;
   category?: string | null;
   tags?: string[];
@@ -136,6 +144,11 @@ export function evaluateRule(
   tx: RuleTransactionCandidate,
 ): boolean {
   if (rule.enabled === false) return false;
+
+  if (rule.conditions != null) {
+    if (rule.compiledConditions) return rule.compiledConditions(tx);
+    return validateConditions(rule.conditions) && evaluateConditions(rule.conditions, tx, rule.compiledRegex);
+  }
 
   // 1. Amount condition check
   if (!matchesAmountCondition(tx.amount, rule.amountCondition)) {
@@ -257,11 +270,17 @@ export function simulateRulesBatch(
   rules: SmartRule[],
   transactions: RuleTransactionCandidate[],
 ): BatchSimulationResult {
+  const work = rules.reduce((sum, rule) => {
+    if (rule.conditions != null && !validateConditions(rule.conditions)) throw new Error("Invalid rule conditions");
+    return sum + (rule.conditions ? conditionWork(rule.conditions) : 2);
+  }, 0) * transactions.length;
+  if (rules.some(rule => rule.conditions != null) && work > RULE_BATCH_WORK_LIMIT) throw new Error("Rule batch evaluation limit exceeded");
   let matchedCount = 0;
   let modifiedCount = 0;
 
   // Pre-compile regex rules once before batch evaluation to avoid inner-loop overhead and ReDoS
   const preparedRules = rules.map((r) =>
+    r.conditions ? { ...r, compiledConditions: compileConditions(r.conditions, r.compiledRegex) } :
     r.matchType === "regex" && r.compiledRegex === undefined
       ? { ...r, compiledRegex: safeCompileRegex(r.pattern) }
       : r,

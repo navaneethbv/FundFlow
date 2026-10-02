@@ -1,15 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import RuleEffectSummary from "@/components/transactions/RuleEffectSummary";
+import DetailPane from "@/components/ui/DetailPane";
+import RuleChangeProvenance from "@/components/transactions/RuleChangeProvenance";
+import { useEffect, useState } from "react";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Input, { fieldClasses } from "@/components/ui/Input";
-import Modal from "@/components/ui/Modal";
+import Modal, { type ModalProps } from "@/components/ui/Modal";
 import TransactionOverrideControl, {
   type TransactionOverride,
 } from "@/components/transactions/TransactionOverrideControl";
 import { cn } from "@/lib/cn";
 import { formatCurrency, titleCase } from "@/lib/format";
+
+function EditorContainer({ detailsEnabled, ...props }: Readonly<ModalProps & { detailsEnabled: boolean }>) {
+  return detailsEnabled ? <DetailPane open={props.open} onClose={props.onClose} titleId={props.titleId!}>{props.children}</DetailPane> : <Modal {...props} />;
+}
 
 export interface EditorSplit {
   category: string;
@@ -17,6 +24,9 @@ export interface EditorSplit {
 }
 
 interface TransactionEditorProps {
+  detailsEnabled?: boolean;
+  suggestionsEnabled?: boolean;
+  ruleHistoryEnabled?: boolean;
   transaction: { id: string; merchant: string; amount: number; currency: string };
   note: string | null;
   tags: string[];
@@ -258,6 +268,9 @@ function TransactionSplitSection({
  * trigger); leaving them empty removes them.
  */
 export default function TransactionEditor({
+  detailsEnabled = false,
+  suggestionsEnabled = false,
+  ruleHistoryEnabled = false,
   transaction,
   note: initialNote,
   tags: initialTags,
@@ -284,7 +297,14 @@ export default function TransactionEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    const closeOther = (event: Event) => { if ((event as CustomEvent).detail !== `${idPrefix}${transaction.id}`) setOpen(false); };
+    window.addEventListener("fundflow:transaction-detail", closeOther);
+    return () => window.removeEventListener("fundflow:transaction-detail", closeOther);
+  }, [transaction.id, idPrefix]);
+
   function openEditor() {
+    if (detailsEnabled) window.dispatchEvent(new CustomEvent("fundflow:transaction-detail", { detail: `${idPrefix}${transaction.id}` }));
     setNote(saved.note);
     setTagText(saved.tags.join(", "));
     setRows(saved.splits.map(toSplitRow));
@@ -369,12 +389,13 @@ export default function TransactionEditor({
             ? "text-accent hover:bg-panel-hover"
             : "text-muted hover:bg-panel-hover hover:text-foreground",
         )}
-        aria-label={hasAnnotations ? "Edit notes and splits" : "Add notes or splits"}
+        aria-label={detailsEnabled ? `Details for ${transaction.merchant}` : (hasAnnotations ? "Edit notes and splits" : "Add notes or splits")}
       >
-        {hasAnnotations ? "Edit" : "Add"}
+        {detailsEnabled ? "Details" : (hasAnnotations ? "Edit" : "Add")}
       </button>
 
-      <Modal
+      <EditorContainer
+        detailsEnabled={detailsEnabled}
         open={open}
         onClose={() => setOpen(false)}
         placement="sheet"
@@ -450,7 +471,10 @@ export default function TransactionEditor({
               activeRows={activeRows}
             />
 
+            {override?.ruleActions && <RuleEffectSummary transactionId={transaction.id} actions={override.ruleActions} />}
+            {ruleHistoryEnabled && <RuleChangeProvenance transactionId={transaction.id} />}
             <TransactionOverrideControl
+              suggestionsEnabled={suggestionsEnabled}
               transactionId={transaction.id}
               providerCategory={providerCategory}
               initialOverride={{
@@ -476,7 +500,7 @@ export default function TransactionEditor({
                 Save
               </Button>
             </div>
-      </Modal>
+      </EditorContainer>
     </>
   );
 }

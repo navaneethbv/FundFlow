@@ -7,7 +7,7 @@ let records: Array<Record<string, unknown>> = [];
 let rules: Array<Record<string, unknown>> = [];
 let failure: { code: string } | null = null;
 const calls: string[] = [];
-vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled: (name: string) => name !== "transactionReview" || enabled }));
+vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled: (name: string) => name === "transactionReview" ? enabled : !["compoundRules", "ruleSuggestions", "transactionDetails", "ruleRunHistory"].includes(name) }));
 const owner = "11111111-1111-4111-8111-111111111111";
 function sourceQuery() {
   let filtered = records.slice();

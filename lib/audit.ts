@@ -5,6 +5,11 @@ import { logError } from "@/lib/log";
 
 /** Sensitive actions we record in audit_logs. */
 export type AuditAction =
+  | "rule_effect_cleared"
+  | "compound_rule_saved"
+  | "insight_acknowledged"
+  | "insight_restored"
+  | "insight_preferences_updated"
   | "login"
   | "logout"
   | "signup"

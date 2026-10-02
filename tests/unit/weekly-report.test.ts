@@ -731,3 +731,22 @@ describe("buildWeeklyReportModel classification overrides", () => {
     expect(report.categories.every((category) => category.amount >= 0)).toBe(true);
   });
 });
+
+it("keeps materialized exclusion, transfer and manual precedence consistent in reports", () => {
+  const base = { date: "2026-07-08", amount: 50, merchantName: "Raw", name: "Raw", category: "FOOD_AND_DRINK", accountId: "checking" };
+  const report = buildWeeklyReportModel({
+    userId: "u", userEmail: "test@example.test", period, accounts, institutions: [], budgets: [], merchantRules: [], splits: [], linkedRefundTransactionIds: new Set(), duplicateTransactionIds: new Set(),
+    transactions: [
+      { ...base, id: "excluded", ruleActions: { exclude: true } },
+      { ...base, id: "transfer", ruleActions: { transfer: true } },
+      { ...base, id: "manual", amount: 30, displayCategory: "User choice", cashFlowClassification: "expense", ruleActions: { category: "Rule choice", transfer: true, displayName: "Clean" } },
+      { ...base, id: "category", amount: 20, ruleActions: { category: "Rule choice" } },
+      { ...base, id: "payment", amount: 200, category: "LOAN_PAYMENTS", ruleActions: { category: "Shopping" } },
+    ],
+  });
+  expect(report.totalSpend).toBe(50);
+  expect(report.categories).toEqual([{ category: "User choice", amount: 30, share: 0.6 }, { category: "Rule choice", amount: 20, share: 0.4 }]);
+  expect(report.merchants).toContainEqual({ merchant: "Clean", amount: 30 });
+  // Cash movement remains literal across the checking account, excluding only the explicit exclusion.
+  expect(report.cashFlow.outflows).toBe(300);
+});

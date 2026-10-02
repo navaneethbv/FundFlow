@@ -1,9 +1,13 @@
+import { isFeatureEnabled } from "@/lib/feature-flags";
+import InsightsFeed from "@/components/notifications/InsightsFeed";
+import InsightPreferences from "@/components/notifications/InsightPreferences";
 import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
 import EmailPreferences from "@/components/notifications/EmailPreferences";
 import InAppPreferences from "@/components/notifications/InAppPreferences";
 import PushSection from "@/components/notifications/PushSection";
 import NotificationFeed, { type NotificationRow } from "@/components/notifications/NotificationFeed";
+import { INSIGHT_TYPES } from "@/lib/insight-types";
 import Badge from "@/components/ui/Badge";
 import Panel from "@/components/ui/Panel";
 import { formatDate } from "@/lib/format-date";
@@ -45,6 +49,14 @@ export default async function NotificationsPage() {
     data: { user },
   } = await supabase.auth.getUser();
   const userId = user?.id ?? "";
+  const feedEnabled = isFeatureEnabled("insightsFeed");
+  const generatorsEnabled = isFeatureEnabled("insightGenerators");
+  let notificationsQuery = supabase
+    .from("notifications")
+    .select("id, type, severity, title, body, read_at, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+  if (feedEnabled) notificationsQuery = notificationsQuery.in("type", [...INSIGHT_TYPES]);
 
   const [
     { data: profile },
@@ -60,16 +72,11 @@ export default async function NotificationsPage() {
     supabase
       .from("alert_preferences")
       .select(
-        "budget_exceeded, goal_reached, large_transaction, low_cash_forecast, large_transaction_threshold",
+        generatorsEnabled ? "*" : "budget_exceeded, goal_reached, large_transaction, low_cash_forecast, large_transaction_threshold",
       )
       .eq("user_id", userId)
       .maybeSingle(),
-    supabase
-      .from("notifications")
-      .select("id, type, severity, title, body, read_at, created_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(25),
+    notificationsQuery.limit(feedEnabled ? 200 : 25),
     supabase
       .from("weekly_report_deliveries")
       .select("period_start, period_end, status, error_code, attempted_at, sent_at")
@@ -105,12 +112,10 @@ export default async function NotificationsPage() {
       />
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
-        <NotificationFeed
-          initialNotifications={(notifications ?? []) as NotificationRow[]}
-        />
+        {feedEnabled ? <InsightsFeed initial={(notifications ?? []) as NotificationRow[]} /> : <NotificationFeed initialNotifications={(notifications ?? []) as NotificationRow[]} />}
         <div className="space-y-6">
           <InAppPreferences
-            initialPreferences={alertPreferences}
+            initialPreferences={alertPreferences as Record<string, boolean> | null}
             initialThreshold={
               (
                 alertPreferences as {
@@ -119,6 +124,7 @@ export default async function NotificationsPage() {
               )?.large_transaction_threshold ?? null
             }
           />
+          {generatorsEnabled && <InsightPreferences initial={(alertPreferences ?? {}) as Record<string, boolean>} />}
           <PushSection />
           <Panel title="Weekly delivery history" eyebrow="Last 6 reports">
             <div className="space-y-3 text-sm">

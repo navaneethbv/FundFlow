@@ -1,3 +1,4 @@
+import { annotationProjectionColumns, storedRuleActions, type RuleActions } from "@/lib/rule-actions";
 import { loadRecurringInputs } from "@/lib/recurring-data";
 import { buildDashboardRecurring } from "@/lib/dashboard-recurring";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -590,6 +591,7 @@ interface DashboardOverrideRow {
   transaction_id: string;
   display_category: string | null;
   cash_flow_classification: "expense" | "income" | null;
+      rule_actions?: unknown;
 }
 
 const DASHBOARD_OVERRIDE_CHUNK_SIZE = IN_FILTER_CHUNK_SIZE;
@@ -615,7 +617,7 @@ async function loadDashboardOverrides(
         const from = page * DASHBOARD_OVERRIDE_PAGE_SIZE;
         let query = supabase
           .from("transaction_annotations")
-          .select("transaction_id, display_category, cash_flow_classification")
+          .select(annotationProjectionColumns("transaction_id, display_category, cash_flow_classification"))
           .in("transaction_id", ids);
         if (userId && applyUserScope) query = query.eq("user_id", userId);
         const { data, error } = await query
@@ -769,6 +771,7 @@ function buildProjectedTransactions(params: {
     transactionId: string;
     displayCategory: string | null;
     cashFlowClassification: "expense" | "income" | null;
+    ruleActions?: RuleActions;
   }>;
   allAccounts: AccountSummary[];
 }): { rawRows: RawFinanceTransaction[]; allTxnsRaw: TxnLite[] } {
@@ -1170,7 +1173,8 @@ export async function getDashboardData(
   const transactionOverrides = overrideRows.map((row) => ({
     transactionId: row.transaction_id,
     displayCategory: row.display_category,
-    cashFlowClassification:
+    ruleActions: storedRuleActions(row),
+        cashFlowClassification:
       row.cash_flow_classification === "expense" || row.cash_flow_classification === "income"
         ? row.cash_flow_classification
         : null,

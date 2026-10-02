@@ -1,3 +1,5 @@
+import { attachLedgerRuleActions } from "@/lib/rule-ledger";
+import { annotationProjectionColumns, storedRuleActions, tagsWithRuleActions, type RuleActions } from "@/lib/rule-actions";
 import { accountDisplayLabel } from "@/lib/account-label";
 import { Fragment } from "react";
 import { redirect } from "next/navigation";
@@ -239,7 +241,7 @@ async function loadLedgerRows(input: {
   const { supabase, state, filters, columns, rules, accountNamesById, accountLabelsById, accountOptionsForFilters } = input;
   let ledgerError = input.ledgerError;
   const ruleAwareFilter = Boolean(state.category || state.merchant) && hasRemapRules(rules);
-  const projectedPath = needsProjectedLedgerPage(state.sort, ruleAwareFilter);
+  const projectedPath = isFeatureEnabled("compoundRules") || needsProjectedLedgerPage(state.sort, ruleAwareFilter);
   const needsFullProjection = projectedPath || hasRemapRules(rules);
   let projectedScope: LedgerProjectedRow[] = [];
   let allRowsForGrouping: LedgerProjectedRow[] | null = null;
@@ -250,7 +252,7 @@ async function loadLedgerRows(input: {
         const result = await buildLedgerScanQuery(supabase, columns, filters).range(from, to);
         return { rows: (result.data ?? []) as unknown as LedgerProjectionSourceRow[], error: result.error };
       });
-      projectedScope = projectLedgerRows(sourceRows, rules, accountNamesById, accountLabelsById);
+      projectedScope = projectLedgerRows(await attachLedgerRuleActions(supabase, filters.ownerId, sourceRows), rules, accountNamesById, accountLabelsById);
     } catch (error) {
       console.error("Transaction projection query failed", error instanceof Error ? error.message : "unknown");
       ledgerError = "We couldn't load your transactions. Try changing the filters or refresh the page.";
@@ -452,6 +454,7 @@ type CashFlowClassification = "expense" | "income" | null;
 type TransactionOverride = {
   displayCategory: string | null;
   cashFlowClassification: CashFlowClassification;
+  ruleActions?: RuleActions;
 };
 
 async function loadLedgerRowDetails(
@@ -473,7 +476,7 @@ async function loadLedgerRowDetails(
   }
 
   const [annotationsResult, splitsResult, duplicatesResult] = await Promise.all([
-    supabase.from("transaction_annotations").select("transaction_id, note, tags, display_category, cash_flow_classification, cleared_at").eq("user_id", ownerId).in("transaction_id", txnIds),
+    supabase.from("transaction_annotations").select(annotationProjectionColumns("transaction_id, note, tags, display_category, cash_flow_classification, cleared_at")).eq("user_id", ownerId).in("transaction_id", txnIds),
     supabase.from("transaction_splits").select("transaction_id, category, amount").eq("user_id", ownerId).in("transaction_id", txnIds),
     supabase.from("linked_duplicates").select("excluded_transaction_id").eq("user_id", ownerId).in("excluded_transaction_id", txnIds),
   ]);
@@ -490,13 +493,14 @@ async function loadLedgerRowDetails(
   for (const a of annotationsResult.data ?? []) {
     annById.set(a.transaction_id as string, {
       note: a.note as string | null,
-      tags: (a.tags as string[]) ?? [],
+      tags: tagsWithRuleActions((a.tags as string[]) ?? [], storedRuleActions(a)),
       cleared: a.cleared_at != null,
     });
     const classification = a.cash_flow_classification;
     overridesById.set(a.transaction_id as string, {
       displayCategory: (a.display_category as string | null) ?? null,
-      cashFlowClassification:
+      ruleActions: storedRuleActions(a),
+        cashFlowClassification:
         classification === "expense" || classification === "income" ? classification : null,
     });
   }
@@ -707,6 +711,9 @@ function LedgerTableRow({
               />
             )}
             <TransactionEditor
+          detailsEnabled={isFeatureEnabled("transactionDetails")}
+          suggestionsEnabled={isFeatureEnabled("ruleSuggestions") && isFeatureEnabled("compoundRules")}
+          ruleHistoryEnabled={isFeatureEnabled("ruleRunHistory")}
               transaction={{ id: row.id, merchant, amount: row.amount, currency }}
               note={note}
               tags={tags}
