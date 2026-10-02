@@ -12,6 +12,14 @@
 
 /** Every known flag and its shipped default. */
 export const FEATURE_FLAG_DEFAULTS = {
+  /** File drop, visible import steps, and keyboard focus transitions. */
+  importWizard: false,
+  /** Read-only CSV diagnostics; requires importProfiles. */
+  importPreflight: false,
+  /** Saved CSV layouts; requires the import-profiles migration and acceptance. */
+  importProfiles: false,
+  /** Read-only committed batch history; requires the history migration. */
+  importHistory: false,
   /**
    * Plaid Liabilities is a separately billed provider call.
    * Keep the daily cron call opt-in until quota and product access are approved.

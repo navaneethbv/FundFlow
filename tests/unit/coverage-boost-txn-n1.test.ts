@@ -50,7 +50,7 @@ vi.mock("@/lib/manual-transaction", () => ({
 
 let featureEnabled = true;
 vi.mock("@/lib/feature-flags", () => ({
-  isFeatureEnabled: () => featureEnabled,
+  isFeatureEnabled: (flag: string) => flag === "importHistory" ? false : featureEnabled,
 }));
 
 const mockMakeImportId = vi.fn(() => "import-id");

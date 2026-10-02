@@ -1,5 +1,159 @@
 # FundFlow Session Handoff
 
+## 2026-10-01: PR #198 scanner follow-up
+
+The five actionable findings are refactored: explicit CSV scanner advancement, extracted preview date-order parsing, derived optional profile name instead of boolean-selector arguments, and export setup before tests.
+The sixth finding, S9382 on sequential page writes, is a documented line-specific false positive: overlapping page writes can replace or remove the same rows out of order.
+A new regression holds the first page write open and proves no second request or cursor completion occurs until that write finishes.
+An additional CSV fixture covers escaped quote pairs with embedded newlines and following physical error locations.
+Local lint, typecheck, 496 suites / 5,534 tests, coverage gates, eight isolated browser fixtures, diff review, and graph refresh passed.
+Coverage: 98.46% statements, 96.11% branches, 98.60% functions, 99.57% lines.
+Hosted checks and the Sonar issue list must be refreshed after pushing this follow-up.
+No migration, production change, merge, or flag flip was performed.
+Group 2 remains preserved in `/private/tmp/fundflow-balance-quality` while this review is addressed.
+
+## 2026-10-01: current grouped delivery checkpoint
+
+The owner requested five or six features per PR, superseding the earlier per-item branch/PR rule.
+Current worktree: `/private/tmp/fundflow-import-foundation`, branch `feat/import-foundation`, from restored main `a19a0a6`.
+Items 0.1, 0.3, and 1.1 through 1.4 are combined locally by merging their topic branches; no feature was merged to main.
+The six individual PRs #192 through #197 are closed as superseded by PR #198.
+The earlier per-item sections below retain their original evidence; their branch/stack directions are superseded by this checkpoint and the updated plan.
+All four new import flags remain off, and all four program migrations remain unapplied to production.
+Signed-in browser/integration acceptance and the local build exception remain as previously approved.
+The primary checkout and its unrelated uncommitted edits are preserved.
+Combined validation passed: lint/types, 496 suites / 5,532 tests, coverage gates (98.46% statements, 96.11% branches, 98.60% functions, 99.57% lines), eight browser fixtures, and all three SQL regressions plus RLS checks.
+`graphify update .` completed with the previously documented optional SQL-parser limitation.
+The grouped review is PR #198: https://github.com/navaneethbv/FundFlow/pull/198.
+All hosted checks passed at `643eda8`, including build, migration/RLS, security/static analysis, preview, and smoke tests.
+Next: continue group 2 on `feat/data-quality-guidance` in `/private/tmp/fundflow-balance-quality`; no separate item PRs.
+Group 2 will contain 2.1, 2.2, 2.3, 3.1, 3.2, and 3.3.
+
+## 2026-10-01: reference adoption program, item 0.1
+
+Implementation worktree: `/private/tmp/fundflow-pending-annotations`, branch `fix/pending-annotation-preservation`, based on restored `origin/main` at `a19a0a6`.
+The primary checkout's unrelated uncommitted backup incident edits remain untouched.
+The plan, comparison report and implementation prompt are included with this branch so future clones can resume.
+Item 0.1 reproduces annotation loss and queues provider removals until the complete update chain arrives.
+An owner/item-scoped service-only RPC carries annotations and related state before deleting pending rows atomically; conflicts refuse without losing data.
+See the plan's execution checklist for review-state semantics and deferred program items.
+The owner selected Option B: signed-in browser and full Supabase integration acceptance are deferred until an isolated target is supplied.
+Verification: all 490 unit suites / 5,423 tests passed; coverage gates passed (98.43% statements, 96.10% branches, 98.58% functions, 99.57% lines).
+Lint, type checking, palette validation, the rollback-only pending carryover SQL regression and `scripts/check-rls.sql` passed.
+The regression first failed against the old deletion behavior with `Pending annotation, tags and override were lost`.
+Local production build is not verified: Turbopack cannot bind its worker port in the execution environment; the Webpack fallback fails on the unchanged `node:crypto` import from `lib/planning.ts` into `WhatIfPanel`.
+An initial test run using a symlinked dependency directory was invalidated by module identity failures; all reported passing tests are from the clean copied dependency directory.
+`graphify update .` completed; SQL extraction reported its optional parser missing.
+The owner authorized hosted build verification and continued program work.
+An attempted feature push on the previous branch unexpectedly updated `main`, which automatically deployed `1ffe379`.
+After explicit owner approval, production was rolled back to `dpl_8E7q4qw5iZGCU5Js17x57nEENoe8`, and corrective PR #191 restored the exact prior tree at merge `a19a0a6` after all checks passed.
+The normal merge was policy-blocked; the owner granted an administrator exception for PR #191 only.
+No database migration or feature-flag change occurred.
+The implementation was then replayed onto this non-tracking feature branch for review.
+Every future branch push must name both source and destination explicitly and be checked with a dry run.
+PR #192 hosted checks passed at `43fe6bc`; PR #193 hosted checks passed at `155934c`.
+Item 0.2 was not reproduced and was skipped with evidence in the plan.
+Item 1.1 is draft PR #194 from `/private/tmp/fundflow-import-profiles`, branch `feat/import-profiles`, with hosted checks pending.
+PR #194 passed hosted checks at `6820c96`; PR #195 passed emitted hosted checks at `2cf0f7d`.
+Current item 1.3 is uncommitted on `ui/import-wizard` in `/private/tmp/fundflow-import-wizard`; its handoff records changed files and pending full verification.
+The wizard is the third branch in the import stack.
+Next: finish the wizard PR, then 1.4 from a shallow base while retaining all default-off flags and deferred signed-in acceptance.
+Temporary Sure reference clone: `/private/tmp/fundflow-reference-sure`, pinned to `97fa8a2eda5df778abcccb2a08a643d8004907c4`.
+Keep it until the program ends; do not delete implementation worktrees or reset the primary checkout.
+
+Last updated: 2026-10-01. Read this first to resume.
+
+## 2026-10-01: reference adoption item 0.3
+
+Branch `fix/plaid-original-description`, worktree `/private/tmp/fundflow-original-description`, starts at restored main `a19a0a6` with no upstream tracking.
+Routine sync and bounded repair request Plaid's optional original descriptor and store it in nullable `transactions.original_description`.
+The existing merchant/name behavior is unchanged; the descriptor is not added to exports, archive selections or AI payloads.
+Failing request-contract regressions reproduced the omission before the fix.
+All 490 unit suites / 5,425 tests passed, then the final four focused suites passed 84 tests including the added absent-descriptor case.
+Lint, typecheck, the additive migration and RLS checks passed locally; graph refresh completed.
+Hosted production builds are used under the owner's approved local build exception.
+Signed-in browser and full Supabase integration acceptance remain deferred under Option B until a disposable target exists.
+Migration `20261001110000_transaction_original_description.sql` remains unapplied to production and must precede deployment of this unflagged defect fix.
+No migration, deployment or merge is authorized for this feature branch.
+The central program checklist is maintained in the plan on PR #192's branch until that document reaches main.
+All pushes must use an explicit source:destination branch refspec, verified first with a dry run.
+
+Last updated: 2026-09-30. Read this first to resume.
+
+Last updated: 2026-10-01. Read this first to resume.
+
+## 2026-10-01: reference adoption 1.3, import wizard
+
+Current worktree `/private/tmp/fundflow-import-wizard`, branch `ui/import-wizard`, based on PR #195 (`feat/import-preflight`) at `2cf0f7d`.
+This is the third branch in the saved-layout/import stack; do not add a fourth dependent branch before earlier PRs merge.
+PR #194 passed all hosted checks at `6820c96`; all emitted #195 checks passed at `2cf0f7d`.
+The pinned personal-finance-tracker dropzone, mapping wizard, and preview were read for interaction behavior.
+FundFlow already implements column naming, samples, date/sign settings, duplicate review, and explicit commit in `ImportReviewSection.tsx`; those surfaces are reused.
+
+New default-off `importWizard` adds a page-wide file drop listener only while the Data import section is mounted, native keyboard file selection, four visible steps, focus transitions to mapping/review/completion, and stale-preview clearing when files or parsing settings change.
+`components/settings/ImportWizard.tsx` contains the scoped drop hook and progress list.
+`components/ui/Input.tsx` accepts the standard React 19 input ref prop so the shared primitive supports dropped-file selection and focus.
+No route or migration is added by this item.
+
+A browser test first failed on the absent progress indicator before implementation.
+Initial four browser fixtures passed for mobile/desktop and both themes; expanded fixtures now exercise drop, manual mapping focus, replacement/cleared files, sign explanation, and off-state event behavior.
+Full coverage passed 495 suites / 5,509 tests at 98.46% statements, 96.10% branches, 98.60% functions, and 99.57% lines.
+Final expanded browser fixtures, lint, and typecheck passed; logs are `/private/tmp/fundflow-wizard-{browser,lint,types}.log`.
+The browser checks cover mapping/review/completion focus, drop and keyboard file selection, clearing stale batches after file/sign changes, disabled-feature event behavior, overflow, and axe checks including diagnostic errors.
+The signed-in journey remains deferred with owner approval; these are isolated component fixtures with mocked HTTP.
+
+Next: finish verification, update the graph, review the diff, open a draft PR against `feat/import-preflight` using an explicit source/destination push refspec, record the item in the canonical plan on PR #192, then work on item 1.4 from an appropriately shallow base.
+Preserve all existing worktrees and the primary checkout's original dirty files.
+
+## 2026-10-01: reference adoption 1.2, import diagnostics
+
+Current worktree `/private/tmp/fundflow-import-preflight`, branch `feat/import-preflight`, based on saved-layout PR #194 at `6820c96`.
+Open the PR against `feat/import-profiles`, documenting the dependency; no merge is authorized.
+PR #194 passed all hosted checks, including build, migrations, security and quality gates, at that exact base.
+Its temporary reference source is `/private/tmp/fundflow-reference-pft`; this item reads Sure's preflight behavior from `/private/tmp/fundflow-reference-sure` at the plan pin, without copying code or text.
+
+New `lib/import-preflight.ts` reports bank CSV delimiter/header problems, physical row positions, invalid or ambiguous dates, numeric format/range problems, competing debit/credit amounts, malformed quoting, and duplicate normalized rows.
+`POST /api/import/preflight` is cookie-authenticated, rate-limited, body-bounded, and audited with counts only; it stages no financial data and accepts no API tokens.
+Both `importPreflight` and its `importProfiles` prerequisite must be enabled; both stay off by default.
+Settings checks CSV files before preview staging and shows a keyboard-accessible diagnostic table; dedicated OFX/application-export parsers keep their existing validation path.
+No new migration is needed for 1.2.
+
+Validation: lint, typecheck, all 495 unit suites / 5,509 tests, and four Chromium fixtures at 375px/1440px in both themes passed.
+Final coverage: 98.46% statements, 96.10% branches, 98.60% functions, and 99.57% lines.
+The final focused run passed 35 tests, including the encoded multipart body still asserting 413 after a File-serializer race invalidated an earlier run.
+Only `/private/tmp/fundflow-preflight-coverage-verified.log` records the accepted full run; the earlier `coverage-final` log contains the invalidated serializer rejection.
+The diagnostic/API edge suite covers physical line numbers, quoted and escaped newlines, amount grouping and range, duplicate warnings, row limits, disabled flags, authentication, rate limiting, and body bounds.
+Signed-in browser journeys and full Supabase integration remain deferred with owner approval; no production credentials or database are used.
+
+Next: commit and push only `HEAD:refs/heads/feat/import-preflight` after a dry run, open a draft PR against `feat/import-profiles`, verify hosted checks, and record 1.2 in the canonical plan on PR #192.
+Then continue 1.3, keeping the stack at most three branches deep.
+The user's dirty primary checkout remains preserved; never reset, clean, stash, or overwrite it.
+
+## 2026-10-01: reference adoption 1.1, saved import layouts
+
+Worktree `/private/tmp/fundflow-import-profiles`, branch `feat/import-profiles`, based on restored main `a19a0a6`.
+The owner-authorized corrective PR #191 is merged; feature PRs #192 and #193 remain separate and unmerged.
+Always push an explicit `HEAD:refs/heads/<topic>` refspec after a dry run.
+An earlier upstream-tracking push accidentally updated main; the rollback and PR #191 restored it, and its administrator exception applies to #191 only.
+
+`lib/import-profiles.ts` validates ordered normalized header signatures, column positions, date order, amount conventions, and up to 20 logical leading records.
+`lib/import-profile-preview.ts` reads profiles through the cookie client with an explicit owner filter, auto-selects a unique match, and asks the user to resolve multiple matches.
+Existing specialized OFX/Mint/Monarch/YNAB importers retain their semantics.
+The preview route stores a layout snapshot; the commit route saves it through a service-only owner-scoped RPC after a durable import, reporting a warning if saving fails.
+Settings exposes layout choice and optional naming only under the default-off `importProfiles` flag.
+The additive migration grants authenticated SELECT with ownership, MFA, and revocation gates, with no client write grants.
+
+Validation: lint and typecheck passed; the full unit coverage run passed 492 suites / 5,472 tests before two additional route integration unit cases also passed.
+Coverage was 98.44% statements, 96.09% branches, 98.59% functions, and 99.57% lines.
+The migration, committed-only save, empty-import refusal, name/quota guards, owner isolation, and `scripts/check-rls.sql` passed on isolated local PostgreSQL with Auth/Storage stand-ins.
+All four browser fixtures passed; they use mocked HTTP responses and no app server or database; they test the real component at 375px and 1440px in both themes, keyboard interaction, overflow, and axe checks.
+The signed-in journey and full Supabase integration remain deferred with owner approval.
+Local production builds remain blocked by the previously documented sandbox worker-port and existing Webpack client-crypto issue; hosted CI is the build gate, as authorized.
+No production migration, flag flip, or feature merge was performed for this item.
+
+Next: open the focused draft PR, record its number in the canonical plan on `fix/pending-annotation-preservation`, and continue item 1.2.
+The untracked plan/report/prompt copies in this worktree are reference copies; do not commit them into this independent PR.
+
 Last updated: 2026-09-30. Read this first to resume.
 
 ## 2026-09-30: preserve integration tokens across sign-out
@@ -791,3 +945,22 @@ The browser journey covered all five sort fields in both directions, complete or
 Finished phase programs and session notes from 2026-07-05 through 2026-08-09 are
 in [`archive/HANDOFF-2026-07-to-08.md`](archive/HANDOFF-2026-07-to-08.md).
 Nothing there is pending.
+
+## 2026-10-01: reference adoption 1.4
+
+Current branch: `feat/import-history`, based on `feat/import-profiles` at `6820c96`.
+This keeps the dependency stack at two branches while the wizard stack awaits owner merge approval.
+The read-only history page is under Settings > Data, behind `importHistory: false`.
+Preview snapshots layout name and flags; a service-only RPC finalizes committed review state and history together after existing ledger writes succeed.
+History never labels an upsert count as newly inserted transactions, and old metadata stays unknown.
+The migration only adds metadata columns and revokes direct client writes on import tables; it does not rewrite existing user data and has not been applied to production.
+Reference behavior was read at Securo commit `76065dbcfa7cbba4479cd0835ae1a3560748fc36`; no code, assets, copy, fixtures, rates, or styling were reused.
+Signed-in browser and full Supabase integration remain deferred under the owner's Option B approval.
+
+Local validation passed: lint, TypeScript, 494 suites / 5,494 tests, and coverage 98.45% statements / 96.15% branches / 98.59% functions / 99.57% lines.
+Synthetic PostgreSQL regression checks and `scripts/check-rls.sql` passed on the isolated localhost database.
+Four Chromium component fixtures passed in both themes at 375px/1440px, including keyboard pagination, empty/legacy states, overflow, and axe checks.
+The mobile screenshot was visually reviewed.
+The fixture substitutes framework navigation and uses synthetic data, so this is not signed-in end-to-end evidence.
+`graphify update .` completed; the optional SQL parser remains unavailable.
+Next: open a draft PR against `feat/import-profiles`, verify its hosted checks, and continue with item 2.1.

@@ -1,5 +1,60 @@
 # FundFlow — Future Todos
 
+## Current delivery grouping
+
+The owner requested five or six features per PR.
+Items 0.1, 0.3, and 1.1 through 1.4 are consolidated in PR #198 on `feat/import-foundation`; individual branch/stack notes below are superseded.
+Keep `importProfiles`, `importPreflight`, `importWizard`, and `importHistory` off pending the approved deferred acceptance.
+All four 20261001 program migrations remain unapplied to production.
+The unflagged defect code must not deploy before its matching migrations are explicitly authorized and applied.
+
+
+## Reference adoption program: pending verification
+
+Item 0.2 did not reproduce double counting: the same-security lot/rollup batch fails atomically on the existing holdings unique key.
+If a real provider sends this shape, investigate the resulting sync rejection with a representative sanitized fixture before adding lot aggregation or heuristic rollup removal.
+
+
+- Item 0.1 local build blocked by Turbopack worker-port permissions; Webpack fallback fails on an existing `node:crypto` client import through `lib/planning.ts`.
+  Hosted build evidence is still required.
+- Item 0.1: migration `20261001100000_pending_annotation_carryover.sql` is unapplied to production.
+  Deploy the matching sync code only after the authorized migration rollout.
+- Owner approved deferring signed-in browser journeys at 375px and desktop, including keyboard use, and full Supabase integration tests for this program until a disposable Supabase project exists.
+  No Docker or approved `TEST_SUPABASE_URL` is available; do not use `.env.local` or `--linked` as a substitute.
+  Keep new feature flags off until those deferred journeys pass.
+- The execution checklist is in [the adoption plan](superpowers/plans/2026-10-01-reference-repo-feature-adoption.md#execution-checklist).
+
+## Reference adoption item 0.3
+
+Migration `20261001110000_transaction_original_description.sql` is unapplied to production; deploy its sync writer only after authorized migration application.
+The owner approved hosted build verification for the local build-environment failure, and deferred signed-in desktop/mobile keyboard journeys plus full Supabase integration until a throwaway target exists.
+Do not use the production-linked target for those tests.
+Existing historical transactions remain null until a normal provider sync supplies the optional descriptor; no cursor reset or extra historical fetch is performed.
+
+## Reference adoption 1.3: import wizard
+
+Implementation branch `ui/import-wizard` depends on PR #195 and is the third branch in this stack.
+Keep `importWizard` off until the deferred authenticated mobile/desktop keyboard journey is verified against a disposable Supabase target.
+The item adds no migration; earlier saved-layout migration requirements still apply when their flags are enabled.
+
+## Reference adoption 1.2: import diagnostics
+
+Implemented on `feat/import-preflight`, stacked on saved-layout PR #194, behind default-off `importPreflight` and its `importProfiles` prerequisite.
+The bank CSV diagnostics path validates without staging; OFX, Mint, Monarch, and YNAB continue through their dedicated preview validation.
+No new migration is added by 1.2.
+Before enablement, perform the deferred signed-in mobile/desktop import journey against a disposable Supabase target, including malformed files, manual mapping, saved-profile reuse, and keyboard navigation.
+Local synthetic fixtures do not replace this acceptance.
+
+## Reference adoption 1.1: saved import layouts
+
+Implemented on `feat/import-profiles` behind `importProfiles: false`.
+Migration `20261001120000_import_profiles.sql` is unapplied to production.
+Before enabling, run the signed-in import/save/reuse journey on an approved disposable Supabase target at 375px and desktop, including keyboard use.
+The owner approved deferring that journey and full Supabase integration while no disposable target exists.
+Local synthetic browser fixtures and isolated PostgreSQL checks do not replace that acceptance.
+Saved layout configuration is not yet included in backup/restore; include it in that subsystem before claiming a complete configuration backup.
+No dependency updates accompany this feature: the startup freshness check reported newer simple-icons, sharp, ESLint, and TypeScript releases for separate review.
+
 ## September 30 review remediation
 
 Local implementation and per-finding status are recorded in [the review](reviews/2026-09-30-repository-review.md#implementation-status-2026-09-30-local-work).
@@ -545,3 +600,13 @@ Still open, all needing credentials or an owner decision rather than code:
 
 Finished todos and completed programs are in
 [`archive/TODO-completed.md`](archive/TODO-completed.md).
+
+## Reference adoption 1.4: import history
+
+- Keep `importHistory` off until disposable signed-in browser acceptance at 375px and desktop, including keyboard use, and Supabase integration are complete.
+- Migration `20261001130000_import_history.sql` is unapplied to production.
+  It adds history metadata and makes the already service-authored import tables read-only to authenticated clients.
+- History reports committed review batches, including old batches with missing metadata labelled Not recorded.
+  The legacy one-shot CSV endpoint creates no batches and remains outside this history.
+- Exact newly inserted ledger counts and guarded undo need the transaction provenance work in item 1.5; current imported-row counts explicitly include updates.
+- The local build exception remains in force; use the hosted build result separately from local unit, SQL, and component-browser checks.

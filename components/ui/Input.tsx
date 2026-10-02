@@ -6,6 +6,6 @@ export const fieldClasses =
 export default function Input({
   className,
   ...props
-}: Readonly<React.InputHTMLAttributes<HTMLInputElement>>) {
+}: Readonly<React.ComponentPropsWithRef<"input">>) {
   return <input className={cn(fieldClasses, className)} {...props} />;
 }
