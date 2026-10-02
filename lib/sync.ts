@@ -424,7 +424,8 @@ async function runTransactionSyncLoop(
         options: { include_original_description: true },
       });
       const data = response.data as TransactionSyncPage;
-      const pageResult = await applyTransactionPage(
+      // Finish these writes before the next page can replace or remove the same rows.
+      const pageResult = await applyTransactionPage( // NOSONAR: S9382, page writes must remain ordered.
         item, supabase, data, options.notify, pagesCompleted === 0 && startCursor === committedCursor,
       );
       result.added += pageResult.added;

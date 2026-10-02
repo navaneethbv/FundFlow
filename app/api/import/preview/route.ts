@@ -248,6 +248,10 @@ function profilePreviewInfo(prepared: PreparedLayout) {
   };
 }
 
+function parseDateOrder(value: FormDataEntryValue | null): DateOrder | undefined {
+  return value === "mdy" || value === "dmy" || value === "ymd" ? value : undefined;
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -267,8 +271,7 @@ export async function POST(request: NextRequest) {
 
     const file = form.get("file");
     const positiveIsIncome = form.get("positive_is_income") !== "false";
-    const dateOrderRaw = form.get("date_order");
-    const dateOrder = dateOrderRaw === "mdy" || dateOrderRaw === "dmy" || dateOrderRaw === "ymd" ? dateOrderRaw : undefined;
+    const dateOrder = parseDateOrder(form.get("date_order"));
     if (!(file instanceof File)) return badRequest("file is required");
     if (file.size > MAX_FILE_BYTES) {
       return badRequest("File too large (2 MB max)");

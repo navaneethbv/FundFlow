@@ -91,6 +91,12 @@ function transaction(index: number) {
 }
 
 describe("lib/export", () => {
+  let mockSupabase: Partial<SupabaseClient>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("never exports the provider raw descriptor, even when returned by a query", async () => {
     const client = pagedExportClient({
       profiles: { data: [{ ai_export_enabled: true }] },
@@ -102,12 +108,6 @@ describe("lib/export", () => {
     expect(result.rows).toEqual([{ date: "2026-07-01", merchant: "Merchant 0", amount: 1, category: "FOOD_AND_DRINK" }]);
     expect(JSON.stringify(result)).not.toContain("PRIVATE-DESCRIPTOR-731");
     expect(client.calls.transactions.find(call => call.method === "select")?.args[0]).not.toContain("original_description");
-  });
-
-  let mockSupabase: Partial<SupabaseClient>;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
   });
 
   describe("isExportAllowed", () => {

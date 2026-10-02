@@ -43,10 +43,6 @@ interface ProfilePreview {
   profile_settings?: { dateOrder: "mdy" | "dmy" | "ymd"; positiveIsIncome: boolean; skipRows: number } | null;
 }
 
-function profileSaveRequest(enabled: boolean, canSave: boolean, name: string) {
-  return enabled && canSave && name.trim() ? { save_profile_name: name.trim() } : {};
-}
-
 function profileCommitNotice(result: { profile_warning?: string; profile_saved?: boolean }): string | null {
   return result.profile_warning ?? (result.profile_saved ? "Saved this layout for future files with the same columns." : null);
 }
@@ -78,6 +74,7 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false,
   const [profileChoices, setProfileChoices] = useState<Array<{ id: string; name: string }>>([]);
   const [canSaveProfile, setCanSaveProfile] = useState(false);
   const [profileName, setProfileName] = useState("");
+  const saveProfileName = profilesEnabled && canSaveProfile ? profileName.trim() : "";
   const [appliedProfile, setAppliedProfile] = useState<string | null>(null);
   const [profileNotice, setProfileNotice] = useState<string | null>(null);
   const [dateFormatRequired, setDateFormatRequired] = useState(false);
@@ -330,7 +327,7 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false,
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           batch_id: batchId,
-          ...profileSaveRequest(profilesEnabled, canSaveProfile, profileName),
+          save_profile_name: saveProfileName || undefined,
           ...(selectedAccount.kind === "manual" ? { manual_account_id: selectedAccount.id } : { account_id: selectedAccount.id }),
           account_mappings: sourceMappings,
           approved_row_ids: [...approvedRowIds],

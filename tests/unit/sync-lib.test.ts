@@ -327,6 +327,38 @@ describe("lib/sync", () => {
       );
     });
 
+    it("waits for page writes before requesting the next cursor", async () => {
+      let releasePage!: () => void;
+      const pageWrite = new Promise<void>((resolve) => { releasePage = resolve; });
+      let firstPageWriting = false;
+      mockTransactionsSync
+        .mockResolvedValueOnce({ data: { added: [], modified: [], removed: [], accounts: [], next_cursor: "cursor-1", has_more: true } })
+        .mockResolvedValueOnce({ data: { added: [], modified: [], removed: [], accounts: [], next_cursor: "cursor-2", has_more: false } });
+      mockServiceClient.from.mockImplementation(() => { throw new Error("Unexpected table"); });
+      await mockServiceClient.rpc.withImplementation(async (name: string) => {
+        if (name === "finish_transaction_sync_page" && !firstPageWriting) {
+          firstPageWriting = true;
+          await pageWrite;
+        }
+        return { data: true, error: null };
+      }, async () => {
+        const run = syncItemTransactions(dummyItem);
+        try {
+          await vi.waitFor(() => expect(firstPageWriting).toBe(true));
+          expect(mockTransactionsSync).toHaveBeenCalledTimes(1);
+          expect(mockCompleteItemCursor).not.toHaveBeenCalled();
+        } finally {
+          releasePage();
+          await run;
+        }
+        expect(mockTransactionsSync).toHaveBeenNthCalledWith(2, {
+          access_token: "access-token-123", cursor: "cursor-1",
+          options: { include_original_description: true },
+        });
+        expect(mockCompleteItemCursor).toHaveBeenCalledWith("user-1", "item-db-1", "cursor-2");
+      });
+    });
+
     it("drains every page instead of stopping at the repair page bound", async () => {
       const pages = 10;
       for (let page = 0; page < pages; page += 1) {

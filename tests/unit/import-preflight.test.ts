@@ -22,6 +22,11 @@ describe("read-only import diagnostics", () => {
     const result = inspectImportCsv(`${header}\n\n2026-01-01,"Cafe\nWest",1\nbad,Shop,2`, options);
     expect(result.issues).toContainEqual(expect.objectContaining({ code: "invalid_date", row: 5 }));
   });
+  it("keeps escaped quote pairs inside a multiline record and locates the following error", () => {
+    const result = inspectImportCsv(`${header}\r\n2026-01-01,"Cafe """"West\nAnnex""",1\r\nbad,Shop,2`, options);
+    expect(result).toMatchObject({ delimiter: "comma", totalRows: 2, validRows: 1 });
+    expect(result.issues).toEqual([expect.objectContaining({ code: "invalid_date", row: 4 })]);
+  });
   it.each([[";", "semicolon"], ["\t", "tab"], ["|", "pipe"]])("detects unsupported %s delimiters without changing the import", (separator, delimiter) => {
     const result = inspectImportCsv(`Date${separator}Description${separator}Amount\n2026-01-01${separator}Shop${separator}1`, options);
     expect(result).toMatchObject({ delimiter, canPreview: false });

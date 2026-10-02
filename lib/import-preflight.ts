@@ -37,11 +37,13 @@ function recordsWithLines(text: string): { records: RecordLine[]; unterminated: 
   let line = 1;
   let startLine = 1;
   let separators = [0, 0, 0, 0];
-  for (let index = 0; index < text.length; index++) {
-    const character = text[index]!;
+  let index = 0;
+  while (index < text.length) {
+    const position = index++;
+    const character = text[position]!;
     if (character === '"') {
-      const next = consumeQuote(text, index, quoted);
-      index = next.index; quoted = next.quoted;
+      const next = consumeQuote(text, position, quoted);
+      index = next.index + 1; quoted = next.quoted;
     }
     if (!quoted) {
       const delimiter = [",", ";", "\t", "|"].indexOf(character);
@@ -50,9 +52,9 @@ function recordsWithLines(text: string): { records: RecordLine[]; unterminated: 
     if (character !== "\n") continue;
     line++;
     if (quoted) continue;
-    const record = text.slice(start, index).replace(/\r$/, "");
+    const record = text.slice(start, position).replace(/\r$/, "");
     if (record.trim()) records.push({ text: record, line: startLine, separators });
-    start = index + 1; startLine = line; separators = [0, 0, 0, 0];
+    start = index; startLine = line; separators = [0, 0, 0, 0];
   }
   const last = text.slice(start);
   if (last.trim()) records.push({ text: last, line: startLine, separators });

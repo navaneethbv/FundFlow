@@ -1,5 +1,17 @@
 # FundFlow Session Handoff
 
+## 2026-10-01: PR #198 scanner follow-up
+
+The five actionable findings are refactored: explicit CSV scanner advancement, extracted preview date-order parsing, derived optional profile name instead of boolean-selector arguments, and export setup before tests.
+The sixth finding, S9382 on sequential page writes, is a documented line-specific false positive: overlapping page writes can replace or remove the same rows out of order.
+A new regression holds the first page write open and proves no second request or cursor completion occurs until that write finishes.
+An additional CSV fixture covers escaped quote pairs with embedded newlines and following physical error locations.
+Local lint, typecheck, 496 suites / 5,534 tests, coverage gates, eight isolated browser fixtures, diff review, and graph refresh passed.
+Coverage: 98.46% statements, 96.11% branches, 98.60% functions, 99.57% lines.
+Hosted checks and the Sonar issue list must be refreshed after pushing this follow-up.
+No migration, production change, merge, or flag flip was performed.
+Group 2 remains preserved in `/private/tmp/fundflow-balance-quality` while this review is addressed.
+
 ## 2026-10-01: current grouped delivery checkpoint
 
 The owner requested five or six features per PR, superseding the earlier per-item branch/PR rule.
