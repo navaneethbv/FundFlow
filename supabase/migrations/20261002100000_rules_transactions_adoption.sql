@@ -66,6 +66,10 @@ grant execute on function public.replace_plaid_category_mappings(uuid, jsonb) to
 alter table public.transaction_annotations
   add column if not exists classification_source text
   check (classification_source in ('user', 'rule', 'plaid_mapping', 'bayes'));
+-- Compound rules (20261001180000) move transaction_annotations to column-level
+-- client grants, so a new client-written column needs its own grant.
+grant insert (classification_source), update (classification_source)
+  on public.transaction_annotations to authenticated;
 
 create table if not exists public.merchant_aliases (
   id uuid primary key default gen_random_uuid(),
