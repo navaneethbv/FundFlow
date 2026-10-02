@@ -84,10 +84,16 @@ export default function MobileLedgerList({
   rows,
   dayGroups = null,
   reviewEnabled = false,
+  bulkEditEnabled = false,
+  keyboardEnabled = false,
+  undoEnabled = false,
 }: Readonly<{
   rows: LedgerCardRow[];
   dayGroups?: Map<string, LedgerDayGroup> | null;
   reviewEnabled?: boolean;
+  bulkEditEnabled?: boolean;
+  keyboardEnabled?: boolean;
+  undoEnabled?: boolean;
 }>) {
   const grouped = dayGroups !== null;
   // Banding restarts inside each day so the stripes line up with the groups
@@ -107,6 +113,9 @@ export default function MobileLedgerList({
               striped={(bands[index] ?? 0) % 2 === 1}
               grouped={grouped}
               reviewEnabled={reviewEnabled}
+              bulkEditEnabled={bulkEditEnabled}
+              keyboardEnabled={keyboardEnabled}
+              undoEnabled={undoEnabled}
             />
           </Fragment>
         );
@@ -120,17 +129,41 @@ function LedgerCard({
   striped,
   grouped,
   reviewEnabled,
+  bulkEditEnabled,
+  keyboardEnabled,
+  undoEnabled,
 }: Readonly<{
   row: LedgerCardRow;
   striped: boolean;
   grouped: boolean;
   reviewEnabled: boolean;
+  bulkEditEnabled: boolean;
+  keyboardEnabled: boolean;
+  undoEnabled: boolean;
 }>) {
   const hasAnnotations =
     Boolean(row.note) || row.tags.length > 0 || row.splits.length > 0;
 
   return (
-    <li className={`flex items-start gap-3 px-4 py-3${striped ? " bg-panel-2" : ""}`}>
+    <li
+      data-ledger-row
+      data-ledger-row-id={row.id}
+      tabIndex={keyboardEnabled ? 0 : undefined}
+      aria-label={`Transaction ${row.merchant}`}
+      className={`flex items-start gap-3 px-4 py-3${striped ? " bg-panel-2" : ""}`}
+    >
+      {bulkEditEnabled && (
+        <>
+          <input
+            type="checkbox"
+            data-bulk-select
+            data-transaction-id={row.id}
+            aria-label={`Select ${row.merchant}`}
+            className="mt-1 h-4 w-4 shrink-0 accent-[var(--accent)]"
+          />
+          <input type="hidden" data-review-version={row.id} value={row.reviewVersion ?? "1"} />
+        </>
+      )}
       {reviewEnabled && (
         <div className="pt-1">
           <TransactionReviewCheckbox
@@ -220,6 +253,7 @@ function LedgerCard({
           categories={row.categoryOptions}
           providerCategory={row.providerCategory}
           override={row.override}
+          undoEnabled={undoEnabled}
         />
       </div>
     </li>

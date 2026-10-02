@@ -13,6 +13,7 @@ import TransactionOverrideControl, {
 } from "@/components/transactions/TransactionOverrideControl";
 import { cn } from "@/lib/cn";
 import { formatCurrency, titleCase } from "@/lib/format";
+import UndoToast from "@/components/ui/UndoToast";
 
 function EditorContainer({ detailsEnabled, ...props }: Readonly<ModalProps & { detailsEnabled: boolean }>) {
   return detailsEnabled ? <DetailPane open={props.open} onClose={props.onClose} titleId={props.titleId!}>{props.children}</DetailPane> : <Modal {...props} />;
@@ -45,6 +46,7 @@ interface TransactionEditorProps {
    * bind to the hidden copy.
    */
   idPrefix?: string;
+  undoEnabled?: boolean;
 }
 
 interface SplitRow {
@@ -280,6 +282,7 @@ export default function TransactionEditor({
   override = null,
   cleared: initialCleared,
   idPrefix = "",
+  undoEnabled = false,
 }: Readonly<TransactionEditorProps>) {
   const target = round2(Math.abs(transaction.amount));
   const inputId = (suffix: string) => `${idPrefix}${suffix}-${transaction.id}`;
@@ -289,6 +292,7 @@ export default function TransactionEditor({
     tags: initialTags,
     splits: initialSplits,
   });
+  const [savedCleared, setSavedCleared] = useState(initialCleared ?? false);
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState(saved.note);
   const [tagText, setTagText] = useState(saved.tags.join(", "));
@@ -296,11 +300,17 @@ export default function TransactionEditor({
   const [rows, setRows] = useState<SplitRow[]>(() => saved.splits.map(toSplitRow));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [undoState, setUndoState] = useState<{ restore: { note: string; tags: string[]; cleared: boolean }; expected: { note: string; tags: string[]; cleared: boolean } } | null>(null);
 
   useEffect(() => {
     const closeOther = (event: Event) => { if ((event as CustomEvent).detail !== `${idPrefix}${transaction.id}`) setOpen(false); };
+    const closeRequested = () => setOpen(false);
     window.addEventListener("fundflow:transaction-detail", closeOther);
-    return () => window.removeEventListener("fundflow:transaction-detail", closeOther);
+    window.addEventListener("fundflow:transaction-detail-close", closeRequested);
+    return () => {
+      window.removeEventListener("fundflow:transaction-detail", closeOther);
+      window.removeEventListener("fundflow:transaction-detail-close", closeRequested);
+    };
   }, [transaction.id, idPrefix]);
 
   function openEditor() {
@@ -358,6 +368,8 @@ export default function TransactionEditor({
         category: r.category.trim(),
         amount: round2(Number(r.amount)),
       }));
+      const restore = { note: saved.note, tags: saved.tags, cleared: savedCleared };
+      const expected = { note: note.trim(), tags: parsedTags, cleared };
       const res = await fetch("/api/transactions/annotate", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -374,6 +386,8 @@ export default function TransactionEditor({
         throw new Error(json.error ?? "Could not save.");
       }
       setSaved({ note: note.trim(), tags: parsedTags, splits: splitPayload });
+      setSavedCleared(cleared);
+      if (undoEnabled && JSON.stringify(saved.splits) === JSON.stringify(splitPayload)) setUndoState({ restore, expected });
       setOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save.");
@@ -394,6 +408,7 @@ export default function TransactionEditor({
             : "text-muted hover:bg-panel-hover hover:text-foreground",
         )}
         aria-label={detailsEnabled ? `Details for ${transaction.merchant}` : editorButtonLabel}
+        data-transaction-detail-trigger
       >
         {detailsEnabled ? "Details" : editorActionLabel}
       </button>
@@ -486,6 +501,7 @@ export default function TransactionEditor({
                 cashFlowClassification: override?.cashFlowClassification ?? null,
               }}
               categories={categories}
+              undoEnabled={undoEnabled}
             />
 
             {error && <p role="alert" className="mt-4 text-sm text-danger">{error}</p>}
@@ -505,6 +521,23 @@ export default function TransactionEditor({
               </Button>
             </div>
       </EditorContainer>
+      {undoState && undoEnabled && (
+        <UndoToast
+          message={`Updated ${transaction.merchant}`}
+          onUndo={async () => {
+            const response = await fetch("/api/transactions/undo-annotation", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ transaction_id: transaction.id, expected: undoState.expected, restore: undoState.restore }),
+            });
+            const json = (await response.json().catch(() => null)) as { error?: string } | null;
+            if (!response.ok) throw new Error(json?.error ?? "This transaction changed; undo was not applied.");
+            setSaved({ note: undoState.restore.note, tags: undoState.restore.tags, splits: saved.splits });
+            setSavedCleared(undoState.restore.cleared);
+            setUndoState(null);
+          }}
+        />
+      )}
     </>
   );
 }

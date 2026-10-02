@@ -39,6 +39,7 @@ export default function KeyboardShortcutsModal({
   const sections = [
     { label: "Navigation (Type sequentially)", items: SHORTCUTS.filter((s) => s.category === "Navigation") },
     { label: "General", items: SHORTCUTS.filter((s) => s.category === "General") },
+    { label: "Ledger", items: SHORTCUTS.filter((s) => s.category === "Ledger") },
   ];
 
   return (

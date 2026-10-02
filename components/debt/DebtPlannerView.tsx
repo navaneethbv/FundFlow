@@ -7,6 +7,7 @@ import type {
   DebtPlannerData,
   DebtStrategy,
 } from "@/lib/debt-data";
+import LoanDetail from "@/components/debt/LoanDetail";
 
 function plannerHref(
   strategy: DebtStrategy,
@@ -24,11 +25,17 @@ export default function DebtPlannerView({
   strategy,
   extraMonthly,
   scopeParam,
+  loanDetailsEnabled = false,
+  amortizationEnabled = false,
+  today,
 }: Readonly<{
   data: DebtPlannerData;
   strategy: DebtStrategy;
   extraMonthly: number;
   scopeParam?: string;
+  loanDetailsEnabled?: boolean;
+  amortizationEnabled?: boolean;
+  today?: string;
 }>) {
   if (data.debts.length === 0) {
     return (
@@ -262,6 +269,15 @@ export default function DebtPlannerView({
           </div>
         </div>
       </Panel>
+
+      {loanDetailsEnabled && amortizationEnabled && (
+        <LoanDetail
+          debt={data.debts.find((debt) => debt.planned)}
+          today={today ?? "1970-01-01"}
+          extraMonthly={extraMonthly}
+          enabled
+        />
+      )}
 
       {data.debts.some((debt) => !debt.planned) && (
         <Panel tone="warning" title="Not in the projection: APR needed">

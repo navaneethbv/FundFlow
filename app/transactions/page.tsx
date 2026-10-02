@@ -19,9 +19,11 @@ import TransactionEditor from "@/components/transactions/TransactionEditor";
 import MobileLedgerList, { type LedgerCardRow } from "@/components/transactions/MobileLedgerList";
 import SavedViewsBar from "@/components/transactions/SavedViewsBar";
 import BulkTagBar from "@/components/transactions/BulkTagBar";
+import BulkEditBar from "@/components/transactions/BulkEditBar";
 import AddTransactionModal from "@/components/transactions/AddTransactionModal";
 import ColumnsMenu from "@/components/transactions/ColumnsMenu";
 import TableToolbar from "@/components/transactions/TableToolbar";
+import LedgerKeyboardNavigation from "@/components/transactions/LedgerKeyboardNavigation";
 import TransactionQueryControls from "@/components/transactions/TransactionQueryControls";
 import TransactionSortMenu from "@/components/transactions/TransactionSortMenu";
 import { MerchantAvatar } from "@/components/ui/Avatar";
@@ -538,6 +540,9 @@ interface LedgerTableRowProps {
   reviewVersion?: string | null;
   reviewEligible?: boolean;
   reviewStateMissing?: boolean;
+  bulkEditEnabled?: boolean;
+  keyboardEnabled?: boolean;
+  undoEnabled?: boolean;
 }
 
 /**
@@ -565,9 +570,13 @@ function LedgerTableRow({
   reviewVersion = null,
   reviewEligible = false,
   reviewStateMissing = false,
+  bulkEditEnabled = false,
+  keyboardEnabled = false,
+  undoEnabled = false,
 }: Readonly<LedgerTableRowProps>) {
   const columnCount =
     (reviewEnabled ? 5 : 4) +
+    (bulkEditEnabled ? 1 : 0) +
     (visibleColumns.has("category") ? 1 : 0) +
     (visibleColumns.has("account") ? 1 : 0);
   const hasAnnotations = Boolean(note) || tags.length > 0 || splits.length > 0 || cleared;
@@ -608,10 +617,26 @@ function LedgerTableRow({
         </tr>
       )}
       <tr
+        data-ledger-row
+        data-ledger-row-id={row.id}
+        tabIndex={keyboardEnabled ? 0 : undefined}
+        aria-label={`Transaction ${merchant}`}
         className={`border-b border-panel-border last:border-0 hover:bg-panel-hover${
           zebraBand % 2 === 1 ? " bg-panel-2" : ""
         }`}
       >
+        {bulkEditEnabled && (
+          <td className="w-10 px-3 py-3 align-top text-center">
+            <input
+              type="checkbox"
+              data-bulk-select
+              data-transaction-id={row.id}
+              aria-label={`Select ${merchant}`}
+              className="h-4 w-4 accent-[var(--accent)]"
+            />
+            <input type="hidden" data-review-version={row.id} value={reviewVersion ?? "1"} />
+          </td>
+        )}
         {reviewEnabled && (
           <td className="w-10 px-3 py-3 align-top text-center">
             <TransactionReviewCheckbox
@@ -722,6 +747,7 @@ function LedgerTableRow({
               providerCategory={providerCategory}
               override={override}
               cleared={cleared}
+              undoEnabled={undoEnabled}
             />
           </div>
         </td>
@@ -1090,8 +1116,11 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                     }))}
                 />
               )}
+              <LedgerKeyboardNavigation enabled={isFeatureEnabled("ledgerKeyboardNavigation")}>
               <TableToolbar
                 bulkTagBar={<BulkTagBar transactionIds={rows.map((t) => t.id)} />}
+                bulkEditBar={<BulkEditBar enabled={isFeatureEnabled("bulkEdit")} />}
+                bulkEditEnabled={isFeatureEnabled("bulkEdit")}
                 sortMenu={<TransactionSortMenu key="sort" field={state.sort} direction={state.direction} entries={queryEntries} />}
                 columnsMenu={
                   transactionsParityEnabled ? (
@@ -1104,6 +1133,9 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                   rows={cardRows}
                   dayGroups={showDayGroups ? dayGroups : null}
                   reviewEnabled={transactionReviewEnabled}
+                  bulkEditEnabled={isFeatureEnabled("bulkEdit")}
+                  keyboardEnabled={isFeatureEnabled("ledgerKeyboardNavigation")}
+                  undoEnabled={isFeatureEnabled("undoToasts")}
                 />
               </div>
               <div className="hidden overflow-x-auto sm:block">
@@ -1114,6 +1146,9 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                         <th className="w-10 px-3 py-3 text-center">
                           <span className="sr-only">Select</span>
                         </th>
+                      )}
+                      {isFeatureEnabled("bulkEdit") && (
+                        <th className="w-10 px-3 py-3 text-center"><span className="sr-only">Select</span></th>
                       )}
                       <th className="px-4 py-3 font-semibold">Date</th>
                       <th className="px-4 py-3 font-semibold">Merchant</th>
@@ -1155,12 +1190,16 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                           reviewVersion={t.review_version != null ? String(t.review_version) : null}
                           reviewEligible={eligible}
                           reviewStateMissing={Boolean(t.review_state_missing)}
+                          bulkEditEnabled={isFeatureEnabled("bulkEdit")}
+                          keyboardEnabled={isFeatureEnabled("ledgerKeyboardNavigation")}
+                          undoEnabled={isFeatureEnabled("undoToasts")}
                         />
                       );
                     })}
                   </tbody>
                 </table>
               </div>
+              </LedgerKeyboardNavigation>
             </Panel>
 
         )}

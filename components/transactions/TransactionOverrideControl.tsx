@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 import { TRANSFER_GROUPS } from "@/lib/finance-domain";
+import UndoToast from "@/components/ui/UndoToast";
 
 type CashFlowClassification = "expense" | "income";
 
@@ -22,6 +23,7 @@ interface Props {
   providerCategory: string | null;
   initialOverride: TransactionOverride;
   categories: string[];
+  undoEnabled?: boolean;
 }
 
 function isProviderTransfer(providerCategory: string | null): boolean {
@@ -42,10 +44,12 @@ export default function TransactionOverrideControl({
   providerCategory,
   initialOverride,
   categories,
+  undoEnabled = false,
 }: Readonly<Props>) {
   const router = useRouter();
   const [suggestedCategory, setSuggestedCategory] = useState<string | null>(null);
   const [savedCategory, setSavedCategory] = useState(initialOverride.displayCategory ?? "");
+  const [savedClassification, setSavedClassification] = useState<CashFlowClassification | null>(initialOverride.cashFlowClassification ?? null);
   const [displayCategory, setDisplayCategory] = useState(
     initialOverride.displayCategory ?? "",
   );
@@ -63,6 +67,10 @@ export default function TransactionOverrideControl({
   const [message, setMessage] = useState<{ kind: "error" | "success"; text: string } | null>(
     null,
   );
+  const [undoState, setUndoState] = useState<{
+    restore: { displayCategory: string | null; cashFlowClassification: CashFlowClassification | null };
+    expected: { displayCategory: string | null; cashFlowClassification: CashFlowClassification | null };
+  } | null>(null);
 
   const providerIsTransfer = isProviderTransfer(providerCategory);
   const reclassifyingTransfer = providerIsTransfer && classification !== "";
@@ -83,9 +91,13 @@ export default function TransactionOverrideControl({
       });
       const json = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) throw new Error(json?.error ?? "Could not save the override.");
+      const restore = { displayCategory: savedCategory || null, cashFlowClassification: savedClassification };
+      const expected = { displayCategory: displayCategory.trim() || null, cashFlowClassification: classification || null };
       if (suggestionsEnabled && displayCategory.trim() && displayCategory.trim() !== savedCategory) setSuggestedCategory(displayCategory.trim());
       setSavedCategory(displayCategory.trim());
+      setSavedClassification(classification || null);
       setHasOverride(Boolean(displayCategory.trim() || classification));
+      if (undoEnabled) setUndoState({ restore, expected });
       setMessage({ kind: "success", text: "Override saved." });
       setConfirmed(false);
       router.refresh();
@@ -220,6 +232,26 @@ export default function TransactionOverrideControl({
         </Button>
       </div>
       {suggestedCategory && <RuleSuggestion transactionId={transactionId} category={suggestedCategory} onClose={() => { setSuggestedCategory(null); document.getElementById(inputId("display"))?.focus(); }} />}
+      {undoState && undoEnabled && (
+        <UndoToast
+          message="Classification updated"
+          onUndo={async () => {
+            const response = await fetch("/api/transactions/undo-override", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ transaction_id: transactionId, expected: undoState.expected, restore: undoState.restore }),
+            });
+            const json = (await response.json().catch(() => null)) as { error?: string } | null;
+            if (!response.ok) throw new Error(json?.error ?? "This transaction changed; undo was not applied.");
+            setDisplayCategory(undoState.restore.displayCategory ?? "");
+            setClassification(undoState.restore.cashFlowClassification ?? "");
+            setSavedCategory(undoState.restore.displayCategory ?? "");
+            setSavedClassification(undoState.restore.cashFlowClassification);
+            setUndoState(null);
+            router.refresh?.();
+          }}
+        />
+      )}
     </fieldset>
   );
 }
