@@ -61,14 +61,17 @@ Follow the plan's "Order" section:
 5. 1.5, 2.4, 4.3, 8.3, 8.4, 10, 12.1, 13.
 6. 9.7, then scoped API tokens (the 12.3 prerequisite), 12.2, 12.3.
 
-Work one item (or one tightly coupled pair) at a time.
+Work one item (or one tightly coupled pair) at a time within a delivery group of five or six features.
+The owner superseded the individual-PR rule on 2026-10-01; open one PR per group.
 If an item turns out to already exist, record that in the plan with the file path and move on rather than building a duplicate.
 
 ## Per-item loop
 
 1. **Branch** with a topic prefix that describes the change (`fix/pending-annotation-carryover`, `feat/import-profiles`, `ui/ledger-keyboard-nav`). Never name a tool or agent.
-   Independent items branch from up-to-date `main`.
-   An item that depends on an unmerged earlier item branches from that item's branch, opens its PR against that branch, and names the dependency in the PR description; once the base merges, rebase onto `main` and retarget the PR.
+   Create one branch for a group of five or six features; keep individual implementation commits focused.
+   Independent groups branch from up-to-date `main`.
+   Keep related prerequisites inside the group when practical.
+   A group that depends on an unmerged earlier group branches from that group, targets its branch, and names the dependency in the PR description; once the base merges, rebase onto `main` and retarget.
    Keep stacks shallow (at most three deep); if a stack would grow further, work on independent items while earlier PRs await approval.
 2. **Understand**: read the plan item, the comparison report row, the reference source at the pinned commit, and the FundFlow modules it touches.
 3. **Defects** (workstream 0): reproduce first, the way a user would hit it, with a failing test or sandbox run. If it does not reproduce, write up the evidence in the plan and skip the fix.
@@ -78,7 +81,7 @@ If an item turns out to already exist, record that in the plan with the file pat
 7. **Migrations**: add the SQL under `supabase/migrations/`, make it pass `migration-check.yml` locally if possible, and **do not apply it to production** unless the owner explicitly authorizes that step in the session. Record unapplied migrations in `docs/TODO.md`.
 8. **Verify**: `npm run lint`, `npx tsc --noEmit`, `npm run test:unit`, `npm run build`, `node scripts/validate_palette.js` when charts change, and a real browser journey at 375px and desktop including keyboard-only use. Integration tests only against a throwaway Supabase project with `TEST_SUPABASE_URL` set, never one holding real data.
 9. **Review** your own diff against the base for correctness, data integrity, security and RLS before opening the PR.
-10. **PR**: describe the behavior and the actual validation run, including anything not verified. No attribution, no "generated with" footer, no agent name anywhere in branch, commits, title or body.
+10. **PR**: after five or six features are implemented and the combined branch is verified, open one grouped PR; describe the behavior and the actual validation run, including anything not verified. No attribution, no "generated with" footer, no agent name anywhere in branch, commits, title or body.
 11. **Merge** only with owner authorization and green required checks. Never force-push shared branches or bypass branch protection.
 12. **Record**: mark the item done in the plan with the PR number, update `docs/TODO.md` for deferred pieces and unapplied migrations, and run `graphify update .`.
 

@@ -1,5 +1,14 @@
 # FundFlow — Future Todos
 
+## Current delivery grouping
+
+The owner requested five or six features per PR.
+Items 0.1, 0.3, and 1.1 through 1.4 are consolidated on `feat/import-foundation`; individual branch/stack notes below are superseded.
+Keep `importProfiles`, `importPreflight`, `importWizard`, and `importHistory` off pending the approved deferred acceptance.
+All four 20261001 program migrations remain unapplied to production.
+The unflagged defect code must not deploy before its matching migrations are explicitly authorized and applied.
+
+
 ## Reference adoption program: pending verification
 
 Item 0.2 did not reproduce double counting: the same-security lot/rollup batch fails atomically on the existing holdings unique key.

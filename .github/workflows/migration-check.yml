@@ -52,6 +52,7 @@ jobs:
 
       - name: Verify pending annotation carryover
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-pending-carryover.sql
+
       - name: Verify committed import layouts and owner isolation
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-import-profiles.sql
 

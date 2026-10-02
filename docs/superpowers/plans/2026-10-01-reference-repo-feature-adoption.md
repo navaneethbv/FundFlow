@@ -272,14 +272,18 @@ Each is a **hypothesis until reproduced**; reproduce before fixing.
 
 ## Delivery rules
 
-- One branch and PR per item or tight pair, topic-prefixed (`feat/`, `fix/`, `ui/`), never naming a tool or agent; no attribution lines.
+- Owner update, 2026-10-01: group five or six features into each branch and PR.
+  Implement and verify one item or tight pair at a time within that group.
+  Use topic prefixes (`feat/`, `fix/`, `ui/`), never tool or agent names, and no attribution lines.
 - New user tables: RLS gated on `session_not_revoked()` and `mfa_satisfied()`, `check-rls.sql` green, migration applied by hand and verified with `supabase migration list --linked`.
 - Client writes only on user-authored configuration tables, added to the CLAUDE.md list when introduced.
 - Every spend total applies `EXCLUDED_PFC`; Plaid sign convention; `YYYY-MM-DD` dates; joins on ids; "projection", never "prediction".
 - Every new feature is behind a flag in `lib/feature-flags.ts`, default off until verified.
   The flag gates **every entry point**, not just UI: route handlers return 404 when off, sync and import processing skip the new step, and cron or scheduled jobs no-op; tests cover the off state for each entry point.
   Confirmed defect fixes (workstream 0) and correctness fixes are **not** flagged; they ship enabled once reproduced and fixed.
-- Dependent work is stacked: an item that needs an unmerged earlier item branches from that item's branch, its PR targets that branch, and the dependency is named in the PR description; after the base merges, rebase onto `main` and retarget. Independent items branch from `main`.
+- Keep dependencies inside a group when practical.
+  Independent groups branch from current `main`; a dependent group may target its unmerged prerequisite group with that dependency documented.
+  Keep group stacks at most three deep, and retarget after the base merges.
 - Each PR runs lint, typecheck, unit tests, build, and a real browser journey at 375px and desktop with keyboard.
 
 ## Order
@@ -294,6 +298,14 @@ Each is a **hypothesis until reproduced**; reproduce before fixing.
 ## Cleanup
 
 Reference clones live outside the repository under `/private/tmp/fundflow-reference-*` and are deleted when the program ends.
+
+## Grouped delivery
+
+The owner replaced the per-item PR rule with groups of five or six features on 2026-10-01.
+Group 1 consolidates items 0.1, 0.3, 1.1, 1.2, 1.3, and 1.4 on `feat/import-foundation` from main `a19a0a6`.
+Individual PRs #192 through #197 are historical evidence and will be closed after the consolidated PR passes its checks.
+Group 2 is planned for 2.1, 2.2, 2.3, 3.1, 3.2, and 3.3, preserving the implementation order.
+The 2.1 worktree has no feature code yet and will not produce a separate PR.
 
 ## Execution checklist
 
