@@ -33,6 +33,14 @@ Local SQL checks used synthetic PostgreSQL records and Auth/Storage stand-ins; t
 The signed-in browser and integration journeys remain deferred under the approved disposable-project exception.
 - The execution checklist is in [the adoption plan](superpowers/plans/2026-10-01-reference-repo-feature-adoption.md#execution-checklist).
 
+## Reference adoption Group 4: ledger interactions and loan projections
+
+Items 6.2, 6.3, 6.4, 8.1, and 8.2 are implemented on `feat/ledger-interactions` and grouped in [PR #202](https://github.com/navaneethbv/FundFlow/pull/202) against `feat/insights-rules-ledger` (PR #200).
+The local checks pass at `07a7610`; hosted checks are pending.
+The five flags `ledgerKeyboardNavigation`, `bulkEdit`, `undoToasts`, `amortizationEngine`, and `loanDetails` remain off.
+No migration was added and no production migration, deployment, or flag flip was performed.
+The signed-in browser and integration journeys remain deferred under the approved disposable-project exception.
+
 ## Reference adoption item 0.3
 
 Migration `20261001110000_transaction_original_description.sql` is unapplied to production; deploy its sync writer only after authorized migration application.

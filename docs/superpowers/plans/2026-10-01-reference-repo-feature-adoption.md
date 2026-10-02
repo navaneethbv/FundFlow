@@ -310,6 +310,8 @@ Group 2 is implemented in `/private/tmp/fundflow-balance-quality` on `feat/data-
 PR #198 is ready with all checks passing at `a2eef7e`, but its merge and prerequisite production migrations are deferred by the owner.
 Group 3 is [PR #200](https://github.com/navaneethbv/FundFlow/pull/200), the six-item insights, rules, and transaction-detail batch on `feat/insights-rules-ledger`, based on PR #198's `feat/import-foundation` branch.
 No production migration or flag flip is included.
+Group 4 is [PR #202](https://github.com/navaneethbv/FundFlow/pull/202), containing items 6.2, 6.3, 6.4, 8.1, and 8.2 on `feat/ledger-interactions`, based on Group 3's branch.
+The grouped implementation has no migration and is open for hosted checks at `07a7610`.
 
 ## Execution checklist
 
@@ -352,9 +354,9 @@ No dependency changes are included in feature PRs.
 | 5.5 | Not started |  |
 | 5.6 | Not started |  |
 | 6.1 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `components/ui/DetailPane.tsx`, `components/transactions/TransactionEditor.tsx` |
-| 6.2 | Not started |  |
-| 6.3 | Not started |  |
-| 6.4 | Not started |  |
+| 6.2 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks pending | `components/transactions/LedgerKeyboardNavigation.tsx`, `lib/use-keyboard-shortcuts.ts` |
+| 6.3 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks pending | `components/transactions/BulkEditBar.tsx`, `app/api/transactions/bulk-edit/route.ts` |
+| 6.4 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks pending | `components/ui/UndoToast.tsx`, `app/api/transactions/undo-annotation/route.ts`, `app/api/transactions/undo-override/route.ts` |
 | 6.5 | Not started |  |
 | 6.6 | Not started |  |
 | 6.7 | Not started |  |
@@ -362,8 +364,8 @@ No dependency changes are included in feature PRs.
 | 7.1 | Not started |  |
 | 7.2 | Not started |  |
 | 7.3 | Not started |  |
-| 8.1 | Not started |  |
-| 8.2 | Not started |  |
+| 8.1 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks pending | `lib/amortization.ts`, `tests/unit/amortization.test.ts` |
+| 8.2 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks pending | `components/debt/LoanDetail.tsx`, `components/debt/DebtPlannerView.tsx` |
 | 8.3 | Not started |  |
 | 8.4 | Not started |  |
 | 9.1 | Not started |  |
