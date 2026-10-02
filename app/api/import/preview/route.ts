@@ -313,6 +313,7 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         file_name: file.name || "statement.csv",
         ...(prepared.layout ? { layout_profile: prepared.layout } : {}),
+        ...(isFeatureEnabled("importHistory") ? { history_profile_name: prepared.profile?.name ?? "Custom mapping" } : {}),
         status: "pending",
       })
       .select("id")
@@ -336,6 +337,7 @@ export async function POST(request: NextRequest) {
       tags: row.row.tags ?? [],
       row_index: index,
       status: row.flags.length > 0 ? "rejected" : "pending",
+      ...(isFeatureEnabled("importHistory") ? { review_flags: row.flags } : {}),
     }));
     const insertedRows = await stagePreviewRows(service, batchId, user.id, stagedRows);
 

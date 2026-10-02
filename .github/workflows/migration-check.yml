@@ -55,6 +55,9 @@ jobs:
       - name: Verify committed import layouts and owner isolation
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-import-profiles.sql
 
+      - name: Verify committed import history and owner isolation
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-import-history.sql
+
       - name: Verify PostgreSQL review benchmark queries
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/fixtures/transaction-review-benchmark.sql
 

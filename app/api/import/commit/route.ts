@@ -374,6 +374,15 @@ async function persistCommit(
   await persistTransactions(service, dbRows);
   await persistTransactionAnnotations(service, dbRows, userId);
 
+  if (isFeatureEnabled("importHistory")) {
+    const { error } = await service.rpc("finish_import_with_history", {
+      p_user_id: userId, p_batch_id: batchId,
+      p_rows: dbRows.map(row => ({ id: row.rowId, account_id: row.account_id, manual_account_id: row.manual_account_id })),
+    });
+    if (error) throw error;
+    return;
+  }
+
   for (const rowIdChunk of chunks(rowIds)) {
     const { error } = await service
       .from("import_review_rows")

@@ -591,3 +591,13 @@ Still open, all needing credentials or an owner decision rather than code:
 
 Finished todos and completed programs are in
 [`archive/TODO-completed.md`](archive/TODO-completed.md).
+
+## Reference adoption 1.4: import history
+
+- Keep `importHistory` off until disposable signed-in browser acceptance at 375px and desktop, including keyboard use, and Supabase integration are complete.
+- Migration `20261001130000_import_history.sql` is unapplied to production.
+  It adds history metadata and makes the already service-authored import tables read-only to authenticated clients.
+- History reports committed review batches, including old batches with missing metadata labelled Not recorded.
+  The legacy one-shot CSV endpoint creates no batches and remains outside this history.
+- Exact newly inserted ledger counts and guarded undo need the transaction provenance work in item 1.5; current imported-row counts explicitly include updates.
+- The local build exception remains in force; use the hosted build result separately from local unit, SQL, and component-browser checks.
