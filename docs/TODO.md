@@ -2,7 +2,7 @@
 
 ## Reference adoption: group 5 bills and membership value
 
-Items 3.4, 3.5, 3.6, 11.1, 11.2, and 11.3 are implemented together on `feat/bills-membership-value`; the grouped PR is pending.
+Items 3.4, 3.5, 3.6, 11.1, 11.2, and 11.3 are implemented together in [PR #203](https://github.com/navaneethbv/FundFlow/pull/203) on `feat/bills-membership-value`.
 The design and acceptance record is [the group 5 spec](superpowers/specs/2026-10-02-bills-membership-value.md).
 The additive migrations `20261002090000_recurring_price_changes.sql` and `20261002091000_card_value_terms.sql` are unapplied to production.
 Keep `billsViews`, `recurringPriceHistory`, `subscriptionCatalog`, `membershipCardValueModel`, `membershipCardValueCalculation`, and `membershipTermsEntry` off until the grouped PR passes hosted checks and the owner authorizes rollout.

@@ -14,7 +14,8 @@ The new migrations `20261002090000_recurring_price_changes.sql` and `20261002091
 Local verification passed `npm run lint`, `npx tsc --noEmit`, `npm run test:unit` (509 files / 5,595 tests), `npm run test:coverage` (511 files / 5,600 tests, 98.40% statements, 96.00% branches, 98.50% functions, 99.55% lines), placeholder `npm run build`, `node scripts/validate_palette.js app/globals.css`, and `npm run test:ui` (16 synthetic fixtures including 375px and 1440px bills/membership journeys).
 The signed-in Supabase browser journey and integration tests remain deferred under the approved disposable-target exception.
 No migration, production flag, deployment, merge, or credential change was performed.
-The grouped PR is the next step after committing this branch; once opened, wait for exact-head hosted checks and leave it unmerged.
+The grouped PR is [PR #203](https://github.com/navaneethbv/FundFlow/pull/203).
+Wait for exact-head hosted checks and leave it unmerged.
 
 ## 2026-10-01: group 2, six data-quality and spending-guidance features
 
