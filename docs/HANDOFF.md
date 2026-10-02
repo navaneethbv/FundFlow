@@ -12,7 +12,8 @@ Signed-in browser/integration acceptance and the local build exception remain as
 The primary checkout and its unrelated uncommitted edits are preserved.
 Combined validation passed: lint/types, 496 suites / 5,532 tests, coverage gates (98.46% statements, 96.11% branches, 98.60% functions, 99.57% lines), eight browser fixtures, and all three SQL regressions plus RLS checks.
 `graphify update .` completed with the previously documented optional SQL-parser limitation.
-Next: open the grouped PR and verify hosted checks before closing superseded PRs.
+The grouped review is PR #198: https://github.com/navaneethbv/FundFlow/pull/198.
+Next: verify its hosted checks, then close superseded PRs #192 through #197.
 Group 2 will contain 2.1, 2.2, 2.3, 3.1, 3.2, and 3.3.
 
 ## 2026-10-01: reference adoption program, item 0.1
