@@ -33,6 +33,8 @@ export interface AccountBalanceSnapshot {
   accountId: string | null;
   manualAccountId: string | null;
   snapshotDate: string;
+  historyLabel?: string;
+  provenance?: "observed" | "manual" | "estimated";
   currentBalance: number | null;
   availableBalance: number | null;
   currency: string;
@@ -76,6 +78,7 @@ export interface AccountsPageRow {
    * `spark` is already sliced from, just not truncated.
    */
   sparkLong: number[];
+  historyLabels?: string[];
   monthChange: BalanceChange | null;
   includeInNetWorth: boolean;
 }
@@ -103,7 +106,7 @@ export interface AccountsPageData {
     assets: CurrencyTotal[];
     liabilities: CurrencyTotal[];
     netWorth: CurrencyTotal[];
-    netWorthSeries: Record<string, Array<{ date: string; value: number }>>;
+    netWorthSeries: Record<string, Array<{ date: string; value: number; labels?: string[]; estimated?: boolean }>>;
     netWorthMonthChange: Record<string, BalanceChange | null>;
     /**
      * Assets/liabilities broken down by account group, keyed by currency —
@@ -308,6 +311,7 @@ function buildAccountRow(
     stale: freshness.stale,
     spark: values.slice(-30),
     sparkLong: values,
+    ...(history.some(point => point.historyLabel) ? { historyLabels: [...new Set(history.flatMap(point => point.historyLabel ? [point.historyLabel] : []))] } : {}),
     monthChange: changeFromSeries(rowSeries),
     includeInNetWorth: account.includeInNetWorth,
   };
@@ -378,6 +382,8 @@ function buildNetWorthSeries(
 ): AccountsPageData["summary"]["netWorthSeries"] {
   const accountById = new Map(accounts.map((account) => [account.id, account]));
   const seriesMaps = new Map<string, Map<string, number>>();
+  const labels = new Map<string, Set<string>>();
+  const estimated = new Set<string>();
   for (const snapshot of snapshots) {
     const id = sourceId(snapshot);
     if (!id || snapshot.currentBalance === null) continue;
@@ -391,12 +397,19 @@ function buildNetWorthSeries(
     const byDate = seriesMaps.get(account.currency) ?? new Map<string, number>();
     addAmount(byDate, snapshot.snapshotDate, signed);
     seriesMaps.set(account.currency, byDate);
+    if (snapshot.provenance === "estimated") estimated.add(`${account.currency}:${snapshot.snapshotDate}`);
+    if (snapshot.historyLabel) {
+      const key = `${account.currency}:${snapshot.snapshotDate}`;
+      const existing = labels.get(key) ?? new Set<string>();
+      existing.add(`${account.name}: ${snapshot.historyLabel}`);
+      labels.set(key, existing);
+    }
   }
   return Object.fromEntries([...seriesMaps]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([currency, byDate]) => {
       const series = [...byDate]
-        .map(([date, value]) => ({ date, value: round(value) }))
+        .map(([date, value]) => ({ date, value: round(value), ...(estimated.has(`${currency}:${date}`) ? { estimated: true } : {}), ...(labels.has(`${currency}:${date}`) ? { labels: [...labels.get(`${currency}:${date}`)!] } : {}) }))
         .sort((a, b) => a.date.localeCompare(b.date));
       return [currency, series];
     })) as AccountsPageData["summary"]["netWorthSeries"];

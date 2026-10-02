@@ -1,3 +1,7 @@
+import { isFeatureEnabled } from "@/lib/feature-flags";
+import { computeBudgetAllowance, type BudgetAllowance } from "@/lib/budget-allowance";
+import { loadPaydaySettings } from "@/lib/payday-data";
+import { paydayDates } from "@/lib/payday";
 import { loadRecurringInputs } from "@/lib/recurring-data";
 import { buildDashboardRecurring } from "@/lib/dashboard-recurring";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -161,6 +165,8 @@ export interface DashboardData {
     essentialsSplit: EssentialsSplit[];
     runwayMonths: number | null;
     paycheck: Paycheck | null;
+    budgetAllowance?: BudgetAllowance | null;
+    confirmedPayday?: { nextDate: string | null; amount: number | null };
     safeToSpend: SafeToSpend | null;
     priceDrift: MerchantPriceDrift;
     sinkingFunds: { items: SinkingFundPlan[]; totalMonthlySetAside: number };
@@ -1352,13 +1358,17 @@ export async function getDashboardData(
           })
           .reduce((sum, account) => sum + Number(account.current_balance ?? 0), 0),
       );
+  const confirmedSettings = isFeatureEnabled("paydaySettings") && userId
+    ? await loadPaydaySettings(supabase, userId) : null;
+  const confirmedNextDate = confirmedSettings ? paydayDates(confirmedSettings, monthDate(activeMonth, activeDay), 1)[0]! : null;
+  const confirmedHorizonDays = confirmedNextDate ? Math.ceil((Date.parse(confirmedNextDate) - Date.parse(monthDate(activeMonth, activeDay))) / 86400000) : 0;
   const cashFlowForecast = forecastCashFlow({
     // The forecast needs a number: an unknown balance degrades to an
     // explicitly zero-based projection while runway and Safe-to-Spend,
     // which take `cashBalance` directly, honestly report unknown.
     startingBalance: cashBalance ?? 0,
     asOf: monthDate(activeMonth, activeDay),
-    horizonDays: 30,
+    horizonDays: isFeatureEnabled("paydaySettings") ? Math.max(30, confirmedHorizonDays) : 30,
     items: recurring.forecastItems,
     lowBalanceThreshold: 500,
   });
@@ -1423,7 +1433,7 @@ export async function getDashboardData(
   const safeToSpend = computeSafeToSpend({
     cashBalance,
     asOf: insightsAsOf,
-    nextPayDate: paychecks.primary?.nextPayDate ?? null,
+    nextPayDate: isFeatureEnabled("paydaySettings") ? confirmedNextDate : paychecks.primary?.nextPayDate ?? null,
     upcomingExpenses: buildSafeToSpendUpcomingExpenses(
       cashFlowForecast.events,
       sinkingFunds.items,
@@ -1537,6 +1547,8 @@ export async function getDashboardData(
       essentialsSplit,
       runwayMonths,
       paycheck: paychecks.primary,
+      ...(isFeatureEnabled("paydaySettings") ? { confirmedPayday: { nextDate: confirmedNextDate, amount: confirmedSettings?.amount ?? null } } : {}),
+      ...(isFeatureEnabled("budgetDailyAllowance") ? { budgetAllowance: isCurrentMonth && !selectedAccountId && !options?.itemId && allAccounts.every(account => !account.iso_currency_code || account.iso_currency_code.toUpperCase() === "USD") ? computeBudgetAllowance({ today, limits: budgetEnvelopes.map(row => row.effectiveLimit), spent: currentMonthExpenses, nextPayday: confirmedNextDate }) : null } : {}),
       safeToSpend,
       priceDrift,
       sinkingFunds,

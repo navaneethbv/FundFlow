@@ -1,6 +1,34 @@
 # FundFlow Session Handoff
 
-Last updated: 2026-09-30. Read this first to resume.
+## 2026-10-01: group 2, six data-quality and spending-guidance features
+
+The owner deferred merging PR #198 and requested the next five or six features in one checklist and PR.
+Group 2 implements items 2.1, 2.2, 2.3, 3.1, 3.2, and 3.3 on `feat/data-quality-guidance` in `/private/tmp/fundflow-balance-quality`, based independently on main `a19a0a6`.
+The primary checkout's unrelated dirty files remain untouched.
+PR #198 is ready at `a2eef7e`, with its merge and prerequisite production migrations deferred.
+No admin exception applies to either PR; the earlier exception applied only to corrective PR #191.
+
+Implemented: owner-only balance-quality reviews and stale-history overlays; consolidated connection health; protected observed/manual/estimated account history; three-period paycheck funding; explicitly confirmed payday settings; a separate monthly budget daily allowance.
+The implementation checklist, contracts, references, and adaptations are in [the group spec](superpowers/specs/2026-10-01-data-quality-guidance.md) and [the adoption plan](superpowers/plans/2026-10-01-reference-repo-feature-adoption.md).
+All six feature flags default off, new pages/handlers are gated, and processing skips when disabled.
+Three new SQL migrations exist only in the branch and disposable local verification database, not production.
+No user data rewrite or dependency upgrade is included.
+
+Pinned reference reads for this group: Tallyo balance review/connection UI, Sure connection status/paycheck model and view, personal-finance-tracker payday/allowance, and KevFin observation precedence.
+Clones live under `/private/tmp/fundflow-reference-*` outside the repository and remain until the full program ends.
+No restricted reference code, text, fixtures, assets, rates, or visual styling was copied.
+
+Verification checkpoint: all 92 migrations apply on a fresh local PostgreSQL 17 database `adoption_group2` at 127.0.0.1:55439 using Auth/Storage schema stand-ins.
+RLS, balance decisions, provenance guards, and payday owner-policy SQL assertions pass.
+The production build passes with CI's non-secret public placeholders; lint and typecheck pass.
+Four component browser journeys pass at 375px/1440px in light/dark themes, with keyboard mutations, suggestion confirmation, source table, axe checks and no page overflow.
+Final local verification passes: 505 unit files and 5,566 tests at current and future clocks, with 98.40% statements, 96.03% branches, 98.40% functions, and 99.51% lines.
+Additional provider-bill exclusion coverage passes separately at both clocks.
+An earlier coverage shortfall and server-rendered estimate-title issue were fixed; thresholds were not changed.
+The owner-approved signed-in Supabase/browser deferral remains in effect; never point tests at the production-linked database or primary `.env.local`.
+Next: local verification and diff review are complete; commit and push only `HEAD:refs/heads/feat/data-quality-guidance` and open one PR with all six checklist items.
+Do not merge, deploy, enable flags, or apply production migrations.
+
 
 ## 2026-09-30: preserve integration tokens across sign-out
 

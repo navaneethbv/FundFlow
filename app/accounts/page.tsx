@@ -1,5 +1,9 @@
+import { historyProvenance, HISTORY_PROVENANCE_LABELS, type HistoryProvenance } from "@/lib/history-provenance";
+import { loadCarriedReviews } from "@/lib/balance-quality-data";
+import { applyBalanceReviewHistory } from "@/lib/balance-quality-history";
 import { accountDisplayLabel } from "@/lib/account-label";
 import Link from "next/link";
+import ButtonLink from "@/components/ui/ButtonLink";
 import { notFound } from "next/navigation";
 import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
@@ -78,6 +82,9 @@ type ManualAccountRow = {
 };
 
 interface SnapshotRow {
+  id?: string;
+  captured_at?: string;
+  provenance?: HistoryProvenance | null;
   account_id: string | null;
   manual_account_id: string | null;
   snapshot_date: string;
@@ -191,7 +198,7 @@ export default async function AccountsPage({
   let snapshotQuery = supabase
     .from("account_balance_snapshots")
     .select(
-      "account_id,manual_account_id,snapshot_date,current_balance,available_balance,iso_currency_code",
+      "account_id,manual_account_id,snapshot_date,current_balance,available_balance,iso_currency_code" + (isFeatureEnabled("balanceQualityReview") ? ",id,captured_at" : "") + (isFeatureEnabled("historyProvenance") ? ",provenance" : ""),
     )
     .gte("snapshot_date", historyStart(params.range))
     .order("snapshot_date");
@@ -282,9 +289,15 @@ export default async function AccountsPage({
       includeInNetWorth: account.include_in_net_worth,
     })),
   ];
-  const snapshots: AccountBalanceSnapshot[] = (
-    (snapshotResult.data ?? []) as SnapshotRow[]
+  const rawSnapshots = (
+    (snapshotResult.data ?? []) as unknown as SnapshotRow[]
   ).map((snapshot) => ({
+    id: snapshot.id,
+    observedAt: snapshot.captured_at,
+    ...(isFeatureEnabled("historyProvenance") ? {
+      provenance: historyProvenance(snapshot.provenance, snapshot.manual_account_id),
+      historyLabel: HISTORY_PROVENANCE_LABELS[historyProvenance(snapshot.provenance, snapshot.manual_account_id)],
+    } : {}),
     accountId: snapshot.account_id,
     manualAccountId: snapshot.manual_account_id,
     snapshotDate: snapshot.snapshot_date,
@@ -292,6 +305,8 @@ export default async function AccountsPage({
     availableBalance: numeric(snapshot.available_balance),
     currency: snapshot.iso_currency_code.toUpperCase(),
   }));
+  const carried = await loadCarriedReviews(supabase, user.id, rawSnapshots.flatMap(row => row.id ? [row.id] : []));
+  const snapshots: AccountBalanceSnapshot[] = applyBalanceReviewHistory(rawSnapshots, carried);
   const dashboardPrefs =
     profileResult.data?.dashboard_prefs &&
     typeof profileResult.data.dashboard_prefs === "object" &&
@@ -354,6 +369,7 @@ export default async function AccountsPage({
                 nothing to show. Rendering both mounts two Plaid Link
                 instances on one page, which Plaid explicitly calls
                 unsupported. */}
+            {isFeatureEnabled("balanceQualityReview") && <ButtonLink href="/accounts/balance-review">Balance review</ButtonLink>}
             {accounts.length > 0 && <ConnectBankButton />}
             {plaidAccounts.length > 0 && <RefreshButton />}
             {reconcileAccounts.length > 0 && <ReconcilePanel accounts={reconcileAccounts} />}

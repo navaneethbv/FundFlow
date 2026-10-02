@@ -28,6 +28,7 @@ export default function AccountRow({
         />
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{row.name}</p>
+          {row.historyLabels?.map(label => <p key={label} className="mt-1 text-xs text-muted">{label}</p>)}
           <p className="mt-1 text-xs text-muted">
             {titleCase(row.subtype ?? row.type) || "Manual account"}
           </p>

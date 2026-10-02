@@ -1,5 +1,7 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/service";
+import { isFeatureEnabled } from "@/lib/feature-flags";
+import { reviewDailyBalanceQuality } from "@/lib/balance-quality-data";
 import { logError } from "@/lib/log";
 
 export type SnapshotPlaidAccount = {
@@ -24,6 +26,7 @@ export interface AccountBalanceSnapshotInsert {
   available_balance: number | null;
   iso_currency_code: string;
   captured_at: string;
+  provenance?: "observed" | "manual";
 }
 
 function assertDate(value: string): void {
@@ -62,6 +65,8 @@ export function shapeDailyAccountSnapshots(input: {
   manualAccounts: SnapshotManualAccount[];
   snapshotDate: string;
   capturedAt?: string;
+  includeMissingBalances?: boolean;
+  recordProvenance?: boolean;
 }): AccountBalanceSnapshotInsert[] {
   assertDate(input.snapshotDate);
   const capturedAt = input.capturedAt ?? new Date().toISOString();
@@ -71,7 +76,7 @@ export function shapeDailyAccountSnapshots(input: {
 
   const plaidRows = input.plaidAccounts.flatMap((account) => {
     const currentBalance = numberOrNull(account.current_balance);
-    if (currentBalance === null) return [];
+    if (currentBalance === null && !input.includeMissingBalances) return [];
     return [
       {
         user_id: input.userId,
@@ -82,6 +87,7 @@ export function shapeDailyAccountSnapshots(input: {
         available_balance: numberOrNull(account.available_balance),
         iso_currency_code: currencyCode(account.iso_currency_code),
         captured_at: capturedAt,
+        ...(input.recordProvenance ? { provenance: "observed" as const } : {}),
       },
     ];
   });
@@ -99,6 +105,7 @@ export function shapeDailyAccountSnapshots(input: {
         available_balance: null,
         iso_currency_code: "USD",
         captured_at: capturedAt,
+        ...(input.recordProvenance ? { provenance: "manual" as const } : {}),
       },
     ];
   });
@@ -128,6 +135,8 @@ export async function writeDailyAccountSnapshots(
   const rows = shapeDailyAccountSnapshots({
     userId,
     snapshotDate,
+    includeMissingBalances: isFeatureEnabled("balanceQualityReview"),
+    recordProvenance: isFeatureEnabled("historyProvenance"),
     // One timestamp describes the complete account read above. Re-upserting a
     // same-day snapshot must refresh this boundary along with its balance.
     capturedAt: new Date().toISOString(),
@@ -142,6 +151,7 @@ export async function writeDailyAccountSnapshots(
   });
   if (error) throw error;
 
+  await reviewDailyBalanceQuality(service, userId, snapshotDate);
   return { written: rows.length, snapshotDate };
 }
 

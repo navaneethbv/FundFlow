@@ -91,6 +91,18 @@ export const FEATURE_FLAG_DEFAULTS = {
    * Off by default until migration is deployed and acceptance tests pass.
    */
   transactionReview: false,
+  /** Reference adoption 2.1: owner review of suspect raw observations. */
+  balanceQualityReview: false,
+  /** Reference adoption 2.2: all bank connections and their recovery action. */
+  connectionHealth: false,
+  /** Reference adoption 2.3: durable source labels for account history. */
+  historyProvenance: false,
+  /** Reference adoption 3.1: funding across the next three declared pay periods. */
+  paycheckPlanner: false,
+  /** Reference adoption 3.2: user-confirmed paydays, never silently inferred. */
+  paydaySettings: false,
+  /** Reference adoption 3.3: monthly budget pace, separate from cash. */
+  budgetDailyAllowance: false,
 } as const;
 
 export type FeatureFlag = keyof typeof FEATURE_FLAG_DEFAULTS;
