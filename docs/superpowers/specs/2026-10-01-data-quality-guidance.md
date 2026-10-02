@@ -1,6 +1,6 @@
 # Data quality and spending guidance: group 2
 
-One PR, based on main independently of deferred PR #198.
+[PR #199](https://github.com/navaneethbv/FundFlow/pull/199), based on main independently of deferred PR #198.
 No merge, production migration, flag change, or deploy is authorized.
 
 ## Implementation checklist

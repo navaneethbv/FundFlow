@@ -26,7 +26,9 @@ Final local verification passes: 505 unit files and 5,566 tests at current and f
 Additional provider-bill exclusion coverage passes separately at both clocks.
 An earlier coverage shortfall and server-rendered estimate-title issue were fixed; thresholds were not changed.
 The owner-approved signed-in Supabase/browser deferral remains in effect; never point tests at the production-linked database or primary `.env.local`.
-Next: local verification and diff review are complete; commit and push only `HEAD:refs/heads/feat/data-quality-guidance` and open one PR with all six checklist items.
+[PR #199](https://github.com/navaneethbv/FundFlow/pull/199) is open with all six checklist items and explicit verification limits.
+Implementation commit: `9b27f90`; topic branch was pushed using only `HEAD:refs/heads/feat/data-quality-guidance`.
+Next: monitor hosted checks at the final head, address in-scope findings, and report separately from the deferred rollout.
 Do not merge, deploy, enable flags, or apply production migrations.
 
 

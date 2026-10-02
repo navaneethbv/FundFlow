@@ -305,7 +305,7 @@ The owner replaced the per-item PR rule with groups of five or six features on 2
 Group 1 is [PR #198](https://github.com/navaneethbv/FundFlow/pull/198), consolidating items 0.1, 0.3, 1.1, 1.2, 1.3, and 1.4 on `feat/import-foundation` from main `a19a0a6`.
 Individual PRs #192 through #197 are closed as superseded.
 All hosted checks on the consolidated PR passed at `643eda8`, including build, migration/RLS, security/static analysis, preview, and smoke tests.
-Group 2 contains 2.1, 2.2, 2.3, 3.1, 3.2, and 3.3, preserving the implementation order.
+Group 2 is [PR #199](https://github.com/navaneethbv/FundFlow/pull/199) and contains 2.1, 2.2, 2.3, 3.1, 3.2, and 3.3, preserving the implementation order.
 Group 2 is implemented in `/private/tmp/fundflow-balance-quality` on `feat/data-quality-guidance`; see `docs/superpowers/specs/2026-10-01-data-quality-guidance.md` for its six-item checklist.
 PR #198 is ready with all checks passing at `a2eef7e`, but its merge and prerequisite production migrations are deferred by the owner.
 
@@ -330,13 +330,13 @@ No dependency changes are included in feature PRs.
 | 1.3 | Group 1 ready; merge deferred; checks passed at `a2eef7e` | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
 | 1.4 | Group 1 ready; merge deferred; checks passed at `a2eef7e` | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
 | 1.5 | Not started |  |
-| 2.1 | Group 2 implemented; local verification passed | `lib/balance-quality.ts`, `app/accounts/balance-review/page.tsx` |
-| 2.2 | Group 2 implemented; local verification passed | `app/settings/connections/page.tsx` |
-| 2.3 | Group 2 implemented; local verification passed | `lib/history-provenance-writer.ts` |
+| 2.1 | Implemented in [#199](https://github.com/navaneethbv/FundFlow/pull/199); local checks passed; rollout deferred | `lib/balance-quality.ts`, `app/accounts/balance-review/page.tsx` |
+| 2.2 | Implemented in [#199](https://github.com/navaneethbv/FundFlow/pull/199); local checks passed; rollout deferred | `app/settings/connections/page.tsx` |
+| 2.3 | Implemented in [#199](https://github.com/navaneethbv/FundFlow/pull/199); local checks passed; rollout deferred | `lib/history-provenance-writer.ts` |
 | 2.4 | Not started |  |
-| 3.1 | Group 2 implemented; local verification passed | `app/recurring/paychecks/page.tsx` |
-| 3.2 | Group 2 implemented; local verification passed | `app/settings/payday/page.tsx` |
-| 3.3 | Group 2 implemented; local verification passed | `lib/budget-allowance.ts` |
+| 3.1 | Implemented in [#199](https://github.com/navaneethbv/FundFlow/pull/199); local checks passed; rollout deferred | `app/recurring/paychecks/page.tsx` |
+| 3.2 | Implemented in [#199](https://github.com/navaneethbv/FundFlow/pull/199); local checks passed; rollout deferred | `app/settings/payday/page.tsx` |
+| 3.3 | Implemented in [#199](https://github.com/navaneethbv/FundFlow/pull/199); local checks passed; rollout deferred | `lib/budget-allowance.ts` |
 | 3.4 | Not started |  |
 | 3.5 | Not started |  |
 | 3.6 | Not started |  |

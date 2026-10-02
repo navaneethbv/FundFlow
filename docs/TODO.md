@@ -3,7 +3,7 @@
 ## Reference adoption: group 2 rollout gates
 
 The six-item checklist is in [the group 2 spec](superpowers/specs/2026-10-01-data-quality-guidance.md).
-Items 2.1, 2.2, 2.3, 3.1, 3.2, and 3.3 are implemented together on `feat/data-quality-guidance`, independently of deferred PR #198.
+Items 2.1, 2.2, 2.3, 3.1, 3.2, and 3.3 are implemented together in [PR #199](https://github.com/navaneethbv/FundFlow/pull/199) on `feat/data-quality-guidance`, independently of deferred PR #198.
 The following migrations are unapplied to production: `20261001140000_balance_quality_reviews.sql`, `20261001150000_history_provenance.sql`, and `20261001160000_payday_settings.sql`.
 Keep all six flags off until the owner authorizes rollout after acceptance: `balanceQualityReview`, `connectionHealth`, `historyProvenance`, `paycheckPlanner`, `paydaySettings`, and `budgetDailyAllowance`.
 Run signed-in journeys at 375px and desktop, including keyboard use and Supabase Auth/MFA/revocation integration, once an approved disposable project exists.
