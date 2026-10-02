@@ -316,9 +316,11 @@ Group 5 is [PR #203](https://github.com/navaneethbv/FundFlow/pull/203), implemen
 It contains 3.4, 3.5, 3.6, 11.1, 11.2, and 11.3; its grouped design and acceptance evidence are in `docs/superpowers/specs/2026-10-02-bills-membership-value.md`.
 The owner merged PR #203 at an earlier head before its original analysis and lint-build checks were green.
 The latest quality fixes remain on `feat/bills-membership-value` at `5264d68` and are the dependency for the current group.
-Group 6 implements 5.4, 5.5, 5.6, 6.5, 6.6, and 6.7 on `feat/rules-transaction-tools`.
+Group 6 is [PR #204](https://github.com/navaneethbv/FundFlow/pull/204) and implements 5.4, 5.5, 5.6, 6.5, 6.6, and 6.7 on `feat/rules-transaction-tools`.
 Its grouped design and acceptance evidence are in `docs/superpowers/specs/2026-10-02-rules-transactions.md`.
 The merchant merge acceptance is adapted to FundFlow's schema: `category_overrides` stores category-to-category mappings and has no merchant key, so it is left untouched rather than rewriting unrelated categories.
+The five maintainability findings and the reported Codacy security-rule crashes have local corrective changes and regression evidence.
+The next grouped checklist starts only after all PR #204 checks pass, as requested by the owner on 2026-10-02.
 
 ## Execution checklist
 
@@ -357,16 +359,16 @@ No dependency changes are included in feature PRs.
 | 5.1 | Not started |  |
 | 5.2 | Not started |  |
 | 5.3 | Not started |  |
-| 5.4 | Group 6 implemented locally; grouped PR pending hosted checks | `lib/plaid-category-mapping.ts`, `components/settings/PlaidCategoryMappingSection.tsx` |
-| 5.5 | Group 6 implemented locally; grouped PR pending hosted checks | `lib/bayes-categorizer.ts`, `app/api/categorization/bayes/route.ts` |
-| 5.6 | Group 6 implemented locally; grouped PR pending hosted checks | `app/merchants/page.tsx`, `app/api/merchants/merge/route.ts`, `20261002100000_rules_transactions_adoption.sql` |
+| 5.4 | Implemented in PR #204; corrective hosted checks pending | `lib/plaid-category-mapping.ts`, `components/settings/PlaidCategoryMappingSection.tsx` |
+| 5.5 | Implemented in PR #204; corrective hosted checks pending | `lib/bayes-categorizer.ts`, `app/api/categorization/bayes/route.ts` |
+| 5.6 | Implemented in PR #204; corrective hosted checks pending | `app/merchants/page.tsx`, `app/api/merchants/merge/route.ts`, `20261002100000_rules_transactions_adoption.sql` |
 | 6.1 | Not started |  |
 | 6.2 | Not started |  |
 | 6.3 | Not started |  |
 | 6.4 | Not started |  |
-| 6.5 | Group 6 implemented locally; grouped PR pending hosted checks | `components/transactions/ProjectedLedgerSection.tsx` |
-| 6.6 | Group 6 implemented locally; grouped PR pending hosted checks | `components/transactions/TransactionCalendar.tsx`, `lib/transaction-calendar.ts` |
-| 6.7 | Group 6 implemented locally; grouped PR pending hosted checks | `components/transactions/AddTransactionModal.tsx` |
+| 6.5 | Implemented in PR #204; corrective hosted checks pending | `components/transactions/ProjectedLedgerSection.tsx` |
+| 6.6 | Implemented in PR #204; corrective hosted checks pending | `components/transactions/TransactionCalendar.tsx`, `lib/transaction-calendar.ts` |
+| 6.7 | Implemented in PR #204; corrective hosted checks pending | `components/transactions/AddTransactionModal.tsx` |
 | 6.8 | Not started |  |
 | 7.1 | Not started |  |
 | 7.2 | Not started |  |

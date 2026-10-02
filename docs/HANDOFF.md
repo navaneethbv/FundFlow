@@ -10,12 +10,23 @@ The migration `20261002100000_rules_transactions_adoption.sql` adds the user-aut
 It is unapplied to production.
 All six new feature flags are default off.
 
-Local checks passed targeted unit tests, lint, typecheck, palette validation, and diff whitespace checks before the final build and full unit run.
-The local migration lint is blocked by the missing Docker/Postgres target.
-The signed-in Supabase journey and integration tests remain deferred under the disposable-target exception.
+The grouped review is [PR #204](https://github.com/navaneethbv/FundFlow/pull/204), against `feat/bills-membership-value`.
+At `354f0b1`, CI, migration/RLS verification, Sonar's quality gate, preview and smoke checks passed; Sonar still listed five maintainability findings and Codacy failed with analyzer errors.
+The corrective change extracts bounded query loading, column selection, pagination recovery, and merchant aggregation helpers; simplifies Bayes messages; applies the supplied review-refresh quick fix; and handles rejected budget-template, household and Bayes requests with user-visible errors.
+Codacy's `security-node/detect-unhandled-async-errors` crash reproduced locally on the three reported files and the Bayes button.
+All four now pass the same rule without disabling it.
+The large-data QA script marks a failed journey before cleanup and rethrows the error to its existing outer handler; it was syntax-checked only and never executed against a database.
 
-Next step is to run the placeholder production build and full unit suite, refresh graphify, then push the grouped branch and open one PR against `feat/bills-membership-value`.
-Do not merge, apply the migration, deploy, or enable the flags without owner authorization.
+Local verification passed lint, typecheck, targeted regressions, the placeholder production build, palette validation and all 16 synthetic browser fixtures.
+The full coverage run passed 517 test files and 5,649 tests, with 98.41% statements, 96.02% branches, 98.53% functions and 99.55% lines.
+Twenty-two integration files and three credential-dependent tests were skipped; none of those results proves Supabase integration.
+Corrective hosted checks remain pending until the new head is analyzed.
+The signed-in Supabase journey and integration tests remain deferred under the disposable-target exception.
+The migration remains unapplied to production and all six flags remain off.
+
+Next step is to push the corrective commit and inspect every hosted check at the new head.
+The owner's latest instruction is to start the next grouped checklist only after all PR checks pass.
+Do not merge, apply production migrations, deploy, or enable flags without owner authorization.
 
 ## 2026-10-02: group 5 bills and membership value
 

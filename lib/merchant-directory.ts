@@ -18,22 +18,72 @@ export interface MerchantSourceRow {
   pfc_primary: string | null;
 }
 
-export function buildMerchantDirectory(rows: readonly MerchantSourceRow[]): MerchantDirectoryRow[] {
+function transferCategory(value: string | null): string {
+  return value?.toUpperCase() ?? "";
+}
+
+function rowCategory(row: MerchantSourceRow): string | null {
+  if (
+    !row.pfc_primary ||
+    TRANSFER_GROUPS.has(transferCategory(row.pfc_primary))
+  )
+    return null;
+  return row.pfc_primary;
+}
+
+function countsAsOutflow(row: MerchantSourceRow): boolean {
+  return (
+    Number(row.amount) > 0 &&
+    !TRANSFER_GROUPS.has(transferCategory(row.pfc_primary))
+  );
+}
+
+function updateMerchantRow(
+  existing: MerchantDirectoryRow,
+  source: MerchantSourceRow,
+  amount: number,
+  category: string | null,
+): void {
+  if (countsAsOutflow(source)) existing.total += amount;
+  existing.count += 1;
+  if (source.date > existing.lastSeen) existing.lastSeen = source.date;
+  if (!existing.category && category) existing.category = category;
+}
+
+function createMerchantRow(
+  merchant: string,
+  source: MerchantSourceRow,
+  amount: number,
+  category: string | null,
+): MerchantDirectoryRow {
+  return {
+    id: merchant,
+    merchant,
+    total: countsAsOutflow(source) ? amount : 0,
+    count: 1,
+    lastSeen: source.date,
+    category,
+  };
+}
+
+export function buildMerchantDirectory(
+  rows: readonly MerchantSourceRow[],
+): MerchantDirectoryRow[] {
   const grouped = new Map<string, MerchantDirectoryRow>();
   for (const row of rows) {
-    const merchant = (row.merchant_name ?? row.name ?? "Unknown").trim() || "Unknown";
+    const merchant =
+      (row.merchant_name ?? row.name ?? "Unknown").trim() || "Unknown";
     const existing = grouped.get(merchant);
     const amount = Number(row.amount);
-    const category = row.pfc_primary && !TRANSFER_GROUPS.has(row.pfc_primary.toUpperCase()) ? row.pfc_primary : null;
-    const countsAsOutflow = amount > 0 && !TRANSFER_GROUPS.has((row.pfc_primary ?? "").toUpperCase());
+    const category = rowCategory(row);
     if (existing) {
-      existing.total += countsAsOutflow ? amount : 0;
-      existing.count += 1;
-      if (row.date > existing.lastSeen) existing.lastSeen = row.date;
-      if (!existing.category && category) existing.category = category;
+      updateMerchantRow(existing, row, amount, category);
     } else {
-      grouped.set(merchant, { id: merchant, merchant, total: countsAsOutflow ? amount : 0, count: 1, lastSeen: row.date, category });
+      grouped.set(merchant, createMerchantRow(merchant, row, amount, category));
     }
   }
-  return [...grouped.values()].sort((left, right) => right.total - left.total || left.merchant.localeCompare(right.merchant));
+  return [...grouped.values()].sort(
+    (left, right) =>
+      right.total - left.total || left.merchant.localeCompare(right.merchant),
+  );
 }

@@ -38,6 +38,7 @@ import {
   parseLedgerQuery,
   savedLedgerViewParams,
   type LedgerRawSearchParams,
+  type LedgerQueryState,
   type LedgerReviewFilter,
 } from "@/lib/ledger-query";
 import {
@@ -826,6 +827,37 @@ function ledgerEmptyMessage(review: LedgerReviewFilter, globalCount: number | nu
   return { title: "No transactions yet", description: "Connect an account or add a transaction to begin." };
 }
 
+function ledgerColumns(transactionsParityEnabled: boolean, transactionReviewEnabled: boolean): string {
+  let columns = "id, date, amount, iso_currency_code, merchant_name, name, pfc_primary, pfc_detailed, pending, account_id";
+  if (transactionsParityEnabled) columns += ", manual_account_id, source";
+  if (transactionReviewEnabled) columns += ", review_status, review_version, reviewed_at, review_eligible, review_state_missing";
+  return columns;
+}
+
+async function loadCategoryMappings(supabase: TransactionsSupabase, ownerId: string, enabled: boolean) {
+  if (!enabled) return { data: [], error: null };
+  return supabase.from("plaid_category_mappings").select("pfc_detailed,display_category")
+    .eq("user_id", ownerId).order("pfc_detailed");
+}
+
+async function loadProjectedItems(supabase: TransactionsSupabase, ownerId: string, today: string, enabled: boolean): Promise<ProjectedLedgerItem[]> {
+  if (!enabled) return [];
+  const { data } = await supabase.from("scheduled_transactions").select("id,scheduled_date,merchant,amount,kind")
+    .eq("user_id", ownerId).eq("status", "scheduled").gte("scheduled_date", today).order("scheduled_date").limit(50);
+  return ((data ?? []) as Array<{ id: string; scheduled_date: string; merchant: string; amount: number | string; kind: "debit" | "credit" }>).map((row) => ({
+    id: row.id,
+    date: row.scheduled_date,
+    merchant: row.merchant,
+    amount: Math.abs(Number(row.amount)),
+    kind: row.kind,
+  }));
+}
+
+function redirectInvalidLedgerPage(state: LedgerQueryState, ledgerError: string, totalPages: number): void {
+  if (ledgerError || state.page <= totalPages) return;
+  redirect(ledgerHref(ledgerQueryEntries(state), { page: totalPages > 1 ? String(totalPages) : null }, { resetPage: false }));
+}
+
 export default async function TransactionsPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
   const transactionReviewEnabled = isFeatureEnabled("transactionReview");
@@ -860,9 +892,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
       .order("created_at"),
     loadReviewSummary(supabase, ownerId, transactionReviewEnabled),
   ]);
-  const categoryMappingResult = plaidCategoryMappingsEnabled
-    ? await supabase.from("plaid_category_mappings").select("pfc_detailed,display_category").eq("user_id", ownerId).order("pfc_detailed")
-    : { data: [], error: null };
+  const categoryMappingResult = await loadCategoryMappings(supabase, ownerId, plaidCategoryMappingsEnabled);
   const categoryMappings = buildPlaidCategoryMap((categoryMappingResult.data ?? []).map((row) => ({ pfcDetailed: row.pfc_detailed as string, displayCategory: row.display_category as string })));
   const savedViews = ((savedViewsResult.data ?? []) as Array<{
     id: string;
@@ -915,14 +945,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   // Merchant rules recategorize/rename rows in-app, so a `category`/`merchant`
   // filter can't be expressed in SQL once such rules exist. In that case fetch
   // the rule-independent scope and filter on the rules-applied values instead.
-  let baseColumns = "id, date, amount, iso_currency_code, merchant_name, name, pfc_primary, pfc_detailed, pending, account_id";
-  if (transactionsParityEnabled) {
-    baseColumns = `${baseColumns}, manual_account_id, source`;
-  }
-  if (transactionReviewEnabled) {
-    baseColumns = `${baseColumns}, review_status, review_version, reviewed_at, review_eligible, review_state_missing`;
-  }
-  const columns: string = baseColumns;
+  const columns = ledgerColumns(transactionsParityEnabled, transactionReviewEnabled);
   const viewerToday = await resolveViewerToday(supabase, ownerId);
   const calendarMonth = month || viewerToday.slice(0, 7);
   const effectiveMonth = state.view === "calendar" ? calendarMonth : month;
@@ -949,10 +972,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     value: account.id,
     label: accountLabelsById.get(account.id) ?? account.name,
   }));
-  const projectedResult = projectedLedgerEnabled
-    ? await supabase.from("scheduled_transactions").select("id,scheduled_date,merchant,amount,kind").eq("user_id", ownerId).eq("status", "scheduled").gte("scheduled_date", viewerToday).order("scheduled_date").limit(50)
-    : { data: [], error: null };
-  const projectedItems = ((projectedResult.data ?? []) as Array<{ id: string; scheduled_date: string; merchant: string; amount: number | string; kind: "debit" | "credit" }>).map((row): ProjectedLedgerItem => ({ id: row.id, date: row.scheduled_date, merchant: row.merchant, amount: Math.abs(Number(row.amount)), kind: row.kind }));
+  const projectedItems = await loadProjectedItems(supabase, ownerId, viewerToday, projectedLedgerEnabled);
   const ledgerRows = await loadLedgerRows({
     supabase,
     state,
@@ -968,9 +988,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   const { rows, total, filterOptions } = ledgerRows;
   ledgerError = ledgerRows.ledgerError;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  if (!ledgerError && state.page > totalPages) {
-    redirect(ledgerHref(ledgerQueryEntries(state), { page: totalPages > 1 ? String(totalPages) : null }, { resetPage: false }));
-  }
+  redirectInvalidLedgerPage(state, ledgerError, totalPages);
 
   // User annotations (note/tags) and category splits for the visible rows.
   // `transaction_splits` is readable for any transaction the caller can see,

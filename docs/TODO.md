@@ -2,12 +2,14 @@
 
 ## Reference adoption: group 6 rules and transaction tools
 
-Items 5.4 to 5.6 and 6.5 to 6.7 are implemented together on `feat/rules-transaction-tools`.
+Items 5.4 to 5.6 and 6.5 to 6.7 are implemented together in [PR #204](https://github.com/navaneethbv/FundFlow/pull/204) on `feat/rules-transaction-tools`.
 The design and acceptance record is [the group 6 spec](superpowers/specs/2026-10-02-rules-transactions.md).
 The migration `20261002100000_rules_transactions_adoption.sql` is unapplied to production.
 Keep `plaidCategoryMappings`, `bayesCategorization`, `merchantsPage`, `projectedLedgerRows`, `transactionCalendar`, and `quickAddTransaction` off until the grouped PR passes hosted checks and the owner authorizes rollout.
 Local Supabase migration lint could not run because Docker and a local Postgres target are unavailable.
 The signed-in browser journey and integration tests remain deferred until the owner provides a disposable Supabase project with `TEST_SUPABASE_URL`.
+Clear the five reported Sonar maintainability findings and Codacy analyzer errors at the corrective PR head before starting the next grouped checklist.
+The reported security-rule crashes reproduce locally and the affected files now pass that rule; hosted reanalysis is still required.
 
 ## Reference adoption: group 5 bills and membership value
 

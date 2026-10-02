@@ -160,15 +160,18 @@ export function ledgerQueryEntries(
     entries.push(["direction", state.direction]);
   }
   if (state.page > 1) entries.push(["page", String(state.page)]);
-  if (state.columnsSubmitted) {
-    entries.push(["colsSubmitted", "1"]);
-    for (const column of LEDGER_COLUMNS) {
-      if (state.columns.has(column)) entries.push(["col", column]);
-    }
-  }
+  entries.push(...ledgerColumnEntries(state));
   if (state.view === "calendar") entries.push(["view", "calendar"]);
 
   return entries;
+}
+
+function ledgerColumnEntries(state: LedgerQueryState): LedgerQueryEntry[] {
+  if (!state.columnsSubmitted) return [];
+  return [
+    ["colsSubmitted", "1"],
+    ...LEDGER_COLUMNS.filter((column) => state.columns.has(column)).map((column): LedgerQueryEntry => ["col", column]),
+  ];
 }
 
 export function ledgerHref(
