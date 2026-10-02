@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const profileFlag = vi.hoisted(() => ({ enabled: false }));
-vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled: () => profileFlag.enabled }));
+const profileFlag = vi.hoisted(() => ({ enabled: false, history: false }));
+vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled: (flag: string) => flag === "importHistory" ? profileFlag.history : profileFlag.enabled }));
 const mockInvalidate = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/dashboard-cache", () => ({ invalidateDashboardCache: mockInvalidate }));
 
@@ -187,6 +187,7 @@ describe("Import API Routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     profileFlag.enabled = false;
+    profileFlag.history = false;
     mockServiceClient.rpc.mockReset();
     mockDetectSourceFormat.mockReturnValue("csv");
     mockLooksLikeOfx.mockReturnValue(false);
@@ -1024,6 +1025,25 @@ function serviceStubWith(
       }
       expect(mockRefreshInferredRecurringForUser).toHaveBeenCalledWith("u1");
       expect(mockInvalidate).toHaveBeenCalledWith(expect.any(String));
+    });
+
+    it.each([false, true])("finalizes history after ledger persistence and reports failure %s", async fails => {
+      profileFlag.history = true;
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: commitSupabase([
+        { id: "row-1", date: "2026-07-01", description: "Store", amount: 10, status: "pending" },
+      ]) });
+      mockServiceClient.from.mockReturnValue(serviceStub());
+      mockServiceClient.rpc.mockResolvedValue({ error: fails ? new Error("history unavailable") : null });
+      const res = await commitPost(new NextRequest("https://example.test/api/import/commit", {
+        method: "POST", body: JSON.stringify({ batch_id: "b1", account_id: "a1" }),
+      }));
+      expect(res.status).toBe(fails ? 500 : 200);
+      expect(mockServiceClient.rpc).toHaveBeenCalledWith("finish_import_with_history", {
+        p_user_id: "u1", p_batch_id: "b1", p_rows: [{ id: "row-1", account_id: "a1", manual_account_id: null }],
+      });
+      expect(mockServiceClient.from).toHaveBeenCalledWith("transactions");
+      expect(mockServiceClient.from).not.toHaveBeenCalledWith("import_review_rows");
+      if (fails) expect(mockWriteAudit).not.toHaveBeenCalled();
     });
 
     it("skips inference when every committed row targets a manual account", async () => {

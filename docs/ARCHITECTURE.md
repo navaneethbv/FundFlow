@@ -466,6 +466,16 @@ Promotion failures are reported in the existing partial-failure response and ale
 `lib/import-profiles.ts` matches ordered, normalized CSV headers and validates column maps, sign conventions, explicit date order, and skipped logical records.
 `lib/import-profile-preview.ts` reads owner profiles through the cookie client and returns choices when more than one layout matches.
 Preview snapshots the validated layout on `import_review_batches.layout_profile` without saving a reusable profile.
+
+With `importHistory` enabled, preview also snapshots the applied layout name and each staged row's review flags.
+After ledger and annotation writes succeed, the service-only `finish_import_with_history` RPC locks the owner batch, marks its newly committed review rows, and records counts, account ids and names, actor, and last commit time atomically.
+Replays leave history unchanged; later partial commits accumulate the batch's imported rows and refresh the remaining skipped count.
+Imported counts describe file rows processed, including updates to existing ledger transactions, rather than claiming every row was newly inserted.
+Existing batches retain unknown metadata; no backfill infers timestamps, flags, or target accounts.
+The cookie-bound `/settings/import-history` page reads only the current owner's committed batches, 25 per page, and is linked from Settings > Data only when the flag is enabled.
+Import batch and review-row writes are service-only; authenticated clients retain their MFA/revocation-gated owner reads.
+The legacy one-shot `/api/import/csv` path does not create review batches and is outside this committed-batch history.
+
 After a durable import, the service-only `save_committed_import_profile` RPC requires a committed owner batch with committed rows, serializes the 100-profile owner quota, and refuses duplicate names.
 `import_profiles` permits only authenticated owner reads with MFA and session-revocation gates; no authenticated writes or RPC execution are granted.
 The profile feature does not change specialized application-export parsers or outbound financial data.

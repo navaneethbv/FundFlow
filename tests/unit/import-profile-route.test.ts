@@ -2,18 +2,19 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { POST } from "@/app/api/import/preview/route";
 import { createImportLayout } from "@/lib/import-profiles";
-const state = vi.hoisted(() => ({ enabled: true, from: vi.fn(), serviceFrom: vi.fn() }));
-vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled: () => state.enabled }));
+const state = vi.hoisted(() => ({ enabled: true, history: false, from: vi.fn(), serviceFrom: vi.fn() }));
+vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled: (flag: string) => flag === "importHistory" ? state.history : state.enabled }));
 vi.mock("@/lib/http", async importOriginal => ({ ...await importOriginal<object>(), requireUser: async () => ({ user: { id: "owner" }, supabase: { from: state.from } }) }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceClient: () => ({ from: state.serviceFrom }) }));
 vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: async () => true }));
 const text = 'Date,Description,Amount\n31/01/2026,Cafe,-12.50';
 const layout = createImportLayout(text, { columns: { date: 0, description: 1, amount: 2, debit: null, credit: null, category: null }, dateOrder: "dmy", positiveIsIncome: true, skipRows: 0 })!;
 beforeEach(() => { vi.clearAllMocks(); state.enabled = true; });
-it.each([true, false])("stages the reviewed layout snapshot with automatic profile selection %s", async saved => {
+it.each([[true, true], [false, true], [true, false]])("stages layout %s with history flag %s", async (saved, history) => {
+  state.history = history;
   const query = { select: () => query, eq: vi.fn(() => query), limit: async () => ({ data: saved ? [{ id: "profile", name: "Bank", layout }] : [], error: null }), gte: () => query, lte: () => query, order: () => query, range: async () => ({ data: [], error: null }) };
   state.from.mockReturnValue(query);
-  const insertBatch = vi.fn(() => ({ select: () => ({ single: async () => ({ data: { id: "batch" }, error: null }) }) }));
+  const insertBatch = vi.fn<(batch: unknown) => unknown>(() => ({ select: () => ({ single: async () => ({ data: { id: "batch" }, error: null }) }) }));
   const insertRows = vi.fn((rows: unknown[]) => ({ select: async () => ({ data: rows.map((row, i) => ({ ...(row as object), id: `row-${i}` })), error: null }) }));
   state.serviceFrom.mockImplementation(table => table === "import_review_batches" ? { insert: insertBatch } : { insert: insertRows });
   const form = new FormData(); form.set("file", new File([text], "bank.csv"));
@@ -23,6 +24,14 @@ it.each([true, false])("stages the reviewed layout snapshot with automatic profi
   const body = await response.json();
   expect(body).toMatchObject({ batch_id: "batch", can_save_profile: true, applied_profile: saved ? { id: "profile", name: "Bank" } : null, rows: [{ date: "2026-01-31", amount: 12.5, description: "Cafe", flags: [] }] });
   expect(insertBatch).toHaveBeenCalledWith(expect.objectContaining({ user_id: "owner", status: "pending", layout_profile: layout }));
+  const batch = insertBatch.mock.calls[0]![0] as unknown;
+  if (history) {
+    expect(batch).toMatchObject({ history_profile_name: saved ? "Bank" : "Custom mapping" });
+    expect(insertRows.mock.calls[0]![0][0]).toMatchObject({ review_flags: [] });
+  } else {
+    expect(batch).not.toHaveProperty("history_profile_name");
+    expect(insertRows.mock.calls[0]![0][0]).not.toHaveProperty("review_flags");
+  }
   expect(state.serviceFrom).not.toHaveBeenCalledWith("import_profiles");
   expect(query.eq).toHaveBeenCalledWith("user_id", "owner");
 });

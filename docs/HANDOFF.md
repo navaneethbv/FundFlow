@@ -816,3 +816,22 @@ The browser journey covered all five sort fields in both directions, complete or
 Finished phase programs and session notes from 2026-07-05 through 2026-08-09 are
 in [`archive/HANDOFF-2026-07-to-08.md`](archive/HANDOFF-2026-07-to-08.md).
 Nothing there is pending.
+
+## 2026-10-01: reference adoption 1.4
+
+Current branch: `feat/import-history`, based on `feat/import-profiles` at `6820c96`.
+This keeps the dependency stack at two branches while the wizard stack awaits owner merge approval.
+The read-only history page is under Settings > Data, behind `importHistory: false`.
+Preview snapshots layout name and flags; a service-only RPC finalizes committed review state and history together after existing ledger writes succeed.
+History never labels an upsert count as newly inserted transactions, and old metadata stays unknown.
+The migration only adds metadata columns and revokes direct client writes on import tables; it does not rewrite existing user data and has not been applied to production.
+Reference behavior was read at Securo commit `76065dbcfa7cbba4479cd0835ae1a3560748fc36`; no code, assets, copy, fixtures, rates, or styling were reused.
+Signed-in browser and full Supabase integration remain deferred under the owner's Option B approval.
+
+Local validation passed: lint, TypeScript, 494 suites / 5,494 tests, and coverage 98.45% statements / 96.15% branches / 98.59% functions / 99.57% lines.
+Synthetic PostgreSQL regression checks and `scripts/check-rls.sql` passed on the isolated localhost database.
+Four Chromium component fixtures passed in both themes at 375px/1440px, including keyboard pagination, empty/legacy states, overflow, and axe checks.
+The mobile screenshot was visually reviewed.
+The fixture substitutes framework navigation and uses synthetic data, so this is not signed-in end-to-end evidence.
+`graphify update .` completed; the optional SQL parser remains unavailable.
+Next: open a draft PR against `feat/import-profiles`, verify its hosted checks, and continue with item 2.1.

@@ -474,6 +474,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
           <ExportSection initialEnabled={profile?.ai_export_enabled ?? true} />
           <ImportReviewSection accounts={importAccounts} profilesEnabled={isFeatureEnabled("importProfiles")} />
         </div>
+        {isFeatureEnabled("importHistory") && <ButtonLink href="/settings/import-history">View import history</ButtonLink>}
         <div className="grid items-start gap-6 xl:grid-cols-2">
           <ReceiptScanSection enabled={aiSettings?.enabled ?? false} />
         </div>
