@@ -5,7 +5,7 @@
 The owner requested five or six features per PR, superseding the earlier per-item branch/PR rule.
 Current worktree: `/private/tmp/fundflow-import-foundation`, branch `feat/import-foundation`, from restored main `a19a0a6`.
 Items 0.1, 0.3, and 1.1 through 1.4 are combined locally by merging their topic branches; no feature was merged to main.
-The six individual PRs #192 through #197 will be superseded by one grouped PR after combined verification.
+The six individual PRs #192 through #197 are closed as superseded by PR #198.
 The earlier per-item sections below retain their original evidence; their branch/stack directions are superseded by this checkpoint and the updated plan.
 All four new import flags remain off, and all four program migrations remain unapplied to production.
 Signed-in browser/integration acceptance and the local build exception remain as previously approved.
@@ -13,7 +13,8 @@ The primary checkout and its unrelated uncommitted edits are preserved.
 Combined validation passed: lint/types, 496 suites / 5,532 tests, coverage gates (98.46% statements, 96.11% branches, 98.60% functions, 99.57% lines), eight browser fixtures, and all three SQL regressions plus RLS checks.
 `graphify update .` completed with the previously documented optional SQL-parser limitation.
 The grouped review is PR #198: https://github.com/navaneethbv/FundFlow/pull/198.
-Next: verify its hosted checks, then close superseded PRs #192 through #197.
+All hosted checks passed at `643eda8`, including build, migration/RLS, security/static analysis, preview, and smoke tests.
+Next: continue group 2 on `feat/data-quality-guidance` in `/private/tmp/fundflow-balance-quality`; no separate item PRs.
 Group 2 will contain 2.1, 2.2, 2.3, 3.1, 3.2, and 3.3.
 
 ## 2026-10-01: reference adoption program, item 0.1

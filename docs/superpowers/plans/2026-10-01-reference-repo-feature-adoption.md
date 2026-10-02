@@ -303,7 +303,8 @@ Reference clones live outside the repository under `/private/tmp/fundflow-refere
 
 The owner replaced the per-item PR rule with groups of five or six features on 2026-10-01.
 Group 1 is [PR #198](https://github.com/navaneethbv/FundFlow/pull/198), consolidating items 0.1, 0.3, 1.1, 1.2, 1.3, and 1.4 on `feat/import-foundation` from main `a19a0a6`.
-Individual PRs #192 through #197 are historical evidence and will be closed after the consolidated PR passes its checks.
+Individual PRs #192 through #197 are closed as superseded.
+All hosted checks on the consolidated PR passed at `643eda8`, including build, migration/RLS, security/static analysis, preview, and smoke tests.
 Group 2 is planned for 2.1, 2.2, 2.3, 3.1, 3.2, and 3.3, preserving the implementation order.
 The 2.1 worktree has no feature code yet and will not produce a separate PR.
 
@@ -320,13 +321,13 @@ No dependency changes are included in feature PRs.
 
 | Item | Status | PR / evidence |
 | --- | --- | --- |
-| 0.1 | Group 1 draft; combined local checks passed, hosted checks pending | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
+| 0.1 | Group 1 draft; combined local and hosted checks passed at `643eda8` | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
 | 0.2 | Not reproduced; skipped per verification rule | Unique holding key rejects duplicate-security rollups |
-| 0.3 | Group 1 draft; combined local checks passed, hosted checks pending | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
-| 1.1 | Group 1 draft; combined local checks passed, hosted checks pending | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
-| 1.2 | Group 1 draft; combined local checks passed, hosted checks pending | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
-| 1.3 | Group 1 draft; combined local checks passed, hosted checks pending | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
-| 1.4 | Group 1 draft; combined local checks passed, hosted checks pending | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
+| 0.3 | Group 1 draft; combined local and hosted checks passed at `643eda8` | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
+| 1.1 | Group 1 draft; combined local and hosted checks passed at `643eda8` | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
+| 1.2 | Group 1 draft; combined local and hosted checks passed at `643eda8` | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
+| 1.3 | Group 1 draft; combined local and hosted checks passed at `643eda8` | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
+| 1.4 | Group 1 draft; combined local and hosted checks passed at `643eda8` | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
 | 1.5 | Not started |  |
 | 2.1 | Reading and design in progress | `/private/tmp/fundflow-balance-quality`, independent from current main |
 | 2.2 | Not started |  |
