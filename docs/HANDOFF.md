@@ -1,5 +1,21 @@
 # FundFlow Session Handoff
 
+## 2026-10-02: group 5 bills and membership value
+
+The owner requested the next reference-adoption group as one PR of five or six features.
+Group 5 implements items 3.4, 3.5, 3.6, 11.1, 11.2, and 11.3 on `feat/bills-membership-value` in `/private/tmp/fundflow-bills-membership`, based on `feat/data-quality-guidance` so the stack stays shallow.
+The grouped design is in [the group 5 spec](superpowers/specs/2026-10-02-bills-membership-value.md).
+
+Recurring now has a month-pulse summary, a gated paycheck view, confirmed price-change history, and a user-authored subscription quick-add catalog.
+Settings now has gated user-maintained membership/card terms and a local anniversary-year value projection with measured, projected, subjective, baseline-card, membership, break-even, expiry, refund, transfer, partial-history, and stale-term handling.
+The six flags are default off: `billsViews`, `recurringPriceHistory`, `subscriptionCatalog`, `membershipCardValueModel`, `membershipCardValueCalculation`, and `membershipTermsEntry`.
+The new migrations `20261002090000_recurring_price_changes.sql` and `20261002091000_card_value_terms.sql` are additive and unapplied to production.
+
+Local verification passed `npm run lint`, `npx tsc --noEmit`, `npm run test:unit` (509 files / 5,595 tests), `npm run test:coverage` (511 files / 5,600 tests, 98.40% statements, 96.00% branches, 98.50% functions, 99.55% lines), placeholder `npm run build`, `node scripts/validate_palette.js app/globals.css`, and `npm run test:ui` (16 synthetic fixtures including 375px and 1440px bills/membership journeys).
+The signed-in Supabase browser journey and integration tests remain deferred under the approved disposable-target exception.
+No migration, production flag, deployment, merge, or credential change was performed.
+The grouped PR is the next step after committing this branch; once opened, wait for exact-head hosted checks and leave it unmerged.
+
 ## 2026-10-01: group 2, six data-quality and spending-guidance features
 
 The owner deferred merging PR #198 and requested the next five or six features in one checklist and PR.

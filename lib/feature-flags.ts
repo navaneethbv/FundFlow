@@ -103,6 +103,18 @@ export const FEATURE_FLAG_DEFAULTS = {
   paydaySettings: false,
   /** Reference adoption 3.3: monthly budget pace, separate from cash. */
   budgetDailyAllowance: false,
+  /** Reference adoption 3.4: recurring bills list, calendar, and paycheck views. */
+  billsViews: false,
+  /** Reference adoption 3.5: confirmed recurring price-change history. */
+  recurringPriceHistory: false,
+  /** Reference adoption 3.6: user-authored subscription quick-add catalog. */
+  subscriptionCatalog: false,
+  /** Reference adoption 11.1: membership and card value terms model. */
+  membershipCardValueModel: false,
+  /** Reference adoption 11.2: local membership and card value calculation. */
+  membershipCardValueCalculation: false,
+  /** Reference adoption 11.3: user-maintained membership terms entry. */
+  membershipTermsEntry: false,
 } as const;
 
 export type FeatureFlag = keyof typeof FEATURE_FLAG_DEFAULTS;

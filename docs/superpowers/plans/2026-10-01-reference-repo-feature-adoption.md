@@ -308,6 +308,10 @@ All hosted checks on the consolidated PR passed at `643eda8`, including build, m
 Group 2 is [PR #199](https://github.com/navaneethbv/FundFlow/pull/199) and contains 2.1, 2.2, 2.3, 3.1, 3.2, and 3.3, preserving the implementation order.
 Group 2 is implemented in `/private/tmp/fundflow-balance-quality` on `feat/data-quality-guidance`; see `docs/superpowers/specs/2026-10-01-data-quality-guidance.md` for its six-item checklist.
 PR #198 is ready with all checks passing at `a2eef7e`, but its merge and prerequisite production migrations are deferred by the owner.
+Group 3 is [PR #200](https://github.com/navaneethbv/FundFlow/pull/200) and contains 4.1, 4.2, 5.1, 5.2, 5.3, and 6.1 on `feat/insights-rules-ledger`.
+Group 4 is [PR #202](https://github.com/navaneethbv/FundFlow/pull/202) and contains 6.2, 6.3, 6.4, 8.1, and 8.2 on `feat/ledger-interactions`; its exact-head hosted checks passed at `5ec7591`.
+Group 5 is implemented together on `feat/bills-membership-value`, based on `feat/data-quality-guidance` to keep the stack shallow.
+It contains 3.4, 3.5, 3.6, 11.1, 11.2, and 11.3; its grouped design and acceptance evidence are in `docs/superpowers/specs/2026-10-02-bills-membership-value.md`.
 
 ## Execution checklist
 
@@ -337,9 +341,9 @@ No dependency changes are included in feature PRs.
 | 3.1 | Implemented in [#199](https://github.com/navaneethbv/FundFlow/pull/199); local checks passed; rollout deferred | `app/recurring/paychecks/page.tsx` |
 | 3.2 | Implemented in [#199](https://github.com/navaneethbv/FundFlow/pull/199); local checks passed; rollout deferred | `app/settings/payday/page.tsx` |
 | 3.3 | Implemented in [#199](https://github.com/navaneethbv/FundFlow/pull/199); local checks passed; rollout deferred | `lib/budget-allowance.ts` |
-| 3.4 | Not started |  |
-| 3.5 | Not started |  |
-| 3.6 | Not started |  |
+| 3.4 | Group 5 implemented locally; PR pending | `app/recurring/page.tsx`, `components/recurring/MonthPulse.tsx` |
+| 3.5 | Group 5 implemented locally; PR pending | `lib/recurring-price-changes.ts`, `app/api/recurring/price-changes/route.ts` |
+| 3.6 | Group 5 implemented locally; PR pending | `components/recurring/SubscriptionCatalog.tsx`, `lib/subscription-catalog.ts` |
 | 4.1 | Not started |  |
 | 4.2 | Not started |  |
 | 4.3 | Not started |  |
@@ -375,9 +379,9 @@ No dependency changes are included in feature PRs.
 | 10.2 | Not started |  |
 | 10.3 | Not started |  |
 | 10.4 | Not started |  |
-| 11.1 | Not started |  |
-| 11.2 | Not started |  |
-| 11.3 | Not started |  |
+| 11.1 | Group 5 implemented locally; PR pending | `lib/card-value.ts`, `20261002091000_card_value_terms.sql` |
+| 11.2 | Group 5 implemented locally; PR pending | `lib/card-value.ts`, `app/settings/page.tsx` |
+| 11.3 | Group 5 implemented locally; PR pending | `app/api/settings/card-value/route.ts`, `components/settings/MembershipCardValueSection.tsx` |
 | 12.1 | Not started |  |
 | 12.2 | Not started |  |
 | 12.3 | Not started |  |

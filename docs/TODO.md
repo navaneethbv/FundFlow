@@ -1,5 +1,14 @@
 # FundFlow — Future Todos
 
+## Reference adoption: group 5 bills and membership value
+
+Items 3.4, 3.5, 3.6, 11.1, 11.2, and 11.3 are implemented together on `feat/bills-membership-value`; the grouped PR is pending.
+The design and acceptance record is [the group 5 spec](superpowers/specs/2026-10-02-bills-membership-value.md).
+The additive migrations `20261002090000_recurring_price_changes.sql` and `20261002091000_card_value_terms.sql` are unapplied to production.
+Keep `billsViews`, `recurringPriceHistory`, `subscriptionCatalog`, `membershipCardValueModel`, `membershipCardValueCalculation`, and `membershipTermsEntry` off until the grouped PR passes hosted checks and the owner authorizes rollout.
+Local verification passed lint, typecheck, unit tests, coverage thresholds, placeholder build, palette validation, and the 16 synthetic UI fixtures at 375px and desktop.
+Signed-in Supabase journeys and integration tests remain deferred under the approved disposable-target exception; never use the production-linked database or `.env.local` for those checks.
+
 ## Reference adoption: group 2 rollout gates
 
 The six-item checklist is in [the group 2 spec](superpowers/specs/2026-10-01-data-quality-guidance.md).

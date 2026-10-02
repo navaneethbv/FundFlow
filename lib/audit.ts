@@ -72,6 +72,8 @@ export type AuditAction =
   | "recurring_stream_dismissed"
   | "recurring_stream_restored"
   | "recurring_stream_amount_corrected"
+  | "recurring_price_change_recorded"
+  | "card_value_terms_updated"
   | "manual_recurring_item_created"
   | "manual_recurring_item_updated"
   | "manual_recurring_item_deleted"

@@ -42,10 +42,14 @@ function persistDismissedIds(ids: readonly string[]): void {
 
 export default function PriceSpikeBanner({
   initialAlerts,
+  historyEnabled = false,
 }: Readonly<{
   initialAlerts: PriceSpikeAlert[];
+  historyEnabled?: boolean;
 }>) {
   const [sessionDismissed, setSessionDismissed] = useState<ReadonlySet<string>>(new Set());
+  const [confirmed, setConfirmed] = useState<ReadonlySet<string>>(new Set());
+  const [confirming, setConfirming] = useState<string | null>(null);
   const hydrated = useSyncExternalStore(
     subscribeToHydration,
     () => true,
@@ -66,6 +70,20 @@ export default function PriceSpikeBanner({
     for (const id of ids) next.add(id);
     persistDismissedIds([...next, ...(hydrated ? readDismissedIds() : [])]);
     setSessionDismissed(next);
+  }
+
+  async function confirmChange(id: string) {
+    setConfirming(id);
+    try {
+      const response = await fetch("/api/recurring/price-changes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stream_id: id }),
+      });
+      if (response.ok) setConfirmed((current) => new Set(current).add(id));
+    } finally {
+      setConfirming(null);
+    }
   }
 
   if (visibleAlerts.length === 0) return null;
@@ -141,6 +159,15 @@ export default function PriceSpikeBanner({
               >
                 View history
               </Link>
+              {historyEnabled && (
+                confirmed.has(alert.id) ? (
+                  <span className="text-success">Recorded</span>
+                ) : (
+                  <button type="button" disabled={confirming === alert.id} onClick={() => void confirmChange(alert.id)} className="font-medium text-accent hover:underline">
+                    {confirming === alert.id ? "Checking…" : "Confirm change"}
+                  </button>
+                )
+              )}
               <button
                 type="button"
                 onClick={() => {

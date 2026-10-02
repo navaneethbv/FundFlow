@@ -32,6 +32,7 @@ import AskAiSection from "@/components/settings/AskAiSection";
 import ReceiptScanSection from "@/components/settings/ReceiptScanSection";
 import SettleUpSection from "@/components/settings/SettleUpSection";
 import CancelledSubscriptionsSection from "@/components/settings/CancelledSubscriptionsSection";
+import MembershipCardValueSection from "@/components/settings/MembershipCardValueSection";
 import DashboardPrefsSection from "@/components/settings/DashboardPrefsSection";
 import DemoDataSection from "@/components/settings/DemoDataSection";
 import RestoreSection from "@/components/settings/RestoreSection";
@@ -47,6 +48,9 @@ import {
   loadInstitutionObservability,
   SYNC_HEALTH_ITEM_COLUMNS,
 } from "@/lib/sync-health";
+import { loadCanonicalProjection } from "@/lib/finance-query";
+import { anniversaryWindow, calculateCardValue, validateCardValueTerms, type CardValueTerms, type CardValueSpendRow } from "@/lib/card-value";
+import { resolveViewerToday } from "@/lib/report-period";
 
 export const dynamic = "force-dynamic";
 
@@ -176,6 +180,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
   if (!settingsIaReady && migrationDependentSections.includes(active)) {
     active = "institutions";
   }
+  if (!isFeatureEnabled("membershipTermsEntry") && active === "membership") active = "institutions";
 
   const supabase = await createClient();
   const {
@@ -295,6 +300,21 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
         <AskAiSection enabled={aiSettings?.enabled ?? false} />
       </div>
     );
+      break;
+    }
+    case "membership": {
+      const { data: profile } = await supabase.from("profiles").select("card_value_terms").eq("id", userId).maybeSingle();
+      const parsedTerms = validateCardValueTerms(profile?.card_value_terms ?? []);
+      const terms = parsedTerms.ok ? parsedTerms.value : [];
+      let result = null;
+      if (isFeatureEnabled("membershipCardValueCalculation") && isFeatureEnabled("membershipCardValueModel") && terms[0]) {
+        const asOf = await resolveViewerToday(supabase, userId);
+        const window = anniversaryWindow(terms[0].anniversaryDate, asOf);
+        const projection = await loadCanonicalProjection(supabase, { scope: { kind: "mine", ownerUserId: userId }, window: { start: window.start, endExclusive: asOf } });
+        const spend: CardValueSpendRow[] = projection.transactions.map((row) => ({ date: row.date, amount: row.signedAmount, category: row.categoryKey, flow: row.flow, isRefund: row.signedAmount < 0 }));
+        result = calculateCardValue({ terms: terms[0], spend, asOf });
+      }
+      content = <MembershipCardValueSection initialTerms={terms as CardValueTerms[]} result={result} />;
       break;
     }
     case "household-general": {
@@ -494,7 +514,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
         <PageHeader title="Settings" />
         <SettingsLayout
           active={active}
-          hiddenSections={settingsIaReady ? [] : migrationDependentSections}
+          hiddenSections={settingsIaReady ? (isFeatureEnabled("membershipTermsEntry") ? [] : ["membership"]) : [...migrationDependentSections, "membership"]}
         >
           {content}
         </SettingsLayout>

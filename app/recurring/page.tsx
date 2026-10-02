@@ -3,8 +3,10 @@ import { notFound } from "next/navigation";
 import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
 import MonthSummary from "@/components/recurring/MonthSummary";
+import MonthPulse from "@/components/recurring/MonthPulse";
 import ReviewBanner from "@/components/recurring/ReviewBanner";
 import PriceSpikeBanner from "@/components/recurring/PriceSpikeBanner";
+import PriceChangeHistory, { type PriceChangeHistoryRow } from "@/components/recurring/PriceChangeHistory";
 import RecurringList, { type RecurringTab } from "@/components/recurring/RecurringList";
 import RecurringCalendar from "@/components/recurring/RecurringCalendar";
 import { detectPriceSpikes } from "@/lib/recurring-alerts";
@@ -14,6 +16,8 @@ import ButtonLink from "@/components/ui/ButtonLink";
 import { ChevronLeft, ChevronRight } from "@/components/ui/icons";
 import { formatMonth } from "@/lib/format";
 import { loadRecurringData } from "@/lib/recurring-data";
+import { loadPaycheckPlan } from "@/lib/paycheck-planner-data";
+import PaycheckPlan from "@/components/recurring/PaycheckPlan";
 import { dateKeyInTimezone } from "@/lib/report-period";
 import { serializeFinancialScope } from "@/lib/financial-scope";
 import { isFeatureEnabled } from "@/lib/feature-flags";
@@ -56,12 +60,13 @@ function recurringHref(input: {
   month: string;
   scope?: string;
   tab?: RecurringTab;
-  view?: "calendar" | "list";
+  view?: "calendar" | "list" | "paycheck";
 }): string {
   const params = new URLSearchParams({ month: input.month });
   if (input.scope) params.set("scope", input.scope);
   if (input.tab && input.tab !== "upcoming") params.set("tab", input.tab);
   if (input.view === "calendar") params.set("view", "calendar");
+  if (input.view === "paycheck") params.set("view", "paycheck");
   return `/recurring?${params.toString()}`;
 }
 
@@ -94,7 +99,14 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
   const month =
     rawMonth && MONTH_REGEX.test(rawMonth) ? rawMonth : currentMonth;
   const tab = parseTab(firstSearchParam(params.tab));
-  const view = firstSearchParam(params.view) === "calendar" ? "calendar" : "list";
+  const billsViewsEnabled = isFeatureEnabled("billsViews");
+  const paycheckViewEnabled = billsViewsEnabled && isFeatureEnabled("paycheckPlanner") && isFeatureEnabled("paydaySettings");
+  const rawView = firstSearchParam(params.view);
+  const view = paycheckViewEnabled && rawView === "paycheck"
+    ? "paycheck"
+    : rawView === "calendar"
+      ? "calendar"
+      : "list";
 
   const loaded = await loadRecurringData(supabase, {
     userId: user.id,
@@ -110,6 +122,13 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
     complete: recurringHref({ ...baseLink, tab: "complete" }),
     manage: recurringHref({ ...baseLink, tab: "manage" }),
   };
+  const paycheckPlan = view === "paycheck"
+    ? await loadPaycheckPlan(supabase, user.id, today)
+    : null;
+  const priceChanges = isFeatureEnabled("recurringPriceHistory")
+    ? await supabase.from("recurring_price_changes").select("id,recurring_stream_id,effective_date,previous_amount,new_amount").eq("user_id", user.id).order("effective_date", { ascending: false }).limit(100)
+    : { data: [] as PriceChangeHistoryRow[], error: null };
+  if (priceChanges.error) logError("recurring.price-change-history", priceChanges.error);
 
   return (
     <AppShell active="recurring" email={user.email}>
@@ -198,12 +217,15 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
               dismissedAt: s.dismissedAt,
             })),
           )}
+          historyEnabled={isFeatureEnabled("recurringPriceHistory")}
         />
+        {isFeatureEnabled("recurringPriceHistory") && <PriceChangeHistory rows={(priceChanges.data ?? []) as PriceChangeHistoryRow[]} streamNames={new Map(loaded.allStreams.map((stream) => [stream.id, stream.merchantName ?? stream.description ?? "Recurring charge"]))} currency={loaded.currency} />}
 
         <MonthSummary totals={loaded.view.totals} currency={loaded.currency} />
+        {billsViewsEnabled && <MonthPulse occurrences={loaded.view.occurrences} currency={loaded.currency} />}
 
         <Panel
-          title={view === "calendar" ? "Recurring calendar" : "Occurrences"}
+          title={view === "calendar" ? "Recurring calendar" : view === "paycheck" ? "Paycheck view" : "Occurrences"}
           eyebrow="This month"
           action={
             <SegmentedControl
@@ -219,11 +241,20 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
                   href: recurringHref({ ...baseLink, tab, view: "calendar" }),
                   active: view === "calendar",
                 },
+                ...(paycheckViewEnabled ? [{
+                  label: "Paycheck",
+                  href: recurringHref({ ...baseLink, tab, view: "paycheck" }),
+                  active: view === "paycheck",
+                }] : []),
               ]}
             />
           }
         >
-          {view === "calendar" ? (
+          {view === "paycheck" ? (
+            paycheckPlan?.configured ? (
+              paycheckPlan.currencyUnsupported ? <p>This paycheck view supports USD accounts only.</p> : <PaycheckPlan periods={paycheckPlan.periods} cash={paycheckPlan.cash} />
+            ) : <p>Confirm a payday and take-home amount before planning pay periods.</p>
+          ) : view === "calendar" ? (
             <RecurringCalendar
               month={month}
               today={today}
@@ -239,6 +270,7 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
               today={today}
               tab={tab}
               links={links}
+              subscriptionCatalogEnabled={isFeatureEnabled("subscriptionCatalog")}
             />
           )}
         </Panel>
