@@ -30,6 +30,8 @@ export default defineConfig({
       include: [
         "lib/**",
         "app/api/**",
+        // Data loaders extracted from pages are logic, not presentation.
+        "app/**/_lib/**",
         // Source only: scripts/ also holds .sql (check-rls.sql), which the
         // coverage remapper tries to parse as JS and errors on.
         "scripts/**/*.{ts,mjs,js}",
