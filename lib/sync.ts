@@ -52,6 +52,7 @@ function mapTransactionRow(
     account_id: accountDbId,
     plaid_transaction_id: txn.transaction_id,
     pending_transaction_id: txn.pending_transaction_id ?? null,
+    original_description: txn.original_description ?? null,
     amount: txn.amount,
     iso_currency_code: txn.iso_currency_code ?? null,
     date: txn.date,
@@ -420,6 +421,7 @@ async function runTransactionSyncLoop(
       const response = await plaid.transactionsSync({
         access_token: accessToken,
         cursor,
+        options: { include_original_description: true },
       });
       const data = response.data as TransactionSyncPage;
       const pageResult = await applyTransactionPage(

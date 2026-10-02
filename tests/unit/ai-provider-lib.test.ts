@@ -71,6 +71,12 @@ describe("isAiProviderConfigured", () => {
 });
 
 describe("buildInsightPayload", () => {
+  it("drops provider raw descriptors from the outbound aggregate payload", () => {
+    const rows = [{ month: "2026-10", category: "Food", merchant: "Cafe", amount: 12, original_description: "PRIVATE-DESCRIPTOR-731" }];
+    expect(buildInsightPayload(rows)).toEqual(buildInsightPayload([{ month: "2026-10", category: "Food", merchant: "Cafe", amount: 12 }]));
+    expect(JSON.stringify(buildInsightPayload(rows))).not.toContain("PRIVATE-DESCRIPTOR-731");
+  });
+
   it("keeps spending only and drops income", () => {
     const payload = buildInsightPayload([
       { month: "2026-07", category: "FOOD", merchant: "Cafe", amount: 30 },

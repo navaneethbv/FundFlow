@@ -282,6 +282,7 @@ describe("backfillItemTransactions (bounded repair backfill)", () => {
     expect(mockTransactionsSync).toHaveBeenCalledWith({
       access_token: "access-token-123",
       cursor: "repair-cursor-8",
+      options: { include_original_description: true },
     });
     expect(mockClearItemRepairCursor).toHaveBeenCalledWith(
       "user-1",
@@ -316,6 +317,7 @@ describe("backfillItemTransactions (bounded repair backfill)", () => {
     expect(mockTransactionsSync).toHaveBeenCalledWith({
       access_token: "access-token-123",
       cursor: "committed-cursor",
+      options: { include_original_description: true },
     });
     expect(mockCompleteItemCursor).toHaveBeenCalledWith(
       "user-1",
