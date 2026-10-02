@@ -4,13 +4,13 @@
 
 Group 4 is implemented in `/private/tmp/fundflow-ledger-interactions` on `feat/ledger-interactions`, based on `feat/insights-rules-ledger` and grouped in [PR #202](https://github.com/navaneethbv/FundFlow/pull/202).
 The batch contains items 6.2, 6.3, 6.4, 8.1, and 8.2.
-The PR is open and hosted checks are pending at `07a7610`.
+The PR is open and all hosted checks pass at exact head `a375739`.
 
 The batch adds keyboard ledger navigation, expanded bulk edits, conflict-aware single-row Undo toasts, a pure amortization engine, and a guarded loan detail schedule with a chart table twin.
 All five flags remain off: `ledgerKeyboardNavigation`, `bulkEdit`, `undoToasts`, `amortizationEngine`, and `loanDetails`.
 No migration was added, applied, or deployed.
 
-Verification passed: lint, TypeScript, the full unit suite with 503 files and 5,644 tests, placeholder-environment production build, palette validation, graph refresh, and six responsive browser fixtures covering the existing Group 3 surfaces plus the new ledger interactions at 375px and desktop.
+Verification passed: lint, TypeScript, the full unit suite with 507 files and 5,665 tests, 96.00% global branch coverage, placeholder-environment production build, palette validation, graph refresh, and six responsive browser fixtures covering the existing Group 3 surfaces plus the new ledger interactions at 375px and desktop.
 The signed-in Supabase browser journey and full integration tests remain deferred because no disposable target or Docker stack exists.
 Do not merge, deploy, apply migrations, or flip flags without renewed authorization.
 

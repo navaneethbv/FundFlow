@@ -36,7 +36,7 @@ The signed-in browser and integration journeys remain deferred under the approve
 ## Reference adoption Group 4: ledger interactions and loan projections
 
 Items 6.2, 6.3, 6.4, 8.1, and 8.2 are implemented on `feat/ledger-interactions` and grouped in [PR #202](https://github.com/navaneethbv/FundFlow/pull/202) against `feat/insights-rules-ledger` (PR #200).
-The local checks pass at `07a7610`; hosted checks are pending.
+The local checks pass at `a375739`; all hosted checks pass at that exact head.
 The five flags `ledgerKeyboardNavigation`, `bulkEdit`, `undoToasts`, `amortizationEngine`, and `loanDetails` remain off.
 No migration was added and no production migration, deployment, or flag flip was performed.
 The signed-in browser and integration journeys remain deferred under the approved disposable-project exception.
