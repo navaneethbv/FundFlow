@@ -47,22 +47,19 @@ do $$ begin
  assert not has_function_privilege('anon','public.finish_transaction_sync_page(uuid,uuid,text[],boolean,boolean)','EXECUTE'), 'Anonymous may invoke provider writes';
 end $$;
 
--- A conflicting posted edit refuses the complete operation, retaining the queue
--- and every source annotation. No partial moves or deletes may escape failure.
+-- A conflicting posted edit skips carryover for that row only. The posted
+-- edit survives, the pending row is removed as before carryover existed, and
+-- the sync completes instead of failing every later run for the item.
 insert into public.transactions(id,user_id,account_id,plaid_transaction_id,amount,date,pending)
  values ('54000000-0000-0000-0000-000000000001','51000000-0000-0000-0000-000000000001','53000000-0000-0000-0000-000000000001','fixture-pending',40,'2026-10-01',true);
 insert into public.transaction_annotations(user_id,transaction_id,note)
  values ('51000000-0000-0000-0000-000000000001','54000000-0000-0000-0000-000000000001','Conflicting note');
 select public.finish_transaction_sync_page('51000000-0000-0000-0000-000000000001','52000000-0000-0000-0000-000000000001',array['fixture-pending'],false,true);
+select public.finish_transaction_sync_page('51000000-0000-0000-0000-000000000001','52000000-0000-0000-0000-000000000001','{}',true,false);
 do $$ begin
- begin
-  perform public.finish_transaction_sync_page('51000000-0000-0000-0000-000000000001','52000000-0000-0000-0000-000000000001','{}',true,false);
-  raise exception 'Conflict incorrectly succeeded';
- exception when raise_exception then
-  if sqlerrm <> 'Pending and posted annotations both edited; reconcile before retrying sync' then raise; end if;
- end;
- assert (select count(*) from public.transaction_annotations where user_id='51000000-0000-0000-0000-000000000001')=2, 'Conflict lost an edit';
- assert (select transaction_removal_ids from public.plaid_items where id='52000000-0000-0000-0000-000000000001')=array['fixture-pending'], 'Conflict lost queued removal';
+ assert exists(select 1 from public.transaction_annotations where transaction_id='54000000-0000-0000-0000-000000000002' and note='Trip meal'), 'Conflict overwrote the posted edit';
+ assert not exists(select 1 from public.transactions where plaid_transaction_id='fixture-pending'), 'Conflict left the pending row counted';
+ assert (select transaction_removal_ids from public.plaid_items where id='52000000-0000-0000-0000-000000000001')='{}', 'Conflict left the removal queued';
  begin
   perform public.finish_transaction_sync_page('51000000-0000-0000-0000-000000000099','52000000-0000-0000-0000-000000000001','{}',true,true);
   raise exception 'Cross-owner item access succeeded';
@@ -70,9 +67,48 @@ do $$ begin
   if sqlerrm <> 'Sync item not found for owner' then raise; end if;
  end;
 end $$;
+-- A confirmed link on the pending row also skips carryover without failing.
+insert into public.transactions(id,user_id,account_id,plaid_transaction_id,amount,date,pending) values
+ ('54000000-0000-0000-0000-000000000005','51000000-0000-0000-0000-000000000001','53000000-0000-0000-0000-000000000001','fixture-dup-pending',9,'2026-10-05',true),
+ ('54000000-0000-0000-0000-000000000007','51000000-0000-0000-0000-000000000001','53000000-0000-0000-0000-000000000001','fixture-dup-other',9,'2026-10-05',false);
+insert into public.transactions(id,user_id,account_id,plaid_transaction_id,pending_transaction_id,amount,date,pending) values
+ ('54000000-0000-0000-0000-000000000006','51000000-0000-0000-0000-000000000001','53000000-0000-0000-0000-000000000001','fixture-dup-posted','fixture-dup-pending',9,'2026-10-06',false);
+insert into public.linked_duplicates(user_id,subject_id,kept_transaction_id,excluded_transaction_id) values
+ ('51000000-0000-0000-0000-000000000001','fixture-dup-subject','54000000-0000-0000-0000-000000000007','54000000-0000-0000-0000-000000000005');
+select public.finish_transaction_sync_page('51000000-0000-0000-0000-000000000001','52000000-0000-0000-0000-000000000001',array['fixture-dup-pending'],true,true);
+do $$ begin
+ assert not exists(select 1 from public.transactions where plaid_transaction_id='fixture-dup-pending'), 'Linked pending row still counted';
+ assert exists(select 1 from public.transactions where plaid_transaction_id='fixture-dup-posted'), 'Posted replacement lost';
+end $$;
 -- A restart discards tombstones from an invalidated pagination chain.
+insert into public.transactions(id,user_id,account_id,plaid_transaction_id,amount,date,pending)
+ values ('54000000-0000-0000-0000-000000000001','51000000-0000-0000-0000-000000000001','53000000-0000-0000-0000-000000000001','fixture-pending',40,'2026-10-01',true);
+select public.finish_transaction_sync_page('51000000-0000-0000-0000-000000000001','52000000-0000-0000-0000-000000000001',array['fixture-pending'],false,true);
 select public.finish_transaction_sync_page('51000000-0000-0000-0000-000000000001','52000000-0000-0000-0000-000000000001','{}',true,true);
 do $$ begin
  assert exists(select 1 from public.transactions where plaid_transaction_id='fixture-pending'), 'Restart applied stale tombstone';
+end $$;
+delete from public.transactions where plaid_transaction_id='fixture-pending';
+-- A posted row already linked to the same recurring stream or goal keeps one
+-- link; the pending link must not violate either unique constraint.
+insert into public.recurring_streams(id,user_id,plaid_item_id,stream_id)
+ values ('55000000-0000-0000-0000-000000000001','51000000-0000-0000-0000-000000000001','52000000-0000-0000-0000-000000000001','pending-fixture-stream');
+insert into public.goals(id,user_id,name,target_amount)
+ values ('56000000-0000-0000-0000-000000000001','51000000-0000-0000-0000-000000000001','Fixture goal',100);
+insert into public.transactions(id,user_id,account_id,plaid_transaction_id,amount,date,pending) values
+ ('54000000-0000-0000-0000-000000000003','51000000-0000-0000-0000-000000000001','53000000-0000-0000-0000-000000000001','fixture-linked-pending',12,'2026-10-03',true);
+insert into public.transactions(id,user_id,account_id,plaid_transaction_id,pending_transaction_id,amount,date,pending) values
+ ('54000000-0000-0000-0000-000000000004','51000000-0000-0000-0000-000000000001','53000000-0000-0000-0000-000000000001','fixture-linked-posted','fixture-linked-pending',12,'2026-10-04',false);
+insert into public.recurring_stream_transactions(user_id,recurring_stream_id,transaction_id) values
+ ('51000000-0000-0000-0000-000000000001','55000000-0000-0000-0000-000000000001','54000000-0000-0000-0000-000000000003'),
+ ('51000000-0000-0000-0000-000000000001','55000000-0000-0000-0000-000000000001','54000000-0000-0000-0000-000000000004');
+insert into public.goal_progress_events(user_id,goal_id,event_date,amount,event_type,transaction_id) values
+ ('51000000-0000-0000-0000-000000000001','56000000-0000-0000-0000-000000000001','2026-10-03',12,'transaction','54000000-0000-0000-0000-000000000003'),
+ ('51000000-0000-0000-0000-000000000001','56000000-0000-0000-0000-000000000001','2026-10-04',12,'transaction','54000000-0000-0000-0000-000000000004');
+select public.finish_transaction_sync_page('51000000-0000-0000-0000-000000000001','52000000-0000-0000-0000-000000000001',array['fixture-linked-pending'],true,true);
+do $$ begin
+ assert (select count(*) from public.recurring_stream_transactions where recurring_stream_id='55000000-0000-0000-0000-000000000001')=1, 'Recurring link duplicated or lost';
+ assert (select count(*) from public.goal_progress_events where goal_id='56000000-0000-0000-0000-000000000001' and transaction_id='54000000-0000-0000-0000-000000000004')=1, 'Goal event duplicated or lost';
+ assert not exists(select 1 from public.goal_progress_events where goal_id='56000000-0000-0000-0000-000000000001' and transaction_id is null), 'Pending goal event survived detached';
 end $$;
 rollback;
