@@ -15,7 +15,8 @@ Verification completed: lint, TypeScript, 502 unit files with 5,638 tests, cover
 The browser fixture screenshots were inspected at both widths.
 Full signed-in Supabase browser and integration acceptance remains deferred because no disposable target or Docker stack exists; the owner approved that exception.
 
-Next step: commit the grouped changes, perform the explicit refspec dry-run push, open one PR against `feat/import-foundation`, then wait for exact-head hosted checks and Sonar review.
+PR #200 is open against `feat/import-foundation`.
+The documentation-only follow-up will be pushed with the same explicit refspec, then exact-head hosted checks and Sonar review must be monitored.
 Do not merge, apply migrations, deploy, or flip flags without renewed authorization.
 
 ## 2026-10-01: group 3 implementation in progress

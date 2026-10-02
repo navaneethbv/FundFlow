@@ -308,8 +308,8 @@ All hosted checks on the consolidated PR passed at `643eda8`, including build, m
 Group 2 is [PR #199](https://github.com/navaneethbv/FundFlow/pull/199) and contains 2.1, 2.2, 2.3, 3.1, 3.2, and 3.3, preserving the implementation order.
 Group 2 is implemented in `/private/tmp/fundflow-balance-quality` on `feat/data-quality-guidance`; see `docs/superpowers/specs/2026-10-01-data-quality-guidance.md` for its six-item checklist.
 PR #198 is ready with all checks passing at `a2eef7e`, but its merge and prerequisite production migrations are deferred by the owner.
-Group 3 is the six-item insights, rules, and transaction-detail batch on `feat/insights-rules-ledger`, based on PR #198's `feat/import-foundation` branch.
-The grouped PR is pending creation after the local verification listed below; no production migration or flag flip is included.
+Group 3 is [PR #200](https://github.com/navaneethbv/FundFlow/pull/200), the six-item insights, rules, and transaction-detail batch on `feat/insights-rules-ledger`, based on PR #198's `feat/import-foundation` branch.
+No production migration or flag flip is included.
 
 ## Execution checklist
 
@@ -342,16 +342,16 @@ No dependency changes are included in feature PRs.
 | 3.4 | Not started |  |
 | 3.5 | Not started |  |
 | 3.6 | Not started |  |
-| 4.1 | Implemented in Group 3; local checks passed; rollout deferred | `lib/insight-generators.ts`, `lib/insight-generation.ts` |
-| 4.2 | Implemented in Group 3; local checks passed; rollout deferred | `components/notifications/InsightsFeed.tsx`, `app/api/insights/acknowledge/route.ts` |
+| 4.1 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200); local checks passed; rollout deferred | `lib/insight-generators.ts`, `lib/insight-generation.ts` |
+| 4.2 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200); local checks passed; rollout deferred | `components/notifications/InsightsFeed.tsx`, `app/api/insights/acknowledge/route.ts` |
 | 4.3 | Not started |  |
-| 5.1 | Implemented in Group 3; local checks passed; rollout deferred | `lib/rule-conditions.ts`, `lib/rules-engine.ts` |
-| 5.2 | Implemented in Group 3; local checks passed; rollout deferred | `lib/rule-run-history.ts`, `supabase/migrations/20261001180000_compound_rules.sql` |
-| 5.3 | Implemented in Group 3; local checks passed; rollout deferred | `components/transactions/RuleSuggestion.tsx`, `app/api/rules/suggestion/route.ts` |
+| 5.1 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200); local checks passed; rollout deferred | `lib/rule-conditions.ts`, `lib/rules-engine.ts` |
+| 5.2 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200); local checks passed; rollout deferred | `lib/rule-run-history.ts`, `supabase/migrations/20261001180000_compound_rules.sql` |
+| 5.3 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200); local checks passed; rollout deferred | `components/transactions/RuleSuggestion.tsx`, `app/api/rules/suggestion/route.ts` |
 | 5.4 | Not started |  |
 | 5.5 | Not started |  |
 | 5.6 | Not started |  |
-| 6.1 | Implemented in Group 3; local checks passed; rollout deferred | `components/ui/DetailPane.tsx`, `components/transactions/TransactionEditor.tsx` |
+| 6.1 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200); local checks passed; rollout deferred | `components/ui/DetailPane.tsx`, `components/transactions/TransactionEditor.tsx` |
 | 6.2 | Not started |  |
 | 6.3 | Not started |  |
 | 6.4 | Not started |  |

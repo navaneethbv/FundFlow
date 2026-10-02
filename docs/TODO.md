@@ -25,7 +25,7 @@ Keep new feature flags off until those deferred journeys pass.
 
 ## Reference adoption Group 3: insights, rules, and transaction details
 
-Items 4.1, 4.2, 5.1, 5.2, 5.3, and 6.1 are implemented on `feat/insights-rules-ledger` and are grouped into one pending PR against `feat/import-foundation` (PR #198).
+Items 4.1, 4.2, 5.1, 5.2, 5.3, and 6.1 are implemented on `feat/insights-rules-ledger` and grouped in [PR #200](https://github.com/navaneethbv/FundFlow/pull/200) against `feat/import-foundation` (PR #198).
 The two migrations `20261001170000_insight_preferences.sql` and `20261001180000_compound_rules.sql` are unapplied to production.
 All six feature flags remain off: `insightGenerators`, `insightsFeed`, `compoundRules`, `ruleRunHistory`, `ruleSuggestions`, and `transactionDetails`.
 Local SQL checks used synthetic PostgreSQL records and Auth/Storage stand-ins; they prove owner isolation, RLS gates, preserved provider facts and stale-write refusal, but do not replace full Supabase Auth acceptance.
