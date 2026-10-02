@@ -20,11 +20,20 @@ The large-data QA script marks a failed journey before cleanup and rethrows the 
 Local verification passed lint, typecheck, targeted regressions, the placeholder production build, palette validation and all 16 synthetic browser fixtures.
 The full coverage run passed 517 test files and 5,649 tests, with 98.41% statements, 96.02% branches, 98.53% functions and 99.55% lines.
 Twenty-two integration files and three credential-dependent tests were skipped; none of those results proves Supabase integration.
-Corrective hosted checks remain pending until the new head is analyzed.
+Corrective commit `a405b24` is pushed to PR #204.
+Its hosted CI, migration/RLS verification, smoke tests, preview and Sonar quality gate passed.
+Sonar reported one new helper-scope finding, fixed by moving the stateless result formatter outside the component.
+The owner supplied Codacy's current log: the same rule crashes on manual-account creation and scheduled save, and Opengrep times out on the transaction page.
+Both component files now pass the rule; ten additional regressions cover draft preservation, retry, cancellation errors and success.
+The page's data loader and desktop row renderer were extracted with eleven byte-identical function bodies.
+The local Opengrep rule run fell from 8.27 seconds with a partial-parse warning to 0.27 seconds without errors.
+The [quality follow-up](reviews/2026-10-02-transaction-tools-quality.md) records the evidence and 22 other pre-existing files that crash the same ESLint rule.
+The owner's decision on that broader cleanup is pending; no changes to those additional files or rule suppression are included.
 The signed-in Supabase journey and integration tests remain deferred under the disposable-target exception.
 The migration remains unapplied to production and all six flags remain off.
 
-Next step is to push the corrective commit and inspect every hosted check at the new head.
+Next step is to complete validation, push this correction to PR #204, and inspect its hosted checks.
+If the broader scanner failure persists, follow the owner's requested cleanup scope before starting another feature checklist.
 The owner's latest instruction is to start the next grouped checklist only after all PR checks pass.
 Do not merge, apply production migrations, deploy, or enable flags without owner authorization.
 

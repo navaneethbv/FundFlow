@@ -282,6 +282,9 @@ The planner needs confirmed payday settings to produce a plan, and the connectio
   The Transactions layout owns the persistent review context; each server page publishes a query/row/version signature before controls can act.
   Review versions are decimal text across the SQL view, API, client and archives.
   Independent owner-wide queue and integrity queries distinguish zero remaining work from missing state.
+- The transaction page's private `app/transactions/_lib/ledger-page-data.ts` module owns its existing cookie-bound page, facet and detail queries.
+  `components/transactions/LedgerTableRow.tsx` renders the desktop rows and date-group headers.
+  Query ownership filters and review semantics remain in the loader; the page composes the controls and ledger.
 - `ledger-columns.ts` — which optional ledger columns are visible, persisted
   as a repeated `col` GET param plus a `colsSubmitted` marker (distinguishing
   "every column explicitly unchecked" from "the menu was never touched," an

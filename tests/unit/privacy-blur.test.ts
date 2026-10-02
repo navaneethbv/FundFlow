@@ -58,7 +58,7 @@ describe("privacy blur mode", () => {
     // one; each regressed to fully-legible when the blur keyed on
     // .metric-value only.
     for (const file of [
-      "app/transactions/page.tsx",
+      "components/transactions/LedgerTableRow.tsx",
       "components/transactions/MobileLedgerList.tsx",
       "components/ui/RegisterRow.tsx",
       "components/dashboard/BarList.tsx",

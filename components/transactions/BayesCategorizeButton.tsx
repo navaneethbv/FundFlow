@@ -3,25 +3,25 @@
 import { useState } from "react";
 import Button from "@/components/ui/Button";
 
+function responseMessage(
+  response: Response,
+  payload: {
+    applied?: number;
+    suggestions?: unknown[];
+    reason?: string;
+    error?: string;
+  },
+): string {
+  if (!response.ok) return payload.error ?? "Categorization failed.";
+  if (payload.applied) return `Categorized ${payload.applied} rows.`;
+  if (payload.reason)
+    return `Bayes categorization unavailable: ${payload.reason.replaceAll("_", " ")}.`;
+  return "No confident categories found.";
+}
+
 export default function BayesCategorizeButton() {
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-
-  function responseMessage(
-    response: Response,
-    payload: {
-      applied?: number;
-      suggestions?: unknown[];
-      reason?: string;
-      error?: string;
-    },
-  ): string {
-    if (!response.ok) return payload.error ?? "Categorization failed.";
-    if (payload.applied) return `Categorized ${payload.applied} rows.`;
-    if (payload.reason)
-      return `Bayes categorization unavailable: ${payload.reason.replaceAll("_", " ")}.`;
-    return "No confident categories found.";
-  }
 
   async function run() {
     setPending(true);

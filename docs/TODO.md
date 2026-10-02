@@ -9,7 +9,12 @@ Keep `plaidCategoryMappings`, `bayesCategorization`, `merchantsPage`, `projected
 Local Supabase migration lint could not run because Docker and a local Postgres target are unavailable.
 The signed-in browser journey and integration tests remain deferred until the owner provides a disposable Supabase project with `TEST_SUPABASE_URL`.
 Clear the five reported Sonar maintainability findings and Codacy analyzer errors at the corrective PR head before starting the next grouped checklist.
-The reported security-rule crashes reproduce locally and the affected files now pass that rule; hosted reanalysis is still required.
+The reported security-rule crashes reproduce locally and the affected files now pass that rule.
+At `a405b24`, CI, migration/RLS, smoke and Sonar's gate passed, but Codacy still returned action required.
+The supplied logs identify two further component-rule crashes and the transaction-page timeout; local corrections pass the targeted rule and reduce the page scan time.
+Sonar's remaining stateless-helper scope finding also has a correction awaiting hosted reanalysis.
+The [quality follow-up](reviews/2026-10-02-transaction-tools-quality.md) lists 22 other pre-existing files that crash the same rule.
+Cleanup scope is awaiting the owner; keep the next checklist pending if those scanner failures persist.
 
 ## Reference adoption: group 5 bills and membership value
 
