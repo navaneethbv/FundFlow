@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const profileFlag = vi.hoisted(() => ({ enabled: false }));
+vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled: () => profileFlag.enabled }));
 const mockInvalidate = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/dashboard-cache", () => ({ invalidateDashboardCache: mockInvalidate }));
 
@@ -82,6 +84,7 @@ vi.mock("@/lib/audit", () => ({
 }));
 
 const mockServiceClient = {
+  rpc: vi.fn(),
   from: vi.fn(),
 };
 vi.mock("@/lib/supabase/service", () => ({
@@ -183,9 +186,27 @@ function commitSupabase(batchRows: Array<Record<string, unknown>>) {
 describe("Import API Routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    profileFlag.enabled = false;
+    mockServiceClient.rpc.mockReset();
     mockDetectSourceFormat.mockReturnValue("csv");
     mockLooksLikeOfx.mockReturnValue(false);
     mockCheckRateLimit.mockResolvedValue(true);
+  });
+
+  it.each([undefined, "", "x".repeat(81), 123])("gates layout saving and validates names %j", async name => {
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+    profileFlag.enabled = name !== undefined;
+    const request = { json: async () => ({ save_profile_name: name ?? "Bank" }) } as unknown as NextRequest;
+    expect((await commitPost(request)).status).toBe(name === undefined ? 404 : 400);
+    expect(mockServiceClient.rpc).not.toHaveBeenCalled();
+    expect(mockServiceClient.from).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 for a profile preview when the flag is off", async () => {
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+    const form = new FormData(); form.set("file", new File(["Date,Description,Amount\n2026-01-01,Shop,1"], "bank.csv")); form.set("profile_id", "saved");
+    expect((await previewPost(new NextRequest("https://example.test/upload", { method: "POST", body: form }))).status).toBe(404);
+    expect(mockServiceClient.from).not.toHaveBeenCalled();
   });
 
   describe("POST /api/import/preview", () => {
@@ -962,7 +983,10 @@ function serviceStubWith(
       expect(res.status).toBe(404);
     });
 
-    it("commits approved rows and updates status successfully", async () => {
+    it.each(["off", "saved", "rejected", "thrown"])("commits approved rows with layout save %s", async outcome => {
+      profileFlag.enabled = outcome !== "off";
+      if (outcome === "thrown") mockServiceClient.rpc.mockRejectedValueOnce(new Error("offline"));
+      else mockServiceClient.rpc.mockResolvedValueOnce({ data: "layout", error: outcome === "rejected" ? new Error("duplicate") : null });
       const mockSupabase = commitSupabase([
         {
           id: "row-1",
@@ -980,6 +1004,7 @@ function serviceStubWith(
         json: () =>
           Promise.resolve({
             batch_id: "b1",
+            ...(outcome !== "off" ? { save_profile_name: " Bank " } : {}),
             account_id: "a1",
             approved_row_ids: ["row-1"],
           }),
@@ -990,7 +1015,13 @@ function serviceStubWith(
       const res = await commitPost(request);
       expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body).toEqual({ ok: true, imported: 1 });
+      expect(body).toMatchObject({ ok: true, imported: 1 });
+      if (outcome === "off") expect(mockServiceClient.rpc).not.toHaveBeenCalled();
+      else {
+        expect(mockServiceClient.rpc).toHaveBeenCalledWith("save_committed_import_profile", { p_user_id: "u1", p_batch_id: "b1", p_name: "Bank" });
+        if (outcome === "saved") expect(body.profile_saved).toBe(true);
+        else expect(body.profile_warning).toContain("Transactions imported");
+      }
       expect(mockRefreshInferredRecurringForUser).toHaveBeenCalledWith("u1");
       expect(mockInvalidate).toHaveBeenCalledWith(expect.any(String));
     });

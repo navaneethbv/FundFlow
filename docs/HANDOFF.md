@@ -1,5 +1,38 @@
 # FundFlow Session Handoff
 
+## 2026-10-01: reference adoption program, item 0.1
+
+Implementation worktree: `/private/tmp/fundflow-pending-annotations`, branch `fix/pending-annotation-preservation`, based on restored `origin/main` at `a19a0a6`.
+The primary checkout's unrelated uncommitted backup incident edits remain untouched.
+The plan, comparison report and implementation prompt are included with this branch so future clones can resume.
+Item 0.1 reproduces annotation loss and queues provider removals until the complete update chain arrives.
+An owner/item-scoped service-only RPC carries annotations and related state before deleting pending rows atomically; conflicts refuse without losing data.
+See the plan's execution checklist for review-state semantics and deferred program items.
+The owner selected Option B: signed-in browser and full Supabase integration acceptance are deferred until an isolated target is supplied.
+Verification: all 490 unit suites / 5,423 tests passed; coverage gates passed (98.43% statements, 96.10% branches, 98.58% functions, 99.57% lines).
+Lint, type checking, palette validation, the rollback-only pending carryover SQL regression and `scripts/check-rls.sql` passed.
+The regression first failed against the old deletion behavior with `Pending annotation, tags and override were lost`.
+Local production build is not verified: Turbopack cannot bind its worker port in the execution environment; the Webpack fallback fails on the unchanged `node:crypto` import from `lib/planning.ts` into `WhatIfPanel`.
+An initial test run using a symlinked dependency directory was invalidated by module identity failures; all reported passing tests are from the clean copied dependency directory.
+`graphify update .` completed; SQL extraction reported its optional parser missing.
+The owner authorized hosted build verification and continued program work.
+An attempted feature push on the previous branch unexpectedly updated `main`, which automatically deployed `1ffe379`.
+After explicit owner approval, production was rolled back to `dpl_8E7q4qw5iZGCU5Js17x57nEENoe8`, and corrective PR #191 restored the exact prior tree at merge `a19a0a6` after all checks passed.
+The normal merge was policy-blocked; the owner granted an administrator exception for PR #191 only.
+No database migration or feature-flag change occurred.
+The implementation was then replayed onto this non-tracking feature branch for review.
+Every future branch push must name both source and destination explicitly and be checked with a dry run.
+PR #192 hosted checks passed at `43fe6bc`; PR #193 hosted checks passed at `155934c`.
+Item 0.2 was not reproduced and was skipped with evidence in the plan.
+Item 1.1 is draft PR #194 from `/private/tmp/fundflow-import-profiles`, branch `feat/import-profiles`, with hosted checks pending.
+PR #194 passed hosted checks at `6820c96`; PR #195 passed emitted hosted checks at `2cf0f7d`.
+Current item 1.3 is uncommitted on `ui/import-wizard` in `/private/tmp/fundflow-import-wizard`; its handoff records changed files and pending full verification.
+The wizard is the third branch in the import stack.
+Next: finish the wizard PR, then 1.4 from a shallow base while retaining all default-off flags and deferred signed-in acceptance.
+Temporary Sure reference clone: `/private/tmp/fundflow-reference-sure`, pinned to `97fa8a2eda5df778abcccb2a08a643d8004907c4`.
+Keep it until the program ends; do not delete implementation worktrees or reset the primary checkout.
+
+Last updated: 2026-10-01. Read this first to resume.
 
 ## 2026-10-01: reference adoption item 0.3
 
@@ -17,3 +50,869 @@ The central program checklist is maintained in the plan on PR #192's branch unti
 All pushes must use an explicit source:destination branch refspec, verified first with a dry run.
 
 Last updated: 2026-09-30. Read this first to resume.
+
+Last updated: 2026-10-01. Read this first to resume.
+
+## 2026-10-01: reference adoption 1.3, import wizard
+
+Current worktree `/private/tmp/fundflow-import-wizard`, branch `ui/import-wizard`, based on PR #195 (`feat/import-preflight`) at `2cf0f7d`.
+This is the third branch in the saved-layout/import stack; do not add a fourth dependent branch before earlier PRs merge.
+PR #194 passed all hosted checks at `6820c96`; all emitted #195 checks passed at `2cf0f7d`.
+The pinned personal-finance-tracker dropzone, mapping wizard, and preview were read for interaction behavior.
+FundFlow already implements column naming, samples, date/sign settings, duplicate review, and explicit commit in `ImportReviewSection.tsx`; those surfaces are reused.
+
+New default-off `importWizard` adds a page-wide file drop listener only while the Data import section is mounted, native keyboard file selection, four visible steps, focus transitions to mapping/review/completion, and stale-preview clearing when files or parsing settings change.
+`components/settings/ImportWizard.tsx` contains the scoped drop hook and progress list.
+`components/ui/Input.tsx` accepts the standard React 19 input ref prop so the shared primitive supports dropped-file selection and focus.
+No route or migration is added by this item.
+
+A browser test first failed on the absent progress indicator before implementation.
+Initial four browser fixtures passed for mobile/desktop and both themes; expanded fixtures now exercise drop, manual mapping focus, replacement/cleared files, sign explanation, and off-state event behavior.
+Full coverage passed 495 suites / 5,509 tests at 98.46% statements, 96.10% branches, 98.60% functions, and 99.57% lines.
+Final expanded browser fixtures, lint, and typecheck passed; logs are `/private/tmp/fundflow-wizard-{browser,lint,types}.log`.
+The browser checks cover mapping/review/completion focus, drop and keyboard file selection, clearing stale batches after file/sign changes, disabled-feature event behavior, overflow, and axe checks including diagnostic errors.
+The signed-in journey remains deferred with owner approval; these are isolated component fixtures with mocked HTTP.
+
+Next: finish verification, update the graph, review the diff, open a draft PR against `feat/import-preflight` using an explicit source/destination push refspec, record the item in the canonical plan on PR #192, then work on item 1.4 from an appropriately shallow base.
+Preserve all existing worktrees and the primary checkout's original dirty files.
+
+## 2026-10-01: reference adoption 1.2, import diagnostics
+
+Current worktree `/private/tmp/fundflow-import-preflight`, branch `feat/import-preflight`, based on saved-layout PR #194 at `6820c96`.
+Open the PR against `feat/import-profiles`, documenting the dependency; no merge is authorized.
+PR #194 passed all hosted checks, including build, migrations, security and quality gates, at that exact base.
+Its temporary reference source is `/private/tmp/fundflow-reference-pft`; this item reads Sure's preflight behavior from `/private/tmp/fundflow-reference-sure` at the plan pin, without copying code or text.
+
+New `lib/import-preflight.ts` reports bank CSV delimiter/header problems, physical row positions, invalid or ambiguous dates, numeric format/range problems, competing debit/credit amounts, malformed quoting, and duplicate normalized rows.
+`POST /api/import/preflight` is cookie-authenticated, rate-limited, body-bounded, and audited with counts only; it stages no financial data and accepts no API tokens.
+Both `importPreflight` and its `importProfiles` prerequisite must be enabled; both stay off by default.
+Settings checks CSV files before preview staging and shows a keyboard-accessible diagnostic table; dedicated OFX/application-export parsers keep their existing validation path.
+No new migration is needed for 1.2.
+
+Validation: lint, typecheck, all 495 unit suites / 5,509 tests, and four Chromium fixtures at 375px/1440px in both themes passed.
+Final coverage: 98.46% statements, 96.10% branches, 98.60% functions, and 99.57% lines.
+The final focused run passed 35 tests, including the encoded multipart body still asserting 413 after a File-serializer race invalidated an earlier run.
+Only `/private/tmp/fundflow-preflight-coverage-verified.log` records the accepted full run; the earlier `coverage-final` log contains the invalidated serializer rejection.
+The diagnostic/API edge suite covers physical line numbers, quoted and escaped newlines, amount grouping and range, duplicate warnings, row limits, disabled flags, authentication, rate limiting, and body bounds.
+Signed-in browser journeys and full Supabase integration remain deferred with owner approval; no production credentials or database are used.
+
+Next: commit and push only `HEAD:refs/heads/feat/import-preflight` after a dry run, open a draft PR against `feat/import-profiles`, verify hosted checks, and record 1.2 in the canonical plan on PR #192.
+Then continue 1.3, keeping the stack at most three branches deep.
+The user's dirty primary checkout remains preserved; never reset, clean, stash, or overwrite it.
+
+## 2026-10-01: reference adoption 1.1, saved import layouts
+
+Worktree `/private/tmp/fundflow-import-profiles`, branch `feat/import-profiles`, based on restored main `a19a0a6`.
+The owner-authorized corrective PR #191 is merged; feature PRs #192 and #193 remain separate and unmerged.
+Always push an explicit `HEAD:refs/heads/<topic>` refspec after a dry run.
+An earlier upstream-tracking push accidentally updated main; the rollback and PR #191 restored it, and its administrator exception applies to #191 only.
+
+`lib/import-profiles.ts` validates ordered normalized header signatures, column positions, date order, amount conventions, and up to 20 logical leading records.
+`lib/import-profile-preview.ts` reads profiles through the cookie client with an explicit owner filter, auto-selects a unique match, and asks the user to resolve multiple matches.
+Existing specialized OFX/Mint/Monarch/YNAB importers retain their semantics.
+The preview route stores a layout snapshot; the commit route saves it through a service-only owner-scoped RPC after a durable import, reporting a warning if saving fails.
+Settings exposes layout choice and optional naming only under the default-off `importProfiles` flag.
+The additive migration grants authenticated SELECT with ownership, MFA, and revocation gates, with no client write grants.
+
+Validation: lint and typecheck passed; the full unit coverage run passed 492 suites / 5,472 tests before two additional route integration unit cases also passed.
+Coverage was 98.44% statements, 96.09% branches, 98.59% functions, and 99.57% lines.
+The migration, committed-only save, empty-import refusal, name/quota guards, owner isolation, and `scripts/check-rls.sql` passed on isolated local PostgreSQL with Auth/Storage stand-ins.
+All four browser fixtures passed; they use mocked HTTP responses and no app server or database; they test the real component at 375px and 1440px in both themes, keyboard interaction, overflow, and axe checks.
+The signed-in journey and full Supabase integration remain deferred with owner approval.
+Local production builds remain blocked by the previously documented sandbox worker-port and existing Webpack client-crypto issue; hosted CI is the build gate, as authorized.
+No production migration, flag flip, or feature merge was performed for this item.
+
+Next: open the focused draft PR, record its number in the canonical plan on `fix/pending-annotation-preservation`, and continue item 1.2.
+The untracked plan/report/prompt copies in this worktree are reference copies; do not commit them into this independent PR.
+
+Last updated: 2026-09-30. Read this first to resume.
+
+## 2026-09-30: preserve integration tokens across sign-out
+
+Fixed the P2-4 logout regression on `fix/security-ui-memory` from `9f4e117`.
+Before editing, `supabase migration list --linked` succeeded and showed empty remote entries for all three `2026100105*` migrations, plus the two `2026090804*`/`2026090805*` transaction-review migrations.
+This agreed with the prior local-only handoff; no other applied environment was identified.
+Edited the unapplied `20261001052000_api_token_lifecycle.sql` in place, removing only the `auth.sessions` deletion trigger and its function branch.
+Password-change and verified-MFA-removal triggers, expiry, grants, and no-reactivation protections are unchanged.
+API/calendar tokens survive sign-out and expired-session cleanup, including deletion of the final session.
+They become unusable on password change, verified MFA factor removal, expiry, or explicit per-token revoke in Settings.
+Logout behavior is unchanged, including its default global scope.
+A dedicated "revoke all integrations" or "sign out of all devices" action does not exist yet and remains deferred in TODO.
+
+The SQL regression covers one-device, final-session, and all-session deletion for both token types, plus password/MFA revocation and other-user isolation.
+It failed against the original migration with `Final-session logout revoked API token`.
+All 89 migrations, including the corrected lifecycle migration, then applied to a fresh local PostgreSQL 17.11 database with minimal Auth/Storage schema stand-ins.
+Both `scripts/check-rls.sql` and `scripts/check-review-remediation.sql` passed with `ON_ERROR_STOP=1`; the lifecycle fixtures rolled back.
+The workflow still runs the lifecycle script immediately after the RLS script.
+This is database-level evidence, not real Supabase Auth or Storage service acceptance; Docker is unavailable.
+
+Verification logs are in `/tmp/fundflow-token-signout-check/`.
+Lint, `npx tsc --noEmit`, the production Turbopack build, palette validation, and `npm audit --audit-level=high` passed; audit reported `found 0 vulnerabilities`.
+`SUPABASE_SECRET_KEY= npm run test:unit` and `TEST_SYSTEM_TIME=2030-01-15T12:00:00Z npm run test:unit` each passed 490 files and 5,423 tests.
+`SUPABASE_SECRET_KEY= npx vitest run tests/unit scripts --coverage` passed 491 files and 5,424 tests, with unchanged gates: 98.43% statements, 96.11% branches, 98.57% functions, and 99.57% lines.
+Dependency freshness found minor icon updates, a sharp patch, and ESLint/TypeScript majors; all remain outside this focused regression fix.
+No integration tests, pushes, deployments, or live migration writes were performed.
+
+Remaining: apply the three `2026100105*` migrations to an approved disposable full Supabase environment and run real Auth password-change, verified-MFA-removal, and logout checks.
+Hosted checks and production rollout remain unverified and unauthorized in this task.
+
+## 2026-09-30: repository review remediation, local only
+
+The [review and finding status](reviews/2026-09-30-repository-review.md#implementation-status-2026-09-30-local-work) records every fixed, deferred, and not-reproduced item.
+Work remains on `fix/security-ui-memory`, starting at `b86d84b`, in focused local commits.
+No push, PR, deployment, live migration, or production Auth configuration change was performed.
+The user explicitly deferred the signup allowlist hook; local signup remains enabled and production signup configuration is unverified.
+
+Implemented deterministic and future-clock CI tests, patched dependencies, first-sync and pending/posting alert protections, cancellation-date checks, batched notification writes, iOS detection and session-owned login alerts, dashboard invalidation, viewer-date reporting, operational retention, fail-closed Plaid/calendar budgets, bounded provider calls, token expiry and fresh step-up, confirmed household acceptance, and validated login return paths.
+Small model/payload and feature documentation updates are included.
+Revoked session records and exact alert dedupe subjects deliberately survive retention to preserve security and replay barriers.
+
+Local verification: 5,424 coverage tests passed; the unchanged coverage gates passed at 98.43 percent statements, 96.11 percent branches, 98.57 percent functions, and 99.57 percent lines.
+The 2030 clock run passed all 5,423 unit tests; 23 focused tests also passed after the final notification database-column mapping fix.
+Lint, TypeScript, palette validation, and dependency audit passed; the audit reports zero vulnerabilities.
+Five Chromium checks passed, covering the token component at 375/1440 pixels in both themes with keyboard and accessibility checks, plus the real signed-out invitation redirect.
+The component checks use synthetic responses and do not prove authenticated persistence.
+
+Production build verification is blocked: Turbopack reports `creating new process -> binding to a port -> Operation not permitted (os error 1)` even after escalation.
+The webpack fallback reports an existing `node:crypto` import from the planning dependency chain reaching a client bundle.
+The development server compiled the login page successfully.
+No approved disposable Supabase target or local Docker stack was available, so database integration, RLS, real Auth lifecycle, and authenticated confirmation-page acceptance remain unverified.
+The new rollback-only `scripts/check-review-remediation.sql` is wired into migration CI but has not run locally.
+
+Before deployment, validate all three `2026100105*` migrations against a disposable database, including `scripts/check-rls.sql`, the new lifecycle smoke script, and real Auth password/MFA/logout behavior (password changes and verified MFA removal revoke tokens; logout preserves them).
+Have the owner apply the validated migrations before dependent application code.
+Hosted checks have not run for these local commits.
+Credit utilization, external error monitoring, broader integration coverage, and the larger P3 findings remain follow-ups described in the review and TODO.
+
+## 2026-09-26: local security, UI, and memory improvements
+
+The user requested a repository review and fixes covering security, UI, shortcomings, and memory efficiency.
+Work started from a clean `test/expand-code-coverage` checkout at `66f96bf`; publication uses `fix/security-ui-memory` rebased onto current `main` at `c3e7828`.
+The [review and verification record](reviews/2026-09-26-security-ui-memory.md) owns the findings, API limits, memory measurements, checks, and remaining acceptance limits.
+Implemented bounded request parsing, bounded dashboard retention and unambiguous cache keys, AI input/quota fixes, command-palette keyboard visibility, enforced isolated browser-test targets, deterministic scheduling tests, and patch dependency refreshes.
+Local verification passed: 5,390 tests, the unchanged coverage gates (96.18 percent branches), six component browser checks, six signed-out production-build smoke checks, lint, typecheck, production build, palette validation, and dependency audit with zero vulnerabilities.
+Database integration and authenticated acceptance were not run against live data; the review record states the skips and required isolated environment.
+No migrations or live-data writes were performed.
+The user authorized a pull request; hosted checks and deployment remain separate from local validation.
+
+## 2026-09-24: repository review and UI polish
+
+The user asked for a bug/consistency review and a page-by-page UI pass.
+Every authenticated page was rendered against a local `supabase start` stack with the demo dataset, at 1440px and 390px in both themes.
+- **Local stack sign-in (bug).** The CSP hardcoded `https://` for the Supabase host, so a plain-http loopback URL (the `supabase start` path `docker-compose.selfhost.yml` documents) could never sign in. `supabaseConnectSources()` in `proxy.ts` now allows http/ws for loopback hosts only and omits `upgrade-insecure-requests` there; hosted projects are unchanged.
+- **414 on `.in()` lists (bug).** 250-UUID chunks built ~9.3KB request lines, over the 8KB nginx/Kong default in front of a self-hosted or local stack, so Cash Flow, Budget, Forecasting, Advice, Wrapped, and Goals/Dashboard failed there. `lib/postgrest-limits.ts` owns one `IN_FILTER_CHUNK_SIZE` (150) used by every URL `.in()` list. The dashboard's month split read was unchunked and ignored its error (silently dropping splits from category totals); it is now chunked and throws. The scheduled-promotion status update is chunked too.
+- **Forecast axis (bug).** Ticks were nice steps offset from the raw minimum ($4K / -$6K / -$16K); `niceTickRange()` puts every tick on a round multiple and always includes zero.
+- **Review prompts.** Duplicate-charge and large-transaction messages now name the amount and day; separate days used to render as identical repeated lines.
+- **UI consistency.** Dates and table headers no longer use Geist Mono (tabular sans figures instead); `titleCase` keeps joining words lowercase ("Food and Drink"); shared `RouteErrorView` for all four error boundaries; tighter sidebar so all nav fits at 900px; lone "Mine" scope switch hidden without a household (Budget, Recurring, matching Debt); Title Case page names (Debt Payoff, Receipt Inbox); sentence-case buttons; formatted dates instead of raw ISO/month keys; milestone badges read "Net worth"/"Emergency fund" without danger red; share percentages at one decimal; capped chart width so axis text no longer doubles in size; 404 page, admin header, login dividers.
+- Dependencies: patch/minor bumps applied. ESLint 10 and TypeScript 7 majors skipped (toolchain risk, `eslint-config-next` pairing).
+
+Follow-up the same day: a high-volume pass (23k-transaction user) and ten light plus ten dark colour palettes.
+The [review record](reviews/2026-09-24-ui-volume-and-themes.md) owns the details: bugs, volume findings, palette design and guard rails, and what is left.
+Settings → Display preferences were saved but never applied; they now are.
+
+## 2026-09-21: unauthenticated webhook body limit
+
+A security review found that `/api/plaid/webhook` buffered the complete request
+body before signature verification. The route now rejects declared and streamed
+bodies above 256 KiB with HTTP 413, before parsing, signature-key lookup, or any
+item-scoped work. Regression tests cover both `Content-Length` and chunked-body
+bypasses. The focused webhook suites and typecheck passed. The dependency
+freshness and vulnerability registry checks were unavailable because this
+environment received HTTP 403 from npm; the full unit run and lint process were
+terminated by the environment without diagnostics, and `graphify` was not
+installed.
+Before merging PR #181, the full unit suite, lint, typecheck, and hosted CI passed.
+
+## 2026-09-08: PR #166 review remediation
+
+The user requested fixes and a push after the [plan-conformance review](reviews/2026-09-08-pr166-review.md).
+Work was isolated from the changing main checkout and incorporates the incoming coverage commit `6c4d125`.
+All six review findings have implementation fixes; the [verification record](testing/pr166-verification.md) owns the detailed behavior, regression evidence, performance measurements and remaining gates.
+The feature remains disabled, and no production schema or records were changed.
+The new additive text-version migration must accompany the original review migration before enablement.
+Full Supabase Auth and production read-only acceptance remain distinct from the successful local browser-shim and PostgreSQL checks.
+
+## 2026-09-08: persistent transaction review implementation
+
+The user requested implementation of the approved [transaction review plan](superpowers/plans/2026-09-07-transaction-review-implementation-plan.md).
+Implemented, reviewed against the plan, and folded into PR #166 on branch `docs/transaction-review-plan` (the plan and its implementation ship together).
+- **Database (`supabase/migrations/20260908040000_transaction_review_state.sql`):**
+  - Created `transaction_review_states` table with composite foreign key `(user_id, transaction_id)`, unique constraint, check constraints (`status IN ('needs_review', 'reviewed')`, `version > 0`, `reviewed_at` non-null iff reviewed), and RLS gating on `user_id = auth.uid()` plus `private.session_not_revoked()` and `private.mfa_satisfied()`.
+  - Added insert and update triggers (private, `SECURITY DEFINER`, empty search path, no callable grant) that initialize every inserted transaction to `needs_review` and reopen with an incremented version when a material fact tuple changes (`amount`, `date`, `account_id`, `manual_account_id`, `iso_currency_code`, `merchant_name`, `name`, `pfc_primary`, `pfc_detailed`, `pending`, `source`); timestamp-only updates are preserved, and a material change with no review row rolls the source write back.
+  - Backfilled all existing transactions into `needs_review` under a bounded `lock_timeout`, then asserted every transaction has exactly one owner-matching review row before commit.
+  - Created `transaction_review_ledger` view with `security_invoker = true`.
+  - Created atomic RPC `set_transaction_review_state_atomic` with strict compare-and-set versioning, batch validation, conflict handling (`40001` / `REVIEW_STATE_CHANGED`), and audit payload return.
+  - Added SQL test harness `scripts/check-transaction-review.sql` and registered it in `.github/workflows/migration-check.yml`.
+- **API & Audit:**
+  - Added `transactionReview` flag in `lib/feature-flags.ts` (default: `false`).
+  - Registered `transaction_reviewed` and `transaction_review_reopened` audit actions in `lib/audit.ts`.
+  - Created validation and helper module `lib/transaction-review.ts`.
+  - Created route handler `app/api/transactions/review/route.ts` with feature gating, authentication, 120/hr rate limiting, byte size enforcement, payload schema validation, error code mapping (404 for P0002, 409 for 40001/REVIEW_STATE_CHANGED, 400 for 22023), audit logging, and `Cache-Control: no-store`.
+- **Ledger Query & Projection:**
+  - Updated `lib/ledger-query.ts` to parse, serialize, and preserve `review` query parameter (`all`, `needs_review`, `reviewed`).
+  - Extended `lib/ledger-projection.ts` and `components/transactions/MobileLedgerList.tsx` interfaces with review state and eligibility fields.
+- **UI Components:**
+  - Created `components/transactions/TransactionReviewProvider.tsx`, `TransactionReviewStatus.tsx`, and `TransactionReviewControls.tsx`.
+  - Updated `components/transactions/TableToolbar.tsx`, `components/transactions/TransactionQueryControls.tsx`, `components/transactions/MobileLedgerList.tsx`, and `app/transactions/page.tsx` for desktop and mobile review actions, bulk operations, review status filtering tabs, and global review queue summary counter.
+- **Lifecycle & Governance:**
+  - Registered `transaction_review_states` in `USER_DATA_TABLES` (`lib/user-data.ts`) with deterministic `transaction_id` ordering.
+  - Added explicit skip guard in `lib/restore.ts`.
+  - Re-exported `Check` and `RotateCcw` in `components/ui/icons.tsx`.
+  - Updated `docs/ARCHITECTURE.md` and `docs/TODO.md`.
+- **Verification:**
+  - Added unit suites `tests/unit/transaction-review.test.ts`, `tests/unit/transaction-review-route.test.ts`, `tests/unit/transaction-review-ledger.test.ts`, and `tests/unit/transaction-review-render.test.ts`; updated `tests/unit/mobile-ledger-list.test.ts`, `tests/unit/table-toolbar-render.test.ts`, and `tests/unit/transaction-query-controls-render.test.ts`.
+  - Added `tests/integration/transaction-review-concurrency.test.ts` (compare-and-set under real row contention, material-change reopen, cross-user rejection, cascade) and `tests/e2e/transaction-review.spec.ts` (review/persist/reopen, bulk, stale-selection clear, 390px), both self-skipping without an approved `TEST_SUPABASE_URL`.
+  - `scripts/check-transaction-review.sql` now also asserts anon and MFA-insufficient denial; `tests/e2e/transactions.spec.ts` gating tightened to require the isolated-target opt-in.
+  - Local gate green: `tsc --noEmit`, `npm run lint`, `npm run validate:palette`, `npm run build`, `npm audit --audit-level=high`, and the unit coverage gate (95% branches).
+
+### Review-remediation notes (against the plan)
+
+- The two source triggers were missing their `REVOKE` and would have failed `scripts/check-rls.sql` in `migration-check` CI; fixed.
+- Bulk selection now resets on view/sort/filter/page navigation via a `key` on `TransactionReviewProvider` (plan §4.3 / AC-12).
+- `validateReviewBatchPayload` now rejects unexpected top-level and per-item fields (plan §7.1).
+- Feature stays flag-off (`transactionReview: false`) until the migration is applied to the live project and browser acceptance runs per plan §12.
+
+## 2026-09-07: transaction review implementation plan
+
+The user chose transaction review from the feature-gap shortlist and requested a detailed plan.
+The [transaction review plan](superpowers/plans/2026-09-07-transaction-review-implementation-plan.md) is based on merged PR #165 at `74efddd` and current source inspection.
+It keeps review separate from reconciliation and specialized candidate decisions, with independent persistent state, source-change reopening, whole-result filtering, and atomic selected-row writes.
+Only planning documents changed; no application code or migration was created or applied for this feature.
+The user subsequently confirmed all existing transactions should enter review, so the plan now uses two states and an all-history backfill.
+Current planning status is tracked in [TODO.md](TODO.md#transaction-review-plan-2026-09-07).
+
+## 2026-09-07: relinked investment account duplication fixed locally
+
+The authenticated production dashboard showed two distinct IDs for each of the IBM 401(k) and PayPal 401(k) accounts after the same Plaid Item was connected twice.
+The displayed $89,663.04 investment total included both the stale and current account sets.
+Branch `fix/relinked-account-dedup` now recognizes a duplicate only when two Items owned by the same user expose the same complete, unambiguous account set and one set is uniquely fresher.
+Ambiguous single-account matches, missing masks, partial sets, tied timestamps, and matching household-member accounts remain visible.
+The shared rule covers Dashboard, Investments, Accounts, net-worth snapshots, forecasting, debt planning, goals, advice, and account exports.
+The production-shaped regression keeps the two current rows and computes $45,240.00.
+No stored account, transaction, holding, or user preference is deleted or rewritten.
+The [TDD evidence](testing/relinked-account-dedup.tdd.md) records the RED and GREEN checks and the coverage result.
+Final validation passed 469 unit files and 5,170 tests, 95.06% branch coverage, typecheck, lint, the production build, and the graph refresh.
+The branch is not pushed, merged, or deployed, so production still shows the duplicate until delivery is completed.
+
+## 2026-09-07: linked migrations applied and history reconciled
+
+The user authorized applying the pending migrations before merging the application fixes.
+Two historical version IDs were corrected after exact stored-SQL comparison, and all eight missing migrations were applied through the linked CLI.
+The ledger now matches all 84 local versions.
+PR #165 contains the fixes.
+Its clean-stack check exposed an absent account lookup grant, reproduced locally with default grants removed and fixed through an additional explicit column-grant migration.
+The follow-up also separates calendar loading and reconciliation rendering responsibilities and addresses the reported lint findings.
+Live RLS assertions and read-only authorization probes pass, and deployed RPC/trigger definitions match the locally tested database.
+The schema rollout preserves the old form's limited legacy insert while denying any client-created verified basis or retry result.
+A fresh local migration run verifies that compatibility path, cross-user rejection, rollback, stale saves, MFA, revocation, and atomic note/goal writes.
+The CLI's optional local catalog-cache refresh warned that Docker was unavailable after the successful push; remote SQL and ledger checks independently confirmed deployment.
+Current rollout status is maintained in [TODO.md](TODO.md#deployment-prerequisite).
+The app merge and deployment remain for the user.
+
+## 2026-09-07: repository review fixes implemented locally
+
+The [repository review and implementation record](reviews/2026-09-07-repository-opportunities.md) records fixes for all ten findings at `ef831c3`.
+Reconciliation now uses verified opening balances, cleared activity, atomic writes, stale-preview checks, idempotent retries, and correct liability signs.
+Manual-entry metadata is atomic; calendars share recurring occurrences; signed exports and manual-only daily maintenance are corrected.
+Local verification: 468 unit files / 5,165 tests, 95.07% branch coverage, lint, typecheck, production build, palette validation, zero audit vulnerabilities, fresh-database migration and RLS checks, fault-injected financial writes, and local browser saves at desktop and phone widths.
+The browser used an isolated database and a test-only auth response, not production writes or hosted Auth verification.
+The subsequent migration rollout above completes the database prerequisites for these routes.
+Supabase JS and Lucide received minor updates; the three proposed features were not implemented.
+This implementation entry predates the migration rollout and pull-request handoff recorded above.
+
+## 2026-09-07: PR #157 merged to `main`
+
+PR #157 (UI audit + financial-workflow review findings) is merged to `main` as `7caaa2c`.
+The branch-scoped entries below (`ui/page-audit` / `codex/ui-page-audit`, review head `61ec03c`) are now historical provenance, not open work.
+Still open after the merge: a production deployment of `main`, the signed-in preview pass at desktop and phone sizes, and the migration-ledger reconciliation tracked in [TODO.md](TODO.md#deployment-prerequisite).
+
+## 2026-09-07: PR #157 follow-up fixes
+
+The [follow-up report](reviews/2026-09-07-pr157-follow-up.md) records the review findings, red/green reproductions, and ongoing verification.
+The MFA helper rejects unavailable factor metadata and accepts a valid second authenticator for callers without explicit factor selection.
+Dashboard and Recurring now share persisted recurring inputs and occurrence expansion; corrected amounts, manual items, and linked payments no longer use separate Dashboard heuristics.
+The weekly-report complexity finding was addressed by extracting its cash-movement calculation.
+Deployment history and prerequisites are owned by [TODO.md](TODO.md#deployment-prerequisite).
+Preview OAuth sign-in still returns to production; inspecting the provider redirect settings requires the user's Supabase dashboard login.
+
+## 2026-09-07: implementation plan phases 0–5 (branch `ui/page-audit`)
+
+Phases 0–4 are implemented and committed on `ui/page-audit` (all for PR #157): Phase 0 (PR-1/12/13 + ride-alongs), Phase 1 (S-1 migration `20260906140000`, S-2 ownership scoping, S-5/S-7 slices), Phase 2A (write-path hardening + refund-link RPC `20260906150000`), Phase 2B (canonical budget matching, clamped month arithmetic, recurring expansion, paged reads, cron 207s), Phase 3 (weekly transfer exclusions, price-spike predicates, payoff math incl. unplanned non-card debts, expense credits, route error checks), Phase 4 (privacy-blur scanner test, viewer-day threading via `resolveViewerToday`, calendar/advice/goal/profile TZ handling). A parallel session landed the complementary frontend pass (`87651df`) and CI/test/docs pass (`7406cb4`: `typecheck` + `validate:palette` + coverage in CI, vitest env placeholders + `TZ: UTC` + `restoreMocks`, auth-callback and assertion-hygiene tests).
+Full gate green: lint, typecheck, palette, 461 unit files / 5,083 tests.
+Two Phase 2B/3 follow-ups fixed after the fact: demo-route limiter mocks and the calendar IP-keyed limiter test helper.
+
+Still manual (not done, never assumed):
+- T-1: no status check is required to merge to `main` (ruleset `18543151`); require `CI / lint-build-test` and `Migration smoke-check` in GitHub settings.
+- T-2: `supabase migration list --linked` re-verified 2026-09-07 (ledger in `TODO.md` is current, now including `20260906140000`/`20260906150000` as local-only); the eight local-only migrations remain unapplied, so the backup cron still fails on the linked project.
+- Signed-in preview pass (desktop + phone) is still open.
+- Plaid 47 / Nodemailer 10 / Vitest 5 majors deferred, each to its own PR.
+- Provider-id upsert conflict targets (`accounts`, `transactions`) still key on the globally-unique provider id; per-user targets need a migration with backfill review, so code now scopes the surrounding reads/writes instead.
+
+## 2026-09-06: PR #157 review remediation
+
+Branch `ui/page-audit` (remote `codex/ui-page-audit`, unrenamed because it backs open PR #157).
+All five findings in the [PR #157 review](archive/2026-09-06-pr157-review.md) are fixed at review head `61ec03c`, with regression coverage for each.
+
+Net worth (R1) now composes the same balance sheet everywhere.
+The new `lib/net-worth-inputs.ts` owns the rule, and `lib/dashboard.ts`, `lib/net-worth.ts`, and `lib/forecasting-data.ts` all read it instead of keeping three near-copies.
+The Dashboard loads `manual_accounts` and the caller's `dashboard_prefs` alongside `accounts`; a failed read of either throws rather than overwriting the stored snapshot with a smaller total, and a manual-only user now gets a live open-month point.
+
+Dismissed recurring streams (R3) no longer produce Dashboard reminders.
+`lib/dashboard.ts` applies the Recurring page's own eligibility rule, `dismissed_at` null and not `TOMBSTONED`, before deriving subscriptions, income streams, statuses, the bill calendar, and the cash-flow forecast.
+The same defect was live in the calendar feed, which was publishing dismissed streams into the user's calendar app; `app/api/calendar/[token]/route.ts` now filters them out too.
+
+The mobile holdings card (R2) carries labeled price, quantity, weight, and change, and the account name wraps rather than truncating so the mask survives.
+The last two duplicated account labels (R4) in `DashboardToolbar` and `WealthView` now use `accountDisplayLabel`; matching still keys on `account.id`.
+The admin sync-job panel (R5) selects `job_type` rather than the nonexistent `source`, separates query failure from a genuine empty state, formats timestamps through `formatTimestampUtc`, and maps `failed` to the danger tone.
+`last_error` was deliberately left out of that panel: the page is framed as a redacted operational view and that column carries arbitrary provider text.
+
+The six Sonar annotations from the reviewed head are cleared: direct re-exports in the three `lib/import-*.ts` files and `toHaveLength` in `tests/unit/coverage-boost-95-plus.test.ts`.
+
+Validation: 453 unit files and 5,036 tests pass, up from 449 and 5,015, with lint, typecheck, and the production build clean, and the graph updated.
+No migration was written or applied, and no production financial record, bank connection, or consent flag was touched.
+The signed-in preview pass at desktop and phone sizes is still open and needs the user to sign in to the preview themselves.
+
+## 2026-09-05: UI page audit and local fixes
+
+Branch `codex/ui-page-audit` contains fixes for 17 confirmed UI findings, with a [coverage matrix and reproductions](reviews/2026-09-05-ui-page-audit.md) and [detailed implementation plan](superpowers/plans/2026-09-05-ui-page-fixes.md).
+The changes cover shared dark-theme controls, settings layouts, mobile recurring rows, account labels, current net-worth history, funded goal review, investment freshness, and explicit AI consent.
+The full coverage run passed 4,947 unit and script tests, including 95.05% branch coverage; lint, typecheck, build, palette validation, and graph update passed.
+The browser URL security policy rejected further production-tab inspection during continuation.
+Post-fix browser checks, login/signup/admin pages, additional states, and the exact recurring-widget mismatch remain unverified.
+No production financial records, bank settings, or consent were changed, and no deployment was made.
+
+## 2026-09-05: Savings-rate period alignment
+
+The dashboard now uses the most recent complete month for the savings-rate card when the active month is the current calendar month.
+Cash-flow and spending tiles remain month-to-date for the active month.
+The savings-rate card names the month used for its income and spending basis, and shows an unavailable state when no complete month is in the six-month window.
+Focused tests, the full unit suite, coverage, lint, typecheck, build, palette validation, graph update, and fresh remote checks pass.
+
+## 2026-09-05: Bulk transfer review action
+
+Branch `codex/bulk-transfer-linking` adds explicit row selection, a select-all checkbox, and a `Link all transfers` action to the transfer review panel.
+The action sends one bounded bulk request with up to eight concurrent per-pair operations, reuses the existing ownership and transfer invariant checks, and reports partial failures while leaving failed rows available for retry.
+Individual link actions are disabled while a bulk operation is running to prevent overlapping writes.
+Bulk requests use their own five-per-hour limiter so a user who exhausted the single-link limiter can still process the review list in one intentional action.
+
+Validation passed with 4,909 unit tests, 95.04% branch coverage, lint, typecheck, and the production build.
+The full coverage command was not allowed to run its live integration files because `TEST_SUPABASE_URL` is not approved on this machine.
+This branch has not been deployed or exercised against production financial data.
+
+## 2026-09-05: Savings-rate denominator context
+
+The dashboard keeps the signed savings-rate calculation, but now flags a period where spending is more than ten times recorded income as denominator-sensitive.
+The card exposes the recorded income and spending amounts in its explanatory copy so a large negative percentage is not mistaken for a calculation failure.
+The active calendar month now uses the most recent complete month for this card, while cash-flow and spending tiles remain month-to-date.
+The six-month savings-rate series now uses the same shared signed calculation and returns no rate for months without an income denominator.
+The focused and full unit suites, coverage, lint, typecheck, build, palette validation, graph update, and fresh remote checks all pass.
+The full coverage command still does not run live integration files because `TEST_SUPABASE_URL` is not approved on this machine.
+
+## 2026-09-05: Third review of PR #153
+
+Reviewed head `6c69927` and reproduced two residual defects through request-handler regressions with isolated dependencies.
+Rule preview took about 1.7 seconds for one repetitive 300-character bank description under `.*a.*a.*!`.
+Accepted merchant patterns now execute through browser-compatible RE2JS while retaining existing shape validation.
+Backup delivery previously deleted its claim after sending when the completion write failed.
+The new `20260905120000_backup_send_boundary.sql` migration records sending before SMTP and prevents automatic retries of uncertain delivery outcomes.
+Pre-send failures remain retryable; uncertain outcomes fail visibly until reconciled with the mail provider.
+The linked migration ledger is recorded in `TODO.md`; no production migration was applied.
+Validation: 4,902 unit tests passed, the 46 restore tests passed again after the Sonar refactor, and lint, typecheck, production build, palette validation, and dependency audit passed.
+All six signed-out browser smoke tests passed against the local production build.
+The formerly slow pattern completed in 3.6 ms in Chromium with the browser-compatible matcher.
+Authenticated production writes and recovery tests were not run.
+
+## 2026-09-05: Second review round on PR #153
+
+Branch: `codex/comprehensive-review-remediation` (unchanged).
+
+The 2026-09-04 entry below claims all 33 findings were "fully resolved".
+A second review of the branch at `4ddf547` rejected that, reproducing defects against seven findings plus four unfinished follow-ups.
+Read the 2026-09-04 entry as the record of what each package touched, not as a statement of what shipped.
+[`TODO.md`](TODO.md) now carries the accurate closed / closed-with-a-limit / deferred split.
+
+What this round changed:
+
+1. **FF-02, MFA and revocation gates were incomplete.**
+   `life_events`, `credit_card_bills` and `account_reconciliations` still had owner-only policies, and a wider audit found 37 user-data tables in the same state.
+   `supabase/migrations/20260905100000_mfa_gate_remaining_user_tables.sql` rewrites each policy in place from `pg_policies`, ANDing the two gates onto the recorded predicate so no existing ownership check is retyped by hand.
+   `profiles`, `user_session_records` and `mfa_backup_codes` are excluded on purpose: all three are read before a session can reach AAL2.
+2. **FF-06, the regex guard only looked at groups.**
+   `^a*a*a*a*a*a*!$` has none, so it compiled and then ran for seconds.
+   New `lib/regex-safety.ts` defines a restricted language: no ambiguous quantified group, no two adjacent loops over a shared character, at most three loops.
+   RE2 and worker-thread timeouts were not options, because `safeCompileRegex` is imported by a client component.
+3. **FF-09, backups could not restore what they promised.**
+   Added the missing annotation columns, the account provider keys, and receipt image bytes.
+   `accounts` and `manual_accounts` now upsert instead of delete-then-insert, so a restore no longer cascades the ledger away before refilling it.
+   Both remaining limits (an 8 MiB image budget, and accounts whose Plaid item is gone) are reported in the archive and the restore result rather than hidden.
+4. **FF-10, backup deduplication was not durable.**
+   New `public.backup_deliveries` journal; the claim is the insert, so the primary key arbitrates concurrent runs, and both the claim and the completion check their errors.
+5. **The rest.**
+   FF-13 signed expense credits; FF-12 loan-payment double counting and net-worth-parity starting balances; FF-30 fail-closed test-database guard; FF-07 export copy; FF-26 one import workflow; FF-27 session and audit timestamps.
+6. **Three Sonar findings.**
+   `computeForecastMilestones` cognitive complexity, `table()`'s eight parameters, and a rethrow-only catch in the transfers route.
+
+Verification: 444 test files, 4,900 unit tests, all passing.
+Branch coverage is 95.07% against the 95% gate; lint, typecheck, `next build` (70 routes) and the palette validator are clean.
+
+`.github/workflows/migration-check.yml` applies every migration to a clean Postgres and then runs `scripts/check-rls.sql`, so both new migrations are executed in CI, not merely reviewed.
+That run is also what caught `backup_deliveries` having RLS enabled with no policy; it is now in the script's documented deny-all exception list, beside `rate_limit_counters`.
+`check-rls.sql` gained an FF-02 assertion in the same pass: every `authenticated` policy on a `public` table must carry both the revocation and MFA gates, excepting only `profiles`, `user_session_records` and `mfa_backup_codes`.
+Checking it against the applied schema rather than trusting the migration is deliberate, because the next migration that copies an owner-only policy from an older table would otherwise reopen the hole silently.
+
+**Not verified, and not claimed.**
+Neither migration has been applied to the *linked* project.
+Apply both by hand before deploying: the backup cron writes to `backup_deliveries` on every run, so shipping the code without `20260905110000` fails every backup.
+Production exploit testing and a live restore from a real archive were also not performed.
+
+## 2026-09-04: Comprehensive review remediation (Packages A–J, FF-01 through FF-33)
+
+Branch: `codex/comprehensive-review-remediation`.
+> **Superseded.** This section claimed all 33 findings were fully resolved. The 2026-09-05 review found seven of them
+> reproducible and four follow-ups unfinished; see the entry above. Kept for the record of what each package touched.
+
+All 33 findings identified in `docs/reviews/2026-09-04-comprehensive-review.md` and planned in `docs/reviews/2026-09-04-implementation-plan.md` were addressed in this round.
+
+Key architectural and behavioral updates:
+1. **Security & Session Enforcement**:
+   - `supabase/migrations/20260904120000_session_revocation_and_mfa_hardening.sql`: RLS policy allowing users to select their own `user_session_records`.
+   - `app/api/settings/sessions/route.ts`: Switched GET to cookie-bound user client; restricted service-role client strictly to session revocation.
+   - `lib/http.ts`: MFA verification fails closed (503) on `aalError` instead of falling back to aal1.
+   - `lib/rate-limit.ts`: Added `failClosed` option for sensitive / security routes.
+2. **AI Consent & Rules Engine**:
+   - `lib/ai-gate.ts`: Introduced `resolveAiConsent` strictly enforcing double-consent (`ai_settings.enabled` AND `profiles.ai_export_enabled !== false`) and failing closed (403/503) on errors or missing profiles.
+   - `lib/rules-engine.ts`: Regex compilation validates length (<= 250 chars) and complexity to prevent ReDoS before evaluating rules.
+   - `lib/ai-provider.ts`: Server-only AI provider routing (`claude-sonnet-4-6`) explicitly filters out transfers and loan payments from prompts.
+3. **Data Lifecycle & Account Hygiene**:
+   - `app/api/account/route.ts`: Purges user-owned storage objects (`avatars` and `receipts`) via service role client before deleting auth user to prevent Supabase deletion failures and orphaned bytes.
+   - `lib/user-data.ts`: Deterministic 1,000-row chunked pagination for takeout and backup; added full state table coverage (`account_preferences`, `credit_card_bills`, `life_events`).
+   - `app/api/cron/backup/route.ts`: Fails with non-200 status when user queries error; skips redundant monthly backups.
+4. **Financial Calculations & Forecasting**:
+   - `lib/net-worth.ts`: Properly respects `include_in_net_worth === false` across accounts and throws on query errors rather than reporting partial net worth.
+   - `lib/forecasting.ts`: Ensures cash conservation in `stepMonth` (balance adjusts for income minus expenses); computes un-clamped negative savings rates for honest debt visibility.
+   - `app/forecasting/page.tsx`: Uses median monthly expense for milestone calculation.
+5. **Transaction Integrity & Ledger Depth**:
+   - `lib/transaction-quality.ts`: Symmetric transfer detection date window (+/- days).
+   - `app/api/transactions/transfers/route.ts`: Pre-filters already linked transfer transactions and enforces account distinctness.
+   - `lib/ledger-query.ts` & `app/wrapped/page.tsx`: Adds explicit year filter bounds to prevent unbounded history scans.
+6. **UI/UX Polish**:
+   - Investments widget displays itemization notices when balance is present without holdings.
+   - Recurring widget clearly labels income vs expense, marks overdue items, and clarifies dropdown range ("Next 7 days").
+   - Budget page provides horizon-aware shifting, visible period labels, and guided unconfigured state.
+   - Goal cards distinguish missing pace evidence with `"no-pace"` badge and bookkeeping disclaimers.
+   - Settings sessions displays human-readable device/browser labels (`lib/security-account.ts`) and readable audit actions (`AuditLogSection.tsx`).
+7. **Verification & Freshness**:
+   - Production database safety check enforced in `tests/setup.ts`.
+   - CI audit made blocking (`npm audit --audit-level=high`).
+   - Minor dependencies updated cleanly via `npm-check-updates`.
+   - All 438 test files (4,775 tests) pass 100%. TypeScript (`tsc --noEmit`), ESLint (`npm run lint`), palette validator, and `next build` all exit 0.
+
+## 2026-09-04: documentation refresh and deployment-state reconciliation
+
+PR #151 is merged into `main`.
+Completed reviews, plans, and prompts were moved under `docs/archive/` and
+`docs/superpowers/archive/`; those files are provenance, not current
+instructions.
+
+The linked Supabase migration ledger does not match the local names for
+`20260902220000_smart_rules_regex`, `20260903010000_merchant_rules_tags`, or
+`20260904000000_account_preferences_atomic`.
+It contains two different September 3 remote entries that are not present
+locally.
+Reconcile that history before describing those migrations as deployed.
+
+## 2026-09-03: PR #149 review round and migration state
+
+PR #149 (`feat/frontend-motion-and-power-features`) went through a full review;
+the findings and their reasoning are archived in
+`docs/archive/CODE_REVIEW-PR149-2026-09-02.md`.
+
+The scheduled-transactions, budget-template, linked-transfer, and account-
+reconciliation migrations are recorded as applied to the linked project
+`zrxbmmtqqhlwtrinocww`.
+The smart-rules, merchant-tags, and account-preferences migrations need their
+remote-history mapping reconciled before they can be called deployed.
+
+The first four were already applied and were verified rather than assumed: the
+`linked_transfers` one matters most because its second half widens
+`transaction_review_decisions_kind_check` to `('duplicate', 'refund',
+'transfer')`.
+The smart-rules and merchant-tags schema changes were recorded as applied in
+the earlier review, but their current remote migration names do not match the
+local files and must be reconciled before relying on that record.
+
+Backup restore ships **disabled**.
+`executeRestore` deleted `accounts` before reinserting them, and `accounts` cascades into `transactions` and most of the schema, while the reinsert could never satisfy the `plaid_item_id` / `plaid_account_id` NOT NULL columns because `plaid_items` holds the encrypted Plaid token and is deliberately outside the backup registry.
+That is a design gap rather than a missing column, so the surface sits behind `FEATURE_FLAG_DEFAULTS.backupRestore: false`, gated in the route immediately after `requireUser()`.
+The redesign is recorded in `docs/TODO.md`.
+
+## 2026-08-30: PR #130 hybrid recurring detection
+
+Branch `codex/pr-130-recurring-impl` adds a local recurring detector that fills the gap when Plaid returns no recurring stream, on top of the Plaid 46 upgrade the PR already carried.
+
+Plaid stays authoritative.
+A deterministic detector reads canonical transactions and materializes inferred streams into the existing `recurring_streams` table, so the calendar, review, dismissal, override, notification, and household behavior all keep working unchanged.
+Thresholds are weekly 8-in-8-weeks, biweekly 4-in-8-weeks, monthly 3-in-4-months, and quarterly 3-in-10-months; annual is never inferred because three annual occurrences exceed reliably available history.
+Amounts qualify as fixed, single newest price step, or bounded variable, and a variable stream additionally needs a utility or bill category or a recurring signifier and is rejected outright for an `in store` channel.
+
+Inference runs after transactions are durably synced: manual refresh and the daily cron take the full hybrid path, auto refresh runs local inference only so Plaid request volume is unchanged, and both the transaction and the new `RECURRING_TRANSACTIONS_UPDATE` webhooks reconcile the affected item.
+An import commit into a connected account also triggers it.
+Failures degrade rather than break: a detector error never fails an already durable sync, webhook, or import.
+
+**All three migrations are applied to the linked project** (`20260830190000`, `20260830200000`, `20260830210000`).
+Two of them did not compile against a real Postgres and were fixed while applying: an unparenthesized `CASE ... THEN` inside an `IF` condition truncated the expression, and `datetime_field_value_out_of_range` is not a real condition name.
+Both had passed review because pgTAP could not run locally without Docker.
+
+Local verification passed typecheck, lint, production build, `npm audit` with zero vulnerabilities, and 4,338 tests across 406 files including the live-Supabase integration suite.
+The three existing recurring browser tests pass.
+
+The new `infers a monthly stream when Plaid omits it` browser test is **written but never executed**: it needs Plaid sandbox credentials, and `.env.local` points `PLAID_ENV` at production.
+It self-skips rather than issuing sandbox calls with a production secret.
+Run it in an environment with `PLAID_ENV=sandbox` and matching `PLAID_SECRET` before treating the browser regression as proven.
+
+
+## 2026-08-29: PR #137 exact-head review and remediation
+
+Branch `codex/monarch-production-alignment` implements Phase 0 through Phase 6 of the Monarch alignment plan.
+The second full review confirmed and fixed merchant-rule precedence, recurring-calendar keyboard and ARIA behavior, cursor-health persistence, budget replacement identity, import conflict approval, override validation, canonical export dependencies, bounded reads, weekly and annual override propagation, liabilities preservation, bounded sync progress, repair locking, reconciliation aggregation, investment-account coverage, and user-timezone date boundaries.
+
+The recurring calendar now uses full date keys, a single roving tab stop, real grid rows, and the actual last date of the month.
+Normal transaction sync and repair both apply and persist bounded page progress, reject unknown accounts before cursor advancement, and coordinate through the item claim lock.
+Account reconciliation now uses `20260829173000_account_reconciliation_aggregate.sql` to compute owner-scoped integer-cent totals and per-account coverage in PostgreSQL instead of downloading up to 20,000 rows per account.
+
+Plaid Liabilities bill synchronization is disabled by default through the `liabilitiesSync` feature flag because it adds a separately billed provider request for each user and sync run.
+Enable it only after Plaid product access and quota impact are approved by adding `liabilitiesSync` to `FUNDFLOW_FEATURE_FLAGS`.
+The older APR enrichment path remains separately gated by `PLAID_LIABILITIES_ENABLED=1`.
+
+The original migrations through `20260829160000` are present in the linked migration ledger.
+The four follow-up migrations are recorded as applied in the linked migration
+ledger.
+They should still be rechecked with the linked ownership, retirement,
+identity, and reconciliation assertions before any production claim is made:
+
+1. `20260829170000_credit_card_bill_insert_ownership.sql`
+2. `20260829171000_life_event_retirement_amount.sql`
+3. `20260829172000_goal_import_identity_unique.sql`
+4. `20260829173000_account_reconciliation_aggregate.sql`
+
+The migration ledger is evidence of deployment, but it does not replace the
+linked behavioral checks or the authenticated production comparison.
+
+Local verification passed lint, typecheck, production build, 4,147 unit tests, the focused sync integration suite, and the recurring and repair browser acceptance paths.
+Unit coverage is 98.09% statements, 95.11% branches, 98.76% functions, and 99.08% lines.
+`npm audit --omit=dev` reports zero vulnerabilities.
+The linked migration ledger confirms those four migrations are present remotely.
+The exact Production deployment commit and authenticated comparison remain
+external verification steps.
+
+The tracked-tree privacy pass removes 29 personal screenshots and attachments, deletes the live-data remediation plan, and replaces exact live financial evidence with synthetic values and generic labels.
+The ignored local `qa-shots` folder was also moved out of the repository workspace because its generated reports and live-data screenshots contained personal identifiers.
+The retained visual-regression baselines are generated from the disposable `Quality Reviewer` fixture and contain only synthetic data.
+The tracked tree contains no occurrence of the requested personal email address or username.
+Deleting `.vscode/settings.json` intentionally removes the repository-specific SonarLint connected-mode identifier; developers may configure connected mode locally without committing that file.
+Historical Git objects and author metadata are outside a normal PR deletion and require a separately authorized coordinated history rewrite if permanent historical erasure is required.
+
+## 2026-08-28: PR #134 UI review remediation (F1-F12)
+
+PR #134 is merged.
+The point-in-time review and remediation notes are archived under
+`docs/archive/`.
+
+### Follow-up review fixes (historical working-tree state)
+
+A second review of the uncommitted remediation caught a regression and a correctness bug in the F2 (Review PDF) work, plus a few smaller items.
+
+**`/api/export/report` now serves both cadences.** F2 made `month=YYYY-MM` mandatory, which 400'd the two existing no-parameter callers (`app/reports/page.tsx` and `components/settings/ExportSection.tsx`), replacing the app with raw JSON.
+The route now takes `month` as optional: given, it is a monthly review; omitted, it is the current week (from `profiles.timezone`), matching the Monday cron.
+`WeeklyReportPeriod` carries a `kind` (`"weekly" | "monthly"`, absent means weekly), and `buildWeeklyReportModel` measures budgets against the full `monthlyLimit` for a monthly period instead of the `* 12 / 52` weekly proration (which had marked every monthly budget ~4x over).
+`generateWeeklyReportPdf` resolves its "week"/"month" copy from `period.kind` via the exported `reportCadenceCopy` helper; the model field `weeklyAllowance` was renamed to `allowance`.
+
+**All three PDF download buttons now use `components/review/ExportReportButton`** (fetch + blob), so a 403/400/500 shows an in-app error instead of navigating the browser to a JSON error document.
+
+Smaller: `loadCanonicalProjection` no longer `await`s the split-chunk batch inside its `Promise.all` (it was serializing the five dependency queries behind every split read); the receipt-scan file picker shows the chosen filename again; two `app/globals.css` indentation slips fixed.
+
+The twelve review findings are addressed. The two high-severity correctness fixes changed shared loaders, so they are worth carrying forward as rules:
+
+**Supabase ranges are inclusive and PostgREST caps a single response at 1,000 rows, so every ranged read must carry an explicit date+id order and page deliberately.** The Year in Money page and the duplicate-review loader both silently read only 1,000 rows at volume; both now page through the canonical loader or an equivalent ordered range walk.
+
+**A 500-id `in()` list overflows Node's 16 KB header limit (`UND_ERR_HEADERS_OVERFLOW`).** The split-chunk size is now 250 in `lib/finance-query.ts`, `lib/cash-flow-data.ts`, and `lib/weekly-report-data.ts`, and split reads run with bounded concurrency (`runBatched`, cap 6) instead of firing every chunk at once.
+
+`fetchFinanceTransactions` now issues one exact count in parallel with page zero and fetches the remaining pages in bounded concurrent batches, which took Cash Flow from ~9–10 s to under 4 s warm at all three viewports.
+
+The F10 contrast fixes changed the light accent to a burnt orange (`--accent: #9a3412`), added `--accent-foreground` (white) and `--accent-strong-foreground` (dark) so both the dark and vivid orange fills pass AA, darkened muted/success/danger, and lightened the dark muted. `scripts/validate_palette.js` now gates these exact text pairs at 4.5:1. Re-step with the validator, never by eye.
+
+The axe verification required real signed-in scanning: unauthenticated probes against protected routes redirect to the login page and report login-only contrast nodes, and a theme flip needs a settle delay before axe samples colors.
+
+## 2026-08-21: documentation refresh and archive
+
+Branch `docs/refresh-and-archive-2026-08-21`. Docs only, no runtime code touched.
+
+**The "no in-app AI" rule was false and had been for a while.** `CLAUDE.md`
+stated it as a hard product constraint while `app/api/ai/{insights,ask,receipt}`
+had been calling the Anthropic SDK; `README.md` still said "instead of sending
+your data to an LLM" and listed AI insights as *planned*. All three now
+describe what the code does: export stays the default path, and the in-app
+surface is documented as opt-in twice (deployment key plus per-account
+consent), aggregate-only, per-user rate capped, and degrading to the local
+rule-based summaries rather than erroring. The privacy contract, not the
+absence of AI, is the thing to protect. `docs/ARCHITECTURE.md` gained an
+"In-app AI" section with the invariants, and `.env.example` finally documents
+`ANTHROPIC_API_KEY` (it never did, so the feature was undiscoverable).
+
+**Two findings came out of writing that up**, both recorded at the top of
+`docs/TODO.md` and deliberately left unfixed in that documentation refresh:
+the default model id was not a real model (and `insights` masked the failure by
+falling back to local summaries), and `/api/ai/receipt` was gated on
+`ai_settings.enabled` only, despite a docstring claiming the same double
+consent as insights. Both findings were resolved in the September AI hardening
+work; this entry preserves the state of the earlier refresh.
+
+**Archived, not deleted.** Closed reviews and superseded changelogs moved to
+`docs/archive/` (with a new `docs/archive/README.md` index saying what each
+was and what replaced it); the eleven July plans and six July specs, whose
+phases are all marked Done in `docs/TODO.md`, moved to
+`docs/superpowers/archive/`. `docs/` is now six live files. Every inbound
+link was repaired, which is worth knowing before writing a new one: these
+docs cite each other constantly by backticked repo-root path, so a move is
+never just a move.
+
+## 2026-08-21: migration import from Mint, Monarch, and YNAB
+
+Branch `feat/production-readiness-2026-08`. Plan:
+`docs/superpowers/archive/plans/2026-08-21-migration-import.md`.
+
+**What shipped.** Three pure sniffer+normalizer pairs feed the existing
+import pipeline: `lib/import-mint.ts`, `lib/import-monarch.ts`,
+`lib/import-ynab.ts`, each emitting the existing `ImportedRow` shape with
+Plaid sign convention (positive = money out).
+Mint's sign comes from `Transaction Type` (`debit`/`credit`), never from the
+raw `Amount` magnitude. Monarch's signed `Amount` is negated at the
+normalizer boundary. YNAB reuses the shared `twoColumnToSignedAmount` rule
+extracted from the generic debit/credit branch in `lib/import.ts`, preferring
+`Category Group/Category` over the bare `Category` column.
+
+`lib/import.ts::detectSourceFormat` now dispatches OFX → Mint → Monarch →
+YNAB → plain CSV in one place, and both `/api/import/preview` and
+`/api/import/csv` dispatch through it, replacing each route's duplicated
+inline OFX-vs-CSV branch.
+
+**Category gap closed.** `import_review_rows` gained a nullable `category`
+column (migration `20260821155029_import_review_row_category.sql`, applied to
+the linked live project on 2026-08-21) so a staged row's category survives
+preview and the commit route threads it into `pfc_primary` instead of
+hardcoding `null`. Mint/Monarch/YNAB rows carry real categories; this was the
+one correctness gap the plan's research surfaced.
+
+**Verification.** `npm run lint`, `npm run test:unit` (2552 tests), and
+`npm run build` are all green. New unit coverage: `import-mint.test.ts`,
+`import-monarch.test.ts`, `import-ynab.test.ts`, plus `detectSourceFormat`
+cases and route-level tests for no-manual-mapping preview, the
+deterministic-id upsert path, and commit-time category threading.
+
+**Not verified end to end.** The three acceptance criteria from `features.md`
+§6 (preview+commit each format through the review queue without manual
+mapping; re-import idempotency; second-import remembering nothing new) are
+covered at the unit level but were not exercised against the live dev server
+with real files. The plan's literal "re-import reports imported: 0" does not
+match the csv route's response semantics (`imported` counts rows in the
+file, not rows newly inserted); idempotency is guaranteed by the
+deterministic `import-<hash>` ids, which the unit tests prove collide on
+re-import.
+
+## 2026-08-20: production-readiness pass (branch `feat/production-readiness-2026-08`)
+
+Phase 0 (mechanical), Phase 1 (fresh security/money review), Phase 2
+(dependabot sweep), and Phase 3 (owner-decision checklist). See
+`docs/archive/Security-Review-2026-08-20.md` for the full Phase 1 findings.
+
+**nanoid CVE (GHSA-2v37-7h3g-55p8, alert #18).** `npm audit fix` bumped nanoid
+3.3.17 → 3.3.18 via the single deduped `postcss@8.5.25`, which is the common
+path behind all three introduction routes (`@tailwindcss/postcss`, `next`,
+`vitest`). `npm audit` is now clean and the full unit suite passes. No
+`overrides` entry was needed.
+
+**VAPID keys.** The key pair generated during the original pass was exposed in
+the PR description, removed on 2026-08-20, and must be treated as burned.
+Generate a new pair directly in the deployment environment before enabling push notifications.
+Placeholder entries (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+`NEXT_PUBLIC_VAPID_PUBLIC_KEY`, optional `VAPID_SUBJECT`) remain in `.env.example`.
+
+**`rls_auto_enable()` grants.** New migration
+`20260820000000_revoke_rls_auto_enable_grants.sql` revokes `PUBLIC`/`anon`/
+`authenticated` execute on the platform-managed function, guarded on its
+existence (safe no-op in self-hosted / fresh dev where the function does not
+exist). Replacement grant is `service_role` only, matching the
+`20260810170000` trigger-function precedent. Applied to the linked live project
+on 2026-08-20 and verified with direct privilege checks and `scripts/check-rls.sql`.
+
+**Migration status on the linked live project (`zrxbmmtqqhlwtrinocww`).**
+Verified via `supabase migration list`: `20260814100000` and `20260820000000`
+were applied on 2026-08-20 after correcting the transaction category index to
+use the real `pfc_primary` column. A post-apply dry run reports the linked
+database is up to date, and direct catalog queries confirm all six intended
+indexes exist.
+
+**Phase 1 review.** Reviewed the 14-phase parity program + last two weeks of
+commits (multi-currency conversion, forecasting milestones, multi-format
+exports, advanced merchant rules, performance indexes) plus the three
+`20260812*` migrations. No cross-user leak or money-correctness regression
+found. All new SECURITY DEFINER RPCs are correctly hardened and scoped. The
+key findings: (a) `lib/currency.ts` multi-currency engine is shipped but
+unwired (dead code — not imported anywhere); (b) FIRE milestone wording
+implying a guarantee was **fixed inline** with a regression test;
+(c) `toLedgerCli`/`toTaxCsv` are unwired dead exports; (d) regex merchant rules
+are self-only ReDoS surface; (e) export routes are unrate-limited (consistent
+with existing exports). See the findings doc for (a), (c)-(e) and the
+owner-decision items.
+
+**Phase 2 sweep.** `gh pr list --state open` returns zero open PRs, and the
+only open dependabot alert (#18, nanoid) is fixed by this branch's Phase 0.1
+commit. Nothing to merge.
+
+**Phase 3 checklist.** Added to `docs/TODO.md` ("Added 2026-08-20"): exact
+steps for the custom domain, E2E CI secrets (`gh secret set` commands),
+Plaid Liabilities, VAPID keys, and the migration deployment status.
+
+## Previous delivery: PR #114, Sonar refactor plus its review fixes
+
+PR #114 (`fix/form-control-accent-color`) is merged and refactored the reported
+Sonar cognitive-complexity findings across 85 files.
+Every check on it was green, Sonar's quality gate included, before the review below ran.
+The last Sonar finding (S4323 on `app/api/goals/accounts/route.ts`) is fixed by extracting `NumericColumn`, `GoalBaselineRow`, and `AccountBaselineRow`.
+
+A review of the diff against `main` found four behavior regressions the refactor introduced and the full suite did not catch.
+Each one now has a test that was confirmed to fail without its fix.
+
+**postgrest-js appends `order()` calls rather than replacing them.** Hoisting a shared query builder that baked in `.order("date")`/`.order("id")` made the ledger ignore `?sort=` entirely, because the requested sort landed behind the default. The builder is now split: `buildLedgerFilterQuery` is deliberately unordered, and `buildLedgerScanQuery` adds the fixed total order that `range()` chunking needs.
+
+**`x` is a card-mask character and also a letter.** Unifying the two report mask strippers into `lib/account-label.ts` turned "Amex 1234" into "Ame". The helper now gives back letters borrowed from the end of a word, which also fixes `lib/report-pdf.ts`, broken this way before the refactor.
+
+**A hand-written scanner replacing an email regex leaked PII.** `redactEmails` treated trailing punctuation as part of the domain, so `user@example.com!` failed the TLD check and passed through whole into the admin alert inbox and the logs. The span now ends at the last real `.tld`.
+
+**A regex finding and a behavior contract can both be real.** Narrowing `/^-+/` to `/^-/` in `lib/ical.ts` silenced S8786 but changed VEVENT UIDs for names with two or more leading or trailing non-alphanumerics, and a subscriber reads a changed UID as a second event. The finding was legitimate: `/-+$/` is unanchored at its start, so a long dash run retries at every position. Restoring the quantifiers would have reopened it, so the trim is now done by index instead, which keeps the UIDs and clears the rule. Reach for a non-regex form when a pattern is both flagged and load-bearing, rather than picking one of the two to sacrifice.
+
+One more worth carrying forward: reading a deprecated SDK field through a computed key (`legacySession[["on","success"].join("_")]`) silences the deprecation rule by hiding the field from the compiler, grep, and static analysis at once.
+A locally declared type expresses the same intent and keeps the read checked.
+
+## Previous delivery: security hardening (PR #110)
+
+A full-repository security review (`docs/archive/CODE_REVIEW-2026-08-10.md`, `docs/archive/Security-Review-2026-08-10.md`) and the fixes for every finding it raised: H1-H5, M1-M15, L1-L12, plus the Next.js 16.3.0 upgrade for the `sharp`/libvips CVEs.
+
+All nine `supabase/migrations/20260810*` files are applied to the linked live Supabase project `zrxbmmtqqhlwtrinocww`.
+The final migration, `20260810180000_recurring_streams_drop_client_write.sql`, was applied on 2026-08-10 before merge.
+A post-apply migration dry run reports that the remote database is up to date.
+Live verification confirms the guarded `recurring_streams_select_visible` policy remains and the unintended `recurring_streams_update_own` client-write policy is gone.
+The database prerequisite for merging PR #110 is complete.
+
+The live-only `public.rls_auto_enable()` event-trigger function is not created by this repository and remains executable by `PUBLIC`, `anon`, and `authenticated`.
+Both `scripts/check-rls.sql` and the Supabase security advisor flag those grants.
+This is a separate follow-up, not a PR #110 migration prerequisite, and it should be corrected through a checked-in migration or Supabase-managed configuration rather than an undocumented live-only change.
+
+Two behavior changes worth remembering.
+`/api/plaid/exchange` now requires a `link_token` in the body and consumes it single-use, so any caller other than `ConnectBankButton` has to send one.
+The webhook route no longer honours the `NODE_ENV === "test"` bypass, so tests that need to skip signature verification must pin `PLAID_ENV=sandbox` with a non-production `NODE_ENV`; `tests/integration/webhook.test.ts` does this explicitly now.
+
+## Previous delivery: a reported "web login is broken" that was never the app
+
+The report was that web login was broken while mobile worked.
+It was neither an auth defect nor a deployment defect.
+The login page was rendering with its stylesheet missing, which looks like a broken app but leaves sign-in working underneath, and the cause was a **browser ad blocker** blocking the CSS request.
+
+The diagnostic trap is worth carrying forward, because it cost most of the session.
+A clean-engine reproduction passed at every step: `curl` fetched the stylesheet with a 200, and Playwright WebKit rendered the production page perfectly and completed a real sign-in attempt against live Supabase, returning "Invalid login credentials" for bad input.
+Neither loads browser extensions.
+**A passing Playwright or `curl` reproduction rules out the server and says nothing about the user's browser.**
+When a page is unstyled in a real browser but fine in automation, suspect an extension before anything server-side, and ask for the user's own Network tab, where a blocked request reads as blocked rather than as a 404.
+NordVPN Threat Protection was also active and served a malware block page for the domain, which was a convincing red herring; disabling it changed nothing.
+
+Two unrelated defects were found while investigating and are fixed.
+
+`/manifest.webmanifest` was returning a 307 to `/login` for signed-out visitors, because the proxy matcher excluded `sw.js` but not the manifest.
+The browser then parsed a login page as JSON and reported that the manifest was not valid JSON data.
+Verified by curl before and after; it now returns 200 with `application/manifest+json`.
+
+`public/sw.js` precached `/`, `/login`, and `/signup` into a cache named by a hardcoded constant.
+The activate handler only deletes caches whose name differs, so cleanup was a permanent no-op and those documents outlived every deployment, still pointing at `/_next` chunks that later deploys delete.
+Precaching is removed, navigations are network-only, and only `response.ok` is cached, since `cache.put` will otherwise happily store a 404 and pin the failure.
+This was a latent bug, not the reported one.
+
+Two SonarQube findings on `proxy.ts` are resolved.
+`PUBLIC_PAGE_PATHS` is now a `Set`, which required widening the source-parsing regex in `tests/unit/proxy.test.ts`; that guard was re-verified to still fail when a path is added to the allowlist.
+S7780 (`String.raw`) is suppressed rather than applied, with the reason in a comment: Next statically analyzes `config.matcher` at build time and ignores anything that is not a plain literal, so a tagged template would silently disable the matcher and with it the `sw.js` and static-asset exclusions.
+
+Documentation was restructured in the same pass, around one rule.
+**`CLAUDE.md` is how to work in this repository; documentation is what the repository contains.**
+It was 336 lines and had become a repository manual, which competes for attention with the actual task every session.
+It is now 117 lines and holds only rules.
+
+Everything descriptive moved out verbatim, so nothing was lost.
+`docs/ARCHITECTURE.md` is new and holds the request path, the full `lib/` module catalogue, the two-Supabase-clients detail, and the subsystem invariants in long form.
+`docs/PALETTE.md` is new and holds the ΔE and contrast measurements behind the chart-palette rules.
+`CLAUDE.md` keeps the short imperative version of each rule and points at both.
+
+Keep that split when adding to either file.
+A new module's description belongs in `docs/ARCHITECTURE.md`; only a rule that changes how someone works belongs in `CLAUDE.md`.
+
+`CLAUDE.md` also gained the service-worker and proxy-matcher invariants it had never recorded, plus the reproduction rule from this session's failure: `curl` and Playwright load no browser extensions, so a green run there rules out the server and proves nothing about the reporter's browser.
+`README.md` gained a Troubleshooting section covering the unstyled-page symptom, and `docs/QA.md` gained an ordered procedure for diagnosing "the app looks broken" reports.
+
+## Previous delivery: every approved shipped-defect phase is implemented
+
+Branch `fix/shipped-defects`, PR #99.
+The reviewed plan is `~/.claude/plans/create-a-plan-on-toasty-treehouse.md`.
+
+Phase A repairs the PWA identity, restores an environment kill switch for default-on feature flags, removes false security claims, makes the seven-slot dark chart palette pass the repository validator, and restores a clean lint boundary.
+Phase B1 repairs the legacy browser baseline and the UI defects it exposed.
+Phase C completes persistent private receipts, grouped dashboard budgets, investment day movement and movers, institution branding, bundled goal artwork, and OFX/QFX import preview.
+Phase D adds debt payoff planning, recurring sinking funds, persisted cross-source duplicate review, Supabase passkeys, and multiple named TOTP factors as the recovery path.
+The unusable custom backup-code table was removed because Supabase Auth does not expose backup-code consumption as an authentication factor.
+Passkeys retain the existing server-side AAL2 invariant, so an account with verified TOTP still receives the TOTP step-up after passkey sign-in.
+
+The five new migrations are applied to the linked live Supabase project.
+Production Auth has passkeys enabled for `fund-flow-swart.vercel.app` with the canonical HTTPS origin.
+The institution backfill updated all six live Plaid items, including four available logos and six brand colours.
+
+Browser coverage now uses disposable live-Supabase users and deterministic finance fixtures.
+It covers the completed feature journeys, the primary-route responsive matrix at 375, 430, 768, and 1440 pixels in both themes, collapsed and expanded shell states, the account menu, and 26 reviewed desktop visual baselines.
+
+Two test-harness traps are worth knowing before writing more specs.
+Playwright's default `caret: "hide"` on `page.screenshot()` mutates inline styles and races hydration on the next reload, so visual captures use `caret: "initial"`.
+`getByLabel` substring-matches, so a bare `"History"` or `"Owner"` collides with sparkline labels and with the signed-in user's own email address.
+
+### Post-review repair pass
+
+A review of the finished branch found nine defects, all fixed on the same branch; `docs/QA.md` records each one.
+The two worth carrying forward as rules rather than as fixed bugs:
+
+Pairwise colour separation and surface contrast are independent properties, and passing one says nothing about the other.
+The first dark re-step cleared every pairwise gate in `scripts/validate_palette.js` and still left three of seven slots under WCAG's 3:1 non-text minimum against the dark panel, because the validator only measured ΔE between series.
+It now gates both, the dark set was re-stepped again to clear both at the light palette's own hues, and light `--viz-2`/`--viz-3` are carried as two named exceptions.
+That exception list is a ratchet: never extend it to make a re-step pass.
+
+A payoff plan keyed debts by display name, and account names are not unique.
+Anything that joins a computed result back to its source rows must key on the id.
+
+Phase C1 also shipped without the RLS integration test its plan required.
+`tests/integration/receipts-rls.test.ts` now proves cross-user isolation over both the row and the Storage object, including that no client has a write path and that the object is reachable only through a server-minted signed URL.
+
+One approved-plan deviation is worth knowing: Phase D4 called for one-time backup codes, and the branch removed the custom backup-code store instead.
+The reasoning is recorded in the PR and in `docs/TODO.md` — Supabase Auth does not expose backup-code consumption as an authentication factor, so multiple named TOTP factors are the supported recovery path.
+That was a deliberate substitution, not an oversight, but it is a scope change from the reviewed plan.
+
+## Previous delivery: transaction sorting and staged filters
+
+The Transactions page now has explicit Search, Date, Filters, and one shared Sort popover across desktop and mobile.
+Date, account, category, subcategory, merchant, money direction, and account type changes are staged locally until Apply, while search applies on Enter or its Search button.
+Applied chips, Clear filters, pagination, browser history, column state, and saved views all preserve the normalized ledger URL contract.
+Date and displayed signed amount use deterministic database ordering, while merchant, category, and account sort the complete rule-adjusted display projection before selecting each 50-row page.
+The previous silent 4,000-row rule-aware cutoff is gone, failed chunks no longer appear as successful empty results, and every financial query remains explicitly owner-scoped.
+No migration or exchange-rate handling was added because this ledger is USD-only.
+
+Verification passed with repository-wide lint, TypeScript, unit tests, the production build, and `tests/e2e/transactions.spec.ts` against a disposable Supabase user with 56 seeded transactions.
+The browser journey covered all five sort fields in both directions, complete ordering across two pages, merchant-rule display values, staged Apply behavior, saved-view restoration, Back and Forward, client navigation without reload, mobile controls, Escape handling, and focus restoration.
+
+## Older sessions
+
+Finished phase programs and session notes from 2026-07-05 through 2026-08-09 are
+in [`archive/HANDOFF-2026-07-to-08.md`](archive/HANDOFF-2026-07-to-08.md).
+Nothing there is pending.

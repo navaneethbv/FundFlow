@@ -1,3 +1,6 @@
+import { prepareImportProfile, type PreparedLayout } from "@/lib/import-profile-preview";
+import { parseWithImportLayout } from "@/lib/import-profiles";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 import { readFormBody } from "@/lib/request-body";
 import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -231,6 +234,20 @@ async function stagePreviewRows(
   }
 }
 
+function parsePreparedInput(text: string, prepared: PreparedLayout, options: { positiveIsIncome: boolean; columnMap: FormDataEntryValue | null; dateOrder?: DateOrder }): ReturnType<typeof parsePreviewInput> {
+  if (prepared.layout) return { ...parseWithImportLayout(text, prepared.layout), format: "csv", columns: prepared.layout.columns };
+  return parsePreviewInput(prepared.text, options.positiveIsIncome, options.columnMap, options.dateOrder);
+}
+
+function profilePreviewInfo(prepared: PreparedLayout) {
+  if (!isFeatureEnabled("importProfiles")) return {};
+  return {
+    can_save_profile: Boolean(prepared.layout),
+    applied_profile: prepared.profile ?? null,
+    profile_settings: prepared.layout ? { dateOrder: prepared.layout.dateOrder, positiveIsIncome: prepared.layout.positiveIsIncome, skipRows: prepared.layout.skipRows } : null,
+  };
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -258,13 +275,15 @@ export async function POST(request: NextRequest) {
     }
 
     const text = await file.text();
-    const parsed = parsePreviewInput(text, positiveIsIncome, form.get("column_map"), dateOrder);
+    const prepared = await prepareImportProfile(supabase, user.id, text, form);
+    if (prepared.response) return prepared.response;
+    const parsed = parsePreparedInput(text, prepared, { positiveIsIncome, columnMap: form.get("column_map"), dateOrder });
     const { rows, errors, format, columns } = parsed;
     if (parsed.mappingError) return badRequest(parsed.mappingError);
     if (rows.length > MAX_ROWS) {
       return badRequest(`Too many rows (${MAX_ROWS} max per file)`);
     }
-    if (rows.length === 0) return emptyPreviewResponse(text, format, columns, errors, parsed.requiresDateOrder);
+    if (rows.length === 0) return emptyPreviewResponse(prepared.text, format, columns, errors, parsed.requiresDateOrder);
 
     const existing = await loadExistingTransactions(
       supabase,
@@ -293,6 +312,7 @@ export async function POST(request: NextRequest) {
       .insert({
         user_id: user.id,
         file_name: file.name || "statement.csv",
+        ...(prepared.layout ? { layout_profile: prepared.layout } : {}),
         status: "pending",
       })
       .select("id")
@@ -333,6 +353,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       batch_id: batchId,
+      ...profilePreviewInfo(prepared),
       rows: rowsOut,
       ...(sourceAccounts.length > 0 ? { source_accounts: sourceAccounts, source_account_mappings: sourceAccountMappings } : {}),
       parse_errors: errors.slice(0, 20),

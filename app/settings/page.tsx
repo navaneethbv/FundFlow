@@ -472,7 +472,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
         */}
         <div className="grid items-start gap-6 xl:grid-cols-2">
           <ExportSection initialEnabled={profile?.ai_export_enabled ?? true} />
-          <ImportReviewSection accounts={importAccounts} />
+          <ImportReviewSection wizardEnabled={isFeatureEnabled("importWizard")} accounts={importAccounts} profilesEnabled={isFeatureEnabled("importProfiles")} diagnosticsEnabled={isFeatureEnabled("importPreflight") && isFeatureEnabled("importProfiles")} />
         </div>
         <div className="grid items-start gap-6 xl:grid-cols-2">
           <ReceiptScanSection enabled={aiSettings?.enabled ?? false} />

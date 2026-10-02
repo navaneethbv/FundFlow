@@ -6,6 +6,7 @@ on:
       - ".github/workflows/migration-check.yml"
       - "supabase/migrations/**"
       - "scripts/check-rls.sql"
+      - "scripts/check-import-profiles.sql"
       - "scripts/check-review-remediation.sql"
       - "scripts/check-financial-writes.sql"
       - "scripts/check-transaction-review.sql"
@@ -51,6 +52,8 @@ jobs:
 
       - name: Verify pending annotation carryover
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-pending-carryover.sql
+      - name: Verify committed import layouts and owner isolation
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-import-profiles.sql
 
       - name: Verify PostgreSQL review benchmark queries
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/fixtures/transaction-review-benchmark.sql

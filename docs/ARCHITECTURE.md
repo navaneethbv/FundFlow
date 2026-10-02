@@ -459,3 +459,32 @@ Both RPCs explicitly verify ownership despite using a service client.
 Subscribed calendars load the same persisted recurring inputs and expand the same occurrences as the Recurring page, with owner-scoped scheduled entries included as single events.
 Daily maintenance discovers every profile, including manual-only users, and promotes each user's due entries before snapshots and recurring processing.
 Promotion failures are reported in the existing partial-failure response and alert path.
+
+## Saved import layouts (reference adoption 1.1)
+
+`importProfiles`, default off, gates Settings controls and the profile fields on import preview/commit.
+`lib/import-profiles.ts` matches ordered, normalized CSV headers and validates column maps, sign conventions, explicit date order, and skipped logical records.
+`lib/import-profile-preview.ts` reads owner profiles through the cookie client and returns choices when more than one layout matches.
+Preview snapshots the validated layout on `import_review_batches.layout_profile` without saving a reusable profile.
+After a durable import, the service-only `save_committed_import_profile` RPC requires a committed owner batch with committed rows, serializes the 100-profile owner quota, and refuses duplicate names.
+`import_profiles` permits only authenticated owner reads with MFA and session-revocation gates; no authenticated writes or RPC execution are granted.
+The profile feature does not change specialized application-export parsers or outbound financial data.
+
+## Bank CSV preflight (reference adoption 1.2)
+
+`importPreflight`, default off and dependent on `importProfiles`, adds a read-only check before the Settings import preview stages rows.
+`lib/import-preflight.ts` reports physical file lines for malformed dates, ambiguous date order, unsafe number formats, oversized amounts, mismatched row widths, competing debit/credit fields, and duplicate normalized transactions.
+It detects delimiters and possible leading headers without rewriting the source file or silently changing conventions.
+Duplicate rows remain warnings because identical purchases can be legitimate; other errors require correction before this UI proceeds.
+`POST /api/import/preflight` uses cookie authentication, a fail-closed per-user rate limit, bounded multipart/file sizes, and count-only audit metadata.
+Responses cap detailed issues at 100 while retaining the full issue count, and files over 20,000 data records are refused rather than truncated.
+Dedicated OFX and application-export validation remains with the existing specialized preview parsers.
+
+## Import wizard interactions (reference adoption 1.3)
+
+`importWizard`, default off, enhances the existing Settings Data import surface without adding a second parser or commit path.
+`components/settings/ImportWizard.tsx` scopes file-drop listeners to the mounted import screen, ignores non-file or already-handled drags, prevents navigation during busy imports, and removes listeners on unmount or disablement.
+The existing native file input remains keyboard-accessible, using the shared Input primitive's standard React 19 ref prop.
+`ImportReviewSection.tsx` reuses existing column mapping and parsed-row review, displays four steps, and focuses mapping, review, and completion when those stages become available.
+Choosing or clearing a file resets the previous batch, selection, layout settings and diagnostic state before another commit is possible.
+Changing date, sign, layout, or leading-row settings invalidates the current preview and requires another review; controls are disabled during wizard requests.
