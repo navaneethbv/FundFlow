@@ -313,10 +313,10 @@ No dependency changes are included in feature PRs.
 | 0.3 | Draft PR; hosted checks passed | [#193](https://github.com/navaneethbv/FundFlow/pull/193) |
 | 1.1 | Draft PR; local and hosted checks passed, signed-in acceptance deferred | [#194](https://github.com/navaneethbv/FundFlow/pull/194) |
 | 1.2 | Draft PR; local and hosted checks passed; depends on 1.1 | [#195](https://github.com/navaneethbv/FundFlow/pull/195) |
-| 1.3 | Implementation in progress; existing mapping and preview reused | `/private/tmp/fundflow-import-wizard`, based on #195 |
-| 1.4 | Not started |  |
+| 1.3 | Draft PR; local and emitted hosted checks passed; depends on 1.2 | [#196](https://github.com/navaneethbv/FundFlow/pull/196) |
+| 1.4 | Draft PR; local checks passed, hosted checks pending; depends on 1.1 | [#197](https://github.com/navaneethbv/FundFlow/pull/197) |
 | 1.5 | Not started |  |
-| 2.1 | Not started |  |
+| 2.1 | Reading and design in progress | `/private/tmp/fundflow-balance-quality`, independent from current main |
 | 2.2 | Not started |  |
 | 2.3 | Not started |  |
 | 2.4 | Not started |  |
@@ -427,3 +427,16 @@ Its readonly endpoint and UI require default-off `importPreflight` and the saved
 For 1.3, column naming, sample rows, date/sign configuration, duplicate review, and explicit commit already exist in `components/settings/ImportReviewSection.tsx` and are reused.
 The remaining implementation adds scoped file drop, visible steps, keyboard focus transitions, and stale-preview clearing behind `importWizard: false`.
 The #194 -> #195 -> wizard stack is three branches deep; do not extend it until a base merges.
+
+
+### Item 1.3 completion and 1.4 checkpoint
+
+PR #196 passed all emitted hosted checks at `0ffebe8`, including build/unit coverage, Sonar, Codacy, preview, and smoke tests.
+Its four synthetic Chromium fixtures exercise drop/file selection, mapping focus, review, stale-preview clearing, completion, and off-state behavior at 375px/1440px in both themes.
+Item 1.4 is isolated on `feat/import-history`, based on #194 rather than extending the three-deep wizard stack.
+The history names the existing upsert outcome "Imported rows", explicitly including updates; exact newly inserted ledger counts require item 1.5 provenance and are not fabricated.
+Existing committed batches show Not recorded for unavailable timestamps, profiles, flags, and accounts.
+
+PR #197 records item 1.4 at `2d0957f` with 494 suites / 5,494 tests passing, coverage gates, lint/types, isolated SQL/RLS checks, and four synthetic browser fixtures.
+Migration `20261001130000_import_history.sql` is unapplied to production and `importHistory` remains off.
+Item 2.1 begins on independent branch `feat/balance-quality-review` from main `a19a0a6`; its upstream is explicitly unset to prevent a default push to main.
