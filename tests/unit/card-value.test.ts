@@ -17,6 +17,38 @@ const terms: CardValueTerms = {
 describe("card value", () => {
   it("uses anniversary years and clamps leap-day anniversaries", () => {
     expect(anniversaryWindow("2024-02-29", "2026-02-27")).toEqual({ start: "2025-02-28", end: "2026-02-28" });
+    expect(() => anniversaryWindow("bad", "2026-02-27")).toThrow("anniversary dates must be ISO dates");
+  });
+
+  it("handles uncategorized rows, capped reward tiers, and a complete year", () => {
+    const result = calculateCardValue({
+      terms: {
+        ...terms,
+        rewardTiers: [
+          { id: "base", label: "Base", rate: 0.01, cap: 50, eligibleCategories: [] },
+          { id: "bonus", label: "Bonus", rate: 0.02, cap: null, eligibleCategories: ["TRAVEL"] },
+        ],
+        statementCredits: [],
+        perks: [],
+      },
+      asOf: "2026-02-27",
+      spend: [
+        { date: "2025-02-28", amount: 50, category: null, flow: "expense" },
+        { date: "2026-02-27", amount: 100, category: "TRAVEL", flow: "expense" },
+      ],
+    });
+    expect(result.historyCoverage).toBeGreaterThan(0.99);
+    expect(result.projectedRewards).toBe(0);
+    expect(result.measuredRewards).toBe(2.5);
+  });
+
+  it("returns no break-even spend when rewards have no rate", () => {
+    const result = calculateCardValue({
+      terms: { ...terms, rewardTiers: [{ ...terms.rewardTiers[0]!, rate: 0 }] },
+      asOf: "2026-03-01",
+      spend: [],
+    });
+    expect(result.breakEvenSpend).toBeNull();
   });
 
   it("nets refunds and excludes transfers from eligible spend", () => {
@@ -76,6 +108,9 @@ describe("card value", () => {
     expect(validateCardValueTerms([{ ...terms, perks: [{ ...terms.perks[0]!, high: -1 }] }]).ok).toBe(false);
     expect(validateCardValueTerms([{ ...terms, annualFee: Number.NaN }]).ok).toBe(false);
     expect(validateCardValueTerms([{ ...terms, rewardTiers: null }]).ok).toBe(false);
+    expect(validateCardValueTerms([{ ...terms, confirmedOn: "bad" }]).ok).toBe(false);
+    expect(validateCardValueTerms([{ ...terms, statementCredits: null }]).ok).toBe(false);
+    expect(validateCardValueTerms([{ ...terms, perks: null }]).ok).toBe(false);
   });
 
   it("normalizes optional benefit fields without inventing a catalog", () => {

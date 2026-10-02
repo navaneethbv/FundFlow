@@ -508,9 +508,10 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
     }
   }
 
-  const hiddenSections: SettingsSection[] = settingsIaReady
-    ? (isFeatureEnabled("membershipTermsEntry") ? [] : ["membership"])
-    : [...migrationDependentSections, "membership"];
+  const hiddenSections: SettingsSection[] = [...migrationDependentSections];
+  if (!settingsIaReady || !isFeatureEnabled("membershipTermsEntry")) {
+    hiddenSections.push("membership");
+  }
 
   return (
     <AppShell active="settings" email={user?.email}>

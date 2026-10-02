@@ -105,6 +105,22 @@ function categoryMatches(categories: string[], category: string | null): boolean
   return categories.some((entry) => entry.trim().toUpperCase() === normalized);
 }
 
+function parseCategories(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is string => typeof entry === "string").slice(0, 30);
+}
+
+function hasText(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isValidRewardTier(candidate: Partial<RewardTier>): boolean {
+  if (!hasText(candidate.id) || !hasText(candidate.label)) return false;
+  if (typeof candidate.rate !== "number" || !Number.isFinite(candidate.rate)) return false;
+  if (candidate.rate < 0 || candidate.rate > 1) return false;
+  return candidate.cap === null || typeof candidate.cap === "number";
+}
+
 function rewardForSpend(spend: number, tiers: RewardTier[]): number {
   let remaining = Math.max(0, spend);
   let result = 0;
@@ -149,12 +165,16 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function compareDateStrings(left: string, right: string): number {
+  return left.localeCompare(right);
+}
+
 export function calculateCardValue({ terms, spend, asOf }: CardValueInput): CardValueResult {
   const window = anniversaryWindow(terms.anniversaryDate, asOf);
   const rows = spend.filter((row) => row.date >= window.start && row.date < window.end);
   const eligibleRows = rows.filter((row) => row.flow === "expense" && !TRANSFER_GROUPS.has((row.category ?? "").toUpperCase()));
   const eligibleSpend = round2(eligibleRows.reduce((sum, row) => sum + row.amount, 0));
-  const observedDates = eligibleRows.map((row) => row.date).sort((a, b) => a.localeCompare(b));
+  const observedDates = eligibleRows.map((row) => row.date).sort(compareDateStrings);
   const windowDays = Math.max(1, Math.round((Date.parse(`${window.end}T12:00:00Z`) - Date.parse(`${window.start}T12:00:00Z`)) / 86_400_000));
   const observedDays = observedDates.length === 0 ? 0 : Math.max(1, Math.round((Date.parse(`${observedDates.at(-1)}T12:00:00Z`) - Date.parse(`${observedDates[0]}T12:00:00Z`)) / 86_400_000) + 1);
   const historyCoverage = clamp(round2(observedDays / windowDays), 0, 1);
@@ -209,20 +229,13 @@ type ValidationResult<T> = { ok: true; value: T } | { ok: false; error: string }
 function parseRewardTier(value: unknown): RewardTier | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<RewardTier>;
-  const valid = typeof candidate.id === "string" && candidate.id.trim().length > 0
-    && typeof candidate.label === "string" && candidate.label.trim().length > 0
-    && typeof candidate.rate === "number" && Number.isFinite(candidate.rate)
-    && candidate.rate >= 0 && candidate.rate <= 1
-    && (candidate.cap === null || typeof candidate.cap === "number");
-  if (!valid) return null;
+  if (!isValidRewardTier(candidate)) return null;
   return {
     id: candidate.id!.slice(0, 80),
     label: candidate.label!.trim().slice(0, 120),
     rate: candidate.rate!,
     cap: candidate.cap ?? null,
-    eligibleCategories: Array.isArray(candidate.eligibleCategories)
-      ? candidate.eligibleCategories.filter((entry): entry is string => typeof entry === "string").slice(0, 30)
-      : [],
+    eligibleCategories: parseCategories(candidate.eligibleCategories),
   };
 }
 
@@ -245,9 +258,7 @@ function parseStatementCredit(value: unknown): StatementCredit | null {
     id: candidate.id!.slice(0, 80),
     label: candidate.label!.trim().slice(0, 120),
     amount: candidate.amount!,
-    eligibleCategories: Array.isArray(candidate.eligibleCategories)
-      ? candidate.eligibleCategories.filter((entry): entry is string => typeof entry === "string").slice(0, 30)
-      : [],
+    eligibleCategories: parseCategories(candidate.eligibleCategories),
     expiresAfterMonths: typeof candidate.expiresAfterMonths === "number"
       ? Math.max(0, Math.floor(candidate.expiresAfterMonths))
       : null,

@@ -76,6 +76,8 @@ export const metadata = {
 
 type RecurringView = "calendar" | "list" | "paycheck";
 type RecurringLoadedData = Awaited<ReturnType<typeof loadRecurringData>>;
+type RecurringViewer = { user: { id: string; email?: string | undefined }; today: string };
+type RecurringFeatureState = { billsViewsEnabled: boolean; paycheckViewEnabled: boolean; priceHistoryEnabled: boolean };
 
 function resolveView(rawView: string | undefined, paycheckViewEnabled: boolean): RecurringView {
   if (paycheckViewEnabled && rawView === "paycheck") return "paycheck";
@@ -87,6 +89,55 @@ function panelTitle(view: RecurringView): string {
   if (view === "calendar") return "Recurring calendar";
   if (view === "paycheck") return "Paycheck view";
   return "Occurrences";
+}
+
+function resolveMonth(rawMonth: string | undefined, currentMonth: string): string {
+  if (rawMonth && MONTH_REGEX.test(rawMonth)) return rawMonth;
+  return currentMonth;
+}
+
+function resolveFeatures(): RecurringFeatureState {
+  const billsViewsEnabled = isFeatureEnabled("billsViews");
+  const paycheckViewEnabled = billsViewsEnabled
+    && isFeatureEnabled("paycheckPlanner")
+    && isFeatureEnabled("paydaySettings");
+  return {
+    billsViewsEnabled,
+    paycheckViewEnabled,
+    priceHistoryEnabled: isFeatureEnabled("recurringPriceHistory"),
+  };
+}
+
+async function loadViewer(supabase: Awaited<ReturnType<typeof createClient>>): Promise<RecurringViewer> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) notFound();
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("timezone")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (profileError) logError("recurring.profile-timezone", profileError);
+  const timezone = profileError ? null : profile?.timezone;
+  return { user: { id: user.id, email: user.email }, today: dateKeyInTimezone(new Date(), timezone) };
+}
+
+async function loadPriceChanges(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  enabled: boolean,
+): Promise<PriceChangeHistoryRow[]> {
+  if (!enabled) return [];
+  const result = await supabase
+    .from("recurring_price_changes")
+    .select("id,recurring_stream_id,effective_date,previous_amount,new_amount")
+    .eq("user_id", userId)
+    .order("effective_date", { ascending: false })
+    .limit(100);
+  if (result.error) {
+    logError("recurring.price-change-history", result.error);
+    return [];
+  }
+  return (result.data ?? []) as PriceChangeHistoryRow[];
 }
 
 function RecurringPanelContent({
@@ -247,28 +298,11 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
 
   const params = await searchParams;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) notFound();
-
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("timezone")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (profileError) logError("recurring.profile-timezone", profileError);
-  const today = dateKeyInTimezone(
-    new Date(),
-    profileError ? null : profile?.timezone,
-  );
+  const { user, today } = await loadViewer(supabase);
   const currentMonth = today.slice(0, 7);
-  const rawMonth = firstSearchParam(params.month);
-  const month =
-    rawMonth && MONTH_REGEX.test(rawMonth) ? rawMonth : currentMonth;
+  const month = resolveMonth(firstSearchParam(params.month), currentMonth);
   const tab = parseTab(firstSearchParam(params.tab));
-  const billsViewsEnabled = isFeatureEnabled("billsViews");
-  const paycheckViewEnabled = billsViewsEnabled && isFeatureEnabled("paycheckPlanner") && isFeatureEnabled("paydaySettings");
+  const { billsViewsEnabled, paycheckViewEnabled, priceHistoryEnabled } = resolveFeatures();
   const rawView = firstSearchParam(params.view);
   const view = resolveView(rawView, paycheckViewEnabled);
 
@@ -286,13 +320,8 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
     complete: recurringHref({ ...baseLink, tab: "complete" }),
     manage: recurringHref({ ...baseLink, tab: "manage" }),
   };
-  const paycheckPlan = view === "paycheck"
-    ? await loadPaycheckPlan(supabase, user.id, today)
-    : null;
-  const priceChanges = isFeatureEnabled("recurringPriceHistory")
-    ? await supabase.from("recurring_price_changes").select("id,recurring_stream_id,effective_date,previous_amount,new_amount").eq("user_id", user.id).order("effective_date", { ascending: false }).limit(100)
-    : { data: [] as PriceChangeHistoryRow[], error: null };
-  if (priceChanges.error) logError("recurring.price-change-history", priceChanges.error);
+  const paycheckPlan = view === "paycheck" ? await loadPaycheckPlan(supabase, user.id, today) : null;
+  const priceChanges = await loadPriceChanges(supabase, user.id, priceHistoryEnabled);
 
-  return <RecurringSurface userEmail={user.email} loaded={loaded} month={month} currentMonth={currentMonth} today={today} tab={tab} view={view} links={links} baseLink={baseLink} paycheckViewEnabled={paycheckViewEnabled} paycheckPlan={paycheckPlan} billsViewsEnabled={billsViewsEnabled} priceHistoryEnabled={isFeatureEnabled("recurringPriceHistory")} priceChanges={(priceChanges.data ?? []) as PriceChangeHistoryRow[]} />;
+  return <RecurringSurface userEmail={user.email} loaded={loaded} month={month} currentMonth={currentMonth} today={today} tab={tab} view={view} links={links} baseLink={baseLink} paycheckViewEnabled={paycheckViewEnabled} paycheckPlan={paycheckPlan} billsViewsEnabled={billsViewsEnabled} priceHistoryEnabled={priceHistoryEnabled} priceChanges={priceChanges} />;
 }
