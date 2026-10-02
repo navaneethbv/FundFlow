@@ -188,7 +188,7 @@ export default function RuleSuggestion({
           checked={past}
           onChange={(event) => setPast(event.target.checked)}
         />
-        Also apply this rule to the last 30 days
+        {" "}Also apply this rule to the last 30 days
       </label>
       {error && (
         <p role="alert" className="text-sm text-danger">
