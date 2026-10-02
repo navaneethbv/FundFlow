@@ -5,6 +5,17 @@ import {
 } from "@/lib/amortization";
 
 describe("buildAmortizationSchedule", () => {
+  it("returns an empty schedule for a zero principal balance", () => {
+    const result = buildAmortizationSchedule({
+      principal: 0,
+      startDate: "2026-01-01",
+      paymentAmount: 100,
+      ratePeriods: [{ start: "2026-01-01", annualRate: 5 }],
+    });
+    expect(result.rows).toEqual([]);
+    expect(result.payoffDate).toBe("2026-01-01");
+  });
+
   it("caps the final payment and reconciles principal plus interest", () => {
     const result = buildAmortizationSchedule({
       principal: 100,
@@ -73,5 +84,31 @@ describe("buildAmortizationSchedule", () => {
       ratePeriods: [{ start: "2026-01-01", annualRate: 0 }],
       periodCap: 2,
     })).toThrow("AMORTIZATION_PERIOD_CAP");
+  });
+
+  it("validates money, dates, rates, extras, and payment periods", () => {
+    const base = { principal: 100, startDate: "2026-01-01", paymentAmount: 20, ratePeriods: [{ start: "2026-01-01", annualRate: 0 }] };
+    expect(() => buildAmortizationSchedule({ ...base, principal: -1 })).toThrow("principal");
+    expect(() => buildAmortizationSchedule({ ...base, paymentAmount: 0 })).toThrow("paymentAmount");
+    expect(() => buildAmortizationSchedule({ ...base, startDate: "bad" })).toThrow("startDate");
+    expect(() => buildAmortizationSchedule({ ...base, ratePeriods: [] })).toThrow("rate period");
+    expect(() => buildAmortizationSchedule({ ...base, ratePeriods: [{ start: "bad", annualRate: 0 }] })).toThrow("rate period start");
+    expect(() => buildAmortizationSchedule({ ...base, ratePeriods: [{ start: "2026-01-01", annualRate: -1 }] })).toThrow("annualRate");
+    expect(() => buildAmortizationSchedule({ ...base, extraPayments: [{ date: "bad", amount: 1 }] })).toThrow("extra payment date");
+    expect(() => buildAmortizationSchedule({ ...base, extraPayments: [{ date: "2026-01-01", amount: -1 }] })).toThrow("extra payment amount");
+  });
+
+  it("holds the prior payment through a rate change", () => {
+    const result = buildAmortizationSchedule({
+      principal: 500,
+      startDate: "2026-01-01",
+      paymentAmount: 100,
+      ratePeriods: [
+        { start: "2026-01-01", annualRate: 0, strategy: "hold" },
+        { start: "2026-02-01", annualRate: 24, strategy: "hold" },
+      ],
+    });
+    expect(result.rows[1]?.scheduledPayment).toBe(100);
+    expect(result.rows[1]?.annualRate).toBe(24);
   });
 });
