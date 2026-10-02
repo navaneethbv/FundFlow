@@ -21,7 +21,7 @@ grant select on table public.recurring_price_changes to authenticated;
 drop policy if exists "recurring_price_changes_select_own" on public.recurring_price_changes;
 create policy "recurring_price_changes_select_own"
   on public.recurring_price_changes
-  for select using (
+  for select to authenticated using (
     user_id = (select auth.uid())
     and private.session_not_revoked()
     and private.mfa_satisfied()
