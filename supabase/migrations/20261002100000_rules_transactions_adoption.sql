@@ -94,7 +94,7 @@ create or replace function public.merge_merchants(
 ) returns void
 language plpgsql
 security definer
-set search_path = public, private
+set search_path = ''
 as $$
 declare
   source_name text := btrim(p_source_merchant);
@@ -110,14 +110,8 @@ begin
   values (p_user_id, source_name, target_name)
   on conflict (user_id, source_merchant) do update
     set target_merchant = excluded.target_merchant;
-
-  update public.merchant_rules
-    set pattern = target_name, display_name = target_name, updated_at = now()
-    where user_id = p_user_id and lower(pattern) = lower(source_name);
-
-  update public.transaction_annotations annotation
-    set tags = array_replace(annotation.tags, source_name, target_name), updated_at = now()
-    where annotation.user_id = p_user_id and source_name = any(annotation.tags);
+  -- Aliases only regroup the merchant directory. Rewriting rule patterns would
+  -- stop them matching the source transactions, and tags are not merchants.
 end;
 $$;
 

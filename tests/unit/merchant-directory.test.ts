@@ -42,4 +42,14 @@ describe("merchant directory", () => {
       { merchant: "Beta", total: 6, lastSeen: "2026-01-03" },
     ]);
   });
+
+  it("folds saved aliases into their canonical merchant, case-insensitively", () => {
+    const aliases = new Map([["old shop", "New Shop"]]);
+    expect(buildMerchantDirectory([
+      { id: "1", merchant_name: "OLD SHOP", name: null, amount: 4, date: "2026-01-05", pfc_primary: "FOOD" },
+      { id: "2", merchant_name: "New Shop", name: null, amount: 6, date: "2026-01-03", pfc_primary: "FOOD" },
+    ], aliases)).toEqual([
+      { id: "New Shop", merchant: "New Shop", total: 10, count: 2, lastSeen: "2026-01-05", category: "FOOD" },
+    ]);
+  });
 });

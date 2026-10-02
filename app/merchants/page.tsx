@@ -14,7 +14,12 @@ export default async function MerchantsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) notFound();
-  const { data, error } = await supabase.from("transactions").select("id,merchant_name,name,amount,date,pfc_primary").eq("user_id", user.id).order("date", { ascending: false }).limit(5000);
+  const [{ data, error }, aliasResult] = await Promise.all([
+    supabase.from("transactions").select("id,merchant_name,name,amount,date,pfc_primary").eq("user_id", user.id).order("date", { ascending: false }).limit(5000),
+    supabase.from("merchant_aliases").select("source_merchant,target_merchant").eq("user_id", user.id).limit(1000),
+  ]);
   if (error) throw error;
-  return <AppShell active="transactions" email={user.email}><PageHeader title="Merchants" /><MerchantDirectory initialRows={buildMerchantDirectory((data ?? []) as MerchantSourceRow[])} /></AppShell>;
+  if (aliasResult.error) throw aliasResult.error;
+  const aliases = new Map((aliasResult.data ?? []).map((row) => [String(row.source_merchant).toLowerCase(), String(row.target_merchant)]));
+  return <AppShell active="transactions" email={user.email}><PageHeader title="Merchants" /><MerchantDirectory initialRows={buildMerchantDirectory((data ?? []) as MerchantSourceRow[], aliases)} /></AppShell>;
 }

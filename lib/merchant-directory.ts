@@ -66,13 +66,15 @@ function createMerchantRow(
   };
 }
 
+/** Saved aliases keyed by lower-cased source name; provider rows stay unchanged. */
 export function buildMerchantDirectory(
   rows: readonly MerchantSourceRow[],
+  aliases: ReadonlyMap<string, string> = new Map(),
 ): MerchantDirectoryRow[] {
   const grouped = new Map<string, MerchantDirectoryRow>();
   for (const row of rows) {
-    const merchant =
-      (row.merchant_name ?? row.name ?? "Unknown").trim() || "Unknown";
+    const raw = (row.merchant_name ?? row.name ?? "Unknown").trim() || "Unknown";
+    const merchant = aliases.get(raw.toLowerCase()) ?? raw;
     const existing = grouped.get(merchant);
     const amount = Number(row.amount);
     const category = rowCategory(row);

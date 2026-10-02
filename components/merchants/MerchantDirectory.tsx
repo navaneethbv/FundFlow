@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import Field from "@/components/ui/Field";
 import Input from "@/components/ui/Input";
@@ -12,7 +13,8 @@ import { formatCurrency } from "@/lib/format";
 import type { MerchantDirectoryRow } from "@/lib/merchant-directory";
 
 export default function MerchantDirectory({ initialRows }: Readonly<{ initialRows: MerchantDirectoryRow[] }>) {
-  const [rows, setRows] = useState(initialRows);
+  const router = useRouter();
+  const rows = initialRows;
   const [source, setSource] = useState("");
   const [target, setTarget] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -22,8 +24,9 @@ export default function MerchantDirectory({ initialRows }: Readonly<{ initialRow
     const response = await fetch("/api/merchants/merge", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ source_merchant: source, target_merchant: target }) });
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     if (!response.ok) { setMessage(payload.error ?? "Could not merge merchants."); return; }
-    setRows((current) => current.filter((row) => row.merchant.toLowerCase() !== source.trim().toLowerCase()));
     setSource(""); setTarget(""); setMessage("Merchant alias saved. Existing transactions keep their provider value.");
+    // The server regroups the directory with the saved alias.
+    router.refresh();
   }
   return (
     <Panel title="Merchants" eyebrow="Spend by normalized name">
