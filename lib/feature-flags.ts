@@ -115,6 +115,18 @@ export const FEATURE_FLAG_DEFAULTS = {
   membershipCardValueCalculation: false,
   /** Reference adoption 11.3: user-maintained membership terms entry. */
   membershipTermsEntry: false,
+  /** Reference adoption 5.4: user-authored Plaid detailed-category mappings. */
+  plaidCategoryMappings: false,
+  /** Reference adoption 5.5: local, bounded Bayes categorization. */
+  bayesCategorization: false,
+  /** Reference adoption 5.6: merchant directory and merge workflow. */
+  merchantsPage: false,
+  /** Reference adoption 6.5: scheduled rows projected above the ledger. */
+  projectedLedgerRows: false,
+  /** Reference adoption 6.6: transaction list/calendar view switcher. */
+  transactionCalendar: false,
+  /** Reference adoption 6.7: keyboard and floating quick-add transaction. */
+  quickAddTransaction: false,
 } as const;
 
 export type FeatureFlag = keyof typeof FEATURE_FLAG_DEFAULTS;

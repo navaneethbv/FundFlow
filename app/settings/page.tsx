@@ -33,6 +33,7 @@ import ReceiptScanSection from "@/components/settings/ReceiptScanSection";
 import SettleUpSection from "@/components/settings/SettleUpSection";
 import CancelledSubscriptionsSection from "@/components/settings/CancelledSubscriptionsSection";
 import MembershipCardValueSection from "@/components/settings/MembershipCardValueSection";
+import PlaidCategoryMappingSection from "@/components/settings/PlaidCategoryMappingSection";
 import DashboardPrefsSection from "@/components/settings/DashboardPrefsSection";
 import DemoDataSection from "@/components/settings/DemoDataSection";
 import RestoreSection from "@/components/settings/RestoreSection";
@@ -396,6 +397,9 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
           .order("due_date"),
       ]);
     const { data: households } = await supabase.from("households").select("id").order("created_at", { ascending: false }).limit(1);
+    const { data: plaidMappings } = isFeatureEnabled("plaidCategoryMappings")
+      ? await supabase.from("plaid_category_mappings").select("pfc_detailed,display_category").eq("user_id", userId).order("pfc_detailed")
+      : { data: [] };
     const historyByMonthCategory = new Map<string, number>();
     // The RPC aggregates by (month, category) in SQL, so the row count is the
     // number of categories across four months — bounded and complete — instead
@@ -426,6 +430,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
               display_category: string;
             }>}
           />
+          {isFeatureEnabled("plaidCategoryMappings") && <PlaidCategoryMappingSection initialMappings={(plaidMappings ?? []) as Array<{ pfc_detailed: string; display_category: string }>} />}
         </div>
         <SinkingFundsSection
           initialFunds={(sinkingFunds ?? []) as Array<{

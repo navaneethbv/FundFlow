@@ -18,6 +18,9 @@ import MobileLedgerList, { type LedgerCardRow } from "@/components/transactions/
 import SavedViewsBar from "@/components/transactions/SavedViewsBar";
 import BulkTagBar from "@/components/transactions/BulkTagBar";
 import AddTransactionModal from "@/components/transactions/AddTransactionModal";
+import TransactionCalendar from "@/components/transactions/TransactionCalendar";
+import ProjectedLedgerSection, { type ProjectedLedgerItem } from "@/components/transactions/ProjectedLedgerSection";
+import BayesCategorizeButton from "@/components/transactions/BayesCategorizeButton";
 import ColumnsMenu from "@/components/transactions/ColumnsMenu";
 import TableToolbar from "@/components/transactions/TableToolbar";
 import TransactionQueryControls from "@/components/transactions/TransactionQueryControls";
@@ -57,6 +60,7 @@ import {
   type LedgerProjectionSourceRow,
 } from "@/lib/ledger-projection";
 import { isFeatureEnabled } from "@/lib/feature-flags";
+import { applyPlaidCategoryMapping, buildPlaidCategoryMap } from "@/lib/plaid-category-mapping";
 import {
   TransactionReviewScope,
 } from "@/components/transactions/TransactionReviewProvider";
@@ -68,6 +72,7 @@ import {
 } from "@/components/transactions/TransactionReviewControls";
 import { TransactionReviewStatusBadge } from "@/components/transactions/TransactionReviewStatus";
 import { isEligibleForReview } from "@/lib/transaction-review";
+import { resolveViewerToday } from "@/lib/report-period";
 
 /**
  * Whether a ledger row can be reviewed. The `transaction_review_ledger` view
@@ -226,6 +231,7 @@ async function loadLedgerRows(input: {
   accountNamesById: Map<string, string>;
   accountLabelsById: Map<string, string>;
   accountOptionsForFilters: { value: string; label: string }[];
+  categoryMappings: ReadonlyMap<string, string>;
   ledgerError: string;
 }): Promise<{
   rows: LedgerProjectedRow[];
@@ -238,8 +244,8 @@ async function loadLedgerRows(input: {
 }> {
   const { supabase, state, filters, columns, rules, accountNamesById, accountLabelsById, accountOptionsForFilters } = input;
   let ledgerError = input.ledgerError;
-  const ruleAwareFilter = Boolean(state.category || state.merchant) && hasRemapRules(rules);
-  const projectedPath = needsProjectedLedgerPage(state.sort, ruleAwareFilter);
+  const ruleAwareFilter = Boolean(state.category || state.merchant) && (hasRemapRules(rules) || input.categoryMappings.size > 0);
+  const projectedPath = needsProjectedLedgerPage(state.sort, ruleAwareFilter) || state.view === "calendar";
   const needsFullProjection = projectedPath || hasRemapRules(rules);
   let projectedScope: LedgerProjectedRow[] = [];
   let allRowsForGrouping: LedgerProjectedRow[] | null = null;
@@ -250,7 +256,7 @@ async function loadLedgerRows(input: {
         const result = await buildLedgerScanQuery(supabase, columns, filters).range(from, to);
         return { rows: (result.data ?? []) as unknown as LedgerProjectionSourceRow[], error: result.error };
       });
-      projectedScope = projectLedgerRows(sourceRows, rules, accountNamesById, accountLabelsById);
+      projectedScope = projectLedgerRows(sourceRows.map((row) => applyPlaidCategoryMapping(row, input.categoryMappings)), rules, accountNamesById, accountLabelsById);
     } catch (error) {
       console.error("Transaction projection query failed", error instanceof Error ? error.message : "unknown");
       ledgerError = "We couldn't load your transactions. Try changing the filters or refresh the page.";
@@ -307,6 +313,7 @@ async function loadDirectLedgerRows(input: {
   accountOptionsForFilters: { value: string; label: string }[];
   ledgerError: string;
   projectedPath: boolean;
+  categoryMappings: ReadonlyMap<string, string>;
 }): Promise<{
   rows: LedgerProjectedRow[];
   total: number;
@@ -335,7 +342,7 @@ async function loadDirectLedgerRows(input: {
     };
   }
   const windowRows = projectLedgerRows(
-    (result.data ?? []) as unknown as LedgerProjectionSourceRow[],
+    ((result.data ?? []) as unknown as LedgerProjectionSourceRow[]).map((row) => applyPlaidCategoryMapping(row, input.categoryMappings)),
     rules,
     accountNamesById,
     accountLabelsById,
@@ -730,7 +737,9 @@ export const metadata = {
 function resolveDateBounds(
   month?: string,
   year?: string,
+  day?: string,
 ): { start: string; end: string } | null {
+  if (day) return { start: day, end: day };
   if (month) return monthBounds(month);
   if (year) return { start: `${year}-01-01`, end: `${year}-12-31` };
   return null;
@@ -739,9 +748,11 @@ function resolveDateBounds(
 function describeLedgerPeriod(
   month?: string,
   year?: string,
+  day?: string,
   hasBounds?: boolean,
 ): string {
   if (!hasBounds) return "";
+  if (day) return ` on ${day}`;
   if (month) return ` in ${formatMonth(month)}`;
   if (year) return ` in ${year}`;
   return "";
@@ -818,8 +829,10 @@ function ledgerEmptyMessage(review: LedgerReviewFilter, globalCount: number | nu
 export default async function TransactionsPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
   const transactionReviewEnabled = isFeatureEnabled("transactionReview");
+  const transactionCalendarEnabled = isFeatureEnabled("transactionCalendar");
+  const projectedLedgerEnabled = isFeatureEnabled("projectedLedgerRows");
   const state = parseLedgerQuery(transactionReviewEnabled ? params : { ...params, review: "all" });
-  const { month, accountId, q, page, category, sub, merchant, flow, accountType } = state;
+  const { month, day, accountId, q, page, category, sub, merchant, flow, accountType } = state;
   const visibleColumns = state.columns;
   const columnsAreDefault = !state.columnsSubmitted;
   // Gated: manual_account_id/source only exist once
@@ -827,6 +840,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   // is already live, so this must default to the pre-Phase-12 query shape
   // rather than 500ing every visit on an unmigrated deployment.
   const transactionsParityEnabled = isFeatureEnabled("transactionsParity");
+  const plaidCategoryMappingsEnabled = isFeatureEnabled("plaidCategoryMappings");
 
   const supabase = await createClient();
   // The ledger has no household scope selector, so every query below is the
@@ -846,6 +860,10 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
       .order("created_at"),
     loadReviewSummary(supabase, ownerId, transactionReviewEnabled),
   ]);
+  const categoryMappingResult = plaidCategoryMappingsEnabled
+    ? await supabase.from("plaid_category_mappings").select("pfc_detailed,display_category").eq("user_id", ownerId).order("pfc_detailed")
+    : { data: [], error: null };
+  const categoryMappings = buildPlaidCategoryMap((categoryMappingResult.data ?? []).map((row) => ({ pfcDetailed: row.pfc_detailed as string, displayCategory: row.display_category as string })));
   const savedViews = ((savedViewsResult.data ?? []) as Array<{
     id: string;
     name: string;
@@ -876,6 +894,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     manualAccountsResult.error,
     merchantRulesResult.error,
     goalRowsResult.error,
+    categoryMappingResult.error,
   ].map((error) => ({ error }))];
   let ledgerError = reviewSummary.integrityError || transactionSetupError(setupResults);
 
@@ -904,7 +923,10 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     baseColumns = `${baseColumns}, review_status, review_version, reviewed_at, review_eligible, review_state_missing`;
   }
   const columns: string = baseColumns;
-  const bounds = resolveDateBounds(month, state.year);
+  const viewerToday = await resolveViewerToday(supabase, ownerId);
+  const calendarMonth = month || viewerToday.slice(0, 7);
+  const effectiveMonth = state.view === "calendar" ? calendarMonth : month;
+  const bounds = resolveDateBounds(effectiveMonth, state.year, day);
   const typedIds = accountType
     ? accounts.filter((account) => account.type === accountType).map((account) => account.id as string)
     : [];
@@ -927,6 +949,10 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     value: account.id,
     label: accountLabelsById.get(account.id) ?? account.name,
   }));
+  const projectedResult = projectedLedgerEnabled
+    ? await supabase.from("scheduled_transactions").select("id,scheduled_date,merchant,amount,kind").eq("user_id", ownerId).eq("status", "scheduled").gte("scheduled_date", viewerToday).order("scheduled_date").limit(50)
+    : { data: [], error: null };
+  const projectedItems = ((projectedResult.data ?? []) as Array<{ id: string; scheduled_date: string; merchant: string; amount: number | string; kind: "debit" | "credit" }>).map((row): ProjectedLedgerItem => ({ id: row.id, date: row.scheduled_date, merchant: row.merchant, amount: Math.abs(Number(row.amount)), kind: row.kind }));
   const ledgerRows = await loadLedgerRows({
     supabase,
     state,
@@ -936,6 +962,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     accountNamesById,
     accountLabelsById,
     accountOptionsForFilters,
+    categoryMappings,
     ledgerError,
   });
   const { rows, total, filterOptions } = ledgerRows;
@@ -1006,11 +1033,18 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
           title="Transactions"
           actions={
             <>
+              {isFeatureEnabled("merchantsPage") && <ButtonLink href="/merchants" variant="secondary">Merchants</ButtonLink>}
+              {isFeatureEnabled("bayesCategorization") && <BayesCategorizeButton />}
               <ButtonLink href="/transactions/receipts" variant="secondary">
                 Receipts
               </ButtonLink>
               {transactionsParityEnabled && accountOptions.length > 0 && (
-                <AddTransactionModal accounts={accountOptions} goals={goalOptions} categories={categoryOptions} />
+                <AddTransactionModal
+                  accounts={accountOptions}
+                  goals={goalOptions}
+                  categories={categoryOptions}
+                  quickAddEnabled={isFeatureEnabled("quickAddTransaction")}
+                />
               )}
             </>
           }
@@ -1019,6 +1053,8 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
         <RefundReview />
         <TransferReview />
         <DuplicateReview />
+
+        {projectedLedgerEnabled && <ProjectedLedgerSection items={projectedItems} />}
 
         {transactionsParityEnabled && accountOptions.length > 0 && (
           <ScheduledTransactionsSection
@@ -1031,6 +1067,13 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
           initialViews={savedViews}
           currentParams={savedLedgerViewParams(state)}
         />
+
+        {transactionCalendarEnabled && (
+          <nav aria-label="Transaction view" className="flex flex-wrap gap-2">
+            <ButtonLink href={ledgerHref(queryEntries, { view: null })} variant={state.view === "list" ? "primary" : "secondary"}>List</ButtonLink>
+            <ButtonLink href={ledgerHref(queryEntries, { view: "calendar" })} variant={state.view === "calendar" ? "primary" : "secondary"}>Calendar</ButtonLink>
+          </nav>
+        )}
 
         <Panel>
           <TransactionQueryControls
@@ -1053,7 +1096,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
         {!ledgerError && (
           <p className="text-xs text-muted">
             {total.toLocaleString()} transaction{total === 1 ? "" : "s"}
-            {describeLedgerPeriod(month, state.year, Boolean(bounds))}
+            {describeLedgerPeriod(effectiveMonth, state.year, day, Boolean(bounds))}
             . Negative amounts represent expenses; positive amounts represent income.
           </p>
         )}
@@ -1070,7 +1113,18 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
             action={hasCommittedFilters && <ButtonLink href="/transactions" variant="secondary">Clear filters</ButtonLink>}
           />
         )}
-        {showLedgerRows && (
+        {transactionCalendarEnabled && state.view === "calendar" && !ledgerError && (
+          <TransactionCalendar
+            month={calendarMonth}
+            rows={(ledgerRows.projectedScope.length > 0 ? ledgerRows.projectedScope : rows).map((row) => ({
+              id: row.id,
+              date: row.date,
+              amount: row.amount,
+              merchant: row.merchant,
+            }))}
+          />
+        )}
+        {showLedgerRows && state.view !== "calendar" && (
 
             <Panel padding="none" className="overflow-hidden">
               {transactionReviewEnabled && (

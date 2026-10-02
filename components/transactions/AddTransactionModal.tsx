@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Button from "@/components/ui/Button";
 import Field from "@/components/ui/Field";
 import FormMessage from "@/components/ui/FormMessage";
@@ -30,10 +30,12 @@ export default function AddTransactionModal({
   accounts,
   goals = [],
   categories = [],
+  quickAddEnabled = false,
 }: Readonly<{
   accounts: AddTransactionAccountOption[];
   goals?: GoalOption[];
   categories?: string[];
+  quickAddEnabled?: boolean;
 }>) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -47,6 +49,20 @@ export default function AddTransactionModal({
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!quickAddEnabled) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "t") {
+        event.preventDefault();
+        setOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [quickAddEnabled]);
 
   async function submit(event: React.SyntheticEvent) {
     event.preventDefault();
@@ -89,7 +105,9 @@ export default function AddTransactionModal({
 
   return (
     <>
-      <Button onClick={() => setOpen(true)}>Add transaction</Button>
+      <Button onClick={() => setOpen(true)} className={quickAddEnabled ? "fixed bottom-5 right-5 z-20 shadow-lg sm:static sm:z-auto sm:shadow-none" : undefined}>
+        Add transaction{quickAddEnabled ? " (Ctrl+Shift+T)" : ""}
+      </Button>
       <Modal open={open} onClose={() => setOpen(false)} placement="sheet" titleId="add-txn-title">
         <h2 id="add-txn-title" className="text-lg font-bold">Add transaction</h2>
         <form

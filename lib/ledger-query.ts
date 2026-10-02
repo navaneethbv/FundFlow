@@ -20,6 +20,7 @@ export type LedgerReviewFilter = "all" | "needs_review" | "reviewed";
 
 export interface LedgerRawSearchParams {
   month?: string | string[];
+  day?: string | string[];
   year?: string | string[];
   accountId?: string | string[];
   q?: string | string[];
@@ -34,11 +35,13 @@ export interface LedgerRawSearchParams {
   col?: string | string[];
   colsSubmitted?: string | string[];
   review?: string | string[];
+  view?: string | string[];
 }
 
 export interface LedgerFilters {
   q: string;
   month: string;
+  day?: string;
   year?: string;
   accountId: string;
   category: string;
@@ -50,6 +53,7 @@ export interface LedgerFilters {
 }
 
 export interface LedgerQueryState extends LedgerFilters {
+  view: "list" | "calendar";
   sort: LedgerSortField;
   direction: LedgerSortDirection;
   page: number;
@@ -68,9 +72,11 @@ const UUID_RE =
 const CATEGORY_RE = /^[A-Z][A-Z0-9_]*$/;
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const YEAR_RE = /^\d{4}$/;
+const DAY_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const FILTER_KEYS = [
   "q",
   "month",
+  "day",
   "year",
   "accountId",
   "category",
@@ -94,6 +100,7 @@ export function parseLedgerQuery(
   const sortValue = firstSearchParamOrEmpty(raw.sort);
   const directionValue = firstSearchParamOrEmpty(raw.direction);
   const monthValue = firstSearchParamOrEmpty(raw.month);
+  const dayValue = firstSearchParamOrEmpty(raw.day);
   const yearValue = firstSearchParamOrEmpty(raw.year);
   const accountValue = firstSearchParamOrEmpty(raw.accountId);
   const categoryValue = firstSearchParamOrEmpty(raw.category);
@@ -101,10 +108,12 @@ export function parseLedgerQuery(
   const flowValue = firstSearchParamOrEmpty(raw.flow);
   const accountTypeValue = firstSearchParamOrEmpty(raw.accountType);
   const reviewValue = firstSearchParamOrEmpty(raw.review);
+  const viewValue = firstSearchParamOrEmpty(raw.view);
 
   return {
     q: sanitizeLedgerSearch(firstSearchParamOrEmpty(raw.q)),
     month: MONTH_RE.test(monthValue) ? monthValue : "",
+    day: DAY_RE.test(dayValue) ? dayValue : "",
     year: YEAR_RE.test(yearValue) ? yearValue : "",
     accountId: UUID_RE.test(accountValue) ? accountValue : "",
     category: CATEGORY_RE.test(categoryValue) ? categoryValue : "",
@@ -119,6 +128,7 @@ export function parseLedgerQuery(
       reviewValue === "needs_review" || reviewValue === "reviewed"
         ? reviewValue
         : "all",
+    view: viewValue === "calendar" ? "calendar" : "list",
     sort: LEDGER_SORT_FIELDS.includes(sortValue as LedgerSortField)
       ? (sortValue as LedgerSortField)
       : "date",
@@ -156,6 +166,7 @@ export function ledgerQueryEntries(
       if (state.columns.has(column)) entries.push(["col", column]);
     }
   }
+  if (state.view === "calendar") entries.push(["view", "calendar"]);
 
   return entries;
 }

@@ -98,4 +98,11 @@ describe("feature flags", () => {
     expect(isFeatureEnabled("billsViews", {})).toBe(false);
     expect(isFeatureEnabled("subscriptionCatalog", {})).toBe(false);
   });
+
+  it("keeps the grouped rules and transaction tools off by default", () => {
+    for (const flag of ["plaidCategoryMappings", "bayesCategorization", "merchantsPage", "projectedLedgerRows", "transactionCalendar", "quickAddTransaction"] as const) {
+      expect(FEATURE_FLAG_DEFAULTS[flag]).toBe(false);
+      expect(isFeatureEnabled(flag, {})).toBe(false);
+    }
+  });
 });

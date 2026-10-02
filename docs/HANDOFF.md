@@ -1,5 +1,22 @@
 # FundFlow Session Handoff
 
+## 2026-10-02: group 6 rules and transaction tools
+
+The current grouped branch is `feat/rules-transaction-tools` in `/private/tmp/fundflow-rules-transaction-tools`, based on `feat/bills-membership-value`.
+It implements items 5.4 to 5.6 and 6.5 to 6.7 in one review: Plaid category mappings, local Bayes suggestions, merchant directory and merge, projected ledger rows, the calendar heatmap, and quick add.
+The grouped design is in [the group 6 spec](superpowers/specs/2026-10-02-rules-transactions.md).
+
+The migration `20261002100000_rules_transactions_adoption.sql` adds the user-authored mapping and merchant alias tables, Bayes provenance, and the owner-scoped merge function.
+It is unapplied to production.
+All six new feature flags are default off.
+
+Local checks passed targeted unit tests, lint, typecheck, palette validation, and diff whitespace checks before the final build and full unit run.
+The local migration lint is blocked by the missing Docker/Postgres target.
+The signed-in Supabase journey and integration tests remain deferred under the disposable-target exception.
+
+Next step is to run the placeholder production build and full unit suite, refresh graphify, then push the grouped branch and open one PR against `feat/bills-membership-value`.
+Do not merge, apply the migration, deploy, or enable the flags without owner authorization.
+
 ## 2026-10-02: group 5 bills and membership value
 
 The owner requested the next reference-adoption group as one PR of five or six features.
