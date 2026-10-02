@@ -60,7 +60,7 @@ export default function InsightsFeed({
   return (
     <Panel title="Insights" eyebrow="Recent activity, highest priority first">
       <label className="mb-4 flex items-center gap-3 text-sm">
-        Show
+        Show{" "}
         <select
           ref={filter}
           value={view}
@@ -72,9 +72,9 @@ export default function InsightsFeed({
           <option value="all">All</option>
         </select>
       </label>
-      <p role="status" className="mb-3 text-sm">
+      <output aria-live="polite" className="mb-3 block text-sm">
         {status}
-      </p>
+      </output>
       <div className="space-y-3">
         {rows.map((row) => (
           <article

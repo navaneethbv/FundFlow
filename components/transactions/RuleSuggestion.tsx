@@ -75,8 +75,8 @@ export default function RuleSuggestion({
           });
         setChoices(next);
       })
-      .catch((failure) => {
-        if (!controller.signal.aborted) setError(failure.message);
+      .catch((error_) => {
+        if (!controller.signal.aborted) setError(error_.message);
       });
     return () => controller.abort();
   }, [transactionId]);
@@ -98,8 +98,8 @@ export default function RuleSuggestion({
           setCount(data.matched);
           setError("");
         })
-        .catch((failure) => {
-          if (!controller.signal.aborted) setError(failure.message);
+        .catch((error_) => {
+          if (!controller.signal.aborted) setError(error_.message);
         });
     }, 250);
     return () => {
@@ -138,9 +138,9 @@ export default function RuleSuggestion({
           );
       }
       onClose();
-    } catch (failure) {
+    } catch (error_) {
       setError(
-        failure instanceof Error ? failure.message : "Could not save rule.",
+        error_ instanceof Error ? error_.message : "Could not save rule.",
       );
     } finally {
       setBusy(false);
@@ -174,14 +174,14 @@ export default function RuleSuggestion({
               );
             }}
           />
-          {choice.label}
+          {" "}{choice.label}
         </label>
       ))}
-      <p role="status" className="text-sm">
+      <output aria-live="polite" className="block text-sm">
         {selected.length
           ? `${count ?? "Counting"} matches in the last 30 days (up to 500 transactions).`
           : "Select at least one condition."}
-      </p>
+      </output>
       <label className="flex min-h-11 items-center gap-2 text-sm">
         <input
           type="checkbox"

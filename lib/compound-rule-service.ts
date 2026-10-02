@@ -95,6 +95,10 @@ export async function loadRuleCandidates(
   return data.map((row) => {
     const annotation = byId.get(row.id);
     const amount = Number(row.amount);
+    let type: RuleTransactionCandidate["type"];
+    if (TRANSFER_GROUPS.has(row.pfc_primary)) type = "transfer";
+    else if (amount < 0) type = "income";
+    else type = "expense";
     return {
       id: row.id,
       merchant: row.merchant_name,
@@ -106,11 +110,7 @@ export async function loadRuleCandidates(
       category: annotation?.display_category ?? row.pfc_primary,
       notes: annotation?.note,
       tags: annotation?.tags ?? [],
-      type: TRANSFER_GROUPS.has(row.pfc_primary)
-        ? "transfer"
-        : amount < 0
-          ? "income"
-          : "expense",
+      type,
       version: row.updated_at,
       annotationVersion: annotation?.updated_at ?? null,
       previousActions: annotation ? storedRuleActions(annotation) : undefined,
@@ -170,16 +170,18 @@ export async function applyCompoundRules(
     rows.push(byId.get(result.transactionId)!);
     matches.set(result.matchedRuleId, rows);
   }
-  let changed = 0;
-  // Each independent rule run is atomic; failures retain earlier completed run evidence.
-  for (const rule of rules) {
-    if (onlyRuleId && rule.id !== onlyRuleId) continue;
-    const rows = matches.get(rule.id) ?? [];
-    // Legacy rules remain projection-only during ingestion, preserving prior semantics.
-    if (!rule.conditions && trigger !== "manual") continue;
-    changed += await applyOneRun(writer, userId, trigger, rule, rows);
-  }
-  return changed;
+  // Each independent rule run is atomic; failures retain completed run evidence.
+  const applicable = rules.filter(
+    (rule) =>
+      (!onlyRuleId || rule.id === onlyRuleId) &&
+      (rule.conditions || trigger === "manual"),
+  );
+  const changes = await Promise.all(
+    applicable.map((rule) =>
+      applyOneRun(writer, userId, trigger, rule, matches.get(rule.id) ?? []),
+    ),
+  );
+  return changes.reduce((total, count) => total + count, 0);
 }
 async function applyOneRun(
   writer: SupabaseClient,
@@ -250,23 +252,50 @@ export async function processRuleAutomation(
   if (!isFeatureEnabled("compoundRules") || !providerIds.length) return;
   const rules = await loadRules(reader, userId);
   if (!rules.some((rule) => rule.enabled && rule.conditions)) return;
-  let offset = 0;
-  while (offset < providerIds.length) {
-    const ids = providerIds.slice(offset, offset + 200);
-    const { data, error } = await reader
-      .from("transactions")
-      .select("id")
-      .eq("user_id", userId)
-      .in("plaid_transaction_id", ids)
-      .limit(201);
-    if (error) throw error;
-    const candidates = await loadRuleCandidates(
-      reader,
-      userId,
-      { start: "0001-01-01", end: "9999-12-31" },
-      (data ?? []).map((row) => row.id),
-    );
-    await applyCompoundRules(writer, userId, trigger, rules, candidates);
-    offset += ids.length;
-  }
+  const chunks = Array.from(
+    { length: Math.ceil(providerIds.length / 200) },
+    (_, index) => providerIds.slice(index * 200, index * 200 + 200),
+  );
+  await processRuleChunks(reader, writer, userId, trigger, rules, chunks);
+}
+
+async function processRuleChunks(
+  reader: SupabaseClient,
+  writer: SupabaseClient,
+  userId: string,
+  trigger: "sync" | "import",
+  rules: StoredCompoundRule[],
+  chunks: string[][],
+  offset = 0,
+): Promise<void> {
+  const batch = chunks.slice(offset, offset + 4);
+  await Promise.all(
+    batch.map((ids) => processRuleChunk(reader, writer, userId, trigger, rules, ids)),
+  );
+  if (batch.length === 4)
+    await processRuleChunks(reader, writer, userId, trigger, rules, chunks, offset + 4);
+}
+
+async function processRuleChunk(
+  reader: SupabaseClient,
+  writer: SupabaseClient,
+  userId: string,
+  trigger: "sync" | "import",
+  rules: StoredCompoundRule[],
+  ids: string[],
+): Promise<void> {
+  const { data, error } = await reader
+    .from("transactions")
+    .select("id")
+    .eq("user_id", userId)
+    .in("plaid_transaction_id", ids)
+    .limit(201);
+  if (error) throw error;
+  const candidates = await loadRuleCandidates(
+    reader,
+    userId,
+    { start: "0001-01-01", end: "9999-12-31" },
+    (data ?? []).map((row) => row.id),
+  );
+  await applyCompoundRules(writer, userId, trigger, rules, candidates);
 }

@@ -144,7 +144,7 @@ async function saveRule(
   };
   let result;
   if (value.id) {
-    const existing = (await loadRules(auth.supabase, auth.user.id)).find(
+    const existing = (await loadRules(auth.supabase, auth.user.id)).some(
       (rule) => rule.id === value.id,
     );
     if (!existing)

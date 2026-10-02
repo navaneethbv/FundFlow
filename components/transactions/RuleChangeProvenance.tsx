@@ -33,8 +33,8 @@ export default function RuleChangeProvenance({
     return () => controller.abort();
   }, [transactionId]);
   return (
-    <p className="my-3 text-xs text-muted" role="status">
+    <output aria-live="polite" className="my-3 block text-xs text-muted">
       {message}
-    </p>
+    </output>
   );
 }

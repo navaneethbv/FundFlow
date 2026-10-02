@@ -336,7 +336,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     if (historyRuns.length) {
       try { await finishLegacyRuleRuns(createServiceClient(), user.id, historyRuns, simulation, "failed"); }
-      catch (historyError) { return errorResponse("rules.batch.history", new AggregateError([error, historyError])); }
+      catch (historyError) { return errorResponse("rules.batch.history", new AggregateError([error, historyError], "Rule history update failed")); }
     }
     return errorResponse("rules.batch.post", error);
   }

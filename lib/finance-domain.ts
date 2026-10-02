@@ -244,9 +244,11 @@ export function projectFinanceTransactions(
     // into spending or income — only an explicit cash-flow classification can.
     const flowGroupKey = overrideCategory(overrides, clean.category) ?? UNCATEGORIZED;
     const groupKey = override?.displayCategory ?? actions?.category ?? flowGroupKey;
-    const flow = nettedIds.has(row.id)
-      ? "transfer"
-      : override?.cashFlowClassification ?? (actions?.transfer ? "transfer" : flowFor(row.amount, flowGroupKey));
+    let flow: FinanceFlow;
+    if (nettedIds.has(row.id)) flow = "transfer";
+    else if (override?.cashFlowClassification) flow = override.cashFlowClassification;
+    else if (actions?.transfer) flow = "transfer";
+    else flow = flowFor(row.amount, flowGroupKey);
 
     const base = {
       sourceTransactionId: row.id,

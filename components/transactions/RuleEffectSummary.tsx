@@ -59,9 +59,9 @@ export default function RuleEffectSummary({
       >
         Remove rule changes
       </Button>
-      <p role="status" className="mt-2">
+      <output aria-live="polite" className="mt-2 block">
         {status}
-      </p>
+      </output>
     </section>
   );
 }

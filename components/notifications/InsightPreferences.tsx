@@ -55,9 +55,9 @@ export default function InsightPreferences({
       <Button className="mt-4" onClick={save} loading={saving}>
         Save insight preferences
       </Button>
-      <p role="status" className="mt-3 text-sm">
+      <output aria-live="polite" className="mt-3 block text-sm">
         {status}
-      </p>
+      </output>
     </Panel>
   );
 }

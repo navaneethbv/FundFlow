@@ -190,7 +190,7 @@ export default function CompoundRulesSection() {
             checked={enabled}
             onChange={(event) => setEnabled(event.target.checked)}
           />
-          Enabled
+          {" "}Enabled
         </label>
       </div>
       <Button
@@ -251,9 +251,9 @@ export default function CompoundRulesSection() {
           </Button>
         </div>
       </fieldset>
-      <p role="status" className="mt-3 text-sm">
+      <output aria-live="polite" className="mt-3 block text-sm">
         {status}
-      </p>
+      </output>
     </Panel>
   );
 }

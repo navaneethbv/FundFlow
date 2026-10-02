@@ -57,6 +57,24 @@ function uniqueKeys(values: readonly unknown[], prefix: string): string[] {
   });
 }
 
+type SourceMapping = { account_id?: string; manual_account_id?: string };
+
+function buildSourceMappings(
+  sourceAccounts: string[],
+  sourceAccountTargets: Record<string, string>,
+  accounts: AccountOption[],
+): { mappings: Record<string, SourceMapping>; error?: string } {
+  const mappings: Record<string, SourceMapping> = {};
+  for (const sourceAccount of sourceAccounts) {
+    const target = accounts.find((account) => account.id === sourceAccountTargets[sourceAccount]);
+    if (!target) return { mappings, error: `Choose a FundFlow account for source account "${sourceAccount}"` };
+    mappings[sourceAccount] = target.kind === "manual"
+      ? { manual_account_id: target.id }
+      : { account_id: target.id };
+  }
+  return { mappings };
+}
+
 /**
  * Two-step CSV import: preview parsed rows with duplicate flags, then commit
  * only the rows the user keeps. Flagged (possible/file duplicate) rows are
@@ -309,17 +327,12 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false,
     if (!batchId) return;
     const selectedAccount = accounts.find((account) => account.id === accountId);
     if (!selectedAccount) return;
-    const sourceMappings: Record<string, { account_id?: string; manual_account_id?: string }> = {};
-    for (const sourceAccount of sourceAccounts) {
-      const target = accounts.find((account) => account.id === sourceAccountTargets[sourceAccount]);
-      if (!target) {
-        setError(`Choose a FundFlow account for source account "${sourceAccount}"`);
-        return;
-      }
-      sourceMappings[sourceAccount] = target.kind === "manual"
-        ? { manual_account_id: target.id }
-        : { account_id: target.id };
+    const sourceResult = buildSourceMappings(sourceAccounts, sourceAccountTargets, accounts);
+    if (sourceResult.error) {
+      setError(sourceResult.error);
+      return;
     }
+    const sourceMappings = sourceResult.mappings;
     setError(null);
     setBusy(true);
     try {

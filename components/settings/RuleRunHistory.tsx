@@ -22,10 +22,10 @@ export default function RuleRunHistory() {
       if (!response.ok) throw new Error("Could not load run history.");
       setRuns((await response.json()).runs);
       setError("");
-    } catch (failure) {
+    } catch (error_) {
       setError(
-        failure instanceof Error
-          ? failure.message
+        error_ instanceof Error
+          ? error_.message
           : "Could not load run history.",
       );
     }
@@ -37,8 +37,8 @@ export default function RuleRunHistory() {
         if (!response.ok) throw new Error("Could not load run history.");
         setRuns((await response.json()).runs);
       })
-      .catch((failure) => {
-        if (!controller.signal.aborted) setError(failure.message);
+      .catch((error_) => {
+        if (!controller.signal.aborted) setError(error_.message);
       });
     return () => controller.abort();
   }, []);
@@ -47,9 +47,9 @@ export default function RuleRunHistory() {
       <Button variant="secondary" size="sm" onClick={refresh}>
         Refresh history
       </Button>
-      <p role="status" className="my-3 text-sm">
+      <output aria-live="polite" className="my-3 block text-sm">
         {error}
-      </p>
+      </output>
       <ul className="space-y-3">
         {runs.map((run) => (
           <li

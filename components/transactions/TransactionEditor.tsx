@@ -329,6 +329,10 @@ export default function TransactionEditor({
   const splitTotal = round2(activeRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0));
   const splitsBalanced = activeRows.length === 0 || Math.abs(splitTotal - target) < 0.01;
   const hasAnnotations = saved.note.length > 0 || saved.tags.length > 0 || saved.splits.length > 0;
+  const editorActionLabel = hasAnnotations ? "Edit" : "Add";
+  const editorButtonLabel = hasAnnotations
+    ? "Edit notes and splits"
+    : "Add notes or splits";
 
   function applySplitPreset(parts: number) {
     if (parts <= 0) return;
@@ -389,9 +393,9 @@ export default function TransactionEditor({
             ? "text-accent hover:bg-panel-hover"
             : "text-muted hover:bg-panel-hover hover:text-foreground",
         )}
-        aria-label={detailsEnabled ? `Details for ${transaction.merchant}` : (hasAnnotations ? "Edit notes and splits" : "Add notes or splits")}
+        aria-label={detailsEnabled ? `Details for ${transaction.merchant}` : editorButtonLabel}
       >
-        {detailsEnabled ? "Details" : (hasAnnotations ? "Edit" : "Add")}
+        {detailsEnabled ? "Details" : editorActionLabel}
       </button>
 
       <EditorContainer

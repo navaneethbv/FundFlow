@@ -58,70 +58,80 @@ function groupBy<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
   return groups;
 }
 /** Descriptor grouping is heuristic, never a relational join or merchant identity. */
+function merchantPairSignals(
+  ordered: CanonicalFinanceTransaction[],
+  recent: string,
+): Insight[] {
+  const out: Insight[] = [];
+  for (let i = 1; i < ordered.length; i++) {
+    const row = ordered[i]!;
+    const previous = ordered[i - 1]!;
+    if (row.date < recent) continue;
+    if (
+      row.accountId === previous.accountId &&
+      row.manualAccountId === previous.manualAccountId &&
+      row.date <= addDays(previous.date, 2) &&
+      Math.round(row.signedAmount * 100) === Math.round(previous.signedAmount * 100)
+    ) {
+      out.push(
+        insight(
+          "double_charge",
+          `${previous.sourceTransactionId}:${row.sourceTransactionId}`,
+          "Check two adjacent charges",
+          `${row.merchant}: two ${formatCurrency(row.signedAmount)} charges on ${previous.date} and ${row.date}, on the same account. They may both be valid.`,
+        ),
+      );
+    }
+    const earlier = ordered.slice(0, i).filter((prior) => prior.date < row.date);
+    if (earlier.length < 3) continue;
+    const usual = median(earlier.map((prior) => prior.signedAmount));
+    if (row.signedAmount < 50 || row.signedAmount < usual * 3) continue;
+    out.push(
+      insight(
+        "merchant_spike",
+        row.sourceTransactionId,
+        "Larger than this merchant's usual charge",
+        `${row.merchant}: ${formatCurrency(row.signedAmount)}, compared with a median ${formatCurrency(usual)} across ${earlier.length} earlier purchases in loaded history.`,
+      ),
+    );
+  }
+  return out;
+}
+
+function merchantGroupSignals(
+  group: CanonicalFinanceTransaction[],
+  input: InsightInputs,
+  recent: string,
+): Insight[] {
+  if (!group[0]?.merchant.trim()) return [];
+  const ordered = group.toSorted(
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      a.sourceTransactionId.localeCompare(b.sourceTransactionId),
+  );
+  const first = ordered[0]!;
+  const out = merchantPairSignals(ordered, recent);
+  if (first.date >= recent && first.signedAmount >= 100)
+    out.unshift(
+      insight(
+        "new_merchant",
+        first.sourceTransactionId,
+        "A merchant new to this history",
+        `${first.merchant}: ${formatCurrency(first.signedAmount)} on ${first.date}. No earlier purchase with this descriptor since ${input.historyStart}.`,
+      ),
+    );
+  return out;
+}
+
 function merchantSignals(
   rows: CanonicalFinanceTransaction[],
   input: InsightInputs,
 ): Insight[] {
   const recent = addDays(input.today, -6);
-  const out: Insight[] = [];
   const purchases = rows.filter((row) => row.signedAmount > 0);
-  for (const group of groupBy(purchases, (row) =>
-    row.merchant.trim().toLowerCase(),
-  ).values()) {
-    if (!group[0]?.merchant.trim()) continue;
-    const ordered = group.toSorted(
-      (a, b) =>
-        a.date.localeCompare(b.date) ||
-        a.sourceTransactionId.localeCompare(b.sourceTransactionId),
-    );
-    const first = ordered[0]!;
-    if (first.date >= recent && first.signedAmount >= 100) {
-      out.push(
-        insight(
-          "new_merchant",
-          first.sourceTransactionId,
-          "A merchant new to this history",
-          `${first.merchant}: ${formatCurrency(first.signedAmount)} on ${first.date}. No earlier purchase with this descriptor since ${input.historyStart}.`,
-        ),
-      );
-    }
-    for (let i = 1; i < ordered.length; i++) {
-      const row = ordered[i]!;
-      const previous = ordered[i - 1]!;
-      if (row.date < recent) continue;
-      if (
-        row.accountId === previous.accountId &&
-        row.manualAccountId === previous.manualAccountId &&
-        row.date <= addDays(previous.date, 2) &&
-        Math.round(row.signedAmount * 100) ===
-          Math.round(previous.signedAmount * 100)
-      ) {
-        out.push(
-          insight(
-            "double_charge",
-            `${previous.sourceTransactionId}:${row.sourceTransactionId}`,
-            "Check two adjacent charges",
-            `${row.merchant}: two ${formatCurrency(row.signedAmount)} charges on ${previous.date} and ${row.date}, on the same account. They may both be valid.`,
-          ),
-        );
-      }
-      const earlier = ordered
-        .slice(0, i)
-        .filter((prior) => prior.date < row.date);
-      if (earlier.length < 3) continue;
-      const usual = median(earlier.map((prior) => prior.signedAmount));
-      if (row.signedAmount >= 50 && row.signedAmount >= usual * 3) {
-        out.push(
-          insight(
-            "merchant_spike",
-            row.sourceTransactionId,
-            "Larger than this merchant's usual charge",
-            `${row.merchant}: ${formatCurrency(row.signedAmount)}, compared with a median ${formatCurrency(usual)} across ${earlier.length} earlier purchases in loaded history.`,
-          ),
-        );
-      }
-    }
-  }
+  const out: Insight[] = [];
+  for (const group of groupBy(purchases, (row) => row.merchant.trim().toLowerCase()).values())
+    out.push(...merchantGroupSignals(group, input, recent));
   return out;
 }
 function categorySignals(
