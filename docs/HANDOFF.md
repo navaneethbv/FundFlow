@@ -1,22 +1,24 @@
 # FundFlow Session Handoff
 
-## 2026-10-01: Group 3 implementation complete locally
+## 2026-10-01: Group 3 implementation complete
 
 Group 3 is complete in `/private/tmp/fundflow-insights-rules` on `feat/insights-rules-ledger`, based on PR #198's `feat/import-foundation` branch.
-The batch contains items 4.1, 4.2, 5.1, 5.2, 5.3, and 6.1 in one pending PR.
-It has not been committed, pushed, merged, deployed, or applied to production yet.
+The batch contains items 4.1, 4.2, 5.1, 5.2, 5.3, and 6.1 in [PR #200](https://github.com/navaneethbv/FundFlow/pull/200).
+The PR is open against `feat/import-foundation` and is not merged.
+No production migration was applied, no feature flag was flipped, and no production deployment was authorized.
 
 The implementation adds eight opt-in insight generators and an explained priority feed, bounded compound rules with preserved legacy behavior, service-only atomic effects with run history and provenance, recategorization rule suggestions, and the desktop detail pane/mobile sheet.
 Rule effects are carried through canonical projections, dashboard/export/weekly-report paths, and the ledger while preserving provider facts and manual overrides.
 Six flags remain off: `insightGenerators`, `insightsFeed`, `compoundRules`, `ruleRunHistory`, `ruleSuggestions`, and `transactionDetails`.
 The unapplied migrations are `20261001170000_insight_preferences.sql` and `20261001180000_compound_rules.sql`.
 
-Verification completed: lint, TypeScript, 502 unit files with 5,638 tests, coverage at 98.41% statements, 96.07% branches, 98.66% functions and 99.53% lines, placeholder-environment production build, four responsive Playwright journeys at 375px and 1440px in light and dark themes, axe and no-overflow checks, palette validation, graph refresh, and local PostgreSQL migration/RLS/rule-effect regressions.
+Verification completed: lint, TypeScript, 502 unit files with 5,638 tests, coverage at 98.40% statements, 96.07% branches, 98.66% functions and 99.52% lines, placeholder-environment production build, four responsive Playwright journeys at 375px and 1440px in light and dark themes, axe and no-overflow checks, palette validation, graph refresh, and local PostgreSQL migration/RLS/rule-effect regressions.
 The browser fixture screenshots were inspected at both widths.
 Full signed-in Supabase browser and integration acceptance remains deferred because no disposable target or Docker stack exists; the owner approved that exception.
 
-PR #200 is open against `feat/import-foundation`.
-The documentation-only follow-up will be pushed with the same explicit refspec, then exact-head hosted checks and Sonar review must be monitored.
+The exact PR head is `dc58d93`.
+Hosted CI, migration smoke-check, E2E smoke, SonarCloud, Codacy, CodeQL, Vercel, and commit checks are green at that head.
+Sonar reports zero unresolved new issues for PR #200.
 Do not merge, apply migrations, deploy, or flip flags without renewed authorization.
 
 ## 2026-10-01: group 3 implementation in progress

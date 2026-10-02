@@ -342,16 +342,16 @@ No dependency changes are included in feature PRs.
 | 3.4 | Not started |  |
 | 3.5 | Not started |  |
 | 3.6 | Not started |  |
-| 4.1 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200); local checks passed; rollout deferred | `lib/insight-generators.ts`, `lib/insight-generation.ts` |
-| 4.2 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200); local checks passed; rollout deferred | `components/notifications/InsightsFeed.tsx`, `app/api/insights/acknowledge/route.ts` |
+| 4.1 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `lib/insight-generators.ts`, `lib/insight-generation.ts` |
+| 4.2 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `components/notifications/InsightsFeed.tsx`, `app/api/insights/acknowledge/route.ts` |
 | 4.3 | Not started |  |
-| 5.1 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200); local checks passed; rollout deferred | `lib/rule-conditions.ts`, `lib/rules-engine.ts` |
-| 5.2 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200); local checks passed; rollout deferred | `lib/rule-run-history.ts`, `supabase/migrations/20261001180000_compound_rules.sql` |
-| 5.3 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200); local checks passed; rollout deferred | `components/transactions/RuleSuggestion.tsx`, `app/api/rules/suggestion/route.ts` |
+| 5.1 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `lib/rule-conditions.ts`, `lib/rules-engine.ts` |
+| 5.2 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `lib/rule-run-history.ts`, `supabase/migrations/20261001180000_compound_rules.sql` |
+| 5.3 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `components/transactions/RuleSuggestion.tsx`, `app/api/rules/suggestion/route.ts` |
 | 5.4 | Not started |  |
 | 5.5 | Not started |  |
 | 5.6 | Not started |  |
-| 6.1 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200); local checks passed; rollout deferred | `components/ui/DetailPane.tsx`, `components/transactions/TransactionEditor.tsx` |
+| 6.1 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `components/ui/DetailPane.tsx`, `components/transactions/TransactionEditor.tsx` |
 | 6.2 | Not started |  |
 | 6.3 | Not started |  |
 | 6.4 | Not started |  |
