@@ -53,8 +53,10 @@ begin
     select count(*) into v_matches from public.transactions t
       where t.user_id=p_user_id and t.account_id=v_pending.account_id and not t.pending
         and t.pending_transaction_id=v_pending.plaid_transaction_id;
-    if v_matches>1 then raise exception 'Ambiguous posted replacement'; end if;
-    if v_matches=0 then continue; end if;
+    -- A conflict below skips carryover for this row only: the pending row is
+    -- then removed as it was before carryover existed. Raising instead would
+    -- fail every later sync for the item and stop all new transactions.
+    if v_matches<>1 then continue; end if;
     select t.* into strict v_posted from public.transactions t
       where t.user_id=p_user_id and t.account_id=v_pending.account_id and not t.pending
         and t.pending_transaction_id=v_pending.plaid_transaction_id;
@@ -62,17 +64,17 @@ begin
     -- Do not silently overwrite a separate edit made on the posted row.
     if exists(select 1 from public.transaction_annotations where user_id=p_user_id and transaction_id=v_pending.id)
       and exists(select 1 from public.transaction_annotations where user_id=p_user_id and transaction_id=v_posted.id)
-    then raise exception 'Pending and posted annotations both edited; reconcile before retrying sync'; end if;
+    then continue; end if;
     if exists(select 1 from public.transaction_splits where user_id=p_user_id and transaction_id=v_pending.id) then
       if v_posted.amount is distinct from v_pending.amount
         or exists(select 1 from public.transaction_splits where user_id=p_user_id and transaction_id=v_posted.id)
-      then raise exception 'Pending splits conflict with posted transaction; reconcile before retrying sync'; end if;
+      then continue; end if;
     end if;
     -- Confirmed financial relationships cannot be reinterpreted automatically.
     if exists(select 1 from public.linked_refunds where user_id=p_user_id and (charge_transaction_id=v_pending.id or refund_transaction_id=v_pending.id))
       or exists(select 1 from public.linked_transfers where user_id=p_user_id and (out_transaction_id=v_pending.id or in_transaction_id=v_pending.id))
       or exists(select 1 from public.linked_duplicates where user_id=p_user_id and (kept_transaction_id=v_pending.id or excluded_transaction_id=v_pending.id))
-    then raise exception 'Pending transaction has confirmed financial links; reconcile before retrying sync'; end if;
+    then continue; end if;
 
     select exists(select 1 from public.transaction_annotations where user_id=p_user_id and transaction_id=v_pending.id)
       or exists(select 1 from public.transaction_splits where user_id=p_user_id and transaction_id=v_pending.id)
@@ -80,6 +82,14 @@ begin
     update public.transaction_annotations set transaction_id=v_posted.id where user_id=p_user_id and transaction_id=v_pending.id;
     update public.transaction_splits set transaction_id=v_posted.id where user_id=p_user_id and transaction_id=v_pending.id;
     update public.receipts set transaction_id=v_posted.id where user_id=p_user_id and transaction_id=v_pending.id;
+    -- The posted row may already carry the same goal or stream link; keep that
+    -- one so the moves below cannot violate either unique constraint.
+    delete from public.goal_progress_events p where p.user_id=p_user_id and p.transaction_id=v_pending.id
+      and exists(select 1 from public.goal_progress_events q
+        where q.user_id=p_user_id and q.goal_id=p.goal_id and q.transaction_id=v_posted.id);
+    delete from public.recurring_stream_transactions p where p.user_id=p_user_id and p.transaction_id=v_pending.id
+      and exists(select 1 from public.recurring_stream_transactions q
+        where q.user_id=p_user_id and q.recurring_stream_id=p.recurring_stream_id and q.transaction_id=v_posted.id);
     update public.goal_progress_events set transaction_id=v_posted.id where user_id=p_user_id and transaction_id=v_pending.id;
     update public.recurring_stream_transactions set transaction_id=v_posted.id where user_id=p_user_id and transaction_id=v_pending.id;
     -- Pending rows are not review-eligible. Preserve their history/version and
