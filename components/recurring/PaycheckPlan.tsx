@@ -6,6 +6,7 @@ export default function PaycheckPlan({
   periods,
   cash,
 }: Readonly<{ periods: PayPeriod[]; cash: number | null }>) {
+  const periodOffset = periods[0]?.bridge ? 0 : 1;
   return (
     <div className="space-y-5">
       <Panel>
@@ -40,7 +41,7 @@ export default function PaycheckPlan({
           <h2 className="text-lg font-semibold">
             {period.bridge
               ? "Before your next payday"
-              : `Pay period ${index + (periods[0]?.bridge ? 0 : 1)}`}
+              : `Pay period ${index + periodOffset}`}
           </h2>
           <p className="text-sm text-muted">
             {formatDate(period.start)} to {formatDate(period.end)}

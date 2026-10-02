@@ -25,8 +25,7 @@ export function applyBalanceReviewHistory(
       `${snapshot.accountId}:${snapshot.snapshotDate}`,
     );
     if (
-      !review ||
-      review.anchor_balance === null ||
+      review?.anchor_balance == null ||
       review.raw_balance !== snapshot.currentBalance ||
       review.currency !== snapshot.currency ||
       Date.parse(review.observed_at) !== Date.parse(snapshot.observedAt ?? "")

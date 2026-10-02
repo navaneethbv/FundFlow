@@ -86,8 +86,10 @@ export function paydayDates(
     );
   }
   const dates: string[] = [];
-  for (let offset = 0; dates.length < count; offset++) {
+  let offset = 0;
+  while (dates.length < count) {
     const month = addMonths(`${first.slice(0, 7)}-01`, offset).slice(0, 7);
+    offset += 1;
     const candidates = new Set([monthDay(month, settings.day1)]);
     if (settings.cadence === "semimonthly")
       candidates.add(monthDay(month, settings.day2!));

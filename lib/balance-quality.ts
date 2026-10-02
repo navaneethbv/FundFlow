@@ -34,12 +34,7 @@ function holdingPriceJump(
   current: QualityHolding,
   previous: QualityHolding | undefined,
 ): boolean {
-  if (
-    !previous ||
-    previous.price === null ||
-    current.price === null ||
-    previous.price <= 0
-  )
+  if (previous?.price == null || current.price === null || previous.price <= 0)
     return false;
   if (
     previous.value === null ||

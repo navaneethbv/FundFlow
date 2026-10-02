@@ -17,6 +17,19 @@ export default async function PaychecksPage() {
   const today = await resolveViewerToday(auth.supabase, auth.user.id);
   const plan = await loadPaycheckPlan(auth.supabase, auth.user.id, today);
   if (!plan) notFound();
+  let content = (
+    <p>Confirm a payday and take-home amount before planning pay periods.</p>
+  );
+  if (plan.configured) {
+    content = plan.currencyUnsupported ? (
+      <p>
+        This planner currently supports USD accounts only. Mixed currencies are
+        not combined or converted.
+      </p>
+    ) : (
+      <PaycheckPlan periods={plan.periods} cash={plan.cash} />
+    );
+  }
   return (
     <AppShell active="recurring" email={auth.user.email}>
       <PageHeader
@@ -30,18 +43,7 @@ export default async function PaychecksPage() {
           </>
         }
       />
-      {!plan.configured ? (
-        <p>
-          Confirm a payday and take-home amount before planning pay periods.
-        </p>
-      ) : plan.currencyUnsupported ? (
-        <p>
-          This planner currently supports USD accounts only. Mixed currencies
-          are not combined or converted.
-        </p>
-      ) : (
-        <PaycheckPlan periods={plan.periods} cash={plan.cash} />
-      )}
+      {content}
     </AppShell>
   );
 }

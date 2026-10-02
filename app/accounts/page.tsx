@@ -153,6 +153,13 @@ function assertQueryResults(
   }
 }
 
+function accountSnapshotColumns(): string {
+  const columns = ["account_id,manual_account_id,snapshot_date,current_balance,available_balance,iso_currency_code"];
+  if (isFeatureEnabled("balanceQualityReview")) columns.push("id,captured_at");
+  if (isFeatureEnabled("historyProvenance")) columns.push("provenance");
+  return columns.join(",");
+}
+
 export const metadata = {
   title: "Accounts",
 };
@@ -198,7 +205,7 @@ export default async function AccountsPage({
   let snapshotQuery = supabase
     .from("account_balance_snapshots")
     .select(
-      "account_id,manual_account_id,snapshot_date,current_balance,available_balance,iso_currency_code" + (isFeatureEnabled("balanceQualityReview") ? ",id,captured_at" : "") + (isFeatureEnabled("historyProvenance") ? ",provenance" : ""),
+      accountSnapshotColumns(),
     )
     .gte("snapshot_date", historyStart(params.range))
     .order("snapshot_date");

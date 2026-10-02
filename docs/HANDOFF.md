@@ -28,7 +28,10 @@ An earlier coverage shortfall and server-rendered estimate-title issue were fixe
 The owner-approved signed-in Supabase/browser deferral remains in effect; never point tests at the production-linked database or primary `.env.local`.
 [PR #199](https://github.com/navaneethbv/FundFlow/pull/199) is open with all six checklist items and explicit verification limits.
 Implementation commit: `9b27f90`; topic branch was pushed using only `HEAD:refs/heads/feat/data-quality-guidance`.
-Next: monitor hosted checks at the final head, address in-scope findings, and report separately from the deferred rollout.
+Hosted Supabase migration/RLS checks, security analysis, preview and smoke tests passed at `f8841ca`; the longer CI job was still running when the follow-up was prepared.
+Sonar's quality gate passed but listed eight maintainability findings, so a follow-up extracts the new guidance/selection logic, replaces nested presentation ternaries, simplifies nullable guards, and makes the payday loop condition explicit.
+The follow-up passes typecheck, lint, 73 focused tests, and four browser fixtures; full coverage/build and the final hosted scan are rerun before handoff.
+Verify the current PR head before any future rollout; no merge is authorized by this record.
 Do not merge, deploy, enable flags, or apply production migrations.
 
 

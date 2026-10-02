@@ -11,6 +11,15 @@ import type { BalanceReview } from "@/lib/balance-quality-data";
 function balance(value: number | null, currency: string) {
   return value === null ? "Unknown" : formatCurrency(value, currency);
 }
+function decisionText(
+  review: BalanceReview,
+  decision: BalanceReview["decision"],
+): string {
+  if (decision === "carried")
+    return `Stale history value: ${balance(review.anchor_balance, review.currency)} from ${formatDate(review.anchor_date!)}`;
+  if (decision === "accepted") return "Accepted provider observation";
+  return "Needs your review";
+}
 function ReviewCard({
   review,
   accountName,
@@ -82,11 +91,7 @@ function ReviewCard({
         </p>
       ) : (
         <p data-money className="mt-3 text-sm font-semibold">
-          {decision === "carried"
-            ? `Stale history value: ${balance(review.anchor_balance, review.currency)} from ${formatDate(review.anchor_date!)}`
-            : decision === "accepted"
-              ? "Accepted provider observation"
-              : "Needs your review"}
+          {decisionText(review, decision)}
         </p>
       )}
       {canDecide && (
