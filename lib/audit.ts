@@ -24,6 +24,7 @@ export type AuditAction =
   | "data_refresh"
   | "data_export"
   | "data_import"
+  | "import_preflight"
   | "account_delete"
   | "calendar_token_created"
   | "calendar_token_revoked"

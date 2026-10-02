@@ -307,7 +307,7 @@ Individual PRs #192 through #197 are closed as superseded.
 All hosted checks on the consolidated PR passed at `643eda8`, including build, migration/RLS, security/static analysis, preview, and smoke tests.
 Group 2 is [PR #199](https://github.com/navaneethbv/FundFlow/pull/199) and contains 2.1, 2.2, 2.3, 3.1, 3.2, and 3.3, preserving the implementation order.
 Group 2 is implemented in `/private/tmp/fundflow-balance-quality` on `feat/data-quality-guidance`; see `docs/superpowers/specs/2026-10-01-data-quality-guidance.md` for its six-item checklist.
-PR #198 is ready with all checks passing at `a2eef7e`, but its merge and prerequisite production migrations are deferred by the owner.
+PR #198 merged to main as `5479261` on 2026-10-02 after its migrations and the two transaction-review prerequisites were applied to production.
 
 ## Execution checklist
 
@@ -322,13 +322,13 @@ No dependency changes are included in feature PRs.
 
 | Item | Status | PR / evidence |
 | --- | --- | --- |
-| 0.1 | Group 1 ready; merge deferred; checks passed at `a2eef7e` | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
+| 0.1 | Merged to main in #198 (`5479261`) on 2026-10-02; migrations applied; flags off | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
 | 0.2 | Not reproduced; skipped per verification rule | Unique holding key rejects duplicate-security rollups |
-| 0.3 | Group 1 ready; merge deferred; checks passed at `a2eef7e` | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
-| 1.1 | Group 1 ready; merge deferred; checks passed at `a2eef7e` | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
-| 1.2 | Group 1 ready; merge deferred; checks passed at `a2eef7e` | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
-| 1.3 | Group 1 ready; merge deferred; checks passed at `a2eef7e` | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
-| 1.4 | Group 1 ready; merge deferred; checks passed at `a2eef7e` | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
+| 0.3 | Merged to main in #198 (`5479261`) on 2026-10-02; migrations applied; flags off | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
+| 1.1 | Merged to main in #198 (`5479261`) on 2026-10-02; migrations applied; flags off | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
+| 1.2 | Merged to main in #198 (`5479261`) on 2026-10-02; migrations applied; flags off | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
+| 1.3 | Merged to main in #198 (`5479261`) on 2026-10-02; migrations applied; flags off | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
+| 1.4 | Merged to main in #198 (`5479261`) on 2026-10-02; migrations applied; flags off | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
 | 1.5 | Not started |  |
 | 2.1 | Implemented in [#199](https://github.com/navaneethbv/FundFlow/pull/199); local checks passed; rollout deferred | `lib/balance-quality.ts`, `app/accounts/balance-review/page.tsx` |
 | 2.2 | Implemented in [#199](https://github.com/navaneethbv/FundFlow/pull/199); local checks passed; rollout deferred | `app/settings/connections/page.tsx` |

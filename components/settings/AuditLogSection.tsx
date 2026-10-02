@@ -27,6 +27,7 @@ const ACTION_LABELS: Record<string, string> = {
   data_refresh: "Bank data refreshed",
   data_export: "Data exported",
   data_import: "Data imported",
+  import_preflight: "Import file checked",
   data_backup: "Backup created",
   account_delete: "Account deletion requested",
   receipt_scanned: "Receipt scanned",

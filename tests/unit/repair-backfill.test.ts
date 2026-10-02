@@ -175,10 +175,13 @@ describe("backfillItemTransactions (bounded repair backfill)", () => {
       "item-db-1",
       "cursor-final",
     );
-    expect(eqDeleteIn).toHaveBeenCalledWith("plaid_transaction_id", ["txn-old"]);
+    expect(mockServiceClient.rpc).toHaveBeenCalledWith("finish_transaction_sync_page", {
+      p_user_id: "user-1", p_item_id: "item-db-1", p_removed_ids: ["txn-old"],
+      p_complete: true, p_restart: true,
+    });
   });
 
-  it("applies explicit Plaid tombstones even on a bounded run but never sweeps absent rows", async () => {
+  it("queues tombstones across bounded pages until their posted replacements arrive", async () => {
     mockTransactionsSync
       .mockResolvedValueOnce({
         data: {
@@ -213,9 +216,15 @@ describe("backfillItemTransactions (bounded repair backfill)", () => {
     const result = await backfillItemTransactions(dummyItem, { maxPages: 2 });
 
     expect(result.completed).toBe(false);
-    expect(eqDeleteIn).toHaveBeenCalledWith("plaid_transaction_id", ["txn-removed"]);
-    // The delete is scoped to the owning user.
-    expect(eqDeleteUser).toHaveBeenCalledWith("user_id", "user-1");
+    expect(deleteQuery).not.toHaveBeenCalled();
+    expect(mockServiceClient.rpc).toHaveBeenCalledWith("finish_transaction_sync_page", {
+      p_user_id: "user-1", p_item_id: "item-db-1", p_removed_ids: ["txn-removed"],
+      p_complete: false, p_restart: true,
+    });
+    expect(mockServiceClient.rpc).toHaveBeenCalledWith("finish_transaction_sync_page", {
+      p_user_id: "user-1", p_item_id: "item-db-1", p_removed_ids: [],
+      p_complete: false, p_restart: false,
+    });
   });
 
   it("upserts by plaid_transaction_id so retries stay idempotent", async () => {
@@ -273,6 +282,7 @@ describe("backfillItemTransactions (bounded repair backfill)", () => {
     expect(mockTransactionsSync).toHaveBeenCalledWith({
       access_token: "access-token-123",
       cursor: "repair-cursor-8",
+      options: { include_original_description: true },
     });
     expect(mockClearItemRepairCursor).toHaveBeenCalledWith(
       "user-1",
@@ -307,6 +317,7 @@ describe("backfillItemTransactions (bounded repair backfill)", () => {
     expect(mockTransactionsSync).toHaveBeenCalledWith({
       access_token: "access-token-123",
       cursor: "committed-cursor",
+      options: { include_original_description: true },
     });
     expect(mockCompleteItemCursor).toHaveBeenCalledWith(
       "user-1",
