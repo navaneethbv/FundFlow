@@ -1,5 +1,20 @@
 # FundFlow — Future Todos
 
+## Reference adoption program: pending verification
+
+Item 0.2 did not reproduce double counting: the same-security lot/rollup batch fails atomically on the existing holdings unique key.
+If a real provider sends this shape, investigate the resulting sync rejection with a representative sanitized fixture before adding lot aggregation or heuristic rollup removal.
+
+
+- Item 0.1 local build blocked by Turbopack worker-port permissions; Webpack fallback fails on an existing `node:crypto` client import through `lib/planning.ts`.
+  Hosted build evidence is still required.
+- Item 0.1: migration `20261001100000_pending_annotation_carryover.sql` is unapplied to production.
+  Deploy the matching sync code only after the authorized migration rollout.
+- Owner approved deferring signed-in browser journeys at 375px and desktop, including keyboard use, and full Supabase integration tests for this program until a disposable Supabase project exists.
+  No Docker or approved `TEST_SUPABASE_URL` is available; do not use `.env.local` or `--linked` as a substitute.
+  Keep new feature flags off until those deferred journeys pass.
+- The execution checklist is in [the adoption plan](superpowers/plans/2026-10-01-reference-repo-feature-adoption.md#execution-checklist).
+
 ## September 30 review remediation
 
 Local implementation and per-finding status are recorded in [the review](reviews/2026-09-30-repository-review.md#implementation-status-2026-09-30-local-work).
