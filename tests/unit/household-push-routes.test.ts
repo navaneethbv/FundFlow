@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockInvalidate = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/dashboard-cache", () => ({ invalidateDashboardCache: mockInvalidate }));
+const featureState = vi.hoisted(() => ({ reportsOnlyEnabled: false }));
+vi.mock("@/lib/feature-flags", () => ({
+  isFeatureEnabled: () => featureState.reportsOnlyEnabled,
+}));
 import { createHash } from "node:crypto";
 import { clientStub } from "../fixtures/supabase-query";
 
@@ -64,6 +68,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockCheckRateLimit.mockResolvedValue(true);
   serviceClient = clientStub();
+  featureState.reportsOnlyEnabled = false;
 });
 
 describe("POST /api/household/invite", () => {
@@ -137,6 +142,28 @@ describe("POST /api/household/invite", () => {
       createHash("sha256").update(plaintext).digest("hex"),
     );
     expect(JSON.stringify(written)).not.toContain(plaintext);
+  });
+
+  it("rejects unknown invite roles and gated reports-only invites", async () => {
+    mockRequireUser.mockResolvedValue({ user: { id: USER }, supabase: clientStub() });
+    const invalid = await invitePost(jsonRequest(url, "POST", { householdId: "h1", email: "a@b.com", role: "owner" }));
+    expect(invalid.status).toBe(400);
+
+    const disabled = await invitePost(jsonRequest(url, "POST", { householdId: "h1", email: "a@b.com", role: "reports_only" }));
+    expect(disabled.status).toBe(400);
+  });
+
+  it("stores the reports-only role only while the feature is enabled", async () => {
+    featureState.reportsOnlyEnabled = true;
+    const userClient = clientStub({
+      households: { data: { id: "h1", name: "Home", owner_user_id: USER } },
+      household_invites: { error: null },
+    });
+    mockRequireUser.mockResolvedValue({ user: { id: USER, email: OWNER_EMAIL }, supabase: userClient });
+
+    const res = await invitePost(jsonRequest(url, "POST", { householdId: "h1", email: "partner@example.com", role: "reports_only" }));
+    expect(res.status).toBe(200);
+    expect(userClient.writtenTo("household_invites")).toMatchObject({ role: "reports_only" });
   });
 });
 
@@ -266,6 +293,47 @@ describe("POST /api/household/accept", () => {
 
     const res = await acceptGet(get(token));
     expect(res.headers.get("location")).toContain("invite=accepted");
+  });
+
+  it.each([
+    ["reports-only", "reports_only", "reports_only"],
+    ["member", "member", "member"],
+  ])("propagates the %s role only when enabled", async (_label, inviteRole, expectedRole) => {
+    featureState.reportsOnlyEnabled = true;
+    serviceClient = clientStub({
+      household_invites: {
+        data: {
+          id: "i1",
+          household_id: "h1",
+          email: OWNER_EMAIL,
+          role: inviteRole,
+          expires_at: future(),
+          accepted_at: null,
+        },
+      },
+      household_members: { error: null },
+    });
+    mockRequireUser.mockResolvedValue({ user: { id: USER, email: OWNER_EMAIL } });
+
+    const res = await acceptGet(get(token));
+    expect(res.headers.get("location")).toContain("invite=accepted");
+    expect(serviceClient.writtenTo("household_members")).toMatchObject({ role: expectedRole });
+  });
+
+  it("refuses a reports-only invite for a user who already has financial data", async () => {
+    featureState.reportsOnlyEnabled = true;
+    serviceClient = clientStub({
+      household_invites: {
+        data: { id: "i1", household_id: "h1", email: OWNER_EMAIL, role: "reports_only", expires_at: future(), accepted_at: null },
+      },
+      plaid_items: { data: [{ id: "item-1" }] },
+      household_members: { error: null },
+    });
+    mockRequireUser.mockResolvedValue({ user: { id: USER, email: OWNER_EMAIL } });
+
+    const res = await acceptGet(get(token));
+    expect(res.headers.get("location")).toContain("invite=reports-only-unavailable");
+    expect(serviceClient.writtenTo("household_members")).toBeUndefined();
   });
 });
 

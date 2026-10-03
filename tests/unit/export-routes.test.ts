@@ -15,6 +15,11 @@ vi.mock("@/lib/export", () => ({
   isExportAllowed: (...args: unknown[]) => mockIsExportAllowed(...args),
 }));
 
+const mockIsReportsOnlyMember = vi.fn<(...args: unknown[]) => unknown>(() => false);
+vi.mock("@/lib/household-access", () => ({
+  isReportsOnlyMember: (...args: unknown[]) => mockIsReportsOnlyMember(...args),
+}));
+
 const mockWriteAudit = vi.fn<(...args: unknown[]) => unknown>();
 const mockGetClientIp = vi.fn<(...args: unknown[]) => unknown>(() => "127.0.0.1");
 vi.mock("@/lib/audit", () => ({
@@ -60,6 +65,7 @@ import { NextResponse, NextRequest } from "next/server";
 describe("Export API Routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockIsReportsOnlyMember.mockResolvedValue(false);
     takeoutInvestmentsEnabled = true;
   });
 
@@ -423,6 +429,15 @@ describe("Export API Routes", () => {
         metadata: { format: "pdf_report", period: "2026-08" },
         ip: "127.0.0.1",
       });
+    });
+
+    it("refuses row-level reports for reports-only members", async () => {
+      mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+      mockIsReportsOnlyMember.mockResolvedValue(true);
+
+      const res = await reportGet(request);
+      expect(res.status).toBe(403);
+      expect(mockGetWeeklyReportData).not.toHaveBeenCalled();
     });
 
     it("returns early if unauthenticated or error thrown", async () => {

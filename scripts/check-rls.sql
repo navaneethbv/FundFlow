@@ -187,3 +187,56 @@ BEGIN
     RAISE EXCEPTION 'Policies on public schema explicitly targeting only {public} role:%', public_only;
   END IF;
 END $$;
+
+-- Aggregate-only household role (12.2): every raw financial table that can
+-- otherwise be reached through PostgREST must carry the shared restrictive
+-- deny policy. The policy is deliberately checked by name so a future
+-- migration cannot silently omit one table while the aggregate RPC remains
+-- available.
+DO $$
+DECLARE
+  missing text;
+BEGIN
+  SELECT string_agg(target, ', ' ORDER BY target)
+    INTO missing
+  FROM unnest(ARRAY[
+    'transactions',
+    'transaction_annotations',
+    'transaction_splits',
+    'receipts',
+    'recurring_streams',
+    'recurring_stream_transactions',
+    'accounts',
+    'manual_accounts',
+    'budgets',
+    'goals',
+    'shared_expenses'
+  ]) AS names(target)
+  WHERE NOT EXISTS (
+    SELECT 1
+    FROM pg_policies p
+    WHERE p.schemaname = 'public'
+      AND p.tablename = names.target
+      AND p.policyname = 'reports_only_access'
+  );
+  IF missing IS NOT NULL THEN
+    RAISE EXCEPTION 'Aggregate-only reports policy missing on: %', missing;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF to_regprocedure('private.is_reports_only()') IS NULL THEN
+    RAISE EXCEPTION 'private.is_reports_only() is missing';
+  END IF;
+  IF to_regprocedure('public.household_report_aggregates(uuid,date,date,text)') IS NULL THEN
+    RAISE EXCEPTION 'public.household_report_aggregates(...) is missing';
+  END IF;
+  -- The RPC is security definer, so it must apply both gates itself.
+  IF pg_get_functiondef('public.household_report_aggregates(uuid,date,date,text)'::regprocedure)
+       NOT LIKE '%private.session_not_revoked()%'
+     OR pg_get_functiondef('public.household_report_aggregates(uuid,date,date,text)'::regprocedure)
+       NOT LIKE '%private.mfa_satisfied()%' THEN
+    RAISE EXCEPTION 'public.household_report_aggregates(...) skips the session or MFA gate';
+  END IF;
+END $$;

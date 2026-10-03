@@ -5,6 +5,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { sendHouseholdInviteEmail } from "@/lib/reporting";
 import { serverEnv } from "@/lib/env.server";
 import { writeAudit, getClientIp } from "@/lib/audit";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 
 const INVITE_TTL_MS = 7 * 24 * 3600 * 1000;
 
@@ -29,10 +30,18 @@ export async function POST(request: NextRequest) {
     const body = (await request.json().catch(() => null)) as {
       householdId?: string;
       email?: string;
+      role?: unknown;
     } | null;
     const email = body?.email?.trim().toLowerCase();
+    const role = body?.role === undefined ? "member" : body.role;
     if (!body?.householdId || !email || !email.includes("@") || email.length > 320) {
       return badRequest("householdId and a valid email are required");
+    }
+    if (role !== "member" && role !== "reports_only") {
+      return badRequest("role must be member or reports_only");
+    }
+    if (role === "reports_only" && !isFeatureEnabled("householdReportsOnly")) {
+      return badRequest("reports_only invitations are not enabled");
     }
 
     // RLS-visible only to the owner; also assert ownership explicitly.
@@ -49,13 +58,17 @@ export async function POST(request: NextRequest) {
 
     const token = randomBytes(32).toString("base64url");
     const tokenHash = createHash("sha256").update(token).digest("hex");
-    const { error } = await supabase.from("household_invites").insert({
+    const invitePayload: Record<string, unknown> = {
       household_id: household.id,
       email,
       token_hash: tokenHash,
       invited_by: user.id,
       expires_at: new Date(Date.now() + INVITE_TTL_MS).toISOString(),
-    });
+    };
+    // Keep the released member-invite path compatible until this migration is
+    // applied. The new role is only sent when its feature flag is enabled.
+    if (isFeatureEnabled("householdReportsOnly")) invitePayload.role = role;
+    const { error } = await supabase.from("household_invites").insert(invitePayload);
     if (error) throw error;
 
     const acceptUrl = `${serverEnv.appUrl ?? "http://localhost:3000"}/api/household/accept?token=${token}`;

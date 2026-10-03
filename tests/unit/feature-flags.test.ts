@@ -16,6 +16,7 @@ describe("feature flags", () => {
     expect(isFeatureEnabled("dashboardWidgetLayout", {})).toBe(false);
     expect(isFeatureEnabled("cashFlowWaterfall", {})).toBe(false);
     expect(isFeatureEnabled("statementVault", {})).toBe(false);
+    expect(isFeatureEnabled("householdReportsOnly", {})).toBe(false);
     expect(isFeatureEnabled("goalVisuals", {})).toBe(false);
   });
   it("keeps the grouped ledger and loan surfaces off by default", () => {

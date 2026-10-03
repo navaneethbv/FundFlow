@@ -1,5 +1,16 @@
 # FundFlow Session Handoff
 
+## 2026-10-03: Checklist 12.2 aggregate-only household role
+
+Worktree: `/private/tmp/fundflow-household-aggregate`, branch `feat/household-aggregate-role`, based on the scoped-token prerequisite commit `855e0632ead132e75f19de0562bdf079097c012b`.
+The additive migration `20261006130000_household_reports_only.sql` adds `reports_only` membership and invite roles, a security-definer `household_report_aggregates` RPC with a written month/category/totals/counts allowlist, two-year range bound, and minimum group size of three, plus restrictive authenticated policies that block reports-only direct table rows.
+The feature-gated `/api/household/aggregates` route validates the bounded filters and calls only the RPC.
+Invite creation and acceptance propagate the selected role only when `householdReportsOnly` is enabled, preserving the released member path before the migration is applied.
+The service-client PDF report path refuses reports-only members.
+The `householdReportsOnly` flag remains off, and the migration, deployment, and rollout are not performed.
+Focused route and migration tests pass, as do TypeScript, ESLint, and `git diff --check`.
+The next step is the read-only MCP endpoint, followed by exact-head hosted checks for this PR.
+
 ## 2026-10-03: Checklist 13.7, goal visuals
 
 The active continuation is `/private/tmp/fundflow-goal-visuals` on `feat/goal-visuals`, stacked on PR #213's exact green head `68115041b75f47950dd5b8584b4a9795c71a311f`.

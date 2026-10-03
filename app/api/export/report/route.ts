@@ -12,6 +12,7 @@ import {
 import { createServiceClient } from "@/lib/supabase/service";
 import { writeAudit, getClientIp } from "@/lib/audit";
 import { isExportAllowed } from "@/lib/export";
+import { isReportsOnlyMember } from "@/lib/household-access";
 
 /**
  * On-demand download of the spending-insights PDF for the signed-in user. The
@@ -44,6 +45,12 @@ export async function GET(request: NextRequest) {
 
   try {
     const service = createServiceClient();
+    if (await isReportsOnlyMember(service, user.id)) {
+      return NextResponse.json(
+        { error: "Reports-only members cannot download row-level reports." },
+        { status: 403 },
+      );
+    }
     if (!(await isExportAllowed(service, user.id))) {
       return NextResponse.json(
         { error: "Data export is disabled in your settings." },

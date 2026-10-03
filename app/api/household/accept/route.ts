@@ -3,6 +3,25 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireUser, errorResponse } from "@/lib/http";
 import { createServiceClient } from "@/lib/supabase/service";
 import { writeAudit, getClientIp } from "@/lib/audit";
+import { isFeatureEnabled } from "@/lib/feature-flags";
+
+/**
+ * A reports-only member is hidden from every financial row, including their
+ * own, and the app has no way to leave a household. Accepting that role with
+ * existing data would lock the user out of it, so only a fresh account may.
+ */
+async function ownsFinancialData(service: ReturnType<typeof createServiceClient>, userId: string): Promise<boolean> {
+  const checks = await Promise.all([
+    service.from("plaid_items").select("id").eq("user_id", userId).limit(1),
+    service.from("manual_accounts").select("id").eq("user_id", userId).limit(1),
+    service.from("households").select("id").eq("owner_user_id", userId).limit(1),
+  ]);
+  for (const { data, error } of checks) {
+    if (error) throw error;
+    if ((data ?? []).length > 0) return true;
+  }
+  return false;
+}
 
 /**
  * Accept a household invite (4.1). The invitee must be signed in, and their
@@ -38,26 +57,40 @@ export async function POST(request: NextRequest) {
     const tokenHash = createHash("sha256").update(token).digest("hex");
 
     const service = createServiceClient();
+    const reportsOnlyEnabled = isFeatureEnabled("householdReportsOnly");
     const { data: invite, error: inviteError } = await service
       .from("household_invites")
-      .select("id, household_id, email, expires_at, accepted_at")
+      .select("*")
       .eq("token_hash", tokenHash)
       .maybeSingle();
 
     if (inviteError) throw inviteError;
+    const inviteRow = invite as unknown as {
+      id: string;
+      household_id: string;
+      email: string;
+      role?: string;
+      expires_at: string;
+      accepted_at: string | null;
+    } | null;
     if (
-      !invite ||
-      invite.accepted_at ||
-      new Date(invite.expires_at as string).getTime() < Date.now() ||
-      (user.email ?? "").toLowerCase() !== (invite.email as string).toLowerCase()
+      !inviteRow ||
+      inviteRow.accepted_at ||
+      new Date(inviteRow.expires_at).getTime() < Date.now() ||
+      (user.email ?? "").toLowerCase() !== inviteRow.email.toLowerCase()
     ) {
       return NextResponse.redirect(new URL("/settings?invite=invalid", request.url), 303);
     }
 
+    const role = reportsOnlyEnabled && inviteRow.role === "reports_only" ? "reports_only" : "member";
+    if (role === "reports_only" && await ownsFinancialData(service, user.id)) {
+      return NextResponse.redirect(new URL("/settings?invite=reports-only-unavailable", request.url), 303);
+    }
+
     const { error: memberError } = await service.from("household_members").insert({
-      household_id: invite.household_id,
+      household_id: inviteRow.household_id,
       user_id: user.id,
-      role: "member",
+      role,
     });
     // Unique violation = already a member; treat as success. Matched on the
     // Postgres code, not the message text (A-13): message wording varies by
@@ -68,13 +101,13 @@ export async function POST(request: NextRequest) {
     const { error: acceptError } = await service
       .from("household_invites")
       .update({ accepted_at: new Date().toISOString() })
-      .eq("id", invite.id);
+      .eq("id", inviteRow.id);
     if (acceptError) throw acceptError;
 
     await writeAudit({
       userId: user.id,
       action: "household_invite_accepted",
-      metadata: { household_id: invite.household_id },
+      metadata: { household_id: inviteRow.household_id },
       ip: getClientIp(request),
     });
 
