@@ -310,11 +310,25 @@ All flags remain off; typed assets require `typedManualAssets`, `assetOwnership`
   The Transactions layout owns the persistent review context; each server page publishes a query/row/version signature before controls can act.
   Review versions are decimal text across the SQL view, API, client and archives.
   Independent owner-wide queue and integrity queries distinguish zero remaining work from missing state.
+- The transaction page's private `app/transactions/_lib/ledger-page-data.ts` module owns its existing cookie-bound page, facet and detail queries.
+  `components/transactions/LedgerTableRow.tsx` renders the desktop rows and date-group headers.
+  Query ownership filters and review semantics remain in the loader; the page composes the controls and ledger.
 - `ledger-columns.ts` — which optional ledger columns are visible, persisted
   as a repeated `col` GET param plus a `colsSubmitted` marker (distinguishing
   "every column explicitly unchecked" from "the menu was never touched," an
   ambiguity a plain multi-checkbox form can't otherwise resolve) rather than
   client state.
+- `plaid-category-mapping.ts` applies user-authored Plaid detailed-category
+  mappings before merchant rules, so a mapping is still explainable in the
+  ledger and never mutates provider rows.
+  The settings route replaces the set through the owner-checked
+  `replace_plaid_category_mappings` RPC in one transaction.
+- `bayes-categorizer.ts` is a bounded, local naive-Bayes suggestion engine.
+  It only trains from the user's labelled rows and never sends transaction
+  data over the network.
+- `merchant-directory.ts` aggregates merchant totals from the ledger sign
+  convention while excluding transfer groups, and `transaction-calendar.ts`
+  builds the viewer-month heatmap data used by the transactions calendar.
 - `tags.ts` — `planTagRename` treats renaming a tag to an existing name as a
   merge (a tag's identity is its name, not a row id); the actual rewrite runs
   through the `rename_user_tag` SQL function so it can never race a
@@ -440,7 +454,7 @@ Invariants:
   `/_vercel/insights/*` (covered by `connect-src 'self'`).
 - Every user table has RLS with owner-only `select` (client writes allowed only
   on `budgets`, `saved_reports`, `user_tags`, `merchant_rules`,
-  `category_overrides`, `households`, `goals`, `shared_expenses`,
+  `category_overrides`, `plaid_category_mappings`, `households`, `goals`, `shared_expenses`,
   `saved_views`, `notifications`, `alert_preferences`, `payday_settings`, and the `profiles`
   preference columns — all hold nothing but user-authored configuration, which is
   the test for joining that list; a provider-synced table never qualifies,
@@ -449,6 +463,10 @@ Invariants:
   dashboard SQL editor — there is no migration runner in CI. Code that reads a
   column from a new migration fails until that migration is applied to the
   live project.
+- The reference-adoption transaction tools migration
+  (`20261002100000_rules_transactions_adoption.sql`) adds the
+  `plaid_category_mappings` and `merchant_aliases` tables, the Bayes provenance
+  column, and the owner-scoped merchant merge function.
 - Two private Supabase Storage buckets, both user-prefixed-path RLS
   (`(storage.foldername(name))[1] = auth.uid()::text`): `receipts` (Phase 12
   migration; schema only, no upload route built yet) and `avatars` (Phase 13,

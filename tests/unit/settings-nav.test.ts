@@ -6,6 +6,7 @@ import {
   validateDisplayPrefsPatch,
   DEFAULT_DISPLAY_PREFS,
 } from "@/components/settings/settings-nav";
+import { hiddenSettingsSections } from "@/components/settings/settings-nav";
 
 describe("sectionFromParam", () => {
   it("defaults to profile when absent", () => {
@@ -107,3 +108,18 @@ describe("validateDisplayPrefsPatch", () => {
     expect(validateDisplayPrefsPatch({ reducedMotion: "always" }).ok).toBe(false);
   });
 });
+
+describe("hiddenSettingsSections", () => {
+  it("shows every section once the settings IA and membership terms are ready", () => {
+    expect(hiddenSettingsSections({ settingsIa: true, membershipTerms: true })).toEqual([]);
+  });
+
+  it("hides only membership while its terms entry is off", () => {
+    expect(hiddenSettingsSections({ settingsIa: true, membershipTerms: false })).toEqual(["membership"]);
+  });
+
+  it("hides the migration-dependent sections and membership before the settings IA", () => {
+    expect(hiddenSettingsSections({ settingsIa: false, membershipTerms: true })).toEqual(["profile", "display", "tags", "membership"]);
+  });
+});
+

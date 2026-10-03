@@ -127,6 +127,30 @@ export const FEATURE_FLAG_DEFAULTS = {
   paydaySettings: false,
   /** Reference adoption 3.3: monthly budget pace, separate from cash. */
   budgetDailyAllowance: false,
+  /** Reference adoption 3.4: recurring bills list, calendar, and paycheck views. */
+  billsViews: false,
+  /** Reference adoption 3.5: confirmed recurring price-change history. */
+  recurringPriceHistory: false,
+  /** Reference adoption 3.6: user-authored subscription quick-add catalog. */
+  subscriptionCatalog: false,
+  /** Reference adoption 11.1: membership and card value terms model. */
+  membershipCardValueModel: false,
+  /** Reference adoption 11.2: local membership and card value calculation. */
+  membershipCardValueCalculation: false,
+  /** Reference adoption 11.3: user-maintained membership terms entry. */
+  membershipTermsEntry: false,
+  /** Reference adoption 5.4: user-authored Plaid detailed-category mappings. */
+  plaidCategoryMappings: false,
+  /** Reference adoption 5.5: local, bounded Bayes categorization. */
+  bayesCategorization: false,
+  /** Reference adoption 5.6: merchant directory and merge workflow. */
+  merchantsPage: false,
+  /** Reference adoption 6.5: scheduled rows projected above the ledger. */
+  projectedLedgerRows: false,
+  /** Reference adoption 6.6: transaction list/calendar view switcher. */
+  transactionCalendar: false,
+  /** Reference adoption 6.7: keyboard and floating quick-add transaction. */
+  quickAddTransaction: false,
   /** Reference adoption 6.8: named collections across categories, built on tags. */
   transactionCollections: false,
   /** Reference adoption 7.1: move planned money between category budgets. */

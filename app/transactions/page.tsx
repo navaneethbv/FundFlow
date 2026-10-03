@@ -1,13 +1,12 @@
-import { attachLedgerRuleActions } from "@/lib/rule-ledger";
-import { annotationProjectionColumns, storedRuleActions, tagsWithRuleActions, type RuleActions } from "@/lib/rule-actions";
-import { accountDisplayLabel } from "@/lib/account-label";
-import { Fragment } from "react";
+import {
+  LEDGER_PAGE_SIZE as PAGE_SIZE, buildAccountLookups, loadLedgerRows, loadLedgerRowDetails,
+  type LedgerChunkFilters,
+} from "./_lib/ledger-page-data";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import AutoRefresh from "@/components/AutoRefresh";
 import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
-import Badge from "@/components/ui/Badge";
 import ButtonLink from "@/components/ui/ButtonLink";
 import EmptyState from "@/components/ui/EmptyState";
 import Panel from "@/components/ui/Panel";
@@ -15,23 +14,21 @@ import RefundReview from "@/components/transactions/RefundReview";
 import DuplicateReview from "@/components/transactions/DuplicateReview";
 import ScheduledTransactionsSection from "@/components/transactions/ScheduledTransactionsSection";
 import TransferReview from "@/components/transactions/TransferReview";
-import TransactionEditor from "@/components/transactions/TransactionEditor";
+import LedgerTableRow from "@/components/transactions/LedgerTableRow";
 import MobileLedgerList, { type LedgerCardRow } from "@/components/transactions/MobileLedgerList";
 import SavedViewsBar from "@/components/transactions/SavedViewsBar";
 import BulkTagBar from "@/components/transactions/BulkTagBar";
 import BulkEditBar from "@/components/transactions/BulkEditBar";
 import AddTransactionModal from "@/components/transactions/AddTransactionModal";
+import TransactionCalendar from "@/components/transactions/TransactionCalendar";
+import ProjectedLedgerSection, { type ProjectedLedgerItem } from "@/components/transactions/ProjectedLedgerSection";
+import BayesCategorizeButton from "@/components/transactions/BayesCategorizeButton";
 import ColumnsMenu from "@/components/transactions/ColumnsMenu";
 import TableToolbar from "@/components/transactions/TableToolbar";
 import LedgerKeyboardNavigation from "@/components/transactions/LedgerKeyboardNavigation";
 import TransactionQueryControls from "@/components/transactions/TransactionQueryControls";
 import TransactionSortMenu from "@/components/transactions/TransactionSortMenu";
-import { MerchantAvatar } from "@/components/ui/Avatar";
-import { merchantLogoDataUri } from "@/lib/merchant-logos";
-import CategoryChip from "@/components/ui/CategoryChip";
-import { formatCurrency, roundsToZero, titleCase, formatMonth } from "@/lib/format";
-import { formatDate } from "@/lib/format-date";
-import { hasRemapRules } from "@/lib/ledger-filter";
+import { formatMonth } from "@/lib/format";
 import {
   hasActiveLedgerFilters,
   ledgerHref,
@@ -39,39 +36,29 @@ import {
   parseLedgerQuery,
   savedLedgerViewParams,
   type LedgerRawSearchParams,
+  type LedgerQueryState,
   type LedgerReviewFilter,
 } from "@/lib/ledger-query";
 import {
-  collectLedgerChunks,
   ledgerZebraBands,
-  ledgerDatabaseOrder,
-  needsProjectedLedgerPage,
-  selectProjectedLedgerPage,
   buildLedgerDayGroups,
   shouldShowLedgerDayGroups,
 } from "@/lib/ledger-data";
 import {
-  buildLedgerFilterOptions,
-  filterProjectedLedgerRows,
-  projectLedgerRows,
-  toLedgerFacetRow,
-  type LedgerFacetSourceRow,
-  type LedgerFilterOptions,
   type LedgerProjectedRow,
   type LedgerProjectionSourceRow,
 } from "@/lib/ledger-projection";
 import { isFeatureEnabled } from "@/lib/feature-flags";
+import { buildPlaidCategoryMap } from "@/lib/plaid-category-mapping";
 import {
   TransactionReviewScope,
 } from "@/components/transactions/TransactionReviewProvider";
 import {
-  TransactionReviewCheckbox,
-  TransactionReviewRowAction,
   TransactionReviewBulkStrip,
   TransactionReviewFeedback,
 } from "@/components/transactions/TransactionReviewControls";
-import { TransactionReviewStatusBadge } from "@/components/transactions/TransactionReviewStatus";
 import { isEligibleForReview } from "@/lib/transaction-review";
+import { resolveViewerToday } from "@/lib/report-period";
 
 /**
  * Whether a ledger row can be reviewed. The `transaction_review_ledger` view
@@ -92,8 +79,6 @@ function reviewRowEligible(
 
 export const dynamic = "force-dynamic";
 
-const PAGE_SIZE = 50;
-
 interface PageProps {
   searchParams: Promise<LedgerRawSearchParams>;
 }
@@ -106,20 +91,6 @@ function monthBounds(month: string): { start: string; end: string } | null {
   const lastDay = new Date(year, monthIdx + 1, 0).getDate();
   return { start: `${month}-01`, end: `${month}-${String(lastDay).padStart(2, "0")}` };
 }
-
-type LedgerChunkFilters = {
-  bounds: ReturnType<typeof monthBounds>;
-  ownerId: string;
-  accountId: string;
-  q: string;
-  flow: "" | "in" | "out";
-  accountType: "" | "depository" | "credit";
-  transactionsParityEnabled: boolean;
-  transactionReviewEnabled: boolean;
-  reviewFilter: LedgerReviewFilter;
-  typedIds: string[];
-  missingAccountId: string;
-};
 
 type TransactionsSupabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -138,633 +109,6 @@ function transactionDetailsError(currentError: string, failed: boolean): string 
     : currentError;
 }
 
-function ledgerNetPrefix(net: number): string {
-  if (roundsToZero(net)) return "";
-  if (net < 0) return "+";
-  if (net > 0) return "-";
-  return "";
-}
-
-/**
- * Filters only, deliberately unordered. postgrest-js appends `order()` calls in
- * the order they are made, so an ordering baked in here would win over the sort
- * the caller asks for afterwards and the ledger would ignore `?sort=`.
- */
-function buildLedgerFilterQuery(
-  supabase: TransactionsSupabase,
-  columns: string,
-  filters: LedgerChunkFilters,
-  count = false,
-) {
-  const sourceTable = filters.transactionReviewEnabled
-    ? "transaction_review_ledger"
-    : "transactions";
-
-  let query = supabase
-    .from(sourceTable)
-    .select(columns, count ? { count: "exact" } : undefined)
-    .eq("user_id", filters.ownerId);
-
-  if (filters.transactionReviewEnabled && filters.reviewFilter !== "all") {
-    query = query.eq("review_status", filters.reviewFilter).eq("review_eligible", true);
-  }
-
-  if (filters.bounds) {
-    query = query
-      .gte("date", filters.bounds.start)
-      .lte("date", filters.bounds.end);
-  }
-  if (filters.accountId) {
-    query = filters.transactionsParityEnabled
-      ? query.or(
-          `account_id.eq.${filters.accountId},manual_account_id.eq.${filters.accountId}`,
-        )
-      : query.eq("account_id", filters.accountId);
-  }
-  if (filters.q) {
-    const categorySearch = filters.q.replace(/\s+/g, "_");
-    query = query.or(
-      `merchant_name.ilike.%${filters.q}%,name.ilike.%${filters.q}%,pfc_primary.ilike.%${categorySearch}%,pfc_detailed.ilike.%${categorySearch}%`,
-    );
-  }
-  if (filters.flow === "in") query = query.lt("amount", 0);
-  if (filters.flow === "out") query = query.gt("amount", 0);
-  if (filters.accountType) {
-    query = query.in(
-      "account_id",
-      filters.typedIds.length ? filters.typedIds : [filters.missingAccountId],
-    );
-  }
-  return query;
-}
-
-/**
- * A chunked scan pages with `range()`, so it needs a total order or the windows
- * can overlap and drop rows. Scans feed projection and facets, never the
- * user-visible row order, so this order is fixed rather than sort-driven.
- */
-function buildLedgerScanQuery(
-  supabase: TransactionsSupabase,
-  columns: string,
-  filters: LedgerChunkFilters,
-) {
-  return buildLedgerFilterQuery(supabase, columns, filters)
-    .order("date", { ascending: false })
-    .order("id", { ascending: true });
-}
-
-type LedgerRules = Array<{
-  matchType: "merchant" | "keyword" | "account";
-  pattern: string;
-  displayName: string | null;
-  category: string | null;
-  enabled: boolean;
-}>;
-
-async function loadLedgerRows(input: {
-  supabase: TransactionsSupabase;
-  state: ReturnType<typeof parseLedgerQuery>;
-  filters: LedgerChunkFilters;
-  columns: string;
-  rules: LedgerRules;
-  accountNamesById: Map<string, string>;
-  accountLabelsById: Map<string, string>;
-  accountOptionsForFilters: { value: string; label: string }[];
-  ledgerError: string;
-}): Promise<{
-  rows: LedgerProjectedRow[];
-  total: number;
-  projectedScope: LedgerProjectedRow[];
-  allRowsForGrouping: LedgerProjectedRow[] | null;
-  incompleteDates: Set<string>;
-  filterOptions: LedgerFilterOptions;
-  ledgerError: string;
-}> {
-  const { supabase, state, filters, columns, rules, accountNamesById, accountLabelsById, accountOptionsForFilters } = input;
-  let ledgerError = input.ledgerError;
-  const ruleAwareFilter = Boolean(state.category || state.merchant) && hasRemapRules(rules);
-  const projectedPath = isFeatureEnabled("compoundRules") || needsProjectedLedgerPage(state.sort, ruleAwareFilter);
-  const needsFullProjection = projectedPath || hasRemapRules(rules);
-  let projectedScope: LedgerProjectedRow[] = [];
-  let allRowsForGrouping: LedgerProjectedRow[] | null = null;
-  let incompleteDates = new Set<string>();
-  if (needsFullProjection) {
-    try {
-      const sourceRows = await collectLedgerChunks<LedgerProjectionSourceRow>(async (from, to) => {
-        const result = await buildLedgerScanQuery(supabase, columns, filters).range(from, to);
-        return { rows: (result.data ?? []) as unknown as LedgerProjectionSourceRow[], error: result.error };
-      });
-      projectedScope = projectLedgerRows(await attachLedgerRuleActions(supabase, filters.ownerId, sourceRows), rules, accountNamesById, accountLabelsById);
-    } catch (error) {
-      console.error("Transaction projection query failed", error instanceof Error ? error.message : "unknown");
-      ledgerError = "We couldn't load your transactions. Try changing the filters or refresh the page.";
-    }
-  }
-  let rows: LedgerProjectedRow[] = [];
-  let total = 0;
-  if (!ledgerError && projectedPath) {
-    const selected = selectProjectedLedgerPage(projectedScope, { ...state, pageSize: PAGE_SIZE });
-    rows = selected.rows;
-    total = selected.total;
-    allRowsForGrouping = filterProjectedLedgerRows(projectedScope, {
-      category: state.category,
-      sub: state.sub,
-      merchant: state.merchant,
-    });
-  } else if (!ledgerError) {
-    const result = await loadDirectLedgerRows({ ...input, projectedPath });
-    if (result.error) {
-      console.error("Transaction page query failed", result.error);
-      ledgerError = "We couldn't load your transactions. Try changing the filters or refresh the page.";
-    } else {
-      rows = result.rows;
-      total = result.total;
-      incompleteDates = result.incompleteDates;
-    }
-  }
-  const filterOptions = await loadLedgerFilterOptions({
-    supabase,
-    filters,
-    projectedScope,
-    needsFullProjection,
-    accountOptionsForFilters,
-  });
-  return {
-    rows,
-    total,
-    projectedScope,
-    allRowsForGrouping,
-    incompleteDates,
-    filterOptions,
-    ledgerError,
-  };
-}
-
-async function loadDirectLedgerRows(input: {
-  supabase: TransactionsSupabase;
-  state: ReturnType<typeof parseLedgerQuery>;
-  filters: LedgerChunkFilters;
-  columns: string;
-  rules: LedgerRules;
-  accountNamesById: Map<string, string>;
-  accountLabelsById: Map<string, string>;
-  accountOptionsForFilters: { value: string; label: string }[];
-  ledgerError: string;
-  projectedPath: boolean;
-}): Promise<{
-  rows: LedgerProjectedRow[];
-  total: number;
-  error: string | null;
-  incompleteDates: Set<string>;
-}> {
-  const { supabase, state, filters, columns, rules, accountNamesById, accountLabelsById } = input;
-  let query = applyDirectLedgerFilters(
-    buildLedgerFilterQuery(supabase, columns, filters, true),
-    state,
-  );
-  for (const order of ledgerDatabaseOrder(state.sort === "amount" ? "amount" : "date", state.direction)) {
-    query = query.order(order.column, { ascending: order.ascending });
-  }
-  const offset = (state.page - 1) * PAGE_SIZE;
-  const inspectNeighbors = state.sort === "date";
-  const windowStart = inspectNeighbors ? Math.max(0, offset - 1) : offset;
-  const windowEnd = inspectNeighbors ? offset + PAGE_SIZE : offset + PAGE_SIZE - 1;
-  const result = await query.range(windowStart, windowEnd);
-  if (result.error) {
-    return {
-      rows: [],
-      total: 0,
-      error: result.error.code ?? "unknown",
-      incompleteDates: new Set<string>(),
-    };
-  }
-  const windowRows = projectLedgerRows(
-    (result.data ?? []) as unknown as LedgerProjectionSourceRow[],
-    rules,
-    accountNamesById,
-    accountLabelsById,
-  );
-  const visibleStart = offset - windowStart;
-  const rows = windowRows.slice(visibleStart, visibleStart + PAGE_SIZE);
-  const incompleteDates = findIncompleteLedgerDates(windowRows, rows, visibleStart, inspectNeighbors);
-  return {
-    rows,
-    total: result.count ?? rows.length,
-    error: null,
-    incompleteDates,
-  };
-}
-
-function applyDirectLedgerFilters(
-  initialQuery: ReturnType<typeof buildLedgerFilterQuery>,
-  state: ReturnType<typeof parseLedgerQuery>,
-) {
-  let query = initialQuery;
-  if (state.category) {
-    query = state.category === "UNCATEGORIZED"
-      ? query.or("pfc_primary.is.null,pfc_primary.eq.UNCATEGORIZED")
-      : query.eq("pfc_primary", state.category);
-  }
-  if (state.sub) query = query.eq("pfc_detailed", state.sub);
-  if (state.merchant) query = query.or(`merchant_name.ilike.${state.merchant},name.ilike.${state.merchant}`);
-  return query;
-}
-
-function findIncompleteLedgerDates(
-  windowRows: readonly LedgerProjectedRow[],
-  rows: readonly LedgerProjectedRow[],
-  visibleStart: number,
-  inspectNeighbors: boolean,
-): Set<string> {
-  const incompleteDates = new Set<string>();
-  if (!inspectNeighbors || rows.length === 0) return incompleteDates;
-  const previous = windowRows[visibleStart - 1];
-  const next = windowRows[visibleStart + rows.length];
-  const first = rows[0]!;
-  const last = rows.at(-1)!;
-  if (previous?.date === first.date) incompleteDates.add(first.date);
-  if (next?.date === last.date) incompleteDates.add(last.date);
-  return incompleteDates;
-}
-
-async function loadLedgerFilterOptions(input: {
-  supabase: TransactionsSupabase;
-  filters: LedgerChunkFilters;
-  projectedScope: LedgerProjectedRow[];
-  needsFullProjection: boolean;
-  accountOptionsForFilters: { value: string; label: string }[];
-}): Promise<LedgerFilterOptions> {
-  if (input.needsFullProjection) return buildLedgerFilterOptions(input.projectedScope, input.accountOptionsForFilters);
-  try {
-    const facetRows = await collectLedgerChunks<LedgerFacetSourceRow>(async (from, to) => {
-      const result = await buildLedgerScanQuery(input.supabase, "pfc_primary, pfc_detailed, merchant_name, name", input.filters).range(from, to);
-      return { rows: (result.data ?? []) as unknown as LedgerFacetSourceRow[], error: result.error };
-    });
-    return buildLedgerFilterOptions(facetRows.map(toLedgerFacetRow), input.accountOptionsForFilters);
-  } catch (error) {
-    console.error("Transaction facet query failed", error instanceof Error ? error.message : "unknown");
-    return buildLedgerFilterOptions([], input.accountOptionsForFilters);
-  }
-}
-
-/**
- * The three account lookups the ledger needs, over both FKs a row can carry —
- * a manual transaction (Phase 12) has no `account_id`.
- *
- * `accountNamesById` is the name *without* the mask, for rule matching: it
- * mirrors the dashboard so the ledger's rules-applied filter agrees with the
- * drill it came from. `accountLabelsById` is the display form.
- */
-function buildAccountLookups(
-  accounts: ReadonlyArray<{ id: unknown; name: unknown; mask?: unknown }>,
-  manualAccounts: ReadonlyArray<{ id: unknown; name: unknown }>,
-): {
-  accountNamesById: Map<string, string>;
-  accountLabelsById: Map<string, string>;
-  accountOptions: Array<{ id: string; name: string; source: "plaid" | "manual" }>;
-} {
-  const accountText = (value: unknown, fallback: string): string =>
-    typeof value === "string" ? value : fallback;
-
-  return {
-    accountNamesById: new Map([
-      ...accounts.map((a) => [a.id as string, accountText(a.name, "")] as const),
-      ...manualAccounts.map((a) => [a.id as string, accountText(a.name, "")] as const),
-    ]),
-    accountLabelsById: new Map([
-      ...accounts.map((a) => {
-        const mask = accountText(a.mask, "");
-        return [a.id as string, accountDisplayLabel(accountText(a.name, "Account"), mask)] as const;
-      }),
-      ...manualAccounts.map((a) => [a.id as string, `${accountText(a.name, "Account")} (manual)`] as const),
-    ]),
-    accountOptions: [
-      ...accounts.map((a) => ({ id: a.id as string, name: accountDisplayLabel(accountText(a.name, "Account"), accountText(a.mask, "")), source: "plaid" as const })),
-      ...manualAccounts.map((a) => ({ id: a.id as string, name: accountText(a.name, "Account"), source: "manual" as const })),
-    ],
-  };
-}
-
-/**
- * Per-row user annotations, splits, and duplicate exclusions for the visible
- * page. `transaction_splits` is readable for any transaction the caller can
- * see, which now includes a household member's shared rows — every query
- * filters to the caller's own so their categories are never rewritten by
- * someone else's.
- */
-type CashFlowClassification = "expense" | "income" | null;
-type TransactionOverride = {
-  displayCategory: string | null;
-  cashFlowClassification: CashFlowClassification;
-  ruleActions?: RuleActions;
-};
-
-async function loadLedgerRowDetails(
-  supabase: TransactionsSupabase,
-  ownerId: string,
-  txnIds: string[],
-): Promise<{
-  annById: Map<string, { note: string | null; tags: string[]; cleared: boolean }>;
-  overridesById: Map<string, TransactionOverride>;
-  splitsById: Map<string, Array<{ category: string; amount: number }>>;
-  excludedDuplicateIds: Set<string>;
-  failed: boolean;
-}> {
-  const annById = new Map<string, { note: string | null; tags: string[]; cleared: boolean }>();
-  const overridesById = new Map<string, TransactionOverride>();
-  const splitsById = new Map<string, Array<{ category: string; amount: number }>>();
-  if (txnIds.length === 0) {
-    return { annById, overridesById, splitsById, excludedDuplicateIds: new Set<string>(), failed: false };
-  }
-
-  const [annotationsResult, splitsResult, duplicatesResult] = await Promise.all([
-    supabase.from("transaction_annotations").select(annotationProjectionColumns("transaction_id, note, tags, display_category, cash_flow_classification, cleared_at")).eq("user_id", ownerId).in("transaction_id", txnIds),
-    supabase.from("transaction_splits").select("transaction_id, category, amount").eq("user_id", ownerId).in("transaction_id", txnIds),
-    supabase.from("linked_duplicates").select("excluded_transaction_id").eq("user_id", ownerId).in("excluded_transaction_id", txnIds),
-  ]);
-
-  const errorCodes = [
-    annotationsResult.error?.code,
-    splitsResult.error?.code,
-    duplicatesResult.error?.code,
-  ].filter(Boolean);
-  if (errorCodes.length > 0) {
-    console.error("Transaction detail query failed", errorCodes);
-  }
-
-  for (const a of annotationsResult.data ?? []) {
-    annById.set(a.transaction_id as string, {
-      note: a.note as string | null,
-      tags: tagsWithRuleActions((a.tags as string[]) ?? [], storedRuleActions(a)),
-      cleared: a.cleared_at != null,
-    });
-    const classification = a.cash_flow_classification;
-    overridesById.set(a.transaction_id as string, {
-      displayCategory: (a.display_category as string | null) ?? null,
-      ruleActions: storedRuleActions(a),
-        cashFlowClassification:
-        classification === "expense" || classification === "income" ? classification : null,
-    });
-  }
-  for (const s of splitsResult.data ?? []) {
-    const list = splitsById.get(s.transaction_id as string) ?? [];
-    list.push({ category: s.category as string, amount: Number(s.amount) });
-    splitsById.set(s.transaction_id as string, list);
-  }
-  const excludedDuplicateIds = new Set(
-    (duplicatesResult.data ?? []).map((row) => row.excluded_transaction_id as string),
-  );
-
-  return { annById, overridesById, splitsById, excludedDuplicateIds, failed: errorCodes.length > 0 };
-}
-
-interface LedgerTableRowProps {
-  row: LedgerProjectedRow;
-  /** Position within its date group when day grouping is active. */
-  zebraBand: number;
-  /** Render the day-group header above this row. */
-  isNewDay: boolean;
-  grouped: boolean;
-  dayGroup: import("@/lib/ledger-data").LedgerDayGroup | undefined;
-  visibleColumns: ReadonlySet<string>;
-  excludedDuplicate: boolean;
-  note: string | null;
-  tags: string[];
-  cleared: boolean;
-  splits: Array<{ category: string; amount: number }>;
-  categoryOptions: string[];
-  providerCategory?: string | null;
-  override?: { displayCategory: string | null; cashFlowClassification: "expense" | "income" | null } | null;
-  reviewEnabled?: boolean;
-  reviewStatus?: "needs_review" | "reviewed" | null;
-  reviewVersion?: string | null;
-  reviewEligible?: boolean;
-  reviewStateMissing?: boolean;
-  bulkEditEnabled?: boolean;
-  keyboardEnabled?: boolean;
-  undoEnabled?: boolean;
-}
-
-/** Columns a day-group header spans; must match the header row's cells. */
-function ledgerColumnCount(reviewEnabled: boolean, bulkEditEnabled: boolean, visibleColumns: ReadonlySet<string>): number {
-  let count = reviewEnabled ? 5 : 4;
-  if (bulkEditEnabled) count += 1;
-  if (visibleColumns.has("category")) count += 1;
-  if (visibleColumns.has("account")) count += 1;
-  return count;
-}
-
-function BulkSelectCell({ id, merchant, reviewVersion }: Readonly<{ id: string; merchant: string; reviewVersion: string | null }>) {
-  return (
-    <td className="w-10 px-3 py-3 align-top text-center">
-      <input
-        type="checkbox"
-        data-bulk-select
-        data-transaction-id={id}
-        aria-label={`Select ${merchant}`}
-        className="h-4 w-4 accent-[var(--accent)]"
-      />
-      <input type="hidden" data-review-version={id} value={reviewVersion ?? "1"} />
-    </td>
-  );
-}
-
-/**
- * One desktop ledger row, plus the day-group header that precedes the first
- * row of each date. Split out of the page so the page body stays readable:
- * the optional column/badge/annotation branches all live here.
- */
-function LedgerTableRow({
-  row,
-  zebraBand,
-  isNewDay,
-  grouped,
-  dayGroup,
-  visibleColumns,
-  excludedDuplicate,
-  note,
-  tags,
-  cleared,
-  splits,
-  categoryOptions,
-  providerCategory = null,
-  override = null,
-  reviewEnabled = false,
-  reviewStatus = null,
-  reviewVersion = null,
-  reviewEligible = false,
-  reviewStateMissing = false,
-  bulkEditEnabled = false,
-  keyboardEnabled = false,
-  undoEnabled = false,
-}: Readonly<LedgerTableRowProps>) {
-  const columnCount = ledgerColumnCount(reviewEnabled, bulkEditEnabled, visibleColumns);
-  const hasAnnotations = Boolean(note) || tags.length > 0 || splits.length > 0 || cleared;
-  const merchant = row.merchant || "Unknown";
-  const currency = row.iso_currency_code ?? "USD";
-  const isMoneyIn = row.amount < 0 && !roundsToZero(row.amount);
-  const showsAmount = !roundsToZero(row.amount);
-  const amountSign = isMoneyIn ? "+" : "-";
-  const amountDisplay = showsAmount
-    ? `${amountSign}${formatCurrency(Math.abs(row.amount), currency)}`
-    : formatCurrency(0, currency);
-
-  return (
-    <Fragment>
-      {isNewDay && (
-        <tr className="border-b border-panel-border bg-panel/60">
-          <th
-            scope="row"
-            colSpan={columnCount - 2}
-            className="px-4 py-1.5 text-left tabular-nums text-xs font-semibold text-muted"
-          >
-            {formatDate(row.date)}
-          </th>
-          <td className="px-4 py-1.5 text-right text-xs font-normal text-muted">
-            {dayGroup?.showNet && (
-              <span
-                data-money
-                style={dayGroup.net < 0 ? { color: "var(--viz-pos)" } : undefined}
-              >
-                {roundsToZero(dayGroup.net)
-                  ? formatCurrency(0)
-                  : `${ledgerNetPrefix(dayGroup.net)}${formatCurrency(Math.abs(dayGroup.net))}`}{" "}
-                net
-              </span>
-            )}
-          </td>
-          <td />
-        </tr>
-      )}
-      <tr
-        data-ledger-row
-        data-ledger-row-id={row.id}
-        tabIndex={keyboardEnabled ? 0 : undefined}
-        aria-label={`Transaction ${merchant}`}
-        className={`border-b border-panel-border last:border-0 hover:bg-panel-hover${
-          zebraBand % 2 === 1 ? " bg-panel-2" : ""
-        }`}
-      >
-        {bulkEditEnabled && <BulkSelectCell id={row.id} merchant={merchant} reviewVersion={reviewVersion} />}
-        {reviewEnabled && (
-          <td className="w-10 px-3 py-3 align-top text-center">
-            <TransactionReviewCheckbox
-              id={row.id}
-              eligible={reviewEligible}
-              date={row.date}
-              merchant={merchant}
-              accountLabel={row.accountLabel}
-              prefix="desktop"
-            />
-          </td>
-        )}
-        <td className="whitespace-nowrap px-4 py-3 align-top text-muted tabular-nums">
-          {/* The day header row already shows this date; keep it for screen readers. */}
-          <span className={grouped ? "sr-only" : undefined}>
-            {formatDate(row.date)}
-          </span>
-        </td>
-        <td className="px-4 py-3 align-top">
-          <div className="flex items-start gap-2.5">
-            <MerchantAvatar
-              name={row.merchant || "?"}
-              logoUrl={merchantLogoDataUri(row.merchant || "?")}
-              size={28}
-              className="mt-0.5"
-            />
-            <span className="min-w-0">
-              <span className="font-medium">{merchant}</span>
-              {row.pending && (
-                <Badge tone="warning" className="ml-2">
-                  pending
-                </Badge>
-              )}
-              {cleared && (
-                <Badge tone="success" className="ml-2">
-                  cleared
-                </Badge>
-              )}
-              {excludedDuplicate && (
-                <Badge tone="warning" className="ml-2">
-                  Excluded duplicate
-                </Badge>
-              )}
-              {reviewEnabled && (reviewStatus || reviewStateMissing) && (
-                <span className="ml-2">
-                  <TransactionReviewStatusBadge
-                    status={reviewStatus}
-                    pending={row.pending}
-                    excludedDuplicate={excludedDuplicate}
-                    missing={reviewStateMissing}
-                  />
-                </span>
-              )}
-              {visibleColumns.has("source") && row.source === "manual" && (
-                <Badge tone="accent" className="ml-2">
-                  manual
-                </Badge>
-              )}
-              {hasAnnotations && (
-                <span className="mt-1 flex flex-wrap items-center gap-1.5">
-                  {splits.length > 0 && <Badge tone="accent">split ×{splits.length}</Badge>}
-                  {tags.map((tag) => (
-                    <Badge key={tag}>{tag}</Badge>
-                  ))}
-                  {note && <span className="text-xs text-muted">{note}</span>}
-                </span>
-              )}
-            </span>
-          </div>
-        </td>
-        {visibleColumns.has("category") && (
-          <td className="hidden px-4 py-3 align-top text-muted sm:table-cell">
-            {row.category ? <CategoryChip label={titleCase(row.category)} /> : "-"}
-          </td>
-        )}
-        {visibleColumns.has("account") && (
-          <td className="hidden px-4 py-3 align-top text-muted md:table-cell">
-            {row.accountLabel || "-"}
-          </td>
-        )}
-        <td
-          data-money
-          className="whitespace-nowrap px-4 py-3 text-right align-top font-semibold"
-          style={isMoneyIn ? { color: "var(--viz-pos)" } : undefined}
-        >
-          {amountDisplay}
-        </td>
-        <td className="px-2 py-3 text-right align-top">
-          <div className="flex items-center justify-end gap-1.5">
-            {reviewEnabled && reviewEligible && (
-              <TransactionReviewRowAction
-                id={row.id}
-                version={reviewVersion}
-                status={reviewStatus}
-                eligible={reviewEligible}
-                prefix="desktop"
-              />
-            )}
-            <TransactionEditor
-          detailsEnabled={isFeatureEnabled("transactionDetails")}
-          suggestionsEnabled={isFeatureEnabled("ruleSuggestions") && isFeatureEnabled("compoundRules")}
-          ruleHistoryEnabled={isFeatureEnabled("ruleRunHistory")}
-              transaction={{ id: row.id, merchant, amount: row.amount, currency }}
-              note={note}
-              tags={tags}
-              splits={splits}
-              categories={categoryOptions}
-              providerCategory={providerCategory}
-              override={override}
-              cleared={cleared}
-              undoEnabled={undoEnabled}
-            />
-          </div>
-        </td>
-      </tr>
-    </Fragment>
-  );
-}
-
 export const metadata = {
   title: "Transactions",
 };
@@ -772,7 +116,9 @@ export const metadata = {
 function resolveDateBounds(
   month?: string,
   year?: string,
+  day?: string,
 ): { start: string; end: string } | null {
+  if (day) return { start: day, end: day };
   if (month) return monthBounds(month);
   if (year) return { start: `${year}-01-01`, end: `${year}-12-31` };
   return null;
@@ -781,9 +127,11 @@ function resolveDateBounds(
 function describeLedgerPeriod(
   month?: string,
   year?: string,
+  day?: string,
   hasBounds?: boolean,
 ): string {
   if (!hasBounds) return "";
+  if (day) return ` on ${day}`;
   if (month) return ` in ${formatMonth(month)}`;
   if (year) return ` in ${year}`;
   return "";
@@ -857,11 +205,44 @@ function ledgerEmptyMessage(review: LedgerReviewFilter, globalCount: number | nu
   return { title: "No transactions yet", description: "Connect an account or add a transaction to begin." };
 }
 
+function ledgerColumns(transactionsParityEnabled: boolean, transactionReviewEnabled: boolean): string {
+  let columns = "id, date, amount, iso_currency_code, merchant_name, name, pfc_primary, pfc_detailed, pending, account_id";
+  if (transactionsParityEnabled) columns += ", manual_account_id, source";
+  if (transactionReviewEnabled) columns += ", review_status, review_version, reviewed_at, review_eligible, review_state_missing";
+  return columns;
+}
+
+async function loadCategoryMappings(supabase: TransactionsSupabase, ownerId: string, enabled: boolean) {
+  if (!enabled) return { data: [], error: null };
+  return supabase.from("plaid_category_mappings").select("pfc_detailed,display_category")
+    .eq("user_id", ownerId).order("pfc_detailed");
+}
+
+async function loadProjectedItems(supabase: TransactionsSupabase, ownerId: string, today: string, enabled: boolean): Promise<ProjectedLedgerItem[]> {
+  if (!enabled) return [];
+  const { data } = await supabase.from("scheduled_transactions").select("id,scheduled_date,merchant,amount,kind")
+    .eq("user_id", ownerId).eq("status", "scheduled").gte("scheduled_date", today).order("scheduled_date").limit(50);
+  return ((data ?? []) as Array<{ id: string; scheduled_date: string; merchant: string; amount: number | string; kind: "debit" | "credit" }>).map((row) => ({
+    id: row.id,
+    date: row.scheduled_date,
+    merchant: row.merchant,
+    amount: Math.abs(Number(row.amount)),
+    kind: row.kind,
+  }));
+}
+
+function redirectInvalidLedgerPage(state: LedgerQueryState, ledgerError: string, totalPages: number): void {
+  if (ledgerError || state.page <= totalPages) return;
+  redirect(ledgerHref(ledgerQueryEntries(state), { page: totalPages > 1 ? String(totalPages) : null }, { resetPage: false }));
+}
+
 export default async function TransactionsPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
   const transactionReviewEnabled = isFeatureEnabled("transactionReview");
+  const transactionCalendarEnabled = isFeatureEnabled("transactionCalendar");
+  const projectedLedgerEnabled = isFeatureEnabled("projectedLedgerRows");
   const state = parseLedgerQuery(transactionReviewEnabled ? params : { ...params, review: "all" });
-  const { month, accountId, q, page, category, sub, merchant, flow, accountType } = state;
+  const { month, day, accountId, q, page, category, sub, merchant, flow, accountType } = state;
   const visibleColumns = state.columns;
   const columnsAreDefault = !state.columnsSubmitted;
   // Gated: manual_account_id/source only exist once
@@ -869,6 +250,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   // is already live, so this must default to the pre-Phase-12 query shape
   // rather than 500ing every visit on an unmigrated deployment.
   const transactionsParityEnabled = isFeatureEnabled("transactionsParity");
+  const plaidCategoryMappingsEnabled = isFeatureEnabled("plaidCategoryMappings");
 
   const supabase = await createClient();
   // The ledger has no household scope selector, so every query below is the
@@ -888,6 +270,8 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
       .order("created_at"),
     loadReviewSummary(supabase, ownerId, transactionReviewEnabled),
   ]);
+  const categoryMappingResult = await loadCategoryMappings(supabase, ownerId, plaidCategoryMappingsEnabled);
+  const categoryMappings = buildPlaidCategoryMap((categoryMappingResult.data ?? []).map((row) => ({ pfcDetailed: row.pfc_detailed as string, displayCategory: row.display_category as string })));
   const savedViews = ((savedViewsResult.data ?? []) as Array<{
     id: string;
     name: string;
@@ -918,6 +302,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     manualAccountsResult.error,
     merchantRulesResult.error,
     goalRowsResult.error,
+    categoryMappingResult.error,
   ].map((error) => ({ error }))];
   let ledgerError = reviewSummary.integrityError || transactionSetupError(setupResults);
 
@@ -938,15 +323,11 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   // Merchant rules recategorize/rename rows in-app, so a `category`/`merchant`
   // filter can't be expressed in SQL once such rules exist. In that case fetch
   // the rule-independent scope and filter on the rules-applied values instead.
-  let baseColumns = "id, date, amount, iso_currency_code, merchant_name, name, pfc_primary, pfc_detailed, pending, account_id";
-  if (transactionsParityEnabled) {
-    baseColumns = `${baseColumns}, manual_account_id, source`;
-  }
-  if (transactionReviewEnabled) {
-    baseColumns = `${baseColumns}, review_status, review_version, reviewed_at, review_eligible, review_state_missing`;
-  }
-  const columns: string = baseColumns;
-  const bounds = resolveDateBounds(month, state.year);
+  const columns = ledgerColumns(transactionsParityEnabled, transactionReviewEnabled);
+  const viewerToday = await resolveViewerToday(supabase, ownerId);
+  const calendarMonth = month || viewerToday.slice(0, 7);
+  const effectiveMonth = state.view === "calendar" ? calendarMonth : month;
+  const bounds = resolveDateBounds(effectiveMonth, state.year, day);
   const typedIds = accountType
     ? accounts.filter((account) => account.type === accountType).map((account) => account.id as string)
     : [];
@@ -969,6 +350,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     value: account.id,
     label: accountLabelsById.get(account.id) ?? account.name,
   }));
+  const projectedItems = await loadProjectedItems(supabase, ownerId, viewerToday, projectedLedgerEnabled);
   const ledgerRows = await loadLedgerRows({
     supabase,
     state,
@@ -978,14 +360,13 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     accountNamesById,
     accountLabelsById,
     accountOptionsForFilters,
+    categoryMappings,
     ledgerError,
   });
   const { rows, total, filterOptions } = ledgerRows;
   ledgerError = ledgerRows.ledgerError;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  if (!ledgerError && state.page > totalPages) {
-    redirect(ledgerHref(ledgerQueryEntries(state), { page: totalPages > 1 ? String(totalPages) : null }, { resetPage: false }));
-  }
+  redirectInvalidLedgerPage(state, ledgerError, totalPages);
 
   // User annotations (note/tags) and category splits for the visible rows.
   // `transaction_splits` is readable for any transaction the caller can see,
@@ -1048,11 +429,18 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
           title="Transactions"
           actions={
             <>
+              {isFeatureEnabled("merchantsPage") && <ButtonLink href="/merchants" variant="secondary">Merchants</ButtonLink>}
+              {isFeatureEnabled("bayesCategorization") && <BayesCategorizeButton />}
               <ButtonLink href="/transactions/receipts" variant="secondary">
                 Receipts
               </ButtonLink>
               {transactionsParityEnabled && accountOptions.length > 0 && (
-                <AddTransactionModal accounts={accountOptions} goals={goalOptions} categories={categoryOptions} />
+                <AddTransactionModal
+                  accounts={accountOptions}
+                  goals={goalOptions}
+                  categories={categoryOptions}
+                  quickAddEnabled={isFeatureEnabled("quickAddTransaction")}
+                />
               )}
             </>
           }
@@ -1061,6 +449,8 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
         <RefundReview />
         <TransferReview />
         <DuplicateReview />
+
+        {projectedLedgerEnabled && <ProjectedLedgerSection items={projectedItems} />}
 
         {transactionsParityEnabled && accountOptions.length > 0 && (
           <ScheduledTransactionsSection
@@ -1073,6 +463,13 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
           initialViews={savedViews}
           currentParams={savedLedgerViewParams(state)}
         />
+
+        {transactionCalendarEnabled && (
+          <nav aria-label="Transaction view" className="flex flex-wrap gap-2">
+            <ButtonLink href={ledgerHref(queryEntries, { view: null })} variant={state.view === "list" ? "primary" : "secondary"}>List</ButtonLink>
+            <ButtonLink href={ledgerHref(queryEntries, { view: "calendar" })} variant={state.view === "calendar" ? "primary" : "secondary"}>Calendar</ButtonLink>
+          </nav>
+        )}
 
         <Panel>
           <TransactionQueryControls
@@ -1095,7 +492,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
         {!ledgerError && (
           <p className="text-xs text-muted">
             {total.toLocaleString()} transaction{total === 1 ? "" : "s"}
-            {describeLedgerPeriod(month, state.year, Boolean(bounds))}
+            {describeLedgerPeriod(effectiveMonth, state.year, day, Boolean(bounds))}
             . Negative amounts represent expenses; positive amounts represent income.
           </p>
         )}
@@ -1112,7 +509,18 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
             action={hasCommittedFilters && <ButtonLink href="/transactions" variant="secondary">Clear filters</ButtonLink>}
           />
         )}
-        {showLedgerRows && (
+        {transactionCalendarEnabled && state.view === "calendar" && !ledgerError && (
+          <TransactionCalendar
+            month={calendarMonth}
+            rows={(ledgerRows.projectedScope.length > 0 ? ledgerRows.projectedScope : rows).map((row) => ({
+              id: row.id,
+              date: row.date,
+              amount: row.amount,
+              merchant: row.merchant,
+            }))}
+          />
+        )}
+        {showLedgerRows && state.view !== "calendar" && (
 
             <Panel padding="none" className="overflow-hidden">
               {transactionReviewEnabled && (

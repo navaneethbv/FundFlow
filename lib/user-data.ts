@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isFeatureEnabled } from "@/lib/feature-flags";
+import { isFeatureEnabled, type FeatureFlag } from "@/lib/feature-flags";
 
 /**
  * One source of truth for the user-owned tables a full takeout/backup carries.
@@ -28,6 +28,8 @@ export interface UserDataTableSpec {
   select: string;
   scope: TableScope;
   gated?: boolean;
+  /** Feature flag that controls whether this relation/column exists yet. */
+  gatedBy?: FeatureFlag;
   /**
    * Extra columns only the encrypted BACKUP carries (never the takeout, whose
    * contract excludes identifiers): the natural keys a restore needs to
@@ -49,6 +51,7 @@ export interface UserDataTableSpec {
 interface TableOptions {
   scope?: TableScope;
   gated?: boolean;
+  gatedBy?: FeatureFlag;
   restoreKeys?: string;
   orderBy?: string;
   /** Physical table name, when it differs from the archive key. */
@@ -60,6 +63,7 @@ function table(key: string, select: string, options: TableOptions = {}): UserDat
   const {
     scope = "user",
     gated = false,
+    gatedBy,
     restoreKeys,
     orderBy,
     tableName = key,
@@ -71,6 +75,7 @@ function table(key: string, select: string, options: TableOptions = {}): UserDat
     select,
     scope,
     ...(gated ? { gated: true } : {}),
+    ...(gatedBy ? { gatedBy } : {}),
     ...(restoreKeys ? { restoreKeys } : {}),
     orderBy: orderBy ?? (select.includes("created_at") ? "created_at" : "id"),
     orderBySecondary,
@@ -124,6 +129,7 @@ export const USER_DATA_TABLES: UserDataTableSpec[] = [
   table("linked_transfers", "out_transaction_id, in_transaction_id, amount, created_at"),
   table("account_reconciliations", "account_id, manual_account_id, statement_date, statement_balance, created_at"),
   table("account_preferences", "dashboard_prefs", { scope: "profile", restoreKeys: "id", orderBy: "id", tableName: "profiles" }),
+  table("membership_terms", "card_value_terms", { scope: "profile", orderBy: "id", tableName: "profiles", gatedBy: "membershipTermsEntry" }),
   table("credit_card_bills", "account_id, statement_balance, minimum_payment, due_date, payment_account_id, sync_timestamp, created_at, updated_at", { restoreKeys: "id" }),
   table("life_events", "event_type, start_month, amount, duration_months, label, created_at, updated_at", { restoreKeys: "id" }),
 ];
@@ -198,7 +204,7 @@ export async function collectUserData(
   const investmentsEnabled = isFeatureEnabled("investmentsPage");
 
   const queries = USER_DATA_TABLES.map(async (spec) => {
-    if (spec.gated && !investmentsEnabled) {
+    if ((spec.gated && !investmentsEnabled) || (spec.gatedBy && !isFeatureEnabled(spec.gatedBy))) {
       return { data: [], error: null };
     }
     const result = await fetchPagedSpecRows(client, spec, userId, options);
@@ -242,6 +248,7 @@ export function countUserDataRows(sections: Record<string, unknown[]>): number {
  */
 const PREFERENCE_SECTION_KEYS = new Set([
   "account_preferences",
+  "membership_terms",
   "alert_preferences",
   "ai_settings",
 ]);

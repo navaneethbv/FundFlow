@@ -46,6 +46,8 @@ export default function HouseholdSection({ initialHouseholds }: Readonly<{ initi
       setHouseholds((current) => [...current, data as HouseholdRow]);
       setName("");
       setStatus("Household created.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not create the household.");
     } finally {
       setBusy(false);
     }
@@ -87,6 +89,8 @@ export default function HouseholdSection({ initialHouseholds }: Readonly<{ initi
                       } | null;
                       setStatus(data?.error ?? "Could not send the invite.");
                     }
+                  } catch (error) {
+                    setStatus(error instanceof Error ? error.message : "Could not send the invite.");
                   } finally {
                     setBusy(false);
                   }

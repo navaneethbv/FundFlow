@@ -12,6 +12,7 @@ import { formatCurrency, formatDay, titleCase } from "@/lib/format";
 import type { RecurringOccurrence } from "@/lib/recurring-page";
 import type { ManualRecurringItemRow, RecurringStreamRow } from "@/lib/recurring-data";
 import { usePopoverMenu } from "@/lib/use-popover-menu";
+import SubscriptionCatalog from "@/components/recurring/SubscriptionCatalog";
 
 export type RecurringTab = "overdue" | "upcoming" | "complete" | "manage";
 
@@ -829,6 +830,7 @@ export default function RecurringList({
   today,
   tab,
   links,
+  subscriptionCatalogEnabled = false,
 }: Readonly<{
   occurrences: RecurringOccurrence[];
   streams: RecurringStreamRow[];
@@ -837,6 +839,7 @@ export default function RecurringList({
   today: string;
   tab: RecurringTab;
   links: Record<RecurringTab, string>;
+  subscriptionCatalogEnabled?: boolean;
 }>) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -1036,6 +1039,7 @@ export default function RecurringList({
                 )}
               </ul>
               <AddManualItemForm pending={isPending} onAdd={handleManualAdd} />
+              {subscriptionCatalogEnabled && <div className="mt-6"><SubscriptionCatalog /></div>}
             </div>
           </>
         )}

@@ -107,6 +107,8 @@ export default function ManualAccountsSection({
       }));
       setName("");
       setBalance("");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not add the account.");
     } finally {
       setAddBusy(false);
     }

@@ -1,9 +1,14 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
+function ledgerSource() {
+  return ["app/transactions/page.tsx", "components/transactions/LedgerTableRow.tsx"]
+    .map((file) => readFileSync(file, "utf8")).join("\n");
+}
+
 describe("transactions UI restyle", () => {
   it("uses staged transaction controls instead of the legacy GET form", () => {
-    const source = readFileSync("app/transactions/page.tsx", "utf8");
+    const source = ledgerSource();
 
     expect(source).toContain("TransactionQueryControls");
     expect(source).toContain("Panel");
@@ -13,7 +18,7 @@ describe("transactions UI restyle", () => {
   });
 
   it("colors inflows only, leaving outflows on the default foreground", () => {
-    const source = readFileSync("app/transactions/page.tsx", "utf8");
+    const source = ledgerSource();
 
     // Under the Plaid convention nearly every row is an outflow, so a red on
     // each one made the amount column a uniform block that carried no signal.
@@ -24,7 +29,7 @@ describe("transactions UI restyle", () => {
   });
 
   it("collapses Edit multiple/Columns behind TableToolbar instead of two always-open bars", () => {
-    const source = readFileSync("app/transactions/page.tsx", "utf8");
+    const source = ledgerSource();
 
     expect(source).toContain("TableToolbar");
     expect(source).toContain("bulkTagBar={<BulkTagBar");
@@ -33,7 +38,7 @@ describe("transactions UI restyle", () => {
   });
 
   it("renders day totals in the amount column and suppresses repeated grouped dates", () => {
-    const source = readFileSync("app/transactions/page.tsx", "utf8");
+    const source = ledgerSource();
 
     expect(source).toContain("colSpan={columnCount - 2}");
     expect(source).toContain("dayGroup?.showNet");
@@ -41,7 +46,7 @@ describe("transactions UI restyle", () => {
   });
 
   it("uses group-local zebra bands for the desktop register", () => {
-    const source = readFileSync("app/transactions/page.tsx", "utf8");
+    const source = ledgerSource();
 
     expect(source).toContain("ledgerZebraBands(rows, showDayGroups)");
     expect(source).toContain("zebraBand % 2 === 1");

@@ -98,4 +98,22 @@ describe("feature flags", () => {
       }),
     ).toBe(true);
   });
+
+  it("keeps the next reference adoption group off unless explicitly enabled", () => {
+    expect(FEATURE_FLAG_DEFAULTS.billsViews).toBe(false);
+    expect(FEATURE_FLAG_DEFAULTS.recurringPriceHistory).toBe(false);
+    expect(FEATURE_FLAG_DEFAULTS.subscriptionCatalog).toBe(false);
+    expect(FEATURE_FLAG_DEFAULTS.membershipCardValueModel).toBe(false);
+    expect(FEATURE_FLAG_DEFAULTS.membershipCardValueCalculation).toBe(false);
+    expect(FEATURE_FLAG_DEFAULTS.membershipTermsEntry).toBe(false);
+    expect(isFeatureEnabled("billsViews", {})).toBe(false);
+    expect(isFeatureEnabled("subscriptionCatalog", {})).toBe(false);
+  });
+
+  it("keeps the grouped rules and transaction tools off by default", () => {
+    for (const flag of ["plaidCategoryMappings", "bayesCategorization", "merchantsPage", "projectedLedgerRows", "transactionCalendar", "quickAddTransaction"] as const) {
+      expect(FEATURE_FLAG_DEFAULTS[flag]).toBe(false);
+      expect(isFeatureEnabled(flag, {})).toBe(false);
+    }
+  });
 });

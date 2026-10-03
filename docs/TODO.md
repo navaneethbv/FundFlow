@@ -19,6 +19,34 @@ ESLint 10 and TypeScript 7 remain deferred major upgrades; the existing branch a
 The linked production migration list was checked read-only from the primary checkout on 2026-10-02.
 It includes the earlier adoption migrations through `20261002100000`; the primary checkout is behind those deployed migrations.
 Older rollout paragraphs below are historical and must not override that live verification or the latest handoff.
+## Reference adoption: group 6 rules and transaction tools
+
+Current check follow-up: Sonar reports zero unresolved issues at `9d26de2`, and the only failed hosted check is the full dependency audit.
+The local correction removes the vulnerable glob chain without changing the audit gate; compatibility and lint-rule regressions are in `tests/unit/next-lint-glob.test.ts`.
+Refresh hosted checks at the pushed correction head; the implementation checkpoint below predates this follow-up.
+
+Items 5.4 to 5.6 and 6.5 to 6.7 are implemented together in [PR #204](https://github.com/navaneethbv/FundFlow/pull/204) on `feat/rules-transaction-tools`.
+The design and acceptance record is [the group 6 spec](superpowers/specs/2026-10-02-rules-transactions.md).
+The migration `20261002100000_rules_transactions_adoption.sql` is unapplied to production.
+Keep `plaidCategoryMappings`, `bayesCategorization`, `merchantsPage`, `projectedLedgerRows`, `transactionCalendar`, and `quickAddTransaction` off until the grouped PR passes hosted checks and the owner authorizes rollout.
+Local Supabase migration lint could not run because Docker and a local Postgres target are unavailable.
+The signed-in browser journey and integration tests remain deferred until the owner provides a disposable Supabase project with `TEST_SUPABASE_URL`.
+Clear the five reported Sonar maintainability findings and Codacy analyzer errors at the corrective PR head before starting the next grouped checklist.
+The reported security-rule crashes reproduce locally and the affected files now pass that rule.
+At `a405b24`, CI, migration/RLS, smoke and Sonar's gate passed, but Codacy still returned action required.
+The supplied logs identify two further component-rule crashes and the transaction-page timeout; local corrections pass the targeted rule and reduce the page scan time.
+Sonar's remaining stateless-helper scope finding also has a correction awaiting hosted reanalysis.
+The [quality follow-up](reviews/2026-10-02-transaction-tools-quality.md) lists 22 other pre-existing files that crash the same rule.
+Cleanup scope is awaiting the owner; keep the next checklist pending if those scanner failures persist.
+
+## Reference adoption: group 5 bills and membership value
+
+Items 3.4, 3.5, 3.6, 11.1, 11.2, and 11.3 are implemented together in [PR #203](https://github.com/navaneethbv/FundFlow/pull/203) on `feat/bills-membership-value`.
+The design and acceptance record is [the group 5 spec](superpowers/specs/2026-10-02-bills-membership-value.md).
+The additive migrations `20261002090000_recurring_price_changes.sql` and `20261002091000_card_value_terms.sql` are unapplied to production.
+Keep `billsViews`, `recurringPriceHistory`, `subscriptionCatalog`, `membershipCardValueModel`, `membershipCardValueCalculation`, and `membershipTermsEntry` off until the grouped PR passes hosted checks and the owner authorizes rollout.
+Local verification passed lint, typecheck, unit tests, coverage thresholds, placeholder build, palette validation, and the 16 synthetic UI fixtures at 375px and desktop.
+Signed-in Supabase journeys and integration tests remain deferred under the approved disposable-target exception; never use the production-linked database or `.env.local` for those checks.
 
 ## Reference adoption: group 2 rollout gates
 

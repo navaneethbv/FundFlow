@@ -1,7 +1,9 @@
 # Reference-repo feature adoption plan
 
 Date: 2026-10-01.
-Status: implementation in progress; owner approved the full scope.
+Status: approved in scope by the owner.
+Implementation is being delivered in grouped five-to-six feature PRs.
+The current group is 5.4 to 5.6 and 6.5 to 6.7.
 Companion documents:
 
 - `docs/reviews/2026-10-01-finance-repository-feature-comparison.md`: independent source comparison with 27 pinned source links and acceptance conditions. Its findings are merged below.
@@ -312,6 +314,19 @@ Group 3 is [PR #200](https://github.com/navaneethbv/FundFlow/pull/200), the six-
 No production migration or flag flip is included.
 Group 4 is [PR #202](https://github.com/navaneethbv/FundFlow/pull/202), containing items 6.2, 6.3, 6.4, 8.1, and 8.2 on `feat/ledger-interactions`, based on Group 3's branch.
 The grouped implementation has no migration and all hosted checks passed at `a375739`.
+Group 5 is [PR #203](https://github.com/navaneethbv/FundFlow/pull/203), implemented together on `feat/bills-membership-value`, based on `feat/data-quality-guidance` to keep the stack shallow.
+It contains 3.4, 3.5, 3.6, 11.1, 11.2, and 11.3; its grouped design and acceptance evidence are in `docs/superpowers/specs/2026-10-02-bills-membership-value.md`.
+The owner merged PR #203 at an earlier head before its original analysis and lint-build checks were green.
+The latest quality fixes remain on `feat/bills-membership-value` at `5264d68` and are the dependency for the current group.
+Group 6 is [PR #204](https://github.com/navaneethbv/FundFlow/pull/204) and implements 5.4, 5.5, 5.6, 6.5, 6.6, and 6.7 on `feat/rules-transaction-tools`.
+Its grouped design and acceptance evidence are in `docs/superpowers/specs/2026-10-02-rules-transactions.md`.
+The merchant merge acceptance is adapted to FundFlow's schema: `category_overrides` stores category-to-category mappings and has no merchant key, so it is left untouched rather than rewriting unrelated categories.
+The five maintainability findings and the reported Codacy security-rule crashes have local corrective changes and regression evidence.
+Corrective commit `a405b24` passed hosted CI, migration/RLS, smoke and Sonar's quality gate; Codacy still returned action required without GitHub diagnostics.
+Sonar's one remaining stateless-helper scope finding and the two further component crashes in the owner's Codacy log have follow-up corrections.
+Extracting the existing ledger loader and desktop row renderer reduced the local Opengrep rule run from 8.27 seconds with a partial-parse warning to 0.27 seconds without errors.
+The [quality follow-up](../../reviews/2026-10-02-transaction-tools-quality.md) lists 22 other pre-existing files that crash the same rule; the owner was asked for the broader cleanup scope.
+The next grouped checklist starts only after all PR #204 checks pass, as requested by the owner on 2026-10-02.
 
 ## Execution checklist
 
@@ -346,25 +361,25 @@ No dependency changes are included in feature PRs.
 | 3.1 | Implemented in [#199](https://github.com/navaneethbv/FundFlow/pull/199); local checks passed; rollout deferred | `app/recurring/paychecks/page.tsx` |
 | 3.2 | Implemented in [#199](https://github.com/navaneethbv/FundFlow/pull/199); local checks passed; rollout deferred | `app/settings/payday/page.tsx` |
 | 3.3 | Implemented in [#199](https://github.com/navaneethbv/FundFlow/pull/199); local checks passed; rollout deferred | `lib/budget-allowance.ts` |
-| 3.4 | Not started |  |
-| 3.5 | Not started |  |
-| 3.6 | Not started |  |
+| 3.4 | Group 5 in [PR #203](https://github.com/navaneethbv/FundFlow/pull/203); merge deferred | `app/recurring/page.tsx`, `components/recurring/MonthPulse.tsx` |
+| 3.5 | Group 5 in [PR #203](https://github.com/navaneethbv/FundFlow/pull/203); merge deferred | `lib/recurring-price-changes.ts`, `app/api/recurring/price-changes/route.ts` |
+| 3.6 | Group 5 in [PR #203](https://github.com/navaneethbv/FundFlow/pull/203); merge deferred | `components/recurring/SubscriptionCatalog.tsx`, `lib/subscription-catalog.ts` |
 | 4.1 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `lib/insight-generators.ts`, `lib/insight-generation.ts` |
 | 4.2 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `components/notifications/InsightsFeed.tsx`, `app/api/insights/acknowledge/route.ts` |
 | 4.3 | Not started |  |
 | 5.1 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `lib/rule-conditions.ts`, `lib/rules-engine.ts` |
 | 5.2 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `lib/rule-run-history.ts`, `supabase/migrations/20261001180000_compound_rules.sql` |
 | 5.3 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `components/transactions/RuleSuggestion.tsx`, `app/api/rules/suggestion/route.ts` |
-| 5.4 | Not started |  |
-| 5.5 | Not started |  |
-| 5.6 | Not started |  |
+| 5.4 | Implemented in PR #204; corrective hosted checks pending | `lib/plaid-category-mapping.ts`, `components/settings/PlaidCategoryMappingSection.tsx` |
+| 5.5 | Implemented in PR #204; corrective hosted checks pending | `lib/bayes-categorizer.ts`, `app/api/categorization/bayes/route.ts` |
+| 5.6 | Implemented in PR #204; corrective hosted checks pending | `app/merchants/page.tsx`, `app/api/merchants/merge/route.ts`, `20261002100000_rules_transactions_adoption.sql` |
 | 6.1 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `components/ui/DetailPane.tsx`, `components/transactions/TransactionEditor.tsx` |
 | 6.2 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks passed at `a375739` | `components/transactions/LedgerKeyboardNavigation.tsx`, `lib/use-keyboard-shortcuts.ts` |
 | 6.3 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks passed at `a375739` | `components/transactions/BulkEditBar.tsx`, `app/api/transactions/bulk-edit/route.ts` |
 | 6.4 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks passed at `a375739` | `components/ui/UndoToast.tsx`, `app/api/transactions/undo-annotation/route.ts`, `app/api/transactions/undo-override/route.ts` |
-| 6.5 | Not started |  |
-| 6.6 | Not started |  |
-| 6.7 | Not started |  |
+| 6.5 | Implemented in PR #204; corrective hosted checks pending | `components/transactions/ProjectedLedgerSection.tsx` |
+| 6.6 | Implemented in PR #204; corrective hosted checks pending | `components/transactions/TransactionCalendar.tsx`, `lib/transaction-calendar.ts` |
+| 6.7 | Implemented in PR #204; corrective hosted checks pending | `components/transactions/AddTransactionModal.tsx` |
 | 6.8 | Implemented in Group 7; verification and rollout tracked in the group spec | `lib/collections-data.ts`, `app/transactions/collections/page.tsx` |
 | 7.1 | Implemented in Group 7 | `app/api/budget/move/route.ts`, `scripts/check-budget-moves.sql` |
 | 7.2 | Implemented in Group 7 | `lib/budget-allocation.ts` |
@@ -384,9 +399,9 @@ No dependency changes are included in feature PRs.
 | 10.2 | Not started |  |
 | 10.3 | Not started |  |
 | 10.4 | Not started |  |
-| 11.1 | Not started |  |
-| 11.2 | Not started |  |
-| 11.3 | Not started |  |
+| 11.1 | Group 5 in [PR #203](https://github.com/navaneethbv/FundFlow/pull/203); merge deferred | `lib/card-value.ts`, `20261002091000_card_value_terms.sql` |
+| 11.2 | Group 5 in [PR #203](https://github.com/navaneethbv/FundFlow/pull/203); merge deferred | `lib/card-value.ts`, `app/settings/page.tsx` |
+| 11.3 | Group 5 in [PR #203](https://github.com/navaneethbv/FundFlow/pull/203); merge deferred | `app/api/settings/card-value/route.ts`, `components/settings/MembershipCardValueSection.tsx` |
 | 12.1 | Not started |  |
 | 12.2 | Not started |  |
 | 12.3 | Not started |  |
