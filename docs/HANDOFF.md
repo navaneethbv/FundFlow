@@ -25,7 +25,8 @@ The three group migrations plus prerequisite insight/rule migrations applied to 
 Budget-move, provenance, manual-asset, and global RLS SQL assertions passed.
 Graph refresh completed; its optional SQL parser is unavailable, so SQL verification comes from PostgreSQL assertions rather than graph extraction.
 Logs are `/private/tmp/fundflow-group7-verified-*`, `/private/tmp/fundflow-group7-sql.log`, and `/private/tmp/fundflow-group7-browser.log`.
-The new batch is prepared as a draft PR; hosted checks remain separate from these local results.
+The batch is in [draft PR #205](https://github.com/navaneethbv/FundFlow/pull/205), with implementation commit `c7ef069`.
+Hosted checks remain separate from these local results and are pending at handoff.
 
 PR #204 remains open at `9d26de2` with the dependency audit as its only failed check.
 The high advisory GHSA-vfj7-8cjw-p6xm affects development-only `braces` 3.0.3; no published patch exists, production-only audit passes, and the audit gate was not changed.

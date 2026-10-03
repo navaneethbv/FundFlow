@@ -2,7 +2,7 @@
 
 ## Current checkpoint: Group 7, 2026-10-02
 
-The next six-feature batch contains 6.8, 7.1, 7.2, 7.3, 9.1, and 9.2 on `feat/budgets-collections-assets`.
+The next six-feature batch contains 6.8, 7.1, 7.2, 7.3, 9.1, and 9.2 in [draft PR #205](https://github.com/navaneethbv/FundFlow/pull/205) on `feat/budgets-collections-assets`.
 See [the group contract](superpowers/specs/2026-10-03-budgets-collections-assets.md) and the latest handoff for validation and delivery status.
 Its three migrations remain unapplied to production: `20261003090000_budget_moves.sql`, `20261003091000_transaction_collections.sql`, and `20261003092000_manual_assets.sql`.
 Keep `transactionCollections`, `budgetMoves`, `budgetOverAllocation`, `budgetSetupWizard`, `typedManualAssets`, and `assetOwnership` off pending signed-in Supabase acceptance and authorized rollout.

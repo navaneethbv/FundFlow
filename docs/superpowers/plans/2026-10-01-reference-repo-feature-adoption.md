@@ -315,6 +315,11 @@ The grouped implementation has no migration and all hosted checks passed at `a37
 
 ## Execution checklist
 
+Group 7 is [draft PR #205](https://github.com/navaneethbv/FundFlow/pull/205), containing 6.8, 7.1, 7.2, 7.3, 9.1, and 9.2.
+Its implementation contract and verification limits are in [the group spec](../specs/2026-10-03-budgets-collections-assets.md).
+Local checks pass; hosted checks are pending, and the full dependency audit has the same unpatched development-only `braces` advisory as PR #204.
+No production migration, merge, or flag change is included.
+
 Verification exception approved by the owner on 2026-10-01: defer signed-in browser journeys and full Supabase integration tests until a disposable target exists.
 Docker is unavailable and no `TEST_SUPABASE_URL` is configured.
 Never use the production-linked database or the primary checkout's `.env.local` for testing.
