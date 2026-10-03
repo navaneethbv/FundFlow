@@ -100,6 +100,13 @@ begin
     where id = p_loan_id and user_id = p_user_id for update;
   if not found then raise exception 'Private loan not found' using errcode = 'P0002'; end if;
   if p_payment_date < v_loan.start_date then raise exception 'Payment predates loan' using errcode = '22023'; end if;
+  if v_loan.status = 'settled' then raise exception 'Loan is already settled' using errcode = '22023'; end if;
+  -- The balance check below replays only earlier payments, so a back-dated
+  -- payment would ignore later ones and allow repaying more than is owed.
+  if exists (select 1 from public.private_loan_payments
+    where loan_id = p_loan_id and user_id = p_user_id and payment_date > p_payment_date) then
+    raise exception 'Record payments in date order; a later payment already exists' using errcode = '22023';
+  end if;
 
   v_principal := v_loan.principal;
   v_cursor := v_loan.start_date;
