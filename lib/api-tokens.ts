@@ -13,6 +13,27 @@ import { createServiceClient } from "@/lib/supabase/service";
 
 export const API_TOKEN_PREFIX = "fft_";
 
+export const API_TOKEN_SCOPES = [
+  "export:rows",
+  "mcp:aggregates",
+  "mcp:export-rows",
+] as const;
+
+export type ApiTokenScope = (typeof API_TOKEN_SCOPES)[number];
+
+export const LEGACY_EXPORT_SCOPE: ApiTokenScope = "export:rows";
+
+export function normalizeApiTokenScopes(value: unknown): ApiTokenScope[] | null {
+  if (value === undefined) return [LEGACY_EXPORT_SCOPE];
+  if (!Array.isArray(value) || value.length === 0) return null;
+  const scopes = [...new Set(value)].filter(
+    (scope): scope is ApiTokenScope =>
+      typeof scope === "string" &&
+      (API_TOKEN_SCOPES as readonly string[]).includes(scope),
+  );
+  return scopes.length === value.length ? scopes : null;
+}
+
 /**
  * SHA-256, deliberately — not bcrypt/argon2. These tokens are 256 bits of
  * `randomBytes` (see the mint route), not user-chosen passwords: there is no
@@ -32,7 +53,8 @@ export function hashApiToken(token: string): string {
  */
 export async function verifyApiToken(
   authorizationHeader: string | null,
-): Promise<string | null> {
+  requiredScope: ApiTokenScope,
+): Promise<{ userId: string; scopes: ApiTokenScope[] } | null> {
   if (!authorizationHeader?.startsWith("Bearer ")) return null;
   const token = authorizationHeader.slice("Bearer ".length).trim();
   if (!token.startsWith(API_TOKEN_PREFIX) || token.length < 30) return null;
@@ -40,13 +62,18 @@ export async function verifyApiToken(
   const service = createServiceClient();
   const { data: row, error } = await service
     .from("api_tokens")
-    .select("id, user_id")
+    .select("id, user_id, scopes")
     .eq("token_hash", hashApiToken(token))
     .is("revoked_at", null)
     .gt("expires_at", new Date().toISOString())
     .maybeSingle();
   if (error) throw error;
   if (!row) return null;
+
+  const scopes = Array.isArray(row.scopes)
+    ? normalizeApiTokenScopes(row.scopes)
+    : null;
+  if (!scopes?.includes(requiredScope)) return null;
 
   await service
     .from("api_tokens")
@@ -55,5 +82,5 @@ export async function verifyApiToken(
     .eq("user_id", row.user_id)
     .then(() => undefined, () => undefined);
 
-  return row.user_id as string;
+  return { userId: row.user_id as string, scopes };
 }

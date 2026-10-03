@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getClientIp, writeAudit } from "@/lib/audit";
 import { verifyApiToken } from "@/lib/api-tokens";
+import type { ApiTokenScope } from "@/lib/api-tokens";
 import { errorResponse, requireUser } from "@/lib/http";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -12,6 +13,7 @@ export interface ExportContext {
 
 export async function resolveExportContext(
   request: NextRequest,
+  requiredScope: ApiTokenScope,
 ): Promise<ExportContext | NextResponse> {
   const auth = await requireUser();
   if (auth instanceof NextResponse) {
@@ -22,12 +24,12 @@ export async function resolveExportContext(
     if (!allowed) {
       return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
     }
-    let userId: string | null;
-    try { userId = await verifyApiToken(authHeader); } catch (error) {
+    let token: Awaited<ReturnType<typeof verifyApiToken>>;
+    try { token = await verifyApiToken(authHeader, requiredScope); } catch (error) {
       return errorResponse("export.token-lookup", error, 503);
     }
-    if (!userId) return auth;
-    return { userId, supabase: createServiceClient() };
+    if (!token) return auth;
+    return { userId: token.userId, supabase: createServiceClient() };
   }
   return { userId: auth.user.id, supabase: auth.supabase };
 }

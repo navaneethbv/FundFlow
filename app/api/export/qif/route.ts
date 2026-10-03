@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  * Respects the user's ai_export_enabled setting and server-side privacy boundaries.
  */
 export async function GET(request: NextRequest) {
-  const context = await resolveExportContext(request);
+  const context = await resolveExportContext(request, "export:rows");
   if (context instanceof NextResponse) return context;
   const { userId, supabase } = context;
 

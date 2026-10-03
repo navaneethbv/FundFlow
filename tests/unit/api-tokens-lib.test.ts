@@ -7,7 +7,11 @@ vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => serviceClient,
 }));
 
-import { API_TOKEN_PREFIX, hashApiToken, verifyApiToken } from "@/lib/api-tokens";
+import {
+  API_TOKEN_PREFIX,
+  hashApiToken,
+  verifyApiToken,
+} from "@/lib/api-tokens";
 
 const VALID = `${API_TOKEN_PREFIX}${"a".repeat(43)}`;
 
@@ -36,21 +40,24 @@ describe("verifyApiToken", () => {
     ["a token without the fft_ prefix", `Bearer ${"a".repeat(40)}`],
     ["a token that is too short", `Bearer ${API_TOKEN_PREFIX}short`],
   ])("rejects %s without querying", async (_label, header) => {
-    await expect(verifyApiToken(header)).resolves.toBeNull();
+    await expect(verifyApiToken(header, "export:rows")).resolves.toBeNull();
     expect(serviceClient.callsOn("api_tokens")).toHaveLength(0);
   });
 
   it("returns null for a token with no matching row", async () => {
     serviceClient = clientStub({ api_tokens: { data: null } });
-    await expect(verifyApiToken(`Bearer ${VALID}`)).resolves.toBeNull();
+    await expect(verifyApiToken(`Bearer ${VALID}`, "export:rows")).resolves.toBeNull();
   });
 
   it("looks the token up by hash, excluding revoked rows", async () => {
     serviceClient = clientStub({
-      api_tokens: { data: { id: "t1", user_id: "user-1" } },
+      api_tokens: { data: { id: "t1", user_id: "user-1", scopes: ["export:rows"] } },
     });
 
-    await expect(verifyApiToken(`Bearer ${VALID}`)).resolves.toBe("user-1");
+    await expect(verifyApiToken(`Bearer ${VALID}`, "export:rows")).resolves.toEqual({
+      userId: "user-1",
+      scopes: ["export:rows"],
+    });
 
     const calls = serviceClient.callsOn("api_tokens");
     expect(
@@ -68,12 +75,29 @@ describe("verifyApiToken", () => {
     ).toBe(true);
   });
 
-  it("stamps last_used_at without blocking the result", async () => {
+  it("fails closed when the token lacks the requested scope", async () => {
+    serviceClient = clientStub({
+      api_tokens: { data: { id: "t1", user_id: "user-1", scopes: ["mcp:aggregates"] } },
+    });
+
+    await expect(verifyApiToken(`Bearer ${VALID}`, "export:rows")).resolves.toBeNull();
+    expect(serviceClient.writtenTo("api_tokens")).toBeUndefined();
+  });
+
+  it("treats a legacy row without scopes as invalid rather than widening access", async () => {
     serviceClient = clientStub({
       api_tokens: { data: { id: "t1", user_id: "user-1" } },
     });
 
-    await verifyApiToken(`Bearer ${VALID}`);
+    await expect(verifyApiToken(`Bearer ${VALID}`, "export:rows")).resolves.toBeNull();
+  });
+
+  it("stamps last_used_at without blocking the result", async () => {
+    serviceClient = clientStub({
+      api_tokens: { data: { id: "t1", user_id: "user-1", scopes: ["export:rows"] } },
+    });
+
+    await verifyApiToken(`Bearer ${VALID}`, "export:rows");
 
     expect(serviceClient.writtenTo("api_tokens")).toMatchObject({
       last_used_at: expect.any(String),
@@ -81,7 +105,7 @@ describe("verifyApiToken", () => {
   });
 
   it("tolerates a failed last_used_at stamp", async () => {
-    const stub = clientStub({ api_tokens: { data: { id: "t1", user_id: "user-1" } } });
+    const stub = clientStub({ api_tokens: { data: { id: "t1", user_id: "user-1", scopes: ["export:rows"] } } });
     // Make the update chain reject; the caller must still get the user id.
     const original = stub.from;
     stub.from = vi.fn((table: string) => {
@@ -98,13 +122,16 @@ describe("verifyApiToken", () => {
     }) as typeof stub.from;
     serviceClient = stub;
 
-    await expect(verifyApiToken(`Bearer ${VALID}`)).resolves.toBe("user-1");
+    await expect(verifyApiToken(`Bearer ${VALID}`, "export:rows")).resolves.toEqual({
+      userId: "user-1",
+      scopes: ["export:rows"],
+    });
   });
 });
 
 
 it("surfaces token lookup outages and filters expired credentials", async () => {
   serviceClient = clientStub({ api_tokens: { error: new Error("offline") } });
-  await expect(verifyApiToken(`Bearer ${VALID}`)).rejects.toThrow("offline");
+  await expect(verifyApiToken(`Bearer ${VALID}`, "export:rows")).rejects.toThrow("offline");
   expect(serviceClient.callsOn("api_tokens")).toContainEqual(expect.objectContaining({ method: "gt", args: ["expires_at", expect.any(String)] }));
 });

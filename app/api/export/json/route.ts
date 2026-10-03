@@ -8,7 +8,7 @@ import { exportError, recordExport, resolveExportContext } from "@/lib/export-ro
  * and audited like every export.
  */
 export async function GET(request: NextRequest) {
-  const context = await resolveExportContext(request);
+  const context = await resolveExportContext(request, "export:rows");
   if (context instanceof NextResponse) return context;
   const { userId, supabase } = context;
 
