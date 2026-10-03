@@ -319,6 +319,22 @@ describe("POST /api/household/accept", () => {
     expect(res.headers.get("location")).toContain("invite=accepted");
     expect(serviceClient.writtenTo("household_members")).toMatchObject({ role: expectedRole });
   });
+
+  it("refuses a reports-only invite for a user who already has financial data", async () => {
+    featureState.reportsOnlyEnabled = true;
+    serviceClient = clientStub({
+      household_invites: {
+        data: { id: "i1", household_id: "h1", email: OWNER_EMAIL, role: "reports_only", expires_at: future(), accepted_at: null },
+      },
+      plaid_items: { data: [{ id: "item-1" }] },
+      household_members: { error: null },
+    });
+    mockRequireUser.mockResolvedValue({ user: { id: USER, email: OWNER_EMAIL } });
+
+    const res = await acceptGet(get(token));
+    expect(res.headers.get("location")).toContain("invite=reports-only-unavailable");
+    expect(serviceClient.writtenTo("household_members")).toBeUndefined();
+  });
 });
 
 describe("/api/push/subscribe", () => {

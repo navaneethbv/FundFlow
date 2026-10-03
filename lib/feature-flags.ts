@@ -108,6 +108,8 @@ export const FEATURE_FLAG_DEFAULTS = {
   cashFlowWaterfall: false,
   /** Reference adoption 13.6: private PDF statement vault and coverage grid. */
   statementVault: false,
+  /** Reference adoption 13.7: goal progress ring, status, and projection. */
+  goalVisuals: false,
   /**
    * Phase 11. Released: `20260730230000_advice.sql` is applied, so the page's
    * `advice_progress` and `profiles.advice_profile` reads/writes resolve.

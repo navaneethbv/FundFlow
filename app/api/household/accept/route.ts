@@ -6,6 +6,24 @@ import { writeAudit, getClientIp } from "@/lib/audit";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 
 /**
+ * A reports-only member is hidden from every financial row, including their
+ * own, and the app has no way to leave a household. Accepting that role with
+ * existing data would lock the user out of it, so only a fresh account may.
+ */
+async function ownsFinancialData(service: ReturnType<typeof createServiceClient>, userId: string): Promise<boolean> {
+  const checks = await Promise.all([
+    service.from("plaid_items").select("id").eq("user_id", userId).limit(1),
+    service.from("manual_accounts").select("id").eq("user_id", userId).limit(1),
+    service.from("households").select("id").eq("owner_user_id", userId).limit(1),
+  ]);
+  for (const { data, error } of checks) {
+    if (error) throw error;
+    if ((data ?? []).length > 0) return true;
+  }
+  return false;
+}
+
+/**
  * Accept a household invite (4.1). The invitee must be signed in, and their
  * signup email must match the invited address — a leaked link alone is not
  * enough. The membership insert uses the service client (the invitee can't
@@ -64,10 +82,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.redirect(new URL("/settings?invite=invalid", request.url), 303);
     }
 
+    const role = reportsOnlyEnabled && inviteRow.role === "reports_only" ? "reports_only" : "member";
+    if (role === "reports_only" && await ownsFinancialData(service, user.id)) {
+      return NextResponse.redirect(new URL("/settings?invite=reports-only-unavailable", request.url), 303);
+    }
+
     const { error: memberError } = await service.from("household_members").insert({
       household_id: inviteRow.household_id,
       user_id: user.id,
-      role: reportsOnlyEnabled && inviteRow.role === "reports_only" ? "reports_only" : "member",
+      role,
     });
     // Unique violation = already a member; treat as success. Matched on the
     // Postgres code, not the message text (A-13): message wording varies by

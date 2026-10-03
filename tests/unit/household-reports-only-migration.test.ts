@@ -27,6 +27,13 @@ describe("aggregate-only household migration", () => {
     expect(migration).not.toContain("transaction_id");
   });
 
+  it("gates the security-definer aggregate RPC on session and MFA state", () => {
+    const rpc = migration.slice(migration.indexOf("create or replace function public.household_report_aggregates"));
+    const body = rpc.slice(0, rpc.indexOf("return query"));
+    expect(body).toContain("(select private.session_not_revoked()) and (select private.mfa_satisfied())");
+    expect(rlsCheck).toContain("skips the session or MFA gate");
+  });
+
   it("uses a restrictive authenticated policy to deny reports-only row access", () => {
     expect(migration).toContain("create policy reports_only_access");
     expect(migration).toContain("as restrictive");
