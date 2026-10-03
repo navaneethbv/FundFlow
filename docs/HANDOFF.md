@@ -13,7 +13,7 @@ Planning tools add editable rent-versus-buy, emergency-fund, and compound-intere
 
 The three migrations were parsed and exercised against a disposable local PostgreSQL stand-in, including private-loan creation and payment allocation.
 Focused unit checks passed, along with TypeScript, ESLint, a placeholder-environment production build, and graph refresh.
-Docker is unavailable and this worktree is not linked to Supabase, so full RLS/Auth acceptance and browser journeys requiring signed-in data remain pending. PR #208 hosted checks and exact-head scanner confirmation remain required.
+Docker is unavailable and this worktree is not linked to Supabase, so full RLS/Auth acceptance and browser journeys requiring signed-in data remain pending. PR #208 hosted checks and exact-head scanner confirmation now pass.
 No production migration, deployment, merge, or feature-flag change was performed.
 
 ## 2026-10-02: Checklist 9.7 portfolio look-through
