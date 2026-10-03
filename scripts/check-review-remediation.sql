@@ -87,4 +87,27 @@ on conflict (user_id,type,subject_key) do nothing;
 do $$ begin
   assert (select count(*) = 1 from public.notifications where user_id = '19000000-0000-0000-0000-000000000001' and subject_key = 'pending-purchase'), 'Duplicate purchase alert';
 end $$;
+
+-- A private loan payment can never repay more than is owed: a settled loan
+-- refuses further payments, and a back-dated payment cannot skip later ones.
+select set_config('request.jwt.claims','{"role":"service_role"}',true);
+do $$
+declare v_loan uuid;
+begin
+  v_loan := public.create_private_loan('19000000-0000-0000-0000-000000000001','lent','Fixture',100,0,'2026-01-01',null,null);
+  perform public.record_private_loan_payment('19000000-0000-0000-0000-000000000001',v_loan,'2026-01-10',60,null);
+  begin
+    perform public.record_private_loan_payment('19000000-0000-0000-0000-000000000001',v_loan,'2026-01-05',60,null);
+    raise exception 'Back-dated payment was accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  perform public.record_private_loan_payment('19000000-0000-0000-0000-000000000001',v_loan,'2026-01-20',40,null);
+  assert (select status = 'settled' from public.private_loans where id = v_loan), 'Fully repaid loan not settled';
+  begin
+    perform public.record_private_loan_payment('19000000-0000-0000-0000-000000000001',v_loan,'2026-01-25',1,null);
+    raise exception 'Settled loan accepted a payment';
+  exception when invalid_parameter_value then null;
+  end;
+  assert (select sum(amount) = 100 from public.private_loan_payments where loan_id = v_loan), 'Loan repaid more than principal';
+end $$;
 rollback;
