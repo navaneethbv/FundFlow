@@ -75,6 +75,30 @@ export interface ForecastPoint {
   optimistic: number;
 }
 
+export interface MonteCarloPoint {
+  month: string;
+  p10: number;
+  p50: number;
+  p90: number;
+}
+
+export interface MonteCarloOptions {
+  /** Annualized standard deviation entered by the user, in percentage points. */
+  annualVolatilityPct: number;
+  /** A fixed seed keeps the same assumptions reproducible across renders. */
+  seed: number;
+  trials?: number;
+}
+
+export function parseMonteCarloOptions(params: ForecastSearchParams): MonteCarloOptions {
+  const volatility = Number(firstSearchParam(params.volatilityPct));
+  const seed = Number(firstSearchParam(params.seed));
+  return {
+    annualVolatilityPct: Number.isFinite(volatility) ? Math.max(0, Math.min(100, volatility)) : 12,
+    seed: Number.isFinite(seed) ? Math.trunc(seed) : 20261003,
+  };
+}
+
 interface ForecastState {
   cash: number;
   investments: number;
@@ -104,7 +128,8 @@ function netWorthOf(state: ForecastState): number {
 /** Percentage points applied around the base rate — additive, not
  * multiplicative, so conservative <= base <= optimistic holds regardless of
  * whether the entered rate is positive, zero, or negative. */
-const SCENARIO_SPREAD_PCT = 2;
+export const SCENARIO_SPREAD_PCT = 2;
+export const FIRE_WITHDRAWAL_RATE = 0.04;
 
 /**
  * Three scenarios sharing one set of assumptions, differing only in the
@@ -134,6 +159,158 @@ export function forecastNetWorth(
     });
   }
   return points;
+}
+
+function seededRandom(seed: number): () => number {
+  let state = (Math.trunc(seed) >>> 0) || 0x9e3779b9;
+  return () => {
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    return (state >>> 0) / 0x100000000;
+  };
+}
+
+function normalSample(random: () => number): number {
+  const u1 = Math.max(Number.MIN_VALUE, random());
+  const u2 = random();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+}
+
+function percentile(sorted: readonly number[], fraction: number): number {
+  if (sorted.length === 0) return 0;
+  const position = (sorted.length - 1) * fraction;
+  const lower = Math.floor(position);
+  const upper = Math.ceil(position);
+  if (lower === upper) return sorted[lower] ?? 0;
+  const weight = position - lower;
+  return (sorted[lower] ?? 0) + ((sorted[upper] ?? 0) - (sorted[lower] ?? 0)) * weight;
+}
+
+/**
+ * Runs a seeded Monte Carlo projection using only the return and volatility
+ * the user supplied. This is deliberately separate from the default three
+ * deterministic scenarios: a percentile band is labelled a projection, not a
+ * confidence interval or a prediction.
+ */
+export function monteCarloProjection(
+  current: ForecastStartingState,
+  assumptions: ForecastAssumptions,
+  options: MonteCarloOptions,
+): MonteCarloPoint[] {
+  const trials = Math.max(1, Math.min(2_000, Math.trunc(options.trials ?? 500)));
+  const annualVolatility = Math.max(0, options.annualVolatilityPct) / 100;
+  const annualizedMonthlyShock = annualVolatility * Math.sqrt(12);
+  const random = seededRandom(options.seed);
+  const paths = Array.from({ length: trials }, () => ({ ...current }));
+  const points: MonteCarloPoint[] = [];
+
+  for (let month = 1; month <= assumptions.horizonMonths; month += 1) {
+    const values: number[] = [];
+    for (const path of paths) {
+      const sampledAnnualReturn = assumptions.annualReturnPct +
+        normalSample(random) * annualizedMonthlyShock * 100;
+      const next = stepMonth(path, assumptions, sampledAnnualReturn);
+      path.cash = next.cash;
+      path.investments = next.investments;
+      path.liabilities = next.liabilities;
+      values.push(netWorthOf(path));
+    }
+    values.sort((a, b) => a - b);
+    points.push({
+      month: `Month ${month}`,
+      p10: round2(percentile(values, 0.1)),
+      p50: round2(percentile(values, 0.5)),
+      p90: round2(percentile(values, 0.9)),
+    });
+  }
+  return points;
+}
+
+export interface EarmarkedGoalRow {
+  id: string;
+  name: string;
+  imageSlug: string | null;
+  savedAmount: number;
+  spendingReduces: boolean;
+  targetAmount: number;
+}
+
+export interface EarmarkedGoalLink {
+  goalId: string;
+  accountId: string;
+  allocatedAmount: number | null;
+  useEntireBalance: boolean;
+}
+
+export interface EarmarkedGoalEvent {
+  goalId: string;
+  amount: number;
+}
+
+export interface EarmarkedCapital {
+  total: number;
+  emergency: number;
+  sinking: number;
+}
+
+export interface EarmarkedAccountBalance {
+  id: string;
+  balance: number | null;
+}
+
+function earmarkedKind(goal: EarmarkedGoalRow): "emergency" | "sinking" | null {
+  if (goal.imageSlug === "emergency-fund" || /emergency/i.test(goal.name)) return "emergency";
+  if (goal.spendingReduces || /sinking/i.test(goal.name)) return "sinking";
+  return null;
+}
+
+/**
+ * Computes funded emergency and sinking-style goal balances without treating
+ * an unspent future target as cash. Account allocations are capped at the
+ * current account balance and duplicate links cannot inflate the result.
+ */
+export function computeEarmarkedCapital(
+  goals: readonly EarmarkedGoalRow[],
+  links: readonly EarmarkedGoalLink[],
+  accounts: readonly EarmarkedAccountBalance[],
+  events: readonly EarmarkedGoalEvent[] = [],
+): EarmarkedCapital {
+  const balances = new Map(accounts.map((account) => [account.id, Math.max(0, account.balance ?? 0)]));
+  const eventsByGoal = new Map<string, number>();
+  for (const event of events) {
+    eventsByGoal.set(event.goalId, (eventsByGoal.get(event.goalId) ?? 0) + event.amount);
+  }
+  const linksByGoal = new Map<string, EarmarkedGoalLink[]>();
+  for (const link of links) {
+    const existing = linksByGoal.get(link.goalId) ?? [];
+    existing.push(link);
+    linksByGoal.set(link.goalId, existing);
+  }
+
+  let emergency = 0;
+  let sinking = 0;
+  for (const goal of goals) {
+    const kind = earmarkedKind(goal);
+    if (!kind || goal.targetAmount <= 0) continue;
+    const seenAccounts = new Set<string>();
+    const allocated = (linksByGoal.get(goal.id) ?? []).reduce((sum, link) => {
+      if (seenAccounts.has(link.accountId)) return sum;
+      seenAccounts.add(link.accountId);
+      const balance = balances.get(link.accountId);
+      if (balance === undefined) return sum;
+      return sum + (link.useEntireBalance
+        ? balance
+        : Math.min(Math.max(0, link.allocatedAmount ?? 0), balance));
+    }, 0);
+    const funded = Math.min(
+      Math.max(0, goal.targetAmount),
+      Math.max(0, goal.savedAmount) + allocated + (eventsByGoal.get(goal.id) ?? 0),
+    );
+    if (kind === "emergency") emergency += funded;
+    else sinking += funded;
+  }
+  return { total: round2(emergency + sinking), emergency: round2(emergency), sinking: round2(sinking) };
 }
 
 export interface ForecastAccountRow {
@@ -401,6 +578,7 @@ function checkMilestoneReached(
   m: ForecastMilestone,
   state: ForecastState,
   currentNW: number,
+  earmarkedCapital: number,
 ): { reached: boolean; amount: number } {
   if (m.type === "debt" && state.liabilities <= 0) {
     return { reached: true, amount: 0 };
@@ -408,8 +586,11 @@ function checkMilestoneReached(
   if (m.type === "emergency" && state.cash >= m.targetAmount) {
     return { reached: true, amount: round2(state.cash) };
   }
-  if ((m.type === "networth" || m.type === "fire") && currentNW >= m.targetAmount) {
+  if (m.type === "networth" && currentNW >= m.targetAmount) {
     return { reached: true, amount: currentNW };
+  }
+  if (m.type === "fire" && currentNW - earmarkedCapital >= m.targetAmount) {
+    return { reached: true, amount: Math.max(0, currentNW - earmarkedCapital) };
   }
   return { reached: false, amount: 0 };
 }
@@ -418,6 +599,7 @@ function checkMilestoneReached(
 function buildMilestoneTargets(
   startingState: ForecastStartingState,
   safeMonthlyExpenses: number | null,
+  earmarkedCapital: number,
 ): ForecastMilestone[] {
   const startingNetWorth =
     startingState.cash + startingState.investments - startingState.liabilities;
@@ -454,9 +636,9 @@ function buildMilestoneTargets(
 
   // Financial independence: the 4% safe-withdrawal rule, i.e. 25x annual spend.
   const fireTarget =
-    safeMonthlyExpenses !== null ? round2(safeMonthlyExpenses * 12 * 25) : null;
+      safeMonthlyExpenses !== null ? round2(safeMonthlyExpenses * 12 / FIRE_WITHDRAWAL_RATE) : null;
   const fire: ForecastMilestone[] =
-    fireTarget !== null && startingNetWorth < fireTarget
+    fireTarget !== null && startingNetWorth - earmarkedCapital < fireTarget
       ? [{
           id: "fire",
           name: "Financial Independence (FIRE)",
@@ -464,7 +646,7 @@ function buildMilestoneTargets(
           type: "fire",
           reachedMonth: null,
           reachedAmount: null,
-          description: `25x annual expenses ($${fireTarget.toLocaleString()}), using a 4% withdrawal rate as a rough planning assumption.`,
+              description: `25x annual expenses ($${fireTarget.toLocaleString()}), using a 4% withdrawal rate as a rough planning assumption after earmarked goal balances.`,
         }]
       : [];
 
@@ -482,6 +664,7 @@ function resolveMilestoneMonths(
   milestones: readonly ForecastMilestone[],
   startingState: ForecastStartingState,
   assumptions: ForecastAssumptions,
+  earmarkedCapital: number,
 ): ForecastMilestone[] {
   const resolved = milestones.map((milestone) => ({ ...milestone }));
   let state: ForecastState = { ...startingState };
@@ -492,7 +675,7 @@ function resolveMilestoneMonths(
 
     for (const milestone of resolved) {
       if (milestone.reachedMonth !== null) continue;
-      const status = checkMilestoneReached(milestone, state, currentNetWorth);
+      const status = checkMilestoneReached(milestone, state, currentNetWorth, earmarkedCapital);
       if (status.reached) {
         milestone.reachedMonth = month;
         milestone.reachedAmount = status.amount;
@@ -510,10 +693,11 @@ export function computeForecastMilestones(
   startingState: ForecastStartingState,
   assumptions: ForecastAssumptions,
   monthlyExpenses = 0,
+  earmarkedCapital = 0,
 ): ForecastMilestone[] {
   // A near-zero expense figure would make the emergency-fund and FIRE targets
   // meaninglessly small, so the floor keeps them honest.
   const safeMonthlyExpenses = monthlyExpenses > 0 ? Math.max(100, monthlyExpenses) : null;
-  const milestones = buildMilestoneTargets(startingState, safeMonthlyExpenses);
-  return resolveMilestoneMonths(milestones, startingState, assumptions);
+  const milestones = buildMilestoneTargets(startingState, safeMonthlyExpenses, Math.max(0, earmarkedCapital));
+  return resolveMilestoneMonths(milestones, startingState, assumptions, Math.max(0, earmarkedCapital));
 }

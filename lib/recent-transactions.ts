@@ -32,7 +32,7 @@ export async function getRecentTransactions({
 
   let query = supabase
     .from("transactions")
-    .select("id, date, amount, iso_currency_code, merchant_name, name, pfc_primary, account_id")
+    .select("id, date, amount, iso_currency_code, merchant_name, name, pfc_primary, account_id, user_id")
     .gte("date", start)
     .lt("date", endDate)
     .order("date", { ascending: false })

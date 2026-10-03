@@ -6,6 +6,7 @@ import Button from "@/components/ui/Button";
 import FormMessage from "@/components/ui/FormMessage";
 import { applyLifeEvents, parseLifeEvent, type ForecastPoint, type LifeEvent, type LifeEventType } from "@/lib/life-events";
 import { formatCurrency } from "@/lib/format";
+import type { ForecastMilestone } from "@/lib/forecasting";
 
 const EVENT_ITEMS: ReadonlyArray<{ type: LifeEventType; label: string }> = [
   { type: "home_purchase", label: "Home purchase" },
@@ -25,6 +26,7 @@ interface Props {
   currentNetWorth: number;
   currency: string;
   initialEvents: LifeEvent[];
+  milestones?: ForecastMilestone[];
 }
 
 /**
@@ -38,6 +40,7 @@ export default function LifeEventsPanel({
   currentNetWorth,
   currency,
   initialEvents,
+  milestones = [],
 }: Readonly<Props>) {
   const [events, setEvents] = useState<LifeEvent[]>(initialEvents);
   const [type, setType] = useState<LifeEventType>("home_purchase");
@@ -140,7 +143,7 @@ export default function LifeEventsPanel({
             with no life events applied.
           </>}
         </p>
-        <ForecastChart points={adjusted} currentNetWorth={currentNetWorth} />
+        <ForecastChart points={adjusted} currentNetWorth={currentNetWorth} milestones={milestones} />
       </PanelShell>
 
       <PanelShell>

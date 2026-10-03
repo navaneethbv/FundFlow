@@ -222,6 +222,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
               savingsRateUsesPriorCompleteMonth={savingsRateBasis.usesPriorCompleteMonth}
               recentTransactions={recentTransactions}
               accountNames={accountNames}
+              viewerId={user?.id}
               linkParams={linkParams}
               drillQuery={drillQuery}
               prefs={dashboardPrefs}

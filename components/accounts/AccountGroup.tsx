@@ -10,9 +10,11 @@ import type {
 export default function AccountGroup({
   groupKey,
   group,
+  viewerId,
 }: Readonly<{
   groupKey: AccountGroupKey;
   group: AccountsPageData["groups"][AccountGroupKey];
+  viewerId?: string;
 }>) {
   if (group.rows.length === 0) return null;
 
@@ -61,7 +63,7 @@ export default function AccountGroup({
       </summary>
       <ul>
         {group.rows.map((row) => (
-          <AccountRow key={`${row.source}-${row.id}`} row={row} />
+          <AccountRow key={`${row.source}-${row.id}`} row={row} viewerId={viewerId} />
         ))}
       </ul>
     </details>

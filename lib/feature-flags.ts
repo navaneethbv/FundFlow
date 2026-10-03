@@ -90,6 +90,10 @@ export const FEATURE_FLAG_DEFAULTS = {
    * `dashboardWidgets`.
    */
   forecastingPage: true,
+  /** Reference adoption 10.2: user-entered, seeded percentile projections. */
+  forecastingMonteCarlo: false,
+  /** Reference adoption 12.1: accessible household-owner attribution dots. */
+  ownerAttributionDots: false,
   /**
    * Phase 11. Released: `20260730230000_advice.sql` is applied, so the page's
    * `advice_progress` and `profiles.advice_profile` reads/writes resolve.

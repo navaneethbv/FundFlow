@@ -520,12 +520,14 @@ function RecentActivitySection({
   transactions,
   merchantItems,
   accountNames,
+  viewerId,
   maxMerchant,
 }: Readonly<{
   hidden: boolean;
   transactions: RecentTransaction[];
   merchantItems: Array<{ label: string; amount: number; href: string }>;
   accountNames: Map<string, string>;
+  viewerId?: string;
   maxMerchant: number;
 }>) {
   if (hidden || (transactions.length === 0 && merchantItems.length === 0)) {
@@ -539,6 +541,7 @@ function RecentActivitySection({
           <RecentActivity
             transactions={transactions}
             accountNames={accountNames}
+            viewerId={viewerId}
           />
         </Panel>
       )}
@@ -683,6 +686,7 @@ export default function MonitorView({
   savingsRateUsesPriorCompleteMonth,
   recentTransactions,
   accountNames,
+  viewerId,
   linkParams,
   drillQuery,
   prefs,
@@ -696,6 +700,7 @@ export default function MonitorView({
   savingsRateUsesPriorCompleteMonth: boolean;
   recentTransactions: RecentTransaction[];
   accountNames: Map<string, string>;
+  viewerId?: string;
   linkParams: DrillLinkParams;
   drillQuery: { category?: string; sub?: string; merchant?: string };
   prefs?: { hideRecent?: boolean; hideBreakdowns?: boolean };
@@ -770,6 +775,7 @@ export default function MonitorView({
         transactions={recentTransactions}
         merchantItems={merchantItems}
         accountNames={accountNames}
+        viewerId={viewerId}
         maxMerchant={maxMerchant}
       />
       <MonitorBreakdowns

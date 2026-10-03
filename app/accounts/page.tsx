@@ -446,6 +446,7 @@ export default async function AccountsPage({
                   key={key}
                   groupKey={key}
                   group={view.groups[key]}
+                  viewerId={user.id}
                 />
               ))}
             </div>

@@ -1,6 +1,6 @@
 import { compactCurrency, linePath, niceTickRange } from "@/lib/chart-utils";
 import { formatCurrency } from "@/lib/format";
-import type { ForecastPoint } from "@/lib/forecasting";
+import type { ForecastMilestone, ForecastPoint } from "@/lib/forecasting";
 
 /**
  * Three deterministic scenarios from the user's own assumptions, not a
@@ -24,7 +24,12 @@ const SERIES = [
 export default function ForecastChart({
   points,
   currentNetWorth,
-}: Readonly<{ points: ForecastPoint[]; currentNetWorth: number }>) {
+  milestones = [],
+}: Readonly<{
+  points: ForecastPoint[];
+  currentNetWorth: number;
+  milestones?: ForecastMilestone[];
+}>) {
   if (points.length === 0) return null;
 
   const scenariosAreDegenerate = points.every(
@@ -45,6 +50,11 @@ export default function ForecastChart({
   const xFor = (i: number) => PAD_LEFT + (i / points.length) * plotWidth;
   const yFor = (value: number) =>
     PAD_TOP + plotHeight - ((value - minTick) / (maxTick - minTick || 1)) * plotHeight;
+  const markerMilestones = milestones
+    .filter((milestone) => milestone.reachedMonth !== null)
+    .slice(0, 6);
+  const xForMilestone = (month: number) =>
+    PAD_LEFT + (Math.max(0, Math.min(points.length, month)) / points.length) * plotWidth;
 
   return (
     <div>
@@ -88,6 +98,29 @@ export default function ForecastChart({
               strokeLinecap="round"
               strokeLinejoin="round"
             />
+          );
+        })}
+        {markerMilestones.map((milestone, index) => {
+          const x = xForMilestone(milestone.reachedMonth ?? 0);
+          const label = milestone.name.replace("Financial Independence (FIRE)", "FIRE");
+          const labelWidth = Math.max(46, label.length * 5.8 + 12);
+          const labelX = Math.max(PAD_LEFT, Math.min(WIDTH - PAD_RIGHT - labelWidth, x - labelWidth / 2));
+          return (
+            <g key={milestone.id}>
+              <line
+                x1={x}
+                x2={x}
+                y1={PAD_TOP}
+                y2={HEIGHT - PAD_BOTTOM}
+                stroke="var(--viz-3)"
+                strokeDasharray="2 3"
+                strokeWidth={1}
+              />
+              <rect x={labelX} y={2 + (index % 2) * 14} width={labelWidth} height={12} rx={6} fill="var(--panel)" stroke="var(--viz-3)" />
+              <text x={labelX + labelWidth / 2} y={10 + (index % 2) * 14} textAnchor="middle" fontSize={8} fontWeight={600} fill="var(--foreground)">
+                {label}
+              </text>
+            </g>
           );
         })}
       </svg>

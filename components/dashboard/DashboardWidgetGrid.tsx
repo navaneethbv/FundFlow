@@ -47,6 +47,7 @@ export default function DashboardWidgetGrid({
   previousMonthLabel,
   recentTransactions,
   accountNames,
+  viewerId,
   today,
   currency = "USD",
 }: Readonly<{
@@ -58,6 +59,7 @@ export default function DashboardWidgetGrid({
   previousMonthLabel: string;
   recentTransactions: ComponentProps<typeof RecentActivity>["transactions"];
   accountNames: Map<string, string>;
+  viewerId?: string;
   today: string;
   currency?: string;
 }>) {
@@ -95,6 +97,7 @@ export default function DashboardWidgetGrid({
           <TransactionsWidget
             transactions={recentTransactions}
             accountNames={accountNames}
+            viewerId={viewerId}
           />
         );
       case "recurring":
