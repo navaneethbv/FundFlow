@@ -42,6 +42,9 @@ describe("goals feature", () => {
     expect(page).toContain("detailHref={goalVisualsEnabled ? `/goals/${goal.id}` : undefined}");
     expect(detail).toContain('isFeatureEnabled("goalVisuals")');
     expect(detail).toContain("notFound()");
+    // Server components resolve the viewer's month, never the UTC server clock.
+    expect(detail).toContain("resolveViewerToday(supabase, user.id)");
+    expect(detail).not.toContain("localMonthKey");
   });
 
   it("ships the accessible goal visual components", () => {

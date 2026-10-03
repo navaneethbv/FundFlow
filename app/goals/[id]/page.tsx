@@ -10,8 +10,8 @@ import { isFeatureEnabled } from "@/lib/feature-flags";
 import { buildGoalProjection } from "@/lib/goal-projection";
 import { GOAL_BADGE_LABEL, type GoalBadge } from "@/lib/goals-v2";
 import { formatCurrency } from "@/lib/format";
-import { localMonthKey } from "@/lib/format-date";
 import { loadGoalsPageData } from "@/lib/goals-data";
+import { resolveViewerToday } from "@/lib/report-period";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -42,11 +42,15 @@ export default async function GoalDetailPage({ params }: Readonly<PageProps>) {
   } = await supabase.auth.getUser();
   if (!user) notFound();
 
-  const data = await loadGoalsPageData(supabase, user.id);
+  const [data, today] = await Promise.all([
+    loadGoalsPageData(supabase, user.id),
+    resolveViewerToday(supabase, user.id),
+  ]);
   const goal = data.goals.find((item) => item.id === id);
   if (!goal) notFound();
 
-  const projection = buildGoalProjection(goal, localMonthKey());
+  // The server clock is UTC; project from the viewer's own month.
+  const projection = buildGoalProjection(goal, today.slice(0, 7));
 
   return (
     <AppShell active="goals" email={user.email}>
