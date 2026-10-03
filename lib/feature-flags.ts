@@ -12,6 +12,10 @@
 
 /** Every known flag and its shipped default. */
 export const FEATURE_FLAG_DEFAULTS = {
+  mortgageEquity: false,
+  investmentBasis: false,
+  investmentXirr: false,
+  investmentTaxBuckets: false,
   /** File drop, visible import steps, and keyboard focus transitions. */
   importWizard: false,
   /** Read-only CSV diagnostics; requires importProfiles. */

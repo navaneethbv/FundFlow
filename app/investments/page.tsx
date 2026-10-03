@@ -7,6 +7,7 @@ import AllocationView from "@/components/investments/AllocationView";
 import ConnectedAccounts from "@/components/investments/ConnectedAccounts";
 import HoldingsTable from "@/components/investments/HoldingsTable";
 import PerformanceChart from "@/components/investments/PerformanceChart";
+import { BasisAnalysis, TaxAnalysis, RecordedPerformance } from "@/components/investments/InvestmentAnalysis";
 import TopMovers from "@/components/investments/TopMovers";
 import EmptyState from "@/components/ui/EmptyState";
 import Panel from "@/components/ui/Panel";
@@ -132,13 +133,13 @@ export default async function InvestmentsPage() {
             <Panel title="Allocation" padding="lg">
               <AllocationView page={page} currency={currency} />
             </Panel>
-            <Panel title="Performance" padding="lg">
+            {!(isFeatureEnabled("investmentXirr") && isFeatureEnabled("historyProvenance")) && <Panel title="Performance" padding="lg">
               <PerformanceChart
                 balanceHistory={page.balanceHistory}
                 returns={returns}
                 currency={currency}
               />
-            </Panel>
+            </Panel>}
             <Panel title="Top movers" padding="lg">
               <TopMovers movers={page.topMovers} />
             </Panel>
@@ -184,6 +185,9 @@ export default async function InvestmentsPage() {
         {itemStatusContent}
 
         {investmentContent}
+        <RecordedPerformance client={supabase} userId={user.id} accounts={investmentAccounts} />
+        <BasisAnalysis client={supabase} userId={user.id} accounts={investmentAccounts} />
+        <TaxAnalysis client={supabase} userId={user.id} accounts={investmentAccounts} />
       </div>
     </AppShell>
   );

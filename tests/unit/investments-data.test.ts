@@ -283,6 +283,7 @@ describe("investments-data", () => {
           subtype: "401k",
           balance: 30000.25,
           currency: "USD",
+          currencyKnown: true,
         },
       ]);
       expect(supabase.scopedToUser("accounts", "user-1")).toBe(true);

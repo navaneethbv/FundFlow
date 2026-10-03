@@ -212,6 +212,7 @@ export async function loadInvestmentAccounts(
       subtype: (a.subtype as string | null) ?? null,
       balance: a.current_balance !== null ? Number(a.current_balance) : null,
       currency: (a.iso_currency_code as string | null) ?? "USD",
+      currencyKnown: a.iso_currency_code != null,
     }));
 
   const manualAccounts = (manualResult.data ?? [])

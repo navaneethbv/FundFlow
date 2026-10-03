@@ -5,6 +5,7 @@ import PageHeader from "@/components/shell/PageHeader";
 import AssumptionsPanel from "@/components/forecasting/AssumptionsPanel";
 import MilestonesPanel from "@/components/forecasting/MilestonesPanel";
 import Panel from "@/components/ui/Panel";
+import TaxBucketSummary from "@/components/investments/TaxBucketSummary";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { formatCurrency } from "@/lib/format";
 import { dateKeyInTimezone } from "@/lib/report-period";
@@ -64,7 +65,7 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
     .maybeSingle();
 
   const today = dateKeyInTimezone(new Date(), profile?.timezone);
-  const [{ startingState, defaults, monthlyExpenses }, params] = await Promise.all([
+  const [{ startingState, defaults, monthlyExpenses, taxSummary }, params] = await Promise.all([
     loadForecastPageData(supabase, user.id, today),
     searchParams,
   ]);
@@ -128,6 +129,7 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
         <Panel padding="lg">
           <AssumptionsPanel assumptions={assumptions} defaults={defaults} />
         </Panel>
+        {taxSummary && <Panel title="Starting investment tax treatments"><TaxBucketSummary summary={taxSummary} /><p className="mt-3 text-xs text-muted">Uses included investment account balances, not holdings values. Unknown currency is omitted here even when the legacy starting-point calculation assumes USD. Edit classifications in Investments. These buckets do not change the scenario&apos;s return or tax assumptions.</p></Panel>}
 
         <LifeEventsPanel
           basePoints={points}
