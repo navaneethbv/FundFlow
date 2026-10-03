@@ -1,5 +1,21 @@
 # FundFlow Session Handoff
 
+## 2026-10-03: Stack #205 to #217 merged and deployed
+
+PRs #205, #206, and #208 through #217 were reviewed one by one, fixed where needed, and merged to `main` in stack order; `main` is `a28fd822`.
+Review fixes, each with a regression that fails without it:
+- #208: `record_private_loan_payment` refused nothing after settlement and replayed only earlier payments, so a back-dated or post-settlement payment could repay more than was owed; it now refuses both, asserted in `scripts/check-review-remediation.sql`. The route awaits its helpers so RPC failures reach `errorResponse`, and impossible dates are rejected as 400.
+- #213: account deletion removed avatar and receipt objects but left every PDF in the private `statements` bucket; it now walks the user's nested statement folders, removes each object before deleting the auth user, and fails closed.
+- #214: the server-rendered goal detail page used the browser helper `localMonthKey()`; it now resolves the viewer's month with `resolveViewerToday`.
+- #216: the security-definer `household_report_aggregates` RPC checked membership only; it now applies `private.session_not_revoked()` and `private.mfa_satisfied()`, asserted in `scripts/check-rls.sql`. Accepting a reports-only invite now requires an account without its own bank links, manual accounts, or households, because that role hides every financial row including the user's own and the app has no leave-household flow.
+
+Before merging, each child branch merged its updated parent (and #215 merged #214) so every exact tested head equals what landed; `main` is tree-identical to the #217 head that passed.
+Every PR head passed all hosted checks, and direct SonarCloud queries reported gate OK, zero unresolved issues, and zero hotspots to review on each exact head.
+The eight migrations `20261003100000` through `20261006130000` were applied to production before the merges, and `supabase migration list --linked` shows every local migration present remotely.
+Vercel's production deployment of `a28fd822` completed; `https://fund-flow-swart.vercel.app/login` returns 200 and the new feature routes return 404 because their flags are off.
+No feature flag was changed; every new release flag remains off.
+Signed-in Supabase Auth, RLS, Storage, and browser journeys remain deferred until an approved disposable `TEST_SUPABASE_URL` target exists.
+
 ## 2026-10-03: Exact-head hosted verification complete
 
 PR #204 is merged at `eaf1b0c4a5ca552ceadabe54465939a98cd0d901`.
@@ -374,6 +390,33 @@ Sonar's quality gate passed but listed eight maintainability findings, so a foll
 The follow-up passes typecheck, lint, 73 focused tests, and four browser fixtures; full coverage/build and the final hosted scan are rerun before handoff.
 Verify the current PR head before any future rollout; no merge is authorized by this record.
 Do not merge, deploy, enable flags, or apply production migrations.
+
+## 2026-10-01: monthly backup configuration failure
+
+[Scheduled run 36890240774](https://github.com/navaneethbv/FundFlow/actions/runs/36890240774) failed after the production endpoint returned `{"ok":false,"error":"BACKUP_ENC_KEY not configured"}`.
+The September run `33517089930` returned the same error; this predates the token lifecycle fix.
+Read-only `vercel env ls` for `navaneethbv/fund-flow` confirmed no `BACKUP_ENC_KEY` in any listed environment, and `.env.local` also lacks it.
+The route correctly stops before collecting financial data or sending backup attachments when the key is absent.
+The environment template and active setup documentation omitted this prerequisite; `.env.example` and README now document it, recovery-key retention, redeployment, and the real email side effect of a manual retry.
+The existing four focused backup suites passed all 43 tests, including the missing-key refusal, archive round trips, restore-script compatibility, and delivery journal behavior.
+
+The user then authorized configuration, redeployment of the existing live version, and a backup retry.
+A new dedicated 32-byte backup key is configured as a Production-only Secret in `navaneethbv/fund-flow`.
+Its local recovery copy is `~/.config/fundflow/secrets/production-backup-key` with mode `0600` in a `0700` directory; retain it in a password manager before removing that file.
+The key was never printed, committed, or added to GitHub Actions.
+A synthetic archive encrypted with the key decrypted correctly using the independent restore script.
+Read-only migration verification confirmed both backup-journal migrations (`20260905110000`, `20260905120000`) were already applied.
+
+Redeployed the existing live deployment `dpl_3mS4bYQd4GkVYu1ctbboZMe1YDTW` as `dpl_8E7q4qw5iZGCU5Js17x57nEENoe8`, which reached READY and owns `fund-flow-swart.vercel.app`.
+The local `fix/repository-review-remediation` branch was not deployed.
+[Manual backup run 36893458489](https://github.com/navaneethbv/FundFlow/actions/runs/36893458489) reached the configured route and returned HTTP 207: 29 users, 1 sent, 0 skipped, 28 failed.
+Runtime logs account for all 28 failures: 1 SMTP 550 rejection from the test sender's owner-only restriction and 27 from invalid reserved-domain test recipients.
+The job remains failed for these delivery errors; the missing-key failure is resolved.
+The successful result records SMTP acceptance and a delivery-journal completion, not independent inbox receipt or decryption of the real attachment.
+Do not blindly retry or clear the 28 uncertain-delivery records; reconcile them before any authorized retry.
+Remaining work is a verified sender domain and `SMTP_FROM` for real recipients, plus explicit review of test accounts without automatic deletion or silent exclusion.
+No git push or live migration was performed.
+Dependency freshness was checked; unrelated available dependency updates were left out of the incident fix.
 
 ## 2026-10-01: PR #198 scanner follow-up
 

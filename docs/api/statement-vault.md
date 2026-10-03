@@ -31,3 +31,8 @@ Deletes one statement owned by the signed-in user, including its private storage
 Success: `200 { ok: true }`.
 
 An unknown or non-owned statement returns `404` without revealing whether another user has a matching id.
+
+## Account deletion
+
+Deleting the FundFlow account removes every object under the user's folder in the private `statements` bucket before the auth user is deleted, and the deletion fails closed if any removal fails.
+Unlinking a bank removes its statement rows through the account cascade, but not yet their stored PDFs; that cleanup is tracked in `docs/TODO.md`.

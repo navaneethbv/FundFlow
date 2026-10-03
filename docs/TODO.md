@@ -1,5 +1,30 @@
 # FundFlow — Future Todos
 
+## Current checkpoint: Stack merged and deployed, 2026-10-03
+
+PRs #205, #206, and #208 through #217 are merged to `main` at `a28fd822` and deployed to production; see [the handoff](HANDOFF.md#2026-10-03-stack-205-to-217-merged-and-deployed).
+All migrations through `20261006130000` are applied to production.
+Every new release flag remains off; enabling any of them is a separate owner decision.
+Signed-in Supabase Auth, RLS, Storage, and browser acceptance remains deferred until an approved disposable `TEST_SUPABASE_URL` target exists.
+
+Follow-ups found during the merge review:
+- Unlinking a bank cascades `account_statements` rows but leaves their PDFs in the `statements` bucket.
+- A reports-only member cannot read `households`, so no in-app surface supplies the `householdId` that `/api/household/aggregates` requires.
+- The Settings token form mints only `export:rows`; MCP scopes are available only through `POST /api/tokens`.
+- `/api/mcp` aggregates do not report when the 25,000-row projection limit truncates the period.
+
+The checkpoints below are superseded history: their "draft", "unmerged", and "unapplied" statements describe state before this merge.
+
+## October 1 monthly backup incident
+
+The missing production `BACKUP_ENC_KEY` is configured, and the existing live version was redeployed after user authorization.
+The template and [setup instructions](../README.md#monthly-encrypted-backup-setup) now include the missing requirement.
+The authorized retry reported 1 sent and 28 failed, so the workflow still fails on SMTP delivery restrictions rather than encryption configuration.
+Configure a verified sender domain and `SMTP_FROM` for real recipients, and review reserved-domain test accounts with the owner.
+Preserve the recovery key and reconcile the uncertain-delivery journal before retrying; do not automatically delete users or exclude recipients to make the workflow green.
+Inbox receipt and offline decryption of the real delivered attachment remain unverified; synthetic archive decryption passed.
+See [the incident handoff](HANDOFF.md#2026-10-01-monthly-backup-configuration-failure) for the verification limits.
+
 ## Current checkpoint: Exact-head hosted verification complete, 2026-10-03
 
 PR #204 is merged at `eaf1b0c4a5ca552ceadabe54465939a98cd0d901`.

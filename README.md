@@ -197,6 +197,26 @@ migrations. They verify **cross-user RLS isolation** and **sync idempotency**
 
 The report delivery row is claimed before rendering and has a unique user and period key, so duplicate cron calls do not send the same completed report twice. To roll back email delivery, disable the GitHub Actions workflow first, then deploy the prior app version. Keep the migration in place so delivery history remains readable.
 
+### Monthly encrypted backup setup
+
+`.github/workflows/backup.yml` invokes `/api/cron/backup` on the first of each month at 09:00 UTC, or on manual dispatch.
+It emails encrypted financial archives to users with data at their signup addresses.
+The application requires a dedicated `BACKUP_ENC_KEY`, encoded as base64 and decoding to exactly 32 bytes, plus the production SMTP configuration above.
+Generate it with a cryptographically secure random generator, keep a recovery copy in a password manager, and configure it as a Secret in the app's **Production** environment.
+Never reuse `PLAID_TOKEN_ENC_KEY`, commit the value, or add it to GitHub Actions: the workflow needs only `FUNDFLOW_APP_URL` and `CRON_SECRET`.
+If backups already exist, recover their original key before provisioning a replacement; a new key cannot decrypt old archives.
+
+After configuring the key, redeploy the intended production version: [environment changes only affect new deployments](https://vercel.com/docs/environment-variables).
+Do not deploy an unrelated local branch just to activate configuration.
+Verify the required backup delivery journal migrations are applied, then manually dispatch `backup.yml` to retry the current month.
+This is a real delivery operation that emails user data, not a dry run.
+Verify the response's `sent`, `skipped`, and `failed` counts and receipt of the encrypted attachment.
+Use `scripts/restore-backup.mjs` with a securely loaded `BACKUP_ENC_KEY` to verify an archive offline; the in-app restore feature remains disabled.
+
+`BACKUP_ENC_KEY not configured` means the app refused to create backups because the encryption key is missing.
+The workflow must remain failed in that state; retries alone cannot fix missing configuration.
+For uncertain SMTP outcomes, reconcile the delivery journal before retrying as described in [the backup invariants](docs/ARCHITECTURE.md#subsystem-invariants-in-full).
+
 ## Project structure
 
 ```
