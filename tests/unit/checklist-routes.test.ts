@@ -111,6 +111,20 @@ describe("private lending route", () => {
     expect(missing.status).toBe(404);
   });
 
+  it("routes a failed lending RPC through the error response instead of rejecting", async () => {
+    state.flags.add("privateLending");
+    state.rpc.mockResolvedValueOnce({ data: null, error: new Error("insert failed") });
+    const created = await privateLending(request("/api/private-lending", {
+      kind: "loan", direction: "lent", counterparty: "Sam", principal: 100, annualInterestRate: 5, startDate: "2026-10-01",
+    }));
+    expect(created.status).toBe(500);
+    state.rpc.mockResolvedValueOnce({ data: null, error: new Error("payment failed") });
+    const paid = await privateLending(request("/api/private-lending", {
+      kind: "payment", loan_id: "00000000-0000-4000-8000-000000000002", amount: 10, payment_date: "2026-10-02",
+    }));
+    expect(paid.status).toBe(500);
+  });
+
   it("serves private lending data and validates payment branches", async () => {
     state.flags.add("privateLending");
     const getResponse = await privateLendingGet();
@@ -124,6 +138,7 @@ describe("private lending route", () => {
     expect(recorded.status).toBe(200);
     expect(state.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "private_loan_payment_recorded" }));
     expect((await privateLending(request("/api/private-lending", { kind: "other" }))).status).toBe(400);
+    expect((await privateLending(request("/api/private-lending", { kind: "payment", loan_id: "00000000-0000-4000-8000-000000000002", payment_date: "2026-02-31", amount: 10 }))).status).toBe(400);
     state.rateLimit.mockResolvedValueOnce(false);
     expect((await privateLending(request("/api/private-lending", { kind: "other" }))).status).toBe(429);
   });
