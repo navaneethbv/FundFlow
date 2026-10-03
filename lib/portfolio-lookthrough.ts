@@ -58,6 +58,28 @@ function text(value: unknown, max: number): value is string {
   return typeof value === "string" && value.trim().length > 0 && value.trim().length <= max;
 }
 
+type ConstituentParse = { ok: true; weight: ConstituentWeight } | { ok: false; error: string };
+
+function parseConstituentEntry(entry: unknown, seen: Set<string>): ConstituentParse {
+  if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+    return { ok: false, error: "Each constituent must be an object." };
+  }
+  const row = entry as Record<string, unknown>;
+  const key = typeof row.key === "string" ? row.key.trim() : "";
+  const name = typeof row.name === "string" ? row.name.trim() : "";
+  const sector = typeof row.sector === "string" ? row.sector.trim() : "Unknown";
+  const region = typeof row.region === "string" ? row.region.trim() : "Unknown";
+  const weight = row.weight;
+  if (!KEY_RE.test(key) || !text(name, 120) || !text(sector, 80) || !text(region, 80)) {
+    return { ok: false, error: "Each constituent needs a stable key, name, sector, and region." };
+  }
+  if (seen.has(key)) return { ok: false, error: `Constituent key ${key} is duplicated.` };
+  if (typeof weight !== "number" || !Number.isFinite(weight) || weight < 0 || weight > 1) {
+    return { ok: false, error: "Weights must be numbers between 0 and 1." };
+  }
+  return { ok: true, weight: { key, name, sector, region, weight } };
+}
+
 export function parseConstituentWeights(value: unknown):
   | { ok: true; weights: ConstituentWeight[] }
   | { ok: false; error: string } {
@@ -67,24 +89,10 @@ export function parseConstituentWeights(value: unknown):
   const seen = new Set<string>();
   const weights: ConstituentWeight[] = [];
   for (const entry of value) {
-    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
-      return { ok: false, error: "Each constituent must be an object." };
-    }
-    const row = entry as Record<string, unknown>;
-    const key = typeof row.key === "string" ? row.key.trim() : "";
-    const name = typeof row.name === "string" ? row.name.trim() : "";
-    const sector = typeof row.sector === "string" ? row.sector.trim() : "Unknown";
-    const region = typeof row.region === "string" ? row.region.trim() : "Unknown";
-    const weight = row.weight;
-    if (!KEY_RE.test(key) || !text(name, 120) || !text(sector, 80) || !text(region, 80)) {
-      return { ok: false, error: "Each constituent needs a stable key, name, sector, and region." };
-    }
-    if (seen.has(key)) return { ok: false, error: `Constituent key ${key} is duplicated.` };
-    if (typeof weight !== "number" || !Number.isFinite(weight) || weight < 0 || weight > 1) {
-      return { ok: false, error: "Weights must be numbers between 0 and 1." };
-    }
-    seen.add(key);
-    weights.push({ key, name, sector, region, weight });
+    const parsed = parseConstituentEntry(entry, seen);
+    if (!parsed.ok) return parsed;
+    seen.add(parsed.weight.key);
+    weights.push(parsed.weight);
   }
   const total = weights.reduce((sum, row) => sum + row.weight, 0);
   if (Math.abs(total - 1) > EPSILON) {
@@ -145,6 +153,46 @@ function finishExposure(map: Map<string, LookthroughExposure>, total: number): L
     .sort((a, b) => b.value - a.value || a.key.localeCompare(b.key));
 }
 
+interface HoldingContribution {
+  value: number;
+  coveredValue: number;
+  unknownValue: number;
+  configured: boolean;
+  unknownHolding: boolean;
+  asOfDate: string | null;
+}
+
+function summarizeHolding(
+  holding: LookthroughHolding,
+  recordByHolding: Map<string, LookthroughRecord>,
+  security: Map<string, LookthroughExposure>,
+  sector: Map<string, LookthroughExposure>,
+  region: Map<string, LookthroughExposure>,
+): HoldingContribution | null {
+  const value = holding.value;
+  if (value === null || !Number.isFinite(value) || value < 0) return null;
+  const stored = recordByHolding.get(holding.id);
+  const weights = stored?.weights ?? directWeight(holding);
+  if (!weights) return { value, coveredValue: 0, unknownValue: value, configured: Boolean(stored), unknownHolding: true, asOfDate: stored?.asOfDate ?? null };
+  let coveredValue = 0;
+  let unknownValue = 0;
+  for (const weight of weights) {
+    const exposure = value * weight.weight;
+    if (weight.key === "unknown" || weight.key.startsWith("unknown:")) unknownValue += exposure;
+    else coveredValue += exposure;
+    addExposure(security, weight.key, weight.name, exposure, holding);
+    addExposure(sector, `sector:${weight.sector}`, weight.sector, exposure, holding);
+    addExposure(region, `region:${weight.region}`, weight.region, exposure, holding);
+  }
+  return { value, coveredValue, unknownValue, configured: Boolean(stored), unknownHolding: false, asOfDate: stored?.asOfDate ?? null };
+}
+
+function summaryAsOfDate(dates: Set<string>): string | null {
+  if (dates.size === 1) return dates.values().next().value ?? null;
+  if (dates.size > 1) return "Mixed";
+  return null;
+}
+
 export function buildLookthroughSummary(
   holdings: readonly LookthroughHolding[],
   records: readonly LookthroughRecord[],
@@ -161,29 +209,14 @@ export function buildLookthroughSummary(
   const dates = new Set<string>();
 
   for (const holding of holdings) {
-    const value = holding.value;
-    if (value === null || !Number.isFinite(value) || value < 0) continue;
-    totalValue += value;
-    const stored = recordByHolding.get(holding.id);
-    const weights = stored?.weights ?? directWeight(holding);
-    if (stored) {
-      configuredHoldingCount += 1;
-      dates.add(stored.asOfDate);
-    }
-    if (!weights) {
-      unknownValue += value;
-      unknownHoldingCount += 1;
-      continue;
-    }
-    for (const weight of weights) {
-      const exposure = value * weight.weight;
-      const isUnknown = weight.key === "unknown" || weight.key.startsWith("unknown:");
-      if (isUnknown) unknownValue += exposure;
-      else coveredValue += exposure;
-      addExposure(security, weight.key, weight.name, exposure, holding);
-      addExposure(sector, `sector:${weight.sector}`, weight.sector, exposure, holding);
-      addExposure(region, `region:${weight.region}`, weight.region, exposure, holding);
-    }
+    const contribution = summarizeHolding(holding, recordByHolding, security, sector, region);
+    if (!contribution) continue;
+    totalValue += contribution.value;
+    coveredValue += contribution.coveredValue;
+    unknownValue += contribution.unknownValue;
+    if (contribution.configured) configuredHoldingCount += 1;
+    if (contribution.unknownHolding) unknownHoldingCount += 1;
+    if (contribution.asOfDate) dates.add(contribution.asOfDate);
   }
   const roundedTotal = Math.round((totalValue + Number.EPSILON) * 100) / 100;
   const roundedCovered = Math.round((coveredValue + Number.EPSILON) * 100) / 100;
@@ -193,7 +226,7 @@ export function buildLookthroughSummary(
     coveredValue: roundedCovered,
     unknownValue: roundedUnknown,
     coveragePct: roundedTotal > 0 ? Math.round((roundedCovered / roundedTotal) * 10000) / 100 : null,
-    asOfDate: dates.size === 1 ? [...dates][0]! : dates.size > 1 ? "Mixed" : null,
+    asOfDate: summaryAsOfDate(dates),
     bySecurity: finishExposure(security, roundedTotal),
     bySector: finishExposure(sector, roundedTotal),
     byRegion: finishExposure(region, roundedTotal),

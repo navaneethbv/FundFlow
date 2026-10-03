@@ -45,7 +45,7 @@ function draftFor(record: LookthroughRecord | undefined): Draft {
 
 function exposureRows(rows: ReturnType<typeof buildLookthroughSummary>["bySecurity"], currency: string, caption: string) {
   return (
-    <div className="overflow-x-auto" tabIndex={0} aria-label={`${caption} table; scroll horizontally for more columns`}>
+    <div role="region" className="overflow-x-auto" tabIndex={0} aria-label={`${caption} table; scroll horizontally for more columns`}>
       <table className="min-w-full text-left text-sm">
         <caption className="sr-only">{caption}</caption>
         <thead className="text-xs uppercase tracking-wide text-muted">
@@ -113,10 +113,10 @@ export default function PortfolioLookthrough({ holdings, initialRecords }: Reado
     setDrafts((current) => {
       const existing = current.get(holdingId) ?? draftFor(undefined);
       const nextDraft: Draft = {
-        asOfDate: update.asOfDate === undefined ? existing.asOfDate : update.asOfDate,
-        weights: update.weights === undefined ? existing.weights : update.weights,
-        message: update.message === undefined ? existing.message : update.message,
-        saving: update.saving === undefined ? existing.saving : update.saving,
+        asOfDate: update.asOfDate ?? existing.asOfDate,
+        weights: update.weights ?? existing.weights,
+        message: update.message ?? existing.message,
+        saving: update.saving ?? existing.saving,
       };
       const next = new Map(current);
       next.set(holdingId, nextDraft);
@@ -130,7 +130,7 @@ export default function PortfolioLookthrough({ holdings, initialRecords }: Reado
 
   async function save(holding: LookthroughHolding) {
     const draft = getDraft(holding.id, recordByHolding.get(holding.id));
-    updateDraft(holding.id, { message: null, saving: true });
+    updateDraft(holding.id, { message: "", saving: true });
     let parsedJson: unknown;
     try {
       parsedJson = JSON.parse(draft.weights);
@@ -174,7 +174,7 @@ export default function PortfolioLookthrough({ holdings, initialRecords }: Reado
   async function reset(holding: LookthroughHolding) {
     const current = recordByHolding.get(holding.id);
     if (!current) return;
-    updateDraft(holding.id, { message: null, saving: true });
+    updateDraft(holding.id, { message: "", saving: true });
     const response = await fetch("/api/portfolio-lookthrough", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -229,9 +229,9 @@ export default function PortfolioLookthrough({ holdings, initialRecords }: Reado
                   <span className="text-xs text-muted">{recordByHolding.has(holding.id) ? "Manual source" : "Not configured"}</span>
                 </div>
                 <label className="mt-3 block text-xs font-medium" htmlFor={`lookthrough-date-${holding.id}`}>Source as-of date</label>
-                <Input id={`lookthrough-date-${holding.id}`} type="date" value={draft.asOfDate} onChange={(event) => { updateDraft(holding.id, { asOfDate: event.target.value, message: null }); }} required className="mt-1" />
+                <Input id={`lookthrough-date-${holding.id}`} type="date" value={draft.asOfDate} onChange={(event) => { updateDraft(holding.id, { asOfDate: event.target.value, message: "" }); }} required className="mt-1" />
                 <label className="mt-3 block text-xs font-medium" htmlFor={`lookthrough-weights-${holding.id}`}>Weights (percentages must add to 100)</label>
-                <textarea id={`lookthrough-weights-${holding.id}`} value={draft.weights} onChange={(event) => { updateDraft(holding.id, { weights: event.target.value, message: null }); }} rows={5} spellCheck={false} className="mt-1 min-h-32 w-full rounded-field border border-panel-border bg-panel px-3 py-2 font-mono text-xs text-foreground focus:border-accent focus-visible:outline-2" aria-describedby={`lookthrough-help-${holding.id}`} />
+                <textarea id={`lookthrough-weights-${holding.id}`} value={draft.weights} onChange={(event) => { updateDraft(holding.id, { weights: event.target.value, message: "" }); }} rows={5} spellCheck={false} className="mt-1 min-h-32 w-full rounded-field border border-panel-border bg-panel px-3 py-2 font-mono text-xs text-foreground focus:border-accent focus-visible:outline-2" aria-describedby={`lookthrough-help-${holding.id}`} />
                 <p id={`lookthrough-help-${holding.id}`} className="mt-1 text-xs text-muted">Use stable keys such as ticker:AAPL. Example fields: key, name, sector, region, weightPct.</p>
                 <FormMessage message={draft.message} type={draft.message === "Saved." || draft.message === "Removed." ? "status" : "error"} className="mt-2" />
                 <div className="mt-3 flex flex-wrap justify-end gap-2">
