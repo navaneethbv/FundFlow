@@ -1,6 +1,26 @@
 # FundFlow — Future Todos
 
-## Current checkpoint: Group 7, 2026-10-02
+## Current checkpoint: Checklist 9.7, 2026-10-02
+
+Checklist 9.7, portfolio look-through, is implemented in the isolated continuation worktree `/private/tmp/fundflow-product-surfaces` and pushed as `a98759a` on PR #206's remote branch.
+The `portfolioLookthrough` flag remains off, and `20261005090000_portfolio_lookthrough.sql` is unapplied to production.
+The surface accepts only user-supplied constituent weights, reports unknown coverage, and has no automated market-data feed.
+Focused unit, migration, TypeScript, lint, and synthetic browser verification passed; hosted checks and exact-head scanner confirmation remain pending until push.
+
+The prior Group 8 items 9.3 through 9.6 and this 9.7 continuation are now together in [draft PR #206](https://github.com/navaneethbv/FundFlow/pull/206) on `feat/asset-investment-provenance`, stacked on PR #205.
+
+Items 9.3 through 9.6 are implemented in [draft PR #206](https://github.com/navaneethbv/FundFlow/pull/206) on `feat/asset-investment-provenance`, stacked on PR #205.
+The [group 8 contract](superpowers/specs/2026-10-03-asset-investment-provenance.md) defines the financial boundaries, provenance, and validation requirements.
+Keep `mortgageEquity`, `investmentBasis`, `investmentXirr`, and `investmentTaxBuckets` off until an authorized rollout.
+The migration `20261004090000_portfolio_provenance.sql` was applied only to disposable local PostgreSQL, not production.
+Mortgage equity additionally requires the manual-asset flags and `amortizationEngine`; XIRR additionally requires `historyProvenance`.
+Local RLS tests exercise owner visibility, cross-user rejection, MFA step-up, session revocation, compare-and-swap, reset/recreation, and unchanged net worth.
+Signed-in Supabase acceptance remains deferred under the existing owner-approved limitation.
+Do not restore these annotations automatically; takeout and backup retain them, but owner-aware restore remains a separate task.
+PR #204 is now merged; PR #205 was refreshed at `b0507e6` with all checks passing before this branch rebased onto it.
+The next adoption sequence after this group is 1.5, 2.4, 4.3, and 8.3 through 8.4.
+
+## Group 7 checkpoint
 
 The next six-feature batch contains 6.8, 7.1, 7.2, 7.3, 9.1, and 9.2 in [draft PR #205](https://github.com/navaneethbv/FundFlow/pull/205) on `feat/budgets-collections-assets`.
 See [the group contract](superpowers/specs/2026-10-03-budgets-collections-assets.md) and the latest handoff for validation and delivery status.
@@ -8,7 +28,7 @@ Its three migrations remain unapplied to production: `20261003090000_budget_move
 Keep `transactionCollections`, `budgetMoves`, `budgetOverAllocation`, `budgetSetupWizard`, `typedManualAssets`, and `assetOwnership` off pending signed-in Supabase acceptance and authorized rollout.
 Assets also depend on `historyProvenance`.
 The existing owner-approved deferral of signed-in journeys and full Supabase integration remains in effect.
-Items 9.3 through 9.6 are next and remain unimplemented.
+Items 9.3 through 9.6 are implemented in the Group 8 branch described above.
 
 The dependency-audit correction shared with PR #204 removes the vulnerable development-only glob dependency chain through a version-scoped Next lint adapter.
 The full audit gate remains unchanged; see `tooling/next-lint-glob/README.md` for compatibility coverage and the upstream-removal condition.

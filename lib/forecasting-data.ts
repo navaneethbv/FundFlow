@@ -13,6 +13,10 @@ import { financeTotals } from "@/lib/finance-domain";
 import { medianOf } from "@/lib/insights";
 import { readExcludedNetWorthIds } from "@/lib/net-worth-inputs";
 import { dedupeRelinkedAccounts } from "@/lib/relinked-accounts";
+import { groupKeyFor } from "@/lib/accounts-page";
+import { isFeatureEnabled } from "@/lib/feature-flags";
+import { loadTaxOverrides } from "@/lib/portfolio-data";
+import { summarizeTaxBuckets } from "@/lib/investment-provenance";
 
 const TRAILING_MONTHS = 6;
 
@@ -36,6 +40,7 @@ export interface ForecastPageData {
   startingState: ForecastStartingSummary;
   defaults: ForecastDefaults;
   monthlyExpenses: number;
+  taxSummary?: ReturnType<typeof summarizeTaxBuckets>;
 }
 
 /**
@@ -108,5 +113,15 @@ export async function loadForecastPageData(
     .filter((e) => e > 0);
   const monthlyExpenses = monthlyExpensesList.length > 0 ? Math.round(medianOf(monthlyExpensesList)) : 0;
 
-  return { startingState, defaults, monthlyExpenses };
+  if (!isFeatureEnabled("investmentTaxBuckets")) return { startingState, defaults, monthlyExpenses };
+  const taxAccounts = [
+    ...dedupeRelinkedAccounts(accountsResult.data ?? []).filter((a) => !excludedNetWorthIds.has(a.id) && groupKeyFor(a.type, a.subtype) === "investment").map((a) => ({
+      id: a.id as string, source: "plaid" as const, subtype: a.subtype as string | null,
+      balance: a.current_balance == null ? null : Number(a.current_balance), currency: a.iso_currency_code as string | null,
+    })),
+    ...(manualResult.data ?? []).filter((a) => !excludedNetWorthIds.has(a.id) && a.include_in_net_worth !== false && a.account_type === "investment").map((a) => ({
+      id: a.id as string, source: "manual" as const, subtype: null, balance: a.balance == null ? null : Number(a.balance), currency: "USD",
+    })),
+  ];
+  return { startingState, defaults, monthlyExpenses, taxSummary: summarizeTaxBuckets(taxAccounts, await loadTaxOverrides(supabase, userId)) };
 }

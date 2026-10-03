@@ -417,7 +417,7 @@ async function restoreOneTable(
   result: RestoreResult,
 ): Promise<TableOutcome> {
   const { name, scope } = entry;
-  if (["manual_assets", "manual_account_values", "budget_moves", "transaction_collections"].includes(name)) {
+  if (["manual_assets", "manual_account_values", "budget_moves", "transaction_collections", "holding_basis_annotations", "account_tax_treatments", "property_mortgages"].includes(name)) {
     return { kind: "skipped", name, reason: "requires owner-scoped financial validation; not restorable in-app" };
   }
 

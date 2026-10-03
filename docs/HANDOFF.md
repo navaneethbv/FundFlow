@@ -1,5 +1,55 @@
 # FundFlow Session Handoff
 
+## 2026-10-02: Checklist 9.7 portfolio look-through
+
+Worktree: `/private/tmp/fundflow-product-surfaces`, local branch `feat/portfolio-lookthrough`, pushed as continuation commit `a98759a` on PR #206's remote branch `feat/asset-investment-provenance`.
+This continuation implements checklist 9.7, user-supplied portfolio look-through, on top of the 9.3 through 9.6 provenance work.
+The new surface is release gated by `portfolioLookthrough`, which remains off.
+
+The engine conserves constituent weights, uses stable keys rather than display names, merges direct holdings with manual fund constituents, reports covered and unknown value, and retains contributing holding IDs.
+It exposes security, sector, and regional tables, a schematic world-map view with a table twin, source and as-of disclosure, and an editor for ETF, mutual-fund, tickerless, or otherwise configurable holdings.
+No automated constituent feed or market-data provider was added.
+
+The additive migration `20261005090000_portfolio_lookthrough.sql` adds the owner-scoped manual weights table and a service-only compare-and-swap RPC.
+The migration was applied only to disposable PostgreSQL `adoption_group9_lookthrough_tmp`, cloned from `adoption_group8_verified`, and its save, strict date, duplicate-key, and reset assertions passed.
+The migration remains unapplied to production.
+
+Focused unit tests, the full unit suite, TypeScript, targeted ESLint, and four synthetic browser journeys at 375px and 1440px in both themes passed after the implementation.
+The full unit suite initially caught missing privacy-blur hooks in the new currency cells; those cells now carry the existing `data-money` contract.
+The browser journeys cover keyboard-accessible tables, conserving saves, conflict draft retention, axe, and overflow checks.
+Hosted checks and exact-head Sonar/Codacy results for `a98759a` remain pending.
+No merge, deployment, production migration, or flag change was performed.
+
+## 2026-10-02: Group 8 asset and investment provenance
+
+Worktree: `/private/tmp/fundflow-asset-investment-provenance`, branch `feat/asset-investment-provenance`.
+Delivery: [draft PR #206](https://github.com/navaneethbv/FundFlow/pull/206), targeting PR #205's branch.
+The primary checkout and its uncommitted plan/documentation changes were left untouched.
+This group implements checklist items 9.3 through 9.6 under [the group contract](superpowers/specs/2026-10-03-asset-investment-provenance.md).
+The branch was rebased onto PR #205's updated head `b0507e6`, which contains the now-merged PR #204 corrections.
+No merge, production migration, manual deployment, or flag change was performed by this group.
+
+Mortgage equity links existing owned property and liability accounts without writing computed equity into the balance sheet.
+Historical exact-date observations override schedules; current equity retains the latest observed/manual balance, including lender credits, with separate property and loan capture dates.
+Current account reads remain authoritative across the UTC/viewer-local date boundary; historical lookups still exclude future observations.
+Fixed-rate principal-and-interest schedules exclude escrow and fees.
+Basis annotations preserve provider data, identify manual/imported/estimated provenance, expire when quantity changes, and disclose value-weighted partial coverage.
+The owner-account performance panel aligns TWR and annualized XIRR populations, rejects ambiguous flows and truncated reads, and handles Plaid's combined buy/contribution sign convention.
+Tax buckets infer only recognized US subtypes, allow owner overrides, preserve unknowns, and feed included Forecasting capital without inventing tax rates.
+Monotonic configuration versions prevent stale updates even across reset and recreation.
+Takeout and backup include all three configuration tables; generic restore explicitly skips them pending validated owner-aware restore.
+
+Migration and SQL assertions passed on disposable `adoption_group8_verified`, cloned from the prior verified fixture database.
+The checks include actual repository RLS helpers for owner/MFA/revocation, but the local Auth schema stand-ins do not prove real Supabase Auth acceptance.
+Synthetic browser journeys passed at 375px and 1440px in both themes, including keyboard saves, reloads, conflict draft retention, axe, and overflow checks.
+Rebased local verification passed: lint, TypeScript, placeholder-environment production build, palette validation, and full coverage at 98.28% statements, 95.91% branches, 98.48% functions, and 99.49% lines.
+The future-clock run at 2030-01-15 passed 544 unit files and 6,060 tests.
+All four browser journeys passed again after the rebase.
+Hosted checks and exact-head zero-issue scanner confirmation remain required before delivery.
+Local logs are `/private/tmp/portfolio-*`; no production environment file was copied into the worktree.
+Dependency freshness found only ESLint 10 and TypeScript 7 majors, deferred as separate toolchain migrations.
+The dependency audit remains unchanged and reports zero vulnerabilities.
+
 ## 2026-10-02: PR checks and zero-issue follow-up
 
 The full dependency audit failed on both PR #204 and PR #205 because the Next lint plugin pulled in unpatched `braces` through `fast-glob` and `micromatch`.

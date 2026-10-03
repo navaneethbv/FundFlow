@@ -258,6 +258,14 @@ All flags remain off; typed assets require `typedManualAssets`, `assetOwnership`
   sub-period whose starting base is zero returns 0%, not an infinite result.
   `hasSufficientPerformanceData` (>=2 valuation points) is what a chart checks
   before it's allowed to say "Portfolio performance" instead of "Balance."
+- `investment-provenance.ts`, `recorded-performance.ts`, and `xirr.ts` supply the disabled-by-default basis, tax-treatment, and matched owner-account performance panels.
+  `portfolio-data.ts` uses owner filters, stable paging, and a hard read limit instead of silently aggregating a truncated population.
+  XIRR is annualized Actual/365, with Newton from 10 percent and a documented bisection fallback; non-conventional flows disclose possible multiple roots.
+  Unknown currency and ambiguous transfer/cash activity cannot generate a return.
+  Tax buckets are classifications, not tax calculations; Forecasting reuses them only for included investment balances.
+  `property-equity.ts` presents owned property value minus an existing liability and never mutates net-worth inputs.
+  `/api/portfolio-annotations` authenticates, bounds, validates, rate-limits, audits, and calls the service-only `save_portfolio_annotation` RPC with explicit owner identity and monotonic compare-and-swap versions.
+  The three annotation tables have owner/session/MFA read policies, no authenticated writes, and owner-composite foreign keys.
 - `benchmark-provider.ts` — the `BenchmarkProvider` interface and a caching
   wrapper exist, but `UNAVAILABLE_BENCHMARK_PROVIDER` is the only
   implementation and nothing renders it. Do not wire a benchmark comparison

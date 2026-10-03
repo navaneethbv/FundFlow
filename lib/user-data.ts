@@ -94,6 +94,9 @@ export const USER_DATA_TABLES: UserDataTableSpec[] = [
   table("manual_account_values", "manual_account_id, valuation_date, gross_value, owned_value, provenance, value_source", { orderBy: "id" }),
   table("transaction_collections", "name, budget, created_at, updated_at"),
   table("budget_moves", "from_budget_id, to_budget_id, month, amount, created_at"),
+  table("holding_basis_annotations", "holding_id, amount, quantity, source, version", { orderBy: "holding_id", orderBySecondary: null }),
+  table("account_tax_treatments", "id, account_id, manual_account_id, bucket, version", { orderBy: "id" }),
+  table("property_mortgages", "manual_account_id, liability_account_id, liability_manual_account_id, terms, version", { orderBy: "manual_account_id", orderBySecondary: null }),
   table("account_balance_snapshots", "account_id, manual_account_id, snapshot_date, current_balance, available_balance, iso_currency_code, captured_at", { orderBy: "captured_at" }),
   table("alert_preferences", "broken_bank, budget_exceeded, goal_reached, large_transaction, low_cash_forecast", { orderBy: "user_id", orderBySecondary: null }),
   table("ai_settings", "enabled", { orderBy: "user_id", orderBySecondary: null }),
@@ -214,7 +217,10 @@ export async function collectUserData(
     const optionalFeatureDisabled = (spec.table === "transaction_review_states" && !isFeatureEnabled("transactionReview"))
       || (["manual_assets", "manual_account_values"].includes(spec.table) && !isFeatureEnabled("typedManualAssets"))
       || (spec.table === "transaction_collections" && !isFeatureEnabled("transactionCollections"))
-      || (spec.table === "budget_moves" && !isFeatureEnabled("budgetMoves"));
+      || (spec.table === "budget_moves" && !isFeatureEnabled("budgetMoves"))
+      || (spec.table === "holding_basis_annotations" && !isFeatureEnabled("investmentBasis"))
+      || (spec.table === "account_tax_treatments" && !isFeatureEnabled("investmentTaxBuckets"))
+      || (spec.table === "property_mortgages" && !isFeatureEnabled("mortgageEquity"));
     if (optionalFeatureDisabled &&
         (code === "42P01" || code === "PGRST205")) {
       return { data: [], error: null };

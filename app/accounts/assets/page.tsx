@@ -4,6 +4,7 @@ import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
 import Panel from "@/components/ui/Panel";
 import ManualAssetForm from "@/components/accounts/ManualAssetForm";
+import PropertyEquityPanel from "@/components/accounts/PropertyEquityPanel";
 import { createClient } from "@/lib/supabase/server";
 import { manualAssetsEnabled } from "@/lib/manual-asset-flags";
 import { loadManualAssets } from "@/lib/manual-assets-data";
@@ -31,6 +32,7 @@ export default async function ManualAssetsPage({ searchParams }: Readonly<{ sear
         {selected && <Link className="mt-4 inline-block underline" href="/accounts/assets">Add another asset</Link>}
       </Panel>
       <Panel title={selected?.name ?? "New asset"}><ManualAssetForm key={`${selected?.id ?? "new"}:${selected?.version ?? 0}`} initial={selected} today={today} /></Panel>
+      {selected?.assetKind === "property" && <PropertyEquityPanel client={client} userId={user.id} propertyId={selected.id} today={today} history={history.data ?? []} />}
       {selected && <Panel title="Valuation history"><p className="mb-3 text-sm text-muted">Latest 100 entries. Growth is refreshed daily; each date states when the value applies. Entered values are retained.</p>
         <div className="overflow-x-auto"><table className="w-full text-left text-sm"><caption className="sr-only">Full and owned asset valuations with source</caption>
           <thead><tr>{["Date", "Full value", "Owned value", "Source"].map((label) => <th key={label} scope="col" className="p-2">{label}</th>)}</tr></thead>
