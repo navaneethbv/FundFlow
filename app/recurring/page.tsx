@@ -136,6 +136,8 @@ export default async function RecurringPage({ searchParams }: Readonly<PageProps
                 ]}
               />
             )}
+            {isFeatureEnabled("paycheckPlanner") && <ButtonLink href="/recurring/paychecks">Paycheck plan</ButtonLink>}
+            {isFeatureEnabled("paydaySettings") && <ButtonLink href="/settings/payday">Confirm payday</ButtonLink>}
             <ButtonLink href={links.manage} variant="primary">
               Manage recurring
             </ButtonLink>

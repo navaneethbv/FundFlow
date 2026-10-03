@@ -1,3 +1,7 @@
+import { isFeatureEnabled } from "@/lib/feature-flags";
+import { computeBudgetAllowance, type BudgetAllowance } from "@/lib/budget-allowance";
+import { loadPaydaySettings } from "@/lib/payday-data";
+import { paydayDates } from "@/lib/payday";
 import { loadRecurringInputs } from "@/lib/recurring-data";
 import { buildDashboardRecurring } from "@/lib/dashboard-recurring";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -161,6 +165,8 @@ export interface DashboardData {
     essentialsSplit: EssentialsSplit[];
     runwayMonths: number | null;
     paycheck: Paycheck | null;
+    budgetAllowance?: BudgetAllowance | null;
+    confirmedPayday?: { nextDate: string | null; amount: number | null };
     safeToSpend: SafeToSpend | null;
     priceDrift: MerchantPriceDrift;
     sinkingFunds: { items: SinkingFundPlan[]; totalMonthlySetAside: number };
@@ -918,6 +924,28 @@ function getItemAccountIds(accounts: AccountSummary[], itemId?: string): Set<str
   return new Set(accounts.filter(account => account.plaid_item_id === itemId).map(account => account.id));
 }
 
+async function confirmedPaydayGuidance(supabase: SupabaseClient, userId: string | undefined, asOf: string): Promise<{
+  fields: Pick<DashboardData["insights"], "confirmedPayday">;
+  nextDate: string | null | undefined;
+  horizonDays: number;
+}> {
+  if (!isFeatureEnabled("paydaySettings")) return { fields: {}, nextDate: undefined, horizonDays: 30 };
+  const settings = userId ? await loadPaydaySettings(supabase, userId) : null;
+  const nextDate = settings ? paydayDates(settings, asOf, 1)[0]! : null;
+  const days = nextDate ? Math.ceil((Date.parse(nextDate) - Date.parse(asOf)) / 86400000) : 0;
+  return { fields: { confirmedPayday: { nextDate, amount: settings?.amount ?? null } }, nextDate, horizonDays: Math.max(30, days) };
+}
+
+function budgetAllowanceGuidance(input: {
+  isCurrentMonth: boolean; accountId?: string; itemId?: string; accounts: AccountSummary[];
+  today: string; envelopes: BudgetEnvelope[]; spent: number; nextPayday: string | null | undefined;
+}): Pick<DashboardData["insights"], "budgetAllowance"> {
+  if (!isFeatureEnabled("budgetDailyAllowance")) return {};
+  const onlyDollars = input.accounts.every(account => !account.iso_currency_code || account.iso_currency_code.toUpperCase() === "USD");
+  if (!input.isCurrentMonth || input.accountId || input.itemId || !onlyDollars) return { budgetAllowance: null };
+  return { budgetAllowance: computeBudgetAllowance({ today: input.today, limits: input.envelopes.map(row => row.effectiveLimit), spent: input.spent, nextPayday: input.nextPayday ?? null }) };
+}
+
 export async function getDashboardData(
   supabase: SupabaseClient,
   selectedAccountId?: string,
@@ -1352,13 +1380,14 @@ export async function getDashboardData(
           })
           .reduce((sum, account) => sum + Number(account.current_balance ?? 0), 0),
       );
+  const confirmed = await confirmedPaydayGuidance(supabase, userId, monthDate(activeMonth, activeDay));
   const cashFlowForecast = forecastCashFlow({
     // The forecast needs a number: an unknown balance degrades to an
     // explicitly zero-based projection while runway and Safe-to-Spend,
     // which take `cashBalance` directly, honestly report unknown.
     startingBalance: cashBalance ?? 0,
     asOf: monthDate(activeMonth, activeDay),
-    horizonDays: 30,
+    horizonDays: confirmed.horizonDays,
     items: recurring.forecastItems,
     lowBalanceThreshold: 500,
   });
@@ -1423,7 +1452,7 @@ export async function getDashboardData(
   const safeToSpend = computeSafeToSpend({
     cashBalance,
     asOf: insightsAsOf,
-    nextPayDate: paychecks.primary?.nextPayDate ?? null,
+    nextPayDate: confirmed.nextDate === undefined ? paychecks.primary?.nextPayDate ?? null : confirmed.nextDate,
     upcomingExpenses: buildSafeToSpendUpcomingExpenses(
       cashFlowForecast.events,
       sinkingFunds.items,
@@ -1537,6 +1566,8 @@ export async function getDashboardData(
       essentialsSplit,
       runwayMonths,
       paycheck: paychecks.primary,
+      ...confirmed.fields,
+      ...budgetAllowanceGuidance({ isCurrentMonth, accountId: selectedAccountId, itemId: options?.itemId, accounts: allAccounts, today, envelopes: budgetEnvelopes, spent: currentMonthExpenses, nextPayday: confirmed.nextDate }),
       safeToSpend,
       priceDrift,
       sinkingFunds,

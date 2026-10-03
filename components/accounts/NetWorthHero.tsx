@@ -15,6 +15,13 @@ function HistoryChart({ summary }: Readonly<{ summary: Summary }>) {
   const H = 130;
   const PAD = 20;
   const allPoints = Object.values(summary.netWorthSeries).flat();
+  if (Object.keys(summary.netWorthSeries).length > 7)
+    return (
+      <p className="text-sm text-muted">
+        Use the daily balance table for all currencies. Different currencies are
+        never combined into one series.
+      </p>
+    );
   if (allPoints.length < 2) {
     return (
       <p className="py-3 text-sm text-muted">
@@ -37,30 +44,75 @@ function HistoryChart({ summary }: Readonly<{ summary: Summary }>) {
         role="img"
         aria-label="Daily net worth by currency"
       >
-        <line x1={PAD} x2={W - PAD} y1={H - PAD} y2={H - PAD} stroke="var(--viz-grid)" />
-        {Object.entries(summary.netWorthSeries).map(([currency, series], seriesIndex) => {
-          const points = series.map((point, index) => ({
-            x:
-              PAD +
-              (series.length === 1
-                ? (W - PAD * 2) / 2
-                : (index / (series.length - 1)) * (W - PAD * 2)),
-            y: PAD + (1 - (point.value - min) / range) * (H - PAD * 2),
-          }));
-          return (
-            <path
-              key={currency}
-              d={linePath(points)}
-              fill="none"
-              stroke={`var(--viz-${(seriesIndex % 6) + 1})`}
-              strokeWidth={2.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <title>{currency}</title>
-            </path>
-          );
-        })}
+        <line
+          x1={PAD}
+          x2={W - PAD}
+          y1={H - PAD}
+          y2={H - PAD}
+          stroke="var(--viz-grid)"
+        />
+        {Object.entries(summary.netWorthSeries).map(
+          ([currency, series], seriesIndex) => {
+            const points = series.map((point, index) => ({
+              x:
+                PAD +
+                (series.length === 1
+                  ? (W - PAD * 2) / 2
+                  : (index / (series.length - 1)) * (W - PAD * 2)),
+              y: PAD + (1 - (point.value - min) / range) * (H - PAD * 2),
+            }));
+            return (
+              <g key={currency}>
+                {!series.some((point) => point.estimated) && (
+                  <path
+                    d={linePath(points)}
+                    fill="none"
+                    stroke={`var(--viz-${seriesIndex + 1})`}
+                    strokeWidth={2.5}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <title>{currency}</title>
+                  </path>
+                )}
+                {series.some((point) => point.estimated) &&
+                  points.slice(1).map((point, index) => (
+                    <path
+                      key={series[index + 1]!.date}
+                      d={linePath([points[index]!, point])}
+                      fill="none"
+                      stroke={`var(--viz-${seriesIndex + 1})`}
+                      strokeWidth={2.5}
+                      strokeDasharray={
+                        series[index]!.estimated || series[index + 1]!.estimated
+                          ? "5 4"
+                          : undefined
+                      }
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <title>{`${currency}: ${series[index + 1]!.date}${series[index + 1]!.estimated ? " (includes estimates)" : ""}`}</title>
+                    </path>
+                  ))}
+                {points.map((point, index) =>
+                  series[index]!.estimated ? (
+                    <circle
+                      key={series[index]!.date}
+                      cx={point.x}
+                      cy={point.y}
+                      r={4}
+                      fill="var(--panel)"
+                      stroke={`var(--viz-${seriesIndex + 1})`}
+                      strokeWidth={2}
+                    >
+                      <title>{`Estimate: ${series[index]!.date}`}</title>
+                    </circle>
+                  ) : null,
+                )}
+              </g>
+            );
+          },
+        )}
       </svg>
       {firstDate && lastDate && (
         <div className="flex justify-between px-1 text-xs text-muted tabular-nums">
@@ -103,7 +155,11 @@ export default function NetWorthHero({
         <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2 text-sm font-semibold">
           <span
             data-money
-            className={monthChange.amount >= 0 ? "text-[var(--viz-pos)]" : "text-[var(--viz-neg)]"}
+            className={
+              monthChange.amount >= 0
+                ? "text-[var(--viz-pos)]"
+                : "text-[var(--viz-neg)]"
+            }
           >
             {monthChange.amount >= 0 ? "↑" : "↓"}{" "}
             {formatCurrency(Math.abs(monthChange.amount), primaryCurrency)}
@@ -113,6 +169,14 @@ export default function NetWorthHero({
       )}
       <div className="mt-5">
         <HistoryChart summary={summary} />
+        {Object.values(summary.netWorthSeries)
+          .flat()
+          .some((point) => point.labels?.length) && (
+          <p className="mt-2 text-sm text-muted">
+            Dashed segments and hollow points include estimates or stale carried
+            values. Open the daily balance table for sources and stale dates.
+          </p>
+        )}
       </div>
       <details className="mt-3">
         <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold focus-visible:outline-2">
@@ -124,20 +188,43 @@ export default function NetWorthHero({
               <tr className="border-b border-panel-border text-muted tabular-nums">
                 <th className="px-2 py-2 font-semibold">Date</th>
                 <th className="px-2 py-2 font-semibold">Currency</th>
-                <th className="px-2 py-2 text-right font-semibold">Net worth</th>
+                <th className="px-2 py-2 text-right font-semibold">
+                  Net worth
+                </th>
+                {Object.values(summary.netWorthSeries)
+                  .flat()
+                  .some((point) => point.labels?.length) && (
+                  <th className="px-2 py-2 font-semibold">History notes</th>
+                )}
               </tr>
             </thead>
             <tbody>
-              {Object.entries(summary.netWorthSeries).flatMap(([currency, series]) =>
-                series.map((point) => (
-                  <tr key={`${currency}-${point.date}`} className="border-b border-panel-border/70">
-                    <td className="px-2 py-2 tabular-nums">{formatDate(point.date)}</td>
-                    <td className="px-2 py-2 tabular-nums">{currency}</td>
-                    <td data-money className="px-2 py-2 text-right tabular-nums">
-                      {formatCurrency(point.value, currency)}
-                    </td>
-                  </tr>
-                )),
+              {Object.entries(summary.netWorthSeries).flatMap(
+                ([currency, series]) =>
+                  series.map((point) => (
+                    <tr
+                      key={`${currency}-${point.date}`}
+                      className="border-b border-panel-border/70"
+                    >
+                      <td className="px-2 py-2 tabular-nums">
+                        {formatDate(point.date)}
+                      </td>
+                      <td className="px-2 py-2 tabular-nums">{currency}</td>
+                      <td
+                        data-money
+                        className="px-2 py-2 text-right tabular-nums"
+                      >
+                        {formatCurrency(point.value, currency)}
+                      </td>
+                      {Object.values(summary.netWorthSeries)
+                        .flat()
+                        .some((entry) => entry.labels?.length) && (
+                        <td className="px-2 py-2">
+                          {point.labels?.join("; ") ?? ""}
+                        </td>
+                      )}
+                    </tr>
+                  )),
               )}
             </tbody>
           </table>
@@ -145,8 +232,8 @@ export default function NetWorthHero({
       </details>
       {historyStartsOn && (
         <p className="mt-4 text-xs text-muted">
-          Daily balance history starts on {formatDate(historyStartsOn)}. Earlier history is
-          unavailable.
+          Daily balance history starts on {formatDate(historyStartsOn)}. Earlier
+          history is unavailable.
         </p>
       )}
     </Panel>

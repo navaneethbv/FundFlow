@@ -6,6 +6,9 @@ on:
       - ".github/workflows/migration-check.yml"
       - "supabase/migrations/**"
       - "scripts/check-rls.sql"
+      - "scripts/check-balance-quality.sql"
+      - "scripts/check-history-provenance.sql"
+      - "scripts/check-payday-settings.sql"
       - "scripts/check-import-profiles.sql"
       - "scripts/check-review-remediation.sql"
       - "scripts/check-financial-writes.sql"
@@ -40,6 +43,14 @@ jobs:
 
       - name: Assert RLS on every public table
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-rls.sql
+
+      - name: Verify balance-quality decisions and ownership
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-balance-quality.sql
+
+      - name: Verify history provenance and payday configuration
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-history-provenance.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-payday-settings.sql
 
       - name: Verify token lifecycle and notification identity
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-review-remediation.sql

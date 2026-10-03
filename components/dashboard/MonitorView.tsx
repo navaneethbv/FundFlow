@@ -1,3 +1,4 @@
+import BudgetAllowanceTile from "@/components/dashboard/BudgetAllowanceTile";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { DashboardData } from "@/lib/dashboard";
@@ -387,8 +388,8 @@ function RunwayTile({
 }
 
 function PaycheckTile({
-  paycheck,
-}: Readonly<Pick<MonitorInsights, "paycheck">>) {
+  paycheck, confirmedPayday,
+}: Readonly<Pick<MonitorInsights, "paycheck" | "confirmedPayday">>) {
   let value = "\u2014";
   let description: ReactNode = "No recurring income detected yet.";
   if (paycheck?.nextPayDate) {
@@ -400,6 +401,10 @@ function PaycheckTile({
     );
   }
 
+  if (confirmedPayday !== undefined) {
+    value = confirmedPayday.nextDate ? formatDay(confirmedPayday.nextDate) : "Not confirmed";
+    description = <>{confirmedPayday.amount !== null ? <><Money amount={confirmedPayday.amount} /> expected from your confirmed schedule. </> : "Confirm a payday to use it in spending guidance. "}<Link href="/settings/payday" className="underline focus-visible:outline-2">Payday settings</Link></>;
+  }
   return (
     <section className="rounded-card border border-panel-border bg-panel p-5 text-foreground shadow-card">
       <h3 className="eyebrow">Next paycheck</h3>
@@ -421,11 +426,12 @@ function MonitorPlanningTiles({
   return (
     <div className="grid gap-3 sm:grid-cols-3">
       <SafeToSpendTile safeToSpend={insights.safeToSpend} />
+      {insights.budgetAllowance !== undefined && <BudgetAllowanceTile allowance={insights.budgetAllowance} />}
       <RunwayTile
         runwayMonths={insights.runwayMonths}
         typicalEssentials={typicalEssentials}
       />
-      <PaycheckTile paycheck={insights.paycheck} />
+      <PaycheckTile paycheck={insights.paycheck} confirmedPayday={insights.confirmedPayday} />
     </div>
   );
 }
