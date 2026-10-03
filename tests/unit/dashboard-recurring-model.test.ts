@@ -20,6 +20,17 @@ describe("Dashboard recurring projections", () => {
     expect(data.recurringStatuses[0]).toMatchObject({status:"paid", transactionIds:["paid"]});
   });
 
+  it("reports an unpaid past-due bill so Safe-to-Spend can still hold it back", () => {
+    const late = buildDashboardRecurring(input);
+    expect(late.overdueExpenses).toEqual([{ date: "2026-09-05", name: "Utility", amount: 90 }]);
+    expect(late.forecastItems.some(row => row.nextDate === "2026-09-05")).toBe(true);
+
+    const paid = buildDashboardRecurring({...input, streams:[{...stream,matchedTransactions:[{id:"paid",date:"2026-09-05"}]}]});
+    expect(paid.overdueExpenses).toEqual([]);
+    const income = buildDashboardRecurring({...input, streams:[{...stream,streamType:"inflow"}]});
+    expect(income.overdueExpenses).toEqual([]);
+  });
+
   it("retains manual income and skips disabled manual items", () => {
     const data = buildDashboardRecurring({...input,manualItems:[
       {id:"income",name:"Allowance",amount:100,frequency:"monthly",itemType:"income",nextDate:"2026-09-08",category:null,enabled:true},

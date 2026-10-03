@@ -32,6 +32,7 @@ import {
   type SinkingFundInput,
   type SinkingFundPlan,
   detectPaychecks,
+  inferWageStreams,
   medianOf,
   splitEssentialsByMonth,
   type EssentialsSplit,
@@ -878,8 +879,13 @@ function buildSafeToSpendUpcomingExpenses(
   forecastEvents: Array<{ itemType: string; date: string; name: string; amount: number }>,
   sinkingFundItems: Array<{ dueSoon: boolean; dueDate: string; name: string; targetAmount: number }>,
   insightsAsOf: string,
+  overdueExpenses: Array<{ date: string; name: string; amount: number }> = [],
 ): Array<{ date: string; name: string; amount: number }> {
   return [
+    // Unpaid past-due bills count as due today, like past-due sinking funds.
+    ...overdueExpenses
+      .filter((expense) => expense.date < insightsAsOf)
+      .map((expense) => ({ ...expense, date: insightsAsOf, amount: Math.abs(expense.amount) })),
     ...forecastEvents
       .filter((event) => event.itemType === "expense")
       .map((event) => ({
@@ -1449,17 +1455,24 @@ export async function getDashboardData(
       .filter((row) => row.month !== currentMonth)
       .map((row) => row.essentials),
   });
+  const incomeTransactions = filteredTxns.filter(isIncome).map((t) => ({
+    date: t.date,
+    merchant: extractMerchantName(t, ""),
+    amount: t.amount,
+    pfcDetailed: t.pfc_detailed,
+  }));
+  const knownIncomeNames = new Set(incomeStreams.map((stream) => stream.merchant.trim().toLowerCase()));
   const paychecks = detectPaychecks({
-    incomeStreams: incomeStreams.map((stream) => ({
-      name: stream.merchant,
-      amount: stream.amount,
-      frequency: normalizeFrequency(stream.frequency),
-    })),
-    incomeTransactions: filteredTxns.filter(isIncome).map((t) => ({
-      date: t.date,
-      merchant: extractMerchantName(t, ""),
-      amount: t.amount,
-    })),
+    incomeStreams: [
+      ...incomeStreams.map((stream) => ({
+        name: stream.merchant,
+        amount: stream.amount,
+        frequency: normalizeFrequency(stream.frequency),
+      })),
+      ...inferWageStreams(incomeTransactions, insightsAsOf)
+        .filter((stream) => !knownIncomeNames.has(stream.name.trim().toLowerCase())),
+    ],
+    incomeTransactions,
     asOf: insightsAsOf,
   });
   // Sinking funds: planned irregular expenses spread into a monthly
@@ -1492,6 +1505,7 @@ export async function getDashboardData(
       cashFlowForecast.events,
       sinkingFunds.items,
       insightsAsOf,
+      recurring.overdueExpenses,
     ),
   });
 
