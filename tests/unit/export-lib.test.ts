@@ -41,6 +41,10 @@ function pagedExportClient(seeds: Record<string, ExportSeed>) {
         tableCalls.push({ method: "gte", args });
         return builder;
       },
+      lte(...args: unknown[]) {
+        tableCalls.push({ method: "lte", args });
+        return builder;
+      },
       range(fromIndex: number, toIndex: number) {
         tableCalls.push({ method: "range", args: [fromIndex, toIndex] });
         range = [fromIndex, toIndex];
@@ -368,11 +372,16 @@ describe("lib/export", () => {
 
       await fetchPrivacySafeRows(client as never, "user-1", {
         startDate: "2026-03-01",
+        endDate: "2026-03-31",
       });
 
       expect(client.calls.transactions).toContainEqual({
         method: "gte",
         args: ["date", "2026-03-01"],
+      });
+      expect(client.calls.transactions).toContainEqual({
+        method: "lte",
+        args: ["date", "2026-03-31"],
       });
     });
 

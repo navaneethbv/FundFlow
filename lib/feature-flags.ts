@@ -96,6 +96,8 @@ export const FEATURE_FLAG_DEFAULTS = {
   ownerAttributionDots: false,
   /** Reference adoption 12.2: aggregate-only household reports role. */
   householdReportsOnly: false,
+  /** Reference adoption 12.3: read-only scoped MCP projections. */
+  mcpEndpoint: false,
   /** Reference adoption 13.1: resumable first-run setup checklist and tour. */
   onboardingTour: false,
   /** Reference adoption 13.2: versioned in-app release highlights. */

@@ -88,6 +88,7 @@ export type ExportFetchResult =
 
 export interface ExportFetchOptions {
   startDate?: string;
+  endDate?: string;
   includeFlow?: boolean;
 }
 
@@ -149,6 +150,7 @@ export async function fetchPrivacySafeRows(
       .select("id, user_id, account_id, manual_account_id, plaid_transaction_id, date, merchant_name, name, amount, pfc_primary, pfc_detailed, pending")
       .eq("user_id", userId);
     if (options.startDate) query = query.gte("date", options.startDate);
+    if (options.endDate) query = query.lte("date", options.endDate);
     return query
       .order("date", { ascending: false })
       .order("id", { ascending: false })

@@ -332,7 +332,7 @@ The next grouped checklist starts only after all PR #204 checks pass, as request
 
 Group 7 is [draft PR #205](https://github.com/navaneethbv/FundFlow/pull/205), containing 6.8, 7.1, 7.2, 7.3, 9.1, and 9.2.
 Its implementation contract and verification limits are in [the group spec](../specs/2026-10-03-budgets-collections-assets.md).
-Local checks pass; hosted checks are pending, and the full dependency audit has the same unpatched development-only `braces` advisory as PR #204.
+The exact head `b0507e6c4be5bc6f40867e5704f0cb244b178ca7` passes the hosted checks, including the dependency audit, and direct SonarCloud verification reports zero unresolved issues and `new_violations=0`.
 No production migration, merge, or flag change is included.
 
 Verification exception approved by the owner on 2026-10-01: defer signed-in browser journeys and full Supabase integration tests until a disposable target exists.
@@ -370,16 +370,16 @@ No dependency changes are included in feature PRs.
 | 5.1 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `lib/rule-conditions.ts`, `lib/rules-engine.ts` |
 | 5.2 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `lib/rule-run-history.ts`, `supabase/migrations/20261001180000_compound_rules.sql` |
 | 5.3 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `components/transactions/RuleSuggestion.tsx`, `app/api/rules/suggestion/route.ts` |
-| 5.4 | Implemented in PR #204; corrective hosted checks pending | `lib/plaid-category-mapping.ts`, `components/settings/PlaidCategoryMappingSection.tsx` |
-| 5.5 | Implemented in PR #204; corrective hosted checks pending | `lib/bayes-categorizer.ts`, `app/api/categorization/bayes/route.ts` |
-| 5.6 | Implemented in PR #204; corrective hosted checks pending | `app/merchants/page.tsx`, `app/api/merchants/merge/route.ts`, `20261002100000_rules_transactions_adoption.sql` |
+| 5.4 | Implemented in merged PR #204 at `eaf1b0c`; hosted checks and Sonar verification pass | `lib/plaid-category-mapping.ts`, `components/settings/PlaidCategoryMappingSection.tsx` |
+| 5.5 | Implemented in merged PR #204 at `eaf1b0c`; hosted checks and Sonar verification pass | `lib/bayes-categorizer.ts`, `app/api/categorization/bayes/route.ts` |
+| 5.6 | Implemented in merged PR #204 at `eaf1b0c`; hosted checks and Sonar verification pass | `app/merchants/page.tsx`, `app/api/merchants/merge/route.ts`, `20261002100000_rules_transactions_adoption.sql` |
 | 6.1 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `components/ui/DetailPane.tsx`, `components/transactions/TransactionEditor.tsx` |
 | 6.2 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks passed at `a375739` | `components/transactions/LedgerKeyboardNavigation.tsx`, `lib/use-keyboard-shortcuts.ts` |
 | 6.3 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks passed at `a375739` | `components/transactions/BulkEditBar.tsx`, `app/api/transactions/bulk-edit/route.ts` |
 | 6.4 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks passed at `a375739` | `components/ui/UndoToast.tsx`, `app/api/transactions/undo-annotation/route.ts`, `app/api/transactions/undo-override/route.ts` |
-| 6.5 | Implemented in PR #204; corrective hosted checks pending | `components/transactions/ProjectedLedgerSection.tsx` |
-| 6.6 | Implemented in PR #204; corrective hosted checks pending | `components/transactions/TransactionCalendar.tsx`, `lib/transaction-calendar.ts` |
-| 6.7 | Implemented in PR #204; corrective hosted checks pending | `components/transactions/AddTransactionModal.tsx` |
+| 6.5 | Implemented in merged PR #204 at `eaf1b0c`; hosted checks and Sonar verification pass | `components/transactions/ProjectedLedgerSection.tsx` |
+| 6.6 | Implemented in merged PR #204 at `eaf1b0c`; hosted checks and Sonar verification pass | `components/transactions/TransactionCalendar.tsx`, `lib/transaction-calendar.ts` |
+| 6.7 | Implemented in merged PR #204 at `eaf1b0c`; hosted checks and Sonar verification pass | `components/transactions/AddTransactionModal.tsx` |
 | 6.8 | Implemented in Group 7; verification and rollout tracked in the group spec | `lib/collections-data.ts`, `app/transactions/collections/page.tsx` |
 | 7.1 | Implemented in Group 7 | `app/api/budget/move/route.ts`, `scripts/check-budget-moves.sql` |
 | 7.2 | Implemented in Group 7 | `lib/budget-allocation.ts` |
@@ -394,7 +394,7 @@ No dependency changes are included in feature PRs.
 | 9.4 | Implemented, release gated | PR #206: basis source annotations and partial coverage. |
 | 9.5 | Implemented, release gated | PR #206: matched owner-account TWR and annualized XIRR. |
 | 9.6 | Implemented, release gated | PR #206: subtype tax buckets and overrides reused by Forecasting. |
-| 9.7 | Implemented, release gated | PR #206 continuation `a98759a` on `feat/asset-investment-provenance`: `lib/portfolio-lookthrough.ts`, `components/investments/PortfolioLookthrough.tsx`, `supabase/migrations/20261005090000_portfolio_lookthrough.sql`; manual weights only, hosted verification pending. |
+| 9.7 | Implemented, release gated | PR #206 exact head `1879d369`; `lib/portfolio-lookthrough.ts`, `components/investments/PortfolioLookthrough.tsx`, `supabase/migrations/20261005090000_portfolio_lookthrough.sql`; manual weights only, hosted checks and Sonar verification pass. |
 | 10.1 | Implemented, release gated | Group 6: funded emergency and sinking-style goal balances are visible and excluded from FIRE capital. |
 | 10.2 | Implemented, release gated | Group 6: seeded, reproducible percentile projection behind `forecastingMonteCarlo`; user-entered return and volatility only. |
 | 10.3 | Implemented | Group 6: direct milestone marker lines and labels on the projection chart. |
@@ -403,15 +403,15 @@ No dependency changes are included in feature PRs.
 | 11.2 | Group 5 in [PR #203](https://github.com/navaneethbv/FundFlow/pull/203); merge deferred | `lib/card-value.ts`, `app/settings/page.tsx` |
 | 11.3 | Group 5 in [PR #203](https://github.com/navaneethbv/FundFlow/pull/203); merge deferred | `app/api/settings/card-value/route.ts`, `components/settings/MembershipCardValueSection.tsx` |
 | 12.1 | Implemented, release gated | Group 6: stable accessible owner dots on household account and dashboard transaction rows behind `ownerAttributionDots`. |
-| 12.2 | Implemented | Aggregate-only reports role, bounded security-definer aggregate RPC, restrictive row-deny policies, feature-gated route, invite-role propagation, and service-report denial are implemented on `feat/household-aggregate-role`; migration and flag remain unapplied/off pending hosted RLS acceptance. |
-| 12.3 | Scoped-token prerequisite implemented | Pending endpoint slice: `scopes` backfill and fail-closed named-scope verification are implemented on the stacked continuation. |
+| 12.2 | Implemented | Aggregate-only reports role, bounded security-definer aggregate RPC, restrictive row-deny policies, feature-gated route, invite-role propagation, and service-report denial are in PR #216 exact head `3740a261`; hosted checks and Sonar verification pass, while the migration and flag remain unapplied/off pending hosted RLS acceptance. |
+| 12.3 | Implemented | Scoped token capabilities and read-only `/api/mcp` aggregate projections are in PR #215 exact head `1e5ae55c` and PR #217 exact head `5d088377`; hosted checks and Sonar verification pass, while `mcpEndpoint` remains off pending rollout acceptance. |
 | 13.1 | Implemented, release gated | PR #210: bounded setup status and dismissible/resumable keyboard-accessible tour; `onboardingTour` remains off. |
 | 13.2 | Implemented, release gated | PR #210: versioned dashboard release highlights with per-user viewed marker; `releaseHighlights` remains off. |
 | 13.3 | Implemented, release gated | Stacked continuation after PR #210: optional drag and keyboard reorder controls plus persisted widget density presets behind `dashboardWidgetLayout`. |
 | 13.4 | Implemented, release gated | Stacked continuation after PR #210: accessible income-to-expenses-to-savings waterfall and table twin behind `cashFlowWaterfall`. |
-| 13.5 | Implemented | Stacked continuation after PR #211: source-linked Settings > Privacy external-service registry. |
-| 13.6 | Implemented | Stacked continuation after PR #212: private PDF statement vault, metadata-only API, and covered/missing/duplicate account-month grid behind `statementVault`. |
-| 13.7 | Implemented | Stacked continuation after PR #213: feature-gated goal detail with progress ring, accessible status badge, and user-assumption-only funding projection with a table twin. |
+| 13.5 | Implemented | PR #212 exact head `d559a96d`; source-linked Settings > Privacy external-service registry; hosted checks and Sonar verification pass. |
+| 13.6 | Implemented | PR #213 exact head `68115041`; private PDF statement vault, metadata-only API, and covered/missing/duplicate account-month grid behind `statementVault`; hosted checks and Sonar verification pass. |
+| 13.7 | Implemented, release gated | PR #214 exact head `43bf763d`; goal detail progress ring, status pill, and projection chart behind `goalVisuals`; hosted checks and Sonar verification pass. |
 
 ### 0.1 decisions and evidence
 
