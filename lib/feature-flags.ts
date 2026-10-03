@@ -94,6 +94,10 @@ export const FEATURE_FLAG_DEFAULTS = {
   forecastingMonteCarlo: false,
   /** Reference adoption 12.1: accessible household-owner attribution dots. */
   ownerAttributionDots: false,
+  /** Reference adoption 13.1: resumable first-run setup checklist and tour. */
+  onboardingTour: false,
+  /** Reference adoption 13.2: versioned in-app release highlights. */
+  releaseHighlights: false,
   /**
    * Phase 11. Released: `20260730230000_advice.sql` is applied, so the page's
    * `advice_progress` and `profiles.advice_profile` reads/writes resolve.

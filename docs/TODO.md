@@ -1,5 +1,14 @@
 # FundFlow — Future Todos
 
+## Current checkpoint: Checklist group 7, onboarding and release transparency, 2026-10-03
+
+The next checklist slice is implemented on `feat/onboarding-transparency`, stacked on PR #209's verified head.
+Checklist 13.1 adds a resumable, keyboard-accessible setup checklist and guided tour for bank connection, payday confirmation, budget seeding, alert choices, and MFA.
+Checklist 13.2 adds a versioned “What’s new” panel that records the viewed release marker in the existing profile preferences JSON.
+The new `onboardingTour` and `releaseHighlights` flags remain off pending release review.
+Local focused tests, TypeScript, ESLint, the placeholder production build, full unit coverage, graph refresh, and `git diff --check` are required before the draft PR handoff.
+The remaining checklist workstreams are 12.2, 12.3, and 13.3 through 13.7.
+
 ## Current checkpoint: Checklist group 6, forecasting and owner attribution, 2026-10-03
 
 The next checklist slice is implemented in `/private/tmp/fundflow-planning-onboarding` on `feat/planning-onboarding-transparency`, stacked on the verified PR #208 head.
@@ -7,7 +16,7 @@ Forecasting now separates funded emergency and sinking-style goal balances from 
 Household accounts and dashboard transaction rows have an opt-in accessible owner dot behind `ownerAttributionDots`; both new flags remain off.
 Focused forecasting, owner-dot, recent-activity, and account-row tests pass, as do TypeScript and ESLint with the shared dependency installation.
 Draft PR #209 is open at `feat/planning-onboarding-transparency`; its hosted checks pass and direct Sonar verification reports zero unresolved issues and zero hotspots awaiting review at the latest pushed head.
-The remaining checklist workstreams 12.2, 12.3, and 13 are still not started.
+Checklist 13.1 and 13.2 are now implemented in the next stacked slice; 12.2, 12.3, and 13.3 through 13.7 remain separate work.
 
 ## Current checkpoint: Checklist group 5, 2026-10-03
 
