@@ -404,7 +404,7 @@ No dependency changes are included in feature PRs.
 | 11.3 | Group 5 in [PR #203](https://github.com/navaneethbv/FundFlow/pull/203); merge deferred | `app/api/settings/card-value/route.ts`, `components/settings/MembershipCardValueSection.tsx` |
 | 12.1 | Implemented, release gated | Group 6: stable accessible owner dots on household account and dashboard transaction rows behind `ownerAttributionDots`. |
 | 12.2 | Implemented | Aggregate-only reports role, bounded security-definer aggregate RPC, restrictive row-deny policies, feature-gated route, invite-role propagation, and service-report denial are implemented on `feat/household-aggregate-role`; migration and flag remain unapplied/off pending hosted RLS acceptance. |
-| 12.3 | Scoped-token prerequisite implemented | Pending endpoint slice: `scopes` backfill and fail-closed named-scope verification are implemented on the stacked continuation. |
+| 12.3 | Implemented | Scoped token capabilities, read-only `/api/mcp` aggregate projections, separately scoped export rows, rate limits, audit events, and API contract are implemented on `feat/mcp-aggregates`; `mcpEndpoint` remains off pending hosted verification. |
 | 13.1 | Implemented, release gated | PR #210: bounded setup status and dismissible/resumable keyboard-accessible tour; `onboardingTour` remains off. |
 | 13.2 | Implemented, release gated | PR #210: versioned dashboard release highlights with per-user viewed marker; `releaseHighlights` remains off. |
 | 13.3 | Implemented, release gated | Stacked continuation after PR #210: optional drag and keyboard reorder controls plus persisted widget density presets behind `dashboardWidgetLayout`. |

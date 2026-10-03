@@ -1,5 +1,16 @@
 # FundFlow Session Handoff
 
+## 2026-10-03: Checklist 12.3 read-only MCP endpoint
+
+Worktree: `/private/tmp/fundflow-mcp-aggregates`, branch `feat/mcp-aggregates`, based on aggregate-only household commit `4ad14d0`.
+The feature-gated `/api/mcp` route is documented in `docs/api/mcp.md` and supports GET or read-only POST requests for bounded aggregate projections or the separately scoped export-row contract.
+`mcp:aggregates` returns only month/category totals and counts, category budgets, recurring category/frequency totals, and net-worth trend.
+`mcp:export-rows` is separately required for date/merchant/amount/category rows and honors `ai_export_enabled`.
+Both paths verify revocation, expiry, and named scopes through `verifyApiToken`, apply IP and user rate limits, and record an audit event.
+The `mcpEndpoint` flag remains off; no migration, deployment, token, or production setting changed.
+Focused MCP, token, export, TypeScript, ESLint, and diff checks pass.
+The next step is exact-head hosted verification for the stacked PR and direct Sonar issue/hotspot confirmation.
+
 ## 2026-10-03: Checklist 12.2 aggregate-only household role
 
 Worktree: `/private/tmp/fundflow-household-aggregate`, branch `feat/household-aggregate-role`, based on the scoped-token prerequisite commit `855e0632ead132e75f19de0562bdf079097c012b`.

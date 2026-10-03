@@ -1,5 +1,14 @@
 # FundFlow — Future Todos
 
+## Current checkpoint: Checklist 12.3, read-only MCP endpoint, 2026-10-03
+
+Checklist 12.3 is implemented in `/private/tmp/fundflow-mcp-aggregates` on `feat/mcp-aggregates`, stacked on the aggregate-only household role.
+The feature-gated `/api/mcp` route accepts only scoped bearer tokens, returns aggregate month/category, budget, recurring, and net-worth projections for `mcp:aggregates`, and keeps the export contract behind the separate `mcp:export-rows` scope.
+Both resources are bounded, read-only, rate-limited, and audited; the export resource honors `ai_export_enabled`.
+The `mcpEndpoint` flag remains off, and no deployment, token, migration, or production setting changed.
+Focused MCP projections, route, token, export, lint, TypeScript, and diff checks pass.
+The checklist implementation work is complete; remaining work is exact-head hosted verification and separately gated rollout review.
+
 ## Current checkpoint: Checklist 12.2, aggregate-only household role, 2026-10-03
 
 Checklist 12.2 is implemented in `/private/tmp/fundflow-household-aggregate` on `feat/household-aggregate-role`, stacked on the scoped-token prerequisite commit.
