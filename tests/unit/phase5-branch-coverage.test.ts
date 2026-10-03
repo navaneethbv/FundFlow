@@ -15,6 +15,10 @@ vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
 }));
 
+vi.mock("@/lib/household-access", () => ({
+  isReportsOnlyMember: vi.fn().mockResolvedValue(false),
+}));
+
 const mockServiceClient = { from: vi.fn() };
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => mockServiceClient,
@@ -427,4 +431,3 @@ describe("composeNetWorthAccounts numeric and fallback parsing", () => {
     expect(accounts[3].includeInNetWorth).toBe(true);
   });
 });
-
