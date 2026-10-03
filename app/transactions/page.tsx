@@ -545,6 +545,15 @@ interface LedgerTableRowProps {
   undoEnabled?: boolean;
 }
 
+/** Columns a day-group header spans; must match the header row's cells. */
+function ledgerColumnCount(reviewEnabled: boolean, bulkEditEnabled: boolean, visibleColumns: ReadonlySet<string>): number {
+  let count = reviewEnabled ? 5 : 4;
+  if (bulkEditEnabled) count += 1;
+  if (visibleColumns.has("category")) count += 1;
+  if (visibleColumns.has("account")) count += 1;
+  return count;
+}
+
 function BulkSelectCell({ id, merchant, reviewVersion }: Readonly<{ id: string; merchant: string; reviewVersion: string | null }>) {
   return (
     <td className="w-10 px-3 py-3 align-top text-center">
@@ -589,11 +598,7 @@ function LedgerTableRow({
   keyboardEnabled = false,
   undoEnabled = false,
 }: Readonly<LedgerTableRowProps>) {
-  const columnCount =
-    (reviewEnabled ? 5 : 4) +
-    (bulkEditEnabled ? 1 : 0) +
-    (visibleColumns.has("category") ? 1 : 0) +
-    (visibleColumns.has("account") ? 1 : 0);
+  const columnCount = ledgerColumnCount(reviewEnabled, bulkEditEnabled, visibleColumns);
   const hasAnnotations = Boolean(note) || tags.length > 0 || splits.length > 0 || cleared;
   const merchant = row.merchant || "Unknown";
   const currency = row.iso_currency_code ?? "USD";
