@@ -9,6 +9,14 @@ The migration is unapplied, and no production role, policy, deployment, or flag 
 Focused aggregate, migration, household, export, lint, TypeScript, and diff checks pass.
 The next checklist slice is the final read-only MCP endpoint on top of scoped tokens and aggregate-only access.
 
+## Current checkpoint: Checklist 13.7, goal visuals, 2026-10-03
+
+The next checklist slice is implemented in `/private/tmp/fundflow-goal-visuals` on `feat/goal-visuals`, stacked on PR #213's exact green head.
+Checklist 13.7 adds an off-by-default goal detail route with a progress ring, a text status pill, and a bounded funding projection based only on the goal's observed funding and existing monthly pace.
+The projection includes a visible data table twin and labels itself as a projection, never a prediction.
+No migration or production flag change was performed.
+The remaining checklist workstreams are 12.2 and 12.3.
+
 ## Current checkpoint: Checklist 12.3 prerequisite, scoped API tokens, 2026-10-03
 
 The scoped-token prerequisite is implemented in `/private/tmp/fundflow-scoped-tokens` on `feat/scoped-api-tokens`, stacked on PR #213's exact verified head.

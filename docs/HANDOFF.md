@@ -11,6 +11,14 @@ The `householdReportsOnly` flag remains off, and the migration, deployment, and 
 Focused route and migration tests pass, as do TypeScript, ESLint, and `git diff --check`.
 The next step is the read-only MCP endpoint, followed by exact-head hosted checks for this PR.
 
+## 2026-10-03: Checklist 13.7, goal visuals
+
+The active continuation is `/private/tmp/fundflow-goal-visuals` on `feat/goal-visuals`, stacked on PR #213's exact green head `68115041b75f47950dd5b8584b4a9795c71a311f`.
+Checklist 13.7 adds `/goals/[id]` behind the default-off `goalVisuals` flag, with a progress ring, accessible status badge, and a bounded funding projection derived only from observed funding and the existing monthly pace.
+The chart has direct labels and an expandable table twin; no migration, deployment, merge, or production flag change was performed.
+Focused goal projection, goals UI, and feature-flag tests pass; lint, typecheck, palette validation, graph refresh, and diff checks pass.
+The remaining checklist workstreams are 12.2 and 12.3.
+
 ## 2026-10-03: Checklist 12.3 scoped-token prerequisite
 
 The scoped-token prerequisite is implemented in `/private/tmp/fundflow-scoped-tokens` on `feat/scoped-api-tokens`, stacked on PR #213's exact verified head `68115041b75f47950dd5b8584b4a9795c71a311f`.

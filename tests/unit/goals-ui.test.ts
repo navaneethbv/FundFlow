@@ -35,6 +35,28 @@ describe("goals feature", () => {
     expect(page).toContain("GoalCardMenu");
   });
 
+  it("keeps goal detail visuals behind their release flag", () => {
+    const page = readFileSync("app/goals/page.tsx", "utf8");
+    const detail = readFileSync("app/goals/[id]/page.tsx", "utf8");
+    expect(page).toContain('isFeatureEnabled("goalVisuals")');
+    expect(page).toContain("detailHref={goalVisualsEnabled ? `/goals/${goal.id}` : undefined}");
+    expect(detail).toContain('isFeatureEnabled("goalVisuals")');
+    expect(detail).toContain("notFound()");
+    // Server components resolve the viewer's month, never the UTC server clock.
+    expect(detail).toContain("resolveViewerToday(supabase, user.id)");
+    expect(detail).not.toContain("localMonthKey");
+  });
+
+  it("ships the accessible goal visual components", () => {
+    for (const file of [
+      "components/goals/GoalProgressRing.tsx",
+      "components/goals/GoalProjectionChart.tsx",
+      "lib/goal-projection.ts",
+    ]) {
+      expect(existsSync(file), `${file} should exist`).toBe(true);
+    }
+  });
+
   it("surfaces goals on the dashboard overview", () => {
     expect(readFileSync("components/dashboard/PlanView.tsx", "utf8")).toContain("GoalsSummary");
   });

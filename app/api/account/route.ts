@@ -70,11 +70,11 @@ async function listAllBucketFiles(
         offset?: number;
         sortBy?: { column: "name" | "updated_at" | "created_at"; order: "asc" | "desc" };
       },
-    ) => Promise<{ data: Array<{ name: string }> | null; error?: unknown }>;
+    ) => Promise<{ data: Array<{ name: string; id?: string | null }> | null; error?: unknown }>;
   },
   folder: string,
-): Promise<Array<{ name: string }>> {
-  const files: Array<{ name: string }> = [];
+): Promise<Array<{ name: string; id?: string | null }>> {
+  const files: Array<{ name: string; id?: string | null }> = [];
   const limit = 1000;
   let offset = 0;
   while (true) {
@@ -194,6 +194,50 @@ async function cleanupReceiptStorage(
   }
 }
 
+/** Statement objects nest as {user}/{source}/{account}/{month}/{id}.pdf. */
+const STATEMENT_FOLDER_DEPTH = 3;
+
+async function listNestedBucketPaths(
+  bucket: Parameters<typeof listAllBucketFiles>[0],
+  folder: string,
+  depth: number,
+): Promise<string[]> {
+  const paths: string[] = [];
+  for (const entry of await listAllBucketFiles(bucket, folder)) {
+    if (!entry?.name || typeof entry.name !== "string") continue;
+    const path = `${folder}/${entry.name}`;
+    // Storage lists a folder as an entry whose id is null.
+    if (entry.id === null && depth < STATEMENT_FOLDER_DEPTH) {
+      paths.push(...await listNestedBucketPaths(bucket, path, depth + 1));
+    } else if (entry.id !== null) {
+      paths.push(path);
+    }
+  }
+  return paths;
+}
+
+/**
+ * Bank statement PDFs are not erased by the auth-user cascade, so remove every
+ * object under the user's folder, including any whose row is already gone.
+ */
+async function cleanupStatementStorage(
+  service: ReturnType<typeof createServiceClient>,
+  userId: string,
+): Promise<number> {
+  try {
+    const statementBucket = service.storage.from("statements");
+    if (!statementBucket?.list || !statementBucket?.remove) {
+      throw new Error("Statement storage cleanup unavailable");
+    }
+    const paths = await listNestedBucketPaths(statementBucket, userId, 0);
+    if (paths.length === 0) return 0;
+    return await removeBucketPaths(statementBucket, paths);
+  } catch (err) {
+    logError("account.delete.statementCleanup", err);
+    throw err;
+  }
+}
+
 async function cleanupUserStorageObjects(
   service: ReturnType<typeof createServiceClient>,
   userId: string,
@@ -203,7 +247,8 @@ async function cleanupUserStorageObjects(
   }
   const avatars = await cleanupAvatarStorage(service, userId);
   const receipts = await cleanupReceiptStorage(service, userId);
-  return avatars + receipts;
+  const statements = await cleanupStatementStorage(service, userId);
+  return avatars + receipts + statements;
 }
 
 export async function DELETE(request: NextRequest) {
