@@ -36,6 +36,7 @@ export const metadata = {
 export default async function GoalsPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
   const goalsV2Enabled = isFeatureEnabled("goalsV2");
+  const goalVisualsEnabled = isFeatureEnabled("goalVisuals");
   const tab: GoalType = firstSearchParam(params.tab) === "pay_down" ? "pay_down" : "save_up";
 
   const supabase = await createClient();
@@ -118,6 +119,7 @@ export default async function GoalsPage({ searchParams }: Readonly<PageProps>) {
               currency={currency}
               priorityImage={index === 0}
               menu={<GoalCardMenu goal={goal} householdId={householdId} />}
+              detailHref={goalVisualsEnabled ? `/goals/${goal.id}` : undefined}
               action={
                 <GoalAllocationPanel
                   goalId={goal.id}

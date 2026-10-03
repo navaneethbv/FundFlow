@@ -1,3 +1,5 @@
+import { isoDate, parseDate } from "@/lib/date-utils";
+
 export type PrivateLoanDirection = "lent" | "borrowed";
 
 export interface PrivateLoanPayment {
@@ -36,6 +38,10 @@ export interface PrivateLendingSummary {
   receivable: number;
   payable: number;
   netWorthAdjustment: number;
+}
+
+function calendarDate(value: unknown): value is string {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && isoDate(parseDate(value)) === value;
 }
 
 function round2(value: number): number {
@@ -116,9 +122,9 @@ export function validatePrivateLoanDraft(value: unknown): { ok: true; value: Pri
   const annualInterestRate = Number(input.annualInterestRate ?? 0);
   if (!Number.isFinite(principal) || principal <= 0 || principal > 1_000_000_000) return { ok: false, error: "Principal must be positive and bounded" };
   if (!Number.isFinite(annualInterestRate) || annualInterestRate < 0 || annualInterestRate > 100) return { ok: false, error: "Interest rate must be between 0 and 100" };
-  if (typeof input.startDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(input.startDate)) return { ok: false, error: "Start date must be YYYY-MM-DD" };
+  if (!calendarDate(input.startDate)) return { ok: false, error: "Start date must be YYYY-MM-DD" };
   const dueDate = input.dueDate === null || input.dueDate === undefined || input.dueDate === "" ? null : input.dueDate;
-  if (dueDate !== null && (typeof dueDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || dueDate < input.startDate)) return { ok: false, error: "Due date must be on or after the start date" };
+  if (dueDate !== null && (!calendarDate(dueDate) || dueDate < input.startDate)) return { ok: false, error: "Due date must be on or after the start date" };
   const notes = input.notes === null || input.notes === undefined || input.notes === "" ? null : input.notes;
   if (notes !== null && (typeof notes !== "string" || notes.length > 1000)) return { ok: false, error: "Notes must be at most 1000 characters" };
   return {

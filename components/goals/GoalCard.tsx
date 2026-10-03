@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import Badge from "@/components/ui/Badge";
 import ProgressBar, { type ProgressBarTone } from "@/components/ui/ProgressBar";
 import { formatDate } from "@/lib/format-date";
@@ -39,6 +40,7 @@ export default function GoalCard({
   currency,
   action,
   menu,
+  detailHref,
   priorityImage = false,
 }: Readonly<{
   goal: FundedGoal;
@@ -47,6 +49,8 @@ export default function GoalCard({
   action?: React.ReactNode;
   /** Slot for the card's `⋯` menu (edit/contribute/household/delete). */
   menu?: React.ReactNode;
+  /** Optional feature-gated link to the goal visual detail page. */
+  detailHref?: string;
   /** Eagerly load only the first above-the-fold goal illustration. */
   priorityImage?: boolean;
 }>) {
@@ -78,6 +82,15 @@ export default function GoalCard({
             {menu}
           </span>
         </div>
+
+        {detailHref && (
+          <Link
+            href={detailHref}
+            className="mt-2 inline-flex min-h-11 items-center rounded-field text-sm font-semibold text-accent hover:underline focus-visible:outline-2"
+          >
+            View goal details
+          </Link>
+        )}
 
         <p className="mt-3 text-2xl font-semibold tabular-nums">
           <span data-money>{formatCurrency(goal.funded_amount, currency)}</span>
