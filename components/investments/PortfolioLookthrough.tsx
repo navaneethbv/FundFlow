@@ -88,7 +88,8 @@ function RegionView({ rows, currency }: Readonly<{ rows: ReturnType<typeof build
       <p className="text-xs font-medium text-muted">World map (schematic)</p>
       <div role="img" aria-label="Schematic world map of regional exposure" className="grid min-h-36 grid-cols-5 grid-rows-3 gap-1 rounded-field border border-panel-border bg-panel-2 p-2">
         {rows.slice(0, MAP_SLOTS.length).map((row, index) => {
-          const slot = MAP_SLOTS[index]!;
+          const slot = MAP_SLOTS[index];
+          if (!slot) return null;
           return <div key={`map-${row.key}`} className="min-w-0 rounded-field border border-panel-border bg-panel px-1 py-2 text-center text-[10px]" style={{ gridColumn: slot.column, gridRow: slot.row, borderTopColor: BAR_COLORS[index % BAR_COLORS.length] }}><span className="block truncate">{row.name}</span><span className="block tabular-nums text-muted">{row.weightPct.toFixed(1)}%</span></div>;
         })}
       </div>
@@ -121,11 +122,20 @@ export default function PortfolioLookthrough({ holdings, initialRecords }: Reado
   const editableHoldings = holdings.filter(configurable);
 
   function updateDraft(holdingId: string, update: Partial<Draft>) {
-    setDrafts((current) => ({ ...current, [holdingId]: { ...(current[holdingId] ?? draftFor(undefined)), ...update } }));
+    setDrafts((current) => {
+      const existing = current[holdingId];
+      const nextDraft: Draft = {
+        asOfDate: update.asOfDate === undefined ? existing.asOfDate : update.asOfDate,
+        weights: update.weights === undefined ? existing.weights : update.weights,
+        message: update.message === undefined ? existing.message : update.message,
+        saving: update.saving === undefined ? existing.saving : update.saving,
+      };
+      return Object.fromEntries(Object.entries(current).map(([key, draft]) => [key, key === holdingId ? nextDraft : draft]));
+    });
   }
 
   async function save(holding: LookthroughHolding) {
-    const draft = drafts[holding.id] ?? draftFor(undefined);
+    const draft = drafts[holding.id];
     updateDraft(holding.id, { message: null, saving: true });
     let parsedJson: unknown;
     try {
@@ -142,7 +152,9 @@ export default function PortfolioLookthrough({ holdings, initialRecords }: Reado
       if (row === null || typeof row !== "object" || Array.isArray(row)) return row;
       const item = row as Record<string, unknown>;
       const weightPct = item.weightPct;
-      return typeof weightPct === "number" ? { ...item, weight: weightPct / 100 } : item;
+      return typeof weightPct === "number"
+        ? { key: item.key, name: item.name, sector: item.sector, region: item.region, weight: weightPct / 100 }
+        : { key: item.key, name: item.name, sector: item.sector, region: item.region, weight: item.weight };
     });
     const parsed = parseLookthroughData({ weights: normalized, asOfDate: draft.asOfDate });
     if (!parsed.ok) {
@@ -215,7 +227,7 @@ export default function PortfolioLookthrough({ holdings, initialRecords }: Reado
         <div className="mt-6 space-y-4 border-t border-panel-border pt-5">
           <h3 className="text-sm font-semibold">Constituent weights</h3>
           {editableHoldings.map((holding) => {
-            const draft = drafts[holding.id] ?? draftFor(recordByHolding.get(holding.id));
+            const draft = drafts[holding.id];
             return (
               <form key={holding.id} className="rounded-field border border-panel-border bg-panel-2 p-4" onSubmit={(event) => { event.preventDefault(); void save(holding); }}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -223,13 +235,13 @@ export default function PortfolioLookthrough({ holdings, initialRecords }: Reado
                   <span className="text-xs text-muted">{recordByHolding.has(holding.id) ? "Manual source" : "Not configured"}</span>
                 </div>
                 <label className="mt-3 block text-xs font-medium" htmlFor={`lookthrough-date-${holding.id}`}>Source as-of date</label>
-                <Input id={`lookthrough-date-${holding.id}`} type="date" value={draft.asOfDate} onChange={(event) => updateDraft(holding.id, { asOfDate: event.target.value, message: null })} required className="mt-1" />
+                <Input id={`lookthrough-date-${holding.id}`} type="date" value={draft.asOfDate} onChange={(event) => { updateDraft(holding.id, { asOfDate: event.target.value, message: null }); }} required className="mt-1" />
                 <label className="mt-3 block text-xs font-medium" htmlFor={`lookthrough-weights-${holding.id}`}>Weights (percentages must add to 100)</label>
-                <textarea id={`lookthrough-weights-${holding.id}`} value={draft.weights} onChange={(event) => updateDraft(holding.id, { weights: event.target.value, message: null })} rows={5} spellCheck={false} className="mt-1 min-h-32 w-full rounded-field border border-panel-border bg-panel px-3 py-2 font-mono text-xs text-foreground focus:border-accent focus-visible:outline-2" aria-describedby={`lookthrough-help-${holding.id}`} />
+                <textarea id={`lookthrough-weights-${holding.id}`} value={draft.weights} onChange={(event) => { updateDraft(holding.id, { weights: event.target.value, message: null }); }} rows={5} spellCheck={false} className="mt-1 min-h-32 w-full rounded-field border border-panel-border bg-panel px-3 py-2 font-mono text-xs text-foreground focus:border-accent focus-visible:outline-2" aria-describedby={`lookthrough-help-${holding.id}`} />
                 <p id={`lookthrough-help-${holding.id}`} className="mt-1 text-xs text-muted">Use stable keys such as ticker:AAPL. Example fields: key, name, sector, region, weightPct.</p>
                 <FormMessage message={draft.message} type={draft.message === "Saved." || draft.message === "Removed." ? "status" : "error"} className="mt-2" />
                 <div className="mt-3 flex flex-wrap justify-end gap-2">
-                  {recordByHolding.has(holding.id) && <Button type="button" variant="ghost" size="sm" onClick={() => void reset(holding)} loading={draft.saving}>Remove</Button>}
+                  {recordByHolding.has(holding.id) && <Button type="button" variant="ghost" size="sm" onClick={() => { void reset(holding); }} loading={draft.saving}>Remove</Button>}
                   <Button type="submit" size="sm" loading={draft.saving}>Save weights</Button>
                 </div>
               </form>
