@@ -22,6 +22,59 @@ export async function GET() {
   return NextResponse.json({ changes: data ?? [] });
 }
 
+type UserClient = Exclude<Awaited<ReturnType<typeof requireUser>>, NextResponse>["supabase"];
+
+/** Owner-scoped payments linked to one recurring stream, or a response to return. */
+async function loadStreamPayments(supabase: UserClient, userId: string, streamId: string): Promise<{ date: string; amount: number }[] | NextResponse> {
+  const { data: stream, error: streamError } = await supabase
+    .from("recurring_streams")
+    .select("id")
+    .eq("id", streamId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (streamError) throw streamError;
+  if (!stream) return NextResponse.json({ error: "Recurring stream not found" }, { status: 404 });
+  const { data: joins, error: joinError } = await supabase
+    .from("recurring_stream_transactions")
+    .select("transaction_id")
+    .eq("recurring_stream_id", streamId)
+    .eq("user_id", userId);
+  if (joinError) throw joinError;
+  const transactionIds = (joins ?? []).map((row) => String(row.transaction_id));
+  if (transactionIds.length < 3) return NextResponse.json({ recorded: false, reason: "insufficient_history" });
+  const { data: transactions, error: transactionError } = await supabase
+    .from("transactions")
+    .select("id,date,amount")
+    .eq("user_id", userId)
+    .in("id", transactionIds);
+  if (transactionError) throw transactionError;
+  return (transactions ?? []).map((row) => ({ date: String(row.date), amount: Math.abs(Number(row.amount)) }));
+}
+
+/** Service write of a confirmed change; false when it was already recorded. */
+async function recordPriceChange(userId: string, streamId: string, change: NonNullable<ReturnType<typeof detectConfirmedPriceChange>>): Promise<boolean> {
+  const service = createServiceClient();
+  const { data: existing, error: existingError } = await service
+    .from("recurring_price_changes")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("recurring_stream_id", streamId)
+    .eq("effective_date", change.effectiveDate)
+    .eq("new_amount", change.newAmount)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  if (existing) return false;
+  const { error: insertError } = await service.from("recurring_price_changes").insert({
+    user_id: userId,
+    recurring_stream_id: streamId,
+    effective_date: change.effectiveDate,
+    previous_amount: change.previousAmount,
+    new_amount: change.newAmount,
+  });
+  if (insertError) throw insertError;
+  return true;
+}
+
 export async function POST(request: Request) {
   if (!isFeatureEnabled("recurringPriceHistory")) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const auth = await requireUser();
@@ -32,49 +85,13 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json().catch(() => null)) as { stream_id?: unknown } | null;
     if (typeof body?.stream_id !== "string" || !UUID.test(body.stream_id)) return badRequest("Invalid stream_id");
-    const { data: stream, error: streamError } = await auth.supabase
-      .from("recurring_streams")
-      .select("id")
-      .eq("id", body.stream_id)
-      .eq("user_id", auth.user.id)
-      .maybeSingle();
-    if (streamError) throw streamError;
-    if (!stream) return NextResponse.json({ error: "Recurring stream not found" }, { status: 404 });
-    const { data: joins, error: joinError } = await auth.supabase
-      .from("recurring_stream_transactions")
-      .select("transaction_id")
-      .eq("recurring_stream_id", body.stream_id)
-      .eq("user_id", auth.user.id);
-    if (joinError) throw joinError;
-    const transactionIds = (joins ?? []).map((row) => String(row.transaction_id));
-    if (transactionIds.length < 3) return NextResponse.json({ recorded: false, reason: "insufficient_history" });
-    const { data: transactions, error: transactionError } = await auth.supabase
-      .from("transactions")
-      .select("id,date,amount")
-      .eq("user_id", auth.user.id)
-      .in("id", transactionIds);
-    if (transactionError) throw transactionError;
-    const change = detectConfirmedPriceChange((transactions ?? []).map((row) => ({ date: String(row.date), amount: Math.abs(Number(row.amount)) })));
+    const payments = await loadStreamPayments(auth.supabase, auth.user.id, body.stream_id);
+    if (payments instanceof NextResponse) return payments;
+    const change = detectConfirmedPriceChange(payments);
     if (!change) return NextResponse.json({ recorded: false, reason: "not_confirmed" });
-    const service = createServiceClient();
-    const { data: existing, error: existingError } = await service
-      .from("recurring_price_changes")
-      .select("id")
-      .eq("user_id", auth.user.id)
-      .eq("recurring_stream_id", body.stream_id)
-      .eq("effective_date", change.effectiveDate)
-      .eq("new_amount", change.newAmount)
-      .maybeSingle();
-    if (existingError) throw existingError;
-    if (existing) return NextResponse.json({ recorded: false, reason: "already_recorded" });
-    const { error: insertError } = await service.from("recurring_price_changes").insert({
-      user_id: auth.user.id,
-      recurring_stream_id: body.stream_id,
-      effective_date: change.effectiveDate,
-      previous_amount: change.previousAmount,
-      new_amount: change.newAmount,
-    });
-    if (insertError) throw insertError;
+    if (!(await recordPriceChange(auth.user.id, body.stream_id, change))) {
+      return NextResponse.json({ recorded: false, reason: "already_recorded" });
+    }
     await writeAudit({ userId: auth.user.id, action: "recurring_price_change_recorded", metadata: { stream_id: body.stream_id, effective_date: change.effectiveDate } });
     return NextResponse.json({ recorded: true, change });
   } catch (error) {

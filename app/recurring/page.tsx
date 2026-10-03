@@ -76,7 +76,7 @@ export const metadata = {
 
 type RecurringView = "calendar" | "list" | "paycheck";
 type RecurringLoadedData = Awaited<ReturnType<typeof loadRecurringData>>;
-type RecurringViewer = { user: { id: string; email?: string | undefined }; today: string };
+type RecurringViewer = { user: { id: string; email?: string }; today: string };
 type RecurringFeatureState = { billsViewsEnabled: boolean; paycheckViewEnabled: boolean; priceHistoryEnabled: boolean };
 
 function resolveView(rawView: string | undefined, paycheckViewEnabled: boolean): RecurringView {

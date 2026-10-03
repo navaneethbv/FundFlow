@@ -75,6 +75,104 @@ function BulkSelectCell({ id, merchant, reviewVersion }: Readonly<{ id: string; 
  * row of each date. Split out of the page so the page body stays readable:
  * the optional column/badge/annotation branches all live here.
  */
+function DayHeaderRow({ date, columnCount, dayGroup }: Readonly<{ date: string; columnCount: number; dayGroup: LedgerTableRowProps["dayGroup"] }>) {
+  return (
+    <tr className="border-b border-panel-border bg-panel/60">
+      <th
+        scope="row"
+        colSpan={columnCount - 2}
+        className="px-4 py-1.5 text-left tabular-nums text-xs font-semibold text-muted"
+      >
+        {formatDate(date)}
+      </th>
+      <td className="px-4 py-1.5 text-right text-xs font-normal text-muted">
+        {dayGroup?.showNet && (
+          <span
+            data-money
+            style={dayGroup.net < 0 ? { color: "var(--viz-pos)" } : undefined}
+          >
+            {roundsToZero(dayGroup.net)
+              ? formatCurrency(0)
+              : `${ledgerNetPrefix(dayGroup.net)}${formatCurrency(Math.abs(dayGroup.net))}`}{" "}
+            net
+          </span>
+        )}
+      </td>
+      <td />
+    </tr>
+  );
+}
+
+function MerchantCell({
+  row, merchant, cleared, excludedDuplicate, review, showSource, note, tags, splitCount,
+}: Readonly<{
+  row: LedgerTableRowProps["row"];
+  merchant: string;
+  cleared: boolean;
+  excludedDuplicate: boolean;
+  /** Null when transaction review is off. */
+  review: { status: LedgerTableRowProps["reviewStatus"]; missing: boolean } | null;
+  showSource: boolean;
+  note: string | null;
+  tags: string[];
+  splitCount: number;
+}>) {
+  return (
+    <td className="px-4 py-3 align-top">
+      <div className="flex items-start gap-2.5">
+        <MerchantAvatar
+          name={row.merchant || "?"}
+          logoUrl={merchantLogoDataUri(row.merchant || "?")}
+          size={28}
+          className="mt-0.5"
+        />
+        <span className="min-w-0">
+          <span className="font-medium">{merchant}</span>
+          {row.pending && (
+            <Badge tone="warning" className="ml-2">
+              pending
+            </Badge>
+          )}
+          {cleared && (
+            <Badge tone="success" className="ml-2">
+              cleared
+            </Badge>
+          )}
+          {excludedDuplicate && (
+            <Badge tone="warning" className="ml-2">
+              Excluded duplicate
+            </Badge>
+          )}
+          {review && (review.status || review.missing) && (
+            <span className="ml-2">
+              <TransactionReviewStatusBadge
+                status={review.status}
+                pending={row.pending}
+                excludedDuplicate={excludedDuplicate}
+                missing={review.missing}
+              />
+            </span>
+          )}
+          {showSource && row.source === "manual" && (
+            <Badge tone="accent" className="ml-2">
+              manual
+            </Badge>
+          )}
+          {(Boolean(note) || tags.length > 0 || splitCount > 0) && (
+            <span className="mt-1 flex flex-wrap items-center gap-1.5">
+              {splitCount > 0 && <Badge tone="accent">split ×{splitCount}</Badge>}
+              {tags.map((tag) => (
+                <Badge key={tag}>{tag}</Badge>
+              ))}
+              {note && <span className="text-xs text-muted">{note}</span>}
+            </span>
+          )}
+        </span>
+      </div>
+    </td>
+  );
+}
+
 export default function LedgerTableRow({
   row,
   zebraBand,
@@ -100,7 +198,6 @@ export default function LedgerTableRow({
   undoEnabled = false,
 }: Readonly<LedgerTableRowProps>) {
   const columnCount = ledgerColumnCount(reviewEnabled, bulkEditEnabled, visibleColumns);
-  const hasAnnotations = Boolean(note) || tags.length > 0 || splits.length > 0 || cleared;
   const merchant = row.merchant || "Unknown";
   const currency = row.iso_currency_code ?? "USD";
   const isMoneyIn = row.amount < 0 && !roundsToZero(row.amount);
@@ -112,31 +209,7 @@ export default function LedgerTableRow({
 
   return (
     <Fragment>
-      {isNewDay && (
-        <tr className="border-b border-panel-border bg-panel/60">
-          <th
-            scope="row"
-            colSpan={columnCount - 2}
-            className="px-4 py-1.5 text-left tabular-nums text-xs font-semibold text-muted"
-          >
-            {formatDate(row.date)}
-          </th>
-          <td className="px-4 py-1.5 text-right text-xs font-normal text-muted">
-            {dayGroup?.showNet && (
-              <span
-                data-money
-                style={dayGroup.net < 0 ? { color: "var(--viz-pos)" } : undefined}
-              >
-                {roundsToZero(dayGroup.net)
-                  ? formatCurrency(0)
-                  : `${ledgerNetPrefix(dayGroup.net)}${formatCurrency(Math.abs(dayGroup.net))}`}{" "}
-                net
-              </span>
-            )}
-          </td>
-          <td />
-        </tr>
-      )}
+      {isNewDay && <DayHeaderRow date={row.date} columnCount={columnCount} dayGroup={dayGroup} />}
       <tr
         data-ledger-row
         data-ledger-row-id={row.id}
@@ -165,58 +238,17 @@ export default function LedgerTableRow({
             {formatDate(row.date)}
           </span>
         </td>
-        <td className="px-4 py-3 align-top">
-          <div className="flex items-start gap-2.5">
-            <MerchantAvatar
-              name={row.merchant || "?"}
-              logoUrl={merchantLogoDataUri(row.merchant || "?")}
-              size={28}
-              className="mt-0.5"
-            />
-            <span className="min-w-0">
-              <span className="font-medium">{merchant}</span>
-              {row.pending && (
-                <Badge tone="warning" className="ml-2">
-                  pending
-                </Badge>
-              )}
-              {cleared && (
-                <Badge tone="success" className="ml-2">
-                  cleared
-                </Badge>
-              )}
-              {excludedDuplicate && (
-                <Badge tone="warning" className="ml-2">
-                  Excluded duplicate
-                </Badge>
-              )}
-              {reviewEnabled && (reviewStatus || reviewStateMissing) && (
-                <span className="ml-2">
-                  <TransactionReviewStatusBadge
-                    status={reviewStatus}
-                    pending={row.pending}
-                    excludedDuplicate={excludedDuplicate}
-                    missing={reviewStateMissing}
-                  />
-                </span>
-              )}
-              {visibleColumns.has("source") && row.source === "manual" && (
-                <Badge tone="accent" className="ml-2">
-                  manual
-                </Badge>
-              )}
-              {hasAnnotations && (
-                <span className="mt-1 flex flex-wrap items-center gap-1.5">
-                  {splits.length > 0 && <Badge tone="accent">split ×{splits.length}</Badge>}
-                  {tags.map((tag) => (
-                    <Badge key={tag}>{tag}</Badge>
-                  ))}
-                  {note && <span className="text-xs text-muted">{note}</span>}
-                </span>
-              )}
-            </span>
-          </div>
-        </td>
+        <MerchantCell
+          row={row}
+          merchant={merchant}
+          cleared={cleared}
+          excludedDuplicate={excludedDuplicate}
+          review={reviewEnabled ? { status: reviewStatus, missing: reviewStateMissing } : null}
+          showSource={visibleColumns.has("source")}
+          note={note}
+          tags={tags}
+          splitCount={splits.length}
+        />
         {visibleColumns.has("category") && (
           <td className="hidden px-4 py-3 align-top text-muted sm:table-cell">
             {row.category ? <CategoryChip label={titleCase(row.category)} /> : "-"}

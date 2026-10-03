@@ -94,54 +94,39 @@ export function sanitizeLedgerSearch(value: string): string {
     .trim();
 }
 
+function matching(pattern: RegExp, value: string): string {
+  return pattern.test(value) ? value : "";
+}
+
+function oneOf<T extends string>(value: string, allowed: readonly T[], fallback: T): T {
+  return (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
+}
+
 export function parseLedgerQuery(
   raw: LedgerRawSearchParams,
 ): LedgerQueryState {
-  const sortValue = firstSearchParamOrEmpty(raw.sort);
-  const directionValue = firstSearchParamOrEmpty(raw.direction);
-  const monthValue = firstSearchParamOrEmpty(raw.month);
-  const dayValue = firstSearchParamOrEmpty(raw.day);
-  const yearValue = firstSearchParamOrEmpty(raw.year);
-  const accountValue = firstSearchParamOrEmpty(raw.accountId);
-  const categoryValue = firstSearchParamOrEmpty(raw.category);
-  const subValue = firstSearchParamOrEmpty(raw.sub);
-  const flowValue = firstSearchParamOrEmpty(raw.flow);
-  const accountTypeValue = firstSearchParamOrEmpty(raw.accountType);
-  const reviewValue = firstSearchParamOrEmpty(raw.review);
-  const viewValue = firstSearchParamOrEmpty(raw.view);
-
+  const param = (value: string | string[] | undefined) => firstSearchParamOrEmpty(value);
   return {
-    q: sanitizeLedgerSearch(firstSearchParamOrEmpty(raw.q)),
-    month: MONTH_RE.test(monthValue) ? monthValue : "",
-    day: DAY_RE.test(dayValue) ? dayValue : "",
-    year: YEAR_RE.test(yearValue) ? yearValue : "",
-    accountId: UUID_RE.test(accountValue) ? accountValue : "",
-    category: CATEGORY_RE.test(categoryValue) ? categoryValue : "",
-    sub: CATEGORY_RE.test(subValue) ? subValue : "",
-    merchant: sanitizeLedgerSearch(firstSearchParamOrEmpty(raw.merchant)),
-    flow: flowValue === "in" || flowValue === "out" ? flowValue : "",
-    accountType:
-      accountTypeValue === "depository" || accountTypeValue === "credit"
-        ? accountTypeValue
-        : "",
-    review:
-      reviewValue === "needs_review" || reviewValue === "reviewed"
-        ? reviewValue
-        : "all",
-    view: viewValue === "calendar" ? "calendar" : "list",
-    sort: LEDGER_SORT_FIELDS.includes(sortValue as LedgerSortField)
-      ? (sortValue as LedgerSortField)
-      : "date",
-    direction:
-      directionValue === "asc" || directionValue === "desc"
-        ? directionValue
-        : "desc",
-    page: Math.max(1, Number.parseInt(firstSearchParamOrEmpty(raw.page), 10) || 1),
+    q: sanitizeLedgerSearch(param(raw.q)),
+    month: matching(MONTH_RE, param(raw.month)),
+    day: matching(DAY_RE, param(raw.day)),
+    year: matching(YEAR_RE, param(raw.year)),
+    accountId: matching(UUID_RE, param(raw.accountId)),
+    category: matching(CATEGORY_RE, param(raw.category)),
+    sub: matching(CATEGORY_RE, param(raw.sub)),
+    merchant: sanitizeLedgerSearch(param(raw.merchant)),
+    flow: oneOf(param(raw.flow), ["in", "out"] as const, ""),
+    accountType: oneOf(param(raw.accountType), ["depository", "credit"] as const, ""),
+    review: oneOf(param(raw.review), ["needs_review", "reviewed"] as const, "all"),
+    view: oneOf(param(raw.view), ["calendar"] as const, "list"),
+    sort: oneOf(param(raw.sort), LEDGER_SORT_FIELDS, "date"),
+    direction: oneOf(param(raw.direction), ["asc", "desc"] as const, "desc"),
+    page: Math.max(1, Number.parseInt(param(raw.page), 10) || 1),
     columns: parseLedgerColumns({
       col: raw.col,
       colsSubmitted: raw.colsSubmitted,
     }),
-    columnsSubmitted: Boolean(firstSearchParamOrEmpty(raw.colsSubmitted)),
+    columnsSubmitted: Boolean(param(raw.colsSubmitted)),
   };
 }
 
