@@ -12,6 +12,7 @@ export type SettingsSection =
   | "notifications"
   | "security"
   | "integrations"
+  | "privacy"
   | "membership"
   | "household-general"
   | "household-preferences"
@@ -34,6 +35,7 @@ export const SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
   { key: "notifications", label: "Notifications", hint: "Alerts and delivery" },
   { key: "security", label: "Security", hint: "MFA, sessions, audit log" },
   { key: "integrations", label: "Integrations", hint: "Calendar, API tokens, AI consent" },
+  { key: "privacy", label: "Privacy", hint: "External services and data flows" },
   { key: "membership", label: "Membership value", hint: "Fees, rewards, credits, perks" },
   { key: "household-general", label: "Household", hint: "Members and sharing" },
   { key: "household-preferences", label: "Settle up", hint: "Shared expense settlement" },

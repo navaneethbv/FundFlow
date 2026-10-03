@@ -101,6 +101,10 @@ vi.mock("@/components/settings/ApiTokensSection", () => ({
   default: () => createElement("div", { "data-testid": "api-tokens-section" }),
 }));
 
+vi.mock("@/components/settings/ExternalServicesSection", () => ({
+  default: () => createElement("div", { "data-testid": "external-services-section" }),
+}));
+
 vi.mock("@/components/settings/SinkingFundsSection", () => ({
   default: () => createElement("div", { "data-testid": "sinking-funds-section" }),
 }));
@@ -306,6 +310,11 @@ describe("SettingsPage Server Component", () => {
         'data-testid="api-tokens-section"',
         'data-testid="ask-ai-section"',
       ],
+    },
+    {
+      section: "privacy",
+      expectedActive: "privacy",
+      expectedContent: ['data-testid="external-services-section"'],
     },
     {
       section: "merchants",

@@ -39,6 +39,7 @@ import CancelledSubscriptionsSection from "@/components/settings/CancelledSubscr
 import MembershipCardValueSection from "@/components/settings/MembershipCardValueSection";
 import PlaidCategoryMappingSection from "@/components/settings/PlaidCategoryMappingSection";
 import DashboardPrefsSection from "@/components/settings/DashboardPrefsSection";
+import ExternalServicesSection from "@/components/settings/ExternalServicesSection";
 import DemoDataSection from "@/components/settings/DemoDataSection";
 import RestoreSection from "@/components/settings/RestoreSection";
 import { buildAuditLogPage, buildSessionList } from "@/lib/security-account";
@@ -308,6 +309,10 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
         <AskAiSection enabled={aiSettings?.enabled ?? false} />
       </div>
     );
+      break;
+    }
+    case "privacy": {
+      content = <ExternalServicesSection />;
       break;
     }
     case "membership": {

@@ -1,5 +1,15 @@
 # FundFlow Session Handoff
 
+## 2026-10-03: Checklist group 9, external-services disclosure
+
+Worktree: `/private/tmp/fundflow-services-disclosure`, branch `feat/services-disclosure`, based on PR #211's exact verified head `48089a2cb8d69621240bd54688e21d7f61a47a2b`.
+Checklist 13.5 adds a read-only Settings > Privacy registry for Supabase, Plaid, configured SMTP or Resend-compatible delivery, browser push, and opt-in Anthropic calls.
+Each entry is source-linked and states its purpose, data sent or received, trigger, and optionality; the registry does not alter provider behavior or consent.
+Focused settings, registry, TypeScript, and ESLint checks pass, with graph refresh and `git diff --check` also passing.
+The next step is to push and verify the stacked draft PR at its exact head, including direct Sonar issue and hotspot counts.
+No migration, production flag change, deployment, or merge occurred.
+The remaining checklist workstreams are 12.2, 12.3, and 13.6 through 13.7.
+
 ## 2026-10-03: Checklist group 8, dashboard layout and cash-flow transparency
 
 Worktree: `/private/tmp/fundflow-dashboard-waterfall`, branch `feat/dashboard-waterfall`, based on PR #210's final head `f5d825342c8a3b06a248769ed51a170f7b9e49c6`.
