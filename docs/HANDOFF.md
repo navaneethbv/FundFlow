@@ -1,5 +1,13 @@
 # FundFlow Session Handoff
 
+## 2026-10-03: Checklist 13.7, goal visuals
+
+The active continuation is `/private/tmp/fundflow-goal-visuals` on `feat/goal-visuals`, stacked on PR #213's exact green head `68115041b75f47950dd5b8584b4a9795c71a311f`.
+Checklist 13.7 adds `/goals/[id]` behind the default-off `goalVisuals` flag, with a progress ring, accessible status badge, and a bounded funding projection derived only from observed funding and the existing monthly pace.
+The chart has direct labels and an expandable table twin; no migration, deployment, merge, or production flag change was performed.
+Focused goal projection, goals UI, and feature-flag tests pass; lint, typecheck, palette validation, graph refresh, and diff checks pass.
+The remaining checklist workstreams are 12.2 and 12.3.
+
 ## 2026-10-03: Checklist 13.6, statement vault
 
 Worktree: `/private/tmp/fundflow-statement-vault`, branch `feat/statement-vault`, based on PR #212's exact verified head `d559a96d3edd0b8678c42badc8f5c25b48dab5fb`.
