@@ -1,3 +1,4 @@
+import type { RuleActions } from "@/lib/rule-actions";
 import {
   applyMerchantRules,
   type MerchantRule,
@@ -10,6 +11,8 @@ import type {
 } from "@/lib/ledger-query";
 
 export interface LedgerDisplaySourceRow {
+  ruleActions?: RuleActions;
+  manualCategory?: string | null;
   id: string;
   merchant_name: string | null;
   name: string | null;
@@ -114,8 +117,8 @@ export function projectLedgerDisplayRows<T extends LedgerDisplaySourceRow>(
 
   return rows.map((row, index) => ({
     id: row.id,
-    merchant: applied[index]!.merchant,
-    category: applied[index]!.category,
+    merchant: row.ruleActions?.displayName ?? applied[index]!.merchant,
+    category: row.manualCategory ?? row.ruleActions?.category ?? applied[index]!.category,
     accountLabel:
       displayAccountLabelsById.get(resolvedLedgerAccountId(row)) ?? "",
   }));

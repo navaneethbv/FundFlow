@@ -8,6 +8,9 @@ import {
   type LedgerFacetSourceRow, type LedgerFilterOptions, type LedgerProjectedRow, type LedgerProjectionSourceRow,
 } from "@/lib/ledger-projection";
 import { applyPlaidCategoryMapping } from "@/lib/plaid-category-mapping";
+import { isFeatureEnabled } from "@/lib/feature-flags";
+import { attachLedgerRuleActions } from "@/lib/rule-ledger";
+import { annotationProjectionColumns, storedRuleActions, tagsWithRuleActions, type RuleActions } from "@/lib/rule-actions";
 
 export const LEDGER_PAGE_SIZE = 50;
 const PAGE_SIZE = LEDGER_PAGE_SIZE;
@@ -126,7 +129,7 @@ export async function loadLedgerRows(input: {
   const { supabase, state, filters, columns, rules, accountNamesById, accountLabelsById, accountOptionsForFilters } = input;
   let ledgerError = input.ledgerError;
   const ruleAwareFilter = Boolean(state.category || state.merchant) && (hasRemapRules(rules) || input.categoryMappings.size > 0);
-  const projectedPath = needsProjectedLedgerPage(state.sort, ruleAwareFilter) || state.view === "calendar";
+  const projectedPath = isFeatureEnabled("compoundRules") || needsProjectedLedgerPage(state.sort, ruleAwareFilter) || state.view === "calendar";
   const needsFullProjection = projectedPath || hasRemapRules(rules);
   let projectedScope: LedgerProjectedRow[] = [];
   let allRowsForGrouping: LedgerProjectedRow[] | null = null;
@@ -137,7 +140,8 @@ export async function loadLedgerRows(input: {
         const result = await buildLedgerScanQuery(supabase, columns, filters).range(from, to);
         return { rows: (result.data ?? []) as unknown as LedgerProjectionSourceRow[], error: result.error };
       });
-      projectedScope = projectLedgerRows(sourceRows.map((row) => applyPlaidCategoryMapping(row, input.categoryMappings)), rules, accountNamesById, accountLabelsById);
+      const mappedRows = sourceRows.map((row) => applyPlaidCategoryMapping(row, input.categoryMappings));
+      projectedScope = projectLedgerRows(await attachLedgerRuleActions(supabase, filters.ownerId, mappedRows), rules, accountNamesById, accountLabelsById);
     } catch (error) {
       console.error("Transaction projection query failed", error instanceof Error ? error.message : "unknown");
       ledgerError = "We couldn't load your transactions. Try changing the filters or refresh the page.";
@@ -340,6 +344,7 @@ type CashFlowClassification = "expense" | "income" | null;
 export type TransactionOverride = {
   displayCategory: string | null;
   cashFlowClassification: CashFlowClassification;
+  ruleActions?: RuleActions;
 };
 
 export async function loadLedgerRowDetails(
@@ -361,7 +366,7 @@ export async function loadLedgerRowDetails(
   }
 
   const [annotationsResult, splitsResult, duplicatesResult] = await Promise.all([
-    supabase.from("transaction_annotations").select("transaction_id, note, tags, display_category, cash_flow_classification, cleared_at").eq("user_id", ownerId).in("transaction_id", txnIds),
+    supabase.from("transaction_annotations").select(annotationProjectionColumns("transaction_id, note, tags, display_category, cash_flow_classification, cleared_at")).eq("user_id", ownerId).in("transaction_id", txnIds),
     supabase.from("transaction_splits").select("transaction_id, category, amount").eq("user_id", ownerId).in("transaction_id", txnIds),
     supabase.from("linked_duplicates").select("excluded_transaction_id").eq("user_id", ownerId).in("excluded_transaction_id", txnIds),
   ]);
@@ -378,12 +383,13 @@ export async function loadLedgerRowDetails(
   for (const a of annotationsResult.data ?? []) {
     annById.set(a.transaction_id as string, {
       note: a.note as string | null,
-      tags: (a.tags as string[]) ?? [],
+      tags: tagsWithRuleActions((a.tags as string[]) ?? [], storedRuleActions(a)),
       cleared: a.cleared_at != null,
     });
     const classification = a.cash_flow_classification;
     overridesById.set(a.transaction_id as string, {
       displayCategory: (a.display_category as string | null) ?? null,
+      ruleActions: storedRuleActions(a),
       cashFlowClassification:
         classification === "expense" || classification === "income" ? classification : null,
     });

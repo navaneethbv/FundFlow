@@ -13,6 +13,8 @@ import {
   serializeFinancialScope,
 } from "@/lib/financial-scope";
 import { createClient } from "@/lib/supabase/server";
+import { isFeatureEnabled } from "@/lib/feature-flags";
+import { resolveViewerToday } from "@/lib/report-period";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +64,7 @@ export default async function DebtPage({ searchParams }: Readonly<PageProps>) {
     scope,
     extraMonthly,
   });
+  const viewerToday = await resolveViewerToday(supabase, user.id);
   const scopeParam = serializeFinancialScope(scope);
 
   return (
@@ -94,6 +97,9 @@ export default async function DebtPage({ searchParams }: Readonly<PageProps>) {
           strategy={strategy}
           extraMonthly={extraMonthly}
           scopeParam={scopeParam}
+          loanDetailsEnabled={isFeatureEnabled("loanDetails")}
+          amortizationEnabled={isFeatureEnabled("amortizationEngine")}
+          today={viewerToday}
         />
       </div>
     </AppShell>

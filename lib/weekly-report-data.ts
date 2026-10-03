@@ -1,3 +1,4 @@
+import { annotationProjectionColumns, storedRuleActions } from "@/lib/rule-actions";
 import "server-only";
 import { IN_FILTER_CHUNK_SIZE } from "@/lib/postgrest-limits";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -137,7 +138,7 @@ export async function getWeeklyReportData(
     (transactionIdChunk) =>
       supabase
         .from("transaction_annotations")
-        .select("transaction_id, display_category, cash_flow_classification")
+        .select(annotationProjectionColumns("transaction_id, display_category, cash_flow_classification"))
         .in("transaction_id", transactionIdChunk)
         .eq("user_id", userId),
   );
@@ -158,6 +159,7 @@ export async function getWeeklyReportData(
       row.transaction_id as string,
       {
         displayCategory: (row.display_category as string | null) ?? null,
+        ruleActions: storedRuleActions(row),
         cashFlowClassification:
           row.cash_flow_classification === "expense" ||
           row.cash_flow_classification === "income"
@@ -187,6 +189,7 @@ export async function getWeeklyReportData(
       category: transaction.pfc_primary as string | null,
       detailedCategory: transaction.pfc_detailed as string | null,
       accountId: transaction.account_id as string,
+      ruleActions: override?.ruleActions,
       displayCategory: override?.displayCategory ?? null,
       cashFlowClassification: override?.cashFlowClassification ?? null,
       };

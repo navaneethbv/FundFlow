@@ -1,3 +1,5 @@
+import CompoundRulesSection from "@/components/settings/CompoundRulesSection";
+import RuleRunHistory from "@/components/settings/RuleRunHistory";
 import { createClient } from "@/lib/supabase/server";
 import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
@@ -462,7 +464,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
       .from("merchant_rules")
       .select("id, match_type, pattern, display_name, category, enabled")
       .order("created_at");
-    content = <MerchantRulesSection initialRules={merchantRules ?? []} />;
+    content = <div className="space-y-6">{isFeatureEnabled("compoundRules") ? <CompoundRulesSection /> : <MerchantRulesSection initialRules={merchantRules ?? []} />}{isFeatureEnabled("ruleRunHistory") && <RuleRunHistory />}</div>;
       break;
     }
     case "tags": {
@@ -499,8 +501,9 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
         */}
         <div className="grid items-start gap-6 xl:grid-cols-2">
           <ExportSection initialEnabled={profile?.ai_export_enabled ?? true} />
-          <ImportReviewSection accounts={importAccounts} />
+          <ImportReviewSection wizardEnabled={isFeatureEnabled("importWizard")} accounts={importAccounts} profilesEnabled={isFeatureEnabled("importProfiles")} diagnosticsEnabled={isFeatureEnabled("importPreflight") && isFeatureEnabled("importProfiles")} />
         </div>
+        {isFeatureEnabled("importHistory") && <ButtonLink href="/settings/import-history">View import history</ButtonLink>}
         <div className="grid items-start gap-6 xl:grid-cols-2">
           <ReceiptScanSection enabled={aiSettings?.enabled ?? false} />
         </div>

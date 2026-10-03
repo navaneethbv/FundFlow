@@ -1,3 +1,4 @@
+import type { RuleActions } from "@/lib/rule-actions";
 import { EXCLUDED_PFC } from "@/lib/dashboard";
 import { matchesBudgetCategory } from "@/lib/finance-domain";
 import {
@@ -18,6 +19,7 @@ export interface WeeklyReportTransaction {
   detailedCategory?: string | null;
   accountId: string;
   displayCategory?: string | null;
+  ruleActions?: RuleActions;
   cashFlowClassification?: "expense" | "income" | null;
 }
 
@@ -123,6 +125,8 @@ interface WeeklyReportRow extends WeeklyReportTransaction {
  * surface agrees. Only an explicit cash-flow override reclassifies a row.
  */
 function isSpend(transaction: WeeklyReportRow): boolean {
+  if (transaction.ruleActions?.exclude) return false;
+  if (transaction.ruleActions?.transfer && !transaction.cashFlowClassification) return false;
   if (transaction.cashFlowClassification === "income") return false;
   if (transaction.cashFlowClassification === "expense") {
     return transaction.amount !== 0;
@@ -191,8 +195,8 @@ export function buildWeeklyReportModel(
   const transactions: WeeklyReportRow[] = input.transactions.map(
     (transaction, index) => ({
       ...transaction,
-      merchantName: applied[index]!.merchant,
-      category: transaction.displayCategory ?? applied[index]!.category,
+      merchantName: transaction.ruleActions?.displayName ?? applied[index]!.merchant,
+      category: transaction.displayCategory ?? transaction.ruleActions?.category ?? applied[index]!.category,
       flowCategory: applied[index]!.category,
       spendAmount: spendAmountOf(transaction),
     }),
@@ -369,6 +373,7 @@ function weeklyCashMovement(
       transaction.date < input.period.start ||
       transaction.date > input.period.end ||
       input.duplicateTransactionIds.has(transaction.id) ||
+      transaction.ruleActions?.exclude ||
       accountById.get(transaction.accountId)?.type !== "depository"
     ) {
       continue;

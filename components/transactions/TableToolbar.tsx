@@ -16,14 +16,18 @@ type Panel = "none" | "edit" | "columns";
  */
 export default function TableToolbar({
   bulkTagBar,
+  bulkEditBar,
   columnsMenu,
   sortMenu,
   reviewControls,
+  bulkEditEnabled = false,
 }: Readonly<{
   bulkTagBar: React.ReactNode;
+  bulkEditBar?: React.ReactNode;
   columnsMenu?: React.ReactNode;
   sortMenu?: React.ReactNode;
   reviewControls?: React.ReactNode;
+  bulkEditEnabled?: boolean;
 }>) {
   const [open, setOpen] = useState<Panel>("none");
 
@@ -58,7 +62,8 @@ export default function TableToolbar({
           )}
         </div>
       </div>
-      {open === "edit" && <div className="mt-3">{bulkTagBar}</div>}
+      {bulkEditBar}
+      {open === "edit" && <div className="mt-3 space-y-2">{!bulkEditEnabled && bulkTagBar}</div>}
       {open === "columns" && columnsMenu && <div className="mt-3">{columnsMenu}</div>}
     </div>
   );

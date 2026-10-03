@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 export interface ShortcutDefinition {
   chord: string; // e.g. "g d" or "?"
   description: string;
-  category: "Navigation" | "General";
+  category: "Navigation" | "General" | "Ledger";
 }
 
 export const SHORTCUTS: ShortcutDefinition[] = [
@@ -20,6 +20,13 @@ export const SHORTCUTS: ShortcutDefinition[] = [
   { chord: "g s", description: "Go to Settings", category: "Navigation" },
   { chord: "Cmd + K", description: "Open Command Palette / Search", category: "General" },
   { chord: "?", description: "Show Keyboard Shortcuts", category: "General" },
+  { chord: "j / k", description: "Move to the next or previous transaction", category: "Ledger" },
+  { chord: "Enter", description: "Open the focused transaction", category: "Ledger" },
+  { chord: "x", description: "Select the focused transaction", category: "Ledger" },
+  { chord: "c", description: "Edit the focused transaction category", category: "Ledger" },
+  { chord: "t", description: "Edit tags on the focused transaction", category: "Ledger" },
+  { chord: "e", description: "Open the focused transaction", category: "Ledger" },
+  { chord: "Esc", description: "Close the focused transaction detail", category: "Ledger" },
 ];
 
 export const NAVIGATION_ROUTES: Record<string, string> = {

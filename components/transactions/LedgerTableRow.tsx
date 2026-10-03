@@ -6,6 +6,7 @@ import TransactionEditor from "@/components/transactions/TransactionEditor";
 import { TransactionReviewCheckbox, TransactionReviewRowAction } from "@/components/transactions/TransactionReviewControls";
 import { TransactionReviewStatusBadge } from "@/components/transactions/TransactionReviewStatus";
 import { merchantLogoDataUri } from "@/lib/merchant-logos";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 import { formatCurrency, roundsToZero, titleCase } from "@/lib/format";
 import { formatDate } from "@/lib/format-date";
 import type { LedgerProjectedRow } from "@/lib/ledger-projection";
@@ -40,6 +41,24 @@ interface LedgerTableRowProps {
   reviewVersion?: string | null;
   reviewEligible?: boolean;
   reviewStateMissing?: boolean;
+  bulkEditEnabled?: boolean;
+  keyboardEnabled?: boolean;
+  undoEnabled?: boolean;
+}
+
+function BulkSelectCell({ id, merchant, reviewVersion }: Readonly<{ id: string; merchant: string; reviewVersion: string | null }>) {
+  return (
+    <td className="w-10 px-3 py-3 align-top text-center">
+      <input
+        type="checkbox"
+        data-bulk-select
+        data-transaction-id={id}
+        aria-label={`Select ${merchant}`}
+        className="h-4 w-4 accent-[var(--accent)]"
+      />
+      <input type="hidden" data-review-version={id} value={reviewVersion ?? "1"} />
+    </td>
+  );
 }
 
 /**
@@ -67,9 +86,13 @@ export default function LedgerTableRow({
   reviewVersion = null,
   reviewEligible = false,
   reviewStateMissing = false,
+  bulkEditEnabled = false,
+  keyboardEnabled = false,
+  undoEnabled = false,
 }: Readonly<LedgerTableRowProps>) {
   const columnCount =
     (reviewEnabled ? 5 : 4) +
+    (bulkEditEnabled ? 1 : 0) +
     (visibleColumns.has("category") ? 1 : 0) +
     (visibleColumns.has("account") ? 1 : 0);
   const hasAnnotations = Boolean(note) || tags.length > 0 || splits.length > 0 || cleared;
@@ -110,10 +133,15 @@ export default function LedgerTableRow({
         </tr>
       )}
       <tr
+        data-ledger-row
+        data-ledger-row-id={row.id}
+        tabIndex={keyboardEnabled ? 0 : undefined}
+        aria-label={`Transaction ${merchant}`}
         className={`border-b border-panel-border last:border-0 hover:bg-panel-hover${
           zebraBand % 2 === 1 ? " bg-panel-2" : ""
         }`}
       >
+        {bulkEditEnabled && <BulkSelectCell id={row.id} merchant={merchant} reviewVersion={reviewVersion} />}
         {reviewEnabled && (
           <td className="w-10 px-3 py-3 align-top text-center">
             <TransactionReviewCheckbox
@@ -213,6 +241,9 @@ export default function LedgerTableRow({
               />
             )}
             <TransactionEditor
+              detailsEnabled={isFeatureEnabled("transactionDetails")}
+              suggestionsEnabled={isFeatureEnabled("ruleSuggestions") && isFeatureEnabled("compoundRules")}
+              ruleHistoryEnabled={isFeatureEnabled("ruleRunHistory")}
               transaction={{ id: row.id, merchant, amount: row.amount, currency }}
               note={note}
               tags={tags}
@@ -221,6 +252,7 @@ export default function LedgerTableRow({
               providerCategory={providerCategory}
               override={override}
               cleared={cleared}
+              undoEnabled={undoEnabled}
             />
           </div>
         </td>

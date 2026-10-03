@@ -9,9 +9,12 @@ on:
       - "scripts/check-balance-quality.sql"
       - "scripts/check-history-provenance.sql"
       - "scripts/check-payday-settings.sql"
+      - "scripts/check-import-profiles.sql"
+      - "scripts/check-compound-rules.sql"
       - "scripts/check-review-remediation.sql"
       - "scripts/check-financial-writes.sql"
       - "scripts/check-transaction-review.sql"
+      - "scripts/check-pending-carryover.sql"
       - "tests/integration/transaction-review-locks.test.ts"
       - "tests/fixtures/transaction-review-benchmark.sql"
 
@@ -58,6 +61,18 @@ jobs:
 
       - name: Verify transaction review states and atomic permissions
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-transaction-review.sql
+
+      - name: Verify pending annotation carryover
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-pending-carryover.sql
+
+      - name: Verify compound rule isolation and atomic effects
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-compound-rules.sql
+
+      - name: Verify committed import layouts and owner isolation
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-import-profiles.sql
+
+      - name: Verify committed import history and owner isolation
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-import-history.sql
 
       - name: Verify PostgreSQL review benchmark queries
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/fixtures/transaction-review-benchmark.sql

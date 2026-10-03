@@ -444,3 +444,21 @@ describe("fromTransactionRow", () => {
     expect(row.source).toBe("manual");
   });
 });
+
+it("materialized rule effects preserve provider facts and explicit user decisions", () => {
+  const rows = [raw({ id: "hidden", amount: 100 }), raw({ id: "move", amount: 200 }), raw({ id: "manual", amount: 30 }), CARD_PAYMENT];
+  const projected = projectFinanceTransactions({
+    rows, merchantRules: [], categoryOverrides: [], splits: [], linkedRefunds: [],
+    transactionOverrides: [
+      { displayCategory: null, cashFlowClassification: null, transactionId: "hidden", ruleActions: { exclude: true } },
+      { displayCategory: null, cashFlowClassification: null, transactionId: "move", ruleActions: { transfer: true } },
+      { transactionId: "manual", displayCategory: "USER", cashFlowClassification: "expense", ruleActions: { category: "RULE", transfer: true, displayName: "Clean merchant" } },
+      { displayCategory: null, cashFlowClassification: null, transactionId: CARD_PAYMENT.id, ruleActions: { category: "Shopping" } },
+    ],
+  });
+  expect(projected.map(row => row.sourceTransactionId)).not.toContain("hidden");
+  expect(projected.find(row => row.sourceTransactionId === "manual")).toMatchObject({ categoryKey: "USER", flow: "expense", merchant: "Clean merchant" });
+  expect(financeTotals(projected).expenses).toBe(30);
+  expect(rows[2]?.merchant).toBe("Generic");
+  expect(CARD_PAYMENT.pfcPrimary).toBe("LOAN_PAYMENTS");
+});

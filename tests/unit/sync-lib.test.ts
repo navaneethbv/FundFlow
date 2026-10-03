@@ -80,7 +80,7 @@ describe("lib/sync", () => {
   };
 
   describe("syncItemTransactions", () => {
-    it("fetches pages from Plaid, upserts transactions, handles large txns and cancelled subscriptions, and updates cursor", async () => {
+    it.each(["BANK-ONLY-DESCRIPTOR-731", undefined])("syncs a page with optional raw descriptor %s and preserves existing notifications", async (originalDescription) => {
       mockTransactionsSync.mockResolvedValueOnce({
         data: {
           added: [
@@ -91,6 +91,7 @@ describe("lib/sync", () => {
               date: "2026-07-28",
               merchant_name: "Netflix",
               name: "NETFLIX.COM",
+              original_description: originalDescription,
               personal_finance_category: { primary: "ENTERTAINMENT" },
             },
           ],
@@ -156,6 +157,13 @@ describe("lib/sync", () => {
         "txn-1",
         "exact",
       );
+      expect(mockTransactionsSync).toHaveBeenCalledWith({
+        access_token: "access-token-123", cursor: "cursor-0",
+        options: { include_original_description: true },
+      });
+      expect(upsertTxns).toHaveBeenCalledWith([
+        expect.objectContaining({ original_description: originalDescription ?? null }),
+      ], { onConflict: "plaid_transaction_id" });
       expect(mockCompleteItemCursor).toHaveBeenCalledWith("user-1", "item-db-1", "cursor-next");
       expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", null);
     });
@@ -246,7 +254,7 @@ describe("lib/sync", () => {
 
       expect(res).toEqual({ added: 0, modified: 0, removed: 0 });
       expect(mockLogError).toHaveBeenCalledWith("sync.claim", expect.any(Error));
-      expect(mockServiceClient.rpc).toHaveBeenCalledTimes(1);
+      expect(mockServiceClient.rpc).not.toHaveBeenCalledWith("release_item_sync", expect.anything());
       expect(mockCompleteItemCursor).not.toHaveBeenCalled();
     });
 
@@ -319,6 +327,38 @@ describe("lib/sync", () => {
       );
     });
 
+    it("waits for page writes before requesting the next cursor", async () => {
+      let releasePage!: () => void;
+      const pageWrite = new Promise<void>((resolve) => { releasePage = resolve; });
+      let firstPageWriting = false;
+      mockTransactionsSync
+        .mockResolvedValueOnce({ data: { added: [], modified: [], removed: [], accounts: [], next_cursor: "cursor-1", has_more: true } })
+        .mockResolvedValueOnce({ data: { added: [], modified: [], removed: [], accounts: [], next_cursor: "cursor-2", has_more: false } });
+      mockServiceClient.from.mockImplementation(() => { throw new Error("Unexpected table"); });
+      await mockServiceClient.rpc.withImplementation(async (name: string) => {
+        if (name === "finish_transaction_sync_page" && !firstPageWriting) {
+          firstPageWriting = true;
+          await pageWrite;
+        }
+        return { data: true, error: null };
+      }, async () => {
+        const run = syncItemTransactions(dummyItem);
+        try {
+          await vi.waitFor(() => expect(firstPageWriting).toBe(true));
+          expect(mockTransactionsSync).toHaveBeenCalledTimes(1);
+          expect(mockCompleteItemCursor).not.toHaveBeenCalled();
+        } finally {
+          releasePage();
+          await run;
+        }
+        expect(mockTransactionsSync).toHaveBeenNthCalledWith(2, {
+          access_token: "access-token-123", cursor: "cursor-1",
+          options: { include_original_description: true },
+        });
+        expect(mockCompleteItemCursor).toHaveBeenCalledWith("user-1", "item-db-1", "cursor-2");
+      });
+    });
+
     it("drains every page instead of stopping at the repair page bound", async () => {
       const pages = 10;
       for (let page = 0; page < pages; page += 1) {
@@ -375,6 +415,7 @@ describe("lib/sync", () => {
       expect(mockTransactionsSync).toHaveBeenCalledWith({
         access_token: "access-token-123",
         cursor: "cursor-0",
+        options: { include_original_description: true },
       });
       expect(mockCompleteItemCursor).not.toHaveBeenCalled();
     });
@@ -525,15 +566,12 @@ describe("lib/sync", () => {
         },
       });
 
-      const eqDeleteIn = vi.fn().mockResolvedValue({ error: new Error("Delete error") });
-      const eqDeleteUser = vi.fn().mockReturnValue({ in: eqDeleteIn });
-      const deleteQuery = vi.fn().mockReturnValue({ eq: eqDeleteUser });
-      mockServiceClient.from.mockImplementation((table: string) => {
-        if (table === "transactions") return { delete: deleteQuery };
-        throw new Error(`Unexpected table ${table}`);
-      });
+      mockServiceClient.rpc
+        .mockResolvedValueOnce({ data: true, error: null })
+        .mockResolvedValueOnce({ error: new Error("Delete error") });
 
       await expect(syncItemTransactions(dummyItem)).rejects.toThrow("Delete error");
+      expect(mockCompleteItemCursor).not.toHaveBeenCalled();
     });
 
     it("logs when the large transaction notification fails", async () => {
@@ -589,6 +627,7 @@ describe("lib/sync", () => {
       });
       mockServiceClient.rpc
         .mockResolvedValueOnce({ data: true, error: null })
+        .mockResolvedValueOnce({ error: null })
         .mockRejectedValueOnce(new Error("Release error"));
 
       const res = await syncItemTransactions(dummyItem);

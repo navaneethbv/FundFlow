@@ -1,3 +1,5 @@
+import { processRuleAutomation } from "@/lib/compound-rule-service";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 import { invalidateDashboardCache } from "@/lib/dashboard-cache";
 import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -373,6 +375,15 @@ async function persistCommit(
   await persistTransactions(service, dbRows);
   await persistTransactionAnnotations(service, dbRows, userId);
 
+  if (isFeatureEnabled("importHistory")) {
+    const { error } = await service.rpc("finish_import_with_history", {
+      p_user_id: userId, p_batch_id: batchId,
+      p_rows: dbRows.map(row => ({ id: row.rowId, account_id: row.account_id, manual_account_id: row.manual_account_id })),
+    });
+    if (error) throw error;
+    return;
+  }
+
   for (const rowIdChunk of chunks(rowIds)) {
     const { error } = await service
       .from("import_review_rows")
@@ -566,6 +577,27 @@ async function prepareImportCommitPlan(
   };
 }
 
+function requestedProfileName(value: unknown): string | NextResponse | undefined {
+  if (value === undefined) return undefined;
+  if (!isFeatureEnabled("importProfiles")) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (typeof value !== "string" || value.trim().length < 1 || value.trim().length > 80) return badRequest("Layout name must be 1 to 80 characters");
+  return value.trim();
+}
+
+async function saveImportProfile(service: SupabaseClient, userId: string, batchId: string, profileName: string | undefined): Promise<{ profile_saved?: boolean; profile_warning?: string }> {
+  if (profileName === undefined) return {};
+  try {
+    const { error } = await service.rpc("save_committed_import_profile", {
+      p_user_id: userId, p_batch_id: batchId, p_name: profileName,
+    });
+    if (error) throw error;
+    return { profile_saved: true };
+  } catch (error) {
+    logError("import.profile-save", error);
+    return { profile_warning: "Transactions imported, but the layout was not saved. Use a new layout name and an explicit date format. Saved layouts are limited to 100." };
+  }
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
@@ -581,6 +613,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const profileName = requestedProfileName(body?.save_profile_name);
+    if (profileName instanceof NextResponse) return profileName;
     const prepared = await prepareImportCommitPlan(supabase, user.id, body);
     if (prepared.errorResponse) return prepared.errorResponse;
     const { batch, batchId, sourceAccounts, mappingBySource, committableIds, dbRows } = prepared.plan!;
@@ -631,14 +665,23 @@ export async function POST(request: NextRequest) {
     invalidateDashboardCache(user.id);
     await refreshRecurringAfterConnectedImport(dbRows, user.id);
 
+    const profileResult = await saveImportProfile(service, user.id, batchId, profileName);
     await writeAudit({
       userId: user.id,
       action: "data_import",
-      metadata: { batch_id: batchId, imported: dbRows.length },
+      metadata: { batch_id: batchId, imported: dbRows.length,
+        ...(typeof profileName === "string" ? { profile_saved: profileResult.profile_saved === true } : {}),
+      },
       ip: getClientIp(request),
     });
-
-    return NextResponse.json({ ok: true, imported: dbRows.length });
+    let ruleWarning: string | undefined;
+    try {
+      await processRuleAutomation(supabase, service, user.id, "import", dbRows.map(row => row.plaid_transaction_id));
+    } catch (error) {
+      logError("import.rule-automation", error);
+      ruleWarning = "Import committed, but rules did not finish. Check rule history and apply rules again.";
+    }
+    return NextResponse.json({ ok: true, imported: dbRows.length, ...profileResult, ...(ruleWarning ? { rule_warning: ruleWarning } : {}) });
   } catch (error) {
     return errorResponse("import.commit", error);
   }

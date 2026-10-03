@@ -1,9 +1,13 @@
+import { isFeatureEnabled } from "@/lib/feature-flags";
+import InsightsFeed from "@/components/notifications/InsightsFeed";
+import InsightPreferences from "@/components/notifications/InsightPreferences";
 import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
 import EmailPreferences from "@/components/notifications/EmailPreferences";
 import InAppPreferences from "@/components/notifications/InAppPreferences";
 import PushSection from "@/components/notifications/PushSection";
 import NotificationFeed, { type NotificationRow } from "@/components/notifications/NotificationFeed";
+import { INSIGHT_TYPES } from "@/lib/insight-types";
 import Badge from "@/components/ui/Badge";
 import Panel from "@/components/ui/Panel";
 import { formatDate } from "@/lib/format-date";
@@ -39,12 +43,13 @@ function deliveryDescription(delivery: WeeklyDeliveryHistoryItem): string {
   return "Not delivered";
 }
 
-export default async function NotificationsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const userId = user?.id ?? "";
+async function loadNotificationsPage(supabase: Awaited<ReturnType<typeof createClient>>, userId: string, feedEnabled: boolean, generatorsEnabled: boolean) {
+  let notificationsQuery = supabase
+    .from("notifications")
+    .select("id, type, severity, title, body, read_at, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+  if (feedEnabled) notificationsQuery = notificationsQuery.in("type", [...INSIGHT_TYPES]);
 
   const [
     { data: profile },
@@ -60,16 +65,11 @@ export default async function NotificationsPage() {
     supabase
       .from("alert_preferences")
       .select(
-        "budget_exceeded, goal_reached, large_transaction, low_cash_forecast, large_transaction_threshold",
+        generatorsEnabled ? "*" : "budget_exceeded, goal_reached, large_transaction, low_cash_forecast, large_transaction_threshold",
       )
       .eq("user_id", userId)
       .maybeSingle(),
-    supabase
-      .from("notifications")
-      .select("id, type, severity, title, body, read_at, created_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(25),
+    notificationsQuery.limit(feedEnabled ? 200 : 25),
     supabase
       .from("weekly_report_deliveries")
       .select("period_start, period_end, status, error_code, attempted_at, sent_at")
@@ -77,6 +77,47 @@ export default async function NotificationsPage() {
       .order("period_start", { ascending: false })
       .limit(10),
   ]);
+
+  return { profile, alertPreferences, notifications, deliveries };
+}
+
+function DeliveryHistoryPanel({ deliveryHistory }: Readonly<{ deliveryHistory: ReturnType<typeof buildWeeklyDeliveryHistory> }>) {
+  return (
+          <Panel title="Weekly delivery history" eyebrow="Last 6 reports">
+            <div className="space-y-3 text-sm">
+              {deliveryHistory.map((delivery, index) => (
+                <div
+                  key={`${delivery.periodStart}-${index}`}
+                  className={`flex items-center justify-between gap-3 rounded-field p-3${index % 2 === 1 ? " bg-panel-2" : ""}`}
+                >
+                  <span className="min-w-0">
+                    <span className="block break-words font-semibold tabular-nums">
+                      {formatDate(delivery.periodStart)} to{" "}
+                      {formatDate(delivery.periodEnd)}
+                    </span>
+                    <span className="block text-xs text-muted tabular-nums">
+                      {deliveryDescription(delivery)}
+                    </span>
+                  </span>
+                  <Badge tone={deliveryStatusTone(delivery.status)} className="shrink-0">
+                    {titleCase(delivery.status)}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </Panel>
+  );
+}
+
+export default async function NotificationsPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const userId = user?.id ?? "";
+  const feedEnabled = isFeatureEnabled("insightsFeed");
+  const generatorsEnabled = isFeatureEnabled("insightGenerators");
+  const { profile, alertPreferences, notifications, deliveries } = await loadNotificationsPage(supabase, userId, feedEnabled, generatorsEnabled);
 
   const userTimezone = profile?.timezone ?? DEFAULT_REPORT_TIMEZONE;
   const deliveryHistory = buildWeeklyDeliveryHistory(
@@ -105,12 +146,10 @@ export default async function NotificationsPage() {
       />
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
-        <NotificationFeed
-          initialNotifications={(notifications ?? []) as NotificationRow[]}
-        />
+        {feedEnabled ? <InsightsFeed initial={(notifications ?? []) as NotificationRow[]} /> : <NotificationFeed initialNotifications={(notifications ?? []) as NotificationRow[]} />}
         <div className="space-y-6">
           <InAppPreferences
-            initialPreferences={alertPreferences}
+            initialPreferences={alertPreferences as Record<string, boolean> | null}
             initialThreshold={
               (
                 alertPreferences as {
@@ -119,30 +158,9 @@ export default async function NotificationsPage() {
               )?.large_transaction_threshold ?? null
             }
           />
+          {generatorsEnabled && <InsightPreferences initial={(alertPreferences ?? {}) as Record<string, boolean>} />}
           <PushSection />
-          <Panel title="Weekly delivery history" eyebrow="Last 6 reports">
-            <div className="space-y-3 text-sm">
-              {deliveryHistory.map((delivery, index) => (
-                <div
-                  key={`${delivery.periodStart}-${index}`}
-                  className={`flex items-center justify-between gap-3 rounded-field p-3${index % 2 === 1 ? " bg-panel-2" : ""}`}
-                >
-                  <span className="min-w-0">
-                    <span className="block break-words font-semibold tabular-nums">
-                      {formatDate(delivery.periodStart)} to{" "}
-                      {formatDate(delivery.periodEnd)}
-                    </span>
-                    <span className="block text-xs text-muted tabular-nums">
-                      {deliveryDescription(delivery)}
-                    </span>
-                  </span>
-                  <Badge tone={deliveryStatusTone(delivery.status)} className="shrink-0">
-                    {titleCase(delivery.status)}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          </Panel>
+          <DeliveryHistoryPanel deliveryHistory={deliveryHistory} />
         </div>
       </div>
     </AppShell>

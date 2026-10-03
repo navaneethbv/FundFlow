@@ -611,3 +611,8 @@ a {
   }
 }
 
+
+/* Keep the ledger reachable beside its non-modal transaction detail pane. */
+@media (min-width: 1024px) {
+  body:has([data-transaction-detail]) main { margin-right: 26rem; }
+}

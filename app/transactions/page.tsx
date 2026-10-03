@@ -18,12 +18,14 @@ import LedgerTableRow from "@/components/transactions/LedgerTableRow";
 import MobileLedgerList, { type LedgerCardRow } from "@/components/transactions/MobileLedgerList";
 import SavedViewsBar from "@/components/transactions/SavedViewsBar";
 import BulkTagBar from "@/components/transactions/BulkTagBar";
+import BulkEditBar from "@/components/transactions/BulkEditBar";
 import AddTransactionModal from "@/components/transactions/AddTransactionModal";
 import TransactionCalendar from "@/components/transactions/TransactionCalendar";
 import ProjectedLedgerSection, { type ProjectedLedgerItem } from "@/components/transactions/ProjectedLedgerSection";
 import BayesCategorizeButton from "@/components/transactions/BayesCategorizeButton";
 import ColumnsMenu from "@/components/transactions/ColumnsMenu";
 import TableToolbar from "@/components/transactions/TableToolbar";
+import LedgerKeyboardNavigation from "@/components/transactions/LedgerKeyboardNavigation";
 import TransactionQueryControls from "@/components/transactions/TransactionQueryControls";
 import TransactionSortMenu from "@/components/transactions/TransactionSortMenu";
 import { formatMonth } from "@/lib/format";
@@ -531,8 +533,11 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                     }))}
                 />
               )}
+              <LedgerKeyboardNavigation enabled={isFeatureEnabled("ledgerKeyboardNavigation")}>
               <TableToolbar
                 bulkTagBar={<BulkTagBar transactionIds={rows.map((t) => t.id)} />}
+                bulkEditBar={<BulkEditBar enabled={isFeatureEnabled("bulkEdit")} />}
+                bulkEditEnabled={isFeatureEnabled("bulkEdit")}
                 sortMenu={<TransactionSortMenu key="sort" field={state.sort} direction={state.direction} entries={queryEntries} />}
                 columnsMenu={
                   transactionsParityEnabled ? (
@@ -545,6 +550,8 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                   rows={cardRows}
                   dayGroups={showDayGroups ? dayGroups : null}
                   reviewEnabled={transactionReviewEnabled}
+                  bulkEditEnabled={isFeatureEnabled("bulkEdit")}
+                  undoEnabled={isFeatureEnabled("undoToasts")}
                 />
               </div>
               <div className="hidden overflow-x-auto sm:block">
@@ -555,6 +562,9 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                         <th className="w-10 px-3 py-3 text-center">
                           <span className="sr-only">Select</span>
                         </th>
+                      )}
+                      {isFeatureEnabled("bulkEdit") && (
+                        <th className="w-10 px-3 py-3 text-center"><span className="sr-only">Select</span></th>
                       )}
                       <th className="px-4 py-3 font-semibold">Date</th>
                       <th className="px-4 py-3 font-semibold">Merchant</th>
@@ -596,12 +606,16 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                           reviewVersion={t.review_version != null ? String(t.review_version) : null}
                           reviewEligible={eligible}
                           reviewStateMissing={Boolean(t.review_state_missing)}
+                          bulkEditEnabled={isFeatureEnabled("bulkEdit")}
+                          keyboardEnabled={isFeatureEnabled("ledgerKeyboardNavigation")}
+                          undoEnabled={isFeatureEnabled("undoToasts")}
                         />
                       );
                     })}
                   </tbody>
                 </table>
               </div>
+              </LedgerKeyboardNavigation>
             </Panel>
 
         )}
