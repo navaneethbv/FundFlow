@@ -29,10 +29,12 @@ export default function PerformanceChart({
   balanceHistory,
   returns,
   currency,
+  returnTitle = "Portfolio performance",
 }: Readonly<{
   balanceHistory: InvestmentsPage["balanceHistory"];
   returns: ReturnPoint[] | null;
   currency: string;
+  returnTitle?: string;
 }>) {
   const sufficient = hasSufficientPerformanceData(balanceHistory) && returns != null;
   const values = sufficient ? returns!.map((p) => p.pct) : balanceHistory.map((p) => p.value);
@@ -54,7 +56,7 @@ export default function PerformanceChart({
     <div className="space-y-2">
       <div className="flex items-baseline justify-between">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted">
-          {sufficient ? "Portfolio performance" : "Balance"}
+          {sufficient ? returnTitle : "Balance"}
         </span>
         <span data-money className="tabular-nums font-medium" style={{ color: performanceColor }}>
           {performanceLabel}
@@ -71,7 +73,7 @@ export default function PerformanceChart({
       )}
       {/* Table twin */}
       <table className="sr-only">
-        <caption>{sufficient ? "Portfolio performance" : "Balance"} history</caption>
+        <caption>{sufficient ? returnTitle : "Balance"} history</caption>
         <thead>
           <tr>
             <th>Date</th>

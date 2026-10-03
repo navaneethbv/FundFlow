@@ -29,19 +29,20 @@ export function resolveBasis(holding: BasisHolding): { amount: number; source: B
 /** Coverage is market-value weighted for holdings with a usable value, never
  * account balances without holdings. Unknown values are separately counted. */
 export function summarizeBasis(holdings: readonly BasisHolding[]) {
-  let totalValue = 0, coveredValue = 0, basis = 0, missingValues = 0, missingBasis = 0, estimated = 0;
+  let totalValue = 0, coveredValue = 0, basis = 0, missingValues = 0, missingBasis = 0, estimated = 0, coveredHoldings = 0;
   for (const holding of holdings) {
     if (!nonnegative(holding.value)) { missingValues++; continue; }
     totalValue += holding.value;
     const resolved = resolveBasis(holding);
     if (!resolved) { missingBasis++; continue; }
     coveredValue += holding.value;
+    coveredHoldings++;
     basis += resolved.amount;
     if (resolved.source === "estimated") estimated++;
   }
   return { totalValue, coveredValue, basis, gain: coveredValue - basis,
     coveragePct: totalValue > 0 ? coveredValue / totalValue * 100 : null,
-    partial: missingValues > 0 || missingBasis > 0, missingValues, missingBasis, estimated };
+    partial: missingValues > 0 || missingBasis > 0, missingValues, missingBasis, estimated, coveredHoldings };
 }
 
 export interface TaxAccount { id: string; source: "plaid" | "manual"; subtype: string | null; balance: number | null; currency: string | null }
