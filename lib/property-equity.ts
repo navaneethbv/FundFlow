@@ -23,8 +23,11 @@ export function propertyEquity(date: string, ownedValue: number, terms: Mortgage
 
 /** Current presentation retains the newest available lender/manual balance,
  * explicitly dated, rather than replacing a stale observation with a model. */
-export function currentPropertyEquity(today: string, ownedValue: number, terms: MortgageTerms, schedule: AmortizationResult, observations: readonly LiabilityObservation[]) {
-  const latest = observations.filter((row) => row.date <= today && row.provenance !== "estimated" && Number.isFinite(row.balance)).sort((a, b) => b.date.localeCompare(a.date))[0];
+export function currentPropertyEquity(today: string, ownedValue: number, terms: MortgageTerms, schedule: AmortizationResult, observations: readonly LiabilityObservation[], liveObservation?: LiabilityObservation | null) {
+  // A current account read is not a historical lookup. Its UTC capture date
+  // can be tomorrow relative to the viewer's local calendar without being future data.
+  const live = liveObservation?.provenance !== "estimated" && Number.isFinite(liveObservation?.balance) ? liveObservation : null;
+  const latest = live ?? observations.filter((row) => row.date <= today && row.provenance !== "estimated" && Number.isFinite(row.balance)).sort((a, b) => b.date.localeCompare(a.date))[0];
   if (latest) return { equity: ownedValue - latest.balance, balance: latest.balance, provenance: latest.provenance, asOf: latest.date };
   const estimate = propertyEquity(today, ownedValue, terms, schedule, []);
   return estimate ? { ...estimate, asOf: today } : null;

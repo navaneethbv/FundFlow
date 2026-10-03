@@ -76,6 +76,7 @@ describe("property equity", () => {
     expect(currentPropertyEquity("2025-03-31", 5000, terms, schedule, [{ date: "2025-02-28", balance: 970, provenance: "observed" }, { date: "2026-01-01", balance: 0, provenance: "manual" }])).toEqual({ equity: 4030, balance: 970, provenance: "observed", asOf: "2025-02-28" });
     expect(currentPropertyEquity("2025-03-31", 5000, terms, schedule, [])?.provenance).toBe("estimated");
     expect(currentPropertyEquity("2024-01-01", 5000, terms, schedule, [])).toBeNull();
+    expect(currentPropertyEquity("2025-03-31", 5000, terms, schedule, [], { date: "2025-04-01", balance: 970, provenance: "observed" })).toMatchObject({ equity: 4030, balance: 970, provenance: "observed", asOf: "2025-04-01" });
   });
 });
 describe("configuration boundary", () => {

@@ -3,6 +3,7 @@
 ## 2026-10-02: Group 8 asset and investment provenance
 
 Worktree: `/private/tmp/fundflow-asset-investment-provenance`, branch `feat/asset-investment-provenance`.
+Delivery: [draft PR #206](https://github.com/navaneethbv/FundFlow/pull/206), targeting PR #205's branch.
 The primary checkout and its uncommitted plan/documentation changes were left untouched.
 This group implements checklist items 9.3 through 9.6 under [the group contract](superpowers/specs/2026-10-03-asset-investment-provenance.md).
 The branch was rebased onto PR #205's updated head `b0507e6`, which contains the now-merged PR #204 corrections.
@@ -10,6 +11,7 @@ No merge, production migration, manual deployment, or flag change was performed 
 
 Mortgage equity links existing owned property and liability accounts without writing computed equity into the balance sheet.
 Historical exact-date observations override schedules; current equity retains the latest observed/manual balance, including lender credits, with separate property and loan capture dates.
+Current account reads remain authoritative across the UTC/viewer-local date boundary; historical lookups still exclude future observations.
 Fixed-rate principal-and-interest schedules exclude escrow and fees.
 Basis annotations preserve provider data, identify manual/imported/estimated provenance, expire when quantity changes, and disclose value-weighted partial coverage.
 The owner-account performance panel aligns TWR and annualized XIRR populations, rejects ambiguous flows and truncated reads, and handles Plaid's combined buy/contribution sign convention.

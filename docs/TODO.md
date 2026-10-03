@@ -2,7 +2,7 @@
 
 ## Current checkpoint: Group 8, 2026-10-02
 
-Items 9.3 through 9.6 are implemented on `feat/asset-investment-provenance`, stacked on PR #205.
+Items 9.3 through 9.6 are implemented in [draft PR #206](https://github.com/navaneethbv/FundFlow/pull/206) on `feat/asset-investment-provenance`, stacked on PR #205.
 The [group 8 contract](superpowers/specs/2026-10-03-asset-investment-provenance.md) defines the financial boundaries, provenance, and validation requirements.
 Keep `mortgageEquity`, `investmentBasis`, `investmentXirr`, and `investmentTaxBuckets` off until an authorized rollout.
 The migration `20261004090000_portfolio_provenance.sql` was applied only to disposable local PostgreSQL, not production.

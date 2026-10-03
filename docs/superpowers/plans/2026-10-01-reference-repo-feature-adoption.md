@@ -390,10 +390,10 @@ No dependency changes are included in feature PRs.
 | 8.4 | Not started |  |
 | 9.1 | Implemented in Group 7; growth estimates preserve entered history | `app/accounts/assets/page.tsx`, `supabase/migrations/20261003092000_manual_assets.sql` |
 | 9.2 | Implemented in Group 7; owned share across balance readers | `lib/manual-assets-data.ts`, `lib/manual-asset-flags.ts` |
-| 9.3 | Implemented, release gated | Group 8: mortgage equity, existing liability counted once; fixed-rate loan terms. |
-| 9.4 | Implemented, release gated | Group 8: basis source annotations and partial coverage. |
-| 9.5 | Implemented, release gated | Group 8: matched owner-account TWR and annualized XIRR. |
-| 9.6 | Implemented, release gated | Group 8: subtype tax buckets and overrides reused by Forecasting. |
+| 9.3 | Implemented, release gated | PR #206: mortgage equity, existing liability counted once; fixed-rate loan terms. |
+| 9.4 | Implemented, release gated | PR #206: basis source annotations and partial coverage. |
+| 9.5 | Implemented, release gated | PR #206: matched owner-account TWR and annualized XIRR. |
+| 9.6 | Implemented, release gated | PR #206: subtype tax buckets and overrides reused by Forecasting. |
 | 9.7 | Not started |  |
 | 10.1 | Not started |  |
 | 10.2 | Not started |  |
