@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BasisAnnotation, TaxOverride } from "@/lib/investment-provenance";
 import type { MortgageTerms, LiabilityObservation } from "@/lib/property-equity";
+import type { ConstituentWeight, LookthroughRecord } from "@/lib/portfolio-lookthrough";
 export class PortfolioReadLimitError extends Error {}
 
 /** Bounded, deterministic owner reads. Never silently return PostgREST's first
@@ -23,6 +24,17 @@ export async function portfolioRows<T>(client: SupabaseClient, userId: string, t
 export interface StoredBasis extends BasisAnnotation { holding_id: string; version: number }
 export const loadBasisAnnotations = (client: SupabaseClient, user: string) => portfolioRows<StoredBasis>(client, user, "holding_basis_annotations", "holding_id,amount,quantity,source,version", "holding_id");
 export const loadTaxOverrides = (client: SupabaseClient, user: string) => portfolioRows<TaxOverride>(client, user, "account_tax_treatments", "account_id,manual_account_id,bucket,version", "id");
+interface StoredLookthroughRow {
+  holding_id: string;
+  weights: ConstituentWeight[];
+  source: "manual";
+  as_of_date: string;
+  version: number;
+}
+export async function loadHoldingLookthrough(client: SupabaseClient, user: string): Promise<LookthroughRecord[]> {
+  const rows = await portfolioRows<StoredLookthroughRow>(client, user, "holding_constituent_weights", "holding_id,weights,source,as_of_date,version", "holding_id");
+  return rows.map((row) => ({ holdingId: row.holding_id, weights: row.weights, source: row.source, asOfDate: row.as_of_date, version: row.version }));
+}
 export interface BasisRecord { id: string; account_id: string | null; manual_account_id: string | null; quantity: number | null; institution_value: number | null; cost_basis: number | null; is_active: boolean; securities: { name: string; iso_currency_code: string | null } | null }
 export const loadBasisHoldings = (client: SupabaseClient, user: string) => portfolioRows<BasisRecord>(client, user, "holdings", "id,account_id,manual_account_id,quantity,institution_value,cost_basis,is_active,securities(name,iso_currency_code)", "id");
 export interface StoredMortgage { manual_account_id: string; liability_account_id: string | null; liability_manual_account_id: string | null; terms: MortgageTerms; version: number }

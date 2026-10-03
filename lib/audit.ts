@@ -6,6 +6,7 @@ import { logError } from "@/lib/log";
 /** Sensitive actions we record in audit_logs. */
 export type AuditAction =
   | "portfolio_annotation_saved"
+  | "portfolio_lookthrough_saved"
   | "rule_effect_cleared"
   | "compound_rule_saved"
   | "insight_acknowledged"

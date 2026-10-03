@@ -394,7 +394,7 @@ No dependency changes are included in feature PRs.
 | 9.4 | Implemented, release gated | PR #206: basis source annotations and partial coverage. |
 | 9.5 | Implemented, release gated | PR #206: matched owner-account TWR and annualized XIRR. |
 | 9.6 | Implemented, release gated | PR #206: subtype tax buckets and overrides reused by Forecasting. |
-| 9.7 | Not started |  |
+| 9.7 | Implemented, release gated | `feat/portfolio-lookthrough`: `lib/portfolio-lookthrough.ts`, `components/investments/PortfolioLookthrough.tsx`, `supabase/migrations/20261005090000_portfolio_lookthrough.sql`; manual weights only, hosted verification pending. |
 | 10.1 | Not started |  |
 | 10.2 | Not started |  |
 | 10.3 | Not started |  |

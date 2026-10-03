@@ -1,6 +1,13 @@
 # FundFlow — Future Todos
 
-## Current checkpoint: Group 8, 2026-10-02
+## Current checkpoint: Checklist 9.7, 2026-10-02
+
+Checklist 9.7, portfolio look-through, is implemented in the isolated continuation branch `/private/tmp/fundflow-product-surfaces` on top of PR #206 head `16120c1`.
+The `portfolioLookthrough` flag remains off, and `20261005090000_portfolio_lookthrough.sql` is unapplied to production.
+The surface accepts only user-supplied constituent weights, reports unknown coverage, and has no automated market-data feed.
+Focused unit, migration, TypeScript, lint, and synthetic browser verification passed; hosted checks and exact-head scanner confirmation remain pending until push.
+
+The prior Group 8 items 9.3 through 9.6 remain implemented in [draft PR #206](https://github.com/navaneethbv/FundFlow/pull/206) on `feat/asset-investment-provenance`, stacked on PR #205.
 
 Items 9.3 through 9.6 are implemented in [draft PR #206](https://github.com/navaneethbv/FundFlow/pull/206) on `feat/asset-investment-provenance`, stacked on PR #205.
 The [group 8 contract](superpowers/specs/2026-10-03-asset-investment-provenance.md) defines the financial boundaries, provenance, and validation requirements.

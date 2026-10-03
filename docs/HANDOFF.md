@@ -1,5 +1,25 @@
 # FundFlow Session Handoff
 
+## 2026-10-02: Checklist 9.7 portfolio look-through
+
+Worktree: `/private/tmp/fundflow-product-surfaces`, branch `feat/portfolio-lookthrough`, based on PR #206 head `16120c1`.
+This continuation implements checklist 9.7, user-supplied portfolio look-through, on top of the 9.3 through 9.6 provenance work.
+The new surface is release gated by `portfolioLookthrough`, which remains off.
+
+The engine conserves constituent weights, uses stable keys rather than display names, merges direct holdings with manual fund constituents, reports covered and unknown value, and retains contributing holding IDs.
+It exposes security, sector, and regional tables, a schematic world-map view with a table twin, source and as-of disclosure, and an editor for ETF, mutual-fund, tickerless, or otherwise configurable holdings.
+No automated constituent feed or market-data provider was added.
+
+The additive migration `20261005090000_portfolio_lookthrough.sql` adds the owner-scoped manual weights table and a service-only compare-and-swap RPC.
+The migration was applied only to disposable PostgreSQL `adoption_group9_lookthrough_tmp`, cloned from `adoption_group8_verified`, and its save, strict date, duplicate-key, and reset assertions passed.
+The migration remains unapplied to production.
+
+Focused unit tests, the full unit suite, TypeScript, targeted ESLint, and four synthetic browser journeys at 375px and 1440px in both themes passed after the implementation.
+The full unit suite initially caught missing privacy-blur hooks in the new currency cells; those cells now carry the existing `data-money` contract.
+The browser journeys cover keyboard-accessible tables, conserving saves, conflict draft retention, axe, and overflow checks.
+Hosted checks, exact-head Sonar/Codacy results, and the PR handoff remain pending until this branch is committed and pushed.
+No merge, deployment, production migration, or flag change was performed.
+
 ## 2026-10-02: Group 8 asset and investment provenance
 
 Worktree: `/private/tmp/fundflow-asset-investment-provenance`, branch `feat/asset-investment-provenance`.

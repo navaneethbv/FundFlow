@@ -16,6 +16,8 @@ export const FEATURE_FLAG_DEFAULTS = {
   investmentBasis: false,
   investmentXirr: false,
   investmentTaxBuckets: false,
+  /** Reference adoption 9.7: user-supplied constituent look-through. */
+  portfolioLookthrough: false,
   /** File drop, visible import steps, and keyboard focus transitions. */
   importWizard: false,
   /** Read-only CSV diagnostics; requires importProfiles. */

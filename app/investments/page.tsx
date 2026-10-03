@@ -9,6 +9,7 @@ import HoldingsTable from "@/components/investments/HoldingsTable";
 import PerformanceChart from "@/components/investments/PerformanceChart";
 import { BasisAnalysis, TaxAnalysis, RecordedPerformance } from "@/components/investments/InvestmentAnalysis";
 import TopMovers from "@/components/investments/TopMovers";
+import PortfolioLookthrough from "@/components/investments/PortfolioLookthrough";
 import EmptyState from "@/components/ui/EmptyState";
 import Panel from "@/components/ui/Panel";
 import { isFeatureEnabled } from "@/lib/feature-flags";
@@ -30,6 +31,7 @@ import {
   loadInvestmentSyncStatus,
   loadInvestmentTransactions,
 } from "@/lib/investments-data";
+import { loadHoldingLookthrough } from "@/lib/portfolio-data";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +56,7 @@ export default async function InvestmentsPage() {
     investmentTransactions,
     investmentAccounts,
     itemStatus,
+    lookthroughRecords,
   ] = await Promise.all([
     loadHoldings(supabase),
     loadHoldingSnapshots(supabase),
@@ -61,6 +64,7 @@ export default async function InvestmentsPage() {
     loadInvestmentTransactions(supabase),
     loadInvestmentAccounts(supabase, user.id),
     loadInvestmentSyncStatus(supabase, user.id),
+    isFeatureEnabled("portfolioLookthrough") ? loadHoldingLookthrough(supabase, user.id) : Promise.resolve([]),
   ]);
 
   const coverage = buildInvestmentAccountCoverage(investmentAccounts, holdings);
@@ -107,6 +111,10 @@ export default async function InvestmentsPage() {
   const totalDisplay = coverage.total;
   const hasAccounts = coverage.accounts.length > 0;
   const hasHoldings = holdings.some((holding) => holding.isActive);
+  const ownedAccountIds = new Set(investmentAccounts.map((account) => account.id));
+  const lookthroughHoldings = holdings
+    .filter((holding) => holding.isActive && ownedAccountIds.has(holding.accountId ?? holding.manualAccountId ?? ""))
+    .map((holding) => ({ id: holding.id, securityName: holding.securityName, ticker: holding.ticker, securityType: holding.securityType, value: holding.value }));
   let investmentContent: ReactNode;
 
   if (!hasAccounts) {
@@ -124,6 +132,9 @@ export default async function InvestmentsPage() {
       <div className="space-y-6">
         {coverage.accountsWithoutHoldings > 0 && (
           <ConnectedAccounts coverage={coverage} currency={currency} />
+        )}
+        {isFeatureEnabled("portfolioLookthrough") && (
+          <PortfolioLookthrough holdings={lookthroughHoldings} initialRecords={lookthroughRecords} />
         )}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <Panel title="Holdings" className="lg:col-span-2" padding="lg">
