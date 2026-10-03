@@ -12,6 +12,7 @@ import {
   buildMcpAggregateRows,
   buildMcpNetWorthTrend,
   buildMcpRecurringRows,
+  type McpNumericValue,
   type McpRecurringInput,
 } from "@/lib/mcp-projections";
 
@@ -46,11 +47,8 @@ function parseInput(value: Record<string, unknown>): McpRequestInput | NextRespo
   const resource = value.resource ?? "aggregates";
   const start = value.start ?? defaults.start;
   const end = value.end ?? defaults.end;
-  const category = value.category === undefined || value.category === null
-    ? null
-    : typeof value.category === "string"
-      ? value.category.trim() || null
-      : null;
+  let category: string | null = null;
+  if (typeof value.category === "string") category = value.category.trim() || null;
   if (!RESOURCE_NAMES.includes(resource as McpResource)) {
     return badRequest("resource must be aggregates or rows");
   }
@@ -113,14 +111,14 @@ async function loadAggregateProjection(
 
   const recurringRows: McpRecurringInput[] = [
     ...((streamsResult.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
-      amount: (row.average_amount ?? row.last_amount) as number | string | null,
+      amount: (row.average_amount ?? row.last_amount) as McpNumericValue,
       frequency: row.frequency as string | null,
       category: row.category as string | null,
       itemType: row.stream_type as string | null,
       isActive: row.is_active as boolean | undefined,
     })),
     ...((manualResult.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
-      amount: row.amount as number | string | null,
+      amount: row.amount as McpNumericValue,
       frequency: row.frequency as string | null,
       category: row.category as string | null,
       itemType: row.item_type as string | null,
@@ -132,15 +130,17 @@ async function loadAggregateProjection(
     period: { start: input.start, end: input.end },
     monthlyCategories: buildMcpAggregateRows(projection.transactions, input.category),
     budgets: ((budgetsResult.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
-      category: String(row.category ?? "UNCATEGORIZED"),
+      category: typeof row.category === "string" && row.category.trim()
+        ? row.category
+        : "UNCATEGORIZED",
       monthlyLimit: Number(row.monthly_limit ?? 0),
     })),
     recurring: buildMcpRecurringRows(recurringRows),
     netWorthTrend: buildMcpNetWorthTrend(
       (snapshotsResult.data ?? []) as Array<{
         snapshot_month: string;
-        assets: number | string | null;
-        liabilities: number | string | null;
+        assets: McpNumericValue;
+        liabilities: McpNumericValue;
       }>,
     ),
   };

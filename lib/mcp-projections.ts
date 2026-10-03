@@ -9,8 +9,10 @@ export interface McpAggregateRow {
   transactionCount: number;
 }
 
+export type McpNumericValue = number | string | null;
+
 export interface McpRecurringInput {
-  amount: number | string | null;
+  amount: McpNumericValue;
   frequency: string | null;
   category: string | null;
   itemType: string | null;
@@ -29,8 +31,8 @@ export interface McpRecurringRow {
 
 export interface McpNetWorthInput {
   snapshot_month: string;
-  assets: number | string | null;
-  liabilities: number | string | null;
+  assets: McpNumericValue;
+  liabilities: McpNumericValue;
 }
 
 export interface McpNetWorthRow {
@@ -42,7 +44,7 @@ export interface McpNetWorthRow {
 
 export const MCP_MIN_GROUP_SIZE = 3;
 
-function numberValue(value: number | string | null): number {
+function numberValue(value: McpNumericValue): number {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;
 }
