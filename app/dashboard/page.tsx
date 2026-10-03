@@ -32,7 +32,7 @@ import ScopeChips from "@/components/dashboard/ScopeChips";
 import type { DashboardPrefs } from "@/components/settings/DashboardPrefsSection";
 import { firstSearchParam } from "@/lib/search-params";
 import { createClient } from "@/lib/supabase/server";
-
+import DashboardSetupPanels from "@/components/dashboard/DashboardSetupPanels";
 export const dynamic = "force-dynamic";
 
 interface PageProps {
@@ -48,7 +48,6 @@ type PlaidItem = {
 export const metadata = {
   title: "Dashboard",
 };
-
 export default async function DashboardPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
   const selectedAccountId = firstSearchParam(params.accountId);
@@ -81,7 +80,6 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-
   const goalsV2 = isFeatureEnabled("goalsV2");
   const goalsPromise = goalsV2 && user
     ? loadGoalsPageData(supabase, user.id)
@@ -144,6 +142,8 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
         title={`Good ${greeting}, ${greetingName}`}
         actions={<DashboardHeaderActions activeView={activeView} prefsRaw={profileRow?.dashboard_prefs} />}
       />
+
+      <DashboardSetupPanels supabase={supabase} userId={user?.id} dashboardPrefs={profileRow?.dashboard_prefs} />
 
       <FreshnessBanner brokenBanks={brokenBanks} isStale={data.syncIsStale} />
       <ManualAssetNotice />

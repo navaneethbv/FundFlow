@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 let featureFlagMap: Record<string, boolean> = {
   dashboardWidgets: true,
   goalsV2: false,
+  onboardingTour: false,
+  releaseHighlights: false,
 };
 
 vi.mock("@/lib/feature-flags", () => ({
@@ -212,7 +214,7 @@ vi.mock("@/lib/supabase/server", () => ({
 import DashboardPage from "@/app/dashboard/page";
 
 beforeEach(() => {
-  featureFlagMap = { dashboardWidgets: true, goalsV2: false };
+  featureFlagMap = { dashboardWidgets: true, goalsV2: false, onboardingTour: false, releaseHighlights: false };
   mockItems = [{ id: "item-1", institution_name: "Chase", status: "ok" }];
   mockHouseholds = [{ id: "hh-1" }];
   mockSupabase = createMockSupabase();
@@ -312,7 +314,7 @@ describe("DashboardPage Server Component", () => {
   });
 
   it("supports goalsV2 feature flag pathway", async () => {
-    featureFlagMap = { dashboardWidgets: true, goalsV2: true };
+    featureFlagMap = { dashboardWidgets: true, goalsV2: true, onboardingTour: false, releaseHighlights: false };
 
     const element = await DashboardPage({
       searchParams: Promise.resolve({ view: "plan" }),
@@ -324,7 +326,7 @@ describe("DashboardPage Server Component", () => {
   });
 
   it("defaults to monitor view when dashboardWidgets feature flag is disabled", async () => {
-    featureFlagMap = { dashboardWidgets: false, goalsV2: false };
+    featureFlagMap = { dashboardWidgets: false, goalsV2: false, onboardingTour: false, releaseHighlights: false };
 
     const element = await DashboardPage({
       searchParams: Promise.resolve({}),

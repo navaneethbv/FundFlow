@@ -405,8 +405,8 @@ No dependency changes are included in feature PRs.
 | 12.1 | Implemented, release gated | Group 6: stable accessible owner dots on household account and dashboard transaction rows behind `ownerAttributionDots`. |
 | 12.2 | Not started |  |
 | 12.3 | Not started |  |
-| 13.1 | Not started |  |
-| 13.2 | Not started |  |
+| 13.1 | Implemented, release gated | PR #210: bounded setup status and dismissible/resumable keyboard-accessible tour; `onboardingTour` remains off. |
+| 13.2 | Implemented, release gated | PR #210: versioned dashboard release highlights with per-user viewed marker; `releaseHighlights` remains off. |
 | 13.3 | Not started |  |
 | 13.4 | Not started |  |
 | 13.5 | Not started |  |
