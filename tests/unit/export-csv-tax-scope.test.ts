@@ -85,7 +85,10 @@ describe("GET /api/export/csv?scope=tax — API-token path", () => {
     mockRequireUser.mockResolvedValue(
       NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     );
-    mockVerifyApiToken.mockResolvedValue(TOKEN_USER);
+    mockVerifyApiToken.mockResolvedValue({
+      userId: TOKEN_USER,
+      scopes: ["export:rows"],
+    });
     mockFetchPrivacySafeRows.mockResolvedValue({ allowed: true, rows: [] });
   });
 
