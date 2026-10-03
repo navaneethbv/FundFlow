@@ -51,6 +51,27 @@ describe("planning calculators", () => {
     expect(result.buyNetCostAtHorizon).toBe(0);
     expect(result.breakEvenMonth).toBe(1);
   });
+
+  it("handles amortizing principal and zero-month horizons", () => {
+    const result = calculateRentBuy({
+      homePrice: 240_000,
+      downPayment: 40_000,
+      mortgageApr: 6,
+      termYears: 30,
+      propertyTaxMonthly: 100,
+      insuranceMonthly: 50,
+      maintenanceMonthly: 75,
+      closingCosts: 5_000,
+      monthlyRent: 1_500,
+      rentGrowthApr: 2,
+      homeAppreciationApr: 3,
+      horizonYears: 0,
+    });
+    expect(result.monthlyMortgage).toBeGreaterThan(0);
+    expect(result.rentCostAtHorizon).toBe(0);
+    expect(result.homeEquityAtHorizon).toBe(40_000);
+    expect(result.breakEvenMonth).toBeNull();
+  });
 });
 
 describe("private lending", () => {

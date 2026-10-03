@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { clientStub } from "../fixtures/supabase-query";
 import { importHistoryPage, loadImportHistory, type ImportHistoryBatch } from "@/lib/import-history";
 import ImportHistory from "@/components/settings/ImportHistory";
 const state = vi.hoisted(() => ({ enabled: false, auth: vi.fn() }));
@@ -32,6 +33,29 @@ it("reads only committed owner batches, with stable bounded pagination", async (
 it("returns empty history and surfaces failed reads", async () => {
   expect(await loadImportHistory(query(null).client, "owner", 1)).toEqual({ batches: [], hasNext: false });
   await expect(loadImportHistory(query(null, new Error("offline")).client, "owner", 1)).rejects.toThrow("offline");
+});
+it("marks only newly tracked committed batches as undoable", async () => {
+  const client = clientStub({
+    import_review_batches: {
+      data: [
+        { id: "batch-1", status: "committed", file_name: "one.csv" },
+        { id: "batch-2", status: "discarded", file_name: "two.csv" },
+      ],
+    },
+    import_review_rows: {
+      data: [
+        { id: "row-1", committed_transaction_id: "txn-1" },
+        { id: "row-2", committed_transaction_id: null },
+      ],
+    },
+  });
+  const result = await loadImportHistory(client as never, "owner", 1, true);
+  expect(result.batches.map((batch) => [batch.id, batch.undoAvailable])).toEqual([
+    ["batch-1", false],
+    ["batch-2", false],
+  ]);
+  expect(client.scopedToUser("import_review_rows", "owner")).toBe(true);
+  expect(client.callsOn("import_review_batches")).toContainEqual({ method: "in", args: ["status", ["committed", "discarded"]] });
 });
 it("returns 404 without history reads when off", async () => {
   await expect(Page({ searchParams: Promise.resolve({}) })).rejects.toThrow("404");

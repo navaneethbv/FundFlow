@@ -6,6 +6,8 @@ const state = vi.hoisted(() => ({
   auth: vi.fn(),
   rpc: vi.fn(),
   audit: vi.fn(),
+  rateLimit: vi.fn(),
+  privateData: vi.fn(),
 }));
 
 vi.mock("@/lib/feature-flags", () => ({
@@ -15,9 +17,12 @@ vi.mock("@/lib/http", async () => {
   const actual = await vi.importActual<typeof import("@/lib/http")>("@/lib/http");
   return { ...actual, requireUser: () => state.auth() };
 });
-vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: vi.fn().mockResolvedValue(true) }));
+vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: (...args: unknown[]) => state.rateLimit(...args) }));
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => ({ rpc: state.rpc }),
+}));
+vi.mock("@/lib/private-lending-data", () => ({
+  loadPrivateLendingData: (...args: unknown[]) => state.privateData(...args),
 }));
 vi.mock("@/lib/audit", () => ({
   getClientIp: () => "127.0.0.1",
@@ -26,7 +31,7 @@ vi.mock("@/lib/audit", () => ({
 vi.mock("@/lib/report-period", () => ({ resolveViewerToday: vi.fn().mockResolvedValue("2026-10-07") }));
 
 import { POST as undoImport } from "@/app/api/import/undo/route";
-import { POST as privateLending } from "@/app/api/private-lending/route";
+import { GET as privateLendingGet, POST as privateLending } from "@/app/api/private-lending/route";
 import { POST as completeWeeklyReview } from "@/app/api/review/weekly/complete/route";
 
 const user = { user: { id: "00000000-0000-4000-8000-000000000001" } };
@@ -44,7 +49,11 @@ beforeEach(() => {
   state.auth.mockReset();
   state.rpc.mockReset();
   state.audit.mockReset();
+  state.rateLimit.mockReset();
+  state.privateData.mockReset();
   state.auth.mockResolvedValue(user);
+  state.rateLimit.mockResolvedValue(true);
+  state.privateData.mockResolvedValue({ loans: [], summary: { receivable: 0, payable: 0, netWorthAdjustment: 0 } });
   state.rpc.mockResolvedValue({ data: { status: "undone", deleted: 1 }, error: null });
 });
 
@@ -64,6 +73,18 @@ describe("guarded import undo route", () => {
     const response = await undoImport(request("/api/import/undo", { batch_id: "00000000-0000-4000-8000-000000000001" }));
     expect(response.status).toBe(200);
     expect(state.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "import_undone" }));
+  });
+
+  it("validates identifiers, rate limits attempts, and maps service failures", async () => {
+    state.flags.add("importUndo");
+    state.flags.add("importHistory");
+    expect((await undoImport(request("/api/import/undo", { batch_id: "not-a-uuid" }))).status).toBe(400);
+    state.rateLimit.mockResolvedValueOnce(false);
+    expect((await undoImport(request("/api/import/undo", { batch_id: "00000000-0000-4000-8000-000000000001" }))).status).toBe(429);
+    state.rpc.mockResolvedValueOnce({ data: null, error: { code: "P0002", message: "missing" } });
+    expect((await undoImport(request("/api/import/undo", { batch_id: "00000000-0000-4000-8000-000000000001" }))).status).toBe(404);
+    state.rpc.mockResolvedValueOnce({ data: null, error: new Error("service down") });
+    expect((await undoImport(request("/api/import/undo", { batch_id: "00000000-0000-4000-8000-000000000001" }))).status).toBe(500);
   });
 });
 
@@ -89,6 +110,23 @@ describe("private lending route", () => {
     }));
     expect(missing.status).toBe(404);
   });
+
+  it("serves private lending data and validates payment branches", async () => {
+    state.flags.add("privateLending");
+    const getResponse = await privateLendingGet();
+    expect(getResponse.status).toBe(200);
+    expect(state.privateData).toHaveBeenCalledWith(undefined, user.user.id, "2026-10-07");
+    expect((await privateLending(request("/api/private-lending", { kind: "payment", loan_id: "bad", payment_date: "2026-10-02", amount: 10 }))).status).toBe(400);
+    expect((await privateLending(request("/api/private-lending", { kind: "payment", loan_id: "00000000-0000-4000-8000-000000000002", payment_date: "2026-10-02", amount: 0 }))).status).toBe(400);
+    expect((await privateLending(request("/api/private-lending", { kind: "payment", loan_id: "00000000-0000-4000-8000-000000000002", payment_date: "2026-10-02", amount: 10, note: "x".repeat(501) }))).status).toBe(400);
+    state.rpc.mockResolvedValueOnce({ data: { remaining: 5 }, error: null });
+    const recorded = await privateLending(request("/api/private-lending", { kind: "payment", loan_id: "00000000-0000-4000-8000-000000000002", amount: 10, payment_date: "2026-10-02", note: "paid" }));
+    expect(recorded.status).toBe(200);
+    expect(state.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "private_loan_payment_recorded" }));
+    expect((await privateLending(request("/api/private-lending", { kind: "other" }))).status).toBe(400);
+    state.rateLimit.mockResolvedValueOnce(false);
+    expect((await privateLending(request("/api/private-lending", { kind: "other" }))).status).toBe(429);
+  });
 });
 
 describe("weekly review completion route", () => {
@@ -107,5 +145,13 @@ describe("weekly review completion route", () => {
     expect(response.status).toBe(200);
     expect(state.rpc).toHaveBeenCalledWith("complete_weekly_review", expect.objectContaining({ p_week_start: "2026-10-05" }));
     expect(state.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "weekly_review_completed" }));
+  });
+
+  it("maps completion service errors and rate limits", async () => {
+    state.flags.add("weeklyReview");
+    state.rateLimit.mockResolvedValueOnce(false);
+    expect((await completeWeeklyReview(request("/api/review/weekly/complete", { complete: true }))).status).toBe(429);
+    state.rpc.mockResolvedValueOnce({ data: null, error: new Error("completion failed") });
+    expect((await completeWeeklyReview(request("/api/review/weekly/complete", { complete: true }))).status).toBe(500);
   });
 });

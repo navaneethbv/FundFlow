@@ -12,6 +12,7 @@ import { refreshInferredRecurringForUser } from "@/lib/recurring-inference";
 import { logError } from "@/lib/log";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { IN_FILTER_CHUNK_SIZE } from "@/lib/postgrest-limits";
+import { loadExistingImportIds, trackImportCommitTransactions, type ImportCommitTrackingRow } from "@/lib/import-undo-tracking";
 
 const UPSERT_CHUNK = 500;
 /** `.in()` lists travel in the URL; see `IN_FILTER_CHUNK_SIZE`. */
@@ -372,8 +373,9 @@ async function persistCommit(
   const { sourceAccounts, mappingBySource, dbRows, rowIds, batchId, userId } = params;
 
   await persistSourceAccountMappings(service, sourceAccounts, mappingBySource, userId);
+  const trackingRows = dbRows as ImportCommitTrackingRow[];
   const preexistingImportIds = isFeatureEnabled("importUndo") && isFeatureEnabled("importHistory")
-    ? await loadExistingImportIds(service, dbRows, userId)
+    ? await loadExistingImportIds(service, trackingRows, userId)
     : new Set<string>();
   await persistTransactions(service, dbRows);
   await persistTransactionAnnotations(service, dbRows, userId);
@@ -385,7 +387,7 @@ async function persistCommit(
     });
     if (error) throw error;
     if (isFeatureEnabled("importUndo") && isFeatureEnabled("importHistory")) {
-      await trackImportCommitTransactions(service, dbRows, batchId, userId, preexistingImportIds);
+      await trackImportCommitTransactions(service, trackingRows, batchId, userId, preexistingImportIds);
     }
     return;
   }
@@ -406,7 +408,7 @@ async function persistCommit(
     .eq("id", batchId);
   if (batchError) throw batchError;
   if (isFeatureEnabled("importUndo") && isFeatureEnabled("importHistory")) {
-    await trackImportCommitTransactions(service, dbRows, batchId, userId, preexistingImportIds);
+    await trackImportCommitTransactions(service, trackingRows, batchId, userId, preexistingImportIds);
   }
 }
 
@@ -459,65 +461,6 @@ async function persistTransactions(
       .upsert(transactionRows.slice(i, i + UPSERT_CHUNK), { onConflict: "plaid_transaction_id" });
     if (error) throw error;
   }
-}
-
-async function loadExistingImportIds(
-  service: ReturnType<typeof createServiceClient>,
-  dbRows: ReturnType<typeof buildCommitRows>,
-  userId: string,
-): Promise<Set<string>> {
-  const existing = new Set<string>();
-  const importIdChunks = chunks(dbRows.map((row) => row.plaid_transaction_id)).filter((chunk) => chunk.length > 0);
-  const results = await Promise.all(importIdChunks.map(async (importIdChunk) => {
-    const table = service.from("transactions");
-    if (typeof (table as unknown as { select?: unknown }).select !== "function") return [] as string[];
-    const { data, error } = await table
-      .select("plaid_transaction_id")
-      .eq("user_id", userId)
-      .in("plaid_transaction_id", importIdChunk);
-    if (error) throw error;
-    return (data ?? [])
-      .map((row) => row.plaid_transaction_id)
-      .filter((value): value is string => typeof value === "string");
-  }));
-  for (const values of results) {
-    for (const value of values) existing.add(value);
-  }
-  return existing;
-}
-
-async function trackImportCommitTransactions(
-  service: ReturnType<typeof createServiceClient>,
-  dbRows: ReturnType<typeof buildCommitRows>,
-  batchId: string,
-  userId: string,
-  preexistingImportIds: ReadonlySet<string>,
-): Promise<void> {
-  const newRows = dbRows.filter((row) => !preexistingImportIds.has(row.plaid_transaction_id));
-  if (newRows.length === 0) return;
-  const committedRowsResults = await Promise.all(chunks(newRows.map((row) => row.plaid_transaction_id)).map(async (chunk) => {
-    const table = service.from("transactions");
-    if (typeof (table as unknown as { select?: unknown }).select !== "function") return [] as Array<{ id: string; plaid_transaction_id: string }>;
-    const { data: rows, error: transactionError } = await table
-      .select("id,plaid_transaction_id")
-      .eq("user_id", userId)
-      .in("plaid_transaction_id", chunk);
-    if (transactionError) throw transactionError;
-    return (rows ?? []) as Array<{ id: string; plaid_transaction_id: string }>;
-  }));
-  const committedRows = committedRowsResults.flat();
-  const transactionIdByImportId = new Map(
-    committedRows.map((row) => [row.plaid_transaction_id, row.id]),
-  );
-  const { error: trackingError } = await service.rpc("record_import_commit_transactions", {
-    p_user_id: userId,
-    p_batch_id: batchId,
-    p_rows: newRows.map((row) => ({
-      row_id: row.rowId,
-      transaction_id: transactionIdByImportId.get(row.plaid_transaction_id),
-    })),
-  });
-  if (trackingError) throw trackingError;
 }
 
 async function persistTransactionAnnotations(
