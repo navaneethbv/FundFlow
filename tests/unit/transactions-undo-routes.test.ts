@@ -69,6 +69,12 @@ describe("single-row undo routes", () => {
     expect(invalidate).toHaveBeenCalledWith("user-1");
   });
 
+  it("writes only the restored annotation columns, never server-only rule actions", async () => {
+    const response = await undoAnnotation(request({ transaction_id: id, expected: { note: "new", tags: ["trip"], cleared: false }, restore: { note: "before", tags: [], cleared: false } }));
+    expect(response.status).toBe(200);
+    expect(Object.keys(supabase.writtenTo("transaction_annotations") as object).sort()).toEqual(["cleared_at", "note", "tags", "transaction_id", "user_id"]);
+  });
+
   it("rejects malformed state and reports query failures", async () => {
     expect((await undoAnnotation(request({ transaction_id: id, expected: {}, restore: {} }))).status).toBe(400);
     expect((await undoAnnotation(request({ transaction_id: id, expected: { note: "new", tags: [1], cleared: false }, restore: { note: "before", tags: [], cleared: false } }))).status).toBe(400);
