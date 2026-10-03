@@ -98,6 +98,10 @@ export const FEATURE_FLAG_DEFAULTS = {
   onboardingTour: false,
   /** Reference adoption 13.2: versioned in-app release highlights. */
   releaseHighlights: false,
+  /** Reference adoption 13.3: pointer and keyboard layout controls. */
+  dashboardWidgetLayout: false,
+  /** Reference adoption 13.4: income-to-savings waterfall on Cash Flow. */
+  cashFlowWaterfall: false,
   /**
    * Phase 11. Released: `20260730230000_advice.sql` is applied, so the page's
    * `advice_progress` and `profiles.advice_profile` reads/writes resolve.

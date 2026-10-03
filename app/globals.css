@@ -590,6 +590,15 @@ a {
   animation: shimmer-wave 2s infinite ease-in-out;
 }
 
+/* Dashboard layout presets adjust card density without clipping widget data. */
+[data-dashboard-widget-size="compact"] > section {
+  padding: 1rem;
+}
+
+[data-dashboard-widget-size="expanded"] > section {
+  padding: 1.5rem;
+}
+
 /* The saved "Reduce" preference, for people whose OS setting is off. */
 :root[data-motion="reduce"] *,
 :root[data-motion="reduce"] ::before,

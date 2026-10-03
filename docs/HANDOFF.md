@@ -1,9 +1,19 @@
 # FundFlow Session Handoff
 
+## 2026-10-03: Checklist group 8, dashboard layout and cash-flow transparency
+
+Worktree: `/private/tmp/fundflow-dashboard-waterfall`, branch `feat/dashboard-waterfall`, based on PR #210's final head `f5d825342c8a3b06a248769ed51a170f7b9e49c6`.
+The slice implements checklist 13.3 with optional drag and keyboard reorder controls and persisted compact, standard, and expanded widget density presets.
+Checklist 13.4 adds an opt-in cash-flow waterfall for income, expenses, and savings with direct labels and a table twin.
+The `dashboardWidgetLayout` and `cashFlowWaterfall` flags remain off; no migration, production flag change, deployment, or merge occurred.
+Local full tests pass with 554 files and 6,130 tests, plus TypeScript, ESLint, the placeholder production build, graph refresh, and `git diff --check`.
+The next step is to push and verify the stacked draft PR at its exact head, including direct Sonar issue and hotspot counts.
+The remaining checklist workstreams are 12.2, 12.3, and 13.5 through 13.7.
+
 ## 2026-10-03: Checklist group 7, onboarding and release transparency
 
 Worktree: `/private/tmp/fundflow-planning-onboarding`, branch `feat/onboarding-transparency`, based on PR #209 head `04b2b767586ecf391e5ea96ef405a7882a6caa10`.
-Draft PR #210 is open at `116ba68`; its exact-head hosted checks and direct Sonar verification pass with zero unresolved issues and zero hotspots awaiting review.
+Draft PR #210 is open at `f5d8253`; its final exact-head hosted checks and direct Sonar verification pass with zero unresolved issues and zero hotspots awaiting review.
 Checklist 13.1 adds a first-run setup checklist and guided tour with bank, payday, budget, alert, and MFA steps.
 The checklist is resumable and dismissible through the existing `profiles.dashboard_prefs` JSON, with bounded server-derived completion state and keyboard-accessible controls.
 Checklist 13.2 adds versioned release highlights with a per-user viewed marker in the same preferences JSON.

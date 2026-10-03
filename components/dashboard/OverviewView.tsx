@@ -14,6 +14,7 @@ import { formatMonth } from "@/lib/format";
 import { dateKeyInTimezone } from "@/lib/report-period";
 import type { GoalSummaryItem } from "@/lib/goal-summary";
 import { createClient } from "@/lib/supabase/server";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 import type { ComponentProps } from "react";
 
 /**
@@ -93,6 +94,7 @@ export default async function OverviewView({
       )}
       <DashboardWidgetGrid
         prefs={prefs}
+        advancedLayout={isFeatureEnabled("dashboardWidgetLayout")}
         data={{ ...data, investments: loaded.investments }}
         goals={goals}
         cumulativeSpend={loaded.cumulativeSpend.days}

@@ -11,6 +11,7 @@ import TransactionsWidget from "@/components/dashboard/widgets/TransactionsWidge
 import RecentActivity from "@/components/dashboard/RecentActivity";
 import {
   visibleWidgets,
+  getWidgetSize,
   WIDGET_DEFINITIONS,
   type DashboardWidgetPrefs,
   type WidgetKey,
@@ -29,6 +30,8 @@ import type { DashboardInvestmentSummary } from "@/lib/dashboard-widgets-data";
  * Budget/Net worth/Goals; right: Spending/Transactions/Recurring/
  * Investments — see `WidgetDefinition.column`); the user's saved `order`
  * still controls arrangement within whichever column a widget belongs to.
+ * Size presets change card density without changing the data contract or
+ * allowing a widget to disappear below the fold.
  */
 
 export interface DashboardWidgetGridData {
@@ -40,6 +43,7 @@ export interface DashboardWidgetGridData {
 
 export default function DashboardWidgetGrid({
   prefs,
+  advancedLayout = false,
   data,
   goals,
   cumulativeSpend,
@@ -52,6 +56,7 @@ export default function DashboardWidgetGrid({
   currency = "USD",
 }: Readonly<{
   prefs: DashboardWidgetPrefs;
+  advancedLayout?: boolean;
   data: DashboardWidgetGridData;
   goals: GoalSummaryItem[];
   cumulativeSpend: CumulativeSpendDay[];
@@ -125,7 +130,11 @@ export default function DashboardWidgetGrid({
         // wide child (table, chart, long merchant name) stretches its track
         // instead of scrolling inside itself, and takes the whole page into
         // horizontal overflow on a phone.
-        <div key={key} className="min-w-0">
+        <div
+          key={key}
+          data-dashboard-widget-size={advancedLayout ? getWidgetSize(prefs, key) : "standard"}
+          className="min-w-0"
+        >
           {render(key)}
         </div>
       ))}

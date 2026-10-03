@@ -394,4 +394,19 @@ describe("DashboardWidgetGrid", () => {
     );
     expect(html).toContain("Every widget is hidden");
   });
+
+  it("renders the selected size preset when the layout enhancement is enabled", () => {
+    const html = renderToStaticMarkup(
+      createElement(DashboardWidgetGrid, {
+        ...baseProps,
+        advancedLayout: true,
+        prefs: {
+          order: ["budget"],
+          hidden: [],
+          sizes: [{ key: "budget", size: "expanded" }],
+        },
+      }),
+    );
+    expect(html).toContain('data-dashboard-widget-size="expanded"');
+  });
 });
