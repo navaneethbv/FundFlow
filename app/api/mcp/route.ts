@@ -172,8 +172,9 @@ async function handle(request: NextRequest, input: McpRequestInput): Promise<Nex
       if (!result.allowed) {
         return NextResponse.json({ error: "Data export is disabled in your settings." }, { status: 403 });
       }
-      const rows = input.category
-        ? result.rows.filter((row) => row.category.toUpperCase() === input.category!.toUpperCase())
+      const category = input.category?.toUpperCase();
+      const rows = category
+        ? result.rows.filter((row) => row.category.toUpperCase() === category)
         : result.rows;
       await writeAudit({
         userId: token.userId,
