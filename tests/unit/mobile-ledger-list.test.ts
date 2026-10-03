@@ -5,7 +5,7 @@ import { formatDate } from "@/lib/format-date";
 import { buildLedgerDayGroups } from "@/lib/ledger-data";
 
 vi.mock("@/components/transactions/TransactionEditor", () => ({
-  default: () => React.createElement("span", { "data-testid": "editor" }),
+  default: ({ cleared }: { cleared?: boolean }) => React.createElement("span", { "data-testid": "editor", "data-cleared": String(cleared) }),
 }));
 
 import MobileLedgerList from "@/components/transactions/MobileLedgerList";
@@ -37,6 +37,10 @@ function render(rows: Row[], grouped = false): string {
 }
 
 describe("MobileLedgerList", () => {
+  it("forwards saved cleared state to the mobile editor", () => {
+    expect(render([{ ...baseRow, cleared: true } as Row])).toContain('data-cleared="true"');
+    expect(render([{ ...baseRow, cleared: false } as Row])).toContain('data-cleared="false"');
+  });
   it("renders merchant, formatted amount, category, and account", () => {
     const html = render([baseRow]);
     expect(html).toContain("Blue Bottle");

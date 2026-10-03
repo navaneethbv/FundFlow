@@ -160,17 +160,17 @@ describe("POST /api/transactions/annotate", () => {
     expect(res.status).toBe(400);
   });
 
-  it("throws to 500 when the annotation delete errors (line 68)", async () => {
+  it("returns 500 when clearing a note fails to persist", async () => {
     mockRequireUser.mockResolvedValue({
       user: USER,
       supabase: supabase(
         handlers({
           transaction_annotations: (kind) =>
-            kind === "delete" ? { error: new Error("del fail") } : { error: null },
+            kind === "upsert" ? { error: new Error("write fail") } : { error: null },
         }),
       ),
     });
-    const res = await annotatePost(jsonRequest({ transaction_id: "t1" }));
+    const res = await annotatePost(jsonRequest({ transaction_id: "t1", note: "" }));
     expect(res.status).toBe(500);
   });
 

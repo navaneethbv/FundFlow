@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CLEAR_LEDGER_FILTERS,
   hasActiveLedgerFilters,
   ledgerHref,
   ledgerQueryEntries,
@@ -8,6 +9,27 @@ import {
 } from "@/lib/ledger-query";
 
 describe("parseLedgerQuery", () => {
+  it("normalizes amount bounds and preserves posting status through navigation and saved views", () => {
+    const state = parseLedgerQuery({ minAmount: "0", maxAmount: "42.5", status: "pending", page: "2" });
+    expect(state).toMatchObject({ minAmount: "0.00", maxAmount: "42.50", status: "pending" });
+    expect(savedLedgerViewParams(state)).toEqual({ minAmount: "0.00", maxAmount: "42.50", status: "pending" });
+    const next = new URL(ledgerHref(ledgerQueryEntries(state), { page: "3" }), "https://fundflow.test");
+    expect(next.searchParams.get("minAmount")).toBe("0.00");
+    expect(next.searchParams.get("maxAmount")).toBe("42.50");
+    expect(next.searchParams.get("status")).toBe("pending");
+    expect(next.searchParams.get("page")).toBe("3");
+    expect(hasActiveLedgerFilters(state)).toBe(true);
+    expect(parseLedgerQuery({ status: "posted" }).status).toBe("posted");
+  });
+
+  it.each(["-1", "NaN", "Infinity", "1e3", "0.001", "1,amount.gt.0", "10000000000", "."])("rejects unsafe or invalid amount %s", (value) => {
+    expect(parseLedgerQuery({ minAmount: value, maxAmount: value, status: "invalid" })).toMatchObject({ minAmount: "", maxAmount: "", status: "" });
+  });
+
+  it("clears hidden date and new filters without removing presentation preferences", () => {
+    const state = parseLedgerQuery({ day: "2026-09-01", year: "2026", minAmount: "1", maxAmount: "2", status: "posted", review: "reviewed", sort: "amount", page: "4" });
+    expect(ledgerHref(ledgerQueryEntries(state), CLEAR_LEDGER_FILTERS)).toBe("/transactions?sort=amount");
+  });
   it("defaults to Date newest first and page one", () => {
     const state = parseLedgerQuery({});
 

@@ -24,7 +24,8 @@ test.beforeAll(async () => {
           import { createElement } from "react";
           import { createRoot } from "react-dom/client";
           import ImportReviewSection from ${JSON.stringify(path.join(root, "components/settings/ImportReviewSection.tsx"))};
-          createRoot(document.getElementById("root")).render(createElement(ImportReviewSection, { wizardEnabled: !location.search.includes("off"), profilesEnabled: !location.search.includes("off"), diagnosticsEnabled: !location.search.includes("off"), accounts: [{ id: "account", name: "Test bank", mask: null, kind: "account" }] }));
+          import ReceiptScanSection from ${JSON.stringify(path.join(root, "components/settings/ReceiptScanSection.tsx"))};
+          createRoot(document.getElementById("root")).render(window.receiptFixture ? createElement(ReceiptScanSection, { enabled: true }) : createElement(ImportReviewSection, { wizardEnabled: !location.search.includes("off"), profilesEnabled: !location.search.includes("off"), diagnosticsEnabled: !location.search.includes("off"), accounts: [{ id: "account", name: "Test bank", mask: null, kind: "account" }] }));
         `;
       },
     }],
@@ -34,6 +35,45 @@ test.beforeAll(async () => {
   const source = path.join(root, "app/globals.css");
   css = (await postcss([tailwind()]).process(await readFile(source, "utf8"), { from: source })).css;
 });
+
+for (const width of [375, 1440]) {
+  test(`receipt upload stays contained and recovers from request failures at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    let offline = true;
+    await page.route("http://fundflow.test/**", route => {
+      if (route.request().url().includes("/api/")) {
+        return offline ? route.abort("failed") : route.fulfill({ json: { merchant: "Test shop", amount: 12, date: "2026-10-01", lineItems: ["Lunch"], matchedTransactionId: "transaction" } });
+      }
+      return route.fulfill({ contentType: "text/html", body: `<!doctype html><html lang="en"><head><title>Receipt test</title><style>${css}</style></head><body><main style="padding:16px"><h1>Receipt test</h1><div id="root"></div></main><script>window.receiptFixture=true</script></body></html>` });
+    });
+    await page.goto("http://fundflow.test/");
+    await page.addScriptTag({ content: script });
+    const picker = page.getByLabel("Choose a receipt photo", { exact: true });
+    await expect(picker).toHaveCount(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await picker.focus();
+    await expect(picker).toBeFocused();
+    await picker.setInputFiles({ name: "receipt.png", mimeType: "image/png", buffer: Buffer.from("synthetic receipt fixture") });
+    await page.getByRole("button", { name: "Scan", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("Could not read the receipt");
+    await expect(page.getByText("receipt.png", { exact: true })).toBeVisible();
+    offline = false;
+    await page.getByRole("button", { name: "Scan", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Attach to matching transaction" })).toBeVisible();
+    offline = true;
+    await page.getByRole("button", { name: "Attach to matching transaction" }).click();
+    await expect(page.getByRole("status")).toContainText("Could not attach the note");
+    await page.getByRole("button", { name: "Save to receipt inbox" }).click();
+    await expect(page.getByRole("status")).toContainText("Could not save the receipt");
+    offline = false;
+    await page.getByRole("button", { name: "Save to receipt inbox" }).click();
+    await expect(page.getByRole("status")).toHaveText("Saved to the receipt inbox.");
+    expect(errors).toEqual([]);
+    expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations).toEqual([]);
+  });
+}
 
 for (const width of [375, 1440]) {
   for (const theme of ["light", "dark"]) {

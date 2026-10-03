@@ -1,5 +1,26 @@
 # FundFlow Session Handoff
 
+## 2026-10-03: Functionality review and initial Sure filter parity
+
+Work is isolated in `/private/tmp/fundflow-main-review-20261003` on `fix/post-merge-functionality-review`, based on fetched/pulled main `dcedce4`.
+The original checkout's unrelated edits remain untouched.
+See [the review and feature-gap matrix](reviews/2026-10-03-functionality-and-sure-review.md) for reproductions, acceptance boundaries, and remaining risks.
+
+Implemented annotation field preservation, recurring history search repair, mobile/cancelled reconciliation-state fixes, closed-editor listener cleanup, calendar-flag fallback, complete date-filter clearing, accessible/recoverable manual holdings, and receipt-picker overflow/request recovery.
+Started Sure parity with owner-scoped ledger amount bounds and posting status, including query navigation and saved-view serialization.
+The Sure live tab was denied by the browser approval control; comparison uses its pinned public source, without copying AGPL implementation.
+Live FundFlow testing was read-only, and all write/failure tests used synthetic data.
+No production data, migration, flag, token, or setting changed.
+
+Baseline main passed 6,210 unit tests and lint.
+Local coverage passed 6,233 tests with 99.31% lines and 94.96% branches; 22 integration files and three tests were skipped without disposable service configuration.
+The 2030 future-clock run passed 6,228 unit tests, and the final browser suite passed 54 tests.
+Lint, typecheck, palette validation, zero-vulnerability dependency audit, and the placeholder-environment production build passed.
+Hosted verification is tracked on the new PR separately; this work is not merged or deployed.
+Remote migration inventory matches all 112 reviewed main versions.
+The graph is refreshed; optional SQL graph extraction is unavailable without its parser dependency.
+The remaining split-write atomicity risk needs a transactional database operation and disposable rollback/concurrency acceptance, not production failure injection.
+
 ## 2026-10-03: Post-merge review fixes and recurring cleanup
 
 A signed-in walk of every live page after the #205 to #217 merge found no broken page, but several wrong numbers; branch `fix/net-worth-change-and-price-alerts` fixes them, each with a regression that fails without it.

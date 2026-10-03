@@ -22,6 +22,7 @@ export interface LedgerCardRow {
   amount: number;
   currency: string;
   pending: boolean;
+  cleared?: boolean;
   excludedDuplicate?: boolean;
   note: string | null;
   tags: string[];
@@ -244,6 +245,7 @@ function LedgerCardAmount({ row, undoEnabled }: Pick<LedgerCardProps, "row" | "u
         categories={row.categoryOptions}
         providerCategory={row.providerCategory}
         override={row.override}
+        cleared={row.cleared}
         undoEnabled={undoEnabled}
       />
     </div>

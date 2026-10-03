@@ -1,5 +1,18 @@
 # FundFlow — Future Todos
 
+## Current review: Functionality and Sure parity, 2026-10-03
+
+The new `fix/post-merge-functionality-review` branch fixes reproduced ledger/form regressions and starts parity with amount-range and pending/posted ledger filters.
+See [the evidence and gap matrix](reviews/2026-10-03-functionality-and-sure-review.md).
+Production data was not changed; the branch is not merged or deployed.
+
+- Make split replacement, annotation updates, and linked goal-progress writes atomic, with owner validation and disposable database failure/concurrency tests.
+- Add tag/untagged ledger filters with pagination-safe query semantics.
+- Evaluate report period presets and report-section layout persistence separately from existing dashboard customization.
+- Historical FX, additional connectors, native clients/FinanceKit, and broader integration APIs require product/provider/security decisions before implementation.
+- Complete disposable-environment acceptance for mutation, authentication, storage, import undo, and delivery flows.
+  Read-only live checks and synthetic browser tests do not substitute for those end-to-end checks.
+
 ## Current checkpoint: Stack merged and deployed, 2026-10-03
 
 PRs #205, #206, and #208 through #217 are merged to `main` at `a28fd822` and deployed to production; see [the handoff](HANDOFF.md#2026-10-03-stack-205-to-217-merged-and-deployed).

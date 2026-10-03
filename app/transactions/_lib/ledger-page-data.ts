@@ -1,7 +1,7 @@
 import { accountDisplayLabel } from "@/lib/account-label";
 import type { createClient } from "@/lib/supabase/server";
 import { hasRemapRules } from "@/lib/ledger-filter";
-import type { parseLedgerQuery, LedgerReviewFilter } from "@/lib/ledger-query";
+import { normalizeLedgerAmount, type parseLedgerQuery, type LedgerReviewFilter } from "@/lib/ledger-query";
 import { collectLedgerChunks, ledgerDatabaseOrder, needsProjectedLedgerPage, selectProjectedLedgerPage } from "@/lib/ledger-data";
 import {
   buildLedgerFilterOptions, filterProjectedLedgerRows, projectLedgerRows, toLedgerFacetRow,
@@ -28,6 +28,9 @@ export type LedgerChunkFilters = {
   reviewFilter: LedgerReviewFilter;
   typedIds: string[];
   missingAccountId: string;
+  minAmount?: string;
+  maxAmount?: string;
+  status?: "" | "pending" | "posted";
 };
 
 /**
@@ -74,6 +77,11 @@ function buildLedgerFilterQuery(
   }
   if (filters.flow === "in") query = query.lt("amount", 0);
   if (filters.flow === "out") query = query.gt("amount", 0);
+  const minimum = normalizeLedgerAmount(filters.minAmount ?? "");
+  const maximum = normalizeLedgerAmount(filters.maxAmount ?? "");
+  if (minimum) query = query.or(`amount.gte.${minimum},amount.lte.-${minimum}`);
+  if (maximum) query = query.gte("amount", -Number(maximum)).lte("amount", Number(maximum));
+  if (filters.status) query = query.eq("pending", filters.status === "pending");
   if (filters.accountType) {
     query = query.in(
       "account_id",
@@ -405,4 +413,3 @@ export async function loadLedgerRowDetails(
 
   return { annById, overridesById, splitsById, excludedDuplicateIds, failed: errorCodes.length > 0 };
 }
-

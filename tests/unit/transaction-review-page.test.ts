@@ -3,11 +3,12 @@ import { isValidElement } from "react";
 import { clientStub, type QueryResult } from "../fixtures/supabase-query";
 
 let enabled = true;
+let calendarEnabled = true;
 let records: Array<Record<string, unknown>> = [];
 let rules: Array<Record<string, unknown>> = [];
 let failure: { code: string } | null = null;
 const calls: string[] = [];
-vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled: (name: string) => name === "transactionReview" ? enabled : !["compoundRules", "ruleSuggestions", "transactionDetails", "ruleRunHistory"].includes(name) }));
+vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled: (name: string) => name === "transactionReview" ? enabled : name === "transactionCalendar" ? calendarEnabled : !["compoundRules", "ruleSuggestions", "transactionDetails", "ruleRunHistory"].includes(name) }));
 const owner = "11111111-1111-4111-8111-111111111111";
 function sourceQuery() {
   let filtered = records.slice();
@@ -61,8 +62,14 @@ function fixture(count: number) {
     review_status: i % 3 ? "needs_review" : "reviewed", review_version: "1", review_eligible: true, review_state_missing: false,
   }));
 }
-beforeEach(() => { records = []; rules = []; failure = null; enabled = true; calls.length = 0; });
+beforeEach(() => { records = []; rules = []; failure = null; enabled = true; calendarEnabled = true; calls.length = 0; });
 describe("transaction review page contract", () => {
+  it("falls back to the list for a calendar URL while that feature is disabled", async () => {
+    calendarEnabled = false;
+    records = fixture(2);
+    const tree = await Page({ searchParams: Promise.resolve({ view: "calendar" }) });
+    expect(rowsIn(tree).map((row) => row.id)).toEqual(records.map((row) => row.id));
+  });
   it("shows caught-up for an empty queue, and filtered-empty only when work remains", async () => {
     let tree = await Page({ searchParams: Promise.resolve({ review: "needs_review" }) });
     expect(elements(tree).some((node) => node.props.title === "You're all caught up")).toBe(true);

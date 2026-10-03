@@ -11,6 +11,8 @@ vi.mock("@/lib/dashboard-cache", () => ({ invalidateDashboardCache: mockInvalida
  */
 function makeClient(txn: { id: string; amount: number } | null) {
   const inserts: unknown[] = [];
+  const annotationWrites: Record<string, unknown>[] = [];
+  const deletes: string[] = [];
   const eqCalls: Array<{ table: string; column: string; value: unknown }> = [];
   const from = (table: string) => {
     const chain: Record<string, unknown> = {};
@@ -20,10 +22,13 @@ function makeClient(txn: { id: string; amount: number } | null) {
         eqCalls.push({ table, column, value });
         return chain;
       },
-      delete: () => chain,
+      delete: () => { deletes.push(table); return chain; },
       neq: () => chain,
       maybeSingle: () => Promise.resolve({ data: txn }),
-      upsert: () => Promise.resolve({ error: null }),
+      upsert: (row: Record<string, unknown>) => {
+        if (table === "transaction_annotations") annotationWrites.push(row);
+        return Promise.resolve({ error: null });
+      },
       insert: (rows: unknown) => {
         inserts.push(rows);
         return Promise.resolve({ error: null });
@@ -32,7 +37,7 @@ function makeClient(txn: { id: string; amount: number } | null) {
     });
     return chain;
   };
-  return { client: { from } as never, inserts, eqCalls };
+  return { client: { from } as never, inserts, eqCalls, annotationWrites, deletes };
 }
 
 const { mockRequireUser } = vi.hoisted(() => ({ mockRequireUser: vi.fn() }));
@@ -121,11 +126,35 @@ describe("POST /api/transactions/annotate", () => {
     expect(res.status).toBe(400);
   });
 
-  it("deletes annotations when note and tags are empty", async () => {
-    const { client } = makeClient({ id: "t1", amount: 60 });
+  it("clears explicit note and tags without deleting other annotation metadata", async () => {
+    const { client, annotationWrites, deletes } = makeClient({ id: "t1", amount: 60 });
     mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: client });
     const res = await post({ transaction_id: "t1", note: "", tags: [] });
     expect(res.status).toBe(200);
+    expect(deletes).not.toContain("transaction_annotations");
+    expect(annotationWrites).toEqual([{ user_id: "u1", transaction_id: "t1", note: null, tags: [] }]);
+  });
+
+  it("clears the last note and tag even when reconciliation is supplied", async () => {
+    const { client, annotationWrites } = makeClient({ id: "t1", amount: 60 });
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: client });
+    expect((await post({ transaction_id: "t1", note: "", tags: [], cleared: true })).status).toBe(200);
+    expect(annotationWrites[0]).toMatchObject({ note: null, tags: [], cleared_at: expect.any(String) });
+  });
+
+  it("preserves omitted notes and tags on a cleared-only update", async () => {
+    const { client, annotationWrites } = makeClient({ id: "t1", amount: 60 });
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: client });
+    expect((await post({ transaction_id: "t1", cleared: false })).status).toBe(200);
+    expect(annotationWrites).toEqual([{ user_id: "u1", transaction_id: "t1", cleared_at: null }]);
+  });
+
+  it("leaves annotation metadata alone for a splits-only request", async () => {
+    const { client, annotationWrites, deletes } = makeClient({ id: "t1", amount: 60 });
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: client });
+    expect((await post({ transaction_id: "t1", splits: [] })).status).toBe(200);
+    expect(annotationWrites).toEqual([]);
+    expect(deletes).toEqual(["transaction_splits"]);
   });
 
   it("upserts annotations when note is provided", async () => {

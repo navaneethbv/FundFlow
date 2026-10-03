@@ -36,6 +36,9 @@ export interface LedgerRawSearchParams {
   colsSubmitted?: string | string[];
   review?: string | string[];
   view?: string | string[];
+  minAmount?: string | string[];
+  maxAmount?: string | string[];
+  status?: string | string[];
 }
 
 export interface LedgerFilters {
@@ -50,6 +53,10 @@ export interface LedgerFilters {
   flow: "" | "in" | "out";
   accountType: "" | "depository" | "credit";
   review: LedgerReviewFilter;
+  /** Absolute amount, in the transaction's own currency. */
+  minAmount?: string;
+  maxAmount?: string;
+  status?: "" | "pending" | "posted";
 }
 
 export interface LedgerQueryState extends LedgerFilters {
@@ -85,7 +92,20 @@ const FILTER_KEYS = [
   "flow",
   "accountType",
   "review",
+  "minAmount",
+  "maxAmount",
+  "status",
 ] as const satisfies readonly (keyof LedgerFilters)[];
+
+export const CLEAR_LEDGER_FILTERS: LedgerQueryPatch = Object.fromEntries(
+  FILTER_KEYS.map((key) => [key, null]),
+);
+
+/** Decimal-only input also keeps values interpolated into PostgREST grammar safe. */
+export function normalizeLedgerAmount(value: string): string {
+  if (!/^\d{1,10}(?:\.\d{1,2})?$/.test(value)) return "";
+  return Number(value).toFixed(2);
+}
 
 export function sanitizeLedgerSearch(value: string): string {
   return value
@@ -118,6 +138,9 @@ export function parseLedgerQuery(
     flow: oneOf(param(raw.flow), ["in", "out"] as const, ""),
     accountType: oneOf(param(raw.accountType), ["depository", "credit"] as const, ""),
     review: oneOf(param(raw.review), ["needs_review", "reviewed"] as const, "all"),
+    minAmount: normalizeLedgerAmount(param(raw.minAmount)),
+    maxAmount: normalizeLedgerAmount(param(raw.maxAmount)),
+    status: oneOf(param(raw.status), ["pending", "posted"] as const, ""),
     view: oneOf(param(raw.view), ["calendar"] as const, "list"),
     sort: oneOf(param(raw.sort), LEDGER_SORT_FIELDS, "date"),
     direction: oneOf(param(raw.direction), ["asc", "desc"] as const, "desc"),

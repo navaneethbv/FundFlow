@@ -164,7 +164,7 @@ export default function PriceSpikeBanner({
                 +{formatCurrency(alert.annualizedImpact)}/yr
               </span>
               <Link
-                href={`/transactions?search=${encodeURIComponent(alert.merchantName)}`}
+                href={`/transactions?q=${encodeURIComponent(alert.merchantName)}`}
                 className="text-accent hover:underline font-medium"
               >
                 View history
