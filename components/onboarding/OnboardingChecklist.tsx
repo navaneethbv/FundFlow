@@ -17,7 +17,7 @@ import type { OnboardingPageData } from "@/lib/onboarding-data";
 export default function OnboardingChecklist({
   initial,
 }: Readonly<{ initial: OnboardingPageData }>) {
-  const dialogRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const supabase = useMemo(() => createClient(), []);
   const [prefs, setPrefs] = useState<OnboardingPrefs>(initial.prefs);
   const [tourOpen, setTourOpen] = useState(false);
@@ -107,8 +107,8 @@ export default function OnboardingChecklist({
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-sm text-muted">{completed} of {initial.steps.length} steps complete. Resume where you left off.</p>
-            <div className="mt-3 h-2 w-full max-w-sm overflow-hidden rounded-full bg-panel-2" role="progressbar" aria-label="Setup progress" aria-valuemin={0} aria-valuemax={initial.steps.length} aria-valuenow={completed}>
-              <div className="h-full rounded-full bg-brand transition-[width]" style={{ width: `${(completed / initial.steps.length) * 100}%` }} />
+            <div className="mt-3 h-2 w-full max-w-sm overflow-hidden rounded-full bg-panel-2">
+              <progress max={initial.steps.length} value={completed} aria-label="Setup progress" className="h-2 w-full accent-brand" />
             </div>
           </div>
           <Button onClick={openTour} disabled={saving}>{completed === initial.steps.length ? "Review setup tour" : "Start guided tour"}</Button>
@@ -130,7 +130,7 @@ export default function OnboardingChecklist({
         </ol>
       </Panel>
       {tourOpen && (
-        <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="onboarding-tour-title" tabIndex={-1} className="rounded-card border border-accent/40 bg-panel p-5 shadow-pop focus:outline-none">
+        <dialog ref={dialogRef} open aria-labelledby="onboarding-tour-title" tabIndex={-1} className="rounded-card border border-accent/40 bg-panel p-5 shadow-pop focus:outline-none">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="eyebrow">Guided setup · Step {tourStep + 1} of {initial.steps.length}</p>
@@ -148,7 +148,7 @@ export default function OnboardingChecklist({
               void persist({ tourStep: next });
             }} disabled={tourStep === ONBOARDING_STEP_KEYS.length - 1}>Next</Button>
           </div>
-        </div>
+        </dialog>
       )}
     </>
   );
