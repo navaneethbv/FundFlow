@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CanonicalFinanceTransaction } from "@/lib/finance-domain";
+import { financeTotals, type CanonicalFinanceTransaction } from "@/lib/finance-domain";
 import {
   breakdownBy,
   cashFlowPeriodKey,
@@ -71,6 +71,22 @@ describe("cashFlowPeriodKey", () => {
 });
 
 describe("computePeriodCashFlow", () => {
+  it("nets refunds against spending, matching financeTotals", () => {
+    const rows = [
+      transaction({ id: "jacket", date: "2026-09-03", signedAmount: 120, flow: "expense" }),
+      // Plaid refund: negative amount in a spending group stays an expense row.
+      transaction({ id: "jacket-refund", date: "2026-09-10", signedAmount: -20, flow: "expense" }),
+      transaction({ id: "pay", date: "2026-09-15", signedAmount: -1000, flow: "income" }),
+    ];
+
+    const [september] = computePeriodCashFlow(rows, "monthly");
+    expect(september).toMatchObject({ income: 1000, expenses: 100, savings: 900 });
+    expect(september!.expenses).toBe(financeTotals(rows).expenses);
+    expect(breakdownBy(rows, "category", "expense")).toEqual([
+      expect.objectContaining({ amount: 100 }),
+    ]);
+  });
+
   it("buckets months in ascending order and excludes transfers", () => {
     expect(computePeriodCashFlow(PERIOD_ROWS, "monthly")).toEqual([
       {

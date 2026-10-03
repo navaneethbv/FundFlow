@@ -78,7 +78,9 @@ export function computePeriodCashFlow(
     const key = cashFlowPeriodKey(row.date, period);
     const current = totals.get(key) ?? { income: 0, expenses: 0 };
     if (row.flow === "income") current.income += Math.abs(row.signedAmount);
-    if (row.flow === "expense") current.expenses += Math.abs(row.signedAmount);
+    // Signed, like financeTotals: a refund is a negative expense row and must
+    // net against spending, not add to it.
+    if (row.flow === "expense") current.expenses += row.signedAmount;
     totals.set(key, current);
   }
 
@@ -166,7 +168,7 @@ export function breakdownBy(
     const label = breakdownLabel(row, dimension);
     amounts.set(
       label,
-      (amounts.get(label) ?? 0) + Math.abs(row.signedAmount),
+      (amounts.get(label) ?? 0) + (direction === "expense" ? row.signedAmount : Math.abs(row.signedAmount)),
     );
   }
 
