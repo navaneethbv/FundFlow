@@ -1,5 +1,14 @@
 # FundFlow — Future Todos
 
+## Current checkpoint: Checklist group 9, external-services disclosure, 2026-10-03
+
+The next checklist slice is implemented in `/private/tmp/fundflow-services-disclosure` on `feat/services-disclosure`, stacked on PR #211's verified head.
+Checklist 13.5 adds Settings > Privacy with a source-linked registry for Supabase, Plaid, configured email delivery, browser push, and opt-in Anthropic calls.
+Each entry states purpose, data sent or received, trigger, optionality, and the source files that own the outbound boundary.
+The registry is read-only and does not change consent, provider configuration, or delivery behavior.
+The next hosted verification is the draft PR stacked on PR #211; no migration, deployment, merge, or production flag change was performed.
+The remaining checklist workstreams are 12.2, 12.3, and 13.6 through 13.7.
+
 ## Current checkpoint: Checklist group 8, dashboard layout and cash-flow transparency, 2026-10-03
 
 The next checklist slice is implemented in `/private/tmp/fundflow-dashboard-waterfall` on `feat/dashboard-waterfall`, stacked on PR #210's final verified head.

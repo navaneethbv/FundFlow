@@ -21,6 +21,7 @@ describe("SettingsLayout", () => {
     expect(html).toContain("Notifications");
     expect(html).toContain("Security");
     expect(html).toContain("Integrations");
+    expect(html).toContain("Privacy");
     // Household-group sections.
     expect(html).toContain("Settle up");
     expect(html).toContain("Institutions");

@@ -409,7 +409,7 @@ No dependency changes are included in feature PRs.
 | 13.2 | Implemented, release gated | PR #210: versioned dashboard release highlights with per-user viewed marker; `releaseHighlights` remains off. |
 | 13.3 | Implemented, release gated | Stacked continuation after PR #210: optional drag and keyboard reorder controls plus persisted widget density presets behind `dashboardWidgetLayout`. |
 | 13.4 | Implemented, release gated | Stacked continuation after PR #210: accessible income-to-expenses-to-savings waterfall and table twin behind `cashFlowWaterfall`. |
-| 13.5 | Not started |  |
+| 13.5 | Implemented | Stacked continuation after PR #211: source-linked Settings > Privacy external-service registry. |
 | 13.6 | Not started |  |
 | 13.7 | Not started |  |
 
