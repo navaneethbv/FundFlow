@@ -231,22 +231,32 @@ export function detectPaychecks(input: {
 
   const primary =
     paychecks
-      .filter(({ paycheck }) => paycheck.nextPayDate !== null)
+      // Interest and dividends recur but are not pay: anchoring Safe-to-Spend
+      // to a savings-interest date is worse than the fallback window.
+      .filter(({ paycheck, isWage }) => paycheck.nextPayDate !== null && (isWage || !NON_PAY_INCOME.test(paycheck.name)))
       .sort((a, b) => Number(b.isWage) - Number(a.isWage) || b.paycheck.amount - a.paycheck.amount)[0]
       ?.paycheck ?? null;
 
   return { paychecks: paychecks.map(({ paycheck }) => paycheck), primary };
 }
 
+const NON_PAY_INCOME = /\b(interest|dividends?)\b/i;
+
 export interface WageTransactionInput extends IncomeTransactionInput {
   /** Plaid's detailed category; wages are `INCOME_WAGES`. */
   pfcDetailed: string | null;
 }
 
-/** Descriptor tokens carrying digits are per-deposit ids, not the employer. */
+/**
+ * The employer part of a payroll descriptor. ACH descriptors append a fresh
+ * trace id each deposit (`ID:yWRlYrN`, sometimes with no digit at all), so
+ * everything from the first `ID:`/`INDN:` field on is dropped along with any
+ * token carrying digits.
+ */
 function employerKey(merchant: string): string {
   return merchant
     .toLowerCase()
+    .split(/\s+(?=(?:co\s+)?(?:id|indn):)/)[0]!
     .split(/\s+/)
     .filter((token) => token && !/\d/.test(token))
     .join(" ");
@@ -272,13 +282,19 @@ function daysBetween(from: string, to: string): number {
  * the largest remaining inflow, often savings interest, became the "paycheck"
  * that anchors Safe-to-Spend. Needs three deposits at a regular cadence, the
  * latest within two pay periods of asOf so a former employer never projects.
+ * An employer whose recurring stream the user dismissed stays dismissed.
  */
-export function inferWageStreams(transactions: WageTransactionInput[], asOf: string): IncomeStreamInput[] {
+export function inferWageStreams(
+  transactions: WageTransactionInput[],
+  asOf: string,
+  dismissedNames: string[] = [],
+): IncomeStreamInput[] {
+  const dismissed = new Set(dismissedNames.map(employerKey));
   const byEmployer = new Map<string, WageTransactionInput[]>();
   for (const txn of transactions) {
     if (txn.pfcDetailed !== "INCOME_WAGES" || txn.amount >= 0) continue;
     const key = employerKey(txn.merchant);
-    if (!key) continue;
+    if (!key || dismissed.has(key)) continue;
     byEmployer.set(key, [...(byEmployer.get(key) ?? []), txn]);
   }
   const streams: IncomeStreamInput[] = [];

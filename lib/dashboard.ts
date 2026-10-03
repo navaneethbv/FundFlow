@@ -1462,6 +1462,9 @@ export async function getDashboardData(
     pfcDetailed: t.pfc_detailed,
   }));
   const knownIncomeNames = new Set(incomeStreams.map((stream) => stream.merchant.trim().toLowerCase()));
+  const dismissedIncomeNames = recurringInputs.streamInputs
+    .filter((stream) => stream.streamType === "inflow" && stream.dismissedAt)
+    .flatMap((stream) => [stream.merchantName, stream.description].filter((name): name is string => !!name));
   const paychecks = detectPaychecks({
     incomeStreams: [
       ...incomeStreams.map((stream) => ({
@@ -1469,7 +1472,7 @@ export async function getDashboardData(
         amount: stream.amount,
         frequency: normalizeFrequency(stream.frequency),
       })),
-      ...inferWageStreams(incomeTransactions, insightsAsOf)
+      ...inferWageStreams(incomeTransactions, insightsAsOf, dismissedIncomeNames)
         .filter((stream) => !knownIncomeNames.has(stream.name.trim().toLowerCase())),
     ],
     incomeTransactions,
