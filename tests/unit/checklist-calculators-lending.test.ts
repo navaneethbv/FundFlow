@@ -104,6 +104,8 @@ describe("private lending", () => {
   it("rejects malformed drafts at the API boundary", () => {
     expect(validatePrivateLoanDraft({ direction: "lent", counterparty: "", principal: 10, annualInterestRate: 0, startDate: "2026-01-01" })).toEqual({ ok: false, error: "Counterparty must be 1 to 120 characters" });
     expect(validatePrivateLoanDraft({ direction: "borrowed", counterparty: "A", principal: 10, annualInterestRate: 0, startDate: "2026-01-01", dueDate: "2025-12-31" })).toEqual({ ok: false, error: "Due date must be on or after the start date" });
+    expect(validatePrivateLoanDraft({ direction: "lent", counterparty: "A", principal: 10, startDate: "2026-02-31" })).toEqual({ ok: false, error: "Start date must be YYYY-MM-DD" });
+    expect(validatePrivateLoanDraft({ direction: "lent", counterparty: "A", principal: 10, startDate: "2026-01-01", dueDate: "2026-13-01" })).toEqual({ ok: false, error: "Due date must be on or after the start date" });
   });
 });
 

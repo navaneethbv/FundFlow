@@ -7,6 +7,7 @@ import { loadPrivateLendingData } from "@/lib/private-lending-data";
 import { validatePrivateLoanDraft } from "@/lib/private-lending";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getClientIp, writeAudit } from "@/lib/audit";
+import { validFinancialDate } from "@/lib/xirr";
 
 function isUuid(value: unknown): value is string {
   return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -41,7 +42,7 @@ async function recordPayment(
   userId: string,
   service: ReturnType<typeof createServiceClient>,
 ): Promise<NextResponse> {
-  if (!isUuid(body.loan_id) || typeof body.payment_date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(body.payment_date)) {
+  if (!isUuid(body.loan_id) || !validFinancialDate(body.payment_date)) {
     return badRequest("loan_id and payment_date are required");
   }
   const amount = Number(body.amount);
@@ -91,8 +92,9 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   try {
     const service = createServiceClient();
-    if (body?.kind === "loan") return createLoan(request, body, auth.user.id, service);
-    if (body?.kind === "payment") return recordPayment(request, body, auth.user.id, service);
+    // Awaited so a rejected RPC reaches errorResponse rather than escaping the try.
+    if (body?.kind === "loan") return await createLoan(request, body, auth.user.id, service);
+    if (body?.kind === "payment") return await recordPayment(request, body, auth.user.id, service);
     return badRequest("kind must be loan or payment");
   } catch (error) {
     return errorResponse("private-lending.post", error);
