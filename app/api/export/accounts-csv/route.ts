@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { manualBalanceTable } from "@/lib/manual-asset-flags";
 import { getClientIp, writeAudit } from "@/lib/audit";
 import { groupKeyFor } from "@/lib/accounts-page";
 import { toCsv } from "@/lib/csv";
@@ -82,7 +83,7 @@ export async function GET(request: NextRequest) {
       )
       .order("name");
     let manualQuery = supabase
-      .from("manual_accounts")
+      .from(manualBalanceTable())
       .select("id,user_id,name,account_type,balance,updated_at")
       .order("name");
     if (queryUserId) {

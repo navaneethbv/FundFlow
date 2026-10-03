@@ -57,7 +57,7 @@ Treat "no in-app AI" as retired wording: the constraint that survived it is the 
 - Client writes are allowed only on `budgets`, `saved_reports`, `user_tags`,
   `merchant_rules`, `category_overrides`, `households`, `goals`,
   `shared_expenses`, `saved_views`, `notifications`, `alert_preferences`, `payday_settings`,
-  `plaid_category_mappings`,
+  `plaid_category_mappings`, `transaction_collections`,
   and the `profiles` preference columns. User-authored configuration is the
   test for joining that list; a provider-synced table never qualifies.
 - Migrations in `supabase/migrations/` are applied by hand (CLI or dashboard).

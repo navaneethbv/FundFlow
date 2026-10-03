@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
+import { manualBalanceTable } from "@/lib/manual-asset-flags";
 import { computeNetWorthSnapshot } from "@/lib/planning";
 import {
   composeNetWorthAccounts,
@@ -29,7 +30,7 @@ export async function writeNetWorthSnapshot(userId: string, today = new Date().t
 
   // 2. Fetch manual accounts
   const { data: manualAccounts, error: manualError } = await supabase
-    .from("manual_accounts")
+    .from(manualBalanceTable())
     .select("id, name, account_type, balance, include_in_net_worth")
     .eq("user_id", userId);
   if (manualError) throw manualError;

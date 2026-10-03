@@ -1,5 +1,6 @@
 import { annotationProjectionColumns, storedRuleActions, type RuleActions } from "@/lib/rule-actions";
 import { isFeatureEnabled } from "@/lib/feature-flags";
+import { manualBalanceTable } from "@/lib/manual-asset-flags";
 import { computeBudgetAllowance, type BudgetAllowance } from "@/lib/budget-allowance";
 import { loadPaydaySettings } from "@/lib/payday-data";
 import { paydayDates } from "@/lib/payday";
@@ -1090,7 +1091,7 @@ export async function getDashboardData(
     options?.includeBalanceSheet !== false
       ? scopeUser(
           supabase
-            .from("manual_accounts")
+            .from(manualBalanceTable())
             .select("id, name, account_type, balance, include_in_net_worth"),
         )
       : Promise.resolve({ data: [], error: null }),

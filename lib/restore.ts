@@ -417,6 +417,9 @@ async function restoreOneTable(
   result: RestoreResult,
 ): Promise<TableOutcome> {
   const { name, scope } = entry;
+  if (["manual_assets", "manual_account_values", "budget_moves", "transaction_collections"].includes(name)) {
+    return { kind: "skipped", name, reason: "requires owner-scoped financial validation; not restorable in-app" };
+  }
 
   if (scope === "profile") {
     const outcome = await restoreProfilePreferences(service, userId, rows);

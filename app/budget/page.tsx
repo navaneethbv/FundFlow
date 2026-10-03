@@ -246,6 +246,11 @@ export default async function BudgetPage({
           currency={currency}
           summaryTab={activeSummary}
           summaryLinks={summaryLinks}
+          features={{
+            overAllocation: isFeatureEnabled("budgetOverAllocation"),
+            moves: isFeatureEnabled("budgetMoves"),
+            setupWizard: isFeatureEnabled("budgetSetupWizard"),
+          }}
         />
       </div>
     </AppShell>

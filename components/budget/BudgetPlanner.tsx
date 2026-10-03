@@ -19,6 +19,8 @@ import type {
 import SeedBudgetButton from "@/components/budget/SeedBudgetButton";
 import CopyLastMonthButton from "@/components/budget/CopyLastMonthButton";
 import BudgetTemplateButton from "@/components/budget/BudgetTemplateButton";
+import MoveMoneyButton from "@/components/budget/MoveMoneyButton";
+import BudgetSetupWizard from "@/components/budget/BudgetSetupWizard";
 
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -263,6 +265,12 @@ function DecadeTable({
   );
 }
 
+export interface BudgetPlannerFeatures {
+  overAllocation?: boolean;
+  moves?: boolean;
+  setupWizard?: boolean;
+}
+
 export default function BudgetPlanner({
   initialView,
   proposals,
@@ -270,7 +278,10 @@ export default function BudgetPlanner({
   currency,
   summaryTab,
   summaryLinks,
+  features = {},
 }: Readonly<{
+  /** Server-resolved flags; client components cannot read them directly. */
+  features?: BudgetPlannerFeatures;
   initialView: BudgetViewData;
   proposals: BudgetSeedProposal[];
   month: string;
@@ -361,9 +372,20 @@ export default function BudgetPlanner({
               currentLines={monthlyData.sections.flatMap((section) => section.lines)}
             />
             <SeedBudgetButton proposals={proposals} month={month} currency={currency} />
+            {features.moves && (
+              <MoveMoneyButton
+                month={month}
+                currency={currency}
+                lines={monthlyData.sections.filter((section) => section.key !== "income").flatMap((section) => section.lines)}
+              />
+            )}
           </div>
 
-          {!hasConfiguredBudget && (
+          {!hasConfiguredBudget && features.setupWizard && proposals.length > 0 && (
+            <BudgetSetupWizard proposals={proposals} month={month} currency={currency} />
+          )}
+
+          {!hasConfiguredBudget && !(features.setupWizard && proposals.length > 0) && (
             <Panel tone="accent" className="border-dashed">
               <p className="text-sm font-semibold">No budget configured for {formatMonth(month)}</p>
               <p className="mt-1 text-sm text-muted">
@@ -463,6 +485,7 @@ export default function BudgetPlanner({
           currency={currency}
           tab={summaryTab}
           links={summaryLinks}
+          allocationWarning={features.overAllocation === true}
         />
       </div>
 

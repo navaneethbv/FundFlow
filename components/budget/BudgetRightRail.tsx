@@ -2,9 +2,38 @@ import Panel from "@/components/ui/Panel";
 import ProgressBar from "@/components/ui/ProgressBar";
 import Tabs from "@/components/ui/Tabs";
 import { formatCurrency } from "@/lib/format";
+import { assessBudgetAllocation } from "@/lib/budget-allocation";
 import type { BudgetPageData, BudgetGroup, BudgetSummaryTab } from "@/lib/budget-page";
 
 const EXPENSE_GROUPS = new Set<BudgetGroup>(["fixed", "flexible", "non_monthly"]);
+
+/** 7.2: shown only when the month allocates more than its planned income. */
+function AllocationWarning({ data, currency }: Readonly<{ data: BudgetPageData; currency: string }>) {
+  const allocation = assessBudgetAllocation({
+    incomePlanned: data.totalIncome.planned,
+    expensesPlanned: data.totalExpenses.planned,
+    contributionsPlanned: data.contributions.goals.reduce((total, goal) => total + goal.planned, 0),
+  });
+  if (allocation.status === "within") return null;
+  if (allocation.status === "no_income") {
+    return (
+      <Panel tone="warning" title="Add an income budget">
+        <p className="text-sm text-muted">
+          Budget your expected income to check whether this month allocates more than you earn.
+        </p>
+      </Panel>
+    );
+  }
+  return (
+    <Panel tone="danger" title="Budget exceeds planned income">
+      <output className="block text-sm text-muted">
+        This month allocates <span data-money>{formatCurrency(allocation.allocated, currency)}</span> against{" "}
+        <span data-money>{formatCurrency(allocation.expectedIncome, currency)}</span> of planned income,{" "}
+        <span data-money>{formatCurrency(allocation.overBy, currency)}</span> over. Lower a category or move money between categories.
+      </output>
+    </Panel>
+  );
+}
 
 function GroupMiniSummary({
   label,
@@ -61,7 +90,9 @@ export default function BudgetRightRail({
   currency,
   tab,
   links,
+  allocationWarning = false,
 }: Readonly<{
+  allocationWarning?: boolean;
   data: BudgetPageData;
   currency: string;
   tab: BudgetSummaryTab;
@@ -84,6 +115,8 @@ export default function BudgetRightRail({
         </p>
         <p className="mt-1 text-sm font-semibold text-muted">Left to budget</p>
       </Panel>
+
+      {allocationWarning && <AllocationWarning data={data} currency={currency} />}
 
       <Panel padding="none">
         <div className="px-2 pt-2">

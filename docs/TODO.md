@@ -1,5 +1,24 @@
 # FundFlow — Future Todos
 
+## Current checkpoint: Group 7, 2026-10-02
+
+The next six-feature batch contains 6.8, 7.1, 7.2, 7.3, 9.1, and 9.2 in [draft PR #205](https://github.com/navaneethbv/FundFlow/pull/205) on `feat/budgets-collections-assets`.
+See [the group contract](superpowers/specs/2026-10-03-budgets-collections-assets.md) and the latest handoff for validation and delivery status.
+Its three migrations remain unapplied to production: `20261003090000_budget_moves.sql`, `20261003091000_transaction_collections.sql`, and `20261003092000_manual_assets.sql`.
+Keep `transactionCollections`, `budgetMoves`, `budgetOverAllocation`, `budgetSetupWizard`, `typedManualAssets`, and `assetOwnership` off pending signed-in Supabase acceptance and authorized rollout.
+Assets also depend on `historyProvenance`.
+The existing owner-approved deferral of signed-in journeys and full Supabase integration remains in effect.
+Items 9.3 through 9.6 are next and remain unimplemented.
+
+The dependency-audit correction shared with PR #204 removes the vulnerable development-only glob dependency chain through a version-scoped Next lint adapter.
+The full audit gate remains unchanged; see `tooling/next-lint-glob/README.md` for compatibility coverage and the upstream-removal condition.
+PR #205's five Sonar findings have source fixes, with API ownership/conflict regressions and bounded asset-materialization tests.
+Refresh all hosted checks and Sonar's unresolved issue count at the pushed head before considering either PR ready.
+ESLint 10 and TypeScript 7 remain deferred major upgrades; the existing branch already contains the lucide-react, simple-icons, and sharp updates from the preceding session.
+
+The linked production migration list was checked read-only from the primary checkout on 2026-10-02.
+It includes the earlier adoption migrations through `20261002100000`; the primary checkout is behind those deployed migrations.
+Older rollout paragraphs below are historical and must not override that live verification or the latest handoff.
 ## Reference adoption: group 6 rules and transaction tools
 
 Current check follow-up: Sonar reports zero unresolved issues at `9d26de2`, and the only failed hosted check is the full dependency audit.

@@ -4,6 +4,8 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { tryWriteDailyAccountSnapshots } from "@/lib/account-history";
 import { getClientIp, writeAudit } from "@/lib/audit";
 import { invalidateDashboardCache } from "@/lib/dashboard-cache";
+import { manualAssetsEnabled } from "@/lib/manual-asset-flags";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const ACCOUNT_TYPES = new Set([
   "asset",
@@ -19,6 +21,14 @@ function validBalance(value: unknown): value is number {
 
 function validInclusion(value: unknown): value is boolean | undefined {
   return value === undefined || typeof value === "boolean";
+}
+
+async function isManualAsset(supabase: SupabaseClient, userId: string, accountId: string): Promise<boolean> {
+  if (!manualAssetsEnabled()) return false;
+  const { data, error } = await supabase.from("manual_assets")
+    .select("manual_account_id").eq("manual_account_id", accountId).eq("user_id", userId).maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
 }
 
 export async function POST(request: NextRequest) {
@@ -118,6 +128,9 @@ export async function PATCH(request: NextRequest) {
       balance: number;
       include_in_net_worth?: boolean;
     } = { balance: body.balance };
+    if (await isManualAsset(supabase, user.id, body.id)) {
+      return NextResponse.json({ error: "Record this valuation on the Manual assets page." }, { status: 409 });
+    }
     const changedFields = ["balance"];
     if (typeof body.includeInNetWorth === "boolean") {
       update.include_in_net_worth = body.includeInNetWorth;
@@ -149,6 +162,9 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ account });
   } catch (error) {
+    if ((error as { code?: string })?.code === "22023") {
+      return NextResponse.json({ error: "Record this valuation on the Manual assets page." }, { status: 409 });
+    }
     return errorResponse("manual-accounts.update", error);
   }
 }

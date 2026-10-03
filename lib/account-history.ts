@@ -3,6 +3,8 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { reviewDailyBalanceQuality } from "@/lib/balance-quality-data";
 import { logError } from "@/lib/log";
+import { manualAssetsEnabled } from "@/lib/manual-asset-flags";
+import { materializeManualAssets } from "@/lib/manual-assets-data";
 
 export type SnapshotPlaidAccount = {
   id: string;
@@ -118,6 +120,9 @@ export async function writeDailyAccountSnapshots(
   snapshotDate = new Date().toISOString().slice(0, 10),
 ): Promise<{ written: number; snapshotDate: string }> {
   const service = createServiceClient();
+  const assetIds = manualAssetsEnabled()
+    ? await materializeManualAssets(service, userId, snapshotDate)
+    : new Set<string>();
   const [plaidResult, manualResult] = await Promise.all([
     service
       .from("accounts")
@@ -141,7 +146,7 @@ export async function writeDailyAccountSnapshots(
     // same-day snapshot must refresh this boundary along with its balance.
     capturedAt: new Date().toISOString(),
     plaidAccounts: (plaidResult.data ?? []) as SnapshotPlaidAccount[],
-    manualAccounts: (manualResult.data ?? []) as SnapshotManualAccount[],
+    manualAccounts: ((manualResult.data ?? []) as SnapshotManualAccount[]).filter((account) => !assetIds.has(account.id)),
   });
 
   if (rows.length === 0) return { written: 0, snapshotDate };

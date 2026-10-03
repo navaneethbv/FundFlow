@@ -1,4 +1,5 @@
 import { historyProvenance, HISTORY_PROVENANCE_LABELS, type HistoryProvenance } from "@/lib/history-provenance";
+import { manualAssetsEnabled, manualBalanceTable } from "@/lib/manual-asset-flags";
 import { loadCarriedReviews } from "@/lib/balance-quality-data";
 import { applyBalanceReviewHistory } from "@/lib/balance-quality-history";
 import { accountDisplayLabel } from "@/lib/account-label";
@@ -16,6 +17,7 @@ import AccountsFilters, {
   type AccountsFilterValues,
 } from "@/components/accounts/AccountsFilters";
 import NetWorthHero from "@/components/accounts/NetWorthHero";
+import ManualAssetNotice from "@/components/accounts/ManualAssetNotice";
 import SummaryPanel from "@/components/accounts/SummaryPanel";
 import ConnectBankButton from "@/components/ConnectBankButton";
 import RefreshButton from "@/components/RefreshButton";
@@ -197,7 +199,7 @@ export default async function AccountsPage({
     )
     .order("name");
   let manualQuery = supabase
-    .from("manual_accounts")
+      .from(manualBalanceTable())
     .select(
       "id,user_id,name,account_type,balance,include_in_net_worth,updated_at",
     )
@@ -377,6 +379,7 @@ export default async function AccountsPage({
                 instances on one page, which Plaid explicitly calls
                 unsupported. */}
             {isFeatureEnabled("balanceQualityReview") && <ButtonLink href="/accounts/balance-review">Balance review</ButtonLink>}
+            {manualAssetsEnabled() && <ButtonLink href="/accounts/assets">Manual assets</ButtonLink>}
             {accounts.length > 0 && <ConnectBankButton />}
             {plaidAccounts.length > 0 && <RefreshButton />}
             {reconcileAccounts.length > 0 && <ReconcilePanel accounts={reconcileAccounts} />}
@@ -384,6 +387,7 @@ export default async function AccountsPage({
         }
       />
 
+      <ManualAssetNotice />
       {visibleHouseholdIds.length > 0 && (
         <nav
           aria-label="Financial scope"

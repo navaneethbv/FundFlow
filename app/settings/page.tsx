@@ -20,6 +20,8 @@ import BanksSection from "@/components/settings/BanksSection";
 import ReconciliationSection from "@/components/settings/ReconciliationSection";
 import DangerZone from "@/components/settings/DangerZone";
 import ManualAccountsSection from "@/components/settings/ManualAccountsSection";
+import { manualAssetsEnabled } from "@/lib/manual-asset-flags";
+import { loadManualAssets } from "@/lib/manual-assets-data";
 import MerchantRulesSection from "@/components/settings/MerchantRulesSection";
 import AuditLogSection from "@/components/settings/AuditLogSection";
 import SessionsSection from "@/components/settings/SessionsSection";
@@ -335,6 +337,8 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
       break;
     }
     case "institutions": {
+    const typedAssets = manualAssetsEnabled() ? await loadManualAssets(supabase, userId) : [];
+    const typedIds = new Set(typedAssets.map((asset) => asset.id));
     const [{ data: items }, { data: manualAccounts }, { data: accounts }, { data: households }] = await Promise.all([
       supabase
         .from("plaid_items")
@@ -370,8 +374,9 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
             healthByItem={healthByItem}
             householdId={(households ?? [])[0]?.id ?? null}
           />
-          <ManualAccountsSection initialAccounts={manualAccounts ?? []} />
+          <ManualAccountsSection initialAccounts={(manualAccounts ?? []).filter((account) => !typedIds.has(account.id))} />
         </div>
+        {manualAssetsEnabled() && <ButtonLink href="/accounts/assets">Manage property, vehicles, and other assets</ButtonLink>}
         <ReconciliationSection rows={observability.reconciliations} />
         <CardAprSection
           initialAccounts={((accounts ?? []) as Array<{

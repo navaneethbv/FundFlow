@@ -330,6 +330,11 @@ The next grouped checklist starts only after all PR #204 checks pass, as request
 
 ## Execution checklist
 
+Group 7 is [draft PR #205](https://github.com/navaneethbv/FundFlow/pull/205), containing 6.8, 7.1, 7.2, 7.3, 9.1, and 9.2.
+Its implementation contract and verification limits are in [the group spec](../specs/2026-10-03-budgets-collections-assets.md).
+Local checks pass; hosted checks are pending, and the full dependency audit has the same unpatched development-only `braces` advisory as PR #204.
+No production migration, merge, or flag change is included.
+
 Verification exception approved by the owner on 2026-10-01: defer signed-in browser journeys and full Supabase integration tests until a disposable target exists.
 Docker is unavailable and no `TEST_SUPABASE_URL` is configured.
 Never use the production-linked database or the primary checkout's `.env.local` for testing.
@@ -375,16 +380,16 @@ No dependency changes are included in feature PRs.
 | 6.5 | Implemented in PR #204; corrective hosted checks pending | `components/transactions/ProjectedLedgerSection.tsx` |
 | 6.6 | Implemented in PR #204; corrective hosted checks pending | `components/transactions/TransactionCalendar.tsx`, `lib/transaction-calendar.ts` |
 | 6.7 | Implemented in PR #204; corrective hosted checks pending | `components/transactions/AddTransactionModal.tsx` |
-| 6.8 | Not started |  |
-| 7.1 | Not started |  |
-| 7.2 | Not started |  |
-| 7.3 | Not started |  |
+| 6.8 | Implemented in Group 7; verification and rollout tracked in the group spec | `lib/collections-data.ts`, `app/transactions/collections/page.tsx` |
+| 7.1 | Implemented in Group 7 | `app/api/budget/move/route.ts`, `scripts/check-budget-moves.sql` |
+| 7.2 | Implemented in Group 7 | `lib/budget-allocation.ts` |
+| 7.3 | Implemented in Group 7 | `components/budget/BudgetSetupWizard.tsx` |
 | 8.1 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks passed at `a375739` | `lib/amortization.ts`, `tests/unit/amortization.test.ts` |
 | 8.2 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks passed at `a375739` | `components/debt/LoanDetail.tsx`, `components/debt/DebtPlannerView.tsx` |
 | 8.3 | Not started |  |
 | 8.4 | Not started |  |
-| 9.1 | Not started |  |
-| 9.2 | Not started |  |
+| 9.1 | Implemented in Group 7; growth estimates preserve entered history | `app/accounts/assets/page.tsx`, `supabase/migrations/20261003092000_manual_assets.sql` |
+| 9.2 | Implemented in Group 7; owned share across balance readers | `lib/manual-assets-data.ts`, `lib/manual-asset-flags.ts` |
 | 9.3 | Not started |  |
 | 9.4 | Not started |  |
 | 9.5 | Not started |  |
