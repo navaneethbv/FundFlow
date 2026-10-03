@@ -56,7 +56,7 @@ export async function GET() {
       loadLookbackTransactions(auth.supabase, auth.user.id),
       auth.supabase
         .from("accounts")
-        .select("id,name,plaid_item_id")
+        .select("id,name,mask,plaid_item_id")
         .eq("user_id", auth.user.id)
         .limit(5000),
       auth.supabase
@@ -81,6 +81,7 @@ export async function GET() {
         {
           name: (account.name as string | null) ?? "Account",
           plaidItemId: (account.plaid_item_id as string | null) ?? null,
+          mask: (account.mask as string | null) ?? null,
         },
       ]),
     );
@@ -95,6 +96,7 @@ export async function GET() {
         accountId,
         plaidItemId: account?.plaidItemId ?? null,
         accountName: account?.name ?? "Account",
+        accountMask: account?.mask ?? null,
       };
     });
     const decisions: ReviewDecision[] = (decisionsResult.data ?? []).map((row) => ({

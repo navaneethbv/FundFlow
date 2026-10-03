@@ -42,6 +42,8 @@ export interface DuplicateTransaction extends LedgerTransaction {
   accountId: string;
   plaidItemId: string | null;
   accountName: string;
+  /** Card or account last four, when known. */
+  accountMask?: string | null;
 }
 
 export interface DuplicatePair {
@@ -235,6 +237,10 @@ function evaluateDuplicateCandidate(
   resolved: Set<string>,
 ): DuplicatePair | null {
   if (first.accountId === second.accountId) return null;
+  // One charge can surface twice only through two records of the same card (a
+  // relink, or a manual mirror). Two cards with different last fours are two
+  // purchases, however alike.
+  if (first.accountMask && second.accountMask && first.accountMask !== second.accountMask) return null;
   if (round2(first.amount) !== round2(second.amount)) return null;
   if (normalize(first.merchant) !== normalize(second.merchant)) return null;
   const dateDistanceDays = Math.abs(parseDate(first.date) - parseDate(second.date)) / 86_400_000;
