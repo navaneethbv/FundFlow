@@ -11,6 +11,8 @@ export interface RecurringStreamCandidate {
   lastAmount?: number | null;
   averageAmount?: number | null;
   frequency?: string | null;
+  /** Inflow streams are income: a larger deposit is never a price hike. */
+  streamType?: "inflow" | "outflow" | null;
   status?: string | null;
   isActive?: boolean | null;
   dismissedAt?: string | null;
@@ -69,6 +71,10 @@ export function detectPriceSpikes(
     // tombstoned stream never alerts and a user override never fabricates
     // a hike against its own average.
     if (s.isActive === false || s.dismissedAt || s.status === "TOMBSTONED") continue;
+    // An UNKNOWN cadence is Plaid's signal that the amounts are irregular
+    // (a card payment that tracks the statement balance), so there is no
+    // stable price to have risen.
+    if (s.streamType === "inflow" || s.frequency?.toUpperCase() === "UNKNOWN") continue;
 
     const current = Math.abs(Number(s.lastAmount) || 0);
     const baseline = Math.abs(Number(s.averageAmount) || 0);

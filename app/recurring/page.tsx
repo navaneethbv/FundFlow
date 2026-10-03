@@ -256,6 +256,7 @@ function RecurringSurface({
             lastAmount: stream.lastAmount ?? stream.averageAmount,
             averageAmount: stream.averageAmount,
             frequency: stream.frequency,
+            streamType: stream.streamType,
             status: stream.status,
             isActive: stream.isActive,
             dismissedAt: stream.dismissedAt,

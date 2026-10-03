@@ -58,8 +58,14 @@ export function buildDashboardRecurring(input: {
     name: row.merchant, amount: row.amount, category: row.category,
     itemType: row.isIncome ? "income" : "expense", nextDate: row.dueDate, frequency: "once",
   });
+  // Past-due bills with no matching payment yet: the cash has not left, so
+  // Safe-to-Spend must still hold it back even though the forecast, which only
+  // looks forward, drops them.
+  const overdueExpenses = occurrences
+    .filter(row => row.status === "overdue" && !row.isIncome)
+    .map(row => ({ date: row.dueDate, name: row.merchant, amount: row.amount }));
   return {
-    subscriptions, incomeStreams, recurringStatuses,
+    subscriptions, incomeStreams, recurringStatuses, overdueExpenses,
     items: [...occurrences.map(toItem), ...input.scheduled],
     forecastItems: [...occurrences.filter(row => row.status !== "complete").map(toItem), ...input.scheduled],
   };

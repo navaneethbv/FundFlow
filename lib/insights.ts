@@ -129,6 +129,8 @@ export interface IncomeStreamInput {
   name: string;
   amount: number;
   frequency: PayFrequency;
+  /** Wage income. A paycheck outranks interest or dividends of any size. */
+  isWage?: boolean;
 }
 
 export interface IncomeTransactionInput {
@@ -216,20 +218,86 @@ export function detectPaychecks(input: {
     const nextPayDate = computeNextPayDate(stream, lastPaidDate, input.asOf);
 
     return {
-      name: stream.name,
-      amount: stream.amount,
-      frequency: stream.frequency,
-      lastPaidDate,
-      nextPayDate,
+      paycheck: {
+        name: stream.name,
+        amount: stream.amount,
+        frequency: stream.frequency,
+        lastPaidDate,
+        nextPayDate,
+      },
+      isWage: stream.isWage === true,
     };
   });
 
   const primary =
     paychecks
-      .filter((paycheck) => paycheck.nextPayDate !== null)
-      .sort((a, b) => b.amount - a.amount)[0] ?? null;
+      .filter(({ paycheck }) => paycheck.nextPayDate !== null)
+      .sort((a, b) => Number(b.isWage) - Number(a.isWage) || b.paycheck.amount - a.paycheck.amount)[0]
+      ?.paycheck ?? null;
 
-  return { paychecks, primary };
+  return { paychecks: paychecks.map(({ paycheck }) => paycheck), primary };
+}
+
+export interface WageTransactionInput extends IncomeTransactionInput {
+  /** Plaid's detailed category; wages are `INCOME_WAGES`. */
+  pfcDetailed: string | null;
+}
+
+/** Descriptor tokens carrying digits are per-deposit ids, not the employer. */
+function employerKey(merchant: string): string {
+  return merchant
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((token) => token && !/\d/.test(token))
+    .join(" ");
+}
+
+const WAGE_PERIOD_DAYS: Partial<Record<PayFrequency, number>> = { weekly: 7, biweekly: 14, monthly: 31 };
+
+function wageFrequency(medianGapDays: number): PayFrequency | null {
+  if (medianGapDays >= 5 && medianGapDays <= 9) return "weekly";
+  // Semi-monthly pay (gaps of 13 to 17 days) projects close enough as biweekly.
+  if (medianGapDays >= 12 && medianGapDays <= 17) return "biweekly";
+  if (medianGapDays >= 26 && medianGapDays <= 35) return "monthly";
+  return null;
+}
+
+function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}
+
+/**
+ * Paychecks straight from wage deposits, for when no recurring stream covers
+ * them yet (a new employer, or a stream still awaiting review). Without this
+ * the largest remaining inflow, often savings interest, became the "paycheck"
+ * that anchors Safe-to-Spend. Needs three deposits at a regular cadence, the
+ * latest within two pay periods of asOf so a former employer never projects.
+ */
+export function inferWageStreams(transactions: WageTransactionInput[], asOf: string): IncomeStreamInput[] {
+  const byEmployer = new Map<string, WageTransactionInput[]>();
+  for (const txn of transactions) {
+    if (txn.pfcDetailed !== "INCOME_WAGES" || txn.amount >= 0) continue;
+    const key = employerKey(txn.merchant);
+    if (!key) continue;
+    byEmployer.set(key, [...(byEmployer.get(key) ?? []), txn]);
+  }
+  const streams: IncomeStreamInput[] = [];
+  for (const deposits of byEmployer.values()) {
+    if (deposits.length < 3) continue;
+    const sorted = deposits.toSorted((a, b) => a.date.localeCompare(b.date));
+    const gaps = sorted.slice(1).map((txn, index) => daysBetween(sorted[index]!.date, txn.date));
+    const frequency = wageFrequency(medianOf(gaps));
+    if (!frequency) continue;
+    const latest = sorted.at(-1)!;
+    if (daysBetween(latest.date, asOf) > 2 * WAGE_PERIOD_DAYS[frequency]!) continue;
+    streams.push({
+      name: latest.merchant,
+      amount: Math.round(medianOf(sorted.slice(-3).map((txn) => Math.abs(txn.amount))) * 100) / 100,
+      frequency,
+      isWage: true,
+    });
+  }
+  return streams;
 }
 
 /** Days assumed when no paycheck anchors the Safe-to-Spend horizon. */

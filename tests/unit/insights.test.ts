@@ -11,6 +11,7 @@ import {
   computeSettleUp,
   detectNetWorthMilestones,
   detectPaychecks,
+  inferWageStreams,
   diffRecurringStreams,
   overrideCategory,
   splitEssentialsByMonth,
@@ -777,4 +778,57 @@ describe("detectNetWorthMilestones", () => {
     expect(suggestions[0].category).toBe("DINING");
   });
 
+});
+
+describe("inferWageStreams", () => {
+  const payroll = (date: string, amount = -4645.43, merchant = "BNSF RAILWAY COM PAYROLL 03282159") => ({
+    date, merchant, amount, pfcDetailed: "INCOME_WAGES",
+  });
+
+  it("finds a biweekly payroll that has no recurring stream yet", () => {
+    const streams = inferWageStreams([
+      payroll("2026-08-22"), payroll("2026-09-05"), payroll("2026-09-19", -4475.4), payroll("2026-10-03"),
+      { date: "2026-09-30", merchant: "Interest Payment", amount: -21.74, pfcDetailed: "INCOME_INTEREST_EARNED" },
+    ], "2026-10-03");
+    expect(streams).toEqual([
+      { name: "BNSF RAILWAY COM PAYROLL 03282159", amount: 4645.43, frequency: "biweekly", isWage: true },
+    ]);
+  });
+
+  it("groups descriptors whose embedded ids change every deposit", () => {
+    const streams = inferWageStreams([
+      payroll("2026-07-01", -3000, "ACME DES:PAYROLL ID:aa11"),
+      payroll("2026-08-01", -3000, "ACME DES:PAYROLL ID:bb22"),
+      payroll("2026-09-01", -3000, "ACME DES:PAYROLL ID:cc33"),
+    ], "2026-09-20");
+    expect(streams).toEqual([
+      { name: "ACME DES:PAYROLL ID:cc33", amount: 3000, frequency: "monthly", isWage: true },
+    ]);
+  });
+
+  it("needs three regular deposits before claiming a cadence", () => {
+    expect(inferWageStreams([payroll("2026-09-05"), payroll("2026-09-19")], "2026-10-03")).toEqual([]);
+    expect(inferWageStreams([payroll("2026-06-01"), payroll("2026-06-04"), payroll("2026-09-19")], "2026-10-03")).toEqual([]);
+  });
+
+  it("ignores a former employer whose deposits stopped", () => {
+    expect(inferWageStreams([payroll("2026-03-06"), payroll("2026-03-20"), payroll("2026-04-03")], "2026-10-03")).toEqual([]);
+  });
+
+  it("prefers a wage stream over larger non-wage income for the next paycheck", () => {
+    const result = detectPaychecks({
+      incomeStreams: [
+        { name: "Interest Payment", amount: 21.74, frequency: "monthly" },
+        { name: "Payroll", amount: 3000, frequency: "monthly", isWage: true },
+        { name: "Dividend", amount: 5000, frequency: "quarterly" },
+      ],
+      incomeTransactions: [
+        { date: "2026-09-30", merchant: "Interest Payment", amount: -21.74 },
+        { date: "2026-09-15", merchant: "Payroll", amount: -3000 },
+        { date: "2026-09-01", merchant: "Dividend", amount: -5000 },
+      ],
+      asOf: "2026-10-03",
+    });
+    expect(result.primary?.name).toBe("Payroll");
+  });
 });

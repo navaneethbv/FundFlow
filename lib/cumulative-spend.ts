@@ -51,7 +51,8 @@ export function computeCumulativeSpendByDay(
       if (!row.date.startsWith(`${target}-`)) continue;
       const day = Number(row.date.slice(8, 10));
       if (!Number.isInteger(day) || day < 1 || day > 31) continue;
-      totals[day] += Math.abs(row.signedAmount);
+      // Signed so a refund nets against that day's spending.
+      totals[day] += row.signedAmount;
     }
     return totals;
   };

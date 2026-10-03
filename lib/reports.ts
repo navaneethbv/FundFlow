@@ -115,8 +115,10 @@ function collectSankeyTotals(txns: CanonicalFinanceTransaction[]): {
   const expenseByGroup: LabeledTotals = new Map();
   const expenseByGroupCategory = new Map<string, LabeledTotals>();
   for (const row of txns) {
-    const amount = Math.abs(row.signedAmount);
-    if (amount <= 0) continue;
+    // Expense rows stay signed so refunds net against their category; ranked()
+    // drops any total that nets to zero or below.
+    const amount = row.flow === "expense" ? row.signedAmount : Math.abs(row.signedAmount);
+    if (amount === 0) continue;
     const groupKey = normalizeKey(row.groupKey);
     const categoryKey = normalizeKey(row.categoryKey);
     if (row.flow === "income") {

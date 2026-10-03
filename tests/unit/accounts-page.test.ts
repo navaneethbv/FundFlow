@@ -458,6 +458,32 @@ describe("buildAccountsPageData", () => {
     });
   });
 
+  it("does not count an account whose history starts mid-window as a net-worth gain", () => {
+    const data = buildAccountsPageData(
+      [
+        account({ id: "cash-1", name: "Checking", type: "depository", currentBalance: 1000 }),
+        account({ id: "card-1", name: "Card", type: "credit", currentBalance: 200 }),
+        account({ id: "invest-1", name: "401k", type: "investment", currentBalance: 46000 }),
+      ],
+      [
+        snapshot("cash-1", "2026-06-29", 900),
+        snapshot("card-1", "2026-06-29", 150),
+        // The 401k's balance history only begins after the window opens.
+        snapshot("invest-1", "2026-07-10", 45000),
+        snapshot("cash-1", "2026-07-29", 1000),
+        snapshot("card-1", "2026-07-29", 200),
+        snapshot("invest-1", "2026-07-29", 46000),
+      ],
+      NOW,
+    );
+
+    // Checking +100, card debt +50 (so -50), 401k +1000 since it appeared:
+    // never the 401k's whole balance.
+    expect(data.summary.netWorthMonthChange).toEqual({
+      USD: { amount: 1050, pct: 2.3 },
+    });
+  });
+
   it("omits excluded manual accounts from summary without hiding their row", () => {
     const data = buildAccountsPageData(
       [

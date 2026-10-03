@@ -305,6 +305,28 @@ describe("RecurringList — Manage tab", () => {
     expect(html).toContain('aria-label="Manual item name"');
   });
 
+  it("lets a reviewed stream be dismissed and tucks dismissed copies away", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecurringList, {
+        occurrences: [],
+        streams: [
+          stream({ id: "live", reviewedAt: "2026-06-01T00:00:00Z" }),
+          stream({ id: "old-1", dismissedAt: "2026-06-01T00:00:00Z" }),
+          stream({ id: "old-2", dismissedAt: "2026-06-02T00:00:00Z" }),
+        ],
+        manualItems: [],
+        currency: "USD",
+        today: "2026-07-10",
+        tab: "manage",
+        links: LINKS,
+      }),
+    );
+    expect(html).toContain("Manage (1)");
+    expect(html).toContain("Not recurring or ended (1)");
+    expect(html.match(/>Not recurring</g)).toHaveLength(1);
+    expect(html.match(/>Restore</g)).toHaveLength(1);
+  });
+
   it("marks a manual expense item's amount with the privacy-blur hook and the negative diverging token", () => {
     const html = renderToStaticMarkup(
       createElement(RecurringList, {

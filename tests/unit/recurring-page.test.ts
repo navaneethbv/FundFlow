@@ -4,6 +4,7 @@ import {
   expandStreamsForMonth,
   occurrenceDatesInWindow,
   type RecurringStreamInput,
+  partitionManageStreams,
 } from "@/lib/recurring-page";
 
 describe("occurrenceDatesInWindow", () => {
@@ -344,5 +345,42 @@ describe("amount fallbacks", () => {
       "2026-07-20",
     );
     expect(month.occurrences[0]!.amount).toBe(0);
+  });
+});
+
+describe("partitionManageStreams", () => {
+  const row = (id: string, overrides: Partial<Parameters<typeof partitionManageStreams>[0][number]> = {}) => ({
+    id, streamType: "outflow" as const, merchantName: "Amazon", description: null,
+    isActive: true, status: "MATURE" as const, dismissedAt: null as string | null, accountName: "Card ••8492",
+    ...overrides,
+  });
+
+  it("keeps every active stream and collapses repeated inactive copies", () => {
+    const { active, inactive } = partitionManageStreams([
+      row("live"),
+      row("live-other-card", { accountName: "Card ••9320" }),
+      row("old-1", { dismissedAt: "2026-09-01" }),
+      row("old-2", { dismissedAt: "2026-09-02" }),
+      row("old-3", { isActive: false }),
+      row("ended", { merchantName: "Peacock", status: "TOMBSTONED" }),
+    ]);
+    expect(active.map((stream) => stream.id)).toEqual(["live", "live-other-card"]);
+    expect(inactive.map((stream) => stream.id)).toEqual(["old-1", "ended"]);
+  });
+
+  it("prefers the dismissed copy so Restore undoes the user's own decision", () => {
+    const { inactive } = partitionManageStreams([
+      row("ended", { isActive: false }),
+      row("dismissed", { isActive: false, dismissedAt: "2026-09-01" }),
+    ]);
+    expect(inactive.map((stream) => stream.id)).toEqual(["dismissed"]);
+  });
+
+  it("never merges an income stream with an expense of the same name", () => {
+    const { inactive } = partitionManageStreams([
+      row("out", { dismissedAt: "2026-09-01" }),
+      row("in", { streamType: "inflow", dismissedAt: "2026-09-01" }),
+    ]);
+    expect(inactive).toHaveLength(2);
   });
 });

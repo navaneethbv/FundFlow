@@ -415,6 +415,60 @@ function buildNetWorthSeries(
     })) as AccountsPageData["summary"]["netWorthSeries"];
 }
 
+/** Each net-worth account's signed daily contribution, grouped by currency. */
+function buildNetWorthAccountSeries(
+  accounts: UnifiedAccountSummary[],
+  snapshots: AccountBalanceSnapshot[],
+): Map<string, Array<Array<{ date: string; value: number }>>> {
+  const accountById = new Map(accounts.map((account) => [account.id, account]));
+  const byAccount = new Map<string, Array<{ date: string; value: number }>>();
+  for (const snapshot of snapshots) {
+    const id = sourceId(snapshot);
+    if (!id || snapshot.currentBalance === null) continue;
+    const account = accountById.get(id);
+    if (!account?.includeInNetWorth) continue;
+    const points = byAccount.get(id) ?? [];
+    points.push({
+      date: snapshot.snapshotDate,
+      value: netWorthContribution(snapshot.currentBalance, account.type, account.subtype),
+    });
+    byAccount.set(id, points);
+  }
+  const byCurrency = new Map<string, Array<Array<{ date: string; value: number }>>>();
+  for (const [id, points] of byAccount) {
+    const currency = accountById.get(id)!.currency;
+    points.sort((a, b) => a.date.localeCompare(b.date));
+    byCurrency.set(currency, [...(byCurrency.get(currency) ?? []), points]);
+  }
+  return byCurrency;
+}
+
+/**
+ * Net-worth change over the trailing window as the sum of each account's own
+ * change. Differencing the summed series instead books an account whose
+ * history begins mid-window (a newly linked 401k) as a gain of its whole
+ * balance.
+ */
+function netWorthChangeFromAccounts(
+  series: Array<{ date: string; value: number }>,
+  accountSeries: Array<Array<{ date: string; value: number }>>,
+): BalanceChange | null {
+  if (series.length < 2) return null;
+  const latest = series.at(-1)!;
+  const threshold = thresholdDate(latest.date);
+  let amount = 0;
+  let measured = false;
+  for (const points of accountSeries) {
+    const first = points.find((point) => point.date >= threshold);
+    const last = points.at(-1);
+    if (!first || !last || first === last) continue;
+    amount += last.value - first.value;
+    measured = true;
+  }
+  if (!measured) return null;
+  return change(latest.value - amount, latest.value);
+}
+
 export function buildAccountsPageData(
   accounts: UnifiedAccountSummary[],
   snapshots: AccountBalanceSnapshot[],
@@ -454,10 +508,14 @@ export function buildAccountsPageData(
   }
 
   const netWorthSeries = buildNetWorthSeries(accounts, snapshots);
+  const accountSeriesByCurrency = buildNetWorthAccountSeries(accounts, snapshots);
   const netWorthMonthChange: AccountsPageData["summary"]["netWorthMonthChange"] =
     {};
   for (const [currency, series] of Object.entries(netWorthSeries)) {
-    netWorthMonthChange[currency] = changeFromSeries(series);
+    netWorthMonthChange[currency] = netWorthChangeFromAccounts(
+      series,
+      accountSeriesByCurrency.get(currency) ?? [],
+    );
   }
 
   const currencies = [

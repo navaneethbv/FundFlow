@@ -25,6 +25,14 @@ describe("detectDuplicatePairs", () => {
     expect(detectDuplicatePairs([base[0]!, second], [])).toEqual([]);
   });
 
+  it("treats two different cards as two purchases, but a relinked card as one", () => {
+    const first = { ...base[0]!, accountMask: "8492" };
+    expect(detectDuplicatePairs([first, { ...base[1]!, accountMask: "9320" }], [])).toEqual([]);
+    expect(detectDuplicatePairs([first, { ...base[1]!, accountMask: "8492" }], [])).toHaveLength(1);
+    // A manual account usually has no mask; it can still mirror a linked card.
+    expect(detectDuplicatePairs([first, { ...base[1]!, accountMask: null }], [])).toHaveLength(1);
+  });
+
   it("allows different connected items and removes resolved decisions", () => {
     expect(detectDuplicatePairs(base, [{
       kind: "duplicate",
