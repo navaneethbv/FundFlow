@@ -411,7 +411,7 @@ No dependency changes are included in feature PRs.
 | 13.4 | Implemented, release gated | Stacked continuation after PR #210: accessible income-to-expenses-to-savings waterfall and table twin behind `cashFlowWaterfall`. |
 | 13.5 | Implemented | Stacked continuation after PR #211: source-linked Settings > Privacy external-service registry. |
 | 13.6 | Implemented | Stacked continuation after PR #212: private PDF statement vault, metadata-only API, and covered/missing/duplicate account-month grid behind `statementVault`. |
-| 13.7 | Not started |  |
+| 13.7 | Implemented | Stacked continuation after PR #213: feature-gated goal detail with progress ring, accessible status badge, and user-assumption-only funding projection with a table twin. |
 
 ### 0.1 decisions and evidence
 
