@@ -26,11 +26,11 @@ function AllocationWarning({ data, currency }: Readonly<{ data: BudgetPageData; 
   }
   return (
     <Panel tone="danger" title="Budget exceeds planned income">
-      <p role="status" className="text-sm text-muted">
+      <output className="block text-sm text-muted">
         This month allocates <span data-money>{formatCurrency(allocation.allocated, currency)}</span> against{" "}
         <span data-money>{formatCurrency(allocation.expectedIncome, currency)}</span> of planned income,{" "}
         <span data-money>{formatCurrency(allocation.overBy, currency)}</span> over. Lower a category or move money between categories.
-      </p>
+      </output>
     </Panel>
   );
 }

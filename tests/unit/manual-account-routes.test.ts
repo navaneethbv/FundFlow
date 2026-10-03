@@ -56,6 +56,7 @@ function request(method: string, body: unknown) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllEnvs();
   serviceClient = clientStub();
   mockWriteDailyAccountSnapshots.mockResolvedValue({
     written: 1,
@@ -143,6 +144,30 @@ describe("POST /api/manual-accounts", () => {
 });
 
 describe("PATCH /api/manual-accounts", () => {
+  it("requires the dedicated valuation path for a typed asset without writing", async () => {
+    vi.stubEnv("FUNDFLOW_FEATURE_FLAGS", "typedManualAssets,assetOwnership,historyProvenance");
+    const reader = clientStub({
+      manual_accounts: { data: { id: ACCOUNT.id } },
+      manual_assets: { data: { manual_account_id: ACCOUNT.id } },
+    });
+    mockRequireUser.mockResolvedValue({ user: { id: USER_ID }, supabase: reader });
+    const response = await PATCH(request("PATCH", { id: ACCOUNT.id, balance: 1250 }));
+    expect(response.status).toBe(409);
+    expect(reader.scopedToUser("manual_assets", USER_ID)).toBe(true);
+    expect(serviceClient.callsOn("manual_accounts")).toEqual([]);
+    expect(mockWriteDailyAccountSnapshots).not.toHaveBeenCalled();
+  });
+
+  it("propagates typed asset lookup failures without writing", async () => {
+    vi.stubEnv("FUNDFLOW_FEATURE_FLAGS", "typedManualAssets,assetOwnership,historyProvenance");
+    const failure = new Error("asset lookup failed");
+    mockRequireUser.mockResolvedValue({ user: { id: USER_ID }, supabase: clientStub({
+      manual_accounts: { data: { id: ACCOUNT.id } }, manual_assets: { error: failure },
+    }) });
+    await expect(PATCH(request("PATCH", { id: ACCOUNT.id, balance: 1250 }))).rejects.toBe(failure);
+    expect(serviceClient.callsOn("manual_accounts")).toEqual([]);
+  });
+
   it.each([
     ["missing id", { balance: 10 }],
     ["string balance", { id: "manual-1", balance: "10" }],

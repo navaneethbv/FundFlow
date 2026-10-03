@@ -18,7 +18,10 @@ export default function ManualAssetForm({ initial, today }: Readonly<{ initial?:
     event.preventDefault();
     if (busy) return;
     const form = new FormData(event.currentTarget);
-    const str = (key: string) => String(form.get(key) ?? "");
+    const str = (key: string) => {
+      const value = form.get(key);
+      return typeof value === "string" ? value : "";
+    };
     const nullableNumber = (key: string) => str(key) === "" ? null : Number(str(key));
     const parsed = parseAssetInput({
       ...(initial?.id ? { id: initial.id, version: initial.version } : {}),

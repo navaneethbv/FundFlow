@@ -10,9 +10,10 @@ Assets also depend on `historyProvenance`.
 The existing owner-approved deferral of signed-in journeys and full Supabase integration remains in effect.
 Items 9.3 through 9.6 are next and remain unimplemented.
 
-PR #204 at `9d26de2` has one failing check: the full dependency audit reports GHSA-vfj7-8cjw-p6xm through the development-only Next.js ESLint dependency chain.
-The current published `braces` version is 3.0.3 and the advisory lists no patched version; the production-only audit is clean.
-Keep the full audit gate unchanged and revisit a compatible upstream patch before merging.
+The dependency-audit correction shared with PR #204 removes the vulnerable development-only glob dependency chain through a version-scoped Next lint adapter.
+The full audit gate remains unchanged; see `tooling/next-lint-glob/README.md` for compatibility coverage and the upstream-removal condition.
+PR #205's five Sonar findings have source fixes, with API ownership/conflict regressions and bounded asset-materialization tests.
+Refresh all hosted checks and Sonar's unresolved issue count at the pushed head before considering either PR ready.
 ESLint 10 and TypeScript 7 remain deferred major upgrades; the existing branch already contains the lucide-react, simple-icons, and sharp updates from the preceding session.
 
 The linked production migration list was checked read-only from the primary checkout on 2026-10-02.

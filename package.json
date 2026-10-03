@@ -52,11 +52,15 @@
     "dotenv": "^18.0.5",
     "eslint": "^9",
     "eslint-config-next": "^16.3.8",
+    "fast-glob": "file:./tooling/next-lint-glob",
     "tailwindcss": "^4.3.3",
     "typescript": "^6",
     "vitest": "^5.0.3"
   },
   "overrides": {
+    "@next/eslint-plugin-next@16.3.8": {
+      "fast-glob": "$fast-glob"
+    },
     "postcss": "^8.5.23",
     "js-yaml": "^4.3.2"
   }

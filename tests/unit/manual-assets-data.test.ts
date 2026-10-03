@@ -29,6 +29,28 @@ it("propagates read/write failures and refuses truncated lists", async () => {
   result.data = [{ manual_account_id: "a" }]; rpc.mockResolvedValue({ error: new Error("write failed") });
   await expect(materializeManualAssets(client, "u", "2026-01-01")).rejects.toThrow("write failed");
 });
+it("bounds independent asset writes to four and completes later batches", async () => {
+  result.data = Array.from({ length: 9 }, (_, index) => ({ manual_account_id: `asset-${index}` }));
+  let active = 0;
+  let peak = 0;
+  rpc.mockImplementation(async () => {
+    active += 1;
+    peak = Math.max(peak, active);
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    active -= 1;
+    return { error: null };
+  });
+  expect((await materializeManualAssets(client, "owner", "2026-10-02")).size).toBe(9);
+  expect(peak).toBe(4);
+  expect(active).toBe(0);
+  expect(rpc).toHaveBeenCalledTimes(9);
+});
+it("does not start another batch after a write failure", async () => {
+  result.data = Array.from({ length: 5 }, (_, index) => ({ manual_account_id: `asset-${index}` }));
+  rpc.mockResolvedValue({ error: new Error("write failed") });
+  await expect(materializeManualAssets(client, "owner", "2026-10-02")).rejects.toThrow("write failed");
+  expect(rpc).toHaveBeenCalledTimes(4);
+});
 it("loads stored input without mistaking owned estimates for gross input", async () => {
   const row = { manual_account_id: "a", version: 1, manual_accounts: { name: "House" }, valuation_value: "100000", asset_kind: "property",
     ownership_percentage: "50", value_source: "Appraisal", valuation_date: "2026-01-01", purchase_price: null, purchase_date: null,

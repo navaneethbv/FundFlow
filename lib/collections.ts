@@ -36,6 +36,13 @@ function isTransfer(category: string | null): boolean {
   return Boolean(category && TRANSFER_GROUPS.has(category.toUpperCase()));
 }
 
+function addTransaction(group: CollectionSummary, txn: CollectionTransaction): void {
+  if (!isTransfer(txn.pfc_primary)) group.spent = round2(group.spent + Number(txn.amount));
+  group.count += 1;
+  if (txn.date < group.firstDate) group.firstDate = txn.date;
+  if (txn.date > group.lastDate) group.lastDate = txn.date;
+}
+
 export function buildCollections(
   annotations: readonly CollectionAnnotation[],
   transactions: readonly CollectionTransaction[],
@@ -50,10 +57,7 @@ export function buildCollections(
     for (const name of new Set((annotation.tags ?? []).map(collectionNameFromTag))) {
       if (!name) continue;
       const group = groups.get(name) ?? { name, spent: 0, count: 0, firstDate: txn.date, lastDate: txn.date, budget: null, remaining: null };
-      if (!isTransfer(txn.pfc_primary)) group.spent = round2(group.spent + Number(txn.amount));
-      group.count += 1;
-      if (txn.date < group.firstDate) group.firstDate = txn.date;
-      if (txn.date > group.lastDate) group.lastDate = txn.date;
+      addTransaction(group, txn);
       groups.set(name, group);
     }
   }

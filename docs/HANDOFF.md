@@ -1,5 +1,20 @@
 # FundFlow Session Handoff
 
+## 2026-10-02: PR checks and zero-issue follow-up
+
+The full dependency audit failed on both PR #204 and PR #205 because the Next lint plugin pulled in unpatched `braces` through `fast-glob` and `micromatch`.
+The correction replaces only the supported plugin version's glob dependency with a small adapter over the existing MIT-licensed `tinyglobby` library.
+It preserves literal, absolute, relative, wildcard, brace, and Windows-separator directory matching, and regression tests exercise the actual installed Next lint rule.
+The full high-severity audit gate is unchanged and local clean-install audits report zero vulnerabilities.
+Remove the temporary override when an upstream plugin release no longer needs it.
+
+PR #205 also had five unresolved Sonar findings despite a green quality gate.
+Source fixes extract the typed-asset lookup and collection accumulation, validate FormData strings, use a native output element for the allocation warning, and materialize independent assets in bounded batches of four.
+The API's authentication, owner scope, conflict response, and write contract remain unchanged.
+No scanner rule or coverage threshold was suppressed or lowered.
+Hosted results must be read at the pushed head; the earlier checkpoint below is historical.
+No merge, production migration, manual deployment, or feature-flag change is part of this follow-up.
+
 ## 2026-10-02: Group 7 continuation
 
 Worktree: `/private/tmp/fundflow-budgets-assets`, branch `feat/budgets-collections-assets`, based on main `3182370`.
