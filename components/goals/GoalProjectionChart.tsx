@@ -71,9 +71,7 @@ export default function GoalProjectionChart({
         })}
         <path d={linePath(targetPoints)} fill="none" stroke="var(--viz-axis)" strokeDasharray="5 4" strokeWidth={1.5} />
         <path d={linePath(fundedPoints)} fill="none" stroke="var(--viz-1)" strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} />
-        {finalFundedPoint && (
-          <circle cx={finalFundedPoint.x} cy={finalFundedPoint.y} r={4} fill="var(--viz-1)" />
-        )}
+        <circle cx={finalFundedPoint.x} cy={finalFundedPoint.y} r={4} fill="var(--viz-1)" />
         <text x={PAD.left} y={HEIGHT - 7} fontSize={10} fill="var(--viz-muted)">
           {formatMonth(firstPoint.month)}
         </text>
