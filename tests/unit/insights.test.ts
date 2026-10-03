@@ -806,6 +806,21 @@ describe("inferWageStreams", () => {
     ]);
   });
 
+  it("groups descriptors whose ids carry no digits at all", () => {
+    const sapphire = (date: string, id: string) =>
+      payroll(date, -8450.42, `Sapphire Softwar DES:PAYROLL ID:${id} INDN:BANGALORE VENUGOPALA R CO ID:9PA8611215 PPD`);
+    const streams = inferWageStreams(
+      [sapphire("2026-07-31", "ehwZBIb"), sapphire("2026-08-31", "PVJTCbl"), sapphire("2026-09-30", "yWRlYrN")],
+      "2026-10-03",
+    );
+    expect(streams.map((stream) => stream.frequency)).toEqual(["monthly"]);
+  });
+
+  it("never revives an employer whose recurring stream the user dismissed", () => {
+    const deposits = [payroll("2026-08-22"), payroll("2026-09-05"), payroll("2026-09-19")];
+    expect(inferWageStreams(deposits, "2026-10-03", ["BNSF RAILWAY COM PAYROLL 99999999"])).toEqual([]);
+  });
+
   it("needs three regular deposits before claiming a cadence", () => {
     expect(inferWageStreams([payroll("2026-09-05"), payroll("2026-09-19")], "2026-10-03")).toEqual([]);
     expect(inferWageStreams([payroll("2026-06-01"), payroll("2026-06-04"), payroll("2026-09-19")], "2026-10-03")).toEqual([]);
@@ -813,6 +828,21 @@ describe("inferWageStreams", () => {
 
   it("ignores a former employer whose deposits stopped", () => {
     expect(inferWageStreams([payroll("2026-03-06"), payroll("2026-03-20"), payroll("2026-04-03")], "2026-10-03")).toEqual([]);
+  });
+
+  it("never calls savings interest or dividends a paycheck", () => {
+    const result = detectPaychecks({
+      incomeStreams: [
+        { name: "Interest Payment", amount: 21.74, frequency: "monthly" },
+        { name: "Quarterly Dividend", amount: 400, frequency: "quarterly" },
+      ],
+      incomeTransactions: [
+        { date: "2026-09-09", merchant: "Interest Payment", amount: -7.03 },
+        { date: "2026-09-01", merchant: "Quarterly Dividend", amount: -400 },
+      ],
+      asOf: "2026-10-03",
+    });
+    expect(result.primary).toBeNull();
   });
 
   it("prefers a wage stream over larger non-wage income for the next paycheck", () => {
