@@ -102,6 +102,8 @@ export const FEATURE_FLAG_DEFAULTS = {
   dashboardWidgetLayout: false,
   /** Reference adoption 13.4: income-to-savings waterfall on Cash Flow. */
   cashFlowWaterfall: false,
+  /** Reference adoption 13.6: private PDF statement vault and coverage grid. */
+  statementVault: false,
   /**
    * Phase 11. Released: `20260730230000_advice.sql` is applied, so the page's
    * `advice_progress` and `profiles.advice_profile` reads/writes resolve.
