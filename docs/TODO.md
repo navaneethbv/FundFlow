@@ -1,6 +1,14 @@
 # FundFlow — Future Todos
 
-## Current checkpoint: Checklist 9.7, 2026-10-02
+## Current checkpoint: Checklist group 5, 2026-10-03
+
+The next canonical checklist group, items 1.5, 2.4, 4.3, 8.3, and 8.4, is implemented in the isolated worktree `/private/tmp/fundflow-review-lending` on `feat/review-lending-calculators`, stacked on PR #206.
+The implementation is release gated by `importUndo`, `explainableMatchSuggestions`, `weeklyReview`, `privateLending`, and `planningCalculators`, all of which remain off.
+The three additive migrations `20261006090000_import_undo.sql`, `20261006100000_weekly_review.sql`, and `20261006110000_private_lending.sql` were parsed and exercised against a disposable local PostgreSQL stand-in only; none was applied to production.
+The local validation includes focused pure-math and checklist regressions, TypeScript, lint, a placeholder-environment production build, graph refresh, and disposable SQL function execution.
+Docker is unavailable and the worktree is not linked to a Supabase project, so full Supabase Auth/RLS acceptance and hosted checks remain pending.
+
+PR #206 was verified at exact head `1879d369dc9a6d805a48463328609de7be77bda2` with all reported GitHub, SonarCloud, Codacy, Vercel, and test checks passing, and Sonar's API reported zero unresolved issues and zero hotspots awaiting review.
 
 Checklist 9.7, portfolio look-through, is implemented in the isolated continuation worktree `/private/tmp/fundflow-product-surfaces` and pushed as `a98759a` on PR #206's remote branch.
 The `portfolioLookthrough` flag remains off, and `20261005090000_portfolio_lookthrough.sql` is unapplied to production.
@@ -18,7 +26,7 @@ Local RLS tests exercise owner visibility, cross-user rejection, MFA step-up, se
 Signed-in Supabase acceptance remains deferred under the existing owner-approved limitation.
 Do not restore these annotations automatically; takeout and backup retain them, but owner-aware restore remains a separate task.
 PR #204 is now merged; PR #205 was refreshed at `b0507e6` with all checks passing before this branch rebased onto it.
-The next adoption sequence after this group is 1.5, 2.4, 4.3, and 8.3 through 8.4.
+The next adoption sequence after this group is 10, 12.1, and 13.
 
 ## Group 7 checkpoint
 

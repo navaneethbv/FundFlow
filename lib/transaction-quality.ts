@@ -29,6 +29,15 @@ export interface ReviewDecision {
   decision: "confirmed" | "dismissed";
 }
 
+/** Human-readable evidence shown beside a suggestion. This is deliberately
+ * made of bounded facts, not a synthetic confidence score. */
+export interface SuggestionEvidence {
+  amountAgreement: string;
+  dateDistanceDays: number;
+  counterpartyAgreement: string;
+  strategy: string;
+}
+
 export interface DuplicateTransaction extends LedgerTransaction {
   accountId: string;
   plaidItemId: string | null;

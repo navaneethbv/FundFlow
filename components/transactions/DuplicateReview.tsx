@@ -7,6 +7,7 @@ import { formatCurrency } from "@/lib/format";
 import type {
   DuplicatePair,
   DuplicateTransaction,
+  SuggestionEvidence,
 } from "@/lib/transaction-quality";
 
 interface ConfirmedDuplicate {
@@ -14,6 +15,8 @@ interface ConfirmedDuplicate {
   kept: DuplicateTransaction | null;
   excluded: DuplicateTransaction | null;
 }
+
+type ExplainableDuplicatePair = DuplicatePair & { evidence?: SuggestionEvidence };
 
 /** How many full review forms render at once. One pair at a time keeps the
  *  ledger reachable even with dozens of candidates; the rest stay in state. */
@@ -36,7 +39,7 @@ export default function DuplicateReview({
   initialPairs?: DuplicatePair[];
   initialConfirmed?: ConfirmedDuplicate[];
 }>) {
-  const [pairs, setPairs] = useState(initialPairs ?? []);
+  const [pairs, setPairs] = useState<ExplainableDuplicatePair[]>(initialPairs ?? []);
   const [confirmed, setConfirmed] = useState(initialConfirmed ?? []);
   const [loaded, setLoaded] = useState(initialPairs !== undefined || initialConfirmed !== undefined);
   const [keepBySubject, setKeepBySubject] = useState<Record<string, string>>({});
@@ -53,7 +56,7 @@ export default function DuplicateReview({
       .then((response) => response.ok ? response.json() : Promise.reject(new Error("load failed")))
       .then((payload) => {
         if (!active) return;
-        setPairs((payload.pairs ?? []) as DuplicatePair[]);
+        setPairs((payload.pairs ?? []) as ExplainableDuplicatePair[]);
         setConfirmed((payload.confirmed ?? []) as ConfirmedDuplicate[]);
       })
       .catch(() => {
@@ -80,7 +83,7 @@ export default function DuplicateReview({
   const candidatesRemaining = pairs.length;
   const candidateNoun = candidatesRemaining === 1 ? "candidate" : "candidates";
 
-  async function decide(pair: DuplicatePair, decision: "confirmed" | "dismissed") {
+  async function decide(pair: ExplainableDuplicatePair, decision: "confirmed" | "dismissed") {
     const keptId = keepBySubject[pair.subjectId];
     if (decision === "confirmed" && !keptId) return;
     const kept = keptId === pair.second.id ? pair.second : pair.first;
@@ -219,6 +222,17 @@ export default function DuplicateReview({
                 Confirm duplicate
               </Button>
             </div>
+            {pair.evidence && (
+              <details className="mt-3 rounded-field border border-panel-border bg-panel p-3 text-xs">
+                <summary className="cursor-pointer font-semibold text-muted">Why this was suggested</summary>
+                <dl className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <div><dt className="text-muted">Amount</dt><dd>{pair.evidence.amountAgreement}</dd></div>
+                  <div><dt className="text-muted">Date distance</dt><dd>{pair.evidence.dateDistanceDays} day{pair.evidence.dateDistanceDays === 1 ? "" : "s"}</dd></div>
+                  <div><dt className="text-muted">Counterparty</dt><dd>{pair.evidence.counterpartyAgreement}</dd></div>
+                  <div><dt className="text-muted">Strategy</dt><dd>{pair.evidence.strategy}</dd></div>
+                </dl>
+              </details>
+            )}
           </fieldset>
         ))}
 

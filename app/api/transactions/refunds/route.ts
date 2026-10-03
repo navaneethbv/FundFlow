@@ -5,6 +5,7 @@ import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { detectRefundPairs, filterReviewDecisions } from "@/lib/transaction-quality";
 import { writeAudit } from "@/lib/audit";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 
 const WINDOW_DAYS = 14;
 const LOOKBACK_DAYS = 90;
@@ -13,6 +14,12 @@ function isoDaysAgo(days: number): string {
   const date = new Date();
   date.setUTCDate(date.getUTCDate() - days);
   return date.toISOString().slice(0, 10);
+}
+
+function dateDistanceDays(left: string | undefined, right: string | undefined): number {
+  if (!left || !right) return 0;
+  const distance = Math.abs(Date.parse(`${left}T00:00:00Z`) - Date.parse(`${right}T00:00:00Z`));
+  return Number.isFinite(distance) ? Math.round(distance / 86_400_000) : 0;
 }
 
 /** Refund pairs (same merchant, opposite sign, close in time) awaiting review. */
@@ -74,7 +81,7 @@ export async function GET() {
       const pair = pairs.find(
         (candidate) => candidate.chargeId === chargeId && candidate.refundId === refundId,
       );
-      return {
+      const output = {
         subject_id: anomaly.subjectId,
         charge_id: chargeId,
         refund_id: refundId,
@@ -85,6 +92,17 @@ export async function GET() {
         refund_amount: refund ? Math.abs(refund.amount) : 0,
         partial: pair?.partial ?? false,
       };
+      return isFeatureEnabled("explainableMatchSuggestions")
+        ? {
+            ...output,
+            evidence: {
+              amountAgreement: output.partial ? "Refund is a partial amount within the charge" : "Exact amount",
+              dateDistanceDays: dateDistanceDays(output.charge_date ?? undefined, output.refund_date ?? undefined),
+              counterpartyAgreement: "Merchant matches after normalization",
+              strategy: "Opposite-signed transactions from the same merchant within fourteen days",
+            },
+          }
+        : output;
     });
 
     return NextResponse.json({ pairs: pairsOut });

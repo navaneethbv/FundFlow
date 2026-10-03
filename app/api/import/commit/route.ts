@@ -372,6 +372,9 @@ async function persistCommit(
   const { sourceAccounts, mappingBySource, dbRows, rowIds, batchId, userId } = params;
 
   await persistSourceAccountMappings(service, sourceAccounts, mappingBySource, userId);
+  const preexistingImportIds = isFeatureEnabled("importUndo") && isFeatureEnabled("importHistory")
+    ? await loadExistingImportIds(service, dbRows, userId)
+    : new Set<string>();
   await persistTransactions(service, dbRows);
   await persistTransactionAnnotations(service, dbRows, userId);
 
@@ -381,6 +384,9 @@ async function persistCommit(
       p_rows: dbRows.map(row => ({ id: row.rowId, account_id: row.account_id, manual_account_id: row.manual_account_id })),
     });
     if (error) throw error;
+    if (isFeatureEnabled("importUndo") && isFeatureEnabled("importHistory")) {
+      await trackImportCommitTransactions(service, dbRows, batchId, userId, preexistingImportIds);
+    }
     return;
   }
 
@@ -399,6 +405,9 @@ async function persistCommit(
     .eq("user_id", userId)
     .eq("id", batchId);
   if (batchError) throw batchError;
+  if (isFeatureEnabled("importUndo") && isFeatureEnabled("importHistory")) {
+    await trackImportCommitTransactions(service, dbRows, batchId, userId, preexistingImportIds);
+  }
 }
 
 async function persistSourceAccountMappings(
@@ -450,6 +459,62 @@ async function persistTransactions(
       .upsert(transactionRows.slice(i, i + UPSERT_CHUNK), { onConflict: "plaid_transaction_id" });
     if (error) throw error;
   }
+}
+
+async function loadExistingImportIds(
+  service: ReturnType<typeof createServiceClient>,
+  dbRows: ReturnType<typeof buildCommitRows>,
+  userId: string,
+): Promise<Set<string>> {
+  const existing = new Set<string>();
+  for (const importIdChunk of chunks(dbRows.map((row) => row.plaid_transaction_id))) {
+    if (importIdChunk.length === 0) continue;
+    const table = service.from("transactions");
+    if (typeof (table as unknown as { select?: unknown }).select !== "function") return existing;
+    const { data, error } = await table
+      .select("plaid_transaction_id")
+      .eq("user_id", userId)
+      .in("plaid_transaction_id", importIdChunk);
+    if (error) throw error;
+    for (const row of data ?? []) {
+      if (typeof row.plaid_transaction_id === "string") existing.add(row.plaid_transaction_id);
+    }
+  }
+  return existing;
+}
+
+async function trackImportCommitTransactions(
+  service: ReturnType<typeof createServiceClient>,
+  dbRows: ReturnType<typeof buildCommitRows>,
+  batchId: string,
+  userId: string,
+  preexistingImportIds: ReadonlySet<string>,
+): Promise<void> {
+  const newRows = dbRows.filter((row) => !preexistingImportIds.has(row.plaid_transaction_id));
+  if (newRows.length === 0) return;
+  const committedRows: Array<{ id: string; plaid_transaction_id: string }> = [];
+  for (const chunk of chunks(newRows.map((row) => row.plaid_transaction_id))) {
+    const table = service.from("transactions");
+    if (typeof (table as unknown as { select?: unknown }).select !== "function") return;
+    const { data: rows, error: transactionError } = await table
+      .select("id,plaid_transaction_id")
+      .eq("user_id", userId)
+      .in("plaid_transaction_id", chunk);
+    if (transactionError) throw transactionError;
+    committedRows.push(...((rows ?? []) as Array<{ id: string; plaid_transaction_id: string }>));
+  }
+  const transactionIdByImportId = new Map(
+    committedRows.map((row) => [row.plaid_transaction_id, row.id]),
+  );
+  const { error: trackingError } = await service.rpc("record_import_commit_transactions", {
+    p_user_id: userId,
+    p_batch_id: batchId,
+    p_rows: newRows.map((row) => ({
+      row_id: row.rowId,
+      transaction_id: transactionIdByImportId.get(row.plaid_transaction_id),
+    })),
+  });
+  if (trackingError) throw trackingError;
 }
 
 async function persistTransactionAnnotations(

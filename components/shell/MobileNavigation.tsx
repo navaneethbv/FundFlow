@@ -18,6 +18,7 @@ import LinkPendingIndicator from "@/components/ui/LinkPendingIndicator";
 import {
   ArrowLeftRight,
   BarChart3,
+  Calculator,
   Compass,
   CreditCard,
   Landmark,
@@ -62,6 +63,7 @@ const ICONS = {
   notifications: Bell,
   settings: Settings,
   wrapped: Sparkles,
+  planning: Calculator,
 } satisfies Record<NavItemKey, typeof LayoutDashboard>;
 
 const QUICK_KEYS = new Set<NavItemKey>([

@@ -73,6 +73,8 @@ import {
 } from "@/lib/net-worth-inputs";
 import { dedupeRelinkedAccounts } from "@/lib/relinked-accounts";
 import { chunkValues, IN_FILTER_CHUNK_SIZE } from "@/lib/postgrest-limits";
+import { loadPrivateLendingData } from "@/lib/private-lending-data";
+import type { PrivateLendingSummary } from "@/lib/private-lending";
 
 /**
  * Aggregations for the dashboard. Runs with the caller's user-scoped Supabase
@@ -152,6 +154,7 @@ export interface DashboardData {
   spendingAnomalies: SpendingAnomaly[];
   netWorthSnapshot: { assets: number; liabilities: number; netWorth: number };
   netWorthHistory: { month: string; assets: number; liabilities: number; netWorth: number }[];
+  privateLending?: PrivateLendingSummary;
   recurringStatuses: ReturnType<typeof buildRecurringStatuses>;
   /**
    * Active-month spend split by person (household scope only, 4.3):
@@ -1162,6 +1165,26 @@ export async function getDashboardData(
           netWorthPrefsResult,
         )
       : [];
+  const privateLendingData =
+    isFeatureEnabled("privateLending") && options?.includeBalanceSheet !== false && applyUserScope && userId
+      ? await loadPrivateLendingData(supabase, userId, today)
+      : null;
+  if (privateLendingData) {
+    if (privateLendingData.summary.receivable > 0) {
+      netWorthAccounts.push({
+        name: "Private lending receivable",
+        type: "other",
+        balance: privateLendingData.summary.receivable,
+      });
+    }
+    if (privateLendingData.summary.payable > 0) {
+      netWorthAccounts.push({
+        name: "Private lending payable",
+        type: "liability",
+        balance: privateLendingData.summary.payable,
+      });
+    }
+  }
   const lastSyncAt = (lastSyncJob?.updated_at as string | undefined) ?? null;
   const allItems = (items ?? []) as Array<{ id: string; institution_name: string | null }>;
   const allBudgets = (budgets ?? []) as Array<{
@@ -1563,6 +1586,7 @@ export async function getDashboardData(
     spendingAnomalies,
     netWorthSnapshot,
     netWorthHistory,
+    privateLending: privateLendingData?.summary,
     recurringStatuses,
     spendPerPerson,
     billPeriods,

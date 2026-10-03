@@ -10,6 +10,7 @@ import {
   filterReviewDecisions,
   transferSubjectId,
 } from "@/lib/transaction-quality";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 
 const WINDOW_DAYS = 7;
 const LOOKBACK_DAYS = 60;
@@ -172,7 +173,7 @@ export async function GET() {
       const pair = pairBySubject.get(anomaly.subjectId)!;
       const out = byId.get(pair.outId);
       const inbound = byId.get(pair.inId);
-      return {
+      const output = {
         subject_id: pair.subjectId,
         out_id: pair.outId,
         in_id: pair.inId,
@@ -184,6 +185,19 @@ export async function GET() {
         out_merchant: out?.merchant || "Outflow",
         in_merchant: inbound?.merchant || "Inflow",
       };
+      return isFeatureEnabled("explainableMatchSuggestions")
+        ? {
+            ...output,
+            evidence: {
+              amountAgreement: "Exact amount",
+              dateDistanceDays: out?.date && inbound?.date
+                ? Math.round(Math.abs(Date.parse(`${out.date}T00:00:00Z`) - Date.parse(`${inbound.date}T00:00:00Z`)) / 86_400_000)
+                : 0,
+              counterpartyAgreement: "Different owned accounts",
+              strategy: "Equal and opposite amounts across accounts within seven days",
+            },
+          }
+        : output;
     });
 
     return NextResponse.json({ pairs: pairsOut });

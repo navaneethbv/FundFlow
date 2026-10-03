@@ -20,7 +20,12 @@ export default async function ImportHistoryPage({ searchParams }: Readonly<{
   const auth = await requireUser();
   if (auth instanceof NextResponse) notFound();
   const page = importHistoryPage(firstSearchParam((await searchParams).page));
-  const { batches, hasNext } = await loadImportHistory(auth.supabase, auth.user.id, page);
+  const { batches, hasNext } = await loadImportHistory(
+    auth.supabase,
+    auth.user.id,
+    page,
+    isFeatureEnabled("importUndo"),
+  );
   return <AppShell active="settings" email={auth.user.email}>
     <PageHeader title="Import history" actions={<ButtonLink href="/settings?section=data">Import a file</ButtonLink>} />
     <ImportHistory batches={batches} />

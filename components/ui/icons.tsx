@@ -8,6 +8,7 @@ export {
   BarChart3,
   Bell,
   Calendar,
+  Calculator,
   Check,
   CheckCircle2,
   ChevronDown,
