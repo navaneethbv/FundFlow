@@ -45,11 +45,11 @@ export default function GoalProjectionChart({
       <div className="mb-2 flex flex-wrap gap-4 text-xs font-semibold text-muted">
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-2 w-2 rounded-full" style={{ background: "var(--viz-1)" }} aria-hidden />
-          Projected funded amount
+          <span>Projected funded amount</span>
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-0.5 w-3" style={{ background: "var(--viz-axis)" }} aria-hidden />
-          Target
+          <span>Target</span>
         </span>
       </div>
       <svg
