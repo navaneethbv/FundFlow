@@ -2,7 +2,7 @@
 
 ## 2026-10-02: Checklist 9.7 portfolio look-through
 
-Worktree: `/private/tmp/fundflow-product-surfaces`, branch `feat/portfolio-lookthrough`, based on PR #206 head `16120c1`.
+Worktree: `/private/tmp/fundflow-product-surfaces`, local branch `feat/portfolio-lookthrough`, pushed as continuation commit `a98759a` on PR #206's remote branch `feat/asset-investment-provenance`.
 This continuation implements checklist 9.7, user-supplied portfolio look-through, on top of the 9.3 through 9.6 provenance work.
 The new surface is release gated by `portfolioLookthrough`, which remains off.
 
@@ -17,7 +17,7 @@ The migration remains unapplied to production.
 Focused unit tests, the full unit suite, TypeScript, targeted ESLint, and four synthetic browser journeys at 375px and 1440px in both themes passed after the implementation.
 The full unit suite initially caught missing privacy-blur hooks in the new currency cells; those cells now carry the existing `data-money` contract.
 The browser journeys cover keyboard-accessible tables, conserving saves, conflict draft retention, axe, and overflow checks.
-Hosted checks, exact-head Sonar/Codacy results, and the PR handoff remain pending until this branch is committed and pushed.
+Hosted checks and exact-head Sonar/Codacy results for `a98759a` remain pending.
 No merge, deployment, production migration, or flag change was performed.
 
 ## 2026-10-02: Group 8 asset and investment provenance
