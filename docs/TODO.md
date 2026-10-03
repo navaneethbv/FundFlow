@@ -6,7 +6,7 @@ The next checklist slice is implemented in `/private/tmp/fundflow-planning-onboa
 Forecasting now separates funded emergency and sinking-style goal balances from FIRE capital, adds seeded percentile projections behind `forecastingMonteCarlo`, draws direct milestone markers, and exposes a methodology panel sourced from the projection constants.
 Household accounts and dashboard transaction rows have an opt-in accessible owner dot behind `ownerAttributionDots`; both new flags remain off.
 Focused forecasting, owner-dot, recent-activity, and account-row tests pass, as do TypeScript and ESLint with the shared dependency installation.
-The branch has not been pushed or opened as a PR yet; hosted checks and exact-head Sonar confirmation remain pending until that delivery step.
+Draft PR #209 is open at `feat/planning-onboarding-transparency`; its hosted checks pass and direct Sonar verification reports zero unresolved issues and zero hotspots awaiting review at the latest pushed head.
 The remaining checklist workstreams 12.2, 12.3, and 13 are still not started.
 
 ## Current checkpoint: Checklist group 5, 2026-10-03

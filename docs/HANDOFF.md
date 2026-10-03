@@ -8,7 +8,8 @@ The seeded Monte Carlo engine is reproducible and uses only user-entered return 
 Forecast charts show direct milestone markers, and the methodology disclosure imports the same FIRE and scenario-spread constants as the math.
 Owner attribution is implemented as an accessible, stable-color dot for household account rows and dashboard transaction rows behind `ownerAttributionDots`, which remains off.
 Focused forecasting, owner-dot, recent-activity, and account-row tests pass, with TypeScript and ESLint passing using the shared dependency installation.
-No migration, production flag change, deployment, merge, push, or PR creation has occurred for this worktree yet.
+Draft PR #209 is open; after the owner-dot accessibility correction, hosted checks pass and direct Sonar verification reports zero unresolved issues and zero hotspots awaiting review at the latest pushed head.
+No migration, production flag change, deployment, or merge occurred for this worktree.
 The next unfinished checklist workstreams are 12.2, 12.3, and 13.
 
 ## 2026-10-03: Checklist group 5, items 1.5, 2.4, 4.3, 8.3, and 8.4
