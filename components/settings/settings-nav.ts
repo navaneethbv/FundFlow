@@ -47,6 +47,16 @@ export const SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
 
 const DEFAULT_SECTION: SettingsSection = "profile";
 
+/** Sections that read profile columns or user_tags added with the settings IA. */
+export const MIGRATION_DEPENDENT_SECTIONS: readonly SettingsSection[] = ["profile", "display", "tags"];
+
+/** Navigation entries to hide for the flags that are still off. */
+export function hiddenSettingsSections(flags: { settingsIa: boolean; membershipTerms: boolean }): SettingsSection[] {
+  const hidden: SettingsSection[] = flags.settingsIa ? [] : [...MIGRATION_DEPENDENT_SECTIONS];
+  if (!flags.settingsIa || !flags.membershipTerms) hidden.push("membership");
+  return hidden;
+}
+
 export function sectionFromParam(raw: string | string[] | undefined): SettingsSection {
   const value = Array.isArray(raw) ? raw[0] : raw;
   const match = SETTINGS_SECTIONS.find((s) => s.key === value);

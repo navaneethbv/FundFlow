@@ -44,7 +44,7 @@ import { currentSessionId } from "@/lib/http";
 import { suggestBudgets } from "@/lib/insights";
 import ButtonLink from "@/components/ui/ButtonLink";
 import Panel from "@/components/ui/Panel";
-import { sectionFromParam, parseDisplayPrefs, type SettingsSection } from "@/components/settings/settings-nav";
+import { hiddenSettingsSections, MIGRATION_DEPENDENT_SECTIONS, sectionFromParam, parseDisplayPrefs, type SettingsSection } from "@/components/settings/settings-nav";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { firstSearchParam } from "@/lib/search-params";
 import {
@@ -171,19 +171,37 @@ export const metadata = {
   title: "Settings",
 };
 
+/** Sections behind an unready flag fall back to institutions. */
+function resolveActiveSection(param: string | undefined): SettingsSection {
+  const active = sectionFromParam(param);
+  if (!isFeatureEnabled("settingsIa") && MIGRATION_DEPENDENT_SECTIONS.includes(active)) return "institutions";
+  if (!isFeatureEnabled("membershipTermsEntry") && active === "membership") return "institutions";
+  return active;
+}
+
+async function renderDisplaySection(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("display_prefs, dashboard_prefs")
+    .eq("id", userId)
+    .maybeSingle();
+  return (
+    <>
+      <DisplaySection initialPrefs={parseDisplayPrefs(profile?.display_prefs)} />
+      <DashboardPrefsSection
+        initialPrefs={
+          ((profile as { dashboard_prefs?: Record<string, boolean> } | null)?.dashboard_prefs ??
+            {}) as Record<string, boolean>
+        }
+      />
+    </>
+  );
+}
+
 export default async function SettingsPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
-  // Gated: Profile/Display/Tags are the only sections that read the new
-  // profile columns or user_tags — everything else uses tables that already
-  // existed, so this only needs to redirect three sections, not the page.
-  const settingsIaReady = isFeatureEnabled("settingsIa");
   const backupRestoreReady = isFeatureEnabled("backupRestore");
-  const migrationDependentSections: SettingsSection[] = ["profile", "display", "tags"];
-  let active = sectionFromParam(firstSearchParam(params.section));
-  if (!settingsIaReady && migrationDependentSections.includes(active)) {
-    active = "institutions";
-  }
-  if (!isFeatureEnabled("membershipTermsEntry") && active === "membership") active = "institutions";
+  const active = resolveActiveSection(firstSearchParam(params.section));
 
   const supabase = await createClient();
   const {
@@ -199,22 +217,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
       break;
     }
     case "display": {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("display_prefs, dashboard_prefs")
-      .eq("id", userId)
-      .maybeSingle();
-    content = (
-      <>
-        <DisplaySection initialPrefs={parseDisplayPrefs(profile?.display_prefs)} />
-        <DashboardPrefsSection
-          initialPrefs={
-            ((profile as { dashboard_prefs?: Record<string, boolean> } | null)?.dashboard_prefs ??
-              {}) as Record<string, boolean>
-          }
-        />
-      </>
-    );
+      content = await renderDisplaySection(supabase, userId);
       break;
     }
     case "notifications": {
@@ -516,10 +519,10 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
     }
   }
 
-  const hiddenSections: SettingsSection[] = [...migrationDependentSections];
-  if (!settingsIaReady || !isFeatureEnabled("membershipTermsEntry")) {
-    hiddenSections.push("membership");
-  }
+  const hiddenSections = hiddenSettingsSections({
+    settingsIa: isFeatureEnabled("settingsIa"),
+    membershipTerms: isFeatureEnabled("membershipTermsEntry"),
+  });
 
   return (
     <AppShell active="settings" email={user?.email}>
