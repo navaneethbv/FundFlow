@@ -265,11 +265,11 @@ function findIncompleteLedgerDates(
   inspectNeighbors: boolean,
 ): Set<string> {
   const incompleteDates = new Set<string>();
-  if (!inspectNeighbors || rows.length === 0) return incompleteDates;
+  const first = rows[0];
+  const last = rows.at(-1);
+  if (!inspectNeighbors || !first || !last) return incompleteDates;
   const previous = windowRows[visibleStart - 1];
   const next = windowRows[visibleStart + rows.length];
-  const first = rows[0]!;
-  const last = rows.at(-1)!;
   if (previous?.date === first.date) incompleteDates.add(first.date);
   if (next?.date === last.date) incompleteDates.add(last.date);
   return incompleteDates;
@@ -383,7 +383,7 @@ export async function loadLedgerRowDetails(
   for (const a of annotationsResult.data ?? []) {
     annById.set(a.transaction_id as string, {
       note: a.note as string | null,
-      tags: tagsWithRuleActions((a.tags as string[]) ?? [], storedRuleActions(a)),
+      tags: tagsWithRuleActions(Array.isArray(a.tags) ? (a.tags as string[]) : [], storedRuleActions(a)),
       cleared: a.cleared_at != null,
     });
     const classification = a.cash_flow_classification;
