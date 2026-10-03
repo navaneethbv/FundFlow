@@ -22,6 +22,14 @@ vi.mock("@/lib/http", async (importOriginal) => {
 vi.mock("@/lib/api-tokens", () => ({
   API_TOKEN_PREFIX: "ff_pat_",
   verifyApiToken: (token: string | null) => mockVerifyApiToken(token),
+  normalizeApiTokenScopes: (value: unknown) => {
+    if (value === undefined) return ["export:rows"];
+    if (!Array.isArray(value) || value.length === 0) return null;
+    const allowed = new Set(["export:rows", "mcp:aggregates", "mcp:export-rows"]);
+    const scopes = value.map(String);
+    if (scopes.some((scope) => !allowed.has(scope))) return null;
+    return [...new Set(scopes)];
+  },
   hashApiToken: (token: string) => "hashed_" + token,
 }));
 
