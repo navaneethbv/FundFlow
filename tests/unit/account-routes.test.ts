@@ -589,6 +589,48 @@ describe("DELETE /api/account", () => {
     );
   });
 
+  it("removes nested statement PDFs before user deletion and blocks on failure", async () => {
+    const mockSupabase = {
+      auth: {
+        signInWithPassword: vi.fn().mockResolvedValue({ error: null }),
+        mfa: { listFactors: vi.fn().mockResolvedValue({ data: { totp: [] } }) },
+      },
+    };
+    const folder = (name: string) => ({ name, id: null });
+    const statementTree: Record<string, Array<{ name: string; id: string | null }>> = {
+      [USER]: [folder("account")],
+      [`${USER}/account`]: [folder("acct-1")],
+      [`${USER}/account/acct-1`]: [folder("2026-09-01")],
+      [`${USER}/account/acct-1/2026-09-01`]: [{ name: "s-1.pdf", id: "object-1" }],
+    };
+    const statementList = vi.fn(async (path: string) => ({ data: statementTree[path] ?? [], error: null }));
+    const statementRemove = vi.fn().mockResolvedValue({ error: null });
+    const deleteUser = vi.fn().mockResolvedValue({ error: null });
+    const emptyBucket = () => ({ list: vi.fn().mockResolvedValue({ data: [] }), remove: vi.fn() });
+    serviceClient = Object.assign(
+      clientStub({ plaid_items: { data: [] }, rate_limit_hit: { data: true } }),
+      {
+        auth: { admin: { deleteUser } },
+        storage: {
+          from: vi.fn((bucket: string) =>
+            bucket === "statements" ? { list: statementList, remove: statementRemove } : emptyBucket()),
+        },
+      },
+    );
+    mockRequireUser.mockResolvedValue({ user: { id: USER, email: "user@example.com" }, supabase: mockSupabase });
+
+    const res = await accountDelete(del("http://localhost/api/account", { code: "secret" }));
+    expect(res.status).toBe(200);
+    expect(statementRemove).toHaveBeenCalledWith([`${USER}/account/acct-1/2026-09-01/s-1.pdf`]);
+    expect(statementRemove.mock.invocationCallOrder[0]).toBeLessThan(deleteUser.mock.invocationCallOrder[0]!);
+
+    statementRemove.mockResolvedValueOnce({ error: new Error("statement remove failed") });
+    deleteUser.mockClear();
+    const failed = await accountDelete(del("http://localhost/api/account", { code: "secret" }));
+    expect(failed.status).toBe(500);
+    expect(deleteUser).not.toHaveBeenCalled();
+  });
+
   it("blocks account deletion when a storage removal fails", async () => {
     const avatarList = vi
       .fn()
