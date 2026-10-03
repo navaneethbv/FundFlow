@@ -25,7 +25,13 @@ export default function OnboardingChecklist({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const completed = completedOnboardingCount(initial.status);
-  const current = initial.steps[tourStep] ?? initial.steps[0]!;
+  const current = initial.steps.find((_, index) => index === tourStep) ?? initial.steps[0] ?? {
+    label: "Setup",
+    description: "Complete the setup checklist.",
+    href: "/dashboard",
+    complete: false,
+    available: true,
+  };
 
   useEffect(() => {
     if (!tourOpen) return;
@@ -34,7 +40,9 @@ export default function OnboardingChecklist({
       if (event.key === "Escape") setTourOpen(false);
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
   }, [tourOpen]);
 
   async function persist(patch: OnboardingPrefs) {
@@ -133,7 +141,7 @@ export default function OnboardingChecklist({
           <p className="mt-3 text-sm leading-6 text-muted">{current.available ? current.description : "Payday settings are not enabled in this release. You can return here when the feature is available."}</p>
           <div className="mt-5 flex flex-wrap gap-2">
             {current.available && !current.complete && <ButtonLink href={current.href} onClick={closeTour}>Open {current.label.toLowerCase()}</ButtonLink>}
-            <Button variant="secondary" onClick={() => setTourStep((step) => Math.max(0, step - 1))} disabled={tourStep === 0}>Previous</Button>
+            <Button variant="secondary" onClick={() => { setTourStep((step) => Math.max(0, step - 1)); }} disabled={tourStep === 0}>Previous</Button>
             <Button onClick={() => {
               const next = Math.min(ONBOARDING_STEP_KEYS.length - 1, tourStep + 1);
               setTourStep(next);
