@@ -232,4 +232,11 @@ BEGIN
   IF to_regprocedure('public.household_report_aggregates(uuid,date,date,text)') IS NULL THEN
     RAISE EXCEPTION 'public.household_report_aggregates(...) is missing';
   END IF;
+  -- The RPC is security definer, so it must apply both gates itself.
+  IF pg_get_functiondef('public.household_report_aggregates(uuid,date,date,text)'::regprocedure)
+       NOT LIKE '%private.session_not_revoked()%'
+     OR pg_get_functiondef('public.household_report_aggregates(uuid,date,date,text)'::regprocedure)
+       NOT LIKE '%private.mfa_satisfied()%' THEN
+    RAISE EXCEPTION 'public.household_report_aggregates(...) skips the session or MFA gate';
+  END IF;
 END $$;

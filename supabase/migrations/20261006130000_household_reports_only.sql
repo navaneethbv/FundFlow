@@ -65,6 +65,11 @@ begin
   if caller_id is null then
     raise exception 'not_authenticated' using errcode = '28000';
   end if;
+  -- Security definer skips RLS, so apply the same session and MFA gates every
+  -- authenticated policy carries; a revoked or aal1 token must not read here.
+  if not ((select private.session_not_revoked()) and (select private.mfa_satisfied())) then
+    raise exception 'session_not_allowed' using errcode = '42501';
+  end if;
   if p_household_id is null or p_start is null or p_end is null then
     raise exception 'aggregate_filters_required' using errcode = '22023';
   end if;
