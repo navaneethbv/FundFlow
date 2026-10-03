@@ -81,7 +81,7 @@ export default function PrivateLendingPanel({
         <Panel key={loan.id} title={`${loan.direction === "lent" ? "Lent to" : "Borrowed from"} ${loan.counterparty}`} eyebrow={`${loan.startDate}${loan.dueDate ? ` · due ${loan.dueDate}` : ""}`}>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div><p data-money className="metric-value text-2xl font-bold">{formatCurrency(loan.balance.totalOutstanding)}</p><p className="text-xs text-muted">{loan.annualInterestRate.toFixed(2)}% annual interest · {formatCurrency(loan.balance.principalOutstanding)} principal + {formatCurrency(loan.balance.accruedInterest)} accrued</p></div>
-            <Button type="button" size="sm" variant="secondary" onClick={() => setPaymentLoanId(paymentLoanId === loan.id ? null : loan.id)}>{paymentLoanId === loan.id ? "Close payment" : "Record payment"}</Button>
+            <Button type="button" size="sm" variant="secondary" onClick={() => { setPaymentLoanId(paymentLoanId === loan.id ? null : loan.id); }}>{paymentLoanId === loan.id ? "Close payment" : "Record payment"}</Button>
           </div>
           {paymentLoanId === loan.id && (
             <form onSubmit={(event) => { recordPayment(event, loan.id); }} className="mt-4 grid gap-3 border-t border-panel-border pt-4 sm:grid-cols-3">
