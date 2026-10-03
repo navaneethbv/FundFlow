@@ -154,6 +154,37 @@ export function countUnreviewedStreams(
   ).length;
 }
 
+type ManageStream = Pick<
+  RecurringStreamInput,
+  "streamType" | "merchantName" | "description" | "isActive" | "status" | "dismissedAt" | "accountName"
+>;
+
+/**
+ * Splits the Manage list into the streams that still recur and the ones that
+ * do not (dismissed, ended or tombstoned). Plaid issues a fresh stream id each
+ * time it re-detects a merchant, so the inactive side piles up copies of the
+ * same merchant on the same account; it keeps one row per merchant, account
+ * and direction, preferring the copy the user dismissed so Restore acts on
+ * their own decision.
+ */
+export function partitionManageStreams<T extends ManageStream>(
+  streams: T[],
+): { active: T[]; inactive: T[] } {
+  const active: T[] = [];
+  const inactiveByKey = new Map<string, T>();
+  for (const stream of streams) {
+    if (stream.isActive && !stream.dismissedAt && stream.status !== "TOMBSTONED") {
+      active.push(stream);
+      continue;
+    }
+    const label = (stream.merchantName?.trim() || stream.description?.trim() || "").toLowerCase();
+    const key = `${label}|${stream.accountName ?? ""}|${stream.streamType}`;
+    const existing = inactiveByKey.get(key);
+    if (!existing || (!existing.dismissedAt && stream.dismissedAt)) inactiveByKey.set(key, stream);
+  }
+  return { active, inactive: [...inactiveByKey.values()] };
+}
+
 export type ManualRecurringFrequency = "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
 
 export interface ManualRecurringItemInput {

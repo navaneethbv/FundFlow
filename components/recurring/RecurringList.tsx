@@ -9,7 +9,7 @@ import { CheckCircle2 } from "@/components/ui/icons";
 import Tabs from "@/components/ui/Tabs";
 import { daysUntil, formatDueAnnotation } from "@/lib/format-date";
 import { formatCurrency, formatDay, titleCase } from "@/lib/format";
-import type { RecurringOccurrence } from "@/lib/recurring-page";
+import { partitionManageStreams, type RecurringOccurrence } from "@/lib/recurring-page";
 import type { ManualRecurringItemRow, RecurringStreamRow } from "@/lib/recurring-data";
 import { usePopoverMenu } from "@/lib/use-popover-menu";
 import SubscriptionCatalog from "@/components/recurring/SubscriptionCatalog";
@@ -597,6 +597,9 @@ function ManageRow({
   const initialAmount = stream.userAmount != null ? String(stream.userAmount) : "";
   const [amount, setAmount] = useState(initialAmount);
   const needsReview = stream.status === "MATURE" && !stream.dismissedAt && !stream.reviewedAt;
+  // Any live stream can turn out not to recur (a cancelled gym, a card that
+  // moved), not only the ones still awaiting review.
+  const canDismiss = !stream.dismissedAt && stream.isActive && stream.status !== "TOMBSTONED";
 
   return (
     <li className="flex flex-wrap items-center justify-between gap-3 border-t border-panel-border py-3 first:border-t-0">
@@ -605,6 +608,7 @@ function ManageRow({
         <span className="text-xs text-muted">
           {stream.accountName ?? "Unlinked account"}
           {stream.dismissedAt ? " · Not recurring" : ""}
+          {!stream.dismissedAt && (!stream.isActive || stream.status === "TOMBSTONED") ? " · Ended" : ""}
         </span>
       </span>
       {stream.isOwn ? (
@@ -626,24 +630,24 @@ function ManageRow({
             className="min-h-11 w-24 rounded-field border border-panel-border bg-background px-3 text-right"
           />
           {needsReview && (
-            <>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => onReview(stream.id)}
-                className="min-h-11 rounded-field bg-accent px-3 text-sm font-semibold text-accent-foreground"
-              >
-                Confirm
-              </button>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => onDismiss(stream.id)}
-                className="min-h-11 rounded-field border border-panel-border px-3 text-sm font-semibold"
-              >
-                Not recurring
-              </button>
-            </>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => onReview(stream.id)}
+              className="min-h-11 rounded-field bg-accent px-3 text-sm font-semibold text-accent-foreground"
+            >
+              Confirm
+            </button>
+          )}
+          {canDismiss && (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => onDismiss(stream.id)}
+              className="min-h-11 rounded-field border border-panel-border px-3 text-sm font-semibold"
+            >
+              Not recurring
+            </button>
           )}
           {stream.dismissedAt && (
             <button
@@ -934,6 +938,7 @@ export default function RecurringList({
   const overdue = occurrences.filter((occurrence) => occurrence.status === "overdue");
   const upcoming = occurrences.filter((occurrence) => occurrence.status === "upcoming");
   const complete = occurrences.filter((occurrence) => occurrence.status === "complete");
+  const manageStreams = partitionManageStreams(streams);
 
   const tableProps = {
     currency,
@@ -969,7 +974,7 @@ export default function RecurringList({
             active: tab === "complete",
           },
           {
-            label: `Manage (${streams.length})`,
+            label: `Manage (${manageStreams.active.length})`,
             href: links.manage,
             active: tab === "manage",
           },
@@ -1004,10 +1009,10 @@ export default function RecurringList({
         {tab === "manage" && (
           <>
             <ul>
-              {streams.length === 0 ? (
+              {manageStreams.active.length === 0 ? (
                 <p className="py-6 text-sm text-muted">No recurring streams detected yet.</p>
               ) : (
-                streams.map((stream) => (
+                manageStreams.active.map((stream) => (
                   <ManageRow
                     key={stream.id}
                     stream={stream}
@@ -1020,6 +1025,26 @@ export default function RecurringList({
                 ))
               )}
             </ul>
+            {manageStreams.inactive.length > 0 && (
+              <details className="mt-4 border-t border-panel-border pt-4">
+                <summary className="min-h-11 cursor-pointer text-sm font-semibold text-muted">
+                  Not recurring or ended ({manageStreams.inactive.length})
+                </summary>
+                <ul>
+                  {manageStreams.inactive.map((stream) => (
+                    <ManageRow
+                      key={stream.id}
+                      stream={stream}
+                      pending={isPending}
+                      onReview={(id) => handle(id, "review")}
+                      onDismiss={(id) => handle(id, "dismiss")}
+                      onRestore={(id) => handle(id, "restore")}
+                      onCorrectAmount={(id, amount) => handle(id, "correct_amount", amount)}
+                    />
+                  ))}
+                </ul>
+              </details>
+            )}
             <div className="mt-6 border-t border-panel-border pt-4">
               <h3 className="text-sm font-semibold">Manual items</h3>
               <ul>
