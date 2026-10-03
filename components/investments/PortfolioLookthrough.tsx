@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Button from "@/components/ui/Button";
 import FormMessage from "@/components/ui/FormMessage";
 import Input from "@/components/ui/Input";
@@ -43,9 +43,18 @@ function draftFor(record: LookthroughRecord | undefined): Draft {
   };
 }
 
-function exposureRows(rows: ReturnType<typeof buildLookthroughSummary>["bySecurity"], currency: string, caption: string) {
+function ExposureTable({ rows, currency, caption }: Readonly<{ rows: ReturnType<typeof buildLookthroughSummary>["bySecurity"]; currency: string; caption: string }>) {
+  const tableRef = useRef<HTMLDivElement>(null);
+  function scrollTable(distance: number) {
+    tableRef.current?.scrollBy({ left: distance, behavior: "smooth" });
+  }
+
   return (
-    <div role="region" className="overflow-x-auto" tabIndex={0} aria-label={`${caption} table; scroll horizontally for more columns`}>
+    <div ref={tableRef} className="overflow-x-auto" aria-label={`${caption} table; use the scroll controls for more columns`}>
+      <div className="flex justify-end gap-1 pb-1">
+        <button type="button" className="sr-only rounded-field px-2 py-1 text-xs focus:not-sr-only focus-visible:outline-2" onClick={() => { scrollTable(-240); }}>Scroll left</button>
+        <button type="button" className="sr-only rounded-field px-2 py-1 text-xs focus:not-sr-only focus-visible:outline-2" onClick={() => { scrollTable(240); }}>Scroll right</button>
+      </div>
       <table className="min-w-full text-left text-sm">
         <caption className="sr-only">{caption}</caption>
         <thead className="text-xs uppercase tracking-wide text-muted">
@@ -95,7 +104,7 @@ function RegionView({ rows, currency }: Readonly<{ rows: ReturnType<typeof build
         ))}
       </div>
       {/* Table twin keeps the chart's exact data available without color or geometry. */}
-      {exposureRows(rows, currency, "Regional exposure")}
+      <ExposureTable rows={rows} currency={currency} caption="Regional exposure" />
     </div>
   );
 }
@@ -205,11 +214,11 @@ export default function PortfolioLookthrough({ holdings, initialRecords }: Reado
       <div className="mt-6 space-y-6">
         <section aria-labelledby="lookthrough-security-heading">
           <h3 id="lookthrough-security-heading" className="text-sm font-semibold">By security</h3>
-          {summary.bySecurity.length > 0 ? exposureRows(summary.bySecurity, "USD", "Security exposure") : <p className="mt-2 text-sm text-muted">No covered holdings yet.</p>}
+          {summary.bySecurity.length > 0 ? <ExposureTable rows={summary.bySecurity} currency="USD" caption="Security exposure" /> : <p className="mt-2 text-sm text-muted">No covered holdings yet.</p>}
         </section>
         <section aria-labelledby="lookthrough-sector-heading">
           <h3 id="lookthrough-sector-heading" className="text-sm font-semibold">By sector</h3>
-          <div className="mt-2">{summary.bySector.length > 0 ? exposureRows(summary.bySector, "USD", "Sector exposure") : <p className="text-sm text-muted">No sector data yet.</p>}</div>
+          <div className="mt-2">{summary.bySector.length > 0 ? <ExposureTable rows={summary.bySector} currency="USD" caption="Sector exposure" /> : <p className="text-sm text-muted">No sector data yet.</p>}</div>
         </section>
         <section aria-labelledby="lookthrough-region-heading">
           <h3 id="lookthrough-region-heading" className="text-sm font-semibold">By region</h3>
