@@ -1,5 +1,15 @@
 # FundFlow — Future Todos
 
+## Current checkpoint: Checklist 13.6, statement vault, 2026-10-03
+
+The next checklist slice is implemented in `/private/tmp/fundflow-statement-vault` on `feat/statement-vault`, stacked on PR #212's exact verified head.
+Checklist 13.6 adds a private, feature-gated PDF statement vault with ownership-checked uploads and deletes, metadata-only reads, and a text-labelled 12-month coverage grid for connected and manual accounts.
+The additive migration `20261003100000_statement_vault.sql` creates the owner-scoped metadata table and private `statements` bucket; it is unapplied to production.
+The `statementVault` flag remains off pending signed-in Supabase storage/RLS acceptance and authorized rollout.
+Local verification passes 557 test files and 6,141 tests, coverage at 97.39% statements, 94.55% branches, 97.97% functions, and 98.80% lines, TypeScript, ESLint, the placeholder production build, palette validation, npm audit, graph refresh, and `git diff --check`.
+Hosted verification begins after this worktree is committed and pushed.
+The remaining checklist workstreams are 12.2, 12.3, and 13.7.
+
 ## Current checkpoint: Checklist group 9, external-services disclosure, 2026-10-03
 
 The next checklist slice is implemented in `/private/tmp/fundflow-services-disclosure` on `feat/services-disclosure`, stacked on PR #211's verified head.

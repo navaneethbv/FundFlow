@@ -53,6 +53,8 @@ export type AuditAction =
   | "receipt_ignored"
   | "receipt_restored"
   | "receipt_deleted"
+  | "statement_uploaded"
+  | "statement_deleted"
   | "ai_question"
   | "ai_consent_updated"
   | "household_share_changed"

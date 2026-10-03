@@ -1,5 +1,16 @@
 # FundFlow Session Handoff
 
+## 2026-10-03: Checklist 13.6, statement vault
+
+Worktree: `/private/tmp/fundflow-statement-vault`, branch `feat/statement-vault`, based on PR #212's exact verified head `d559a96d3edd0b8678c42badc8f5c25b48dab5fb`.
+Checklist 13.6 adds a feature-gated private PDF statement vault with account ownership checks, bounded PDF validation, metadata-only listing, deletion, audit actions, and a text-labelled 12-month covered/missing/duplicate grid.
+The additive migration `20261003100000_statement_vault.sql` creates `account_statements` and a private `statements` bucket, with no browser storage policies; route handlers use the service client only after authenticated ownership checks.
+The `statementVault` flag remains off, and the migration, deployment, and rollout are not performed.
+The API contract is documented in `docs/api/statement-vault.md`.
+Local verification passes 557 test files and 6,141 tests, coverage at 97.39% statements, 94.55% branches, 97.97% functions, and 98.80% lines, TypeScript, ESLint, the placeholder production build, palette validation, npm audit, graph refresh, and `git diff --check`.
+The exact-head hosted checks and direct Sonar issue/hotspot confirmation remain next.
+The remaining checklist workstreams are 12.2, 12.3, and 13.7.
+
 ## 2026-10-03: Checklist group 9, external-services disclosure
 
 Worktree: `/private/tmp/fundflow-services-disclosure`, branch `feat/services-disclosure`, based on PR #211's exact verified head `48089a2cb8d69621240bd54688e21d7f61a47a2b`.
