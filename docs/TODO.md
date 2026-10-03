@@ -2,10 +2,11 @@
 
 ## Current checkpoint: Checklist group 7, onboarding and release transparency, 2026-10-03
 
-The next checklist slice is implemented on `feat/onboarding-transparency`, stacked on PR #209's verified head, and delivered as [draft PR #210](https://github.com/navaneethbv/FundFlow/pull/210) at `f9e7347`.
+The next checklist slice is implemented on `feat/onboarding-transparency`, stacked on PR #209's verified head, and delivered as [draft PR #210](https://github.com/navaneethbv/FundFlow/pull/210) at `116ba68`.
 Checklist 13.1 adds a resumable, keyboard-accessible setup checklist and guided tour for bank connection, payday confirmation, budget seeding, alert choices, and MFA.
 Checklist 13.2 adds a versioned “What’s new” panel that records the viewed release marker in the existing profile preferences JSON.
 The new `onboardingTour` and `releaseHighlights` flags remain off pending release review.
+PR #210's exact-head hosted checks pass, and direct Sonar verification reports zero unresolved issues and zero hotspots awaiting review.
 Local focused tests, TypeScript, ESLint, the placeholder production build, full unit coverage, graph refresh, and `git diff --check` are required before the draft PR handoff.
 The remaining checklist workstreams are 12.2, 12.3, and 13.3 through 13.7.
 
