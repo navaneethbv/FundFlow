@@ -269,6 +269,12 @@ export function applyRulesToTransaction(
 /**
  * Runs a set of smart rules across an entire batch of transactions.
  */
+function prepareRule(rule: SmartRule): SmartRule {
+  if (rule.conditions) return { ...rule, compiledConditions: compileConditions(rule.conditions, rule.compiledRegex) };
+  if (rule.matchType === "regex" && rule.compiledRegex === undefined) return { ...rule, compiledRegex: safeCompileRegex(rule.pattern) };
+  return rule;
+}
+
 export function simulateRulesBatch(
   rules: SmartRule[],
   transactions: RuleTransactionCandidate[],
@@ -282,12 +288,7 @@ export function simulateRulesBatch(
   let modifiedCount = 0;
 
   // Pre-compile regex rules once before batch evaluation to avoid inner-loop overhead and ReDoS
-  const preparedRules = rules.map((r) =>
-    r.conditions ? { ...r, compiledConditions: compileConditions(r.conditions, r.compiledRegex) } :
-    r.matchType === "regex" && r.compiledRegex === undefined
-      ? { ...r, compiledRegex: safeCompileRegex(r.pattern) }
-      : r,
-  );
+  const preparedRules = rules.map(prepareRule);
 
   const results: RuleApplicationResult[] = transactions.map((tx) => {
     const res = applyRulesToTransaction(preparedRules, tx);

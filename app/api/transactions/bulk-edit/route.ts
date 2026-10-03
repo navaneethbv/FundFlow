@@ -13,7 +13,7 @@ type BulkAction = "tag" | "category" | "exclude" | "reviewed" | "collection";
 type BulkBody = { transaction_ids?: unknown; action?: unknown; value?: unknown; versions?: unknown } | null;
 type ServiceClient = ReturnType<typeof createServiceClient>;
 const ACTIONS: readonly BulkAction[] = ["tag", "category", "exclude", "reviewed", "collection"];
-const VALUE_ACTIONS: readonly BulkAction[] = ["tag", "category", "collection"];
+const VALUE_ACTIONS: ReadonlySet<BulkAction> = new Set(["tag", "category", "collection"]);
 
 function parseBulkEdit(body: BulkBody): { ids: string[]; action: BulkAction; value: string } | NextResponse {
   const rawIds = Array.isArray(body?.transaction_ids) ? body.transaction_ids : [];
@@ -25,7 +25,7 @@ function parseBulkEdit(body: BulkBody): { ids: string[]; action: BulkAction; val
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   const value = typeof body?.value === "string" ? body.value.trim().slice(0, 100) : "";
-  if (VALUE_ACTIONS.includes(action) && !value) return badRequest("This action requires a value");
+  if (VALUE_ACTIONS.has(action) && !value) return badRequest("This action requires a value");
   return { ids, action, value };
 }
 
