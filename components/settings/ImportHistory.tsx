@@ -1,5 +1,6 @@
 import ButtonLink from "@/components/ui/ButtonLink";
 import Panel from "@/components/ui/Panel";
+import ImportUndoButton from "@/components/settings/ImportUndoButton";
 import type { ImportHistoryBatch } from "@/lib/import-history";
 
 function utcTime(value: string): string {
@@ -13,7 +14,13 @@ export default function ImportHistory({ batches }: Readonly<{ batches: ImportHis
     {batches.map(batch => {
       const summary = batch.history_summary;
       return <Panel key={batch.id}>
-        <h2 className="text-base font-semibold break-all">{batch.file_name}</h2>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold break-all">{batch.file_name}</h2>
+            {batch.status === "discarded" && <p className="mt-1 text-xs font-semibold text-muted">Import undone</p>}
+          </div>
+          {batch.undoAvailable && <ImportUndoButton batchId={batch.id} />}
+        </div>
         <p className="mt-1 text-sm text-muted">Uploaded <time dateTime={batch.created_at}>{utcTime(batch.created_at)}</time></p>
         <dl className="mt-4 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <div><dt className="text-muted">Layout</dt><dd className="break-words">{batch.history_profile_name ?? "Not recorded"}</dd></div>

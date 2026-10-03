@@ -2,6 +2,7 @@ import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
 import BarList from "@/components/dashboard/BarList";
 import ExportReportButton from "@/components/review/ExportReportButton";
+import ButtonLink from "@/components/ui/ButtonLink";
 import Panel from "@/components/ui/Panel";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { loadGoalsPageData } from "@/lib/goals-data";
@@ -78,7 +79,7 @@ export default async function MonthlyReviewPage({ searchParams }: Readonly<PageP
     <AppShell active="reports" email={user?.email}>
       <PageHeader
         title={`${formatMonth(data.selectedMonth)} review${isCurrentMonth ? ", month to date" : ""}`}
-        actions={<ExportReportButton month={data.selectedMonth} />}
+        actions={<div className="flex flex-wrap gap-2"><ExportReportButton month={data.selectedMonth} />{isFeatureEnabled("weeklyReview") && <ButtonLink href="/review/weekly">Weekly review</ButtonLink>}</div>}
       />
       <p className="max-w-2xl text-sm text-muted">
         {isCurrentMonth

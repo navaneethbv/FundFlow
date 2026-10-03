@@ -4,6 +4,7 @@ import CommandPalette from "@/components/CommandPalette";
 import KeyboardShortcutsListener from "@/components/shell/KeyboardShortcutsListener";
 import { getEnabledNavItems } from "@/components/shell/nav-model";
 import { dashboardUrl } from "@/lib/drilldown";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 
 const EXTRA_COMMANDS = [
   { label: "Plan view", href: dashboardUrl({ view: "plan" }), hint: "Budgets, bills, debt" },
@@ -29,6 +30,7 @@ export default function AppShell({
   const commands = [
     ...getEnabledNavItems().map((item) => ({ label: item.label, href: item.href, hint: item.hint })),
     ...EXTRA_COMMANDS,
+    ...(isFeatureEnabled("weeklyReview") ? [{ label: "Weekly review", href: "/review/weekly", hint: "Five-step weekly ritual" }] : []),
   ];
 
   return (

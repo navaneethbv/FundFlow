@@ -12,6 +12,7 @@ import { refreshInferredRecurringForUser } from "@/lib/recurring-inference";
 import { logError } from "@/lib/log";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { IN_FILTER_CHUNK_SIZE } from "@/lib/postgrest-limits";
+import { loadExistingImportIds, trackImportCommitTransactions, type ImportCommitTrackingRow } from "@/lib/import-undo-tracking";
 
 const UPSERT_CHUNK = 500;
 /** `.in()` lists travel in the URL; see `IN_FILTER_CHUNK_SIZE`. */
@@ -372,6 +373,10 @@ async function persistCommit(
   const { sourceAccounts, mappingBySource, dbRows, rowIds, batchId, userId } = params;
 
   await persistSourceAccountMappings(service, sourceAccounts, mappingBySource, userId);
+  const trackingRows = dbRows as ImportCommitTrackingRow[];
+  const preexistingImportIds = isFeatureEnabled("importUndo") && isFeatureEnabled("importHistory")
+    ? await loadExistingImportIds(service, trackingRows, userId)
+    : new Set<string>();
   await persistTransactions(service, dbRows);
   await persistTransactionAnnotations(service, dbRows, userId);
 
@@ -381,6 +386,9 @@ async function persistCommit(
       p_rows: dbRows.map(row => ({ id: row.rowId, account_id: row.account_id, manual_account_id: row.manual_account_id })),
     });
     if (error) throw error;
+    if (isFeatureEnabled("importUndo") && isFeatureEnabled("importHistory")) {
+      await trackImportCommitTransactions(service, trackingRows, batchId, userId, preexistingImportIds);
+    }
     return;
   }
 
@@ -399,6 +407,9 @@ async function persistCommit(
     .eq("user_id", userId)
     .eq("id", batchId);
   if (batchError) throw batchError;
+  if (isFeatureEnabled("importUndo") && isFeatureEnabled("importHistory")) {
+    await trackImportCommitTransactions(service, trackingRows, batchId, userId, preexistingImportIds);
+  }
 }
 
 async function persistSourceAccountMappings(

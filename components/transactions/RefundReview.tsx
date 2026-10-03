@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ReviewCard, ReviewItemActions } from "@/components/transactions/ReviewPairList";
 import { formatCurrency } from "@/lib/format";
+import type { SuggestionEvidence } from "@/lib/transaction-quality";
 
 interface RefundPair {
   subject_id: string;
@@ -12,6 +13,7 @@ interface RefundPair {
   charge_date: string | null;
   refund_date: string | null;
   amount: number;
+  evidence?: SuggestionEvidence;
 }
 
 /**
@@ -74,27 +76,37 @@ export default function RefundReview() {
   return (
     <ReviewCard title="Refund review" eyebrow="Possible refund pairs" error={error}>
       {pairs.map((pair) => (
-        <div
-          key={pair.subject_id}
-          className="flex flex-wrap items-center justify-between gap-3 rounded-field bg-panel-2 p-3"
-        >
-          <span>
-            <span className="block font-semibold">{pair.merchant}</span>
-            <span data-money className="block text-xs text-muted">
-              Charged {pair.charge_date}, refunded {pair.refund_date} · {formatCurrency(pair.amount)}
+        <div key={pair.subject_id} className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-field bg-panel-2 p-3">
+            <span>
+              <span className="block font-semibold">{pair.merchant}</span>
+              <span data-money className="block text-xs text-muted">
+                Charged {pair.charge_date}, refunded {pair.refund_date} · {formatCurrency(pair.amount)}
+              </span>
             </span>
-          </span>
-          <ReviewItemActions
-            id={pair.subject_id}
-            busyId={busyId}
-            confirmLabel="Link"
-            onConfirm={() => {
-              void decide(pair, "confirmed");
-            }}
-            onDismiss={() => {
-              void decide(pair, "dismissed");
-            }}
-          />
+            <ReviewItemActions
+              id={pair.subject_id}
+              busyId={busyId}
+              confirmLabel="Link"
+              onConfirm={() => {
+                void decide(pair, "confirmed");
+              }}
+              onDismiss={() => {
+                void decide(pair, "dismissed");
+              }}
+            />
+          </div>
+          {pair.evidence && (
+            <details className="rounded-field border border-panel-border bg-panel p-3 text-xs">
+              <summary className="cursor-pointer font-semibold text-muted">Why this was suggested</summary>
+              <dl className="mt-2 grid gap-2 sm:grid-cols-2">
+                <div><dt className="text-muted">Amount</dt><dd>{pair.evidence.amountAgreement}</dd></div>
+                <div><dt className="text-muted">Date distance</dt><dd>{pair.evidence.dateDistanceDays} day{pair.evidence.dateDistanceDays === 1 ? "" : "s"}</dd></div>
+                <div><dt className="text-muted">Counterparty</dt><dd>{pair.evidence.counterpartyAgreement}</dd></div>
+                <div><dt className="text-muted">Strategy</dt><dd>{pair.evidence.strategy}</dd></div>
+              </dl>
+            </details>
+          )}
         </div>
       ))}
     </ReviewCard>

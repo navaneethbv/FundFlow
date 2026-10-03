@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import {
   ArrowLeftRight,
   BarChart3,
+  Calculator,
   Bell,
   Compass,
   CreditCard,
@@ -30,6 +31,7 @@ export type NavItemKey =
   | "investments"
   | "debt"
   | "forecasting"
+  | "planning"
   | "advice"
   | "settings"
   | "notifications"
@@ -52,6 +54,7 @@ export interface NavItemDefinition {
   icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
   category: "primary" | "planning" | "manage";
   featureFlag?: FeatureFlag;
+  featureFlags?: FeatureFlag[];
   hint: string;
 }
 
@@ -67,6 +70,7 @@ export const NAV_ITEMS: NavItemDefinition[] = [
   { key: "investments", label: "Investments", href: "/investments", icon: LineChart, category: "planning", featureFlag: "investmentsPage", hint: "Holdings and allocation" },
   { key: "debt", label: "Debt Payoff", href: "/debt", icon: CreditCard, category: "planning", hint: "Avalanche and snowball projections" },
   { key: "forecasting", label: "Forecasting", href: "/forecasting", icon: TrendingUp, category: "planning", featureFlag: "forecastingPage", hint: "Net worth projections" },
+  { key: "planning", label: "Planning tools", href: "/planning", icon: Calculator, category: "planning", featureFlags: ["planningCalculators", "privateLending"], hint: "Scenarios and private lending" },
   { key: "advice", label: "Advice", href: "/advice", icon: Compass, category: "planning", featureFlag: "advicePage", hint: "Sourced education checklists" },
   { key: "notifications", label: "Notifications", href: "/notifications", icon: Bell, category: "manage", hint: "Alerts and digests" },
   { key: "settings", label: "Settings", href: "/settings", icon: Settings, category: "manage", hint: "Control center" },
@@ -74,7 +78,10 @@ export const NAV_ITEMS: NavItemDefinition[] = [
 ];
 
 export function getEnabledNavItems(env?: FeatureFlagEnv): NavItemDefinition[] {
-  return NAV_ITEMS.filter((item) => !item.featureFlag || isFeatureEnabled(item.featureFlag, env));
+  return NAV_ITEMS.filter((item) =>
+    (!item.featureFlag || isFeatureEnabled(item.featureFlag, env)) &&
+    (!item.featureFlags || item.featureFlags.some((flag) => isFeatureEnabled(flag, env))),
+  );
 }
 
 export interface UtilityItemDefinition {

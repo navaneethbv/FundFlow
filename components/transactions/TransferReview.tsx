@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ReviewItemActions } from "@/components/transactions/ReviewPairList";
 import { formatCurrency } from "@/lib/format";
+import type { SuggestionEvidence } from "@/lib/transaction-quality";
 import Button from "@/components/ui/Button";
 
 interface TransferPair {
@@ -17,6 +18,7 @@ interface TransferPair {
   in_account_name?: string;
   out_merchant?: string;
   in_merchant?: string;
+  evidence?: SuggestionEvidence;
 }
 
 export function getTransferSelectionState(
@@ -302,10 +304,8 @@ export default function TransferReview() {
             </Button>
           </div>
           {pairs.map((pair) => (
-            <div
-              key={pair.subject_id}
-              className="flex flex-col gap-3 rounded-field bg-panel-2 p-3 sm:flex-row sm:items-center sm:justify-between"
-            >
+            <div key={pair.subject_id} className="space-y-2">
+              <div className="flex flex-col gap-3 rounded-field bg-panel-2 p-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-start gap-3">
                 <input
                   type="checkbox"
@@ -344,6 +344,18 @@ export default function TransferReview() {
                   void decide(pair, "dismissed");
                 }}
               />
+              </div>
+              {pair.evidence && (
+                <details className="rounded-field border border-panel-border bg-panel p-3 text-xs">
+                  <summary className="cursor-pointer font-semibold text-muted">Why this was suggested</summary>
+                  <dl className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <div><dt className="text-muted">Amount</dt><dd>{pair.evidence.amountAgreement}</dd></div>
+                    <div><dt className="text-muted">Date distance</dt><dd>{pair.evidence.dateDistanceDays} day{pair.evidence.dateDistanceDays === 1 ? "" : "s"}</dd></div>
+                    <div><dt className="text-muted">Counterparty</dt><dd>{pair.evidence.counterpartyAgreement}</dd></div>
+                    <div><dt className="text-muted">Strategy</dt><dd>{pair.evidence.strategy}</dd></div>
+                  </dl>
+                </details>
+              )}
             </div>
           ))}
         </div>

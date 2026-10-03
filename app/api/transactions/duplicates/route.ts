@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getClientIp, writeAudit } from "@/lib/audit";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { createServiceClient } from "@/lib/supabase/service";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 import {
   detectDuplicatePairs,
   duplicateSubjectId,
@@ -118,8 +119,19 @@ export async function GET() {
         link.excluded_transaction_id as string,
       ]),
     );
+    const pairs = detectDuplicatePairs(transactions, decisions, linkedTransactionIds);
     return NextResponse.json({
-      pairs: detectDuplicatePairs(transactions, decisions, linkedTransactionIds),
+      pairs: isFeatureEnabled("explainableMatchSuggestions")
+        ? pairs.map((pair) => ({
+            ...pair,
+            evidence: {
+              amountAgreement: "Exact amount",
+              dateDistanceDays: pair.dateDistanceDays,
+              counterpartyAgreement: "Merchant matches after normalization",
+              strategy: "Same merchant and amount across different accounts within two days",
+            },
+          }))
+        : pairs,
       confirmed,
     });
   } catch (error) {

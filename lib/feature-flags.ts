@@ -26,6 +26,8 @@ export const FEATURE_FLAG_DEFAULTS = {
   importProfiles: false,
   /** Read-only committed batch history; requires the history migration. */
   importHistory: false,
+  /** Guarded removal of a committed import batch; requires importHistory. */
+  importUndo: false,
   /**
    * Plaid Liabilities is a separately billed provider call.
    * Keep the daily cron call opt-in until quota and product access are approved.
@@ -169,6 +171,14 @@ export const FEATURE_FLAG_DEFAULTS = {
   typedManualAssets: false,
   /** Reference adoption 9.2: valuation provenance and owned share in net worth. */
   assetOwnership: false,
+  /** Reference adoption 2.4: explainable duplicate, refund, and transfer suggestions. */
+  explainableMatchSuggestions: false,
+  /** Reference adoption 4.3: the five-step weekly review ritual and streak. */
+  weeklyReview: false,
+  /** Reference adoption 8.3: owner-scoped private lending balances and payments. */
+  privateLending: false,
+  /** Reference adoption 8.4: editable rent-buy, emergency-fund, and compound tools. */
+  planningCalculators: false,
 } as const;
 
 export type FeatureFlag = keyof typeof FEATURE_FLAG_DEFAULTS;

@@ -10,7 +10,7 @@ import {
 import { loadCanonicalProjection } from "@/lib/finance-query";
 
 import { financeTotals } from "@/lib/finance-domain";
-import { medianOf } from "@/lib/insights";
+import { medianOf, splitEssentialsByMonth } from "@/lib/insights";
 import { readExcludedNetWorthIds } from "@/lib/net-worth-inputs";
 import { dedupeRelinkedAccounts } from "@/lib/relinked-accounts";
 import { groupKeyFor } from "@/lib/accounts-page";
@@ -40,6 +40,7 @@ export interface ForecastPageData {
   startingState: ForecastStartingSummary;
   defaults: ForecastDefaults;
   monthlyExpenses: number;
+  essentialMonthlyExpenses: number;
   taxSummary?: ReturnType<typeof summarizeTaxBuckets>;
 }
 
@@ -112,8 +113,25 @@ export async function loadForecastPageData(
     .map((m) => financeTotals(byMonth.get(m) ?? []).expenses)
     .filter((e) => e > 0);
   const monthlyExpenses = monthlyExpensesList.length > 0 ? Math.round(medianOf(monthlyExpensesList)) : 0;
+  const essentialByMonth = splitEssentialsByMonth(
+    projection.transactions
+      .filter((transaction) => transaction.flow === "expense" && transaction.signedAmount > 0)
+      .map((transaction) => ({
+        month: transaction.date.slice(0, 7),
+        pfcPrimary: transaction.groupKey,
+        pfcDetailed: transaction.categoryKey,
+        amount: transaction.signedAmount,
+      })),
+    months,
+  );
+  const essentialMonthlyExpenses = essentialByMonth
+    .filter((row) => row.month !== today.slice(0, 7) && row.essentials > 0)
+    .map((row) => row.essentials);
+  const typicalEssentialMonthlyExpenses = essentialMonthlyExpenses.length > 0
+    ? Math.round(medianOf(essentialMonthlyExpenses))
+    : 0;
 
-  if (!isFeatureEnabled("investmentTaxBuckets")) return { startingState, defaults, monthlyExpenses };
+  if (!isFeatureEnabled("investmentTaxBuckets")) return { startingState, defaults, monthlyExpenses, essentialMonthlyExpenses: typicalEssentialMonthlyExpenses };
   const taxAccounts = [
     ...dedupeRelinkedAccounts(accountsResult.data ?? []).filter((a) => !excludedNetWorthIds.has(a.id) && groupKeyFor(a.type, a.subtype) === "investment").map((a) => ({
       id: a.id as string, source: "plaid" as const, subtype: a.subtype as string | null,
@@ -123,5 +141,5 @@ export async function loadForecastPageData(
       id: a.id as string, source: "manual" as const, subtype: null, balance: a.balance == null ? null : Number(a.balance), currency: "USD",
     })),
   ];
-  return { startingState, defaults, monthlyExpenses, taxSummary: summarizeTaxBuckets(taxAccounts, await loadTaxOverrides(supabase, userId)) };
+  return { startingState, defaults, monthlyExpenses, essentialMonthlyExpenses: typicalEssentialMonthlyExpenses, taxSummary: summarizeTaxBuckets(taxAccounts, await loadTaxOverrides(supabase, userId)) };
 }
