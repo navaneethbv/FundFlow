@@ -1,5 +1,16 @@
 # FundFlow Session Handoff
 
+## 2026-10-03: Exact-head hosted verification complete
+
+PR #204 is merged at `eaf1b0c4a5ca552ceadabe54465939a98cd0d901`.
+Draft PRs #205, #206, and #208 through #217 are green at their exact current heads across GitHub checks, Vercel, Codacy, and SonarCloud.
+The latest MCP head is PR #217 at `4fac4255285f5e2e30d152ce749a8087762f528f`.
+Direct SonarCloud issue searches report zero unresolved issues and `new_violations=0` for PRs #205, #206, and #208 through #217.
+The final MCP scanner cleanup extracted the numeric union into `McpNumericValue`, removed the nested category ternary, and avoided object stringification in budget categories.
+Local MCP tests, ESLint, TypeScript, diff checks, graph refresh, and hosted lint/build/test, E2E, analysis, Codacy, SonarCloud, and Vercel checks pass.
+The checklist implementation is complete through 13.7.
+Remaining work is release acceptance and owner-controlled delivery: keep all feature flags off, leave additive migrations unapplied, and defer signed-in Supabase Auth, RLS, Storage, and browser journeys until an approved disposable target is available.
+
 ## 2026-10-03: Checklist 12.3 read-only MCP endpoint
 
 Worktree: `/private/tmp/fundflow-mcp-aggregates`, branch `feat/mcp-aggregates`, based on aggregate-only household commit `4ad14d0`.

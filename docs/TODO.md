@@ -1,5 +1,14 @@
 # FundFlow — Future Todos
 
+## Current checkpoint: Exact-head hosted verification complete, 2026-10-03
+
+PR #204 is merged at `eaf1b0c4a5ca552ceadabe54465939a98cd0d901`.
+The remaining stacked implementation PRs are still draft, but their exact current heads are green across the required GitHub checks, Vercel, Codacy, and SonarCloud: #205 `b0507e6c4be5bc6f40867e5704f0cb244b178ca7`, #206 `1879d369dc9a6d805a48463328609de7be77bda2`, #208 `c11ff67f875f89ca0a5c2d51fd0b22d2c1b17c53`, #209 `04b2b767586ecf391e5ea96ef405a7882a6caa10`, #210 `f5d825342c8a3b06a248769ed51a170f7b9e49c6`, #211 `48089a2cb8d69621240bd54688e21d7f61a47a2b`, #212 `d559a96d3edd0b8678c42badc8f5c25b48dab5fb`, #213 `68115041b75f47950dd5b8584b4a9795c71a311f`, #214 `43bf763dc6aadfe3a6d802ec0ab093baf734d073`, #215 `1e5ae55ca336b77c6d102d89760d2d7b340f7ffc`, #216 `3740a261734b0b3cf12c5ffde9e7822ee5fc343f`, and #217 `4fac4255285f5e2e30d152ce749a8087762f528f`.
+Direct SonarCloud issue searches report zero unresolved issues and `new_violations=0` for every listed PR.
+The implementation checklist through 13.7 is complete; the remaining work is owner-gated release acceptance and delivery.
+All new feature flags remain off, additive migrations remain unapplied to production, and no token, deployment, merge, or production setting changed.
+Signed-in Supabase Auth, RLS, Storage, and browser journeys remain deferred until an approved disposable `TEST_SUPABASE_URL` target exists.
+
 ## Current checkpoint: Checklist 12.3, read-only MCP endpoint, 2026-10-03
 
 Checklist 12.3 is implemented in `/private/tmp/fundflow-mcp-aggregates` on `feat/mcp-aggregates`, stacked on the aggregate-only household role.
