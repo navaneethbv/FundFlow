@@ -1,5 +1,14 @@
 # FundFlow — Future Todos
 
+## Current checkpoint: Checklist 12.3 prerequisite, scoped API tokens, 2026-10-03
+
+The scoped-token prerequisite is implemented in `/private/tmp/fundflow-scoped-tokens` on `feat/scoped-api-tokens`, stacked on PR #213's exact verified head.
+The additive migration `20261006120000_api_token_scopes.sql` backfills existing API tokens to the explicit `export:rows` scope and constrains future scopes to the named capabilities.
+`verifyApiToken()` now requires a named scope, fails closed when stored scopes are absent, and returns the validated user id plus scopes.
+Existing JSON, CSV, and QIF token consumers explicitly require `export:rows`; token minting accepts only the named capabilities after step-up.
+The migration is unapplied to production, and no token scope or production setting was changed.
+The next checklist slice is the aggregate-only household role before the final MCP endpoint.
+
 ## Current checkpoint: Checklist 13.6, statement vault, 2026-10-03
 
 The next checklist slice is implemented in `/private/tmp/fundflow-statement-vault` on `feat/statement-vault`, stacked on PR #212's exact verified head.

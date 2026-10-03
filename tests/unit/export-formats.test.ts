@@ -73,6 +73,7 @@ describe("GET /api/export/qif", () => {
     const res = await qifGet(req);
 
     expect(res.status).toBe(200);
+    expect(mockResolveExportContext).toHaveBeenCalledWith(req, "export:rows");
     expect(res.headers.get("Content-Type")).toBe("application/x-qif; charset=utf-8");
     expect(res.headers.get("Content-Disposition")).toContain("fundflow-transactions.qif");
 

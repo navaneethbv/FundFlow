@@ -404,7 +404,7 @@ No dependency changes are included in feature PRs.
 | 11.3 | Group 5 in [PR #203](https://github.com/navaneethbv/FundFlow/pull/203); merge deferred | `app/api/settings/card-value/route.ts`, `components/settings/MembershipCardValueSection.tsx` |
 | 12.1 | Implemented, release gated | Group 6: stable accessible owner dots on household account and dashboard transaction rows behind `ownerAttributionDots`. |
 | 12.2 | Not started |  |
-| 12.3 | Not started |  |
+| 12.3 | Scoped-token prerequisite implemented | Pending endpoint slice: `scopes` backfill and fail-closed named-scope verification are implemented on the stacked continuation. |
 | 13.1 | Implemented, release gated | PR #210: bounded setup status and dismissible/resumable keyboard-accessible tour; `onboardingTour` remains off. |
 | 13.2 | Implemented, release gated | PR #210: versioned dashboard release highlights with per-user viewed marker; `releaseHighlights` remains off. |
 | 13.3 | Implemented, release gated | Stacked continuation after PR #210: optional drag and keyboard reorder controls plus persisted widget density presets behind `dashboardWidgetLayout`. |

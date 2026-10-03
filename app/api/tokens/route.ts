@@ -3,7 +3,11 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { randomBytes } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { badRequest } from "@/lib/http";
-import { API_TOKEN_PREFIX, hashApiToken } from "@/lib/api-tokens";
+import {
+  API_TOKEN_PREFIX,
+  hashApiToken,
+  normalizeApiTokenScopes,
+} from "@/lib/api-tokens";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { requestAudits } from "@/lib/request-audit";
 import { withUser } from "@/lib/authed-route";
@@ -16,9 +20,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Too many tokens created today." }, { status: 429 });
     }
 
-    const body = (await request.json().catch(() => ({}))) as { name?: string; code?: string; factorId?: string };
+    const body = (await request.json().catch(() => ({}))) as {
+      name?: string;
+      code?: string;
+      factorId?: string;
+      scopes?: unknown;
+    };
     const name = typeof body.name === "string" ? body.name.trim() : "";
     if (!name || name.length > 80) return badRequest("A token name (≤80 chars) is required");
+    const scopes = normalizeApiTokenScopes(body.scopes);
+    if (!scopes) return badRequest("Token scopes are invalid");
 
     if (typeof body.code !== "string" || !await verifyStepUp(supabase, user, body.code, body.factorId)) {
       return NextResponse.json({ error: "Reauthentication required" }, { status: 403 });
@@ -27,7 +38,7 @@ export async function POST(request: NextRequest) {
     const token = `${API_TOKEN_PREFIX}${randomBytes(32).toString("base64url")}`;
     const { data, error } = await createServiceClient()
       .from("api_tokens")
-      .insert({ user_id: user.id, name, token_hash: hashApiToken(token), expires_at: expiresAt })
+      .insert({ user_id: user.id, name, token_hash: hashApiToken(token), expires_at: expiresAt, scopes })
       .select("id, name, created_at, expires_at")
       .single();
     if (error) throw error;

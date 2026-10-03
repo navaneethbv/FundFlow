@@ -1,5 +1,14 @@
 # FundFlow Session Handoff
 
+## 2026-10-03: Checklist 12.3 scoped-token prerequisite
+
+The scoped-token prerequisite is implemented in `/private/tmp/fundflow-scoped-tokens` on `feat/scoped-api-tokens`, stacked on PR #213's exact verified head `68115041b75f47950dd5b8584b4a9795c71a311f`.
+Migration `20261006120000_api_token_scopes.sql` adds and backfills `api_tokens.scopes` with the explicit legacy `export:rows` capability, then constrains stored values to the named export and MCP capabilities.
+`verifyApiToken()` requires a scope and returns the validated user id plus scopes; JSON, CSV, and QIF token exports explicitly require `export:rows`, and token minting validates requested capabilities after step-up.
+Focused token, export, schema, lint, typecheck, and diff checks pass.
+The migration is unapplied, and no production token or flag state changed.
+The next slice is 12.2 aggregate-only household access, followed by the final 12.3 MCP endpoint.
+
 ## 2026-10-03: Checklist 13.6, statement vault
 
 Worktree: `/private/tmp/fundflow-statement-vault`, branch `feat/statement-vault`, based on PR #212's exact verified head `d559a96d3edd0b8678c42badc8f5c25b48dab5fb`.

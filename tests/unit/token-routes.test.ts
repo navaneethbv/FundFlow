@@ -120,6 +120,32 @@ describe("POST /api/tokens", () => {
     expect(JSON.stringify(written)).not.toContain(payload.token);
   });
 
+  it("stores explicitly requested capabilities and rejects unknown ones", async () => {
+    const userClient = clientStub({
+      api_tokens: { data: { id: "t1", name: "mcp", scopes: ["mcp:aggregates"] } },
+    });
+    mockRequireUser.mockResolvedValue({ user: { id: USER }, supabase: userClient });
+
+    const created = await tokensPost(
+      body("http://localhost/api/tokens", "POST", {
+        name: "mcp",
+        scopes: ["mcp:aggregates"],
+      }),
+    );
+    expect(created.status).toBe(200);
+    expect(userClient.writtenTo("api_tokens")).toMatchObject({
+      scopes: ["mcp:aggregates"],
+    });
+
+    const invalid = await tokensPost(
+      body("http://localhost/api/tokens", "POST", {
+        name: "bad",
+        scopes: ["transactions:write"],
+      }),
+    );
+    expect(invalid.status).toBe(400);
+  });
+
   it("mints a distinct token each time", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: USER },

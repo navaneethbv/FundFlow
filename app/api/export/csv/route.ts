@@ -13,7 +13,7 @@ import { exportError, recordExport, resolveExportContext } from "@/lib/export-ro
  * contract lives in lib/export.ts, shared with the JSON export).
  */
 export async function GET(request: NextRequest) {
-  const context = await resolveExportContext(request);
+  const context = await resolveExportContext(request, "export:rows");
   if (context instanceof NextResponse) return context;
   const { userId, supabase } = context;
 
