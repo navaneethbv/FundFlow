@@ -85,14 +85,12 @@ export default function MobileLedgerList({
   dayGroups = null,
   reviewEnabled = false,
   bulkEditEnabled = false,
-  keyboardEnabled = false,
   undoEnabled = false,
 }: Readonly<{
   rows: LedgerCardRow[];
   dayGroups?: Map<string, LedgerDayGroup> | null;
   reviewEnabled?: boolean;
   bulkEditEnabled?: boolean;
-  keyboardEnabled?: boolean;
   undoEnabled?: boolean;
 }>) {
   const grouped = dayGroups !== null;
@@ -114,7 +112,6 @@ export default function MobileLedgerList({
               grouped={grouped}
               reviewEnabled={reviewEnabled}
               bulkEditEnabled={bulkEditEnabled}
-              keyboardEnabled={keyboardEnabled}
               undoEnabled={undoEnabled}
             />
           </Fragment>
@@ -124,34 +121,18 @@ export default function MobileLedgerList({
   );
 }
 
-function LedgerCard({
-  row,
-  striped,
-  grouped,
-  reviewEnabled,
-  bulkEditEnabled,
-  keyboardEnabled,
-  undoEnabled,
-}: Readonly<{
+type LedgerCardProps = Readonly<{
   row: LedgerCardRow;
   striped: boolean;
   grouped: boolean;
   reviewEnabled: boolean;
   bulkEditEnabled: boolean;
-  keyboardEnabled: boolean;
   undoEnabled: boolean;
-}>) {
-  const hasAnnotations =
-    Boolean(row.note) || row.tags.length > 0 || row.splits.length > 0;
+}>;
 
+function LedgerCardSelection({ row, reviewEnabled, bulkEditEnabled }: Pick<LedgerCardProps, "row" | "reviewEnabled" | "bulkEditEnabled">) {
   return (
-    <li
-      data-ledger-row
-      data-ledger-row-id={row.id}
-      tabIndex={keyboardEnabled ? 0 : undefined}
-      aria-label={`Transaction ${row.merchant}`}
-      className={`flex items-start gap-3 px-4 py-3${striped ? " bg-panel-2" : ""}`}
-    >
+    <>
       {bulkEditEnabled && (
         <>
           <input
@@ -176,86 +157,115 @@ function LedgerCard({
           />
         </div>
       )}
+    </>
+  );
+}
+
+function LedgerCardAnnotations({ row }: Readonly<{ row: LedgerCardRow }>) {
+  if (!row.note && row.tags.length === 0 && row.splits.length === 0) return null;
+  return (
+    <p className="mt-1 flex flex-wrap items-center gap-1.5">
+      {row.splits.length > 0 && (
+        <Badge tone="accent">split ×{row.splits.length}</Badge>
+      )}
+      {row.tags.map((tag) => (
+        <Badge key={tag}>{tag}</Badge>
+      ))}
+      {row.note && <span className="text-xs text-muted">{row.note}</span>}
+    </p>
+  );
+}
+
+function LedgerCardDetails({ row, grouped, reviewEnabled }: Pick<LedgerCardProps, "row" | "grouped" | "reviewEnabled">) {
+  return (
+    <div className="min-w-0 flex-1">
+      <p className="flex flex-wrap items-center gap-2">
+        <span className="truncate font-medium">{row.merchant}</span>
+        {row.pending && <Badge tone="warning">pending</Badge>}
+        {row.excludedDuplicate && <Badge tone="warning">Excluded duplicate</Badge>}
+        {reviewEnabled && row.reviewStatus && (
+          <TransactionReviewStatusBadge
+            status={row.reviewStatus}
+            pending={row.pending}
+            excludedDuplicate={row.excludedDuplicate}
+            missing={row.reviewStateMissing}
+          />
+        )}
+      </p>
+      <p className="mt-0.5 text-xs text-muted">
+        {!grouped && (
+          <>
+            <span className="tabular-nums">{formatDate(row.date)}</span>
+            {" · "}
+          </>
+        )}
+        {titleCase(row.category) || "Uncategorized"} · {row.accountLabel}
+      </p>
+      <LedgerCardAnnotations row={row} />
+      {reviewEnabled && row.reviewEligible && (
+        <div className="mt-2">
+          <TransactionReviewRowAction
+            id={row.id}
+            version={row.reviewVersion}
+            status={row.reviewStatus}
+            eligible={row.reviewEligible}
+            prefix="mobile"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LedgerCardAmount({ row, undoEnabled }: Pick<LedgerCardProps, "row" | "undoEnabled">) {
+  return (
+    <div className="flex shrink-0 flex-col items-end gap-1">
+      <span
+        data-money
+        className="whitespace-nowrap font-semibold tabular-nums"
+        style={amountColor(row.amount)}
+      >
+        {signedAmount(row.amount, row.currency)}
+      </span>
+      <TransactionEditor
+        detailsEnabled={isFeatureEnabled("transactionDetails")}
+        suggestionsEnabled={isFeatureEnabled("ruleSuggestions") && isFeatureEnabled("compoundRules")}
+        ruleHistoryEnabled={isFeatureEnabled("ruleRunHistory")}
+        idPrefix="mobile-"
+        transaction={{
+          id: row.id,
+          merchant: row.merchant,
+          amount: row.amount,
+          currency: row.currency,
+        }}
+        note={row.note}
+        tags={row.tags}
+        splits={row.splits}
+        categories={row.categoryOptions}
+        providerCategory={row.providerCategory}
+        override={row.override}
+        undoEnabled={undoEnabled}
+      />
+    </div>
+  );
+}
+
+function LedgerCard({ row, striped, grouped, reviewEnabled, bulkEditEnabled, undoEnabled }: LedgerCardProps) {
+  return (
+    <li
+      data-ledger-row
+      data-ledger-row-id={row.id}
+      className={`flex items-start gap-3 px-4 py-3${striped ? " bg-panel-2" : ""}`}
+    >
+      <LedgerCardSelection row={row} reviewEnabled={reviewEnabled} bulkEditEnabled={bulkEditEnabled} />
       <MerchantAvatar
         name={row.merchant}
         logoUrl={merchantLogoDataUri(row.merchant)}
         size={32}
         className="mt-0.5 shrink-0"
       />
-      <div className="min-w-0 flex-1">
-        <p className="flex flex-wrap items-center gap-2">
-          <span className="truncate font-medium">{row.merchant}</span>
-          {row.pending && <Badge tone="warning">pending</Badge>}
-          {row.excludedDuplicate && <Badge tone="warning">Excluded duplicate</Badge>}
-          {reviewEnabled && row.reviewStatus && (
-            <TransactionReviewStatusBadge
-              status={row.reviewStatus}
-              pending={row.pending}
-              excludedDuplicate={row.excludedDuplicate}
-              missing={row.reviewStateMissing}
-            />
-          )}
-        </p>
-        <p className="mt-0.5 text-xs text-muted">
-          {!grouped && (
-            <>
-              <span className="tabular-nums">{formatDate(row.date)}</span>
-              {" · "}
-            </>
-          )}
-          {titleCase(row.category) || "Uncategorized"} · {row.accountLabel}
-        </p>
-        {hasAnnotations && (
-          <p className="mt-1 flex flex-wrap items-center gap-1.5">
-            {row.splits.length > 0 && (
-              <Badge tone="accent">split ×{row.splits.length}</Badge>
-            )}
-            {row.tags.map((tag) => (
-              <Badge key={tag}>{tag}</Badge>
-            ))}
-            {row.note && <span className="text-xs text-muted">{row.note}</span>}
-          </p>
-        )}
-        {reviewEnabled && row.reviewEligible && (
-          <div className="mt-2">
-            <TransactionReviewRowAction
-              id={row.id}
-              version={row.reviewVersion}
-              status={row.reviewStatus}
-              eligible={row.reviewEligible}
-              prefix="mobile"
-            />
-          </div>
-        )}
-      </div>
-      <div className="flex shrink-0 flex-col items-end gap-1">
-        <span
-          data-money
-          className="whitespace-nowrap font-semibold tabular-nums"
-          style={amountColor(row.amount)}
-        >
-          {signedAmount(row.amount, row.currency)}
-        </span>
-        <TransactionEditor
-          detailsEnabled={isFeatureEnabled("transactionDetails")}
-          suggestionsEnabled={isFeatureEnabled("ruleSuggestions") && isFeatureEnabled("compoundRules")}
-          ruleHistoryEnabled={isFeatureEnabled("ruleRunHistory")}
-          idPrefix="mobile-"
-          transaction={{
-            id: row.id,
-            merchant: row.merchant,
-            amount: row.amount,
-            currency: row.currency,
-          }}
-          note={row.note}
-          tags={row.tags}
-          splits={row.splits}
-          categories={row.categoryOptions}
-          providerCategory={row.providerCategory}
-          override={row.override}
-          undoEnabled={undoEnabled}
-        />
-      </div>
+      <LedgerCardDetails row={row} grouped={grouped} reviewEnabled={reviewEnabled} />
+      <LedgerCardAmount row={row} undoEnabled={undoEnabled} />
     </li>
   );
 }

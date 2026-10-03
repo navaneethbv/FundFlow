@@ -20,6 +20,164 @@ function plannerHref(
   return `/debt?${params.toString()}`;
 }
 
+type DebtPlan = DebtPlannerData["avalanche"];
+type DebtRow = DebtPlannerData["debts"][number];
+type PlanResult = NonNullable<DebtPlan>["debts"][number];
+
+function PayoffOrderPanel({ strategy, selectedPlan, debtById, resultById }: Readonly<{
+  strategy: DebtStrategy;
+  selectedPlan: DebtPlan;
+  debtById: Map<string, DebtRow>;
+  resultById: Map<string, PlanResult>;
+}>) {
+  if (!selectedPlan) return (
+    <Panel tone="warning" title="The current monthly budget is insufficient">
+      <p className="text-sm text-muted">
+        The payment does not cover the projected interest over the payoff
+        horizon. Increase the extra monthly payment or update an assumed APR.
+      </p>
+    </Panel>
+  );
+  return (
+    <Panel
+      eyebrow={strategy === "avalanche" ? "Highest APR first" : "Smallest balance first"}
+      title={`${strategy === "avalanche" ? "Avalanche" : "Snowball"} payoff order`}
+    >
+      {/* Mobile cards: each debt's payoff facts stay together without a 40rem scroll region. */}
+      <div className="space-y-2 sm:hidden">
+        {selectedPlan.order.map((accountId, index) => {
+          const debt = debtById.get(accountId);
+          const result = resultById.get(accountId);
+          if (!debt || !result) return null;
+          return (
+            <div key={accountId} className="rounded-field border border-panel-border bg-panel-2 p-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                {/* Wraps rather than truncates: the mask is the only thing
+                    telling two cards from the same bank apart, and it sits
+                    at the end of the name where an ellipsis would eat it. */}
+                <span className="min-w-0 break-words font-semibold">
+                  {index + 1}. {debt.name}
+                </span>
+                <span data-money className="shrink-0 font-semibold tabular-nums" style={{ color: "var(--viz-neg)" }}>
+                  {formatCurrency(debt.balance)}
+                </span>
+              </div>
+              {debt.aprAssumed && (
+                <span className="mt-1.5 inline-block rounded-full bg-warning/10 px-2 py-1 text-xs font-semibold text-warning">
+                  22% assumed APR
+                </span>
+              )}
+              <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+                {/* The blur hook wraps the number only; blurring the whole
+                    span would leave three unlabelled smudges in privacy
+                    mode, where the desktop table keeps its column heads. */}
+                <span>APR <span className="money">{debt.apr.toFixed(2)}%</span></span>
+                <span>Month {result.payoffMonth}</span>
+                <span>Interest <span data-money>{formatCurrency(result.interestPaid)}</span></span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="hidden overflow-x-auto sm:block">
+        <table className="w-full min-w-[40rem] text-left text-sm">
+          <thead className="border-b border-panel-border text-xs uppercase tracking-wide text-muted tabular-nums">
+            <tr>
+              <th className="px-3 py-3">Priority</th>
+              <th className="px-3 py-3">Debt</th>
+              <th className="px-3 py-3 text-right">Balance</th>
+              <th className="px-3 py-3 text-right">APR</th>
+              <th className="px-3 py-3 text-right">Payoff projection</th>
+              <th className="px-3 py-3 text-right">Projected interest</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-panel-border">
+            {selectedPlan.order.map((accountId, index) => {
+              // The plan identifies debts by account id, not display name —
+              // two accounts can share a name. See `lib/debt-data.ts`.
+              const debt = debtById.get(accountId);
+              const result = resultById.get(accountId);
+              if (!debt || !result) return null;
+              return (
+                <tr key={accountId}>
+                  <td className="px-3 py-3 font-semibold">{index + 1}</td>
+                  <td className="px-3 py-3">
+                    <span className="font-semibold">{debt.name}</span>
+                    {debt.aprAssumed && (
+                      <span className="ml-2 rounded-full bg-warning/10 px-2 py-1 text-xs font-semibold text-warning">
+                        22% assumed APR
+                      </span>
+                    )}
+                  </td>
+                  <td data-money className="px-3 py-3 text-right" style={{ color: "var(--viz-neg)" }}>
+                    {formatCurrency(debt.balance)}
+                  </td>
+                  <td className="money px-3 py-3 text-right">{debt.apr.toFixed(2)}%</td>
+                  <td className="px-3 py-3 text-right">Month {result.payoffMonth}</td>
+                  <td data-money className="px-3 py-3 text-right" style={{ color: "var(--viz-neg)" }}>
+                    {formatCurrency(result.interestPaid)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
+  );
+}
+
+function StrategyComparison({ strategy, selectedPlan, comparison }: Readonly<{ strategy: DebtStrategy; selectedPlan: DebtPlan; comparison: DebtPlan }>) {
+  return (
+  <Panel title="Strategy comparison" eyebrow="Same monthly budget">
+    <div className="grid gap-4 text-sm sm:grid-cols-2">
+      <div>
+        <p className="font-semibold capitalize">{strategy}</p>
+        <p className="mt-1 text-muted">
+          {selectedPlan
+            ? `${selectedPlan.months} months and ${formatCurrency(selectedPlan.totalInterest)} projected interest.`
+            : "The projection does not converge."}
+        </p>
+      </div>
+      <div>
+        <p className="font-semibold capitalize">
+          {strategy === "avalanche" ? "snowball" : "avalanche"}
+        </p>
+        <p className="mt-1 text-muted">
+          {comparison
+            ? `${comparison.months} months and ${formatCurrency(comparison.totalInterest)} projected interest.`
+            : "The projection does not converge."}
+        </p>
+      </div>
+    </div>
+  </Panel>
+  );
+}
+
+function UnplannedDebtsPanel({ debts }: Readonly<{ debts: DebtRow[] }>) {
+  if (!debts.some((debt) => !debt.planned)) return null;
+  return (
+    <Panel tone="warning" title="Not in the projection: APR needed">
+      <p className="text-sm text-muted">
+        These balances are real, but a card-rate assumption would misstate
+        them, so they stay out of the payoff order until an APR is set.
+      </p>
+      <ul className="mt-3 space-y-2 text-sm">
+        {debts
+          .filter((debt) => !debt.planned)
+          .map((debt) => (
+            <li key={debt.id} className="flex items-center justify-between gap-3">
+              <span className="min-w-0 break-words font-semibold">{debt.name}</span>
+              <span data-money className="shrink-0 font-semibold tabular-nums">
+                {formatCurrency(debt.balance)}
+              </span>
+            </li>
+          ))}
+      </ul>
+    </Panel>
+  );
+}
+
 export default function DebtPlannerView({
   data,
   strategy,
@@ -152,123 +310,9 @@ export default function DebtPlannerView({
         </div>
       </dl>
 
-      {!selectedPlan ? (
-        <Panel tone="warning" title="The current monthly budget is insufficient">
-          <p className="text-sm text-muted">
-            The payment does not cover the projected interest over the payoff
-            horizon. Increase the extra monthly payment or update an assumed APR.
-          </p>
-        </Panel>
-      ) : (
-        <Panel
-          eyebrow={strategy === "avalanche" ? "Highest APR first" : "Smallest balance first"}
-          title={`${strategy === "avalanche" ? "Avalanche" : "Snowball"} payoff order`}
-        >
-          {/* Mobile cards: each debt's payoff facts stay together without a 40rem scroll region. */}
-          <div className="space-y-2 sm:hidden">
-            {selectedPlan.order.map((accountId, index) => {
-              const debt = debtById.get(accountId);
-              const result = resultById.get(accountId);
-              if (!debt || !result) return null;
-              return (
-                <div key={accountId} className="rounded-field border border-panel-border bg-panel-2 p-3 text-sm">
-                  <div className="flex items-center justify-between gap-3">
-                    {/* Wraps rather than truncates: the mask is the only thing
-                        telling two cards from the same bank apart, and it sits
-                        at the end of the name where an ellipsis would eat it. */}
-                    <span className="min-w-0 break-words font-semibold">
-                      {index + 1}. {debt.name}
-                    </span>
-                    <span data-money className="shrink-0 font-semibold tabular-nums" style={{ color: "var(--viz-neg)" }}>
-                      {formatCurrency(debt.balance)}
-                    </span>
-                  </div>
-                  {debt.aprAssumed && (
-                    <span className="mt-1.5 inline-block rounded-full bg-warning/10 px-2 py-1 text-xs font-semibold text-warning">
-                      22% assumed APR
-                    </span>
-                  )}
-                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
-                    {/* The blur hook wraps the number only; blurring the whole
-                        span would leave three unlabelled smudges in privacy
-                        mode, where the desktop table keeps its column heads. */}
-                    <span>APR <span className="money">{debt.apr.toFixed(2)}%</span></span>
-                    <span>Month {result.payoffMonth}</span>
-                    <span>Interest <span data-money>{formatCurrency(result.interestPaid)}</span></span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="hidden overflow-x-auto sm:block">
-            <table className="w-full min-w-[40rem] text-left text-sm">
-              <thead className="border-b border-panel-border text-xs uppercase tracking-wide text-muted tabular-nums">
-                <tr>
-                  <th className="px-3 py-3">Priority</th>
-                  <th className="px-3 py-3">Debt</th>
-                  <th className="px-3 py-3 text-right">Balance</th>
-                  <th className="px-3 py-3 text-right">APR</th>
-                  <th className="px-3 py-3 text-right">Payoff projection</th>
-                  <th className="px-3 py-3 text-right">Projected interest</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-panel-border">
-                {selectedPlan.order.map((accountId, index) => {
-                  // The plan identifies debts by account id, not display name —
-                  // two accounts can share a name. See `lib/debt-data.ts`.
-                  const debt = debtById.get(accountId);
-                  const result = resultById.get(accountId);
-                  if (!debt || !result) return null;
-                  return (
-                    <tr key={accountId}>
-                      <td className="px-3 py-3 font-semibold">{index + 1}</td>
-                      <td className="px-3 py-3">
-                        <span className="font-semibold">{debt.name}</span>
-                        {debt.aprAssumed && (
-                          <span className="ml-2 rounded-full bg-warning/10 px-2 py-1 text-xs font-semibold text-warning">
-                            22% assumed APR
-                          </span>
-                        )}
-                      </td>
-                      <td data-money className="px-3 py-3 text-right" style={{ color: "var(--viz-neg)" }}>
-                        {formatCurrency(debt.balance)}
-                      </td>
-                      <td className="money px-3 py-3 text-right">{debt.apr.toFixed(2)}%</td>
-                      <td className="px-3 py-3 text-right">Month {result.payoffMonth}</td>
-                      <td data-money className="px-3 py-3 text-right" style={{ color: "var(--viz-neg)" }}>
-                        {formatCurrency(result.interestPaid)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Panel>
-      )}
+      <PayoffOrderPanel strategy={strategy} selectedPlan={selectedPlan} debtById={debtById} resultById={resultById} />
 
-      <Panel title="Strategy comparison" eyebrow="Same monthly budget">
-        <div className="grid gap-4 text-sm sm:grid-cols-2">
-          <div>
-            <p className="font-semibold capitalize">{strategy}</p>
-            <p className="mt-1 text-muted">
-              {selectedPlan
-                ? `${selectedPlan.months} months and ${formatCurrency(selectedPlan.totalInterest)} projected interest.`
-                : "The projection does not converge."}
-            </p>
-          </div>
-          <div>
-            <p className="font-semibold capitalize">
-              {strategy === "avalanche" ? "snowball" : "avalanche"}
-            </p>
-            <p className="mt-1 text-muted">
-              {comparison
-                ? `${comparison.months} months and ${formatCurrency(comparison.totalInterest)} projected interest.`
-                : "The projection does not converge."}
-            </p>
-          </div>
-        </div>
-      </Panel>
+      <StrategyComparison strategy={strategy} selectedPlan={selectedPlan} comparison={comparison} />
 
       {loanDetailsEnabled && amortizationEnabled && (
         <LoanDetail
@@ -279,26 +323,7 @@ export default function DebtPlannerView({
         />
       )}
 
-      {data.debts.some((debt) => !debt.planned) && (
-        <Panel tone="warning" title="Not in the projection: APR needed">
-          <p className="text-sm text-muted">
-            These balances are real, but a card-rate assumption would misstate
-            them, so they stay out of the payoff order until an APR is set.
-          </p>
-          <ul className="mt-3 space-y-2 text-sm">
-            {data.debts
-              .filter((debt) => !debt.planned)
-              .map((debt) => (
-                <li key={debt.id} className="flex items-center justify-between gap-3">
-                  <span className="min-w-0 break-words font-semibold">{debt.name}</span>
-                  <span data-money className="shrink-0 font-semibold tabular-nums">
-                    {formatCurrency(debt.balance)}
-                  </span>
-                </li>
-              ))}
-          </ul>
-        </Panel>
-      )}
+      <UnplannedDebtsPanel debts={data.debts} />
 
       {data.debts.some((debt) => debt.aprAssumed && debt.planned) && (
         <Panel tone="warning" title="Replace assumed APRs for a more useful projection">

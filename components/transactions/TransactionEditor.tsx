@@ -262,6 +262,127 @@ function TransactionSplitSection({
   );
 }
 
+type AnnotationSnapshot = { note: string; tags: string[]; cleared: boolean };
+
+/** Close this editor when another row opens its details or Escape asks. */
+function useCloseOnOtherDetail(key: string, setOpen: (open: boolean) => void) {
+  useEffect(() => {
+    const closeOther = (event: Event) => { if ((event as CustomEvent).detail !== key) setOpen(false); };
+    const closeRequested = () => setOpen(false);
+    window.addEventListener("fundflow:transaction-detail", closeOther);
+    window.addEventListener("fundflow:transaction-detail-close", closeRequested);
+    return () => {
+      window.removeEventListener("fundflow:transaction-detail", closeOther);
+      window.removeEventListener("fundflow:transaction-detail-close", closeRequested);
+    };
+  }, [key, setOpen]);
+}
+
+async function requestAnnotationUndo(transactionId: string, state: { expected: AnnotationSnapshot; restore: AnnotationSnapshot }): Promise<void> {
+  const response = await fetch("/api/transactions/undo-annotation", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ transaction_id: transactionId, expected: state.expected, restore: state.restore }),
+  });
+  const json = (await response.json().catch(() => null)) as { error?: string } | null;
+  if (!response.ok) throw new Error(json?.error ?? "This transaction changed; undo was not applied.");
+}
+
+function AnnotationFields({
+  inputId, note, setNote, tagText, setTagText, parsedTags, cleared, setCleared,
+}: Readonly<{
+  inputId: (suffix: string) => string;
+  note: string;
+  setNote: (value: string) => void;
+  tagText: string;
+  setTagText: (value: string) => void;
+  parsedTags: string[];
+  /** Undefined when the row has no reconciliation control. */
+  cleared: boolean | undefined;
+  setCleared: (value: boolean) => void;
+}>) {
+  return (
+    <>
+            <label className="mb-1 block text-sm font-medium" htmlFor={inputId("note")}>
+              Note
+            </label>
+            <textarea
+              id={inputId("note")}
+              value={note}
+              onChange={(e) => {
+                setNote(e.target.value);
+              }}
+              maxLength={500}
+              rows={2}
+              placeholder="Add a note"
+              className={cn(fieldClasses, "mb-4 resize-y")}
+            />
+
+            <label className="mb-1 block text-sm font-medium" htmlFor={inputId("tags")}>
+              Tags <span className="font-normal text-muted">(comma separated)</span>
+            </label>
+            <Input
+              id={inputId("tags")}
+              value={tagText}
+              onChange={(e) => {
+                setTagText(e.target.value);
+              }}
+              placeholder="reimbursable, vacation"
+              className="mb-2"
+            />
+            {parsedTags.length > 0 && (
+              <div className="mb-4 flex flex-wrap gap-1.5">
+                {parsedTags.map((t) => (
+                  <Badge key={t}>{t}</Badge>
+                ))}
+              </div>
+            )}
+
+            {cleared !== undefined && (
+              <label className="mb-4 flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={cleared}
+                  onChange={(e) => setCleared(e.target.checked)}
+                />
+                <span>Cleared (reconciled against the bank)</span>
+              </label>
+            )}
+
+    </>
+  );
+}
+
+function EditorRuleDetails({
+  transactionId, override, ruleHistoryEnabled, suggestionsEnabled, providerCategory, categories, undoEnabled,
+}: Readonly<{
+  transactionId: string;
+  override: TransactionEditorProps["override"];
+  ruleHistoryEnabled: boolean;
+  suggestionsEnabled: boolean;
+  providerCategory: string | null;
+  categories: TransactionEditorProps["categories"];
+  undoEnabled: boolean;
+}>) {
+  return (
+    <>
+      {override?.ruleActions && <RuleEffectSummary transactionId={transactionId} actions={override.ruleActions} />}
+      {ruleHistoryEnabled && <RuleChangeProvenance transactionId={transactionId} />}
+      <TransactionOverrideControl
+        suggestionsEnabled={suggestionsEnabled}
+        transactionId={transactionId}
+        providerCategory={providerCategory}
+        initialOverride={{
+          displayCategory: override?.displayCategory ?? null,
+          cashFlowClassification: override?.cashFlowClassification ?? null,
+        }}
+        categories={categories}
+        undoEnabled={undoEnabled}
+      />
+    </>
+  );
+}
+
 /**
  * Per-row notes/tags/splits editor for the ledger. The row stays server-
  * rendered; this renders a small trigger (with an indicator when annotations or
@@ -302,16 +423,7 @@ export default function TransactionEditor({
   const [error, setError] = useState<string | null>(null);
   const [undoState, setUndoState] = useState<{ restore: { note: string; tags: string[]; cleared: boolean }; expected: { note: string; tags: string[]; cleared: boolean } } | null>(null);
 
-  useEffect(() => {
-    const closeOther = (event: Event) => { if ((event as CustomEvent).detail !== `${idPrefix}${transaction.id}`) setOpen(false); };
-    const closeRequested = () => setOpen(false);
-    window.addEventListener("fundflow:transaction-detail", closeOther);
-    window.addEventListener("fundflow:transaction-detail-close", closeRequested);
-    return () => {
-      window.removeEventListener("fundflow:transaction-detail", closeOther);
-      window.removeEventListener("fundflow:transaction-detail-close", closeRequested);
-    };
-  }, [transaction.id, idPrefix]);
+  useCloseOnOtherDetail(`${idPrefix}${transaction.id}`, setOpen);
 
   function openEditor() {
     if (detailsEnabled) window.dispatchEvent(new CustomEvent("fundflow:transaction-detail", { detail: `${idPrefix}${transaction.id}` }));
@@ -429,51 +541,16 @@ export default function TransactionEditor({
               <h2 id={`${idPrefix}title-${transaction.id}`} className="text-lg font-semibold">{transaction.merchant}</h2>
             </div>
 
-            <label className="mb-1 block text-sm font-medium" htmlFor={inputId("note")}>
-              Note
-            </label>
-            <textarea
-              id={inputId("note")}
-              value={note}
-              onChange={(e) => {
-                setNote(e.target.value);
-              }}
-              maxLength={500}
-              rows={2}
-              placeholder="Add a note"
-              className={cn(fieldClasses, "mb-4 resize-y")}
+            <AnnotationFields
+              inputId={inputId}
+              note={note}
+              setNote={setNote}
+              tagText={tagText}
+              setTagText={setTagText}
+              parsedTags={parsedTags}
+              cleared={initialCleared === undefined ? undefined : cleared}
+              setCleared={setCleared}
             />
-
-            <label className="mb-1 block text-sm font-medium" htmlFor={inputId("tags")}>
-              Tags <span className="font-normal text-muted">(comma separated)</span>
-            </label>
-            <Input
-              id={inputId("tags")}
-              value={tagText}
-              onChange={(e) => {
-                setTagText(e.target.value);
-              }}
-              placeholder="reimbursable, vacation"
-              className="mb-2"
-            />
-            {parsedTags.length > 0 && (
-              <div className="mb-4 flex flex-wrap gap-1.5">
-                {parsedTags.map((t) => (
-                  <Badge key={t}>{t}</Badge>
-                ))}
-              </div>
-            )}
-
-            {initialCleared !== undefined && (
-              <label className="mb-4 flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={cleared}
-                  onChange={(e) => setCleared(e.target.checked)}
-                />
-                <span>Cleared (reconciled against the bank)</span>
-              </label>
-            )}
 
             <TransactionSplitSection
               rows={rows}
@@ -490,16 +567,12 @@ export default function TransactionEditor({
               activeRows={activeRows}
             />
 
-            {override?.ruleActions && <RuleEffectSummary transactionId={transaction.id} actions={override.ruleActions} />}
-            {ruleHistoryEnabled && <RuleChangeProvenance transactionId={transaction.id} />}
-            <TransactionOverrideControl
-              suggestionsEnabled={suggestionsEnabled}
+            <EditorRuleDetails
               transactionId={transaction.id}
+              override={override}
+              ruleHistoryEnabled={ruleHistoryEnabled}
+              suggestionsEnabled={suggestionsEnabled}
               providerCategory={providerCategory}
-              initialOverride={{
-                displayCategory: override?.displayCategory ?? null,
-                cashFlowClassification: override?.cashFlowClassification ?? null,
-              }}
               categories={categories}
               undoEnabled={undoEnabled}
             />
@@ -525,13 +598,7 @@ export default function TransactionEditor({
         <UndoToast
           message={`Updated ${transaction.merchant}`}
           onUndo={async () => {
-            const response = await fetch("/api/transactions/undo-annotation", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ transaction_id: transaction.id, expected: undoState.expected, restore: undoState.restore }),
-            });
-            const json = (await response.json().catch(() => null)) as { error?: string } | null;
-            if (!response.ok) throw new Error(json?.error ?? "This transaction changed; undo was not applied.");
+            await requestAnnotationUndo(transaction.id, undoState);
             setSaved({ note: undoState.restore.note, tags: undoState.restore.tags, splits: saved.splits });
             setSavedCleared(undoState.restore.cleared);
             setUndoState(null);

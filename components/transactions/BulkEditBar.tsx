@@ -22,6 +22,12 @@ function selectedIds(): string[] {
     .filter((id): id is string => Boolean(id)))];
 }
 
+function valueLabel(action: string | null): string {
+  if (action === "collection") return "Collection name";
+  if (action === "category") return "Category or display name";
+  return "Tag";
+}
+
 export default function BulkEditBar({ enabled }: Readonly<{ enabled: boolean }>) {
   const router = useRouter();
   const [ids, setIds] = useState<string[]>([]);
@@ -80,7 +86,7 @@ export default function BulkEditBar({ enabled }: Readonly<{ enabled: boolean }>)
       <Modal open={action !== null} onClose={() => setAction(null)} placement="sheet" titleId="bulk-edit-title">
         <h2 id="bulk-edit-title" className="text-base font-bold">Bulk edit</h2>
         <p className="mt-1 text-sm text-muted">Apply this change to {ids.length} selected transactions.</p>
-        <label htmlFor="bulk-edit-value" className="mt-4 block text-sm font-semibold">{action === "collection" ? "Collection name" : action === "category" ? "Category or display name" : "Tag"}</label>
+        <label htmlFor="bulk-edit-value" className="mt-4 block text-sm font-semibold">{valueLabel(action)}</label>
         <Input id="bulk-edit-value" value={value} onChange={(event) => setValue(event.target.value)} className="mt-1" autoFocus />
         <div className="mt-4 flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={() => setAction(null)}>Cancel</Button>

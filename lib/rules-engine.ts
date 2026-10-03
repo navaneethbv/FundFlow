@@ -154,7 +154,11 @@ export function evaluateRule(
   if (!matchesAmountCondition(tx.amount, rule.amountCondition)) {
     return false;
   }
+  // 2. Pattern check based on matchType
+  return matchesLegacyPattern(rule, tx);
+}
 
+function matchesLegacyPattern(rule: SmartRule, tx: RuleTransactionCandidate): boolean {
   const rawMerchant = (tx.merchant ?? "").trim().slice(0, 300);
   const rawName = (tx.name ?? "").trim().slice(0, 300);
   const accountName = (tx.accountName ?? "").trim().slice(0, 300);
@@ -162,7 +166,6 @@ export function evaluateRule(
 
   if (!pattern) return false;
 
-  // 2. Pattern check based on matchType
   switch (rule.matchType) {
     case "merchant": {
       const target = (rawMerchant || rawName).toLowerCase();

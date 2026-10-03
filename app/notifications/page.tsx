@@ -43,14 +43,7 @@ function deliveryDescription(delivery: WeeklyDeliveryHistoryItem): string {
   return "Not delivered";
 }
 
-export default async function NotificationsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const userId = user?.id ?? "";
-  const feedEnabled = isFeatureEnabled("insightsFeed");
-  const generatorsEnabled = isFeatureEnabled("insightGenerators");
+async function loadNotificationsPage(supabase: Awaited<ReturnType<typeof createClient>>, userId: string, feedEnabled: boolean, generatorsEnabled: boolean) {
   let notificationsQuery = supabase
     .from("notifications")
     .select("id, type, severity, title, body, read_at, created_at")
@@ -84,6 +77,47 @@ export default async function NotificationsPage() {
       .order("period_start", { ascending: false })
       .limit(10),
   ]);
+
+  return { profile, alertPreferences, notifications, deliveries };
+}
+
+function DeliveryHistoryPanel({ deliveryHistory }: Readonly<{ deliveryHistory: ReturnType<typeof buildWeeklyDeliveryHistory> }>) {
+  return (
+          <Panel title="Weekly delivery history" eyebrow="Last 6 reports">
+            <div className="space-y-3 text-sm">
+              {deliveryHistory.map((delivery, index) => (
+                <div
+                  key={`${delivery.periodStart}-${index}`}
+                  className={`flex items-center justify-between gap-3 rounded-field p-3${index % 2 === 1 ? " bg-panel-2" : ""}`}
+                >
+                  <span className="min-w-0">
+                    <span className="block break-words font-semibold tabular-nums">
+                      {formatDate(delivery.periodStart)} to{" "}
+                      {formatDate(delivery.periodEnd)}
+                    </span>
+                    <span className="block text-xs text-muted tabular-nums">
+                      {deliveryDescription(delivery)}
+                    </span>
+                  </span>
+                  <Badge tone={deliveryStatusTone(delivery.status)} className="shrink-0">
+                    {titleCase(delivery.status)}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </Panel>
+  );
+}
+
+export default async function NotificationsPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const userId = user?.id ?? "";
+  const feedEnabled = isFeatureEnabled("insightsFeed");
+  const generatorsEnabled = isFeatureEnabled("insightGenerators");
+  const { profile, alertPreferences, notifications, deliveries } = await loadNotificationsPage(supabase, userId, feedEnabled, generatorsEnabled);
 
   const userTimezone = profile?.timezone ?? DEFAULT_REPORT_TIMEZONE;
   const deliveryHistory = buildWeeklyDeliveryHistory(
@@ -126,29 +160,7 @@ export default async function NotificationsPage() {
           />
           {generatorsEnabled && <InsightPreferences initial={(alertPreferences ?? {}) as Record<string, boolean>} />}
           <PushSection />
-          <Panel title="Weekly delivery history" eyebrow="Last 6 reports">
-            <div className="space-y-3 text-sm">
-              {deliveryHistory.map((delivery, index) => (
-                <div
-                  key={`${delivery.periodStart}-${index}`}
-                  className={`flex items-center justify-between gap-3 rounded-field p-3${index % 2 === 1 ? " bg-panel-2" : ""}`}
-                >
-                  <span className="min-w-0">
-                    <span className="block break-words font-semibold tabular-nums">
-                      {formatDate(delivery.periodStart)} to{" "}
-                      {formatDate(delivery.periodEnd)}
-                    </span>
-                    <span className="block text-xs text-muted tabular-nums">
-                      {deliveryDescription(delivery)}
-                    </span>
-                  </span>
-                  <Badge tone={deliveryStatusTone(delivery.status)} className="shrink-0">
-                    {titleCase(delivery.status)}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          </Panel>
+          <DeliveryHistoryPanel deliveryHistory={deliveryHistory} />
         </div>
       </div>
     </AppShell>

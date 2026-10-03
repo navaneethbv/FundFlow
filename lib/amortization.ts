@@ -98,7 +98,20 @@ function extrasOnDate(extras: AmortizationExtraPayment[], date: string): number 
  * extra payments. The function is deliberately pure so the debt page and unit
  * tests share the same financial calculation without database or clock input.
  */
-export function buildAmortizationSchedule(input: AmortizationInput): AmortizationResult {
+/** One month: interest accrues, the scheduled payment applies, then any extra. */
+function amortizePeriod(openingPrincipal: number, annualRate: number, scheduledPayment: number, extras: number) {
+  const interest = round2(openingPrincipal * (annualRate / 100 / 12));
+  const required = round2(openingPrincipal + interest);
+  const payment = Math.min(scheduledPayment, required);
+  const afterScheduled = round2(required - payment);
+  if (afterScheduled > openingPrincipal - EPSILON && extras <= EPSILON && payment <= interest + EPSILON) {
+    throw new Error("AMORTIZATION_NON_AMORTIZING");
+  }
+  const extraPayment = Math.min(extras, afterScheduled);
+  return { interest, payment, extraPayment, closing: round2(Math.max(0, afterScheduled - extraPayment)) };
+}
+
+function validatedInputs(input: AmortizationInput) {
   if (!Number.isFinite(input.principal) || input.principal < 0) throw new Error("principal must be non-negative");
   if (!Number.isFinite(input.paymentAmount) || input.paymentAmount <= 0) throw new Error("paymentAmount must be positive");
   assertDate(input.startDate, "startDate");
@@ -113,6 +126,11 @@ export function buildAmortizationSchedule(input: AmortizationInput): Amortizatio
     assertDate(extra.date, "extra payment date");
     if (!Number.isFinite(extra.amount) || extra.amount < 0) throw new Error("extra payment amount must be non-negative");
   });
+  return { periods, extras };
+}
+
+export function buildAmortizationSchedule(input: AmortizationInput): AmortizationResult {
+  const { periods, extras } = validatedInputs(input);
   const termMonths = Math.max(1, Math.floor(input.termMonths ?? DEFAULT_TERM_MONTHS));
   const periodCap = Math.max(1, Math.floor(input.periodCap ?? DEFAULT_PERIOD_CAP));
   let balance = round2(input.principal);
@@ -137,15 +155,8 @@ export function buildAmortizationSchedule(input: AmortizationInput): Amortizatio
     previousPeriodStart = ratePeriod.start;
 
     const openingPrincipal = balance;
-    const interest = round2(openingPrincipal * (ratePeriod.annualRate / 100 / 12));
-    const required = round2(openingPrincipal + interest);
-    const payment = Math.min(scheduledPayment, required);
-    const afterScheduled = round2(required - payment);
-    if (afterScheduled > openingPrincipal - EPSILON && extrasOnDate(extras, date) <= EPSILON && payment <= interest + EPSILON) {
-      throw new Error("AMORTIZATION_NON_AMORTIZING");
-    }
-    const extraPayment = Math.min(extrasOnDate(extras, date), afterScheduled);
-    balance = round2(Math.max(0, afterScheduled - extraPayment));
+    const { interest, payment, extraPayment, closing } = amortizePeriod(openingPrincipal, ratePeriod.annualRate, scheduledPayment, extrasOnDate(extras, date));
+    balance = closing;
     totalInterest = round2(totalInterest + interest);
     totalPayments = round2(totalPayments + payment + extraPayment);
     rows.push({

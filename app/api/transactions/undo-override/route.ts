@@ -10,7 +10,9 @@ type OverrideState = { displayCategory: string | null; cashFlowClassification: "
 function parseState(value: unknown): OverrideState | null {
   if (!value || typeof value !== "object") return null;
   const row = value as { displayCategory?: unknown; cashFlowClassification?: unknown };
-  const displayCategory = row.displayCategory === null ? null : typeof row.displayCategory === "string" ? row.displayCategory.slice(0, 100) : undefined;
+  let displayCategory: string | null | undefined;
+  if (row.displayCategory === null) displayCategory = null;
+  else if (typeof row.displayCategory === "string") displayCategory = row.displayCategory.slice(0, 100);
   const classification = row.cashFlowClassification;
   const cashFlowClassification = classification === null || classification === "expense" || classification === "income" ? classification : undefined;
   return displayCategory !== undefined && cashFlowClassification !== undefined ? { displayCategory, cashFlowClassification } : null;

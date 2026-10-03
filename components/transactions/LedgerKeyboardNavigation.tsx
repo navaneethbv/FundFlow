@@ -14,7 +14,11 @@ function rows(root: HTMLElement): HTMLElement[] {
 function focusRow(root: HTMLElement, index: number): void {
   const list = rows(root);
   const target = list[Math.max(0, Math.min(index, list.length - 1))];
-  target?.focus();
+  if (!target) return;
+  // Mobile cards are list items, not focusable widgets; focus their editor
+  // button instead, which keeps the same row for every row action.
+  const focusable = target.tabIndex >= 0 ? target : visible(Array.from(target.querySelectorAll<HTMLElement>("[data-transaction-detail-trigger]")));
+  focusable?.focus();
 }
 
 function currentRow(root: HTMLElement, target: EventTarget | null): HTMLElement | null {

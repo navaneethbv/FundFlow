@@ -545,6 +545,21 @@ interface LedgerTableRowProps {
   undoEnabled?: boolean;
 }
 
+function BulkSelectCell({ id, merchant, reviewVersion }: Readonly<{ id: string; merchant: string; reviewVersion: string | null }>) {
+  return (
+    <td className="w-10 px-3 py-3 align-top text-center">
+      <input
+        type="checkbox"
+        data-bulk-select
+        data-transaction-id={id}
+        aria-label={`Select ${merchant}`}
+        className="h-4 w-4 accent-[var(--accent)]"
+      />
+      <input type="hidden" data-review-version={id} value={reviewVersion ?? "1"} />
+    </td>
+  );
+}
+
 /**
  * One desktop ledger row, plus the day-group header that precedes the first
  * row of each date. Split out of the page so the page body stays readable:
@@ -625,18 +640,7 @@ function LedgerTableRow({
           zebraBand % 2 === 1 ? " bg-panel-2" : ""
         }`}
       >
-        {bulkEditEnabled && (
-          <td className="w-10 px-3 py-3 align-top text-center">
-            <input
-              type="checkbox"
-              data-bulk-select
-              data-transaction-id={row.id}
-              aria-label={`Select ${merchant}`}
-              className="h-4 w-4 accent-[var(--accent)]"
-            />
-            <input type="hidden" data-review-version={row.id} value={reviewVersion ?? "1"} />
-          </td>
-        )}
+        {bulkEditEnabled && <BulkSelectCell id={row.id} merchant={merchant} reviewVersion={reviewVersion} />}
         {reviewEnabled && (
           <td className="w-10 px-3 py-3 align-top text-center">
             <TransactionReviewCheckbox
@@ -1134,7 +1138,6 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                   dayGroups={showDayGroups ? dayGroups : null}
                   reviewEnabled={transactionReviewEnabled}
                   bulkEditEnabled={isFeatureEnabled("bulkEdit")}
-                  keyboardEnabled={isFeatureEnabled("ledgerKeyboardNavigation")}
                   undoEnabled={isFeatureEnabled("undoToasts")}
                 />
               </div>

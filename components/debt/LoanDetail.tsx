@@ -40,7 +40,7 @@ export default function LoanDetail({
   extraMonthly: number;
   enabled: boolean;
 }>) {
-  if (!enabled || !debt || !debt.planned) return null;
+  if (!enabled || !debt?.planned) return null;
   const projection = buildProjection(debt, today, extraMonthly);
   if ("error" in projection) {
     return <Panel tone="warning" eyebrow="Loan detail" title={`${debt.name} amortization`}><p className="text-sm text-muted">{projection.error}</p></Panel>;
