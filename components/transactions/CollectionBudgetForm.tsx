@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useId, useState } from "react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 
@@ -18,7 +18,7 @@ export default function CollectionBudgetForm({ name, budget }: Readonly<{ name: 
   const [text, setText] = useState(budget === null ? "" : String(budget));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const inputId = `collection-budget-${name.replace(/\W+/g, "-").toLowerCase()}`;
+  const inputId = useId();
 
   async function save(event: React.SyntheticEvent) {
     event.preventDefault();

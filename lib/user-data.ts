@@ -85,6 +85,10 @@ export const USER_DATA_TABLES: UserDataTableSpec[] = [
   table("goals", "name, target_amount, saved_amount, target_date, goal_type", { restoreKeys: "id" }),
   table("merchant_rules", "match_type, pattern, display_name, category, enabled, tags"),
   table("manual_accounts", "name, account_type, balance, include_in_net_worth", { restoreKeys: "id" }),
+  table("manual_assets", "manual_account_id, asset_kind, ownership_percentage, value_source, valuation_date, valuation_value, purchase_price, purchase_date, growth_kind, growth_amount, growth_period, growth_start_date, version", { orderBy: "manual_account_id", orderBySecondary: null }),
+  table("manual_account_values", "manual_account_id, valuation_date, gross_value, owned_value, provenance, value_source", { orderBy: "id" }),
+  table("transaction_collections", "name, budget, created_at, updated_at"),
+  table("budget_moves", "from_budget_id, to_budget_id, month, amount, created_at"),
   table("account_balance_snapshots", "account_id, manual_account_id, snapshot_date, current_balance, available_balance, iso_currency_code, captured_at", { orderBy: "captured_at" }),
   table("alert_preferences", "broken_bank, budget_exceeded, goal_reached, large_transaction, low_cash_forecast", { orderBy: "user_id", orderBySecondary: null }),
   table("ai_settings", "enabled", { orderBy: "user_id", orderBySecondary: null }),
@@ -201,7 +205,11 @@ export async function collectUserData(
     // Preserve existing records during UI rollback. Only an absent relation
     // before rollout may be omitted, and only while the feature is disabled.
     const code = (result.error as { code?: string } | null)?.code;
-    if (spec.table === "transaction_review_states" && !isFeatureEnabled("transactionReview") &&
+    const optionalFeatureDisabled = (spec.table === "transaction_review_states" && !isFeatureEnabled("transactionReview"))
+      || (["manual_assets", "manual_account_values"].includes(spec.table) && !isFeatureEnabled("typedManualAssets"))
+      || (spec.table === "transaction_collections" && !isFeatureEnabled("transactionCollections"))
+      || (spec.table === "budget_moves" && !isFeatureEnabled("budgetMoves"));
+    if (optionalFeatureDisabled &&
         (code === "42P01" || code === "PGRST205")) {
       return { data: [], error: null };
     }

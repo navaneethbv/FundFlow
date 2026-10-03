@@ -15,7 +15,7 @@ type ParsedMove = { month: string; fromId: string; toId: string; amount: number 
 
 function validAmount(amount: unknown): amount is number {
   return typeof amount === "number" && Number.isFinite(amount) && amount > 0 && amount < MAX_AMOUNT
-    && Math.round(amount * 100) === amount * 100;
+    && Number(amount.toFixed(2)) === amount;
 }
 
 function parseMove(body: MoveBody): ParsedMove | string {

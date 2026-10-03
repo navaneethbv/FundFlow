@@ -7,6 +7,7 @@ on:
       - "supabase/migrations/**"
       - "scripts/check-rls.sql"
       - "scripts/check-budget-moves.sql"
+      - "scripts/check-manual-assets.sql"
       - "scripts/check-balance-quality.sql"
       - "scripts/check-history-provenance.sql"
       - "scripts/check-payday-settings.sql"
@@ -47,6 +48,8 @@ jobs:
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-rls.sql
       - name: Verify budget moves
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-budget-moves.sql
+      - name: Verify manual asset ownership and valuation history
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-manual-assets.sql
 
       - name: Verify balance-quality decisions and ownership
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-balance-quality.sql

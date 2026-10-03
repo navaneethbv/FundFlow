@@ -62,6 +62,24 @@ Flags: `balanceQualityReview`, `connectionHealth`, `historyProvenance`, `paychec
 All default off; new pages and handlers return 404 when disabled, and background processing skips the new work.
 The planner needs confirmed payday settings to produce a plan, and the connection page reads balance reviews only when that separate flag is enabled.
 
+## Collections, budgets, and manual assets (default off)
+
+Group 7 is defined in [its contract and checklist](superpowers/specs/2026-10-03-budgets-collections-assets.md).
+Collections use the canonical financial projection so splits, classification, exclusions, and linked refunds agree with the ledger.
+Their optional budgets are user-authored configuration in `transaction_collections`; RLS includes owner, session-revocation, and MFA checks.
+Budget moves are atomic, owner-scoped service writes with `budget_moves` history.
+The setup wizard reuses the existing budget-save contract, and over-allocation compares planned spending and contributions against planned income.
+
+Manual assets retain the entered gross valuation in `manual_assets` and dated `manual_account_values` history.
+The ordinary manual-account balance holds the entered owned share for compatibility when flags are off.
+Growth estimates never change entered values, and account-history estimates use the existing protected writer.
+`manual_account_balances` is a security-invoker view of the latest owned valuation, with explicit Estimate labels.
+Accounts, dashboard net worth, forecasting, and account CSV exports read that view when the asset feature dependencies are enabled.
+Valuation saves serialize on the account row and compare versions; legacy balance updates cannot bypass valuation history.
+Daily account snapshots materialize growth through the viewer date before capturing ordinary balances, keeping estimated assets out of the manual snapshot writer.
+The new histories and configuration are included in takeout/backup; generic in-app restore skips them pending a validated restore path.
+All flags remain off; typed assets require `typedManualAssets`, `assetOwnership`, and `historyProvenance` together.
+
 ## Key modules in `lib/`
 
 - `request-body.ts` bounds actual incoming bytes before JSON or multipart parsing and returns 413 for oversized envelopes.

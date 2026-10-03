@@ -57,6 +57,10 @@ describe("POST /api/budget/move", () => {
     expect((await POST(request(valid))).status).toBe(401);
   });
 
+  it("accepts cents that have an inexact binary representation", async () => {
+    expect((await POST(request({ ...valid, amount: 0.29 }))).status).toBe(200);
+  });
+
   it("rate limits before touching budgets", async () => {
     allowed = false;
     expect((await POST(request(valid))).status).toBe(429);

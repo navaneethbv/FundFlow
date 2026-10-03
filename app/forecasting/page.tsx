@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import AppShell from "@/components/shell/AppShell";
+import ManualAssetNotice from "@/components/accounts/ManualAssetNotice";
 import PageHeader from "@/components/shell/PageHeader";
 import AssumptionsPanel from "@/components/forecasting/AssumptionsPanel";
 import MilestonesPanel from "@/components/forecasting/MilestonesPanel";
@@ -97,6 +98,7 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
           description="A projection, not a prediction: three scenarios compounding your own assumptions forward. Nothing here is a guarantee or a statistical forecast."
         />
 
+        <ManualAssetNotice />
         <Panel padding="lg">
           <h2 className="mb-3 card-title">Starting point</h2>
           <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-3">

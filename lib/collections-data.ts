@@ -1,9 +1,8 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { IN_FILTER_CHUNK_SIZE } from "@/lib/postgrest-limits";
+import { loadCanonicalProjection } from "@/lib/finance-query";
 import {
   buildCollections,
-  COLLECTION_TAG_PREFIX,
   type CollectionAnnotation,
   type CollectionBudget,
   type CollectionSummary,
@@ -13,26 +12,38 @@ import {
 /** Annotations scanned for collection tags; far above a personal ledger's tagged rows. */
 const MAX_TAGGED_ANNOTATIONS = 5000;
 
+async function collectionAnnotations(client: SupabaseClient, userId: string): Promise<CollectionAnnotation[]> {
+  const rows: CollectionAnnotation[] = [];
+  for (let offset = 0; offset <= MAX_TAGGED_ANNOTATIONS; offset += 1000) {
+    const { data, error } = await client.from("transaction_annotations").select("transaction_id,tags")
+      .eq("user_id", userId).not("tags", "is", null).order("transaction_id").range(offset, offset + 999);
+    if (error) throw error;
+    rows.push(...(data ?? []) as CollectionAnnotation[]);
+    if (rows.length > MAX_TAGGED_ANNOTATIONS) throw new Error("Collection annotation limit exceeded");
+    if ((data?.length ?? 0) < 1000) return rows;
+  }
+  throw new Error("Collection annotation limit exceeded");
+}
+
 /** Cookie-bound, owner-only reads, including when household rows are visible. */
 export async function loadCollections(client: SupabaseClient, userId: string): Promise<CollectionSummary[]> {
-  const [annotationResult, budgetResult] = await Promise.all([
-    client.from("transaction_annotations").select("transaction_id, tags")
-      .eq("user_id", userId).not("tags", "is", null).limit(MAX_TAGGED_ANNOTATIONS),
-    client.from("transaction_collections").select("name, budget").eq("user_id", userId).limit(500),
+  const [annotations, budgetResult, projection] = await Promise.all([
+    collectionAnnotations(client, userId),
+    client.from("transaction_collections").select("name, budget").eq("user_id", userId).limit(501),
+    loadCanonicalProjection(client, { scope: { kind: "mine", ownerUserId: userId }, maxRows: 50000 }),
   ]);
-  if (annotationResult.error) throw annotationResult.error;
   if (budgetResult.error) throw budgetResult.error;
-  const annotations = ((annotationResult.data ?? []) as CollectionAnnotation[])
-    .filter((row) => (row.tags ?? []).some((tag) => tag.startsWith(COLLECTION_TAG_PREFIX)));
-  const ids = annotations.map((row) => row.transaction_id);
-  const chunks = Array.from({ length: Math.ceil(ids.length / IN_FILTER_CHUNK_SIZE) }, (_, index) =>
-    ids.slice(index * IN_FILTER_CHUNK_SIZE, (index + 1) * IN_FILTER_CHUNK_SIZE));
-  const results = await Promise.all(chunks.map((chunk) =>
-    client.from("transactions").select("id, date, amount, pfc_primary").eq("user_id", userId).in("id", chunk)));
-  const transactions: CollectionTransaction[] = [];
-  for (const result of results) {
-    if (result.error) throw result.error;
-    transactions.push(...((result.data ?? []) as CollectionTransaction[]));
+  if (projection.truncated || (budgetResult.data?.length ?? 0) > 500) throw new Error("Collection data limit exceeded");
+  const transactions = new Map<string, CollectionTransaction>();
+  const taggedIds = new Set(annotations.filter((row) => row.tags?.some((tag) => tag.startsWith("collection:"))).map((row) => row.transaction_id));
+  for (const row of projection.transactions) {
+    if (!taggedIds.has(row.sourceTransactionId)) continue;
+    const currency = row.accountId ? projection.currencyByAccountId.get(row.accountId) : "USD";
+    if (currency !== "USD") throw new Error("Collections currently require USD transactions");
+    const existing = transactions.get(row.sourceTransactionId);
+    const spent = row.flow === "expense" ? row.signedAmount : 0;
+    transactions.set(row.sourceTransactionId, { id: row.sourceTransactionId, date: row.date,
+      amount: Number(existing?.amount ?? 0) + spent, pfc_primary: null });
   }
-  return buildCollections(annotations, transactions, (budgetResult.data ?? []) as CollectionBudget[]);
+  return buildCollections(annotations, [...transactions.values()], (budgetResult.data ?? []) as CollectionBudget[]);
 }

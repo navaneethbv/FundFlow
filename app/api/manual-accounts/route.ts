@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { tryWriteDailyAccountSnapshots } from "@/lib/account-history";
 import { getClientIp, writeAudit } from "@/lib/audit";
 import { invalidateDashboardCache } from "@/lib/dashboard-cache";
+import { manualAssetsEnabled } from "@/lib/manual-asset-flags";
 
 const ACCOUNT_TYPES = new Set([
   "asset",
@@ -118,6 +119,12 @@ export async function PATCH(request: NextRequest) {
       balance: number;
       include_in_net_worth?: boolean;
     } = { balance: body.balance };
+    if (manualAssetsEnabled()) {
+      const { data: asset, error: assetError } = await supabase.from("manual_assets")
+        .select("manual_account_id").eq("manual_account_id", body.id).eq("user_id", user.id).maybeSingle();
+      if (assetError) throw assetError;
+      if (asset) return NextResponse.json({ error: "Record this valuation on the Manual assets page." }, { status: 409 });
+    }
     const changedFields = ["balance"];
     if (typeof body.includeInNetWorth === "boolean") {
       update.include_in_net_worth = body.includeInNetWorth;
@@ -149,6 +156,9 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ account });
   } catch (error) {
+    if ((error as { code?: string })?.code === "22023") {
+      return NextResponse.json({ error: "Record this valuation on the Manual assets page." }, { status: 409 });
+    }
     return errorResponse("manual-accounts.update", error);
   }
 }

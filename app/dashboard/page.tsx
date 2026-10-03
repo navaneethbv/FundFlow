@@ -1,4 +1,5 @@
 import AppShell from "@/components/shell/AppShell";
+import ManualAssetNotice from "@/components/accounts/ManualAssetNotice";
 import PageHeader from "@/components/shell/PageHeader";
 import AutoRefresh from "@/components/AutoRefresh";
 import EmptyState from "@/components/ui/EmptyState";
@@ -139,14 +140,13 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
   return (
     <AppShell active={activeView} email={user?.email}>
       {hasBanks && <AutoRefresh />}
-
       <PageHeader
         title={`Good ${greeting}, ${greetingName}`}
         actions={<DashboardHeaderActions activeView={activeView} prefsRaw={profileRow?.dashboard_prefs} />}
       />
 
       <FreshnessBanner brokenBanks={brokenBanks} isStale={data.syncIsStale} />
-
+      <ManualAssetNotice />
       {!hasBanks ? (
         <EmptyState
           icon={<Landmark aria-hidden className="h-5 w-5" />}

@@ -1,4 +1,5 @@
 import "server-only";
+import { manualBalanceTable } from "@/lib/manual-asset-flags";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   computeForecastDefaults,
@@ -55,7 +56,7 @@ export async function loadForecastPageData(
       .select("id, plaid_item_id, name, mask, type, subtype, current_balance, iso_currency_code, updated_at")
       .eq("user_id", userId),
     supabase
-      .from("manual_accounts")
+      .from(manualBalanceTable())
       .select("id, account_type, balance, include_in_net_worth")
       .eq("user_id", userId),
     supabase.from("profiles").select("dashboard_prefs").eq("id", userId).maybeSingle(),

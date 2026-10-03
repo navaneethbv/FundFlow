@@ -360,16 +360,16 @@ No dependency changes are included in feature PRs.
 | 6.5 | Not started |  |
 | 6.6 | Not started |  |
 | 6.7 | Not started |  |
-| 6.8 | Not started |  |
-| 7.1 | Not started |  |
-| 7.2 | Not started |  |
-| 7.3 | Not started |  |
+| 6.8 | Implemented in Group 7; verification and rollout tracked in the group spec | `lib/collections-data.ts`, `app/transactions/collections/page.tsx` |
+| 7.1 | Implemented in Group 7 | `app/api/budget/move/route.ts`, `scripts/check-budget-moves.sql` |
+| 7.2 | Implemented in Group 7 | `lib/budget-allocation.ts` |
+| 7.3 | Implemented in Group 7 | `components/budget/BudgetSetupWizard.tsx` |
 | 8.1 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks passed at `a375739` | `lib/amortization.ts`, `tests/unit/amortization.test.ts` |
 | 8.2 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks passed at `a375739` | `components/debt/LoanDetail.tsx`, `components/debt/DebtPlannerView.tsx` |
 | 8.3 | Not started |  |
 | 8.4 | Not started |  |
-| 9.1 | Not started |  |
-| 9.2 | Not started |  |
+| 9.1 | Implemented in Group 7; growth estimates preserve entered history | `app/accounts/assets/page.tsx`, `supabase/migrations/20261003092000_manual_assets.sql` |
+| 9.2 | Implemented in Group 7; owned share across balance readers | `lib/manual-assets-data.ts`, `lib/manual-asset-flags.ts` |
 | 9.3 | Not started |  |
 | 9.4 | Not started |  |
 | 9.5 | Not started |  |

@@ -1,5 +1,37 @@
 # FundFlow Session Handoff
 
+## 2026-10-02: Group 7 continuation
+
+Worktree: `/private/tmp/fundflow-budgets-assets`, branch `feat/budgets-collections-assets`, based on main `3182370`.
+The primary checkout's uncommitted work is preserved.
+The six-item batch is 6.8, 7.1, 7.2, 7.3, 9.1, and 9.2.
+The first four were already committed at `b36ee0d`; the continuation implements typed manual assets, growth history, provenance, purchase details, and ownership.
+The API contract and design are in [the group spec](superpowers/specs/2026-10-03-budgets-collections-assets.md).
+Growth uses completed anniversaries, month-end clamping, an optional later start, and a floor of zero.
+Gross entered values remain in asset metadata/history; ordinary manual balances retain the entered owned share, and a security-invoker view supplies the latest owned estimate to financial readers.
+Updates lock the account and compare versions; a database trigger protects history from legacy balance writers even when flags are off.
+
+Review also corrected collection totals to use the canonical projection, refused truncated collection reads and unsupported currencies, fixed the 29-cent budget-move validation edge case, removed collection input-id collisions, and registered new configuration/history in takeout and backup.
+Generic restore explicitly skips these financial tables until a validated restore path exists.
+The form and aggregate surfaces disclose estimates; privacy-blur hooks cover history amounts.
+
+All three group migrations are unapplied to production, and all six new flags remain off.
+The linked production list was verified read-only from the primary checkout; the isolated worktree has no production link or environment file.
+Local SQL uses a disposable PostgreSQL clone with synthetic Auth/Storage stand-ins and cannot establish full Supabase Auth acceptance.
+Eight synthetic browser journeys passed across 375px and 1440px, light and dark, including keyboard use, reload, conflict retention, budget moves, wizard review, collection budgets, axe checks, and overflow checks.
+Final local verification passed: lint, TypeScript, placeholder-environment production build, palette validation, 529 unit files and 5,898 tests at the current and 2030-01-15 clocks.
+Coverage is 98.26% statements, 95.88% branches, 98.51% functions, and 99.47% lines, passing the unchanged repository thresholds.
+The three group migrations plus prerequisite insight/rule migrations applied to disposable PostgreSQL `adoption_group7_verified`, cloned from the verified Group 2 fixture database.
+Budget-move, provenance, manual-asset, and global RLS SQL assertions passed.
+Graph refresh completed; its optional SQL parser is unavailable, so SQL verification comes from PostgreSQL assertions rather than graph extraction.
+Logs are `/private/tmp/fundflow-group7-verified-*`, `/private/tmp/fundflow-group7-sql.log`, and `/private/tmp/fundflow-group7-browser.log`.
+The new batch is prepared as a draft PR; hosted checks remain separate from these local results.
+
+PR #204 remains open at `9d26de2` with the dependency audit as its only failed check.
+The high advisory GHSA-vfj7-8cjw-p6xm affects development-only `braces` 3.0.3; no published patch exists, production-only audit passes, and the audit gate was not changed.
+No merge, production migration, deployment, or flag change was performed.
+Next feature work is 9.3 through 9.6 after this batch's review.
+
 ## 2026-10-01: Group 4 implementation complete
 
 Group 4 is implemented in `/private/tmp/fundflow-ledger-interactions` on `feat/ledger-interactions`, based on `feat/insights-rules-ledger` and grouped in [PR #202](https://github.com/navaneethbv/FundFlow/pull/202).
