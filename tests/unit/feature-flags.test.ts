@@ -12,6 +12,10 @@ describe("feature flags", () => {
     expect(isFeatureEnabled("importPreflight", {})).toBe(false);
     expect(isFeatureEnabled("importWizard", {})).toBe(false);
   });
+  it("keeps the dashboard layout and cash-flow waterfall releases off", () => {
+    expect(isFeatureEnabled("dashboardWidgetLayout", {})).toBe(false);
+    expect(isFeatureEnabled("cashFlowWaterfall", {})).toBe(false);
+  });
   it("keeps the grouped ledger and loan surfaces off by default", () => {
     for (const flag of ["ledgerKeyboardNavigation", "bulkEdit", "undoToasts", "amortizationEngine", "loanDetails"] as const) {
       expect(FEATURE_FLAG_DEFAULTS[flag]).toBe(false);

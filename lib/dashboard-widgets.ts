@@ -25,12 +25,26 @@ export const WIDGET_KEYS = [
 
 export type WidgetKey = (typeof WIDGET_KEYS)[number];
 
+export const WIDGET_SIZE_KEYS = ["compact", "standard", "expanded"] as const;
+export type WidgetSize = (typeof WIDGET_SIZE_KEYS)[number];
+
+export interface WidgetSizePreference {
+  key: WidgetKey;
+  size: WidgetSize;
+}
+
 export interface DashboardWidgetPrefs {
   order: WidgetKey[];
   hidden: WidgetKey[];
+  /** Optional for compatibility with the pre-13.3 preference shape. */
+  sizes?: WidgetSizePreference[];
 }
 
 export const DEFAULT_WIDGET_ORDER: WidgetKey[] = [...WIDGET_KEYS];
+export const DEFAULT_WIDGET_SIZES: WidgetSizePreference[] = WIDGET_KEYS.map((key) => ({
+  key,
+  size: "standard",
+}));
 
 const KEY_SET = new Set<string>(WIDGET_KEYS);
 
@@ -62,6 +76,23 @@ function widgetKeyList(value: unknown): WidgetKey[] | null {
   return [...seen];
 }
 
+function widgetSize(value: unknown): WidgetSize | null {
+  return typeof value === "string" && WIDGET_SIZE_KEYS.includes(value as WidgetSize)
+    ? (value as WidgetSize)
+    : null;
+}
+
+function normalizeWidgetSizes(value: unknown): WidgetSizePreference[] {
+  const stored = Array.isArray(value) ? value : [];
+  return WIDGET_KEYS.map((key) => {
+    const entry = stored.find(
+      (candidate) => isRecord(candidate) && candidate.key === key,
+    );
+    const size = isRecord(entry) ? widgetSize(entry.size) : null;
+    return { key, size: size ?? "standard" };
+  });
+}
+
 export function normalizeWidgetPrefs(raw: unknown): DashboardWidgetPrefs {
   const root = isRecord(raw) ? raw : {};
   const widgets = isRecord(root.widgets) ? root.widgets : null;
@@ -84,7 +115,30 @@ export function normalizeWidgetPrefs(raw: unknown): DashboardWidgetPrefs {
     hidden = legacy.length > 0 ? legacy : [];
   }
 
-  return { order, hidden: hidden ?? [] };
+  return {
+    order,
+    hidden: hidden ?? [],
+    sizes: normalizeWidgetSizes(widgets?.sizes),
+  };
+}
+
+export function getWidgetSize(
+  prefs: DashboardWidgetPrefs,
+  key: WidgetKey,
+): WidgetSize {
+  return prefs.sizes?.find((entry) => entry.key === key)?.size ?? "standard";
+}
+
+export function withWidgetSize(
+  prefs: DashboardWidgetPrefs,
+  key: WidgetKey,
+  size: WidgetSize,
+): DashboardWidgetPrefs {
+  const sizes = WIDGET_KEYS.map((widgetKey) => ({
+    key: widgetKey,
+    size: widgetKey === key ? size : getWidgetSize(prefs, widgetKey),
+  }));
+  return { ...prefs, sizes };
 }
 
 /** The widgets to render, in order. */

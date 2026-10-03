@@ -4,6 +4,8 @@ import {
   normalizeWidgetPrefs,
   visibleWidgets,
   mergeWidgetPrefs,
+  getWidgetSize,
+  withWidgetSize,
   WIDGET_KEYS,
   type DashboardWidgetPrefs,
 } from "@/lib/dashboard-widgets";
@@ -108,6 +110,20 @@ describe("normalizeWidgetPrefs", () => {
     const twice = normalizeWidgetPrefs({ widgets: once });
     expect(twice).toEqual(once);
   });
+
+  it("normalizes size presets and defaults missing widgets to standard", () => {
+    const prefs = normalizeWidgetPrefs({
+      widgets: {
+        order: ["goals"],
+        sizes: [
+          { key: "goals", size: "expanded" },
+          { key: "budget", size: "not-a-size" },
+        ],
+      },
+    });
+    expect(getWidgetSize(prefs, "goals")).toBe("expanded");
+    expect(getWidgetSize(prefs, "budget")).toBe("standard");
+  });
 });
 
 describe("visibleWidgets", () => {
@@ -148,5 +164,23 @@ describe("mergeWidgetPrefs", () => {
     };
     const result = mergeWidgetPrefs(null, widgets);
     expect(result.widgets).toEqual(widgets);
+  });
+});
+
+describe("withWidgetSize", () => {
+  it("changes one widget without dropping the other preferences", () => {
+    const prefs: DashboardWidgetPrefs = {
+      order: ["budget", "goals"],
+      hidden: ["goals"],
+      sizes: [
+        { key: "budget" as const, size: "standard" as const },
+        { key: "goals" as const, size: "standard" as const },
+      ],
+    };
+    const resized = withWidgetSize(prefs, "budget", "compact");
+    expect(resized.order).toEqual(["budget", "goals"]);
+    expect(resized.hidden).toEqual(["goals"]);
+    expect(getWidgetSize(resized, "budget")).toBe("compact");
+    expect(getWidgetSize(resized, "goals")).toBe("standard");
   });
 });

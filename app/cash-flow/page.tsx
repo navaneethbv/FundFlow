@@ -7,6 +7,7 @@ import CashFlowControls, {
   type CashFlowControlValues,
 } from "@/components/cash-flow/CashFlowControls";
 import CashFlowSummary from "@/components/cash-flow/CashFlowSummary";
+import CashFlowWaterfall from "@/components/cash-flow/CashFlowWaterfall";
 import PeriodBars from "@/components/cash-flow/PeriodBars";
 import EmptyState from "@/components/ui/EmptyState";
 import Panel from "@/components/ui/Panel";
@@ -239,6 +240,15 @@ export default async function CashFlowPage({
             currency={selectedCurrency ?? UNKNOWN_CURRENCY}
             savingsRateBasis={savingsRateBasis}
           />
+
+          {isFeatureEnabled("cashFlowWaterfall") && (
+            <Panel eyebrow="Waterfall" title={`Income to savings in ${selectedPeriod?.label ?? "this period"}`}>
+              <CashFlowWaterfall
+                period={selectedPeriod}
+                currency={selectedCurrency ?? UNKNOWN_CURRENCY}
+              />
+            </Panel>
+          )}
 
           <Panel
             eyebrow="Trend"

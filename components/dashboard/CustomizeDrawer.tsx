@@ -7,19 +7,21 @@ import Modal from "@/components/ui/Modal";
 import { createClient } from "@/lib/supabase/client";
 import {
   DEFAULT_WIDGET_ORDER,
+  DEFAULT_WIDGET_SIZES,
   mergeWidgetPrefs,
+  WIDGET_SIZE_KEYS,
   WIDGET_DEFINITIONS,
+  withWidgetSize,
+  type WidgetSize,
   type DashboardWidgetPrefs,
   type WidgetKey,
 } from "@/lib/dashboard-widgets";
 
 /**
- * Show, hide, and reorder dashboard widgets.
+ * Show, hide, reorder, and size dashboard widgets.
  *
- * Ordering is up/down buttons rather than drag-and-drop, deliberately: dragging
- * is unusable by keyboard and awkward on touch, and there are only seven items.
- * Each button announces the widget it moves, so the control is meaningful to a
- * screen reader without a live region.
+ * Up/down buttons remain the keyboard path. The optional drag path is an
+ * enhancement for pointer users, never the only way to arrange the list.
  *
  * The save is optimistic with an explicit rollback — the grid re-renders from
  * the server after `router.refresh()`, so leaving local state ahead of a failed
@@ -32,13 +34,18 @@ import {
  */
 export default function CustomizeDrawer({
   initialPrefs,
-}: Readonly<{ initialPrefs: DashboardWidgetPrefs }>) {
+  advancedLayout = false,
+}: Readonly<{
+  initialPrefs: DashboardWidgetPrefs;
+  advancedLayout?: boolean;
+}>) {
   const router = useRouter();
   const supabase = createClient();
   const [open, setOpen] = useState(false);
   const [prefs, setPrefs] = useState<DashboardWidgetPrefs>(initialPrefs);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [draggingKey, setDraggingKey] = useState<WidgetKey | null>(null);
 
   function move(key: WidgetKey, delta: -1 | 1) {
     setPrefs((current) => {
@@ -46,8 +53,23 @@ export default function CustomizeDrawer({
       const index = order.indexOf(key);
       const next = index + delta;
       if (index < 0 || next < 0 || next >= order.length) return current;
-      [order[index], order[next]] = [order[next]!, order[index]!];
+      const currentKey = order[index];
+      const nextKey = order[next];
+      if (!currentKey || !nextKey) return current;
+      order.splice(index, 1, nextKey);
+      order.splice(next, 1, currentKey);
       return { ...current, order };
+    });
+  }
+
+  function moveBefore(source: WidgetKey, target: WidgetKey) {
+    if (source === target) return;
+    setPrefs((current) => {
+      const remaining = current.order.filter((key) => key !== source);
+      const targetIndex = remaining.indexOf(target);
+      if (targetIndex < 0) return current;
+      remaining.splice(targetIndex, 0, source);
+      return { ...current, order: remaining };
     });
   }
 
@@ -61,7 +83,15 @@ export default function CustomizeDrawer({
   }
 
   function restoreDefaults() {
-    setPrefs({ order: [...DEFAULT_WIDGET_ORDER], hidden: [] });
+    setPrefs({
+      order: [...DEFAULT_WIDGET_ORDER],
+      hidden: [],
+      sizes: DEFAULT_WIDGET_SIZES.map((entry) => ({ ...entry })),
+    });
+  }
+
+  function resize(key: WidgetKey, size: WidgetSize) {
+    setPrefs((current) => withWidgetSize(current, key, size));
   }
 
   function close() {
@@ -144,6 +174,24 @@ export default function CustomizeDrawer({
             return (
               <li
                 key={key}
+                draggable={advancedLayout}
+                onDragStart={(event) => {
+                  if (!advancedLayout) return;
+                  event.dataTransfer.effectAllowed = "move";
+                  setDraggingKey(key);
+                }}
+                onDragOver={(event) => {
+                  if (!advancedLayout || !draggingKey || draggingKey === key) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                }}
+                onDrop={(event) => {
+                  if (!advancedLayout || !draggingKey) return;
+                  event.preventDefault();
+                  moveBefore(draggingKey, key);
+                  setDraggingKey(null);
+                }}
+                onDragEnd={() => setDraggingKey(null)}
                 className="flex flex-wrap items-center gap-2 border-t border-panel-border pt-2 first:border-t-0 first:pt-0"
               >
                 <label className="flex min-w-0 flex-1 items-start gap-2 text-sm">
@@ -179,6 +227,23 @@ export default function CustomizeDrawer({
                   <span aria-hidden>↓</span>
                   <span className="sr-only">Move {definition.label} down</span>
                 </Button>
+                {advancedLayout && (
+                  <label className="flex items-center gap-1 text-xs text-muted">
+                    <span>Size</span>
+                    <select
+                      aria-label={`${definition.label} size`}
+                      className="min-h-9 rounded-field border border-panel-border bg-panel px-2 text-foreground"
+                      value={prefs.sizes?.find((entry) => entry.key === key)?.size ?? "standard"}
+                      onChange={(event) => resize(key, event.target.value as WidgetSize)}
+                    >
+                      {WIDGET_SIZE_KEYS.map((size) => (
+                        <option key={size} value={size}>
+                          {size[0]?.toUpperCase()}{size.slice(1)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
               </li>
             );
           })}

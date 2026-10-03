@@ -1,5 +1,6 @@
 import CustomizeDrawer from "@/components/dashboard/CustomizeDrawer";
 import { normalizeWidgetPrefs } from "@/lib/dashboard-widgets";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 import type { DashboardView } from "@/components/dashboard/dashboard-view";
 
 /**
@@ -13,5 +14,10 @@ export default function DashboardHeaderActions({
   prefsRaw,
 }: Readonly<{ activeView: DashboardView; prefsRaw: unknown }>) {
   if (activeView !== "overview") return null;
-  return <CustomizeDrawer initialPrefs={normalizeWidgetPrefs(prefsRaw)} />;
+  return (
+    <CustomizeDrawer
+      initialPrefs={normalizeWidgetPrefs(prefsRaw)}
+      advancedLayout={isFeatureEnabled("dashboardWidgetLayout")}
+    />
+  );
 }
