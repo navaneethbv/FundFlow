@@ -39,7 +39,10 @@ async function loadRecordedPerformance(client: SupabaseClient, userId: string, i
     portfolioRows<PerformanceTransaction>(client, userId, "investment_transactions", "id,account_id,date,amount,txn_type,txn_subtype,iso_currency_code,is_active", "id", { column: "account_id", value: ids }),
   ]);
     return recordedPerformance(ids, snapshots, transactions);
-  } catch (error) { if (error instanceof PortfolioReadLimitError) return null; throw error; }
+  } catch (error) {
+    if (error instanceof PortfolioReadLimitError) return null;
+    throw error;
+  }
 }
 export async function RecordedPerformance({ client, userId, accounts }: Readonly<Props>) {
   if (!isFeatureEnabled("investmentXirr") || !isFeatureEnabled("historyProvenance")) return null;
