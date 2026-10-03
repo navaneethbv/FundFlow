@@ -5,6 +5,11 @@ import { logError } from "@/lib/log";
 
 /** Sensitive actions we record in audit_logs. */
 export type AuditAction =
+  | "rule_effect_cleared"
+  | "compound_rule_saved"
+  | "insight_acknowledged"
+  | "insight_restored"
+  | "insight_preferences_updated"
   | "login"
   | "logout"
   | "signup"
@@ -111,6 +116,9 @@ export type AuditAction =
   | "display_prefs_updated"
   | "rules_batch_applied"
   | "bulk_tag_applied"
+  | "transaction_bulk_edit"
+  | "transaction_annotation_undone"
+  | "transaction_override_undone"
   | "transfer_confirmed"
   | "transfer_dismissed"
   | "refund_confirmed"

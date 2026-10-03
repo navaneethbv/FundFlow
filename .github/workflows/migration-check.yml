@@ -10,6 +10,7 @@ on:
       - "scripts/check-history-provenance.sql"
       - "scripts/check-payday-settings.sql"
       - "scripts/check-import-profiles.sql"
+      - "scripts/check-compound-rules.sql"
       - "scripts/check-review-remediation.sql"
       - "scripts/check-financial-writes.sql"
       - "scripts/check-transaction-review.sql"
@@ -63,6 +64,9 @@ jobs:
 
       - name: Verify pending annotation carryover
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-pending-carryover.sql
+
+      - name: Verify compound rule isolation and atomic effects
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-compound-rules.sql
 
       - name: Verify committed import layouts and owner isolation
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/check-import-profiles.sql

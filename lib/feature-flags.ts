@@ -24,6 +24,22 @@ export const FEATURE_FLAG_DEFAULTS = {
    * Plaid Liabilities is a separately billed provider call.
    * Keep the daily cron call opt-in until quota and product access are approved.
    */
+  insightGenerators: false,
+  insightsFeed: false,
+  compoundRules: false,
+  ruleRunHistory: false,
+  ruleSuggestions: false,
+  transactionDetails: false,
+  /** Keyboard movement and row actions in the transaction ledger. */
+  ledgerKeyboardNavigation: false,
+  /** Multi-row transaction edits from the ledger toolbar. */
+  bulkEdit: false,
+  /** Single-row inverse actions with an accessible undo toast. */
+  undoToasts: false,
+  /** User supplied loan schedules and amortization projections. */
+  amortizationEngine: false,
+  /** Detail schedule and strategy comparison on the debt page. */
+  loanDetails: false,
   liabilitiesSync: false,
   accountsPage: true,
   cashFlowPage: true,

@@ -308,6 +308,10 @@ All hosted checks on the consolidated PR passed at `643eda8`, including build, m
 Group 2 is [PR #199](https://github.com/navaneethbv/FundFlow/pull/199) and contains 2.1, 2.2, 2.3, 3.1, 3.2, and 3.3, preserving the implementation order.
 Group 2 is implemented in `/private/tmp/fundflow-balance-quality` on `feat/data-quality-guidance`; see `docs/superpowers/specs/2026-10-01-data-quality-guidance.md` for its six-item checklist.
 PR #198 merged to main as `5479261` on 2026-10-02 after its migrations and the two transaction-review prerequisites were applied to production.
+Group 3 is [PR #200](https://github.com/navaneethbv/FundFlow/pull/200), the six-item insights, rules, and transaction-detail batch on `feat/insights-rules-ledger`, based on PR #198's `feat/import-foundation` branch.
+No production migration or flag flip is included.
+Group 4 is [PR #202](https://github.com/navaneethbv/FundFlow/pull/202), containing items 6.2, 6.3, 6.4, 8.1, and 8.2 on `feat/ledger-interactions`, based on Group 3's branch.
+The grouped implementation has no migration and all hosted checks passed at `a375739`.
 
 ## Execution checklist
 
@@ -340,19 +344,19 @@ No dependency changes are included in feature PRs.
 | 3.4 | Not started |  |
 | 3.5 | Not started |  |
 | 3.6 | Not started |  |
-| 4.1 | Not started |  |
-| 4.2 | Not started |  |
+| 4.1 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `lib/insight-generators.ts`, `lib/insight-generation.ts` |
+| 4.2 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `components/notifications/InsightsFeed.tsx`, `app/api/insights/acknowledge/route.ts` |
 | 4.3 | Not started |  |
-| 5.1 | Not started |  |
-| 5.2 | Not started |  |
-| 5.3 | Not started |  |
+| 5.1 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `lib/rule-conditions.ts`, `lib/rules-engine.ts` |
+| 5.2 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `lib/rule-run-history.ts`, `supabase/migrations/20261001180000_compound_rules.sql` |
+| 5.3 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `components/transactions/RuleSuggestion.tsx`, `app/api/rules/suggestion/route.ts` |
 | 5.4 | Not started |  |
 | 5.5 | Not started |  |
 | 5.6 | Not started |  |
-| 6.1 | Not started |  |
-| 6.2 | Not started |  |
-| 6.3 | Not started |  |
-| 6.4 | Not started |  |
+| 6.1 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `components/ui/DetailPane.tsx`, `components/transactions/TransactionEditor.tsx` |
+| 6.2 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks passed at `a375739` | `components/transactions/LedgerKeyboardNavigation.tsx`, `lib/use-keyboard-shortcuts.ts` |
+| 6.3 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks passed at `a375739` | `components/transactions/BulkEditBar.tsx`, `app/api/transactions/bulk-edit/route.ts` |
+| 6.4 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks passed at `a375739` | `components/ui/UndoToast.tsx`, `app/api/transactions/undo-annotation/route.ts`, `app/api/transactions/undo-override/route.ts` |
 | 6.5 | Not started |  |
 | 6.6 | Not started |  |
 | 6.7 | Not started |  |
@@ -360,8 +364,8 @@ No dependency changes are included in feature PRs.
 | 7.1 | Not started |  |
 | 7.2 | Not started |  |
 | 7.3 | Not started |  |
-| 8.1 | Not started |  |
-| 8.2 | Not started |  |
+| 8.1 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks passed at `a375739` | `lib/amortization.ts`, `tests/unit/amortization.test.ts` |
+| 8.2 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks passed at `a375739` | `components/debt/LoanDetail.tsx`, `components/debt/DebtPlannerView.tsx` |
 | 8.3 | Not started |  |
 | 8.4 | Not started |  |
 | 9.1 | Not started |  |

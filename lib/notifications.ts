@@ -1,3 +1,5 @@
+import { isFeatureEnabled } from "@/lib/feature-flags";
+import { loadGeneratedInsights, persistGeneratedInsights } from "@/lib/insight-generation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/service";
 import { buildNotification, shouldSendAlert, type AlertType, type AlertPreferences } from "@/lib/planning";
@@ -329,6 +331,11 @@ export async function processNotificationsForUser(userId: string, today = new Da
   await notifyReachedGoals(supabase, userId, tryNotify);
   await notifyNetWorthMilestones(supabase, userId, dashboardData, tryNotify);
   await notifyBrokenBanks(supabase, userId, today, tryNotify);
+  if (isFeatureEnabled("insightGenerators")) {
+    const { data: preferences, error } = await supabase.from("alert_preferences").select("*").eq("user_id", userId).maybeSingle();
+    if (error) throw error;
+    await persistGeneratedInsights(supabase, userId, await loadGeneratedInsights(supabase, userId, today), preferences);
+  }
 }
 
 /**

@@ -12,6 +12,12 @@ describe("feature flags", () => {
     expect(isFeatureEnabled("importPreflight", {})).toBe(false);
     expect(isFeatureEnabled("importWizard", {})).toBe(false);
   });
+  it("keeps the grouped ledger and loan surfaces off by default", () => {
+    for (const flag of ["ledgerKeyboardNavigation", "bulkEdit", "undoToasts", "amortizationEngine", "loanDetails"] as const) {
+      expect(FEATURE_FLAG_DEFAULTS[flag]).toBe(false);
+      expect(isFeatureEnabled(flag, {})).toBe(false);
+    }
+  });
   it("ships Accounts, Cash Flow, and Budget by default", () => {
     expect(isFeatureEnabled("accountsPage", {})).toBe(true);
     expect(isFeatureEnabled("cashFlowPage", {})).toBe(true);

@@ -35,8 +35,25 @@ If a real provider sends this shape, investigate the resulting sync rejection wi
   Deploy the matching sync code only after the authorized migration rollout.
 - Owner approved deferring signed-in browser journeys at 375px and desktop, including keyboard use, and full Supabase integration tests for this program until a disposable Supabase project exists.
   No Docker or approved `TEST_SUPABASE_URL` is available; do not use `.env.local` or `--linked` as a substitute.
-  Keep new feature flags off until those deferred journeys pass.
+Keep new feature flags off until those deferred journeys pass.
+
+## Reference adoption Group 3: insights, rules, and transaction details
+
+Items 4.1, 4.2, 5.1, 5.2, 5.3, and 6.1 are implemented on `feat/insights-rules-ledger` and grouped in [PR #200](https://github.com/navaneethbv/FundFlow/pull/200) against `feat/import-foundation` (PR #198).
+PR #200 is green at exact head `dc58d93`, including SonarCloud with zero unresolved new issues.
+The two migrations `20261001170000_insight_preferences.sql` and `20261001180000_compound_rules.sql` are unapplied to production.
+All six feature flags remain off: `insightGenerators`, `insightsFeed`, `compoundRules`, `ruleRunHistory`, `ruleSuggestions`, and `transactionDetails`.
+Local SQL checks used synthetic PostgreSQL records and Auth/Storage stand-ins; they prove owner isolation, RLS gates, preserved provider facts and stale-write refusal, but do not replace full Supabase Auth acceptance.
+The signed-in browser and integration journeys remain deferred under the approved disposable-project exception.
 - The execution checklist is in [the adoption plan](superpowers/plans/2026-10-01-reference-repo-feature-adoption.md#execution-checklist).
+
+## Reference adoption Group 4: ledger interactions and loan projections
+
+Items 6.2, 6.3, 6.4, 8.1, and 8.2 are implemented on `feat/ledger-interactions` and grouped in [PR #202](https://github.com/navaneethbv/FundFlow/pull/202) against `feat/insights-rules-ledger` (PR #200).
+The local checks pass at `a375739`; all hosted checks pass at that exact head.
+The five flags `ledgerKeyboardNavigation`, `bulkEdit`, `undoToasts`, `amortizationEngine`, and `loanDetails` remain off.
+No migration was added and no production migration, deployment, or flag flip was performed.
+The signed-in browser and integration journeys remain deferred under the approved disposable-project exception.
 
 ## Reference adoption item 0.3
 

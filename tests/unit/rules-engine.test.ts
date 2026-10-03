@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
-  evaluateRule,
-  applyRulesToTransaction,
-  simulateRulesBatch,
+  evaluateRule as legacyEvaluateRule,
+  applyRulesToTransaction as legacyApplyRules,
+  simulateRulesBatch as legacySimulateBatch,
   matchesAmountCondition,
   safeCompileRegex,
   type SmartRule,
@@ -11,6 +11,13 @@ import {
   type RuleMatchType,
 } from "@/lib/rules-engine";
 
+import { legacyToConditions } from "@/lib/rule-conditions";
+
+describe.each(["legacy", "converted groups"])("Existing fixtures: %s", mode => {
+  const convert = (rule: SmartRule): SmartRule => mode === "legacy" ? rule : { ...rule, conditions: legacyToConditions(rule) };
+  const evaluateRule = (rule: SmartRule, tx: RuleTransactionCandidate) => legacyEvaluateRule(convert(rule), tx);
+  const applyRulesToTransaction = (rules: SmartRule[], tx: RuleTransactionCandidate) => legacyApplyRules(rules.map(convert), tx);
+  const simulateRulesBatch = (rules: SmartRule[], txs: RuleTransactionCandidate[]) => legacySimulateBatch(rules.map(convert), txs);
 describe("Smart Rules Engine: Amount Condition Matching", () => {
   it("matches 'any' or undefined condition", () => {
     expect(matchesAmountCondition(50, undefined)).toBe(true);
@@ -332,4 +339,6 @@ describe("Smart Rules Engine: Application & Batch Simulation", () => {
     const result = applyRulesToTransaction([], emptyTx);
     expect(result.updated.merchant).toBe("");
   });
+});
+
 });

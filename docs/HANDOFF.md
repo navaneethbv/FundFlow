@@ -1,5 +1,63 @@
 # FundFlow Session Handoff
 
+## 2026-10-01: Group 4 implementation complete
+
+Group 4 is implemented in `/private/tmp/fundflow-ledger-interactions` on `feat/ledger-interactions`, based on `feat/insights-rules-ledger` and grouped in [PR #202](https://github.com/navaneethbv/FundFlow/pull/202).
+The batch contains items 6.2, 6.3, 6.4, 8.1, and 8.2.
+The PR is open and all hosted checks pass at exact head `a375739`.
+
+The batch adds keyboard ledger navigation, expanded bulk edits, conflict-aware single-row Undo toasts, a pure amortization engine, and a guarded loan detail schedule with a chart table twin.
+All five flags remain off: `ledgerKeyboardNavigation`, `bulkEdit`, `undoToasts`, `amortizationEngine`, and `loanDetails`.
+No migration was added, applied, or deployed.
+
+Verification passed: lint, TypeScript, the full unit suite with 507 files and 5,665 tests, 96.00% global branch coverage, placeholder-environment production build, palette validation, graph refresh, and six responsive browser fixtures covering the existing Group 3 surfaces plus the new ledger interactions at 375px and desktop.
+The signed-in Supabase browser journey and full integration tests remain deferred because no disposable target or Docker stack exists.
+Do not merge, deploy, apply migrations, or flip flags without renewed authorization.
+
+## 2026-10-01: Group 3 implementation complete
+
+Group 3 is complete in `/private/tmp/fundflow-insights-rules` on `feat/insights-rules-ledger`, based on PR #198's `feat/import-foundation` branch.
+The batch contains items 4.1, 4.2, 5.1, 5.2, 5.3, and 6.1 in [PR #200](https://github.com/navaneethbv/FundFlow/pull/200).
+The PR is open against `feat/import-foundation` and is not merged.
+No production migration was applied, no feature flag was flipped, and no production deployment was authorized.
+
+The implementation adds eight opt-in insight generators and an explained priority feed, bounded compound rules with preserved legacy behavior, service-only atomic effects with run history and provenance, recategorization rule suggestions, and the desktop detail pane/mobile sheet.
+Rule effects are carried through canonical projections, dashboard/export/weekly-report paths, and the ledger while preserving provider facts and manual overrides.
+Six flags remain off: `insightGenerators`, `insightsFeed`, `compoundRules`, `ruleRunHistory`, `ruleSuggestions`, and `transactionDetails`.
+The unapplied migrations are `20261001170000_insight_preferences.sql` and `20261001180000_compound_rules.sql`.
+
+Verification completed: lint, TypeScript, 502 unit files with 5,638 tests, coverage at 98.40% statements, 96.07% branches, 98.66% functions and 99.52% lines, placeholder-environment production build, four responsive Playwright journeys at 375px and 1440px in light and dark themes, axe and no-overflow checks, palette validation, graph refresh, and local PostgreSQL migration/RLS/rule-effect regressions.
+The browser fixture screenshots were inspected at both widths.
+Full signed-in Supabase browser and integration acceptance remains deferred because no disposable target or Docker stack exists; the owner approved that exception.
+
+The exact PR head is `dc58d93`.
+Hosted CI, migration smoke-check, E2E smoke, SonarCloud, Codacy, CodeQL, Vercel, and commit checks are green at that head.
+Sonar reports zero unresolved new issues for PR #200.
+Do not merge, apply migrations, deploy, or flip flags without renewed authorization.
+
+## 2026-10-01: group 3 implementation in progress
+
+Worktree `/private/tmp/fundflow-insights-rules`, branch `feat/insights-rules-ledger`, based on PR #198 at `a2eef7e` for raw descriptors and import hooks.
+No group 3 commits, push, PR, merge, deployment, or production database changes yet.
+The primary checkout's unrelated uncommitted work is preserved.
+Group scope is 4.1, 4.2, 5.1, 5.2, 5.3, 6.1 in one PR.
+Contracts and checklist: `docs/superpowers/specs/2026-10-01-insights-rules-ledger.md`.
+
+Implemented locally: eight pure insight generators, opt-in preferences and priority feed; bounded compound rule evaluator/editor; service-only atomic rule materialization and history; manual-category rule suggestions; responsive transaction details.
+All six flags default off.
+Two unapplied migrations are `20261001170000_insight_preferences.sql` and `20261001180000_compound_rules.sql`.
+Rule effects are separate annotation JSON, preserving provider facts and user-authored overrides.
+SQL checks passed on fresh local PostgreSQL `adoption_group3_v2` at localhost:55439 using Auth/Storage stand-ins.
+The SQL regression proves owner isolation, preserved annotations, forbidden direct writes, and stale-write refusal.
+Original rule fixtures are run against both legacy and converted-group evaluators.
+Focused route/service/generator suites passed except an async error-boundary issue fixed with `return await saveRule` and awaiting its rerun.
+
+Next: finish cross-surface effect verification, browser fixtures at 375px/desktop with keyboard, coverage and full local checks, graph refresh, self-review, then one PR targeting `feat/import-foundation` with six checklist items.
+Full signed-in Supabase journeys remain deferred by owner authorization; never load primary `.env.local` into tests.
+Current logs: `/private/tmp/group3-*.log`.
+Reference clones remain `/private/tmp/fundflow-reference-*` until the entire program ends.
+Push only with verified explicit `HEAD:refs/heads/feat/insights-rules-ledger` refspec, first dry run.
+
 ## 2026-10-01: group 2, six data-quality and spending-guidance features
 
 The owner deferred merging PR #198 and requested the next five or six features in one checklist and PR.

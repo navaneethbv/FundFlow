@@ -1,3 +1,5 @@
+import { attachLedgerRuleActions } from "@/lib/rule-ledger";
+import { annotationProjectionColumns, storedRuleActions, tagsWithRuleActions, type RuleActions } from "@/lib/rule-actions";
 import { accountDisplayLabel } from "@/lib/account-label";
 import { Fragment } from "react";
 import { redirect } from "next/navigation";
@@ -17,9 +19,11 @@ import TransactionEditor from "@/components/transactions/TransactionEditor";
 import MobileLedgerList, { type LedgerCardRow } from "@/components/transactions/MobileLedgerList";
 import SavedViewsBar from "@/components/transactions/SavedViewsBar";
 import BulkTagBar from "@/components/transactions/BulkTagBar";
+import BulkEditBar from "@/components/transactions/BulkEditBar";
 import AddTransactionModal from "@/components/transactions/AddTransactionModal";
 import ColumnsMenu from "@/components/transactions/ColumnsMenu";
 import TableToolbar from "@/components/transactions/TableToolbar";
+import LedgerKeyboardNavigation from "@/components/transactions/LedgerKeyboardNavigation";
 import TransactionQueryControls from "@/components/transactions/TransactionQueryControls";
 import TransactionSortMenu from "@/components/transactions/TransactionSortMenu";
 import { MerchantAvatar } from "@/components/ui/Avatar";
@@ -239,7 +243,7 @@ async function loadLedgerRows(input: {
   const { supabase, state, filters, columns, rules, accountNamesById, accountLabelsById, accountOptionsForFilters } = input;
   let ledgerError = input.ledgerError;
   const ruleAwareFilter = Boolean(state.category || state.merchant) && hasRemapRules(rules);
-  const projectedPath = needsProjectedLedgerPage(state.sort, ruleAwareFilter);
+  const projectedPath = isFeatureEnabled("compoundRules") || needsProjectedLedgerPage(state.sort, ruleAwareFilter);
   const needsFullProjection = projectedPath || hasRemapRules(rules);
   let projectedScope: LedgerProjectedRow[] = [];
   let allRowsForGrouping: LedgerProjectedRow[] | null = null;
@@ -250,7 +254,7 @@ async function loadLedgerRows(input: {
         const result = await buildLedgerScanQuery(supabase, columns, filters).range(from, to);
         return { rows: (result.data ?? []) as unknown as LedgerProjectionSourceRow[], error: result.error };
       });
-      projectedScope = projectLedgerRows(sourceRows, rules, accountNamesById, accountLabelsById);
+      projectedScope = projectLedgerRows(await attachLedgerRuleActions(supabase, filters.ownerId, sourceRows), rules, accountNamesById, accountLabelsById);
     } catch (error) {
       console.error("Transaction projection query failed", error instanceof Error ? error.message : "unknown");
       ledgerError = "We couldn't load your transactions. Try changing the filters or refresh the page.";
@@ -452,6 +456,7 @@ type CashFlowClassification = "expense" | "income" | null;
 type TransactionOverride = {
   displayCategory: string | null;
   cashFlowClassification: CashFlowClassification;
+  ruleActions?: RuleActions;
 };
 
 async function loadLedgerRowDetails(
@@ -473,7 +478,7 @@ async function loadLedgerRowDetails(
   }
 
   const [annotationsResult, splitsResult, duplicatesResult] = await Promise.all([
-    supabase.from("transaction_annotations").select("transaction_id, note, tags, display_category, cash_flow_classification, cleared_at").eq("user_id", ownerId).in("transaction_id", txnIds),
+    supabase.from("transaction_annotations").select(annotationProjectionColumns("transaction_id, note, tags, display_category, cash_flow_classification, cleared_at")).eq("user_id", ownerId).in("transaction_id", txnIds),
     supabase.from("transaction_splits").select("transaction_id, category, amount").eq("user_id", ownerId).in("transaction_id", txnIds),
     supabase.from("linked_duplicates").select("excluded_transaction_id").eq("user_id", ownerId).in("excluded_transaction_id", txnIds),
   ]);
@@ -490,13 +495,14 @@ async function loadLedgerRowDetails(
   for (const a of annotationsResult.data ?? []) {
     annById.set(a.transaction_id as string, {
       note: a.note as string | null,
-      tags: (a.tags as string[]) ?? [],
+      tags: tagsWithRuleActions((a.tags as string[]) ?? [], storedRuleActions(a)),
       cleared: a.cleared_at != null,
     });
     const classification = a.cash_flow_classification;
     overridesById.set(a.transaction_id as string, {
       displayCategory: (a.display_category as string | null) ?? null,
-      cashFlowClassification:
+      ruleActions: storedRuleActions(a),
+        cashFlowClassification:
         classification === "expense" || classification === "income" ? classification : null,
     });
   }
@@ -534,6 +540,33 @@ interface LedgerTableRowProps {
   reviewVersion?: string | null;
   reviewEligible?: boolean;
   reviewStateMissing?: boolean;
+  bulkEditEnabled?: boolean;
+  keyboardEnabled?: boolean;
+  undoEnabled?: boolean;
+}
+
+/** Columns a day-group header spans; must match the header row's cells. */
+function ledgerColumnCount(reviewEnabled: boolean, bulkEditEnabled: boolean, visibleColumns: ReadonlySet<string>): number {
+  let count = reviewEnabled ? 5 : 4;
+  if (bulkEditEnabled) count += 1;
+  if (visibleColumns.has("category")) count += 1;
+  if (visibleColumns.has("account")) count += 1;
+  return count;
+}
+
+function BulkSelectCell({ id, merchant, reviewVersion }: Readonly<{ id: string; merchant: string; reviewVersion: string | null }>) {
+  return (
+    <td className="w-10 px-3 py-3 align-top text-center">
+      <input
+        type="checkbox"
+        data-bulk-select
+        data-transaction-id={id}
+        aria-label={`Select ${merchant}`}
+        className="h-4 w-4 accent-[var(--accent)]"
+      />
+      <input type="hidden" data-review-version={id} value={reviewVersion ?? "1"} />
+    </td>
+  );
 }
 
 /**
@@ -561,11 +594,11 @@ function LedgerTableRow({
   reviewVersion = null,
   reviewEligible = false,
   reviewStateMissing = false,
+  bulkEditEnabled = false,
+  keyboardEnabled = false,
+  undoEnabled = false,
 }: Readonly<LedgerTableRowProps>) {
-  const columnCount =
-    (reviewEnabled ? 5 : 4) +
-    (visibleColumns.has("category") ? 1 : 0) +
-    (visibleColumns.has("account") ? 1 : 0);
+  const columnCount = ledgerColumnCount(reviewEnabled, bulkEditEnabled, visibleColumns);
   const hasAnnotations = Boolean(note) || tags.length > 0 || splits.length > 0 || cleared;
   const merchant = row.merchant || "Unknown";
   const currency = row.iso_currency_code ?? "USD";
@@ -604,10 +637,15 @@ function LedgerTableRow({
         </tr>
       )}
       <tr
+        data-ledger-row
+        data-ledger-row-id={row.id}
+        tabIndex={keyboardEnabled ? 0 : undefined}
+        aria-label={`Transaction ${merchant}`}
         className={`border-b border-panel-border last:border-0 hover:bg-panel-hover${
           zebraBand % 2 === 1 ? " bg-panel-2" : ""
         }`}
       >
+        {bulkEditEnabled && <BulkSelectCell id={row.id} merchant={merchant} reviewVersion={reviewVersion} />}
         {reviewEnabled && (
           <td className="w-10 px-3 py-3 align-top text-center">
             <TransactionReviewCheckbox
@@ -707,6 +745,9 @@ function LedgerTableRow({
               />
             )}
             <TransactionEditor
+          detailsEnabled={isFeatureEnabled("transactionDetails")}
+          suggestionsEnabled={isFeatureEnabled("ruleSuggestions") && isFeatureEnabled("compoundRules")}
+          ruleHistoryEnabled={isFeatureEnabled("ruleRunHistory")}
               transaction={{ id: row.id, merchant, amount: row.amount, currency }}
               note={note}
               tags={tags}
@@ -715,6 +756,7 @@ function LedgerTableRow({
               providerCategory={providerCategory}
               override={override}
               cleared={cleared}
+              undoEnabled={undoEnabled}
             />
           </div>
         </td>
@@ -1083,8 +1125,11 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                     }))}
                 />
               )}
+              <LedgerKeyboardNavigation enabled={isFeatureEnabled("ledgerKeyboardNavigation")}>
               <TableToolbar
                 bulkTagBar={<BulkTagBar transactionIds={rows.map((t) => t.id)} />}
+                bulkEditBar={<BulkEditBar enabled={isFeatureEnabled("bulkEdit")} />}
+                bulkEditEnabled={isFeatureEnabled("bulkEdit")}
                 sortMenu={<TransactionSortMenu key="sort" field={state.sort} direction={state.direction} entries={queryEntries} />}
                 columnsMenu={
                   transactionsParityEnabled ? (
@@ -1097,6 +1142,8 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                   rows={cardRows}
                   dayGroups={showDayGroups ? dayGroups : null}
                   reviewEnabled={transactionReviewEnabled}
+                  bulkEditEnabled={isFeatureEnabled("bulkEdit")}
+                  undoEnabled={isFeatureEnabled("undoToasts")}
                 />
               </div>
               <div className="hidden overflow-x-auto sm:block">
@@ -1107,6 +1154,9 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                         <th className="w-10 px-3 py-3 text-center">
                           <span className="sr-only">Select</span>
                         </th>
+                      )}
+                      {isFeatureEnabled("bulkEdit") && (
+                        <th className="w-10 px-3 py-3 text-center"><span className="sr-only">Select</span></th>
                       )}
                       <th className="px-4 py-3 font-semibold">Date</th>
                       <th className="px-4 py-3 font-semibold">Merchant</th>
@@ -1148,12 +1198,16 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                           reviewVersion={t.review_version != null ? String(t.review_version) : null}
                           reviewEligible={eligible}
                           reviewStateMissing={Boolean(t.review_state_missing)}
+                          bulkEditEnabled={isFeatureEnabled("bulkEdit")}
+                          keyboardEnabled={isFeatureEnabled("ledgerKeyboardNavigation")}
+                          undoEnabled={isFeatureEnabled("undoToasts")}
                         />
                       );
                     })}
                   </tbody>
                 </table>
               </div>
+              </LedgerKeyboardNavigation>
             </Panel>
 
         )}

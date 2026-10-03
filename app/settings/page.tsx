@@ -1,3 +1,5 @@
+import CompoundRulesSection from "@/components/settings/CompoundRulesSection";
+import RuleRunHistory from "@/components/settings/RuleRunHistory";
 import { createClient } from "@/lib/supabase/server";
 import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
@@ -437,7 +439,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
       .from("merchant_rules")
       .select("id, match_type, pattern, display_name, category, enabled")
       .order("created_at");
-    content = <MerchantRulesSection initialRules={merchantRules ?? []} />;
+    content = <div className="space-y-6">{isFeatureEnabled("compoundRules") ? <CompoundRulesSection /> : <MerchantRulesSection initialRules={merchantRules ?? []} />}{isFeatureEnabled("ruleRunHistory") && <RuleRunHistory />}</div>;
       break;
     }
     case "tags": {

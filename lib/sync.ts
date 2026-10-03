@@ -1,3 +1,4 @@
+import { processRuleAutomation } from "@/lib/compound-rule-service";
 import "server-only";
 import type { Transaction, RemovedTransaction, AccountBase } from "plaid";
 import { getPlaidClient } from "@/lib/plaid";
@@ -299,6 +300,7 @@ async function applyTransactionPage(
     p_restart: restart,
   });
   if (finishError) throw finishError;
+  await processRuleAutomation(supabase, supabase, item.user_id, "sync", upsertRows.map(row => row.plaid_transaction_id));
   if (notify && upsertRows.length > 0) {
     await notifySyncedTransactions(supabase, item.user_id, upsertRows);
   }

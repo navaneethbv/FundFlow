@@ -1,3 +1,4 @@
+import { annotationProjectionColumns, storedRuleActions, type RuleActions } from "@/lib/rule-actions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fromTransactionRow, type RawFinanceTransaction, type TransactionRow } from "@/lib/finance-domain";
 import { scopeQueryUserId, type FinancialScope } from "@/lib/financial-scope";
@@ -302,7 +303,7 @@ function buildOverrideChunkQueries(
       loadProjectionRows<OverrideRow>("transaction_annotations", (from, to) => {
         let overrideQuery = supabase
           .from("transaction_annotations")
-          .select("transaction_id, display_category, cash_flow_classification")
+          .select(annotationProjectionColumns("transaction_id, display_category, cash_flow_classification"))
           .in("transaction_id", chunk)
           .order("id")
           .range(from, to);
@@ -321,11 +322,13 @@ function collectOverrides(
   transactionId: string;
   displayCategory: string | null;
   cashFlowClassification: CashFlowClassification;
+  ruleActions?: RuleActions;
 }> {
   const overrides: Array<{
     transactionId: string;
     displayCategory: string | null;
     cashFlowClassification: CashFlowClassification;
+  ruleActions?: RuleActions;
   }> = [];
   for (const chunk of chunks) {
     for (const row of chunk) {
@@ -333,6 +336,7 @@ function collectOverrides(
       overrides.push({
         transactionId: row.transaction_id,
         displayCategory: row.display_category,
+        ruleActions: storedRuleActions(row),
         cashFlowClassification:
           classification === "expense" || classification === "income"
             ? classification

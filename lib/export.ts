@@ -1,3 +1,4 @@
+import { annotationProjectionColumns, storedRuleActions } from "@/lib/rule-actions";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -209,10 +210,11 @@ async function loadCanonicalRows(
       transaction_id: string;
       display_category: string | null;
       cash_flow_classification: "expense" | "income" | null;
+      rule_actions?: unknown;
     }>(txnIds, (transactionIds, from, to) =>
       supabase
         .from("transaction_annotations")
-        .select("transaction_id, display_category, cash_flow_classification")
+        .select(annotationProjectionColumns("transaction_id, display_category, cash_flow_classification"))
         .in("transaction_id", transactionIds)
         .eq("user_id", userId)
         .order("transaction_id")
@@ -316,7 +318,8 @@ async function loadCanonicalRows(
     transactionOverrides: overrides.map((row) => ({
       transactionId: row.transaction_id,
       displayCategory: row.display_category,
-      cashFlowClassification:
+      ruleActions: storedRuleActions(row),
+        cashFlowClassification:
         row.cash_flow_classification === "expense" || row.cash_flow_classification === "income"
           ? row.cash_flow_classification
           : null,

@@ -57,6 +57,24 @@ function uniqueKeys(values: readonly unknown[], prefix: string): string[] {
   });
 }
 
+type SourceMapping = { account_id?: string; manual_account_id?: string };
+
+function buildSourceMappings(
+  sourceAccounts: string[],
+  sourceAccountTargets: Record<string, string>,
+  accounts: AccountOption[],
+): { mappings: Record<string, SourceMapping>; error?: string } {
+  const mappings: Record<string, SourceMapping> = {};
+  for (const sourceAccount of sourceAccounts) {
+    const target = accounts.find((account) => account.id === sourceAccountTargets[sourceAccount]);
+    if (!target) return { mappings, error: `Choose a FundFlow account for source account "${sourceAccount}"` };
+    mappings[sourceAccount] = target.kind === "manual"
+      ? { manual_account_id: target.id }
+      : { account_id: target.id };
+  }
+  return { mappings };
+}
+
 /**
  * Two-step CSV import: preview parsed rows with duplicate flags, then commit
  * only the rows the user keeps. Flagged (possible/file duplicate) rows are
@@ -87,6 +105,7 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false,
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ruleWarning, setRuleWarning] = useState<string | null>(null);
   const [committed, setCommitted] = useState<number | null>(null);
   /** Review-row ids the server refused to overwrite; empty when there are none. */
   const [annotationConflicts, setAnnotationConflicts] = useState<string[]>([]);
@@ -308,17 +327,12 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false,
     if (!batchId) return;
     const selectedAccount = accounts.find((account) => account.id === accountId);
     if (!selectedAccount) return;
-    const sourceMappings: Record<string, { account_id?: string; manual_account_id?: string }> = {};
-    for (const sourceAccount of sourceAccounts) {
-      const target = accounts.find((account) => account.id === sourceAccountTargets[sourceAccount]);
-      if (!target) {
-        setError(`Choose a FundFlow account for source account "${sourceAccount}"`);
-        return;
-      }
-      sourceMappings[sourceAccount] = target.kind === "manual"
-        ? { manual_account_id: target.id }
-        : { account_id: target.id };
+    const sourceResult = buildSourceMappings(sourceAccounts, sourceAccountTargets, accounts);
+    if (sourceResult.error) {
+      setError(sourceResult.error);
+      return;
     }
+    const sourceMappings = sourceResult.mappings;
     setError(null);
     setBusy(true);
     try {
@@ -347,6 +361,7 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false,
       }
       if (!res.ok) throw new Error(json.error ?? "Import failed");
       setCommitted(json.imported ?? 0);
+      setRuleWarning(typeof json.rule_warning === "string" ? json.rule_warning : null);
       setProfileNotice(profileCommitNotice(json));
       setProfileName("");
       setRows([]);
@@ -727,6 +742,7 @@ export default function ImportReviewSection({ accounts, profilesEnabled = false,
           Imported {committed} transaction{committed === 1 ? "" : "s"}.
         </output>
       )}
+      {ruleWarning && <p role="alert" className="mt-3 text-sm text-warning">{ruleWarning}</p>}
       {profileNotice && <output className="mt-3 block text-sm text-muted">{profileNotice}</output>}
       {error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}
     </Panel>

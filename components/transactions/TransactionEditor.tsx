@@ -1,15 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import RuleEffectSummary from "@/components/transactions/RuleEffectSummary";
+import DetailPane from "@/components/ui/DetailPane";
+import RuleChangeProvenance from "@/components/transactions/RuleChangeProvenance";
+import { useEffect, useState } from "react";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Input, { fieldClasses } from "@/components/ui/Input";
-import Modal from "@/components/ui/Modal";
+import Modal, { type ModalProps } from "@/components/ui/Modal";
 import TransactionOverrideControl, {
   type TransactionOverride,
 } from "@/components/transactions/TransactionOverrideControl";
 import { cn } from "@/lib/cn";
 import { formatCurrency, titleCase } from "@/lib/format";
+import UndoToast from "@/components/ui/UndoToast";
+
+function EditorContainer({ detailsEnabled, ...props }: Readonly<ModalProps & { detailsEnabled: boolean }>) {
+  return detailsEnabled ? <DetailPane open={props.open} onClose={props.onClose} titleId={props.titleId!}>{props.children}</DetailPane> : <Modal {...props} />;
+}
 
 export interface EditorSplit {
   category: string;
@@ -17,6 +25,9 @@ export interface EditorSplit {
 }
 
 interface TransactionEditorProps {
+  detailsEnabled?: boolean;
+  suggestionsEnabled?: boolean;
+  ruleHistoryEnabled?: boolean;
   transaction: { id: string; merchant: string; amount: number; currency: string };
   note: string | null;
   tags: string[];
@@ -35,6 +46,7 @@ interface TransactionEditorProps {
    * bind to the hidden copy.
    */
   idPrefix?: string;
+  undoEnabled?: boolean;
 }
 
 interface SplitRow {
@@ -250,145 +262,47 @@ function TransactionSplitSection({
   );
 }
 
-/**
- * Per-row notes/tags/splits editor for the ledger. The row stays server-
- * rendered; this renders a small trigger (with an indicator when annotations or
- * splits exist) plus a modal that saves through /api/transactions/annotate.
- * Splits must sum to the transaction amount (enforced client-side and by a DB
- * trigger); leaving them empty removes them.
- */
-export default function TransactionEditor({
-  transaction,
-  note: initialNote,
-  tags: initialTags,
-  splits: initialSplits,
-  categories,
-  providerCategory = null,
-  override = null,
-  cleared: initialCleared,
-  idPrefix = "",
-}: Readonly<TransactionEditorProps>) {
-  const target = round2(Math.abs(transaction.amount));
-  const inputId = (suffix: string) => `${idPrefix}${suffix}-${transaction.id}`;
+type AnnotationSnapshot = { note: string; tags: string[]; cleared: boolean };
 
-  const [saved, setSaved] = useState({
-    note: initialNote ?? "",
-    tags: initialTags,
-    splits: initialSplits,
+/** Close this editor when another row opens its details or Escape asks. */
+function useCloseOnOtherDetail(key: string, setOpen: (open: boolean) => void) {
+  useEffect(() => {
+    const closeOther = (event: Event) => { if ((event as CustomEvent).detail !== key) setOpen(false); };
+    const closeRequested = () => setOpen(false);
+    window.addEventListener("fundflow:transaction-detail", closeOther);
+    window.addEventListener("fundflow:transaction-detail-close", closeRequested);
+    return () => {
+      window.removeEventListener("fundflow:transaction-detail", closeOther);
+      window.removeEventListener("fundflow:transaction-detail-close", closeRequested);
+    };
+  }, [key, setOpen]);
+}
+
+async function requestAnnotationUndo(transactionId: string, state: { expected: AnnotationSnapshot; restore: AnnotationSnapshot }): Promise<void> {
+  const response = await fetch("/api/transactions/undo-annotation", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ transaction_id: transactionId, expected: state.expected, restore: state.restore }),
   });
-  const [open, setOpen] = useState(false);
-  const [note, setNote] = useState(saved.note);
-  const [tagText, setTagText] = useState(saved.tags.join(", "));
-  const [cleared, setCleared] = useState(initialCleared ?? false);
-  const [rows, setRows] = useState<SplitRow[]>(() => saved.splits.map(toSplitRow));
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const json = (await response.json().catch(() => null)) as { error?: string } | null;
+  if (!response.ok) throw new Error(json?.error ?? "This transaction changed; undo was not applied.");
+}
 
-  function openEditor() {
-    setNote(saved.note);
-    setTagText(saved.tags.join(", "));
-    setRows(saved.splits.map(toSplitRow));
-    setError(null);
-    setOpen(true);
-  }
-
-  function updateRow(id: string, patch: Partial<Omit<SplitRow, "id">>) {
-    setRows((cur) => cur.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-  }
-
-  function removeRow(id: string) {
-    setRows((cur) => cur.filter((r) => r.id !== id));
-  }
-
-  const parsedTags = tagText
-    .split(",")
-    .map((t) => t.trim())
-    .filter(Boolean);
-
-  const activeRows = rows.filter((r) => r.category.trim() && r.amount.trim());
-  const splitTotal = round2(activeRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0));
-  const splitsBalanced = activeRows.length === 0 || Math.abs(splitTotal - target) < 0.01;
-  const hasAnnotations = saved.note.length > 0 || saved.tags.length > 0 || saved.splits.length > 0;
-
-  function applySplitPreset(parts: number) {
-    if (parts <= 0) return;
-    const perPart = round2(target / parts);
-    const remainder = round2(target - perPart * (parts - 1));
-    const newRows = Array.from({ length: parts }, (_, i) => ({
-      id: crypto.randomUUID(),
-      category: rows[i]?.category || "",
-      amount: String(i === parts - 1 ? remainder : perPart),
-    }));
-    setRows(newRows);
-  }
-
-  async function save() {
-    setError(null);
-    if (activeRows.length > 0 && !splitsBalanced) {
-      setError(`Splits must total ${formatCurrency(target, transaction.currency)}.`);
-      return;
-    }
-    setSaving(true);
-    try {
-      const splitPayload = activeRows.map((r) => ({
-        category: r.category.trim(),
-        amount: round2(Number(r.amount)),
-      }));
-      const res = await fetch("/api/transactions/annotate", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          transaction_id: transaction.id,
-          note,
-          tags: parsedTags,
-          splits: splitPayload,
-          ...(initialCleared !== undefined ? { cleared } : {}),
-        }),
-      });
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error(json.error ?? "Could not save.");
-      }
-      setSaved({ note: note.trim(), tags: parsedTags, splits: splitPayload });
-      setOpen(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
+function AnnotationFields({
+  inputId, note, setNote, tagText, setTagText, parsedTags, cleared, setCleared,
+}: Readonly<{
+  inputId: (suffix: string) => string;
+  note: string;
+  setNote: (value: string) => void;
+  tagText: string;
+  setTagText: (value: string) => void;
+  parsedTags: string[];
+  /** Undefined when the row has no reconciliation control. */
+  cleared: boolean | undefined;
+  setCleared: (value: boolean) => void;
+}>) {
   return (
     <>
-      <button
-        type="button"
-        onClick={openEditor}
-        className={cn(
-          "inline-flex min-h-11 min-w-11 items-center justify-center rounded-field px-2 py-1 text-xs font-medium transition-colors sm:min-h-0 sm:min-w-0",
-          hasAnnotations
-            ? "text-accent hover:bg-panel-hover"
-            : "text-muted hover:bg-panel-hover hover:text-foreground",
-        )}
-        aria-label={hasAnnotations ? "Edit notes and splits" : "Add notes or splits"}
-      >
-        {hasAnnotations ? "Edit" : "Add"}
-      </button>
-
-      <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        placement="sheet"
-        titleId={`${idPrefix}title-${transaction.id}`}
-        className="max-h-[90vh] max-w-lg overflow-y-auto"
-      >
-            <div className="mb-4">
-              <p className="text-xs uppercase tracking-wider text-muted">
-                {transaction.amount < 0 ? "Money in" : "Money out"} ·{" "}
-                <span data-money>{formatCurrency(target, transaction.currency)}</span>
-              </p>
-              <h2 id={`${idPrefix}title-${transaction.id}`} className="text-lg font-semibold">{transaction.merchant}</h2>
-            </div>
-
             <label className="mb-1 block text-sm font-medium" htmlFor={inputId("note")}>
               Note
             </label>
@@ -424,7 +338,7 @@ export default function TransactionEditor({
               </div>
             )}
 
-            {initialCleared !== undefined && (
+            {cleared !== undefined && (
               <label className="mb-4 flex items-center gap-2 text-sm cursor-pointer">
                 <input
                   type="checkbox"
@@ -434,6 +348,209 @@ export default function TransactionEditor({
                 <span>Cleared (reconciled against the bank)</span>
               </label>
             )}
+
+    </>
+  );
+}
+
+function EditorRuleDetails({
+  transactionId, override, ruleHistoryEnabled, suggestionsEnabled, providerCategory, categories, undoEnabled,
+}: Readonly<{
+  transactionId: string;
+  override: TransactionEditorProps["override"];
+  ruleHistoryEnabled: boolean;
+  suggestionsEnabled: boolean;
+  providerCategory: string | null;
+  categories: TransactionEditorProps["categories"];
+  undoEnabled: boolean;
+}>) {
+  return (
+    <>
+      {override?.ruleActions && <RuleEffectSummary transactionId={transactionId} actions={override.ruleActions} />}
+      {ruleHistoryEnabled && <RuleChangeProvenance transactionId={transactionId} />}
+      <TransactionOverrideControl
+        suggestionsEnabled={suggestionsEnabled}
+        transactionId={transactionId}
+        providerCategory={providerCategory}
+        initialOverride={{
+          displayCategory: override?.displayCategory ?? null,
+          cashFlowClassification: override?.cashFlowClassification ?? null,
+        }}
+        categories={categories}
+        undoEnabled={undoEnabled}
+      />
+    </>
+  );
+}
+
+/**
+ * Per-row notes/tags/splits editor for the ledger. The row stays server-
+ * rendered; this renders a small trigger (with an indicator when annotations or
+ * splits exist) plus a modal that saves through /api/transactions/annotate.
+ * Splits must sum to the transaction amount (enforced client-side and by a DB
+ * trigger); leaving them empty removes them.
+ */
+export default function TransactionEditor({
+  detailsEnabled = false,
+  suggestionsEnabled = false,
+  ruleHistoryEnabled = false,
+  transaction,
+  note: initialNote,
+  tags: initialTags,
+  splits: initialSplits,
+  categories,
+  providerCategory = null,
+  override = null,
+  cleared: initialCleared,
+  idPrefix = "",
+  undoEnabled = false,
+}: Readonly<TransactionEditorProps>) {
+  const target = round2(Math.abs(transaction.amount));
+  const inputId = (suffix: string) => `${idPrefix}${suffix}-${transaction.id}`;
+
+  const [saved, setSaved] = useState({
+    note: initialNote ?? "",
+    tags: initialTags,
+    splits: initialSplits,
+  });
+  const [savedCleared, setSavedCleared] = useState(initialCleared ?? false);
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState(saved.note);
+  const [tagText, setTagText] = useState(saved.tags.join(", "));
+  const [cleared, setCleared] = useState(initialCleared ?? false);
+  const [rows, setRows] = useState<SplitRow[]>(() => saved.splits.map(toSplitRow));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [undoState, setUndoState] = useState<{ restore: { note: string; tags: string[]; cleared: boolean }; expected: { note: string; tags: string[]; cleared: boolean } } | null>(null);
+
+  useCloseOnOtherDetail(`${idPrefix}${transaction.id}`, setOpen);
+
+  function openEditor() {
+    if (detailsEnabled) window.dispatchEvent(new CustomEvent("fundflow:transaction-detail", { detail: `${idPrefix}${transaction.id}` }));
+    setNote(saved.note);
+    setTagText(saved.tags.join(", "));
+    setRows(saved.splits.map(toSplitRow));
+    setError(null);
+    setOpen(true);
+  }
+
+  function updateRow(id: string, patch: Partial<Omit<SplitRow, "id">>) {
+    setRows((cur) => cur.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  }
+
+  function removeRow(id: string) {
+    setRows((cur) => cur.filter((r) => r.id !== id));
+  }
+
+  const parsedTags = tagText
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+
+  const activeRows = rows.filter((r) => r.category.trim() && r.amount.trim());
+  const splitTotal = round2(activeRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0));
+  const splitsBalanced = activeRows.length === 0 || Math.abs(splitTotal - target) < 0.01;
+  const hasAnnotations = saved.note.length > 0 || saved.tags.length > 0 || saved.splits.length > 0;
+  const editorActionLabel = hasAnnotations ? "Edit" : "Add";
+  const editorButtonLabel = hasAnnotations
+    ? "Edit notes and splits"
+    : "Add notes or splits";
+
+  function applySplitPreset(parts: number) {
+    if (parts <= 0) return;
+    const perPart = round2(target / parts);
+    const remainder = round2(target - perPart * (parts - 1));
+    const newRows = Array.from({ length: parts }, (_, i) => ({
+      id: crypto.randomUUID(),
+      category: rows[i]?.category || "",
+      amount: String(i === parts - 1 ? remainder : perPart),
+    }));
+    setRows(newRows);
+  }
+
+  async function save() {
+    setError(null);
+    if (activeRows.length > 0 && !splitsBalanced) {
+      setError(`Splits must total ${formatCurrency(target, transaction.currency)}.`);
+      return;
+    }
+    setSaving(true);
+    try {
+      const splitPayload = activeRows.map((r) => ({
+        category: r.category.trim(),
+        amount: round2(Number(r.amount)),
+      }));
+      const restore = { note: saved.note, tags: saved.tags, cleared: savedCleared };
+      const expected = { note: note.trim(), tags: parsedTags, cleared };
+      const res = await fetch("/api/transactions/annotate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          transaction_id: transaction.id,
+          note,
+          tags: parsedTags,
+          splits: splitPayload,
+          ...(initialCleared !== undefined ? { cleared } : {}),
+        }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error ?? "Could not save.");
+      }
+      setSaved({ note: note.trim(), tags: parsedTags, splits: splitPayload });
+      setSavedCleared(cleared);
+      if (undoEnabled && JSON.stringify(saved.splits) === JSON.stringify(splitPayload)) setUndoState({ restore, expected });
+      setOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={openEditor}
+        className={cn(
+          "inline-flex min-h-11 min-w-11 items-center justify-center rounded-field px-2 py-1 text-xs font-medium transition-colors sm:min-h-0 sm:min-w-0",
+          hasAnnotations
+            ? "text-accent hover:bg-panel-hover"
+            : "text-muted hover:bg-panel-hover hover:text-foreground",
+        )}
+        aria-label={detailsEnabled ? `Details for ${transaction.merchant}` : editorButtonLabel}
+        data-transaction-detail-trigger
+      >
+        {detailsEnabled ? "Details" : editorActionLabel}
+      </button>
+
+      <EditorContainer
+        detailsEnabled={detailsEnabled}
+        open={open}
+        onClose={() => setOpen(false)}
+        placement="sheet"
+        titleId={`${idPrefix}title-${transaction.id}`}
+        className="max-h-[90vh] max-w-lg overflow-y-auto"
+      >
+            <div className="mb-4">
+              <p className="text-xs uppercase tracking-wider text-muted">
+                {transaction.amount < 0 ? "Money in" : "Money out"} ·{" "}
+                <span data-money>{formatCurrency(target, transaction.currency)}</span>
+              </p>
+              <h2 id={`${idPrefix}title-${transaction.id}`} className="text-lg font-semibold">{transaction.merchant}</h2>
+            </div>
+
+            <AnnotationFields
+              inputId={inputId}
+              note={note}
+              setNote={setNote}
+              tagText={tagText}
+              setTagText={setTagText}
+              parsedTags={parsedTags}
+              cleared={initialCleared === undefined ? undefined : cleared}
+              setCleared={setCleared}
+            />
 
             <TransactionSplitSection
               rows={rows}
@@ -450,14 +567,14 @@ export default function TransactionEditor({
               activeRows={activeRows}
             />
 
-            <TransactionOverrideControl
+            <EditorRuleDetails
               transactionId={transaction.id}
+              override={override}
+              ruleHistoryEnabled={ruleHistoryEnabled}
+              suggestionsEnabled={suggestionsEnabled}
               providerCategory={providerCategory}
-              initialOverride={{
-                displayCategory: override?.displayCategory ?? null,
-                cashFlowClassification: override?.cashFlowClassification ?? null,
-              }}
               categories={categories}
+              undoEnabled={undoEnabled}
             />
 
             {error && <p role="alert" className="mt-4 text-sm text-danger">{error}</p>}
@@ -476,7 +593,18 @@ export default function TransactionEditor({
                 Save
               </Button>
             </div>
-      </Modal>
+      </EditorContainer>
+      {undoState && undoEnabled && (
+        <UndoToast
+          message={`Updated ${transaction.merchant}`}
+          onUndo={async () => {
+            await requestAnnotationUndo(transaction.id, undoState);
+            setSaved({ note: undoState.restore.note, tags: undoState.restore.tags, splits: saved.splits });
+            setSavedCleared(undoState.restore.cleared);
+            setUndoState(null);
+          }}
+        />
+      )}
     </>
   );
 }
