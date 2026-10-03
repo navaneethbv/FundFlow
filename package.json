@@ -25,7 +25,7 @@
     "@types/pdfkit": "^0.17.6",
     "@vercel/analytics": "^2.0.1",
     "clsx": "^2.1.1",
-    "lucide-react": "^1.49.0",
+    "lucide-react": "^1.50.0",
     "next": "^16.3.8",
     "nodemailer": "^10.0.13",
     "pdfkit": "^0.20.2",
@@ -35,8 +35,8 @@
     "react-dom": "19.3.0",
     "react-plaid-link": "^5.0.0",
     "server-only": "^0.0.1",
-    "sharp": "0.35.4",
-    "simple-icons": "^16.32.0",
+    "sharp": "0.35.5",
+    "simple-icons": "^16.33.0",
     "tailwind-merge": "^3.7.0",
     "web-push": "^3.6.7"
   },
@@ -52,11 +52,15 @@
     "dotenv": "^18.0.5",
     "eslint": "^9",
     "eslint-config-next": "^16.3.8",
+    "fast-glob": "file:./tooling/next-lint-glob",
     "tailwindcss": "^4.3.3",
     "typescript": "^6",
     "vitest": "^5.0.3"
   },
   "overrides": {
+    "@next/eslint-plugin-next@16.3.8": {
+      "fast-glob": "$fast-glob"
+    },
     "postcss": "^8.5.23",
     "js-yaml": "^4.3.2"
   }

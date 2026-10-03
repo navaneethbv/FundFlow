@@ -2,6 +2,10 @@
 
 ## Reference adoption: group 6 rules and transaction tools
 
+Current check follow-up: Sonar reports zero unresolved issues at `9d26de2`, and the only failed hosted check is the full dependency audit.
+The local correction removes the vulnerable glob chain without changing the audit gate; compatibility and lint-rule regressions are in `tests/unit/next-lint-glob.test.ts`.
+Refresh hosted checks at the pushed correction head; the implementation checkpoint below predates this follow-up.
+
 Items 5.4 to 5.6 and 6.5 to 6.7 are implemented together in [PR #204](https://github.com/navaneethbv/FundFlow/pull/204) on `feat/rules-transaction-tools`.
 The design and acceptance record is [the group 6 spec](superpowers/specs/2026-10-02-rules-transactions.md).
 The migration `20261002100000_rules_transactions_adoption.sql` is unapplied to production.

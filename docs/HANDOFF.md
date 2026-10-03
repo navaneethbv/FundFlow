@@ -1,5 +1,17 @@
 # FundFlow Session Handoff
 
+## 2026-10-02: PR #204 dependency audit correction
+
+At `9d26de2`, all hosted checks except the full dependency audit passed, and Sonar's unresolved PR issue count was zero.
+The audit failure was GHSA-vfj7-8cjw-p6xm in the Next lint plugin's development-only glob dependency chain.
+No patched `braces` release exists, so a version-scoped override replaces the plugin's sole glob API with a small adapter over MIT-licensed `tinyglobby`.
+Regression tests exercise the installed plugin's default, literal, relative, absolute, wildcard, brace, and Windows-separator root discovery and an actual Next lint violation.
+The vulnerable packages are removed from the dependency tree, and the full audit gate remains unchanged.
+See `tooling/next-lint-glob/README.md` for compatibility scope and the upstream-removal condition.
+Refresh all hosted checks and Sonar's issue count at the pushed correction head before considering the PR ready.
+The older implementation and rollout notes below are historical checkpoints, not a current production-state verification.
+No merge, production migration, manual deployment, or feature-flag change is part of this follow-up.
+
 ## 2026-10-02: group 6 rules and transaction tools
 
 The current grouped branch is `feat/rules-transaction-tools` in `/private/tmp/fundflow-rules-transaction-tools`, based on `feat/bills-membership-value`.
