@@ -34,6 +34,8 @@ export default function SessionsSection({ initialSessions }: Readonly<{ initialS
       }
       setSessions((current) => current.filter((session) => session.id !== id));
       setStatus("Session revoked.");
+    } catch {
+      setStatus("Could not reach the server. The session is still listed; retry revocation.");
     } finally {
       setBusyId(null);
     }
@@ -67,7 +69,7 @@ export default function SessionsSection({ initialSessions }: Readonly<{ initialS
                 <Button
                   size="sm"
                   variant="danger"
-                  onClick={() => revoke(session.id)}
+                  onClick={() => { void revoke(session.id); }}
                   disabled={busyId !== null}
                   loading={busyId === session.id}
                 >
@@ -78,7 +80,7 @@ export default function SessionsSection({ initialSessions }: Readonly<{ initialS
           ))}
         </ul>
       )}
-      {status && <p className="mt-3 text-sm text-muted">{status}</p>}
+      {status && <output className="mt-3 block text-sm text-muted">{status}</output>}
     </Panel>
   );
 }

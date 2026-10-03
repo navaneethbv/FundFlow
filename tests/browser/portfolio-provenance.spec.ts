@@ -12,14 +12,19 @@ test.beforeAll(async () => {
   const bundle = await rolldown({ input: "portfolio-fixture", platform: "browser", resolve: { alias: { "@": root } },
     onwarn(warning, warn) { if (warning.code !== "MODULE_LEVEL_DIRECTIVE") warn(warning); },
     transform: { define: { "process.env.NODE_ENV": '"production"' }, jsx: "react-jsx" },
-    plugins: [{ name: "portfolio-fixture", resolveId(id) { if (["portfolio-fixture", "next/navigation"].includes(id)) return `\0${id}`; },
+    plugins: [{ name: "portfolio-fixture", resolveId(id) { if (["portfolio-fixture", "next/navigation", "next/link"].includes(id)) return `\0${id}`; },
       load(id) {
         if (id === "\0next/navigation") return 'export function useRouter() { return { refresh() {} }; }';
+        if (id === "\0next/link") return 'import { createElement } from "react"; export default function Link(props) { return createElement("a", props); }';
         if (id === "\0portfolio-fixture") return `import { createElement as h } from "react"; import { createRoot } from "react-dom/client";
           import Form from ${JSON.stringify(path.join(root, "components/investments/PortfolioAnnotationForm.tsx"))};
           import Summary from ${JSON.stringify(path.join(root, "components/investments/TaxBucketSummary.tsx"))};
+          import Sessions from ${JSON.stringify(path.join(root, "components/settings/SessionsSection.tsx"))};
+          import PriceSpikes from ${JSON.stringify(path.join(root, "components/recurring/PriceSpikeBanner.tsx"))};
           const options=[{id:"92000000-0000-4000-8000-000000000004",name:"Home mortgage",source:"manual"}];
-          createRoot(document.getElementById("root")).render(h("div",{className:"space-y-6"},
+          createRoot(document.getElementById("root")).render(window.handlerFixture ? h("div",{className:"space-y-6"},
+            h(Sessions,{initialSessions:[{id:"session-1",label:"Other device",current:false}]}),
+            h(PriceSpikes,{historyEnabled:true,initialAlerts:[{id:"stream-1",merchantName:"Service",previousAmount:10,currentAmount:15,increaseAmount:5,percentIncrease:50,annualizedImpact:60,frequency:"MONTHLY"}]})) : h("div",{className:"space-y-6"},
             ...window.configs.map((initial,index)=>h("section",{key:initial.kind,className:"rounded-md border border-panel-border p-4"},h(Form,{initial,name:["Index fund","Brokerage","Property mortgage"][index],quantity:2,liabilities:options,today:"2026-10-02"}))),
             h(Summary,{summary:{buckets:{taxable:1000,deferred:2000,roth:3000,hsa:0,education:0,unknown:500},unavailable:1}})));`;
       } }],
@@ -27,6 +32,34 @@ test.beforeAll(async () => {
   try { script = (await bundle.generate({ format: "iife" })).output[0]!.code; } finally { await bundle.close(); }
   const source = path.join(root, "app/globals.css");
   css = (await postcss([tailwind()]).process(await readFile(source, "utf8"), { from: source })).css;
+});
+
+test("request failures retain session and price-change actions for retry", async ({ page }) => {
+  const failures: string[] = [];
+  page.on("pageerror", (error) => failures.push(error.message));
+  let offline = true;
+  await page.route("http://fundflow.test/**", async (route) => {
+    if (route.request().url().includes("/api/")) {
+      if (offline) await route.abort("failed");
+      else await route.fulfill({ json: {} });
+    } else await route.fulfill({ contentType: "text/html", body: `<!doctype html><html lang="en" data-theme="light"><head><title>Request recovery</title><style>${css}</style></head><body><main style="padding:16px"><h1>Request recovery</h1><div id="root"></div></main><script>window.handlerFixture=true</script></body></html>` });
+  });
+  await page.goto("http://fundflow.test/"); await page.addScriptTag({ content: script });
+  await page.getByRole("button", { name: "Revoke", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Could not reach the server. The session is still listed; retry revocation.");
+  await expect(page.getByText("Other device", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Confirm change" }).click();
+  await expect(page.getByRole("alert")).toHaveText("Could not reach the server. The price change is not confirmed; try again.");
+  await expect(page.getByText("Recorded", { exact: true })).toHaveCount(0);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  offline = false;
+  await page.getByRole("button", { name: "Revoke", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Session revoked.");
+  await expect(page.getByText("Other device", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Confirm change" }).focus(); await page.keyboard.press("Enter");
+  await expect(page.getByText("Recorded", { exact: true })).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(failures).toEqual([]);
 });
 
 for (const width of [375, 1440]) for (const theme of ["light", "dark"]) {

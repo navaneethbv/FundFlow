@@ -50,6 +50,7 @@ export default function PriceSpikeBanner({
   const [sessionDismissed, setSessionDismissed] = useState<ReadonlySet<string>>(new Set());
   const [confirmed, setConfirmed] = useState<ReadonlySet<string>>(new Set());
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [confirmationError, setConfirmationError] = useState<string | null>(null);
   const hydrated = useSyncExternalStore(
     subscribeToHydration,
     () => true,
@@ -73,6 +74,8 @@ export default function PriceSpikeBanner({
   }
 
   async function confirmChange(id: string) {
+    if (confirming) return;
+    setConfirmationError(null);
     setConfirming(id);
     try {
       const response = await fetch("/api/recurring/price-changes", {
@@ -80,7 +83,13 @@ export default function PriceSpikeBanner({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stream_id: id }),
       });
-      if (response.ok) setConfirmed((current) => new Set(current).add(id));
+      if (!response.ok) {
+        setConfirmationError("Could not record the price change. Try again.");
+        return;
+      }
+      setConfirmed((current) => new Set(current).add(id));
+    } catch {
+      setConfirmationError("Could not reach the server. The price change is not confirmed; try again.");
     } finally {
       setConfirming(null);
     }
@@ -126,6 +135,7 @@ export default function PriceSpikeBanner({
         </div>
       </div>
 
+      {confirmationError && <p role="alert" className="mt-3 text-sm text-danger">{confirmationError}</p>}
       <div className="mt-3 space-y-2">
         {visibleAlerts.map((alert) => (
           <div
@@ -163,7 +173,7 @@ export default function PriceSpikeBanner({
                 confirmed.has(alert.id) ? (
                   <span className="text-success">Recorded</span>
                 ) : (
-                  <button type="button" disabled={confirming === alert.id} onClick={() => void confirmChange(alert.id)} className="font-medium text-accent hover:underline">
+                  <button type="button" disabled={confirming !== null} onClick={() => void confirmChange(alert.id)} className="font-medium text-accent hover:underline">
                     {confirming === alert.id ? "Checking…" : "Confirm change"}
                   </button>
                 )

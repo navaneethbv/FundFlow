@@ -19,6 +19,7 @@ vi.mock("react", async (importOriginal) => ({
   },
   useCallback: (callback: unknown) => callback,
   useEffect: () => undefined,
+  useSyncExternalStore: () => false,
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: refreshMock }) }));
 vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({ auth: { getUser: getUserMock } }) }));
@@ -28,6 +29,8 @@ import BudgetTemplateButton from "@/components/budget/BudgetTemplateButton";
 import HouseholdSection from "@/components/settings/HouseholdSection";
 import ManualAccountsSection from "@/components/settings/ManualAccountsSection";
 import ScheduledTransactionsSection from "@/components/transactions/ScheduledTransactionsSection";
+import SessionsSection from "@/components/settings/SessionsSection";
+import PriceSpikeBanner from "@/components/recurring/PriceSpikeBanner";
 
 type ElementProps = { children?: unknown; role?: string; onClick?: () => void; onSubmit?: (event: unknown) => Promise<void> };
 function elements(node: unknown): Array<{ type: unknown; props: ElementProps }> {
@@ -50,6 +53,39 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
 });
 afterEach(() => vi.unstubAllGlobals());
+
+describe("scanner-blocking request handlers", () => {
+  const session = { id: "session-1", label: "Other device", current: false };
+  it("keeps the session and clears busy state after a transport failure", async () => {
+    fetchMock.mockRejectedValue(new Error("Network unavailable"));
+    click(SessionsSection({ initialSessions: [session] }), "Revoke");
+    await vi.waitFor(() => expect(states.values[1]).toBe("Could not reach the server. The session is still listed; retry revocation."));
+    expect(states.values[0]).toEqual([session]); expect(states.values[2]).toBeNull();
+  });
+  it.each([[false, { error: "Denied" }, "Denied", 1], [true, {}, "Session revoked.", 0]])("updates session rows only after successful revocation", async (ok, json, message, remaining) => {
+    fetchMock.mockResolvedValue({ ok, json: async () => json });
+    click(SessionsSection({ initialSessions: [session] }), "Revoke");
+    await vi.waitFor(() => expect(states.values[1]).toBe(message));
+    expect(states.values[0]).toHaveLength(remaining); expect(states.values[2]).toBeNull();
+  });
+  const alert = { id: "stream-1", merchantName: "Service", previousAmount: 10, currentAmount: 15, increaseAmount: 5, percentIncrease: 50, annualizedImpact: 60, frequency: "MONTHLY" };
+  it("leaves a price change unconfirmed after transport failure and permits retry", async () => {
+    fetchMock.mockRejectedValue(new Error("Network unavailable"));
+    click(PriceSpikeBanner({ initialAlerts: [alert], historyEnabled: true }), "Confirm change");
+    await vi.waitFor(() => expect(states.values[3]).toBe("Could not reach the server. The price change is not confirmed; try again."));
+    expect(states.values[1]).toEqual(new Set()); expect(states.values[2]).toBeNull();
+    fetchMock.mockResolvedValue({ ok: true }); states.index = 0;
+    click(PriceSpikeBanner({ initialAlerts: [alert], historyEnabled: true }), "Confirm change");
+    await vi.waitFor(() => expect(states.values[1]).toEqual(new Set(["stream-1"])));
+    expect(states.values[3]).toBeNull(); expect(states.values[2]).toBeNull();
+  });
+  it("reports HTTP rejection without recording a price change", async () => {
+    fetchMock.mockResolvedValue({ ok: false });
+    click(PriceSpikeBanner({ initialAlerts: [alert], historyEnabled: true }), "Confirm change");
+    await vi.waitFor(() => expect(states.values[3]).toBe("Could not record the price change. Try again."));
+    expect(states.values[1]).toEqual(new Set()); expect(states.values[2]).toBeNull();
+  });
+});
 
 describe("Bayes categorization feedback", () => {
   it.each([
