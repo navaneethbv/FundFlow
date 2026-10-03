@@ -1,5 +1,17 @@
 # FundFlow Session Handoff
 
+## 2026-10-03: Checklist group 6, forecasting and owner attribution
+
+Worktree: `/private/tmp/fundflow-planning-onboarding`, branch `feat/planning-onboarding-transparency`, based on PR #208 head `c11ff67f875f89ca0a5c2d51fd0b22d2c1b17c53`.
+Forecasting now computes funded emergency and sinking-style goal balances from existing goals, account allocations, and progress events, subtracts them visibly from FIRE capital, and uses the same value when resolving the FIRE milestone.
+The seeded Monte Carlo engine is reproducible and uses only user-entered return and volatility; its surface is gated by `forecastingMonteCarlo` and remains off.
+Forecast charts show direct milestone markers, and the methodology disclosure imports the same FIRE and scenario-spread constants as the math.
+Owner attribution is implemented as an accessible, stable-color dot for household account rows and dashboard transaction rows behind `ownerAttributionDots`, which remains off.
+Focused forecasting, owner-dot, recent-activity, and account-row tests pass, with TypeScript and ESLint passing using the shared dependency installation.
+Draft PR #209 is open; after the owner-dot accessibility correction, hosted checks pass and direct Sonar verification reports zero unresolved issues and zero hotspots awaiting review at the latest pushed head.
+No migration, production flag change, deployment, or merge occurred for this worktree.
+The next unfinished checklist workstreams are 12.2, 12.3, and 13.
+
 ## 2026-10-03: Checklist group 5, items 1.5, 2.4, 4.3, 8.3, and 8.4
 
 Worktree: `/private/tmp/fundflow-review-lending`, branch `feat/review-lending-calculators`, based on PR #206's verified head `1879d369dc9a6d805a48463328609de7be77bda2`.

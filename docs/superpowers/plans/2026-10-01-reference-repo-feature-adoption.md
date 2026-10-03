@@ -395,14 +395,14 @@ No dependency changes are included in feature PRs.
 | 9.5 | Implemented, release gated | PR #206: matched owner-account TWR and annualized XIRR. |
 | 9.6 | Implemented, release gated | PR #206: subtype tax buckets and overrides reused by Forecasting. |
 | 9.7 | Implemented, release gated | PR #206 continuation `a98759a` on `feat/asset-investment-provenance`: `lib/portfolio-lookthrough.ts`, `components/investments/PortfolioLookthrough.tsx`, `supabase/migrations/20261005090000_portfolio_lookthrough.sql`; manual weights only, hosted verification pending. |
-| 10.1 | Not started |  |
-| 10.2 | Not started |  |
-| 10.3 | Not started |  |
-| 10.4 | Not started |  |
+| 10.1 | Implemented, release gated | Group 6: funded emergency and sinking-style goal balances are visible and excluded from FIRE capital. |
+| 10.2 | Implemented, release gated | Group 6: seeded, reproducible percentile projection behind `forecastingMonteCarlo`; user-entered return and volatility only. |
+| 10.3 | Implemented | Group 6: direct milestone marker lines and labels on the projection chart. |
+| 10.4 | Implemented | Group 6: Forecasting methodology panel imports the projection constants. |
 | 11.1 | Group 5 in [PR #203](https://github.com/navaneethbv/FundFlow/pull/203); merge deferred | `lib/card-value.ts`, `20261002091000_card_value_terms.sql` |
 | 11.2 | Group 5 in [PR #203](https://github.com/navaneethbv/FundFlow/pull/203); merge deferred | `lib/card-value.ts`, `app/settings/page.tsx` |
 | 11.3 | Group 5 in [PR #203](https://github.com/navaneethbv/FundFlow/pull/203); merge deferred | `app/api/settings/card-value/route.ts`, `components/settings/MembershipCardValueSection.tsx` |
-| 12.1 | Not started |  |
+| 12.1 | Implemented, release gated | Group 6: stable accessible owner dots on household account and dashboard transaction rows behind `ownerAttributionDots`. |
 | 12.2 | Not started |  |
 | 12.3 | Not started |  |
 | 13.1 | Not started |  |

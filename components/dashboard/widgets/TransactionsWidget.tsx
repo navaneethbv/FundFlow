@@ -6,10 +6,12 @@ import DropdownButton from "@/components/ui/DropdownButton";
 export default function TransactionsWidget({
   transactions,
   accountNames,
+  viewerId,
   error = null,
 }: Readonly<{
   transactions: ComponentProps<typeof RecentActivity>["transactions"];
   accountNames: Map<string, string>;
+  viewerId?: string;
   error?: string | null;
 }>) {
   return (
@@ -24,7 +26,7 @@ export default function TransactionsWidget({
       }
     >
       {/* RecentActivity carries its own empty state, so no `empty` here. */}
-      <RecentActivity transactions={transactions} accountNames={accountNames} />
+      <RecentActivity transactions={transactions} accountNames={accountNames} viewerId={viewerId} />
     </WidgetShell>
   );
 }

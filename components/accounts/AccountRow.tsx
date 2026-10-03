@@ -2,6 +2,8 @@ import AreaSparkline from "@/components/charts/AreaSparkline";
 import { InstitutionAvatar } from "@/components/ui/Avatar";
 import { formatCurrency, gainLossColor, inflowMarker, titleCase } from "@/lib/format";
 import type { AccountsPageRow } from "@/lib/accounts-page";
+import OwnerDot from "@/components/household/OwnerDot";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 
 function formatChange(row: AccountsPageRow): string | null {
   if (!row.monthChange) return null;
@@ -15,7 +17,8 @@ function formatChange(row: AccountsPageRow): string | null {
 
 export default function AccountRow({
   row,
-}: Readonly<{ row: AccountsPageRow }>) {
+  viewerId,
+}: Readonly<{ row: AccountsPageRow; viewerId?: string }>) {
   const change = formatChange(row);
   return (
     <li className="grid gap-3 border-t border-panel-border px-4 py-4 first:border-t-0 sm:grid-cols-[minmax(0,1.3fr)_7rem_7rem_minmax(8rem,0.8fr)] sm:items-center">
@@ -27,7 +30,10 @@ export default function AccountRow({
           className="shrink-0"
         />
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">{row.name}</p>
+          <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-semibold">
+            {isFeatureEnabled("ownerAttributionDots") && <OwnerDot ownerId={row.ownerUserId} viewerId={viewerId} />}
+            <span className="truncate">{row.name}</span>
+          </p>
           {row.historyLabels?.map(label => <p key={label} className="mt-1 text-xs text-muted">{label}</p>)}
           <p className="mt-1 text-xs text-muted">
             {titleCase(row.subtype ?? row.type) || "Manual account"}

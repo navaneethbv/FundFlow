@@ -2,6 +2,7 @@ import "server-only";
 import { manualBalanceTable } from "@/lib/manual-asset-flags";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  computeEarmarkedCapital,
   computeForecastDefaults,
   computeForecastStartingState,
   type ForecastDefaults,
@@ -41,6 +42,7 @@ export interface ForecastPageData {
   defaults: ForecastDefaults;
   monthlyExpenses: number;
   essentialMonthlyExpenses: number;
+  earmarkedCapital: ReturnType<typeof computeEarmarkedCapital>;
   taxSummary?: ReturnType<typeof summarizeTaxBuckets>;
 }
 
@@ -56,7 +58,7 @@ export async function loadForecastPageData(
 ): Promise<ForecastPageData> {
   const months = trailingMonths(today, TRAILING_MONTHS);
 
-  const [accountsResult, manualResult, profileResult, projection] = await Promise.all([
+  const [accountsResult, manualResult, profileResult, projection, goalsResult, linksResult, eventsResult] = await Promise.all([
     supabase
       .from("accounts")
       .select("id, plaid_item_id, name, mask, type, subtype, current_balance, iso_currency_code, updated_at")
@@ -70,10 +72,25 @@ export async function loadForecastPageData(
       scope: { kind: "mine", ownerUserId: userId },
       window: { start: `${months[0]}-01`, endExclusive: dayAfter(today) },
     }),
+    supabase
+      .from("goals")
+      .select("id,name,image_slug,saved_amount,spending_reduces,target_amount")
+      .eq("user_id", userId),
+    supabase
+      .from("goal_accounts")
+      .select("goal_id,account_id,allocated_amount,use_entire_balance")
+      .eq("user_id", userId),
+    supabase
+      .from("goal_progress_events")
+      .select("goal_id,amount")
+      .eq("user_id", userId),
   ]);
   if (accountsResult.error) throw accountsResult.error;
   if (manualResult.error) throw manualResult.error;
   if (profileResult.error) throw profileResult.error;
+  if (goalsResult.error) throw goalsResult.error;
+  if (linksResult.error) throw linksResult.error;
+  if (eventsResult.error) throw eventsResult.error;
 
   const excludedNetWorthIds = readExcludedNetWorthIds(
     (profileResult.data as { dashboard_prefs?: unknown } | null)?.dashboard_prefs,
@@ -131,7 +148,32 @@ export async function loadForecastPageData(
     ? Math.round(medianOf(essentialMonthlyExpenses))
     : 0;
 
-  if (!isFeatureEnabled("investmentTaxBuckets")) return { startingState, defaults, monthlyExpenses, essentialMonthlyExpenses: typicalEssentialMonthlyExpenses };
+  const earmarkedCapital = computeEarmarkedCapital(
+    (goalsResult.data ?? []).map((row) => ({
+      id: row.id as string,
+      name: String(row.name ?? ""),
+      imageSlug: (row.image_slug as string | null) ?? null,
+      savedAmount: Number(row.saved_amount ?? 0),
+      spendingReduces: Boolean(row.spending_reduces),
+      targetAmount: Number(row.target_amount ?? 0),
+    })),
+    (linksResult.data ?? []).map((row) => ({
+      goalId: row.goal_id as string,
+      accountId: row.account_id as string,
+      allocatedAmount: row.allocated_amount == null ? null : Number(row.allocated_amount),
+      useEntireBalance: Boolean(row.use_entire_balance),
+    })),
+    (accountsResult.data ?? []).map((row) => ({
+      id: row.id as string,
+      balance: row.current_balance == null ? null : Number(row.current_balance),
+    })),
+    (eventsResult.data ?? []).map((row) => ({
+      goalId: row.goal_id as string,
+      amount: Number(row.amount ?? 0),
+    })),
+  );
+
+  if (!isFeatureEnabled("investmentTaxBuckets")) return { startingState, defaults, monthlyExpenses, essentialMonthlyExpenses: typicalEssentialMonthlyExpenses, earmarkedCapital };
   const taxAccounts = [
     ...dedupeRelinkedAccounts(accountsResult.data ?? []).filter((a) => !excludedNetWorthIds.has(a.id) && groupKeyFor(a.type, a.subtype) === "investment").map((a) => ({
       id: a.id as string, source: "plaid" as const, subtype: a.subtype as string | null,
@@ -141,5 +183,5 @@ export async function loadForecastPageData(
       id: a.id as string, source: "manual" as const, subtype: null, balance: a.balance == null ? null : Number(a.balance), currency: "USD",
     })),
   ];
-  return { startingState, defaults, monthlyExpenses, essentialMonthlyExpenses: typicalEssentialMonthlyExpenses, taxSummary: summarizeTaxBuckets(taxAccounts, await loadTaxOverrides(supabase, userId)) };
+  return { startingState, defaults, monthlyExpenses, essentialMonthlyExpenses: typicalEssentialMonthlyExpenses, earmarkedCapital, taxSummary: summarizeTaxBuckets(taxAccounts, await loadTaxOverrides(supabase, userId)) };
 }

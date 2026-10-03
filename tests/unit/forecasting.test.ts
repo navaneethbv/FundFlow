@@ -1,11 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
   computeForecastDefaults,
+  computeEarmarkedCapital,
   computeForecastMilestones,
   computeForecastStartingState,
   computeWhatIfProjection,
   forecastNetWorth,
   parseForecastAssumptions,
+  monteCarloProjection,
+  parseMonteCarloOptions,
 } from "@/lib/forecasting";
 import type { CanonicalFinanceTransaction } from "@/lib/finance-domain";
 
@@ -180,6 +183,67 @@ describe("forecastNetWorth", () => {
       const points = forecastNetWorth({ cash: 0, investments: 0, liabilities: 0 }, { ...BASE_ASSUMPTIONS, horizonMonths });
       expect(points).toHaveLength(horizonMonths);
     }
+  });
+});
+
+describe("seeded Monte Carlo projections", () => {
+  const assumptions = {
+    monthlySavings: 100,
+    annualReturnPct: 5,
+    annualCashYieldPct: 0,
+    monthlyDebtPayment: 0,
+    horizonMonths: 12 as const,
+  };
+
+  it("is reproducible for the same seed and assumptions", () => {
+    const input = { cash: 1000, investments: 5000, liabilities: 0 };
+    expect(monteCarloProjection(input, assumptions, { annualVolatilityPct: 12, seed: 7 })).toEqual(
+      monteCarloProjection(input, assumptions, { annualVolatilityPct: 12, seed: 7 }),
+    );
+  });
+
+  it("keeps percentile ordering and honors zero volatility", () => {
+    const points = monteCarloProjection(
+      { cash: 0, investments: 1000, liabilities: 0 },
+      assumptions,
+      { annualVolatilityPct: 0, seed: 11, trials: 25 },
+    );
+    expect(points.every((point) => point.p10 === point.p50 && point.p50 === point.p90)).toBe(true);
+    expect(points.every((point) => point.p10 <= point.p50 && point.p50 <= point.p90)).toBe(true);
+  });
+
+  it("parses user-entered volatility and a stable fallback seed", () => {
+    expect(parseMonteCarloOptions({ volatilityPct: "18", seed: "42" })).toEqual({ annualVolatilityPct: 18, seed: 42 });
+    expect(parseMonteCarloOptions({})).toEqual({ annualVolatilityPct: 12, seed: 20261003 });
+  });
+});
+
+describe("computeEarmarkedCapital", () => {
+  it("counts funded emergency and sinking-style goals without counting targets", () => {
+    expect(computeEarmarkedCapital(
+      [
+        { id: "emergency", name: "Emergency fund", imageSlug: "emergency-fund", savedAmount: 200, spendingReduces: false, targetAmount: 1000 },
+        { id: "sinking", name: "Car repairs", imageSlug: null, savedAmount: 100, spendingReduces: true, targetAmount: 800 },
+        { id: "future", name: "Vacation", imageSlug: "vacation", savedAmount: 0, spendingReduces: false, targetAmount: 5000 },
+      ],
+      [
+        { goalId: "emergency", accountId: "cash", allocatedAmount: 400, useEntireBalance: false },
+        { goalId: "sinking", accountId: "cash", allocatedAmount: 500, useEntireBalance: false },
+      ],
+      [{ id: "cash", balance: 6000 }],
+      [{ goalId: "emergency", amount: 50 }],
+    )).toEqual({ total: 1250, emergency: 650, sinking: 600 });
+  });
+
+  it("caps account allocations and ignores duplicate links", () => {
+    expect(computeEarmarkedCapital(
+      [{ id: "emergency", name: "Emergency", imageSlug: "emergency-fund", savedAmount: 0, spendingReduces: false, targetAmount: 1000 }],
+      [
+        { goalId: "emergency", accountId: "cash", allocatedAmount: 900, useEntireBalance: false },
+        { goalId: "emergency", accountId: "cash", allocatedAmount: 900, useEntireBalance: false },
+      ],
+      [{ id: "cash", balance: 300 }],
+    )).toEqual({ total: 300, emergency: 300, sinking: 0 });
   });
 });
 

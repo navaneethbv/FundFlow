@@ -100,6 +100,7 @@ export default async function OverviewView({
         previousMonthLabel={loaded.cumulativeSpend.previousMonthLabel}
         recentTransactions={recent}
         accountNames={accountNames}
+        viewerId={userId}
         today={today}
       />
     </>

@@ -4,12 +4,14 @@ import ManualAssetNotice from "@/components/accounts/ManualAssetNotice";
 import PageHeader from "@/components/shell/PageHeader";
 import AssumptionsPanel from "@/components/forecasting/AssumptionsPanel";
 import MilestonesPanel from "@/components/forecasting/MilestonesPanel";
+import ForecastMethodologyPanel from "@/components/forecasting/ForecastMethodologyPanel";
+import MonteCarloPanel from "@/components/forecasting/MonteCarloPanel";
 import Panel from "@/components/ui/Panel";
 import TaxBucketSummary from "@/components/investments/TaxBucketSummary";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { formatCurrency } from "@/lib/format";
 import { dateKeyInTimezone } from "@/lib/report-period";
-import { computeForecastMilestones, forecastNetWorth, parseForecastAssumptions } from "@/lib/forecasting";
+import { computeForecastMilestones, forecastNetWorth, parseForecastAssumptions, parseMonteCarloOptions } from "@/lib/forecasting";
 import type { ForecastStartingGaps } from "@/lib/forecasting";
 import LifeEventsPanel from "@/components/forecasting/LifeEventsPanel";
 import type { LifeEvent } from "@/lib/life-events";
@@ -65,17 +67,19 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
     .maybeSingle();
 
   const today = dateKeyInTimezone(new Date(), profile?.timezone);
-  const [{ startingState, defaults, monthlyExpenses, taxSummary }, params] = await Promise.all([
+  const [{ startingState, defaults, monthlyExpenses, earmarkedCapital, taxSummary }, params] = await Promise.all([
     loadForecastPageData(supabase, user.id, today),
     searchParams,
   ]);
   const assumptions = parseForecastAssumptions(params, defaults);
+  const monteCarloOptions = parseMonteCarloOptions(params);
   // Say what the balance sheet left out rather than projecting from a silently
   // incomplete starting point (a zeroed unknown balance reads as a real $0).
   const startingPointNotes = describeStartingPointGaps(startingState.gaps);
   const currentNetWorth = startingState.cash + startingState.investments - startingState.liabilities;
   const points = forecastNetWorth(startingState, assumptions);
-  const milestones = computeForecastMilestones(startingState, assumptions, monthlyExpenses);
+  const milestones = computeForecastMilestones(startingState, assumptions, monthlyExpenses, earmarkedCapital.total);
+  const fireCapital = Math.max(0, currentNetWorth - earmarkedCapital.total);
   const { data: lifeEventRows, error: lifeEventsError } = await supabase
     .from("life_events")
     .select("id, event_type, start_month, amount, duration_months, label")
@@ -119,6 +123,12 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
           <p className="mt-3 text-sm text-muted">
             Net worth today: {" "}<span className="money font-semibold text-foreground">{formatCurrency(currentNetWorth)}</span>
           </p>
+          {earmarkedCapital.total > 0 && (
+            <p className="mt-2 text-sm text-muted">
+              Earmarked for funded goals: <span className="money font-semibold text-foreground">-{formatCurrency(earmarkedCapital.total)}</span>{" "}
+              ({formatCurrency(earmarkedCapital.emergency)} emergency, {formatCurrency(earmarkedCapital.sinking)} sinking-style) · FIRE capital: <span className="money font-semibold text-foreground">{formatCurrency(fireCapital)}</span>
+            </p>
+          )}
           {startingPointNotes.length > 0 && (
             <p className="mt-2 text-sm text-muted">
               Not counted in this starting point: {startingPointNotes.join("; ")}.
@@ -137,7 +147,13 @@ export default async function ForecastingPage({ searchParams }: Readonly<PagePro
           currentNetWorth={currentNetWorth}
           currency="USD"
           initialEvents={lifeEvents}
+          milestones={milestones}
         />
+
+        <ForecastMethodologyPanel monthlyExpenses={monthlyExpenses} earmarkedCapital={earmarkedCapital.total} />
+        {isFeatureEnabled("forecastingMonteCarlo") && (
+          <MonteCarloPanel startingState={startingState} assumptions={assumptions} options={monteCarloOptions} />
+        )}
 
         <Panel padding="lg">
           <MilestonesPanel milestones={milestones} horizonMonths={assumptions.horizonMonths} />

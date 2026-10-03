@@ -2,6 +2,8 @@ import CategoryChip from "@/components/ui/CategoryChip";
 import RegisterRow from "@/components/ui/RegisterRow";
 import { ChevronRight } from "@/components/ui/icons";
 import { titleCase } from "@/lib/format";
+import OwnerDot from "@/components/household/OwnerDot";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 
 export type RecentTransaction = {
   id: string;
@@ -12,14 +14,17 @@ export type RecentTransaction = {
   name: string | null;
   pfc_primary: string | null;
   account_id: string;
+  user_id?: string | null;
 };
 
 export default function RecentActivity({
   transactions,
   accountNames,
+  viewerId,
 }: Readonly<{
   transactions: RecentTransaction[];
   accountNames: Map<string, string>;
+  viewerId?: string;
 }>) {
   if (transactions.length === 0) {
     return <p className="py-4 text-sm text-muted">No recent activity yet.</p>;
@@ -42,6 +47,7 @@ export default function RecentActivity({
               ) : (
                 <span>Uncategorized</span>
               )}
+              {isFeatureEnabled("ownerAttributionDots") && <OwnerDot ownerId={transaction.user_id} viewerId={viewerId} />}
               <span className="truncate">
                 · {accountNames.get(transaction.account_id) ?? "Account"}
               </span>

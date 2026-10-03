@@ -1,5 +1,14 @@
 # FundFlow — Future Todos
 
+## Current checkpoint: Checklist group 6, forecasting and owner attribution, 2026-10-03
+
+The next checklist slice is implemented in `/private/tmp/fundflow-planning-onboarding` on `feat/planning-onboarding-transparency`, stacked on the verified PR #208 head.
+Forecasting now separates funded emergency and sinking-style goal balances from FIRE capital, adds seeded percentile projections behind `forecastingMonteCarlo`, draws direct milestone markers, and exposes a methodology panel sourced from the projection constants.
+Household accounts and dashboard transaction rows have an opt-in accessible owner dot behind `ownerAttributionDots`; both new flags remain off.
+Focused forecasting, owner-dot, recent-activity, and account-row tests pass, as do TypeScript and ESLint with the shared dependency installation.
+Draft PR #209 is open at `feat/planning-onboarding-transparency`; its hosted checks pass and direct Sonar verification reports zero unresolved issues and zero hotspots awaiting review at the latest pushed head.
+The remaining checklist workstreams 12.2, 12.3, and 13 are still not started.
+
 ## Current checkpoint: Checklist group 5, 2026-10-03
 
 The canonical checklist group, items 1.5, 2.4, 4.3, 8.3, and 8.4, is implemented in the isolated worktree `/private/tmp/fundflow-review-lending` on `feat/review-lending-calculators`, delivered as [draft PR #208](https://github.com/navaneethbv/FundFlow/pull/208) stacked on PR #206.
