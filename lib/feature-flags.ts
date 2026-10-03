@@ -127,6 +127,18 @@ export const FEATURE_FLAG_DEFAULTS = {
   paydaySettings: false,
   /** Reference adoption 3.3: monthly budget pace, separate from cash. */
   budgetDailyAllowance: false,
+  /** Reference adoption 6.8: named collections across categories, built on tags. */
+  transactionCollections: false,
+  /** Reference adoption 7.1: move planned money between category budgets. */
+  budgetMoves: false,
+  /** Reference adoption 7.2: warn when the budget allocates more than planned income. */
+  budgetOverAllocation: false,
+  /** Reference adoption 7.3: guided first budget from trailing averages. */
+  budgetSetupWizard: false,
+  /** Reference adoption 9.1: typed manual assets with estimated growth. */
+  typedManualAssets: false,
+  /** Reference adoption 9.2: valuation provenance and owned share in net worth. */
+  assetOwnership: false,
 } as const;
 
 export type FeatureFlag = keyof typeof FEATURE_FLAG_DEFAULTS;

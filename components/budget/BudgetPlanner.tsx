@@ -263,6 +263,12 @@ function DecadeTable({
   );
 }
 
+export interface BudgetPlannerFeatures {
+  overAllocation?: boolean;
+  moves?: boolean;
+  setupWizard?: boolean;
+}
+
 export default function BudgetPlanner({
   initialView,
   proposals,
@@ -270,7 +276,10 @@ export default function BudgetPlanner({
   currency,
   summaryTab,
   summaryLinks,
+  features = {},
 }: Readonly<{
+  /** Server-resolved flags; client components cannot read them directly. */
+  features?: BudgetPlannerFeatures;
   initialView: BudgetViewData;
   proposals: BudgetSeedProposal[];
   month: string;
@@ -463,6 +472,7 @@ export default function BudgetPlanner({
           currency={currency}
           tab={summaryTab}
           links={summaryLinks}
+          allocationWarning={features.overAllocation === true}
         />
       </div>
 
