@@ -353,11 +353,11 @@ No dependency changes are included in feature PRs.
 | 1.2 | Merged to main in #198 (`5479261`) on 2026-10-02; migrations applied; flags off | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
 | 1.3 | Merged to main in #198 (`5479261`) on 2026-10-02; migrations applied; flags off | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
 | 1.4 | Merged to main in #198 (`5479261`) on 2026-10-02; migrations applied; flags off | [#198](https://github.com/navaneethbv/FundFlow/pull/198) |
-| 1.5 | Implemented, release gated | Next grouped PR: guarded import undo with exact-row provenance and refusal checks. |
+| 1.5 | Implemented, release gated | PR #207: guarded import undo with exact-row provenance and refusal checks. |
 | 2.1 | Implemented in [#199](https://github.com/navaneethbv/FundFlow/pull/199); local checks passed; rollout deferred | `lib/balance-quality.ts`, `app/accounts/balance-review/page.tsx` |
 | 2.2 | Implemented in [#199](https://github.com/navaneethbv/FundFlow/pull/199); local checks passed; rollout deferred | `app/settings/connections/page.tsx` |
 | 2.3 | Implemented in [#199](https://github.com/navaneethbv/FundFlow/pull/199); local checks passed; rollout deferred | `lib/history-provenance-writer.ts` |
-| 2.4 | Implemented, release gated | Next grouped PR: bounded evidence for duplicate, refund, and transfer suggestions. |
+| 2.4 | Implemented, release gated | PR #207: bounded evidence for duplicate, refund, and transfer suggestions. |
 | 3.1 | Implemented in [#199](https://github.com/navaneethbv/FundFlow/pull/199); local checks passed; rollout deferred | `app/recurring/paychecks/page.tsx` |
 | 3.2 | Implemented in [#199](https://github.com/navaneethbv/FundFlow/pull/199); local checks passed; rollout deferred | `app/settings/payday/page.tsx` |
 | 3.3 | Implemented in [#199](https://github.com/navaneethbv/FundFlow/pull/199); local checks passed; rollout deferred | `lib/budget-allowance.ts` |
@@ -366,7 +366,7 @@ No dependency changes are included in feature PRs.
 | 3.6 | Group 5 in [PR #203](https://github.com/navaneethbv/FundFlow/pull/203); merge deferred | `components/recurring/SubscriptionCatalog.tsx`, `lib/subscription-catalog.ts` |
 | 4.1 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `lib/insight-generators.ts`, `lib/insight-generation.ts` |
 | 4.2 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `components/notifications/InsightsFeed.tsx`, `app/api/insights/acknowledge/route.ts` |
-| 4.3 | Implemented, release gated | Next grouped PR: five-step weekly review rail and owner streak. |
+| 4.3 | Implemented, release gated | PR #207: five-step weekly review rail and owner streak. |
 | 5.1 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `lib/rule-conditions.ts`, `lib/rules-engine.ts` |
 | 5.2 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `lib/rule-run-history.ts`, `supabase/migrations/20261001180000_compound_rules.sql` |
 | 5.3 | Implemented in [#200](https://github.com/navaneethbv/FundFlow/pull/200) at `dc58d93`; hosted checks passed; rollout deferred | `components/transactions/RuleSuggestion.tsx`, `app/api/rules/suggestion/route.ts` |
@@ -386,8 +386,8 @@ No dependency changes are included in feature PRs.
 | 7.3 | Implemented in Group 7 | `components/budget/BudgetSetupWizard.tsx` |
 | 8.1 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks passed at `a375739` | `lib/amortization.ts`, `tests/unit/amortization.test.ts` |
 | 8.2 | Implemented in [#202](https://github.com/navaneethbv/FundFlow/pull/202); hosted checks passed at `a375739` | `components/debt/LoanDetail.tsx`, `components/debt/DebtPlannerView.tsx` |
-| 8.3 | Implemented, release gated | Next grouped PR: owner-scoped private lending with daily interest and payment allocation. |
-| 8.4 | Implemented, release gated | Next grouped PR: editable rent-buy, emergency-fund, and compound-interest calculators. |
+| 8.3 | Implemented, release gated | PR #207: owner-scoped private lending with daily interest and payment allocation. |
+| 8.4 | Implemented, release gated | PR #207: editable rent-buy, emergency-fund, and compound-interest calculators. |
 | 9.1 | Implemented in Group 7; growth estimates preserve entered history | `app/accounts/assets/page.tsx`, `supabase/migrations/20261003092000_manual_assets.sql` |
 | 9.2 | Implemented in Group 7; owned share across balance readers | `lib/manual-assets-data.ts`, `lib/manual-asset-flags.ts` |
 | 9.3 | Implemented, release gated | PR #206: mortgage equity, existing liability counted once; fixed-rate loan terms. |
