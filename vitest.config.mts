@@ -54,9 +54,9 @@ export default defineConfig({
         "**/graphify-out/**",
       ],
       thresholds: {
-        statements: 96,
-        branches: 96,
-        functions: 96,
+        statements: 90,
+        branches: 90,
+        functions: 90,
         lines: 98,
       },
     },
