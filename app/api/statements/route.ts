@@ -72,6 +72,30 @@ async function hasPdfMagic(file: File): Promise<boolean> {
   return new TextDecoder().decode(bytes) === "%PDF-";
 }
 
+interface PreparedStatementUpload {
+  file: File;
+  account: StatementAccountRef;
+  month: string;
+}
+
+async function prepareStatementUpload(
+  request: NextRequest,
+): Promise<PreparedStatementUpload | NextResponse> {
+  const form = await readFormBody(request, MAX_STATEMENT_BYTES + 1024 * 1024);
+  if (form instanceof NextResponse) return form;
+  const file = form.get("file");
+  const account = parseStatementAccountRef(form.get("account"));
+  const month = form.get("month");
+  if (!(file instanceof File)) return badRequest("file is required");
+  if (!account) return badRequest("account must be account:id or manual:id");
+  if (!isStatementMonth(month)) return badRequest("month must be the first day of a month");
+  if (!validPdf(file) || (file.type && file.type !== "application/pdf")) {
+    return badRequest("Only PDF statements up to 15 MiB are accepted");
+  }
+  if (!(await hasPdfMagic(file))) return badRequest("The uploaded file is not a PDF");
+  return { file, account, month };
+}
+
 export async function POST(request: NextRequest) {
   if (!isFeatureEnabled("statementVault")) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const auth = await requireUser();
@@ -81,18 +105,9 @@ export async function POST(request: NextRequest) {
     const allowed = await checkRateLimit(`statement-upload:${auth.user.id}`, 20, 3600, { failClosed: true });
     if (!allowed) return NextResponse.json({ error: "Statement upload limit reached." }, { status: 429 });
 
-    const form = await readFormBody(request, MAX_STATEMENT_BYTES + 1024 * 1024);
-    if (form instanceof NextResponse) return form;
-    const file = form.get("file");
-    const account = parseStatementAccountRef(form.get("account"));
-    const month = form.get("month");
-    if (!(file instanceof File)) return badRequest("file is required");
-    if (!account) return badRequest("account must be account:id or manual:id");
-    if (!isStatementMonth(month)) return badRequest("month must be the first day of a month");
-    if (!validPdf(file) || (file.type && file.type !== "application/pdf")) {
-      return badRequest("Only PDF statements up to 15 MiB are accepted");
-    }
-    if (!(await hasPdfMagic(file))) return badRequest("The uploaded file is not a PDF");
+    const prepared = await prepareStatementUpload(request);
+    if (prepared instanceof NextResponse) return prepared;
+    const { file, account, month } = prepared;
     if (!(await accountIsOwned(auth.supabase, auth.user.id, account))) {
       return NextResponse.json({ error: "Account not found" }, { status: 404 });
     }

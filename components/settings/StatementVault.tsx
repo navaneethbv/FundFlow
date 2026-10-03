@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type SyntheticEvent } from "react";
 import Button from "@/components/ui/Button";
 import Panel from "@/components/ui/Panel";
 import { formatMonth } from "@/lib/format";
@@ -19,6 +19,12 @@ function statusText(status: "missing" | "covered" | "duplicate", count: number):
   if (status === "missing") return "Missing";
   if (status === "duplicate") return `Duplicate (${count})`;
   return "Covered";
+}
+
+function statusClass(status: "missing" | "covered" | "duplicate"): string {
+  if (status === "covered") return "text-success";
+  if (status === "duplicate") return "text-warning";
+  return "text-muted";
 }
 
 interface PublicStatement {
@@ -72,7 +78,7 @@ export default function StatementVault({
     [coverage],
   );
 
-  async function upload(event: React.FormEvent<HTMLFormElement>) {
+  async function upload(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage(null);
     setError(null);
@@ -139,7 +145,7 @@ export default function StatementVault({
         </p>
         <form className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem_minmax(0,1fr)_auto] md:items-end" onSubmit={(event) => { void upload(event); }}>
           <label className="grid gap-1.5 text-sm font-semibold">
-            Account
+            <span>Account</span>
             <select className="min-h-11 rounded-field border border-panel-border bg-panel px-3" value={selectedAccount} onChange={(event) => { setSelectedAccount(event.target.value); }}>
               {accounts.map((account) => (
                 <option key={accountKey(account.ref)} value={accountKey(account.ref)}>{account.label}</option>
@@ -147,18 +153,18 @@ export default function StatementVault({
             </select>
           </label>
           <label className="grid gap-1.5 text-sm font-semibold">
-            Month
+            <span>Month</span>
             <select className="min-h-11 rounded-field border border-panel-border bg-panel px-3" value={selectedMonth} onChange={(event) => { setSelectedMonth(event.target.value); }}>
               {months.map((month) => <option key={month} value={month}>{formatMonth(month)}</option>)}
             </select>
           </label>
           <label className="grid gap-1.5 text-sm font-semibold">
-            PDF file
+            <span>PDF file</span>
             <input id="statement-file" name="statement-file" className="min-h-11 rounded-field border border-panel-border bg-panel px-3 py-2 text-sm" type="file" accept="application/pdf,.pdf" onChange={(event) => { setFile(event.target.files?.[0] ?? null); }} />
           </label>
           <Button type="submit" loading={busy} disabled={busy}>{busy ? "Uploading" : "Upload PDF"}</Button>
         </form>
-        {message && <p className="mt-3 text-sm text-success" role="status">{message}</p>}
+        {message && <output className="mt-3 block text-sm text-success" aria-live="polite">{message}</output>}
         {error && <p className="mt-3 text-sm text-danger" role="alert">{error}</p>}
       </Panel>
 
@@ -188,7 +194,7 @@ export default function StatementVault({
                     };
                     const label = statusText(cell.status, cell.count);
                     return <td className="border-b border-panel-border px-3 py-3" key={month} aria-label={`${account.label}, ${formatMonth(month)}: ${label}`}>
-                      <span className={cell.status === "covered" ? "text-success" : cell.status === "duplicate" ? "text-warning" : "text-muted"}>{label}</span>
+                      <span className={statusClass(cell.status)}>{label}</span>
                     </td>;
                   })}
                 </tr>
