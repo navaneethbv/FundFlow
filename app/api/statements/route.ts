@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
     const account = parseStatementAccountRef(form.get("account"));
     const month = form.get("month");
     if (!(file instanceof File)) return badRequest("file is required");
-    if (!account) return badRequest("account must be account:<id> or manual:<id>");
+    if (!account) return badRequest("account must be account:id or manual:id");
     if (!isStatementMonth(month)) return badRequest("month must be the first day of a month");
     if (!validPdf(file) || (file.type && file.type !== "application/pdf")) {
       return badRequest("Only PDF statements up to 15 MiB are accepted");
@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
     const accountParam = request.nextUrl.searchParams.get("account");
     const monthParam = request.nextUrl.searchParams.get("month");
     const account = accountParam ? parseStatementAccountRef(accountParam) : null;
-    if (accountParam && !account) return badRequest("account must be account:<id> or manual:<id>");
+    if (accountParam && !account) return badRequest("account must be account:id or manual:id");
     if (monthParam && !isStatementMonth(monthParam)) return badRequest("month must be the first day of a month");
     if (account?.source === "account") query = query.eq("account_id", account.id);
     if (account?.source === "manual") query = query.eq("manual_account_id", account.id);

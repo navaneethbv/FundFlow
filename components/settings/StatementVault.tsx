@@ -88,14 +88,15 @@ export default function StatementVault({
       body.set("file", file);
       const response = await fetch("/api/statements", { method: "POST", body });
       const payload = (await response.json()) as { statement?: PublicStatement; error?: string };
-      if (!response.ok || !payload.statement) {
+      const uploaded = payload.statement;
+      if (!response.ok || !uploaded) {
         throw new Error(payload.error ?? "Statement upload failed");
       }
-      setStatements((current) => [toMetadata(payload.statement!), ...current]);
+      setStatements((current) => [toMetadata(uploaded), ...current]);
       setFile(null);
       const input = event.currentTarget.elements.namedItem("statement-file");
       if (input instanceof HTMLInputElement) input.value = "";
-      setMessage(`Uploaded ${payload.statement.filename}.`);
+      setMessage(`Uploaded ${uploaded.filename}.`);
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "Statement upload failed");
     } finally {
@@ -136,10 +137,10 @@ export default function StatementVault({
         <p className="mb-4 max-w-3xl text-sm text-muted">
           PDFs are stored privately and listed as metadata only. FundFlow does not parse or interpret statement contents.
         </p>
-        <form className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem_minmax(0,1fr)_auto] md:items-end" onSubmit={upload}>
+        <form className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem_minmax(0,1fr)_auto] md:items-end" onSubmit={(event) => { void upload(event); }}>
           <label className="grid gap-1.5 text-sm font-semibold">
             Account
-            <select className="min-h-11 rounded-field border border-panel-border bg-panel px-3" value={selectedAccount} onChange={(event) => setSelectedAccount(event.target.value)}>
+            <select className="min-h-11 rounded-field border border-panel-border bg-panel px-3" value={selectedAccount} onChange={(event) => { setSelectedAccount(event.target.value); }}>
               {accounts.map((account) => (
                 <option key={accountKey(account.ref)} value={accountKey(account.ref)}>{account.label}</option>
               ))}
@@ -147,13 +148,13 @@ export default function StatementVault({
           </label>
           <label className="grid gap-1.5 text-sm font-semibold">
             Month
-            <select className="min-h-11 rounded-field border border-panel-border bg-panel px-3" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}>
+            <select className="min-h-11 rounded-field border border-panel-border bg-panel px-3" value={selectedMonth} onChange={(event) => { setSelectedMonth(event.target.value); }}>
               {months.map((month) => <option key={month} value={month}>{formatMonth(month)}</option>)}
             </select>
           </label>
           <label className="grid gap-1.5 text-sm font-semibold">
             PDF file
-            <input id="statement-file" name="statement-file" className="min-h-11 rounded-field border border-panel-border bg-panel px-3 py-2 text-sm" type="file" accept="application/pdf,.pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+            <input id="statement-file" name="statement-file" className="min-h-11 rounded-field border border-panel-border bg-panel px-3 py-2 text-sm" type="file" accept="application/pdf,.pdf" onChange={(event) => { setFile(event.target.files?.[0] ?? null); }} />
           </label>
           <Button type="submit" loading={busy} disabled={busy}>{busy ? "Uploading" : "Upload PDF"}</Button>
         </form>
@@ -179,7 +180,12 @@ export default function StatementVault({
                 <tr key={accountKey(account.ref)}>
                   <th className="sticky left-0 z-10 border-b border-panel-border bg-panel px-3 py-3 font-semibold" scope="row">{account.label}</th>
                   {months.map((month) => {
-                    const cell = cells.get(`${accountKey(account.ref)}|${month}`)!;
+                    const cell = cells.get(`${accountKey(account.ref)}|${month}`) ?? {
+                      account: account.ref,
+                      month,
+                      count: 0,
+                      status: "missing" as const,
+                    };
                     const label = statusText(cell.status, cell.count);
                     return <td className="border-b border-panel-border px-3 py-3" key={month} aria-label={`${account.label}, ${formatMonth(month)}: ${label}`}>
                       <span className={cell.status === "covered" ? "text-success" : cell.status === "duplicate" ? "text-warning" : "text-muted"}>{label}</span>
@@ -202,7 +208,7 @@ export default function StatementVault({
                   <p className="font-semibold">{statement.originalFilename}</p>
                   <p className="text-sm text-muted">{formatMonth(statement.statementMonth)} · {(statement.sizeBytes / 1024 / 1024).toFixed(1)} MiB</p>
                 </div>
-                <Button variant="danger" size="sm" loading={deletingId === statement.id} disabled={deletingId !== null} onClick={() => remove(statement)}>
+                <Button variant="danger" size="sm" loading={deletingId === statement.id} disabled={deletingId !== null} onClick={() => { void remove(statement); }}>
                   {deletingId === statement.id ? "Deleting" : "Delete"}
                 </Button>
               </li>
