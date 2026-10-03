@@ -254,12 +254,10 @@ export interface WageTransactionInput extends IncomeTransactionInput {
  * token carrying digits.
  */
 function employerKey(merchant: string): string {
-  return merchant
-    .toLowerCase()
-    .split(/\s+(?=(?:co\s+)?(?:id|indn):)/)[0]!
-    .split(/\s+/)
-    .filter((token) => token && !/\d/.test(token))
-    .join(" ");
+  const tokens = merchant.toLowerCase().split(/\s+/);
+  const end = tokens.findIndex((token) => token.startsWith("id:") || token.startsWith("indn:"));
+  const employer = end === -1 ? tokens : tokens.slice(0, end);
+  return employer.filter((token) => token && !/\d/.test(token)).join(" ");
 }
 
 const WAGE_PERIOD_DAYS: Partial<Record<PayFrequency, number>> = { weekly: 7, biweekly: 14, monthly: 31 };
