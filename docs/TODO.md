@@ -1,5 +1,19 @@
 # FundFlow — Future Todos
 
+## Reference adoption: group 2 rollout gates
+
+The six-item checklist is in [the group 2 spec](superpowers/specs/2026-10-01-data-quality-guidance.md).
+Items 2.1, 2.2, 2.3, 3.1, 3.2, and 3.3 are implemented together in [PR #199](https://github.com/navaneethbv/FundFlow/pull/199) on `feat/data-quality-guidance`, independently of deferred PR #198.
+The following migrations are unapplied to production: `20261001140000_balance_quality_reviews.sql`, `20261001150000_history_provenance.sql`, and `20261001160000_payday_settings.sql`.
+Keep all six flags off until the owner authorizes rollout after acceptance: `balanceQualityReview`, `connectionHealth`, `historyProvenance`, `paycheckPlanner`, `paydaySettings`, and `budgetDailyAllowance`.
+Run signed-in journeys at 375px and desktop, including keyboard use and Supabase Auth/MFA/revocation integration, once an approved disposable project exists.
+Local PostgreSQL with Auth/Storage schema stand-ins and synthetic browser fixtures do not replace those checks.
+Provider-side unlinked-account counts are unavailable; the UI explicitly reports that limitation and counts manual accounts separately.
+Paycheck planning supports USD accounts and does not infer statement settlement.
+Archive/restore coverage for the new review and payday configuration tables is deferred to the restore redesign; no export or in-app AI payload is expanded.
+PR #198 and its production migrations remain deferred by the owner; do not infer rollout authorization from this group's PR request.
+
+
 ## Current delivery grouping
 
 The owner requested five or six features per PR.
@@ -618,6 +632,7 @@ Still open, all needing credentials or an owner decision rather than code:
 Finished todos and completed programs are in
 [`archive/TODO-completed.md`](archive/TODO-completed.md).
 
+Paycheck bill totals exclude transfer-category loan repayments as well as internal transfers; reserve other debt payments separately until the later debt workstream connects them.
 ## Reference adoption 1.4: import history
 
 - Keep `importHistory` off until disposable signed-in browser acceptance at 375px and desktop, including keyboard use, and Supabase integration are complete.

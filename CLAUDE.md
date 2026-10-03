@@ -56,7 +56,7 @@ Treat "no in-app AI" as retired wording: the constraint that survived it is the 
   components. `lib/env.ts` holds the `NEXT_PUBLIC_*` values.
 - Client writes are allowed only on `budgets`, `saved_reports`, `user_tags`,
   `merchant_rules`, `category_overrides`, `households`, `goals`,
-  `shared_expenses`, `saved_views`, `notifications`, `alert_preferences`,
+  `shared_expenses`, `saved_views`, `notifications`, `alert_preferences`, `payday_settings`,
   and the `profiles` preference columns. User-authored configuration is the
   test for joining that list; a provider-synced table never qualifies.
 - Migrations in `supabase/migrations/` are applied by hand (CLI or dashboard).

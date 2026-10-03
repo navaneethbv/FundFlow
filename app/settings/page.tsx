@@ -338,6 +338,8 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
     );
     content = (
       <>
+        {isFeatureEnabled("connectionHealth") && <ButtonLink href="/settings/connections">Connection health</ButtonLink>}
+        {isFeatureEnabled("paydaySettings") && <ButtonLink href="/settings/payday">Payday settings</ButtonLink>}
         <div className="grid items-start gap-6 xl:grid-cols-2">
           <BanksSection
             initialItems={safeItems}

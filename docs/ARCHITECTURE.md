@@ -35,6 +35,33 @@ flowchart TB
     class trust zone
 ```
 
+## Data quality and spending guidance (default off)
+
+- `balance-quality.ts` derives disclosed review signals from same-currency observations within seven days.
+  `balance-quality-data.ts` records frozen owner-scoped context after daily snapshots through service-only RPCs.
+  Decisions preserve raw values and use snapshot/review locks plus version checks; cookie-bound queue reads stay owner-only.
+  `balance-quality-history.ts` overlays an explicitly stale anchor only while the raw observation still matches.
+- `/settings/connections` consolidates the existing institution observability model without new provider calls.
+  Provider accounts not shared with FundFlow have an unknown count; manual accounts without a connection are counted separately.
+- `account_balance_snapshots.provenance` records observed, manual, or estimated account values.
+  Legacy NULL values derive from account source without a data rewrite.
+  A protected estimate RPC cannot overwrite observed or manual history, and future asset work must use that writer.
+  Accounts history uses text sources, dashed estimate segments, hollow points, and a table twin.
+- `payday_settings` is owner-authored configuration with session-revocation and MFA RLS gates.
+  Its session-only POST/DELETE route validates, rate limits, invalidates cached guidance, and audits without financial payloads.
+  Detected income is a suggestion until the user confirms cadence, next date, and expected USD take-home pay.
+- `paycheck-planner.ts` allocates integer cents across three pay periods and an optional cash bridge.
+  Earlier paychecks reserve future funding gaps; unknown bridge cash stays unknown.
+  The USD-only loader excludes transfer streams and recurring card purchases, uses reported card statements instead, and refuses truncated input sets.
+  Statement settlement is not tracked; the page discloses this limitation.
+- `budget-allowance.ts` paces monthly expense budgets including rollover against canonical net spending, including unbudgeted spending and refunds.
+  It never replaces cash safe-to-spend or subtracts bills a second time.
+  It is unavailable for historical months, account/institution filters, or non-USD account sets.
+
+Flags: `balanceQualityReview`, `connectionHealth`, `historyProvenance`, `paycheckPlanner`, `paydaySettings`, and `budgetDailyAllowance`.
+All default off; new pages and handlers return 404 when disabled, and background processing skips the new work.
+The planner needs confirmed payday settings to produce a plan, and the connection page reads balance reviews only when that separate flag is enabled.
+
 ## Key modules in `lib/`
 
 - `request-body.ts` bounds actual incoming bytes before JSON or multipart parsing and returns 413 for oversized envelopes.
@@ -396,7 +423,7 @@ Invariants:
 - Every user table has RLS with owner-only `select` (client writes allowed only
   on `budgets`, `saved_reports`, `user_tags`, `merchant_rules`,
   `category_overrides`, `households`, `goals`, `shared_expenses`,
-  `saved_views`, `notifications`, `alert_preferences`, and the `profiles`
+  `saved_views`, `notifications`, `alert_preferences`, `payday_settings`, and the `profiles`
   preference columns — all hold nothing but user-authored configuration, which is
   the test for joining that list; a provider-synced table never qualifies,
   see `20260730180000_recurring_streams_revert_client_write.sql`). Migrations
