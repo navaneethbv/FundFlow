@@ -159,4 +159,37 @@ describe("Subscription Price Spike Alerts", () => {
 
     expect(detectPriceSpikes(streams)).toHaveLength(0);
   });
+
+  it("never reports income or variable-amount bills as a subscription price hike", () => {
+    const streams: RecurringStreamCandidate[] = [
+      {
+        // A raise is good news, not a subscription price increase.
+        id: "stream-payroll",
+        merchantName: "Payroll",
+        averageAmount: 4000,
+        lastAmount: 4645.43,
+        frequency: "BIWEEKLY",
+        streamType: "inflow",
+      },
+      {
+        // A card payment varies with the statement balance; it has no price.
+        id: "stream-card-payment",
+        merchantName: "Apple Card",
+        averageAmount: 35.18,
+        lastAmount: 126.38,
+        frequency: "UNKNOWN",
+        streamType: "outflow",
+      },
+      {
+        id: "stream-netflix",
+        merchantName: "Netflix",
+        averageAmount: 24.84,
+        lastAmount: 26.99,
+        frequency: "MONTHLY",
+        streamType: "outflow",
+      },
+    ];
+
+    expect(detectPriceSpikes(streams).map((alert) => alert.id)).toEqual(["stream-netflix"]);
+  });
 });
