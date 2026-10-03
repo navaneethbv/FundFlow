@@ -3,6 +3,7 @@
 ## 2026-10-03: Checklist group 7, onboarding and release transparency
 
 Worktree: `/private/tmp/fundflow-planning-onboarding`, branch `feat/onboarding-transparency`, based on PR #209 head `04b2b767586ecf391e5ea96ef405a7882a6caa10`.
+Draft PR #210 is open at `f9e7347`.
 Checklist 13.1 adds a first-run setup checklist and guided tour with bank, payday, budget, alert, and MFA steps.
 The checklist is resumable and dismissible through the existing `profiles.dashboard_prefs` JSON, with bounded server-derived completion state and keyboard-accessible controls.
 Checklist 13.2 adds versioned release highlights with a per-user viewed marker in the same preferences JSON.
