@@ -6,7 +6,6 @@ import OwnerDot from "@/components/household/OwnerDot";
 describe("OwnerDot", () => {
   it("renders an accessible label for the viewer's own rows", () => {
     const html = renderToStaticMarkup(createElement(OwnerDot, { ownerId: "owner-1", viewerId: "owner-1" }));
-    expect(html).toContain('role="img"');
     expect(html).toContain("Owner: You");
   });
 

@@ -29,11 +29,11 @@ export default function OwnerDot({
   const label = ownerId === viewerId ? "You" : "Household member";
   return (
     <span
-      role="img"
-      aria-label={`Owner: ${label}`}
       title={`Owner: ${label}`}
-      className={cn("inline-block h-2.5 w-2.5 shrink-0 rounded-full", className)}
-      style={{ backgroundColor: `var(${colorFor(ownerId)})` }}
-    />
+      className={cn("inline-flex shrink-0 items-center", className)}
+    >
+      <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: `var(${colorFor(ownerId)})` }} />
+      <span className="sr-only">Owner: {label}</span>
+    </span>
   );
 }
