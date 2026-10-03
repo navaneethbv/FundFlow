@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const mockRequireUser = vi.fn();
 const mockRpc = vi.fn();
+const mockCheckRateLimit = vi.fn();
 let reportsOnlyEnabled = false;
 
 vi.mock("@/lib/http", () => ({
@@ -14,7 +15,7 @@ vi.mock("@/lib/feature-flags", () => ({
   isFeatureEnabled: () => reportsOnlyEnabled,
 }));
 vi.mock("@/lib/rate-limit", () => ({
-  checkRateLimit: vi.fn().mockResolvedValue(true),
+  checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
 }));
 vi.mock("@/lib/audit", () => ({
   writeAudit: vi.fn().mockResolvedValue(undefined),
@@ -26,6 +27,7 @@ import { GET } from "@/app/api/household/aggregates/route";
 beforeEach(() => {
   vi.clearAllMocks();
   reportsOnlyEnabled = false;
+  mockCheckRateLimit.mockResolvedValue(true);
   mockRpc.mockResolvedValue({ data: [], error: null });
   mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase: { rpc: mockRpc } });
 });
@@ -61,5 +63,29 @@ describe("GET /api/household/aggregates", () => {
       p_end: "2026-03-31",
       p_category: "food_and_drink",
     });
+  });
+
+  it("returns 429 when aggregate requests are rate limited", async () => {
+    reportsOnlyEnabled = true;
+    mockCheckRateLimit.mockResolvedValue(false);
+    const response = await GET(new NextRequest("http://localhost/api/household/aggregates?householdId=h1&start=2026-01-01&end=2026-03-31"));
+    expect(response.status).toBe(429);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it("rejects reversed dates and oversized categories", async () => {
+    reportsOnlyEnabled = true;
+    const reversed = await GET(new NextRequest("http://localhost/api/household/aggregates?householdId=h1&start=2026-03-01&end=2026-02-01"));
+    expect(reversed.status).toBe(400);
+
+    const oversized = await GET(new NextRequest(`http://localhost/api/household/aggregates?householdId=h1&start=2026-01-01&end=2026-03-31&category=${"x".repeat(81)}`));
+    expect(oversized.status).toBe(400);
+  });
+
+  it("returns 500 when the aggregate RPC fails", async () => {
+    reportsOnlyEnabled = true;
+    mockRpc.mockResolvedValue({ data: null, error: { message: "rpc down" } });
+    const response = await GET(new NextRequest("http://localhost/api/household/aggregates?householdId=h1&start=2026-01-01&end=2026-03-31"));
+    expect(response.status).toBe(500);
   });
 });
