@@ -1,12 +1,19 @@
 import type { GoalBadge } from "@/lib/goals-v2";
 
-const RING_COLOUR: Record<GoalBadge, string> = {
-  completed: "var(--success)",
-  "on-track": "var(--accent)",
-  "at-risk": "var(--warning)",
-  behind: "var(--danger)",
-  "no-pace": "var(--muted)",
-};
+function ringColour(badge: GoalBadge): string {
+  switch (badge) {
+    case "completed":
+      return "var(--success)";
+    case "on-track":
+      return "var(--accent)";
+    case "at-risk":
+      return "var(--warning)";
+    case "behind":
+      return "var(--danger)";
+    case "no-pace":
+      return "var(--muted)";
+  }
+}
 
 export default function GoalProgressRing({
   percent,
@@ -37,7 +44,7 @@ export default function GoalProgressRing({
         cy="60"
         r={radius}
         fill="none"
-        stroke={RING_COLOUR[badge]}
+        stroke={ringColour(badge)}
         strokeDasharray={`${dash} ${circumference - dash}`}
         strokeLinecap="round"
         strokeWidth="10"

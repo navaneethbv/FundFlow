@@ -32,6 +32,13 @@ export default function GoalProjectionChart({
     PAD.top + plotHeight - ((value - minTick) / (maxTick - minTick || 1)) * plotHeight;
   const fundedPoints = points.map((point, index) => ({ x: xFor(index), y: yFor(point.funded) }));
   const targetPoints = points.map((point, index) => ({ x: xFor(index), y: yFor(point.target) }));
+  const firstPoint = points.at(0);
+  const lastPoint = points.at(-1);
+  const finalFundedPoint = fundedPoints.at(-1);
+
+  if (!firstPoint || !lastPoint || !finalFundedPoint) {
+    return null;
+  }
 
   return (
     <div>
@@ -64,14 +71,14 @@ export default function GoalProjectionChart({
         })}
         <path d={linePath(targetPoints)} fill="none" stroke="var(--viz-axis)" strokeDasharray="5 4" strokeWidth={1.5} />
         <path d={linePath(fundedPoints)} fill="none" stroke="var(--viz-1)" strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} />
-        {fundedPoints.at(-1) && (
-          <circle cx={fundedPoints.at(-1)!.x} cy={fundedPoints.at(-1)!.y} r={4} fill="var(--viz-1)" />
+        {finalFundedPoint && (
+          <circle cx={finalFundedPoint.x} cy={finalFundedPoint.y} r={4} fill="var(--viz-1)" />
         )}
         <text x={PAD.left} y={HEIGHT - 7} fontSize={10} fill="var(--viz-muted)">
-          {formatMonth(points[0]!.month)}
+          {formatMonth(firstPoint.month)}
         </text>
         <text x={WIDTH - PAD.right} y={HEIGHT - 7} textAnchor="end" fontSize={10} fill="var(--viz-muted)">
-          {formatMonth(points.at(-1)!.month)}
+          {formatMonth(lastPoint.month)}
         </text>
       </svg>
       <p className="mt-2 text-xs text-muted">
