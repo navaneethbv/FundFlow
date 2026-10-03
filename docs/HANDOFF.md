@@ -3,7 +3,7 @@
 ## 2026-10-03: Checklist group 5, items 1.5, 2.4, 4.3, 8.3, and 8.4
 
 Worktree: `/private/tmp/fundflow-review-lending`, branch `feat/review-lending-calculators`, based on PR #206's verified head `1879d369dc9a6d805a48463328609de7be77bda2`.
-The grouped implementation is delivered as [draft PR #207](https://github.com/navaneethbv/FundFlow/pull/207), stacked on PR #206, and keeps `importUndo`, `explainableMatchSuggestions`, `weeklyReview`, `privateLending`, and `planningCalculators` disabled.
+The grouped implementation is delivered as [draft PR #208](https://github.com/navaneethbv/FundFlow/pull/208), stacked on PR #206, and keeps `importUndo`, `explainableMatchSuggestions`, `weeklyReview`, `privateLending`, and `planningCalculators` disabled.
 
 Guarded import undo records exact newly created transaction IDs and refuses to delete a batch when provenance is missing or later annotations, splits, links, receipts, goal events, recurring matches, rules, or reconciliations depend on it.
 Explainable match suggestions add bounded amount, date, counterparty, and strategy evidence to duplicate, refund, and transfer candidates without changing their decision contracts.
@@ -13,7 +13,7 @@ Planning tools add editable rent-versus-buy, emergency-fund, and compound-intere
 
 The three migrations were parsed and exercised against a disposable local PostgreSQL stand-in, including private-loan creation and payment allocation.
 Focused unit checks passed, along with TypeScript, ESLint, a placeholder-environment production build, and graph refresh.
-Docker is unavailable and this worktree is not linked to Supabase, so full RLS/Auth acceptance and browser journeys requiring signed-in data remain pending. PR #207 hosted checks and exact-head scanner confirmation remain required.
+Docker is unavailable and this worktree is not linked to Supabase, so full RLS/Auth acceptance and browser journeys requiring signed-in data remain pending. PR #208 hosted checks and exact-head scanner confirmation remain required.
 No production migration, deployment, merge, or feature-flag change was performed.
 
 ## 2026-10-02: Checklist 9.7 portfolio look-through

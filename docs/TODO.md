@@ -2,11 +2,11 @@
 
 ## Current checkpoint: Checklist group 5, 2026-10-03
 
-The canonical checklist group, items 1.5, 2.4, 4.3, 8.3, and 8.4, is implemented in the isolated worktree `/private/tmp/fundflow-review-lending` on `feat/review-lending-calculators`, delivered as [draft PR #207](https://github.com/navaneethbv/FundFlow/pull/207) stacked on PR #206.
+The canonical checklist group, items 1.5, 2.4, 4.3, 8.3, and 8.4, is implemented in the isolated worktree `/private/tmp/fundflow-review-lending` on `feat/review-lending-calculators`, delivered as [draft PR #208](https://github.com/navaneethbv/FundFlow/pull/208) stacked on PR #206.
 The implementation is release gated by `importUndo`, `explainableMatchSuggestions`, `weeklyReview`, `privateLending`, and `planningCalculators`, all of which remain off.
 The three additive migrations `20261006090000_import_undo.sql`, `20261006100000_weekly_review.sql`, and `20261006110000_private_lending.sql` were parsed and exercised against a disposable local PostgreSQL stand-in only; none was applied to production.
 The local validation includes focused pure-math and checklist regressions, TypeScript, lint, a placeholder-environment production build, graph refresh, and disposable SQL function execution.
-PR #207 is awaiting exact-head hosted checks and scanner confirmation before any rollout decision.
+PR #208 is awaiting exact-head hosted checks and scanner confirmation before any rollout decision.
 Docker is unavailable and the worktree is not linked to a Supabase project, so full Supabase Auth/RLS acceptance and hosted checks remain pending.
 
 PR #206 was verified at exact head `1879d369dc9a6d805a48463328609de7be77bda2` with all reported GitHub, SonarCloud, Codacy, Vercel, and test checks passing, and Sonar's API reported zero unresolved issues and zero hotspots awaiting review.
