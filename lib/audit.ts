@@ -44,6 +44,7 @@ export type AuditAction =
   | "account_delete_failed"
   | "household_invite_sent"
   | "household_invite_accepted"
+  | "household_report_aggregate_read"
   | "apr_updated"
   | "api_token_created"
   | "api_token_revoked"

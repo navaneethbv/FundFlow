@@ -11,7 +11,10 @@ interface HouseholdRow {
   name: string;
 }
 
-export default function HouseholdSection({ initialHouseholds }: Readonly<{ initialHouseholds: HouseholdRow[] }>) {
+export default function HouseholdSection({
+  initialHouseholds,
+  reportsOnlyEnabled = false,
+}: Readonly<{ initialHouseholds: HouseholdRow[]; reportsOnlyEnabled?: boolean }>) {
   const supabase = createClient();
   const [households, setHouseholds] = useState(initialHouseholds);
   const [name, setName] = useState("");
@@ -70,6 +73,9 @@ export default function HouseholdSection({ initialHouseholds }: Readonly<{ initi
                   setStatus(null);
                   const form = e.currentTarget;
                   const input = form.elements.namedItem("email") as HTMLInputElement;
+                  const role = reportsOnlyEnabled
+                    ? (form.elements.namedItem("role") as HTMLSelectElement).value
+                    : "member";
                   setBusy(true);
                   try {
                     const response = await fetch("/api/household/invite", {
@@ -78,6 +84,7 @@ export default function HouseholdSection({ initialHouseholds }: Readonly<{ initi
                       body: JSON.stringify({
                         householdId: household.id,
                         email: input.value,
+                        role,
                       }),
                     });
                     if (response.ok) {
@@ -107,6 +114,22 @@ export default function HouseholdSection({ initialHouseholds }: Readonly<{ initi
                   placeholder="partner@example.com"
                   className="w-56"
                 />
+                {reportsOnlyEnabled && (
+                  <>
+                    <label htmlFor={`household-invite-role-${household.id}`} className="sr-only">
+                      Access level for {household.name} invite
+                    </label>
+                    <select
+                      id={`household-invite-role-${household.id}`}
+                      name="role"
+                      defaultValue="member"
+                      className="rounded-field border border-border bg-panel px-3 py-2 text-sm text-foreground"
+                    >
+                      <option value="member">Member</option>
+                      <option value="reports_only">Reports only</option>
+                    </select>
+                  </>
+                )}
                 <Button type="submit" size="sm" variant="ghost" disabled={busy}>
                   Invite
                 </Button>

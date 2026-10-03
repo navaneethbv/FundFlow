@@ -1,5 +1,14 @@
 # FundFlow — Future Todos
 
+## Current checkpoint: Checklist 12.2, aggregate-only household role, 2026-10-03
+
+Checklist 12.2 is implemented in `/private/tmp/fundflow-household-aggregate` on `feat/household-aggregate-role`, stacked on the scoped-token prerequisite commit.
+The migration adds the `reports_only` membership and invite role, a bounded `household_report_aggregates` security-definer RPC, and restrictive authenticated policies that deny reports-only direct table rows while preserving the aggregate path.
+The new aggregate route is behind `householdReportsOnly` and defaults off; invite role selection is hidden until the same flag is enabled.
+The migration is unapplied, and no production role, policy, deployment, or flag state changed.
+Focused aggregate, migration, household, export, lint, TypeScript, and diff checks pass.
+The next checklist slice is the final read-only MCP endpoint on top of scoped tokens and aggregate-only access.
+
 ## Current checkpoint: Checklist 12.3 prerequisite, scoped API tokens, 2026-10-03
 
 The scoped-token prerequisite is implemented in `/private/tmp/fundflow-scoped-tokens` on `feat/scoped-api-tokens`, stacked on PR #213's exact verified head.

@@ -331,10 +331,13 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
       break;
     }
     case "household-general": {
-    const { data: households } = await supabase.from("households").select("id, name").order("created_at", { ascending: false });
-    content = (
-      <HouseholdSection initialHouseholds={(households ?? []) as Array<{ id: string; name: string }>} />
-    );
+      const { data: households } = await supabase.from("households").select("id, name").order("created_at", { ascending: false });
+      content = (
+        <HouseholdSection
+          initialHouseholds={(households ?? []) as Array<{ id: string; name: string }>}
+          reportsOnlyEnabled={isFeatureEnabled("householdReportsOnly")}
+        />
+      );
       break;
     }
     case "household-preferences": {
