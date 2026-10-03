@@ -19,6 +19,7 @@ import type {
 import SeedBudgetButton from "@/components/budget/SeedBudgetButton";
 import CopyLastMonthButton from "@/components/budget/CopyLastMonthButton";
 import BudgetTemplateButton from "@/components/budget/BudgetTemplateButton";
+import MoveMoneyButton from "@/components/budget/MoveMoneyButton";
 
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -370,6 +371,13 @@ export default function BudgetPlanner({
               currentLines={monthlyData.sections.flatMap((section) => section.lines)}
             />
             <SeedBudgetButton proposals={proposals} month={month} currency={currency} />
+            {features.moves && (
+              <MoveMoneyButton
+                month={month}
+                currency={currency}
+                lines={monthlyData.sections.filter((section) => section.key !== "income").flatMap((section) => section.lines)}
+              />
+            )}
           </div>
 
           {!hasConfiguredBudget && (
