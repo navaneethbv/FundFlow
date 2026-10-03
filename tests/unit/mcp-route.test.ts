@@ -91,4 +91,94 @@ describe("/api/mcp", () => {
     expect(response.status).toBe(400);
     expect(mockVerify).not.toHaveBeenCalled();
   });
+
+  it("validates resources, dates, ordering, and category length", async () => {
+    enabled = true;
+    for (const query of [
+      "?resource=unknown",
+      "?start=2026-02-30&end=2026-03-01",
+      "?start=2026-03-01&end=2026-02-01",
+      `?start=2026-01-01&end=2026-03-31&category=${"x".repeat(81)}`,
+    ]) {
+      expect((await GET(new NextRequest(`http://localhost/api/mcp${query}`))).status).toBe(400);
+    }
+  });
+
+  it("rejects malformed POST bodies before authentication", async () => {
+    enabled = true;
+    const invalidJson = await POST(new NextRequest("http://localhost/api/mcp", {
+      method: "POST",
+      body: "not-json",
+    }));
+    expect(invalidJson.status).toBe(400);
+    const arrayBody = await POST(new NextRequest("http://localhost/api/mcp", {
+      method: "POST",
+      body: JSON.stringify([]),
+    }));
+    expect(arrayBody.status).toBe(400);
+  });
+
+  it("enforces IP and user rate limits and fails closed on token lookup errors", async () => {
+    enabled = true;
+    mockRateLimit.mockResolvedValueOnce(false);
+    expect((await GET(new NextRequest("http://localhost/api/mcp", { headers: { authorization: "Bearer x" } }))).status).toBe(429);
+
+    mockRateLimit.mockResolvedValue(true);
+    mockRateLimit.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    expect((await GET(new NextRequest("http://localhost/api/mcp", { headers: { authorization: "Bearer x" } }))).status).toBe(429);
+
+    mockRateLimit.mockResolvedValue(true);
+    mockVerify.mockRejectedValueOnce(new Error("token service down"));
+    expect((await GET(new NextRequest("http://localhost/api/mcp", { headers: { authorization: "Bearer x" } }))).status).toBe(503);
+  });
+
+  it("filters export rows and honors the export opt-out", async () => {
+    enabled = true;
+    tokenScopes = ["mcp:export-rows"];
+    mockFetchRows.mockResolvedValue({ allowed: true, rows: [
+      { date: "2026-01-01", merchant: "Food shop", amount: 10, category: "Food" },
+      { date: "2026-01-02", merchant: "Transit", amount: 5, category: "TRANSPORT" },
+    ] });
+    const filtered = await GET(new NextRequest("http://localhost/api/mcp?resource=rows&category=food", { headers: { authorization: "Bearer x" } }));
+    await expect(filtered.json()).resolves.toMatchObject({ rows: [{ merchant: "Food shop" }] });
+
+    mockFetchRows.mockResolvedValue({ allowed: false });
+    const denied = await GET(new NextRequest("http://localhost/api/mcp?resource=rows", { headers: { authorization: "Bearer x" } }));
+    expect(denied.status).toBe(403);
+  });
+
+  it("returns explicit errors for projection and export failures", async () => {
+    enabled = true;
+    mockLoadProjection.mockRejectedValueOnce(new Error("projection down"));
+    expect((await GET(new NextRequest("http://localhost/api/mcp", { headers: { authorization: "Bearer x" } }))).status).toBe(500);
+
+    tokenScopes = ["mcp:export-rows"];
+    mockFetchRows.mockRejectedValueOnce(new Error("export down"));
+    expect((await GET(new NextRequest("http://localhost/api/mcp?resource=rows", { headers: { authorization: "Bearer x" } }))).status).toBe(500);
+  });
+
+  it("includes recurring and snapshot rows in aggregate projections", async () => {
+    enabled = true;
+    serviceClient = clientStub({
+      budgets: { data: [{ category: null, monthly_limit: null }] },
+      recurring_streams: { data: [{ average_amount: null, last_amount: 25, frequency: "monthly", category: "Pay", stream_type: "inflow", is_active: true }] },
+      manual_recurring_items: { data: [{ amount: 7, frequency: "weekly", category: null, item_type: "expense", enabled: true }] },
+      net_worth_snapshots: { data: [{ snapshot_month: "2026-01-01", assets: "100", liabilities: "25" }] },
+    });
+    const response = await GET(new NextRequest("http://localhost/api/mcp?start=2026-01-01&end=2026-03-31", { headers: { authorization: "Bearer x" } }));
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      budgets: [{ category: "UNCATEGORIZED", monthlyLimit: 0 }],
+      recurring: expect.arrayContaining([
+        expect.objectContaining({ category: "Pay", kind: "income" }),
+        expect.objectContaining({ category: "UNCATEGORIZED", kind: "expense" }),
+      ]),
+    });
+  });
+
+  it("returns 500 when an aggregate dependency query fails", async () => {
+    enabled = true;
+    serviceClient = clientStub({ budgets: { data: [], error: { message: "budgets down" } } });
+    expect((await GET(new NextRequest("http://localhost/api/mcp", { headers: { authorization: "Bearer x" } }))).status).toBe(500);
+  });
 });
