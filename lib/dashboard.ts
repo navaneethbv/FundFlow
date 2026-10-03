@@ -953,6 +953,31 @@ function budgetAllowanceGuidance(input: {
   return { budgetAllowance: computeBudgetAllowance({ today: input.today, limits: input.envelopes.map(row => row.effectiveLimit), spent: input.spent, nextPayday: input.nextPayday ?? null }) };
 }
 
+type PrivateLendingBalanceSheetAccount = {
+  name: string;
+  type: "other" | "liability";
+  balance: number;
+};
+
+async function loadPrivateLendingBalanceSheet(
+  supabase: SupabaseClient,
+  userId: string | undefined,
+  options: DashboardOptions | undefined,
+  applyUserScope: boolean,
+  today: string,
+): Promise<{ summary: PrivateLendingSummary; accounts: PrivateLendingBalanceSheetAccount[] } | null> {
+  if (!isFeatureEnabled("privateLending") || options?.includeBalanceSheet === false || !applyUserScope || !userId) return null;
+  const data = await loadPrivateLendingData(supabase, userId, today);
+  const accounts: PrivateLendingBalanceSheetAccount[] = [];
+  if (data.summary.receivable > 0) {
+    accounts.push({ name: "Private lending receivable", type: "other", balance: data.summary.receivable });
+  }
+  if (data.summary.payable > 0) {
+    accounts.push({ name: "Private lending payable", type: "liability", balance: data.summary.payable });
+  }
+  return { summary: data.summary, accounts };
+}
+
 export async function getDashboardData(
   supabase: SupabaseClient,
   selectedAccountId?: string,
@@ -1165,26 +1190,8 @@ export async function getDashboardData(
           netWorthPrefsResult,
         )
       : [];
-  const privateLendingData =
-    isFeatureEnabled("privateLending") && options?.includeBalanceSheet !== false && applyUserScope && userId
-      ? await loadPrivateLendingData(supabase, userId, today)
-      : null;
-  if (privateLendingData) {
-    if (privateLendingData.summary.receivable > 0) {
-      netWorthAccounts.push({
-        name: "Private lending receivable",
-        type: "other",
-        balance: privateLendingData.summary.receivable,
-      });
-    }
-    if (privateLendingData.summary.payable > 0) {
-      netWorthAccounts.push({
-        name: "Private lending payable",
-        type: "liability",
-        balance: privateLendingData.summary.payable,
-      });
-    }
-  }
+  const privateLendingData = await loadPrivateLendingBalanceSheet(supabase, userId, options, applyUserScope, today);
+  netWorthAccounts.push(...(privateLendingData?.accounts ?? []));
   const lastSyncAt = (lastSyncJob?.updated_at as string | undefined) ?? null;
   const allItems = (items ?? []) as Array<{ id: string; institution_name: string | null }>;
   const allBudgets = (budgets ?? []) as Array<{

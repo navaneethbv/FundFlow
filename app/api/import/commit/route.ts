@@ -467,18 +467,21 @@ async function loadExistingImportIds(
   userId: string,
 ): Promise<Set<string>> {
   const existing = new Set<string>();
-  for (const importIdChunk of chunks(dbRows.map((row) => row.plaid_transaction_id))) {
-    if (importIdChunk.length === 0) continue;
+  const importIdChunks = chunks(dbRows.map((row) => row.plaid_transaction_id)).filter((chunk) => chunk.length > 0);
+  const results = await Promise.all(importIdChunks.map(async (importIdChunk) => {
     const table = service.from("transactions");
-    if (typeof (table as unknown as { select?: unknown }).select !== "function") return existing;
+    if (typeof (table as unknown as { select?: unknown }).select !== "function") return [] as string[];
     const { data, error } = await table
       .select("plaid_transaction_id")
       .eq("user_id", userId)
       .in("plaid_transaction_id", importIdChunk);
     if (error) throw error;
-    for (const row of data ?? []) {
-      if (typeof row.plaid_transaction_id === "string") existing.add(row.plaid_transaction_id);
-    }
+    return (data ?? [])
+      .map((row) => row.plaid_transaction_id)
+      .filter((value): value is string => typeof value === "string");
+  }));
+  for (const values of results) {
+    for (const value of values) existing.add(value);
   }
   return existing;
 }
@@ -492,17 +495,17 @@ async function trackImportCommitTransactions(
 ): Promise<void> {
   const newRows = dbRows.filter((row) => !preexistingImportIds.has(row.plaid_transaction_id));
   if (newRows.length === 0) return;
-  const committedRows: Array<{ id: string; plaid_transaction_id: string }> = [];
-  for (const chunk of chunks(newRows.map((row) => row.plaid_transaction_id))) {
+  const committedRowsResults = await Promise.all(chunks(newRows.map((row) => row.plaid_transaction_id)).map(async (chunk) => {
     const table = service.from("transactions");
-    if (typeof (table as unknown as { select?: unknown }).select !== "function") return;
+    if (typeof (table as unknown as { select?: unknown }).select !== "function") return [] as Array<{ id: string; plaid_transaction_id: string }>;
     const { data: rows, error: transactionError } = await table
       .select("id,plaid_transaction_id")
       .eq("user_id", userId)
       .in("plaid_transaction_id", chunk);
     if (transactionError) throw transactionError;
-    committedRows.push(...((rows ?? []) as Array<{ id: string; plaid_transaction_id: string }>));
-  }
+    return (rows ?? []) as Array<{ id: string; plaid_transaction_id: string }>;
+  }));
+  const committedRows = committedRowsResults.flat();
   const transactionIdByImportId = new Map(
     committedRows.map((row) => [row.plaid_transaction_id, row.id]),
   );

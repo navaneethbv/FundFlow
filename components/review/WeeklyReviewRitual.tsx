@@ -92,7 +92,7 @@ export default function WeeklyReviewRitual({
                   <Link href={step.href} className="rounded-field border border-panel-border px-3 py-2 text-sm font-semibold text-accent hover:bg-accent-soft focus-visible:outline-2">Open</Link>
                   <label className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold">
                     <input type="checkbox" checked={isChecked} onChange={() => { toggle(step.id); }} className="h-4 w-4 accent-accent" />
-                    Done
+                    <span>Done</span>
                   </label>
                 </div>
               </div>

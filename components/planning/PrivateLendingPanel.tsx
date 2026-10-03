@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type ComponentProps } from "react";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import Panel from "@/components/ui/Panel";
 import { formatCurrency } from "@/lib/format";
-import type { PrivateLoanView } from "@/lib/private-lending";
-import type { PrivateLendingSummary } from "@/lib/private-lending";
+import type { PrivateLendingSummary, PrivateLoanView } from "@/lib/private-lending";
+
+type FormSubmitEvent = Parameters<NonNullable<ComponentProps<"form">["onSubmit"]>>[0];
 
 export default function PrivateLendingPanel({
   loans,
@@ -47,12 +48,12 @@ export default function PrivateLendingPanel({
     }
   }
 
-  function createLoan(event: FormEvent<HTMLFormElement>): void {
+  function createLoan(event: FormSubmitEvent): void {
     event.preventDefault();
     void submit({ kind: "loan", direction, counterparty, principal, annualInterestRate: rate, startDate, dueDate: dueDate || null, notes: notes || null });
   }
 
-  function recordPayment(event: FormEvent<HTMLFormElement>, loanId: string): void {
+  function recordPayment(event: FormSubmitEvent, loanId: string): void {
     event.preventDefault();
     void submit({ kind: "payment", loan_id: loanId, amount: paymentAmount, payment_date: paymentDate, note: paymentNote || null });
   }
@@ -77,8 +78,11 @@ export default function PrivateLendingPanel({
         </form>
       </Panel>
       {loans.length === 0 && <Panel><p className="text-sm text-muted">No private loans recorded yet.</p></Panel>}
-      {loans.map((loan) => (
-        <Panel key={loan.id} title={`${loan.direction === "lent" ? "Lent to" : "Borrowed from"} ${loan.counterparty}`} eyebrow={`${loan.startDate}${loan.dueDate ? ` · due ${loan.dueDate}` : ""}`}>
+      {loans.map((loan) => {
+        const title = `${loan.direction === "lent" ? "Lent to" : "Borrowed from"} ${loan.counterparty}`;
+        const eyebrow = loan.dueDate ? `${loan.startDate} · due ${loan.dueDate}` : loan.startDate;
+        return (
+        <Panel key={loan.id} title={title} eyebrow={eyebrow}>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div><p data-money className="metric-value text-2xl font-bold">{formatCurrency(loan.balance.totalOutstanding)}</p><p className="text-xs text-muted">{loan.annualInterestRate.toFixed(2)}% annual interest · {formatCurrency(loan.balance.principalOutstanding)} principal + {formatCurrency(loan.balance.accruedInterest)} accrued</p></div>
             <Button type="button" size="sm" variant="secondary" onClick={() => { setPaymentLoanId(paymentLoanId === loan.id ? null : loan.id); }}>{paymentLoanId === loan.id ? "Close payment" : "Record payment"}</Button>
@@ -93,7 +97,8 @@ export default function PrivateLendingPanel({
           )}
           {loan.payments.length > 0 && <details className="mt-4 border-t border-panel-border pt-3 text-sm"><summary className="cursor-pointer font-semibold text-muted">{loan.payments.length} payment{loan.payments.length === 1 ? "" : "s"}</summary><ul className="mt-2 space-y-1">{loan.payments.map((payment) => <li key={payment.id} className="flex justify-between gap-3"><span>{payment.paymentDate}{payment.note ? ` · ${payment.note}` : ""}</span><span data-money className="font-semibold">{formatCurrency(payment.amount)}</span></li>)}</ul></details>}
         </Panel>
-      ))}
+        );
+      })}
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
     </div>
   );

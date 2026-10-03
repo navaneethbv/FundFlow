@@ -30,7 +30,13 @@ export async function POST(request: NextRequest) {
       metadata: { week_start: mondayOf(today) },
       ip: getClientIp(request),
     });
-    return NextResponse.json({ ok: true, ...(data ?? {}) });
+    const result = data as { weekStart?: string; streak?: number; alreadyComplete?: boolean } | null;
+    return NextResponse.json({
+      ok: true,
+      weekStart: result?.weekStart ?? mondayOf(today),
+      streak: result?.streak ?? 0,
+      alreadyComplete: result?.alreadyComplete ?? false,
+    });
   } catch (error) {
     return errorResponse("review.weekly.complete", error);
   }
