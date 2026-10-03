@@ -85,6 +85,8 @@ describe("import undo tracking", () => {
 describe("weekly review data loader", () => {
   it("builds the five checks from owner-scoped dashboard and review data", async () => {
     state.flags.add("transactionReview");
+    const freshSync = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const staleSync = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
     state.dashboard.mockResolvedValue({
       budgetEnvelopes: [{ monthlyLimit: 100, projectedSpend: 120 }, { monthlyLimit: 0, projectedSpend: 999 }],
       billPeriods: { weekly: [{ items: [{ itemType: "expense", nextDate: "2026-10-08" }, { itemType: "income", nextDate: "2026-10-08" }] }] },
@@ -92,9 +94,9 @@ describe("weekly review data loader", () => {
     });
     const client = clientStub({
       plaid_items: { data: [
-        { status: "active", last_sync_success_at: "2026-10-07T12:00:00Z" },
-        { status: "active", last_sync_success_at: "2026-09-01T12:00:00Z" },
-        { status: "inactive", last_sync_success_at: "2026-10-07T12:00:00Z" },
+        { status: "active", last_sync_success_at: freshSync },
+        { status: "active", last_sync_success_at: staleSync },
+        { status: "inactive", last_sync_success_at: freshSync },
         { status: "active", last_sync_success_at: null },
       ] },
       transaction_review_ledger: { count: 2, data: null },
@@ -112,9 +114,10 @@ describe("weekly review data loader", () => {
   });
 
   it("treats disabled review and empty checks as complete", async () => {
+    const freshSync = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     state.dashboard.mockResolvedValue({ budgetEnvelopes: [], billPeriods: { weekly: [] }, spendingAnomalies: [] });
     const client = clientStub({
-      plaid_items: { data: [{ status: "active", last_sync_success_at: "2026-10-07T12:00:00Z" }] },
+      plaid_items: { data: [{ status: "active", last_sync_success_at: freshSync }] },
       notifications: { count: 0, data: null },
       weekly_review_streaks: { data: { last_completed_week: "2026-10-05", current_streak: 3 } },
     });
