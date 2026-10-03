@@ -27,14 +27,6 @@ interface Draft {
 
 const FUND_TYPES = new Set(["etf", "mutual fund"]);
 const BAR_COLORS = ["var(--viz-1)", "var(--viz-2)", "var(--viz-3)", "var(--viz-4)", "var(--viz-5)", "var(--viz-6)"];
-const MAP_SLOTS = [
-  { column: "1 / span 1", row: "1 / span 1" },
-  { column: "2 / span 1", row: "2 / span 1" },
-  { column: "3 / span 1", row: "1 / span 1" },
-  { column: "4 / span 1", row: "1 / span 1" },
-  { column: "5 / span 1", row: "2 / span 1" },
-  { column: "3 / span 1", row: "3 / span 1" },
-];
 
 function configurable(holding: LookthroughHolding): boolean {
   return !holding.ticker || !holding.securityType || FUND_TYPES.has(holding.securityType.toLowerCase());
@@ -87,11 +79,7 @@ function RegionView({ rows, currency }: Readonly<{ rows: ReturnType<typeof build
     <div className="space-y-3">
       <p className="text-xs font-medium text-muted">World map (schematic)</p>
       <div role="img" aria-label="Schematic world map of regional exposure" className="grid min-h-36 grid-cols-5 grid-rows-3 gap-1 rounded-field border border-panel-border bg-panel-2 p-2">
-        {rows.slice(0, MAP_SLOTS.length).map((row, index) => {
-          const slot = MAP_SLOTS[index];
-          if (!slot) return null;
-          return <div key={`map-${row.key}`} className="min-w-0 rounded-field border border-panel-border bg-panel px-1 py-2 text-center text-[10px]" style={{ gridColumn: slot.column, gridRow: slot.row, borderTopColor: BAR_COLORS[index % BAR_COLORS.length] }}><span className="block truncate">{row.name}</span><span className="block tabular-nums text-muted">{row.weightPct.toFixed(1)}%</span></div>;
-        })}
+        {rows.slice(0, 6).map((row, index) => <div key={`map-${row.key}`} className="min-w-0 rounded-field border border-panel-border bg-panel px-1 py-2 text-center text-[10px]" style={{ borderTopColor: BAR_COLORS[index % BAR_COLORS.length] }}><span className="block truncate">{row.name}</span><span className="block tabular-nums text-muted">{row.weightPct.toFixed(1)}%</span></div>)}
       </div>
       <div aria-label="Regional exposure bars" className="space-y-2">
         {rows.map((row, index) => (
@@ -114,7 +102,7 @@ function RegionView({ rows, currency }: Readonly<{ rows: ReturnType<typeof build
 
 export default function PortfolioLookthrough({ holdings, initialRecords }: Readonly<PortfolioLookthroughProps>) {
   const [records, setRecords] = useState(initialRecords);
-  const [drafts, setDrafts] = useState<Record<string, Draft>>(() => Object.fromEntries(
+  const [drafts, setDrafts] = useState<Map<string, Draft>>(() => new Map(
     holdings.filter(configurable).map((holding) => [holding.id, draftFor(records.find((record) => record.holdingId === holding.id))]),
   ));
   const summary = useMemo(() => buildLookthroughSummary(holdings, records), [holdings, records]);
@@ -123,19 +111,25 @@ export default function PortfolioLookthrough({ holdings, initialRecords }: Reado
 
   function updateDraft(holdingId: string, update: Partial<Draft>) {
     setDrafts((current) => {
-      const existing = current[holdingId];
+      const existing = current.get(holdingId) ?? draftFor(undefined);
       const nextDraft: Draft = {
         asOfDate: update.asOfDate === undefined ? existing.asOfDate : update.asOfDate,
         weights: update.weights === undefined ? existing.weights : update.weights,
         message: update.message === undefined ? existing.message : update.message,
         saving: update.saving === undefined ? existing.saving : update.saving,
       };
-      return Object.fromEntries(Object.entries(current).map(([key, draft]) => [key, key === holdingId ? nextDraft : draft]));
+      const next = new Map(current);
+      next.set(holdingId, nextDraft);
+      return next;
     });
   }
 
+  function getDraft(holdingId: string, record?: LookthroughRecord): Draft {
+    return drafts.get(holdingId) ?? draftFor(record);
+  }
+
   async function save(holding: LookthroughHolding) {
-    const draft = drafts[holding.id];
+    const draft = getDraft(holding.id, recordByHolding.get(holding.id));
     updateDraft(holding.id, { message: null, saving: true });
     let parsedJson: unknown;
     try {
@@ -227,7 +221,7 @@ export default function PortfolioLookthrough({ holdings, initialRecords }: Reado
         <div className="mt-6 space-y-4 border-t border-panel-border pt-5">
           <h3 className="text-sm font-semibold">Constituent weights</h3>
           {editableHoldings.map((holding) => {
-            const draft = drafts[holding.id];
+            const draft = getDraft(holding.id, recordByHolding.get(holding.id));
             return (
               <form key={holding.id} className="rounded-field border border-panel-border bg-panel-2 p-4" onSubmit={(event) => { event.preventDefault(); void save(holding); }}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
