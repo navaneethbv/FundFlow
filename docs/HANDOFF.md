@@ -1,5 +1,19 @@
 # FundFlow Session Handoff
 
+## 2026-10-03: Post-merge review fixes and recurring cleanup
+
+A signed-in walk of every live page after the #205 to #217 merge found no broken page, but several wrong numbers; branch `fix/net-worth-change-and-price-alerts` fixes them, each with a regression that fails without it.
+- Accounts "1 month change" differenced the summed balance series, so an account whose history began mid-window counted its whole balance as a gain (+$39,463.64 shown against a real change near +$11.5k); it now sums each account's own change.
+- Cash Flow, Reports (Sankey and breakdowns), and the cumulative-spend chart summed `abs(signedAmount)` for expense rows, so refunds added to spending; they now net like `financeTotals`, closing a $272.22 September gap against the dashboard.
+- Subscription price-spike alerts skip inflow streams and UNKNOWN-cadence streams (card payments).
+- The next paycheck falls back to wage deposits (`INCOME_WAGES`, three regular deposits, latest within two periods) and prefers wages over interest; Safe-to-Spend now holds back unpaid past-due recurring bills.
+- Cross-account duplicate suggestions require matching account masks when both are known.
+- Recurring Manage lists active streams only and folds dismissed or ended copies into one de-duplicated disclosure; every active stream can be dismissed.
+
+Production data change, made through `PATCH /api/recurring` as the owner and reversible with Restore: WSDOT and Evergreen Pediatrics dismissed, YouTube Premium on the Platinum card restored.
+Lily Massage is still awaiting the owner's review.
+Unverified until deployed: the corrected figures in the browser.
+
 ## 2026-10-03: Stack #205 to #217 merged and deployed
 
 PRs #205, #206, and #208 through #217 were reviewed one by one, fixed where needed, and merged to `main` in stack order; `main` is `a28fd822`.
