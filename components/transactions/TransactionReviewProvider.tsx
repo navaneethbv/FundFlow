@@ -96,7 +96,7 @@ export function TransactionReviewProvider({ children }: Readonly<{ children: Rea
 
   const refreshReview = useCallback(() => {
     setAwaitingRevision(revision);
-    startTransition(() => router.refresh());
+    startTransition(() => { router.refresh(); });
   }, [revision, router]);
 
   const toggleSelect = useCallback((id: string) => {

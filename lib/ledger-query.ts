@@ -20,6 +20,7 @@ export type LedgerReviewFilter = "all" | "needs_review" | "reviewed";
 
 export interface LedgerRawSearchParams {
   month?: string | string[];
+  day?: string | string[];
   year?: string | string[];
   accountId?: string | string[];
   q?: string | string[];
@@ -34,11 +35,13 @@ export interface LedgerRawSearchParams {
   col?: string | string[];
   colsSubmitted?: string | string[];
   review?: string | string[];
+  view?: string | string[];
 }
 
 export interface LedgerFilters {
   q: string;
   month: string;
+  day?: string;
   year?: string;
   accountId: string;
   category: string;
@@ -50,6 +53,7 @@ export interface LedgerFilters {
 }
 
 export interface LedgerQueryState extends LedgerFilters {
+  view: "list" | "calendar";
   sort: LedgerSortField;
   direction: LedgerSortDirection;
   page: number;
@@ -68,9 +72,11 @@ const UUID_RE =
 const CATEGORY_RE = /^[A-Z][A-Z0-9_]*$/;
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const YEAR_RE = /^\d{4}$/;
+const DAY_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const FILTER_KEYS = [
   "q",
   "month",
+  "day",
   "year",
   "accountId",
   "category",
@@ -88,50 +94,39 @@ export function sanitizeLedgerSearch(value: string): string {
     .trim();
 }
 
+function matching(pattern: RegExp, value: string): string {
+  return pattern.test(value) ? value : "";
+}
+
+function oneOf<T extends string>(value: string, allowed: readonly T[], fallback: T): T {
+  return (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
+}
+
 export function parseLedgerQuery(
   raw: LedgerRawSearchParams,
 ): LedgerQueryState {
-  const sortValue = firstSearchParamOrEmpty(raw.sort);
-  const directionValue = firstSearchParamOrEmpty(raw.direction);
-  const monthValue = firstSearchParamOrEmpty(raw.month);
-  const yearValue = firstSearchParamOrEmpty(raw.year);
-  const accountValue = firstSearchParamOrEmpty(raw.accountId);
-  const categoryValue = firstSearchParamOrEmpty(raw.category);
-  const subValue = firstSearchParamOrEmpty(raw.sub);
-  const flowValue = firstSearchParamOrEmpty(raw.flow);
-  const accountTypeValue = firstSearchParamOrEmpty(raw.accountType);
-  const reviewValue = firstSearchParamOrEmpty(raw.review);
-
+  const param = (value: string | string[] | undefined) => firstSearchParamOrEmpty(value);
   return {
-    q: sanitizeLedgerSearch(firstSearchParamOrEmpty(raw.q)),
-    month: MONTH_RE.test(monthValue) ? monthValue : "",
-    year: YEAR_RE.test(yearValue) ? yearValue : "",
-    accountId: UUID_RE.test(accountValue) ? accountValue : "",
-    category: CATEGORY_RE.test(categoryValue) ? categoryValue : "",
-    sub: CATEGORY_RE.test(subValue) ? subValue : "",
-    merchant: sanitizeLedgerSearch(firstSearchParamOrEmpty(raw.merchant)),
-    flow: flowValue === "in" || flowValue === "out" ? flowValue : "",
-    accountType:
-      accountTypeValue === "depository" || accountTypeValue === "credit"
-        ? accountTypeValue
-        : "",
-    review:
-      reviewValue === "needs_review" || reviewValue === "reviewed"
-        ? reviewValue
-        : "all",
-    sort: LEDGER_SORT_FIELDS.includes(sortValue as LedgerSortField)
-      ? (sortValue as LedgerSortField)
-      : "date",
-    direction:
-      directionValue === "asc" || directionValue === "desc"
-        ? directionValue
-        : "desc",
-    page: Math.max(1, Number.parseInt(firstSearchParamOrEmpty(raw.page), 10) || 1),
+    q: sanitizeLedgerSearch(param(raw.q)),
+    month: matching(MONTH_RE, param(raw.month)),
+    day: matching(DAY_RE, param(raw.day)),
+    year: matching(YEAR_RE, param(raw.year)),
+    accountId: matching(UUID_RE, param(raw.accountId)),
+    category: matching(CATEGORY_RE, param(raw.category)),
+    sub: matching(CATEGORY_RE, param(raw.sub)),
+    merchant: sanitizeLedgerSearch(param(raw.merchant)),
+    flow: oneOf(param(raw.flow), ["in", "out"] as const, ""),
+    accountType: oneOf(param(raw.accountType), ["depository", "credit"] as const, ""),
+    review: oneOf(param(raw.review), ["needs_review", "reviewed"] as const, "all"),
+    view: oneOf(param(raw.view), ["calendar"] as const, "list"),
+    sort: oneOf(param(raw.sort), LEDGER_SORT_FIELDS, "date"),
+    direction: oneOf(param(raw.direction), ["asc", "desc"] as const, "desc"),
+    page: Math.max(1, Number.parseInt(param(raw.page), 10) || 1),
     columns: parseLedgerColumns({
       col: raw.col,
       colsSubmitted: raw.colsSubmitted,
     }),
-    columnsSubmitted: Boolean(firstSearchParamOrEmpty(raw.colsSubmitted)),
+    columnsSubmitted: Boolean(param(raw.colsSubmitted)),
   };
 }
 
@@ -150,14 +145,18 @@ export function ledgerQueryEntries(
     entries.push(["direction", state.direction]);
   }
   if (state.page > 1) entries.push(["page", String(state.page)]);
-  if (state.columnsSubmitted) {
-    entries.push(["colsSubmitted", "1"]);
-    for (const column of LEDGER_COLUMNS) {
-      if (state.columns.has(column)) entries.push(["col", column]);
-    }
-  }
+  entries.push(...ledgerColumnEntries(state));
+  if (state.view === "calendar") entries.push(["view", "calendar"]);
 
   return entries;
+}
+
+function ledgerColumnEntries(state: LedgerQueryState): LedgerQueryEntry[] {
+  if (!state.columnsSubmitted) return [];
+  return [
+    ["colsSubmitted", "1"],
+    ...LEDGER_COLUMNS.filter((column) => state.columns.has(column)).map((column): LedgerQueryEntry => ["col", column]),
+  ];
 }
 
 export function ledgerHref(

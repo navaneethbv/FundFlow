@@ -37,7 +37,7 @@ describe("settings UI restyle", () => {
     // of the page uses tables that already existed and must stay reachable.
     const page = readFileSync("app/settings/page.tsx", "utf8");
     expect(page).toContain("settingsIa");
-    expect(page).toContain("migrationDependentSections");
+    expect(page).toContain("MIGRATION_DEPENDENT_SECTIONS");
   });
 
   it("uses an output element for institution health announcements", () => {

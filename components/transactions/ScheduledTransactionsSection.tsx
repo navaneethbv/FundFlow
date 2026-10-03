@@ -181,21 +181,31 @@ export default function ScheduledTransactionsSection({
       setOpen(false);
       await reload();
       router.refresh();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not save the scheduled transaction.");
     } finally {
       setSubmitting(false);
     }
   }
 
   async function cancel(id: string) {
+    setError(null);
     setSubmitting(true);
     try {
-      await fetch("/api/scheduled-transactions", {
+      const response = await fetch("/api/scheduled-transactions", {
         method: "DELETE",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ id }),
       });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        setError(payload.error ?? "Could not cancel the scheduled transaction.");
+        return;
+      }
       await reload();
       router.refresh();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not cancel the scheduled transaction.");
     } finally {
       setSubmitting(false);
     }
@@ -216,6 +226,8 @@ export default function ScheduledTransactionsSection({
           </span>
         )}
       </div>
+
+      {error && !open && <p role="alert" className="mt-2 text-sm text-danger">{error}</p>}
 
       {sorted.length > 0 && (
         <ul className="mt-2 divide-y divide-panel-border rounded-field border border-panel-border">

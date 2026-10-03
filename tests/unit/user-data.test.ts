@@ -296,12 +296,13 @@ describe("collectReceiptAssets", () => {
   it("counts user record rows excluding preferences sections", () => {
     const count = countUserRecordRows({
       accounts: [{ id: "1" }, { id: "2" }],
-      account_preferences: [{ id: "p1" }],
+        account_preferences: [{ id: "p1" }],
+        membership_terms: [{ card_value_terms: [] }],
       ai_settings: [{ enabled: true }],
       alert_preferences: [{ id: "a1" }],
       budgets: [{ id: "b1" }],
     });
-    // accounts (2) + budgets (1) = 3; account_preferences, ai_settings, alert_preferences excluded
+    // accounts (2) + budgets (1) = 3; preference sections are excluded
     expect(count).toBe(3);
   });
 });

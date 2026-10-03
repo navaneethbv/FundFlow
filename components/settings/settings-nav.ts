@@ -12,6 +12,7 @@ export type SettingsSection =
   | "notifications"
   | "security"
   | "integrations"
+  | "membership"
   | "household-general"
   | "household-preferences"
   | "institutions"
@@ -33,6 +34,7 @@ export const SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
   { key: "notifications", label: "Notifications", hint: "Alerts and delivery" },
   { key: "security", label: "Security", hint: "MFA, sessions, audit log" },
   { key: "integrations", label: "Integrations", hint: "Calendar, API tokens, AI consent" },
+  { key: "membership", label: "Membership value", hint: "Fees, rewards, credits, perks" },
   { key: "household-general", label: "Household", hint: "Members and sharing" },
   { key: "household-preferences", label: "Settle up", hint: "Shared expense settlement" },
   { key: "institutions", label: "Institutions", hint: "Banks and manual accounts" },
@@ -44,6 +46,16 @@ export const SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
 ];
 
 const DEFAULT_SECTION: SettingsSection = "profile";
+
+/** Sections that read profile columns or user_tags added with the settings IA. */
+export const MIGRATION_DEPENDENT_SECTIONS: readonly SettingsSection[] = ["profile", "display", "tags"];
+
+/** Navigation entries to hide for the flags that are still off. */
+export function hiddenSettingsSections(flags: { settingsIa: boolean; membershipTerms: boolean }): SettingsSection[] {
+  const hidden: SettingsSection[] = flags.settingsIa ? [] : [...MIGRATION_DEPENDENT_SECTIONS];
+  if (!flags.settingsIa || !flags.membershipTerms) hidden.push("membership");
+  return hidden;
+}
 
 export function sectionFromParam(raw: string | string[] | undefined): SettingsSection {
   const value = Array.isArray(raw) ? raw[0] : raw;

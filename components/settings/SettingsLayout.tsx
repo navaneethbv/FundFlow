@@ -16,6 +16,7 @@ const ACCOUNT_SECTIONS = new Set<SettingsSection>([
   "notifications",
   "security",
   "integrations",
+  "membership",
 ]);
 
 function SectionGroup({

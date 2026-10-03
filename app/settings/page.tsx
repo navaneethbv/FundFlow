@@ -34,6 +34,8 @@ import AskAiSection from "@/components/settings/AskAiSection";
 import ReceiptScanSection from "@/components/settings/ReceiptScanSection";
 import SettleUpSection from "@/components/settings/SettleUpSection";
 import CancelledSubscriptionsSection from "@/components/settings/CancelledSubscriptionsSection";
+import MembershipCardValueSection from "@/components/settings/MembershipCardValueSection";
+import PlaidCategoryMappingSection from "@/components/settings/PlaidCategoryMappingSection";
 import DashboardPrefsSection from "@/components/settings/DashboardPrefsSection";
 import DemoDataSection from "@/components/settings/DemoDataSection";
 import RestoreSection from "@/components/settings/RestoreSection";
@@ -42,13 +44,16 @@ import { currentSessionId } from "@/lib/http";
 import { suggestBudgets } from "@/lib/insights";
 import ButtonLink from "@/components/ui/ButtonLink";
 import Panel from "@/components/ui/Panel";
-import { sectionFromParam, parseDisplayPrefs, type SettingsSection } from "@/components/settings/settings-nav";
+import { hiddenSettingsSections, MIGRATION_DEPENDENT_SECTIONS, sectionFromParam, parseDisplayPrefs, type SettingsSection } from "@/components/settings/settings-nav";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { firstSearchParam } from "@/lib/search-params";
 import {
   loadInstitutionObservability,
   SYNC_HEALTH_ITEM_COLUMNS,
 } from "@/lib/sync-health";
+import { loadCanonicalProjection } from "@/lib/finance-query";
+import { anniversaryWindow, calculateCardValue, validateCardValueTerms, type CardValueTerms, type CardValueSpendRow } from "@/lib/card-value";
+import { resolveViewerToday } from "@/lib/report-period";
 
 export const dynamic = "force-dynamic";
 
@@ -166,18 +171,37 @@ export const metadata = {
   title: "Settings",
 };
 
+/** Sections behind an unready flag fall back to institutions. */
+function resolveActiveSection(param: string | undefined): SettingsSection {
+  const active = sectionFromParam(param);
+  if (!isFeatureEnabled("settingsIa") && MIGRATION_DEPENDENT_SECTIONS.includes(active)) return "institutions";
+  if (!isFeatureEnabled("membershipTermsEntry") && active === "membership") return "institutions";
+  return active;
+}
+
+async function renderDisplaySection(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("display_prefs, dashboard_prefs")
+    .eq("id", userId)
+    .maybeSingle();
+  return (
+    <>
+      <DisplaySection initialPrefs={parseDisplayPrefs(profile?.display_prefs)} />
+      <DashboardPrefsSection
+        initialPrefs={
+          ((profile as { dashboard_prefs?: Record<string, boolean> } | null)?.dashboard_prefs ??
+            {}) as Record<string, boolean>
+        }
+      />
+    </>
+  );
+}
+
 export default async function SettingsPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
-  // Gated: Profile/Display/Tags are the only sections that read the new
-  // profile columns or user_tags — everything else uses tables that already
-  // existed, so this only needs to redirect three sections, not the page.
-  const settingsIaReady = isFeatureEnabled("settingsIa");
   const backupRestoreReady = isFeatureEnabled("backupRestore");
-  const migrationDependentSections: SettingsSection[] = ["profile", "display", "tags"];
-  let active = sectionFromParam(firstSearchParam(params.section));
-  if (!settingsIaReady && migrationDependentSections.includes(active)) {
-    active = "institutions";
-  }
+  const active = resolveActiveSection(firstSearchParam(params.section));
 
   const supabase = await createClient();
   const {
@@ -193,22 +217,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
       break;
     }
     case "display": {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("display_prefs, dashboard_prefs")
-      .eq("id", userId)
-      .maybeSingle();
-    content = (
-      <>
-        <DisplaySection initialPrefs={parseDisplayPrefs(profile?.display_prefs)} />
-        <DashboardPrefsSection
-          initialPrefs={
-            ((profile as { dashboard_prefs?: Record<string, boolean> } | null)?.dashboard_prefs ??
-              {}) as Record<string, boolean>
-          }
-        />
-      </>
-    );
+      content = await renderDisplaySection(supabase, userId);
       break;
     }
     case "notifications": {
@@ -299,6 +308,21 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
     );
       break;
     }
+    case "membership": {
+      const { data: profile } = await supabase.from("profiles").select("card_value_terms").eq("id", userId).maybeSingle();
+      const parsedTerms = validateCardValueTerms(profile?.card_value_terms ?? []);
+      const terms = parsedTerms.ok ? parsedTerms.value : [];
+      let result = null;
+      if (isFeatureEnabled("membershipCardValueCalculation") && isFeatureEnabled("membershipCardValueModel") && terms[0]) {
+        const asOf = await resolveViewerToday(supabase, userId);
+        const window = anniversaryWindow(terms[0].anniversaryDate, asOf);
+        const projection = await loadCanonicalProjection(supabase, { scope: { kind: "mine", ownerUserId: userId }, window: { start: window.start, endExclusive: asOf } });
+        const spend: CardValueSpendRow[] = projection.transactions.map((row) => ({ date: row.date, amount: row.signedAmount, category: row.categoryKey, flow: row.flow, isRefund: row.signedAmount < 0 }));
+        result = calculateCardValue({ terms: terms[0], spend, asOf });
+      }
+      content = <MembershipCardValueSection initialTerms={terms as CardValueTerms[]} result={result} />;
+      break;
+    }
     case "household-general": {
     const { data: households } = await supabase.from("households").select("id, name").order("created_at", { ascending: false });
     content = (
@@ -378,6 +402,9 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
           .order("due_date"),
       ]);
     const { data: households } = await supabase.from("households").select("id").order("created_at", { ascending: false }).limit(1);
+    const { data: plaidMappings } = isFeatureEnabled("plaidCategoryMappings")
+      ? await supabase.from("plaid_category_mappings").select("pfc_detailed,display_category").eq("user_id", userId).order("pfc_detailed")
+      : { data: [] };
     const historyByMonthCategory = new Map<string, number>();
     // The RPC aggregates by (month, category) in SQL, so the row count is the
     // number of categories across four months — bounded and complete — instead
@@ -408,6 +435,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
               display_category: string;
             }>}
           />
+          {isFeatureEnabled("plaidCategoryMappings") && <PlaidCategoryMappingSection initialMappings={(plaidMappings ?? []) as Array<{ pfc_detailed: string; display_category: string }>} />}
         </div>
         <SinkingFundsSection
           initialFunds={(sinkingFunds ?? []) as Array<{
@@ -491,13 +519,18 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
     }
   }
 
+  const hiddenSections = hiddenSettingsSections({
+    settingsIa: isFeatureEnabled("settingsIa"),
+    membershipTerms: isFeatureEnabled("membershipTermsEntry"),
+  });
+
   return (
     <AppShell active="settings" email={user?.email}>
       <div className="space-y-6">
         <PageHeader title="Settings" />
         <SettingsLayout
           active={active}
-          hiddenSections={settingsIaReady ? [] : migrationDependentSections}
+          hiddenSections={hiddenSections}
         >
           {content}
         </SettingsLayout>

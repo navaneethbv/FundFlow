@@ -562,6 +562,9 @@ async function main() {
     console.log("axe: no WCAG AA violations on the reviewed route matrix in either theme");
 
     console.log("ALL F1/F2/F5/F8/F6 CHECKS PASSED");
+  } catch (error) {
+    process.exitCode = 1;
+    throw error;
   } finally {
     await browser.close();
     // Cleanup: delete user rows, then the auth user.

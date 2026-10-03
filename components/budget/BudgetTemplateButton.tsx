@@ -119,6 +119,8 @@ export default function BudgetTemplateButton({
       setSaveName("");
       setStatus(`Saved "${name}".`);
       await reload();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not save the template.");
     } finally {
       setBusy(false);
     }
@@ -155,6 +157,8 @@ export default function BudgetTemplateButton({
       setStatus(`Applied ${payload.applied ?? 0} planned amount(s) to ${formatMonth(month)}.${unmatchedNote}`);
       setConflict(null);
       router.refresh();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not apply the template.");
     } finally {
       setBusy(false);
     }
@@ -167,6 +171,8 @@ export default function BudgetTemplateButton({
         method: "DELETE",
       });
       await reload();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not delete the template.");
     } finally {
       setBusy(false);
     }

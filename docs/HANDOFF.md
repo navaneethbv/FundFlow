@@ -1,5 +1,70 @@
 # FundFlow Session Handoff
 
+## 2026-10-02: PR #204 dependency audit correction
+
+At `9d26de2`, all hosted checks except the full dependency audit passed, and Sonar's unresolved PR issue count was zero.
+The audit failure was GHSA-vfj7-8cjw-p6xm in the Next lint plugin's development-only glob dependency chain.
+No patched `braces` release exists, so a version-scoped override replaces the plugin's sole glob API with a small adapter over MIT-licensed `tinyglobby`.
+Regression tests exercise the installed plugin's default, literal, relative, absolute, wildcard, brace, and Windows-separator root discovery and an actual Next lint violation.
+The vulnerable packages are removed from the dependency tree, and the full audit gate remains unchanged.
+See `tooling/next-lint-glob/README.md` for compatibility scope and the upstream-removal condition.
+Refresh all hosted checks and Sonar's issue count at the pushed correction head before considering the PR ready.
+The older implementation and rollout notes below are historical checkpoints, not a current production-state verification.
+No merge, production migration, manual deployment, or feature-flag change is part of this follow-up.
+
+## 2026-10-02: group 6 rules and transaction tools
+
+The current grouped branch is `feat/rules-transaction-tools` in `/private/tmp/fundflow-rules-transaction-tools`, based on `feat/bills-membership-value`.
+It implements items 5.4 to 5.6 and 6.5 to 6.7 in one review: Plaid category mappings, local Bayes suggestions, merchant directory and merge, projected ledger rows, the calendar heatmap, and quick add.
+The grouped design is in [the group 6 spec](superpowers/specs/2026-10-02-rules-transactions.md).
+
+The migration `20261002100000_rules_transactions_adoption.sql` adds the user-authored mapping and merchant alias tables, Bayes provenance, and the owner-scoped merge function.
+It is unapplied to production.
+All six new feature flags are default off.
+
+The grouped review is [PR #204](https://github.com/navaneethbv/FundFlow/pull/204), against `feat/bills-membership-value`.
+At `354f0b1`, CI, migration/RLS verification, Sonar's quality gate, preview and smoke checks passed; Sonar still listed five maintainability findings and Codacy failed with analyzer errors.
+The corrective change extracts bounded query loading, column selection, pagination recovery, and merchant aggregation helpers; simplifies Bayes messages; applies the supplied review-refresh quick fix; and handles rejected budget-template, household and Bayes requests with user-visible errors.
+Codacy's `security-node/detect-unhandled-async-errors` crash reproduced locally on the three reported files and the Bayes button.
+All four now pass the same rule without disabling it.
+The large-data QA script marks a failed journey before cleanup and rethrows the error to its existing outer handler; it was syntax-checked only and never executed against a database.
+
+Local verification passed lint, typecheck, targeted regressions, the placeholder production build, palette validation and all 16 synthetic browser fixtures.
+The full coverage run passed 517 test files and 5,649 tests, with 98.41% statements, 96.02% branches, 98.53% functions and 99.55% lines.
+Twenty-two integration files and three credential-dependent tests were skipped; none of those results proves Supabase integration.
+Corrective commit `a405b24` is pushed to PR #204.
+Its hosted CI, migration/RLS verification, smoke tests, preview and Sonar quality gate passed.
+Sonar reported one new helper-scope finding, fixed by moving the stateless result formatter outside the component.
+The owner supplied Codacy's current log: the same rule crashes on manual-account creation and scheduled save, and Opengrep times out on the transaction page.
+Both component files now pass the rule; ten additional regressions cover draft preservation, retry, cancellation errors and success.
+The page's data loader and desktop row renderer were extracted with eleven byte-identical function bodies.
+The local Opengrep rule run fell from 8.27 seconds with a partial-parse warning to 0.27 seconds without errors.
+The [quality follow-up](reviews/2026-10-02-transaction-tools-quality.md) records the evidence and 22 other pre-existing files that crash the same ESLint rule.
+The owner's decision on that broader cleanup is pending; no changes to those additional files or rule suppression are included.
+The signed-in Supabase journey and integration tests remain deferred under the disposable-target exception.
+The migration remains unapplied to production and all six flags remain off.
+
+Next step is to complete validation, push this correction to PR #204, and inspect its hosted checks.
+If the broader scanner failure persists, follow the owner's requested cleanup scope before starting another feature checklist.
+The owner's latest instruction is to start the next grouped checklist only after all PR checks pass.
+Do not merge, apply production migrations, deploy, or enable flags without owner authorization.
+
+## 2026-10-02: group 5 bills and membership value
+
+The owner requested the next reference-adoption group as one PR of five or six features.
+Group 5 implements items 3.4, 3.5, 3.6, 11.1, 11.2, and 11.3 on `feat/bills-membership-value` in `/private/tmp/fundflow-bills-membership`, based on `feat/data-quality-guidance` so the stack stays shallow.
+The grouped design is in [the group 5 spec](superpowers/specs/2026-10-02-bills-membership-value.md).
+
+Recurring now has a month-pulse summary, a gated paycheck view, confirmed price-change history, and a user-authored subscription quick-add catalog.
+Settings now has gated user-maintained membership/card terms and a local anniversary-year value projection with measured, projected, subjective, baseline-card, membership, break-even, expiry, refund, transfer, partial-history, and stale-term handling.
+The six flags are default off: `billsViews`, `recurringPriceHistory`, `subscriptionCatalog`, `membershipCardValueModel`, `membershipCardValueCalculation`, and `membershipTermsEntry`.
+The new migrations `20261002090000_recurring_price_changes.sql` and `20261002091000_card_value_terms.sql` are additive and unapplied to production.
+
+Local verification passed `npm run lint`, `npx tsc --noEmit`, `npm run test:unit` (509 files / 5,595 tests), `npm run test:coverage` (511 files / 5,600 tests, 98.40% statements, 96.00% branches, 98.50% functions, 99.55% lines), placeholder `npm run build`, `node scripts/validate_palette.js app/globals.css`, and `npm run test:ui` (16 synthetic fixtures including 375px and 1440px bills/membership journeys).
+The signed-in Supabase browser journey and integration tests remain deferred under the approved disposable-target exception.
+No migration, production flag, deployment, merge, or credential change was performed.
+The grouped PR is [PR #203](https://github.com/navaneethbv/FundFlow/pull/203).
+Wait for exact-head hosted checks and leave it unmerged.
 ## 2026-10-01: Group 4 implementation complete
 
 Group 4 is implemented in `/private/tmp/fundflow-ledger-interactions` on `feat/ledger-interactions`, based on `feat/insights-rules-ledger` and grouped in [PR #202](https://github.com/navaneethbv/FundFlow/pull/202).
