@@ -12,8 +12,8 @@ const OWNER_COLORS = [
 
 function colorFor(ownerId: string): string {
   let hash = 0;
-  for (const character of ownerId) hash = (hash * 31 + character.codePointAt(0)!) >>> 0;
-  return OWNER_COLORS[hash % OWNER_COLORS.length]!;
+  for (const character of ownerId) hash = (hash * 31 + (character.codePointAt(0) ?? 0)) >>> 0;
+  return OWNER_COLORS[hash % OWNER_COLORS.length] ?? OWNER_COLORS[0];
 }
 
 /**
