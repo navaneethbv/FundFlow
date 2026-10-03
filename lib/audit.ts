@@ -64,6 +64,7 @@ export type AuditAction =
   | "budget_template_applied"
   | "payday_settings_updated"
   | "budget_money_moved"
+  | "collection_budget_updated"
   | "balance_quality_reviewed"
   | "account_reconciled"
   | "transaction_reviewed"
