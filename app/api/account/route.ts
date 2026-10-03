@@ -202,18 +202,15 @@ async function listNestedBucketPaths(
   folder: string,
   depth: number,
 ): Promise<string[]> {
-  const paths: string[] = [];
-  for (const entry of await listAllBucketFiles(bucket, folder)) {
-    if (!entry?.name || typeof entry.name !== "string") continue;
-    const path = `${folder}/${entry.name}`;
-    // Storage lists a folder as an entry whose id is null.
-    if (entry.id === null && depth < STATEMENT_FOLDER_DEPTH) {
-      paths.push(...await listNestedBucketPaths(bucket, path, depth + 1));
-    } else if (entry.id !== null) {
-      paths.push(path);
-    }
-  }
-  return paths;
+  const entries = (await listAllBucketFiles(bucket, folder))
+    .filter((entry) => typeof entry?.name === "string" && entry.name.length > 0);
+  // Storage lists a folder as an entry whose id is null.
+  const files = entries.filter((entry) => entry.id !== null).map((entry) => `${folder}/${entry.name}`);
+  const folders = depth < STATEMENT_FOLDER_DEPTH ? entries.filter((entry) => entry.id === null) : [];
+  const nested = await Promise.all(
+    folders.map((entry) => listNestedBucketPaths(bucket, `${folder}/${entry.name}`, depth + 1)),
+  );
+  return [...files, ...nested.flat()];
 }
 
 /**
