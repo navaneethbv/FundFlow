@@ -1,16 +1,5 @@
 # FundFlow Session Handoff
 
-## 2026-10-03: Desktop continuation, live Sure review and report shortcuts
-
-Resumed PR #220 without changing its clean worktree or the original checkout's unrelated edits.
-GitHub still reports #220 open at `16af6b7`, all reported checks successful, merge state BLOCKED.
-No bypass or merge was attempted.
-The new `feat/report-period-shortcuts` worktree is `/private/tmp/fundflow-report-shortcuts-20261003`, based independently on current main `dcedce4`.
-See [the live demo comparison](reviews/2026-10-03-sure-live-demo.md) for new observations, priorities, and acceptance limits.
-Implemented viewer-date report shortcuts and preserved sorting, currency, and other filters across report navigation.
-The report date form also remounts on date changes and disables restoration of stale date drafts on browser Back.
-No production data, credentials, migration, deployment, or feature flag changed.
-
 ## 2026-10-03: Post-merge review fixes and recurring cleanup
 
 A signed-in walk of every live page after the #205 to #217 merge found no broken page, but several wrong numbers; branch `fix/net-worth-change-and-price-alerts` fixes them, each with a regression that fails without it.
