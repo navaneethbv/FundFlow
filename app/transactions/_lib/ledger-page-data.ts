@@ -33,6 +33,24 @@ export type LedgerChunkFilters = {
   status?: "" | "pending" | "posted";
 };
 
+function buildOwnerScopedLedgerQuery(supabase: TransactionsSupabase, columns: string, filters: LedgerChunkFilters, count: boolean) {
+  const sourceTable = filters.transactionReviewEnabled ? "transaction_review_ledger" : "transactions";
+  return supabase.from(sourceTable)
+    .select(columns, count ? { count: "exact" } : undefined)
+    .eq("user_id", filters.ownerId);
+}
+
+function applyLedgerMoneyFilters(query: ReturnType<typeof buildOwnerScopedLedgerQuery>, filters: LedgerChunkFilters) {
+  if (filters.flow === "in") query = query.lt("amount", 0);
+  if (filters.flow === "out") query = query.gt("amount", 0);
+  const minimum = normalizeLedgerAmount(filters.minAmount ?? "");
+  const maximum = normalizeLedgerAmount(filters.maxAmount ?? "");
+  if (minimum) query = query.or(`amount.gte.${minimum},amount.lte.-${minimum}`);
+  if (maximum) query = query.gte("amount", -Number(maximum)).lte("amount", Number(maximum));
+  if (filters.status) query = query.eq("pending", filters.status === "pending");
+  return query;
+}
+
 /**
  * Filters only, deliberately unordered. postgrest-js appends `order()` calls in
  * the order they are made, so an ordering baked in here would win over the sort
@@ -44,14 +62,7 @@ function buildLedgerFilterQuery(
   filters: LedgerChunkFilters,
   count = false,
 ) {
-  const sourceTable = filters.transactionReviewEnabled
-    ? "transaction_review_ledger"
-    : "transactions";
-
-  let query = supabase
-    .from(sourceTable)
-    .select(columns, count ? { count: "exact" } : undefined)
-    .eq("user_id", filters.ownerId);
+  let query = buildOwnerScopedLedgerQuery(supabase, columns, filters, count);
 
   if (filters.transactionReviewEnabled && filters.reviewFilter !== "all") {
     query = query.eq("review_status", filters.reviewFilter).eq("review_eligible", true);
@@ -75,13 +86,7 @@ function buildLedgerFilterQuery(
       `merchant_name.ilike.%${filters.q}%,name.ilike.%${filters.q}%,pfc_primary.ilike.%${categorySearch}%,pfc_detailed.ilike.%${categorySearch}%`,
     );
   }
-  if (filters.flow === "in") query = query.lt("amount", 0);
-  if (filters.flow === "out") query = query.gt("amount", 0);
-  const minimum = normalizeLedgerAmount(filters.minAmount ?? "");
-  const maximum = normalizeLedgerAmount(filters.maxAmount ?? "");
-  if (minimum) query = query.or(`amount.gte.${minimum},amount.lte.-${minimum}`);
-  if (maximum) query = query.gte("amount", -Number(maximum)).lte("amount", Number(maximum));
-  if (filters.status) query = query.eq("pending", filters.status === "pending");
+  query = applyLedgerMoneyFilters(query, filters);
   if (filters.accountType) {
     query = query.in(
       "account_id",

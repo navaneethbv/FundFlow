@@ -20,6 +20,7 @@ import {
 import type { LedgerFilterOptions } from "@/lib/ledger-projection";
 
 type OpenPanel = "date" | "filters" | null;
+type FilterChip = { key: keyof LedgerFilters; label: string; removeLabel: string };
 
 const triggerClasses =
   "inline-flex min-h-11 items-center gap-2 rounded-full border border-panel-border bg-panel px-4 text-sm font-semibold text-foreground shadow-sm transition-colors hover:border-accent/40 focus-visible:outline-2";
@@ -38,15 +39,8 @@ function filterCount(filters: LedgerFilters): number {
   ].filter(Boolean).length;
 }
 
-function filterChips(committed: LedgerFilters, options: LedgerFilterOptions) {
-  const accountLabel = options.accounts.find((option) => option.value === committed.accountId)?.label;
-  const subLabel = committed.sub
-    ? Object.values(options.subcategoriesByCategory)
-        .flat()
-        .find((option) => option.value === committed.sub)?.label
-    : undefined;
-  const chips: Array<{ key: keyof LedgerFilters; label: string; removeLabel: string }> = [
-    committed.q && { key: "q", label: `Search: ${committed.q}`, removeLabel: `Remove search filter ${committed.q}` },
+function dateFilterChips(committed: LedgerFilters): FilterChip[] {
+  return [
     committed.month && {
       key: "month",
       label: formatMonth(committed.month),
@@ -54,9 +48,28 @@ function filterChips(committed: LedgerFilters, options: LedgerFilterOptions) {
     },
     committed.day && { key: "day", label: committed.day, removeLabel: `Remove day filter ${committed.day}` },
     committed.year && { key: "year", label: committed.year, removeLabel: `Remove year filter ${committed.year}` },
+  ].filter((chip): chip is FilterChip => Boolean(chip));
+}
+
+function amountAndStatusChips(committed: LedgerFilters): FilterChip[] {
+  return [
     committed.minAmount && { key: "minAmount", label: `Amount at least ${committed.minAmount}`, removeLabel: "Remove minimum amount filter" },
     committed.maxAmount && { key: "maxAmount", label: `Amount at most ${committed.maxAmount}`, removeLabel: "Remove maximum amount filter" },
     committed.status && { key: "status", label: committed.status === "pending" ? "Pending" : "Posted", removeLabel: "Remove posting status filter" },
+  ].filter((chip): chip is FilterChip => Boolean(chip));
+}
+
+function filterChips(committed: LedgerFilters, options: LedgerFilterOptions) {
+  const accountLabel = options.accounts.find((option) => option.value === committed.accountId)?.label;
+  const subLabel = committed.sub
+    ? Object.values(options.subcategoriesByCategory)
+        .flat()
+        .find((option) => option.value === committed.sub)?.label
+    : undefined;
+  const chips: FilterChip[] = [
+    committed.q && { key: "q", label: `Search: ${committed.q}`, removeLabel: `Remove search filter ${committed.q}` },
+    ...dateFilterChips(committed),
+    ...amountAndStatusChips(committed),
     committed.accountId && {
       key: "accountId",
       label: accountLabel ?? "Account",
@@ -87,7 +100,7 @@ function filterChips(committed: LedgerFilters, options: LedgerFilterOptions) {
       label: titleCase(committed.accountType),
       removeLabel: `Remove account type filter ${titleCase(committed.accountType)}`,
     },
-  ].filter((chip): chip is { key: keyof LedgerFilters; label: string; removeLabel: string } => Boolean(chip));
+  ].filter((chip): chip is FilterChip => Boolean(chip));
 
   return chips;
 }
