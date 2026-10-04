@@ -114,7 +114,8 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
     user.id,
     params.scope,
   );
-  const anchorMonth = (await resolveViewerToday(supabase, user.id)).slice(0, 7);
+  const today = await resolveViewerToday(supabase, user.id);
+  const anchorMonth = today.slice(0, 7);
   const filters: ReportFilters = {
     ...reportFiltersFromSearchParams(params, defaultReportFilters(anchorMonth)),
     scope: serializeFinancialScope(scope) ?? null,
@@ -168,7 +169,7 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
       <Tabs
         items={(Object.keys(TAB_LABELS) as ReportTab[]).map((tab) => ({
           label: TAB_LABELS[tab],
-          href: reportHref(filters, { tab }),
+          href: reportHref(filters, { tab }, selectedCurrency),
           active: filters.tab === tab,
         }))}
       />
@@ -213,6 +214,8 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
 
       <ReportControls
         filters={filters}
+        today={today}
+        currency={selectedCurrency}
         householdId={visibleHouseholdIds[0]}
       />
 

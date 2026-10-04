@@ -8,6 +8,7 @@ import {
   type ReportSort,
   type ReportTab,
 } from "@/lib/reports";
+import { reportShortcuts } from "@/lib/report-shortcuts";
 import type { BreakdownDimension } from "@/lib/cash-flow";
 
 /**
@@ -50,19 +51,42 @@ const DIRECTION_LABELS: Record<ReportDirection, string> = {
 export function reportHref(
   filters: ReportFilters,
   patch: Partial<ReportFilters> = {},
+  currency?: string,
 ): string {
-  return `/reports?${reportFiltersToSearchParams({ ...filters, ...patch }).toString()}`;
+  const params = reportFiltersToSearchParams({ ...filters, ...patch });
+  if (currency) params.set("currency", currency);
+  return `/reports?${params.toString()}`;
 }
 
 export default function ReportControls({
   filters,
   householdId,
-}: Readonly<{ filters: ReportFilters; householdId?: string }>) {
+  today,
+  currency,
+}: Readonly<{ filters: ReportFilters; householdId?: string; today: string; currency?: string }>) {
+  const href = (patch: Partial<ReportFilters>) => reportHref(filters, patch, currency);
+  const hiddenParams = reportFiltersToSearchParams(filters);
+  hiddenParams.delete("start");
+  hiddenParams.delete("end");
+  if (currency) hiddenParams.set("currency", currency);
   return (
     <section
       aria-label="Report controls"
       className="rounded-card border border-panel-border bg-panel p-4 shadow-card"
     >
+      <nav aria-label="Report period shortcuts" className="mb-4 flex flex-wrap gap-2">
+        {reportShortcuts(today).map(({ label, start, end }) => (
+          <Link
+            key={label}
+            href={href({ start, end })}
+            aria-current={filters.start === start && filters.end === end ? "true" : undefined}
+            className="inline-flex min-h-11 items-center rounded-field border border-panel-border px-3 py-2 text-sm font-semibold hover:bg-panel-2 focus-visible:outline-2 aria-[current=true]:bg-accent-soft"
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
+      <p className="mb-4 text-xs text-muted">Last 6 months includes this month through today. Use From and To for a custom range.</p>
       <div className="grid gap-4 xl:grid-cols-[auto_1fr] xl:items-end">
         <fieldset>
           <legend className="eyebrow mb-2">View</legend>
@@ -70,36 +94,21 @@ export default function ReportControls({
             ariaLabel="View"
             items={(Object.keys(MODE_LABELS) as ReportMode[]).map((mode) => ({
               label: MODE_LABELS[mode],
-              href: reportHref(filters, { mode }),
+              href: href({ mode }),
               active: filters.mode === mode,
             }))}
           />
         </fieldset>
 
         <form
+          key={`${filters.start}:${filters.end}`}
+          autoComplete="off"
           method="get"
           action="/reports"
           className="grid gap-3 sm:grid-cols-[repeat(2,minmax(9rem,1fr))_auto]"
         >
-          <input type="hidden" name="tab" value={filters.tab} />
-          <input type="hidden" name="mode" value={filters.mode} />
-          <input type="hidden" name="dimension" value={filters.dimension} />
-          <input
-            type="hidden"
-            name="pending"
-            value={filters.excludePending ? "exclude" : "include"}
-          />
-          {filters.scope && (
-            <input type="hidden" name="scope" value={filters.scope} />
-          )}
-          {filters.accounts.map((account) => (
-            <input key={account} type="hidden" name="account" value={account} />
-          ))}
-          {filters.merchants.map((merchant) => (
-            <input key={merchant} type="hidden" name="merchant" value={merchant} />
-          ))}
-          {filters.categories.map((category) => (
-            <input key={category} type="hidden" name="category" value={category} />
+          {[...hiddenParams.entries()].map(([name, value], index) => (
+            <input key={`${name}:${index}`} type="hidden" name={name} value={value} />
           ))}
 
           <label className="text-sm font-semibold">
@@ -136,7 +145,7 @@ export default function ReportControls({
             ariaLabel="Sort report transactions by"
             items={(Object.keys(SORT_LABELS) as ReportSort[]).map((sort) => ({
               label: SORT_LABELS[sort],
-              href: reportHref(filters, { sort }),
+              href: href({ sort }),
               active: filters.sort === sort,
             }))}
           />
@@ -149,7 +158,7 @@ export default function ReportControls({
             items={(Object.keys(DIRECTION_LABELS) as ReportDirection[]).map(
               (direction) => ({
                 label: DIRECTION_LABELS[direction],
-                href: reportHref(filters, { direction }),
+                href: href({ direction }),
                 active: filters.direction === direction,
               }),
             )}
@@ -163,7 +172,7 @@ export default function ReportControls({
             items={(Object.keys(DIMENSION_LABELS) as BreakdownDimension[]).map(
               (dimension) => ({
                 label: DIMENSION_LABELS[dimension],
-                href: reportHref(filters, { dimension }),
+                href: href({ dimension }),
                 active: filters.dimension === dimension,
               }),
             )}
@@ -177,12 +186,12 @@ export default function ReportControls({
             items={[
               {
                 label: "Included",
-                href: reportHref(filters, { excludePending: false }),
+                href: href({ excludePending: false }),
                 active: !filters.excludePending,
               },
               {
                 label: "Excluded",
-                href: reportHref(filters, { excludePending: true }),
+                href: href({ excludePending: true }),
                 active: filters.excludePending,
               },
             ]}
@@ -197,12 +206,12 @@ export default function ReportControls({
               items={[
                 {
                   label: "Just mine",
-                  href: reportHref(filters, { scope: null }),
+                  href: href({ scope: null }),
                   active: !filters.scope,
                 },
                 {
                   label: "Household",
-                  href: reportHref(filters, { scope: householdId }),
+                  href: href({ scope: householdId }),
                   active: filters.scope === householdId,
                 },
               ]}
@@ -226,7 +235,7 @@ export default function ReportControls({
             values.map((value) => (
               <Link
                 key={`${key}:${value}`}
-                href={reportHref(filters, {
+                href={href({
                   [key]: values.filter((entry) => entry !== value),
                 } as Partial<ReportFilters>)}
                 className="inline-flex min-h-11 items-center gap-1 rounded-field bg-accent-soft px-3 py-1 text-sm font-semibold text-accent focus-visible:outline-2"

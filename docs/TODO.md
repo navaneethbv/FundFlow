@@ -1,5 +1,13 @@
 # FundFlow — Future Todos
 
+## Current review continuation: Live Sure demo, 2026-10-03
+
+The live Sure demo is now inspected in Chrome; see [the evidence and priority matrix](reviews/2026-10-03-sure-live-demo.md).
+Report period shortcuts and report navigation state preservation are implemented on `feat/report-period-shortcuts`, independently of PR #220.
+Tag/untagged ledger filtering and persisted report-section layout remain confirmed gaps.
+Split replacement still needs an atomic owner-validated write covering annotations and goal events, with real disposable-database rollback and concurrency coverage.
+The existing multi-request write path has not been represented as safe or fixed.
+
 ## Current checkpoint: Stack merged and deployed, 2026-10-03
 
 PRs #205, #206, and #208 through #217 are merged to `main` at `a28fd822` and deployed to production; see [the handoff](HANDOFF.md#2026-10-03-stack-205-to-217-merged-and-deployed).
