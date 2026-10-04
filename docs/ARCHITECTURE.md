@@ -224,9 +224,6 @@ All flags remain off; typed assets require `typedManualAssets`, `assetOwnership`
   `reportFiltersFromSearchParams` for URLs. `reports-data.ts` is the single
   loader the page and the CSV route share, so a download always matches the
   chart above it.
-  `report-shortcuts.ts` derives inclusive calendar ranges from the viewer date resolved by the Reports page.
-  Shortcuts serialize concrete dates using the existing report filter contract; saved reports keep fixed dates.
-  Report navigation preserves the selected currency separately from the saved filter schema.
 - `goals-v2.ts` — Phase 7 funded goals. A goal's progress has three sources
   (typed-in `saved_amount`, account allocations capped at the real balance, and
   the `goal_progress_events` ledger) and the failure mode is counting the same
